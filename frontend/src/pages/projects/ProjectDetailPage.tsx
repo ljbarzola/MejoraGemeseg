@@ -101,6 +101,12 @@ export default function ProjectDetailPage() {
             ))}
           </div>
         </div>
+
+        <div className="project-actions">
+          <button className="auth-btn" onClick={() => navigate(`/projects/${id}/board`)}>
+            Ver tablero Kanban
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -8,8 +8,8 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log('Limpiando datos existentes...');
-  await prisma.projectMember.deleteMany();
   await prisma.task.deleteMany();
+  await prisma.projectMember.deleteMany();
   await prisma.project.deleteMany();
   await prisma.user.deleteMany();
   await prisma.department.deleteMany();
@@ -184,6 +184,27 @@ async function main() {
   console.log(`3. ${project3.name} [ON_HOLD] → Leidy (OWNER), Andrea (MANAGER)`);
   console.log(`4. ${project4.name} [COMPLETED] → Carlos (OWNER), Andrea (MEMBER), Miguel (VIEWER)`);
   console.log(`5. ${project5.name} [ACTIVE] → Carlos (OWNER), Miguel (MEMBER)`);
+
+  console.log('\nCreando tareas de prueba...');
+  await prisma.task.createMany({
+    data: [
+      { title: 'Configurar base de datos PostgreSQL', description: 'Crear schemas, indices y usuarios de BD', priority: 'HIGH', status: 'DONE', projectId: project1.id, assigneeId: employee.id, dueDate: new Date('2026-07-15'), estimatedHours: 8 },
+      { title: 'Diseñar schema de Prisma', description: 'Definir modelos User, Project, Task, enums', priority: 'HIGH', status: 'DONE', projectId: project1.id, assigneeId: employee.id, dueDate: new Date('2026-07-10'), estimatedHours: 6 },
+      { title: 'Implementar autenticacion JWT', description: 'Login, register, guards, bcrypt', priority: 'HIGH', status: 'DONE', projectId: project1.id, assigneeId: employee.id, dueDate: new Date('2026-07-20'), estimatedHours: 12 },
+      { title: 'Crear modulo de proyectos CRUD', description: 'Create, read, update con guards por rol', priority: 'MEDIUM', status: 'DONE', projectId: project1.id, assigneeId: employee.id, dueDate: new Date('2026-07-25'), estimatedHours: 16 },
+      { title: 'Implementar tablero Kanban', description: 'Vista drag-and-drop con columnas por estado', priority: 'MEDIUM', status: 'IN_PROGRESS', projectId: project1.id, assigneeId: employee.id, dueDate: new Date('2026-08-01'), estimatedHours: 20 },
+      { title: 'Integrar Claude API para sugerencias', description: 'Usar IA para sugerir asignacion de tareas', priority: 'LOW', status: 'TODO', projectId: project1.id, dueDate: new Date('2026-08-15'), estimatedHours: 24 },
+      { title: 'Deploy a GCP Cloud Run', description: 'Configurar Dockerfile, Cloud Build y Cloud SQL', priority: 'URGENT', status: 'TODO', projectId: project1.id, dueDate: new Date('2026-09-01'), estimatedHours: 16 },
+      { title: 'Definir estrategia de contenido Q3', description: 'Calendario editorial para redes sociales', priority: 'HIGH', status: 'IN_PROGRESS', projectId: project2.id, assigneeId: employee2.id, dueDate: new Date('2026-07-15'), estimatedHours: 10 },
+      { title: 'Crear landing page campana', description: 'Diseno y desarrollo de landing page promocional', priority: 'MEDIUM', status: 'TODO', projectId: project2.id, assigneeId: employee2.id, dueDate: new Date('2026-07-30'), estimatedHours: 14 },
+      { title: 'Configurar campañas Google Ads', description: 'Setup de campanas SEM y remarketing', priority: 'MEDIUM', status: 'TODO', projectId: project2.id, assigneeId: employee2.id, dueDate: new Date('2026-08-05'), estimatedHours: 8 },
+      { title: 'Analisis de metricas Q2', description: 'Reporte de KPIs del segundo trimestre', priority: 'LOW', status: 'IN_REVIEW', projectId: project2.id, assigneeId: employee2.id, dueDate: new Date('2026-07-10'), estimatedHours: 6 },
+      { title: 'Evaluacion de servicios GCP', description: 'Comparar Cloud Run vs Cloud Functions vs GKE', priority: 'HIGH', status: 'TODO', projectId: project3.id, assigneeId: employee.id, dueDate: new Date('2026-08-15'), estimatedHours: 12 },
+      { title: 'Crear infraestructura IaC', description: 'Terraform/Pulumi para recursos GCP', priority: 'MEDIUM', status: 'TODO', projectId: project3.id, dueDate: new Date('2026-09-01'), estimatedHours: 20 },
+    ],
+  });
+
+  console.log('13 tareas creadas (Proyecto 1: 7, Proyecto 2: 4, Proyecto 3: 2)');
 }
 
 main()
