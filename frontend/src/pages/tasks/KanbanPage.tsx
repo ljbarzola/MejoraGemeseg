@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getProjectTasks, getProject } from '../../services/task.service';
-import type { Task, TaskGrouped } from '../../types/task';
 import { getUser } from '../../services/auth.service';
+import type { Task, TaskGrouped } from '../../types/task';
 
 const COLUMNS: { key: keyof TaskGrouped; label: string; color: string }[] = [
   { key: 'TODO', label: 'Por Hacer', color: '#6b7280' },
@@ -18,6 +18,20 @@ const PRIORITY_BADGES: Record<string, { bg: string; fg: string }> = {
   URGENT: { bg: '#fef2f2', fg: '#dc2626' },
 };
 
+const ROLE_LABELS: Record<string, string> = {
+  OWNER: 'Propietario',
+  MANAGER: 'Gerente',
+  MEMBER: 'Miembro',
+  VIEWER: 'Observador',
+};
+
+const ROLE_COLORS: Record<string, string> = {
+  OWNER: '#dc2626',
+  MANAGER: '#2563eb',
+  MEMBER: '#16a34a',
+  VIEWER: '#6b7280',
+};
+
 export default function KanbanPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -26,9 +40,11 @@ export default function KanbanPage() {
   const [loading, setLoading] = useState(true);
 
   const user = getUser();
-  const canCreate = user && project?.members?.some(
-    (m: any) => m.user.id === user.id && m.role !== 'VIEWER',
+  const myMembership = project?.members?.find(
+    (m: any) => m.user.id === user?.id,
   );
+  const myRole = myMembership?.role;
+  const canCreate = myRole && myRole !== 'VIEWER';
 
   useEffect(() => {
     if (!id) return;
@@ -55,9 +71,24 @@ export default function KanbanPage() {
         <div>
           <div className="page-eyebrow">Tablero Kanban</div>
           <h1>{project.name}</h1>
+          {myRole && (
+            <span
+              className="status-badge my-role-badge"
+              style={{
+                backgroundColor: ROLE_COLORS[myRole] + '20',
+                color: ROLE_COLORS[myRole],
+              }}
+            >
+              Mi rol: {ROLE_LABELS[myRole]}
+            </span>
+          )}
         </div>
-        {canCreate && (
+        {canCreate ? (
           <button className="auth-btn" onClick={() => navigate(`/projects/${id}/tasks/new`)}>
+            + Nueva Tarea
+          </button>
+        ) : (
+          <button className="btn-disabled" disabled title="Solo los miembros con permisos pueden crear tareas">
             + Nueva Tarea
           </button>
         )}

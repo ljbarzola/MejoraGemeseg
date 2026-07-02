@@ -1,19 +1,9 @@
 import { useNavigate } from 'react-router-dom';
-import { removeToken } from '../../services/auth.service';
+import { getUser } from '../../services/auth.service';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-
-  const handleLogout = () => {
-    removeToken();
-    navigate('/login');
-  };
-
-  let user: any = null;
-  try {
-    const raw = localStorage.getItem('user');
-    if (raw) user = JSON.parse(raw);
-  } catch {}
+  const user = getUser();
 
   return (
     <div className="app-shell">
@@ -46,12 +36,6 @@ export default function DashboardPage() {
           </ul>
         </section>
       </main>
-
-      <div style={{ marginTop: 24 }}>
-        <button className="btn-logout" onClick={handleLogout}>
-          Cerrar sesión
-        </button>
-      </div>
     </div>
   );
 }

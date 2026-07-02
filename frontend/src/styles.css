@@ -30,6 +30,82 @@ body {
   background: linear-gradient(120deg, rgba(16, 15, 49, 0.06), rgba(18, 55, 95, 0.04));
 }
 
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 32px;
+  background: var(--azul-oscuro);
+  color: white;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.navbar-brand {
+  cursor: pointer;
+}
+
+.navbar-logo {
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.navbar-links {
+  display: flex;
+  gap: 8px;
+}
+
+.navbar-link {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.navbar-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.navbar-user {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.navbar-name {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.btn-logout-sm {
+  padding: 8px 16px;
+  background: transparent;
+  color: var(--naranja);
+  border: 1px solid var(--naranja);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-logout-sm:hover {
+  background: var(--naranja);
+  color: white;
+}
+
 .hero {
   background: linear-gradient(90deg, var(--azul-oscuro) 0%, var(--azul-claro) 100%);
   color: white;
@@ -585,8 +661,15 @@ body {
 .project-detail-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 20px;
+}
+
+.project-detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .project-detail-header h1 {
@@ -738,6 +821,186 @@ body {
 .project-actions {
   margin-top: 32px;
   text-align: center;
+}
+
+.btn-disabled {
+  padding: 14px 24px;
+  background: #d1d5db;
+  color: #9ca3af;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.my-role-badge {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.75rem;
+}
+
+.member-item-me {
+  border: 2px solid var(--azul-claro);
+  background: rgba(18, 55, 95, 0.04);
+}
+
+.member-me-tag {
+  color: var(--azul-claro);
+  font-weight: 700;
+}
+
+.form-select-disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.viewer-notice {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 0.85rem;
+  margin-bottom: 20px;
+}
+
+.project-tasks-section {
+  margin-top: 32px;
+  border-top: 2px solid var(--gris-claro);
+  padding-top: 24px;
+}
+
+.project-tasks-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.project-tasks-header h2 {
+  margin: 0;
+  color: var(--azul-claro);
+  font-size: 1.1rem;
+}
+
+.tasks-table-wrapper {
+  overflow-x: auto;
+}
+
+.tasks-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.tasks-table th {
+  text-align: left;
+  padding: 12px 14px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #888;
+  border-bottom: 2px solid var(--gris-claro);
+}
+
+.tasks-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--gris-claro);
+  vertical-align: middle;
+}
+
+.tasks-table-row {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.tasks-table-row:hover {
+  background: rgba(18, 55, 95, 0.04);
+}
+
+.task-id-cell {
+  color: #888;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.task-title-cell {
+  font-weight: 600;
+  color: var(--azul-oscuro);
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.priority-badge {
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.table-assignee {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.unassigned {
+  color: #aaa;
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+.navbar-link-admin {
+  color: var(--naranja) !important;
+}
+
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.admin-stat-card {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.admin-stat-number {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--azul-oscuro);
+}
+
+.admin-stat-label {
+  font-size: 0.85rem;
+  color: #888;
+  font-weight: 600;
+}
+
+.admin-users-section {
+  background: white;
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.06);
+}
+
+.admin-users-section h2 {
+  margin: 0 0 20px;
+  color: var(--azul-claro);
+  font-size: 1.1rem;
 }
 
 .kanban-board {

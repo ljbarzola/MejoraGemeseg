@@ -8,8 +8,19 @@ import ProjectDetailPage from './pages/projects/ProjectDetailPage';
 import KanbanPage from './pages/tasks/KanbanPage';
 import CreateTaskPage from './pages/tasks/CreateTaskPage';
 import TaskDetailPage from './pages/tasks/TaskDetailPage';
+import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import Navbar from './components/layout/Navbar';
 import { isAuthenticated } from './services/auth.service';
+
+function ProtectedLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ProtectedRoute>
+      <Navbar />
+      {children}
+    </ProtectedRoute>
+  );
+}
 
 function App() {
   return (
@@ -30,57 +41,65 @@ function App() {
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute>
+            <ProtectedLayout>
               <DashboardPage />
-            </ProtectedRoute>
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedLayout>
+              <AdminDashboardPage />
+            </ProtectedLayout>
           }
         />
         <Route
           path="/projects"
           element={
-            <ProtectedRoute>
+            <ProtectedLayout>
               <ProjectsListPage />
-            </ProtectedRoute>
+            </ProtectedLayout>
           }
         />
         <Route
           path="/projects/new"
           element={
-            <ProtectedRoute>
+            <ProtectedLayout>
               <CreateProjectPage />
-            </ProtectedRoute>
+            </ProtectedLayout>
           }
         />
         <Route
           path="/projects/:id"
           element={
-            <ProtectedRoute>
+            <ProtectedLayout>
               <ProjectDetailPage />
-            </ProtectedRoute>
+            </ProtectedLayout>
           }
         />
         <Route
           path="/projects/:id/board"
           element={
-            <ProtectedRoute>
+            <ProtectedLayout>
               <KanbanPage />
-            </ProtectedRoute>
+            </ProtectedLayout>
           }
         />
         <Route
           path="/projects/:id/tasks/new"
           element={
-            <ProtectedRoute>
+            <ProtectedLayout>
               <CreateTaskPage />
-            </ProtectedRoute>
+            </ProtectedLayout>
           }
         />
         <Route
           path="/tasks/:id"
           element={
-            <ProtectedRoute>
+            <ProtectedLayout>
               <TaskDetailPage />
-            </ProtectedRoute>
+            </ProtectedLayout>
           }
         />
       </Routes>

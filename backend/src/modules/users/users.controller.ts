@@ -7,7 +7,9 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
@@ -22,6 +24,7 @@ export class UsersController {
   }
 
   @Get()
+  @UseGuards(AuthGuard('jwt'))
   findAll() {
     return this.usersService.findAll();
   }

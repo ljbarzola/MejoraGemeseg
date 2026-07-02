@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getTask, updateTask } from '../../services/task.service';
+import { getUser } from '../../services/auth.service';
 import type { Task } from '../../types/task';
 
 const STATUS_OPTIONS = [
@@ -17,11 +18,27 @@ const STATUS_COLORS: Record<string, string> = {
   DONE: '#22c55e',
 };
 
+const ROLE_LABELS: Record<string, string> = {
+  OWNER: 'Propietario',
+  MANAGER: 'Gerente',
+  MEMBER: 'Miembro',
+  VIEWER: 'Observador',
+};
+
+const ROLE_COLORS: Record<string, string> = {
+  OWNER: '#dc2626',
+  MANAGER: '#2563eb',
+  MEMBER: '#16a34a',
+  VIEWER: '#6b7280',
+};
+
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [task, setTask] = useState<(Task & { project: any }) | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const currentUser = getUser();
 
   useEffect(() => {
     if (id) {
@@ -31,6 +48,12 @@ export default function TaskDetailPage() {
         .finally(() => setLoading(false));
     }
   }, [id, navigate]);
+
+  const myMembership = task?.project?.members?.find(
+    (m: any) => m.user.id === currentUser?.id,
+  );
+  const myRole = myMembership?.role;
+  const canEdit = myRole && myRole !== 'VIEWER';
 
   const handleStatusChange = async (newStatus: string) => {
     if (!task) return;
@@ -60,6 +83,17 @@ export default function TaskDetailPage() {
           <div>
             <span className="task-detail-id">#{task.id}</span>
             <h1>{task.title}</h1>
+            {myRole && (
+              <span
+                className="status-badge my-role-badge"
+                style={{
+                  backgroundColor: ROLE_COLORS[myRole] + '20',
+                  color: ROLE_COLORS[myRole],
+                }}
+              >
+                Mi rol: {ROLE_LABELS[myRole]}
+              </span>
+            )}
           </div>
           <span
             className="status-badge status-badge-lg"
@@ -97,31 +131,54 @@ export default function TaskDetailPage() {
         <div className="task-actions">
           <div className="form-group">
             <label>Estado</label>
-            <select
-              className="form-select"
-              value={task.status}
-              onChange={(e) => handleStatusChange(e.target.value)}
-            >
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
+            {canEdit ? (
+              <select
+                className="form-select"
+                value={task.status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+              >
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            ) : (
+              <select className="form-select form-select-disabled" value={task.status} disabled>
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="form-group">
             <label>Asignado a</label>
-            <select
-              className="form-select"
-              value={task.assignee?.id || ''}
-              onChange={(e) => handleAssign(Number(e.target.value))}
-            >
-              <option value="">Sin asignar</option>
-              {members.map((m: any) => (
-                <option key={m.user.id} value={m.user.id}>{m.user.fullName}</option>
-              ))}
-            </select>
+            {canEdit ? (
+              <select
+                className="form-select"
+                value={task.assignee?.id || ''}
+                onChange={(e) => handleAssign(Number(e.target.value))}
+              >
+                <option value="">Sin asignar</option>
+                {members.map((m: any) => (
+                  <option key={m.user.id} value={m.user.id}>{m.user.fullName}</option>
+                ))}
+              </select>
+            ) : (
+              <select className="form-select form-select-disabled" value={task.assignee?.id || ''} disabled>
+                <option value="">Sin asignar</option>
+                {members.map((m: any) => (
+                  <option key={m.user.id} value={m.user.id}>{m.user.fullName}</option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
+
+        {!canEdit && (
+          <div className="viewer-notice">
+            Tu rol de Observador no permite editar tareas. Contacta al propietario o gerente del proyecto.
+          </div>
+        )}
 
         {task.assignee && (
           <div className="task-assignee-display">

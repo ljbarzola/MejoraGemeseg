@@ -28,19 +28,6 @@ async function main() {
   const password = await bcrypt.hash('gemeseg2026', 10);
 
   console.log('Creando usuarios de prueba...');
-  const admin = await prisma.user.create({
-    data: {
-      fullName: 'Leidy Ponce',
-      email: 'leidy@gemeseg.com',
-      password,
-      role: 'ADMIN',
-      documentNumber: '1712345678',
-      position: 'Directora General',
-      departmentId: deptTI.id,
-      roleId: roleAdmin.id,
-    },
-  });
-
   const manager = await prisma.user.create({
     data: {
       fullName: 'Carlos Mendoza',
@@ -80,6 +67,19 @@ async function main() {
     },
   });
 
+  const sistemas = await prisma.user.create({
+    data: {
+      fullName: 'Leidy Barzola',
+      email: 'sistemas@gemeseg.com',
+      password,
+      role: 'ADMIN',
+      documentNumber: '1700000000',
+      position: 'Directora de Sistemas',
+      departmentId: deptTI.id,
+      roleId: roleAdmin.id,
+    },
+  });
+
   console.log('Creando proyectos de prueba...');
   const project1 = await prisma.project.create({
     data: {
@@ -88,10 +88,10 @@ async function main() {
       status: 'ACTIVE',
       startDate: new Date('2026-07-01'),
       endDate: new Date('2026-12-31'),
-      createdById: admin.id,
+      createdById: sistemas.id,
       members: {
         create: [
-          { userId: admin.id, role: 'OWNER' },
+          { userId: sistemas.id, role: 'OWNER' },
           { userId: employee.id, role: 'MEMBER' },
         ],
       },
@@ -122,10 +122,10 @@ async function main() {
       status: 'ON_HOLD',
       startDate: new Date('2026-08-01'),
       endDate: new Date('2027-02-28'),
-      createdById: admin.id,
+      createdById: sistemas.id,
       members: {
         create: [
-          { userId: admin.id, role: 'OWNER' },
+          { userId: sistemas.id, role: 'OWNER' },
           { userId: employee.id, role: 'MANAGER' },
         ],
       },
@@ -173,15 +173,15 @@ async function main() {
 
   console.log('USUARIOS CREADOS (todos: contraseña = gemeseg2026):');
   console.log('─────────────────────────────────────────');
-  console.log(`ADMIN:   ${admin.email}  (Leidy Ponce - Directora General)`);
+  console.log(`ADMIN:    ${sistemas.email}  (Leidy Barzola - Directora de Sistemas)`);
   console.log(`MANAGER: ${manager.email}  (Carlos Mendoza - Gerente Marketing)`);
   console.log(`EMPLOYEE: ${employee.email}  (Andrea Vera - Dev Senior)`);
   console.log(`EMPLOYEE: ${employee2.email}  (Miguel Torres - Analista Marketing)`);
   console.log('\nPROYECTOS CREADOS:');
   console.log('─────────────────────────────────────────');
-  console.log(`1. ${project1.name} [ACTIVE] → Leidy (OWNER), Andrea (MEMBER)`);
+  console.log(`1. ${project1.name} [ACTIVE] → Leidy Barzola (OWNER), Andrea (MEMBER)`);
   console.log(`2. ${project2.name} [ACTIVE] → Carlos (OWNER), Miguel (MEMBER)`);
-  console.log(`3. ${project3.name} [ON_HOLD] → Leidy (OWNER), Andrea (MANAGER)`);
+  console.log(`3. ${project3.name} [ON_HOLD] → Leidy Barzola (OWNER), Andrea (MANAGER)`);
   console.log(`4. ${project4.name} [COMPLETED] → Carlos (OWNER), Andrea (MEMBER), Miguel (VIEWER)`);
   console.log(`5. ${project5.name} [ACTIVE] → Carlos (OWNER), Miguel (MEMBER)`);
 
