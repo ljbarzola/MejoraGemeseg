@@ -1,0 +1,52 @@
+﻿version: '"3.9"'
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: gemeseg-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: gemeseg
+    ports:
+      - "5432:5432"
+    volumes:
+      - gemeseg-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gemeseg"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: gemeseg-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gemeseg-backend
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/gemeseg?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PORT: 3000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: sh -c "npx prisma generate && npx prisma db push && npm run start:dev"
+    restart: unless-stopped
+
+volumes:
+  gemeseg-postgres-data:
