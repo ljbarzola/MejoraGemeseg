@@ -1,5 +1,4 @@
-﻿version: '"3.9"'
-services:
+﻿services:
   db:
     image: postgres:16-alpine
     container_name: gemeseg-postgres

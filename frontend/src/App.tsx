@@ -1,40 +1,63 @@
-const departments = ['Marketing', 'Operaciones', 'Contabilidad', 'TI'];
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import LoginPage from './pages/auth/LoginPage';
+import RegisterPage from './pages/auth/RegisterPage';
+import DashboardPage from './pages/dashboard/DashboardPage';
+import ProjectsListPage from './pages/projects/ProjectsListPage';
+import CreateProjectPage from './pages/projects/CreateProjectPage';
+import ProjectDetailPage from './pages/projects/ProjectDetailPage';
+import ProtectedRoute from './components/ProtectedRoute';
+import { isAuthenticated } from './services/auth.service';
 
 function App() {
   return (
-    <div className="app-shell">
-      <header className="hero">
-        <div>
-          <p className="eyebrow">GEMESEG · Panel administrativo</p>
-          <h1>Gestión corporativa de fichas y permisos</h1>
-          <p className="hero-text">
-            Control centralizado para personas, áreas y roles operativos con una experiencia visual alineada a la identidad corporativa.
-          </p>
-        </div>
-      </header>
-
-      <main className="content-grid">
-        <section className="panel">
-          <h2>Áreas corporativas</h2>
-          <div className="chip-list">
-            {departments.map((department) => (
-              <span key={department} className="chip">
-                {department}
-              </span>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel highlight">
-          <h2>Estado del módulo</h2>
-          <ul>
-            <li>Frontend React + Vite listo</li>
-            <li>Backend NestJS + Prisma preparado</li>
-            <li>Paleta corporativa aplicada</li>
-          </ul>
-        </section>
-      </main>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            isAuthenticated() ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/projects"
+          element={
+            <ProtectedRoute>
+              <ProjectsListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/projects/new"
+          element={
+            <ProtectedRoute>
+              <CreateProjectPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/projects/:id"
+          element={
+            <ProtectedRoute>
+              <ProjectDetailPage />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
