@@ -1,91 +1,112 @@
 # Gemeseg Mejora
 
-## ¿Qué es este proyecto?
-Gemeseg Mejora es una plataforma en desarrollo para GEMESEG (Ecuador) diseñada para centralizar, modernizar y automatizar procesos internos.
-En esta primera fase el foco está en gestionar proyectos, tareas y usuarios de forma segura, con una base preparada para integrar IA en etapas posteriores.
+## Que es este proyecto
+Gemeseg Mejora es una plataforma web de gestion interna para GEMESEG (Ecuador), disenada para centralizar proyectos, tareas y usuarios. Esta primera fase cubre autenticacion, gestion de proyectos con roles y una interfaz moderna alineada a la identidad corporativa.
 
 ## Contexto
 - Empresa: GEMESEG (Ecuador)
-- Objetivo: centralizar operaciones internas en un espacio digital único.
-- Metodología: Scrum con sprints de 1-2 semanas.
+- Objetivo: centralizar operaciones internas en un espacio digital unico.
+- Metodologia: Scrum con sprints de 1-2 semanas.
+- Plataforma: **Web** (no movil).
 - Estado actual: Fase 1 en desarrollo.
 
-## Funcionalidades clave
-- Gestión de usuarios y roles con inicio de sesión seguro.
-- Administración de proyectos y seguimiento de tareas.
-- Base de datos relacional para mantener información estructurada.
-- Soporte inicial para IA mediante cola de trabajo asíncrona.
-- Interfaz frontend con identidad visual GEMESEG.
-- Documentación de API disponible en `/docs`.
+## Funcionalidades implementadas
+- **Autenticacion JWT**: registro solo con correos `@gemeseg.com`, login, token de 7 dias.
+- **Roles de usuario**: ADMIN, MANAGER, EMPLOYEE con guards en endpoints protegidos.
+- **Gestion de proyectos**: crear (ADMIN/MANAGER), listar con filtro por estado, paginacion de 10 por pagina, vista detalle.
+- **Proteccion por rol**: solo ADMIN y MANAGER pueden crear proyectos.
+- **Formularios validados**: React Hook Form + Zod en frontend.
+- **Diseño web responsive**: interfaz optimizada para escritorio y movil.
 
-## Qué puede hacer hoy
-- Registrar y gestionar usuarios.
-- Crear, leer, actualizar y desactivar usuarios desde el backend.
-- Estructura inicial de módulos para proyectos y tareas.
-- Colas asíncronas con Bull para manejar procesos más largos.
-- Configuración de entorno y despliegue local con Docker.
+## Credenciales de prueba
+Todos los usuarios usan la contrasena: **gemeseg2026**
 
-## Qué está en camino
-- Módulos de RRHH y desempeño.
-- Facturación y OCR.
-- CRM y despliegue en Google Cloud.
-- Integración más profunda de Claude API para asistencia en tareas.
-- Formularios y paneles de administración más completos.
+| Usuario | Email | Rol |
+|---------|-------|-----|
+| Leidy Ponce | leidy@gemeseg.com | ADMIN |
+| Carlos Mendoza | carlos@gemeseg.com | MANAGER |
+| Andrea Vera | andrea@gemeseg.com | EMPLOYEE |
+| Miguel Torres | miguel@gemeseg.com | EMPLOYEE |
 
-## Tecnología utilizada
-- Frontend: React 18 + Vite
-- Backend: NestJS + TypeScript
-- Base de datos: PostgreSQL
-- ORM: Prisma
-- Colas: Bull + Redis
-- Autenticación: JWT
-- Contenedores: Docker Compose
+## Como empezar
 
-## Cómo empezar
-### Con Docker
-1. Copia `.env.example` a `.env`.
-2. Ajusta `DATABASE_URL`, `REDIS_HOST`, `JWT_SECRET`, `CLAUDE_API_KEY` y otros valores.
-3. Ejecuta:
-   - `docker compose up --build`
-4. Accede a:
-   - Backend: `http://localhost:3000`
-   - Frontend: `http://localhost:5173`
-   - Swagger: `http://localhost:3000/docs`
+### Requisitos previos
+- Node.js 18+
+- PostgreSQL 17 (instalado localmente o via Docker)
 
-### Sin Docker
-1. Backend:
-   - `cd backend && npm install`
-   - Copia `.env.example` a `.env` y configura los valores.
-   - `npx prisma migrate dev --name init`
-   - `npm run start:dev`
-2. Frontend:
-   - `cd frontend && npm install`
-   - `npm run dev`
-3. Prueba el backend en `http://localhost:3000` y el frontend en `http://localhost:5173`.
-
-## Estructura principal del repositorio
+### Backend
+```bash
+cd backend
+npm install
+# Configurar .env con DATABASE_URL y JWT_SECRET
+npx prisma migrate dev
+node prisma/seed.js        # Crea usuarios y proyectos de prueba
+npm run start:dev          # http://localhost:3000
 ```
-gemeseg-app/
+
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev                # http://localhost:5173
+```
+
+### Endpoints disponibles
+- `POST /auth/register` - Registro (solo @gemeseg.com)
+- `POST /auth/login` - Login, retorna JWT
+- `GET /auth/profile` - Perfil del usuario autenticado
+- `POST /projects` - Crear proyecto (ADMIN/MANAGER)
+- `GET /projects` - Listar proyectos (con filtro y paginacion)
+- `GET /projects/:id` - Detalle de proyecto
+- `GET /docs` - Swagger API docs
+
+### Seed de prueba
+```bash
+cd backend
+node prisma/seed.js
+```
+
+## Estructura del repositorio
+```
+gemeseg-mejora/
 ├── AGENT.md
 ├── docker-compose.yml
-├── docker-compose.dev.yml
-├── .env.example
-├── .gitignore
 ├── backend/
 │   ├── src/
+│   │   ├── common/
+│   │   │   ├── decorators/    (Roles decorator)
+│   │   │   └── guards/        (RolesGuard)
+│   │   ├── modules/
+│   │   │   ├── auth/          (register, login, JWT)
+│   │   │   ├── projects/      (CRUD proyectos)
+│   │   │   ├── users/         (gestion de usuarios)
+│   │   │   └── tasks/         (por implementar)
+│   │   └── prisma/
 │   ├── prisma/
-│   ├── test/
-│   ├── Dockerfile
-│   ├── package.json
-│   └── tsconfig.json
+│   │   ├── schema.prisma
+│   │   ├── seed.js
+│   │   └── migrations/
+│   └── package.json
 ├── frontend/
 │   ├── src/
-│   ├── Dockerfile
-│   ├── package.json
-│   └── vite.config.ts
+│   │   ├── pages/
+│   │   │   ├── auth/          (Login, Register)
+│   │   │   ├── dashboard/
+│   │   │   └── projects/      (Listar, Crear, Detalle)
+│   │   ├── services/          (API calls)
+│   │   └── types/
+│   └── package.json
 └── docs/
     └── historias-usuario-fase1.md
 ```
+
+## Tecnologia
+- **Frontend**: React 18 + Vite + TypeScript
+- **Backend**: NestJS + TypeScript + Prisma ORM
+- **Base de datos**: PostgreSQL 17
+- **Autenticacion**: JWT (Passport.js)
+- **Validacion**: class-validator (backend) + Zod (frontend)
+- **Estilos**: CSS custom con paleta corporativa GEMESEG
 
 ## Colores corporativos
 - Azul oscuro: `#100F31`
@@ -93,5 +114,7 @@ gemeseg-app/
 - Naranja: `#EE3B1B`
 - Gris claro: `#E6E6E6`
 
-## Nota para personas no técnicas
-Este README explica qué hace el sistema, cómo empezar localmente y qué etapas están planificadas. No es necesario conocer todos los detalles técnicos para entender que la plataforma sirve a GEMESEG como un sistema moderno de gestión interna.
+## Historias de usuario completadas
+- [x] HU-ADM-01: Registro e inicio de sesion
+- [x] P1-04: Crear proyectos
+- [x] P1-05: Listar proyectos

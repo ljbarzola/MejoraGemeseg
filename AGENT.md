@@ -1,435 +1,114 @@
-# Gemeseg Mejora - Guía para agentes
+# Gemeseg Mejora - Guia para agentes
 
-## Propósito
-Este documento está destinado a agentes de desarrollo, asistentes de código y pipelines de automatización. Proporciona contexto técnico completo, decisiones de infraestructura y la organización actual del proyecto.
+## Proposito
+Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pipelines de automatizacion. Proporciona contexto tecnico completo, decisiones de infraestructura y la organizacion actual del proyecto.
 
-## 🏢 Contexto del Proyecto
+## Contexto del Proyecto
 **Empresa:** GEMESEG (Ecuador)
-**Objetivo:** Centralizar, modernizar y automatizar procesos internos mediante un ecosistema de software potenciado por IA (Claude API).
-**Metodología:** Scrum — sprints de 1-2 semanas
+**Objetivo:** Centralizar, modernizar y automatizar procesos internos mediante un ecosistema de software.
+**Metodologia:** Scrum - sprints de 1-2 semanas
+**Plataforma:** Web (no movil)
 **Estado actual:** Fase 1 en desarrollo
 
----
-
-## 🎯 Fases del Proyecto
-| Fase | Módulos | Estado |
-|------|---------|--------|
-| 1 | Proyectos & Tareas | 🔄 En progreso |
-| 2 | RRHH & Desempeño | ⏳ Pendiente |
-| 3 | Facturación & OCR | ⏳ Pendiente |
-| 4 | CRM & Deploy GCP | ⏳ Pendiente |
-
----
-
-## 🗂️ Estructura del Repositorio
-```
-gemeseg-app/
-├── AGENT.md                    ← Este archivo
-├── docker-compose.yml          ← PostgreSQL + Redis + App
-├── docker-compose.dev.yml      ← Override para desarrollo
-├── .env.example                ← Variables necesarias (sin secretos)
-├── .gitignore
-├── backend/
-│   ├── src/
-│   │   ├── main.ts
-│   │   ├── app.module.ts
-│   │   ├── common/
-│   │   │   ├── decorators/
-│   │   │   ├── filters/
-│   │   │   ├── guards/
-│   │   │   └── interceptors/
-│   │   ├── config/
-│   │   │   └── configuration.ts
-│   │   ├── modules/
-│   │   │   ├── auth/
-│   │   │   │   ├── auth.module.ts
-│   │   │   │   ├── auth.service.ts
-│   │   │   │   ├── auth.controller.ts
-│   │   │   │   ├── strategies/
-│   │   │   │   │   ├── jwt.strategy.ts
-│   │   │   │   │   └── google.strategy.ts
-│   │   │   │   └── dto/
-│   │   │   ├── users/
-│   │   │   │   ├── users.module.ts
-│   │   │   │   ├── users.service.ts
-│   │   │   │   ├── users.controller.ts
-│   │   │   │   └── dto/
-│   │   │   ├── projects/            ← FASE 1
-│   │   │   │   ├── projects.module.ts
-│   │   │   │   ├── projects.service.ts
-│   │   │   │   ├── projects.controller.ts
-│   │   │   │   └── dto/
-│   │   │   ├── tasks/               ← FASE 1
-│   │   │   │   ├── tasks.module.ts
-│   │   │   │   ├── tasks.service.ts
-│   │   │   │   ├── tasks.controller.ts
-│   │   │   │   └── dto/
-│   │   │   ├── ai/                  ← FASE 1 (Claude API)
-│   │   │   │   ├── ai.module.ts
-│   │   │   │   ├── ai.service.ts
-│   │   │   │   ├── ai.processor.ts
-│   │   │   │   └── dto/
-│   │   │   └── queue/
-│   │   │       └── queue.module.ts
-│   │   └── prisma/
-│   │       ├── prisma.module.ts
-│   │       └── prisma.service.ts
-│   ├── prisma/
-│   │   ├── schema.prisma
-│   │   └── migrations/
-│   ├── test/
-│   ├── Dockerfile
-│   ├── package.json
-│   └── tsconfig.json
-├── frontend/
-│   ├── src/
-│   │   ├── main.tsx
-│   │   ├── App.tsx
-│   │   ├── assets/
-│   │   ├── components/
-│   │   │   ├── ui/                  ← Componentes base reutilizables
-│   │   │   └── layout/
-│   │   ├── pages/
-│   │   │   ├── auth/
-│   │   │   ├── dashboard/
-│   │   │   ├── projects/            ← FASE 1
-│   │   │   └── tasks/               ← FASE 1
-│   │   ├── hooks/
-│   │   ├── services/                ← API calls
-│   │   ├── stores/                  ← Zustand stores
-│   │   └── types/
-│   ├── Dockerfile
-│   ├── package.json
-│   └── vite.config.ts
-└── docs/
-    └── historias-usuario-fase1.md
-```
-
----
-
-## 🛠️ Stack Tecnológico
+## Stack Tecnologico
 
 ### Backend
-- **Framework:** NestJS v10 + TypeScript
-- **ORM:** Prisma v5
-- **Base de datos:** PostgreSQL v15
-- **Colas:** Bull v4 + Redis v7
-- **Auth:** Passport.js (JWT + Google OAuth2)
+- **Framework:** NestJS v11 + TypeScript
+- **ORM:** Prisma v7
+- **Base de datos:** PostgreSQL 17
+- **Auth:** Passport.js (JWT) + bcryptjs
 - **Docs:** Swagger en `/docs`
-- **Testing:** Jest + Supertest
+- **Validacion:** class-validator + class-transformer
 
 ### Frontend
 - **Framework:** React 18 + Vite
-- **Estilos:** TailwindCSS + paleta corporativa GEMESEG
-- **Estado:** TanStack Query (server) + Zustand (client)
+- **Routing:** react-router-dom
 - **Formularios:** React Hook Form + Zod
 - **HTTP:** Axios
 
 ### Infraestructura
-- **Dev:** Docker Compose (local)
-- **Prod:** GCP Cloud Run + Cloud SQL
-- **Monitoring:** Datadog
-- **CI/CD:** GitHub Actions (rama main → prod, rama dev → staging)
+- **Dev:** PostgreSQL local
+- **Prod:** GCP Cloud Run + Cloud SQL (planeado)
 
----
-
-## 🔑 Variables de Entorno
-
-```bash
-# .env.example — copiar a .env y rellenar valores reales
-
-# App
-NODE_ENV=development
-PORT=3000
-
-# Base de datos
-DATABASE_URL=postgresql://gemeseg:password@localhost:5432/gemeseg_db
-
-# Redis (para Bull)
-REDIS_HOST=localhost
-REDIS_PORT=6379
-
-# JWT
-JWT_SECRET=your-secret-key-min-32-chars
-JWT_EXPIRES_IN=7d
-
-# Google OAuth (solo 4 usuarios piloto)
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
-
-# Claude API (cuenta personal de Leidy)
-CLAUDE_API_KEY=sk-ant-
-CLAUDE_MODEL=claude-3-5-sonnet-20241022
-CLAUDE_MAX_TOKENS=2048
-
-# Rate limiting Claude (por usuario por día)
-CLAUDE_DAILY_LIMIT_PER_USER=50
-
-# Frontend URL (para CORS)
-FRONTEND_URL=http://localhost:5173
-```
-
----
-
-## 🗃️ Esquema Prisma (Fase 1)
-
-```prisma
-// schema.prisma
-
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  password     String?  // null si es OAuth
-  firstName    String
-  lastName     String
-  authMethod   AuthMethod @default(LOCAL)
-  googleId     String?  @unique
-  role         UserRole   @default(EMPLOYEE)
-  isActive     Boolean  @default(true)
-  dailyAiCalls Int      @default(0)
-  lastAiReset  DateTime @default(now())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  department   Department? @relation(fields: [departmentId], references: [id])
-  departmentId String?
-
-  projectMemberships ProjectMember[]
-  assignedTasks      Task[]
-  createdProjects    Project[]         @relation("CreatedBy")
-  aiLogs             AiLog[]
-}
-
-model Department {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
-  users     User[]
-}
-
-model Project {
-  id          String        @id @default(cuid())
-  name        String
-  description String?
-  status      ProjectStatus @default(ACTIVE)
-  startDate   DateTime?
-  endDate     DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  createdBy   User   @relation("CreatedBy", fields: [createdById], references: [id])
-  createdById String
-
-  members     ProjectMember[]
-  tasks       Task[]
-}
-
-model ProjectMember {
-  id        String      @id @default(cuid())
-  role      MemberRole  @default(MEMBER)
-  joinedAt  DateTime    @default(now())
-
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectId String
-  user      User    @relation(fields: [userId], references: [id])
-  userId    String
-
-  @@unique([projectId, userId])
-}
-
-model Task {
-  id          String     @id @default(cuid())
-  title       String
-  description String?
-  status      TaskStatus @default(TODO)
-  priority    Priority   @default(MEDIUM)
-  dueDate     DateTime?
-  estimatedHours Float?
-  actualHours    Float?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectId   String
-  assignee    User?   @relation(fields: [assigneeId], references: [id])
-  assigneeId  String?
-}
-
-model AiLog {
-  id          String   @id @default(cuid())
-  userId      String
-  module      String   // "projects", "tasks", "reports"
-  action      String   // "suggest_assignee", "generate_report"
-  tokensUsed  Int
-  cost        Float?
-  success     Boolean
-  createdAt   DateTime @default(now())
-
-  user        User @relation(fields: [userId], references: [id])
-}
-
-enum AuthMethod {
-  LOCAL
-  GOOGLE
-}
-
-enum UserRole {
-  ADMIN
-  MANAGER
-  EMPLOYEE
-}
-
-enum MemberRole {
-  OWNER
-  MANAGER
-  MEMBER
-  VIEWER
-}
-
-enum ProjectStatus {
-  ACTIVE
-  ON_HOLD
-  COMPLETED
-  CANCELLED
-}
-
-enum TaskStatus {
-  TODO
-  IN_PROGRESS
-  IN_REVIEW
-  DONE
-  CANCELLED
-}
-
-enum Priority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
-}
-```
-
----
-
-## 🔐 Autenticación
-
-### Flujo 1: Local (toda la empresa)
-1. `POST /auth/register` → email + contraseña
-2. `POST /auth/login` → retorna JWT
-3. JWT en header `Authorization: Bearer <token>`
-
-### Flujo 2: Google OAuth (4 usuarios piloto Workspace)
-1. `GET /auth/google` → redirige a Google
-2. Google callback → `GET /auth/google/callback`
-3. Retorna mismo JWT estándar
-
-### Reglas importantes
-- Ambos flujos producen el **mismo JWT**, misma protección de rutas.
-- Solo correos `@gemeseg.com` pueden registrarse.
-- Contraseñas hasheadas con `bcrypt` (salt rounds: 10).
-- JWT expira en 7 días.
-
----
-
-## 🤖 Claude API — Reglas de Uso
-
-### Rate Limiting
-- **Máximo:** 50 llamadas/usuario/día
-- **Reset:** Diario a medianoche (Ecuador, UTC-5)
-- **Control:** Campo `dailyAiCalls` + `lastAiReset` en tabla `User`
-- Si el usuario alcanza el límite → error `429` con mensaje descriptivo
-
-### Procesamiento
-- **Todas las llamadas a Claude son ASÍNCRONAS** vía Bull Queue.
-- El endpoint devuelve `{ jobId, status: "enqueued" }` inmediatamente.
-- El frontend hace polling a `GET /ai/jobs/:jobId` para el resultado.
-- El resultado final se guarda en BD cuando está listo.
-
-### Modelo
-- Usar siempre `claude-3-5-sonnet-20241022`.
-- `max_tokens: 2048` por defecto (ajustar según el caso).
-
-### Seguridad
-- `CLAUDE_API_KEY` solo vive en `.env` — nunca en el código fuente.
-- Nunca exponer la key al frontend.
-- Loguear en `AiLog` cada llamada: tokens, costo, éxito/fallo.
-
----
-
-## 📏 Convenciones de Código
+## Convenciones de Codigo
 
 ### NestJS
-- Un módulo por dominio: `projects`, `tasks`, `auth`, `users`, `ai`.
+- Un modulo por dominio: `auth`, `projects`, `users`, `tasks`.
 - DTOs con `class-validator` para toda entrada.
-- Responses consistentes:
-  ```ts
-  { data: T, message: string, statusCode: number }
-  ```
-- Errores con `HttpException` o filters globales.
-- Nombres en inglés, comentarios en español si son complejos.
+- Guards por rol: `@Roles(UserRole.ADMIN, UserRole.MANAGER)` + `RolesGuard`.
+- Responses consistentes.
+- Nombres en ingles.
 
 ### React
 - Componentes en PascalCase.
-- Hooks personalizados con prefijo `use`.
-- Servicios de API en `/src/services/` (Axios).
-- Un store de Zustand por módulo.
-- Páginas en `/src/pages/`, componentes reutilizables en `/src/components/ui/`.
+- Servicios de API en `/src/services/` (Axios con interceptor JWT).
+- Paginas en `/src/pages/`.
+- Tipos en `/src/types/`.
+
+### Prisma
+- Enums en schema: `UserRole`, `ProjectStatus`, `MemberRole`, `TaskStatus`, `Priority`.
+- Migraciones con `prisma migrate dev --name <nombre>`.
+- Seed en `prisma/seed.js`.
 
 ### Git
 - Ramas: `main` (prod), `dev` (desarrollo activo), `feature/XXX-nombre`.
 - Commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`.
-- PRs siempre de `feature/*` → `dev`, nunca directo a `main`.
 
-### Testing
-- Un archivo `*.spec.ts` por servicio.
-- Cubrir al menos: happy path + caso de error principal.
-- Mocks para Prisma y Claude API en tests unitarios.
+## Variables de Entorno
 
----
+```bash
+# .env
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gemeseg?schema=public
+JWT_SECRET=gemeseg-jwt-secret-2026
+```
 
-## 🚫 LO QUE NO DEBES HACER
+## Esquema Prisma (actual)
 
-- ❌ Poner `CLAUDE_API_KEY` hardcodeada en ningún archivo.
-- ❌ Llamar a Claude API de forma síncrona (siempre via Bull).
-- ❌ Saltarte la validación de `@gemeseg.com` en registro.
-- ❌ Hacer commits directos a `main`.
-- ❌ Usar `any` en TypeScript sin justificación.
-- ❌ Retornar contraseñas hasheadas en responses de la API.
-- ❌ Omitir el registro en `AiLog` cuando se llama a Claude.
+```prisma
+enum UserRole { ADMIN MANAGER EMPLOYEE }
+enum ProjectStatus { ACTIVE ON_HOLD COMPLETED CANCELLED }
+enum MemberRole { OWNER MANAGER MEMBER VIEWER }
+enum TaskStatus { TODO IN_PROGRESS IN_REVIEW DONE CANCELLED }
+enum Priority { LOW MEDIUM HIGH URGENT }
+```
 
----
+Modelos: `User`, `Department`, `Role`, `Project`, `ProjectMember`, `Task`
 
-## ✅ CHECKLIST ANTES DE CADA PR
+## Autenticacion
 
-- [ ] Tests pasan (`npm run test`)
-- [ ] No hay `console.log` olvidados en producción
-- [ ] Variables de entorno nuevas están en `.env.example`
-- [ ] Swagger actualizado (`@ApiOperation`, `@ApiResponse`)
-- [ ] Migración Prisma creada si hay cambios de schema
-- [ ] Sin secretos en el código
+- `POST /auth/register` - solo correos `@gemeseg.com`
+- `POST /auth/login` - retorna JWT con `{ sub, email, role }`
+- JWT expira en 7 dias
+- Password hasheada con bcrypt (salt 10)
+- Role incluido en JWT para guards
 
----
+## Guard de roles
+
+```typescript
+@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.MANAGER)
+async create(...) { ... }
+```
+
+## LO QUE NO DEBES HACER
+
+- Poner contrasenas en texto plano en la BD.
+- Hacer commits directos a `main`.
+- Usar `any` en TypeScript sin justificacion.
+- Retornar contrasenas hasheadas en responses de la API.
+- Crear endpoints sin validacion de DTOs.
 
 ## Estado actual del sistema
-- Backend NestJS + Prisma con módulo Users y CRUD básico.
-- Frontend React + Vite con paleta corporativa GEMESEG.
-- Esquema Prisma con User, Department y Role.
+- Backend NestJS + Prisma con modulos Auth y Projects funcionalles.
+- Frontend React + Vite con login, registro, dashboard, y gestion de proyectos.
+- Roles: ADMIN, MANAGER, EMPLOYEE con guards.
+- Seed con 4 usuarios y 5 proyectos de prueba.
 - Swagger habilitado en `/docs`.
-- Docker Compose definido para dev.
-- Base para HU-ADM-01 y para extenderse a proyectos, tareas y IA.
+- PostgreSQL 17 instalado localmente.
 
-## Puntos de atención
-- Asegurar la conexión válida a PostgreSQL antes de ejecutar migraciones.
-- Mantener la clave Claude en `.env` y no en el repositorio.
-- Usar Bull para operaciones asíncronas de IA.
-- Añadir tests unitarios e integración sobre Prisma y la API de Claude.
+## Credenciales de prueba
+- Contrasena para todos: `gemeseg2026`
+- Admin: `leidy@gemeseg.com`
+- Manager: `carlos@gemeseg.com`
+- Employee: `andrea@gemeseg.com`
+- Employee: `miguel@gemeseg.com`
