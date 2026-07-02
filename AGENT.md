@@ -1,63 +1,148 @@
 # Gemeseg Mejora - Guía para agentes
 
 ## Propósito
-Este documento está pensado para ser consumido por agentes de desarrollo, asistentes de código o herramientas de automatización. Su objetivo es proporcionar contexto técnico claro para entender el proyecto, sus decisiones de arquitectura y las prioridades de implementación.
+Este documento está destinado a agentes de desarrollo, asistentes de código y pipelines de automatización. Proporciona contexto técnico completo, decisiones de infraestructura y la organización actual del proyecto.
 
-## Contexto del proyecto
-Proyecto orientado a modernizar Gemeseg mediante una plataforma web escalable, segura y preparada para incorporar inteligencia artificial en una segunda fase.
+## 🏢 Contexto del Proyecto
+**Empresa:** GEMESEG (Ecuador)
+**Objetivo:** Centralizar, modernizar y automatizar procesos internos mediante un ecosistema de software potenciado por IA (Claude API).
+**Metodología:** Scrum — sprints de 1-2 semanas
+**Estado actual:** Fase 1 en desarrollo
 
-## Objetivo general
-Construir una solución modular para gestionar operaciones corporativas, usuarios, roles, contratos y auditorías, con una arquitectura preparada para crecimiento y evolución.
+---
 
-## Arquitectura recomendada
+## 🎯 Fases del Proyecto
+| Fase | Módulos | Estado |
+|------|---------|--------|
+| 1 | Proyectos & Tareas | 🔄 En progreso |
+| 2 | RRHH & Desempeño | ⏳ Pendiente |
+| 3 | Facturación & OCR | ⏳ Pendiente |
+| 4 | CRM & Deploy GCP | ⏳ Pendiente |
 
-### Frontend
-- Framework: React
-- Herramienta de desarrollo: Vite
-- Gestión de estado:
-  - React Query (TanStack) para peticiones y caché
-  - Zustand para estado global
-- Estilos:
-  - CSS puro con variables si se requiere control corporativo estricto
-  - Tailwind CSS si se prioriza rapidez en el desarrollo de interfaces
+---
+
+## 🗂️ Estructura del Repositorio
+```
+gemeseg-app/
+├── AGENT.md                    ← Este archivo
+├── docker-compose.yml          ← PostgreSQL + Redis + App
+├── docker-compose.dev.yml      ← Override para desarrollo
+├── .env.example                ← Variables necesarias (sin secretos)
+├── .gitignore
+├── backend/
+│   ├── src/
+│   │   ├── main.ts
+│   │   ├── app.module.ts
+│   │   ├── common/
+│   │   │   ├── decorators/
+│   │   │   ├── filters/
+│   │   │   ├── guards/
+│   │   │   └── interceptors/
+│   │   ├── config/
+│   │   │   └── configuration.ts
+│   │   ├── modules/
+│   │   │   ├── auth/
+│   │   │   │   ├── auth.module.ts
+│   │   │   │   ├── auth.service.ts
+│   │   │   │   ├── auth.controller.ts
+│   │   │   │   ├── strategies/
+│   │   │   │   │   ├── jwt.strategy.ts
+│   │   │   │   │   └── google.strategy.ts
+│   │   │   │   └── dto/
+│   │   │   ├── users/
+│   │   │   │   ├── users.module.ts
+│   │   │   │   ├── users.service.ts
+│   │   │   │   ├── users.controller.ts
+│   │   │   │   └── dto/
+│   │   │   ├── projects/            ← FASE 1
+│   │   │   │   ├── projects.module.ts
+│   │   │   │   ├── projects.service.ts
+│   │   │   │   ├── projects.controller.ts
+│   │   │   │   └── dto/
+│   │   │   ├── tasks/               ← FASE 1
+│   │   │   │   ├── tasks.module.ts
+│   │   │   │   ├── tasks.service.ts
+│   │   │   │   ├── tasks.controller.ts
+│   │   │   │   └── dto/
+│   │   │   ├── ai/                  ← FASE 1 (Claude API)
+│   │   │   │   ├── ai.module.ts
+│   │   │   │   ├── ai.service.ts
+│   │   │   │   ├── ai.processor.ts
+│   │   │   │   └── dto/
+│   │   │   └── queue/
+│   │   │       └── queue.module.ts
+│   │   └── prisma/
+│   │       ├── prisma.module.ts
+│   │       └── prisma.service.ts
+│   ├── prisma/
+│   │   ├── schema.prisma
+│   │   └── migrations/
+│   ├── test/
+│   ├── Dockerfile
+│   ├── package.json
+│   └── tsconfig.json
+├── frontend/
+│   ├── src/
+│   │   ├── main.tsx
+│   │   ├── App.tsx
+│   │   ├── assets/
+│   │   ├── components/
+│   │   │   ├── ui/                  ← Componentes base reutilizables
+│   │   │   └── layout/
+│   │   ├── pages/
+│   │   │   ├── auth/
+│   │   │   ├── dashboard/
+│   │   │   ├── projects/            ← FASE 1
+│   │   │   └── tasks/               ← FASE 1
+│   │   ├── hooks/
+│   │   ├── services/                ← API calls
+│   │   ├── stores/                  ← Zustand stores
+│   │   └── types/
+│   ├── Dockerfile
+│   ├── package.json
+│   └── vite.config.ts
+└── docs/
+    └── historias-usuario-fase1.md
+```
+
+---
+
+## 🛠️ Stack Tecnológico
 
 ### Backend
-Elegir una de estas dos opciones según el alcance previsto para IA:
+- **Framework:** NestJS v10 + TypeScript
+- **ORM:** Prisma v5
+- **Base de datos:** PostgreSQL v15
+- **Colas:** Bull v4 + Redis v7
+- **Auth:** Passport.js (JWT + Google OAuth2)
+- **Docs:** Swagger en `/docs`
+- **Testing:** Jest + Supertest
 
-- Opción A - Corporativa:
-  - NestJS + TypeScript + Prisma
-  - Recomendado para sistemas empresariales, seguridad y mantenibilidad
+### Frontend
+- **Framework:** React 18 + Vite
+- **Estilos:** TailwindCSS + paleta corporativa GEMESEG
+- **Estado:** TanStack Query (server) + Zustand (client)
+- **Formularios:** React Hook Form + Zod
+- **HTTP:** Axios
 
-- Opción B - IA:
-  - FastAPI + Python
-  - Recomendado para agentes de IA y procesamiento complejo de documentos
+### Infraestructura
+- **Dev:** Docker Compose (local)
+- **Prod:** GCP Cloud Run + Cloud SQL
+- **Monitoring:** Datadog
+- **CI/CD:** GitHub Actions (rama main → prod, rama dev → staging)
 
-### Base de datos e infraestructura
-- PostgreSQL como base de datos relacional principal
-- Google Cloud Platform (GCP) como plataforma de despliegue
-- Cloud Run para aplicaciones frontend y backend
-- Cloud SQL para base de datos gestionada y segura
+---
 
-## Reglas de implementación sugeridas
-- Priorizar una arquitectura limpia y modular.
-- Mantener separación clara entre frontend, backend y datos.
-- Favorecer buenas prácticas de seguridad y auditoría.
-- Diseñar el modelo de datos para soportar relaciones entre empleados, roles, contratos y auditorías.
-- Preparar la solución para integrar agentes de IA en una segunda fase sin reestructurar por completo el sistema.
+## 🔑 Variables de Entorno
 
-## Entregables esperados
-- Estructura base del frontend
-- Estructura base del backend
-- Modelo de datos inicial en PostgreSQL
-- Configuración básica de despliegue en GCP
-- Documentación de decisiones técnicas
+```bash
+# .env.example — copiar a .env y rellenar valores reales
 
-## Notas para agentes
-- Si el usuario pide crear la arquitectura, priorizar una solución escalable y bien documentada.
-- Si el usuario solicita implementar funcionalidades, mantener el enfoque en una base técnica coherente con esta propuesta.
-- Si aparece una decisión entre backend corporativo y backend IA, preguntar cuál es la prioridad antes de tomar una decisión definitiva.
-- No introducir tecnologías que contradigan esta propuesta sin justificarlo.
+# App
+NODE_ENV=development
+PORT=3000
 
+<<<<<<< HEAD
 ## Resumen corto
 Este proyecto está planteado como una solución moderna, segura y preparada para IA, con React/Vite en el frontend, una opción de backend según el peso de la IA, PostgreSQL como base de datos y GCP como infraestructura principal.
 
@@ -234,6 +319,8 @@ gemeseg-app/
 NODE_ENV=development
 PORT=3000
 
+=======
+>>>>>>> 2f63cce36b5b653bcd3016ab0d68318d4d219622
 # Base de datos
 DATABASE_URL=postgresql://gemeseg:password@localhost:5432/gemeseg_db
 
@@ -288,7 +375,11 @@ model User {
   googleId     String?  @unique
   role         UserRole   @default(EMPLOYEE)
   isActive     Boolean  @default(true)
+<<<<<<< HEAD
   dailyAiCalls Int      @default(0)  // Reset diario
+=======
+  dailyAiCalls Int      @default(0)
+>>>>>>> 2f63cce36b5b653bcd3016ab0d68318d4d219622
   lastAiReset  DateTime @default(now())
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -370,8 +461,11 @@ model AiLog {
   user        User @relation(fields: [userId], references: [id])
 }
 
+<<<<<<< HEAD
 // ===== ENUMS =====
 
+=======
+>>>>>>> 2f63cce36b5b653bcd3016ab0d68318d4d219622
 enum AuthMethod {
   LOCAL
   GOOGLE
@@ -427,11 +521,19 @@ enum Priority {
 2. Google callback → `GET /auth/google/callback`
 3. Retorna mismo JWT estándar
 
+<<<<<<< HEAD
 ### Reglas importantes:
 - Ambos flujos producen el **mismo JWT**, misma protección de rutas
 - Solo correos `@gemeseg.com` pueden registrarse
 - Contraseñas hasheadas con `bcrypt` (salt rounds: 10)
 - JWT expira en 7 días
+=======
+### Reglas importantes
+- Ambos flujos producen el **mismo JWT**, misma protección de rutas.
+- Solo correos `@gemeseg.com` pueden registrarse.
+- Contraseñas hasheadas con `bcrypt` (salt rounds: 10).
+- JWT expira en 7 días.
+>>>>>>> 2f63cce36b5b653bcd3016ab0d68318d4d219622
 
 ---
 
@@ -444,6 +546,7 @@ enum Priority {
 - Si el usuario alcanza el límite → error `429` con mensaje descriptivo
 
 ### Procesamiento
+<<<<<<< HEAD
 - **Todas las llamadas a Claude son ASÍNCRONAS** via Bull Queue
 - El endpoint devuelve `{ jobId, status: "enqueued" }` inmediatamente
 - El frontend hace polling a `GET /ai/jobs/:jobId` para el resultado
@@ -457,18 +560,39 @@ enum Priority {
 - `CLAUDE_API_KEY` solo vive en `.env` — nunca en el código fuente
 - Nunca exponer la key al frontend
 - Loguear en `AiLog` cada llamada: tokens, costo, éxito/fallo
+=======
+- **Todas las llamadas a Claude son ASÍNCRONAS** vía Bull Queue.
+- El endpoint devuelve `{ jobId, status: "enqueued" }` inmediatamente.
+- El frontend hace polling a `GET /ai/jobs/:jobId` para el resultado.
+- El resultado final se guarda en BD cuando está listo.
+
+### Modelo
+- Usar siempre `claude-3-5-sonnet-20241022`.
+- `max_tokens: 2048` por defecto (ajustar según el caso).
+
+### Seguridad
+- `CLAUDE_API_KEY` solo vive en `.env` — nunca en el código fuente.
+- Nunca exponer la key al frontend.
+- Loguear en `AiLog` cada llamada: tokens, costo, éxito/fallo.
+>>>>>>> 2f63cce36b5b653bcd3016ab0d68318d4d219622
 
 ---
 
 ## 📏 Convenciones de Código
 
 ### NestJS
+<<<<<<< HEAD
 - Un módulo por dominio: `projects`, `tasks`, `auth`, `users`, `ai`
 - DTOs con `class-validator` para toda entrada
+=======
+- Un módulo por dominio: `projects`, `tasks`, `auth`, `users`, `ai`.
+- DTOs con `class-validator` para toda entrada.
+>>>>>>> 2f63cce36b5b653bcd3016ab0d68318d4d219622
 - Responses consistentes:
   ```ts
   { data: T, message: string, statusCode: number }
   ```
+<<<<<<< HEAD
 - Errores con `HttpException` o filters globales
 - Nombres en inglés, comentarios en español si son complejos
 
@@ -488,11 +612,33 @@ enum Priority {
 - Un archivo `*.spec.ts` por servicio
 - Cubrir al menos: happy path + caso de error principal
 - Mocks para Prisma y Claude API en tests unitarios
+=======
+- Errores con `HttpException` o filters globales.
+- Nombres en inglés, comentarios en español si son complejos.
+
+### React
+- Componentes en PascalCase.
+- Hooks personalizados con prefijo `use`.
+- Servicios de API en `/src/services/` (Axios).
+- Un store de Zustand por módulo.
+- Páginas en `/src/pages/`, componentes reutilizables en `/src/components/ui/`.
+
+### Git
+- Ramas: `main` (prod), `dev` (desarrollo activo), `feature/XXX-nombre`.
+- Commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`.
+- PRs siempre de `feature/*` → `dev`, nunca directo a `main`.
+
+### Testing
+- Un archivo `*.spec.ts` por servicio.
+- Cubrir al menos: happy path + caso de error principal.
+- Mocks para Prisma y Claude API en tests unitarios.
+>>>>>>> 2f63cce36b5b653bcd3016ab0d68318d4d219622
 
 ---
 
 ## 🚫 LO QUE NO DEBES HACER
 
+<<<<<<< HEAD
 - ❌ Poner `CLAUDE_API_KEY` hardcodeada en ningún archivo
 - ❌ Llamar a Claude API de forma síncrona (siempre via Bull)
 - ❌ Saltarte la validación de `@gemeseg.com` en registro
@@ -500,6 +646,15 @@ enum Priority {
 - ❌ Usar `any` en TypeScript sin justificación
 - ❌ Retornar contraseñas hasheadas en responses de la API
 - ❌ Omitir el registro en `AiLog` cuando se llama a Claude
+=======
+- ❌ Poner `CLAUDE_API_KEY` hardcodeada en ningún archivo.
+- ❌ Llamar a Claude API de forma síncrona (siempre via Bull).
+- ❌ Saltarte la validación de `@gemeseg.com` en registro.
+- ❌ Hacer commits directos a `main`.
+- ❌ Usar `any` en TypeScript sin justificación.
+- ❌ Retornar contraseñas hasheadas en responses de la API.
+- ❌ Omitir el registro en `AiLog` cuando se llama a Claude.
+>>>>>>> 2f63cce36b5b653bcd3016ab0d68318d4d219622
 
 ---
 
@@ -511,3 +666,22 @@ enum Priority {
 - [ ] Swagger actualizado (`@ApiOperation`, `@ApiResponse`)
 - [ ] Migración Prisma creada si hay cambios de schema
 - [ ] Sin secretos en el código
+<<<<<<< HEAD
+=======
+
+---
+
+## Estado actual del sistema
+- Backend NestJS + Prisma con módulo Users y CRUD básico.
+- Frontend React + Vite con paleta corporativa GEMESEG.
+- Esquema Prisma con User, Department y Role.
+- Swagger habilitado en `/docs`.
+- Docker Compose definido para dev.
+- Base para HU-ADM-01 y para extenderse a proyectos, tareas y IA.
+
+## Puntos de atención
+- Asegurar la conexión válida a PostgreSQL antes de ejecutar migraciones.
+- Mantener la clave Claude en `.env` y no en el repositorio.
+- Usar Bull para operaciones asíncronas de IA.
+- Añadir tests unitarios e integración sobre Prisma y la API de Claude.
+>>>>>>> 2f63cce36b5b653bcd3016ab0d68318d4d219622
