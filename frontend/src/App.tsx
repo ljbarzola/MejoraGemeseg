@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
@@ -23,6 +24,8 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  const [chatOpen, setChatOpen] = useState(false);
+
   return (
     <BrowserRouter>
       <Routes>
@@ -103,6 +106,13 @@ function App() {
           }
         />
       </Routes>
+
+      {isAuthenticated() && (
+        <>
+          <ChatFloatingButton onClick={() => setChatOpen(true)} />
+          <ChatDrawer isOpen={chatOpen} onClose={() => setChatOpen(false)} />
+        </>
+      )}
     </BrowserRouter>
   );
 }
