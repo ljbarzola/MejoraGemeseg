@@ -5,6 +5,9 @@ import DashboardPage from './pages/dashboard/DashboardPage';
 import ProjectsListPage from './pages/projects/ProjectsListPage';
 import CreateProjectPage from './pages/projects/CreateProjectPage';
 import ProjectDetailPage from './pages/projects/ProjectDetailPage';
+import KanbanPage from './pages/tasks/KanbanPage';
+import CreateTaskPage from './pages/tasks/CreateTaskPage';
+import TaskDetailPage from './pages/tasks/TaskDetailPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { isAuthenticated } from './services/auth.service';
 
@@ -53,6 +56,30 @@ function App() {
           element={
             <ProtectedRoute>
               <ProjectDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/projects/:id/tasks"
+          element={
+            <ProtectedRoute>
+              <KanbanPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/projects/:id/tasks/new"
+          element={
+            <ProtectedRoute>
+              <CreateTaskPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tasks/:id"
+          element={
+            <ProtectedRoute>
+              <TaskDetailPage />
             </ProtectedRoute>
           }
         />

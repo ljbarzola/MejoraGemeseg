@@ -8,6 +8,10 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log('Limpiando datos existentes...');
+  await prisma.chatMessage.deleteMany();
+  await prisma.conversation.deleteMany();
+  await prisma.aiLog.deleteMany();
+  await prisma.agent.deleteMany();
   await prisma.projectMember.deleteMany();
   await prisma.task.deleteMany();
   await prisma.project.deleteMany();
@@ -167,6 +171,96 @@ async function main() {
     },
   });
 
+  console.log('Creando tareas de prueba...');
+  const task1 = await prisma.task.create({
+    data: {
+      title: 'Diseñar nueva interfaz del dashboard',
+      description: 'Crear mockups y prototipos del nuevo dashboard principal con métricas en tiempo real.',
+      status: 'DONE',
+      priority: 'HIGH',
+      dueDate: new Date('2026-07-15'),
+      estimatedHours: 24,
+      projectId: project1.id,
+      assigneeId: employee.id,
+    },
+  });
+
+  const task2 = await prisma.task.create({
+    data: {
+      title: 'Implementar módulo de autenticación OAuth',
+      description: 'Integrar login con Google y Microsoft usando OAuth 2.0.',
+      status: 'IN_PROGRESS',
+      priority: 'URGENT',
+      dueDate: new Date('2026-07-20'),
+      estimatedHours: 16,
+      projectId: project1.id,
+      assigneeId: employee.id,
+    },
+  });
+
+  const task3 = await prisma.task.create({
+    data: {
+      title: 'Configurar pipeline CI/CD',
+      description: 'Setup de GitHub Actions para build, test y deploy automático a Cloud Run.',
+      status: 'TODO',
+      priority: 'MEDIUM',
+      dueDate: new Date('2026-07-25'),
+      estimatedHours: 12,
+      projectId: project1.id,
+    },
+  });
+
+  const task4 = await prisma.task.create({
+    data: {
+      title: 'Escribir documentación API',
+      description: 'Documentar todos los endpoints REST con Swagger/OpenAPI.',
+      status: 'IN_REVIEW',
+      priority: 'LOW',
+      dueDate: new Date('2026-08-01'),
+      estimatedHours: 8,
+      projectId: project1.id,
+      assigneeId: employee.id,
+    },
+  });
+
+  const task5 = await prisma.task.create({
+    data: {
+      title: 'Crear campaña Instagram Q3',
+      description: 'Diseñar contenido visual y calendario de publicaciones para Instagram.',
+      status: 'IN_PROGRESS',
+      priority: 'HIGH',
+      dueDate: new Date('2026-07-18'),
+      estimatedHours: 20,
+      projectId: project2.id,
+      assigneeId: employee2.id,
+    },
+  });
+
+  const task6 = await prisma.task.create({
+    data: {
+      title: 'Analizar métricas SEO del sitio',
+      description: 'Revisar posicionamiento actual y proponer mejoras técnicas de SEO.',
+      status: 'TODO',
+      priority: 'MEDIUM',
+      dueDate: new Date('2026-07-22'),
+      estimatedHours: 10,
+      projectId: project2.id,
+    },
+  });
+
+  const task7 = await prisma.task.create({
+    data: {
+      title: 'Diseñar presupuesto publicitario',
+      description: 'Definir distribución del presupuesto en campañas pagadas de Google Ads y Meta.',
+      status: 'DONE',
+      priority: 'HIGH',
+      dueDate: new Date('2026-07-10'),
+      estimatedHours: 6,
+      projectId: project2.id,
+      assigneeId: employee2.id,
+    },
+  });
+
   console.log('\n========================================');
   console.log('  SEED COMPLETADO EXITOSAMENTE');
   console.log('========================================\n');
@@ -184,6 +278,15 @@ async function main() {
   console.log(`3. ${project3.name} [ON_HOLD] → Leidy (OWNER), Andrea (MANAGER)`);
   console.log(`4. ${project4.name} [COMPLETED] → Carlos (OWNER), Andrea (MEMBER), Miguel (VIEWER)`);
   console.log(`5. ${project5.name} [ACTIVE] → Carlos (OWNER), Miguel (MEMBER)`);
+  console.log('\nTAREAS CREADAS:');
+  console.log('─────────────────────────────────────────');
+  console.log(`1. ${task1.title} [DONE] → Andrea`);
+  console.log(`2. ${task2.title} [IN_PROGRESS] → Andrea`);
+  console.log(`3. ${task3.title} [TODO] → Sin asignar`);
+  console.log(`4. ${task4.title} [IN_REVIEW] → Andrea`);
+  console.log(`5. ${task5.title} [IN_PROGRESS] → Miguel`);
+  console.log(`6. ${task6.title} [TODO] → Sin asignar`);
+  console.log(`7. ${task7.title} [DONE] → Miguel`);
 }
 
 main()
