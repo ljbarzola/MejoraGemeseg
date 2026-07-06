@@ -1,14 +1,9 @@
 import { useNavigate } from 'react-router-dom';
-import { removeToken, getUser } from '../../services/auth.service';
+import { getUser } from '../../services/auth.service';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
   const user = getUser();
-
-  const handleLogout = () => {
-    removeToken();
-    navigate('/login');
-  };
 
   return (
     <div className="app-shell">
