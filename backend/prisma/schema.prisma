@@ -117,6 +117,7 @@ model Task {
   status      TaskStatus @default(TODO)
   priority    Priority   @default(MEDIUM)
   dueDate     DateTime?
+  estimatedHours Float?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -124,4 +125,51 @@ model Task {
   project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assigneeId Int?
   assignee   User?   @relation(fields: [assigneeId], references: [id])
+}
+
+model Agent {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  prompt    String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  messages  ChatMessage[]
+}
+
+model Conversation {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  context   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  messages  ChatMessage[]
+  @@index([userId])
+}
+
+model ChatMessage {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  tokensUsed     Int?
+  model          String?
+  createdAt      DateTime     @default(now())
+  agentId        Int?
+  agent          Agent?       @relation(fields: [agentId], references: [id])
+  @@index([conversationId])
+}
+
+model AiLog {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  action       String
+  model        String
+  tokensUsed   Int?
+  success      Boolean
+  errorMessage String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  @@index([userId])
+  @@index([createdAt])
 }
