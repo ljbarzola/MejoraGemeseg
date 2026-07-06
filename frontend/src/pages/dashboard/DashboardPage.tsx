@@ -53,12 +53,6 @@ export default function DashboardPage() {
           </ul>
         </section>
       </main>
-
-      <div style={{ marginTop: 24 }}>
-        <button className="btn-logout" onClick={handleLogout}>
-          Cerrar sesión
-        </button>
-      </div>
     </div>
   );
 }
