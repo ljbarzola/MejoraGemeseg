@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsNumber, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsNumber, IsDateString, IsArray } from 'class-validator';
 
 export class CreateTaskDto {
   @IsString()
@@ -14,9 +14,22 @@ export class CreateTaskDto {
 
   @IsOptional()
   @IsDateString()
-  dueDate?: string;
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
 
   @IsOptional()
   @IsNumber()
   estimatedHours?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  assigneeIds?: number[];
+
+  @IsOptional()
+  @IsEnum(['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE', 'CANCELLED'])
+  status?: string;
 }

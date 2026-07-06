@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsNumber, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsNumber, IsDateString, IsArray } from 'class-validator';
 
 export class UpdateTaskDto {
   @IsOptional()
@@ -19,13 +19,18 @@ export class UpdateTaskDto {
 
   @IsOptional()
   @IsDateString()
-  dueDate?: string;
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
 
   @IsOptional()
   @IsNumber()
   estimatedHours?: number;
 
   @IsOptional()
-  @IsNumber()
-  assigneeId?: number | null;
+  @IsArray()
+  @IsNumber({}, { each: true })
+  assigneeIds?: number[];
 }

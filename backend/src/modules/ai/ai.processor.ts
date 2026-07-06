@@ -65,7 +65,7 @@ export class AiProcessor {
       include: {
         department: true,
         roleRelation: true,
-        _count: { select: { createdProjects: true, projectMemberships: true, assignedTasks: true } },
+        _count: { select: { createdProjects: true, projectMemberships: true, taskAssignees: true } },
       },
     });
 
@@ -76,10 +76,10 @@ export class AiProcessor {
       `Correo: ${user.email}`,
       `Rol sistema: ${user.role}`,
       `Cargo: ${user.position || 'No definido'}`,
-      `Departamento: ${user.department?.name || 'No asignado'}`,
+      `Departamento: ${user.departmentId ? 'Asignado' : 'No asignado'}`,
       `Proyectos creados: ${user._count.createdProjects}`,
       `Proyectos como miembro: ${user._count.projectMemberships}`,
-      `Tareas asignadas: ${user._count.assignedTasks}`,
+      `Tareas asignadas: ${user._count.taskAssignees}`,
     ].join('\n');
   }
 
@@ -107,17 +107,21 @@ export class AiProcessor {
   }
 
   private async listMyTasks(userId: number): Promise<string> {
-    const tasks = await this.prisma.task.findMany({
-      where: { assigneeId: userId },
-      include: { project: { select: { name: true } } },
-      orderBy: { createdAt: 'desc' },
+    const taskAssignees = await this.prisma.taskAssignee.findMany({
+      where: { userId },
+      include: {
+        task: {
+          include: { project: { select: { name: true } } },
+        },
+      },
+      orderBy: { task: { createdAt: 'desc' } },
       take: 10,
     });
 
-    if (tasks.length === 0) return 'No tienes tareas asignadas actualmente.';
+    if (taskAssignees.length === 0) return 'No tienes tareas asignadas actualmente.';
 
-    const list = tasks.map((t) =>
-      `- ${t.title} [${t.status}] (${t.project.name})${t.dueDate ? ` - vence ${t.dueDate.toLocaleDateString('es-EC')}` : ''}`
+    const list = taskAssignees.map((ta) =>
+      `- ${ta.task.title} [${ta.task.status}] (${ta.task.project.name})${ta.task.endDate ? ` - hasta ${ta.task.endDate.toLocaleDateString('es-EC')}` : ''}`
     ).join('\n');
 
     return `Tus tareas:\n${list}`;

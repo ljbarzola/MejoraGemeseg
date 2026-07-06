@@ -5,6 +5,6 @@ export class AddMemberDto {
   userId: number;
 
   @IsString()
-  @IsIn(['OWNER', 'MANAGER', 'MEMBER', 'VIEWER'])
+  @IsIn(['OWNER', 'MEMBER', 'VIEWER'])
   role: string;
 }

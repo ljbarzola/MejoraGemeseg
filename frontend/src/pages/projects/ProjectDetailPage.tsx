@@ -24,12 +24,11 @@ const PROJECT_STATUS_LABELS: Record<string, string> = {
 
 const MEMBER_ROLE_LABELS: Record<string, string> = {
   OWNER: 'Propietario',
-  MANAGER: 'Gerente',
   MEMBER: 'Miembro',
   VIEWER: 'Observador',
 };
 
-const MEMBER_ROLE_OPTIONS = ['OWNER', 'MANAGER', 'MEMBER', 'VIEWER'];
+const MEMBER_ROLE_OPTIONS = ['OWNER', 'MEMBER', 'VIEWER'];
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -44,9 +43,10 @@ export default function ProjectDetailPage() {
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', description: '', startDate: '', endDate: '' });
+  const [editForm, setEditForm] = useState({ name: '', description: '', startDate: '', endDate: '', status: 'ACTIVE' });
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
+  const [openRoleMenu, setOpenRoleMenu] = useState<number | null>(null);
   const currentUser = getUser();
 
   const userMembership = project?.members?.find(
@@ -54,6 +54,7 @@ export default function ProjectDetailPage() {
   );
   const isViewer = userMembership?.role === 'VIEWER';
   const isOwner = userMembership?.role === 'OWNER' || currentUser?.role === 'ADMIN';
+  const canEditStatus = isOwner || userMembership?.role === 'MEMBER';
 
   const loadData = () => {
     if (!id) return;
@@ -78,6 +79,18 @@ export default function ProjectDetailPage() {
       getUsers().then(setAllUsers).catch(() => {});
     }
   }, [showAddModal]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (target.closest?.('.role-dropdown-container')) return;
+      setOpenRoleMenu(null);
+    }
+    if (openRoleMenu !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openRoleMenu]);
 
   const currentMemberIds = project?.members?.map((m: any) => m.user.id) || [];
   const availableUsers = allUsers.filter(
@@ -131,6 +144,7 @@ export default function ProjectDetailPage() {
       description: project.description || '',
       startDate: project.startDate ? project.startDate.split('T')[0] : '',
       endDate: project.endDate ? project.endDate.split('T')[0] : '',
+      status: project.status || 'ACTIVE',
     });
     setEditError('');
     setShowEditModal(true);
@@ -146,6 +160,7 @@ export default function ProjectDetailPage() {
         description: editForm.description.trim() || undefined,
         startDate: editForm.startDate || undefined,
         endDate: editForm.endDate || undefined,
+        status: editForm.status,
       });
       const p = await getProject(Number(id));
       setProject(p);
@@ -195,15 +210,15 @@ export default function ProjectDetailPage() {
             >
               {PROJECT_STATUS_LABELS[project.status]}
             </span>
+            {canEditStatus && (
+              <button className="btn-secondary" onClick={openEditModal}>
+                Editar
+              </button>
+            )}
             {isOwner && (
-              <>
-                <button className="btn-secondary" onClick={openEditModal}>
-                  Editar
-                </button>
-                <button className="btn-delete-project" onClick={handleDeleteProject} title="Eliminar proyecto">
-                  Eliminar proyecto
-                </button>
-              </>
+              <button className="btn-delete-project" onClick={handleDeleteProject} title="Eliminar proyecto">
+                Eliminar proyecto
+              </button>
             )}
           </div>
         </div>
@@ -267,15 +282,28 @@ export default function ProjectDetailPage() {
                     </div>
                     <div className="member-role">
                       {canChangeRole ? (
-                        <select
-                          value={m.role}
-                          onChange={(e) => handleChangeRole(m.user.id, e.target.value)}
-                          className="role-select"
-                        >
-                          {MEMBER_ROLE_OPTIONS.map((r) => (
-                            <option key={r} value={r}>{MEMBER_ROLE_LABELS[r]}</option>
-                          ))}
-                        </select>
+                        <div className="role-dropdown-container">
+                          <span
+                            className={`role-badge role-dropdown-trigger role-badge-${m.role.toLowerCase()}`}
+                            onClick={() => setOpenRoleMenu(openRoleMenu === m.user.id ? null : m.user.id)}
+                          >
+                            {MEMBER_ROLE_LABELS[m.role]} ▾
+                          </span>
+                          {openRoleMenu === m.user.id && (
+                            <div className="role-dropdown-menu">
+                              {MEMBER_ROLE_OPTIONS.map((r) => (
+                                <button
+                                  key={r}
+                                  className={`role-dropdown-option role-dropdown-option-${r.toLowerCase()} ${r === m.role ? 'active' : ''}`}
+                                  onClick={() => { handleChangeRole(m.user.id, r); setOpenRoleMenu(null); }}
+                                >
+                                  {r === m.role && <span className="role-dropdown-check">✓</span>}
+                                  {MEMBER_ROLE_LABELS[r]}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         <span className={`role-badge role-badge-${m.role.toLowerCase()}`}>
                           {MEMBER_ROLE_LABELS[m.role] || m.role}
@@ -335,7 +363,7 @@ export default function ProjectDetailPage() {
                     <th>Estado</th>
                     <th>Prioridad</th>
                     <th>Asignado</th>
-                    <th>Fecha límite</th>
+                    <th>Fecha fin</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -367,20 +395,24 @@ export default function ProjectDetailPage() {
                         </span>
                       </td>
                       <td className="tasks-table-assignee">
-                        {task.assignee ? (
-                          <>
-                            <span className="kanban-avatar">
-                              {task.assignee.fullName.charAt(0)}
-                            </span>
-                            {task.assignee.fullName}
-                          </>
+                        {task.assignees.length > 0 ? (
+                          <div className="tasks-table-assignees">
+                            {task.assignees.map((a) => (
+                              <span key={a.user.id} className="tasks-table-assignee-item">
+                                <span className="kanban-avatar">
+                                  {a.user.fullName.charAt(0)}
+                                </span>
+                                {a.user.fullName}
+                              </span>
+                            ))}
+                          </div>
                         ) : (
                           <span className="kanban-unassigned">Sin asignar</span>
                         )}
                       </td>
                       <td className="tasks-table-date">
-                        {task.dueDate
-                          ? new Date(task.dueDate).toLocaleDateString('es-EC')
+                        {task.endDate
+                          ? new Date(task.endDate).toLocaleDateString('es-EC')
                           : '—'}
                       </td>
                     </tr>
@@ -488,6 +520,18 @@ export default function ProjectDetailPage() {
                     onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })}
                   />
                 </div>
+              </div>
+              <div className="form-group">
+                <label>Estado</label>
+                <select
+                  value={editForm.status}
+                  onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                >
+                  <option value="ACTIVE">Activo</option>
+                  <option value="ON_HOLD">En pausa</option>
+                  <option value="COMPLETED">Completado</option>
+                  <option value="CANCELLED">Cancelado</option>
+                </select>
               </div>
             </div>
             <div className="modal-actions">

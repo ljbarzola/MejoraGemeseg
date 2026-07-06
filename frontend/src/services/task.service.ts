@@ -18,7 +18,10 @@ export async function createTask(
     description?: string;
     priority?: string;
     dueDate?: string;
+    startDate?: string;
+    endDate?: string;
     estimatedHours?: number;
+    assigneeIds?: number[];
   },
 ): Promise<Task> {
   const res = await api.post(`/projects/${projectId}/tasks`, data);
@@ -33,8 +36,10 @@ export async function updateTask(
     status?: string;
     priority?: string;
     dueDate?: string;
+    startDate?: string;
+    endDate?: string;
     estimatedHours?: number;
-    assigneeId?: number | null;
+    assigneeIds?: number[];
   },
 ): Promise<Task> {
   const res = await api.patch(`/tasks/${id}`, data);

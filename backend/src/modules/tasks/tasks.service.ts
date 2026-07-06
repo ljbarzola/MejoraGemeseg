@@ -8,13 +8,17 @@ import { UserRole } from '@prisma/client';
 export class TasksService {
   constructor(private prisma: PrismaService) {}
 
+  private assigneeSelect = {
+    select: { id: true, fullName: true, email: true },
+  };
+
   async findByProject(projectId: number) {
     return this.prisma.task.findMany({
       where: { projectId },
       orderBy: { createdAt: 'desc' },
       include: {
-        assignee: {
-          select: { id: true, fullName: true, email: true },
+        assignees: {
+          select: { user: this.assigneeSelect },
         },
       },
     });
@@ -24,8 +28,8 @@ export class TasksService {
     const task = await this.prisma.task.findUnique({
       where: { id },
       include: {
-        assignee: {
-          select: { id: true, fullName: true, email: true },
+        assignees: {
+          select: { user: this.assigneeSelect },
         },
         project: {
           select: { id: true, name: true },
@@ -55,18 +59,25 @@ export class TasksService {
       throw new ForbiddenException('Los observadores no pueden crear tareas');
     }
 
+    const assigneeIds = dto.assigneeIds || [];
+
     const task = await this.prisma.task.create({
       data: {
         title: dto.title,
         description: dto.description,
         priority: (dto.priority as any) || 'MEDIUM',
-        dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-        estimatedHours: dto.estimatedHours || null,
+        status: (dto.status as any) || 'TODO',
+        startDate: dto.startDate ? new Date(dto.startDate) : null,
+        endDate: dto.endDate ? new Date(dto.endDate) : null,
+        estimatedHours: dto.estimatedHours ?? 0,
         projectId,
+        assignees: assigneeIds.length > 0
+          ? { create: assigneeIds.map((userId) => ({ userId })) }
+          : undefined,
       },
       include: {
-        assignee: {
-          select: { id: true, fullName: true, email: true },
+        assignees: {
+          select: { user: this.assigneeSelect },
         },
       },
     });
@@ -109,16 +120,25 @@ export class TasksService {
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.priority !== undefined) data.priority = dto.priority;
-    if (dto.dueDate !== undefined) data.dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
+    if (dto.startDate !== undefined) data.startDate = dto.startDate ? new Date(dto.startDate) : null;
+    if (dto.endDate !== undefined) data.endDate = dto.endDate ? new Date(dto.endDate) : null;
     if (dto.estimatedHours !== undefined) data.estimatedHours = dto.estimatedHours;
-    if (dto.assigneeId !== undefined) data.assigneeId = dto.assigneeId;
+
+    if (dto.assigneeIds !== undefined) {
+      await this.prisma.taskAssignee.deleteMany({ where: { taskId: id } });
+      if (dto.assigneeIds.length > 0) {
+        data.assignees = {
+          create: dto.assigneeIds.map((userId) => ({ userId })),
+        };
+      }
+    }
 
     const updated = await this.prisma.task.update({
       where: { id },
       data,
       include: {
-        assignee: {
-          select: { id: true, fullName: true, email: true },
+        assignees: {
+          select: { user: this.assigneeSelect },
         },
       },
     });

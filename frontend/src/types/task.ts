@@ -11,10 +11,11 @@ export interface Task {
   status: 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE' | 'CANCELLED';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   dueDate: string | null;
+  startDate: string | null;
+  endDate: string | null;
   estimatedHours: number | null;
   createdAt: string;
-  assignee: TaskAssignee | null;
-  assigneeId: number | null;
+  assignees: { user: TaskAssignee }[];
   projectId: number;
 }
 
@@ -34,7 +35,7 @@ export interface ProjectMember {
 export const STATUS_LABELS: Record<string, string> = {
   TODO: 'Por hacer',
   IN_PROGRESS: 'En progreso',
-  IN_REVIEW: 'En revisi├│n',
+  IN_REVIEW: 'En revisión',
   DONE: 'Completado',
   CANCELLED: 'Cancelado',
 };

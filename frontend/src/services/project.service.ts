@@ -44,6 +44,7 @@ export async function updateProject(id: number, data: {
   description?: string;
   startDate?: string;
   endDate?: string;
+  status?: string;
 }) {
   const res = await api.patch(`/projects/${id}`, data);
   return res.data;

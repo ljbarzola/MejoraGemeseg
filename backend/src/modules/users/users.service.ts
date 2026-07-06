@@ -63,7 +63,7 @@ export class UsersService {
           select: {
             createdProjects: true,
             projectMemberships: true,
-            assignedTasks: true,
+            taskAssignees: true,
           },
         },
       },
@@ -83,7 +83,7 @@ export class UsersService {
           select: {
             createdProjects: true,
             projectMemberships: true,
-            assignedTasks: true,
+            taskAssignees: true,
           },
         },
       },

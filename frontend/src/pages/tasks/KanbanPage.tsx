@@ -121,9 +121,9 @@ export default function KanbanPage() {
                     >
                       {PRIORITY_LABELS[task.priority]}
                     </span>
-                    {task.dueDate && (
+                    {task.endDate && (
                       <span className="kanban-due">
-                        {new Date(task.dueDate).toLocaleDateString('es-EC')}
+                        {new Date(task.endDate).toLocaleDateString('es-EC')}
                       </span>
                     )}
                   </div>
@@ -132,12 +132,16 @@ export default function KanbanPage() {
                     <p className="kanban-card-desc">{task.description}</p>
                   )}
                   <div className="kanban-card-footer">
-                    {task.assignee ? (
-                      <span className="kanban-assignee">
-                        <span className="kanban-avatar">
-                          {task.assignee.fullName.charAt(0)}
-                        </span>
-                        {task.assignee.fullName}
+                    {task.assignees.length > 0 ? (
+                      <span className="kanban-assignees">
+                        {task.assignees.map((a) => (
+                          <span key={a.user.id} className="kanban-assignee">
+                            <span className="kanban-avatar">
+                              {a.user.fullName.charAt(0)}
+                            </span>
+                            {a.user.fullName}
+                          </span>
+                        ))}
                       </span>
                     ) : (
                       <span className="kanban-unassigned">Sin asignar</span>
@@ -150,7 +154,7 @@ export default function KanbanPage() {
                           handleAdvance(task.id, task.status);
                         }}
                       >
-                        ΓåÆ
+                        ▶
                       </button>
                     )}
                   </div>

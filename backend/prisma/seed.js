@@ -180,24 +180,32 @@ async function main() {
       members: {
         create: [
           { userId: admin.id, role: 'OWNER' },
-          { userId: hugo.id, role: 'MANAGER' },
+          { userId: hugo.id, role: 'MEMBER' },
         ],
       },
     },
   });
 
   console.log('Creando tareas...');
-  await prisma.task.createMany({
+  const task1 = await prisma.task.create({ data: { title: 'Diseñar landings para campaña Q3', status: 'IN_PROGRESS', priority: 'HIGH', projectId: projectLandings.id, estimatedHours: 20 } });
+  const task2 = await prisma.task.create({ data: { title: 'Configurar tracking GA4 en landings', status: 'TODO', priority: 'MEDIUM', projectId: projectLandings.id, estimatedHours: 8 } });
+  const task3 = await prisma.task.create({ data: { title: 'Implementar OAuth en plataforma', status: 'IN_PROGRESS', priority: 'URGENT', projectId: projectMejora.id, estimatedHours: 16 } });
+  const task4 = await prisma.task.create({ data: { title: 'Documentar API REST', status: 'TODO', priority: 'LOW', projectId: projectMejora.id, estimatedHours: 10 } });
+  const task5 = await prisma.task.create({ data: { title: 'Módulo de cotizaciones PDF', status: 'TODO', priority: 'HIGH', projectId: projectCotizador.id, estimatedHours: 24 } });
+  const task6 = await prisma.task.create({ data: { title: 'Diseñar interfaz del cotizador', status: 'IN_REVIEW', priority: 'MEDIUM', projectId: projectCotizador.id, estimatedHours: 12 } });
+  const task7 = await prisma.task.create({ data: { title: 'Dashboard con métricas en tiempo real', status: 'DONE', priority: 'HIGH', projectId: projectPlataforma.id, estimatedHours: 20 } });
+  const task8 = await prisma.task.create({ data: { title: 'Pipeline CI/CD en GitHub Actions', status: 'TODO', priority: 'MEDIUM', projectId: projectPlataforma.id, estimatedHours: 12 } });
+  const task9 = await prisma.task.create({ data: { title: 'Evaluar costos GCP', status: 'TODO', priority: 'MEDIUM', projectId: projectMigracion.id, estimatedHours: 8 } });
+
+  console.log('Asignando usuarios a tareas...');
+  await prisma.taskAssignee.createMany({
     data: [
-      { title: 'Diseñar landings para campaña Q3', status: 'IN_PROGRESS', priority: 'HIGH', projectId: projectLandings.id, assigneeId: david.id, estimatedHours: 20 },
-      { title: 'Configurar tracking GA4 en landings', status: 'TODO', priority: 'MEDIUM', projectId: projectLandings.id, estimatedHours: 8 },
-      { title: 'Implementar OAuth en plataforma', status: 'IN_PROGRESS', priority: 'URGENT', projectId: projectMejora.id, estimatedHours: 16 },
-      { title: 'Documentar API REST', status: 'TODO', priority: 'LOW', projectId: projectMejora.id, estimatedHours: 10 },
-      { title: 'Módulo de cotizaciones PDF', status: 'TODO', priority: 'HIGH', projectId: projectCotizador.id, assigneeId: hugo.id, estimatedHours: 24 },
-      { title: 'Diseñar interfaz del cotizador', status: 'IN_REVIEW', priority: 'MEDIUM', projectId: projectCotizador.id, estimatedHours: 12 },
-      { title: 'Dashboard con métricas en tiempo real', status: 'DONE', priority: 'HIGH', projectId: projectPlataforma.id, assigneeId: david.id, estimatedHours: 20 },
-      { title: 'Pipeline CI/CD en GitHub Actions', status: 'TODO', priority: 'MEDIUM', projectId: projectPlataforma.id, estimatedHours: 12 },
-      { title: 'Evaluar costos GCP', status: 'TODO', priority: 'MEDIUM', projectId: projectMigracion.id, assigneeId: hugo.id, estimatedHours: 8 },
+      { taskId: task1.id, userId: david.id },
+      { taskId: task5.id, userId: hugo.id },
+      { taskId: task7.id, userId: david.id },
+      { taskId: task9.id, userId: hugo.id },
+      { taskId: task3.id, userId: david.id },
+      { taskId: task3.id, userId: hugo.id },
     ],
   });
 

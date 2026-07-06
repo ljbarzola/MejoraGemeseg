@@ -8,7 +8,7 @@ import {
 } from '../../services/task.service';
 import { getUser } from '../../services/auth.service';
 import type { Task, ProjectMember } from '../../types/task';
-import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_COLORS, STATUS_COLORS } from '../../types/task';
+import { STATUS_LABELS, STATUS_COLORS } from '../../types/task';
 
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,18 +16,39 @@ export default function TaskDetailPage() {
   const [task, setTask] = useState<Task | null>(null);
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [selectedAssignees, setSelectedAssignees] = useState<number[]>([]);
   const currentUser = getUser();
 
   const isViewer = members.some(
     (m) => m.user.email === currentUser?.email && m.role === 'VIEWER',
   );
 
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    priority: 'MEDIUM',
+    startDate: '',
+    endDate: '',
+    estimatedHours: 0,
+    status: 'TODO',
+  });
+
   useEffect(() => {
     if (!id) return;
     getTask(Number(id))
       .then((t) => {
         setTask(t);
+        setForm({
+          title: t.title,
+          description: t.description || '',
+          priority: t.priority,
+          startDate: t.startDate ? t.startDate.split('T')[0] : '',
+          endDate: t.endDate ? t.endDate.split('T')[0] : '',
+          estimatedHours: t.estimatedHours ?? 0,
+          status: t.status,
+        });
+        setSelectedAssignees(t.assignees.map((a) => a.user.id));
         return getProjectMembers(t.projectId);
       })
       .then(setMembers)
@@ -35,31 +56,42 @@ export default function TaskDetailPage() {
       .finally(() => setLoading(false));
   }, [id, navigate]);
 
-  const handleStatusChange = async (newStatus: string) => {
-    if (!task) return;
-    setUpdating(true);
-    try {
-      const updated = await updateTask(task.id, { status: newStatus });
-      setTask(updated);
-    } finally {
-      setUpdating(false);
-    }
+  const handleChange = (field: string, value: any) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleAssign = async (assigneeId: number | null) => {
+  const toggleAssignee = (userId: number) => {
+    if (isViewer) return;
+    setSelectedAssignees((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
+    );
+  };
+
+  const handleSave = async () => {
     if (!task) return;
-    setUpdating(true);
+    setSaving(true);
     try {
-      const updated = await updateTask(task.id, { assigneeId });
-      setTask(updated);
+      await updateTask(task.id, {
+        title: form.title,
+        description: form.description || undefined,
+        priority: form.priority,
+        startDate: form.startDate || undefined,
+        endDate: form.endDate || undefined,
+        estimatedHours: form.estimatedHours,
+        assigneeIds: selectedAssignees,
+        status: form.status,
+      });
+      navigate(`/projects/${task.projectId}`);
+    } catch {
+      // silent
     } finally {
-      setUpdating(false);
+      setSaving(false);
     }
   };
 
   const handleDelete = async () => {
     if (!task) return;
-    if (!confirm('┬┐Eliminar esta tarea?')) return;
+    if (!confirm('¿Eliminar esta tarea?')) return;
     try {
       await deleteTask(task.id);
       navigate(`/projects/${task.projectId}`);
@@ -77,132 +109,153 @@ export default function TaskDetailPage() {
         &larr; Volver al proyecto
       </button>
 
-      <div className="page-card" style={{ maxWidth: '700px' }}>
-        <div className="page-header-row" style={{ marginBottom: '24px' }}>
-          <div>
-            <p className="page-eyebrow">Tarea #{task.id}</p>
-            <h1 style={{ margin: 0, fontSize: '1.5rem' }}>{task.title}</h1>
-          </div>
-          <span
-            className="status-badge status-badge-lg"
-            style={{
-              backgroundColor: STATUS_COLORS[task.status] + '20',
-              color: STATUS_COLORS[task.status],
-            }}
-          >
-            {STATUS_LABELS[task.status]}
-          </span>
+      <div className="page-card">
+        <div className="page-header">
+          <p className="page-eyebrow">GEMESEG</p>
+          <h1>Tarea #{task.id}</h1>
         </div>
 
-        {task.description && (
-          <p style={{ color: '#666', marginBottom: '24px' }}>{task.description}</p>
-        )}
+        <div className="auth-form">
+          <div className="form-group">
+            <label htmlFor="title">Título *</label>
+            <input
+              id="title"
+              type="text"
+              value={form.title}
+              onChange={(e) => handleChange('title', e.target.value)}
+              disabled={isViewer}
+            />
+          </div>
 
-        <div className="project-detail-meta" style={{ marginBottom: '24px' }}>
-          <div className="meta-item">
-            <span className="meta-label">Prioridad</span>
-            <span
-              className="meta-value"
-              style={{ color: PRIORITY_COLORS[task.priority] }}
-            >
-              {PRIORITY_LABELS[task.priority]}
-            </span>
+          <div className="form-group">
+            <label htmlFor="description">Descripción</label>
+            <textarea
+              id="description"
+              value={form.description}
+              onChange={(e) => handleChange('description', e.target.value)}
+              className="form-textarea"
+              rows={3}
+              disabled={isViewer}
+            />
           </div>
-          <div className="meta-item">
-            <span className="meta-label">Fecha l├¡mite</span>
-            <span className="meta-value">
-              {task.dueDate
-                ? new Date(task.dueDate).toLocaleDateString('es-EC')
-                : 'No definida'}
-            </span>
-          </div>
-          <div className="meta-item">
-            <span className="meta-label">Horas estimadas</span>
-            <span className="meta-value">
-              {task.estimatedHours ? `${task.estimatedHours}h` : 'ΓÇö'}
-            </span>
-          </div>
-          <div className="meta-item">
-            <span className="meta-label">Creada</span>
-            <span className="meta-value">
-              {new Date(task.createdAt).toLocaleDateString('es-EC')}
-            </span>
-          </div>
-        </div>
 
-        <div style={{ marginBottom: '24px' }}>
-          <h3 style={{ color: 'var(--azul-claro)', fontSize: '0.9rem', marginBottom: '12px' }}>
-            Asignado a
-          </h3>
-          <select
-            className="form-group"
-            value={task.assigneeId ?? ''}
-            onChange={(e) => {
-              const val = e.target.value;
-              handleAssign(val ? Number(val) : null);
-            }}
-            disabled={updating || isViewer}
-            style={{
-              padding: '12px 16px',
-              border: `2px solid ${isViewer ? '#ddd' : 'var(--gris-claro)'}`,
-              borderRadius: '12px',
-              fontSize: '0.95rem',
-              fontFamily: 'inherit',
-              width: '100%',
-              background: isViewer ? '#f5f5f5' : 'white',
-              cursor: isViewer ? 'not-allowed' : 'pointer',
-              opacity: isViewer ? 0.6 : 1,
-            }}
-          >
-            <option value="">Sin asignar</option>
-            {members.map((m) => (
-              <option key={m.user.id} value={m.user.id}>
-                {m.user.fullName} ({m.role})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div style={{ marginBottom: '24px' }}>
-          <h3 style={{ color: 'var(--azul-claro)', fontSize: '0.9rem', marginBottom: '12px' }}>
-            Cambiar estado
-          </h3>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {(['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'] as const).map((s) => (
-              <button
-                key={s}
-                className={`filter-btn ${isViewer ? 'btn-disabled' : ''}`}
-                style={{
-                  borderColor: STATUS_COLORS[s],
-                  color: task.status === s || isViewer ? 'white' : STATUS_COLORS[s],
-                  backgroundColor: task.status === s ? STATUS_COLORS[s] : isViewer ? '#ccc' : 'white',
-                  opacity: isViewer ? 0.5 : 1,
-                  cursor: isViewer ? 'not-allowed' : task.status === s ? 'default' : 'pointer',
-                }}
-                onClick={() => {
-                  if (!isViewer) handleStatusChange(s);
-                }}
-                disabled={updating || task.status === s || isViewer}
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="priority">Prioridad</label>
+              <select
+                id="priority"
+                value={form.priority}
+                onChange={(e) => handleChange('priority', e.target.value)}
+                disabled={isViewer}
               >
-                {STATUS_LABELS[s]}
+                <option value="LOW">Baja</option>
+                <option value="MEDIUM">Media</option>
+                <option value="HIGH">Alta</option>
+                <option value="URGENT">Urgente</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="estimatedHours">Horas estimadas</label>
+              <input
+                id="estimatedHours"
+                type="number"
+                min="0"
+                step="0.5"
+                value={form.estimatedHours}
+                onChange={(e) => handleChange('estimatedHours', Number(e.target.value))}
+                disabled={isViewer}
+              />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="startDate">Fecha inicio</label>
+              <input
+                id="startDate"
+                type="date"
+                value={form.startDate}
+                onChange={(e) => handleChange('startDate', e.target.value)}
+                disabled={isViewer}
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="endDate">Fecha fin</label>
+              <input
+                id="endDate"
+                type="date"
+                value={form.endDate}
+                onChange={(e) => handleChange('endDate', e.target.value)}
+                disabled={isViewer}
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Asignar a</label>
+            <div className="assignee-chips">
+              {members.map((m) => (
+                <button
+                  key={m.user.id}
+                  type="button"
+                  className={`assignee-chip ${selectedAssignees.includes(m.user.id) ? 'assignee-chip-active' : ''}`}
+                  onClick={() => toggleAssignee(m.user.id)}
+                  disabled={isViewer}
+                >
+                  <span className="assignee-chip-avatar">{m.user.fullName.charAt(0)}</span>
+                  {m.user.fullName}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Estado</label>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {(['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className="filter-btn"
+                  style={{
+                    borderColor: STATUS_COLORS[s],
+                    color: form.status === s ? 'white' : STATUS_COLORS[s],
+                    backgroundColor: form.status === s ? STATUS_COLORS[s] : 'white',
+                    cursor: isViewer ? 'not-allowed' : 'pointer',
+                    opacity: isViewer ? 0.5 : 1,
+                  }}
+                  onClick={() => !isViewer && handleChange('status', s)}
+                  disabled={isViewer}
+                >
+                  {STATUS_LABELS[s]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {isViewer && (
+            <div style={{ padding: '12px', background: '#f8f8f8', borderRadius: '8px', color: '#888', fontSize: '0.85rem', textAlign: 'center' }}>
+              Solo lectura — los observadores no pueden modificar tareas
+            </div>
+          )}
+
+          {!isViewer && (
+            <div className="form-actions">
+              <button className="btn-secondary" onClick={handleDelete} style={{ color: '#ef4444' }}>
+                Eliminar tarea
               </button>
-            ))}
-          </div>
+              <button
+                className="auth-btn"
+                onClick={handleSave}
+                disabled={saving || !form.title.trim()}
+              >
+                {saving ? 'Guardando...' : 'Guardar y volver'}
+              </button>
+            </div>
+          )}
         </div>
-
-        {!isViewer && (
-          <div className="form-actions">
-            <button className="btn-secondary" onClick={handleDelete} style={{ color: '#ef4444' }}>
-              Eliminar tarea
-            </button>
-          </div>
-        )}
-
-        {isViewer && (
-          <div style={{ padding: '12px', background: '#f8f8f8', borderRadius: '8px', color: '#888', fontSize: '0.85rem', textAlign: 'center' }}>
-            Solo lectura ΓÇö los observadores no pueden modificar tareas
-          </div>
-        )}
       </div>
     </div>
   );

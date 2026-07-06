@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsDateString } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsDateString, IsEnum } from 'class-validator';
 
 export class CreateProjectDto {
   @IsString()
@@ -16,4 +16,8 @@ export class CreateProjectDto {
   @IsDateString()
   @IsOptional()
   endDate?: string;
+
+  @IsEnum(['ACTIVE', 'ON_HOLD', 'COMPLETED', 'CANCELLED'])
+  @IsOptional()
+  status?: string;
 }

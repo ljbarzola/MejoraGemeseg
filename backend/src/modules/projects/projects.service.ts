@@ -140,8 +140,8 @@ export class ProjectsService {
       const membership = await this.prisma.projectMember.findUnique({
         where: { projectId_userId: { projectId: id, userId } },
       });
-      if (!membership || membership.role !== 'OWNER') {
-        throw new ForbiddenException('Solo los propietarios pueden editar el proyecto');
+      if (!membership || (membership.role !== 'OWNER' && membership.role !== 'MEMBER')) {
+        throw new ForbiddenException('Solo propietarios y miembros pueden editar el proyecto');
       }
     }
 
@@ -150,6 +150,7 @@ export class ProjectsService {
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.startDate !== undefined) data.startDate = dto.startDate ? new Date(dto.startDate) : null;
     if (dto.endDate !== undefined) data.endDate = dto.endDate ? new Date(dto.endDate) : null;
+    if (dto.status !== undefined) data.status = dto.status;
 
     return this.prisma.project.update({
       where: { id },
