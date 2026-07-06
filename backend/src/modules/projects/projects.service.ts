@@ -132,6 +132,55 @@ export class ProjectsService {
     return project;
   }
 
+  async update(id: number, dto: CreateProjectDto, userId: number, userRole: UserRole) {
+    const project = await this.prisma.project.findUnique({ where: { id } });
+    if (!project) throw new NotFoundException(`Proyecto con id ${id} no encontrado`);
+
+    if (userRole !== UserRole.ADMIN) {
+      const membership = await this.prisma.projectMember.findUnique({
+        where: { projectId_userId: { projectId: id, userId } },
+      });
+      if (!membership || membership.role !== 'OWNER') {
+        throw new ForbiddenException('Solo los propietarios pueden editar el proyecto');
+      }
+    }
+
+    const data: any = {};
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.description !== undefined) data.description = dto.description;
+    if (dto.startDate !== undefined) data.startDate = dto.startDate ? new Date(dto.startDate) : null;
+    if (dto.endDate !== undefined) data.endDate = dto.endDate ? new Date(dto.endDate) : null;
+
+    return this.prisma.project.update({
+      where: { id },
+      data,
+      include: {
+        createdBy: { select: { id: true, fullName: true, email: true } },
+        members: {
+          include: { user: { select: { id: true, fullName: true, email: true } } },
+        },
+        _count: { select: { tasks: true } },
+      },
+    });
+  }
+
+  async remove(id: number, userId: number, userRole: UserRole) {
+    const project = await this.prisma.project.findUnique({ where: { id } });
+    if (!project) throw new NotFoundException(`Proyecto con id ${id} no encontrado`);
+
+    if (userRole !== UserRole.ADMIN) {
+      const membership = await this.prisma.projectMember.findUnique({
+        where: { projectId_userId: { projectId: id, userId } },
+      });
+      if (!membership || membership.role !== 'OWNER') {
+        throw new ForbiddenException('Solo los propietarios pueden eliminar el proyecto');
+      }
+    }
+
+    await this.prisma.project.delete({ where: { id } });
+    return { message: 'Proyecto eliminado' };
+  }
+
   async getAdminStats() {
     const [total, byStatus, taskStats] = await Promise.all([
       this.prisma.project.count(),

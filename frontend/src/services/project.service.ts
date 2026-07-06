@@ -38,3 +38,18 @@ export async function updateMemberRole(projectId: number, userId: number, role: 
   const res = await api.patch(`/projects/${projectId}/members/${userId}/role`, { role });
   return res.data;
 }
+
+export async function updateProject(id: number, data: {
+  name?: string;
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+}) {
+  const res = await api.patch(`/projects/${id}`, data);
+  return res.data;
+}
+
+export async function deleteProject(id: number) {
+  const res = await api.delete(`/projects/${id}`);
+  return res.data;
+}

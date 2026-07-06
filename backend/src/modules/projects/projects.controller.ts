@@ -42,6 +42,25 @@ export class ProjectsController {
     return this.projectsService.findOne(+id);
   }
 
+  @Patch(':id')
+  @UseGuards(AuthGuard('jwt'))
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateProjectDto,
+    @Req() req: any,
+  ) {
+    return this.projectsService.update(id, dto, req.user.userId, req.user.role);
+  }
+
+  @Delete(':id')
+  @UseGuards(AuthGuard('jwt'))
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+  ) {
+    return this.projectsService.remove(id, req.user.userId, req.user.role);
+  }
+
   @Get(':projectId/tasks')
   @UseGuards(AuthGuard('jwt'))
   getProjectTasks(@Param('projectId', ParseIntPipe) projectId: number) {

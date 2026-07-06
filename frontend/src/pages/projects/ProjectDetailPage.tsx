@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getProject, addMember, removeMember, updateMemberRole } from '../../services/project.service';
+import { getProject, addMember, removeMember, updateMemberRole, updateProject, deleteProject } from '../../services/project.service';
 import { getTasksByProject } from '../../services/task.service';
 import { getUsers } from '../../services/user.service';
 import { getUser } from '../../services/auth.service';
@@ -43,6 +43,10 @@ export default function ProjectDetailPage() {
   const [selectedRole, setSelectedRole] = useState('MEMBER');
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState('');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({ name: '', description: '', startDate: '', endDate: '' });
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
   const currentUser = getUser();
 
   const userMembership = project?.members?.find(
@@ -121,6 +125,49 @@ export default function ProjectDetailPage() {
     }
   }
 
+  function openEditModal() {
+    setEditForm({
+      name: project.name || '',
+      description: project.description || '',
+      startDate: project.startDate ? project.startDate.split('T')[0] : '',
+      endDate: project.endDate ? project.endDate.split('T')[0] : '',
+    });
+    setEditError('');
+    setShowEditModal(true);
+  }
+
+  async function handleUpdateProject() {
+    if (!id || !editForm.name.trim()) return;
+    setEditLoading(true);
+    setEditError('');
+    try {
+      await updateProject(Number(id), {
+        name: editForm.name.trim(),
+        description: editForm.description.trim() || undefined,
+        startDate: editForm.startDate || undefined,
+        endDate: editForm.endDate || undefined,
+      });
+      const p = await getProject(Number(id));
+      setProject(p);
+      setShowEditModal(false);
+    } catch (err: any) {
+      setEditError(err.response?.data?.message || 'Error al actualizar proyecto');
+    } finally {
+      setEditLoading(false);
+    }
+  }
+
+  async function handleDeleteProject() {
+    if (!id) return;
+    if (!confirm('¿Estás seguro de eliminar este proyecto? Esta acción no se puede deshacer.')) return;
+    try {
+      await deleteProject(Number(id));
+      navigate('/projects');
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error al eliminar proyecto');
+    }
+  }
+
   if (loading) return <div className="loading-state">Cargando proyecto...</div>;
   if (!project) return null;
 
@@ -138,15 +185,27 @@ export default function ProjectDetailPage() {
       <div className="project-detail">
         <div className="project-detail-header">
           <h1>{project.name}</h1>
-          <span
-            className="status-badge status-badge-lg"
-            style={{
-              backgroundColor: PROJECT_STATUS_COLORS[project.status] + '20',
-              color: PROJECT_STATUS_COLORS[project.status],
-            }}
-          >
-            {PROJECT_STATUS_LABELS[project.status]}
-          </span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <span
+              className="status-badge status-badge-lg"
+              style={{
+                backgroundColor: PROJECT_STATUS_COLORS[project.status] + '20',
+                color: PROJECT_STATUS_COLORS[project.status],
+              }}
+            >
+              {PROJECT_STATUS_LABELS[project.status]}
+            </span>
+            {isOwner && (
+              <>
+                <button className="btn-secondary" onClick={openEditModal}>
+                  Editar
+                </button>
+                <button className="btn-danger-sm" onClick={handleDeleteProject} title="Eliminar proyecto">
+                  Eliminar
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {project.description && (
@@ -382,6 +441,67 @@ export default function ProjectDetailPage() {
                 disabled={!selectedUserId || addLoading}
               >
                 {addLoading ? 'Agregando...' : 'Agregar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEditModal && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Editar proyecto</h3>
+              <button className="modal-close" onClick={() => setShowEditModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              {editError && <div className="form-error">{editError}</div>}
+              <div className="form-group">
+                <label>Nombre</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>Descripción</label>
+                <textarea
+                  className="form-textarea"
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  rows={3}
+                />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Fecha de inicio</label>
+                  <input
+                    type="date"
+                    value={editForm.startDate}
+                    onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Fecha de fin</label>
+                  <input
+                    type="date"
+                    value={editForm.endDate}
+                    onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setShowEditModal(false)}>
+                Cancelar
+              </button>
+              <button
+                className="auth-btn"
+                onClick={handleUpdateProject}
+                disabled={!editForm.name.trim() || editLoading}
+              >
+                {editLoading ? 'Guardando...' : 'Guardar'}
               </button>
             </div>
           </div>
