@@ -10,6 +10,7 @@ import KanbanPage from './pages/tasks/KanbanPage';
 import CreateTaskPage from './pages/tasks/CreateTaskPage';
 import TaskDetailPage from './pages/tasks/TaskDetailPage';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
+import ToolsPage from './pages/tools/ToolsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/layout/Navbar';
 import ChatFloatingButton from './components/chat/ChatFloatingButton';
@@ -104,6 +105,14 @@ function App() {
           element={
             <ProtectedLayout>
               <AdminDashboardPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/tools"
+          element={
+            <ProtectedLayout>
+              <ToolsPage />
             </ProtectedLayout>
           }
         />

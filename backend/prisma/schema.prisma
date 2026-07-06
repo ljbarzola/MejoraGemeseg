@@ -78,6 +78,8 @@ model User {
   createdProjects    Project[]
   projectMemberships ProjectMember[]
   taskAssignees      TaskAssignee[]
+  toolAssignments    ToolAssignment[]
+  toolAudits         ToolAuditLog[]
   conversations      Conversation[]
   aiLogs             AiLog[]
 }
@@ -183,5 +185,42 @@ model AiLog {
   metadata     Json?
   createdAt    DateTime @default(now())
   @@index([userId])
+  @@index([createdAt])
+}
+
+model Tool {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  category  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  assignments ToolAssignment[]
+}
+
+model ToolAssignment {
+  id        Int      @id @default(autoincrement())
+  toolId    Int
+  tool      Tool     @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  version   String?
+  licenseKey String?
+  assignedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@unique([toolId, userId])
+  audits ToolAuditLog[]
+}
+
+model ToolAuditLog {
+  id           Int      @id @default(autoincrement())
+  assignmentId Int
+  assignment   ToolAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  action       String
+  performedBy  Int
+  performer    User     @relation(fields: [performedBy], references: [id])
+  details      String?
+  createdAt    DateTime @default(now())
+  @@index([assignmentId])
   @@index([createdAt])
 }
