@@ -63,6 +63,7 @@ Todos los usuarios usan la contrasena: **gemeseg2026**
 | Hugo Melo | hugo@gemeseg.com | MANAGER | Gerente General |
 | David Izurieta | david@gemeseg.com | EMPLOYEE | Analista de Marketing Digital |
 | Nayelli | nayelli@gemeseg.com | EMPLOYEE | Analista de Recursos Humanos |
+| Leidy Barzola | sistemas@gemeseg.com | EMPLOYEE | Analista de Sistemas |
 
 ## Proyectos de prueba
 

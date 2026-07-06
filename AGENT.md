@@ -139,6 +139,7 @@ GITHUB_TOKEN=<token_de_github_models>
 - Manager: `hugo@gemeseg.com` (MANAGER - Gerente General)
 - Employee: `david@gemeseg.com` (EMPLOYEE - Marketing Digital)
 - Employee: `nayelli@gemeseg.com` (EMPLOYEE - Recursos Humanos)
+- Employee: `sistemas@gemeseg.com` (EMPLOYEE - Sistemas, Leidy Barzola)
 
 ## LO QUE NO DEBES HACER
 

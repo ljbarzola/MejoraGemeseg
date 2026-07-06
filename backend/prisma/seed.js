@@ -84,6 +84,18 @@ async function main() {
     },
   });
 
+  const leidy = await prisma.user.create({
+    data: {
+      fullName: 'Leidy Barzola',
+      email: 'sistemas@gemeseg.com',
+      password,
+      role: 'EMPLOYEE',
+      documentNumber: '1755566677',
+      position: 'Analista de Sistemas',
+      departmentId: deptTI.id,
+    },
+  });
+
   console.log('Creando proyectos...');
 
   const projectLandings = await prisma.project.create({
@@ -198,6 +210,7 @@ async function main() {
   console.log(`MANAGER:   ${hugo.email}  (Hugo Melo - Gerente General)`);
   console.log(`EMPLOYEE:  ${david.email}  (David Izurieta - Marketing Digital)`);
   console.log(`EMPLOYEE:  ${nayelli.email}  (Nayelli - Recursos Humanos)`);
+  console.log(`EMPLOYEE:  ${leidy.email}  (Leidy Barzola - Sistemas)`);
   console.log('\nPROYECTOS:');
   console.log('─────────────────────────────────────────');
   console.log(`1. ${projectLandings.name} [ACTIVE] → David (OWNER), Admin (OWNER)`);
