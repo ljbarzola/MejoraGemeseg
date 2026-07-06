@@ -167,6 +167,96 @@ async function main() {
     },
   });
 
+  console.log('Creando tareas de prueba...');
+  const task1 = await prisma.task.create({
+    data: {
+      title: 'Diseñar nueva interfaz del dashboard',
+      description: 'Crear mockups y prototipos del nuevo dashboard principal con métricas en tiempo real.',
+      status: 'DONE',
+      priority: 'HIGH',
+      dueDate: new Date('2026-07-15'),
+      estimatedHours: 24,
+      projectId: project1.id,
+      assigneeId: employee.id,
+    },
+  });
+
+  const task2 = await prisma.task.create({
+    data: {
+      title: 'Implementar módulo de autenticación OAuth',
+      description: 'Integrar login con Google y Microsoft usando OAuth 2.0.',
+      status: 'IN_PROGRESS',
+      priority: 'URGENT',
+      dueDate: new Date('2026-07-20'),
+      estimatedHours: 16,
+      projectId: project1.id,
+      assigneeId: employee.id,
+    },
+  });
+
+  const task3 = await prisma.task.create({
+    data: {
+      title: 'Configurar pipeline CI/CD',
+      description: 'Setup de GitHub Actions para build, test y deploy automático a Cloud Run.',
+      status: 'TODO',
+      priority: 'MEDIUM',
+      dueDate: new Date('2026-07-25'),
+      estimatedHours: 12,
+      projectId: project1.id,
+    },
+  });
+
+  const task4 = await prisma.task.create({
+    data: {
+      title: 'Escribir documentación API',
+      description: 'Documentar todos los endpoints REST con Swagger/OpenAPI.',
+      status: 'IN_REVIEW',
+      priority: 'LOW',
+      dueDate: new Date('2026-08-01'),
+      estimatedHours: 8,
+      projectId: project1.id,
+      assigneeId: employee.id,
+    },
+  });
+
+  const task5 = await prisma.task.create({
+    data: {
+      title: 'Crear campaña Instagram Q3',
+      description: 'Diseñar contenido visual y calendario de publicaciones para Instagram.',
+      status: 'IN_PROGRESS',
+      priority: 'HIGH',
+      dueDate: new Date('2026-07-18'),
+      estimatedHours: 20,
+      projectId: project2.id,
+      assigneeId: employee2.id,
+    },
+  });
+
+  const task6 = await prisma.task.create({
+    data: {
+      title: 'Analizar métricas SEO del sitio',
+      description: 'Revisar posicionamiento actual y proponer mejoras técnicas de SEO.',
+      status: 'TODO',
+      priority: 'MEDIUM',
+      dueDate: new Date('2026-07-22'),
+      estimatedHours: 10,
+      projectId: project2.id,
+    },
+  });
+
+  const task7 = await prisma.task.create({
+    data: {
+      title: 'Diseñar presupuesto publicitario',
+      description: 'Definir distribución del presupuesto en campañas pagadas de Google Ads y Meta.',
+      status: 'DONE',
+      priority: 'HIGH',
+      dueDate: new Date('2026-07-10'),
+      estimatedHours: 6,
+      projectId: project2.id,
+      assigneeId: employee2.id,
+    },
+  });
+
   console.log('\n========================================');
   console.log('  SEED COMPLETADO EXITOSAMENTE');
   console.log('========================================\n');

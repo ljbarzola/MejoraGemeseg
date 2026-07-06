@@ -273,6 +273,22 @@ body {
   border-color: var(--azul-claro);
 }
 
+.form-group select {
+  padding: 12px 16px;
+  border: 2px solid var(--gris-claro);
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: border-color 0.2s;
+  outline: none;
+  background: white;
+  cursor: pointer;
+}
+
+.form-group select:focus {
+  border-color: var(--azul-claro);
+}
+
 .form-group input.input-error {
   border-color: var(--naranja);
 }
@@ -757,6 +773,104 @@ body {
 .member-role {
   font-size: 0.8rem;
   color: #888;
+}
+
+.member-you-badge {
+  font-size: 0.75rem;
+  color: var(--naranja);
+  font-weight: 600;
+  margin-left: 6px;
+}
+
+.tasks-section {
+  margin-top: 32px;
+}
+
+.tasks-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.tasks-section-header h2 {
+  margin: 0;
+  color: var(--azul-claro);
+  font-size: 1.1rem;
+}
+
+.tasks-section-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-disabled {
+  opacity: 0.4;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+.tasks-table-wrapper {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--gris-claro);
+}
+
+.tasks-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.tasks-table thead {
+  background: var(--gris-claro);
+}
+
+.tasks-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #666;
+  border-bottom: 2px solid #ddd;
+}
+
+.tasks-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--gris-claro);
+}
+
+.tasks-table-row {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.tasks-table-row:hover {
+  background: rgba(18, 55, 95, 0.04);
+}
+
+.tasks-table-id {
+  color: #888;
+  font-weight: 600;
+  width: 50px;
+}
+
+.tasks-table-title {
+  font-weight: 600;
+  color: var(--azul-oscuro);
+}
+
+.tasks-table-assignee {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tasks-table-date {
+  color: #888;
+  white-space: nowrap;
 }
 
 @media (max-width: 768px) {

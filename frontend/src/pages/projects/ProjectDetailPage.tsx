@@ -5,14 +5,14 @@ import { getProjectTasks } from '../../services/task.service';
 import { getUser } from '../../services/auth.service';
 import type { Task } from '../../types/task';
 
-const STATUS_COLORS: Record<string, string> = {
+const PROJECT_STATUS_COLORS: Record<string, string> = {
   ACTIVE: '#22c55e',
   ON_HOLD: '#f59e0b',
   COMPLETED: '#3b82f6',
   CANCELLED: '#ef4444',
 };
 
-const STATUS_LABELS: Record<string, string> = {
+const PROJECT_STATUS_LABELS: Record<string, string> = {
   ACTIVE: 'Activo',
   ON_HOLD: 'En pausa',
   COMPLETED: 'Completado',
@@ -62,6 +62,12 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<any>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const currentUser = getUser();
+
+  const userMembership = project?.members?.find(
+    (m: any) => m.user.email === currentUser?.email,
+  );
+  const isViewer = userMembership?.role === 'VIEWER';
 
   const currentUser = getUser();
 
@@ -211,9 +217,88 @@ export default function ProjectDetailPage() {
                     </span>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+
+          {currentUser && !userMembership && (
+            <div className="member-item" style={{ marginTop: '8px', opacity: 0.7 }}>
+              <div className="member-avatar">{currentUser.fullName.charAt(0)}</div>
+              <div>
+                <div className="member-name">{currentUser.fullName} (Tú)</div>
+                <div className="member-role">{currentUser.role}</div>
               </div>
             )}
           </div>
+
+          {tasks.length === 0 ? (
+            <div className="empty-state" style={{ padding: '32px' }}>
+              <p>No hay tareas en este proyecto</p>
+            </div>
+          ) : (
+            <div className="tasks-table-wrapper">
+              <table className="tasks-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Título</th>
+                    <th>Estado</th>
+                    <th>Prioridad</th>
+                    <th>Asignado</th>
+                    <th>Fecha límite</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tasks.map((task) => (
+                    <tr
+                      key={task.id}
+                      className="tasks-table-row"
+                      onClick={() => navigate(`/tasks/${task.id}`)}
+                    >
+                      <td className="tasks-table-id">{task.id}</td>
+                      <td className="tasks-table-title">{task.title}</td>
+                      <td>
+                        <span
+                          className="status-badge"
+                          style={{
+                            backgroundColor: STATUS_COLORS[task.status] + '20',
+                            color: STATUS_COLORS[task.status],
+                          }}
+                        >
+                          {STATUS_LABELS[task.status]}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className="kanban-priority"
+                          style={{ backgroundColor: PRIORITY_COLORS[task.priority] }}
+                        >
+                          {PRIORITY_LABELS[task.priority]}
+                        </span>
+                      </td>
+                      <td className="tasks-table-assignee">
+                        {task.assignee ? (
+                          <>
+                            <span className="kanban-avatar">
+                              {task.assignee.fullName.charAt(0)}
+                            </span>
+                            {task.assignee.fullName}
+                          </>
+                        ) : (
+                          <span className="kanban-unassigned">Sin asignar</span>
+                        )}
+                      </td>
+                      <td className="tasks-table-date">
+                        {task.dueDate
+                          ? new Date(task.dueDate).toLocaleDateString('es-EC')
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         <div className="project-tasks-section">

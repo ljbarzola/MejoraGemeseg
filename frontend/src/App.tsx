@@ -105,6 +105,30 @@ function App() {
             </ProtectedLayout>
           }
         />
+        <Route
+          path="/projects/:id/tasks"
+          element={
+            <ProtectedRoute>
+              <KanbanPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/projects/:id/tasks/new"
+          element={
+            <ProtectedRoute>
+              <CreateTaskPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tasks/:id"
+          element={
+            <ProtectedRoute>
+              <TaskDetailPage />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
 
       {isAuthenticated() && (
