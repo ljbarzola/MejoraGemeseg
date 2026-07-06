@@ -17,8 +17,7 @@ export class ProjectsController {
   ) {}
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @UseGuards(AuthGuard('jwt'))
   create(@Body() dto: CreateProjectDto, @Req() req: any) {
     return this.projectsService.create(dto, req.user.userId, req.user.role);
   }

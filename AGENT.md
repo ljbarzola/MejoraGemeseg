@@ -35,9 +35,9 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 ## Convenciones de Codigo
 
 ### NestJS
-- Un modulo por dominio: `auth`, `projects`, `users`, `tasks`, `ai`, `queue`.
+- Un modulo por dominio: `auth`, `projects`, `users`, `tasks`, `ai`, `queue`, `tools`.
 - DTOs con `class-validator` para toda entrada.
-- Guards por rol: `@Roles(UserRole.ADMIN, UserRole.MANAGER)` + `RolesGuard`.
+- Guards por rol: `@Roles(UserRole.ADMIN)` + `RolesGuard`.
 - Responses consistentes.
 - Nombres en ingles.
 
@@ -50,7 +50,7 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 
 ### Prisma
 - Enums en schema: `UserRole`, `ProjectStatus`, `MemberRole`, `TaskStatus`, `Priority`.
-- Modelos: `User`, `Department`, `Role`, `Project`, `ProjectMember`, `Task`, `Agent`, `Conversation`, `ChatMessage`, `AiLog`.
+- Modelos: `User`, `Department`, `Role`, `Project`, `ProjectMember`, `Task`, `Tool`, `ToolAssignment`, `ToolAuditLog`, `Agent`, `Conversation`, `ChatMessage`, `AiLog`.
 - Migraciones con `prisma migrate dev --name <nombre>`.
 - Seed en `prisma/seed.js`.
 - Prisma v7 requiere adapter: `new PrismaClient({ adapter: new PrismaPg(...) })`.
@@ -87,6 +87,11 @@ GITHUB_TOKEN=<token_de_github_models>
 - Puede ver todos los miembros (incluyose a si mismo)
 - No aparece en la lista de miembros para usuarios normales
 
+### Proyectos
+- **Cualquier usuario autenticado** puede crear proyectos.
+- OWNER y MEMBER pueden editar el proyecto (incluyendo estado).
+- Solo OWNER o ADMIN pueden eliminar proyectos.
+
 ### Owners
 - Pueden agregar y quitar miembros del proyecto
 - No pueden quitar al ultimo OWNER de un proyecto
@@ -96,6 +101,12 @@ GITHUB_TOKEN=<token_de_github_models>
 - Ven botones deshabilitados (greyed out, `cursor: not-allowed`), no ocultos
 - No pueden crear ni editar tareas
 
+### Herramientas (Sistema)
+- Solo usuario `sistemas@gemeseg.com` ve la pestana de Herramientas.
+- Cualquier usuario autenticado puede crear/eliminar herramientas y asignaciones.
+- Asignaciones multiples de usuarios soportadas.
+- Auditoria de cada accion (quien asigno/removio, cuando).
+
 ## Modulos Backend
 
 ### Auth (`/auth`)
@@ -104,7 +115,7 @@ GITHUB_TOKEN=<token_de_github_models>
 - `GET /auth/profile` - Perfil del usuario autenticado
 
 ### Projects (`/projects`)
-- `POST /projects` - Crear proyecto (ADMIN/MANAGER) + admin auto-OWNER
+- `POST /projects` - Crear proyecto (cualquier usuario autenticado) + admin auto-OWNER
 - `GET /projects` - Listar proyectos (filtrado por membresia, paginado)
 - `GET /projects/admin/stats` - Estadisticas admin (solo ADMIN)
 - `GET /projects/:id` - Detalle de proyecto
@@ -120,12 +131,25 @@ GITHUB_TOKEN=<token_de_github_models>
 - `PATCH /tasks/:id` - Actualizar tarea
 - `DELETE /tasks/:id` - Eliminar tarea
 
-### Users (`/users`) - Solo ADMIN
-- `POST /users` - Crear usuario
-- `GET /users` - Listar usuarios (con filtros)
-- `GET /users/stats` - Estadisticas de usuarios
-- `PATCH /users/:id` - Actualizar usuario
-- `DELETE /users/:id` - Eliminar usuario (soft delete)
+### Users (`/users`)
+- `POST /users` - Crear usuario (solo ADMIN)
+- `GET /users` - Listar usuarios (cualquier usuario autenticado)
+- `GET /users/me` - Perfil del usuario autenticado (con herramientas asignadas)
+- `GET /users/stats` - Estadisticas (solo ADMIN)
+- `GET /users/:id` - Detalle de usuario (solo ADMIN)
+- `PATCH /users/:id` - Actualizar usuario (solo ADMIN)
+- `DELETE /users/:id` - Eliminar usuario (soft delete, solo ADMIN)
+
+### Tools (`/tools`)
+- `GET /tools` - Listar catalogo de herramientas
+- `POST /tools` - Crear herramienta en catalogo
+- `DELETE /tools/:id` - Eliminar herramienta y sus asignaciones
+- `GET /tools/assignments` - Listar asignaciones (filtros por tool/user)
+- `GET /tools/users` - Usuarios con sus herramientas
+- `POST /tools/assign` - Asignar herramienta a usuario
+- `PATCH /tools/assign/:id` - Actualizar asignacion (version, licencia)
+- `DELETE /tools/assign/:id` - Eliminar asignacion
+- `GET /tools/assign/:id/audit` - Historial de auditoria
 
 ### Chat IA (`/chat`)
 - `POST /chat/message` - Enviar mensaje al asistente IA

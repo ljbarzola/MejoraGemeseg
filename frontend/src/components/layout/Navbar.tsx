@@ -28,7 +28,11 @@ export default function Navbar() {
         )}
       </div>
       <div className="navbar-user">
-        {user && <span className="navbar-name">{user.fullName}</span>}
+        {user && (
+          <button className="navbar-name navbar-link" onClick={() => navigate('/profile')}>
+            {user.fullName}
+          </button>
+        )}
         <button className="btn-logout-sm" onClick={handleLogout}>Cerrar sesión</button>
       </div>
     </nav>

@@ -98,3 +98,31 @@ export async function getAllDepartments(): Promise<{ id: number; name: string }[
   });
   return Array.from(departments.entries()).map(([id, name]) => ({ id, name }));
 }
+
+export interface ProfileData {
+  id: number;
+  fullName: string;
+  email: string;
+  role: string;
+  position: string | null;
+  documentNumber: string | null;
+  department: { id: number; name: string } | null;
+  roleRelation: { id: number; name: string } | null;
+  createdAt: string;
+  toolAssignments: {
+    id: number;
+    version: string | null;
+    licenseKey: string | null;
+    tool: { id: number; name: string; category: string | null };
+  }[];
+  _count: {
+    createdProjects: number;
+    projectMemberships: number;
+    taskAssignees: number;
+  };
+}
+
+export async function getMe(): Promise<ProfileData> {
+  const res = await api.get('/users/me');
+  return res.data;
+}

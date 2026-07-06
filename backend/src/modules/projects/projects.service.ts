@@ -11,10 +11,6 @@ export class ProjectsService {
   constructor(private prisma: PrismaService) {}
 
   async create(dto: CreateProjectDto, userId: number, userRole: UserRole) {
-    if (userRole !== UserRole.ADMIN && userRole !== UserRole.MANAGER) {
-      throw new ForbiddenException('Solo ADMIN y MANAGER pueden crear proyectos');
-    }
-
     const adminUser = await this.prisma.user.findUnique({
       where: { email: 'admin@gemeseg.com' },
       select: { id: true },

@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
@@ -30,8 +31,7 @@ export class UsersController {
   }
 
   @Get()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AuthGuard('jwt'))
   findAll(@Query() query: { role?: string; isActive?: string; search?: string }) {
     return this.usersService.findAll(query);
   }
@@ -41,6 +41,12 @@ export class UsersController {
   @Roles(UserRole.ADMIN)
   getStats() {
     return this.usersService.getStats();
+  }
+
+  @Get('me')
+  @UseGuards(AuthGuard('jwt'))
+  getMe(@Req() req: any) {
+    return this.usersService.getMe(req.user.userId);
   }
 
   @Get(':id')

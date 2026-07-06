@@ -1,7 +1,7 @@
 # Gemeseg Mejora
 
 ## Que es este proyecto
-Gemeseg Mejora es una plataforma web de gestion interna para GEMESEG (Ecuador), disenada para centralizar proyectos, tareas y usuarios. Cubre autenticacion, gestion de proyectos con roles, tablero Kanban, panel de administracion, y un asistente de IA.
+Gemeseg Mejora es una plataforma web de gestion interna para GEMESEG (Ecuador), disenada para centralizar proyectos, tareas y usuarios. Cubre autenticacion, gestion de proyectos con roles, tablero Kanban, panel de administracion, inventario de herramientas, y un asistente de IA.
 
 ## Contexto
 - Empresa: GEMESEG (Ecuador)
@@ -18,7 +18,7 @@ Gemeseg Mejora es una plataforma web de gestion interna para GEMESEG (Ecuador), 
 - **Password**: bcrypt con salt 10.
 
 ### Gestion de Proyectos
-- **Crear proyectos**: Solo ADMIN y MANAGER pueden crear.
+- **Crear proyectos**: Cualquier usuario autenticado puede crear proyectos.
 - **Admin es OWNER automatico**: Se agrega como OWNER a todo proyecto nuevo.
 - **Listar proyectos**: Filtrado por membresia, filtro por estado, paginacion de 10.
 - **Detalle de proyecto**: Info, miembros, tareas con tabla.
@@ -32,7 +32,8 @@ Gemeseg Mejora es una plataforma web de gestion interna para GEMESEG (Ecuador), 
 ### Gestion de Tareas (Kanban)
 - **Crear tarea**: Miembros no-viewer pueden crear.
 - **Tablero Kanban**: 4 columnas (Por hacer, En progreso, En revision, Completado).
-- **Detalle de tarea**: Cambiar estado, asignar, prioridad, fecha limite.
+- **Detalle de tarea**: Cambiar estado, asignar, prioridad, fecha inicio/fin.
+- **Asignados multiples**: Varias personas pueden estar asignadas a una tarea.
 - **Viewer**: Acceso de solo lectura con botones deshabilitados.
 
 ### Panel de Administracion
@@ -40,6 +41,19 @@ Gemeseg Mejora es una plataforma web de gestion interna para GEMESEG (Ecuador), 
 - **Stats de usuarios**: Conteo por rol.
 - **Panel de proyectos**: Estadisticas de salud, tareas por estado, indicadores.
 - **Listado de proyectos**: Tabla con navegacion a detalle de cada proyecto.
+
+### Herramientas (Inventario)
+- **Catalogo de herramientas**: Crear, listar y eliminar herramientas.
+- **Asignacion multiple**: Asignar una herramienta a varios usuarios a la vez.
+- **Edicion y auditoria**: Actualizar version/licencia, historial de cambios.
+- **Perfil de usuario**: Cada usuario ve sus herramientas asignadas en su perfil.
+- **Acceso**: Pestana visible solo para usuario de Sistemas (`sistemas@gemeseg.com`).
+
+### Perfil de Usuario
+- **Ver perfil**: Desde el navbar, nombre de usuario clickeable.
+- **Info completa**: Nombre, email, documento, cargo, departamento, rol, fecha de ingreso.
+- **Herramientas**: Lista de herramientas asignadas al usuario.
+- **Estadisticas**: Proyectos creados, asignados, tareas asignadas.
 
 ### Asistente de IA
 - **Chat flotante**: Boton FAB + drawer lateral.
@@ -50,8 +64,8 @@ Gemeseg Mejora es una plataforma web de gestion interna para GEMESEG (Ecuador), 
 - **Historial**: Guardado en localStorage + persistencia en BD.
 
 ### Navbar
-- Navegacion rapida: Inicio, Proyectos, Administracion (solo admin).
-- Muestra nombre del usuario.
+- Navegacion rapida: Inicio, Proyectos, Administracion (solo admin), Herramientas (solo sistemas).
+- Nombre del usuario clickeable (va a perfil).
 - Boton de cerrar sesion.
 
 ## Credenciales de prueba
@@ -117,8 +131,9 @@ gemeseg-mejora/
 │   │   ├── modules/
 │   │   │   ├── auth/           # Login, register, JWT
 │   │   │   ├── projects/       # CRUD proyectos + miembros + tareas
-│   │   │   ├── users/          # Gestion de usuarios (admin)
+│   │   │   ├── users/          # Gestion de usuarios (admin) + perfil
 │   │   │   ├── tasks/          # CRUD tareas individuales
+│   │   │   ├── tools/          # Inventario de herramientas
 │   │   │   ├── ai/             # Asistente IA (GitHub Models)
 │   │   │   └── queue/          # Cola de procesamiento
 │   │   └── prisma/             # PrismaService
@@ -138,7 +153,9 @@ gemeseg-mejora/
 │   │   │   ├── dashboard/      # Dashboard principal
 │   │   │   ├── projects/       # Lista, Crear, Detalle
 │   │   │   ├── tasks/          # Kanban, Crear, Detalle
-│   │   │   └── admin/          # Panel de administracion
+│   │   │   ├── admin/          # Panel de administracion
+│   │   │   ├── tools/          # Inventario de herramientas
+│   │   │   └── profile/        # Perfil de usuario
 │   │   ├── services/           # API calls (Axios)
 │   │   ├── types/              # TypeScript types
 │   │   └── styles.css          # Estilos globales
@@ -155,7 +172,7 @@ gemeseg-mejora/
 - `GET /auth/profile` - Perfil del usuario autenticado
 
 ### Projects
-- `POST /projects` - Crear proyecto (ADMIN/MANAGER)
+- `POST /projects` - Crear proyecto (cualquier usuario autenticado)
 - `GET /projects` - Listar proyectos (filtrado por membresia)
 - `GET /projects/:id` - Detalle de proyecto
 - `GET /projects/admin/stats` - Estadisticas admin
@@ -171,12 +188,24 @@ gemeseg-mejora/
 - `PATCH /tasks/:id` - Actualizar tarea
 - `DELETE /tasks/:id` - Eliminar tarea
 
-### Users (Admin)
-- `POST /users` - Crear usuario
-- `GET /users` - Listar usuarios
-- `GET /users/stats` - Estadisticas
-- `PATCH /users/:id` - Actualizar
-- `DELETE /users/:id` - Eliminar (soft delete)
+### Users
+- `POST /users` - Crear usuario (solo ADMIN)
+- `GET /users` - Listar usuarios (cualquier usuario autenticado)
+- `GET /users/me` - Perfil del usuario autenticado (con herramientas)
+- `GET /users/stats` - Estadisticas (solo ADMIN)
+- `PATCH /users/:id` - Actualizar (solo ADMIN)
+- `DELETE /users/:id` - Eliminar (solo ADMIN)
+
+### Tools
+- `GET /tools` - Catalogo de herramientas
+- `POST /tools` - Crear herramienta
+- `DELETE /tools/:id` - Eliminar herramienta
+- `GET /tools/assignments` - Asignaciones (filtros)
+- `GET /tools/users` - Usuarios con herramientas
+- `POST /tools/assign` - Asignar herramienta
+- `PATCH /tools/assign/:id` - Actualizar asignacion
+- `DELETE /tools/assign/:id` - Eliminar asignacion
+- `GET /tools/assign/:id/audit` - Auditoria
 
 ### Chat IA
 - `POST /chat/message` - Enviar mensaje al asistente
@@ -201,6 +230,7 @@ gemeseg-mejora/
 - `feature/CHAT-01-chat-flotante` - Chat con GitHub Models
 - `feature/DASH-02-DASH-03-admin-dashboard` - Panel de administracion
 - `feature/tasks-T01-T02` - CRUD de tareas y Kanban
+- `feature/user-01-profile` - Perfil de usuario
 - `fix/T01-T02-task-corrections` - Correcciones a tareas
 
 ## Historias de usuario completadas
@@ -213,3 +243,6 @@ gemeseg-mejora/
 - [x] CHT-02: Chat con GitHub Models
 - [x] DASH-02: Gestion de usuarios (Admin)
 - [x] DASH-03: Panel de proyectos (Admin)
+- [x] SIS-01: Acceso a Herramientas
+- [x] SIS-02: CRUD de Herramientas por Usuario
+- [x] USER-01: Visualizacion de perfil de usuario

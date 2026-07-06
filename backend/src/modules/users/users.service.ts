@@ -149,6 +149,39 @@ export class UsersService {
     return { message: 'Usuario desactivado correctamente' };
   }
 
+  async getMe(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        role: true,
+        position: true,
+        documentNumber: true,
+        department: true,
+        roleRelation: true,
+        createdAt: true,
+        toolAssignments: {
+          include: {
+            tool: { select: { id: true, name: true, category: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+        _count: {
+          select: {
+            createdProjects: true,
+            projectMemberships: true,
+            taskAssignees: true,
+          },
+        },
+      },
+    });
+
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+    return user;
+  }
+
   async getStats() {
     const [total, active, byRole] = await Promise.all([
       this.prisma.user.count(),

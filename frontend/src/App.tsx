@@ -11,6 +11,7 @@ import CreateTaskPage from './pages/tasks/CreateTaskPage';
 import TaskDetailPage from './pages/tasks/TaskDetailPage';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import ToolsPage from './pages/tools/ToolsPage';
+import ProfilePage from './pages/profile/ProfilePage';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/layout/Navbar';
 import ChatFloatingButton from './components/chat/ChatFloatingButton';
@@ -113,6 +114,14 @@ function App() {
           element={
             <ProtectedLayout>
               <ToolsPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedLayout>
+              <ProfilePage />
             </ProtectedLayout>
           }
         />
