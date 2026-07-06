@@ -5,7 +5,7 @@ export default function Navbar() {
   const navigate = useNavigate();
   const user = getUser();
   const isAdmin = user?.email === 'admin@gemeseg.com' || user?.role === 'ADMIN';
-  const isSystems = user?.email === 'admin@gemeseg.com';
+  const isSystems = user?.email === 'sistemas@gemeseg.com';
 
   const handleLogout = () => {
     removeToken();
