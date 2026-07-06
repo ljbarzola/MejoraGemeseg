@@ -2428,6 +2428,85 @@ body {
   }
 }
 
+.agent-empty-badge {
+  font-size: 0.78rem;
+  color: #aaa;
+  font-style: italic;
+}
+
+.agent-scope-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.agent-active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.agent-inactive {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.agent-preview {
+  padding: 16px;
+  background: var(--gris-claro);
+  border-radius: 12px;
+}
+
+.agent-preview-title {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  color: var(--azul-oscuro);
+}
+
+.agent-preview-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.agent-preview-chip {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: white;
+  color: var(--azul-claro);
+  border: 1px solid var(--azul-claro);
+}
+
+.agent-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.agent-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--azul-oscuro);
+}
+
+.agent-toggle-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--azul-claro);
+}
+
 .btn-sm-edit,
 .btn-sm-audit {
   width: 28px;

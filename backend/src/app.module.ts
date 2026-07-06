@@ -6,8 +6,9 @@ import { TasksModule } from './modules/tasks/tasks.module';
 import { AiModule } from './modules/ai/ai.module';
 import { QueueModule } from './modules/queue/queue.module';
 import { ToolsModule } from './modules/tools/tools.module';
+import { AgentsModule } from './modules/agents/agents.module';
 
 @Module({
-  imports: [AuthModule, UsersModule, ProjectsModule, TasksModule, AiModule, QueueModule, ToolsModule],
+  imports: [AuthModule, UsersModule, ProjectsModule, TasksModule, AiModule, QueueModule, ToolsModule, AgentsModule],
 })
 export class AppModule {}

@@ -80,6 +80,7 @@ model User {
   taskAssignees      TaskAssignee[]
   toolAssignments    ToolAssignment[]
   toolAudits         ToolAuditLog[]
+  agents             Agent[]
   conversations      Conversation[]
   aiLogs             AiLog[]
 }
@@ -140,12 +141,17 @@ model TaskAssignee {
 }
 
 model Agent {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  prompt    String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  messages  ChatMessage[]
+  id           Int      @id @default(autoincrement())
+  name         String
+  instructions String
+  scope        String   @default("GLOBAL")
+  isActive     Boolean  @default(true)
+  userId       Int?
+  user         User?    @relation(fields: [userId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  messages     ChatMessage[]
+  @@unique([userId, name])
 }
 
 model Conversation {

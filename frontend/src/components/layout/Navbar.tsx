@@ -6,6 +6,7 @@ export default function Navbar() {
   const user = getUser();
   const isAdmin = user?.email === 'admin@gemeseg.com' || user?.role === 'ADMIN';
   const isSystems = user?.email === 'sistemas@gemeseg.com';
+  const canManageAgents = isAdmin || isSystems;
 
   const handleLogout = () => {
     removeToken();
@@ -25,6 +26,9 @@ export default function Navbar() {
         )}
         {isSystems && (
           <button className="navbar-link" onClick={() => navigate('/tools')}>Herramientas</button>
+        )}
+        {canManageAgents && (
+          <button className="navbar-link" onClick={() => navigate('/admin/agents')}>Agentes</button>
         )}
       </div>
       <div className="navbar-user">
