@@ -1,52 +1,31 @@
 import { api } from './auth.service';
-import type { Task, ProjectMember } from '../types/task';
-
-export async function getTasksByProject(projectId: number): Promise<Task[]> {
-  const res = await api.get(`/projects/${projectId}/tasks`);
-  return res.data;
-}
-
-export async function getTask(id: number): Promise<Task> {
-  const res = await api.get(`/tasks/${id}`);
-  return res.data;
-}
+import type { Task, TaskGrouped } from '../types/task';
 
 export async function createTask(
   projectId: number,
-  data: {
-    title: string;
-    description?: string;
-    priority?: string;
-    dueDate?: string;
-    estimatedHours?: number;
-  },
+  data: { title: string; description?: string; priority?: string; dueDate?: string; estimatedHours?: number },
 ): Promise<Task> {
   const res = await api.post(`/projects/${projectId}/tasks`, data);
   return res.data;
 }
 
-export async function updateTask(
-  id: number,
-  data: {
-    title?: string;
-    description?: string;
-    status?: string;
-    priority?: string;
-    dueDate?: string;
-    estimatedHours?: number;
-    assigneeId?: number | null;
-  },
-): Promise<Task> {
-  const res = await api.patch(`/tasks/${id}`, data);
+export async function getProjectTasks(
+  projectId: number,
+): Promise<{ tasks: Task[]; grouped: TaskGrouped }> {
+  const res = await api.get(`/projects/${projectId}/tasks`);
   return res.data;
 }
 
-export async function deleteTask(id: number): Promise<void> {
-  await api.delete(`/tasks/${id}`);
+export async function getTask(id: number): Promise<Task & { project: any }> {
+  const res = await api.get(`/tasks/${id}`);
+  return res.data;
 }
 
-export async function getProjectMembers(projectId: number): Promise<ProjectMember[]> {
-  const res = await api.get(`/projects/${projectId}/members`);
+export async function updateTask(
+  id: number,
+  data: { status?: string; assigneeId?: number; title?: string; description?: string; priority?: string; dueDate?: string; estimatedHours?: number },
+): Promise<Task> {
+  const res = await api.patch(`/tasks/${id}`, data);
   return res.data;
 }
 

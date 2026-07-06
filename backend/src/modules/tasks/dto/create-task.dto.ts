@@ -1,5 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsDateString, IsEnum, IsNumber, Min } from 'class-validator';
-import { Priority } from '@prisma/client';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsDateString, IsNumber, Min } from 'class-validator';
 
 export class CreateTaskDto {
   @IsString()
@@ -10,9 +9,9 @@ export class CreateTaskDto {
   @IsOptional()
   description?: string;
 
-  @IsEnum(Priority)
+  @IsEnum(['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const)
   @IsOptional()
-  priority?: Priority;
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
   @IsDateString()
   @IsOptional()

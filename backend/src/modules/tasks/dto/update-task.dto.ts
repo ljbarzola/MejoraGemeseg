@@ -1,5 +1,4 @@
-import { IsString, IsOptional, IsDateString, IsEnum, IsNumber, Min, IsInt } from 'class-validator';
-import { Priority, TaskStatus } from '@prisma/client';
+import { IsString, IsOptional, IsEnum, IsDateString, IsNumber, Min, IsInt } from 'class-validator';
 
 export class UpdateTaskDto {
   @IsString()
@@ -10,13 +9,13 @@ export class UpdateTaskDto {
   @IsOptional()
   description?: string;
 
-  @IsEnum(TaskStatus)
+  @IsEnum(['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE', 'CANCELLED'] as const)
   @IsOptional()
-  status?: TaskStatus;
+  status?: 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE' | 'CANCELLED';
 
-  @IsEnum(Priority)
+  @IsEnum(['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const)
   @IsOptional()
-  priority?: Priority;
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
   @IsDateString()
   @IsOptional()
