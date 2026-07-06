@@ -79,6 +79,8 @@ model User {
   createdProjects    Project[]
   projectMemberships ProjectMember[]
   assignedTasks      Task[]
+  conversations      Conversation[]
+  aiLogs             AiLog[]
 }
 
 model Project {
@@ -111,17 +113,68 @@ model ProjectMember {
 }
 
 model Task {
-  id          Int        @id @default(autoincrement())
-  title       String
-  description String?
-  status      TaskStatus @default(TODO)
-  priority    Priority   @default(MEDIUM)
-  dueDate     DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id             Int        @id @default(autoincrement())
+  title          String
+  description    String?
+  status         TaskStatus @default(TODO)
+  priority       Priority   @default(MEDIUM)
+  dueDate        DateTime?
+  estimatedHours Float?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
   projectId  Int
   project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assigneeId Int?
   assignee   User?   @relation(fields: [assigneeId], references: [id])
+}
+
+model Agent {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  conversations Conversation[]
+}
+
+model Conversation {
+  id        Int      @id @default(autoincrement())
+  context   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agentId   Int?
+  agent     Agent?   @relation(fields: [agentId], references: [id])
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+
+  messages ChatMessage[]
+}
+
+model ChatMessage {
+  id             Int      @id @default(autoincrement())
+  role           String
+  content        String
+  model          String?
+  tokensUsed     Int?
+  createdAt      DateTime @default(now())
+
+  conversationId Int
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+}
+
+model AiLog {
+  id          Int      @id @default(autoincrement())
+  action      String
+  model       String?
+  tokensUsed  Int      @default(0)
+  success     Boolean  @default(true)
+  errorMessage String?
+  createdAt   DateTime @default(now())
+
+  userId Int
+  user   User   @relation(fields: [userId], references: [id])
 }

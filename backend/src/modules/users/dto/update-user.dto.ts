@@ -1,13 +1,14 @@
-import { IsEmail, IsNotEmpty, IsString, IsOptional, IsEnum, IsInt, MinLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, IsEnum, IsInt, MinLength } from 'class-validator';
 import { UserRole } from '@prisma/client';
 
-export class CreateUserDto {
+export class UpdateUserDto {
   @IsString()
-  @IsNotEmpty()
-  fullName: string;
+  @IsOptional()
+  fullName?: string;
 
   @IsEmail()
-  email: string;
+  @IsOptional()
+  email?: string;
 
   @IsString()
   @MinLength(6)
@@ -28,9 +29,12 @@ export class CreateUserDto {
 
   @IsInt()
   @IsOptional()
-  departmentId?: number;
+  departmentId?: number | null;
 
   @IsInt()
   @IsOptional()
-  roleId?: number;
+  roleId?: number | null;
+
+  @IsOptional()
+  isActive?: boolean;
 }

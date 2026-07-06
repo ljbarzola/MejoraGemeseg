@@ -1,20 +1,5 @@
-import axios from 'axios';
+import { api } from './auth.service';
 import type { PaginatedProjects } from '../types/project';
-
-const API_URL = 'http://localhost:3000';
-
-const api = axios.create({
-  baseURL: API_URL,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
 
 export async function createProject(data: {
   name: string;
@@ -36,5 +21,20 @@ export async function getProjects(params?: {
 
 export async function getProject(id: number) {
   const res = await api.get(`/projects/${id}`);
+  return res.data;
+}
+
+export async function addMember(projectId: number, userId: number, role: string) {
+  const res = await api.post(`/projects/${projectId}/members`, { userId, role });
+  return res.data;
+}
+
+export async function removeMember(projectId: number, userId: number) {
+  const res = await api.delete(`/projects/${projectId}/members/${userId}`);
+  return res.data;
+}
+
+export async function updateMemberRole(projectId: number, userId: number, role: string) {
+  const res = await api.patch(`/projects/${projectId}/members/${userId}/role`, { role });
   return res.data;
 }
