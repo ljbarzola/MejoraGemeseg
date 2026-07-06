@@ -8,6 +8,11 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log('Limpiando datos existentes...');
+  await prisma.chatMessage.deleteMany();
+  await prisma.conversation.deleteMany();
+  await prisma.aiLog.deleteMany();
+  await prisma.agent.deleteMany();
+  await prisma.projectMember.deleteMany();
   await prisma.task.deleteMany();
   await prisma.projectMember.deleteMany();
   await prisma.project.deleteMany();
@@ -18,283 +23,202 @@ async function main() {
   console.log('Creando departamentos...');
   const deptTI = await prisma.department.create({ data: { name: 'Tecnología e Innovación', description: 'Desarrollo y soporte TI' } });
   const deptMKT = await prisma.department.create({ data: { name: 'Marketing', description: 'Marketing digital y comunicaciones' } });
+  const deptFinance = await prisma.department.create({ data: { name: 'Finanzas', description: 'Contabilidad y finanzas' } });
   const deptRRHH = await prisma.department.create({ data: { name: 'Recursos Humanos', description: 'Gestión de talento humano' } });
 
   console.log('Creando roles organizacionales...');
   const roleAdmin = await prisma.role.create({ data: { name: 'Director', description: 'Director general' } });
-  const roleManager = await prisma.role.create({ data: { name: 'Gerente', description: 'Gerente de área' } });
-  const roleEmployee = await prisma.role.create({ data: { name: 'Analista', description: 'Analista senior' } });
+  const roleGerente = await prisma.role.create({ data: { name: 'Gerente', description: 'Gerente de área' } });
+  const roleAnalyst = await prisma.role.create({ data: { name: 'Analista', description: 'Analista senior' } });
 
   const password = await bcrypt.hash('gemeseg2026', 10);
 
-  console.log('Creando usuarios de prueba...');
-  const manager = await prisma.user.create({
+  console.log('Creando usuarios...');
+  const admin = await prisma.user.create({
     data: {
-      fullName: 'Carlos Mendoza',
-      email: 'carlos@gemeseg.com',
-      password,
-      role: 'MANAGER',
-      documentNumber: '1798765432',
-      position: 'Gerente de Marketing',
-      departmentId: deptMKT.id,
-      roleId: roleManager.id,
-    },
-  });
-
-  const employee = await prisma.user.create({
-    data: {
-      fullName: 'Andrea Vera',
-      email: 'andrea@gemeseg.com',
-      password,
-      role: 'EMPLOYEE',
-      documentNumber: '1755566677',
-      position: 'Desarrolladora Senior',
-      departmentId: deptTI.id,
-      roleId: roleEmployee.id,
-    },
-  });
-
-  const employee2 = await prisma.user.create({
-    data: {
-      fullName: 'Miguel Torres',
-      email: 'miguel@gemeseg.com',
-      password,
-      role: 'EMPLOYEE',
-      documentNumber: '1744433322',
-      position: 'Analista de Marketing',
-      departmentId: deptMKT.id,
-      roleId: roleEmployee.id,
-    },
-  });
-
-  const sistemas = await prisma.user.create({
-    data: {
-      fullName: 'Leidy Barzola',
-      email: 'sistemas@gemeseg.com',
+      fullName: 'Sistemas GEMESEG',
+      email: 'admin@gemeseg.com',
       password,
       role: 'ADMIN',
-      documentNumber: '1700000000',
-      position: 'Directora de Sistemas',
+      documentNumber: '1700000001',
+      position: 'Administrador del Sistema',
       departmentId: deptTI.id,
       roleId: roleAdmin.id,
     },
   });
 
-  console.log('Creando proyectos de prueba...');
-  const project1 = await prisma.project.create({
+  const hugo = await prisma.user.create({
     data: {
-      name: 'Plataforma GEMESEG v2',
-      description: 'Rediseño completo de la plataforma de gestión interna con nuevas funcionalidades de IA y automatización.',
-      status: 'ACTIVE',
-      startDate: new Date('2026-07-01'),
-      endDate: new Date('2026-12-31'),
-      createdById: sistemas.id,
-      members: {
-        create: [
-          { userId: sistemas.id, role: 'OWNER' },
-          { userId: employee.id, role: 'MEMBER' },
-        ],
-      },
+      fullName: 'Hugo Melo',
+      email: 'hugo@gemeseg.com',
+      password,
+      role: 'MANAGER',
+      documentNumber: '1700000002',
+      position: 'Gerente General',
+      departmentId: deptFinance.id,
+      roleId: roleGerente.id,
     },
   });
 
-  const project2 = await prisma.project.create({
+  const david = await prisma.user.create({
     data: {
-      name: 'Campaña Marketing Q3 2026',
-      description: 'Estrategia de marketing digital para el tercer trimestre, incluyendo redes sociales, SEO y campañas pagadas.',
+      fullName: 'David Izurieta',
+      email: 'david@gemeseg.com',
+      password,
+      role: 'EMPLOYEE',
+      documentNumber: '1733322211',
+      position: 'Analista de Marketing Digital',
+      departmentId: deptMKT.id,
+      roleId: roleAnalyst.id,
+    },
+  });
+
+  const nayelli = await prisma.user.create({
+    data: {
+      fullName: 'Nayelli',
+      email: 'nayelli@gemeseg.com',
+      password,
+      role: 'EMPLOYEE',
+      documentNumber: '1744455566',
+      position: 'Analista de Recursos Humanos',
+      departmentId: deptRRHH.id,
+    },
+  });
+
+  const leidy = await prisma.user.create({
+    data: {
+      fullName: 'Leidy Barzola',
+      email: 'sistemas@gemeseg.com',
+      password,
+      role: 'EMPLOYEE',
+      documentNumber: '1755566677',
+      position: 'Analista de Sistemas',
+      departmentId: deptTI.id,
+    },
+  });
+
+  console.log('Creando proyectos...');
+
+  const projectLandings = await prisma.project.create({
+    data: {
+      name: 'Landings',
+      description: 'Diseño y desarrollo de landings pages para campañas de marketing digital.',
       status: 'ACTIVE',
       startDate: new Date('2026-07-01'),
       endDate: new Date('2026-09-30'),
-      createdById: manager.id,
+      createdById: david.id,
       members: {
         create: [
-          { userId: manager.id, role: 'OWNER' },
-          { userId: employee2.id, role: 'MEMBER' },
+          { userId: david.id, role: 'OWNER' },
+          { userId: admin.id, role: 'OWNER' },
         ],
       },
     },
   });
 
-  const project3 = await prisma.project.create({
+  const projectMejora = await prisma.project.create({
+    data: {
+      name: 'Mejora GEMESEG',
+      description: 'Mejoras continuas a la plataforma GEMESEG.',
+      status: 'ACTIVE',
+      startDate: new Date('2026-07-01'),
+      endDate: new Date('2026-12-31'),
+      createdById: admin.id,
+      members: {
+        create: [
+          { userId: admin.id, role: 'OWNER' },
+          { userId: hugo.id, role: 'MEMBER' },
+          { userId: david.id, role: 'MEMBER' },
+        ],
+      },
+    },
+  });
+
+  const projectCotizador = await prisma.project.create({
+    data: {
+      name: 'Cotizador',
+      description: 'Sistema de cotización de servicios y productos.',
+      status: 'ACTIVE',
+      startDate: new Date('2026-07-15'),
+      endDate: new Date('2026-10-31'),
+      createdById: admin.id,
+      members: {
+        create: [
+          { userId: admin.id, role: 'OWNER' },
+          { userId: hugo.id, role: 'MEMBER' },
+          { userId: david.id, role: 'VIEWER' },
+        ],
+      },
+    },
+  });
+
+  const projectPlataforma = await prisma.project.create({
+    data: {
+      name: 'Plataforma GEMESEG v2',
+      description: 'Rediseño completo de la plataforma de gestión interna con nuevas funcionalidades de IA.',
+      status: 'ACTIVE',
+      startDate: new Date('2026-07-01'),
+      endDate: new Date('2026-12-31'),
+      createdById: admin.id,
+      members: {
+        create: [
+          { userId: admin.id, role: 'OWNER' },
+          { userId: david.id, role: 'MEMBER' },
+        ],
+      },
+    },
+  });
+
+  const projectMigracion = await prisma.project.create({
     data: {
       name: 'Migración a Google Cloud',
       description: 'Migración de infraestructura on-premise a GCP con Cloud Run y Cloud SQL.',
       status: 'ON_HOLD',
       startDate: new Date('2026-08-01'),
       endDate: new Date('2027-02-28'),
-      createdById: sistemas.id,
+      createdById: admin.id,
       members: {
         create: [
-          { userId: sistemas.id, role: 'OWNER' },
-          { userId: employee.id, role: 'MANAGER' },
+          { userId: admin.id, role: 'OWNER' },
+          { userId: hugo.id, role: 'MANAGER' },
         ],
       },
     },
   });
 
-  const project4 = await prisma.project.create({
-    data: {
-      name: 'Portal de Clientes CRM',
-      description: 'Desarrollo de portal web para que los clientes puedan consultar estado de proyectos y facturación.',
-      status: 'COMPLETED',
-      startDate: new Date('2026-01-15'),
-      endDate: new Date('2026-06-30'),
-      createdById: manager.id,
-      members: {
-        create: [
-          { userId: manager.id, role: 'OWNER' },
-          { userId: employee.id, role: 'MEMBER' },
-          { userId: employee2.id, role: 'VIEWER' },
-        ],
-      },
-    },
-  });
-
-  const project5 = await prisma.project.create({
-    data: {
-      name: 'Capacitación en Herramientas Digitales',
-      description: 'Programa de capacitación para todo el personal en nuevas herramientas digitales y flujos de trabajo.',
-      status: 'ACTIVE',
-      startDate: new Date('2026-07-15'),
-      endDate: new Date('2026-10-15'),
-      createdById: manager.id,
-      members: {
-        create: [
-          { userId: manager.id, role: 'OWNER' },
-          { userId: employee2.id, role: 'MEMBER' },
-        ],
-      },
-    },
-  });
-
-  console.log('Creando tareas de prueba...');
-  const task1 = await prisma.task.create({
-    data: {
-      title: 'Diseñar nueva interfaz del dashboard',
-      description: 'Crear mockups y prototipos del nuevo dashboard principal con métricas en tiempo real.',
-      status: 'DONE',
-      priority: 'HIGH',
-      dueDate: new Date('2026-07-15'),
-      estimatedHours: 24,
-      projectId: project1.id,
-      assigneeId: employee.id,
-    },
-  });
-
-  const task2 = await prisma.task.create({
-    data: {
-      title: 'Implementar módulo de autenticación OAuth',
-      description: 'Integrar login con Google y Microsoft usando OAuth 2.0.',
-      status: 'IN_PROGRESS',
-      priority: 'URGENT',
-      dueDate: new Date('2026-07-20'),
-      estimatedHours: 16,
-      projectId: project1.id,
-      assigneeId: employee.id,
-    },
-  });
-
-  const task3 = await prisma.task.create({
-    data: {
-      title: 'Configurar pipeline CI/CD',
-      description: 'Setup de GitHub Actions para build, test y deploy automático a Cloud Run.',
-      status: 'TODO',
-      priority: 'MEDIUM',
-      dueDate: new Date('2026-07-25'),
-      estimatedHours: 12,
-      projectId: project1.id,
-    },
-  });
-
-  const task4 = await prisma.task.create({
-    data: {
-      title: 'Escribir documentación API',
-      description: 'Documentar todos los endpoints REST con Swagger/OpenAPI.',
-      status: 'IN_REVIEW',
-      priority: 'LOW',
-      dueDate: new Date('2026-08-01'),
-      estimatedHours: 8,
-      projectId: project1.id,
-      assigneeId: employee.id,
-    },
-  });
-
-  const task5 = await prisma.task.create({
-    data: {
-      title: 'Crear campaña Instagram Q3',
-      description: 'Diseñar contenido visual y calendario de publicaciones para Instagram.',
-      status: 'IN_PROGRESS',
-      priority: 'HIGH',
-      dueDate: new Date('2026-07-18'),
-      estimatedHours: 20,
-      projectId: project2.id,
-      assigneeId: employee2.id,
-    },
-  });
-
-  const task6 = await prisma.task.create({
-    data: {
-      title: 'Analizar métricas SEO del sitio',
-      description: 'Revisar posicionamiento actual y proponer mejoras técnicas de SEO.',
-      status: 'TODO',
-      priority: 'MEDIUM',
-      dueDate: new Date('2026-07-22'),
-      estimatedHours: 10,
-      projectId: project2.id,
-    },
-  });
-
-  const task7 = await prisma.task.create({
-    data: {
-      title: 'Diseñar presupuesto publicitario',
-      description: 'Definir distribución del presupuesto en campañas pagadas de Google Ads y Meta.',
-      status: 'DONE',
-      priority: 'HIGH',
-      dueDate: new Date('2026-07-10'),
-      estimatedHours: 6,
-      projectId: project2.id,
-      assigneeId: employee2.id,
-    },
+  console.log('Creando tareas...');
+  await prisma.task.createMany({
+    data: [
+      { title: 'Diseñar landings para campaña Q3', status: 'IN_PROGRESS', priority: 'HIGH', projectId: projectLandings.id, assigneeId: david.id, estimatedHours: 20 },
+      { title: 'Configurar tracking GA4 en landings', status: 'TODO', priority: 'MEDIUM', projectId: projectLandings.id, estimatedHours: 8 },
+      { title: 'Implementar OAuth en plataforma', status: 'IN_PROGRESS', priority: 'URGENT', projectId: projectMejora.id, estimatedHours: 16 },
+      { title: 'Documentar API REST', status: 'TODO', priority: 'LOW', projectId: projectMejora.id, estimatedHours: 10 },
+      { title: 'Módulo de cotizaciones PDF', status: 'TODO', priority: 'HIGH', projectId: projectCotizador.id, assigneeId: hugo.id, estimatedHours: 24 },
+      { title: 'Diseñar interfaz del cotizador', status: 'IN_REVIEW', priority: 'MEDIUM', projectId: projectCotizador.id, estimatedHours: 12 },
+      { title: 'Dashboard con métricas en tiempo real', status: 'DONE', priority: 'HIGH', projectId: projectPlataforma.id, assigneeId: david.id, estimatedHours: 20 },
+      { title: 'Pipeline CI/CD en GitHub Actions', status: 'TODO', priority: 'MEDIUM', projectId: projectPlataforma.id, estimatedHours: 12 },
+      { title: 'Evaluar costos GCP', status: 'TODO', priority: 'MEDIUM', projectId: projectMigracion.id, assigneeId: hugo.id, estimatedHours: 8 },
+    ],
   });
 
   console.log('\n========================================');
   console.log('  SEED COMPLETADO EXITOSAMENTE');
   console.log('========================================\n');
 
-  console.log('USUARIOS CREADOS (todos: contraseña = gemeseg2026):');
+  console.log('USUARIOS (contraseña: gemeseg2026):');
   console.log('─────────────────────────────────────────');
-  console.log(`ADMIN:    ${sistemas.email}  (Leidy Barzola - Directora de Sistemas)`);
-  console.log(`MANAGER: ${manager.email}  (Carlos Mendoza - Gerente Marketing)`);
-  console.log(`EMPLOYEE: ${employee.email}  (Andrea Vera - Dev Senior)`);
-  console.log(`EMPLOYEE: ${employee2.email}  (Miguel Torres - Analista Marketing)`);
-  console.log('\nPROYECTOS CREADOS:');
+  console.log(`ADMIN:     ${admin.email}  (Sistemas GEMESEG)`);
+  console.log(`MANAGER:   ${hugo.email}  (Hugo Melo - Gerente General)`);
+  console.log(`EMPLOYEE:  ${david.email}  (David Izurieta - Marketing Digital)`);
+  console.log(`EMPLOYEE:  ${nayelli.email}  (Nayelli - Recursos Humanos)`);
+  console.log(`EMPLOYEE:  ${leidy.email}  (Leidy Barzola - Sistemas)`);
+  console.log('\nPROYECTOS:');
   console.log('─────────────────────────────────────────');
-  console.log(`1. ${project1.name} [ACTIVE] → Leidy Barzola (OWNER), Andrea (MEMBER)`);
-  console.log(`2. ${project2.name} [ACTIVE] → Carlos (OWNER), Miguel (MEMBER)`);
-  console.log(`3. ${project3.name} [ON_HOLD] → Leidy Barzola (OWNER), Andrea (MANAGER)`);
-  console.log(`4. ${project4.name} [COMPLETED] → Carlos (OWNER), Andrea (MEMBER), Miguel (VIEWER)`);
-  console.log(`5. ${project5.name} [ACTIVE] → Carlos (OWNER), Miguel (MEMBER)`);
-
-  console.log('\nCreando tareas de prueba...');
-  await prisma.task.createMany({
-    data: [
-      { title: 'Configurar base de datos PostgreSQL', description: 'Crear schemas, indices y usuarios de BD', priority: 'HIGH', status: 'DONE', projectId: project1.id, assigneeId: employee.id, dueDate: new Date('2026-07-15'), estimatedHours: 8 },
-      { title: 'Diseñar schema de Prisma', description: 'Definir modelos User, Project, Task, enums', priority: 'HIGH', status: 'DONE', projectId: project1.id, assigneeId: employee.id, dueDate: new Date('2026-07-10'), estimatedHours: 6 },
-      { title: 'Implementar autenticacion JWT', description: 'Login, register, guards, bcrypt', priority: 'HIGH', status: 'DONE', projectId: project1.id, assigneeId: employee.id, dueDate: new Date('2026-07-20'), estimatedHours: 12 },
-      { title: 'Crear modulo de proyectos CRUD', description: 'Create, read, update con guards por rol', priority: 'MEDIUM', status: 'DONE', projectId: project1.id, assigneeId: employee.id, dueDate: new Date('2026-07-25'), estimatedHours: 16 },
-      { title: 'Implementar tablero Kanban', description: 'Vista drag-and-drop con columnas por estado', priority: 'MEDIUM', status: 'IN_PROGRESS', projectId: project1.id, assigneeId: employee.id, dueDate: new Date('2026-08-01'), estimatedHours: 20 },
-      { title: 'Integrar Claude API para sugerencias', description: 'Usar IA para sugerir asignacion de tareas', priority: 'LOW', status: 'TODO', projectId: project1.id, dueDate: new Date('2026-08-15'), estimatedHours: 24 },
-      { title: 'Deploy a GCP Cloud Run', description: 'Configurar Dockerfile, Cloud Build y Cloud SQL', priority: 'URGENT', status: 'TODO', projectId: project1.id, dueDate: new Date('2026-09-01'), estimatedHours: 16 },
-      { title: 'Definir estrategia de contenido Q3', description: 'Calendario editorial para redes sociales', priority: 'HIGH', status: 'IN_PROGRESS', projectId: project2.id, assigneeId: employee2.id, dueDate: new Date('2026-07-15'), estimatedHours: 10 },
-      { title: 'Crear landing page campana', description: 'Diseno y desarrollo de landing page promocional', priority: 'MEDIUM', status: 'TODO', projectId: project2.id, assigneeId: employee2.id, dueDate: new Date('2026-07-30'), estimatedHours: 14 },
-      { title: 'Configurar campañas Google Ads', description: 'Setup de campanas SEM y remarketing', priority: 'MEDIUM', status: 'TODO', projectId: project2.id, assigneeId: employee2.id, dueDate: new Date('2026-08-05'), estimatedHours: 8 },
-      { title: 'Analisis de metricas Q2', description: 'Reporte de KPIs del segundo trimestre', priority: 'LOW', status: 'IN_REVIEW', projectId: project2.id, assigneeId: employee2.id, dueDate: new Date('2026-07-10'), estimatedHours: 6 },
-      { title: 'Evaluacion de servicios GCP', description: 'Comparar Cloud Run vs Cloud Functions vs GKE', priority: 'HIGH', status: 'TODO', projectId: project3.id, assigneeId: employee.id, dueDate: new Date('2026-08-15'), estimatedHours: 12 },
-      { title: 'Crear infraestructura IaC', description: 'Terraform/Pulumi para recursos GCP', priority: 'MEDIUM', status: 'TODO', projectId: project3.id, dueDate: new Date('2026-09-01'), estimatedHours: 20 },
-    ],
-  });
-
-  console.log('13 tareas creadas (Proyecto 1: 7, Proyecto 2: 4, Proyecto 3: 2)');
+  console.log(`1. ${projectLandings.name} [ACTIVE] → David (OWNER), Admin (OWNER)`);
+  console.log(`2. ${projectMejora.name} [ACTIVE] → Admin (OWNER), Hugo (MEMBER), David (MEMBER)`);
+  console.log(`3. ${projectCotizador.name} [ACTIVE] → Admin (OWNER), Hugo (MEMBER), David (VIEWER)`);
+  console.log(`4. ${projectPlataforma.name} [ACTIVE] → Admin (OWNER), David (MEMBER)`);
+  console.log(`5. ${projectMigracion.name} [ON_HOLD] → Admin (OWNER), Hugo (MANAGER)`);
 }
 
 main()

@@ -12,6 +12,8 @@ import TaskDetailPage from './pages/tasks/TaskDetailPage';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/layout/Navbar';
+import ChatFloatingButton from './components/chat/ChatFloatingButton';
+import ChatDrawer from './components/chat/ChatDrawer';
 import { isAuthenticated } from './services/auth.service';
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -50,14 +52,6 @@ function App() {
           }
         />
         <Route
-          path="/admin"
-          element={
-            <ProtectedLayout>
-              <AdminDashboardPage />
-            </ProtectedLayout>
-          }
-        />
-        <Route
           path="/projects"
           element={
             <ProtectedLayout>
@@ -82,51 +76,35 @@ function App() {
           }
         />
         <Route
-          path="/projects/:id/board"
-          element={
-            <ProtectedLayout>
-              <KanbanPage />
-            </ProtectedLayout>
-          }
-        />
-        <Route
-          path="/projects/:id/tasks/new"
-          element={
-            <ProtectedLayout>
-              <CreateTaskPage />
-            </ProtectedLayout>
-          }
-        />
-        <Route
-          path="/tasks/:id"
-          element={
-            <ProtectedLayout>
-              <TaskDetailPage />
-            </ProtectedLayout>
-          }
-        />
-        <Route
           path="/projects/:id/tasks"
           element={
-            <ProtectedRoute>
+            <ProtectedLayout>
               <KanbanPage />
-            </ProtectedRoute>
+            </ProtectedLayout>
           }
         />
         <Route
           path="/projects/:id/tasks/new"
           element={
-            <ProtectedRoute>
+            <ProtectedLayout>
               <CreateTaskPage />
-            </ProtectedRoute>
+            </ProtectedLayout>
           }
         />
         <Route
           path="/tasks/:id"
           element={
-            <ProtectedRoute>
+            <ProtectedLayout>
               <TaskDetailPage />
-            </ProtectedRoute>
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedLayout>
+              <AdminDashboardPage />
+            </ProtectedLayout>
           }
         />
       </Routes>

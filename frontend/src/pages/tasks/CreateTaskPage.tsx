@@ -1,126 +1,143 @@
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+﻿import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useNavigate, useParams } from 'react-router-dom';
 import { createTask } from '../../services/task.service';
 
-const schema = z.object({
-  title: z.string().min(1, 'El título es requerido'),
+const taskSchema = z.object({
+  title: z.string().min(1, 'El t├¡tulo es requerido'),
   description: z.string().optional(),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']),
   dueDate: z.string().optional(),
-  estimatedHours: z.number().min(0).optional(),
+  estimatedHours: z.coerce.number().min(0).optional().optional(),
 });
 
-type FormData = z.infer<typeof schema>;
-
-const PRIORITY_OPTIONS = [
-  { value: 'LOW', label: 'Baja' },
-  { value: 'MEDIUM', label: 'Media' },
-  { value: 'HIGH', label: 'Alta' },
-  { value: 'URGENT', label: 'Urgente' },
-];
+type TaskForm = {
+  title: string;
+  description?: string;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  dueDate?: string;
+  estimatedHours?: number;
+};
 
 export default function CreateTaskPage() {
   const { id: projectId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [error, setError] = useState('');
+  const [serverError, setServerError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(schema),
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<TaskForm>({
+    resolver: zodResolver(taskSchema) as any,
     defaultValues: { priority: 'MEDIUM' },
   });
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = async (data: TaskForm) => {
+    if (!projectId) return;
+    setServerError('');
+    setLoading(true);
     try {
-      setError('');
-      await createTask(Number(projectId), {
-        title: data.title,
-        description: data.description,
-        priority: data.priority,
-        dueDate: data.dueDate || undefined,
-        estimatedHours: data.estimatedHours || undefined,
-      });
-      navigate(`/projects/${projectId}/board`);
+      await createTask(Number(projectId), data);
+      navigate(`/projects/${projectId}`);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al crear tarea');
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        'Error al crear tarea';
+      setServerError(Array.isArray(msg) ? msg[0] : msg);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="page-container">
-      <button className="btn-back" onClick={() => navigate(`/projects/${projectId}/board`)}>
-        &larr; Volver al tablero
+      <button className="btn-back" onClick={() => navigate(`/projects/${projectId}`)}>
+        &larr; Volver al proyecto
       </button>
 
       <div className="page-card">
         <div className="page-header">
-          <div className="page-eyebrow">Nueva Tarea</div>
-          <h1>Crear Tarea</h1>
-          <p className="page-subtitle">Agrega una nueva tarea al proyecto</p>
+          <p className="page-eyebrow">GEMESEG</p>
+          <h1>Crear tarea</h1>
+          <p className="page-subtitle">
+            Registra una nueva tarea dentro del proyecto
+          </p>
         </div>
 
-        {error && <div className="auth-error-banner">{error}</div>}
+        <form onSubmit={handleSubmit(onSubmit)} className="auth-form">
+          {serverError && (
+            <div className="auth-error-banner">{serverError}</div>
+          )}
 
-        <form className="auth-form" onSubmit={handleSubmit(onSubmit)}>
           <div className="form-group">
-            <label>Título *</label>
+            <label htmlFor="title">T├¡tulo *</label>
             <input
+              id="title"
+              type="text"
+              placeholder="Nombre de la tarea"
               {...register('title')}
               className={errors.title ? 'input-error' : ''}
-              placeholder="Ej: Configurar base de datos"
             />
-            {errors.title && <span className="field-error">{errors.title.message}</span>}
+            {errors.title && (
+              <span className="field-error">{errors.title.message}</span>
+            )}
           </div>
 
           <div className="form-group">
-            <label>Descripción</label>
+            <label htmlFor="description">Descripci├│n</label>
             <textarea
+              id="description"
+              placeholder="Detalles de la tarea (opcional)"
               {...register('description')}
               className="form-textarea"
               rows={3}
-              placeholder="Describe la tarea..."
             />
           </div>
 
           <div className="form-row">
             <div className="form-group">
-              <label>Prioridad</label>
-              <select {...register('priority')} className="form-select">
-                {PRIORITY_OPTIONS.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
-                ))}
+              <label htmlFor="priority">Prioridad</label>
+              <select id="priority" {...register('priority')}>
+                <option value="LOW">Baja</option>
+                <option value="MEDIUM">Media</option>
+                <option value="HIGH">Alta</option>
+                <option value="URGENT">Urgente</option>
               </select>
             </div>
 
             <div className="form-group">
-              <label>Fecha límite</label>
-              <input
-                type="date"
-                {...register('dueDate')}
-                min={new Date().toISOString().split('T')[0]}
-              />
+              <label htmlFor="dueDate">Fecha l├¡mite</label>
+              <input id="dueDate" type="date" {...register('dueDate')} />
             </div>
           </div>
 
           <div className="form-group">
-            <label>Horas estimadas</label>
+            <label htmlFor="estimatedHours">Horas estimadas</label>
             <input
+              id="estimatedHours"
               type="number"
-              {...register('estimatedHours', { valueAsNumber: true })}
               min="0"
               step="0.5"
               placeholder="0"
+              {...register('estimatedHours')}
             />
           </div>
 
           <div className="form-actions">
-            <button type="button" className="btn-secondary" onClick={() => navigate(`/projects/${projectId}/board`)}>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => navigate(`/projects/${projectId}`)}
+            >
               Cancelar
             </button>
-            <button type="submit" className="auth-btn" disabled={isSubmitting}>
-              {isSubmitting ? 'Creando...' : 'Crear Tarea'}
+            <button type="submit" className="auth-btn" disabled={loading}>
+              {loading ? 'Creando...' : 'Crear tarea'}
             </button>
           </div>
         </form>

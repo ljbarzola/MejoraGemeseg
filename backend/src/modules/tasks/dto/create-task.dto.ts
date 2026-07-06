@@ -1,24 +1,22 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsDateString, IsNumber, Min } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsNumber, IsDateString } from 'class-validator';
 
 export class CreateTaskDto {
   @IsString()
-  @IsNotEmpty()
   title: string;
 
-  @IsString()
   @IsOptional()
+  @IsString()
   description?: string;
 
-  @IsEnum(['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const)
   @IsOptional()
-  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  @IsEnum(['LOW', 'MEDIUM', 'HIGH', 'URGENT'])
+  priority?: string;
 
-  @IsDateString()
   @IsOptional()
+  @IsDateString()
   dueDate?: string;
 
-  @IsNumber()
-  @Min(0)
   @IsOptional()
+  @IsNumber()
   estimatedHours?: number;
 }

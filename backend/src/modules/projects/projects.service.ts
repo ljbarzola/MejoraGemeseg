@@ -15,6 +15,19 @@ export class ProjectsService {
       throw new ForbiddenException('Solo ADMIN y MANAGER pueden crear proyectos');
     }
 
+    const adminUser = await this.prisma.user.findUnique({
+      where: { email: 'admin@gemeseg.com' },
+      select: { id: true },
+    });
+
+    const membersToCreate = [
+      { userId, role: 'OWNER' as const },
+    ];
+
+    if (adminUser && adminUser.id !== userId) {
+      membersToCreate.push({ userId: adminUser.id, role: 'OWNER' as const });
+    }
+
     const project = await this.prisma.project.create({
       data: {
         name: dto.name,
@@ -23,10 +36,7 @@ export class ProjectsService {
         endDate: dto.endDate ? new Date(dto.endDate) : null,
         createdById: userId,
         members: {
-          create: {
-            userId,
-            role: 'OWNER',
-          },
+          create: membersToCreate,
         },
       },
       include: {
@@ -120,5 +130,138 @@ export class ProjectsService {
     }
 
     return project;
+  }
+
+  async getAdminStats() {
+    const [total, byStatus, taskStats] = await Promise.all([
+      this.prisma.project.count(),
+      this.prisma.project.groupBy({
+        by: ['status'],
+        _count: { id: true },
+      }),
+      this.prisma.task.groupBy({
+        by: ['status'],
+        _count: { id: true },
+      }),
+    ]);
+
+    const totalTasks = taskStats.reduce((sum, s) => sum + s._count.id, 0);
+    const completedTasks = taskStats.find((s) => s.status === 'DONE')?._count.id || 0;
+
+    return {
+      totalProjects: total,
+      byStatus: byStatus.map((s) => ({ status: s.status, count: s._count.id })),
+      tasks: {
+        total: totalTasks,
+        completed: completedTasks,
+        completionRate: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
+        byStatus: taskStats.map((s) => ({ status: s.status, count: s._count.id })),
+      },
+    };
+  }
+
+  private async assertOwner(projectId: number, userId: number, userRole: UserRole) {
+    if (userRole === UserRole.ADMIN) return;
+
+    const membership = await this.prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId } },
+    });
+
+    if (!membership || membership.role !== 'OWNER') {
+      throw new ForbiddenException('Solo los propietarios pueden gestionar miembros');
+    }
+  }
+
+  async addMember(projectId: number, targetUserId: number, role: string, userId: number, userRole: UserRole) {
+    await this.assertOwner(projectId, userId, userRole);
+
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('Proyecto no encontrado');
+
+    const targetUser = await this.prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!targetUser || targetUser.isActive === false) {
+      throw new NotFoundException('Usuario no encontrado o inactivo');
+    }
+
+    const existing = await this.prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId: targetUserId } },
+    });
+
+    if (existing) {
+      throw new ForbiddenException('El usuario ya es miembro de este proyecto');
+    }
+
+    return this.prisma.projectMember.create({
+      data: {
+        projectId,
+        userId: targetUserId,
+        role: role as any,
+      },
+      include: {
+        user: {
+          select: { id: true, fullName: true, email: true },
+        },
+      },
+    });
+  }
+
+  async removeMember(projectId: number, targetUserId: number, userId: number, userRole: UserRole) {
+    await this.assertOwner(projectId, userId, userRole);
+
+    const membership = await this.prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId: targetUserId } },
+    });
+
+    if (!membership) {
+      throw new NotFoundException('El usuario no es miembro de este proyecto');
+    }
+
+    if (membership.role === 'OWNER') {
+      const ownerCount = await this.prisma.projectMember.count({
+        where: { projectId, role: 'OWNER' },
+      });
+      if (ownerCount <= 1) {
+        throw new ForbiddenException('No se puede eliminar al único propietario del proyecto');
+      }
+    }
+
+    await this.prisma.projectMember.delete({
+      where: { projectId_userId: { projectId, userId: targetUserId } },
+    });
+
+    return { message: 'Miembro eliminado del proyecto' };
+  }
+
+  async updateMemberRole(projectId: number, targetUserId: number, newRole: string, userId: number, userRole: UserRole) {
+    if (userRole !== UserRole.ADMIN) {
+      throw new ForbiddenException('Solo el administrador puede cambiar roles de propietario');
+    }
+
+    const membership = await this.prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId: targetUserId } },
+    });
+
+    if (!membership) {
+      throw new NotFoundException('El usuario no es miembro de este proyecto');
+    }
+
+    if (membership.role === 'OWNER' && newRole !== 'OWNER') {
+      const ownerCount = await this.prisma.projectMember.count({
+        where: { projectId, role: 'OWNER' },
+      });
+      if (ownerCount <= 1) {
+        throw new ForbiddenException('No se puede degradar al único propietario');
+      }
+    }
+
+    return this.prisma.projectMember.update({
+      where: { projectId_userId: { projectId, userId: targetUserId } },
+      data: { role: newRole as any },
+      include: {
+        user: {
+          select: { id: true, fullName: true, email: true },
+        },
+      },
+    });
   }
 }

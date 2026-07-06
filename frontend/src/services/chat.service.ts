@@ -43,10 +43,11 @@ export function detectContext(pathname: string): string {
   if (pathname === '/dashboard') return 'dashboard';
   if (pathname === '/projects') return 'proyectos';
   if (pathname === '/projects/new') return 'crear proyecto';
-  if (pathname.match(/\/projects\/\d+\/board/)) return 'tablero kanban';
   if (pathname.match(/\/projects\/\d+\/tasks\/new/)) return 'crear tarea';
+  if (pathname.match(/\/projects\/\d+\/tasks/)) return 'tablero kanban';
   if (pathname.match(/\/projects\/\d+/)) return 'detalle de proyecto';
   if (pathname.match(/\/tasks\/\d+/)) return 'detalle de tarea';
+  if (pathname === '/admin') return 'administracion';
   return 'general';
 }
 

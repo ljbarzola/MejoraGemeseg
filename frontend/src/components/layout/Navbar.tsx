@@ -4,7 +4,7 @@ import { getUser, removeToken } from '../../services/auth.service';
 export default function Navbar() {
   const navigate = useNavigate();
   const user = getUser();
-  const isAdmin = user?.email === 'sistemas@gemeseg.com';
+  const isAdmin = user?.email === 'admin@gemeseg.com' || user?.role === 'ADMIN';
 
   const handleLogout = () => {
     removeToken();

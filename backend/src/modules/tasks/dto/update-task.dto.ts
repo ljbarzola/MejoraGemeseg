@@ -1,32 +1,31 @@
-import { IsString, IsOptional, IsEnum, IsDateString, IsNumber, Min, IsInt } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsNumber, IsDateString } from 'class-validator';
 
 export class UpdateTaskDto {
-  @IsString()
   @IsOptional()
+  @IsString()
   title?: string;
 
-  @IsString()
   @IsOptional()
+  @IsString()
   description?: string;
 
-  @IsEnum(['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE', 'CANCELLED'] as const)
   @IsOptional()
-  status?: 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE' | 'CANCELLED';
+  @IsEnum(['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE', 'CANCELLED'])
+  status?: string;
 
-  @IsEnum(['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const)
   @IsOptional()
-  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  @IsEnum(['LOW', 'MEDIUM', 'HIGH', 'URGENT'])
+  priority?: string;
 
+  @IsOptional()
   @IsDateString()
-  @IsOptional()
   dueDate?: string;
 
-  @IsNumber()
-  @Min(0)
   @IsOptional()
+  @IsNumber()
   estimatedHours?: number;
 
-  @IsInt()
   @IsOptional()
-  assigneeId?: number;
+  @IsNumber()
+  assigneeId?: number | null;
 }

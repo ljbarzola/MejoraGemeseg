@@ -1,42 +1,31 @@
-﻿import { Controller, Get, Post, Patch, Body, Param, UseGuards, Req } from '@nestjs/common';
+﻿import { Controller, Get, Patch, Delete, Param, Body, UseGuards, Req, ParseIntPipe } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { TasksService } from './tasks.service';
-import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 
 @Controller()
 export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
 
-  @Post('projects/:projectId/tasks')
+  @Get(':id')
   @UseGuards(AuthGuard('jwt'))
-  create(
-    @Param('projectId') projectId: string,
-    @Body() dto: CreateTaskDto,
-    @Req() req: any,
-  ) {
-    return this.tasksService.create(+projectId, dto, req.user.userId);
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.tasksService.findOne(id);
   }
 
-  @Get('projects/:projectId/tasks')
-  @UseGuards(AuthGuard('jwt'))
-  findByProject(@Param('projectId') projectId: string) {
-    return this.tasksService.findByProject(+projectId);
-  }
-
-  @Get('tasks/:id')
-  @UseGuards(AuthGuard('jwt'))
-  findOne(@Param('id') id: string) {
-    return this.tasksService.findOne(+id);
-  }
-
-  @Patch('tasks/:id')
+  @Patch(':id')
   @UseGuards(AuthGuard('jwt'))
   update(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateTaskDto,
     @Req() req: any,
   ) {
-    return this.tasksService.update(+id, dto, req.user.userId);
+    return this.tasksService.update(id, dto, req.user.userId, req.user.role);
+  }
+
+  @Delete(':id')
+  @UseGuards(AuthGuard('jwt'))
+  remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.tasksService.remove(id, req.user.userId, req.user.role);
   }
 }
