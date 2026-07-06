@@ -200,8 +200,8 @@ export default function ProjectDetailPage() {
                 <button className="btn-secondary" onClick={openEditModal}>
                   Editar
                 </button>
-                <button className="btn-danger-sm" onClick={handleDeleteProject} title="Eliminar proyecto">
-                  Eliminar
+                <button className="btn-delete-project" onClick={handleDeleteProject} title="Eliminar proyecto">
+                  Eliminar proyecto
                 </button>
               </>
             )}
@@ -270,20 +270,16 @@ export default function ProjectDetailPage() {
                         <select
                           value={m.role}
                           onChange={(e) => handleChangeRole(m.user.id, e.target.value)}
-                          style={{
-                            border: '1px solid #d1d5db',
-                            borderRadius: '4px',
-                            padding: '2px 6px',
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                          }}
+                          className="role-select"
                         >
                           {MEMBER_ROLE_OPTIONS.map((r) => (
                             <option key={r} value={r}>{MEMBER_ROLE_LABELS[r]}</option>
                           ))}
                         </select>
                       ) : (
-                        MEMBER_ROLE_LABELS[m.role] || m.role
+                        <span className={`role-badge role-badge-${m.role.toLowerCase()}`}>
+                          {MEMBER_ROLE_LABELS[m.role] || m.role}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -449,7 +445,7 @@ export default function ProjectDetailPage() {
 
       {showEditModal && (
         <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Editar proyecto</h3>
               <button className="modal-close" onClick={() => setShowEditModal(false)}>✕</button>
@@ -457,11 +453,12 @@ export default function ProjectDetailPage() {
             <div className="modal-body">
               {editError && <div className="form-error">{editError}</div>}
               <div className="form-group">
-                <label>Nombre</label>
+                <label>Nombre del proyecto</label>
                 <input
                   type="text"
                   value={editForm.name}
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  placeholder="Ej: Landings Q3"
                 />
               </div>
               <div className="form-group">
@@ -471,6 +468,7 @@ export default function ProjectDetailPage() {
                   value={editForm.description}
                   onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                   rows={3}
+                  placeholder="Describe el objetivo del proyecto..."
                 />
               </div>
               <div className="form-row">
@@ -501,7 +499,7 @@ export default function ProjectDetailPage() {
                 onClick={handleUpdateProject}
                 disabled={!editForm.name.trim() || editLoading}
               >
-                {editLoading ? 'Guardando...' : 'Guardar'}
+                {editLoading ? 'Guardando...' : 'Guardar cambios'}
               </button>
             </div>
           </div>

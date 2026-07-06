@@ -1731,7 +1731,78 @@ body {
     width: 100vw;
   }
 
-  .chat-fab {
+.role-select {
+  padding: 5px 10px;
+  border: 2px solid var(--gris-claro);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--azul-oscuro);
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  outline: none;
+}
+
+.role-select:focus {
+  border-color: var(--azul-claro);
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.role-badge-owner {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  color: #92400e;
+}
+
+.role-badge-manager {
+  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+  color: #1e40af;
+}
+
+.role-badge-member {
+  background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+  color: #3730a3;
+}
+
+.role-badge-viewer {
+  background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+  color: #6b7280;
+}
+
+.btn-delete-project {
+  padding: 8px 16px;
+  background: transparent;
+  color: #dc2626;
+  border: 2px solid #fca5a5;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-delete-project:hover {
+  background: #dc2626;
+  color: white;
+  border-color: #dc2626;
+}
+
+.modal-lg {
+  max-width: 560px;
+}
+
+.chat-fab {
     bottom: 20px;
     right: 20px;
     width: 52px;
