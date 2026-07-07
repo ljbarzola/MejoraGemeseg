@@ -47,14 +47,13 @@ export default function AgentsPage() {
     setShowModal(true);
   }
 
-  function openEditModal(user: UserWithAgent) {
-    if (!user.agent) return;
-    setSelectedUserId(user.id);
-    setEditingAgent(user.agent);
+  function openEditModal(agent: Agent) {
+    setSelectedUserId(agent.userId);
+    setEditingAgent(agent);
     setForm({
-      name: user.agent.name,
-      systemMsg: user.agent.instructions,
-      scope: user.agent.scope,
+      name: agent.name,
+      systemMsg: agent.instructions,
+      scope: agent.scope,
     });
     setFormError('');
     setShowModal(true);
@@ -131,49 +130,58 @@ export default function AgentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((u) => (
-                  <tr key={u.id}>
-                    <td className="tasks-table-title">
-                      <div className="tasks-table-assignee-item">
-                        <span className="kanban-avatar">{u.fullName.charAt(0)}</span>
-                        {u.fullName}
-                      </div>
-                    </td>
-                    <td>{u.email}</td>
-                    <td>{u.role}</td>
-                    <td>
-                      {u.agent ? (
-                        <span className="tools-name">{u.agent.name}</span>
-                      ) : (
-                        <span className="agent-empty-badge">Sin agente</span>
-                      )}
-                    </td>
-                    <td>
-                      {u.agent && (
-                        <span className="agent-scope-badge">{u.agent.scope}</span>
-                      )}
-                    </td>
-                    <td>
-                      {u.agent && (
-                        <span className={`status-badge ${u.agent.isActive ? 'agent-active' : 'agent-inactive'}`}>
-                          {u.agent.isActive ? 'Activo' : 'Inactivo'}
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <div className="tools-actions-cell">
-                        {u.agent ? (
+                {users.map((u) =>
+                  u.agents.length > 0 ? (
+                    u.agents.map((agent, idx) => (
+                      <tr key={`${u.id}-${agent.id}`}>
+                        {idx === 0 && (
                           <>
-                            <button className="btn-sm-edit" onClick={() => openEditModal(u)} title="Editar agente">✎</button>
-                            <button className="btn-danger-sm" onClick={() => handleDelete(u.agent!.id)} title="Eliminar agente">✕</button>
+                            <td className="tasks-table-title" rowSpan={u.agents.length}>
+                              <div className="tasks-table-assignee-item">
+                                <span className="kanban-avatar">{u.fullName.charAt(0)}</span>
+                                {u.fullName}
+                              </div>
+                            </td>
+                            <td rowSpan={u.agents.length}>{u.email}</td>
+                            <td rowSpan={u.agents.length}>{u.role}</td>
                           </>
-                        ) : (
-                          <button className="btn-sm-edit" onClick={() => openCreateModal(u.id)} title="Crear agente">+</button>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        <td><span className="tools-name">{agent.name}</span></td>
+                        <td><span className="agent-scope-badge">{agent.scope}</span></td>
+                        <td>
+                          <span className={`status-badge ${agent.isActive ? 'agent-active' : 'agent-inactive'}`}>
+                            {agent.isActive ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="tools-actions-cell">
+                            <button className="btn-sm-edit" onClick={() => openEditModal(agent)} title="Editar agente">✎</button>
+                            <button className="btn-danger-sm" onClick={() => handleDelete(agent.id)} title="Eliminar agente">✕</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr key={u.id}>
+                      <td className="tasks-table-title">
+                        <div className="tasks-table-assignee-item">
+                          <span className="kanban-avatar">{u.fullName.charAt(0)}</span>
+                          {u.fullName}
+                        </div>
+                      </td>
+                      <td>{u.email}</td>
+                      <td>{u.role}</td>
+                      <td><span className="agent-empty-badge">Sin agente</span></td>
+                      <td></td>
+                      <td></td>
+                      <td>
+                        <div className="tools-actions-cell">
+                          <button className="btn-sm-edit" onClick={() => openCreateModal(u.id)} title="Crear agente">+</button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                )}
               </tbody>
             </table>
           </div>
@@ -196,7 +204,7 @@ export default function AgentsPage() {
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Ej: Asistente de Proyectos"
+                  placeholder="Ej: Agente de Proyectos"
                   maxLength={100}
                 />
               </div>

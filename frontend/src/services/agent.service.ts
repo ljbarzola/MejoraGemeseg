@@ -32,3 +32,13 @@ export async function updateAgent(
 export async function deleteAgent(id: number): Promise<void> {
   await api.delete(`/admin/agents/${id}`);
 }
+
+export async function getAvailableAgents(): Promise<{ agents: Agent[]; defaultAgent: Agent | null }> {
+  const res = await api.get('/agents/available');
+  return res.data;
+}
+
+export async function setActiveAgent(agentId: number | null): Promise<{ id: number; activeAgentId: number | null }> {
+  const res = await api.patch('/users/me/active-agent', { agentId });
+  return res.data;
+}

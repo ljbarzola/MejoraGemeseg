@@ -37,3 +37,14 @@ export class AgentsController {
     return this.agentsService.remove(id);
   }
 }
+
+@Controller('agents')
+export class AgentsUserController {
+  constructor(private readonly agentsService: AgentsService) {}
+
+  @Get('available')
+  @UseGuards(AuthGuard('jwt'))
+  getAvailable(@Req() req: any) {
+    return this.agentsService.getAvailableForUser(req.user.userId);
+  }
+}

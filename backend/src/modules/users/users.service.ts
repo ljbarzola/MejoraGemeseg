@@ -182,6 +182,22 @@ export class UsersService {
     return user;
   }
 
+  async setActiveAgent(userId: number, agentId: number | null) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    if (agentId !== null) {
+      const agent = await this.prisma.agent.findUnique({ where: { id: agentId } });
+      if (!agent) throw new NotFoundException('Agente no encontrado');
+    }
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { activeAgentId: agentId },
+      select: { id: true, activeAgentId: true },
+    });
+  }
+
   async getStats() {
     const [total, active, byRole] = await Promise.all([
       this.prisma.user.count(),

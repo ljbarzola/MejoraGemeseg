@@ -7,7 +7,7 @@ const RATE_LIMIT = 50;
 const MODEL = 'gpt-4o-mini';
 const API_URL = 'https://models.inference.ai.azure.com/chat/completions';
 
-const SYSTEM_PROMPT = `Eres el asistente de GEMESEG, un sistema de gestión de proyectos y tareas.
+const SYSTEM_PROMPT = `Eres el agente de GEMESEG, un sistema de gestión de proyectos y tareas.
 Puedes responder preguntas sobre los datos del usuario: proyectos, tareas, miembros, estadísticas.
 Cuando el usuario pregunte algo, responde de forma concisa y útil en español.
 Si necesitas datos específicos, indica la intención con el formato [INTENCION: nombre_intencion].
@@ -88,8 +88,10 @@ export class AiService {
   }
 
   private async callGitHubModels(message: string, context: string, history: string[], userId: number) {
+    const systemPrompt = await this.getSystemPrompt(userId);
+
     const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: systemPrompt },
       ...history.map((msg, i) => ({
         role: i % 2 === 0 ? 'user' : 'assistant',
         content: msg,
@@ -238,6 +240,25 @@ export class AiService {
     });
 
     return messages.map((m) => m.content);
+  }
+
+  private async getSystemPrompt(userId: number): Promise<string> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { activeAgentId: true },
+    });
+
+    if (user?.activeAgentId) {
+      const agent = await this.prisma.agent.findUnique({
+        where: { id: user.activeAgentId },
+        select: { instructions: true, isActive: true },
+      });
+      if (agent?.isActive) {
+        return agent.instructions;
+      }
+    }
+
+    return SYSTEM_PROMPT;
   }
 
   private async logAi(userId: number, action: string, tokensUsed: number, success: boolean, errorMessage?: string) {

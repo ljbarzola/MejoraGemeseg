@@ -22,11 +22,11 @@ export class AgentsService {
 
     const userMap = new Map<number, any>();
     for (const u of users) {
-      userMap.set(u.id, { ...u, agent: null as any });
+      userMap.set(u.id, { ...u, agents: [] as any[] });
     }
     for (const a of agents) {
       if (a.userId && userMap.has(a.userId)) {
-        userMap.get(a.userId)!.agent = a;
+        userMap.get(a.userId)!.agents.push(a);
       }
     }
 
@@ -90,5 +90,43 @@ export class AgentsService {
 
     await this.prisma.agent.delete({ where: { id } });
     return { message: 'Agente eliminado (revertido a prompt base)' };
+  }
+
+  async getAvailableForUser(userId: number) {
+    const agents = await this.prisma.agent.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { userId: null },
+          { userId },
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        instructions: true,
+        scope: true,
+        isActive: true,
+        userId: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    const defaultAgent = await this.prisma.agent.findFirst({
+      where: { userId: null, name: 'Agente GEMESEG' },
+      select: {
+        id: true,
+        name: true,
+        instructions: true,
+        scope: true,
+        isActive: true,
+        userId: true,
+      },
+    });
+
+    return {
+      agents,
+      defaultAgent,
+    };
   }
 }

@@ -70,8 +70,10 @@ model User {
   isActive       Boolean    @default(true)
   departmentId   Int?
   roleId         Int?
+  activeAgentId  Int?
   department     Department? @relation(fields: [departmentId], references: [id])
   roleRelation   Role?       @relation(fields: [roleId], references: [id])
+  activeAgent    Agent?      @relation("UserActiveAgent", fields: [activeAgentId], references: [id])
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
@@ -80,7 +82,7 @@ model User {
   taskAssignees      TaskAssignee[]
   toolAssignments    ToolAssignment[]
   toolAudits         ToolAuditLog[]
-  agents             Agent[]
+  agents             Agent[]   @relation("AgentOwner")
   conversations      Conversation[]
   aiLogs             AiLog[]
 }
@@ -141,16 +143,17 @@ model TaskAssignee {
 }
 
 model Agent {
-  id           Int      @id @default(autoincrement())
-  name         String
-  instructions String
-  scope        String   @default("GLOBAL")
-  isActive     Boolean  @default(true)
-  userId       Int?
-  user         User?    @relation(fields: [userId], references: [id])
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  messages     ChatMessage[]
+  id             Int      @id @default(autoincrement())
+  name           String
+  instructions   String
+  scope          String   @default("GLOBAL")
+  isActive       Boolean  @default(true)
+  userId         Int?
+  user           User?    @relation("AgentOwner", fields: [userId], references: [id])
+  activeUsers    User[]   @relation("UserActiveAgent")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  messages       ChatMessage[]
   @@unique([userId, name])
 }
 

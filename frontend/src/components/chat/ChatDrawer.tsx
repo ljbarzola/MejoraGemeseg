@@ -7,11 +7,15 @@ import {
   sendMessage,
   type ChatMessage,
 } from '../../services/chat.service';
+import { getAvailableAgents, setActiveAgent } from '../../services/agent.service';
+import type { Agent } from '../../types/agent';
 
 interface ChatDrawerProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
+const AGENT_STORAGE_KEY = 'gemeseg_active_agent_id';
 
 export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
   const location = useLocation();
@@ -21,11 +25,27 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [defaultAgent, setDefaultAgent] = useState<Agent | null>(null);
+  const [activeAgentId, setActiveAgentIdState] = useState<number | null>(null);
+  const [showAgentMenu, setShowAgentMenu] = useState(false);
+
   const context = detectContext(location.pathname);
 
   useEffect(() => {
     setMessages(getChatHistory());
+    const saved = localStorage.getItem(AGENT_STORAGE_KEY);
+    if (saved) setActiveAgentIdState(Number(saved));
   }, []);
+
+  useEffect(() => {
+    if (isOpen && agents.length === 0) {
+      getAvailableAgents().then((data) => {
+        setAgents(data.agents);
+        setDefaultAgent(data.defaultAgent);
+      }).catch(() => {});
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -36,6 +56,22 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
       setTimeout(() => inputRef.current?.focus(), 300);
     }
   }, [isOpen]);
+
+  const currentAgent = agents.find((a) => a.id === activeAgentId) || defaultAgent;
+
+  async function handleSelectAgent(agent: Agent | null) {
+    const agentId = agent?.id || null;
+    setActiveAgentIdState(agentId);
+    if (agentId) {
+      localStorage.setItem(AGENT_STORAGE_KEY, String(agentId));
+    } else {
+      localStorage.removeItem(AGENT_STORAGE_KEY);
+    }
+    try {
+      await setActiveAgent(agentId);
+    } catch {}
+    setShowAgentMenu(false);
+  }
 
   const handleSend = async () => {
     const text = input.trim();
@@ -96,18 +132,47 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
           <div className="chat-header-info">
             <div className="chat-bot-icon">🤖</div>
             <div>
-              <div className="chat-header-title">Asistente GEMESEG</div>
+              <div className="chat-header-title">Agente GEMESEG</div>
               <div className="chat-header-context">Sección: {context}</div>
             </div>
           </div>
           <button className="chat-close" onClick={onClose}>✕</button>
         </div>
 
+        <div className="chat-agent-bar">
+          <button className="chat-agent-trigger" onClick={() => setShowAgentMenu(!showAgentMenu)}>
+            <span className="chat-agent-icon">🧠</span>
+            <span className="chat-agent-name">{currentAgent?.name || 'Agente GEMESEG'}</span>
+            <span className="chat-agent-arrow">{showAgentMenu ? '▲' : '▼'}</span>
+          </button>
+          {showAgentMenu && (
+            <div className="chat-agent-menu">
+              <button
+                className={`chat-agent-option ${!activeAgentId ? 'active' : ''}`}
+                onClick={() => handleSelectAgent(null)}
+              >
+                <span className="chat-agent-option-name">Agente GEMESEG</span>
+                <span className="chat-agent-option-desc">Agente por defecto</span>
+              </button>
+              {agents.filter((a) => a.userId !== null).map((agent) => (
+                <button
+                  key={agent.id}
+                  className={`chat-agent-option ${activeAgentId === agent.id ? 'active' : ''}`}
+                  onClick={() => handleSelectAgent(agent)}
+                >
+                  <span className="chat-agent-option-name">{agent.name}</span>
+                  <span className="chat-agent-option-desc">{agent.scope}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="chat-messages">
           {messages.length === 0 && (
             <div className="chat-empty">
               <div className="chat-bot-icon-lg">🤖</div>
-              <p>¡Hola! Soy tu asistente. Pregúntame sobre esta sección.</p>
+              <p>¡Hola! Soy tu agente. Pregúntame sobre esta sección.</p>
             </div>
           )}
           {messages.map((msg) => (

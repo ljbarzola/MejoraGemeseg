@@ -14,5 +14,5 @@ export interface UserWithAgent {
   fullName: string;
   email: string;
   role: string;
-  agent: Agent | null;
+  agents: Agent[];
 }

@@ -49,6 +49,12 @@ export class UsersController {
     return this.usersService.getMe(req.user.userId);
   }
 
+  @Patch('me/active-agent')
+  @UseGuards(AuthGuard('jwt'))
+  setActiveAgent(@Req() req: any, @Body() body: { agentId: number | null }) {
+    return this.usersService.setActiveAgent(req.user.userId, body.agentId);
+  }
+
   @Get(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN)
