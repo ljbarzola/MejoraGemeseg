@@ -220,7 +220,7 @@ async function main() {
 
   console.log('Creando agente global por defecto...');
   const existingAgent = await prisma.agent.findFirst({
-    where: { userId: null, name: 'Agente GEMESEG' },
+    where: { createdBy: null, name: 'Agente GEMESEG' },
   });
   if (!existingAgent) {
     await prisma.agent.create({
@@ -244,26 +244,27 @@ Si no necesitas datos, responde directamente.`,
 
   console.log('Creando agente personalizado para sistemas...');
   const existingCodeAgent = await prisma.agent.findFirst({
-    where: { userId: leidy.id, name: 'Agente de Código' },
+    where: { createdBy: leidy.id, name: 'Agente de Código' },
   });
   if (!existingCodeAgent) {
-    await prisma.agent.create({
+    const codeAgent = await prisma.agent.create({
       data: {
         name: 'Agente de Código',
         instructions: 'Actúa como un Ingeniero en Computación Senior con experiencia en stack tecnológicos y buenas prácticas de desarrollo.',
         scope: 'GLOBAL',
-        userId: leidy.id,
+        createdBy: leidy.id,
       },
     });
+    await prisma.userAgent.create({ data: { userId: leidy.id, agentId: codeAgent.id } });
   }
 
   console.log('Creando agentes genéricos por usuario...');
 
   const adminAgentExists = await prisma.agent.findFirst({
-    where: { userId: admin.id, name: 'Agente de Administración' },
+    where: { createdBy: admin.id, name: 'Agente de Administración' },
   });
   if (!adminAgentExists) {
-    await prisma.agent.create({
+    const adminAgent = await prisma.agent.create({
       data: {
         name: 'Agente de Administración',
         instructions: `Eres el agente de administración de GEMESEG, enfocado en la gestión del sistema.
@@ -279,16 +280,17 @@ Intenciones disponibles:
 - system_stats: estadísticas globales del sistema
 Si no necesitas datos, responde directamente.`,
         scope: 'GLOBAL',
-        userId: admin.id,
+        createdBy: admin.id,
       },
     });
+    await prisma.userAgent.create({ data: { userId: admin.id, agentId: adminAgent.id } });
   }
 
   const hugoAgentExists = await prisma.agent.findFirst({
-    where: { userId: hugo.id, name: 'Agente de Gerencia' },
+    where: { createdBy: hugo.id, name: 'Agente de Gerencia' },
   });
   if (!hugoAgentExists) {
-    await prisma.agent.create({
+    const hugoAgent = await prisma.agent.create({
       data: {
         name: 'Agente de Gerencia',
         instructions: `Eres el agente de gerencia de GEMESEG, enfocado en visión ejecutiva y financieramente orientada.
@@ -303,16 +305,17 @@ Intenciones disponibles:
 - list_my_tasks: listar tareas asignadas
 Si no necesitas datos, responde directamente.`,
         scope: 'GLOBAL',
-        userId: hugo.id,
+        createdBy: hugo.id,
       },
     });
+    await prisma.userAgent.create({ data: { userId: hugo.id, agentId: hugoAgent.id } });
   }
 
   const davidAgentExists = await prisma.agent.findFirst({
-    where: { userId: david.id, name: 'Agente de Marketing' },
+    where: { createdBy: david.id, name: 'Agente de Marketing' },
   });
   if (!davidAgentExists) {
-    await prisma.agent.create({
+    const davidAgent = await prisma.agent.create({
       data: {
         name: 'Agente de Marketing',
         instructions: `Eres el agente de marketing de GEMESEG, enfocado en campañas digitales y métricas de marketing.
@@ -327,16 +330,17 @@ Intenciones disponibles:
 - list_my_tasks: listar tareas asignadas de marketing
 Si no necesitas datos, responde directamente.`,
         scope: 'GLOBAL',
-        userId: david.id,
+        createdBy: david.id,
       },
     });
+    await prisma.userAgent.create({ data: { userId: david.id, agentId: davidAgent.id } });
   }
 
   const nayelliAgentExists = await prisma.agent.findFirst({
-    where: { userId: nayelli.id, name: 'Agente de Recursos Humanos' },
+    where: { createdBy: nayelli.id, name: 'Agente de Recursos Humanos' },
   });
   if (!nayelliAgentExists) {
-    await prisma.agent.create({
+    const nayelliAgent = await prisma.agent.create({
       data: {
         name: 'Agente de Recursos Humanos',
         instructions: `Eres el agente de recursos humanos de GEMESEG, enfocado en gestión de talento y organización.
@@ -351,9 +355,10 @@ Intenciones disponibles:
 - list_my_tasks: listar tareas asignadas
 Si no necesitas datos, responde directamente.`,
         scope: 'GLOBAL',
-        userId: nayelli.id,
+        createdBy: nayelli.id,
       },
     });
+    await prisma.userAgent.create({ data: { userId: nayelli.id, agentId: nayelliAgent.id } });
   }
 
   console.log('\n========================================');

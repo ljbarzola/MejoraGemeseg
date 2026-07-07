@@ -4,9 +4,8 @@ export interface Agent {
   instructions: string;
   scope: string;
   isActive: boolean;
-  userId: number | null;
+  createdBy: number | null;
   createdAt: string;
-  user: { id: number; fullName: string; email: string } | null;
 }
 
 export interface UserWithAgent {

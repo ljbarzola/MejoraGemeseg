@@ -36,6 +36,18 @@ export class AgentsController {
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.agentsService.remove(id);
   }
+
+  @Post(':id/assign/:userId')
+  @UseGuards(AuthGuard('jwt'))
+  assign(@Param('id', ParseIntPipe) id: number, @Param('userId', ParseIntPipe) userId: number) {
+    return this.agentsService.assignToUser(id, userId);
+  }
+
+  @Delete(':id/assign/:userId')
+  @UseGuards(AuthGuard('jwt'))
+  unassign(@Param('id', ParseIntPipe) id: number, @Param('userId', ParseIntPipe) userId: number) {
+    return this.agentsService.unassignFromUser(id, userId);
+  }
 }
 
 @Controller('agents')

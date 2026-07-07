@@ -5,6 +5,8 @@ import {
   saveChatHistory,
   detectContext,
   sendMessage,
+  getActiveAgentId,
+  setActiveAgentId,
   type ChatMessage,
 } from '../../services/chat.service';
 import { getAvailableAgents, setActiveAgent } from '../../services/agent.service';
@@ -14,8 +16,6 @@ interface ChatDrawerProps {
   isOpen: boolean;
   onClose: () => void;
 }
-
-const AGENT_STORAGE_KEY = 'gemeseg_active_agent_id';
 
 export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
   const location = useLocation();
@@ -33,9 +33,13 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
   const context = detectContext(location.pathname);
 
   useEffect(() => {
-    setMessages(getChatHistory());
-    const saved = localStorage.getItem(AGENT_STORAGE_KEY);
-    if (saved) setActiveAgentIdState(Number(saved));
+    const saved = getActiveAgentId();
+    if (saved) {
+      setActiveAgentIdState(saved);
+      setMessages(getChatHistory(saved));
+    } else {
+      setMessages(getChatHistory(null));
+    }
   }, []);
 
   useEffect(() => {
@@ -62,11 +66,8 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
   async function handleSelectAgent(agent: Agent | null) {
     const agentId = agent?.id || null;
     setActiveAgentIdState(agentId);
-    if (agentId) {
-      localStorage.setItem(AGENT_STORAGE_KEY, String(agentId));
-    } else {
-      localStorage.removeItem(AGENT_STORAGE_KEY);
-    }
+    setActiveAgentId(agentId);
+    setMessages(getChatHistory(agentId));
     try {
       await setActiveAgent(agentId);
     } catch {}
@@ -86,12 +87,12 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
 
     const updated = [...messages, userMsg];
     setMessages(updated);
-    saveChatHistory(updated);
+    saveChatHistory(updated, activeAgentId);
     setInput('');
     setIsTyping(true);
 
     try {
-      const result = await sendMessage(text, context);
+      const result = await sendMessage(text, context, activeAgentId);
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -100,7 +101,7 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
       };
       const final = [...updated, assistantMsg];
       setMessages(final);
-      saveChatHistory(final);
+      saveChatHistory(final, activeAgentId);
     } catch {
       const errorMsg: ChatMessage = {
         id: crypto.randomUUID(),
@@ -110,7 +111,7 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
       };
       const final = [...updated, errorMsg];
       setMessages(final);
-      saveChatHistory(final);
+      saveChatHistory(final, activeAgentId);
     } finally {
       setIsTyping(false);
     }
@@ -132,7 +133,7 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
           <div className="chat-header-info">
             <div className="chat-bot-icon">🤖</div>
             <div>
-              <div className="chat-header-title">Agente GEMESEG</div>
+              <div className="chat-header-title">{currentAgent?.name || 'Agente GEMESEG'}</div>
               <div className="chat-header-context">Sección: {context}</div>
             </div>
           </div>
@@ -154,7 +155,7 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
                 <span className="chat-agent-option-name">Agente GEMESEG</span>
                 <span className="chat-agent-option-desc">Agente por defecto</span>
               </button>
-              {agents.filter((a) => a.userId !== null).map((agent) => (
+              {agents.filter((a) => a.createdBy !== null).map((agent) => (
                 <button
                   key={agent.id}
                   className={`chat-agent-option ${activeAgentId === agent.id ? 'active' : ''}`}

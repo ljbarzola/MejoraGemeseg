@@ -39,7 +39,8 @@ export class AiService {
   async sendMessage(dto: SendMessageDto, userId: number) {
     await this.checkRateLimit(userId);
 
-    const conversation = await this.getOrCreateConversation(dto.conversationId, userId, dto.context);
+    const agentId = dto.agentId || await this.getDefaultAgentId();
+    const conversation = await this.getOrCreateConversation(dto.conversationId, userId, dto.context, agentId);
 
     await this.prisma.chatMessage.create({
       data: {
@@ -56,7 +57,7 @@ export class AiService {
 
     try {
       if (this.githubToken && this.githubToken !== 'YOUR_GITHUB_TOKEN_HERE') {
-        const result = await this.callGitHubModels(dto.message, dto.context, history, userId);
+        const result = await this.callGitHubModels(dto.message, dto.context, history, conversation.agentId);
         reply = result.reply;
         tokensUsed = result.tokensUsed;
       } else {
@@ -84,11 +85,12 @@ export class AiService {
     return {
       reply,
       conversationId: conversation.id,
+      agentId: conversation.agentId,
     };
   }
 
-  private async callGitHubModels(message: string, context: string, history: string[], userId: number) {
-    const systemPrompt = await this.getSystemPrompt(userId);
+  private async callGitHubModels(message: string, context: string, history: string[], agentId: number) {
+    const systemPrompt = await this.getSystemPromptForAgent(agentId);
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -138,7 +140,7 @@ export class AiService {
 
       if (params.projectId) params.projectId = Number(params.projectId);
 
-      const dataResult = await this.processor.executeQuery(intent, params, userId);
+      const dataResult = await this.processor.executeQuery(intent, params, 0);
 
       try {
         const finalResponse = await fetch(API_URL, {
@@ -221,14 +223,22 @@ export class AiService {
     }
   }
 
-  private async getOrCreateConversation(conversationId: number | undefined, userId: number, context: string) {
+  private async getDefaultAgentId(): Promise<number> {
+    const agent = await this.prisma.agent.findFirst({
+      where: { createdBy: null, name: 'Agente GEMESEG' },
+      select: { id: true },
+    });
+    return agent?.id || 1;
+  }
+
+  private async getOrCreateConversation(conversationId: number | undefined, userId: number, context: string, agentId: number) {
     if (conversationId) {
       const conv = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
       if (conv && conv.userId === userId) return conv;
     }
 
     return this.prisma.conversation.create({
-      data: { userId, context },
+      data: { userId, context, agentId },
     });
   }
 
@@ -242,23 +252,31 @@ export class AiService {
     return messages.map((m) => m.content);
   }
 
-  private async getSystemPrompt(userId: number): Promise<string> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { activeAgentId: true },
+  private async getSystemPromptForAgent(agentId: number): Promise<string> {
+    const agent = await this.prisma.agent.findUnique({
+      where: { id: agentId },
+      select: { instructions: true, isActive: true },
     });
 
-    if (user?.activeAgentId) {
-      const agent = await this.prisma.agent.findUnique({
-        where: { id: user.activeAgentId },
-        select: { instructions: true, isActive: true },
-      });
-      if (agent?.isActive) {
-        return agent.instructions;
-      }
+    if (agent?.isActive) {
+      return agent.instructions;
     }
 
     return SYSTEM_PROMPT;
+  }
+
+  async getConversationsByAgent(userId: number, agentId?: number) {
+    const where: any = { userId };
+    if (agentId) where.agentId = agentId;
+
+    return this.prisma.conversation.findMany({
+      where,
+      include: {
+        agent: { select: { id: true, name: true } },
+        _count: { select: { messages: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
   }
 
   private async logAi(userId: number, action: string, tokensUsed: number, success: boolean, errorMessage?: string) {

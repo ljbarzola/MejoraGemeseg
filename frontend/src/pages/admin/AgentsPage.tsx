@@ -48,7 +48,7 @@ export default function AgentsPage() {
   }
 
   function openEditModal(agent: Agent) {
-    setSelectedUserId(agent.userId);
+    setSelectedUserId(agent.createdBy);
     setEditingAgent(agent);
     setForm({
       name: agent.name,

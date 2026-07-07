@@ -5,6 +5,10 @@ export class SendMessageDto {
   @IsOptional()
   conversationId?: number;
 
+  @IsNumber()
+  @IsOptional()
+  agentId?: number;
+
   @IsString()
   @IsNotEmpty()
   message: string;

@@ -7,26 +7,30 @@ export class AgentsService {
   constructor(private prisma: PrismaService) {}
 
   async findAll() {
-    const agents = await this.prisma.agent.findMany({
-      include: {
-        user: { select: { id: true, fullName: true, email: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
     const users = await this.prisma.user.findMany({
       where: { isActive: true },
       select: { id: true, fullName: true, email: true, role: true },
       orderBy: { fullName: 'asc' },
     });
 
+    const userLinks = await this.prisma.userAgent.findMany({
+      include: {
+        agent: {
+          select: {
+            id: true, name: true, instructions: true, scope: true,
+            isActive: true, createdBy: true, createdAt: true,
+          },
+        },
+      },
+    });
+
     const userMap = new Map<number, any>();
     for (const u of users) {
       userMap.set(u.id, { ...u, agents: [] as any[] });
     }
-    for (const a of agents) {
-      if (a.userId && userMap.has(a.userId)) {
-        userMap.get(a.userId)!.agents.push(a);
+    for (const link of userLinks) {
+      if (userMap.has(link.userId)) {
+        userMap.get(link.userId)!.agents.push(link.agent);
       }
     }
 
@@ -34,35 +38,40 @@ export class AgentsService {
   }
 
   async findByUser(userId: number) {
-    const agent = await this.prisma.agent.findFirst({
+    const links = await this.prisma.userAgent.findMany({
       where: { userId },
       include: {
-        user: { select: { id: true, fullName: true, email: true } },
+        agent: {
+          select: {
+            id: true, name: true, instructions: true, scope: true,
+            isActive: true, createdBy: true, createdAt: true,
+          },
+        },
       },
     });
-    return agent;
+    return links.map((l) => l.agent);
   }
 
   async create(dto: CreateAgentDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: dto.userId } });
-    if (!user) throw new NotFoundException('Usuario no encontrado');
-
-    const existing = await this.prisma.agent.findUnique({
-      where: { userId_name: { userId: dto.userId, name: dto.name } },
+    const existing = await this.prisma.agent.findFirst({
+      where: { createdBy: dto.userId, name: dto.name },
     });
     if (existing) throw new ConflictException('Ya existe un agente con ese nombre para este usuario');
 
-    return this.prisma.agent.create({
+    const agent = await this.prisma.agent.create({
       data: {
-        userId: dto.userId,
         name: dto.name,
         instructions: dto.systemMsg,
         scope: dto.scope || 'GLOBAL',
-      },
-      include: {
-        user: { select: { id: true, fullName: true, email: true } },
+        createdBy: dto.userId,
       },
     });
+
+    await this.prisma.userAgent.create({
+      data: { userId: dto.userId, agentId: agent.id },
+    });
+
+    return agent;
   }
 
   async update(id: number, dto: UpdateAgentDto) {
@@ -78,9 +87,6 @@ export class AgentsService {
     return this.prisma.agent.update({
       where: { id },
       data,
-      include: {
-        user: { select: { id: true, fullName: true, email: true } },
-      },
     });
   }
 
@@ -93,40 +99,57 @@ export class AgentsService {
   }
 
   async getAvailableForUser(userId: number) {
+    const userLinks = await this.prisma.userAgent.findMany({
+      where: { userId },
+      select: { agentId: true },
+    });
+    const assignedAgentIds = userLinks.map((l) => l.agentId);
+
     const agents = await this.prisma.agent.findMany({
       where: {
         isActive: true,
         OR: [
-          { userId: null },
-          { userId },
+          { createdBy: null },
+          { id: { in: assignedAgentIds } },
         ],
       },
       select: {
-        id: true,
-        name: true,
-        instructions: true,
-        scope: true,
-        isActive: true,
-        userId: true,
+        id: true, name: true, instructions: true, scope: true,
+        isActive: true, createdBy: true,
       },
       orderBy: { name: 'asc' },
     });
 
     const defaultAgent = await this.prisma.agent.findFirst({
-      where: { userId: null, name: 'Agente GEMESEG' },
+      where: { createdBy: null, name: 'Agente GEMESEG' },
       select: {
-        id: true,
-        name: true,
-        instructions: true,
-        scope: true,
-        isActive: true,
-        userId: true,
+        id: true, name: true, instructions: true, scope: true,
+        isActive: true, createdBy: true,
       },
     });
 
-    return {
-      agents,
-      defaultAgent,
-    };
+    return { agents, defaultAgent };
+  }
+
+  async assignToUser(agentId: number, userId: number) {
+    const agent = await this.prisma.agent.findUnique({ where: { id: agentId } });
+    if (!agent) throw new NotFoundException('Agente no encontrado');
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    const exists = await this.prisma.userAgent.findUnique({
+      where: { userId_agentId: { userId, agentId } },
+    });
+    if (exists) throw new ConflictException('El usuario ya tiene acceso a este agente');
+
+    return this.prisma.userAgent.create({ data: { userId, agentId } });
+  }
+
+  async unassignFromUser(agentId: number, userId: number) {
+    await this.prisma.userAgent.delete({
+      where: { userId_agentId: { userId, agentId } },
+    });
+    return { message: 'Agente removido del usuario' };
   }
 }
