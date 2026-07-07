@@ -1,4 +1,4 @@
-﻿import { Controller, Get, Patch, Delete, Param, Body, UseGuards, Req, ParseIntPipe } from '@nestjs/common';
+﻿import { Controller, Get, Patch, Delete, Param, Body, Query, UseGuards, Req, ParseIntPipe } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { TasksService } from './tasks.service';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -6,6 +6,21 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 @Controller('tasks')
 export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
+
+  @Get('my-tasks')
+  @UseGuards(AuthGuard('jwt'))
+  findMyTasks(
+    @Req() req: any,
+    @Query('status') status?: string,
+    @Query('assignedToMe') assignedToMe?: string,
+    @Query('projectId') projectId?: string,
+  ) {
+    return this.tasksService.findMyTasks(req.user.userId, {
+      status,
+      assignedToMe: assignedToMe === 'true',
+      projectId: projectId ? +projectId : undefined,
+    });
+  }
 
   @Get(':id')
   @UseGuards(AuthGuard('jwt'))

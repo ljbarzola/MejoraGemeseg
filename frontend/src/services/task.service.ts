@@ -1,6 +1,19 @@
 ﻿import { api } from './auth.service';
 import type { Task, ProjectMember } from '../types/task';
 
+export async function getMyTasks(filters?: {
+  status?: string;
+  assignedToMe?: boolean;
+  projectId?: number;
+}): Promise<Task[]> {
+  const params: Record<string, string> = {};
+  if (filters?.status) params.status = filters.status;
+  if (filters?.assignedToMe) params.assignedToMe = 'true';
+  if (filters?.projectId) params.projectId = String(filters.projectId);
+  const res = await api.get('/tasks/my-tasks', { params });
+  return res.data;
+}
+
 export async function getTasksByProject(projectId: number): Promise<Task[]> {
   const res = await api.get(`/projects/${projectId}/tasks`);
   return res.data;

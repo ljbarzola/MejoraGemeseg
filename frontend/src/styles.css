@@ -538,6 +538,50 @@ body {
   color: white;
 }
 
+.dashboard-status-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.filter-select {
+  padding: 8px 12px;
+  border: 2px solid var(--gris-claro);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  background: white;
+  color: var(--azul-oscuro);
+  cursor: pointer;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: var(--azul-oscuro);
+}
+
+.project-name-chip {
+  background: #e8f0fe;
+  color: var(--azul-oscuro);
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.project-name-chip:hover {
+  background: #d0e2fc;
+}
+
+.priority-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
 .status-dot {
   width: 8px;
   height: 8px;

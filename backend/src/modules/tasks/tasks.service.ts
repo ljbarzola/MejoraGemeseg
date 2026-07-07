@@ -190,4 +190,37 @@ export class TasksService {
       },
     });
   }
+
+  async findMyTasks(userId: number, filters: { status?: string; assignedToMe?: boolean; projectId?: number }) {
+    const where: any = {
+      project: {
+        members: { some: { userId } },
+      },
+    };
+
+    if (filters.status) {
+      where.status = filters.status;
+    }
+
+    if (filters.assignedToMe) {
+      where.assignees = { some: { userId } };
+    }
+
+    if (filters.projectId) {
+      where.projectId = filters.projectId;
+    }
+
+    return this.prisma.task.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        assignees: {
+          select: { user: this.assigneeSelect },
+        },
+        project: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+  }
 }
