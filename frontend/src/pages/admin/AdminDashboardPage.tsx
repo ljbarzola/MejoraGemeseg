@@ -452,78 +452,83 @@ export default function AdminDashboardPage() {
 
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2>{editingUser ? 'Editar usuario' : 'Nuevo usuario'}</h2>
-            {formError && <div className="auth-error-banner">{formError}</div>}
-            <form onSubmit={handleSubmit} className="auth-form">
-              <div className="form-group">
-                <label>Nombre completo *</label>
-                <input
-                  type="text"
-                  value={formData.fullName}
-                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Email *</label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  required
-                />
-              </div>
-              {!editingUser && (
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{editingUser ? 'Editar usuario' : 'Nuevo usuario'}</h3>
+              <button className="modal-close" onClick={() => setShowForm(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              {formError && <div className="auth-error-banner">{formError}</div>}
+              <form onSubmit={handleSubmit} className="auth-form">
                 <div className="form-group">
-                  <label>Contraseña</label>
-                  <input
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder="gemeseg2026"
-                  />
-                </div>
-              )}
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Rol *</label>
-                  <select
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  >
-                    <option value="ADMIN">Administrador</option>
-                    <option value="MANAGER">Gerente</option>
-                    <option value="EMPLOYEE">Empleado</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Cargo</label>
+                  <label>Nombre completo *</label>
                   <input
                     type="text"
-                    value={formData.position}
-                    onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                    placeholder="Ej: Analista"
+                    value={formData.fullName}
+                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                    required
                   />
                 </div>
-              </div>
-              <div className="form-group">
-                <label>Documento de identidad</label>
-                <input
-                  type="text"
-                  value={formData.documentNumber}
-                  onChange={(e) => setFormData({ ...formData, documentNumber: e.target.value })}
-                />
-              </div>
-              <div className="form-actions">
-                <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
-                  Cancelar
-                </button>
-                <button type="submit" className="auth-btn" disabled={formLoading}>
-                  {formLoading ? 'Guardando...' : editingUser ? 'Guardar cambios' : 'Crear usuario'}
-                </button>
-              </div>
-            </form>
+                <div className="form-group">
+                  <label>Email *</label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    required
+                  />
+                </div>
+                {!editingUser && (
+                  <div className="form-group">
+                    <label>Contraseña</label>
+                    <input
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="gemeseg2026"
+                    />
+                  </div>
+                )}
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Rol *</label>
+                    <select
+                      value={formData.role}
+                      onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                    >
+                      <option value="ADMIN">Administrador</option>
+                      <option value="MANAGER">Gerente</option>
+                      <option value="EMPLOYEE">Empleado</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Cargo</label>
+                    <input
+                      type="text"
+                      value={formData.position}
+                      onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                      placeholder="Ej: Analista"
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Documento de identidad</label>
+                  <input
+                    type="text"
+                    value={formData.documentNumber}
+                    onChange={(e) => setFormData({ ...formData, documentNumber: e.target.value })}
+                  />
+                </div>
+                <div className="modal-actions" style={{ padding: 0, borderTop: 'none' }}>
+                  <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+                    Cancelar
+                  </button>
+                  <button type="submit" className="auth-btn" disabled={formLoading}>
+                    {formLoading ? 'Guardando...' : editingUser ? 'Guardar cambios' : 'Crear usuario'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

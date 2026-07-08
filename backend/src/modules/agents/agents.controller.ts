@@ -13,6 +13,18 @@ export class AgentsController {
     return this.agentsService.findAll();
   }
 
+  @Get('catalog')
+  @UseGuards(AuthGuard('jwt'))
+  findAllAgents() {
+    return this.agentsService.findAllAgents();
+  }
+
+  @Get('assignments')
+  @UseGuards(AuthGuard('jwt'))
+  findAllAssignments() {
+    return this.agentsService.findAllAssignments();
+  }
+
   @Get('user/:userId')
   @UseGuards(AuthGuard('jwt'))
   findByUser(@Param('userId', ParseIntPipe) userId: number) {

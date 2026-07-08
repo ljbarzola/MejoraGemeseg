@@ -42,8 +42,8 @@ export async function updateMemberRole(projectId: number, userId: number, role: 
 export async function updateProject(id: number, data: {
   name?: string;
   description?: string;
-  startDate?: string;
-  endDate?: string;
+  startDate?: string | null;
+  endDate?: string | null;
   status?: string;
 }) {
   const res = await api.patch(`/projects/${id}`, data);

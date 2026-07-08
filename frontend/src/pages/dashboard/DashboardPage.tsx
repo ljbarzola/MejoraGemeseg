@@ -44,7 +44,6 @@ export default function DashboardPage() {
     <div className="app-shell">
       <header className="hero">
         <div>
-          <p className="eyebrow">GEMESEG</p>
           <h1>Bienvenido{user ? `, ${user.fullName}` : ''}</h1>
           <p className="hero-text">
             Gestiona proyectos, tareas y el equipo de trabajo desde un solo lugar.

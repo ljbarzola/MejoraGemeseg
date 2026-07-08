@@ -158,8 +158,8 @@ export default function ProjectDetailPage() {
       await updateProject(Number(id), {
         name: editForm.name.trim(),
         description: editForm.description.trim() || undefined,
-        startDate: editForm.startDate || undefined,
-        endDate: editForm.endDate || undefined,
+        startDate: editForm.startDate || null,
+        endDate: editForm.endDate || null,
         status: editForm.status,
       });
       const p = await getProject(Number(id));
@@ -363,6 +363,7 @@ export default function ProjectDetailPage() {
                     <th>Estado</th>
                     <th>Prioridad</th>
                     <th>Asignado</th>
+                    <th>Fecha inicio</th>
                     <th>Fecha fin</th>
                   </tr>
                 </thead>
@@ -409,6 +410,11 @@ export default function ProjectDetailPage() {
                         ) : (
                           <span className="kanban-unassigned">Sin asignar</span>
                         )}
+                      </td>
+                      <td className="tasks-table-date">
+                        {task.startDate
+                          ? new Date(task.startDate).toLocaleDateString('es-EC')
+                          : '—'}
                       </td>
                       <td className="tasks-table-date">
                         {task.endDate

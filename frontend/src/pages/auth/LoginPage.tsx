@@ -52,7 +52,7 @@ export default function LoginPage() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <p className="auth-eyebrow">GEMESEG</p>
+          <img src="/resources/logo-gemeseg-back-white.png" alt="GEMESEG" className="auth-logo" />
           <h1>Iniciar sesión</h1>
           <p className="auth-subtitle">
             Ingresa con tu correo corporativo para acceder al sistema

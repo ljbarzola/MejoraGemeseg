@@ -16,7 +16,9 @@ export default function Navbar() {
   return (
     <nav className="navbar">
       <div className="navbar-brand" onClick={() => navigate('/dashboard')}>
-        <span className="navbar-logo">GEMESEG</span>
+        <span className="navbar-logo">
+          <img src="/resources/logo-gemeseg-back-white.png" alt="GEMESEG" style={{ height: '28px' }} />
+        </span>
       </div>
       <div className="navbar-links">
         <button className="navbar-link" onClick={() => navigate('/dashboard')}>Inicio</button>

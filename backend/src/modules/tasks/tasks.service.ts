@@ -67,8 +67,8 @@ export class TasksService {
         description: dto.description,
         priority: (dto.priority as any) || 'MEDIUM',
         status: (dto.status as any) || 'TODO',
-        startDate: dto.startDate ? new Date(dto.startDate) : null,
-        endDate: dto.endDate ? new Date(dto.endDate) : null,
+        startDate: dto.startDate ? new Date(dto.startDate + 'T12:00:00.000Z') : null,
+        endDate: dto.endDate ? new Date(dto.endDate + 'T12:00:00.000Z') : null,
         estimatedHours: dto.estimatedHours ?? 0,
         projectId,
         assignees: assigneeIds.length > 0
@@ -120,8 +120,8 @@ export class TasksService {
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.priority !== undefined) data.priority = dto.priority;
-    if (dto.startDate !== undefined) data.startDate = dto.startDate ? new Date(dto.startDate) : null;
-    if (dto.endDate !== undefined) data.endDate = dto.endDate ? new Date(dto.endDate) : null;
+    if (dto.startDate !== undefined) data.startDate = dto.startDate ? new Date(dto.startDate + 'T12:00:00.000Z') : null;
+    if (dto.endDate !== undefined) data.endDate = dto.endDate ? new Date(dto.endDate + 'T12:00:00.000Z') : null;
     if (dto.estimatedHours !== undefined) data.estimatedHours = dto.estimatedHours;
 
     if (dto.assigneeIds !== undefined) {

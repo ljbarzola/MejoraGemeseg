@@ -279,6 +279,26 @@ export class AiService {
     });
   }
 
+  async getConversationMessages(conversationId: number, userId: number) {
+    const conv = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
+    if (!conv || conv.userId !== userId) {
+      throw new HttpException('Conversacion no encontrada', HttpStatus.NOT_FOUND);
+    }
+
+    const messages = await this.prisma.chatMessage.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, role: true, content: true, createdAt: true },
+    });
+
+    return messages.map((m) => ({
+      id: String(m.id),
+      role: m.role,
+      content: m.content,
+      timestamp: m.createdAt,
+    }));
+  }
+
   private async logAi(userId: number, action: string, tokensUsed: number, success: boolean, errorMessage?: string) {
     await this.prisma.aiLog.create({
       data: {

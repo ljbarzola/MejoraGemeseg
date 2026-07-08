@@ -61,10 +61,19 @@ Gemeseg Mejora es una plataforma web de gestion interna para GEMESEG (Ecuador), 
 - **Fallback mock**: Respuestas predefinidas cuando no hay token configurado.
 - **Rate limit**: 50 mensajes/dia por usuario.
 - **Contexto**: Detecta la pagina actual para respuestas contextualizadas.
-- **Historial**: Guardado en localStorage + persistencia en BD.
+- **Conversaciones**: Cada combinacion agente+usuario tiene sus propias conversaciones guardadas en BD.
+- **Cambio de agente**: Dropdown para seleccionar agente, con lista de conversaciones por agente.
+
+### Agentes de IA
+- **Catalogo de agentes**: Crear, editar y eliminar agentes con nombre, instrucciones (system prompt) y alcance.
+- **Alcances**: GLOBAL, PROJECTS, TASKS, ADMIN.
+- **Asignacion**: Asignar agentes a multiples usuarios. Un usuario puede tener multiples agentes.
+- **Agentes por usuario**: Cada usuario ve los agentes que le estan asignados en el chat.
+- **Acceso**: Pestana visible para admin y usuario de Sistemas.
 
 ### Navbar
-- Navegacion rapida: Inicio, Proyectos, Administracion (solo admin), Herramientas (solo sistemas).
+- Logo GEMESEG en la barra de navegacion.
+- Navegacion rapida: Inicio, Proyectos, Administracion (solo admin), Herramientas (solo sistemas), Agentes (admin/sistemas).
 - Nombre del usuario clickeable (va a perfil).
 - Boton de cerrar sesion.
 
@@ -209,6 +218,19 @@ gemeseg-mejora/
 
 ### Chat IA
 - `POST /chat/message` - Enviar mensaje al asistente
+- `GET /chat/conversations` - Listar conversaciones (filtro por agentId)
+- `GET /chat/conversations/:id/messages` - Mensajes de una conversacion
+
+### Agents
+- `GET /admin/agents` - Listar usuarios con sus agentes
+- `GET /admin/agents/catalog` - Listar todos los agentes (catalogo)
+- `GET /admin/agents/assignments` - Listar todas las asignaciones
+- `POST /admin/agents` - Crear agente
+- `PATCH /admin/agents/:id` - Actualizar agente
+- `DELETE /admin/agents/:id` - Eliminar agente
+- `POST /admin/agents/:id/assign/:userId` - Asignar agente a usuario
+- `DELETE /admin/agents/:id/assign/:userId` - Quitar agente de usuario
+- `GET /agents/available` - Agentes disponibles para el usuario actual
 
 ## Tecnologia
 - **Frontend**: React 18 + Vite + TypeScript

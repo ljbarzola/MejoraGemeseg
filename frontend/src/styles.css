@@ -223,6 +223,12 @@ body {
   margin-bottom: 8px;
 }
 
+.auth-logo {
+  max-width: 160px;
+  height: auto;
+  margin-bottom: 12px;
+}
+
 .auth-header h1 {
   margin: 0 0 8px;
   font-size: 1.75rem;
@@ -250,7 +256,12 @@ body {
 
 .form-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
+}
+
+.form-row .form-group {
+  min-width: 0;
 }
 
 .form-group label {
@@ -2637,6 +2648,133 @@ body {
 .chat-agent-option-desc {
   font-size: 0.75rem;
   color: #888;
+}
+
+.chat-empty-hint {
+  font-size: 0.82rem !important;
+  color: #aaa !important;
+  margin-top: 4px;
+}
+
+.chat-back-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.chat-back-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.chat-conversations {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-conversations-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--gris-claro);
+}
+
+.chat-conversations-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--azul-oscuro);
+}
+
+.chat-new-conv-btn {
+  background: linear-gradient(135deg, var(--azul-oscuro), var(--azul-claro));
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.chat-new-conv-btn:hover {
+  opacity: 0.9;
+}
+
+.chat-conversations-loading,
+.chat-conversations-empty {
+  text-align: center;
+  color: #888;
+  padding: 40px 20px;
+  font-size: 0.9rem;
+}
+
+.chat-conversations-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-conv-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 20px;
+  border: none;
+  border-bottom: 1px solid var(--gris-claro);
+  background: white;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+  width: 100%;
+}
+
+.chat-conv-item:hover {
+  background: #f0f7ff;
+}
+
+.chat-conv-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-conv-item-icon {
+  font-size: 1rem;
+}
+
+.chat-conv-item-context {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--azul-oscuro);
+  text-transform: capitalize;
+  flex: 1;
+}
+
+.chat-conv-item-count {
+  font-size: 0.75rem;
+  background: var(--gris-claro);
+  color: #666;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.chat-conv-item-date {
+  font-size: 0.72rem;
+  color: #999;
+  margin-left: 26px;
 }
 
 .btn-sm-edit,
