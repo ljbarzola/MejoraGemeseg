@@ -18,6 +18,7 @@ export default function TaskDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedAssignees, setSelectedAssignees] = useState<number[]>([]);
+  const [hoursFocused, setHoursFocused] = useState(false);
   const currentUser = getUser();
 
   const isViewer = members.some(
@@ -81,7 +82,7 @@ export default function TaskDetailPage() {
         assigneeIds: selectedAssignees,
         status: form.status,
       });
-      navigate(`/projects/${task.projectId}`);
+      navigate(-1);
     } catch {
       // silent
     } finally {
@@ -94,7 +95,7 @@ export default function TaskDetailPage() {
     if (!confirm('¿Eliminar esta tarea?')) return;
     try {
       await deleteTask(task.id);
-      navigate(`/projects/${task.projectId}`);
+      navigate(-1);
     } catch {
       // silent
     }
@@ -105,8 +106,8 @@ export default function TaskDetailPage() {
 
   return (
     <div className="page-container">
-      <button className="btn-back" onClick={() => navigate(`/projects/${task.projectId}`)}>
-        &larr; Volver al proyecto
+      <button className="btn-back" onClick={() => navigate(-1)}>
+        &larr; Volver
       </button>
 
       <div className="page-card">
@@ -162,8 +163,10 @@ export default function TaskDetailPage() {
                 type="number"
                 min="0"
                 step="0.5"
-                value={form.estimatedHours}
-                onChange={(e) => handleChange('estimatedHours', Number(e.target.value))}
+                value={hoursFocused && form.estimatedHours === 0 ? '' : form.estimatedHours}
+                onFocus={() => setHoursFocused(true)}
+                onBlur={() => setHoursFocused(false)}
+                onChange={(e) => handleChange('estimatedHours', e.target.value === '' ? 0 : Number(e.target.value))}
                 disabled={isViewer}
               />
             </div>

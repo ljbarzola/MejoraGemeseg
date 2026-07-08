@@ -11,14 +11,12 @@ export class CreateProjectDto {
   description?: string;
 
   @Transform(({ value }) => value === '' ? undefined : value)
-  @IsDateString()
   @IsOptional()
-  startDate?: string;
+  startDate?: string | null;
 
   @Transform(({ value }) => value === '' ? undefined : value)
-  @IsDateString()
   @IsOptional()
-  endDate?: string;
+  endDate?: string | null;
 
   @IsEnum(['ACTIVE', 'ON_HOLD', 'COMPLETED', 'CANCELLED'])
   @IsOptional()

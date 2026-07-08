@@ -35,7 +35,7 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 ## Convenciones de Codigo
 
 ### NestJS
-- Un modulo por dominio: `auth`, `projects`, `users`, `tasks`, `ai`, `queue`, `tools`.
+- Un modulo por dominio: `auth`, `projects`, `users`, `tasks`, `ai`, `queue`, `tools`, `agents`.
 - DTOs con `class-validator` para toda entrada.
 - Guards por rol: `@Roles(UserRole.ADMIN)` + `RolesGuard`.
 - Responses consistentes.
@@ -50,7 +50,7 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 
 ### Prisma
 - Enums en schema: `UserRole`, `ProjectStatus`, `MemberRole`, `TaskStatus`, `Priority`.
-- Modelos: `User`, `Department`, `Role`, `Project`, `ProjectMember`, `Task`, `Tool`, `ToolAssignment`, `ToolAuditLog`, `Agent`, `Conversation`, `ChatMessage`, `AiLog`.
+- Modelos: `User`, `Department`, `Role`, `Project`, `ProjectMember`, `Task`, `TaskAssignee`, `Tool`, `ToolAssignment`, `ToolAuditLog`, `Agent`, `UserAgent`, `Conversation`, `ChatMessage`, `AiLog`.
 - Migraciones con `prisma migrate dev --name <nombre>`.
 - Seed en `prisma/seed.js`.
 - Prisma v7 requiere adapter: `new PrismaClient({ adapter: new PrismaPg(...) })`.
@@ -107,6 +107,14 @@ GITHUB_TOKEN=<token_de_github_models>
 - Asignaciones multiples de usuarios soportadas.
 - Auditoria de cada accion (quien asigno/removio, cuando).
 
+### Agentes de IA
+- Admin y usuario de Sistemas pueden gestionar agentes.
+- Cada agente tiene: nombre, instrucciones (system prompt), alcance (GLOBAL/PROJECTS/TASKS/ADMIN).
+- Un agente puede estar asignado a multiples usuarios.
+- Un usuario puede tener multiples agentes asignados.
+- El agente global (createdBy: null) esta disponible para todos.
+- Cada combinacion usuario+agente tiene sus propias conversaciones.
+
 ## Modulos Backend
 
 ### Auth (`/auth`)
@@ -153,9 +161,23 @@ GITHUB_TOKEN=<token_de_github_models>
 
 ### Chat IA (`/chat`)
 - `POST /chat/message` - Enviar mensaje al asistente IA
+- `GET /chat/conversations` - Listar conversaciones del usuario (filtro por agentId)
+- `GET /chat/conversations/:id/messages` - Obtener mensajes de una conversacion
 - Rate limit: 50 mensajes/dia por usuario
 - GitHub Models (`gpt-4o-mini`) con fallback a mock
 - Predefinidas: `list_projects`, `count_tasks_by_status`, `user_info`, `project_summary`, `list_my_tasks`
+
+### Agents (`/admin/agents`)
+- `GET /admin/agents` - Listar usuarios con sus agentes asignados
+- `GET /admin/agents/catalog` - Listar todos los agentes (catalogo)
+- `GET /admin/agents/assignments` - Listar todas las asignaciones usuario-agente
+- `GET /admin/agents/user/:userId` - Agentes de un usuario
+- `POST /admin/agents` - Crear agente (asigna automaticamente al usuario creador)
+- `PATCH /admin/agents/:id` - Actualizar agente (nombre, instrucciones, alcance, isActive)
+- `DELETE /admin/agents/:id` - Eliminar agente
+- `POST /admin/agents/:id/assign/:userId` - Asignar agente a usuario
+- `DELETE /admin/agents/:id/assign/:userId` - Quitar agente de usuario
+- `GET /agents/available` - Agentes disponibles para el usuario actual (global + asignados)
 
 ## Credenciales de prueba
 - Contrasena para todos: `gemeseg2026`

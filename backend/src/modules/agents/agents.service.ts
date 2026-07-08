@@ -6,6 +6,31 @@ import { CreateAgentDto, UpdateAgentDto } from './dto/agent.dto';
 export class AgentsService {
   constructor(private prisma: PrismaService) {}
 
+  async findAllAgents() {
+    return this.prisma.agent.findMany({
+      select: {
+        id: true, name: true, instructions: true, scope: true,
+        isActive: true, createdBy: true, createdAt: true,
+        _count: { select: { userLinks: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async findAllAssignments() {
+    return this.prisma.userAgent.findMany({
+      include: {
+        agent: {
+          select: { id: true, name: true, scope: true, isActive: true },
+        },
+        user: {
+          select: { id: true, fullName: true, email: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async findAll() {
     const users = await this.prisma.user.findMany({
       where: { isActive: true },
@@ -21,8 +46,19 @@ export class AgentsService {
             isActive: true, createdBy: true, createdAt: true,
           },
         },
+        user: {
+          select: { id: true, fullName: true, email: true },
+        },
       },
     });
+
+    const agentUserMap = new Map<number, { id: number; fullName: string; email: string }[]>();
+    for (const link of userLinks) {
+      if (!agentUserMap.has(link.agentId)) {
+        agentUserMap.set(link.agentId, []);
+      }
+      agentUserMap.get(link.agentId)!.push(link.user);
+    }
 
     const userMap = new Map<number, any>();
     for (const u of users) {
@@ -30,7 +66,8 @@ export class AgentsService {
     }
     for (const link of userLinks) {
       if (userMap.has(link.userId)) {
-        userMap.get(link.userId)!.agents.push(link.agent);
+        const agentData = { ...link.agent, assignedUsers: agentUserMap.get(link.agentId) || [] };
+        userMap.get(link.userId)!.agents.push(agentData);
       }
     }
 

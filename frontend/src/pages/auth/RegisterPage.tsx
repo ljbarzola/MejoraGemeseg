@@ -68,7 +68,7 @@ export default function RegisterPage() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <p className="auth-eyebrow">GEMESEG</p>
+          <img src="/resources/logo-gemeseg-back-white.png" alt="GEMESEG" className="auth-logo" />
           <h1>Crear cuenta</h1>
           <p className="auth-subtitle">
             Regístrate con tu correo corporativo @gemeseg.com

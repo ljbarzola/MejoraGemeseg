@@ -34,6 +34,7 @@ export default function CreateTaskPage() {
   const [loading, setLoading] = useState(false);
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [selectedAssignees, setSelectedAssignees] = useState<number[]>([]);
+  const [hoursFocused, setHoursFocused] = useState(false);
 
   const {
     register,
@@ -139,7 +140,13 @@ export default function CreateTaskPage() {
                 type="number"
                 min="0"
                 step="0.5"
-                {...register('estimatedHours')}
+                value={hoursFocused && watch('estimatedHours') === 0 ? '' : watch('estimatedHours')}
+                onFocus={() => setHoursFocused(true)}
+                onBlur={() => setHoursFocused(false)}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? 0 : Number(e.target.value);
+                  setValue('estimatedHours', val);
+                }}
               />
             </div>
           </div>

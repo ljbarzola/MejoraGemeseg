@@ -83,10 +83,6 @@ export default function ProfilePage() {
             <span className="profile-info-value">{profile.department?.name || '—'}</span>
           </div>
           <div className="profile-info-item">
-            <span className="profile-info-label">Rol asignado</span>
-            <span className="profile-info-value">{profile.roleRelation?.name || '—'}</span>
-          </div>
-          <div className="profile-info-item">
             <span className="profile-info-label">Miembro desde</span>
             <span className="profile-info-value">
               {new Date(profile.createdAt).toLocaleDateString('es-EC', { year: 'numeric', month: 'long', day: 'numeric' })}

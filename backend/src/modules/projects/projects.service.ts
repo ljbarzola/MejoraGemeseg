@@ -28,8 +28,8 @@ export class ProjectsService {
       data: {
         name: dto.name,
         description: dto.description,
-        startDate: dto.startDate ? new Date(dto.startDate) : null,
-        endDate: dto.endDate ? new Date(dto.endDate) : null,
+        startDate: dto.startDate ? new Date(dto.startDate + 'T12:00:00.000Z') : null,
+        endDate: dto.endDate ? new Date(dto.endDate + 'T12:00:00.000Z') : null,
         createdById: userId,
         members: {
           create: membersToCreate,
@@ -144,8 +144,8 @@ export class ProjectsService {
     const data: any = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.description !== undefined) data.description = dto.description;
-    if (dto.startDate !== undefined) data.startDate = dto.startDate ? new Date(dto.startDate) : null;
-    if (dto.endDate !== undefined) data.endDate = dto.endDate ? new Date(dto.endDate) : null;
+    if (dto.startDate !== undefined) data.startDate = dto.startDate ? new Date(dto.startDate + 'T12:00:00.000Z') : null;
+    if (dto.endDate !== undefined) data.endDate = dto.endDate ? new Date(dto.endDate + 'T12:00:00.000Z') : null;
     if (dto.status !== undefined) data.status = dto.status;
 
     return this.prisma.project.update({
