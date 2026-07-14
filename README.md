@@ -8,7 +8,12 @@ Gemeseg Mejora es una plataforma web de gestion interna para GEMESEG (Ecuador), 
 - Objetivo: centralizar operaciones internas en un espacio digital unico.
 - Metodologia: Scrum con sprints de 1-2 semanas.
 - Plataforma: **Web** (no movil).
-- Estado actual: Fase 1 en desarrollo.
+- Estado actual: Fase 1 - Desplegado en produccion.
+
+### URLs de Produccion
+- **Frontend (Vercel):** https://mejora-gemeseg.vercel.app
+- **Backend (Railway):** https://mejoragemeseg-production.up.railway.app
+- **API Docs (Swagger):** https://mejoragemeseg-production.up.railway.app/docs
 
 ## Funcionalidades implementadas
 
@@ -102,7 +107,7 @@ Todos los usuarios usan la contrasena: **gemeseg2026**
 
 ### Requisitos previos
 - Node.js 18+
-- PostgreSQL 17 (instalado localmente)
+- PostgreSQL 17 (instalado localmente o via Docker)
 
 ### Backend
 ```bash
@@ -127,50 +132,98 @@ cd backend
 node prisma/seed.js
 ```
 
+## Despliegue en Produccion
+
+### Arquitectura Monorepo
+El proyecto usa un repositorio unico que se despliega automaticamente en dos plataformas:
+
+```
+GitHub (repo: MejoraGemeseg/)
+  ├── backend/  → Railway (Root Dir: /backend)
+  ├── frontend/ → Vercel  (Root Dir: /frontend)
+  └── .env      → ignorado por .gitignore
+```
+
+### Plataformas
+| Servicio | Proveedor | URL |
+|----------|-----------|-----|
+| Base de datos | Supabase | https://supabase.com |
+| Backend | Railway | https://mejoragemeseg-production.up.railway.app |
+| Frontend | Vercel | https://mejora-gemeseg.vercel.app |
+
+### Variables de Entorno
+
+**Backend (Railway):**
+| Key | Value |
+|-----|-------|
+| `DATABASE_URL` | `postgresql://...@aws-0-us-east-1.pooler.supabase.com:6543/postgres` |
+| `JWT_SECRET` | *(configurar en panel de Railway)* |
+| `FRONTEND_URL` | `https://mejora-gemeseg.vercel.app` |
+| `PORT` | `3000` |
+
+**Frontend (Vercel):**
+| Key | Value |
+|-----|-------|
+| `VITE_API_URL` | `https://mejoragemeseg-production.up.railway.app` |
+
+### Flujo de Deploy
+1. Push a `main` en GitHub
+2. Railway detecta cambios en `/backend` y despliega automaticamente
+3. Vercel detecta cambios en `/frontend` y despliega automaticamente
+4. No usar archivos `.env` en produccion - usar paneles de Railway/Vercel
+
 ## Estructura del repositorio
 ```
-gemeseg-mejora/
-├── AGENT.md                    # Guia para agentes de IA
+MejoraGemeseg/
+├── AGENTS.md                   # Guia para agentes de IA
 ├── README.md                   # Este archivo
+├── .env.example                # Template de variables de entorno
+├── docker-compose.yml          # PostgreSQL + Redis (produccion local)
+├── docker-compose.dev.yml      # Desarrollo local
 ├── backend/
-│   ├── src/
-│   │   ├── common/
-│   │   │   ├── decorators/     # Roles decorator
-│   │   │   └── guards/         # RolesGuard
-│   │   ├── modules/
-│   │   │   ├── auth/           # Login, register, JWT
-│   │   │   ├── projects/       # CRUD proyectos + miembros + tareas
-│   │   │   ├── users/          # Gestion de usuarios (admin) + perfil
-│   │   │   ├── tasks/          # CRUD tareas individuales
-│   │   │   ├── tools/          # Inventario de herramientas
-│   │   │   ├── ai/             # Asistente IA (GitHub Models)
-│   │   │   └── queue/          # Cola de procesamiento
-│   │   └── prisma/             # PrismaService
+│   ├── Dockerfile              # Multi-stage build para Railway
+│   ├── railway.json            # Config de deploy en Railway
+│   ├── package.json
 │   ├── prisma/
 │   │   ├── schema.prisma       # Schema completo
 │   │   ├── seed.js             # Datos de prueba
 │   │   └── migrations/
-│   └── package.json
+│   └── src/
+│       ├── main.ts             # Bootstrap, CORS, Swagger
+│       ├── common/
+│       │   ├── decorators/     # Roles decorator
+│       │   └── guards/         # RolesGuard
+│       ├── modules/
+│       │   ├── auth/           # Login, register, JWT
+│       │   ├── projects/       # CRUD proyectos + miembros + tareas
+│       │   ├── users/          # Gestion de usuarios (admin) + perfil
+│       │   ├── tasks/          # CRUD tareas individuales
+│       │   ├── tools/          # Inventario de herramientas
+│       │   ├── ai/             # Asistente IA (GitHub Models)
+│       │   └── agents/         # Agentes de IA
+│       └── prisma/             # PrismaService
 ├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── chat/           # ChatDrawer, ChatFloatingButton
-│   │   │   ├── layout/         # Navbar
-│   │   │   └── ProtectedRoute
-│   │   ├── pages/
-│   │   │   ├── auth/           # Login, Register
-│   │   │   ├── dashboard/      # Dashboard principal
-│   │   │   ├── projects/       # Lista, Crear, Detalle
-│   │   │   ├── tasks/          # Kanban, Crear, Detalle
-│   │   │   ├── admin/          # Panel de administracion
-│   │   │   ├── tools/          # Inventario de herramientas
-│   │   │   └── profile/        # Perfil de usuario
-│   │   ├── services/           # API calls (Axios)
-│   │   ├── types/              # TypeScript types
-│   │   └── styles.css          # Estilos globales
-│   └── package.json
-└── docs/
-    └── historias-usuario-fase1.md
+│   ├── vercel.json             # Config SPA en Vercel
+│   ├── vite.config.ts          # Config de Vite
+│   ├── package.json
+│   └── src/
+│       ├── components/
+│       │   ├── chat/           # ChatDrawer, ChatFloatingButton
+│       │   ├── layout/         # Navbar
+│       │   └── ProtectedRoute
+│       ├── pages/
+│       │   ├── auth/           # Login, Register
+│       │   ├── dashboard/      # Dashboard principal
+│       │   ├── projects/       # Lista, Crear, Detalle
+│       │   ├── tasks/          # Kanban, Crear, Detalle
+│       │   ├── admin/          # Panel de administracion
+│       │   ├── tools/          # Inventario de herramientas
+│       │   └── profile/        # Perfil de usuario
+│       ├── services/           # API calls (Axios)
+│       ├── types/              # TypeScript types
+│       └── styles.css          # Estilos globales
+└── scripts/
+    └── supabase-schema.sql     # SQL para Supabase (Schema Editor)
 ```
 
 ## Endpoints disponibles
@@ -235,11 +288,12 @@ gemeseg-mejora/
 ## Tecnologia
 - **Frontend**: React 18 + Vite + TypeScript
 - **Backend**: NestJS + TypeScript + Prisma ORM v7
-- **Base de datos**: PostgreSQL 17
+- **Base de datos**: PostgreSQL 17 (Supabase en produccion)
 - **Autenticacion**: JWT (Passport.js)
 - **Validacion**: class-validator (backend) + Zod (frontend)
 - **IA**: GitHub Models (gpt-4o-mini)
 - **Estilos**: CSS custom con paleta corporativa GEMESEG
+- **Deploy**: Railway (backend) + Vercel (frontend) + Supabase (DB)
 
 ## Colores corporativos
 - Azul oscuro: `#100F31`
@@ -254,6 +308,14 @@ gemeseg-mejora/
 - `feature/tasks-T01-T02` - CRUD de tareas y Kanban
 - `feature/user-01-profile` - Perfil de usuario
 - `fix/T01-T02-task-corrections` - Correcciones a tareas
+
+## Base de datos en Supabase
+Para configurar la base de datos en Supabase:
+1. Ir a SQL Editor en el panel de Supabase
+2. Ejecutar el contenido de `scripts/supabase-schema.sql`
+3. Configurar las variables de entorno en Railway con la URL del pooler
+
+Las credenciales de prueba se crean ejecutando `node prisma/seed.js` contra la base de datos.
 
 ## Historias de usuario completadas
 - [x] HU-ADM-01: Registro e inicio de sesion

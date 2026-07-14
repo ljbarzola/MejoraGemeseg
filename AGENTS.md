@@ -8,7 +8,12 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 **Objetivo:** Centralizar, modernizar y automatizar procesos internos mediante un ecosistema de software.
 **Metodologia:** Scrum - sprints de 1-2 semanas
 **Plataforma:** Web (no movil)
-**Estado actual:** Fase 1 en desarrollo
+**Estado actual:** Fase 1 - Desplegado en produccion
+
+### URLs de Produccion
+- **Frontend (Vercel):** https://mejora-gemeseg.vercel.app
+- **Backend (Railway):** https://mejoragemeseg-production.up.railway.app
+- **API Docs (Swagger):** https://mejoragemeseg-production.up.railway.app/docs
 
 ## Stack Tecnologico
 
@@ -29,8 +34,21 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 - **Estilos:** CSS custom con paleta corporativa GEMESEG
 
 ### Infraestructura
-- **Dev:** PostgreSQL local (Docker abandonado)
-- **Prod:** GCP Cloud Run + Cloud SQL (planeado)
+
+#### Desarrollo (local)
+- **DB:** PostgreSQL 17 (Docker)
+- **Backend:** http://localhost:3000
+- **Frontend:** http://localhost:5173
+
+#### Produccion (Monorepo en GitHub)
+- **Base de datos:** Supabase (plan gratuito) - PostgreSQL 17
+- **Backend:** Railway (Root Dir: `/backend`)
+- **Frontend:** Vercel (Root Dir: `/frontend`)
+- **Repo:** https://github.com/ljbarzola/MejoraGemeseg
+
+**Flujo:** Push a `main` → Railway y Vercel hacen deploy automatico.
+
+**Variables de entorno:** No usar archivos `.env` en produccion. Mapear en paneles de Railway y Vercel.
 
 ## Convenciones de Codigo
 
@@ -61,14 +79,48 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 - Commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`.
 - No hacer push sin confirmacion del usuario.
 
-## Variables de Entorno
+## Despliegue en Produccion
 
+### Arquitectura
+```
+GitHub (repo: MejoraGemeseg/)
+  ├── backend/  → Railway (Root Dir: /backend)
+  ├── frontend/ → Vercel  (Root Dir: /frontend)
+  └── .env      → ignorado por .gitignore
+```
+
+### Plataformas
+- **Base de datos:** Supabase (plan gratuito, PostgreSQL 17)
+- **Backend:** Railway (deploy automatico desde `main`)
+- **Frontend:** Vercel (deploy automatico desde `main`)
+
+### URLs
+- Frontend: https://mejora-gemeseg.vercel.app
+- Backend: https://mejoragemeseg-production.up.railway.app
+- API Docs: https://mejoragemeseg-production.up.railway.app/docs
+
+### Variables de Entorno
+
+### Desarrollo (.env local)
 ```bash
-# .env
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gemeseg?schema=public
 JWT_SECRET=gemeseg-jwt-secret-2026
 GITHUB_TOKEN=<token_de_github_models>
+FRONTEND_URL=http://localhost:5173
 ```
+
+### Produccion - Backend (Railway)
+| Key | Value |
+|-----|-------|
+| `DATABASE_URL` | `postgresql://postgres.alvpovhbqcwunaiieuhy:MejoraG3m3s3g2026@aws-0-us-east-1.pooler.supabase.com:6543/postgres` |
+| `JWT_SECRET` | *(configurar en panel de Railway)* |
+| `FRONTEND_URL` | `https://mejora-gemeseg.vercel.app` |
+| `PORT` | `3000` |
+
+### Produccion - Frontend (Vercel)
+| Key | Value |
+|-----|-------|
+| `VITE_API_URL` | `https://mejoragemeseg-production.up.railway.app` |
 
 ## Autenticacion
 
@@ -196,3 +248,5 @@ GITHUB_TOKEN=<token_de_github_models>
 - Crear endpoints sin validacion de DTOs.
 - **Perder archivos de ramas existentes** - SIEMPRE hacer pull de main antes de crear ramas.
 - Hacer push sin autorizacion del usuario.
+- Hardcodear URLs de API en el frontend (usar `VITE_API_URL`).
+- Usar archivos `.env` en produccion (usar paneles de Railway/Vercel).
