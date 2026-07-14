@@ -7,9 +7,13 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  const frontendUrl = process.env.FRONTEND_URL || '';
+
   app.enableCors({
     origin: (origin, callback) => {
       if (!origin || origin.startsWith('http://localhost:')) {
+        callback(null, true);
+      } else if (frontendUrl && origin === frontendUrl) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));

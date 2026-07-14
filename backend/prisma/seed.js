@@ -1,9 +1,13 @@
+require('dotenv/config');
 const { PrismaClient } = require('@prisma/client');
 const { PrismaPg } = require('@prisma/adapter-pg');
 const bcrypt = require('bcryptjs');
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/gemeseg?schema=public';
-const adapter = new PrismaPg({ connectionString: DATABASE_URL });
+const adapter = new PrismaPg({
+  connectionString: DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
