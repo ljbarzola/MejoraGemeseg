@@ -43,7 +43,7 @@ export function getToken(): string | null {
   return localStorage.getItem('token');
 }
 
-export function getUser(): { id: number; email: string; fullName: string; role: string } | null {
+export function getUser(): { id: number; email: string; fullName: string; role: string; companyId: number | null } | null {
   const raw = localStorage.getItem('user');
   if (!raw) return null;
   try {

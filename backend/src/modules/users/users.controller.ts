@@ -10,6 +10,7 @@ import {
   Query,
   Req,
   UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { UsersService } from './users.service';
@@ -26,21 +27,21 @@ export class UsersController {
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN)
-  create(@Body() dto: CreateUserDto) {
-    return this.usersService.create(dto);
+  create(@Body() dto: CreateUserDto, @Req() req: any) {
+    return this.usersService.create(dto, req.user.companyId);
   }
 
   @Get()
   @UseGuards(AuthGuard('jwt'))
-  findAll(@Query() query: { role?: string; isActive?: string; search?: string }) {
-    return this.usersService.findAll(query);
+  findAll(@Req() req: any, @Query() query: { role?: string; isActive?: string; search?: string }) {
+    return this.usersService.findAll(req.user.companyId, query);
   }
 
   @Get('stats')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN)
-  getStats() {
-    return this.usersService.getStats();
+  getStats(@Req() req: any) {
+    return this.usersService.getStats(req.user.companyId);
   }
 
   @Get('me')
@@ -58,21 +59,33 @@ export class UsersController {
   @Get(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN)
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.usersService.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const user = await this.usersService.findOne(id);
+    if (req.user.companyId && user.companyId !== req.user.companyId) {
+      throw new ForbiddenException('No tienes acceso a este usuario');
+    }
+    return user;
   }
 
   @Patch(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN)
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateUserDto) {
+  async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateUserDto, @Req() req: any) {
+    const user = await this.usersService.findOne(id);
+    if (req.user.companyId && user.companyId !== req.user.companyId) {
+      throw new ForbiddenException('No puedes editar usuarios de otra empresa');
+    }
     return this.usersService.update(id, dto);
   }
 
   @Delete(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN)
-  remove(@Param('id', ParseIntPipe) id: number) {
+  async remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const user = await this.usersService.findOne(id);
+    if (req.user.companyId && user.companyId !== req.user.companyId) {
+      throw new ForbiddenException('No puedes eliminar usuarios de otra empresa');
+    }
     return this.usersService.remove(id);
   }
 }

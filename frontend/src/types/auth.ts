@@ -3,6 +3,7 @@ export interface User {
   email: string;
   fullName: string;
   role: 'ADMIN' | 'MANAGER' | 'EMPLOYEE';
+  companyId: number | null;
 }
 
 export interface AuthResponse {

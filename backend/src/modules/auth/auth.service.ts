@@ -11,8 +11,6 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { UserRole } from '@prisma/client';
 
-const GEMESEG_DOMAIN = '@gemeseg.com';
-
 @Injectable()
 export class AuthService {
   constructor(
@@ -21,9 +19,18 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    if (!dto.email.endsWith(GEMESEG_DOMAIN)) {
+    const company = await this.prisma.company.findFirst({
+      where: { domain: { not: null } },
+    });
+
+    if (company?.domain && !dto.email.endsWith(company.domain)) {
+      const allowedDomains = await this.prisma.company.findMany({
+        where: { domain: { not: null } },
+        select: { domain: true },
+      });
+      const domains = allowedDomains.map((c) => c.domain).join(', ');
       throw new ForbiddenException(
-        'Solo se permiten correos corporativos @gemeseg.com',
+        `Solo se permiten correos corporativos (${domains})`,
       );
     }
 
@@ -35,6 +42,12 @@ export class AuthService {
       throw new ConflictException('Ya existe un usuario con ese correo');
     }
 
+    const userCompany = company?.domain
+      ? await this.prisma.company.findFirst({
+          where: { domain: dto.email.split('@')[1] },
+        })
+      : null;
+
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     const user = await this.prisma.user.create({
@@ -42,10 +55,11 @@ export class AuthService {
         email: dto.email,
         password: hashedPassword,
         fullName: `${dto.firstName} ${dto.lastName}`,
+        companyId: userCompany?.id || null,
       },
     });
 
-    const token = this.generateToken(user.id, user.email, user.role);
+    const token = this.generateToken(user.id, user.email, user.role, user.companyId);
 
     return {
       user: {
@@ -53,6 +67,7 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        companyId: user.companyId,
       },
       token,
     };
@@ -73,7 +88,7 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    const token = this.generateToken(user.id, user.email, user.role);
+    const token = this.generateToken(user.id, user.email, user.role, user.companyId);
 
     return {
       user: {
@@ -81,16 +96,18 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        companyId: user.companyId,
       },
       token,
     };
   }
 
-  private generateToken(userId: number, email: string, role: UserRole): string {
+  private generateToken(userId: number, email: string, role: UserRole, companyId: number | null): string {
     return this.jwtService.sign({
       sub: userId,
       email,
       role,
+      companyId,
     });
   }
 }

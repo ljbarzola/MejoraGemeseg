@@ -41,6 +41,22 @@ enum Priority {
   URGENT
 }
 
+model Company {
+  id             Int      @id @default(autoincrement())
+  name           String
+  slug           String   @unique
+  logoUrl        String?
+  primaryColor   String   @default("#100F31")
+  secondaryColor String   @default("#12375F")
+  accentColor    String   @default("#EE3B1B")
+  bgColor        String   @default("#f8fafc")
+  textColor      String   @default("#1e293b")
+  domain         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  users          User[]
+}
+
 model Department {
   id          Int      @id @default(autoincrement())
   name        String   @unique
@@ -71,9 +87,11 @@ model User {
   departmentId   Int?
   roleId         Int?
   activeAgentId  Int?
+  companyId      Int?
   department     Department? @relation(fields: [departmentId], references: [id])
   roleRelation   Role?       @relation(fields: [roleId], references: [id])
   activeAgent    Agent?      @relation("UserActiveAgent", fields: [activeAgentId], references: [id])
+  company        Company?    @relation(fields: [companyId], references: [id])
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 

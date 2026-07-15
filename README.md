@@ -76,6 +76,15 @@ Gemeseg Mejora es una plataforma web de gestion interna para GEMESEG (Ecuador), 
 - **Agentes por usuario**: Cada usuario ve los agentes que le estan asignados en el chat.
 - **Acceso**: Pestana visible para admin y usuario de Sistemas.
 
+### Empresas (White-labeling)
+- **Multi-empresa**: Soporte para multiples empresas con branding independiente.
+- **Colores corporativos**: Cada empresa configura sus colores (principal, secundario, acento, fondo, texto).
+- **Logo personalizado**: Upload de logo por empresa.
+- **Dominio de email**: Asociacion de dominio de correo electronico por empresa.
+- **Super Admin**: `admin@general.com` gestiona todas las empresas (companyId: null).
+- **Admin de empresa**: Cada empresa tiene su propio administrador.
+- **Configuracion de marca**: Pagina de ajustes para personalizar la identidad visual de la empresa.
+
 ### Navbar
 - Logo GEMESEG en la barra de navegacion.
 - Navegacion rapida: Inicio, Proyectos, Administracion (solo admin), Herramientas (solo sistemas), Agentes (admin/sistemas).
@@ -83,15 +92,25 @@ Gemeseg Mejora es una plataforma web de gestion interna para GEMESEG (Ecuador), 
 - Boton de cerrar sesion.
 
 ## Credenciales de prueba
-Todos los usuarios usan la contrasena: **gemeseg2026**
 
-| Usuario | Email | Rol | Cargo |
-|---------|-------|-----|-------|
-| Sistemas GEMESEG | admin@gemeseg.com | ADMIN | Administrador del Sistema |
-| Hugo Melo | hugo@gemeseg.com | MANAGER | Gerente General |
-| David Izurieta | david@gemeseg.com | EMPLOYEE | Analista de Marketing Digital |
-| Nayelli | nayelli@gemeseg.com | EMPLOYEE | Analista de Recursos Humanos |
-| Leidy Barzola | sistemas@gemeseg.com | EMPLOYEE | Analista de Sistemas |
+### Super Admin (todas las empresas)
+| Usuario | Email | Contrasena | Rol | Empresa |
+|---------|-------|------------|-----|---------|
+| Super Administrador | admin@general.com | admin2026 | ADMIN | (todas) |
+
+### GEMESEG
+| Usuario | Email | Contrasena | Rol | Cargo |
+|---------|-------|------------|-----|-------|
+| Administracion GEMESEG | admin@gemeseg.com | gemeseg2026 | ADMIN | Administrador del Sistema |
+| Hugo Melo | hugo@gemeseg.com | gemeseg2026 | MANAGER | Gerente General |
+| David Izurieta | marketing@gemeseg.com | gemeseg2026 | EMPLOYEE | Analista de Marketing Digital |
+| Nayelli | nayelli@gemeseg.com | gemeseg2026 | EMPLOYEE | Analista de Recursos Humanos |
+| Leidy Barzola | sistemas@gemeseg.com | gemeseg2026 | EMPLOYEE | Analista de Sistemas |
+
+### Mikacao S.A.
+| Usuario | Email | Contrasena | Rol | Cargo |
+|---------|-------|------------|-----|-------|
+| Administracion Mikacao | admin@mikacao.com | mikacao2026 | ADMIN | Administrador del Sistema |
 
 ## Proyectos de prueba
 
@@ -200,7 +219,8 @@ MejoraGemeseg/
 │       │   ├── tasks/          # CRUD tareas individuales
 │       │   ├── tools/          # Inventario de herramientas
 │       │   ├── ai/             # Asistente IA (GitHub Models)
-│       │   └── agents/         # Agentes de IA
+│       │   ├── agents/         # Agentes de IA
+│       │   └── companies/      # Gestion de empresas (white-labeling)
 │       └── prisma/             # PrismaService
 ├── frontend/
 │   ├── vercel.json             # Config SPA en Vercel
@@ -216,7 +236,7 @@ MejoraGemeseg/
 │       │   ├── dashboard/      # Dashboard principal
 │       │   ├── projects/       # Lista, Crear, Detalle
 │       │   ├── tasks/          # Kanban, Crear, Detalle
-│       │   ├── admin/          # Panel de administracion
+│       │   ├── admin/          # Panel de administracion + empresas
 │       │   ├── tools/          # Inventario de herramientas
 │       │   └── profile/        # Perfil de usuario
 │       ├── services/           # API calls (Axios)
@@ -285,6 +305,16 @@ MejoraGemeseg/
 - `DELETE /admin/agents/:id/assign/:userId` - Quitar agente de usuario
 - `GET /agents/available` - Agentes disponibles para el usuario actual
 
+### Companies
+- `GET /companies` - Listar empresas (solo ADMIN)
+- `GET /companies/mine` - Empresa del usuario autenticado
+- `GET /companies/slug/:slug` - Buscar empresa por slug (publico)
+- `GET /companies/:id` - Detalle de empresa (solo ADMIN)
+- `POST /companies` - Crear empresa (solo super admin)
+- `PATCH /companies/:id` - Actualizar empresa
+- `DELETE /companies/:id` - Eliminar empresa (solo super admin)
+- `POST /companies/:id/logo` - Subir logo de empresa
+
 ## Tecnologia
 - **Frontend**: React 18 + Vite + TypeScript
 - **Backend**: NestJS + TypeScript + Prisma ORM v7
@@ -303,6 +333,7 @@ MejoraGemeseg/
 
 ## Ramas del repositorio
 - `main` - Produccion, codigo estable
+- `feature/COMP-01-02-white-labeling` - Gestion de empresas y white-labeling
 - `feature/CHAT-01-chat-flotante` - Chat con GitHub Models
 - `feature/DASH-02-DASH-03-admin-dashboard` - Panel de administracion
 - `feature/tasks-T01-T02` - CRUD de tareas y Kanban
@@ -330,3 +361,5 @@ Las credenciales de prueba se crean ejecutando `node prisma/seed.js` contra la b
 - [x] SIS-01: Acceso a Herramientas
 - [x] SIS-02: CRUD de Herramientas por Usuario
 - [x] USER-01: Visualizacion de perfil de usuario
+- [x] COMP-01: Gestion de empresas (CRUD, branding, logo)
+- [x] COMP-02: Datos por empresa (asociacion usuario-empresa, super admin)

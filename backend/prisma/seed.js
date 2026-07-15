@@ -14,6 +14,34 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log('Verificando datos existentes (modo idempotente)...');
 
+  console.log('Creando empresas...');
+  const gemeseg = await prisma.company.findFirst({ where: { slug: 'gemeseg' } }) || await prisma.company.create({
+    data: {
+      name: 'GEMESEG',
+      slug: 'gemeseg',
+      primaryColor: '#100F31',
+      secondaryColor: '#12375F',
+      accentColor: '#EE3B1B',
+      bgColor: '#f8fafc',
+      textColor: '#1e293b',
+      domain: '@gemeseg.com',
+    },
+  });
+
+  const mikacao = await prisma.company.findFirst({ where: { slug: 'mikacao' } }) || await prisma.company.create({
+    data: {
+      name: 'Mikacao S.A.',
+      slug: 'mikacao',
+      logoUrl: '/resources/logo-mikacao.png',
+      primaryColor: '#361F13',
+      secondaryColor: '#606B42',
+      accentColor: '#606B42',
+      bgColor: '#F9F6F0',
+      textColor: '#361F13',
+      domain: '@mikacao.com',
+    },
+  });
+
   console.log('Creando departamentos...');
   const deptTIData = { name: 'Tecnología e Innovación', description: 'Desarrollo y soporte TI' };
   const deptTI = await prisma.department.findFirst({ where: { name: deptTIData.name } }) || await prisma.department.create({ data: deptTIData });
@@ -50,8 +78,13 @@ async function main() {
       position: 'Administrador del Sistema',
       departmentId: deptTI.id,
       roleId: roleAdmin.id,
+      companyId: gemeseg.id,
     },
   });
+
+  if (!admin.companyId) {
+    await prisma.user.update({ where: { id: admin.id }, data: { companyId: gemeseg.id } });
+  }
 
   const hugo = await prisma.user.findFirst({ where: { email: 'hugo@gemeseg.com' } }) || await prisma.user.create({
     data: {
@@ -63,8 +96,13 @@ async function main() {
       position: 'Gerente General',
       departmentId: deptFinance.id,
       roleId: roleGerente.id,
+      companyId: gemeseg.id,
     },
   });
+
+  if (!hugo.companyId) {
+    await prisma.user.update({ where: { id: hugo.id }, data: { companyId: gemeseg.id } });
+  }
 
   const david = await prisma.user.findFirst({ where: { email: 'marketing@gemeseg.com' } }) || await prisma.user.create({
     data: {
@@ -76,8 +114,13 @@ async function main() {
       position: 'Analista de Marketing Digital',
       departmentId: deptMKT.id,
       roleId: roleAnalyst.id,
+      companyId: gemeseg.id,
     },
   });
+
+  if (!david.companyId) {
+    await prisma.user.update({ where: { id: david.id }, data: { companyId: gemeseg.id } });
+  }
 
   const nayelli = await prisma.user.findFirst({ where: { email: 'nayelli@gemeseg.com' } }) || await prisma.user.create({
     data: {
@@ -88,8 +131,13 @@ async function main() {
       documentNumber: '1744455566',
       position: 'Analista de Recursos Humanos',
       departmentId: deptRRHH.id,
+      companyId: gemeseg.id,
     },
   });
+
+  if (!nayelli.companyId) {
+    await prisma.user.update({ where: { id: nayelli.id }, data: { companyId: gemeseg.id } });
+  }
 
   const leidy = await prisma.user.findFirst({ where: { email: 'sistemas@gemeseg.com' } }) || await prisma.user.create({
     data: {
@@ -100,6 +148,40 @@ async function main() {
       documentNumber: '1755566677',
       position: 'Analista de Sistemas',
       departmentId: deptTI.id,
+      companyId: gemeseg.id,
+    },
+  });
+
+  if (!leidy.companyId) {
+    await prisma.user.update({ where: { id: leidy.id }, data: { companyId: gemeseg.id } });
+  }
+
+  console.log('Creando usuario admin de Mikacao...');
+  const mikacaoPassword = await bcrypt.hash('mikacao2026', 10);
+  const adminMikacao = await prisma.user.findFirst({ where: { email: 'admin@mikacao.com' } }) || await prisma.user.create({
+    data: {
+      fullName: 'Administración Mikacao',
+      email: 'admin@mikacao.com',
+      password: mikacaoPassword,
+      role: 'ADMIN',
+      documentNumber: '1799988877',
+      position: 'Administrador del Sistema',
+      departmentId: deptTI.id,
+      companyId: mikacao.id,
+    },
+  });
+
+  console.log('Creando super admin (admin@general.com)...');
+  const generalPassword = await bcrypt.hash('admin2026', 10);
+  const superAdmin = await prisma.user.findFirst({ where: { email: 'admin@general.com' } }) || await prisma.user.create({
+    data: {
+      fullName: 'Super Administrador',
+      email: 'admin@general.com',
+      password: generalPassword,
+      role: 'ADMIN',
+      documentNumber: '1700000000',
+      position: 'Super Administrador',
+      companyId: null,
     },
   });
 
@@ -370,13 +452,27 @@ Si no necesitas datos, responde directamente.`,
   console.log('  SEED COMPLETADO EXITOSAMENTE');
   console.log('========================================\n');
 
-  console.log('USUARIOS (contraseña: gemeseg2026):');
+  console.log('EMPRESAS:');
+  console.log('─────────────────────────────────────────');
+  console.log(`1. ${gemeseg.name} (${gemeseg.slug}) → dominio: ${gemeseg.domain}`);
+  console.log(`2. ${mikacao.name} (${mikacao.slug}) → dominio: ${mikacao.domain}`);
+
+  console.log('\nUSUARIOS GEMESEG (contraseña: gemeseg2026):');
   console.log('─────────────────────────────────────────');
   console.log(`ADMIN:     ${admin.email}  (Administración GEMESEG)`);
   console.log(`MANAGER:   ${hugo.email}  (Hugo Melo - Gerente General)`);
   console.log(`EMPLOYEE:  ${david.email}  (David Izurieta - Marketing Digital)`);
   console.log(`EMPLOYEE:  ${nayelli.email}  (Nayelli - Recursos Humanos)`);
   console.log(`EMPLOYEE:  ${leidy.email}  (Leidy Barzola - Sistemas)`);
+
+  console.log('\nUSUARIOS MIKACAO (contraseña: mikacao2026):');
+  console.log('─────────────────────────────────────────');
+  console.log(`ADMIN:     ${adminMikacao.email}  (Administración Mikacao)`);
+
+  console.log('\nSUPER ADMIN (contraseña: admin2026):');
+  console.log('─────────────────────────────────────────');
+  console.log(`SUPER:     ${superAdmin.email}  (Super Administrador - gestiona todas las empresas)`);
+
   console.log('\nPROYECTOS:');
   console.log('─────────────────────────────────────────');
   console.log(`1. ${projectLandings.name} [ACTIVE] → David (OWNER), Admin (OWNER), Leidy (MEMBER), Hugo (MEMBER)`);

@@ -53,7 +53,7 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 ## Convenciones de Codigo
 
 ### NestJS
-- Un modulo por dominio: `auth`, `projects`, `users`, `tasks`, `ai`, `queue`, `tools`, `agents`.
+- Un modulo por dominio: `auth`, `projects`, `users`, `tasks`, `ai`, `queue`, `tools`, `agents`, `companies`.
 - DTOs con `class-validator` para toda entrada.
 - Guards por rol: `@Roles(UserRole.ADMIN)` + `RolesGuard`.
 - Responses consistentes.
@@ -68,7 +68,7 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 
 ### Prisma
 - Enums en schema: `UserRole`, `ProjectStatus`, `MemberRole`, `TaskStatus`, `Priority`.
-- Modelos: `User`, `Department`, `Role`, `Project`, `ProjectMember`, `Task`, `TaskAssignee`, `Tool`, `ToolAssignment`, `ToolAuditLog`, `Agent`, `UserAgent`, `Conversation`, `ChatMessage`, `AiLog`.
+- Modelos: `Company`, `User`, `Department`, `Role`, `Project`, `ProjectMember`, `Task`, `TaskAssignee`, `Tool`, `ToolAssignment`, `ToolAuditLog`, `Agent`, `UserAgent`, `Conversation`, `ChatMessage`, `AiLog`.
 - Migraciones con `prisma migrate dev --name <nombre>`.
 - Seed en `prisma/seed.js`.
 - Prisma v7 requiere adapter: `new PrismaClient({ adapter: new PrismaPg(...) })`.
@@ -133,11 +133,12 @@ FRONTEND_URL=http://localhost:5173
 ## Reglas de Negocio
 
 ### Admin
-- Solo UNO: `admin@gemeseg.com` (Sistemas GEMESEG)
-- Es OWNER automatico de TODOS los proyectos (se agrega al crear proyecto)
-- Puede cambiar roles de cualquier miembro (incluyendo OWNER)
-- Puede ver todos los miembros (incluyose a si mismo)
-- No aparece en la lista de miembros para usuarios normales
+- **Super Admin:** `admin@general.com` (companyId: null) - puede ver y gestionar todas las empresas.
+- **Admin de empresa:** `admin@gemeseg.com`, `admin@mikacao.com` - solo gestiona su propia empresa.
+- Es OWNER automatico de TODOS los proyectos de su empresa (se agrega al crear proyecto).
+- Puede cambiar roles de cualquier miembro (incluyendo OWNER).
+- Puede ver todos los miembros (incluyose a si mismo).
+- No aparece en la lista de miembros para usuarios normales.
 
 ### Proyectos
 - **Cualquier usuario autenticado** puede crear proyectos.
@@ -166,6 +167,15 @@ FRONTEND_URL=http://localhost:5173
 - Un usuario puede tener multiples agentes asignados.
 - El agente global (createdBy: null) esta disponible para todos.
 - Cada combinacion usuario+agente tiene sus propias conversaciones.
+
+### Empresas (White-labeling)
+- **Super Admin** (`admin@general.com`, `companyId: null`): puede ver y gestionar todas las empresas.
+- **Admin de empresa** (`admin@gemeseg.com`, `admin@mikacao.com`): solo gestiona su propia empresa.
+- Cada empresa tiene: nombre, slug, logo, colores corporativos (primary, secondary, accent, bg, text), dominio de email.
+- Los usuarios se asocian a una empresa via `companyId`.
+- Los proyectos y datos se filtran por membresia, no por empresa (companyId esta en User, no en Project).
+- El endpoint `GET /companies/mine` retorna la empresa del usuario autenticado.
+- El endpoint `GET /companies/slug/:slug` es publico (para branding en login).
 
 ## Modulos Backend
 
@@ -231,13 +241,31 @@ FRONTEND_URL=http://localhost:5173
 - `DELETE /admin/agents/:id/assign/:userId` - Quitar agente de usuario
 - `GET /agents/available` - Agentes disponibles para el usuario actual (global + asignados)
 
+### Companies (`/companies`)
+- `GET /companies` - Listar empresas (solo ADMIN; si tiene companyId retorna su empresa)
+- `GET /companies/mine` - Empresa del usuario autenticado (cualquier usuario)
+- `GET /companies/slug/:slug` - Buscar empresa por slug (publico, para branding)
+- `GET /companies/:id` - Detalle de empresa (solo ADMIN, restringe por companyId)
+- `POST /companies` - Crear empresa (solo super admin, companyId=null)
+- `PATCH /companies/:id` - Actualizar empresa (solo admin de esa empresa)
+- `DELETE /companies/:id` - Eliminar empresa (solo super admin, companyId=null)
+- `POST /companies/:id/logo` - Subir logo de empresa (solo admin de esa empresa)
+
 ## Credenciales de prueba
-- Contrasena para todos: `gemeseg2026`
+
+### Super Admin (todas las empresas)
+- Contrasena: `admin2026`
+- Super Admin: `admin@general.com` (ADMIN, companyId: null)
+
+### GEMESEG (contrasena: `gemeseg2026`)
 - Admin: `admin@gemeseg.com` (ADMIN)
 - Manager: `hugo@gemeseg.com` (MANAGER - Gerente General)
-- Employee: `david@gemeseg.com` (EMPLOYEE - Marketing Digital)
+- Employee: `marketing@gemeseg.com` (EMPLOYEE - Marketing Digital)
 - Employee: `nayelli@gemeseg.com` (EMPLOYEE - Recursos Humanos)
 - Employee: `sistemas@gemeseg.com` (EMPLOYEE - Sistemas, Leidy Barzola)
+
+### Mikacao S.A. (contrasena: `mikacao2026`)
+- Admin: `admin@mikacao.com` (ADMIN)
 
 ## LO QUE NO DEBES HACER
 

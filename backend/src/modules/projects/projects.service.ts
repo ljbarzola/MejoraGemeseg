@@ -10,19 +10,10 @@ const PAGE_SIZE = 10;
 export class ProjectsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(dto: CreateProjectDto, userId: number, userRole: UserRole) {
-    const adminUser = await this.prisma.user.findUnique({
-      where: { email: 'admin@gemeseg.com' },
-      select: { id: true },
-    });
-
+  async create(dto: CreateProjectDto, userId: number, userRole: UserRole, companyId?: number | null) {
     const membersToCreate = [
       { userId, role: 'OWNER' as const },
     ];
-
-    if (adminUser && adminUser.id !== userId) {
-      membersToCreate.push({ userId: adminUser.id, role: 'OWNER' as const });
-    }
 
     const project = await this.prisma.project.create({
       data: {
@@ -55,13 +46,15 @@ export class ProjectsService {
     return project;
   }
 
-  async findAll(userId: number, userRole: UserRole, query: ListProjectsDto) {
+  async findAll(userId: number, userRole: UserRole, companyId: number | null, query: ListProjectsDto) {
     const page = query.page || 1;
     const skip = (page - 1) * PAGE_SIZE;
 
     const where: any = {};
 
-    if (userRole !== UserRole.ADMIN) {
+    if (companyId) {
+      where.createdBy = { companyId };
+    } else if (userRole !== UserRole.ADMIN) {
       where.OR = [
         { createdById: userId },
         { members: { some: { userId } } },
@@ -128,9 +121,24 @@ export class ProjectsService {
     return project;
   }
 
-  async update(id: number, dto: CreateProjectDto, userId: number, userRole: UserRole) {
+  async getProjectCreator(projectId: number) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { createdBy: { select: { id: true, companyId: true } } },
+    });
+    return project?.createdBy || null;
+  }
+
+  async update(id: number, dto: CreateProjectDto, userId: number, userRole: UserRole, companyId?: number | null) {
     const project = await this.prisma.project.findUnique({ where: { id } });
     if (!project) throw new NotFoundException(`Proyecto con id ${id} no encontrado`);
+
+    if (companyId) {
+      const creator = await this.getProjectCreator(id);
+      if (creator && creator.companyId !== companyId) {
+        throw new ForbiddenException('No tienes acceso a este proyecto');
+      }
+    }
 
     if (userRole !== UserRole.ADMIN) {
       const membership = await this.prisma.projectMember.findUnique({
@@ -161,9 +169,16 @@ export class ProjectsService {
     });
   }
 
-  async remove(id: number, userId: number, userRole: UserRole) {
+  async remove(id: number, userId: number, userRole: UserRole, companyId?: number | null) {
     const project = await this.prisma.project.findUnique({ where: { id } });
     if (!project) throw new NotFoundException(`Proyecto con id ${id} no encontrado`);
+
+    if (companyId) {
+      const creator = await this.getProjectCreator(id);
+      if (creator && creator.companyId !== companyId) {
+        throw new ForbiddenException('No tienes acceso a este proyecto');
+      }
+    }
 
     if (userRole !== UserRole.ADMIN) {
       const membership = await this.prisma.projectMember.findUnique({
@@ -178,15 +193,22 @@ export class ProjectsService {
     return { message: 'Proyecto eliminado' };
   }
 
-  async getAdminStats() {
+  async getAdminStats(companyId?: number | null) {
+    const projectWhere = companyId ? { createdBy: { companyId } } : {};
+    const taskWhere = companyId
+      ? { project: { createdBy: { companyId } } }
+      : {};
+
     const [total, byStatus, taskStats] = await Promise.all([
-      this.prisma.project.count(),
+      this.prisma.project.count({ where: projectWhere }),
       this.prisma.project.groupBy({
         by: ['status'],
+        where: projectWhere,
         _count: { id: true },
       }),
       this.prisma.task.groupBy({
         by: ['status'],
+        where: taskWhere,
         _count: { id: true },
       }),
     ]);
@@ -218,7 +240,7 @@ export class ProjectsService {
     }
   }
 
-  async addMember(projectId: number, targetUserId: number, role: string, userId: number, userRole: UserRole) {
+  async addMember(projectId: number, targetUserId: number, role: string, userId: number, userRole: UserRole, companyId?: number | null) {
     await this.assertOwner(projectId, userId, userRole);
 
     const project = await this.prisma.project.findUnique({ where: { id: projectId } });
@@ -227,6 +249,10 @@ export class ProjectsService {
     const targetUser = await this.prisma.user.findUnique({ where: { id: targetUserId } });
     if (!targetUser || targetUser.isActive === false) {
       throw new NotFoundException('Usuario no encontrado o inactivo');
+    }
+
+    if (companyId && targetUser.companyId !== companyId) {
+      throw new ForbiddenException('Solo puedes agregar usuarios de tu empresa');
     }
 
     const existing = await this.prisma.projectMember.findUnique({

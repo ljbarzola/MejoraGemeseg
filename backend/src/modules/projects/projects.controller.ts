@@ -1,4 +1,4 @@
-﻿import { Controller, Get, Post, Patch, Delete, Body, Query, Param, UseGuards, Req, ParseIntPipe } from '@nestjs/common';
+﻿import { Controller, Get, Post, Patch, Delete, Body, Query, Param, UseGuards, Req, ParseIntPipe, ForbiddenException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ProjectsService } from './projects.service';
 import { TasksService } from '../tasks/tasks.service';
@@ -19,26 +19,33 @@ export class ProjectsController {
   @Post()
   @UseGuards(AuthGuard('jwt'))
   create(@Body() dto: CreateProjectDto, @Req() req: any) {
-    return this.projectsService.create(dto, req.user.userId, req.user.role);
+    return this.projectsService.create(dto, req.user.userId, req.user.role, req.user.companyId);
   }
 
   @Get()
   @UseGuards(AuthGuard('jwt'))
   findAll(@Req() req: any, @Query() query: ListProjectsDto) {
-    return this.projectsService.findAll(req.user.userId, req.user.role, query);
+    return this.projectsService.findAll(req.user.userId, req.user.role, req.user.companyId, query);
   }
 
   @Get('admin/stats')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN)
-  getAdminStats() {
-    return this.projectsService.getAdminStats();
+  getAdminStats(@Req() req: any) {
+    return this.projectsService.getAdminStats(req.user.companyId);
   }
 
   @Get(':id')
   @UseGuards(AuthGuard('jwt'))
-  findOne(@Param('id') id: string) {
-    return this.projectsService.findOne(+id);
+  async findOne(@Param('id') id: string, @Req() req: any) {
+    const project = await this.projectsService.findOne(+id);
+    if (req.user.companyId) {
+      const creator = await this.projectsService.getProjectCreator(+id);
+      if (creator && creator.companyId !== req.user.companyId) {
+        throw new ForbiddenException('No tienes acceso a este proyecto');
+      }
+    }
+    return project;
   }
 
   @Patch(':id')
@@ -48,7 +55,7 @@ export class ProjectsController {
     @Body() dto: CreateProjectDto,
     @Req() req: any,
   ) {
-    return this.projectsService.update(id, dto, req.user.userId, req.user.role);
+    return this.projectsService.update(id, dto, req.user.userId, req.user.role, req.user.companyId);
   }
 
   @Delete(':id')
@@ -57,7 +64,7 @@ export class ProjectsController {
     @Param('id', ParseIntPipe) id: number,
     @Req() req: any,
   ) {
-    return this.projectsService.remove(id, req.user.userId, req.user.role);
+    return this.projectsService.remove(id, req.user.userId, req.user.role, req.user.companyId);
   }
 
   @Get(':projectId/tasks')
@@ -89,7 +96,7 @@ export class ProjectsController {
     @Body() body: { userId: number; role: string },
     @Req() req: any,
   ) {
-    return this.projectsService.addMember(projectId, body.userId, body.role, req.user.userId, req.user.role);
+    return this.projectsService.addMember(projectId, body.userId, body.role, req.user.userId, req.user.role, req.user.companyId);
   }
 
   @Delete(':projectId/members/:userId')

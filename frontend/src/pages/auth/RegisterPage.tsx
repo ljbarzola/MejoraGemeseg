@@ -7,6 +7,7 @@ import {
   register as registerService,
   saveAuth,
 } from '../../services/auth.service';
+import { useCompany } from '../../contexts/ThemeContext';
 
 const registerSchema = z
   .object({
@@ -30,6 +31,7 @@ type RegisterForm = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const { theme } = useCompany();
   const [serverError, setServerError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -64,14 +66,16 @@ export default function RegisterPage() {
     }
   };
 
+  const domainHint = theme.domain || '@gemeseg.com';
+
   return (
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <img src="/resources/logo-gemeseg-back-white.png" alt="GEMESEG" className="auth-logo" />
+          <img src={theme.logoUrl || '/resources/logo-gemeseg-back-white.png'} alt={theme.name} className="auth-logo" />
           <h1>Crear cuenta</h1>
           <p className="auth-subtitle">
-            Regístrate con tu correo corporativo @gemeseg.com
+            Regístrate con tu correo corporativo {domainHint}
           </p>
         </div>
 
@@ -119,7 +123,7 @@ export default function RegisterPage() {
             <input
               id="email"
               type="email"
-              placeholder="tu@ gemeseg.com"
+              placeholder={`tu@${domainHint.replace('@', '')}`}
               {...register('email')}
               className={errors.email ? 'input-error' : ''}
             />

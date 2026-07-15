@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate, Link } from 'react-router-dom';
 import { login as loginService, saveAuth } from '../../services/auth.service';
+import { useCompany } from '../../contexts/ThemeContext';
 
 const loginSchema = z.object({
   email: z
@@ -19,6 +20,7 @@ type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { theme, loadThemeBySlug } = useCompany();
   const [serverError, setServerError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -30,12 +32,35 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
   });
 
+  useEffect(() => {
+    const detectCompany = async () => {
+      const emailInput = document.getElementById('email') as HTMLInputElement;
+      if (!emailInput) return;
+      const handler = async () => {
+        const email = emailInput.value;
+        const domain = email.split('@')[1];
+        if (domain) {
+          const slug = domain.split('.')[0];
+          await loadThemeBySlug(slug);
+        }
+      };
+      emailInput.addEventListener('blur', handler);
+      return () => emailInput.removeEventListener('blur', handler);
+    };
+    detectCompany();
+  }, [loadThemeBySlug]);
+
   const onSubmit = async (data: LoginForm) => {
     setServerError('');
     setLoading(true);
     try {
       const res = await loginService(data);
       saveAuth(res);
+      const domain = data.email.split('@')[1];
+      if (domain) {
+        const slug = domain.split('.')[0];
+        await loadThemeBySlug(slug);
+      }
       navigate('/dashboard');
     } catch (err: any) {
       const msg =
@@ -52,7 +77,7 @@ export default function LoginPage() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <img src="/resources/logo-gemeseg-back-white.png" alt="GEMESEG" className="auth-logo" />
+          <img src={theme.logoUrl || '/resources/logo-gemeseg-back-white.png'} alt={theme.name} className="auth-logo" />
           <h1>Iniciar sesión</h1>
           <p className="auth-subtitle">
             Ingresa con tu correo corporativo para acceder al sistema
@@ -69,7 +94,7 @@ export default function LoginPage() {
             <input
               id="email"
               type="email"
-              placeholder="tu@ gemeseg.com"
+              placeholder="tu@correo.com"
               {...register('email')}
               className={errors.email ? 'input-error' : ''}
             />

@@ -1,15 +1,20 @@
 import { useNavigate } from 'react-router-dom';
 import { getUser, removeToken } from '../../services/auth.service';
+import { useCompany } from '../../contexts/ThemeContext';
 
 export default function Navbar() {
   const navigate = useNavigate();
+  const { theme } = useCompany();
   const user = getUser();
-  const isAdmin = user?.email === 'admin@gemeseg.com' || user?.role === 'ADMIN';
+  const isAdmin = user?.role === 'ADMIN';
+  const isSuperAdmin = isAdmin && !user?.companyId;
+  const isCompanyAdmin = isAdmin && !!user?.companyId;
   const isSystems = user?.email === 'sistemas@gemeseg.com';
   const canManageAgents = isAdmin || isSystems;
 
   const handleLogout = () => {
     removeToken();
+    localStorage.removeItem('company_theme');
     navigate('/login');
   };
 
@@ -17,7 +22,7 @@ export default function Navbar() {
     <nav className="navbar">
       <div className="navbar-brand" onClick={() => navigate('/dashboard')}>
         <span className="navbar-logo">
-          <img src="/resources/logo-gemeseg-back-white.png" alt="GEMESEG" style={{ height: '28px' }} />
+          <img src={theme.logoUrl || '/resources/logo-gemeseg-back-white.png'} alt={theme.name} style={{ height: '28px' }} />
         </span>
       </div>
       <div className="navbar-links">
@@ -25,6 +30,12 @@ export default function Navbar() {
         <button className="navbar-link" onClick={() => navigate('/projects')}>Proyectos</button>
         {isAdmin && (
           <button className="navbar-link navbar-link-admin" onClick={() => navigate('/admin')}>Administración</button>
+        )}
+        {isSuperAdmin && (
+          <button className="navbar-link navbar-link-admin" onClick={() => navigate('/admin/companies')}>Empresas</button>
+        )}
+        {isCompanyAdmin && (
+          <button className="navbar-link navbar-link-admin" onClick={() => navigate('/admin/company-settings')}>Mi Empresa</button>
         )}
         {isSystems && (
           <button className="navbar-link" onClick={() => navigate('/tools')}>Herramientas</button>

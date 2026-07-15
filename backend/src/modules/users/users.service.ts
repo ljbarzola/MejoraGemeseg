@@ -8,7 +8,7 @@ import * as bcrypt from 'bcryptjs';
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  async create(dto: CreateUserDto) {
+  async create(dto: CreateUserDto, companyId?: number | null) {
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -28,6 +28,7 @@ export class UsersService {
         position: dto.position,
         departmentId: dto.departmentId || null,
         roleId: dto.roleId || null,
+        companyId: companyId || null,
       },
       include: {
         department: true,
@@ -36,8 +37,12 @@ export class UsersService {
     });
   }
 
-  async findAll(query?: { role?: string; isActive?: string; search?: string }) {
+  async findAll(companyId?: number | null, query?: { role?: string; isActive?: string; search?: string }) {
     const where: any = {};
+
+    if (companyId) {
+      where.companyId = companyId;
+    }
 
     if (query?.role) {
       where.role = query.role;
@@ -159,6 +164,7 @@ export class UsersService {
         role: true,
         position: true,
         documentNumber: true,
+        companyId: true,
         department: true,
         roleRelation: true,
         createdAt: true,
@@ -198,12 +204,15 @@ export class UsersService {
     });
   }
 
-  async getStats() {
+  async getStats(companyId?: number | null) {
+    const where = companyId ? { companyId } : {};
+
     const [total, active, byRole] = await Promise.all([
-      this.prisma.user.count(),
-      this.prisma.user.count({ where: { isActive: true } }),
+      this.prisma.user.count({ where }),
+      this.prisma.user.count({ where: { ...where, isActive: true } }),
       this.prisma.user.groupBy({
         by: ['role'],
+        where,
         _count: { id: true },
       }),
     ]);

@@ -1,11 +1,15 @@
 import 'dotenv/config';
-import { ValidationPipe } from '@nestjs/common';
+import { join } from 'path';
 import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import express from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
 
   const frontendUrl = process.env.FRONTEND_URL || '';
 

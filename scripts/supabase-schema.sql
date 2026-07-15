@@ -22,6 +22,23 @@ CREATE TYPE "TaskStatus" AS ENUM ('TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE', 'C
 CREATE TYPE "Priority" AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'URGENT');
 
 -- CreateTable
+CREATE TABLE "Company" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "logoUrl" TEXT,
+    "primaryColor" TEXT NOT NULL DEFAULT '#100F31',
+    "secondaryColor" TEXT NOT NULL DEFAULT '#12375F',
+    "accentColor" TEXT NOT NULL DEFAULT '#EE3B1B',
+    "bgColor" TEXT NOT NULL DEFAULT '#f8fafc',
+    "textColor" TEXT NOT NULL DEFAULT '#1e293b',
+    "domain" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "Company_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Department" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
@@ -54,6 +71,7 @@ CREATE TABLE "User" (
     "departmentId" INTEGER,
     "roleId" INTEGER,
     "activeAgentId" INTEGER,
+    "companyId" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
@@ -200,6 +218,7 @@ CREATE TABLE "ToolAuditLog" (
 );
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Company_slug_key" ON "Company"("slug");
 CREATE UNIQUE INDEX "Department_name_key" ON "Department"("name");
 CREATE UNIQUE INDEX "Role_name_key" ON "Role"("name");
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
@@ -221,6 +240,7 @@ CREATE INDEX "ToolAuditLog_createdAt_idx" ON "ToolAuditLog"("createdAt");
 ALTER TABLE "User" ADD CONSTRAINT "User_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "User" ADD CONSTRAINT "User_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES "Role"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "User" ADD CONSTRAINT "User_activeAgentId_fkey" FOREIGN KEY ("activeAgentId") REFERENCES "Agent"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "User" ADD CONSTRAINT "User_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "Project" ADD CONSTRAINT "Project_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "ProjectMember" ADD CONSTRAINT "ProjectMember_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "ProjectMember" ADD CONSTRAINT "ProjectMember_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

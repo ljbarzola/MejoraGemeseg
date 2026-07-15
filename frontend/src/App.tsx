@@ -10,6 +10,8 @@ import KanbanPage from './pages/tasks/KanbanPage';
 import CreateTaskPage from './pages/tasks/CreateTaskPage';
 import TaskDetailPage from './pages/tasks/TaskDetailPage';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
+import CompaniesPage from './pages/admin/CompaniesPage';
+import CompanySettingsPage from './pages/admin/CompanySettingsPage';
 import ToolsPage from './pages/tools/ToolsPage';
 import ProfilePage from './pages/profile/ProfilePage';
 import AgentsPage from './pages/admin/AgentsPage';
@@ -17,6 +19,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/layout/Navbar';
 import ChatFloatingButton from './components/chat/ChatFloatingButton';
 import ChatDrawer from './components/chat/ChatDrawer';
+import { CompanyProvider } from './contexts/ThemeContext';
 import { isAuthenticated } from './services/auth.service';
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -33,6 +36,7 @@ function App() {
 
   return (
     <BrowserRouter>
+      <CompanyProvider>
       <Routes>
         <Route
           path="/"
@@ -127,6 +131,22 @@ function App() {
           }
         />
         <Route
+          path="/admin/companies"
+          element={
+            <ProtectedLayout>
+              <CompaniesPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/company-settings"
+          element={
+            <ProtectedLayout>
+              <CompanySettingsPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
           path="/tools"
           element={
             <ProtectedLayout>
@@ -150,6 +170,7 @@ function App() {
           <ChatDrawer isOpen={chatOpen} onClose={() => setChatOpen(false)} />
         </>
       )}
+      </CompanyProvider>
     </BrowserRouter>
   );
 }
