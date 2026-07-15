@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getUser } from '../../services/auth.service';
 import { getMyTasks } from '../../services/task.service';
 import { getProjects } from '../../services/project.service';
@@ -14,16 +14,45 @@ const STATUS_OPTIONS = [
   { value: 'DONE', label: 'Completado' },
 ];
 
+type SortField = 'title' | 'project' | 'status' | 'priority' | 'assignees' | 'estimatedHours';
+type SortDirection = 'asc' | 'desc';
+
+const PRIORITY_ORDER: Record<string, number> = {
+  URGENT: 0,
+  HIGH: 1,
+  MEDIUM: 2,
+  LOW: 3,
+};
+
+const STATUS_ORDER: Record<string, number> = {
+  TODO: 0,
+  IN_PROGRESS: 1,
+  IN_REVIEW: 2,
+  DONE: 3,
+};
+
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const user = getUser();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('IN_PROGRESS');
-  const [assignedToMe, setAssignedToMe] = useState(false);
-  const [projectFilter, setProjectFilter] = useState<number | ''>('');
+  const [statusFilter, setStatusFilter] = useState(
+    () => localStorage.getItem('dashboard_status_filter') || 'IN_PROGRESS'
+  );
+  const [assignedToMe, setAssignedToMe] = useState(
+    () => localStorage.getItem('dashboard_assigned_to_me') === 'true'
+  );
+  const [projectFilter, setProjectFilter] = useState<number | ''>(
+    () => {
+      const saved = localStorage.getItem('dashboard_project_filter');
+      return saved !== null ? (saved === '' ? '' : Number(saved)) : '';
+    }
+  );
   const [projects, setProjects] = useState<{ id: number; name: string }[]>([]);
+  const [sortField, setSortField] = useState<SortField>('status');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   useEffect(() => {
     getProjects({ page: 1 }).then((res) => {
@@ -38,7 +67,53 @@ export default function DashboardPage() {
       assignedToMe: assignedToMe || undefined,
       projectId: projectFilter !== '' ? Number(projectFilter) : undefined,
     }).then(setTasks).finally(() => setLoading(false));
-  }, [statusFilter, assignedToMe, projectFilter]);
+  }, [statusFilter, assignedToMe, projectFilter, location.key]);
+
+  const sortedTasks = useMemo(() => {
+    const sorted = [...tasks];
+    sorted.sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case 'title':
+          cmp = a.title.localeCompare(b.title);
+          break;
+        case 'project': {
+          const nameA = (a as any).project?.name || '';
+          const nameB = (b as any).project?.name || '';
+          cmp = nameA.localeCompare(nameB);
+          break;
+        }
+        case 'status':
+          cmp = (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99);
+          break;
+        case 'priority':
+          cmp = (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99);
+          break;
+        case 'assignees':
+          cmp = (a.assignees?.length || 0) - (b.assignees?.length || 0);
+          break;
+        case 'estimatedHours':
+          cmp = (a.estimatedHours || 0) - (b.estimatedHours || 0);
+          break;
+      }
+      return sortDirection === 'asc' ? cmp : -cmp;
+    });
+    return sorted;
+  }, [tasks, sortField, sortDirection]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <span className="sort-icon">⇅</span>;
+    return <span className="sort-icon sort-active">{sortDirection === 'asc' ? '↑' : '↓'}</span>;
+  };
 
   return (
     <div className="app-shell">
@@ -61,7 +136,11 @@ export default function DashboardPage() {
             <select
               className="filter-select"
               value={projectFilter}
-              onChange={(e) => setProjectFilter(e.target.value ? Number(e.target.value) : '')}
+              onChange={(e) => {
+                const val = e.target.value ? Number(e.target.value) : '';
+                setProjectFilter(val);
+                localStorage.setItem('dashboard_project_filter', String(val));
+              }}
             >
               <option value="">Todos los proyectos</option>
               {projects.map((p) => (
@@ -71,9 +150,21 @@ export default function DashboardPage() {
 
             <button
               className={`filter-btn ${assignedToMe ? 'active' : ''}`}
-              onClick={() => setAssignedToMe(!assignedToMe)}
+              onClick={() => {
+                const next = !assignedToMe;
+                setAssignedToMe(next);
+                localStorage.setItem('dashboard_assigned_to_me', String(next));
+              }}
             >
               Asignadas a mí
+            </button>
+
+            <button
+              className="auth-btn"
+              onClick={() => navigate('/tasks/new')}
+              style={{ marginLeft: 4 }}
+            >
+              + Nueva tarea
             </button>
           </div>
         </div>
@@ -83,7 +174,10 @@ export default function DashboardPage() {
             <button
               key={opt.value}
               className={`filter-btn ${statusFilter === opt.value ? 'active' : ''}`}
-              onClick={() => setStatusFilter(opt.value)}
+              onClick={() => {
+                setStatusFilter(opt.value);
+                localStorage.setItem('dashboard_status_filter', opt.value);
+              }}
             >
               {opt.label}
             </button>
@@ -93,23 +187,35 @@ export default function DashboardPage() {
         <div className="admin-section">
           {loading ? (
             <div className="loading-state">Cargando tareas...</div>
-          ) : tasks.length === 0 ? (
+          ) : sortedTasks.length === 0 ? (
             <div className="empty-state">No hay tareas que mostrar con estos filtros.</div>
           ) : (
             <div className="tasks-table-wrapper">
               <table className="tasks-table">
                 <thead>
                   <tr>
-                    <th>Tarea</th>
-                    <th>Proyecto</th>
-                    <th>Estado</th>
-                    <th>Prioridad</th>
-                    <th>Asignados</th>
-                    <th>Horas est.</th>
+                    <th className="sortable-th" onClick={() => handleSort('title')}>
+                      Tarea <SortIcon field="title" />
+                    </th>
+                    <th className="sortable-th" onClick={() => handleSort('project')}>
+                      Proyecto <SortIcon field="project" />
+                    </th>
+                    <th className="sortable-th" onClick={() => handleSort('status')}>
+                      Estado <SortIcon field="status" />
+                    </th>
+                    <th className="sortable-th" onClick={() => handleSort('priority')}>
+                      Prioridad <SortIcon field="priority" />
+                    </th>
+                    <th className="sortable-th" onClick={() => handleSort('assignees')}>
+                      Asignados <SortIcon field="assignees" />
+                    </th>
+                    <th className="sortable-th" onClick={() => handleSort('estimatedHours')}>
+                      Horas est. <SortIcon field="estimatedHours" />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {tasks.map((task) => (
+                  {sortedTasks.map((task) => (
                     <tr
                       key={task.id}
                       className="tasks-table-row"

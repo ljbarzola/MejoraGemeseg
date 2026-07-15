@@ -103,6 +103,14 @@ function App() {
           }
         />
         <Route
+          path="/tasks/new"
+          element={
+            <ProtectedLayout>
+              <CreateTaskPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
           path="/admin"
           element={
             <ProtectedLayout>

@@ -198,10 +198,11 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
               <button className="chat-back-btn" onClick={handleBackToList}>←</button>
             )}
             <div className="chat-bot-icon">{getAgentEmoji(currentAgent)}</div>
-            <div>
-              <div className="chat-header-title">
-                {currentAgent?.name || 'Agente GEMESEG'}
-              </div>
+            <div className="chat-header-title-wrapper">
+              <button className="chat-header-title-btn" onClick={() => setShowAgentMenu(!showAgentMenu)}>
+                <span className="chat-header-title">{currentAgent?.name || 'Agente GEMESEG'}</span>
+                <span className="chat-agent-arrow">{showAgentMenu ? '▲' : '▼'}</span>
+              </button>
               <div className="chat-header-context">
                 {showChat
                   ? `${messages.length} mensajes`
@@ -210,40 +211,32 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
                     : 'Selecciona un agente'
                 }
               </div>
+              {showAgentMenu && (
+                <div className="chat-agent-menu">
+                  {defaultAgent && (
+                    <button
+                      className={`chat-agent-option ${activeAgentId === defaultAgent.id ? 'active' : ''}`}
+                      onClick={() => handleSelectAgent(defaultAgent)}
+                    >
+                      <span className="chat-agent-option-name">🤖 {defaultAgent.name}</span>
+                      <span className="chat-agent-option-desc">Agente por defecto</span>
+                    </button>
+                  )}
+                  {agents.filter((a) => a.createdBy !== null).map((agent) => (
+                    <button
+                      key={agent.id}
+                      className={`chat-agent-option ${activeAgentId === agent.id ? 'active' : ''}`}
+                      onClick={() => handleSelectAgent(agent)}
+                    >
+                      <span className="chat-agent-option-name">{getAgentEmoji(agent)} {agent.name}</span>
+                      <span className="chat-agent-option-desc">{agent.scope}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <button className="chat-close" onClick={onClose}>✕</button>
-        </div>
-
-        <div className="chat-agent-bar">
-          <button className="chat-agent-trigger" onClick={() => setShowAgentMenu(!showAgentMenu)}>
-            <span className="chat-agent-icon">🧠</span>
-            <span className="chat-agent-name">{currentAgent?.name || 'Seleccionar agente'}</span>
-            <span className="chat-agent-arrow">{showAgentMenu ? '▲' : '▼'}</span>
-          </button>
-          {showAgentMenu && (
-            <div className="chat-agent-menu">
-              {defaultAgent && (
-                <button
-                  className={`chat-agent-option ${activeAgentId === defaultAgent.id ? 'active' : ''}`}
-                  onClick={() => handleSelectAgent(defaultAgent)}
-                >
-                  <span className="chat-agent-option-name">🤖 {defaultAgent.name}</span>
-                  <span className="chat-agent-option-desc">Agente por defecto</span>
-                </button>
-              )}
-              {agents.filter((a) => a.createdBy !== null).map((agent) => (
-                <button
-                  key={agent.id}
-                  className={`chat-agent-option ${activeAgentId === agent.id ? 'active' : ''}`}
-                  onClick={() => handleSelectAgent(agent)}
-                >
-                  <span className="chat-agent-option-name">{getAgentEmoji(agent)} {agent.name}</span>
-                  <span className="chat-agent-option-desc">{agent.scope}</span>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {!currentAgent ? (

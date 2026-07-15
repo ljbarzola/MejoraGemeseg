@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getTasksByProject, getProject, updateTask } from '../../services/task.service';
 import { getUser } from '../../services/auth.service';
 import type { Task, TaskGrouped } from '../../types/task';
@@ -16,6 +16,7 @@ const NEXT_STATUS: Record<string, string> = {
 export default function KanbanPage() {
   const { id: projectId } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -42,8 +43,9 @@ export default function KanbanPage() {
   };
 
   useEffect(() => {
+    setLoading(true);
     loadData();
-  }, [projectId, navigate]);
+  }, [projectId, location.key]);
 
   const grouped: TaskGrouped = {
     TODO: [],

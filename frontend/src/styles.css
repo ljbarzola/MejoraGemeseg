@@ -988,6 +988,27 @@ body {
   border-bottom: 2px solid #ddd;
 }
 
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+.sortable-th:hover {
+  color: var(--azul-oscuro);
+}
+
+.sort-icon {
+  font-size: 0.75rem;
+  opacity: 0.4;
+  margin-left: 4px;
+}
+
+.sort-icon.sort-active {
+  opacity: 1;
+  color: var(--azul-claro);
+}
+
 .tasks-table td {
   padding: 12px 16px;
   border-bottom: 1px solid var(--gris-claro);
@@ -1737,15 +1758,11 @@ body {
   justify-content: center;
 }
 
-.chat-header-title {
-  font-weight: 700;
-  font-size: 1rem;
-}
-
 .chat-header-context {
   font-size: 0.75rem;
   opacity: 0.8;
   text-transform: capitalize;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .chat-close {
@@ -2562,53 +2579,44 @@ body {
   accent-color: var(--azul-claro);
 }
 
-.chat-agent-bar {
-  display: flex;
-  align-items: center;
-  padding: 8px 20px;
-  background: rgba(255, 255, 255, 0.1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+.chat-header-title-wrapper {
   position: relative;
 }
 
-.chat-agent-trigger {
+.chat-header-title-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.1);
+  padding: 5px 10px;
   color: white;
-  font-size: 0.82rem;
-  font-weight: 600;
   font-family: inherit;
   cursor: pointer;
   transition: background 0.2s;
 }
 
-.chat-agent-trigger:hover {
-  background: rgba(255, 255, 255, 0.2);
+.chat-header-title-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 
-.chat-agent-icon {
-  font-size: 1rem;
-}
-
-.chat-agent-name {
-  white-space: nowrap;
+.chat-header-title {
+  font-weight: 700;
+  font-size: 0.95rem;
 }
 
 .chat-agent-arrow {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   opacity: 0.7;
 }
 
 .chat-agent-menu {
   position: absolute;
-  top: calc(100% + 4px);
-  left: 20px;
-  right: 20px;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 240px;
+  max-width: 320px;
   background: white;
   border: 1px solid var(--gris-claro);
   border-radius: 12px;

@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createTask, getProjectMembers } from '../../services/task.service';
+import { getProjects } from '../../services/project.service';
 import { STATUS_LABELS, STATUS_COLORS } from '../../types/task';
 import type { ProjectMember } from '../../types/task';
 
@@ -28,13 +29,17 @@ type TaskForm = {
 };
 
 export default function CreateTaskPage() {
-  const { id: projectId } = useParams<{ id: string }>();
+  const { id: projectIdParam } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [serverError, setServerError] = useState('');
   const [loading, setLoading] = useState(false);
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [selectedAssignees, setSelectedAssignees] = useState<number[]>([]);
   const [hoursFocused, setHoursFocused] = useState(false);
+  const [projects, setProjects] = useState<{ id: number; name: string }[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(projectIdParam || '');
+
+  const effectiveProjectId = projectIdParam || selectedProjectId;
 
   const {
     register,
@@ -48,10 +53,18 @@ export default function CreateTaskPage() {
   });
 
   useEffect(() => {
-    if (projectId) {
-      getProjectMembers(Number(projectId)).then(setMembers).catch(() => {});
+    if (!projectIdParam) {
+      getProjects({ page: 1 })
+        .then((res) => setProjects(res.data.map((p: any) => ({ id: p.id, name: p.name }))))
+        .catch(() => {});
     }
-  }, [projectId]);
+  }, [projectIdParam]);
+
+  useEffect(() => {
+    if (effectiveProjectId) {
+      getProjectMembers(Number(effectiveProjectId)).then(setMembers).catch(() => {});
+    }
+  }, [effectiveProjectId]);
 
   const toggleAssignee = (userId: number) => {
     setSelectedAssignees((prev) =>
@@ -60,15 +73,18 @@ export default function CreateTaskPage() {
   };
 
   const onSubmit = async (data: TaskForm) => {
-    if (!projectId) return;
+    if (!effectiveProjectId) {
+      setServerError('Selecciona un proyecto');
+      return;
+    }
     setServerError('');
     setLoading(true);
     try {
       const payload: any = { ...data, assigneeIds: selectedAssignees };
       if (!payload.startDate) delete payload.startDate;
       if (!payload.endDate) delete payload.endDate;
-      await createTask(Number(projectId), payload);
-      navigate(`/projects/${projectId}`);
+      await createTask(Number(effectiveProjectId), payload);
+      navigate(`/projects/${effectiveProjectId}`);
     } catch (err: any) {
       const msg =
         err.response?.data?.message ||
@@ -82,8 +98,11 @@ export default function CreateTaskPage() {
 
   return (
     <div className="page-container">
-      <button className="btn-back" onClick={() => navigate(`/projects/${projectId}`)}>
-        &larr; Volver al proyecto
+      <button
+        className="btn-back"
+        onClick={() => effectiveProjectId ? navigate(`/projects/${effectiveProjectId}`) : navigate('/dashboard')}
+      >
+        &larr; {effectiveProjectId ? 'Volver al proyecto' : 'Volver al dashboard'}
       </button>
 
       <div className="page-card">
@@ -95,6 +114,26 @@ export default function CreateTaskPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="auth-form">
           {serverError && (
             <div className="auth-error-banner">{serverError}</div>
+          )}
+
+          {!projectIdParam && (
+            <div className="form-group">
+              <label htmlFor="project">Proyecto *</label>
+              <select
+                id="project"
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                className={!selectedProjectId ? 'input-error' : ''}
+              >
+                <option value="">Seleccionar proyecto...</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              {!selectedProjectId && (
+                <span className="field-error">Debes seleccionar un proyecto</span>
+              )}
+            </div>
           )}
 
           <div className="form-group">
@@ -166,19 +205,22 @@ export default function CreateTaskPage() {
           <div className="form-group">
             <label>Asignar a</label>
             <div className="assignee-chips">
-              {members.map((m) => (
-                <button
-                  key={m.user.id}
-                  type="button"
-                  className={`assignee-chip ${selectedAssignees.includes(m.user.id) ? 'assignee-chip-active' : ''}`}
-                  onClick={() => toggleAssignee(m.user.id)}
-                >
-                  <span className="assignee-chip-avatar">{m.user.fullName.charAt(0)}</span>
-                  {m.user.fullName}
-                </button>
-              ))}
-              {members.length === 0 && (
+              {!effectiveProjectId ? (
+                <span className="assignee-empty">Selecciona un proyecto primero</span>
+              ) : members.length === 0 ? (
                 <span className="assignee-empty">No hay miembros en el proyecto</span>
+              ) : (
+                members.map((m) => (
+                  <button
+                    key={m.user.id}
+                    type="button"
+                    className={`assignee-chip ${selectedAssignees.includes(m.user.id) ? 'assignee-chip-active' : ''}`}
+                    onClick={() => toggleAssignee(m.user.id)}
+                  >
+                    <span className="assignee-chip-avatar">{m.user.fullName.charAt(0)}</span>
+                    {m.user.fullName}
+                  </button>
+                ))
               )}
             </div>
           </div>
@@ -209,7 +251,7 @@ export default function CreateTaskPage() {
             <button
               type="button"
               className="btn-secondary"
-              onClick={() => navigate(`/projects/${projectId}`)}
+              onClick={() => effectiveProjectId ? navigate(`/projects/${effectiveProjectId}`) : navigate('/dashboard')}
             >
               Cancelar
             </button>
