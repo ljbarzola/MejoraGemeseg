@@ -34,6 +34,14 @@ export async function login(data: {
   return res.data;
 }
 
+export async function forgotPassword(data: {
+  email: string;
+  newPassword: string;
+}): Promise<{ message: string }> {
+  const res = await api.post<{ message: string }>('/auth/forgot-password', data);
+  return res.data;
+}
+
 export function saveAuth(auth: AuthResponse) {
   localStorage.setItem('token', auth.token);
   localStorage.setItem('user', JSON.stringify(auth.user));
