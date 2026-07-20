@@ -859,6 +859,23 @@ body {
   background: #dc2626;
 }
 
+.btn-danger {
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
 .tasks-section-header {
   display: flex;
   align-items: center;
@@ -1640,6 +1657,15 @@ body {
 .navbar-link-admin:hover {
   background: #fef2f2;
   color: var(--naranja);
+}
+
+.navbar-link-cacao {
+  color: #606B42;
+}
+
+.navbar-link-cacao:hover {
+  background: #f0f4e8;
+  color: #361F13;
 }
 
 .navbar-user {
@@ -2869,5 +2895,90 @@ body {
     width: 52px;
     height: 52px;
   }
+}
+
+/* Cacao forms */
+.cacao-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.cacao-form .form-row {
+  gap: 20px;
+}
+
+.cacao-form .form-row .form-group {
+  max-width: 50%;
+}
+
+.cacao-form .form-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #718096;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.cacao-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid #e2e8f0;
+  color: #4a5568;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.cacao-back-btn:hover {
+  background: white;
+  border-color: #cbd5e0;
+  color: #2d3748;
+}
+
+/* Unsaved changes dialog */
+.unsaved-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.unsaved-dialog {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.unsaved-dialog h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: #2d3748;
+}
+
+.unsaved-dialog p {
+  margin: 0 0 20px;
+  color: #718096;
+  font-size: 14px;
+}
+
+.unsaved-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 

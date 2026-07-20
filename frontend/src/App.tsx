@@ -15,6 +15,22 @@ import CompanySettingsPage from './pages/admin/CompanySettingsPage';
 import ToolsPage from './pages/tools/ToolsPage';
 import ProfilePage from './pages/profile/ProfilePage';
 import AgentsPage from './pages/admin/AgentsPage';
+import CacaoDashboard from './pages/cacao/CacaoDashboard';
+import SuppliersPage from './pages/cacao/suppliers/SuppliersPage';
+import ClientsPage from './pages/cacao/clients/ClientsPage';
+import ReceptionsList from './pages/cacao/receptions/ReceptionsList';
+import ReceptionForm from './pages/cacao/receptions/ReceptionForm';
+import LotsList from './pages/cacao/lots/LotsList';
+import LotDetail from './pages/cacao/lots/LotDetail';
+import SettlementsList from './pages/cacao/settlements/SettlementsList';
+import SettlementForm from './pages/cacao/settlements/SettlementForm';
+import PriceFixingsList from './pages/cacao/price-fixings/PriceFixingsList';
+import ShipmentsList from './pages/cacao/shipments/ShipmentsList';
+import ShipmentForm from './pages/cacao/shipments/ShipmentForm';
+import PayablesList from './pages/cacao/payables/PayablesList';
+import ReceivablesList from './pages/cacao/receivables/ReceivablesList';
+import QualitiesPage from './pages/cacao/qualities/QualitiesPage';
+import KardexList from './pages/cacao/kardex/KardexList';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/layout/Navbar';
 import ChatFloatingButton from './components/chat/ChatFloatingButton';
@@ -162,6 +178,22 @@ function App() {
             </ProtectedLayout>
           }
         />
+        <Route path="/cacao" element={<ProtectedLayout><CacaoDashboard /></ProtectedLayout>} />
+        <Route path="/cacao/suppliers" element={<ProtectedLayout><SuppliersPage /></ProtectedLayout>} />
+        <Route path="/cacao/clients" element={<ProtectedLayout><ClientsPage /></ProtectedLayout>} />
+        <Route path="/cacao/receptions" element={<ProtectedLayout><ReceptionsList /></ProtectedLayout>} />
+        <Route path="/cacao/receptions/new" element={<ProtectedLayout><ReceptionForm /></ProtectedLayout>} />
+        <Route path="/cacao/lots" element={<ProtectedLayout><LotsList /></ProtectedLayout>} />
+        <Route path="/cacao/lots/:id" element={<ProtectedLayout><LotDetail /></ProtectedLayout>} />
+        <Route path="/cacao/settlements" element={<ProtectedLayout><SettlementsList /></ProtectedLayout>} />
+        <Route path="/cacao/settlements/new" element={<ProtectedLayout><SettlementForm /></ProtectedLayout>} />
+        <Route path="/cacao/price-fixings" element={<ProtectedLayout><PriceFixingsList /></ProtectedLayout>} />
+        <Route path="/cacao/shipments" element={<ProtectedLayout><ShipmentsList /></ProtectedLayout>} />
+        <Route path="/cacao/shipments/new" element={<ProtectedLayout><ShipmentForm /></ProtectedLayout>} />
+        <Route path="/cacao/payables" element={<ProtectedLayout><PayablesList /></ProtectedLayout>} />
+        <Route path="/cacao/receivables" element={<ProtectedLayout><ReceivablesList /></ProtectedLayout>} />
+        <Route path="/cacao/qualities" element={<ProtectedLayout><QualitiesPage /></ProtectedLayout>} />
+        <Route path="/cacao/kardex" element={<ProtectedLayout><KardexList /></ProtectedLayout>} />
       </Routes>
 
       {isAuthenticated() && (
