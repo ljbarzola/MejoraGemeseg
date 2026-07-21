@@ -16,6 +16,7 @@ import ToolsPage from './pages/tools/ToolsPage';
 import ProfilePage from './pages/profile/ProfilePage';
 import AgentsPage from './pages/admin/AgentsPage';
 import CacaoDashboard from './pages/cacao/CacaoDashboard';
+import CacaoHelpGuide from './pages/cacao/CacaoHelpGuide';
 import SuppliersPage from './pages/cacao/suppliers/SuppliersPage';
 import ClientsPage from './pages/cacao/clients/ClientsPage';
 import ReceptionsList from './pages/cacao/receptions/ReceptionsList';
@@ -179,6 +180,7 @@ function App() {
           }
         />
         <Route path="/cacao" element={<ProtectedLayout><CacaoDashboard /></ProtectedLayout>} />
+        <Route path="/cacao/guia" element={<ProtectedLayout><CacaoHelpGuide /></ProtectedLayout>} />
         <Route path="/cacao/suppliers" element={<ProtectedLayout><SuppliersPage /></ProtectedLayout>} />
         <Route path="/cacao/clients" element={<ProtectedLayout><ClientsPage /></ProtectedLayout>} />
         <Route path="/cacao/receptions" element={<ProtectedLayout><ReceptionsList /></ProtectedLayout>} />

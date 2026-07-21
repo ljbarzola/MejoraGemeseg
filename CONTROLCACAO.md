@@ -445,6 +445,7 @@ SALIDA:  nuevo saldo = saldo anterior - cantidad
 - v1.3.0 - Julio 2026 (recepcion con precio opcional + diferencial, liquidacion con desglose descuentos por calidad, validacion lotes duplicados, fijaciones antes de liquidaciones en dashboard, precio venta calculado en embarques)
 - v1.4.0 - Julio 2026 (sistema de conversion de unidades: compra en TON/KG/SACO, venta en SACO, kardex siempre en kg, modelos configurables)
 - v1.5.0 - Julio 2026 (UI informativa: formularios con tarjeta de conversion visual, listados con unidades originales, lotes con unidad de entrada, kardex con columna de unidad original)
+- v1.6.0 - Julio 2026 (guia interactiva del sistema, dashboard mejorado con KPIs y boton de ayuda)
 
 ---
 
@@ -452,6 +453,15 @@ SALIDA:  nuevo saldo = saldo anterior - cantidad
 
 - **NUNCA hacer push sin confirmacion explicita del usuario**
 - Todos los cambios del modulo cacao se mantienen en local hasta que el usuario autorice el push
+
+## Mejoras Recientes (v1.6.0 - Guía del Sistema)
+
+- **CacaoHelpGuide**: Página interactiva `/cacao/guia` con guía paso a paso para nuevos usuarios. Explica cada sección del sistema: Maestros → Recepción → Liquidación → Fijación → Kárdex → Embarque → CxP/CxC.
+- **Flujo visual**: Diagrama que muestra cómo se conectan las secciones: Proveedor → Recepción → Lote → Liquidación → CxP, Lote → Fijación, Lote → Embarque → CxC → Kárdex.
+- **Glosario**: Definiciones de términos clave: Lote, Kárdex, Costo Promedio, Diferencial, Fijación, Liquidación, CxP, CxC, Unidad de Medida, Guía de Remisión.
+- **Tips por sección**: Cada paso incluye un tip práctico para evitar errores comunes.
+- **Dashboard mejorado**: Botón "Guía del Sistema" en el header. KPIs mejorados con conteo de facturas pendientes.
+- **Ruta**: `/cacao/guia` (protegida, requiere autenticación).
 
 ## Mejoras Recientes (v1.5.0 - UI Informativa de Unidades)
 

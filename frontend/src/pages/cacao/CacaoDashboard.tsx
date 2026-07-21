@@ -46,16 +46,34 @@ export default function CacaoDashboard() {
           <p className="page-eyebrow">MÓDULO CACAO</p>
           <h1>Dashboard</h1>
         </div>
+        <button
+          onClick={() => navigate('/cacao/guia')}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#2d3748',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          📖 Guía del Sistema
+        </button>
       </div>
 
       <div className="admin-section">
-        {/* KPIs arriba */}
+        {/* KPIs */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '28px' }}>
           {[
-            { label: 'Inventario', value: fmt(data?.inventoryValue || 0), sub: fmtKg(data?.totalInventoryKg || 0), color: '#2b6cb0', icon: '📦', path: '/cacao/lots' },
-            { label: 'Fijaciones Abiertas', value: fmt(data?.openFixingValue || 0), sub: fmtKg(data?.openFixingKg || 0), color: '#b7791f', icon: '🔒', path: '/cacao/price-fixings' },
-            { label: 'Cuentas por Pagar', value: fmt(data?.totalPayables || 0), sub: 'Pendiente', color: '#e53e3e', icon: '📤', path: '/cacao/payables' },
-            { label: 'Cuentas por Cobrar', value: fmt(data?.totalReceivables || 0), sub: 'Pendiente', color: '#38a169', icon: '📥', path: '/cacao/receivables' },
+            { label: 'Valor Inventario', value: fmt(data?.inventoryValue || 0), sub: fmtKg(data?.totalInventoryKg || 0), color: '#2b6cb0', icon: '📦', path: '/cacao/lots' },
+            { label: 'Exposición Sin Fijar', value: fmt(data?.openFixingValue || 0), sub: fmtKg(data?.openFixingKg || 0) + ' pendientes', color: '#b7791f', icon: '⚠️', path: '/cacao/price-fixings' },
+            { label: 'CxP Pendiente', value: fmt(data?.totalPayables || 0), sub: data?.payableCount ? `${data.payableCount} FACTURAS` : 'SALDO', color: '#e53e3e', icon: '📤', path: '/cacao/payables' },
+            { label: 'CxC Pendiente', value: fmt(data?.totalReceivables || 0), sub: data?.receivableCount ? `${data.receivableCount} FACTURAS` : 'SALDO', color: '#38a169', icon: '📥', path: '/cacao/receivables' },
           ].map((kpi) => (
             <div
               key={kpi.path}
@@ -100,6 +118,7 @@ export default function CacaoDashboard() {
               { label: 'Calidades', desc: 'Configurar calidades y descuentos', path: '/cacao/qualities', icon: ICONS.qualities },
               { label: 'Proveedores', desc: 'Directorio de proveedores', path: '/cacao/suppliers', icon: ICONS.suppliers },
               { label: 'Clientes', desc: 'Directorio de clientes', path: '/cacao/clients', icon: ICONS.clients },
+              { label: '📖 Guía', desc: 'Cómo usar el sistema', path: '/cacao/guia', icon: { d: 'M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z', color: '#2d3748' } },
             ].map((item) => (
               <button
                 key={item.path}

@@ -45,6 +45,8 @@ export class CacaoDashboardService {
       openFixingKg,
       totalPayables,
       totalReceivables,
+      payableCount: payables.length,
+      receivableCount: receivables.length,
       recentShipments,
     };
   }
