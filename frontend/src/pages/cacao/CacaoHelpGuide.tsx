@@ -238,7 +238,7 @@ export default function CacaoHelpGuide() {
             </div>
             {step.path && (
               <button
-                onClick={() => navigate(step.path)}
+                onClick={() => navigate(step.path, { state: { from: '/cacao/guia' } })}
                 style={{
                   padding: '8px 16px',
                   backgroundColor: step.color,
@@ -272,7 +272,7 @@ export default function CacaoHelpGuide() {
                   <span style={{ color: '#718096' }}>{d.desc}</span>
                   {'path' in d && d.path && (
                     <span
-                      onClick={() => navigate(d.path)}
+                      onClick={() => navigate(d.path, { state: { from: '/cacao/guia' } })}
                       style={{ color: step.color, cursor: 'pointer', marginLeft: '6px', fontWeight: 600, textDecoration: 'underline' }}
                     >
                       Ver →

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getLotById } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
 
@@ -10,6 +10,7 @@ const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
 export default function LotDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [lot, setLot] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -36,7 +37,7 @@ export default function LotDetail() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/cacao/lots')}>← Volver</button>
+          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao/lots')}>← Volver</button>
           <div>
             <p className="page-eyebrow">CACAO</p>
             <h1>{lot.code}</h1>

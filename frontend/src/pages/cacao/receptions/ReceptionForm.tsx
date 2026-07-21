@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getSuppliers, getQualities, createReception, getNextLotCode, getUnitConfig } from '../../../services/cacao.service';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
@@ -8,6 +8,7 @@ const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
 
 export default function ReceptionForm() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [qualities, setQualities] = useState<any[]>([]);
   const [unitConfigs, setUnitConfigs] = useState<any[]>([]);
@@ -125,7 +126,7 @@ export default function ReceptionForm() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => confirmNavigate(() => navigate('/cacao/receptions'))}>← Volver</button>
+          <button className="cacao-back-btn" onClick={() => confirmNavigate(() => navigate(location.state?.from || '/cacao/receptions'))}>← Volver</button>
           <div>
             <p className="page-eyebrow">CACAO</p>
             <h1>Nueva Recepción</h1>

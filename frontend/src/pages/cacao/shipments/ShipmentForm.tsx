@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getClients, getLots, createShipment, getUnitConfig } from '../../../services/cacao.service';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
@@ -8,6 +8,7 @@ const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
 
 export default function ShipmentForm() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [clients, setClients] = useState<any[]>([]);
   const [lots, setLots] = useState<any[]>([]);
   const [unitConfigs, setUnitConfigs] = useState<any[]>([]);
@@ -164,7 +165,7 @@ export default function ShipmentForm() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => confirmNavigate(() => navigate('/cacao/shipments'))}>← Volver</button>
+          <button className="cacao-back-btn" onClick={() => confirmNavigate(() => navigate(location.state?.from || '/cacao/shipments'))}>← Volver</button>
           <div>
             <p className="page-eyebrow">CACAO</p>
             <h1>Nuevo Embarque</h1>

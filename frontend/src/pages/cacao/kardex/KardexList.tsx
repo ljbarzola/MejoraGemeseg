@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getKardex, getLots } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
 
@@ -9,6 +9,7 @@ const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
 
 export default function KardexList() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [entries, setEntries] = useState<any[]>([]);
   const [lots, setLots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +31,7 @@ export default function KardexList() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/cacao')}>← Volver</button>
+          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao')}>← Volver</button>
           <div>
             <p className="page-eyebrow">CACAO</p>
             <h1>Kardex de Inventario</h1>

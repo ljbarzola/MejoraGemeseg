@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getReceivables, receiveReceivable } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
 
 export default function ReceivablesList() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [receivables, setReceivables] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -48,7 +49,7 @@ export default function ReceivablesList() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/cacao')}>← Volver</button>
+          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao')}>← Volver</button>
           <div>
             <p className="page-eyebrow">CACAO</p>
             <h1>Cuentas por Cobrar</h1>

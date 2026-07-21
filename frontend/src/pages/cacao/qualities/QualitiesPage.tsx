@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getQualities, createQuality, updateQuality, deleteQuality } from '../../../services/cacao.service';
 
 export default function QualitiesPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [qualities, setQualities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -72,7 +73,7 @@ export default function QualitiesPage() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/cacao')}>← Volver</button>
+          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao')}>← Volver</button>
           <div>
             <p className="page-eyebrow">CACAO</p>
             <h1>Calidades del Cacao</h1>

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getClients, createClient, updateClient, deleteClient } from '../../../services/cacao.service';
 
 export default function ClientsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -58,7 +59,7 @@ export default function ClientsPage() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/cacao')}>← Volver</button>
+          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao')}>← Volver</button>
           <div>
             <p className="page-eyebrow">CACAO</p>
             <h1>Clientes</h1>

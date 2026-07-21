@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getSuppliers, getLots, createSettlement } from '../../../services/cacao.service';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
@@ -7,6 +7,7 @@ const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
 
 export default function SettlementForm() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [allLots, setAllLots] = useState<any[]>([]);
   const [availableLots, setAvailableLots] = useState<any[]>([]);
@@ -205,7 +206,7 @@ export default function SettlementForm() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => confirmNavigate(() => navigate('/cacao/settlements'))}>← Volver</button>
+          <button className="cacao-back-btn" onClick={() => confirmNavigate(() => navigate(location.state?.from || '/cacao/settlements'))}>← Volver</button>
           <div>
             <p className="page-eyebrow">CACAO</p>
             <h1>Nueva Liquidación</h1>

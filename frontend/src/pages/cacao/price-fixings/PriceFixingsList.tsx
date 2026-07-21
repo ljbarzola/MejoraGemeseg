@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getPriceFixings, createPriceFixing, fixPrice, getLots } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
 
 export default function PriceFixingsList() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [fixings, setFixings] = useState<any[]>([]);
   const [provisionalLots, setProvisionalLots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,7 +88,7 @@ export default function PriceFixingsList() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/cacao')}>← Volver</button>
+          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao')}>← Volver</button>
           <div>
             <p className="page-eyebrow">CACAO</p>
             <h1>Fijaciones de Precio</h1>
