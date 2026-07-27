@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
@@ -36,6 +36,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/layout/Navbar';
 import ChatFloatingButton from './components/chat/ChatFloatingButton';
 import ChatDrawer from './components/chat/ChatDrawer';
+import CacaoHelpMenu from './components/cacao/CacaoHelpMenu';
 import { CompanyProvider } from './contexts/ThemeContext';
 import { isAuthenticated } from './services/auth.service';
 
@@ -46,6 +47,12 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
       {children}
     </ProtectedRoute>
   );
+}
+
+function CacaoHelpWrapper() {
+  const { pathname } = useLocation();
+  if (!pathname.startsWith('/cacao')) return null;
+  return <CacaoHelpMenu />;
 }
 
 function App() {
@@ -202,6 +209,7 @@ function App() {
         <>
           <ChatFloatingButton onClick={() => setChatOpen(true)} />
           <ChatDrawer isOpen={chatOpen} onClose={() => setChatOpen(false)} />
+          <CacaoHelpWrapper />
         </>
       )}
       </CompanyProvider>

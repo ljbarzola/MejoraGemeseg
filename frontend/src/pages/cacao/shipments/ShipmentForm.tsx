@@ -5,6 +5,7 @@ import { getClients, getLots, createShipment, getUnitConfig } from '../../../ser
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FULL: Record<string, string> = { TON: 'Toneladas', KG: 'Kilogramos', SACO: 'Sacos' };
 const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
+function round4(n: number) { return Math.round(n * 10000) / 10000; }
 
 export default function ShipmentForm() {
   const navigate = useNavigate();
@@ -208,7 +209,7 @@ export default function ShipmentForm() {
           <div className="form-row">
             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
               <label>Precio Venta ($/kg) * <span style={{ fontSize: '11px', color: '#718096', fontWeight: 400 }}>(calculado, editable)</span></label>
-              <input type="number" step="0.01" min="0" value={form.salePrice} onChange={(e) => setField('salePrice', e.target.value)} />
+              <input type="number" step="0.0001" min="0" value={form.salePrice} onChange={(e) => setField('salePrice', e.target.value)} />
               <div style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>Se auto-calcula del precio fijo + margen, pero puede editarlo</div>
             </div>
           </div>
@@ -220,7 +221,7 @@ export default function ShipmentForm() {
           </div>
           {selectedLots.map((sl, i) => {
             const lot = lots.find((l) => l.id === sl.lotId);
-            const quantityKg = (Number(sl.quantity) || 0) * unitFactor;
+            const quantityKg = round4((Number(sl.quantity) || 0) * unitFactor);
             const exceeds = lot && quantityKg > lot.netWeight;
             const receptionUnit = lot?.receptions?.[0]?.unitOfMeasure;
             return (
@@ -238,7 +239,8 @@ export default function ShipmentForm() {
                       );
                     })}
                   </select>
-                  <input type="number" step="0.01" min="0" placeholder={`Cant. ${unitAbbr}`} value={sl.quantity} onChange={(e) => updateLot(i, 'quantity', e.target.value)} style={{ flex: 1, borderColor: exceeds ? '#e53e3e' : undefined }} />
+                  <input type="number" step="0.0001" min="0" placeholder={`Cant. ${unitAbbr}`} value={sl.quantity} onChange={(e) => updateLot(i, 'quantity', e.target.value)} style={{ flex: 1, borderColor: exceeds ? '#e53e3e' : undefined }} />
+                  {lot && <button type="button" className="btn-secondary" style={{ fontSize: '11px', padding: '4px 8px', whiteSpace: 'nowrap' }} onClick={() => updateLot(i, 'quantity', String(round4(lot.netWeight / unitFactor)))}>Usar todo</button>}
                   <span style={{ fontSize: '13px', color: '#718096', minWidth: '120px', textAlign: 'right' }}>
                     = {quantityKg.toFixed(0)} kg
                   </span>
@@ -248,7 +250,7 @@ export default function ShipmentForm() {
                 {/* Per-lot conversion display */}
                 {isNotKg && Number(sl.quantity) > 0 && lot && (
                   <div style={{ fontSize: '12px', color: '#2b6cb0', marginLeft: '8px', marginTop: '4px' }}>
-                    {Number(sl.quantity)} {unitAbbr} × {unitFactor} kg/{unitAbbr} = <strong>{quantityKg.toFixed(2)} kg</strong>
+                    {round4(Number(sl.quantity))} {unitAbbr} × {unitFactor} kg/{unitAbbr} = <strong>{quantityKg.toFixed(2)} kg</strong>
                     {receptionUnit && receptionUnit !== form.unitOfMeasure && (
                       <span style={{ color: '#718096', marginLeft: '8px' }}>(lote recibido en {UNIT_ABBR[receptionUnit] || receptionUnit})</span>
                     )}

@@ -4,6 +4,15 @@ import { getSuppliers, getLots, createSettlement } from '../../../services/cacao
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
+function round4(n: number) { return Math.round(n * 10000) / 10000; }
+
+interface LotSelection {
+  lotId: number;
+  quantity: string;
+  humidityPct: number | null;
+  impurityPct: number | null;
+  qualityPunishment: number;
+}
 
 export default function SettlementForm() {
   const navigate = useNavigate();
@@ -20,7 +29,7 @@ export default function SettlementForm() {
     periodStart: '',
     periodEnd: '',
   });
-  const [selectedLots, setSelectedLots] = useState<{ lotId: number; quantity: string }[]>([]);
+  const [selectedLots, setSelectedLots] = useState<LotSelection[]>([]);
   const isDirty = useRef(false);
   const [showUnsaved, setShowUnsaved] = useState(false);
   const pendingNav = useRef<(() => void) | null>(null);
@@ -31,7 +40,6 @@ export default function SettlementForm() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Auto-filter lots by supplier and period
   useEffect(() => {
     if (!form.supplierId) {
       setAvailableLots([]);
@@ -53,12 +61,17 @@ export default function SettlementForm() {
     }
     setAvailableLots(filtered);
 
-    // Auto-add lots that aren't already selected
     if (filtered.length > 0) {
       const currentIds = selectedLots.map(sl => sl.lotId).filter(Boolean);
       const newLots = filtered.filter((l: any) => !currentIds.includes(l.id));
       if (newLots.length > 0 && currentIds.length === 0) {
-        setSelectedLots(newLots.map((l: any) => ({ lotId: l.id, quantity: l.netWeight.toString() })));
+        setSelectedLots(newLots.map((l: any) => ({
+          lotId: l.id,
+          quantity: l.netWeight.toString(),
+          humidityPct: null,
+          impurityPct: null,
+          qualityPunishment: 0,
+        })));
         isDirty.current = true;
       }
     }
@@ -88,14 +101,37 @@ export default function SettlementForm() {
 
   function addLot() {
     isDirty.current = true;
-    setSelectedLots([...selectedLots, { lotId: 0, quantity: '' }]);
+    setSelectedLots([...selectedLots, { lotId: 0, quantity: '', humidityPct: null, impurityPct: null, qualityPunishment: 0 }]);
   }
 
   function updateLot(index: number, field: string, value: any) {
     isDirty.current = true;
     const updated = [...selectedLots];
-    (updated[index] as any)[field] = field === 'lotId' ? Number(value) : value;
+    if (field === 'lotId') {
+      const lotId = Number(value);
+      updated[index].lotId = lotId;
+      const lot = allLots.find((l: any) => l.id === lotId);
+      if (lot?.quality) {
+        updated[index].humidityPct = lot.quality.humidityDiscount;
+        updated[index].impurityPct = lot.quality.impurityDiscount;
+        updated[index].qualityPunishment = 0;
+      }
+    } else {
+      (updated[index] as any)[field] = value;
+    }
     setSelectedLots(updated);
+  }
+
+  function resetDiscounts(index: number) {
+    isDirty.current = true;
+    const lot = allLots.find((l: any) => l.id === selectedLots[index].lotId);
+    if (lot?.quality) {
+      const updated = [...selectedLots];
+      updated[index].humidityPct = lot.quality.humidityDiscount;
+      updated[index].impurityPct = lot.quality.impurityDiscount;
+      updated[index].qualityPunishment = 0;
+      setSelectedLots(updated);
+    }
   }
 
   function removeLot(index: number) {
@@ -103,18 +139,21 @@ export default function SettlementForm() {
     setSelectedLots(selectedLots.filter((_, i) => i !== index));
   }
 
-  // Calculate discount breakdown per lot
-  function getLotBreakdown(sl: { lotId: number; quantity: string }) {
+  function getLotBreakdown(sl: LotSelection) {
     const lot = allLots.find((l: any) => l.id === sl.lotId);
     if (!lot || !lot.quality) return null;
     const qty = Number(sl.quantity) || 0;
     const q = lot.quality;
-    const humidityDiscount = qty * (q.humidityDiscount / 100);
-    const impurityDiscount = qty * (q.impurityDiscount / 100);
-    const totalDiscount = humidityDiscount + impurityDiscount;
-    const netWeightAfterDiscount = qty - totalDiscount;
+    const hPct = sl.humidityPct ?? q.humidityDiscount;
+    const iPct = sl.impurityPct ?? q.impurityDiscount;
+    const humidityDiscount = round4(qty * (hPct / 100));
+    const impurityDiscount = round4(qty * (iPct / 100));
+    const totalDiscount = round4(humidityDiscount + impurityDiscount);
+    const netWeightAfterDiscount = round4(qty - totalDiscount);
     const avgCost = lot.averageCost || 0;
-    const lotAmount = netWeightAfterDiscount * avgCost;
+    const punishment = sl.qualityPunishment || 0;
+    const effectiveCost = Math.max(0, avgCost - punishment);
+    const lotAmount = round4(netWeightAfterDiscount * effectiveCost);
     const receptionUnit = lot.receptions?.[0]?.unitOfMeasure || null;
     let origQty = null;
     if (receptionUnit && receptionUnit !== 'KG') {
@@ -125,13 +164,17 @@ export default function SettlementForm() {
       code: lot.code,
       qualityName: q.name,
       grossWeight: qty,
-      humidityDiscountPct: q.humidityDiscount,
+      humidityPct: hPct,
       humidityDiscountKg: humidityDiscount,
-      impurityDiscountPct: q.impurityDiscount,
+      defaultHumidityPct: q.humidityDiscount,
+      impurityPct: iPct,
       impurityDiscountKg: impurityDiscount,
+      defaultImpurityPct: q.impurityDiscount,
+      qualityPunishment: punishment,
       totalDiscountKg: totalDiscount,
       netWeightAfterDiscount,
       avgCost,
+      effectiveCost,
       lotAmount,
       hasFixedPrice: q.isFixedPrice,
       fixedPrice: q.fixedPrice,
@@ -142,13 +185,13 @@ export default function SettlementForm() {
 
   const selectedLotBreakdowns = selectedLots
     .filter(sl => sl.lotId && Number(sl.quantity) > 0)
-    .map(getLotBreakdown)
-    .filter(Boolean);
+    .map((sl, i) => ({ breakdown: getLotBreakdown(sl), index: i }))
+    .filter((x) => x.breakdown);
 
-  const totalGrossWeight = selectedLotBreakdowns.reduce((sum, b) => sum + (b?.grossWeight || 0), 0);
-  const totalDiscountKg = selectedLotBreakdowns.reduce((sum, b) => sum + (b?.totalDiscountKg || 0), 0);
-  const totalNetWeight = selectedLotBreakdowns.reduce((sum, b) => sum + (b?.netWeightAfterDiscount || 0), 0);
-  const totalAmount = selectedLotBreakdowns.reduce((sum, b) => sum + (b?.lotAmount || 0), 0);
+  const totalGrossWeight = selectedLotBreakdowns.reduce((sum, x) => sum + (x.breakdown?.grossWeight || 0), 0);
+  const totalDiscountKg = selectedLotBreakdowns.reduce((sum, x) => sum + (x.breakdown?.totalDiscountKg || 0), 0);
+  const totalNetWeight = selectedLotBreakdowns.reduce((sum, x) => sum + (x.breakdown?.netWeightAfterDiscount || 0), 0);
+  const totalAmount = selectedLotBreakdowns.reduce((sum, x) => sum + (x.breakdown?.lotAmount || 0), 0);
 
   async function handleSubmit() {
     if (!form.supplierId) { setError('El proveedor es requerido'); return; }
@@ -157,7 +200,6 @@ export default function SettlementForm() {
       setError('Debe tener al menos un lote seleccionado');
       return;
     }
-    // Validate no duplicate lots
     const lotIds = selectedLots.filter(sl => sl.lotId).map(sl => sl.lotId);
     const uniqueLotIds = new Set(lotIds);
     if (lotIds.length !== uniqueLotIds.size) {
@@ -272,7 +314,8 @@ export default function SettlementForm() {
                           <option key={l.id} value={l.id}>{l.code} ({l.netWeight} kg - ${l.averageCost.toFixed(2)}/kg)</option>
                         ))}
                     </select>
-                    <input type="number" step="0.01" min="0" max={lot?.netWeight || 99999} placeholder="Cantidad kg" value={sl.quantity} onChange={(e) => updateLot(i, 'quantity', e.target.value)} style={{ flex: 1, borderColor: exceeds ? '#e53e3e' : undefined }} />
+                    <input type="number" step="0.0001" min="0" max={lot?.netWeight || 99999} placeholder="Cantidad kg" value={sl.quantity} onChange={(e) => updateLot(i, 'quantity', e.target.value)} style={{ flex: 1, borderColor: exceeds ? '#e53e3e' : undefined }} />
+                    {lot && <button type="button" className="btn-secondary" style={{ fontSize: '11px', padding: '4px 8px', whiteSpace: 'nowrap' }} onClick={() => updateLot(i, 'quantity', String(round4(lot.netWeight)))}>Usar todo</button>}
                     <button className="btn-danger-sm" onClick={() => removeLot(i)}>✕</button>
                     {isDuplicate && <span style={{ color: '#e53e3e', fontSize: '11px', fontWeight: 700 }}>Duplicado</span>}
                     {exceeds && <span style={{ color: '#e53e3e', fontSize: '11px', fontWeight: 700 }}>Excede {lot.netWeight}kg</span>}
@@ -282,47 +325,95 @@ export default function SettlementForm() {
             </>
           )}
 
-          {/* Discount Breakdown per lot */}
           {selectedLotBreakdowns.length > 0 && (
             <>
-              <div className="form-section-title">Desglose por Lote (Descuentos de Calidad)</div>
-              <div className="tasks-table-wrapper">
+              <div className="form-section-title">Desglose por Lote (Descuentos Editables)</div>
+              <div style={{ padding: '10px 14px', backgroundColor: '#fffbeb', border: '1px solid #f6e05e', borderRadius: '8px', fontSize: '12px', color: '#975a16', marginBottom: '12px' }}>
+                <strong>💡</strong> Los descuentos de humedad e impurezas vienen prellenados desde la calidad, pero puede editarlos por lote. El "Castigo Calidad" es una deducción adicional en $/kg.
+              </div>
+              <div className="tasks-table-wrapper" style={{ overflowX: 'auto' }}>
                 <table className="tasks-table">
                   <thead>
                     <tr>
                       <th>Lote</th>
                       <th>Calidad</th>
                       <th>Peso (kg)</th>
-                      <th>Unidad Orig.</th>
-                      <th>Humedad</th>
-                      <th>Impurezas</th>
+                      <th>Humedad %</th>
+                      <th>Impurezas %</th>
+                      <th>Castigo $/kg</th>
                       <th>Desc. Total</th>
                       <th>Peso Neto</th>
                       <th>Precio/kg</th>
                       <th>Subtotal</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedLotBreakdowns.map((b, i) => b && (
+                    {selectedLotBreakdowns.map(({ breakdown: b, index: i }) => b && (
                       <tr key={i}>
                         <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{b.code}</td>
                         <td>{b.qualityName}</td>
                         <td>{b.grossWeight.toLocaleString()} kg</td>
                         <td>
-                          {b.origQty ? (
-                            <span style={{ fontSize: '11px', color: '#2b6cb0' }}>
-                              {b.grossWeight.toLocaleString()} kg = {b.origQty.value} {b.origQty.abbr}
-                            </span>
-                          ) : (
-                            <span style={{ color: '#a0aec0', fontSize: '11px' }}>KG</span>
-                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max="30"
+                              value={b.humidityPct}
+                              onChange={(e) => updateLot(i, 'humidityPct', parseFloat(e.target.value) || 0)}
+                              style={{ width: '60px', padding: '4px 6px', fontSize: '12px', border: b.humidityPct !== b.defaultHumidityPct ? '2px solid #b7791f' : '1px solid #e2e8f0', borderRadius: '4px' }}
+                            />
+                            <span style={{ fontSize: '11px', color: '#718096' }}>%</span>
+                          </div>
+                          <div style={{ fontSize: '10px', color: '#a0aec0' }}>-{b.humidityDiscountKg.toFixed(1)} kg</div>
                         </td>
-                        <td style={{ color: '#b7791f' }}>-{b.humidityDiscountPct}% (-{b.humidityDiscountKg.toFixed(1)}kg)</td>
-                        <td style={{ color: '#b7791f' }}>-{b.impurityDiscountPct}% (-{b.impurityDiscountKg.toFixed(1)}kg)</td>
-                        <td style={{ color: '#e53e3e', fontWeight: 600 }}>-{b.totalDiscountKg.toFixed(1)}kg</td>
-                        <td style={{ fontWeight: 700 }}>{b.netWeightAfterDiscount.toFixed(1)}kg</td>
-                        <td>{b.hasFixedPrice ? `$${b.fixedPrice?.toFixed(2)}` : `$${b.avgCost.toFixed(2)}`}</td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max="20"
+                              value={b.impurityPct}
+                              onChange={(e) => updateLot(i, 'impurityPct', parseFloat(e.target.value) || 0)}
+                              style={{ width: '60px', padding: '4px 6px', fontSize: '12px', border: b.impurityPct !== b.defaultImpurityPct ? '2px solid #b7791f' : '1px solid #e2e8f0', borderRadius: '4px' }}
+                            />
+                            <span style={{ fontSize: '11px', color: '#718096' }}>%</span>
+                          </div>
+                          <div style={{ fontSize: '10px', color: '#a0aec0' }}>-{b.impurityDiscountKg.toFixed(1)} kg</div>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ fontSize: '11px', color: '#718096' }}>$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={b.qualityPunishment}
+                              onChange={(e) => updateLot(i, 'qualityPunishment', parseFloat(e.target.value) || 0)}
+                              style={{ width: '65px', padding: '4px 6px', fontSize: '12px', border: b.qualityPunishment > 0 ? '2px solid #e53e3e' : '1px solid #e2e8f0', borderRadius: '4px' }}
+                            />
+                          </div>
+                        </td>
+                        <td style={{ color: '#e53e3e', fontWeight: 600 }}>-{b.totalDiscountKg.toFixed(1)} kg</td>
+                        <td style={{ fontWeight: 700 }}>{b.netWeightAfterDiscount.toFixed(1)} kg</td>
+                        <td>
+                          ${b.effectiveCost.toFixed(2)}
+                          {b.qualityPunishment > 0 && <div style={{ fontSize: '10px', color: '#e53e3e' }}>(-${b.qualityPunishment} castigo)</div>}
+                        </td>
                         <td style={{ fontWeight: 700, color: '#276749' }}>${b.lotAmount.toFixed(2)}</td>
+                        <td>
+                          <button
+                            type="button"
+                            onClick={() => resetDiscounts(i)}
+                            title="Restablecer descuentos de calidad"
+                            style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '4px', padding: '4px 6px', cursor: 'pointer', fontSize: '11px', color: '#718096' }}
+                          >
+                            ↺
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -331,7 +422,6 @@ export default function SettlementForm() {
             </>
           )}
 
-          {/* Total summary */}
           <div style={{
             marginTop: '16px',
             padding: '20px 24px',

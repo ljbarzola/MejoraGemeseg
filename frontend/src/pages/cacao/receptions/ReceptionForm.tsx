@@ -5,6 +5,7 @@ import { getSuppliers, getQualities, createReception, getNextLotCode, getUnitCon
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FULL: Record<string, string> = { TON: 'Toneladas', KG: 'Kilogramos', SACO: 'Sacos' };
 const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
+function round4(n: number) { return Math.round(n * 10000) / 10000; }
 
 export default function ReceptionForm() {
   const navigate = useNavigate();
@@ -79,10 +80,10 @@ export default function ReceptionForm() {
   const unitFactor = getUnitFactor();
   const grossWeightNum = parseFloat(form.grossWeight) || 0;
   const tareNum = parseFloat(form.tare) || 0;
-  const netWeightInUnit = grossWeightNum - tareNum;
-  const netWeightKg = netWeightInUnit * unitFactor;
-  const grossWeightKg = grossWeightNum * unitFactor;
-  const tareKg = tareNum * unitFactor;
+  const netWeightInUnit = round4(grossWeightNum - tareNum);
+  const netWeightKg = round4(netWeightInUnit * unitFactor);
+  const grossWeightKg = round4(grossWeightNum * unitFactor);
+  const tareKg = round4(tareNum * unitFactor);
 
   const priceLabel = form.isFixedPrice ? 'Precio Fijo ($/kg)' : 'Precio Provisional ($/kg)';
   const unitAbbr = UNIT_ABBR[form.unitOfMeasure] || 'kg';
@@ -210,11 +211,11 @@ export default function ReceptionForm() {
           <div className="form-row">
             <div className="form-group">
               <label>Peso Bruto ({unitAbbr}) *</label>
-              <input type="number" step="0.01" min="0" value={form.grossWeight} onChange={(e) => setField('grossWeight', e.target.value)} placeholder={`Ej: ${form.unitOfMeasure === 'TON' ? '1.5' : form.unitOfMeasure === 'SACO' ? '20' : '1500'}`} />
+              <input type="number" step="0.0001" min="0" value={form.grossWeight} onChange={(e) => setField('grossWeight', e.target.value)} placeholder={`Ej: ${form.unitOfMeasure === 'TON' ? '1.5' : form.unitOfMeasure === 'SACO' ? '20' : '1500'}`} />
             </div>
             <div className="form-group">
               <label>Tara ({unitAbbr})</label>
-              <input type="number" step="0.01" min="0" value={form.tare} onChange={(e) => setField('tare', e.target.value)} placeholder={`Ej: ${form.unitOfMeasure === 'TON' ? '0.05' : form.unitOfMeasure === 'SACO' ? '1' : '50'}`} />
+              <input type="number" step="0.0001" min="0" value={form.tare} onChange={(e) => setField('tare', e.target.value)} placeholder={`Ej: ${form.unitOfMeasure === 'TON' ? '0.05' : form.unitOfMeasure === 'SACO' ? '1' : '50'}`} />
             </div>
           </div>
 
@@ -300,11 +301,11 @@ export default function ReceptionForm() {
           <div className="form-row">
             <div className="form-group">
               <label>Humedad %</label>
-              <input type="number" step="0.1" min="0" max="30" value={form.humidity} onChange={(e) => setField('humidity', e.target.value)} />
+              <input type="number" step="0.0001" min="0" max="30" value={form.humidity} onChange={(e) => setField('humidity', e.target.value)} />
             </div>
             <div className="form-group">
               <label>Impurezas %</label>
-              <input type="number" step="0.1" min="0" max="20" value={form.impurities} onChange={(e) => setField('impurities', e.target.value)} />
+              <input type="number" step="0.0001" min="0" max="20" value={form.impurities} onChange={(e) => setField('impurities', e.target.value)} />
             </div>
           </div>
 
