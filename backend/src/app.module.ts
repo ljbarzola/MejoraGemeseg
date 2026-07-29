@@ -8,8 +8,9 @@ import { QueueModule } from './modules/queue/queue.module';
 import { ToolsModule } from './modules/tools/tools.module';
 import { AgentsModule } from './modules/agents/agents.module';
 import { CompaniesModule } from './modules/companies/companies.module';
+import { CacaoModule } from './modules/cacao/cacao.module';
 
 @Module({
-  imports: [AuthModule, UsersModule, ProjectsModule, TasksModule, AiModule, QueueModule, ToolsModule, AgentsModule, CompaniesModule],
+  imports: [AuthModule, UsersModule, ProjectsModule, TasksModule, AiModule, QueueModule, ToolsModule, AgentsModule, CompaniesModule, CacaoModule],
 })
 export class AppModule {}

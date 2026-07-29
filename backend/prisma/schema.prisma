@@ -262,3 +262,244 @@ model ToolAuditLog {
   @@index([assignmentId])
   @@index([createdAt])
 }
+
+// ─── CACAO MODULE ───────────────────────────────────────────
+
+model CacaoSupplier {
+  id           Int      @id @default(autoincrement())
+  name         String
+  contact      String?
+  phone        String?
+  paymentTerms String?
+  bank         String?
+  companyId    Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  receptions   CacaoReception[]
+  settlements  CacaoSettlement[]
+  payables     CacaoPayable[]
+}
+
+model CacaoClient {
+  id        Int      @id @default(autoincrement())
+  name      String
+  country   String?
+  contact   String?
+  email     String?
+  phone     String?
+  companyId Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  shipments    CacaoShipment[]
+  receivables  CacaoReceivable[]
+}
+
+model CacaoQuality {
+  id                Int      @id @default(autoincrement())
+  name              String   @unique
+  humidityDiscount  Float    @default(7)
+  impurityDiscount  Float    @default(1)
+  isFixedPrice      Boolean  @default(false)
+  fixedPrice        Float?
+  lots              CacaoLot[]
+}
+
+model CacaoLot {
+  id           Int      @id @default(autoincrement())
+  code         String   @unique
+  qualityId    Int
+  quality      CacaoQuality @relation(fields: [qualityId], references: [id])
+  netWeight    Float
+  averageCost  Float    @default(0)
+  differential Float?   // Diferencial pactado ($/T) - viaja dormido hasta fijacion
+  status       String   @default("OPEN")
+  companyId    Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  receptions   CacaoReception[]
+  kardex       CacaoKardex[]
+  settlements  CacaoSettlementLot[]
+  shipments    CacaoShipmentLot[]
+  priceFixings CacaoPriceFixing[]
+}
+
+model CacaoReception {
+  id               Int      @id @default(autoincrement())
+  date             DateTime
+  supplierId       Int
+  supplier         CacaoSupplier @relation(fields: [supplierId], references: [id])
+  guideNumber      String
+  unitOfMeasure    String   @default("KG") // TON, KG, SACO
+  grossWeight      Float
+  tare             Float    @default(0)
+  netWeight        Float
+  humidity         Float    @default(0)
+  impurities       Float    @default(0)
+  provisionalPrice Float    @default(0)
+  differential     Float?   // Diferencial pactado ($/T) - viaja dormido hasta fijacion
+  qualityId        Int?
+  lotId            Int?
+  lot              CacaoLot? @relation(fields: [lotId], references: [id])
+  companyId        Int
+  createdBy        Int
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model CacaoSettlement {
+  id              Int      @id @default(autoincrement())
+  date            DateTime
+  supplierId      Int
+  supplier        CacaoSupplier @relation(fields: [supplierId], references: [id])
+  periodStart     DateTime
+  periodEnd       DateTime
+  totalNetWeight  Float    @default(0)
+  totalDeductions Float    @default(0)
+  finalPrice      Float    @default(0)
+  totalAmount     Float    @default(0)
+  status          String   @default("PENDING")
+  companyId       Int
+  createdBy       Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  lots            CacaoSettlementLot[]
+  payable         CacaoPayable?
+}
+
+model CacaoSettlementLot {
+  id           Int      @id @default(autoincrement())
+  settlementId Int
+  settlement   CacaoSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  lotId        Int
+  lot          CacaoLot @relation(fields: [lotId], references: [id])
+  quantity     Float
+  unitCost     Float
+  createdAt    DateTime @default(now())
+}
+
+model CacaoKardex {
+  id            Int      @id @default(autoincrement())
+  lotId         Int
+  lot           CacaoLot @relation(fields: [lotId], references: [id])
+  type          String
+  quantity      Float
+  unitCost      Float
+  totalCost     Float
+  balanceQty    Float
+  balanceCost   Float
+  date          DateTime
+  reference     String?
+  referenceUnit String?
+  companyId     Int
+  createdAt     DateTime @default(now())
+}
+
+model CacaoPriceFixing {
+  id             Int      @id @default(autoincrement())
+  lotId          Int
+  lot            CacaoLot @relation(fields: [lotId], references: [id])
+  referencePrice Float?
+  differential   Float?
+  fixedPrice     Float?
+  pendingWeight  Float?
+  fixedDate      DateTime?
+  deadline       DateTime?
+  status         String   @default("OPEN")
+  companyId      Int
+  createdBy      Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model CacaoShipment {
+  id             Int      @id @default(autoincrement())
+  date           DateTime
+  clientId       Int
+  client         CacaoClient @relation(fields: [clientId], references: [id])
+  contractRef    String
+  unitOfMeasure  String   @default("KG") // TON, KG, SACO
+  totalWeight    Float
+  totalWeightKg  Float    // Peso total siempre en kg para kárdex
+  totalCost      Float
+  salePrice      Float
+  salePricePerKg Float    // Precio de venta siempre en $/kg para kárdex
+  margin         Float    @default(0)
+  status         String   @default("PENDING")
+  companyId      Int
+  createdBy      Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  lots           CacaoShipmentLot[]
+  receivable     CacaoReceivable?
+}
+
+model CacaoShipmentLot {
+  id              Int      @id @default(autoincrement())
+  shipmentId      Int
+  shipment        CacaoShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  lotId           Int
+  lot             CacaoLot @relation(fields: [lotId], references: [id])
+  quantity        Float    // Cantidad en la unidad original del usuario
+  quantityKg      Float    // Cantidad convertida a kg para kárdex
+  unitCost        Float
+  saleAmount      Float
+  unitOfMeasure   String   @default("KG")
+  createdAt       DateTime @default(now())
+}
+
+model CacaoPayable {
+  id           Int      @id @default(autoincrement())
+  settlementId Int      @unique
+  settlement   CacaoSettlement @relation(fields: [settlementId], references: [id])
+  supplierId   Int
+  supplier     CacaoSupplier @relation(fields: [supplierId], references: [id])
+  totalAmount  Float
+  paidAmount   Float    @default(0)
+  dueDate      DateTime
+  status       String   @default("PENDING")
+  companyId    Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  payments     CacaoPayment[]
+}
+
+model CacaoReceivable {
+  id             Int      @id @default(autoincrement())
+  shipmentId     Int      @unique
+  shipment       CacaoShipment @relation(fields: [shipmentId], references: [id])
+  clientId       Int
+  client         CacaoClient @relation(fields: [clientId], references: [id])
+  totalAmount    Float
+  receivedAmount Float    @default(0)
+  dueDate        DateTime
+  status         String   @default("PENDING")
+  companyId      Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  payments       CacaoPayment[]
+}
+
+model CacaoPayment {
+  id           Int      @id @default(autoincrement())
+  type         String
+  amount       Float
+  method       String   @default("TRANSFER")
+  reference    String?
+  companyId    Int
+  createdAt    DateTime @default(now())
+  payableId    Int?
+  payable      CacaoPayable? @relation(fields: [payableId], references: [id])
+  receivableId Int?
+  receivable   CacaoReceivable? @relation(fields: [receivableId], references: [id])
+}
+
+model CacaoUnitConfig {
+  id           Int      @id @default(autoincrement())
+  name         String   // SACO_MICHOACAN, SACO_ESTANDAR, SACO_PERSONALIZADO
+  displayName  String   // "Saco Michoacán (90 kg)"
+  kgPerUnit    Float    // Cuántos kg equivalen 1 unidad de esta medida
+  isDefault    Boolean  @default(false)
+  companyId    Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

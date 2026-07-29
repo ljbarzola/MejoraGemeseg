@@ -11,6 +11,7 @@ export default function Navbar() {
   const isCompanyAdmin = isAdmin && !!user?.companyId;
   const isSystems = user?.email === 'sistemas@gemeseg.com';
   const canManageAgents = isAdmin || isSystems;
+  const isMikacao = user?.companyId === 2;
 
   const handleLogout = () => {
     removeToken();
@@ -42,6 +43,9 @@ export default function Navbar() {
         )}
         {canManageAgents && (
           <button className="navbar-link" onClick={() => navigate('/admin/agents')}>Agentes</button>
+        )}
+        {isMikacao && (
+          <button className="navbar-link navbar-link-cacao" onClick={() => navigate('/cacao')}>Cacao</button>
         )}
       </div>
       <div className="navbar-user">

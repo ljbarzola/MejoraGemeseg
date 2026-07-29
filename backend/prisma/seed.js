@@ -448,6 +448,184 @@ Si no necesitas datos, responde directamente.`,
     await prisma.userAgent.create({ data: { userId: nayelli.id, agentId: nayelliAgent.id } });
   }
 
+  // ─── CACAO MODULE SEED DATA ────────────────────────────────────
+
+  console.log('\nCreando datos del módulo Cacao...');
+
+  // Qualities
+  const qualitiesData = [
+    { name: 'Convencional', humidityDiscount: 7, impurityDiscount: 1, isFixedPrice: true, fixedPrice: 2.50 },
+    { name: 'Orgánico', humidityDiscount: 6, impurityDiscount: 0.5, isFixedPrice: false, fixedPrice: null },
+    { name: 'Fino de Aroma', humidityDiscount: 7, impurityDiscount: 1, isFixedPrice: false, fixedPrice: null },
+    { name: 'Grado 1', humidityDiscount: 7.5, impurityDiscount: 1.2, isFixedPrice: true, fixedPrice: 2.40 },
+    { name: 'Grado 2', humidityDiscount: 8, impurityDiscount: 1.5, isFixedPrice: true, fixedPrice: 2.20 },
+  ];
+  const qualityMap = {};
+  for (const qd of qualitiesData) {
+    let quality = await prisma.cacaoQuality.findFirst({ where: { name: qd.name } });
+    if (!quality) {
+      quality = await prisma.cacaoQuality.create({ data: qd });
+    } else {
+      quality = await prisma.cacaoQuality.update({ where: { id: quality.id }, data: qd });
+    }
+    qualityMap[qd.name] = quality;
+  }
+  console.log('  ✓ Calidades creadas:', qualitiesData.map(q => q.name).join(', '));
+
+  // Suppliers (Mikacao companyId: 2)
+  const suppliersData = [
+    { name: 'Cooperativa Agraria de Guayas', contact: 'Carlos Mendoza', phone: '0991234567', paymentTerms: '30 días', bank: 'Banco Pichincha' },
+    { name: 'Finca El Oro - Los Ríos', contact: 'María Jaramillo', phone: '0987654321', paymentTerms: '15 días', bank: 'Banco del Austro' },
+    { name: 'Asociación de Productores Manabí', contact: 'Luis Terán', phone: '0971122334', paymentTerms: 'Quincenal', bank: 'Banco Central' },
+  ];
+  const supplierMap = {};
+  for (const sd of suppliersData) {
+    let supplier = await prisma.cacaoSupplier.findFirst({ where: { name: sd.name, companyId: 2 } });
+    if (!supplier) {
+      supplier = await prisma.cacaoSupplier.create({ data: { ...sd, companyId: 2 } });
+    }
+    supplierMap[sd.name] = supplier;
+  }
+  console.log('  ✓ Proveedores creados: 3');
+
+  // Clients
+  const clientsData = [
+    { name: 'ChocoLovers GmbH', country: 'Alemania', contact: 'Hans Müller', email: 'hans@chocolovers.de', phone: '+49 30 1234567' },
+    { name: 'Belgian Fine Chocolate', country: 'Bélgica', contact: 'Pierre Dubois', email: 'pierre@bfchoc.be', phone: '+32 2 9876543' },
+    { name: 'Cacao Premium Colombia', country: 'Colombia', contact: 'Andrés Ramírez', email: 'andres@cacaopremium.co', phone: '+57 1 2345678' },
+  ];
+  const clientMap = {};
+  for (const cd of clientsData) {
+    let client = await prisma.cacaoClient.findFirst({ where: { name: cd.name, companyId: 2 } });
+    if (!client) {
+      client = await prisma.cacaoClient.create({ data: { ...cd, companyId: 2 } });
+    }
+    clientMap[cd.name] = client;
+  }
+  console.log('  ✓ Clientes creados: 3');
+
+  // Lots + Receptions + Kardex (5 lots)
+  const lotData = [
+    { code: 'LOTE-2026-001', quality: 'Convencional', netWeight: 950, cost: 2.50, humidity: 7.5, impurities: 0.8, grossWeight: 1000, tare: 50, supplier: 'Cooperativa Agraria de Guayas', guide: 'TR-2026-0001', date: '2026-07-01', differential: -200 },
+    { code: 'LOTE-2026-002', quality: 'Convencional', netWeight: 1100, cost: 2.45, humidity: 6.5, impurities: 0.5, grossWeight: 1150, tare: 50, supplier: 'Cooperativa Agraria de Guayas', guide: 'TR-2026-0002', date: '2026-07-03', differential: -150 },
+    { code: 'LOTE-2026-003', quality: 'Fino de Aroma', netWeight: 800, cost: 3.20, humidity: 8.1, impurities: 1.2, grossWeight: 850, tare: 50, supplier: 'Finca El Oro - Los Ríos', guide: 'TR-2026-0003', date: '2026-07-05', differential: -150 },
+    { code: 'LOTE-2026-004', quality: 'Orgánico', netWeight: 600, cost: 3.80, humidity: 6.0, impurities: 0.3, grossWeight: 640, tare: 40, supplier: 'Asociación de Productores Manabí', guide: 'TR-2026-0004', date: '2026-07-08', differential: 0 },
+    { code: 'LOTE-2026-005', quality: 'Convencional', netWeight: 1200, cost: 2.53, humidity: 7.2, impurities: 0.6, grossWeight: 1260, tare: 60, supplier: 'Finca El Oro - Los Ríos', guide: 'TR-2026-0005', date: '2026-07-10', differential: -100 },
+  ];
+
+  const createdLots = [];
+  for (const ld of lotData) {
+    const lot = await prisma.cacaoLot.upsert({
+      where: { code: ld.code },
+      update: { differential: ld.differential },
+      create: {
+        code: ld.code,
+        qualityId: qualityMap[ld.quality].id,
+        netWeight: ld.netWeight,
+        averageCost: ld.cost,
+        differential: ld.differential,
+        status: 'OPEN',
+        companyId: 2,
+      },
+    });
+    createdLots.push(lot);
+
+    // Create reception (idempotent)
+    const existingReception = await prisma.cacaoReception.findFirst({ where: { guideNumber: ld.guide, lotId: lot.id } });
+    if (!existingReception) {
+      await prisma.cacaoReception.create({
+        data: {
+          date: new Date(ld.date),
+          supplierId: supplierMap[ld.supplier].id,
+          guideNumber: ld.guide,
+          grossWeight: ld.grossWeight,
+          tare: ld.tare,
+          netWeight: ld.netWeight,
+          humidity: ld.humidity,
+          impurities: ld.impurities,
+          provisionalPrice: ld.cost,
+          differential: ld.differential,
+          lotId: lot.id,
+          companyId: 2,
+          createdBy: adminMikacao.id,
+        },
+      });
+    }
+
+    // Create kardex entry (idempotent)
+    const existingKardex = await prisma.cacaoKardex.findFirst({ where: { lotId: lot.id, reference: `Recepción ${ld.guide}` } });
+    if (!existingKardex) {
+      await prisma.cacaoKardex.create({
+        data: {
+          lotId: lot.id,
+          type: 'ENTRY',
+          quantity: ld.netWeight,
+          unitCost: ld.cost,
+          totalCost: ld.netWeight * ld.cost,
+          balanceQty: ld.netWeight,
+          balanceCost: ld.netWeight * ld.cost,
+          date: new Date(ld.date),
+          reference: `Recepción ${ld.guide}`,
+          companyId: 2,
+        },
+      });
+    }
+  }
+  console.log('  ✓ Lotes creados: 5 + recepciones + kardex');
+
+  // Price Fixings (2 open, idempotent)
+  const fixing1Exists = await prisma.cacaoPriceFixing.findFirst({ where: { lotId: createdLots[0].id, status: 'OPEN' } });
+  if (!fixing1Exists) {
+    await prisma.cacaoPriceFixing.create({
+      data: {
+        lotId: createdLots[0].id,
+        referencePrice: 8000,
+        differential: -200,
+        fixedPrice: null,
+        pendingWeight: 950,
+        deadline: new Date('2026-07-20'),
+        status: 'OPEN',
+        companyId: 2,
+        createdBy: adminMikacao.id,
+      },
+    });
+  }
+  const fixing2Exists = await prisma.cacaoPriceFixing.findFirst({ where: { lotId: createdLots[2].id, status: 'OPEN' } });
+  if (!fixing2Exists) {
+    await prisma.cacaoPriceFixing.create({
+      data: {
+        lotId: createdLots[2].id,
+        referencePrice: 8200,
+        differential: -150,
+        fixedPrice: null,
+        pendingWeight: 800,
+        deadline: new Date('2026-07-25'),
+        status: 'OPEN',
+        companyId: 2,
+        createdBy: adminMikacao.id,
+      },
+    });
+  }
+  console.log('  ✓ Fijaciones abiertas: 2');
+
+  // Unit Config (Mikacao companyId: 2)
+  console.log('Creando configuración de unidades...');
+  const existingUnitConfig = await prisma.cacaoUnitConfig.findFirst({ where: { companyId: 2, name: 'SACO_MICHOACAN' } });
+  if (!existingUnitConfig) {
+    await prisma.cacaoUnitConfig.create({
+      data: { name: 'SACO_MICHOACAN', displayName: 'Saco Michoacán (90 kg)', kgPerUnit: 90, isDefault: true, companyId: 2 },
+    });
+    await prisma.cacaoUnitConfig.create({
+      data: { name: 'SACO_ESTANDAR', displayName: 'Saco Estándar (69 kg)', kgPerUnit: 69, isDefault: false, companyId: 2 },
+    });
+    await prisma.cacaoUnitConfig.create({
+      data: { name: 'SACO_PERSONALIZADO', displayName: 'Saco Personalizado', kgPerUnit: 62, isDefault: false, companyId: 2 },
+    });
+    console.log('  ✓ Unidades de medida creadas: 3');
+  } else {
+    console.log('  ✓ Unidades de medida ya existen');
+  }
+
   console.log('\n========================================');
   console.log('  SEED COMPLETADO EXITOSAMENTE');
   console.log('========================================\n');
