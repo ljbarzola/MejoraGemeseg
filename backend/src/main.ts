@@ -15,6 +15,10 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
+      const allowedOrigins = [
+      'http://localhost:3000',
+      'https://mejora-gemeseg-55rh092u7-gemeseg.vercel.app' // el de tu error actual
+    ];
       if (!origin || origin.startsWith('http://localhost:')) {
         callback(null, true);
       } else if (frontendUrl && origin === frontendUrl) {
