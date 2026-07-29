@@ -19,7 +19,6 @@ const ICONS: Record<string, { d: string; color: string }> = {
   suppliers: { d: 'M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2', color: '#4a5568' },
   clients: { d: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2', color: '#4a5568' },
   qualities: { d: 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z', color: '#d69e2e' },
-  kardex: { d: 'M3 3v18h18', color: '#e53e3e' },
 };
 
 export default function CacaoDashboard() {
@@ -49,13 +48,13 @@ export default function CacaoDashboard() {
         <button
           onClick={() => navigate('/cacao/guia')}
           style={{
-            padding: '10px 20px',
-            backgroundColor: '#2d3748',
-            color: 'white',
-            border: 'none',
+            padding: '8px 16px',
+            backgroundColor: 'transparent',
+            color: '#4a5568',
+            border: '1px solid #e2e8f0',
             borderRadius: '8px',
             fontSize: '13px',
-            fontWeight: 600,
+            fontWeight: 500,
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
@@ -108,17 +107,12 @@ export default function CacaoDashboard() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
             {[
               { label: 'Recepciones', desc: 'Registrar entradas de cacao', path: '/cacao/receptions', icon: ICONS.receptions },
-              { label: 'Lotes', desc: 'Inventario y seguimiento', path: '/cacao/lots', icon: ICONS.lots },
+              { label: 'Lotes', desc: 'Inventario y kárdex', path: '/cacao/lots', icon: ICONS.lots },
               { label: 'Fijaciones', desc: 'Fijar precio definitivo', path: '/cacao/price-fixings', icon: ICONS.priceFixings },
               { label: 'Liquidaciones', desc: 'Liquidar compras a proveedores', path: '/cacao/settlements', icon: ICONS.settlements },
               { label: 'Embarques', desc: 'Exportaciones y ventas', path: '/cacao/shipments', icon: ICONS.shipments },
               { label: 'CxP', desc: 'Pendientes a proveedores', path: '/cacao/payables', icon: ICONS.payables },
               { label: 'CxC', desc: 'Cobros a clientes', path: '/cacao/receivables', icon: ICONS.receivables },
-              { label: 'Kardex', desc: 'Historial de movimientos', path: '/cacao/kardex', icon: ICONS.kardex },
-              { label: 'Calidades', desc: 'Configurar calidades y descuentos', path: '/cacao/qualities', icon: ICONS.qualities },
-              { label: 'Proveedores', desc: 'Directorio de proveedores', path: '/cacao/suppliers', icon: ICONS.suppliers },
-              { label: 'Clientes', desc: 'Directorio de clientes', path: '/cacao/clients', icon: ICONS.clients },
-              { label: '📖 Guía', desc: 'Cómo usar el sistema', path: '/cacao/guia', icon: { d: 'M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z', color: '#2d3748' } },
             ].map((item) => (
               <button
                 key={item.path}
@@ -155,6 +149,54 @@ export default function CacaoDashboard() {
                   <span style={{ fontSize: '14px', fontWeight: 600, color: '#2d3748' }}>{item.label}</span>
                 </div>
                 <span style={{ fontSize: '12px', color: '#a0aec0', lineHeight: 1.3 }}>{item.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Configuración */}
+        <div style={{ marginBottom: '28px' }}>
+          <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#718096', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Configuración</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
+            {[
+              { label: 'Calidades', desc: 'Descuentos por humedad/impurezas', path: '/cacao/qualities', icon: ICONS.qualities },
+              { label: 'Proveedores', desc: 'Directorio de proveedores', path: '/cacao/suppliers', icon: ICONS.suppliers },
+              { label: 'Clientes', desc: 'Directorio de clientes/exportadores', path: '/cacao/clients', icon: ICONS.clients },
+            ].map((item) => (
+              <button
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  gap: '8px',
+                  padding: '14px',
+                  background: '#f7fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = item.icon.color; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.transform = 'translateY(0)'; }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{
+                    width: '30px',
+                    height: '30px',
+                    borderRadius: '6px',
+                    background: `${item.icon.color}10`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <SectionIcon d={item.icon.d} color={item.icon.color} />
+                  </div>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#4a5568' }}>{item.label}</span>
+                </div>
+                <span style={{ fontSize: '11px', color: '#a0aec0', lineHeight: 1.3 }}>{item.desc}</span>
               </button>
             ))}
           </div>

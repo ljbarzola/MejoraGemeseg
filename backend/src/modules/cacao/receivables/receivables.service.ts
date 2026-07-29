@@ -41,6 +41,14 @@ export class CacaoReceivablesService {
         status: newReceived >= receivable.totalAmount ? 'RECEIVED' : 'PARTIAL',
       },
       include: { client: true, payments: true },
+    }).then(async (result) => {
+      if (newReceived >= receivable.totalAmount && receivable.shipmentId) {
+        await this.prisma.cacaoShipment.update({
+          where: { id: receivable.shipmentId },
+          data: { status: 'COMPLETED' },
+        });
+      }
+      return result;
     });
   }
 }

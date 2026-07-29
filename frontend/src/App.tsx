@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
@@ -25,18 +25,18 @@ import LotsList from './pages/cacao/lots/LotsList';
 import LotDetail from './pages/cacao/lots/LotDetail';
 import SettlementsList from './pages/cacao/settlements/SettlementsList';
 import SettlementForm from './pages/cacao/settlements/SettlementForm';
+import SettlementDetail from './pages/cacao/settlements/SettlementDetail';
 import PriceFixingsList from './pages/cacao/price-fixings/PriceFixingsList';
 import ShipmentsList from './pages/cacao/shipments/ShipmentsList';
 import ShipmentForm from './pages/cacao/shipments/ShipmentForm';
+import ShipmentDetail from './pages/cacao/shipments/ShipmentDetail';
 import PayablesList from './pages/cacao/payables/PayablesList';
 import ReceivablesList from './pages/cacao/receivables/ReceivablesList';
 import QualitiesPage from './pages/cacao/qualities/QualitiesPage';
-import KardexList from './pages/cacao/kardex/KardexList';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/layout/Navbar';
 import ChatFloatingButton from './components/chat/ChatFloatingButton';
 import ChatDrawer from './components/chat/ChatDrawer';
-import CacaoHelpMenu from './components/cacao/CacaoHelpMenu';
 import { CompanyProvider } from './contexts/ThemeContext';
 import { isAuthenticated } from './services/auth.service';
 
@@ -47,12 +47,6 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
       {children}
     </ProtectedRoute>
   );
-}
-
-function CacaoHelpWrapper() {
-  const { pathname } = useLocation();
-  if (!pathname.startsWith('/cacao')) return null;
-  return <CacaoHelpMenu />;
 }
 
 function App() {
@@ -196,20 +190,20 @@ function App() {
         <Route path="/cacao/lots/:id" element={<ProtectedLayout><LotDetail /></ProtectedLayout>} />
         <Route path="/cacao/settlements" element={<ProtectedLayout><SettlementsList /></ProtectedLayout>} />
         <Route path="/cacao/settlements/new" element={<ProtectedLayout><SettlementForm /></ProtectedLayout>} />
+        <Route path="/cacao/settlements/:id" element={<ProtectedLayout><SettlementDetail /></ProtectedLayout>} />
         <Route path="/cacao/price-fixings" element={<ProtectedLayout><PriceFixingsList /></ProtectedLayout>} />
         <Route path="/cacao/shipments" element={<ProtectedLayout><ShipmentsList /></ProtectedLayout>} />
         <Route path="/cacao/shipments/new" element={<ProtectedLayout><ShipmentForm /></ProtectedLayout>} />
+        <Route path="/cacao/shipments/:id" element={<ProtectedLayout><ShipmentDetail /></ProtectedLayout>} />
         <Route path="/cacao/payables" element={<ProtectedLayout><PayablesList /></ProtectedLayout>} />
         <Route path="/cacao/receivables" element={<ProtectedLayout><ReceivablesList /></ProtectedLayout>} />
         <Route path="/cacao/qualities" element={<ProtectedLayout><QualitiesPage /></ProtectedLayout>} />
-        <Route path="/cacao/kardex" element={<ProtectedLayout><KardexList /></ProtectedLayout>} />
       </Routes>
 
       {isAuthenticated() && (
         <>
           <ChatFloatingButton onClick={() => setChatOpen(true)} />
           <ChatDrawer isOpen={chatOpen} onClose={() => setChatOpen(false)} />
-          <CacaoHelpWrapper />
         </>
       )}
       </CompanyProvider>

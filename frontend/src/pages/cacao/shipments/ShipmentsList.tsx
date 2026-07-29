@@ -13,6 +13,13 @@ export default function ShipmentsList() {
     getShipments().then(setShipments).finally(() => setLoading(false));
   }, []);
 
+  function getDisplayStatus(s: any) {
+    if (s.receivable?.status === 'RECEIVED') return { label: 'Cobrado', bg: '#c6f6d5', color: '#276749' };
+    if (s.receivable?.status === 'PARTIAL') return { label: 'Parcial', bg: '#fefcbf', color: '#975a16' };
+    if (s.status === 'COMPLETED') return { label: 'Completado', bg: '#c6f6d5', color: '#276749' };
+    return { label: 'Pendiente', bg: '#fefcbf', color: '#975a16' };
+  }
+
   return (
     <div className="page-container">
       <div className="page-header-row">
@@ -36,6 +43,7 @@ export default function ShipmentsList() {
             <table className="tasks-table">
               <thead>
                 <tr>
+                  <th>ID</th>
                   <th>Fecha</th>
                   <th>Cliente</th>
                   <th>Referencia</th>
@@ -44,25 +52,33 @@ export default function ShipmentsList() {
                   <th>Precio Venta</th>
                   <th>Margen</th>
                   <th>Estado</th>
+                  <th className="no-print"></th>
                 </tr>
               </thead>
               <tbody>
-                {shipments.map((s) => (
-                  <tr key={s.id}>
-                    <td>{formatDateEc(s.date)}</td>
-                    <td>{s.client?.name || '—'}</td>
-                    <td>{s.contractRef}</td>
-                    <td>{s.totalWeight.toLocaleString()} kg</td>
-                    <td>${s.totalCost.toFixed(2)}</td>
-                    <td>${s.salePrice.toFixed(2)}/kg</td>
-                    <td style={{ color: s.margin >= 0 ? '#38a169' : '#e53e3e', fontWeight: 600 }}>{s.margin}%</td>
-                    <td>
-                      <span className="status-badge" style={{ backgroundColor: s.status === 'PENDING' ? '#fefcbf' : '#c6f6d5', color: s.status === 'PENDING' ? '#975a16' : '#276749' }}>
-                        {s.status === 'PENDING' ? 'Pendiente' : 'Completado'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {shipments.map((s) => {
+                  const st = getDisplayStatus(s);
+                  return (
+                    <tr key={s.id}>
+                      <td style={{ fontFamily: 'monospace', fontWeight: 600, color: '#2f855a' }}>EMB-{String(s.id).padStart(4, '0')}</td>
+                      <td>{formatDateEc(s.date)}</td>
+                      <td>{s.client?.name || '—'}</td>
+                      <td>{s.contractRef}</td>
+                      <td>{s.totalWeight.toLocaleString()} kg</td>
+                      <td>${s.totalCost.toFixed(2)}</td>
+                      <td>${s.salePrice.toFixed(2)}/kg</td>
+                      <td style={{ color: s.margin >= 0 ? '#38a169' : '#e53e3e', fontWeight: 600 }}>{s.margin}%</td>
+                      <td>
+                        <span className="status-badge" style={{ backgroundColor: st.bg, color: st.color }}>
+                          {st.label}
+                        </span>
+                      </td>
+                      <td className="no-print">
+                        <button className="btn-sm-edit" onClick={() => navigate(`/cacao/shipments/${s.id}`, { state: { from: '/cacao/shipments' } })}>Ver</button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

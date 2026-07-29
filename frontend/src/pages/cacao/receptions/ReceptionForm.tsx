@@ -6,6 +6,10 @@ const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FULL: Record<string, string> = { TON: 'Toneladas', KG: 'Kilogramos', SACO: 'Sacos' };
 const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
 function round4(n: number) { return Math.round(n * 10000) / 10000; }
+function getTodayLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 
 export default function ReceptionForm() {
   const navigate = useNavigate();
@@ -18,7 +22,7 @@ export default function ReceptionForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: getTodayLocal(),
     supplierId: '',
     guideNumber: '',
     unitOfMeasure: 'KG',

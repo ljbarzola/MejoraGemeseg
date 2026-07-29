@@ -36,6 +36,7 @@ export default function SettlementsList() {
             <table className="tasks-table">
               <thead>
                 <tr>
+                  <th>ID</th>
                   <th>Fecha</th>
                   <th>Proveedor</th>
                   <th>Periodo</th>
@@ -44,11 +45,13 @@ export default function SettlementsList() {
                   <th>Precio Final</th>
                   <th>Monto Total</th>
                   <th>Estado</th>
+                  <th className="no-print"></th>
                 </tr>
               </thead>
               <tbody>
                 {settlements.map((s) => (
                   <tr key={s.id}>
+                    <td style={{ fontFamily: 'monospace', fontWeight: 600, color: '#6b46c1' }}>LIQ-{String(s.id).padStart(4, '0')}</td>
                     <td>{formatDateEc(s.date)}</td>
                     <td>{s.supplier?.name || '—'}</td>
                     <td>{formatDateEc(s.periodStart)} - {formatDateEc(s.periodEnd)}</td>
@@ -60,6 +63,9 @@ export default function SettlementsList() {
                       <span className="status-badge" style={{ backgroundColor: s.status === 'PAID' ? '#c6f6d5' : '#fefcbf', color: s.status === 'PAID' ? '#276749' : '#975a16' }}>
                         {s.status === 'PAID' ? 'Pagada' : 'Pendiente'}
                       </span>
+                    </td>
+                    <td className="no-print">
+                      <button className="btn-sm-edit" onClick={() => navigate(`/cacao/settlements/${s.id}`, { state: { from: '/cacao/settlements' } })}>Ver</button>
                     </td>
                   </tr>
                 ))}

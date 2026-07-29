@@ -98,7 +98,7 @@ export default function LotsList() {
                         </span>
                       </td>
                       <td>
-                        <button className="btn-sm-edit" onClick={() => navigate(`/cacao/lots/${l.id}`)}>Ver</button>
+                        <button className="btn-sm-edit" onClick={() => navigate(`/cacao/lots/${l.id}`)}>Ver Kardex</button>
                       </td>
                     </tr>
                   );

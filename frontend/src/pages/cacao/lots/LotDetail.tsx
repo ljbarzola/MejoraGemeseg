@@ -35,7 +35,18 @@ export default function LotDetail() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          .page-container { padding: 8px !important; font-size: 12px !important; }
+          .page-card, .admin-section { box-shadow: none !important; border: none !important; margin: 0 !important; padding: 8px 0 !important; }
+          .page-card { max-width: 100% !important; }
+          .print-only { display: block !important; }
+          body { background: white !important; }
+        }
+        .print-only { display: none; }
+      `}</style>
+      <div className="page-header-row no-print">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao/lots')}>← Volver</button>
           <div>
@@ -43,6 +54,21 @@ export default function LotDetail() {
             <h1>{lot.code}</h1>
           </div>
         </div>
+        <button
+          onClick={() => window.print()}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#e53e3e',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          🖨️ Descargar PDF
+        </button>
       </div>
 
       <div className="page-card" style={{ marginBottom: '16px' }}>
@@ -104,44 +130,63 @@ export default function LotDetail() {
           <div className="empty-state">Sin movimientos en kardex.</div>
         ) : (
           <div className="tasks-table-wrapper">
-            <table className="tasks-table">
+            <table className="tasks-table" style={{ fontSize: '13px', borderCollapse: 'collapse', width: '100%' }}>
               <thead>
                 <tr>
-                  <th>Fecha</th>
-                  <th>Tipo</th>
-                  <th>Cantidad</th>
-                  <th>Costo Unit.</th>
-                  <th>Costo Total</th>
-                  <th>Saldo Cant.</th>
-                  <th>Saldo Costo</th>
-                  <th>Referencia</th>
+                  <th rowSpan={2} style={{ border: '1px solid #e2e8f0', padding: '8px', background: '#f7fafc', textAlign: 'center', verticalAlign: 'middle', width: '90px' }}>Fecha</th>
+                  <th rowSpan={2} style={{ border: '1px solid #e2e8f0', padding: '8px', background: '#f7fafc', textAlign: 'center', verticalAlign: 'middle', width: '180px' }}>Detalles</th>
+                  <th colSpan={3} style={{ border: '1px solid #e2e8f0', padding: '6px', background: '#c6f6d5', color: '#276749', textAlign: 'center', fontWeight: 700 }}>Entradas</th>
+                  <th colSpan={3} style={{ border: '1px solid #e2e8f0', padding: '6px', background: '#fed7d7', color: '#9b2c2c', textAlign: 'center', fontWeight: 700 }}>Salidas</th>
+                  <th colSpan={3} style={{ border: '1px solid #e2e8f0', padding: '6px', background: '#ebf8ff', color: '#2b6cb0', textAlign: 'center', fontWeight: 700 }}>Saldos</th>
+                </tr>
+                <tr>
+                  {['#', 'Vr. Unitario', 'Vr. Total', '#', 'Vr. Unitario', 'Vr. Total', '#', 'Vr. Unitario', 'Vr. Total'].map((h, i) => (
+                    <th key={i} style={{ border: '1px solid #e2e8f0', padding: '6px', background: '#f7fafc', textAlign: 'center', fontWeight: 600, fontSize: '11px', color: '#4a5568' }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {lot.kardex.map((k: any) => {
-                  const kardexOrigUnit = k.referenceUnit || receptionUnit;
-                  const origQty = getOrigWeight(k.quantity, kardexOrigUnit);
-                  const origBal = getOrigWeight(k.balanceQty, kardexOrigUnit);
+                  const isEntry = k.type === 'ENTRY';
+                  const refUnit = k.referenceUnit || receptionUnit || 'KG';
+                  const refUnitAbbr = UNIT_ABBR[refUnit] || refUnit;
+                  const referenceLabel = k.reference?.includes('RECEPCIÓN') || k.reference?.startsWith('REC-') ? `RECEPCIÓN (${refUnitAbbr})` :
+                    k.reference?.includes('EMBARQUE') || k.reference?.startsWith('EMB-') ? `EMBARQUE (${refUnitAbbr})` :
+                    k.reference || '—';
                   return (
                     <tr key={k.id}>
-                      <td>{formatDateEc(k.date)}</td>
-                      <td>
-                        <span className="status-badge" style={{ backgroundColor: k.type === 'ENTRY' ? '#c6f6d5' : '#fed7d7', color: k.type === 'ENTRY' ? '#276749' : '#9b2c2c' }}>
-                          {k.type === 'ENTRY' ? 'Entrada' : 'Salida'}
-                        </span>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '8px', textAlign: 'center', whiteSpace: 'nowrap' }}>{formatDateEc(k.date)}</td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '8px', fontSize: '12px', color: '#4a5568' }}>{referenceLabel}</td>
+                      {/* Entradas */}
+                      <td style={{ border: '1px solid #e2e8f0', padding: '8px', textAlign: 'right', fontWeight: 600, color: isEntry ? '#276749' : '#a0aec0' }}>
+                        {isEntry ? k.quantity.toLocaleString() : ''}
                       </td>
-                      <td style={{ fontWeight: 600 }}>
-                        {k.quantity.toLocaleString()} kg
-                        {origQty && <span style={{ fontSize: '11px', color: '#2b6cb0', marginLeft: '4px' }}>({origQty.value} {origQty.abbr})</span>}
+                      <td style={{ border: '1px solid #e2e8f0', padding: '8px', textAlign: 'right', color: isEntry ? '#276749' : '#a0aec0' }}>
+                        {isEntry ? `$${k.unitCost.toFixed(2)}` : ''}
                       </td>
-                      <td>${k.unitCost.toFixed(2)}</td>
-                      <td>${k.totalCost.toFixed(2)}</td>
-                      <td style={{ fontWeight: 600 }}>
-                        {k.balanceQty.toLocaleString()} kg
-                        {origBal && <span style={{ fontSize: '11px', color: '#718096', marginLeft: '4px' }}>({origBal.value} {origBal.abbr})</span>}
+                      <td style={{ border: '1px solid #e2e8f0', padding: '8px', textAlign: 'right', fontWeight: 600, color: isEntry ? '#276749' : '#a0aec0' }}>
+                        {isEntry ? `$${k.totalCost.toFixed(2)}` : ''}
                       </td>
-                      <td>${k.balanceCost.toFixed(2)}</td>
-                      <td>{k.reference}</td>
+                      {/* Salidas */}
+                      <td style={{ border: '1px solid #e2e8f0', padding: '8px', textAlign: 'right', fontWeight: 600, color: !isEntry ? '#9b2c2c' : '#a0aec0' }}>
+                        {!isEntry ? k.quantity.toLocaleString() : ''}
+                      </td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '8px', textAlign: 'right', color: !isEntry ? '#9b2c2c' : '#a0aec0' }}>
+                        {!isEntry ? `$${k.unitCost.toFixed(2)}` : ''}
+                      </td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '8px', textAlign: 'right', fontWeight: 600, color: !isEntry ? '#9b2c2c' : '#a0aec0' }}>
+                        {!isEntry ? `$${k.totalCost.toFixed(2)}` : ''}
+                      </td>
+                      {/* Saldos */}
+                      <td style={{ border: '1px solid #e2e8f0', padding: '8px', textAlign: 'right', fontWeight: 700, color: '#2b6cb0', background: '#ebf8ff10' }}>
+                        {k.balanceQty.toLocaleString()}
+                      </td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '8px', textAlign: 'right', color: '#2b6cb0' }}>
+                        ${k.balanceCost.toFixed(2)}
+                      </td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '8px', textAlign: 'right', fontWeight: 700, color: '#2b6cb0', background: '#ebf8ff10' }}>
+                        ${(k.balanceQty * k.balanceCost).toFixed(2)}
+                      </td>
                     </tr>
                   );
                 })}

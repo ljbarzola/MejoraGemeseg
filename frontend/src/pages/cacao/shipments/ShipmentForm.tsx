@@ -6,6 +6,10 @@ const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FULL: Record<string, string> = { TON: 'Toneladas', KG: 'Kilogramos', SACO: 'Sacos' };
 const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
 function round4(n: number) { return Math.round(n * 10000) / 10000; }
+function getTodayLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 
 export default function ShipmentForm() {
   const navigate = useNavigate();
@@ -16,8 +20,9 @@ export default function ShipmentForm() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [createdId, setCreatedId] = useState<number | null>(null);
   const [form, setForm] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: getTodayLocal(),
     clientId: '',
     contractRef: '',
     unitOfMeasure: 'KG',
@@ -134,7 +139,7 @@ export default function ShipmentForm() {
     setSaving(true);
     setError('');
     try {
-      await createShipment({
+      const result = await createShipment({
         date: form.date,
         clientId: Number(form.clientId),
         contractRef: form.contractRef,
@@ -151,13 +156,38 @@ export default function ShipmentForm() {
         })),
       });
       isDirty.current = false;
-      navigate('/cacao/shipments');
+      setCreatedId(result.id);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al crear embarque');
     } finally { setSaving(false); }
   }
 
   if (loading) return <div className="loading-state">Cargando datos...</div>;
+
+  if (createdId) {
+    return (
+      <div className="page-container">
+        <div className="page-header-row">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button className="cacao-back-btn" onClick={() => navigate('/cacao/shipments')}>← Volver</button>
+            <div>
+              <p className="page-eyebrow">CACAO</p>
+              <h1>Embarque Creado</h1>
+            </div>
+          </div>
+        </div>
+        <div className="page-card" style={{ textAlign: 'center', padding: '40px' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
+          <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#276749', marginBottom: '8px' }}>Embarque creado exitosamente</h2>
+          <div style={{ fontSize: '28px', fontWeight: 800, color: '#2f855a', fontFamily: 'monospace', marginBottom: '24px' }}>EMB-{String(createdId).padStart(4, '0')}</div>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <button className="btn-secondary" onClick={() => navigate('/cacao/shipments')}>Ver Embarques</button>
+            <button className="auth-btn" onClick={() => navigate(`/cacao/shipments/${createdId}`, { state: { from: '/cacao/shipments' } })}>Ver Detalle</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const unitAbbr = UNIT_ABBR[form.unitOfMeasure] || 'kg';
   const isNotKg = form.unitOfMeasure !== 'KG';

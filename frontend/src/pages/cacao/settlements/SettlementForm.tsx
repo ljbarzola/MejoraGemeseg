@@ -5,6 +5,10 @@ import { getSuppliers, getLots, createSettlement } from '../../../services/cacao
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
 function round4(n: number) { return Math.round(n * 10000) / 10000; }
+function getTodayLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 
 interface LotSelection {
   lotId: number;
@@ -23,8 +27,9 @@ export default function SettlementForm() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [createdId, setCreatedId] = useState<number | null>(null);
   const [form, setForm] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: getTodayLocal(),
     supplierId: '',
     periodStart: '',
     periodEnd: '',
@@ -60,21 +65,6 @@ export default function SettlementForm() {
       });
     }
     setAvailableLots(filtered);
-
-    if (filtered.length > 0) {
-      const currentIds = selectedLots.map(sl => sl.lotId).filter(Boolean);
-      const newLots = filtered.filter((l: any) => !currentIds.includes(l.id));
-      if (newLots.length > 0 && currentIds.length === 0) {
-        setSelectedLots(newLots.map((l: any) => ({
-          lotId: l.id,
-          quantity: l.netWeight.toString(),
-          humidityPct: null,
-          impurityPct: null,
-          qualityPunishment: 0,
-        })));
-        isDirty.current = true;
-      }
-    }
   }, [form.supplierId, form.periodStart, form.periodEnd, allLots]);
 
   useEffect(() => {
@@ -217,7 +207,7 @@ export default function SettlementForm() {
     setSaving(true);
     setError('');
     try {
-      await createSettlement({
+      const result = await createSettlement({
         date: form.date,
         supplierId: Number(form.supplierId),
         periodStart: form.periodStart,
@@ -236,13 +226,38 @@ export default function SettlementForm() {
         }),
       });
       isDirty.current = false;
-      navigate('/cacao/settlements');
+      setCreatedId(result.id);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al crear liquidación');
     } finally { setSaving(false); }
   }
 
   if (loading) return <div className="loading-state">Cargando datos...</div>;
+
+  if (createdId) {
+    return (
+      <div className="page-container">
+        <div className="page-header-row">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button className="cacao-back-btn" onClick={() => navigate('/cacao/settlements')}>← Volver</button>
+            <div>
+              <p className="page-eyebrow">CACAO</p>
+              <h1>Liquidación Creada</h1>
+            </div>
+          </div>
+        </div>
+        <div className="page-card" style={{ textAlign: 'center', padding: '40px' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
+          <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#276749', marginBottom: '8px' }}>Liquidación creada exitosamente</h2>
+          <div style={{ fontSize: '28px', fontWeight: 800, color: '#6b46c1', fontFamily: 'monospace', marginBottom: '24px' }}>LIQ-{String(createdId).padStart(4, '0')}</div>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <button className="btn-secondary" onClick={() => navigate('/cacao/settlements')}>Ver Liquidaciones</button>
+            <button className="auth-btn" onClick={() => navigate(`/cacao/settlements/${createdId}`, { state: { from: '/cacao/settlements' } })}>Ver Detalle</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-container">
