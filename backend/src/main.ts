@@ -19,6 +19,8 @@ async function bootstrap() {
         callback(null, true);
       } else if (frontendUrl && origin === frontendUrl) {
         callback(null, true);
+      } else if (origin.endsWith('.vercel.app')) {
+        callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
       }
