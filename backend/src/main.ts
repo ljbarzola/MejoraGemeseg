@@ -19,7 +19,7 @@ async function bootstrap() {
       'http://localhost:3000',
       'https://mejora-gemeseg-55rh092u7-gemeseg.vercel.app' // el de tu error actual
     ];
-      if (!origin || origin.startsWith('http://localhost:')) {
+      if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else if (frontendUrl && origin === frontendUrl) {
         callback(null, true);
