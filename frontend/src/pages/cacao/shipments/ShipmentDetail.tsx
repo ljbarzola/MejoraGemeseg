@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getShipments } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
+import { useCompany } from '../../../contexts/ThemeContext';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 
@@ -9,6 +10,7 @@ export default function ShipmentDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme } = useCompany();
   const [shipment, setShipment] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -18,6 +20,11 @@ export default function ShipmentDetail() {
       setShipment(found || null);
     }).finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (shipment) document.title = `EMB-${String(shipment.id).padStart(4, '0')} — ${theme.name}`;
+    return () => { document.title = 'GEMESEG Mejora'; };
+  }, [shipment, theme.name]);
 
   if (loading) return <div className="loading-state">Cargando embarque...</div>;
   if (!shipment) return <div className="empty-state">Embarque no encontrado.</div>;
@@ -29,12 +36,26 @@ export default function ShipmentDetail() {
     <div className="page-container">
       <style>{`
         @media print {
-          .page-header-row, .cacao-back-btn, .no-print { display: none !important; }
-          .page-container { padding: 0 !important; }
-          .page-card, .admin-section { box-shadow: none !important; border: 1px solid #ccc !important; }
+          .no-print { display: none !important; }
+          .page-container { padding: 8px !important; font-size: 12px !important; }
+          .page-card, .admin-section { box-shadow: none !important; border: none !important; margin: 0 !important; padding: 8px 0 !important; }
           .page-card { max-width: 100% !important; }
+          .print-header { display: flex !important; }
+          body { background: white !important; }
+          .tasks-table { font-size: 11px !important; }
+          .tasks-table th, .tasks-table td { padding: 4px 6px !important; }
         }
+        .print-header { display: none; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 2px solid #1a202c; margin-bottom: 12px; }
       `}</style>
+
+      <div className="print-header">
+        {theme.logoUrl && <img src={theme.logoUrl} alt={theme.name} style={{ height: '40px' }} />}
+        <div>
+          <div style={{ fontSize: '16px', fontWeight: 800, color: '#1a202c' }}>{theme.name}</div>
+          <div style={{ fontSize: '10px', color: '#718096' }}>Embarque EMB-{String(shipment.id).padStart(4, '0')}</div>
+        </div>
+      </div>
+
       <div className="page-header-row no-print">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao/shipments')}>← Volver</button>
@@ -49,7 +70,7 @@ export default function ShipmentDetail() {
       </div>
 
       <div className="page-card" style={{ marginBottom: '16px' }}>
-        <div className="form-row" style={{ gap: '32px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px 32px' }}>
           <div><strong>ID:</strong> EMB-{String(shipment.id).padStart(4, '0')}</div>
           <div><strong>Fecha:</strong> {formatDateEc(shipment.date)}</div>
           <div><strong>Cliente:</strong> {shipment.client?.name || '—'}</div>
@@ -61,7 +82,7 @@ export default function ShipmentDetail() {
             </span>
           </div>
         </div>
-        <div style={{ marginTop: '12px', display: 'flex', gap: '32px', fontSize: '14px', flexWrap: 'wrap' }}>
+        <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px 32px', fontSize: '14px' }}>
           <div><strong>Peso Total:</strong> {shipment.totalWeight.toLocaleString()} {unitAbbr} ({shipment.totalWeightKg?.toLocaleString() || '—'} kg)</div>
           <div><strong>Costo Total:</strong> {fmt(shipment.totalCost)}</div>
           <div><strong>Precio Venta:</strong> {fmt(shipment.salePrice)}/{unitAbbr}</div>
@@ -105,7 +126,7 @@ export default function ShipmentDetail() {
 
       {shipment.receivable && (
         <div className="page-card" style={{ marginTop: '16px' }}>
-          <div style={{ fontSize: '14px', display: 'flex', gap: '32px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ fontSize: '14px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px 32px', alignItems: 'center' }}>
             <div><strong>CxC Asociada:</strong> COB-{String(shipment.receivable.id).padStart(4, '0')}</div>
             <div><strong>Monto:</strong> {fmt(shipment.receivable.totalAmount)}</div>
             <div><strong>Cobrado:</strong> {fmt(shipment.receivable.receivedAmount)}</div>

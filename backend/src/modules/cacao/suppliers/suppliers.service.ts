@@ -21,13 +21,17 @@ export class CacaoSuppliersService {
   }
 
   async update(id: number, dto: UpdateSupplierDto, companyId: number) {
-    const supplier = await this.prisma.cacaoSupplier.findFirst({ where: { id, companyId } });
+    const supplier = await this.prisma.cacaoSupplier.findFirst({
+      where: { id, companyId },
+    });
     if (!supplier) throw new NotFoundException('Proveedor no encontrado');
     return this.prisma.cacaoSupplier.update({ where: { id }, data: dto });
   }
 
   async remove(id: number, companyId: number) {
-    const supplier = await this.prisma.cacaoSupplier.findFirst({ where: { id, companyId } });
+    const supplier = await this.prisma.cacaoSupplier.findFirst({
+      where: { id, companyId },
+    });
     if (!supplier) throw new NotFoundException('Proveedor no encontrado');
     return this.prisma.cacaoSupplier.delete({ where: { id } });
   }

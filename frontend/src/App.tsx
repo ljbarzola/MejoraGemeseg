@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
@@ -9,30 +9,6 @@ import ProjectDetailPage from './pages/projects/ProjectDetailPage';
 import KanbanPage from './pages/tasks/KanbanPage';
 import CreateTaskPage from './pages/tasks/CreateTaskPage';
 import TaskDetailPage from './pages/tasks/TaskDetailPage';
-import AdminDashboardPage from './pages/admin/AdminDashboardPage';
-import CompaniesPage from './pages/admin/CompaniesPage';
-import CompanySettingsPage from './pages/admin/CompanySettingsPage';
-import ToolsPage from './pages/tools/ToolsPage';
-import ProfilePage from './pages/profile/ProfilePage';
-import AgentsPage from './pages/admin/AgentsPage';
-import CacaoDashboard from './pages/cacao/CacaoDashboard';
-import CacaoHelpGuide from './pages/cacao/CacaoHelpGuide';
-import SuppliersPage from './pages/cacao/suppliers/SuppliersPage';
-import ClientsPage from './pages/cacao/clients/ClientsPage';
-import ReceptionsList from './pages/cacao/receptions/ReceptionsList';
-import ReceptionForm from './pages/cacao/receptions/ReceptionForm';
-import LotsList from './pages/cacao/lots/LotsList';
-import LotDetail from './pages/cacao/lots/LotDetail';
-import SettlementsList from './pages/cacao/settlements/SettlementsList';
-import SettlementForm from './pages/cacao/settlements/SettlementForm';
-import SettlementDetail from './pages/cacao/settlements/SettlementDetail';
-import PriceFixingsList from './pages/cacao/price-fixings/PriceFixingsList';
-import ShipmentsList from './pages/cacao/shipments/ShipmentsList';
-import ShipmentForm from './pages/cacao/shipments/ShipmentForm';
-import ShipmentDetail from './pages/cacao/shipments/ShipmentDetail';
-import PayablesList from './pages/cacao/payables/PayablesList';
-import ReceivablesList from './pages/cacao/receivables/ReceivablesList';
-import QualitiesPage from './pages/cacao/qualities/QualitiesPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/layout/Navbar';
 import ChatFloatingButton from './components/chat/ChatFloatingButton';
@@ -40,12 +16,48 @@ import ChatDrawer from './components/chat/ChatDrawer';
 import { CompanyProvider } from './contexts/ThemeContext';
 import { isAuthenticated } from './services/auth.service';
 
+const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
+const CompaniesPage = lazy(() => import('./pages/admin/CompaniesPage'));
+const CompanySettingsPage = lazy(() => import('./pages/admin/CompanySettingsPage'));
+const ToolsPage = lazy(() => import('./pages/tools/ToolsPage'));
+const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
+const AgentsPage = lazy(() => import('./pages/admin/AgentsPage'));
+const CacaoDashboard = lazy(() => import('./pages/cacao/CacaoDashboard'));
+const CacaoHelpGuide = lazy(() => import('./pages/cacao/CacaoHelpGuide'));
+const SuppliersPage = lazy(() => import('./pages/cacao/suppliers/SuppliersPage'));
+const ClientsPage = lazy(() => import('./pages/cacao/clients/ClientsPage'));
+const ReceptionsList = lazy(() => import('./pages/cacao/receptions/ReceptionsList'));
+const ReceptionForm = lazy(() => import('./pages/cacao/receptions/ReceptionForm'));
+const LotsList = lazy(() => import('./pages/cacao/lots/LotsList'));
+const LotDetail = lazy(() => import('./pages/cacao/lots/LotDetail'));
+const SettlementsList = lazy(() => import('./pages/cacao/settlements/SettlementsList'));
+const SettlementForm = lazy(() => import('./pages/cacao/settlements/SettlementForm'));
+const SettlementDetail = lazy(() => import('./pages/cacao/settlements/SettlementDetail'));
+const PriceFixingsList = lazy(() => import('./pages/cacao/price-fixings/PriceFixingsList'));
+const ShipmentsList = lazy(() => import('./pages/cacao/shipments/ShipmentsList'));
+const ShipmentForm = lazy(() => import('./pages/cacao/shipments/ShipmentForm'));
+const ShipmentDetail = lazy(() => import('./pages/cacao/shipments/ShipmentDetail'));
+const PayablesList = lazy(() => import('./pages/cacao/payables/PayablesList'));
+const ReceivablesList = lazy(() => import('./pages/cacao/receivables/ReceivablesList'));
+const QualitiesPage = lazy(() => import('./pages/cacao/qualities/QualitiesPage'));
+
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
     <ProtectedRoute>
-      <Navbar />
+      <div className="no-print"><Navbar /></div>
       {children}
     </ProtectedRoute>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#718096' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: '24px', marginBottom: '8px', animation: 'spin 1s linear infinite' }}>&#8635;</div>
+        <div>Cargando...</div>
+      </div>
+    </div>
   );
 }
 
@@ -55,6 +67,7 @@ function App() {
   return (
     <BrowserRouter>
       <CompanyProvider>
+      <Suspense fallback={<LoadingFallback />}>
       <Routes>
         <Route
           path="/"
@@ -199,6 +212,7 @@ function App() {
         <Route path="/cacao/receivables" element={<ProtectedLayout><ReceivablesList /></ProtectedLayout>} />
         <Route path="/cacao/qualities" element={<ProtectedLayout><QualitiesPage /></ProtectedLayout>} />
       </Routes>
+      </Suspense>
 
       {isAuthenticated() && (
         <>

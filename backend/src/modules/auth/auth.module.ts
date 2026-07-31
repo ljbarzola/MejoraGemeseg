@@ -6,7 +6,10 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { PrismaModule } from '../../prisma/prisma.module';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'gemeseg-jwt-secret-2024';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
 
 @Module({
   imports: [

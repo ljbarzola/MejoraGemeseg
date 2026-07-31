@@ -1,4 +1,6 @@
 ﻿import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { ProjectsModule } from './modules/projects/projects.module';
@@ -9,8 +11,23 @@ import { ToolsModule } from './modules/tools/tools.module';
 import { AgentsModule } from './modules/agents/agents.module';
 import { CompaniesModule } from './modules/companies/companies.module';
 import { CacaoModule } from './modules/cacao/cacao.module';
+import { CacheModule } from './modules/cache/cache.module';
 
 @Module({
-  imports: [AuthModule, UsersModule, ProjectsModule, TasksModule, AiModule, QueueModule, ToolsModule, AgentsModule, CompaniesModule, CacaoModule],
+  imports: [
+    CacheModule,
+    AuthModule,
+    UsersModule,
+    ProjectsModule,
+    TasksModule,
+    AiModule,
+    QueueModule,
+    ToolsModule,
+    AgentsModule,
+    CompaniesModule,
+    CacaoModule,
+  ],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}

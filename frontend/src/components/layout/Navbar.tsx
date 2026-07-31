@@ -10,7 +10,8 @@ export default function Navbar() {
   const isSuperAdmin = isAdmin && !user?.companyId;
   const isCompanyAdmin = isAdmin && !!user?.companyId;
   const isSystems = user?.email === 'sistemas@gemeseg.com';
-  const canManageAgents = isAdmin || isSystems;
+  const isGemeseg = !user?.companyId || user?.companyId === 1;
+  const canManageAgents = (isAdmin || isSystems) && isGemeseg;
   const isMikacao = user?.companyId === 2;
 
   const handleLogout = () => {
@@ -23,7 +24,15 @@ export default function Navbar() {
     <nav className="navbar">
       <div className="navbar-brand" onClick={() => navigate('/dashboard')}>
         <span className="navbar-logo">
-          <img src={theme.logoUrl || '/resources/logo-gemeseg-back-white.png'} alt={theme.name} style={{ height: '28px' }} />
+          {theme.logoUrl ? (
+            <img
+              src={theme.logoUrl}
+              alt={theme.name}
+              style={{ height: '28px' }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+          ) : null}
+          <span style={{ color: 'white', fontWeight: 700, fontSize: '14px' }}>{theme.name}</span>
         </span>
       </div>
       <div className="navbar-links">

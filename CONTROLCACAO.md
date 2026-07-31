@@ -336,6 +336,9 @@ SALIDA:  nuevo saldo = saldo anterior - cantidad
 - `PATCH /cacao/clients/:id` - Actualizar cliente
 - `DELETE /cacao/clients/:id` - Eliminar cliente
 - `GET /cacao/qualities` - Lista de calidades
+- `POST /cacao/qualities` - Crear calidad (solo ADMIN)
+- `PATCH /cacao/qualities/:id` - Actualizar calidad (solo ADMIN)
+- `DELETE /cacao/qualities/:id` - Eliminar calidad (solo ADMIN)
 
 ### Operaciones
 - `GET /cacao/receptions` - Listar recepciones
@@ -364,6 +367,12 @@ SALIDA:  nuevo saldo = saldo anterior - cantidad
 
 ### Dashboard
 - `GET /cacao/dashboard` - KPIs
+
+### Configuracion
+- `GET /cacao/unit-config` - Listar configuraciones de unidades
+- `POST /cacao/unit-config` - Crear configuracion (solo ADMIN)
+- `PATCH /cacao/unit-config/:id` - Actualizar configuracion (solo ADMIN)
+- `DELETE /cacao/unit-config/:id` - Eliminar configuracion (solo ADMIN)
 
 ---
 
@@ -399,6 +408,11 @@ SALIDA:  nuevo saldo = saldo anterior - cantidad
 - `frontend/src/styles.css`: +.navbar-link-cacao, .cacao-form, .cacao-back-btn, .unsaved-dialog, .btn-danger
 - `frontend/src/pages/cacao/utils.ts`: formatDateEc(), formatMoney(), formatKg()
 - `scripts/supabase-schema.sql`: +tablas Cacao*
+- `backend/src/modules/agents/agents.controller.ts`: +RolesGuard + @Roles(ADMIN) a nivel de clase
+- `backend/src/modules/tools/tools.controller.ts`: +RolesGuard + @Roles(ADMIN) a nivel de clase
+- `backend/src/modules/cacao/unit-config/unit-config.controller.ts`: +RolesGuard en POST/PATCH/DELETE
+- `backend/src/app.module.ts`: +AppController + AppService registrados
+- `backend/test/app.e2e-spec.ts`: +JWT_SECRET setup, tests e2e funcionando
 
 ## Paginas del Modulo Cacao
 
@@ -446,6 +460,7 @@ SALIDA:  nuevo saldo = saldo anterior - cantidad
 - v1.4.0 - Julio 2026 (sistema de conversion de unidades: compra en TON/KG/SACO, venta en SACO, kardex siempre en kg, modelos configurables)
 - v1.5.0 - Julio 2026 (UI informativa: formularios con tarjeta de conversion visual, listados con unidades originales, lotes con unidad de entrada, kardex con columna de unidad original)
 - v1.6.0 - Julio 2026 (guia interactiva del sistema, dashboard mejorado con KPIs y boton de ayuda)
+- v1.7.0 - Julio 2026 (auditoria tecnica: RolesGuard en Agents/Tools/UnitConfig, tests e2e corregidos, AppController registrado en AppModule)
 
 ---
 

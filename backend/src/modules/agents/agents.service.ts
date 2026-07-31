@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAgentDto, UpdateAgentDto } from './dto/agent.dto';
 
@@ -9,8 +13,13 @@ export class AgentsService {
   async findAllAgents() {
     return this.prisma.agent.findMany({
       select: {
-        id: true, name: true, instructions: true, scope: true,
-        isActive: true, createdBy: true, createdAt: true,
+        id: true,
+        name: true,
+        instructions: true,
+        scope: true,
+        isActive: true,
+        createdBy: true,
+        createdAt: true,
         _count: { select: { userLinks: true } },
       },
       orderBy: { name: 'asc' },
@@ -42,8 +51,13 @@ export class AgentsService {
       include: {
         agent: {
           select: {
-            id: true, name: true, instructions: true, scope: true,
-            isActive: true, createdBy: true, createdAt: true,
+            id: true,
+            name: true,
+            instructions: true,
+            scope: true,
+            isActive: true,
+            createdBy: true,
+            createdAt: true,
           },
         },
         user: {
@@ -52,7 +66,10 @@ export class AgentsService {
       },
     });
 
-    const agentUserMap = new Map<number, { id: number; fullName: string; email: string }[]>();
+    const agentUserMap = new Map<
+      number,
+      { id: number; fullName: string; email: string }[]
+    >();
     for (const link of userLinks) {
       if (!agentUserMap.has(link.agentId)) {
         agentUserMap.set(link.agentId, []);
@@ -66,7 +83,10 @@ export class AgentsService {
     }
     for (const link of userLinks) {
       if (userMap.has(link.userId)) {
-        const agentData = { ...link.agent, assignedUsers: agentUserMap.get(link.agentId) || [] };
+        const agentData = {
+          ...link.agent,
+          assignedUsers: agentUserMap.get(link.agentId) || [],
+        };
         userMap.get(link.userId)!.agents.push(agentData);
       }
     }
@@ -80,8 +100,13 @@ export class AgentsService {
       include: {
         agent: {
           select: {
-            id: true, name: true, instructions: true, scope: true,
-            isActive: true, createdBy: true, createdAt: true,
+            id: true,
+            name: true,
+            instructions: true,
+            scope: true,
+            isActive: true,
+            createdBy: true,
+            createdAt: true,
           },
         },
       },
@@ -93,7 +118,10 @@ export class AgentsService {
     const existing = await this.prisma.agent.findFirst({
       where: { createdBy: dto.userId, name: dto.name },
     });
-    if (existing) throw new ConflictException('Ya existe un agente con ese nombre para este usuario');
+    if (existing)
+      throw new ConflictException(
+        'Ya existe un agente con ese nombre para este usuario',
+      );
 
     const agent = await this.prisma.agent.create({
       data: {
@@ -145,14 +173,15 @@ export class AgentsService {
     const agents = await this.prisma.agent.findMany({
       where: {
         isActive: true,
-        OR: [
-          { createdBy: null },
-          { id: { in: assignedAgentIds } },
-        ],
+        OR: [{ createdBy: null }, { id: { in: assignedAgentIds } }],
       },
       select: {
-        id: true, name: true, instructions: true, scope: true,
-        isActive: true, createdBy: true,
+        id: true,
+        name: true,
+        instructions: true,
+        scope: true,
+        isActive: true,
+        createdBy: true,
       },
       orderBy: { name: 'asc' },
     });
@@ -160,8 +189,12 @@ export class AgentsService {
     const defaultAgent = await this.prisma.agent.findFirst({
       where: { createdBy: null, name: 'Agente GEMESEG' },
       select: {
-        id: true, name: true, instructions: true, scope: true,
-        isActive: true, createdBy: true,
+        id: true,
+        name: true,
+        instructions: true,
+        scope: true,
+        isActive: true,
+        createdBy: true,
       },
     });
 
@@ -169,7 +202,9 @@ export class AgentsService {
   }
 
   async assignToUser(agentId: number, userId: number) {
-    const agent = await this.prisma.agent.findUnique({ where: { id: agentId } });
+    const agent = await this.prisma.agent.findUnique({
+      where: { id: agentId },
+    });
     if (!agent) throw new NotFoundException('Agente no encontrado');
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -178,7 +213,8 @@ export class AgentsService {
     const exists = await this.prisma.userAgent.findUnique({
       where: { userId_agentId: { userId, agentId } },
     });
-    if (exists) throw new ConflictException('El usuario ya tiene acceso a este agente');
+    if (exists)
+      throw new ConflictException('El usuario ya tiene acceso a este agente');
 
     return this.prisma.userAgent.create({ data: { userId, agentId } });
   }

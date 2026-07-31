@@ -1,0 +1,265 @@
+==========================================================
+CAMBIOS REALIZADOS - AUDITORIA TECNICA
+GEMESEG Mejora - Módulo Cacao
+Fecha: 30/07/2026
+==========================================================
+
+RESUMEN EJECUTIVO
+==========================================================
+Se implementaron 16 mejoras técnicas (12 en sesión anterior + 4 en esta sesión)
+identificadas en la auditoría técnica del sistema.
+
+Puntuación antes: 5.0/10
+Puntuación después: 6.0/10
+
+==========================================================
+1. FIX JEST 29 - FRAMEWORK DE TESTS
+==========================================================
+Categoría: TESTING | Prioridad: CRITICA | Esfuerzo: Bajo
+Archivos: backend/package.json
+Cambio: Downgrade de Jest 30 → Jest 29 (compatibilidad con ts-jest@29)
+Verificación: npm run test pasa (1 test suite, 1 test)
+Impacto: Los tests unitarios ahora ejecutan correctamente.
+
+==========================================================
+2. ELIMINAR SECRETS HARDCODEADOS
+==========================================================
+Categoría: SEGURIDAD | Prioridad: CRITICA | Esfuerzo: Bajo
+Archivos:
+  - backend/src/modules/auth/auth.module.ts: JWT_SECRET lanza error si falta
+  - backend/src/modules/auth/strategies/jwt.strategy.ts: JWT_SECRET lanza error si falta
+  - backend/src/modules/users/users.service.ts: Password requerido, sin default 'gemeseg2026'
+  - backend/src/modules/users/dto/create-user.dto.ts: Password con @IsNotEmpty
+Cambio: Eliminados fallbacks hardcodeados, passwords siempre requeridos
+Verificación: Backend compila sin errores, tests pasan.
+
+==========================================================
+3. INSTALAR HELMET
+==========================================================
+Categoría: SEGURIDAD | Prioridad: ALTA | Esfuerzo: Bajo
+Archivos:
+  - backend/package.json: npm install helmet
+  - backend/src/main.ts: app.use(helmet())
+Cambio: Headers de seguridad HTTP activos:
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Content-Security-Policy
+  Strict-Transport-Security
+Verificación: Backend compila, tests pasan.
+
+==========================================================
+4. EXCEPTIONFILTER GLOBAL
+==========================================================
+Categoría: ARQUITECTURA | Prioridad: ALTA | Esfuerzo: Medio
+Archivos:
+  - backend/src/common/filters/all-exceptions.filter.ts (NUEVO)
+  - backend/src/main.ts: app.useGlobalFilters(new AllExceptionsFilter())
+Cambio: Manejo centralizado de errores con formato JSON consistente
+Verificación: Backend compila, tests pasan.
+
+==========================================================
+5. REACT.LAZY() CODE-SPLITTING
+==========================================================
+Categoría: RENDIMIENTO | Prioridad: ALTA | Esfuerzo: Medio
+Archivos: frontend/src/App.tsx
+Cambio: 24 componentes de página lazy-loaded con React.lazy() + <Suspense>
+Resultado: Bundle principal 569.42 KB → 393.45 KB (-31%, bajo 500KB)
+Chunks generados: 24+ archivos JS separados por página
+Verificación: npm run build exitoso.
+
+==========================================================
+6. CORS EXPLÍCITO (WHITELIST)
+==========================================================
+Categoría: SEGURIDAD | Prioridad: ALTA | Esfuerzo: Bajo
+Archivos: backend/src/main.ts
+Cambio: Reemplazado origin.endsWith('.vercel.app') (wildcard) por
+  whitelist explícita: ['https://mejora-gemeseg.vercel.app']
+  + FRONTEND_URL + localhost
+Verificación: Backend compila, tests pasan.
+
+==========================================================
+7. DOCKER USER NODE (NO-ROOT)
+==========================================================
+Categoría: DEVOPS | Prioridad: ALTA | Esfuerzo: Bajo
+Archivos: backend/Dockerfile
+Cambio: Agregado usuario no-root 'appuser' al contenedor
+  RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+  USER appuser
+Verificación: Dockerfile válido, multi-stage build preservado.
+
+==========================================================
+8. DOCKER HEALTHCHECK BACKEND
+==========================================================
+Categoría: DEVOPS | Prioridad: BAJO | Esfuerzo: Bajo
+Archivos: docker-compose.yml
+Cambio: Agregado healthcheck al servicio backend:
+  test: wget -qO- http://localhost:3000/docs || exit 1
+  interval: 15s, timeout: 5s, retries: 3
+Verificación: docker-compose.yml válido.
+
+==========================================================
+9. BACKEND STRICT TYPESCRIPT
+==========================================================
+Categoría: CALIDAD | Prioridad: ALTA | Esfuerzo: Medio
+Archivos:
+  - backend/tsconfig.json: noImplicitAny, strictBindCallApply, noFallthroughCasesInSwitch
+  - backend/src/modules/companies/companies.controller.ts: Tipado correcto de multer
+  - backend/src/main.ts: Tipado de CORS callback
+Cambio: Habilitados flags strict en backend tsconfig
+  - noImplicitAny: true (antes false)
+  - strictBindCallApply: true (antes false)
+  - noFallthroughCasesInSwitch: true (antes false)
+  + npm install -D @types/multer
+Verificación: 0 errores TypeScript, tests pasan.
+
+==========================================================
+10. ESLINT FUNCIONAL EN FRONTEND
+==========================================================
+Categoría: CALIDAD | Prioridad: ALTA | Esfuerzo: Bajo
+Archivos:
+  - frontend/eslint.config.js (NUEVO) - Flat config con typescript-eslint + react-hooks
+  - frontend/package.json: npm install eslint + lint script
+Cambio: ESLint v10 con flat config configurado y funcional
+Resultado: 0 errores, 149 warnings (no bloqueantes)
+Comando: npm run lint
+Verificación: Ejecuta sin errores.
+
+==========================================================
+11. REDIS CACHE PARA ENDPOINTS FRECUENTES
+==========================================================
+Categoría: RENDIMIENTO | Prioridad: MEDIA | Esfuerzo: Medio
+Archivos:
+  - backend/src/modules/cache/cache.service.ts (NUEVO) - Servicio Redis con get/set/invalidate
+  - backend/src/modules/cache/cache.module.ts (NUEVO) - Módulo global
+  - backend/src/modules/cacao/dashboard/dashboard.service.ts: Cache 30s
+  - backend/src/modules/cacao/kardex/kardex.service.ts: Cache 30s + invalidación
+  - backend/src/modules/cacao/receptions/receptions.service.ts: Inyección CacheService + invalidación
+  - backend/src/modules/cacao/shipments/shipments.service.ts: Inyección CacheService + invalidación
+  - backend/src/app.module.ts: CacheModule registrado
+Cambio: Dashboard y kardex cacheados con TTL 30 segundos
+  Invalidación automática al crear recepciones/embarques
+  Sin Redis configurado → cache deshabilitado graceful (sin errores)
+Verificación: Backend compila, tests pasan.
+
+==========================================================
+12. TEST:COV FUNCIONA
+==========================================================
+Categoría: TESTING | Prioridad: MEDIA | Esfuerzo: Bajo
+Archivos: backend/package.json (ya existía test:cov script)
+Cambio: El downgrade a Jest 29 corrigió el error de babel instrumentation
+Verificación: npm run test:cov ejecuta y genera coverage report
+Resultado: Cobertura disponible (~0% real porque solo hay 1 test trivial)
+
+==========================================================
+13. ROLESGuard EN AGENTESCONTROLLER
+==========================================================
+Categoría: SEGURIDAD | Prioridad: CRITICA | Esfuerzo: Bajo
+Archivos: backend/src/modules/agents/agents.controller.ts
+Cambio: Agregado @UseGuards(AuthGuard('jwt'), RolesGuard) + @Roles(UserRole.ADMIN) a nivel de clase
+  Antes: Solo AuthGuard en cada metodo individual
+  Ahora: RolesGuard en toda la clase, solo ADMIN puede crear/eliminar/asignar agentes
+Verificación: Backend compila, tests pasan.
+
+==========================================================
+14. ROLESGuard EN TOOLSCONTROLLER
+==========================================================
+Categoría: SEGURIDAD | Prioridad: CRITICA | Esfuerzo: Bajo
+Archivos: backend/src/modules/tools/tools.controller.ts
+Cambio: Agregado @UseGuards(AuthGuard('jwt'), RolesGuard) + @Roles(UserRole.ADMIN) a nivel de clase
+  Antes: Solo AuthGuard en cada metodo individual
+  Ahora: RolesGuard en toda la clase, solo ADMIN puede crear/eliminar/asignar herramientas
+Verificación: Backend compila, tests pasan.
+
+==========================================================
+15. ROLESGuard EN UNITCONFIGCONTROLLER
+==========================================================
+Categoría: SEGURIDAD | Prioridad: ALTA | Esfuerzo: Bajo
+Archivos: backend/src/modules/cacao/unit-config/unit-config.controller.ts
+Cambio: RolesGuard + @Roles(UserRole.ADMIN) en POST, PATCH, DELETE
+  GET queda accesible para cualquier usuario autenticado
+Verificación: Backend compila, tests pasan.
+
+==========================================================
+16. TESTS E2E CORREGIDOS
+==========================================================
+Categoría: TESTING | Prioridad: CRITICA | Esfuerzo: Bajo
+Archivos: test/app.e2e-spec.ts, src/app.module.ts
+Cambio:
+  - JWT_SECRET se configura automaticamente en el test setup
+  - AppController y AppService registrados en AppModule (antes no estaban)
+  - Tests e2e ahora pasan: GET / + GET /auth/status
+Verificación: npm run test:e2e pasa (2 tests).
+
+==========================================================
+ARCHIVOS MODIFICADOS (RESUMEN)
+==========================================================
+
+Backend:
+  [MODIFICADO] backend/tsconfig.json - strict flags
+  [MODIFICADO] backend/package.json - jest@29, helmet, ioredis, @types/multer
+  [MODIFICADO] backend/Dockerfile - non-root user
+  [MODIFICADO] backend/src/main.ts - helmet, ExceptionFilter, CORS whitelist, strict types
+  [MODIFICADO] backend/src/app.module.ts - CacheModule
+  [MODIFICADO] backend/src/modules/auth/auth.module.ts - JWT_SECRET throws
+  [MODIFICADO] backend/src/modules/auth/strategies/jwt.strategy.ts - JWT_SECRET throws
+  [MODIFICADO] backend/src/modules/users/users.service.ts - password required
+  [MODIFICADO] backend/src/modules/users/dto/create-user.dto.ts - password @IsNotEmpty
+  [MODIFICADO] backend/src/modules/companies/companies.controller.ts - multer types
+  [MODIFICADO] backend/src/modules/cacao/dashboard/dashboard.service.ts - cache
+  [MODIFICADO] backend/src/modules/cacao/kardex/kardex.service.ts - cache + invalidación
+  [MODIFICADO] backend/src/modules/cacao/receptions/receptions.service.ts - cache inject + invalidación
+  [MODIFICADO] backend/src/modules/cacao/shipments/shipments.service.ts - cache inject + invalidación
+  [MODIFICADO] backend/src/modules/agents/agents.controller.ts - RolesGuard + @Roles(ADMIN)
+  [MODIFICADO] backend/src/modules/tools/tools.controller.ts - RolesGuard + @Roles(ADMIN)
+  [MODIFICADO] backend/src/modules/cacao/unit-config/unit-config.controller.ts - RolesGuard en escritura
+  [MODIFICADO] backend/src/app.module.ts - AppController + AppService registrados
+  [MODIFICADO] backend/test/app.e2e-spec.ts - JWT_SECRET setup + tests e2e
+  [NUEVO] backend/src/common/filters/all-exceptions.filter.ts
+  [NUEVO] backend/src/modules/cache/cache.service.ts
+  [NUEVO] backend/src/modules/cache/cache.module.ts
+
+Frontend:
+  [MODIFICADO] frontend/package.json - eslint, lint script
+  [MODIFICADO] frontend/src/App.tsx - React.lazy() + Suspense (24 páginas)
+  [NUEVO] frontend/eslint.config.js
+
+Infraestructura:
+  [MODIFICADO] docker-compose.yml - backend healthcheck
+
+==========================================================
+PENDIENTE (NO IMPLEMENTADO)
+==========================================================
+
+Items de esfuerzo bajo:
+  - Sin CI/CD pipeline configurado (GitHub Actions)
+  - uploads/ no excluido del build docker
+
+Items de esfuerzo medio:
+  - Sin tests unitarios de servicios (solo 1 spec trivial + 2 e2e)
+  - Backend tsconfig sin "strict": true completo (solo flags individuales)
+  - Sin refresh token pattern (JWT en localStorage)
+
+==========================================================
+VERIFICACIÓN FINAL
+==========================================================
+
+Backend:
+  tsc --noEmit: 0 errores ✓
+  npm run test: 1 passed ✓
+  npm run test:cov: funciona ✓
+  npm run test:e2e: 2 passed (GET / + GET /auth/status) ✓
+
+Frontend:
+  tsc --noEmit: 1 warning (unused var, no bloqueante) ✓
+  npm run build: 3.42s, 393.45 KB bundle ✓
+  npm run lint: 0 errores, 149 warnings ✓
+
+Docker:
+  Dockerfile: válido, non-root ✓
+  docker-compose.yml: healthcheck backend ✓
+
+==========================================================
+GENERADO POR: Auditoría Técnica Automatizada
+FECHA: 30/07/2026
+HERRAMIENTAS: tsc, eslint, jest, npm audit, prisma generate
+==========================================================

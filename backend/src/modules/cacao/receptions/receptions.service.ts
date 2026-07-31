@@ -2,15 +2,20 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateReceptionDto } from './dto/create-reception.dto';
 import { CacaoUnitConfigService } from '../unit-config/unit-config.service';
+import { CacheService } from '../../cache/cache.service';
 
 @Injectable()
 export class CacaoReceptionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly unitConfig: CacaoUnitConfigService,
+    private readonly cache: CacheService,
   ) {}
 
-  async findAll(companyId: number, query: { supplierId?: string; from?: string; to?: string }) {
+  async findAll(
+    companyId: number,
+    query: { supplierId?: string; from?: string; to?: string },
+  ) {
     const where: any = { companyId };
     if (query.supplierId) where.supplierId = Number(query.supplierId);
     if (query.from || query.to) {
@@ -33,8 +38,16 @@ export class CacaoReceptionsService {
     const unit = dto.unitOfMeasure || 'KG';
 
     // Convert all weights to kg for internal storage
-    const grossWeightKg = await this.unitConfig.convertToKg(dto.grossWeight, unit, companyId);
-    const tareKg = await this.unitConfig.convertToKg(dto.tare || 0, unit, companyId);
+    const grossWeightKg = await this.unitConfig.convertToKg(
+      dto.grossWeight,
+      unit,
+      companyId,
+    );
+    const tareKg = await this.unitConfig.convertToKg(
+      dto.tare || 0,
+      unit,
+      companyId,
+    );
     const netWeightKg = grossWeightKg - tareKg;
 
     const now = new Date();
@@ -45,7 +58,7 @@ export class CacaoReceptionsService {
       orderBy: { id: 'desc' },
     });
     const seq = lastLot ? parseInt(lastLot.code.split('-')[2]) + 1 : 1;
-    const lotCode = `LOTE-${year}-${String(seq).padStart(3, '0')}`;
+    const lotCode = `LOTE-${year}-${String(seq).padStart(5, '0')}`;
 
     const qualityId = dto.qualityId || 1;
     const provPrice = dto.provisionalPrice || 0;
@@ -100,5 +113,10 @@ export class CacaoReceptionsService {
     });
 
     return reception;
+  }
+
+  async invalidateCache(companyId: number): Promise<void> {
+    await this.cache.invalidate(`dashboard:${companyId}`);
+    await this.cache.invalidate(`kardex:${companyId}:*`);
   }
 }

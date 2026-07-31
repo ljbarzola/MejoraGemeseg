@@ -33,7 +33,10 @@ export class UsersController {
 
   @Get()
   @UseGuards(AuthGuard('jwt'))
-  findAll(@Req() req: any, @Query() query: { role?: string; isActive?: string; search?: string }) {
+  findAll(
+    @Req() req: any,
+    @Query() query: { role?: string; isActive?: string; search?: string },
+  ) {
     return this.usersService.findAll(req.user.companyId, query);
   }
 
@@ -70,7 +73,11 @@ export class UsersController {
   @Patch(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN)
-  async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateUserDto, @Req() req: any) {
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateUserDto,
+    @Req() req: any,
+  ) {
     const user = await this.usersService.findOne(id);
     if (req.user.companyId && user.companyId !== req.user.companyId) {
       throw new ForbiddenException('No puedes editar usuarios de otra empresa');
@@ -84,7 +91,9 @@ export class UsersController {
   async remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     const user = await this.usersService.findOne(id);
     if (req.user.companyId && user.companyId !== req.user.companyId) {
-      throw new ForbiddenException('No puedes eliminar usuarios de otra empresa');
+      throw new ForbiddenException(
+        'No puedes eliminar usuarios de otra empresa',
+      );
     }
     return this.usersService.remove(id);
   }

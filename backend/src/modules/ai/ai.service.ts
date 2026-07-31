@@ -32,15 +32,22 @@ export class AiService {
     if (this.githubToken && this.githubToken !== 'YOUR_GITHUB_TOKEN_HERE') {
       this.logger.log('Usando GitHub Models (gpt-4o-mini)');
     } else {
-      this.logger.warn('GITHUB_TOKEN no configurado — chat funcionará con respuestas mock');
+      this.logger.warn(
+        'GITHUB_TOKEN no configurado — chat funcionará con respuestas mock',
+      );
     }
   }
 
   async sendMessage(dto: SendMessageDto, userId: number) {
     await this.checkRateLimit(userId);
 
-    const agentId = dto.agentId || await this.getDefaultAgentId();
-    const conversation = await this.getOrCreateConversation(dto.conversationId, userId, dto.context, agentId);
+    const agentId = dto.agentId || (await this.getDefaultAgentId());
+    const conversation = await this.getOrCreateConversation(
+      dto.conversationId,
+      userId,
+      dto.context,
+      agentId,
+    );
 
     await this.prisma.chatMessage.create({
       data: {
@@ -57,7 +64,12 @@ export class AiService {
 
     try {
       if (this.githubToken && this.githubToken !== 'YOUR_GITHUB_TOKEN_HERE') {
-        const result = await this.callGitHubModels(dto.message, dto.context, history, conversation.agentId);
+        const result = await this.callGitHubModels(
+          dto.message,
+          dto.context,
+          history,
+          conversation.agentId,
+        );
         reply = result.reply;
         tokensUsed = result.tokensUsed;
       } else {
@@ -76,7 +88,10 @@ export class AiService {
         role: 'assistant',
         content: reply,
         tokensUsed,
-        model: this.githubToken && this.githubToken !== 'YOUR_GITHUB_TOKEN_HERE' ? MODEL : 'mock',
+        model:
+          this.githubToken && this.githubToken !== 'YOUR_GITHUB_TOKEN_HERE'
+            ? MODEL
+            : 'mock',
       },
     });
 
@@ -89,7 +104,12 @@ export class AiService {
     };
   }
 
-  private async callGitHubModels(message: string, context: string, history: string[], agentId: number) {
+  private async callGitHubModels(
+    message: string,
+    context: string,
+    history: string[],
+    agentId: number,
+  ) {
     const systemPrompt = await this.getSystemPromptForAgent(agentId);
 
     const messages = [
@@ -105,7 +125,7 @@ export class AiService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.githubToken}`,
+        Authorization: `Bearer ${this.githubToken}`,
       },
       body: JSON.stringify({
         model: MODEL,
@@ -121,7 +141,8 @@ export class AiService {
     }
 
     const data = await response.json();
-    const text = data.choices?.[0]?.message?.content || 'No pude generar una respuesta.';
+    const text =
+      data.choices?.[0]?.message?.content || 'No pude generar una respuesta.';
     const tokensUsed = data.usage?.total_tokens || 0;
 
     const intentMatch = text.match(/\[INTENCION:\s*(\w+)(?:\(([^)]+)\))?\]/);
@@ -147,13 +168,20 @@ export class AiService {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.githubToken}`,
+            Authorization: `Bearer ${this.githubToken}`,
           },
           body: JSON.stringify({
             model: MODEL,
             messages: [
-              { role: 'system', content: 'Responde de forma concisa basándote en los datos proporcionados.' },
-              { role: 'user', content: `Datos del sistema:\n${dataResult}\n\nPregunta original: ${message}` },
+              {
+                role: 'system',
+                content:
+                  'Responde de forma concisa basándote en los datos proporcionados.',
+              },
+              {
+                role: 'user',
+                content: `Datos del sistema:\n${dataResult}\n\nPregunta original: ${message}`,
+              },
             ],
             max_tokens: 512,
             temperature: 0.5,
@@ -177,25 +205,38 @@ export class AiService {
     return { reply: text, tokensUsed };
   }
 
-  private async mockResponse(message: string, context: string): Promise<string> {
+  private async mockResponse(
+    message: string,
+    context: string,
+  ): Promise<string> {
     await new Promise((r) => setTimeout(r, 800));
 
     const lower = message.toLowerCase();
 
     if (lower.includes('proyecto')) {
-      const projects = await this.prisma.project.findMany({ take: 5, orderBy: { createdAt: 'desc' } });
+      const projects = await this.prisma.project.findMany({
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+      });
       if (projects.length === 0) return 'No hay proyectos registrados.';
       const list = projects.map((p) => `- ${p.name} [${p.status}]`).join('\n');
       return `Tus proyectos:\n${list}`;
     }
 
     if (lower.includes('tarea')) {
-      const tasks = await this.prisma.task.groupBy({ by: ['status'], _count: { id: true } });
+      const tasks = await this.prisma.task.groupBy({
+        by: ['status'],
+        _count: { id: true },
+      });
       const counts = tasks.map((t) => `${t.status}: ${t._count.id}`).join(', ');
       return `Resumen de tareas: ${counts || 'No hay tareas'}`;
     }
 
-    if (lower.includes('usuario') || lower.includes('perfil') || lower.includes('quién soy')) {
+    if (
+      lower.includes('usuario') ||
+      lower.includes('perfil') ||
+      lower.includes('quién soy')
+    ) {
       return 'Puedo mostrarte tu información de perfil. Usa la sección de tu perfil para más detalles.';
     }
 
@@ -231,9 +272,16 @@ export class AiService {
     return agent?.id || 1;
   }
 
-  private async getOrCreateConversation(conversationId: number | undefined, userId: number, context: string, agentId: number) {
+  private async getOrCreateConversation(
+    conversationId: number | undefined,
+    userId: number,
+    context: string,
+    agentId: number,
+  ) {
     if (conversationId) {
-      const conv = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
+      const conv = await this.prisma.conversation.findUnique({
+        where: { id: conversationId },
+      });
       if (conv && conv.userId === userId) return conv;
     }
 
@@ -242,7 +290,9 @@ export class AiService {
     });
   }
 
-  private async getConversationHistory(conversationId: number): Promise<string[]> {
+  private async getConversationHistory(
+    conversationId: number,
+  ): Promise<string[]> {
     const messages = await this.prisma.chatMessage.findMany({
       where: { conversationId },
       orderBy: { createdAt: 'asc' },
@@ -280,9 +330,14 @@ export class AiService {
   }
 
   async getConversationMessages(conversationId: number, userId: number) {
-    const conv = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
+    const conv = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+    });
     if (!conv || conv.userId !== userId) {
-      throw new HttpException('Conversacion no encontrada', HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        'Conversacion no encontrada',
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const messages = await this.prisma.chatMessage.findMany({
@@ -299,12 +354,21 @@ export class AiService {
     }));
   }
 
-  private async logAi(userId: number, action: string, tokensUsed: number, success: boolean, errorMessage?: string) {
+  private async logAi(
+    userId: number,
+    action: string,
+    tokensUsed: number,
+    success: boolean,
+    errorMessage?: string,
+  ) {
     await this.prisma.aiLog.create({
       data: {
         userId,
         action,
-        model: this.githubToken && this.githubToken !== 'YOUR_GITHUB_TOKEN_HERE' ? MODEL : 'mock',
+        model:
+          this.githubToken && this.githubToken !== 'YOUR_GITHUB_TOKEN_HERE'
+            ? MODEL
+            : 'mock',
         tokensUsed,
         success,
         errorMessage,

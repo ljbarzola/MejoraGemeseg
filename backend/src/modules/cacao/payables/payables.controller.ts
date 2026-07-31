@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../../common/guards/roles.guard';
@@ -18,7 +28,17 @@ export class CacaoPayablesController {
   @Post(':id/pay')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN)
-  pay(@Param('id', ParseIntPipe) id: number, @Body() body: { amount: number; method: string; reference?: string }, @Req() req: any) {
-    return this.service.pay(id, body.amount, body.method, body.reference, req.user.companyId);
+  pay(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { amount: number; method: string; reference?: string },
+    @Req() req: any,
+  ) {
+    return this.service.pay(
+      id,
+      body.amount,
+      body.method,
+      body.reference,
+      req.user.companyId,
+    );
   }
 }

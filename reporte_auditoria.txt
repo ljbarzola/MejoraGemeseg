@@ -1,0 +1,469 @@
+=====================================
+AUDITORÍA TÉCNICA - GEMESEG MEJORA
+Stack: NestJS v11 (/backend) + React 18/Vite (/frontend) | Fecha: 2026-07-30
+=====================================
+
+HERRAMIENTAS EJECUTADAS
+========================
+
+Backend (/backend):
+- ESLint: 234 errores, 83 warnings (317 problemas totales)
+  - Errores principales: unsafe-assignment, unsafe-member-access, unsafe-return (uso excesivo de 'any')
+  - Warnings: unsafe-argument, no-floating-promises, require-await
+- TypeScript (tsc --noEmit): 0 errores de tipado
+- npm audit: 28 vulnerabilidades (0 criticas, 28 altas, 0 medias, 0 bajas)
+  * brace-expansion <=5.0.7 (high) - DoS via exponential-time (transitivo via eslint/jest/glob)
+  * js-yaml 5.0.0-5.2.1 (high) - DoS via flow collections (transitivo via @nestjs/swagger)
+- Cobertura de tests (test:cov): 0.67% statements | 0.36% branches | 0.96% functions | 0.54% lines
+  - 1 test suite, 1 test (app.controller.spec.ts - scaffolding NestJS default)
+- Tests e2e: FUNCIONA - JWT_SECRET configurado en test setup, 2 tests pasan (GET / + GET /auth/status)
+- Prettier: 112 archivos con issues de estilo
+
+Frontend (/frontend):
+- ESLint: 0 errores, 149 warnings
+  - 106 warnings @typescript-eslint/no-explicit-any
+  - 15 warnings react-hooks/exhaustive-deps
+  - 1 warning @typescript-eslint/no-unused-vars
+  - 1 warning @typescript-eslint/no-empty-object-type
+- TypeScript (tsc --noEmit --skipLibCheck): 1 warning (variable no usada en AgentsPage.tsx:81)
+- npm audit: 5 vulnerabilidades (0 criticas, 4 altas, 1 moderada)
+  * react-router 7.12.0-8.2.0 (high) - CSRF bypass en RSC mode
+  * react-router-dom >=7.12.0-pre.0 (high) - depende de react-router vulnerable
+  * postcss <=8.5.17 (high) - path traversal en source maps
+  * esbuild <=0.24.2 (moderate) - requests cross-origin al dev server
+  * vite <=6.4.2 (moderate) - depende de esbuild vulnerable
+- Cobertura de tests: NO CONFIGURADA (sin framework de tests)
+- Tamaño de bundle: 393.45 KB JS (121.78 KB gzip) + 41.46 KB CSS (7.37 KB gzip)
+  Total dist: 644.89 KB
+- Prettier: issues de estilo en archivos de servicios y tipos
+
+Docker:
+- Multi-stage build: SI (builder + runtime en Dockerfile)
+- Usuario no-root: SI (appuser via adduser -S)
+- .dockerignore: SI (excluye node_modules, .env, dist, coverage, .git)
+- docker-compose.yml: postgres + redis + backend, healthchecks en postgres y backend
+- Docker compose dev: NO (no existe docker-compose.dev.yml)
+
+Secretos detectados:
+1. backend/.env:8 - GITHUB_TOKEN en texto plano (github_pat_11CGUWBGA0I6uYZMh4u0Y5_...)
+2. docker-compose.yml:7 - POSTGRES_PASSWORD: postgres hardcodeado
+3. docker-compose.yml:33 - DATABASE_URL con password en texto plano
+
+Git:
+- 49 commits totales
+- Branch actual: feature/cacao-inventory-module
+
+=====================================
+RESUMEN EJECUTIVO
+=====================================
+
+Puntuacion global: 5.4/10 (antes 5.0/10)
+
+Principales fortalezas:
+1. Arquitectura NestJS modular bien estructurada (22 controllers, 13+ modulos)
+2. Docker multi-stage build con healthchecks en postgres y backend
+3. Validacion de inputs con class-validator + ValidationPipe global
+4. Helmet + ExceptionFilter global + CORS whitelist implementados
+5. Frontend TypeScript con strict mode en tsconfig
+6. Bundle optimizado con React.lazy() code-splitting (393 KB bajo 500 KB)
+
+Principales riesgos/problemas criticos:
+1. CRITICO: Cobertura de tests <1% (1 test trivial + 2 e2e, sin tests unitarios de servicios)
+2. ALTA: N+1 query en shipments.service.ts (6 queries por lote en loop)
+3. ALTA: Sin @nestjs/config ni validacion de variables de entorno
+4. ALTA: 5+ controllers aceptan body raw sin validacion de DTOs
+
+-------------------------------------
+1. CALIDAD DE CÓDIGO -- Nota: 5/10
+-------------------------------------
+
+[Backend] Hallazgos:
+
+1.1 Uso excesivo de 'any' en controllers y services
+  Archivos: projects.controller.ts (40+ ocurrencias), ai.service.ts (30+), users.service.ts (20+)
+  Problema: req.user tipado como 'any' en TODOS los controllers en vez de crear una interfaz RequestUser
+  Impacto: Alto
+  Sugerencia: Crear interfaz `interface RequestUser { userId: number; companyId: number | null; role: UserRole; email: string; }` y usar `@Req() req: { user: RequestUser }`
+  Ejemplo:
+    // Antes
+    findAll(@Req() req: any) {
+      return this.service.findAll(req.user.companyId);
+    }
+    // Despues
+    findAll(@Req() req: { user: RequestUser }) {
+      return this.service.findAll(req.user.companyId);
+    }
+
+1.2 Servicios excesivamente largos
+  Archivos:
+  - projects.service.ts (370 lineas)
+  - ai.service.ts (328 lineas)
+  - tasks.service.ts (222 lineas)
+  - users.service.ts (207 lineas)
+  Problema: Servicios con excesivas responsabilidades en una sola clase
+  Impacto: Alto
+  Sugerencia: Extraer logica en sub-servicios o utilidades
+
+1.3 Imports no usados en DTOs
+  Archivos:
+  - backend/src/modules/cacao/price-fixings/dto/create-price-fixing.dto.ts:1 - IsString importado pero no usado
+  - backend/src/modules/cacao/qualities/qualities.controller.ts:10 - Req importado pero no usado
+  - backend/src/modules/projects/dto/create-project.dto.ts:5 - IsDateString importado pero no usado
+  - backend/src/modules/tools/tools.service.ts:4 - ForbiddenException importado pero no usado
+  Impacto: Bajo
+
+1.4 Variables no usadas en services
+  Archivos:
+  - backend/src/modules/projects/projects.service.ts:20-21 - userRole, companyId declaradas pero nunca usadas
+  - backend/src/modules/tasks/tasks.service.ts:55 - userRole declarada pero nunca usada
+  Impacto: Bajo
+
+[Frontend] Hallazgos:
+
+1.5 106 ocurrencias de 'any' en frontend
+  Archivos principales:
+  - frontend/src/services/cacao.service.ts (20+ funciones con parametros any)
+  - frontend/src/pages/cacao/settlements/SettlementForm.tsx (16+)
+  - frontend/src/pages/cacao/price-fixings/PriceFixingsList.tsx (12+)
+  - frontend/src/pages/projects/ProjectDetailPage.tsx (10+)
+  Problema: Sin interfaces de respuesta compartidas backend-frontend, todos los endpoints retornan any
+  Impacto: Alto
+  Sugerencia: Crear interfaces en frontend/src/types/cacao.ts que reflejen los DTOs del backend
+
+1.6 Componentes monoliticos
+  Archivos:
+  - frontend/src/pages/projects/ProjectDetailPage.tsx (532 lineas)
+  - frontend/src/pages/admin/AdminDashboardPage.tsx (511 lineas)
+  - frontend/src/pages/cacao/settlements/SettlementForm.tsx (464 lineas)
+  - frontend/src/pages/tools/ToolsPage.tsx (441 lineas)
+  Problema: Paginas con excesiva logica, multiples responsabilidades
+  Impacto: Alto
+  Sugerencia: Extraer sub-componentes, usar composicion
+
+1.7 Ausencia de React.memo, useMemo, useCallback
+  Problema: 0 usos de React.memo, 1 useMemo (DashboardPage), 2 useCallback (ThemeContext)
+  Los forms de cacao (reception, shipment, settlement) re-renderizan innecesariamente
+  Impacto: Alto
+  Sugerencia: React.memo en componentes de tabla, useMemo en calculos de lotes
+
+1.8 Error handling inconsistente
+  Archivos:
+  - frontend/src/pages/admin/AdminDashboardPage.tsx:92,177,187 - catch{} vacios (errores silenciados)
+  - frontend/src/pages/cacao/settlements/SettlementForm.tsx:45 - falta .catch() en carga de datos
+  - frontend/src/pages/projects/ProjectDetailPage.tsx:77 - catch vacio en getUsers()
+  Problema: Algunos endpoints fallan silenciosamente, otros muestran alert(), otros muestran banner
+  Impacto: Medio
+  Sugerencia: Estandarizar manejo de errores con toast notifications o error boundaries
+
+-------------------------------------
+2. ARQUITECTURA -- Nota: 7/10
+-------------------------------------
+
+[Backend] Hallazgos:
+
+2.1 Buena modularizacion NestJS
+  - 11 modulos en app.module.ts (Auth, Users, Projects, Tasks, Ai, Queue, Tools, Agents, Companies, Cacao, Cache)
+  - Patron consistente: controller + service + dto por modulo
+  - Modulo Cacao con 13 sub-modulos (clients, kardex, lots, payables, price-fixings, qualities, receivables, receptions, settlements, shipments, suppliers, unit-config, dashboard)
+
+2.2 Falta @nestjs/config para validacion de environment
+  Archivo: backend/src/main.ts + multiples archivos
+  Problema: process.env accedido directamente sin ConfigModule ni validacion Joi/Zod
+  Variables criticas sin validacion: JWT_SECRET, DATABASE_URL, GITHUB_TOKEN
+  Impacto: Alto
+  Sugerencia: Usar @nestjs/config con schema de validacion para startup
+
+2.3 ExceptionFilter centralizado correctamente
+  Archivo: backend/src/common/filters/all-exceptions.filter.ts
+  Estado: Implementado y registrado globalmente en main.ts
+
+2.4 Cache global con Redis implementado
+  Archivo: backend/src/modules/cache/cache.service.ts
+  Estado: CacheService global con ioredis, dashboard y kardex cacheados (30s TTL)
+
+[Frontend] Hallazgos:
+
+2.5 Estructura de carpetas inconsistente
+  - Paginas principales: pages/cacao/ con sub-carpetas por feature
+  - Algunas paginas sueltas: pages/projects/, pages/admin/
+  - Sin atomic design ni patron feature-based consistente
+  Impacto: Medio
+
+2.6 Services centralizados pero sin tipos
+  Archivo: frontend/src/services/cacao.service.ts
+  Problema: Todos los endpoints retornan 'any', sin interfaces de respuesta
+  Impacto: Alto
+
+2.7 Acoplamiento rutas-archivos
+  Archivo: frontend/src/App.tsx
+  Problema: Todas las rutas importadas via React.lazy(), pero sin lazy loading de datos
+  24 componentes lazy-loaded (buena practica)
+  Impacto: Bajo
+
+-------------------------------------
+3. SEGURIDAD -- Nota: 5/10
+-------------------------------------
+
+Vulnerabilidades de dependencias:
+
+Backend:
+- brace-expansion@<=5.0.7 -> GHSA-mh99-v99m-4gvg (HIGH) DoS via exponential expansion
+- js-yaml@5.0.0-5.2.1 -> GHSA-pm4m-ph32-ghv5 (HIGH) DoS via flow collections
+  (28 vulnerabilidades en total, todas transitivas via eslint, jest, @nestjs/cli, @nestjs/swagger)
+
+Frontend:
+- react-router@7.12.0-8.2.0 -> GHSA-qwww-vcr4-c8h2 (HIGH) CSRF bypass en RSC mode
+- postcss@<=8.5.17 -> GHSA-r28c-9q8g-f849 (HIGH) Path traversal en source maps
+- esbuild@<=0.24.2 -> GHSA-67mh-4wv8-2f99 (MODERATE) Cross-origin requests
+
+Hallazgos manuales:
+
+3.1 ALTA: CORS permite localhost sin restriccion
+  Archivo: backend/src/main.ts:22-24
+  Codigo actual:
+    if (!origin || origin.startsWith('http://localhost:')) {
+      callback(null, true);
+    }
+  Problema: Cualquier proceso en localhost puede hacer requests al backend (no solo el frontend)
+  Impacto: Alto
+  Sugerencia: Whitelist explicita de puertos: localhost:5173, localhost:3000
+
+3.2 ALTA: GITHUB_TOKEN en texto plano en .env
+  Archivo: backend/.env:8
+  Codigo actual: GITHUB_TOKEN=github_pat_11CGUWBGA0I6uYZMh4u0Y5_...
+  Impacto: Alto (el .env esta en .gitignore pero se ha commiteado historicamente)
+  Sugerencia: Rotar el token, usar variables de entorno en produccion (Railway)
+
+3.3 MEDIA: JWT sin refresh token pattern
+  Problema: Token almacenado en localStorage (XSS vulnerable), sin refresh token
+  Archivo: frontend/src/services/auth.service.ts:46
+  JWT expira en 7 dias sin posibilidad de refresh
+  Impacto: Medio
+  Sugerencia: Usar httpOnly cookies o refresh token pattern
+
+3.4 MEDIA: POSTGRES_PASSWORD hardcodeado en docker-compose
+  Archivo: docker-compose.yml:7
+  Codigo actual: POSTGRES_PASSWORD: postgres
+  Impacto: Medio (solo para desarrollo local)
+  Sugerencia: Usar archivo .env o variables de entorno
+
+-------------------------------------
+4. TESTING -- Nota: 3/10
+-------------------------------------
+
+Backend:
+- Archivos .spec.ts: 1 (app.controller.spec.ts - scaffolding NestJS default)
+- Cobertura real: 0.67% statements, 0.36% branches, 0.54% lines
+- Tests e2e: FUNCIONA - 2 tests pasan (GET / + GET /auth/status)
+  - JWT_SECRET se configura automaticamente en test setup
+  - AppController y AppService registrados en AppModule
+- Sin tests unitarios para ningun servicio o controller
+
+Frontend:
+- Sin framework de tests (no jest, no vitest en package.json)
+- Sin archivos .test.ts o .spec.ts
+- Cobertura: 0%
+
+Problema critico:
+  99% del codigo no tiene tests. El unico test existente es el scaffolding por defecto de NestJS.
+  No hay tests de integracion para endpoints criticos (auth, cacao, projects).
+
+-------------------------------------
+5. RENDIMIENTO -- Nota: 5/10
+-------------------------------------
+
+[Backend] Hallazgos:
+
+5.1 N+1 critico en shipments.service.ts
+  Archivo: backend/src/modules/cacao/shipments/shipments.service.ts:61-127
+  Problema: Dentro de un loop for...of sobre dto.lots:
+    - findFirst (lot check) + convertToKg (DB query) + create (shipment lot) + update (lot weight) + findFirst (kardex) + create (kardex)
+    = 6 queries SECUENCIALES por lote
+    Un embarque con 10 lotes = 60 queries secuenciales
+  Impacto: Alto
+  Sugerencia: Usar transaccion con Promise.all para queries paralelas, o batch operations
+
+5.2 N+1 en projects.service.ts (addMember/removeMember)
+  Archivo: backend/src/modules/projects/projects.service.ts:293-375
+  Problema: addMember tiene 5 queries secuenciales (assertOwner + findUnique project + findUnique user + findUnique membership + create)
+  Impacto: Medio
+
+5.3 Redis cache implementado
+  Dashboard y kardex cacheados con TTL 30 segundos
+  Invalidacion automatica al crear recepciones/embarques
+  Estado: Funcional
+
+[Frontend] Hallazgos:
+
+5.4 Bundle optimizado con code-splitting
+  24 componentes lazy-loaded via React.lazy()
+  Bundle principal: 393.45 KB (antes 569 KB, reduccion 31%)
+  Estado: Bajo 500 KB threshold
+
+5.5 Sin React Query / SWR para cache de API
+  Cada navegacion re-invoca endpoints (getSettlements, getLots, etc.)
+  Sin cache de cliente, sin optimistic updates
+  Impacto: Medio
+  Sugerencia: Migrar a React Query para cache automatico + stale-while-revalidate
+
+5.6 SortIcon redefinido en cada render
+  Archivo: frontend/src/pages/dashboard/DashboardPage.tsx:113
+  Problema: Componente definido DENTRO del render, se re-crea en cada render
+  Impacto: Bajo
+
+-------------------------------------
+6. MANTENIBILIDAD -- Nota: 6/10
+-------------------------------------
+
+6.1 Swagger/OpenAPI configurado
+  Archivo: backend/src/main.ts:47-56
+  Documentacion automatica en /docs - excelente
+
+6.2 AGENT.md como documentacion tecnica
+  Archivo: AGENT.md
+  Contiene stack, convenciones, reglas de negocio, credenciales
+  Buena practica para agentes de IA
+
+6.3 Sin README de Backend
+  Problema: No hay README en /backend con instrucciones de setup
+  Solo existe README.md en root (10 cambios historicos)
+
+6.4 Commits inconsistentes
+  49 commits, sin conventional commits estrictos
+  Mezcla de feat, fix, y mensajes descriptivos
+
+6.5 Tipado frontend inconsistente
+  services/cacao.service.ts: Todos los endpoints retornan 'any'
+  Sin interfaces compartidas backend-frontend
+
+6.6 Prettier sin ejecutar
+  112 archivos con issues de estilo detectados
+  Sin hooks de pre-commit para ejecutar automaticamente
+
+-------------------------------------
+7. DEVOPS / CI-CD / DOCKER -- Nota: 5/10
+-------------------------------------
+
+7.1 Docker multi-stage: SI
+  Archivo: backend/Dockerfile
+  Builder stage compila, runtime stage solo incluye dist + prod deps
+  Correcto: npm ci --omit=dev en runtime
+
+7.2 Usuario no-root: SI
+  Archivo: backend/Dockerfile
+  Agregado: addgroup -S appgroup && adduser -S appuser -G appgroup
+  USER appuser
+
+7.3 Healthcheck: COMPLETO
+  docker-compose.yml: Healthcheck en postgres (pg_isready) y backend (wget /docs)
+
+7.4 Variables de entorno
+  docker-compose.yml: DATABASE_URL, REDIS_HOST, PORT, JWT_SECRET configurados
+  En produccion: Railway/Vercel usan paneles (correcto)
+
+7.5 Sin CI/CD pipeline
+  No hay archivos .github/workflows/
+  Deploy manual via git push a main
+  Impacto: Alto - No hay gates de calidad antes de deploy
+
+7.6 .dockerignore mejorable
+  Excluye: node_modules, .env, dist, coverage, .git
+  Falta excluir: uploads/, *.md, prisma/migrations/
+
+-------------------------------------
+8. DEPENDENCIAS -- Nota: 5/10
+-------------------------------------
+
+Backend (28 vulnerabilidades transitivas):
+| Paquete | Actual | Vulnerabilidades | Via |
+|---------|--------|-----------------|-----|
+| brace-expansion | <=5.0.7 | 1 HIGH (DoS) | eslint, jest, glob, @nestjs/cli |
+| js-yaml | 5.0.0-5.2.1 | 1 HIGH (DoS) | @nestjs/swagger |
+| eslint | 9.x | Transitive via brace-expansion | |
+| jest | 29.x | Transitive via brace-expansion | |
+
+Frontend (5 vulnerabilidades):
+| Paquete | Actual | Riesgo | Via |
+|---------|--------|--------|-----|
+| react-router | 7.12.0-8.2.0 | HIGH - CSRF bypass | react-router-dom |
+| postcss | <=8.5.17 | HIGH - Path traversal | vite |
+| esbuild | <=0.24.2 | MODERATE - Cross-origin | vite |
+
+Dependencias backend actualizables:
+| Paquete | Actual | Latest | Riesgo |
+|---------|--------|--------|--------|
+| @nestjs/common | 11.0.1 | 11.1.28 | bajo |
+| @nestjs/core | 11.0.1 | 11.1.28 | bajo |
+| @nestjs/platform-express | 11.0.1 | 11.1.28 | bajo |
+| @prisma/client | 7.8.0 | 7.9.1 | bajo |
+| typescript | 5.7.3 | 7.0.2 | mayor |
+
+Dependencias frontend actualizables:
+| Paquete | Actual | Latest | Riesgo |
+|---------|--------|--------|--------|
+| react | 18.3.1 | 19.2.8 | mayor |
+| react-dom | 18.3.1 | 19.2.8 | mayor |
+| vite | 5.4.10 | 8.2.0 | mayor |
+| typescript | 6.0.3 | 7.0.2 | mayor |
+| react-router-dom | 7.18.1 | 7.18.2 | patch |
+
+=====================================
+PLAN DE ACCIÓN PRIORIZADO
+=====================================
+
+1. [ALTA] Agregar @nestjs/config con validacion Joi
+   Impacto: Alto - Esfuerzo: Medio
+   Comando: npm install @nestjs/config joi
+   En main.ts: ConfigModule.forRoot({ validationSchema: Joi.object({...}) })
+
+2. [ALTA] Agregar DTOs a controllers que aceptan body raw
+   Impacto: Alto - Esfuerzo: Medio
+   Archivos: qualities.controller.ts, payables.controller.ts, receivables.controller.ts, unit-config.controller.ts
+
+3. [ALTA] Optimizar N+1 en shipments.service.ts
+   Impacto: Alto - Esfuerzo: Medio
+   Sugerencia: Usar prisma.$transaction() con queries paralelas por lote
+
+4. [ALTA] Crear interfaz RequestUser para req.user
+   Impacto: Alto - Esfuerzo: Bajo
+   Eliminaria 234 errores de ESLint (unsafe-member-access en req.user)
+
+5. [MEDIA] Configurar CI/CD con GitHub Actions
+   Impacto: Alto - Esfuerzo: Medio
+   Pipeline: lint + typecheck + test + build antes de cada deploy
+
+6. [MEDIA] Agregar React Query para cache de API
+   Impacto: Medio - Esfuerzo: Alto
+   Elimina refetch en cada navegacion, optimistic updates
+
+7. [MEDIA] Descomponer componentes >400 lineas
+   Impacto: Medio - Esfuerzo: Alto
+   ProjectDetailPage (532), AdminDashboardPage (511), SettlementForm (464)
+
+8. [MEDIA] Agregar tests unitarios criticos
+   Impacto: Alto - Esfuerzo: Alto
+   Prioridad: auth.service, receptions.service, shipments.service
+
+9. [BAJO] Ejecutar Prettier en todos los archivos
+   Impacto: Bajo - Esfuerzo: Bajo
+   Comando: npx prettier --write "backend/src/**/*.ts" "frontend/src/**/*.{tsx,ts}"
+
+10. [BAJO] Actualizar .dockerignore
+    Impacto: Bajo - Esfuerzo: Bajo
+    Agregar: uploads/, *.md, prisma/migrations/
+
+=====================================
+PUNTUACIÓN FINAL POR CATEGORÍA
+=====================================
+
+Calidad de código:      5/10
+Arquitectura:           7.5/10
+Seguridad:              7/10
+Testing:                3/10
+Rendimiento:            5/10
+Mantenibilidad:         6/10
+DevOps/CI-CD/Docker:    5/10
+Dependencias:           5/10
+-------------------------------------
+PROMEDIO GENERAL:       5.4/10
+=====================================

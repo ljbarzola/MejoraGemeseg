@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Patch, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Patch,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../../common/guards/roles.guard';
@@ -18,14 +29,31 @@ export class CacaoQualitiesController {
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN)
-  create(@Body() dto: { name: string; humidityDiscount?: number; impurityDiscount?: number; isFixedPrice?: boolean }) {
+  create(
+    @Body()
+    dto: {
+      name: string;
+      humidityDiscount?: number;
+      impurityDiscount?: number;
+      isFixedPrice?: boolean;
+    },
+  ) {
     return this.prisma.cacaoQuality.create({ data: dto });
   }
 
   @Patch(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN)
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: { name?: string; humidityDiscount?: number; impurityDiscount?: number; isFixedPrice?: boolean }) {
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body()
+    dto: {
+      name?: string;
+      humidityDiscount?: number;
+      impurityDiscount?: number;
+      isFixedPrice?: boolean;
+    },
+  ) {
     return this.prisma.cacaoQuality.update({ where: { id }, data: dto });
   }
 

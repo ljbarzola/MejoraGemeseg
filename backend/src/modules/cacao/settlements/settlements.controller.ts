@@ -16,6 +16,12 @@ export class CacaoSettlementsController {
     return this.service.findAll(req.user.companyId);
   }
 
+  @Get('next-id')
+  @UseGuards(AuthGuard('jwt'))
+  nextId(@Req() req: any) {
+    return this.service.getNextId(req.user.companyId);
+  }
+
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN)

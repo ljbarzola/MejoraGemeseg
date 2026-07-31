@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
@@ -15,13 +19,24 @@ export class CacaoReceivablesService {
     });
   }
 
-  async receive(id: number, amount: number, method: string, reference: string | undefined, companyId: number) {
-    const receivable = await this.prisma.cacaoReceivable.findFirst({ where: { id, companyId } });
-    if (!receivable) throw new NotFoundException('Cuenta por cobrar no encontrada');
-    if (receivable.status === 'RECEIVED') throw new BadRequestException('Ya está cobrada');
+  async receive(
+    id: number,
+    amount: number,
+    method: string,
+    reference: string | undefined,
+    companyId: number,
+  ) {
+    const receivable = await this.prisma.cacaoReceivable.findFirst({
+      where: { id, companyId },
+    });
+    if (!receivable)
+      throw new NotFoundException('Cuenta por cobrar no encontrada');
+    if (receivable.status === 'RECEIVED')
+      throw new BadRequestException('Ya está cobrada');
 
     const newReceived = receivable.receivedAmount + amount;
-    if (newReceived > receivable.totalAmount) throw new BadRequestException('El monto excede el total');
+    if (newReceived > receivable.totalAmount)
+      throw new BadRequestException('El monto excede el total');
 
     await this.prisma.cacaoPayment.create({
       data: {
@@ -34,21 +49,24 @@ export class CacaoReceivablesService {
       },
     });
 
-    return this.prisma.cacaoReceivable.update({
-      where: { id },
-      data: {
-        receivedAmount: newReceived,
-        status: newReceived >= receivable.totalAmount ? 'RECEIVED' : 'PARTIAL',
-      },
-      include: { client: true, payments: true },
-    }).then(async (result) => {
-      if (newReceived >= receivable.totalAmount && receivable.shipmentId) {
-        await this.prisma.cacaoShipment.update({
-          where: { id: receivable.shipmentId },
-          data: { status: 'COMPLETED' },
-        });
-      }
-      return result;
-    });
+    return this.prisma.cacaoReceivable
+      .update({
+        where: { id },
+        data: {
+          receivedAmount: newReceived,
+          status:
+            newReceived >= receivable.totalAmount ? 'RECEIVED' : 'PARTIAL',
+        },
+        include: { client: true, payments: true },
+      })
+      .then(async (result) => {
+        if (newReceived >= receivable.totalAmount && receivable.shipmentId) {
+          await this.prisma.cacaoShipment.update({
+            where: { id: receivable.shipmentId },
+            data: { status: 'COMPLETED' },
+          });
+        }
+        return result;
+      });
   }
 }

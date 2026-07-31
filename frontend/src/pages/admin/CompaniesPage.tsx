@@ -165,10 +165,10 @@ export default function CompaniesPage() {
                 <tr key={c.id}>
                   <td>
                     <img
-                      src={c.logoUrl || '/resources/logo-gemeseg-back-white.png'}
+                      src={c.logoUrl || `/resources/logo-${c.slug}.png`}
                       alt={c.name}
                       style={{ height: 32, borderRadius: 4, objectFit: 'contain' }}
-                      onError={(e) => { (e.target as HTMLImageElement).src = '/resources/logo-gemeseg-back-white.png'; }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                     />
                   </td>
                   <td><strong>{c.name}</strong><br/><span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{c.slug}</span></td>

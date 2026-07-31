@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getClients, getLots, createShipment, getUnitConfig } from '../../../services/cacao.service';
+import { getClients, getLots, createShipment, getUnitConfig, getNextShipmentId } from '../../../services/cacao.service';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FULL: Record<string, string> = { TON: 'Toneladas', KG: 'Kilogramos', SACO: 'Sacos' };
@@ -21,6 +21,7 @@ export default function ShipmentForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [createdId, setCreatedId] = useState<number | null>(null);
+  const [nextIdCode, setNextIdCode] = useState<string | null>(null);
   const [form, setForm] = useState({
     date: getTodayLocal(),
     clientId: '',
@@ -34,11 +35,12 @@ export default function ShipmentForm() {
   const pendingNav = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    Promise.all([getClients(), getLots({ status: 'OPEN' }), getUnitConfig()])
-      .then(([c, l, uc]) => {
+    Promise.all([getClients(), getLots({ status: 'OPEN' }), getUnitConfig(), getNextShipmentId()])
+      .then(([c, l, uc, nid]) => {
         setClients(c);
         setLots(l);
         setUnitConfigs(uc);
+        setNextIdCode(nid.code);
         const lotWithFixedPrice = l.find((lot: any) => lot.quality?.isFixedPrice && lot.quality?.fixedPrice);
         if (lotWithFixedPrice && !form.salePrice) {
           const defaultSale = (lotWithFixedPrice.quality.fixedPrice * 1.15).toFixed(2);
@@ -126,7 +128,7 @@ export default function ShipmentForm() {
       const lot = lots.find((l) => l.id === sl.lotId);
       if (!lot) { setError(`Lote no encontrado`); return; }
       const quantityKg = Number(sl.quantity) * unitFactor;
-      if (quantityKg > lot.netWeight) {
+      if (quantityKg > lot.netWeight + 0.001) {
         setError(`El lote ${lot.code} solo tiene ${lot.netWeight} kg disponibles. No puede enviar ${Number(sl.quantity)} ${UNIT_FULL[form.unitOfMeasure]} (${quantityKg.toFixed(0)} kg).`);
         return;
       }
@@ -208,6 +210,16 @@ export default function ShipmentForm() {
         <div className="cacao-form">
           {error && <div className="auth-error-banner">{error}</div>}
 
+          {nextIdCode && (
+            <div style={{ padding: '16px 20px', backgroundColor: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <span style={{ fontSize: '20px' }}>🚢</span>
+              <div>
+                <div style={{ fontSize: '12px', color: '#2b6cb0', fontWeight: 600, textTransform: 'uppercase' }}>Embarque que se asignará</div>
+                <div style={{ fontSize: '22px', fontWeight: 800, color: '#2c5282', fontFamily: 'monospace' }}>{nextIdCode}</div>
+              </div>
+            </div>
+          )}
+
           <div className="form-section-title">Datos del Embarque</div>
           <div className="form-row">
             <div className="form-group">
@@ -252,7 +264,7 @@ export default function ShipmentForm() {
           {selectedLots.map((sl, i) => {
             const lot = lots.find((l) => l.id === sl.lotId);
             const quantityKg = round4((Number(sl.quantity) || 0) * unitFactor);
-            const exceeds = lot && quantityKg > lot.netWeight;
+            const exceeds = lot && quantityKg > lot.netWeight + 0.001;
             const receptionUnit = lot?.receptions?.[0]?.unitOfMeasure;
             return (
               <div key={i} style={{ marginBottom: '12px' }}>

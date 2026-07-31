@@ -1,4 +1,17 @@
-﻿import { Controller, Get, Post, Patch, Delete, Body, Query, Param, UseGuards, Req, ParseIntPipe, ForbiddenException } from '@nestjs/common';
+﻿import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Query,
+  Param,
+  UseGuards,
+  Req,
+  ParseIntPipe,
+  ForbiddenException,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ProjectsService } from './projects.service';
 import { TasksService } from '../tasks/tasks.service';
@@ -19,13 +32,23 @@ export class ProjectsController {
   @Post()
   @UseGuards(AuthGuard('jwt'))
   create(@Body() dto: CreateProjectDto, @Req() req: any) {
-    return this.projectsService.create(dto, req.user.userId, req.user.role, req.user.companyId);
+    return this.projectsService.create(
+      dto,
+      req.user.userId,
+      req.user.role,
+      req.user.companyId,
+    );
   }
 
   @Get()
   @UseGuards(AuthGuard('jwt'))
   findAll(@Req() req: any, @Query() query: ListProjectsDto) {
-    return this.projectsService.findAll(req.user.userId, req.user.role, req.user.companyId, query);
+    return this.projectsService.findAll(
+      req.user.userId,
+      req.user.role,
+      req.user.companyId,
+      query,
+    );
   }
 
   @Get('admin/stats')
@@ -55,16 +78,24 @@ export class ProjectsController {
     @Body() dto: CreateProjectDto,
     @Req() req: any,
   ) {
-    return this.projectsService.update(id, dto, req.user.userId, req.user.role, req.user.companyId);
+    return this.projectsService.update(
+      id,
+      dto,
+      req.user.userId,
+      req.user.role,
+      req.user.companyId,
+    );
   }
 
   @Delete(':id')
   @UseGuards(AuthGuard('jwt'))
-  remove(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: any,
-  ) {
-    return this.projectsService.remove(id, req.user.userId, req.user.role, req.user.companyId);
+  remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.projectsService.remove(
+      id,
+      req.user.userId,
+      req.user.role,
+      req.user.companyId,
+    );
   }
 
   @Get(':projectId/tasks')
@@ -80,7 +111,12 @@ export class ProjectsController {
     @Body() dto: CreateTaskDto,
     @Req() req: any,
   ) {
-    return this.tasksService.create(projectId, dto, req.user.userId, req.user.role);
+    return this.tasksService.create(
+      projectId,
+      dto,
+      req.user.userId,
+      req.user.role,
+    );
   }
 
   @Get(':projectId/members')
@@ -96,7 +132,14 @@ export class ProjectsController {
     @Body() body: { userId: number; role: string },
     @Req() req: any,
   ) {
-    return this.projectsService.addMember(projectId, body.userId, body.role, req.user.userId, req.user.role, req.user.companyId);
+    return this.projectsService.addMember(
+      projectId,
+      body.userId,
+      body.role,
+      req.user.userId,
+      req.user.role,
+      req.user.companyId,
+    );
   }
 
   @Delete(':projectId/members/:userId')
@@ -106,7 +149,12 @@ export class ProjectsController {
     @Param('userId', ParseIntPipe) userId: number,
     @Req() req: any,
   ) {
-    return this.projectsService.removeMember(projectId, userId, req.user.userId, req.user.role);
+    return this.projectsService.removeMember(
+      projectId,
+      userId,
+      req.user.userId,
+      req.user.role,
+    );
   }
 
   @Patch(':projectId/members/:userId/role')
@@ -118,6 +166,12 @@ export class ProjectsController {
     @Body() body: { role: string },
     @Req() req: any,
   ) {
-    return this.projectsService.updateMemberRole(projectId, userId, body.role, req.user.userId, req.user.role);
+    return this.projectsService.updateMemberRole(
+      projectId,
+      userId,
+      body.role,
+      req.user.userId,
+      req.user.role,
+    );
   }
 }

@@ -60,7 +60,12 @@ export class AuthService {
       },
     });
 
-    const token = this.generateToken(user.id, user.email, user.role, user.companyId);
+    const token = this.generateToken(
+      user.id,
+      user.email,
+      user.role,
+      user.companyId,
+    );
 
     return {
       user: {
@@ -89,7 +94,12 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    const token = this.generateToken(user.id, user.email, user.role, user.companyId);
+    const token = this.generateToken(
+      user.id,
+      user.email,
+      user.role,
+      user.companyId,
+    );
 
     return {
       user: {
@@ -122,7 +132,12 @@ export class AuthService {
     return { message: 'Contraseña actualizada correctamente' };
   }
 
-  private generateToken(userId: number, email: string, role: UserRole, companyId: number | null): string {
+  private generateToken(
+    userId: number,
+    email: string,
+    role: UserRole,
+    companyId: number | null,
+  ): string {
     return this.jwtService.sign({
       sub: userId,
       email,

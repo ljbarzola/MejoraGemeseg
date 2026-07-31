@@ -156,12 +156,12 @@ FRONTEND_URL=http://localhost:5173
 
 ### Herramientas (Sistema)
 - Solo usuario `sistemas@gemeseg.com` ve la pestana de Herramientas.
-- Cualquier usuario autenticado puede crear/eliminar herramientas y asignaciones.
+- Solo ADMIN puede crear/eliminar herramientas y asignaciones (RolesGuard).
 - Asignaciones multiples de usuarios soportadas.
 - Auditoria de cada accion (quien asigno/removio, cuando).
 
 ### Agentes de IA
-- Admin y usuario de Sistemas pueden gestionar agentes.
+- Solo ADMIN puede gestionar agentes (RolesGuard en AdminAgentsController).
 - Cada agente tiene: nombre, instrucciones (system prompt), alcance (GLOBAL/PROJECTS/TASKS/ADMIN).
 - Un agente puede estar asignado a multiples usuarios.
 - Un usuario puede tener multiples agentes asignados.
@@ -221,6 +221,8 @@ FRONTEND_URL=http://localhost:5173
 - `DELETE /tools/assign/:id` - Eliminar asignacion
 - `GET /tools/assign/:id/audit` - Historial de auditoria
 
+**Nota:** Todos los endpoints de Tools requieren rol ADMIN (RolesGuard).
+
 ### Chat IA (`/chat`)
 - `POST /chat/message` - Enviar mensaje al asistente IA
 - `GET /chat/conversations` - Listar conversaciones del usuario (filtro por agentId)
@@ -240,6 +242,8 @@ FRONTEND_URL=http://localhost:5173
 - `POST /admin/agents/:id/assign/:userId` - Asignar agente a usuario
 - `DELETE /admin/agents/:id/assign/:userId` - Quitar agente de usuario
 - `GET /agents/available` - Agentes disponibles para el usuario actual (global + asignados)
+
+**Nota:** Todos los endpoints de Admin Agents requieren rol ADMIN (RolesGuard). El endpoint `GET /agents/available` es para cualquier usuario autenticado.
 
 ### Companies (`/companies`)
 - `GET /companies` - Listar empresas (solo ADMIN; si tiene companyId retorna su empresa)
@@ -278,3 +282,4 @@ FRONTEND_URL=http://localhost:5173
 - Hacer push sin autorizacion del usuario.
 - Hardcodear URLs de API en el frontend (usar `VITE_API_URL`).
 - Usar archivos `.env` en produccion (usar paneles de Railway/Vercel).
+- Crear endpoints sin RolesGuard cuando la accion requiere rol ADMIN.

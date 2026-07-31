@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateToolDto } from './dto/create-tool.dto';
 import { AssignToolDto } from './dto/assign-tool.dto';
@@ -16,9 +21,14 @@ export class ToolsService {
   }
 
   async createTool(dto: CreateToolDto) {
-    const existing = await this.prisma.tool.findUnique({ where: { name: dto.name } });
-    if (existing) throw new ConflictException('Ya existe una herramienta con ese nombre');
-    return this.prisma.tool.create({ data: { name: dto.name, category: dto.category } });
+    const existing = await this.prisma.tool.findUnique({
+      where: { name: dto.name },
+    });
+    if (existing)
+      throw new ConflictException('Ya existe una herramienta con ese nombre');
+    return this.prisma.tool.create({
+      data: { name: dto.name, category: dto.category },
+    });
   }
 
   async removeTool(id: number) {
@@ -52,16 +62,23 @@ export class ToolsService {
   }
 
   async assignTool(dto: AssignToolDto, performedBy: number) {
-    const tool = await this.prisma.tool.findUnique({ where: { id: dto.toolId } });
+    const tool = await this.prisma.tool.findUnique({
+      where: { id: dto.toolId },
+    });
     if (!tool) throw new NotFoundException('Herramienta no encontrada');
 
-    const user = await this.prisma.user.findUnique({ where: { id: dto.userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: dto.userId },
+    });
     if (!user) throw new NotFoundException('Usuario no encontrado');
 
     const existing = await this.prisma.toolAssignment.findUnique({
       where: { toolId_userId: { toolId: dto.toolId, userId: dto.userId } },
     });
-    if (existing) throw new ConflictException('Esta herramienta ya está asignada a este usuario');
+    if (existing)
+      throw new ConflictException(
+        'Esta herramienta ya está asignada a este usuario',
+      );
 
     const assignment = await this.prisma.toolAssignment.create({
       data: {
@@ -88,7 +105,11 @@ export class ToolsService {
     return assignment;
   }
 
-  async updateAssignment(id: number, dto: UpdateAssignmentDto, performedBy: number) {
+  async updateAssignment(
+    id: number,
+    dto: UpdateAssignmentDto,
+    performedBy: number,
+  ) {
     const assignment = await this.prisma.toolAssignment.findUnique({
       where: { id },
       include: { tool: true, user: true },
@@ -108,7 +129,9 @@ export class ToolsService {
       },
     });
 
-    const changes = Object.keys(data).map((k) => `${k}: ${data[k]}`).join(', ');
+    const changes = Object.keys(data)
+      .map((k) => `${k}: ${data[k]}`)
+      .join(', ');
     await this.prisma.toolAuditLog.create({
       data: {
         assignmentId: id,

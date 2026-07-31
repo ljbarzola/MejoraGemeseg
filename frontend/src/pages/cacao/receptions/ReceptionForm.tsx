@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getSuppliers, getQualities, createReception, getNextLotCode, getUnitConfig } from '../../../services/cacao.service';
 
@@ -38,6 +38,36 @@ export default function ReceptionForm() {
   const isDirty = useRef(false);
   const [showUnsaved, setShowUnsaved] = useState(false);
   const pendingNav = useRef<(() => void) | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({});
+
+  const supplierRef = useRef<HTMLSelectElement>(null);
+  const guideRef = useRef<HTMLInputElement>(null);
+  const grossWeightRef = useRef<HTMLInputElement>(null);
+  const qualityRef = useRef<HTMLSelectElement>(null);
+
+  const fieldRefMap: Record<string, React.RefObject<HTMLElement | null>> = {
+    supplierId: supplierRef as any,
+    guideNumber: guideRef as any,
+    grossWeight: grossWeightRef as any,
+    qualityId: qualityRef as any,
+  };
+
+  const scrollToField = useCallback((fieldName: string) => {
+    const ref = fieldRefMap[fieldName];
+    if (ref?.current) {
+      ref.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      (ref.current as any).focus?.();
+    }
+  }, []);
+
+  const clearFieldError = useCallback((fieldName: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[fieldName]) return prev;
+      const next = { ...prev };
+      delete next[fieldName];
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     Promise.all([getSuppliers(), getQualities(), getNextLotCode(), getUnitConfig()])
@@ -94,14 +124,20 @@ export default function ReceptionForm() {
   const isNotKg = form.unitOfMeasure !== 'KG';
 
   async function handleSubmit() {
-    if (!form.supplierId || !form.guideNumber || !form.grossWeight) {
-      setError('Proveedor, guía y peso bruto son requeridos');
+    const errors: Record<string, boolean> = {};
+    if (!form.supplierId) errors.supplierId = true;
+    if (!form.guideNumber) errors.guideNumber = true;
+    if (!form.grossWeight) errors.grossWeight = true;
+    if (!form.qualityId) errors.qualityId = true;
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setError('Complete los campos requeridos marcados en rojo');
+      const firstError = Object.keys(errors)[0];
+      setTimeout(() => scrollToField(firstError), 50);
       return;
     }
-    if (!form.qualityId) {
-      setError('Debe seleccionar una calidad');
-      return;
-    }
+    setFieldErrors({});
     setSaving(true);
     setError('');
     try {
@@ -160,16 +196,18 @@ export default function ReceptionForm() {
             </div>
             <div className="form-group">
               <label>Proveedor *</label>
-              <select value={form.supplierId} onChange={(e) => setField('supplierId', e.target.value)}>
+              <select ref={supplierRef} value={form.supplierId} onChange={(e) => { setField('supplierId', e.target.value); clearFieldError('supplierId'); }} className={fieldErrors.supplierId ? 'input-error' : ''}>
                 <option value="">Seleccionar proveedor...</option>
                 {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
+              {fieldErrors.supplierId && <span className="field-error">Este campo es requerido</span>}
             </div>
           </div>
           <div className="form-row">
             <div className="form-group">
               <label>Nro. Guía de Remisión *</label>
-              <input type="text" placeholder="Ej: TR-2026-0045" value={form.guideNumber} onChange={(e) => setField('guideNumber', e.target.value)} />
+              <input ref={guideRef} type="text" placeholder="Ej: TR-2026-0045" value={form.guideNumber} onChange={(e) => { setField('guideNumber', e.target.value); clearFieldError('guideNumber'); }} className={fieldErrors.guideNumber ? 'input-error' : ''} />
+              {fieldErrors.guideNumber && <span className="field-error">Este campo es requerido</span>}
             </div>
             <div className="form-group">
               <label>Unidad de Medida de Entrada *</label>
@@ -183,7 +221,8 @@ export default function ReceptionForm() {
           <div className="form-row">
             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
               <label>Calidad del Cacao *</label>
-              <select value={form.qualityId} onChange={(e) => {
+              <select ref={qualityRef} value={form.qualityId} onChange={(e) => {
+                clearFieldError('qualityId');
                 const qId = e.target.value;
                 const q = qualities.find((x) => x.id === Number(qId));
                 setField('qualityId', qId);
@@ -195,10 +234,11 @@ export default function ReceptionForm() {
                     provisionalPrice: q.isFixedPrice && q.fixedPrice ? q.fixedPrice.toString() : '',
                   }));
                 }
-              }}>
+              }} className={fieldErrors.qualityId ? 'input-error' : ''}>
                 <option value="">Seleccionar calidad...</option>
                 {qualities.map((q) => <option key={q.id} value={q.id}>{q.name}{q.isFixedPrice ? ' (Precio Fijo)' : ' (Precio Provisional)'}</option>)}
               </select>
+              {fieldErrors.qualityId && <span className="field-error">Este campo es requerido</span>}
             </div>
           </div>
 
@@ -215,7 +255,8 @@ export default function ReceptionForm() {
           <div className="form-row">
             <div className="form-group">
               <label>Peso Bruto ({unitAbbr}) *</label>
-              <input type="number" step="0.0001" min="0" value={form.grossWeight} onChange={(e) => setField('grossWeight', e.target.value)} placeholder={`Ej: ${form.unitOfMeasure === 'TON' ? '1.5' : form.unitOfMeasure === 'SACO' ? '20' : '1500'}`} />
+              <input ref={grossWeightRef} type="number" step="0.0001" min="0" value={form.grossWeight} onChange={(e) => { setField('grossWeight', e.target.value); clearFieldError('grossWeight'); }} placeholder={`Ej: ${form.unitOfMeasure === 'TON' ? '1.5' : form.unitOfMeasure === 'SACO' ? '20' : '1500'}`} className={fieldErrors.grossWeight ? 'input-error' : ''} />
+              {fieldErrors.grossWeight && <span className="field-error">Este campo es requerido</span>}
             </div>
             <div className="form-group">
               <label>Tara ({unitAbbr})</label>

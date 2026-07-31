@@ -6,6 +6,16 @@ import { CreateSettlementDto } from './dto/create-settlement.dto';
 export class CacaoSettlementsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getNextId(companyId: number) {
+    const year = new Date().getFullYear();
+    const last = await this.prisma.cacaoSettlement.findFirst({
+      where: { companyId },
+      orderBy: { id: 'desc' },
+    });
+    const nextNum = last ? last.id + 1 : 1;
+    return { code: `LIQ-${String(nextNum).padStart(4, '0')}` };
+  }
+
   async findAll(companyId: number) {
     return this.prisma.cacaoSettlement.findMany({
       where: { companyId },
@@ -16,7 +26,11 @@ export class CacaoSettlementsService {
             lot: {
               include: {
                 quality: true,
-                receptions: { orderBy: { date: 'desc' }, take: 1, include: { supplier: true } },
+                receptions: {
+                  orderBy: { date: 'desc' },
+                  take: 1,
+                  include: { supplier: true },
+                },
               },
             },
           },
@@ -69,7 +83,11 @@ export class CacaoSettlementsService {
 
     return this.prisma.cacaoSettlement.findUnique({
       where: { id: settlement.id },
-      include: { supplier: true, lots: { include: { lot: true } }, payable: true },
+      include: {
+        supplier: true,
+        lots: { include: { lot: true } },
+        payable: true,
+      },
     });
   }
 }
