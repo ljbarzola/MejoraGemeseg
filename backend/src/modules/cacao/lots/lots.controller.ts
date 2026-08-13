@@ -1,4 +1,12 @@
-import { Controller, Get, Param, ParseIntPipe, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { CacaoLotsService } from './lots.service';
 
@@ -8,7 +16,11 @@ export class CacaoLotsController {
 
   @Get()
   @UseGuards(AuthGuard('jwt'))
-  findAll(@Req() req: any, @Query() query: { status?: string; qualityId?: string; supplierId?: string }) {
+  findAll(
+    @Req() req: any,
+    @Query()
+    query: { status?: string; qualityId?: string; supplierId?: string },
+  ) {
     return this.service.findAll(req.user.companyId, query);
   }
 

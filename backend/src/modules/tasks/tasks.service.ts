@@ -1,4 +1,8 @@
-﻿import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+﻿import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -44,7 +48,12 @@ export class TasksService {
     return task;
   }
 
-  async create(projectId: number, dto: CreateTaskDto, userId: number, userRole: UserRole) {
+  async create(
+    projectId: number,
+    dto: CreateTaskDto,
+    userId: number,
+    userRole: UserRole,
+  ) {
     const membership = await this.prisma.projectMember.findUnique({
       where: {
         projectId_userId: { projectId, userId },
@@ -67,13 +76,16 @@ export class TasksService {
         description: dto.description,
         priority: (dto.priority as any) || 'MEDIUM',
         status: (dto.status as any) || 'TODO',
-        startDate: dto.startDate ? new Date(dto.startDate + 'T12:00:00.000Z') : null,
+        startDate: dto.startDate
+          ? new Date(dto.startDate + 'T12:00:00.000Z')
+          : null,
         endDate: dto.endDate ? new Date(dto.endDate + 'T12:00:00.000Z') : null,
         estimatedHours: dto.estimatedHours ?? 0,
         projectId,
-        assignees: assigneeIds.length > 0
-          ? { create: assigneeIds.map((userId) => ({ userId })) }
-          : undefined,
+        assignees:
+          assigneeIds.length > 0
+            ? { create: assigneeIds.map((userId) => ({ userId })) }
+            : undefined,
       },
       include: {
         assignees: {
@@ -85,7 +97,12 @@ export class TasksService {
     return task;
   }
 
-  async update(id: number, dto: UpdateTaskDto, userId: number, userRole: UserRole) {
+  async update(
+    id: number,
+    dto: UpdateTaskDto,
+    userId: number,
+    userRole: UserRole,
+  ) {
     const task = await this.prisma.task.findUnique({
       where: { id },
       include: {
@@ -120,9 +137,16 @@ export class TasksService {
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.priority !== undefined) data.priority = dto.priority;
-    if (dto.startDate !== undefined) data.startDate = dto.startDate ? new Date(dto.startDate + 'T12:00:00.000Z') : null;
-    if (dto.endDate !== undefined) data.endDate = dto.endDate ? new Date(dto.endDate + 'T12:00:00.000Z') : null;
-    if (dto.estimatedHours !== undefined) data.estimatedHours = dto.estimatedHours;
+    if (dto.startDate !== undefined)
+      data.startDate = dto.startDate
+        ? new Date(dto.startDate + 'T12:00:00.000Z')
+        : null;
+    if (dto.endDate !== undefined)
+      data.endDate = dto.endDate
+        ? new Date(dto.endDate + 'T12:00:00.000Z')
+        : null;
+    if (dto.estimatedHours !== undefined)
+      data.estimatedHours = dto.estimatedHours;
 
     if (dto.assigneeIds !== undefined) {
       await this.prisma.taskAssignee.deleteMany({ where: { taskId: id } });
@@ -173,7 +197,9 @@ export class TasksService {
     }
 
     if (membership?.role === ('VIEWER' as any) && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('Los observadores no pueden eliminar tareas');
+      throw new ForbiddenException(
+        'Los observadores no pueden eliminar tareas',
+      );
     }
 
     await this.prisma.task.delete({ where: { id } });
@@ -191,7 +217,10 @@ export class TasksService {
     });
   }
 
-  async findMyTasks(userId: number, filters: { status?: string; assignedToMe?: boolean; projectId?: number }) {
+  async findMyTasks(
+    userId: number,
+    filters: { status?: string; assignedToMe?: boolean; projectId?: number },
+  ) {
     const where: any = {
       project: {
         members: { some: { userId } },

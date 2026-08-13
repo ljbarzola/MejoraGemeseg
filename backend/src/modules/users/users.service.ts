@@ -1,4 +1,8 @@
-﻿import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+﻿import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -16,7 +20,7 @@ export class UsersService {
       throw new ConflictException('Ya existe un usuario con ese correo');
     }
 
-    const hashedPassword = await bcrypt.hash(dto.password || 'gemeseg2026', 10);
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     return this.prisma.user.create({
       data: {
@@ -37,7 +41,10 @@ export class UsersService {
     });
   }
 
-  async findAll(companyId?: number | null, query?: { role?: string; isActive?: string; search?: string }) {
+  async findAll(
+    companyId?: number | null,
+    query?: { role?: string; isActive?: string; search?: string },
+  ) {
     const where: any = {};
 
     if (companyId) {
@@ -120,7 +127,8 @@ export class UsersService {
     if (dto.fullName !== undefined) data.fullName = dto.fullName;
     if (dto.email !== undefined) data.email = dto.email;
     if (dto.role !== undefined) data.role = dto.role;
-    if (dto.documentNumber !== undefined) data.documentNumber = dto.documentNumber;
+    if (dto.documentNumber !== undefined)
+      data.documentNumber = dto.documentNumber;
     if (dto.position !== undefined) data.position = dto.position;
     if (dto.departmentId !== undefined) data.departmentId = dto.departmentId;
     if (dto.roleId !== undefined) data.roleId = dto.roleId;
@@ -193,7 +201,9 @@ export class UsersService {
     if (!user) throw new NotFoundException('Usuario no encontrado');
 
     if (agentId !== null) {
-      const agent = await this.prisma.agent.findUnique({ where: { id: agentId } });
+      const agent = await this.prisma.agent.findUnique({
+        where: { id: agentId },
+      });
       if (!agent) throw new NotFoundException('Agente no encontrado');
     }
 

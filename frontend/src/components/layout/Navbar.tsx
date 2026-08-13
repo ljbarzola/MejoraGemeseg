@@ -1,17 +1,15 @@
 import { useNavigate } from 'react-router-dom';
 import { getUser, removeToken } from '../../services/auth.service';
 import { useCompany } from '../../contexts/ThemeContext';
+import { usePerm } from '../../contexts/PermissionsContext';
 
 export default function Navbar() {
   const navigate = useNavigate();
   const { theme } = useCompany();
+  const { canView, isSuperAdmin } = usePerm();
   const user = getUser();
   const isAdmin = user?.role === 'ADMIN';
-  const isSuperAdmin = isAdmin && !user?.companyId;
   const isCompanyAdmin = isAdmin && !!user?.companyId;
-  const isSystems = user?.email === 'sistemas@gemeseg.com';
-  const canManageAgents = isAdmin || isSystems;
-  const isMikacao = user?.companyId === 2;
 
   const handleLogout = () => {
     removeToken();
@@ -23,29 +21,48 @@ export default function Navbar() {
     <nav className="navbar">
       <div className="navbar-brand" onClick={() => navigate('/dashboard')}>
         <span className="navbar-logo">
-          <img src={theme.logoUrl || '/resources/logo-gemeseg-back-white.png'} alt={theme.name} style={{ height: '28px' }} />
+          {theme.logoUrl ? (
+            <img
+              src={theme.logoUrl}
+              alt={theme.name}
+              style={{ height: '28px' }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+          ) : null}
+          <span style={{ color: 'white', fontWeight: 700, fontSize: '14px' }}>{theme.name}</span>
         </span>
       </div>
       <div className="navbar-links">
         <button className="navbar-link" onClick={() => navigate('/dashboard')}>Inicio</button>
-        <button className="navbar-link" onClick={() => navigate('/projects')}>Proyectos</button>
-        {isAdmin && (
+        {canView('PROJECTS') && (
+          <button className="navbar-link" onClick={() => navigate('/projects')}>Proyectos</button>
+        )}
+        {canView('ADMIN') && (
           <button className="navbar-link navbar-link-admin" onClick={() => navigate('/admin')}>Administración</button>
         )}
-        {isSuperAdmin && (
+        {isSuperAdmin && canView('COMPANIES') && (
           <button className="navbar-link navbar-link-admin" onClick={() => navigate('/admin/companies')}>Empresas</button>
         )}
-        {isCompanyAdmin && (
+        {isCompanyAdmin && canView('COMPANY_SETTINGS') && (
           <button className="navbar-link navbar-link-admin" onClick={() => navigate('/admin/company-settings')}>Mi Empresa</button>
         )}
-        {isSystems && (
+        {canView('TOOLS') && (
           <button className="navbar-link" onClick={() => navigate('/tools')}>Herramientas</button>
         )}
-        {canManageAgents && (
+        {canView('AGENTS') && (
           <button className="navbar-link" onClick={() => navigate('/admin/agents')}>Agentes</button>
         )}
-        {isMikacao && (
+        {canView('CACAO') && (
           <button className="navbar-link navbar-link-cacao" onClick={() => navigate('/cacao')}>Cacao</button>
+        )}
+        {canView('CUSTODIAS') && (
+          <button className="navbar-link" onClick={() => navigate('/custodias')}>Custodias</button>
+        )}
+        {isSuperAdmin && (
+          <button className="navbar-link navbar-link-admin" onClick={() => navigate('/admin/permissions')}>Permisos</button>
+        )}
+        {isCompanyAdmin && (
+          <button className="navbar-link navbar-link-admin" onClick={() => navigate('/admin/user-permissions')}>Permisos Usuarios</button>
         )}
       </div>
       <div className="navbar-user">

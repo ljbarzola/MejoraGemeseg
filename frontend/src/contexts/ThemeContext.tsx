@@ -1,13 +1,21 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { getCompanyBySlug, type Company } from '../services/company.service';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+function resolveLogoUrl(logoUrl: string | null, slug: string): string | null {
+  if (!logoUrl) return `/resources/logo-${slug}.png`;
+  if (logoUrl.startsWith('/uploads/')) return `${API_URL}${logoUrl}`;
+  return logoUrl;
+}
+
 interface CompanyTheme extends Company {}
 
 const DEFAULT_THEME: CompanyTheme = {
   id: 1,
   name: 'GEMESEG',
   slug: 'gemeseg',
-  logoUrl: '/resources/logo-gemeseg-back-white.png',
+  logoUrl: null,
   primaryColor: '#100F31',
   secondaryColor: '#12375F',
   accentColor: '#EE3B1B',
@@ -61,9 +69,9 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       const company = await getCompanyBySlug(slug);
-      applyTheme({ ...company, logoUrl: company.logoUrl || `/resources/logo-${slug}.png` });
+      applyTheme({ ...company, logoUrl: resolveLogoUrl(company.logoUrl, slug) });
     } catch {
-      applyTheme(DEFAULT_THEME);
+      // Si el slug no existe, no cambiar el tema — mantener el actual
     } finally {
       setLoading(false);
     }
@@ -83,3 +91,5 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
 export function useCompany() {
   return useContext(ThemeContext);
 }
+
+export { resolveLogoUrl };

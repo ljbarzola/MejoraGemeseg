@@ -29,6 +29,7 @@ export default function LoginPage() {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotMsg, setForgotMsg] = useState('');
   const [forgotError, setForgotError] = useState('');
+  const [detectedCompany, setDetectedCompany] = useState(false);
 
   const {
     register,
@@ -48,6 +49,7 @@ export default function LoginPage() {
         if (domain) {
           const slug = domain.split('.')[0];
           await loadThemeBySlug(slug);
+          setDetectedCompany(true);
         }
       };
       emailInput.addEventListener('blur', handler);
@@ -60,12 +62,14 @@ export default function LoginPage() {
     setServerError('');
     setLoading(true);
     try {
+      localStorage.removeItem('company_theme');
       const res = await loginService(data);
       saveAuth(res);
       const domain = data.email.split('@')[1];
       if (domain) {
         const slug = domain.split('.')[0];
         await loadThemeBySlug(slug);
+        setDetectedCompany(true);
       }
       navigate('/dashboard');
     } catch (err: any) {
@@ -105,7 +109,25 @@ export default function LoginPage() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <img src={theme.logoUrl || '/resources/logo-gemeseg-back-white.png'} alt={theme.name} className="auth-logo" />
+          {detectedCompany && theme.logoUrl ? (
+            <img src={theme.logoUrl} alt={theme.name} className="auth-logo" />
+          ) : (
+            <div style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '16px',
+              background: 'linear-gradient(135deg, #4a5568, #718096)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+            }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </div>
+          )}
           <h1>{showForgot ? 'Recuperar contraseña' : 'Iniciar sesión'}</h1>
           <p className="auth-subtitle">
             {showForgot

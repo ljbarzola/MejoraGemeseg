@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../../common/guards/roles.guard';
@@ -12,7 +20,10 @@ export class CacaoReceptionsController {
 
   @Get()
   @UseGuards(AuthGuard('jwt'))
-  findAll(@Req() req: any, @Query() query: { supplierId?: string; from?: string; to?: string }) {
+  findAll(
+    @Req() req: any,
+    @Query() query: { supplierId?: string; from?: string; to?: string },
+  ) {
     return this.service.findAll(req.user.companyId, query);
   }
 

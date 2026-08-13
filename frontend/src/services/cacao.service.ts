@@ -23,6 +23,7 @@ export const getLotById = (id: number) => api.get(`/cacao/lots/${id}`).then(r =>
 export const getNextLotCode = () => api.get('/cacao/lots/next-code').then(r => r.data);
 
 export const getSettlements = () => api.get('/cacao/settlements').then(r => r.data);
+export const getNextSettlementId = () => api.get('/cacao/settlements/next-id').then(r => r.data);
 export const createSettlement = (data: any) => api.post('/cacao/settlements', data).then(r => r.data);
 
 export const getPriceFixings = () => api.get('/cacao/price-fixings').then(r => r.data);
@@ -33,6 +34,7 @@ export const getKardex = (params?: any) => api.get('/cacao/kardex', { params }).
 export const getKardexByLot = (lotId: number) => api.get(`/cacao/kardex/${lotId}`).then(r => r.data);
 
 export const getShipments = () => api.get('/cacao/shipments').then(r => r.data);
+export const getNextShipmentId = () => api.get('/cacao/shipments/next-id').then(r => r.data);
 export const createShipment = (data: any) => api.post('/cacao/shipments', data).then(r => r.data);
 
 export const getPayables = (params?: any) => api.get('/cacao/payables', { params }).then(r => r.data);

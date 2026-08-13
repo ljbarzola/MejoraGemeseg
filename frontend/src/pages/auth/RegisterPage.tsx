@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -31,9 +31,10 @@ type RegisterForm = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { theme } = useCompany();
+  const { theme, loadThemeBySlug } = useCompany();
   const [serverError, setServerError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [detectedCompany, setDetectedCompany] = useState(false);
 
   const {
     register,
@@ -42,6 +43,22 @@ export default function RegisterPage() {
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
   });
+
+  useEffect(() => {
+    const emailInput = document.getElementById('reg-email') as HTMLInputElement;
+    if (!emailInput) return;
+    const handler = async () => {
+      const email = emailInput.value;
+      const domain = email.split('@')[1];
+      if (domain) {
+        const slug = domain.split('.')[0];
+        await loadThemeBySlug(slug);
+        setDetectedCompany(true);
+      }
+    };
+    emailInput.addEventListener('blur', handler);
+    return () => emailInput.removeEventListener('blur', handler);
+  }, [loadThemeBySlug]);
 
   const onSubmit = async (data: RegisterForm) => {
     setServerError('');
@@ -72,7 +89,22 @@ export default function RegisterPage() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <img src={theme.logoUrl || '/resources/logo-gemeseg-back-white.png'} alt={theme.name} className="auth-logo" />
+          {detectedCompany && theme.logoUrl ? (
+            <img src={theme.logoUrl} alt={theme.name} className="auth-logo" />
+          ) : (
+            <div style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '16px',
+              background: 'linear-gradient(135deg, #100F31, #12375F)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+            }}>
+              <span style={{ fontSize: '28px', color: 'white', fontWeight: 800 }}>G</span>
+            </div>
+          )}
           <h1>Crear cuenta</h1>
           <p className="auth-subtitle">
             Regístrate con tu correo corporativo {domainHint}
@@ -119,10 +151,10 @@ export default function RegisterPage() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="email">Correo electrónico</label>
-            <input
-              id="email"
-              type="email"
+            <label htmlFor="reg-email">Correo electrónico</label>
+              <input
+                id="reg-email"
+                type="email"
               placeholder={`tu@${domainHint.replace('@', '')}`}
               {...register('email')}
               className={errors.email ? 'input-error' : ''}

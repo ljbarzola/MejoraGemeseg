@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsEnum, IsNumber, IsDateString, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  IsNumber,
+  IsDateString,
+  IsArray,
+} from 'class-validator';
 
 export class UpdateTaskDto {
   @IsOptional()

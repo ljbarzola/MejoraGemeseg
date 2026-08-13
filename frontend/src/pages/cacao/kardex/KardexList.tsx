@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getKardex, getLots } from '../../../services/cacao.service';
 import { formatDateEc, formatMoney, formatKg } from '../utils';
 
+const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
+
 interface KardexEntry {
   id: number;
   type: 'ENTRY' | 'EXIT';
@@ -13,6 +15,7 @@ interface KardexEntry {
   balanceCost: number;
   date: string;
   reference: string;
+  referenceUnit?: string;
 }
 
 interface Lot {
@@ -230,6 +233,7 @@ export default function KardexList() {
                         <tr>
                           <th>Fecha</th>
                           <th>Concepto</th>
+                          <th style={{ textAlign: 'right' }}>Unds</th>
                           <th style={{ textAlign: 'right' }}>Cantidad</th>
                           <th style={{ textAlign: 'right' }}>Vr. Unit.</th>
                           <th style={{ textAlign: 'right' }}>Vr. Total</th>
@@ -240,6 +244,7 @@ export default function KardexList() {
                           <tr key={e.id}>
                             <td style={{ whiteSpace: 'nowrap' }}>{formatDateEc(e.date)}</td>
                             <td>{e.reference}</td>
+                            <td style={{ textAlign: 'right', fontSize: '12px', color: '#718096' }}>{UNIT_ABBR[e.referenceUnit || 'KG'] || 'kg'}</td>
                             <td style={{ fontWeight: 600, textAlign: 'right' }}>{e.quantity.toLocaleString()} kg</td>
                             <td style={{ textAlign: 'right' }}>${e.unitCost.toFixed(2)}</td>
                             <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatMoney(e.totalCost)}</td>
@@ -248,7 +253,7 @@ export default function KardexList() {
                       </tbody>
                       <tfoot>
                         <tr style={{ backgroundColor: '#f0fff4', fontWeight: 700 }}>
-                          <td colSpan={2} style={{ padding: '8px 12px', fontSize: '12px' }}>Total Entradas</td>
+                          <td colSpan={3} style={{ padding: '8px 12px', fontSize: '12px' }}>Total Entradas</td>
                           <td style={{ textAlign: 'right', padding: '8px 12px' }}>{totalEntradas.toLocaleString()} kg</td>
                           <td></td>
                           <td style={{ textAlign: 'right', padding: '8px 12px' }}>
@@ -284,6 +289,7 @@ export default function KardexList() {
                         <tr>
                           <th>Fecha</th>
                           <th>Concepto</th>
+                          <th style={{ textAlign: 'right' }}>Unds</th>
                           <th style={{ textAlign: 'right' }}>Cantidad</th>
                           <th style={{ textAlign: 'right' }}>Vr. Unit.</th>
                           <th style={{ textAlign: 'right' }}>Vr. Total</th>
@@ -294,6 +300,7 @@ export default function KardexList() {
                           <tr key={e.id}>
                             <td style={{ whiteSpace: 'nowrap' }}>{formatDateEc(e.date)}</td>
                             <td>{e.reference}</td>
+                            <td style={{ textAlign: 'right', fontSize: '12px', color: '#718096' }}>{UNIT_ABBR[e.referenceUnit || 'KG'] || 'kg'}</td>
                             <td style={{ fontWeight: 600, textAlign: 'right' }}>{e.quantity.toLocaleString()} kg</td>
                             <td style={{ textAlign: 'right' }}>${e.unitCost.toFixed(2)}</td>
                             <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatMoney(e.totalCost)}</td>
@@ -302,7 +309,7 @@ export default function KardexList() {
                       </tbody>
                       <tfoot>
                         <tr style={{ backgroundColor: '#fff5f5', fontWeight: 700 }}>
-                          <td colSpan={2} style={{ padding: '8px 12px', fontSize: '12px' }}>Total Salidas</td>
+                          <td colSpan={3} style={{ padding: '8px 12px', fontSize: '12px' }}>Total Salidas</td>
                           <td style={{ textAlign: 'right', padding: '8px 12px' }}>{totalSalidas.toLocaleString()} kg</td>
                           <td></td>
                           <td style={{ textAlign: 'right', padding: '8px 12px' }}>

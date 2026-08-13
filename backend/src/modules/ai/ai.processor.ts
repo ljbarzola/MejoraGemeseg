@@ -5,7 +5,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class AiProcessor {
   constructor(private prisma: PrismaService) {}
 
-  async executeQuery(intent: string, params: any, userId: number): Promise<string> {
+  async executeQuery(
+    intent: string,
+    params: any,
+    userId: number,
+  ): Promise<string> {
     switch (intent) {
       case 'list_projects':
         return this.listProjects(userId);
@@ -25,10 +29,7 @@ export class AiProcessor {
   private async listProjects(userId: number): Promise<string> {
     const projects = await this.prisma.project.findMany({
       where: {
-        OR: [
-          { createdById: userId },
-          { members: { some: { userId } } },
-        ],
+        OR: [{ createdById: userId }, { members: { some: { userId } } }],
       },
       include: {
         _count: { select: { tasks: true, members: true } },
@@ -36,11 +37,15 @@ export class AiProcessor {
       orderBy: { createdAt: 'desc' },
     });
 
-    if (projects.length === 0) return 'No participas en ningún proyecto actualmente.';
+    if (projects.length === 0)
+      return 'No participas en ningún proyecto actualmente.';
 
-    const list = projects.map((p) =>
-      `- ${p.name} [${p.status}] (${p._count.tasks} tareas, ${p._count.members} miembros)`
-    ).join('\n');
+    const list = projects
+      .map(
+        (p) =>
+          `- ${p.name} [${p.status}] (${p._count.tasks} tareas, ${p._count.members} miembros)`,
+      )
+      .join('\n');
 
     return `Tus proyectos:\n${list}`;
   }
@@ -65,7 +70,13 @@ export class AiProcessor {
       include: {
         department: true,
         roleRelation: true,
-        _count: { select: { createdProjects: true, projectMemberships: true, taskAssignees: true } },
+        _count: {
+          select: {
+            createdProjects: true,
+            projectMemberships: true,
+            taskAssignees: true,
+          },
+        },
       },
     });
 
@@ -118,11 +129,15 @@ export class AiProcessor {
       take: 10,
     });
 
-    if (taskAssignees.length === 0) return 'No tienes tareas asignadas actualmente.';
+    if (taskAssignees.length === 0)
+      return 'No tienes tareas asignadas actualmente.';
 
-    const list = taskAssignees.map((ta) =>
-      `- ${ta.task.title} [${ta.task.status}] (${ta.task.project.name})${ta.task.endDate ? ` - hasta ${ta.task.endDate.toLocaleDateString('es-EC')}` : ''}`
-    ).join('\n');
+    const list = taskAssignees
+      .map(
+        (ta) =>
+          `- ${ta.task.title} [${ta.task.status}] (${ta.task.project.name})${ta.task.endDate ? ` - hasta ${ta.task.endDate.toLocaleDateString('es-EC')}` : ''}`,
+      )
+      .join('\n');
 
     return `Tus tareas:\n${list}`;
   }

@@ -1,4 +1,11 @@
-import { IsEmail, IsOptional, IsString, IsEnum, IsInt, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsOptional,
+  IsString,
+  IsEnum,
+  IsInt,
+  MinLength,
+} from 'class-validator';
 import { UserRole } from '@prisma/client';
 
 export class UpdateUserDto {

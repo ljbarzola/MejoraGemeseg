@@ -7,9 +7,11 @@ import {
   uploadCompanyLogo,
   type Company,
 } from '../../services/company.service';
+import { useCompany, resolveLogoUrl } from '../../contexts/ThemeContext';
 
 export default function CompanySettingsPage() {
   const navigate = useNavigate();
+  const { applyTheme } = useCompany();
   const user = getUser();
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,7 +45,7 @@ export default function CompanySettingsPage() {
         bgColor: data.bgColor,
         textColor: data.textColor,
       });
-      setLogoPreview(data.logoUrl);
+      setLogoPreview(data.logoUrl ? resolveLogoUrl(data.logoUrl, data.slug) : null);
     } catch {
       navigate('/dashboard');
     } finally {
@@ -68,9 +70,16 @@ export default function CompanySettingsPage() {
     setSaving(true);
     try {
       await updateCompany(company.id, form);
+      let updatedLogoUrl = company.logoUrl;
       if (logoFile) {
-        await uploadCompanyLogo(company.id, logoFile);
+        const uploaded = await uploadCompanyLogo(company.id, logoFile);
+        updatedLogoUrl = uploaded.logoUrl;
       }
+      applyTheme({
+        ...company,
+        ...form,
+        logoUrl: resolveLogoUrl(updatedLogoUrl, company.slug),
+      });
       setSuccess('Configuración guardada correctamente');
       await loadCompany();
     } catch (err: any) {

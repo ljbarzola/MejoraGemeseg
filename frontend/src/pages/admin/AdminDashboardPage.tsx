@@ -112,7 +112,7 @@ export default function AdminDashboardPage() {
     setFormData({
       fullName: '',
       email: '',
-      password: 'gemeseg2026',
+      password: '',
       role: 'EMPLOYEE',
       documentNumber: '',
       position: '',
@@ -150,10 +150,15 @@ export default function AdminDashboardPage() {
         };
         await updateUser(editingUser.id, data);
       } else {
+        if (!formData.password) {
+          setFormError('La contraseña es requerida para nuevos usuarios');
+          setFormLoading(false);
+          return;
+        }
         await createUser({
           fullName: formData.fullName,
           email: formData.email,
-          password: formData.password || 'gemeseg2026',
+          password: formData.password,
           role: formData.role,
           documentNumber: formData.documentNumber || undefined,
           position: formData.position || undefined,
@@ -480,12 +485,13 @@ export default function AdminDashboardPage() {
                 </div>
                 {!editingUser && (
                   <div className="form-group">
-                    <label>Contraseña</label>
+                    <label>Contraseña *</label>
                     <input
                       type="password"
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      placeholder="gemeseg2026"
+                      placeholder="Ingresa una contraseña"
+                      required
                     />
                   </div>
                 )}

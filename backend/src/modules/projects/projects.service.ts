@@ -1,4 +1,8 @@
-﻿import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+﻿import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { ListProjectsDto } from './dto/list-projects.dto';
@@ -10,16 +14,21 @@ const PAGE_SIZE = 10;
 export class ProjectsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(dto: CreateProjectDto, userId: number, userRole: UserRole, companyId?: number | null) {
-    const membersToCreate = [
-      { userId, role: 'OWNER' as const },
-    ];
+  async create(
+    dto: CreateProjectDto,
+    userId: number,
+    userRole: UserRole,
+    companyId?: number | null,
+  ) {
+    const membersToCreate = [{ userId, role: 'OWNER' as const }];
 
     const project = await this.prisma.project.create({
       data: {
         name: dto.name,
         description: dto.description,
-        startDate: dto.startDate ? new Date(dto.startDate + 'T12:00:00.000Z') : null,
+        startDate: dto.startDate
+          ? new Date(dto.startDate + 'T12:00:00.000Z')
+          : null,
         endDate: dto.endDate ? new Date(dto.endDate + 'T12:00:00.000Z') : null,
         createdById: userId,
         members: {
@@ -46,7 +55,12 @@ export class ProjectsService {
     return project;
   }
 
-  async findAll(userId: number, userRole: UserRole, companyId: number | null, query: ListProjectsDto) {
+  async findAll(
+    userId: number,
+    userRole: UserRole,
+    companyId: number | null,
+    query: ListProjectsDto,
+  ) {
     const page = query.page || 1;
     const skip = (page - 1) * PAGE_SIZE;
 
@@ -55,10 +69,7 @@ export class ProjectsService {
     if (companyId) {
       where.createdBy = { companyId };
     } else if (userRole !== UserRole.ADMIN) {
-      where.OR = [
-        { createdById: userId },
-        { members: { some: { userId } } },
-      ];
+      where.OR = [{ createdById: userId }, { members: { some: { userId } } }];
     }
 
     if (query.status) {
@@ -129,9 +140,16 @@ export class ProjectsService {
     return project?.createdBy || null;
   }
 
-  async update(id: number, dto: CreateProjectDto, userId: number, userRole: UserRole, companyId?: number | null) {
+  async update(
+    id: number,
+    dto: CreateProjectDto,
+    userId: number,
+    userRole: UserRole,
+    companyId?: number | null,
+  ) {
     const project = await this.prisma.project.findUnique({ where: { id } });
-    if (!project) throw new NotFoundException(`Proyecto con id ${id} no encontrado`);
+    if (!project)
+      throw new NotFoundException(`Proyecto con id ${id} no encontrado`);
 
     if (companyId) {
       const creator = await this.getProjectCreator(id);
@@ -144,16 +162,27 @@ export class ProjectsService {
       const membership = await this.prisma.projectMember.findUnique({
         where: { projectId_userId: { projectId: id, userId } },
       });
-      if (!membership || (membership.role !== 'OWNER' && membership.role !== 'MEMBER')) {
-        throw new ForbiddenException('Solo propietarios y miembros pueden editar el proyecto');
+      if (
+        !membership ||
+        (membership.role !== 'OWNER' && membership.role !== 'MEMBER')
+      ) {
+        throw new ForbiddenException(
+          'Solo propietarios y miembros pueden editar el proyecto',
+        );
       }
     }
 
     const data: any = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.description !== undefined) data.description = dto.description;
-    if (dto.startDate !== undefined) data.startDate = dto.startDate ? new Date(dto.startDate + 'T12:00:00.000Z') : null;
-    if (dto.endDate !== undefined) data.endDate = dto.endDate ? new Date(dto.endDate + 'T12:00:00.000Z') : null;
+    if (dto.startDate !== undefined)
+      data.startDate = dto.startDate
+        ? new Date(dto.startDate + 'T12:00:00.000Z')
+        : null;
+    if (dto.endDate !== undefined)
+      data.endDate = dto.endDate
+        ? new Date(dto.endDate + 'T12:00:00.000Z')
+        : null;
     if (dto.status !== undefined) data.status = dto.status;
 
     return this.prisma.project.update({
@@ -162,16 +191,24 @@ export class ProjectsService {
       include: {
         createdBy: { select: { id: true, fullName: true, email: true } },
         members: {
-          include: { user: { select: { id: true, fullName: true, email: true } } },
+          include: {
+            user: { select: { id: true, fullName: true, email: true } },
+          },
         },
         _count: { select: { tasks: true } },
       },
     });
   }
 
-  async remove(id: number, userId: number, userRole: UserRole, companyId?: number | null) {
+  async remove(
+    id: number,
+    userId: number,
+    userRole: UserRole,
+    companyId?: number | null,
+  ) {
     const project = await this.prisma.project.findUnique({ where: { id } });
-    if (!project) throw new NotFoundException(`Proyecto con id ${id} no encontrado`);
+    if (!project)
+      throw new NotFoundException(`Proyecto con id ${id} no encontrado`);
 
     if (companyId) {
       const creator = await this.getProjectCreator(id);
@@ -185,7 +222,9 @@ export class ProjectsService {
         where: { projectId_userId: { projectId: id, userId } },
       });
       if (!membership || membership.role !== 'OWNER') {
-        throw new ForbiddenException('Solo los propietarios pueden eliminar el proyecto');
+        throw new ForbiddenException(
+          'Solo los propietarios pueden eliminar el proyecto',
+        );
       }
     }
 
@@ -214,7 +253,8 @@ export class ProjectsService {
     ]);
 
     const totalTasks = taskStats.reduce((sum, s) => sum + s._count.id, 0);
-    const completedTasks = taskStats.find((s) => s.status === 'DONE')?._count.id || 0;
+    const completedTasks =
+      taskStats.find((s) => s.status === 'DONE')?._count.id || 0;
 
     return {
       totalProjects: total,
@@ -222,13 +262,21 @@ export class ProjectsService {
       tasks: {
         total: totalTasks,
         completed: completedTasks,
-        completionRate: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
-        byStatus: taskStats.map((s) => ({ status: s.status, count: s._count.id })),
+        completionRate:
+          totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
+        byStatus: taskStats.map((s) => ({
+          status: s.status,
+          count: s._count.id,
+        })),
       },
     };
   }
 
-  private async assertOwner(projectId: number, userId: number, userRole: UserRole) {
+  private async assertOwner(
+    projectId: number,
+    userId: number,
+    userRole: UserRole,
+  ) {
     if (userRole === UserRole.ADMIN) return;
 
     const membership = await this.prisma.projectMember.findUnique({
@@ -236,23 +284,38 @@ export class ProjectsService {
     });
 
     if (!membership || membership.role !== 'OWNER') {
-      throw new ForbiddenException('Solo los propietarios pueden gestionar miembros');
+      throw new ForbiddenException(
+        'Solo los propietarios pueden gestionar miembros',
+      );
     }
   }
 
-  async addMember(projectId: number, targetUserId: number, role: string, userId: number, userRole: UserRole, companyId?: number | null) {
+  async addMember(
+    projectId: number,
+    targetUserId: number,
+    role: string,
+    userId: number,
+    userRole: UserRole,
+    companyId?: number | null,
+  ) {
     await this.assertOwner(projectId, userId, userRole);
 
-    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+    });
     if (!project) throw new NotFoundException('Proyecto no encontrado');
 
-    const targetUser = await this.prisma.user.findUnique({ where: { id: targetUserId } });
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+    });
     if (!targetUser || targetUser.isActive === false) {
       throw new NotFoundException('Usuario no encontrado o inactivo');
     }
 
     if (companyId && targetUser.companyId !== companyId) {
-      throw new ForbiddenException('Solo puedes agregar usuarios de tu empresa');
+      throw new ForbiddenException(
+        'Solo puedes agregar usuarios de tu empresa',
+      );
     }
 
     const existing = await this.prisma.projectMember.findUnique({
@@ -277,7 +340,12 @@ export class ProjectsService {
     });
   }
 
-  async removeMember(projectId: number, targetUserId: number, userId: number, userRole: UserRole) {
+  async removeMember(
+    projectId: number,
+    targetUserId: number,
+    userId: number,
+    userRole: UserRole,
+  ) {
     await this.assertOwner(projectId, userId, userRole);
 
     const membership = await this.prisma.projectMember.findUnique({
@@ -293,7 +361,9 @@ export class ProjectsService {
         where: { projectId, role: 'OWNER' },
       });
       if (ownerCount <= 1) {
-        throw new ForbiddenException('No se puede eliminar al único propietario del proyecto');
+        throw new ForbiddenException(
+          'No se puede eliminar al único propietario del proyecto',
+        );
       }
     }
 
@@ -304,9 +374,17 @@ export class ProjectsService {
     return { message: 'Miembro eliminado del proyecto' };
   }
 
-  async updateMemberRole(projectId: number, targetUserId: number, newRole: string, userId: number, userRole: UserRole) {
+  async updateMemberRole(
+    projectId: number,
+    targetUserId: number,
+    newRole: string,
+    userId: number,
+    userRole: UserRole,
+  ) {
     if (userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('Solo el administrador puede cambiar roles de propietario');
+      throw new ForbiddenException(
+        'Solo el administrador puede cambiar roles de propietario',
+      );
     }
 
     const membership = await this.prisma.projectMember.findUnique({
@@ -322,7 +400,9 @@ export class ProjectsService {
         where: { projectId, role: 'OWNER' },
       });
       if (ownerCount <= 1) {
-        throw new ForbiddenException('No se puede degradar al único propietario');
+        throw new ForbiddenException(
+          'No se puede degradar al único propietario',
+        );
       }
     }
 

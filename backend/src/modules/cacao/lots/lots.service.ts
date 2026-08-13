@@ -5,7 +5,10 @@ import { PrismaService } from '../../../prisma/prisma.service';
 export class CacaoLotsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(companyId: number, query: { status?: string; qualityId?: string; supplierId?: string }) {
+  async findAll(
+    companyId: number,
+    query: { status?: string; qualityId?: string; supplierId?: string },
+  ) {
     const where: any = { companyId };
     if (query.status) where.status = query.status;
     if (query.qualityId) where.qualityId = Number(query.qualityId);
@@ -26,7 +29,7 @@ export class CacaoLotsService {
       orderBy: { id: 'desc' },
     });
     const seq = lastLot ? parseInt(lastLot.code.split('-')[2]) + 1 : 1;
-    return { code: `LOTE-${year}-${String(seq).padStart(3, '0')}` };
+    return { code: `LOTE-${year}-${String(seq).padStart(5, '0')}` };
   }
 
   async findOne(id: number, companyId: number) {

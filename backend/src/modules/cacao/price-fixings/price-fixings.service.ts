@@ -16,7 +16,9 @@ export class CacaoPriceFixingsService {
   }
 
   async create(dto: CreatePriceFixingDto, companyId: number, userId: number) {
-    const lot = await this.prisma.cacaoLot.findFirst({ where: { id: dto.lotId, companyId } });
+    const lot = await this.prisma.cacaoLot.findFirst({
+      where: { id: dto.lotId, companyId },
+    });
     if (!lot) throw new NotFoundException('Lote no encontrado');
 
     // Use differential from lot if not provided in DTO
@@ -39,19 +41,25 @@ export class CacaoPriceFixingsService {
   }
 
   async update(id: number, dto: UpdatePriceFixingDto, companyId: number) {
-    const fixing = await this.prisma.cacaoPriceFixing.findFirst({ where: { id, companyId } });
+    const fixing = await this.prisma.cacaoPriceFixing.findFirst({
+      where: { id, companyId },
+    });
     if (!fixing) throw new NotFoundException('Fijación no encontrada');
 
     const updateData: any = {};
-    if (dto.referencePrice !== undefined) updateData.referencePrice = dto.referencePrice;
-    if (dto.differential !== undefined) updateData.differential = dto.differential;
+    if (dto.referencePrice !== undefined)
+      updateData.referencePrice = dto.referencePrice;
+    if (dto.differential !== undefined)
+      updateData.differential = dto.differential;
     if (dto.fixedPrice !== undefined) {
       updateData.fixedPrice = dto.fixedPrice;
       updateData.status = 'FIXED';
       updateData.fixedDate = new Date();
     }
-    if (dto.pendingWeight !== undefined) updateData.pendingWeight = dto.pendingWeight;
-    if (dto.deadline !== undefined) updateData.deadline = dto.deadline ? new Date(dto.deadline) : null;
+    if (dto.pendingWeight !== undefined)
+      updateData.pendingWeight = dto.pendingWeight;
+    if (dto.deadline !== undefined)
+      updateData.deadline = dto.deadline ? new Date(dto.deadline) : null;
 
     return this.prisma.cacaoPriceFixing.update({
       where: { id },

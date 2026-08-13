@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getSuppliers, getLots, createSettlement } from '../../../services/cacao.service';
+import { getSuppliers, getLots, createSettlement, getNextSettlementId } from '../../../services/cacao.service';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
@@ -28,6 +28,7 @@ export default function SettlementForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [createdId, setCreatedId] = useState<number | null>(null);
+  const [nextIdCode, setNextIdCode] = useState<string | null>(null);
   const [form, setForm] = useState({
     date: getTodayLocal(),
     supplierId: '',
@@ -40,8 +41,8 @@ export default function SettlementForm() {
   const pendingNav = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    Promise.all([getSuppliers(), getLots()])
-      .then(([s, l]) => { setSuppliers(s); setAllLots(l); })
+    Promise.all([getSuppliers(), getLots(), getNextSettlementId()])
+      .then(([s, l, nid]) => { setSuppliers(s); setAllLots(l); setNextIdCode(nid.code); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -199,7 +200,7 @@ export default function SettlementForm() {
     for (const sl of selectedLots) {
       if (!sl.lotId || !sl.quantity || Number(sl.quantity) <= 0) continue;
       const lot = allLots.find((l: any) => l.id === sl.lotId);
-      if (lot && Number(sl.quantity) > lot.netWeight) {
+      if (lot && Number(sl.quantity) > lot.netWeight + 0.001) {
         setError(`El lote ${lot.code} tiene ${lot.netWeight} kg disponibles, no puede seleccionar ${sl.quantity} kg`);
         return;
       }
@@ -275,6 +276,16 @@ export default function SettlementForm() {
         <div className="cacao-form">
           {error && <div className="auth-error-banner">{error}</div>}
 
+          {nextIdCode && (
+            <div style={{ padding: '16px 20px', backgroundColor: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <span style={{ fontSize: '20px' }}>📋</span>
+              <div>
+                <div style={{ fontSize: '12px', color: '#2b6cb0', fontWeight: 600, textTransform: 'uppercase' }}>Liquidación que se asignará</div>
+                <div style={{ fontSize: '22px', fontWeight: 800, color: '#2c5282', fontFamily: 'monospace' }}>{nextIdCode}</div>
+              </div>
+            </div>
+          )}
+
           <div className="form-section-title">Datos Generales</div>
           <div className="form-row">
             <div className="form-group">
@@ -318,7 +329,7 @@ export default function SettlementForm() {
               {selectedLots.map((sl, i) => {
                 const lot = allLots.find((l: any) => l.id === sl.lotId);
                 const isDuplicate = sl.lotId && selectedLots.filter(s => s.lotId === sl.lotId).length > 1;
-                const exceeds = lot && Number(sl.quantity) > lot.netWeight;
+                const exceeds = lot && Number(sl.quantity) > lot.netWeight + 0.001;
                 return (
                   <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '10px' }}>
                     <select value={sl.lotId} onChange={(e) => updateLot(i, 'lotId', e.target.value)} style={{ flex: 2, borderColor: isDuplicate || exceeds ? '#e53e3e' : undefined }}>

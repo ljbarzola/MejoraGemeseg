@@ -1,10 +1,504 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+model Company {
+  id             Int      @id @default(autoincrement())
+  name           String
+  slug           String   @unique
+  logoUrl        String?
+  primaryColor   String   @default("#100F31")
+  secondaryColor String   @default("#12375F")
+  accentColor    String   @default("#EE3B1B")
+  bgColor        String   @default("#f8fafc")
+  textColor      String   @default("#1e293b")
+  domain         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  users          User[]
+  sections       CompanySection[]
+  custodias      Custodia[]
+  kanbanColumns  KanbanColumn[]
+  candidates     Candidate[]
+  contractTemplates ContractTemplate[]
+  contracts      Contract[]
+  certifications Certification[]
+  logTemplates   LogTemplate[]
+  logEntries     LogEntry[]
+  driveFolders   EmployeeDriveFolder[]
+  documentTypes  DocumentType[]
+  employeeDocuments EmployeeDocument[]
+  folderConfigs  FolderConfig[]
+  jobPositions   JobPosition[]
+  salesGoals        SalesGoal[]
+  clientVisits      ClientVisit[]
+  leads             Lead[]
+  salesApiKeys      SalesApiKey[]
+}
+
+model Department {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
+}
+
+model User {
+  id                 Int              @id @default(autoincrement())
+  fullName           String
+  email              String           @unique
+  password           String?
+  documentNumber     String?
+  position           String?
+  isActive           Boolean          @default(true)
+  departmentId       Int?
+  roleId             Int?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  role               UserRole         @default(EMPLOYEE)
+  activeAgentId      Int?
+  companyId          Int?
+  aiLogs             AiLog[]
+  conversations      Conversation[]
+  createdProjects    Project[]
+  projectMemberships ProjectMember[]
+  taskAssignees      TaskAssignee[]
+  toolAssignments    ToolAssignment[]
+  toolAudits         ToolAuditLog[]
+  activeAgent        Agent?           @relation("UserActiveAgent", fields: [activeAgentId], references: [id])
+  company            Company?         @relation(fields: [companyId], references: [id])
+  department         Department?      @relation(fields: [departmentId], references: [id])
+  roleRelation       Role?            @relation(fields: [roleId], references: [id])
+  agentLinks         UserAgent[]
+  permissions        UserPermission[]
+  createdCustodias   Custodia[]
+  createdCandidates  Candidate[]
+  candidateMoves     CandidateHistory[]
+  contractTemplates  ContractTemplate[]
+  contracts          Contract[]
+  certifications     Certification[]
+  logTemplates       LogTemplate[]
+  logEntries         LogEntry[]
+  salesGoals         SalesGoal[]
+  clientVisits       ClientVisit[]
+  assignedLeads      Lead[]
+}
+
+model Project {
+  id          Int             @id @default(autoincrement())
+  name        String
+  description String?
+  status      ProjectStatus   @default(ACTIVE)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  createdById Int
+  createdBy   User            @relation(fields: [createdById], references: [id])
+  members     ProjectMember[]
+  tasks       Task[]
+}
+
+model ProjectMember {
+  id        Int        @id @default(autoincrement())
+  role      MemberRole @default(MEMBER)
+  projectId Int
+  userId    Int
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id])
+
+  @@unique([projectId, userId])
+}
+
+model Task {
+  id             Int            @id @default(autoincrement())
+  title          String
+  description    String?
+  status         TaskStatus     @default(TODO)
+  priority       Priority       @default(MEDIUM)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  projectId      Int
+  estimatedHours Float?
+  endDate        DateTime?
+  startDate      DateTime?
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignees      TaskAssignee[]
+}
+
+model TaskAssignee {
+  id     Int  @id @default(autoincrement())
+  taskId Int
+  userId Int
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User @relation(fields: [userId], references: [id])
+
+  @@unique([taskId, userId])
+}
+
+model Agent {
+  id            Int            @id @default(autoincrement())
+  name          String
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  createdBy     Int?
+  instructions  String
+  scope         String         @default("GLOBAL")
+  updatedAt     DateTime       @updatedAt
+  conversations Conversation[]
+  activeUsers   User[]         @relation("UserActiveAgent")
+  userLinks     UserAgent[]
+
+  @@unique([createdBy, name])
+}
+
+model UserAgent {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  agentId   Int
+  createdAt DateTime @default(now())
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, agentId])
+}
+
+model Conversation {
+  id        Int           @id @default(autoincrement())
+  userId    Int
+  context   String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  agentId   Int
+  messages  ChatMessage[]
+  agent     Agent         @relation(fields: [agentId], references: [id])
+  user      User          @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([agentId])
+}
+
+model ChatMessage {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  role           String
+  content        String
+  tokensUsed     Int?
+  model          String?
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+model AiLog {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  action       String
+  model        String
+  tokensUsed   Int?
+  success      Boolean
+  errorMessage String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Tool {
+  id          Int              @id @default(autoincrement())
+  name        String           @unique
+  category    String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  assignments ToolAssignment[]
+}
+
+model ToolAssignment {
+  id         Int            @id @default(autoincrement())
+  toolId     Int
+  userId     Int
+  version    String?
+  licenseKey String?
+  assignedAt DateTime       @default(now())
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  tool       Tool           @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id])
+  audits     ToolAuditLog[]
+
+  @@unique([toolId, userId])
+}
+
+model ToolAuditLog {
+  id           Int            @id @default(autoincrement())
+  assignmentId Int
+  action       String
+  performedBy  Int
+  details      String?
+  createdAt    DateTime       @default(now())
+  assignment   ToolAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  performer    User           @relation(fields: [performedBy], references: [id])
+
+  @@index([assignmentId])
+  @@index([createdAt])
+}
+
+model CacaoSupplier {
+  id           Int               @id @default(autoincrement())
+  name         String
+  contact      String?
+  phone        String?
+  paymentTerms String?
+  bank         String?
+  companyId    Int
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  payables     CacaoPayable[]
+  receptions   CacaoReception[]
+  settlements  CacaoSettlement[]
+}
+
+model CacaoClient {
+  id          Int               @id @default(autoincrement())
+  name        String
+  country     String?
+  contact     String?
+  email       String?
+  phone       String?
+  companyId   Int
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  receivables CacaoReceivable[]
+  shipments   CacaoShipment[]
+}
+
+model CacaoQuality {
+  id               Int        @id @default(autoincrement())
+  name             String     @unique
+  fixedPrice       Float?
+  humidityDiscount Float      @default(7)
+  impurityDiscount Float      @default(1)
+  isFixedPrice     Boolean    @default(false)
+  lots             CacaoLot[]
+}
+
+model CacaoLot {
+  id           Int                  @id @default(autoincrement())
+  code         String               @unique
+  qualityId    Int
+  netWeight    Float
+  averageCost  Float                @default(0)
+  status       String               @default("OPEN")
+  companyId    Int
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  differential Float?
+  kardex       CacaoKardex[]
+  quality      CacaoQuality         @relation(fields: [qualityId], references: [id])
+  priceFixings CacaoPriceFixing[]
+  receptions   CacaoReception[]
+  settlements  CacaoSettlementLot[]
+  shipments    CacaoShipmentLot[]
+}
+
+model CacaoReception {
+  id               Int           @id @default(autoincrement())
+  date             DateTime
+  supplierId       Int
+  guideNumber      String
+  grossWeight      Float
+  tare             Float         @default(0)
+  netWeight        Float
+  humidity         Float         @default(0)
+  impurities       Float         @default(0)
+  provisionalPrice Float         @default(0)
+  qualityId        Int?
+  lotId            Int?
+  companyId        Int
+  createdBy        Int
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  differential     Float?
+  unitOfMeasure    String        @default("KG")
+  lot              CacaoLot?     @relation(fields: [lotId], references: [id])
+  supplier         CacaoSupplier @relation(fields: [supplierId], references: [id])
+}
+
+model CacaoSettlement {
+  id              Int                  @id @default(autoincrement())
+  date            DateTime
+  supplierId      Int
+  periodStart     DateTime
+  periodEnd       DateTime
+  totalNetWeight  Float                @default(0)
+  totalDeductions Float                @default(0)
+  finalPrice      Float                @default(0)
+  totalAmount     Float                @default(0)
+  status          String               @default("PENDING")
+  companyId       Int
+  createdBy       Int
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  payable         CacaoPayable?
+  supplier        CacaoSupplier        @relation(fields: [supplierId], references: [id])
+  lots            CacaoSettlementLot[]
+}
+
+model CacaoSettlementLot {
+  id           Int             @id @default(autoincrement())
+  settlementId Int
+  lotId        Int
+  quantity     Float
+  unitCost     Float
+  createdAt    DateTime        @default(now())
+  lot          CacaoLot        @relation(fields: [lotId], references: [id])
+  settlement   CacaoSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+}
+
+model CacaoKardex {
+  id            Int      @id @default(autoincrement())
+  lotId         Int
+  type          String
+  quantity      Float
+  unitCost      Float
+  totalCost     Float
+  balanceQty    Float
+  balanceCost   Float
+  date          DateTime
+  reference     String?
+  companyId     Int
+  createdAt     DateTime @default(now())
+  referenceUnit String?
+  lot           CacaoLot @relation(fields: [lotId], references: [id])
+}
+
+model CacaoPriceFixing {
+  id             Int       @id @default(autoincrement())
+  lotId          Int
+  referencePrice Float?
+  differential   Float?
+  fixedPrice     Float?
+  pendingWeight  Float?
+  fixedDate      DateTime?
+  deadline       DateTime?
+  status         String    @default("OPEN")
+  companyId      Int
+  createdBy      Int
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  lot            CacaoLot  @relation(fields: [lotId], references: [id])
+}
+
+model CacaoShipment {
+  id             Int                @id @default(autoincrement())
+  date           DateTime
+  clientId       Int
+  contractRef    String
+  totalWeight    Float
+  totalCost      Float
+  salePrice      Float
+  margin         Float              @default(0)
+  status         String             @default("PENDING")
+  companyId      Int
+  createdBy      Int
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  salePricePerKg Float
+  totalWeightKg  Float
+  unitOfMeasure  String             @default("KG")
+  receivable     CacaoReceivable?
+  client         CacaoClient        @relation(fields: [clientId], references: [id])
+  lots           CacaoShipmentLot[]
+}
+
+model CacaoShipmentLot {
+  id            Int           @id @default(autoincrement())
+  shipmentId    Int
+  lotId         Int
+  quantity      Float
+  unitCost      Float
+  saleAmount    Float
+  createdAt     DateTime      @default(now())
+  quantityKg    Float
+  unitOfMeasure String        @default("KG")
+  lot           CacaoLot      @relation(fields: [lotId], references: [id])
+  shipment      CacaoShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+}
+
+model CacaoPayable {
+  id           Int             @id @default(autoincrement())
+  settlementId Int             @unique
+  supplierId   Int
+  totalAmount  Float
+  paidAmount   Float           @default(0)
+  dueDate      DateTime
+  status       String          @default("PENDING")
+  companyId    Int
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  settlement   CacaoSettlement @relation(fields: [settlementId], references: [id])
+  supplier     CacaoSupplier   @relation(fields: [supplierId], references: [id])
+  payments     CacaoPayment[]
+}
+
+model CacaoReceivable {
+  id             Int            @id @default(autoincrement())
+  shipmentId     Int            @unique
+  clientId       Int
+  totalAmount    Float
+  receivedAmount Float          @default(0)
+  dueDate        DateTime
+  status         String         @default("PENDING")
+  companyId      Int
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  payments       CacaoPayment[]
+  client         CacaoClient    @relation(fields: [clientId], references: [id])
+  shipment       CacaoShipment  @relation(fields: [shipmentId], references: [id])
+}
+
+model CacaoPayment {
+  id           Int              @id @default(autoincrement())
+  type         String
+  amount       Float
+  method       String           @default("TRANSFER")
+  reference    String?
+  companyId    Int
+  createdAt    DateTime         @default(now())
+  payableId    Int?
+  receivableId Int?
+  payable      CacaoPayable?    @relation(fields: [payableId], references: [id])
+  receivable   CacaoReceivable? @relation(fields: [receivableId], references: [id])
+}
+
+model CacaoUnitConfig {
+  id          Int      @id @default(autoincrement())
+  name        String
+  displayName String
+  kgPerUnit   Float
+  isDefault   Boolean  @default(false)
+  companyId   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 enum UserRole {
@@ -41,465 +535,398 @@ enum Priority {
   URGENT
 }
 
-model Company {
-  id             Int      @id @default(autoincrement())
-  name           String
-  slug           String   @unique
-  logoUrl        String?
-  primaryColor   String   @default("#100F31")
-  secondaryColor String   @default("#12375F")
-  accentColor    String   @default("#EE3B1B")
-  bgColor        String   @default("#f8fafc")
-  textColor      String   @default("#1e293b")
-  domain         String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  users          User[]
+model CompanySection {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  section   String
+  createdAt DateTime @default(now())
+  @@unique([companyId, section])
 }
 
-model Department {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  description String?
-  users       User[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-model Role {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  description String?
-  users       User[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-model User {
-  id             Int        @id @default(autoincrement())
-  fullName       String
-  email          String     @unique
-  password       String?
-  role           UserRole   @default(EMPLOYEE)
-  documentNumber String?
-  position       String?
-  isActive       Boolean    @default(true)
-  departmentId   Int?
-  roleId         Int?
-  activeAgentId  Int?
-  companyId      Int?
-  department     Department? @relation(fields: [departmentId], references: [id])
-  roleRelation   Role?       @relation(fields: [roleId], references: [id])
-  activeAgent    Agent?      @relation("UserActiveAgent", fields: [activeAgentId], references: [id])
-  company        Company?    @relation(fields: [companyId], references: [id])
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-
-  createdProjects    Project[]
-  projectMemberships ProjectMember[]
-  taskAssignees      TaskAssignee[]
-  toolAssignments    ToolAssignment[]
-  toolAudits         ToolAuditLog[]
-  agentLinks         UserAgent[]
-  conversations      Conversation[]
-  aiLogs             AiLog[]
-}
-
-model Project {
-  id          Int           @id @default(autoincrement())
-  name        String
-  description String?
-  status      ProjectStatus @default(ACTIVE)
-  startDate   DateTime?
-  endDate     DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  createdById Int
-  createdBy   User   @relation(fields: [createdById], references: [id])
-
-  members ProjectMember[]
-  tasks   Task[]
-}
-
-model ProjectMember {
-  id     Int        @id @default(autoincrement())
-  role   MemberRole @default(MEMBER)
-
-  projectId Int
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  userId    Int
-  user      User    @relation(fields: [userId], references: [id])
-
-  @@unique([projectId, userId])
-}
-
-model Task {
-  id             Int        @id @default(autoincrement())
-  title          String
-  description    String?
-  status         TaskStatus @default(TODO)
-  priority       Priority   @default(MEDIUM)
-  startDate      DateTime?
-  endDate        DateTime?
-  estimatedHours Float?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-  projectId      Int
-  project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignees      TaskAssignee[]
-}
-
-model TaskAssignee {
-  id       Int  @id @default(autoincrement())
-  taskId   Int
-  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  userId   Int
-  user     User @relation(fields: [userId], references: [id])
-
-  @@unique([taskId, userId])
-}
-
-model Agent {
-  id             Int      @id @default(autoincrement())
-  name           String
-  instructions   String
-  scope          String   @default("GLOBAL")
-  isActive       Boolean  @default(true)
-  createdBy      Int?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  activeUsers    User[]   @relation("UserActiveAgent")
-  userLinks      UserAgent[]
-  conversations  Conversation[]
-  @@unique([createdBy, name])
-}
-
-model UserAgent {
+model UserPermission {
   id        Int      @id @default(autoincrement())
   userId    Int
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  agentId   Int
-  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  section   String
+  canView   Boolean  @default(true)
+  canWrite  Boolean  @default(false)
   createdAt DateTime @default(now())
-  @@unique([userId, agentId])
+  @@unique([userId, section])
 }
 
-model Conversation {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
-  agentId   Int
-  agent     Agent    @relation(fields: [agentId], references: [id])
-  context   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  messages  ChatMessage[]
-  @@index([userId])
-  @@index([agentId])
+enum CustodiaType {
+  HACIENDA
+  PUERTO
+  VIP
 }
 
-model ChatMessage {
-  id             Int          @id @default(autoincrement())
-  conversationId Int
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role           String
-  content        String
-  tokensUsed     Int?
-  model          String?
-  createdAt      DateTime     @default(now())
-  @@index([conversationId])
+enum CustodiaEstado {
+  LISTO_PARA_CUSTODIAR
+  EN_CAMINO
+  LLEGO
 }
 
-model AiLog {
-  id           Int      @id @default(autoincrement())
-  userId       Int
-  user         User     @relation(fields: [userId], references: [id])
-  action       String
-  model        String
-  tokensUsed   Int?
-  success      Boolean
-  errorMessage String?
-  metadata     Json?
-  createdAt    DateTime @default(now())
-  @@index([userId])
-  @@index([createdAt])
+model Custodia {
+  id               Int            @id @default(autoincrement())
+  numeroGuia       String         @unique
+  tipoCustodia     CustodiaType
+  estado           CustodiaEstado @default(LISTO_PARA_CUSTODIAR)
+  choferName       String
+  choferCedula     String         @default("")
+  custodio1Name    String
+  custodio1Cedula  String         @default("")
+  custodio2Name    String
+  custodio2Cedula  String         @default("")
+  cliente          String         @default("")
+  placa            String         @default("")
+  direccionSalida  String         @default("")
+  direccionLlegada String         @default("")
+  fechaHoraSalida  DateTime?
+  fechaHoraLlegada DateTime?
+  observaciones    String?
+  nombreHacienda   String?
+  cantidadSacos    Int?
+  contenedores     String[]
+  companyId        Int
+  company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy        Int
+  creator          User           @relation(fields: [createdBy], references: [id])
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  @@index([companyId])
+  @@index([estado])
+  @@index([tipoCustodia])
 }
 
-model Tool {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  category  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  assignments ToolAssignment[]
+enum CandidateStatus {
+  POSTULADO
+  VALIDACION_DOCUMENTAL
+  TEST_PSICOLOGICO
+  TEST_MEDICO
+  APROBADO
+  RECHAZADO
 }
 
-model ToolAssignment {
-  id        Int      @id @default(autoincrement())
-  toolId    Int
-  tool      Tool     @relation(fields: [toolId], references: [id], onDelete: Cascade)
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
-  version   String?
-  licenseKey String?
-  assignedAt DateTime @default(now())
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  @@unique([toolId, userId])
-  audits ToolAuditLog[]
+enum ContractType {
+  TERMINO_INDEFINIDO
+  TERMINO_FIJO
+  ENTREGA_UNIFORMES
 }
 
-model ToolAuditLog {
-  id           Int      @id @default(autoincrement())
-  assignmentId Int
-  assignment   ToolAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  action       String
-  performedBy  Int
-  performer    User     @relation(fields: [performedBy], references: [id])
-  details      String?
-  createdAt    DateTime @default(now())
-  @@index([assignmentId])
-  @@index([createdAt])
+enum LogType {
+  PERMISO_INGRESO
+  RESPUESTA_ADMIN_CONTRATO
+  NOVEDAD_OPERATIVA
+  SALIDA_PERSONAL
 }
 
-// ─── CACAO MODULE ───────────────────────────────────────────
-
-model CacaoSupplier {
-  id           Int      @id @default(autoincrement())
-  name         String
-  contact      String?
-  phone        String?
-  paymentTerms String?
-  bank         String?
-  companyId    Int
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  receptions   CacaoReception[]
-  settlements  CacaoSettlement[]
-  payables     CacaoPayable[]
-}
-
-model CacaoClient {
+model KanbanColumn {
   id        Int      @id @default(autoincrement())
   name      String
-  country   String?
-  contact   String?
-  email     String?
-  phone     String?
+  position  Int      @default(0)
+  color     String   @default("#718096")
   companyId Int
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  candidates Candidate[]
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  shipments    CacaoShipment[]
-  receivables  CacaoReceivable[]
+  @@unique([companyId, name])
+  @@index([companyId])
 }
 
-model CacaoQuality {
-  id                Int      @id @default(autoincrement())
-  name              String   @unique
-  humidityDiscount  Float    @default(7)
-  impurityDiscount  Float    @default(1)
-  isFixedPrice      Boolean  @default(false)
-  fixedPrice        Float?
-  lots              CacaoLot[]
-}
-
-model CacaoLot {
-  id           Int      @id @default(autoincrement())
-  code         String   @unique
-  qualityId    Int
-  quality      CacaoQuality @relation(fields: [qualityId], references: [id])
-  netWeight    Float
-  averageCost  Float    @default(0)
-  differential Float?   // Diferencial pactado ($/T) - viaja dormido hasta fijacion
-  status       String   @default("OPEN")
-  companyId    Int
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  receptions   CacaoReception[]
-  kardex       CacaoKardex[]
-  settlements  CacaoSettlementLot[]
-  shipments    CacaoShipmentLot[]
-  priceFixings CacaoPriceFixing[]
-}
-
-model CacaoReception {
-  id               Int      @id @default(autoincrement())
-  date             DateTime
-  supplierId       Int
-  supplier         CacaoSupplier @relation(fields: [supplierId], references: [id])
-  guideNumber      String
-  unitOfMeasure    String   @default("KG") // TON, KG, SACO
-  grossWeight      Float
-  tare             Float    @default(0)
-  netWeight        Float
-  humidity         Float    @default(0)
-  impurities       Float    @default(0)
-  provisionalPrice Float    @default(0)
-  differential     Float?   // Diferencial pactado ($/T) - viaja dormido hasta fijacion
-  qualityId        Int?
-  lotId            Int?
-  lot              CacaoLot? @relation(fields: [lotId], references: [id])
+model Candidate {
+  id               Int              @id @default(autoincrement())
+  fullName         String
+  cedula           String
+  phone            String?
+  email            String?
+  positionApplied  String
+  availability     String?
+  salaryExpected   Float?
+  education        String?
+  experience       String?
+  references       String?
+  observations     String?
+  cvUrl            String?
+  status           CandidateStatus  @default(POSTULADO)
+  columnId         Int?
+  column           KanbanColumn?    @relation(fields: [columnId], references: [id])
   companyId        Int
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdBy        Int
+  creator          User             @relation(fields: [createdBy], references: [id])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  history          CandidateHistory[]
+  contracts        Contract[]
+  @@unique([companyId, cedula])
+  @@index([companyId])
+}
+
+model CandidateHistory {
+  id          Int      @id @default(autoincrement())
+  candidateId Int
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  fromColumn  String?
+  toColumn    String
+  notes       String?
+  performedBy Int
+  performer   User    @relation(fields: [performedBy], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model ContractTemplate {
+  id          Int          @id @default(autoincrement())
+  name        String
+  type        ContractType
+  fileName    String
+  fileUrl     String
+  fields      String[]
+  companyId   Int
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy   Int
+  creator     User         @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime     @default(now())
+  contracts   Contract[]
+}
+
+model Contract {
+  id           Int              @id @default(autoincrement())
+  candidateId  Int
+  candidate    Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  templateId   Int
+  template     ContractTemplate @relation(fields: [templateId], references: [id])
+  generatedUrl String?
+  status       String           @default("DRAFT")
+  companyId    Int
+  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy    Int
+  creator      User             @relation(fields: [createdBy], references: [id])
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+}
+
+model Certification {
+  id          Int      @id @default(autoincrement())
+  employeeName String
+  cedula      String
+  type        String
+  issueDate   DateTime
+  expiryDate  DateTime
+  status      String   @default("ACTIVE")
+  documentUrl String?
+  companyId   Int
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy   Int
+  creator     User     @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  alerts      CertificationAlert[]
+  @@index([companyId])
+}
+
+model CertificationAlert {
+  id              Int            @id @default(autoincrement())
+  certificationId Int
+  certification   Certification  @relation(fields: [certificationId], references: [id], onDelete: Cascade)
+  daysBefore      Int
+  sentAt          DateTime?
+  createdAt       DateTime       @default(now())
+}
+
+model LogTemplate {
+  id        Int      @id @default(autoincrement())
+  name      String
+  type      LogType
+  content   String
+  companyId Int
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy Int
+  creator   User     @relation(fields: [createdBy], references: [id])
+  createdAt DateTime @default(now())
+  entries   LogEntry[]
+}
+
+model LogEntry {
+  id         Int         @id @default(autoincrement())
+  templateId Int?
+  template   LogTemplate? @relation(fields: [templateId], references: [id])
+  title      String
+  content    String
+  type       LogType
+  companyId  Int
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy  Int
+  creator    User        @relation(fields: [createdBy], references: [id])
+  createdAt  DateTime    @default(now())
+}
+
+model EmployeeDriveFolder {
+  id          Int      @id @default(autoincrement())
+  employeeName String
+  cedula      String
+  folderId    String
+  folderUrl   String
+  folderType  String   @default("PERSONAL")
+  lastSyncAt  DateTime?
+  companyId   Int
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  @@unique([companyId, cedula])
+}
+
+model DocumentType {
+  id          Int      @id @default(autoincrement())
+  name        String
+  folder      String
+  required    Boolean  @default(true)
+  companyId   Int
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  @@unique([companyId, folder, name])
+}
+
+model EmployeeDocument {
+  id             Int      @id @default(autoincrement())
+  employeeName   String
+  cedula         String
+  fileName       String
+  fileUrl        String
+  fileType       String
+  driveFileId    String   @unique
+  folder         String
+  companyId      Int
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  @@unique([companyId, driveFileId])
+}
+
+model FolderConfig {
+  id              Int      @id @default(autoincrement())
+  driveFolderId   String
+  driveFolderName String
+  companyId       Int
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  @@unique([companyId])
+}
+
+enum VisitStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum VisitOutcome {
+  INTERESTED
+  QUOTED
+  CLOSED_SALE
+  NOT_INTERESTED
+  FOLLOW_UP
+}
+
+enum LeadSource {
+  GOOGLE_ADS
+  WEB_FORM
+  EMAIL
+  MANUAL
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  QUOTED
+  WON
+  LOST
+}
+
+model SalesGoal {
+  id               Int      @id @default(autoincrement())
+  userId           Int
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weeklyVisitGoal  Int      @default(20)
+  year             Int
+  weekNumber       Int
+  companyId        Int
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+
+  @@unique([companyId, userId, year, weekNumber])
 }
 
-model CacaoSettlement {
-  id              Int      @id @default(autoincrement())
-  date            DateTime
-  supplierId      Int
-  supplier        CacaoSupplier @relation(fields: [supplierId], references: [id])
-  periodStart     DateTime
-  periodEnd       DateTime
-  totalNetWeight  Float    @default(0)
-  totalDeductions Float    @default(0)
-  finalPrice      Float    @default(0)
-  totalAmount     Float    @default(0)
-  status          String   @default("PENDING")
+model ClientVisit {
+  id              Int          @id @default(autoincrement())
+  userId          Int
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientName      String
+  clientAddress   String?
+  clientPhone     String?
+  visitDate       DateTime
+  status          VisitStatus  @default(PLANNED)
+  checkInTime     DateTime?
+  checkInLat      Float?
+  checkInLng      Float?
+  isVerified      Boolean      @default(false)
+  commercialOffer String?
+  quotedAmount    Float?       @default(0)
+  outcome         VisitOutcome?
+  notes           String?
   companyId       Int
-  createdBy       Int
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  lots            CacaoSettlementLot[]
-  payable         CacaoPayable?
+  company         Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([companyId, userId])
 }
 
-model CacaoSettlementLot {
-  id           Int      @id @default(autoincrement())
-  settlementId Int
-  settlement   CacaoSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
-  lotId        Int
-  lot          CacaoLot @relation(fields: [lotId], references: [id])
-  quantity     Float
-  unitCost     Float
-  createdAt    DateTime @default(now())
-}
-
-model CacaoKardex {
-  id            Int      @id @default(autoincrement())
-  lotId         Int
-  lot           CacaoLot @relation(fields: [lotId], references: [id])
-  type          String
-  quantity      Float
-  unitCost      Float
-  totalCost     Float
-  balanceQty    Float
-  balanceCost   Float
-  date          DateTime
-  reference     String?
-  referenceUnit String?
-  companyId     Int
-  createdAt     DateTime @default(now())
-}
-
-model CacaoPriceFixing {
-  id             Int      @id @default(autoincrement())
-  lotId          Int
-  lot            CacaoLot @relation(fields: [lotId], references: [id])
-  referencePrice Float?
-  differential   Float?
-  fixedPrice     Float?
-  pendingWeight  Float?
-  fixedDate      DateTime?
-  deadline       DateTime?
-  status         String   @default("OPEN")
+model Lead {
+  id             Int        @id @default(autoincrement())
+  fullName       String
+  email          String?
+  phone          String?
+  companyName    String?
+  source         LeadSource @default(WEB_FORM)
+  status         LeadStatus @default(NEW)
+  assignedUserId Int?
+  assignedUser   User?      @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+  campaignName   String?
+  estimatedValue Float?     @default(0)
+  closedValue    Float?     @default(0)
+  notes          String?
   companyId      Int
-  createdBy      Int
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  company        Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([companyId, assignedUserId])
 }
 
-model CacaoShipment {
-  id             Int      @id @default(autoincrement())
-  date           DateTime
-  clientId       Int
-  client         CacaoClient @relation(fields: [clientId], references: [id])
-  contractRef    String
-  unitOfMeasure  String   @default("KG") // TON, KG, SACO
-  totalWeight    Float
-  totalWeightKg  Float    // Peso total siempre en kg para kárdex
-  totalCost      Float
-  salePrice      Float
-  salePricePerKg Float    // Precio de venta siempre en $/kg para kárdex
-  margin         Float    @default(0)
-  status         String   @default("PENDING")
-  companyId      Int
-  createdBy      Int
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  lots           CacaoShipmentLot[]
-  receivable     CacaoReceivable?
+model SalesApiKey {
+  id          Int      @id @default(autoincrement())
+  name        String
+  apiKey      String   @unique
+  isActive    Boolean  @default(true)
+  companyId   Int
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([companyId])
 }
 
-model CacaoShipmentLot {
-  id              Int      @id @default(autoincrement())
-  shipmentId      Int
-  shipment        CacaoShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
-  lotId           Int
-  lot             CacaoLot @relation(fields: [lotId], references: [id])
-  quantity        Float    // Cantidad en la unidad original del usuario
-  quantityKg      Float    // Cantidad convertida a kg para kárdex
-  unitCost        Float
-  saleAmount      Float
-  unitOfMeasure   String   @default("KG")
-  createdAt       DateTime @default(now())
-}
+model JobPosition {
+  id                 Int      @id @default(autoincrement())
+  puesto             String
+  descripcion        String?
+  camposRequeridos   String[]
+  archivosRequeridos String[]
+  driveFileId        String?
+  companyId          Int
+  company            Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-model CacaoPayable {
-  id           Int      @id @default(autoincrement())
-  settlementId Int      @unique
-  settlement   CacaoSettlement @relation(fields: [settlementId], references: [id])
-  supplierId   Int
-  supplier     CacaoSupplier @relation(fields: [supplierId], references: [id])
-  totalAmount  Float
-  paidAmount   Float    @default(0)
-  dueDate      DateTime
-  status       String   @default("PENDING")
-  companyId    Int
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  payments     CacaoPayment[]
-}
-
-model CacaoReceivable {
-  id             Int      @id @default(autoincrement())
-  shipmentId     Int      @unique
-  shipment       CacaoShipment @relation(fields: [shipmentId], references: [id])
-  clientId       Int
-  client         CacaoClient @relation(fields: [clientId], references: [id])
-  totalAmount    Float
-  receivedAmount Float    @default(0)
-  dueDate        DateTime
-  status         String   @default("PENDING")
-  companyId      Int
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  payments       CacaoPayment[]
-}
-
-model CacaoPayment {
-  id           Int      @id @default(autoincrement())
-  type         String
-  amount       Float
-  method       String   @default("TRANSFER")
-  reference    String?
-  companyId    Int
-  createdAt    DateTime @default(now())
-  payableId    Int?
-  payable      CacaoPayable? @relation(fields: [payableId], references: [id])
-  receivableId Int?
-  receivable   CacaoReceivable? @relation(fields: [receivableId], references: [id])
-}
-
-model CacaoUnitConfig {
-  id           Int      @id @default(autoincrement())
-  name         String   // SACO_MICHOACAN, SACO_ESTANDAR, SACO_PERSONALIZADO
-  displayName  String   // "Saco Michoacán (90 kg)"
-  kgPerUnit    Float    // Cuántos kg equivalen 1 unidad de esta medida
-  isDefault    Boolean  @default(false)
-  companyId    Int
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  @@index([companyId])
 }

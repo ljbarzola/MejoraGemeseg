@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Body, Query, Param, UseGuards, Req, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  Param,
+  UseGuards,
+  Req,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AiService } from './ai.service';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -24,7 +34,10 @@ export class AiController {
 
   @Get('conversations/:id/messages')
   @UseGuards(AuthGuard('jwt'))
-  getConversationMessages(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+  getConversationMessages(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+  ) {
     return this.aiService.getConversationMessages(id, req.user.userId);
   }
 }

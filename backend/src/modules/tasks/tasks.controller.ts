@@ -1,4 +1,15 @@
-﻿import { Controller, Get, Patch, Delete, Param, Body, Query, UseGuards, Req, ParseIntPipe } from '@nestjs/common';
+﻿import {
+  Controller,
+  Get,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  Query,
+  UseGuards,
+  Req,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { TasksService } from './tasks.service';
 import { UpdateTaskDto } from './dto/update-task.dto';

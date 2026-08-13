@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getSettlements } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
+import { useCompany } from '../../../contexts/ThemeContext';
 
 export default function SettlementDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme } = useCompany();
   const [settlement, setSettlement] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -17,6 +19,11 @@ export default function SettlementDetail() {
     }).finally(() => setLoading(false));
   }, [id]);
 
+  useEffect(() => {
+    if (settlement) document.title = `LIQ-${String(settlement.id).padStart(4, '0')} — ${theme.name}`;
+    return () => { document.title = 'GEMESEG Mejora'; };
+  }, [settlement, theme.name]);
+
   if (loading) return <div className="loading-state">Cargando liquidación...</div>;
   if (!settlement) return <div className="empty-state">Liquidación no encontrada.</div>;
 
@@ -26,12 +33,26 @@ export default function SettlementDetail() {
     <div className="page-container">
       <style>{`
         @media print {
-          .page-header-row, .cacao-back-btn, .no-print { display: none !important; }
-          .page-container { padding: 0 !important; }
-          .page-card, .admin-section { box-shadow: none !important; border: 1px solid #ccc !important; }
+          .no-print { display: none !important; }
+          .page-container { padding: 8px !important; font-size: 12px !important; }
+          .page-card, .admin-section { box-shadow: none !important; border: none !important; margin: 0 !important; padding: 8px 0 !important; }
           .page-card { max-width: 100% !important; }
+          .print-header { display: flex !important; }
+          body { background: white !important; }
+          .tasks-table { font-size: 11px !important; }
+          .tasks-table th, .tasks-table td { padding: 4px 6px !important; }
         }
+        .print-header { display: none; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 2px solid #1a202c; margin-bottom: 12px; }
       `}</style>
+
+      <div className="print-header">
+        {theme.logoUrl && <img src={theme.logoUrl} alt={theme.name} style={{ height: '40px' }} />}
+        <div>
+          <div style={{ fontSize: '16px', fontWeight: 800, color: '#1a202c' }}>{theme.name}</div>
+          <div style={{ fontSize: '10px', color: '#718096' }}>Liquidación LIQ-{String(settlement.id).padStart(4, '0')}</div>
+        </div>
+      </div>
+
       <div className="page-header-row no-print">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao/settlements')}>← Volver</button>
@@ -46,7 +67,7 @@ export default function SettlementDetail() {
       </div>
 
       <div className="page-card" style={{ marginBottom: '16px' }}>
-        <div className="form-row" style={{ gap: '32px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px 32px' }}>
           <div><strong>ID:</strong> LIQ-{String(settlement.id).padStart(4, '0')}</div>
           <div><strong>Fecha:</strong> {formatDateEc(settlement.date)}</div>
           <div><strong>Proveedor:</strong> {settlement.supplier?.name || '—'}</div>
@@ -57,7 +78,7 @@ export default function SettlementDetail() {
             </span>
           </div>
         </div>
-        <div style={{ marginTop: '12px', display: 'flex', gap: '32px', fontSize: '14px', flexWrap: 'wrap' }}>
+        <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px 32px', fontSize: '14px' }}>
           <div><strong>Periodo:</strong> {formatDateEc(settlement.periodStart)} — {formatDateEc(settlement.periodEnd)}</div>
           <div><strong>Peso Neto Total:</strong> {settlement.totalNetWeight.toLocaleString()} kg</div>
           <div><strong>Deducciones:</strong> {fmt(settlement.totalDeductions)}</div>
@@ -99,7 +120,7 @@ export default function SettlementDetail() {
 
       {settlement.payable && (
         <div className="page-card" style={{ marginTop: '16px' }}>
-          <div style={{ fontSize: '14px', display: 'flex', gap: '32px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ fontSize: '14px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px 32px', alignItems: 'center' }}>
             <div><strong>CxP Asociada:</strong> PAGO-{String(settlement.payable.id).padStart(4, '0')}</div>
             <div><strong>Monto:</strong> {fmt(settlement.payable.totalAmount)}</div>
             <div><strong>Pagado:</strong> {fmt(settlement.payable.paidAmount)}</div>

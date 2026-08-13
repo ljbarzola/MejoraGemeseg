@@ -53,7 +53,7 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 ## Convenciones de Codigo
 
 ### NestJS
-- Un modulo por dominio: `auth`, `projects`, `users`, `tasks`, `ai`, `queue`, `tools`, `agents`, `companies`.
+- Un modulo por dominio: `auth`, `projects`, `users`, `tasks`, `ai`, `queue`, `tools`, `agents`, `companies`, `custodias`, `personal`, `ventas`.
 - DTOs con `class-validator` para toda entrada.
 - Guards por rol: `@Roles(UserRole.ADMIN)` + `RolesGuard`.
 - Responses consistentes.
@@ -67,8 +67,8 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 - `noUnusedLocals: true` y `noUnusedParameters: true` en tsconfig.
 
 ### Prisma
-- Enums en schema: `UserRole`, `ProjectStatus`, `MemberRole`, `TaskStatus`, `Priority`.
-- Modelos: `Company`, `User`, `Department`, `Role`, `Project`, `ProjectMember`, `Task`, `TaskAssignee`, `Tool`, `ToolAssignment`, `ToolAuditLog`, `Agent`, `UserAgent`, `Conversation`, `ChatMessage`, `AiLog`.
+- Enums en schema: `UserRole`, `ProjectStatus`, `MemberRole`, `TaskStatus`, `Priority`, `CustodiaType`, `CustodiaEstado`.
+- Modelos: `Company`, `User`, `Department`, `Role`, `Project`, `ProjectMember`, `Task`, `TaskAssignee`, `Tool`, `ToolAssignment`, `ToolAuditLog`, `Agent`, `UserAgent`, `Conversation`, `ChatMessage`, `AiLog`, `Custodia`, `SalesGoal`, `ClientVisit`, `Lead`, `SalesApiKey`.
 - Migraciones con `prisma migrate dev --name <nombre>`.
 - Seed en `prisma/seed.js`.
 - Prisma v7 requiere adapter: `new PrismaClient({ adapter: new PrismaPg(...) })`.
@@ -156,12 +156,12 @@ FRONTEND_URL=http://localhost:5173
 
 ### Herramientas (Sistema)
 - Solo usuario `sistemas@gemeseg.com` ve la pestana de Herramientas.
-- Cualquier usuario autenticado puede crear/eliminar herramientas y asignaciones.
+- Solo ADMIN puede crear/eliminar herramientas y asignaciones (RolesGuard).
 - Asignaciones multiples de usuarios soportadas.
 - Auditoria de cada accion (quien asigno/removio, cuando).
 
 ### Agentes de IA
-- Admin y usuario de Sistemas pueden gestionar agentes.
+- Solo ADMIN puede gestionar agentes (RolesGuard en AdminAgentsController).
 - Cada agente tiene: nombre, instrucciones (system prompt), alcance (GLOBAL/PROJECTS/TASKS/ADMIN).
 - Un agente puede estar asignado a multiples usuarios.
 - Un usuario puede tener multiples agentes asignados.
@@ -221,6 +221,8 @@ FRONTEND_URL=http://localhost:5173
 - `DELETE /tools/assign/:id` - Eliminar asignacion
 - `GET /tools/assign/:id/audit` - Historial de auditoria
 
+**Nota:** Todos los endpoints de Tools requieren rol ADMIN (RolesGuard).
+
 ### Chat IA (`/chat`)
 - `POST /chat/message` - Enviar mensaje al asistente IA
 - `GET /chat/conversations` - Listar conversaciones del usuario (filtro por agentId)
@@ -240,6 +242,39 @@ FRONTEND_URL=http://localhost:5173
 - `POST /admin/agents/:id/assign/:userId` - Asignar agente a usuario
 - `DELETE /admin/agents/:id/assign/:userId` - Quitar agente de usuario
 - `GET /agents/available` - Agentes disponibles para el usuario actual (global + asignados)
+
+**Nota:** Todos los endpoints de Admin Agents requieren rol ADMIN (RolesGuard). El endpoint `GET /agents/available` es para cualquier usuario autenticado.
+
+### Custodias (`/custodias`) - Módulo Operativo
+*Nota de nomenclatura:* "Custodias" es el módulo operativo de rutas, transporte y nómina. El personal de seguridad gestionado en el módulo de Personal se denomina "Guardias" (submenú Personal > Guardias).
+
+- `POST /custodias` - Crear custodia (tipo, guia, personal, ruta, horarios, datos por tipo)
+- `GET /custodias` - Listar custodias (filtros: fechaInicio, fechaFin, tipo, estado)
+- `GET /custodias/dashboard` - KPIs del mes (`total_viajes`, `total_nomina_usd`, `empleados_activos`, `por_tipo`, `por_estado`)
+- `GET /custodias/trabajador` - Consulta de historial de viajes e ingresos por cédula (`cedula`, `mes`)
+- `POST /custodias/gemebot/query` - Asistente de consultas operativas GEME-BOT
+- `GET /custodias/:id` - Detalle de custodia
+- `PATCH /custodias/:id/estado` - Cambiar estado (LISTO_PARA_CUSTODIAR/EN_CAMINO/LLEGO)
+- `DELETE /custodias/:id` - Eliminar custodia
+- `GET /custodias/:id/pdf` - PDF Orden de Custodia con firmas
+- `GET /custodias/available-custodios` - Empleados de Drive CUSTODIAS para el select
+- `GET /custodias/nomina` - Nomina con matriz cronologica (fechaInicio, fechaFin)
+- `GET /custodias/nomina/pdf` - PDF nomina (cedula=individual, todos=true, sin param=matriz)
+
+**Tipos:** HACIENDA ($20/persona), PUERTO ($10/persona), VIP ($23/persona)
+**Estados:** LISTO_PARA_CUSTODIAR → EN_CAMINO → LLEGO (solo LLEGO liquida nomina)
+**PDFs:** PDFKit - orden con firmas, matriz landscape, rol individual, masivo
+
+### Personal y RRHH (`/personal`)
+- `GET/POST/DELETE /personal/reclutamiento/puestos` - Creación de vacantes y sincronización JSON con Drive
+- `POST /personal/reclutamiento/sync` - Sincronización de candidatos postulados en Drive Reclutamiento
+- `GET/POST /personal/kanban/columns` - Columnas del Kanban
+- `GET/POST /personal/candidates` - Candidatos
+- `PATCH /personal/candidates/:id/move` - Mover candidato de columna
+- `GET /personal/certifications` - Certificaciones
+- `GET /personal/certifications/alerts` - Alertas de vencimiento
+- `POST /personal/drive/sync` - Sincronizar carpetas de Drive
+- `GET /personal/drive/compliance/:cedula` - Checklist de cumplimiento por cédula
 
 ### Companies (`/companies`)
 - `GET /companies` - Listar empresas (solo ADMIN; si tiene companyId retorna su empresa)
@@ -278,3 +313,4 @@ FRONTEND_URL=http://localhost:5173
 - Hacer push sin autorizacion del usuario.
 - Hardcodear URLs de API en el frontend (usar `VITE_API_URL`).
 - Usar archivos `.env` en produccion (usar paneles de Railway/Vercel).
+- Crear endpoints sin RolesGuard cuando la accion requiere rol ADMIN.

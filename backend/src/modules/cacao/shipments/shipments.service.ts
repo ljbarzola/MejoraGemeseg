@@ -2,18 +2,33 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { CacaoUnitConfigService } from '../unit-config/unit-config.service';
+import { CacheService } from '../../cache/cache.service';
 
 @Injectable()
 export class CacaoShipmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly unitConfig: CacaoUnitConfigService,
+    private readonly cache: CacheService,
   ) {}
+
+  async getNextId(companyId: number) {
+    const last = await this.prisma.cacaoShipment.findFirst({
+      where: { companyId },
+      orderBy: { id: 'desc' },
+    });
+    const nextNum = last ? last.id + 1 : 1;
+    return { code: `EMB-${String(nextNum).padStart(4, '0')}` };
+  }
 
   async findAll(companyId: number) {
     return this.prisma.cacaoShipment.findMany({
       where: { companyId },
-      include: { client: true, lots: { include: { lot: true } }, receivable: true },
+      include: {
+        client: true,
+        lots: { include: { lot: true } },
+        receivable: true,
+      },
       orderBy: { date: 'desc' },
     });
   }
@@ -22,10 +37,17 @@ export class CacaoShipmentsService {
     const unit = dto.unitOfMeasure || 'KG';
 
     // Convert total weight to kg for kardex
-    const totalWeightKg = await this.unitConfig.convertToKg(dto.totalWeight, unit, companyId);
+    const totalWeightKg = await this.unitConfig.convertToKg(
+      dto.totalWeight,
+      unit,
+      companyId,
+    );
 
     // Calculate sale price per kg
-    const salePricePerKg = totalWeightKg > 0 ? (dto.totalWeight * dto.salePrice) / totalWeightKg : dto.salePrice;
+    const salePricePerKg =
+      totalWeightKg > 0
+        ? (dto.totalWeight * dto.salePrice) / totalWeightKg
+        : dto.salePrice;
 
     const shipment = await this.prisma.cacaoShipment.create({
       data: {
@@ -47,13 +69,23 @@ export class CacaoShipmentsService {
 
     if (dto.lots && dto.lots.length > 0) {
       for (const sl of dto.lots) {
-        const lot = await this.prisma.cacaoLot.findFirst({ where: { id: sl.lotId, companyId } });
-        if (!lot) throw new BadRequestException(`Lote ${sl.lotId} no encontrado`);
+        const lot = await this.prisma.cacaoLot.findFirst({
+          where: { id: sl.lotId, companyId },
+        });
+        if (!lot)
+          throw new BadRequestException(`Lote ${sl.lotId} no encontrado`);
 
         // Convert quantity to kg for validation and kardex
-        const quantityKg = await this.unitConfig.convertToKg(sl.quantity, unit, companyId);
+        const quantityKg = await this.unitConfig.convertToKg(
+          sl.quantity,
+          unit,
+          companyId,
+        );
 
-        if (lot.netWeight < quantityKg) throw new BadRequestException(`Lote ${lot.code} no tiene suficiente peso`);
+        if (lot.netWeight + 0.001 < quantityKg)
+          throw new BadRequestException(
+            `Lote ${lot.code} no tiene suficiente peso`,
+          );
 
         await this.prisma.cacaoShipmentLot.create({
           data: {
@@ -117,7 +149,16 @@ export class CacaoShipmentsService {
 
     return this.prisma.cacaoShipment.findUnique({
       where: { id: shipment.id },
-      include: { client: true, lots: { include: { lot: true } }, receivable: true },
+      include: {
+        client: true,
+        lots: { include: { lot: true } },
+        receivable: true,
+      },
     });
+  }
+
+  async invalidateCache(companyId: number): Promise<void> {
+    await this.cache.invalidate(`dashboard:${companyId}`);
+    await this.cache.invalidate(`kardex:${companyId}:*`);
   }
 }
