@@ -16,3 +16,6 @@ scripts/supabase-migrate-production.sql
 
 # Testing
 coverage
+
+# Google service account credentials
+backend/google-service-account.json

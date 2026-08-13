@@ -78,13 +78,6 @@ export default function AgentsPage() {
     setShowEditModal(true);
   }
 
-  function openAssignModal(agent: Agent) {
-    setAssigningAgent(agent);
-    setAssignForm({ selectedUsers: [] });
-    setFormError('');
-    setShowAssignModal(true);
-  }
-
   async function handleCreate() {
     if (!createForm.name.trim()) { setFormError('El nombre es requerido'); return; }
     if (!createForm.systemMsg.trim()) { setFormError('El prompt del sistema es requerido'); return; }

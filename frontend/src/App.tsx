@@ -10,10 +10,13 @@ import KanbanPage from './pages/tasks/KanbanPage';
 import CreateTaskPage from './pages/tasks/CreateTaskPage';
 import TaskDetailPage from './pages/tasks/TaskDetailPage';
 import ProtectedRoute from './components/ProtectedRoute';
-import Navbar from './components/layout/Navbar';
+import Sidebar from './components/layout/Sidebar';
 import ChatFloatingButton from './components/chat/ChatFloatingButton';
 import ChatDrawer from './components/chat/ChatDrawer';
 import { CompanyProvider } from './contexts/ThemeContext';
+import { usePerm } from './contexts/PermissionsContext';
+import { PermissionsProvider } from './contexts/PermissionsContext';
+import { usePermissions } from './hooks/usePermissions';
 import { isAuthenticated } from './services/auth.service';
 
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
@@ -22,6 +25,8 @@ const CompanySettingsPage = lazy(() => import('./pages/admin/CompanySettingsPage
 const ToolsPage = lazy(() => import('./pages/tools/ToolsPage'));
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
 const AgentsPage = lazy(() => import('./pages/admin/AgentsPage'));
+const SuperAdminPermissions = lazy(() => import('./pages/admin/SuperAdminPermissions'));
+const CompanyAdminPermissions = lazy(() => import('./pages/admin/CompanyAdminPermissions'));
 const CacaoDashboard = lazy(() => import('./pages/cacao/CacaoDashboard'));
 const CacaoHelpGuide = lazy(() => import('./pages/cacao/CacaoHelpGuide'));
 const SuppliersPage = lazy(() => import('./pages/cacao/suppliers/SuppliersPage'));
@@ -40,14 +45,47 @@ const ShipmentDetail = lazy(() => import('./pages/cacao/shipments/ShipmentDetail
 const PayablesList = lazy(() => import('./pages/cacao/payables/PayablesList'));
 const ReceivablesList = lazy(() => import('./pages/cacao/receivables/ReceivablesList'));
 const QualitiesPage = lazy(() => import('./pages/cacao/qualities/QualitiesPage'));
+const CustodiasList = lazy(() => import('./pages/custodias/CustodiasList'));
+const CustodiaForm = lazy(() => import('./pages/custodias/CustodiaForm'));
+const NominaPage = lazy(() => import('./pages/custodias/NominaPage'));
+const CustodiasDashboard = lazy(() => import('./pages/custodias/CustodiasDashboard'));
+const ConsultaTrabajador = lazy(() => import('./pages/custodias/ConsultaTrabajador'));
+const GemeBotChat = lazy(() => import('./pages/custodias/GemeBotChat'));
+const PersonalDashboard = lazy(() => import('./pages/personal/PersonalDashboard'));
+const ReclutamientoPage = lazy(() => import('./pages/personal/ReclutamientoPage'));
+const GuardiasList = lazy(() => import('./pages/personal/GuardiasList'));
+const AdministrativeStaff = lazy(() => import('./pages/personal/AdministrativeStaff'));
+const RecruitmentKanban = lazy(() => import('./pages/personal/recruitment/RecruitmentKanban'));
+const CandidatesList = lazy(() => import('./pages/personal/candidates/CandidatesList'));
+const CandidateForm = lazy(() => import('./pages/personal/candidates/CandidateForm'));
+const ContractsList = lazy(() => import('./pages/personal/contracts/ContractsList'));
+const CertificationsList = lazy(() => import('./pages/personal/certifications/CertificationsList'));
+const LogEntriesPage = lazy(() => import('./pages/personal/logs/LogEntries'));
+const CompliancePanel = lazy(() => import('./pages/personal/compliance/CompliancePanel'));
+const DriveConfig = lazy(() => import('./pages/personal/compliance/DriveConfig'));
+const DocumentTypeConfig = lazy(() => import('./pages/personal/compliance/DocumentTypeConfig'));
+const VentasDashboard = lazy(() => import('./pages/ventas/VentasDashboard'));
+const VisitasPage = lazy(() => import('./pages/ventas/VisitasPage'));
+const LeadsPage = lazy(() => import('./pages/ventas/LeadsPage'));
+const VentasReportes = lazy(() => import('./pages/ventas/VentasReportes'));
+const WebhookConfig = lazy(() => import('./pages/ventas/WebhookConfig'));
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
     <ProtectedRoute>
-      <div className="no-print"><Navbar /></div>
-      {children}
+      <div className="no-print"><Sidebar /></div>
+      <div className="main-content">
+        {children}
+      </div>
     </ProtectedRoute>
   );
+}
+
+function SectionRoute({ section, children }: { section: string; children: React.ReactNode }) {
+  const { canView, loading } = usePerm();
+  if (loading) return <LoadingFallback />;
+  if (!canView(section)) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
 }
 
 function LoadingFallback() {
@@ -61,12 +99,12 @@ function LoadingFallback() {
   );
 }
 
-function App() {
+function AppInner() {
+  const perms = usePermissions();
   const [chatOpen, setChatOpen] = useState(false);
 
   return (
-    <BrowserRouter>
-      <CompanyProvider>
+    <PermissionsProvider value={perms}>
       <Suspense fallback={<LoadingFallback />}>
       <Routes>
         <Route
@@ -85,7 +123,7 @@ function App() {
           path="/dashboard"
           element={
             <ProtectedLayout>
-              <DashboardPage />
+              <SectionRoute section="DASHBOARD"><DashboardPage /></SectionRoute>
             </ProtectedLayout>
           }
         />
@@ -93,7 +131,7 @@ function App() {
           path="/projects"
           element={
             <ProtectedLayout>
-              <ProjectsListPage />
+              <SectionRoute section="PROJECTS"><ProjectsListPage /></SectionRoute>
             </ProtectedLayout>
           }
         />
@@ -101,7 +139,7 @@ function App() {
           path="/projects/new"
           element={
             <ProtectedLayout>
-              <CreateProjectPage />
+              <SectionRoute section="PROJECTS"><CreateProjectPage /></SectionRoute>
             </ProtectedLayout>
           }
         />
@@ -109,7 +147,7 @@ function App() {
           path="/projects/:id"
           element={
             <ProtectedLayout>
-              <ProjectDetailPage />
+              <SectionRoute section="PROJECTS"><ProjectDetailPage /></SectionRoute>
             </ProtectedLayout>
           }
         />
@@ -117,7 +155,7 @@ function App() {
           path="/projects/:id/tasks"
           element={
             <ProtectedLayout>
-              <KanbanPage />
+              <SectionRoute section="PROJECTS"><KanbanPage /></SectionRoute>
             </ProtectedLayout>
           }
         />
@@ -125,7 +163,7 @@ function App() {
           path="/projects/:id/tasks/new"
           element={
             <ProtectedLayout>
-              <CreateTaskPage />
+              <SectionRoute section="PROJECTS"><CreateTaskPage /></SectionRoute>
             </ProtectedLayout>
           }
         />
@@ -133,7 +171,7 @@ function App() {
           path="/tasks/:id"
           element={
             <ProtectedLayout>
-              <TaskDetailPage />
+              <SectionRoute section="PROJECTS"><TaskDetailPage /></SectionRoute>
             </ProtectedLayout>
           }
         />
@@ -141,7 +179,7 @@ function App() {
           path="/tasks/new"
           element={
             <ProtectedLayout>
-              <CreateTaskPage />
+              <SectionRoute section="PROJECTS"><CreateTaskPage /></SectionRoute>
             </ProtectedLayout>
           }
         />
@@ -149,7 +187,7 @@ function App() {
           path="/admin"
           element={
             <ProtectedLayout>
-              <AdminDashboardPage />
+              <SectionRoute section="ADMIN"><AdminDashboardPage /></SectionRoute>
             </ProtectedLayout>
           }
         />
@@ -157,7 +195,7 @@ function App() {
           path="/admin/agents"
           element={
             <ProtectedLayout>
-              <AgentsPage />
+              <SectionRoute section="AGENTS"><AgentsPage /></SectionRoute>
             </ProtectedLayout>
           }
         />
@@ -165,7 +203,7 @@ function App() {
           path="/admin/companies"
           element={
             <ProtectedLayout>
-              <CompaniesPage />
+              <SectionRoute section="COMPANIES"><CompaniesPage /></SectionRoute>
             </ProtectedLayout>
           }
         />
@@ -173,7 +211,23 @@ function App() {
           path="/admin/company-settings"
           element={
             <ProtectedLayout>
-              <CompanySettingsPage />
+              <SectionRoute section="COMPANY_SETTINGS"><CompanySettingsPage /></SectionRoute>
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/permissions"
+          element={
+            <ProtectedLayout>
+              <SuperAdminPermissions />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/admin/user-permissions"
+          element={
+            <ProtectedLayout>
+              <CompanyAdminPermissions />
             </ProtectedLayout>
           }
         />
@@ -181,7 +235,7 @@ function App() {
           path="/tools"
           element={
             <ProtectedLayout>
-              <ToolsPage />
+              <SectionRoute section="TOOLS"><ToolsPage /></SectionRoute>
             </ProtectedLayout>
           }
         />
@@ -193,24 +247,49 @@ function App() {
             </ProtectedLayout>
           }
         />
-        <Route path="/cacao" element={<ProtectedLayout><CacaoDashboard /></ProtectedLayout>} />
-        <Route path="/cacao/guia" element={<ProtectedLayout><CacaoHelpGuide /></ProtectedLayout>} />
-        <Route path="/cacao/suppliers" element={<ProtectedLayout><SuppliersPage /></ProtectedLayout>} />
-        <Route path="/cacao/clients" element={<ProtectedLayout><ClientsPage /></ProtectedLayout>} />
-        <Route path="/cacao/receptions" element={<ProtectedLayout><ReceptionsList /></ProtectedLayout>} />
-        <Route path="/cacao/receptions/new" element={<ProtectedLayout><ReceptionForm /></ProtectedLayout>} />
-        <Route path="/cacao/lots" element={<ProtectedLayout><LotsList /></ProtectedLayout>} />
-        <Route path="/cacao/lots/:id" element={<ProtectedLayout><LotDetail /></ProtectedLayout>} />
-        <Route path="/cacao/settlements" element={<ProtectedLayout><SettlementsList /></ProtectedLayout>} />
-        <Route path="/cacao/settlements/new" element={<ProtectedLayout><SettlementForm /></ProtectedLayout>} />
-        <Route path="/cacao/settlements/:id" element={<ProtectedLayout><SettlementDetail /></ProtectedLayout>} />
-        <Route path="/cacao/price-fixings" element={<ProtectedLayout><PriceFixingsList /></ProtectedLayout>} />
-        <Route path="/cacao/shipments" element={<ProtectedLayout><ShipmentsList /></ProtectedLayout>} />
-        <Route path="/cacao/shipments/new" element={<ProtectedLayout><ShipmentForm /></ProtectedLayout>} />
-        <Route path="/cacao/shipments/:id" element={<ProtectedLayout><ShipmentDetail /></ProtectedLayout>} />
-        <Route path="/cacao/payables" element={<ProtectedLayout><PayablesList /></ProtectedLayout>} />
-        <Route path="/cacao/receivables" element={<ProtectedLayout><ReceivablesList /></ProtectedLayout>} />
-        <Route path="/cacao/qualities" element={<ProtectedLayout><QualitiesPage /></ProtectedLayout>} />
+        <Route path="/cacao" element={<ProtectedLayout><SectionRoute section="CACAO"><CacaoDashboard /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/guia" element={<ProtectedLayout><SectionRoute section="CACAO"><CacaoHelpGuide /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/suppliers" element={<ProtectedLayout><SectionRoute section="CACAO"><SuppliersPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/clients" element={<ProtectedLayout><SectionRoute section="CACAO"><ClientsPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/receptions" element={<ProtectedLayout><SectionRoute section="CACAO"><ReceptionsList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/receptions/new" element={<ProtectedLayout><SectionRoute section="CACAO"><ReceptionForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/lots" element={<ProtectedLayout><SectionRoute section="CACAO"><LotsList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/lots/:id" element={<ProtectedLayout><SectionRoute section="CACAO"><LotDetail /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/settlements" element={<ProtectedLayout><SectionRoute section="CACAO"><SettlementsList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/settlements/new" element={<ProtectedLayout><SectionRoute section="CACAO"><SettlementForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/settlements/:id" element={<ProtectedLayout><SectionRoute section="CACAO"><SettlementDetail /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/price-fixings" element={<ProtectedLayout><SectionRoute section="CACAO"><PriceFixingsList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/shipments" element={<ProtectedLayout><SectionRoute section="CACAO"><ShipmentsList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/shipments/new" element={<ProtectedLayout><SectionRoute section="CACAO"><ShipmentForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/shipments/:id" element={<ProtectedLayout><SectionRoute section="CACAO"><ShipmentDetail /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/payables" element={<ProtectedLayout><SectionRoute section="CACAO"><PayablesList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/receivables" element={<ProtectedLayout><SectionRoute section="CACAO"><ReceivablesList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/qualities" element={<ProtectedLayout><SectionRoute section="CACAO"><QualitiesPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/custodias" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><CustodiasList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/custodias/dashboard" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><CustodiasDashboard /></SectionRoute></ProtectedLayout>} />
+        <Route path="/custodias/new" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><CustodiaForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/custodias/nomina" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><NominaPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/custodias/trabajador" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><ConsultaTrabajador /></SectionRoute></ProtectedLayout>} />
+        <Route path="/custodias/gemebot" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><GemeBotChat /></SectionRoute></ProtectedLayout>} />
+        <Route path="/personal" element={<ProtectedLayout><SectionRoute section="PERSONAL"><PersonalDashboard /></SectionRoute></ProtectedLayout>} />
+        <Route path="/personal/reclutamiento" element={<ProtectedLayout><SectionRoute section="PERSONAL"><ReclutamientoPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/personal/guardias" element={<ProtectedLayout><SectionRoute section="PERSONAL"><GuardiasList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/personal/administrativo" element={<ProtectedLayout><SectionRoute section="PERSONAL"><AdministrativeStaff /></SectionRoute></ProtectedLayout>} />
+        <Route path="/personal/kanban" element={<ProtectedLayout><SectionRoute section="PERSONAL"><RecruitmentKanban /></SectionRoute></ProtectedLayout>} />
+        <Route path="/personal/candidates" element={<ProtectedLayout><SectionRoute section="PERSONAL"><CandidatesList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/personal/candidates/new" element={<ProtectedLayout><SectionRoute section="PERSONAL"><CandidateForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/personal/candidates/:id" element={<ProtectedLayout><SectionRoute section="PERSONAL"><CandidateForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/personal/contracts" element={<ProtectedLayout><SectionRoute section="PERSONAL"><ContractsList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/personal/certifications" element={<ProtectedLayout><SectionRoute section="PERSONAL"><CertificationsList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/personal/logs" element={<ProtectedLayout><SectionRoute section="PERSONAL"><LogEntriesPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/personal/compliance" element={<ProtectedLayout><SectionRoute section="PERSONAL"><CompliancePanel /></SectionRoute></ProtectedLayout>} />
+        <Route path="/personal/drive-config" element={<ProtectedLayout><SectionRoute section="PERSONAL"><DriveConfig /></SectionRoute></ProtectedLayout>} />
+        <Route path="/personal/document-types" element={<ProtectedLayout><SectionRoute section="PERSONAL"><DocumentTypeConfig /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasDashboard /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/visitas" element={<ProtectedLayout><SectionRoute section="VENTAS"><VisitasPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/leads" element={<ProtectedLayout><SectionRoute section="VENTAS"><LeadsPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/reportes" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasReportes /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/webhook-config" element={<ProtectedLayout><SectionRoute section="VENTAS"><WebhookConfig /></SectionRoute></ProtectedLayout>} />
       </Routes>
       </Suspense>
 
@@ -220,6 +299,15 @@ function App() {
           <ChatDrawer isOpen={chatOpen} onClose={() => setChatOpen(false)} />
         </>
       )}
+      </PermissionsProvider>
+    );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <CompanyProvider>
+        <AppInner />
       </CompanyProvider>
     </BrowserRouter>
   );

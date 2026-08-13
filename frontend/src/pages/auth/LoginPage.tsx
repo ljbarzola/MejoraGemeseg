@@ -62,6 +62,7 @@ export default function LoginPage() {
     setServerError('');
     setLoading(true);
     try {
+      localStorage.removeItem('company_theme');
       const res = await loginService(data);
       saveAuth(res);
       const domain = data.email.split('@')[1];

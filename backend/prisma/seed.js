@@ -626,6 +626,163 @@ Si no necesitas datos, responde directamente.`,
     console.log('  ✓ Unidades de medida ya existen');
   }
 
+  // Custodias (Mikacao companyId: 2)
+  console.log('Creando custodias de ejemplo...');
+  const existingCustodia = await prisma.custodia.findFirst({ where: { companyId: 2 } });
+  if (!existingCustodia) {
+    const custodiaExamples = [
+      {
+        numeroGuia: 'G-0001', tipoCustodia: 'HACIENDA', choferName: 'Carlos Mendoza',
+        custodio1Name: 'Luis Ramirez', custodio2Name: 'Ana Torres',
+        nombreHacienda: 'La Esperanza', cantidadSacos: 120, contenedores: [],
+      },
+      {
+        numeroGuia: 'G-0002', tipoCustodia: 'PUERTO', choferName: 'Miguel Lopez',
+        custodio1Name: 'Pedro Sanchez', custodio2Name: 'Maria Garcia',
+        nombreHacienda: null, cantidadSacos: null, contenedores: ['CONT-001', 'CONT-002'],
+      },
+      {
+        numeroGuia: 'G-0003', tipoCustodia: 'VIP', choferName: 'Juan Perez',
+        custodio1Name: 'Rosa Martinez', custodio2Name: 'Diego Fernandez',
+        nombreHacienda: null, cantidadSacos: null, contenedores: [],
+      },
+      {
+        numeroGuia: 'G-0004', tipoCustodia: 'HACIENDA', choferName: 'Roberto Diaz',
+        custodio1Name: 'Sandra Luna', custodio2Name: 'Fernando Castro',
+        nombreHacienda: 'El Paraiso', cantidadSacos: 85, contenedores: [],
+      },
+      {
+        numeroGuia: 'G-0005', tipoCustodia: 'PUERTO', choferName: 'Andres Morales',
+        custodio1Name: 'Gabriela Rojas', custodio2Name: 'Marco Vera',
+        nombreHacienda: null, cantidadSacos: null, contenedores: ['CONT-003', 'CONT-004', 'CONT-005'],
+      },
+      {
+        numeroGuia: 'G-0006', tipoCustodia: 'HACIENDA', choferName: 'Jorge Salazar',
+        custodio1Name: 'Patricia Acosta', custodio2Name: 'Eduardo Reyes',
+        nombreHacienda: 'San Jose de los Montes', cantidadSacos: 200, contenedores: [],
+      },
+      {
+        numeroGuia: 'G-0007', tipoCustodia: 'VIP', choferName: 'Luis Torres',
+        custodio1Name: 'Carolina Mendez', custodio2Name: 'Ricardo Paredes',
+        nombreHacienda: null, cantidadSacos: null, contenedores: [],
+      },
+      {
+        numeroGuia: 'G-0008', tipoCustodia: 'PUERTO', choferName: 'Francisco Guzman',
+        custodio1Name: 'Isabel Flores', custodio2Name: ' Alejandro Silva',
+        nombreHacienda: null, cantidadSacos: null, contenedores: ['CONT-006'],
+      },
+      {
+        numeroGuia: 'G-0009', tipoCustodia: 'HACIENDA', choferName: 'Manuel Ortega',
+        custodio1Name: 'Teresa Campos', custodio2Name: 'Rafael Vargas',
+        nombreHacienda: 'Buena Vista', cantidadSacos: 150, contenedores: [],
+      },
+      {
+        numeroGuia: 'G-0010', tipoCustodia: 'VIP', choferName: 'Sergio Delgado',
+        custodio1Name: 'Natalia Herrera', custodio2Name: 'Oscar Mena',
+        nombreHacienda: null, cantidadSacos: null, contenedores: [],
+      },
+    ];
+    for (const c of custodiaExamples) {
+      await prisma.custodia.create({ data: { ...c, companyId: 2, createdBy: adminMikacao.id } });
+    }
+    console.log('  ✓ Custodias de ejemplo creadas: 10');
+  } else {
+    console.log('  ✓ Custodias ya existen');
+  }
+
+  // Personal Module (Mikacao companyId: 2)
+  console.log('Creando datos del módulo Personal...');
+  const existingColumn = await prisma.kanbanColumn.findFirst({ where: { companyId: 2 } });
+  if (!existingColumn) {
+    // Kanban Columns
+    const col1 = await prisma.kanbanColumn.create({ data: { name: 'Postulado', position: 1, color: '#2b6cb0', companyId: 2 } });
+    const col2 = await prisma.kanbanColumn.create({ data: { name: 'Entrevista', position: 2, color: '#6b46c1', companyId: 2 } });
+    const col3 = await prisma.kanbanColumn.create({ data: { name: 'Verificación Documental', position: 3, color: '#b7791f', companyId: 2 } });
+    const col4 = await prisma.kanbanColumn.create({ data: { name: 'Test Médico', position: 4, color: '#2c7a7b', companyId: 2 } });
+    const col5 = await prisma.kanbanColumn.create({ data: { name: 'Contratado', position: 5, color: '#d69e2e', companyId: 2 } });
+    const col6 = await prisma.kanbanColumn.create({ data: { name: 'Activo', position: 6, color: '#276749', companyId: 2 } });
+    console.log('  ✓ Columnas Kanban creadas: 6');
+
+    // Candidates (5)
+    await prisma.candidate.create({ data: { fullName: 'Ana Lucía Vera', cedula: '1712345678', phone: '0991234567', email: 'ana.vera@email.com', positionApplied: 'Auxiliar de Logística', availability: 'Tiempo completo', salaryExpected: 450, education: 'Técnica en Logística', experience: '2 años en empresa importadora', references: 'Juan Pérez - Gerente LogisTIC', columnId: col6.id, companyId: 2, createdBy: adminMikacao.id } });
+    await prisma.candidate.create({ data: { fullName: 'Carlos Andrés Muñoz', cedula: '1309876543', phone: '0987654321', email: 'carlos.munoz@email.com', positionApplied: 'Operador de Montacargas', availability: 'Tiempo completo', salaryExpected: 400, education: 'Bachiller', experience: '1 año en bodega', columnId: col3.id, companyId: 2, createdBy: adminMikacao.id } });
+    await prisma.candidate.create({ data: { fullName: 'María José Paredes', cedula: '0502456789', phone: '0976543210', email: 'maria.paredes@email.com', positionApplied: 'Asistente Administrativa', availability: 'Medio tiempo', salaryExpected: 350, education: 'Universitaria en Administración', experience: 'Sin experiencia', columnId: col1.id, companyId: 2, createdBy: adminMikacao.id } });
+    await prisma.candidate.create({ data: { fullName: 'Luis Fernando Gómez', cedula: '1804567890', phone: '0965432109', email: 'luis.gomez@email.com', positionApplied: 'Chofer Liviano', availability: 'Tiempo completo', salaryExpected: 500, education: 'Bachiller', experience: '3 años conduciendo vehículos livianos', references: 'Transportes Rápidos S.A.', columnId: col4.id, companyId: 2, createdBy: adminMikacao.id } });
+    await prisma.candidate.create({ data: { fullName: 'Diana Carolina Torres', cedula: '1103456789', phone: '0954321098', email: 'diana.torres@email.com', positionApplied: 'Analista de Calidad', availability: 'Tiempo completo', salaryExpected: 600, education: 'Ingeniera Industrial', experience: '4 años en laboratorio de control de calidad', columnId: col2.id, companyId: 2, createdBy: adminMikacao.id } });
+    console.log('  ✓ Candidatos creados: 5');
+
+    // Certifications (5)
+    const now = new Date();
+    const in3Days = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const in10Days = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000);
+    const in25Days = new Date(now.getTime() + 25 * 24 * 60 * 60 * 1000);
+    const in45Days = new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000);
+    const in90Days = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+    await prisma.certification.create({ data: { employeeName: 'Roberto Díaz', cedula: '1723456789', type: 'Nivel 1', issueDate: new Date('2025-06-01'), expiryDate: in25Days, companyId: 2, createdBy: adminMikacao.id } });
+    await prisma.certification.create({ data: { employeeName: 'Sandra Luna', cedula: '1308765432', type: 'Reentrenamiento', issueDate: new Date('2025-07-15'), expiryDate: in10Days, companyId: 2, createdBy: adminMikacao.id } });
+    await prisma.certification.create({ data: { employeeName: 'Fernando Castro', cedula: '0501234567', type: 'Examen Ocupacional', issueDate: new Date('2025-01-01'), expiryDate: in45Days, companyId: 2, createdBy: adminMikacao.id } });
+    await prisma.certification.create({ data: { employeeName: 'Eduardo Reyes', cedula: '1809876543', type: 'Nivel 2', issueDate: new Date('2025-03-01'), expiryDate: in3Days, companyId: 2, createdBy: adminMikacao.id } });
+    await prisma.certification.create({ data: { employeeName: 'Patricia Acosta', cedula: '1107654321', type: 'Nivel 1', issueDate: new Date('2025-08-01'), expiryDate: in90Days, companyId: 2, createdBy: adminMikacao.id } });
+    console.log('  ✓ Certificaciones creadas: 5');
+
+    // Contract Templates (3)
+    const tpl1 = await prisma.contractTemplate.create({ data: { name: 'Contrato a Término Indefinido', type: 'TERMINO_INDEFINIDO', fileName: 'contrato_indefinido.docx', fileUrl: '/templates/contrato_indefinido.docx', fields: ['[NOMBRE]', '[CEDULA]', '[PUESTO]', '[FECHA_INICIO]', '[SALARIO]', '[EMPRESA]'], companyId: 2, createdBy: adminMikacao.id } });
+    const tpl2 = await prisma.contractTemplate.create({ data: { name: 'Contrato a Término Fijo', type: 'TERMINO_FIJO', fileName: 'contrato_fijo.docx', fileUrl: '/templates/contrato_fijo.docx', fields: ['[NOMBRE]', '[CEDULA]', '[PUESTO]', '[FECHA_INICIO]', '[FECHA_FIN]', '[SALARIO]', '[EMPRESA]'], companyId: 2, createdBy: adminMikacao.id } });
+    const tpl3 = await prisma.contractTemplate.create({ data: { name: 'Acta de Entrega de Uniformes', type: 'ENTREGA_UNIFORMES', fileName: 'acta_uniformes.docx', fileUrl: '/templates/acta_uniformes.docx', fields: ['[NOMBRE]', '[CEDULA]', '[PUESTO]', '[FECHA]', '[ARTICULOS]'], companyId: 2, createdBy: adminMikacao.id } });
+    console.log('  ✓ Plantillas de contrato creadas: 3');
+
+    // Contracts (3)
+    const candAna = await prisma.candidate.findFirst({ where: { companyId: 2, cedula: '1712345678' } });
+    const candLuis = await prisma.candidate.findFirst({ where: { companyId: 2, cedula: '1804567890' } });
+    const candDiana = await prisma.candidate.findFirst({ where: { companyId: 2, cedula: '1103456789' } });
+    if (candAna) await prisma.contract.create({ data: { candidateId: candAna.id, templateId: tpl1.id, status: 'SIGNED', companyId: 2, createdBy: adminMikacao.id } });
+    if (candLuis) await prisma.contract.create({ data: { candidateId: candLuis.id, templateId: tpl2.id, status: 'DRAFT', companyId: 2, createdBy: adminMikacao.id } });
+    if (candDiana) await prisma.contract.create({ data: { candidateId: candDiana.id, templateId: tpl3.id, status: 'DRAFT', companyId: 2, createdBy: adminMikacao.id } });
+    console.log('  ✓ Contratos creados: 3');
+
+    // Log Entries (5)
+    const tplIngreso = await prisma.logTemplate.findFirst({ where: { companyId: 2, type: 'PERMISO_INGRESO' } });
+    const tplNovedad = await prisma.logTemplate.findFirst({ where: { companyId: 2, type: 'NOVEDAD_OPERATIVA' } });
+    const tplSalida = await prisma.logTemplate.findFirst({ where: { companyId: 2, type: 'SALIDA_PERSONAL' } });
+    const tplRespuesta = await prisma.logTemplate.findFirst({ where: { companyId: 2, type: 'RESPUESTA_ADMIN_CONTRATO' } });
+
+    if (tplIngreso) await prisma.logEntry.create({ data: { title: 'Ingreso de proveedor - Distribuidora Norte', content: 'Se autoriza el ingreso de Juan Carlos Pérez con cédula 1754321678 al área de Bodega. Motivo: Entrega de materia prima para producción.', type: 'PERMISO_INGRESO', templateId: tplIngreso.id, companyId: 2, createdBy: adminMikacao.id } });
+    if (tplNovedad) await prisma.logEntry.create({ data: { title: 'Novedad en línea de producción', content: 'Novedad reportada por Roberto Díaz: Se presentó retraso de 30 minutos en la línea 2 por cambio de molde. Acción tomada: Se reasignó personal temporal.', type: 'NOVEDAD_OPERATIVA', templateId: tplNovedad.id, companyId: 2, createdBy: adminMikacao.id } });
+    if (tplSalida) await prisma.logEntry.create({ data: { title: 'Salida anticipada - Emergencia familiar', content: 'Se autoriza la salida de Sandra Luna del área de Calidad. Hora de salida: 14:30. Motivo: Emergencia familiar comprobada.', type: 'SALIDA_PERSONAL', templateId: tplSalida.id, companyId: 2, createdBy: adminMikacao.id } });
+    if (tplRespuesta) await prisma.logEntry.create({ data: { title: 'Respuesta sobre contrato de prueba', content: 'En respuesta a su solicitud regarding la extensión del período de prueba de Carlos Muñoz, le informamos que se aprueba por 30 días adicionales.', type: 'RESPUESTA_ADMIN_CONTRATO', templateId: tplRespuesta.id, companyId: 2, createdBy: adminMikacao.id } });
+    if (tplIngreso) await prisma.logEntry.create({ data: { title: 'Ingreso de visitante - Auditoría externa', content: 'Se autoriza el ingreso de María Fernanda López con cédula 1765432890 al área de Oficinas. Motivo: Auditoría de calidad programada.', type: 'PERMISO_INGRESO', templateId: tplIngreso.id, companyId: 2, createdBy: adminMikacao.id } });
+    console.log('  ✓ Registros de bitácora creados: 5');
+  } else {
+    console.log('  ✓ Datos del módulo Personal ya existen');
+  }
+
+  // Document Types (requisitos por defecto)
+  console.log('Creando tipos de documentos (requisitos)...');
+  const existingDocType = await prisma.documentType.findFirst({ where: { companyId: 2 } });
+  if (!existingDocType) {
+    const custodiasReqs = [
+      'Hoja de Vida',
+      'Cédula',
+      'Papeleta de Votación Actualizada',
+      'Antecedentes Penales',
+      'Título de Bachiller',
+      'Referencias Laborales',
+      'Curso Nivel 1',
+      'Curso Nivel 2',
+      'Reentrenamiento Vigente',
+    ];
+    for (const name of custodiasReqs) {
+      await prisma.documentType.create({ data: { name, folder: 'CUSTODIAS', required: true, companyId: 2 } });
+    }
+    const personalReqs = ['Hoja de Vida', 'Cédula', 'Contrato'];
+    for (const name of personalReqs) {
+      await prisma.documentType.create({ data: { name, folder: 'PERSONAL', required: true, companyId: 2 } });
+    }
+    console.log('  ✓ Tipos de documentos creados: 9 Custodias + 3 Personal');
+  } else {
+    console.log('  ✓ Tipos de documentos ya existen');
+  }
+
   console.log('\n========================================');
   console.log('  SEED COMPLETADO EXITOSAMENTE');
   console.log('========================================\n');

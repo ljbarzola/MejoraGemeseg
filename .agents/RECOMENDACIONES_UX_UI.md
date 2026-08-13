@@ -130,5 +130,40 @@ Cuando el usuario presione "Crear" o "Guardar" y haya campos requeridos vacíos:
 
 ---
 
+## 12. Custodias - Cambio de Estado
+
+### Regla: Select Inline con Colores
+
+- El cambio de estado se hace desde la lista directamente (dropdown inline).
+- Cada estado tiene un color distinctivo: amarillo (LISTO), azul (EN_CAMINO), verde (LLEGÓ).
+- El dropdown muestra el color del estado actual como borde y fondo.
+- Al cambiar estado, la UI se actualiza inmediatamente sin recargar la pagina.
+- Solo se pueden seleccionar estados validos del flujo.
+
+---
+
+## 13. Custodias - Impresion de Orden
+
+### Regla: Confirmacion Post-Registro
+
+- Despues de registrar una custodia, mostrar modal de confirmacion.
+- El modal ofrece dos opciones: "Imprimir PDF" o "Ahora no".
+- El PDF de Orden de Custodia incluye: datos generales, ruta, personal, y bloque de firmas (Cliente, Chofer, Custodio 1, Custodio 2).
+- El PDF se abre en nueva pestana para impresion directa.
+
+---
+
+## 14. Custodias - Seleccion de Personal
+
+### Regla: Busqueda con Empleados de Drive
+
+- El formulario de custodias usa un componente de busqueda (EmpleadoSelect).
+- Muestra empleados del folder "Custodios" de Google Drive + candidatos con puesto "Custodio".
+- Permite busqueda por nombre o cedula.
+- Exclusion automatica: chofer y custodios deben ser personas distintas.
+- Opcion "+ Manual" para ingreso directo si el empleado no esta en la lista.
+
+---
+
 ## Versión
-- v1.1 - Julio 2026 (reescripción sin código, solo reglas funcionales)
+- v1.2 - Agosto 2026 (añadidas reglas custodias)
