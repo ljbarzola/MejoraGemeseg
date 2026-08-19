@@ -1,28 +1,27 @@
 import 'dotenv/config';
-import { join } from 'path';
-import { mkdirSync } from 'fs';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
-import express from 'express';
 import helmet from 'helmet';
+import { join } from 'path';
+import { existsSync } from 'fs';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  const uploadsDir = join(__dirname, '..', 'uploads', 'logos');
-  mkdirSync(uploadsDir, { recursive: true });
-
-  app.use(helmet());
+  app.use(helmet({ contentSecurityPolicy: false }));
   app.useGlobalFilters(new AllExceptionsFilter());
-  app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
 
-  const allowedOrigins = [
-    process.env.FRONTEND_URL,
-    'https://mejora-gemeseg.vercel.app',
-  ].filter(Boolean) as string[];
+  app.use('/health', (_req: any, res: any) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  app.setGlobalPrefix('api', {
+    exclude: ['health', 'docs', 'docs/(.*)'],
+  });
 
   app.enableCors({
     origin: (
@@ -31,10 +30,8 @@ async function bootstrap() {
     ) => {
       if (!origin || origin.startsWith('http://localhost:')) {
         callback(null, true);
-      } else if (allowedOrigins.includes(origin)) {
-        callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS'));
+        callback(null, true);
       }
     },
     credentials: true,
@@ -59,6 +56,23 @@ async function bootstrap() {
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, documentFactory);
 
-  await app.listen(process.env.PORT ?? 3000);
+  const publicPath = join(__dirname, '..', 'public');
+  if (existsSync(publicPath)) {
+    app.useStaticAssets(publicPath);
+
+    const indexHtml = join(publicPath, 'index.html');
+
+    app.use((req: any, res: any, next: any) => {
+      if (req.path.startsWith('/api/') || req.path === '/health' || req.path.startsWith('/docs')) {
+        return next();
+      }
+      if (existsSync(indexHtml)) {
+        return res.sendFile(indexHtml);
+      }
+      next();
+    });
+  }
+
+  await app.listen(process.env.PORT ?? 8080, '0.0.0.0');
 }
 bootstrap();

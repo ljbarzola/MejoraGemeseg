@@ -4,3 +4,7 @@ dist
 coverage
 .git
 .env
+google-service-account.json
+railway.json
+*.md
+test/

@@ -11,16 +11,16 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 **Estado actual:** Fase 1 - Desplegado en produccion
 
 ### URLs de Produccion
-- **Frontend (Vercel):** https://mejora-gemeseg.vercel.app
-- **Backend (Railway):** https://mejoragemeseg-production.up.railway.app
-- **API Docs (Swagger):** https://mejoragemeseg-production.up.railway.app/docs
+- **Frontend (Firebase Hosting):** https://mejora-gemeseg.web.app
+- **Backend (Cloud Run):** https://mejora-gemeseg-backend-141953681725.us-central1.run.app
+- **API Docs (Swagger):** https://mejora-gemeseg-backend-141953681725.us-central1.run.app/docs
 
 ## Stack Tecnologico
 
 ### Backend
 - **Framework:** NestJS v11 + TypeScript
-- **ORM:** Prisma v7 (con `@prisma/adapter-pg`)
-- **Base de datos:** PostgreSQL 17 (local)
+- **ORM:** Prisma v7 (con `prisma.config.js`, sin `url` en datasource)
+- **Base de datos:** PostgreSQL 16 (Cloud SQL en produccion, Docker en desarrollo)
 - **Auth:** Passport.js (JWT, expira 7 dias) + bcryptjs (salt 10)
 - **Docs:** Swagger en `/docs`
 - **Validacion:** class-validator + class-transformer
@@ -40,15 +40,14 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 - **Backend:** http://localhost:3000
 - **Frontend:** http://localhost:5173
 
-#### Produccion (Monorepo en GitHub)
-- **Base de datos:** Supabase (plan gratuito) - PostgreSQL 17
-- **Backend:** Railway (Root Dir: `/backend`)
-- **Frontend:** Vercel (Root Dir: `/frontend`)
-- **Repo:** https://github.com/ljbarzola/MejoraGemeseg
-
-**Flujo:** Push a `main` → Railway y Vercel hacen deploy automatico.
-
-**Variables de entorno:** No usar archivos `.env` en produccion. Mapear en paneles de Railway y Vercel.
+#### Produccion (Google Cloud Platform)
+- **Proyecto GCP:** `mejora-gemeseg` (org: `gemeseg.com`)
+- **Base de datos:** Cloud SQL - PostgreSQL 16 (`gemeseg-db`, `34.9.205.240`)
+- **Backend:** Cloud Run (`mejora-gemeseg-backend`, us-central1)
+- **Frontend:** Firebase Hosting (`mejora-gemeseg.web.app`)
+- **Registry:** Artifact Registry (`us-central1-docker.pkg.dev/mejora-gemeseg/gemeseg-repo`)
+- **Secrets:** Secret Manager (`DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`)
+- **Deploy:** `firebase deploy --only hosting` (frontend), Cloud Build / `gcloud run deploy` (backend)
 
 ## Convenciones de Codigo
 
@@ -71,7 +70,8 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 - Modelos: `Company`, `User`, `Department`, `Role`, `Project`, `ProjectMember`, `Task`, `TaskAssignee`, `Tool`, `ToolAssignment`, `ToolAuditLog`, `Agent`, `UserAgent`, `Conversation`, `ChatMessage`, `AiLog`, `Custodia`, `SalesGoal`, `ClientVisit`, `Lead`, `SalesApiKey`.
 - Migraciones con `prisma migrate dev --name <nombre>`.
 - Seed en `prisma/seed.js`.
-- Prisma v7 requiere adapter: `new PrismaClient({ adapter: new PrismaPg(...) })`.
+- Prisma v7 usa `prisma.config.js` (JS, no TS) para la URL de conexion.
+- `schema.prisma` NO tiene `url` en datasource (se define en `prisma.config.js`).
 
 ### Git
 - Ramas: `main` (produccion), `feature/XXX-nombre`, `fix/XXX-nombre`.
@@ -83,21 +83,24 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 
 ### Arquitectura
 ```
-GitHub (repo: MejoraGemeseg/)
-  ├── backend/  → Railway (Root Dir: /backend)
-  ├── frontend/ → Vercel  (Root Dir: /frontend)
-  └── .env      → ignorado por .gitignore
+Google Cloud Platform (proyecto: mejora-gemeseg)
+  ├── Cloud SQL (PostgreSQL 16)   → gemeseg-db
+  ├── Cloud Run (NestJS backend)  → mejora-gemeseg-backend
+  ├── Firebase Hosting (React)    → mejora-gemeseg.web.app
+  ├── Artifact Registry           → gemeseg-repo
+  └── Secret Manager              → DATABASE_URL, JWT_SECRET, FRONTEND_URL
 ```
 
 ### Plataformas
-- **Base de datos:** Supabase (plan gratuito, PostgreSQL 17)
-- **Backend:** Railway (deploy automatico desde `main`)
-- **Frontend:** Vercel (deploy automatico desde `main`)
+- **Base de datos:** Cloud SQL (PostgreSQL 16, `us-central1`)
+- **Backend:** Cloud Run (`us-central1`, auto-scaling)
+- **Frontend:** Firebase Hosting (`mejora-gemeseg.web.app`)
+- **CI/CD:** Cloud Build + `cloudbuild.yaml`
 
 ### URLs
-- Frontend: https://mejora-gemeseg.vercel.app
-- Backend: https://mejoragemeseg-production.up.railway.app
-- API Docs: https://mejoragemeseg-production.up.railway.app/docs
+- Frontend: https://mejora-gemeseg.web.app
+- Backend: https://mejora-gemeseg-backend-141953681725.us-central1.run.app
+- API Docs: https://mejora-gemeseg-backend-141953681725.us-central1.run.app/docs
 
 ### Variables de Entorno
 
@@ -109,18 +112,18 @@ GITHUB_TOKEN=<token_de_github_models>
 FRONTEND_URL=http://localhost:5173
 ```
 
-### Produccion - Backend (Railway)
+### Produccion - Backend (Cloud Run / Secret Manager)
 | Key | Value |
 |-----|-------|
-| `DATABASE_URL` | `postgresql://postgres.alvpovhbqcwunaiieuhy:MejoraG3m3s3g2026@aws-0-us-east-1.pooler.supabase.com:6543/postgres` |
-| `JWT_SECRET` | *(configurar en panel de Railway)* |
-| `FRONTEND_URL` | `https://mejora-gemeseg.vercel.app` |
-| `PORT` | `3000` |
+| `DATABASE_URL` | Secret Manager: `DATABASE_URL` (Cloud SQL, socket: `/cloudsql/mejora-gemeseg:us-central1:gemeseg-db`) |
+| `JWT_SECRET` | Secret Manager: `JWT_SECRET` |
+| `FRONTEND_URL` | Secret Manager: `FRONTEND_URL` (`https://mejora-gemeseg.web.app`) |
+| `NODE_ENV` | `production` |
 
-### Produccion - Frontend (Vercel)
+### Produccion - Frontend (Firebase Hosting)
 | Key | Value |
 |-----|-------|
-| `VITE_API_URL` | `https://mejoragemeseg-production.up.railway.app` |
+| `VITE_API_URL` | `https://mejora-gemeseg-backend-141953681725.us-central1.run.app` |
 
 ## Autenticacion
 
@@ -312,5 +315,5 @@ FRONTEND_URL=http://localhost:5173
 - **Perder archivos de ramas existentes** - SIEMPRE hacer pull de main antes de crear ramas.
 - Hacer push sin autorizacion del usuario.
 - Hardcodear URLs de API en el frontend (usar `VITE_API_URL`).
-- Usar archivos `.env` en produccion (usar paneles de Railway/Vercel).
+- Usar archivos `.env` en produccion (usar Secret Manager / Firebase Hosting env vars).
 - Crear endpoints sin RolesGuard cuando la accion requiere rol ADMIN.

@@ -1,0 +1,15 @@
+# .gcloudignore
+.git/
+.gitignore
+node_modules/
+**/node_modules/
+frontend/node_modules/
+backend/node_modules/
+frontend/dist/
+backend/dist/
+coverage/
+**/coverage/
+*.dump
+*.tar.gz
+*.tgz
+*.log
