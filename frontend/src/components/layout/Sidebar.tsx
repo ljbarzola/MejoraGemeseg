@@ -54,6 +54,7 @@ export default function Sidebar() {
     { label: 'Certificaciones', path: '/personal/certifications', icon: '🎓' },
     { label: 'Contratos', path: '/personal/contracts', icon: '📄' },
     { label: 'Cumplimiento', path: '/personal/compliance', icon: '🔍' },
+    { label: 'Verificación SUT/SICOSEP', path: '/personal/verificacion', icon: '✅' },
   ];
 
   const bitacorasItems = [

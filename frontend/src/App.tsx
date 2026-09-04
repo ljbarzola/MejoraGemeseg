@@ -64,6 +64,7 @@ const LogEntriesPage = lazy(() => import('./pages/personal/logs/LogEntries'));
 const CompliancePanel = lazy(() => import('./pages/personal/compliance/CompliancePanel'));
 const DriveConfig = lazy(() => import('./pages/personal/compliance/DriveConfig'));
 const DocumentTypeConfig = lazy(() => import('./pages/personal/compliance/DocumentTypeConfig'));
+const VerificacionPage = lazy(() => import('./pages/personal/VerificacionPage'));
 const VentasDashboard = lazy(() => import('./pages/ventas/VentasDashboard'));
 const VisitasPage = lazy(() => import('./pages/ventas/VisitasPage'));
 const LeadsPage = lazy(() => import('./pages/ventas/LeadsPage'));
@@ -285,6 +286,7 @@ function AppInner() {
         <Route path="/personal/compliance" element={<ProtectedLayout><SectionRoute section="PERSONAL"><CompliancePanel /></SectionRoute></ProtectedLayout>} />
         <Route path="/personal/drive-config" element={<ProtectedLayout><SectionRoute section="PERSONAL"><DriveConfig /></SectionRoute></ProtectedLayout>} />
         <Route path="/personal/document-types" element={<ProtectedLayout><SectionRoute section="PERSONAL"><DocumentTypeConfig /></SectionRoute></ProtectedLayout>} />
+        <Route path="/personal/verificacion" element={<ProtectedLayout><SectionRoute section="PERSONAL"><VerificacionPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasDashboard /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/visitas" element={<ProtectedLayout><SectionRoute section="VENTAS"><VisitasPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/leads" element={<ProtectedLayout><SectionRoute section="VENTAS"><LeadsPage /></SectionRoute></ProtectedLayout>} />

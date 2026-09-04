@@ -1,6 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-3.0.x"]
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -35,10 +35,13 @@ model Company {
   employeeDocuments EmployeeDocument[]
   folderConfigs  FolderConfig[]
   jobPositions   JobPosition[]
+  verificationChecks VerificationCheck[]
   salesGoals        SalesGoal[]
   clientVisits      ClientVisit[]
   leads             Lead[]
   salesApiKeys      SalesApiKey[]
+  salesTemplates    SalesTemplate[]
+  salesContracts    SalesContract[]
 }
 
 model Department {
@@ -98,6 +101,9 @@ model User {
   salesGoals         SalesGoal[]
   clientVisits       ClientVisit[]
   assignedLeads      Lead[]
+  createdSalesTemplates   SalesTemplate[]
+  createdSalesContracts   SalesContract[]
+  verificationChecks  VerificationCheck[]
 }
 
 model Project {
@@ -929,4 +935,91 @@ model JobPosition {
   updatedAt          DateTime @updatedAt
 
   @@index([companyId])
+}
+
+model VerificationCheck {
+  id         Int      @id @default(autoincrement())
+  cedula     String
+  platform   String   // SICOSEP | SUT | IESS
+  status     String   @default("PENDIENTE") // PENDIENTE | VERIFICADO | NO_ENCONTRADO
+  notes      String?
+  verifiedBy Int
+  verifier   User     @relation(fields: [verifiedBy], references: [id])
+  verifiedAt DateTime @default(now())
+  companyId  Int
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([companyId, cedula])
+}
+
+model SalesTemplate {
+  id                 Int      @id @default(autoincrement())
+  name               String
+  description        String?
+  driveUrl           String?  // Link de Google Drive con el .docx
+  docxPath           String?  // Ruta local del .docx descargado
+  generatedPdfPath   String?  // Ruta del último PDF generado
+  boldsignTemplateId String?
+  emailSubject       String?  // Asunto por defecto del correo
+  emailBody          String?  // Cuerpo por defecto del correo
+  companyId          Int
+  createdBy          Int
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  company  Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator  User            @relation(fields: [createdBy], references: [id])
+  fields   SalesField[]
+  contracts SalesContract[]
+
+  @@index([companyId])
+}
+
+model SalesField {
+  id               Int      @id @default(autoincrement())
+  templateId       Int
+  variableName     String   // Nombre de la variable en el doc: "ClientName"
+  label            String   // Etiqueta visible en el form
+  fieldType        String   // TEXT, NUMBER, DATE, EMAIL, CHECKBOX, DROPDOWN, SIGNATURE
+  isRequired       Boolean  @default(true)
+  isClientField    Boolean  @default(false) // true = cliente llena
+  defaultValue     String?
+  dropdownOptions  String[]
+  order            Int      @default(0)
+
+  template SalesTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+}
+
+model SalesContract {
+  id                  Int      @id @default(autoincrement())
+  templateId          Int
+  clientName          String
+  clientEmail         String
+  clientPhone         String?
+  clientCompany       String?
+  clientRuc           String?
+  clientAddress       String?
+  fieldValues         Json     // {variableName: value} — campos del vendedor
+  annexA              Json?    // Equipos
+  annexB              Json?    // Servicios
+  annexC              Json?    // Contactos
+  generatedPdfPath    String?  // Ruta del PDF generado
+  boldsignDocumentId  String?
+  boldsignStatus      String?
+  status              String   @default("DRAFT") // DRAFT, GENERATING, READY, SENT, SIGNED, CANCELLED
+  sentAt              DateTime?
+  signedAt            DateTime?
+  companyId           Int
+  createdBy           Int
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  company  Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator  User          @relation(fields: [createdBy], references: [id])
+  template SalesTemplate @relation(fields: [templateId], references: [id])
+
+  @@index([companyId, status])
 }

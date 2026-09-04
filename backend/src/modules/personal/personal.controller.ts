@@ -6,11 +6,13 @@ import { CandidateService } from './services/candidate.service';
 import { ContractService } from './services/contract.service';
 import { CertificationService } from './services/certification.service';
 import { LogService } from './services/log.service';
+import { VerificationService } from './services/verification.service';
 import { CreateKanbanColumnDto, UpdateKanbanColumnDto, ReorderKanbanDto } from './dto/kanban.dto';
 import { CreateCandidateDto, UpdateCandidateDto, MoveCandidateDto } from './dto/candidate.dto';
 import { CreateContractTemplateDto, UpdateContractDto, GenerateContractDto } from './dto/contract.dto';
 import { CreateCertificationDto, UpdateCertificationDto } from './dto/certification.dto';
 import { CreateLogTemplateDto, CreateLogEntryDto } from './dto/log.dto';
+import { CreateVerificationDto, UpdateVerificationDto } from './dto/verification.dto';
 
 @Controller('personal')
 @UseGuards(AuthGuard('jwt'))
@@ -21,7 +23,8 @@ export class PersonalController {
     private readonly candidateService: CandidateService,
     private readonly contractService: ContractService,
     private readonly certificationService: CertificationService,
-    private readonly logService: LogService
+    private readonly logService: LogService,
+    private readonly verificationService: VerificationService
   ) {}
 
   @Get('dashboard')
@@ -169,4 +172,23 @@ export class PersonalController {
     return this.logService.deleteEntry(+id, req.user.companyId);
   }
 
+  @Get('verificacion')
+  getVerifications(@Req() req: any, @Query('cedula') cedula?: string) {
+    return this.verificationService.findAll(req.user.companyId, cedula);
+  }
+
+  @Post('verificacion')
+  createVerification(@Body() body: CreateVerificationDto, @Req() req: any) {
+    return this.verificationService.create(body, req.user.companyId, req.user.userId);
+  }
+
+  @Patch('verificacion/:id')
+  updateVerification(@Param('id') id: string, @Body() body: UpdateVerificationDto, @Req() req: any) {
+    return this.verificationService.update(+id, body, req.user.companyId, req.user.userId);
+  }
+
+  @Delete('verificacion/:id')
+  deleteVerification(@Param('id') id: string, @Req() req: any) {
+    return this.verificationService.remove(+id, req.user.companyId);
+  }
 }

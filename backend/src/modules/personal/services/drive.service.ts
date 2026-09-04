@@ -49,23 +49,27 @@ export class DriveService {
     return this.driveClient;
   }
 
-  async testConnection(companyId: number) {
+  async testConnection(companyId: number, folderId?: string) {
     if (!companyId) return { success: false, message: 'Usuario sin empresa asociada. Inicia sesión nuevamente.' };
     try {
       const drive = this.getDriveClient();
-      const config = await this.prisma.folderConfig.findFirst({ where: { companyId } });
-      if (!config) {
-        return { success: false, message: 'No hay carpeta configurada. Guarda el ID de la carpeta raíz primero.' };
+      let targetFolderId = folderId?.trim();
+      if (!targetFolderId) {
+        const config = await this.prisma.folderConfig.findFirst({ where: { companyId } });
+        if (!config) {
+          return { success: false, message: 'Escribe el ID de la carpeta raíz y pulsa Probar Conexión.' };
+        }
+        targetFolderId = config.driveFolderId;
       }
       const folder = await drive.files.get({
-        fileId: config.driveFolderId,
+        fileId: targetFolderId,
         fields: 'id, name',
         supportsAllDrives: true,
       });
       return { success: true, folderName: folder.data.name, folderId: folder.data.id };
     } catch (error) {
       this.logger.error(`Error de conexión: ${error.message}`);
-      return { success: false, message: `Error: ${error.message}` };
+      return { success: false, message: `No se pudo conectar a Google Drive: ${error.message}. Verifica el ID de la carpeta y las credenciales.` };
     }
   }
 
