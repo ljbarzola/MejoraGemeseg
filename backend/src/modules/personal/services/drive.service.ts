@@ -14,37 +14,31 @@ export class DriveService {
   private getDriveClient() {
     if (this.driveClient) return this.driveClient;
 
-    if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-      const auth = new google.auth.GoogleAuth({
-        scopes: ['https://www.googleapis.com/auth/drive'],
-      });
-      this.driveClient = google.drive({ version: 'v3', auth });
-      return this.driveClient;
+    const candidates = [
+      path.join(process.cwd(), 'google-service-account.json'),
+      path.join(__dirname, '..', '..', '..', '..', 'google-service-account.json'),
+    ];
+    this.logger.log(`DriveClient: process.cwd()=${process.cwd()}, __dirname=${__dirname}`);
+
+    let keyFile: any = null;
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        keyFile = JSON.parse(fs.readFileSync(candidate, 'utf-8'));
+        this.logger.log(`DriveClient: loaded credentials from ${candidate}`);
+        break;
+      }
     }
 
-    const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-    if (!credentialsJson) {
-      const keyPath = path.join(process.cwd(), 'google-service-account.json');
-      if (fs.existsSync(keyPath)) {
-        const keyFile = JSON.parse(fs.readFileSync(keyPath, 'utf-8'));
-        const auth = new google.auth.GoogleAuth({
-          credentials: keyFile,
-          scopes: ['https://www.googleapis.com/auth/drive'],
-        });
-        this.driveClient = google.drive({ version: 'v3', auth });
-        return this.driveClient;
-      }
+    if (!keyFile) {
       throw new BadRequestException(
-        'Google Drive no configurado. Configura GOOGLE_APPLICATION_CREDENTIALS o GOOGLE_SERVICE_ACCOUNT_JSON.',
+        'Google Drive no configurado. Coloca google-service-account.json en la raíz del backend.',
       );
     }
 
-    const credentials = JSON.parse(credentialsJson);
     const auth = new google.auth.GoogleAuth({
-      credentials,
+      credentials: keyFile,
       scopes: ['https://www.googleapis.com/auth/drive'],
     });
-
     this.driveClient = google.drive({ version: 'v3', auth });
     return this.driveClient;
   }
@@ -58,6 +52,7 @@ export class DriveService {
     try {
       const drive = this.getDriveClient();
       let targetFolderId = this.sanitizeFolderId(folderId || '');
+      this.logger.log(`testConnection: raw folderId=${folderId}, sanitized=${targetFolderId}`);
       if (!targetFolderId) {
         const config = await this.prisma.folderConfig.findFirst({ where: { companyId } });
         if (!config) {
