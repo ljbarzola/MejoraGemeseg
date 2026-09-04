@@ -1,16 +1,13 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import helmet from 'helmet';
-import { join } from 'path';
-import { existsSync } from 'fs';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create(AppModule);
 
   app.use(helmet({ contentSecurityPolicy: false }));
   app.useGlobalFilters(new AllExceptionsFilter());
@@ -23,15 +20,24 @@ async function bootstrap() {
     exclude: ['health', 'docs', 'docs/(.*)'],
   });
 
+  const allowedOrigins = [process.env.FRONTEND_URL].filter(
+    (url): url is string => Boolean(url),
+  );
+
   app.enableCors({
     origin: (
       origin: string | undefined,
       callback: (err: Error | null, allow?: boolean) => void,
     ) => {
-      if (!origin || origin.startsWith('http://localhost:')) {
+      const isLocalDev =
+        process.env.NODE_ENV !== 'production' &&
+        !!origin &&
+        origin.startsWith('http://localhost:');
+
+      if (!origin || isLocalDev || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(null, true);
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
       }
     },
     credentials: true,
@@ -55,23 +61,6 @@ async function bootstrap() {
 
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, documentFactory);
-
-  const publicPath = join(__dirname, '..', 'public');
-  if (existsSync(publicPath)) {
-    app.useStaticAssets(publicPath);
-
-    const indexHtml = join(publicPath, 'index.html');
-
-    app.use((req: any, res: any, next: any) => {
-      if (req.path.startsWith('/api/') || req.path === '/health' || req.path.startsWith('/docs')) {
-        return next();
-      }
-      if (existsSync(indexHtml)) {
-        return res.sendFile(indexHtml);
-      }
-      next();
-    });
-  }
 
   await app.listen(process.env.PORT ?? 8080, '0.0.0.0');
 }

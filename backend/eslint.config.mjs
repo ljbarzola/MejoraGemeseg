@@ -32,4 +32,17 @@ export default tseslint.config(
       "prettier/prettier": ["error", { endOfLine: "auto" }],
     },
   },
+  {
+    // Jest's own types (expect.objectContaining, mock.calls, jest.fn()) are
+    // intentionally `any`-typed, which trips these rules on every mock-based
+    // assertion without indicating an actual type-safety bug.
+    files: ['**/*.spec.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'warn',
+      '@typescript-eslint/no-unsafe-member-access': 'warn',
+      '@typescript-eslint/no-unsafe-call': 'warn',
+      '@typescript-eslint/no-unsafe-return': 'warn',
+      '@typescript-eslint/unbound-method': 'off',
+    },
+  },
 );

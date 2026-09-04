@@ -38,5 +38,8 @@ migrate-db.ps1
 # Data dumps
 *.dump
 
+# Ad-hoc test fixtures
+test-template.docx
+
 # Old migrations
 backend/prisma/migrations/20260720_cacao_unit_conversion/

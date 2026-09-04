@@ -1,17 +1,3 @@
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /app/frontend
-
-ARG VITE_API_URL
-ENV VITE_API_URL=$VITE_API_URL
-
-COPY frontend/package*.json ./
-RUN npm ci
-
-COPY frontend/ .
-RUN npm run build
-
-
 FROM node:20-alpine AS backend-builder
 
 WORKDIR /app
@@ -37,7 +23,6 @@ COPY --from=backend-builder /app/node_modules ./node_modules
 COPY --from=backend-builder /app/dist ./dist
 COPY --from=backend-builder /app/prisma ./prisma
 COPY --from=backend-builder /app/prisma.config.js ./prisma.config.js
-COPY --from=frontend-builder /app/frontend/dist ./public
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser

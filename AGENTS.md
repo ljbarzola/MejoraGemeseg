@@ -82,20 +82,22 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 ## Despliegue en Produccion
 
 ### Arquitectura
+Cloud Run y Firebase Hosting se despliegan por separado y con pipelines distintos - Cloud Run **solo sirve la API** (el `Dockerfile` de `backend/` no incluye el frontend). El dominio publico `app.gemeseg.com` esta mapeado como custom domain sobre Firebase Hosting, que hace de unico origen de cara al usuario y reenvia `/api/**`, `/health`, `/docs/**` a Cloud Run (ver `firebase.json`).
+
 ```
 Google Cloud Platform (proyecto: mejora-gemeseg)
   ├── Cloud SQL (PostgreSQL 16)   → gemeseg-db
-  ├── Cloud Run (NestJS backend)  → mejora-gemeseg-backend
-  ├── Firebase Hosting (React)    → mejora-gemeseg.web.app
+  ├── Cloud Run (NestJS backend, solo API) → mejora-gemeseg-backend
+  ├── Firebase Hosting (React, dominio publico app.gemeseg.com) → mejora-gemeseg.web.app
   ├── Artifact Registry           → gemeseg-repo
-  └── Secret Manager              → DATABASE_URL, JWT_SECRET, FRONTEND_URL
+  └── Secret Manager              → DATABASE_URL, JWT_SECRET, FRONTEND_URL, BOLDSIGN_API_KEY
 ```
 
 ### Plataformas
 - **Base de datos:** Cloud SQL (PostgreSQL 16, `us-central1`)
-- **Backend:** Cloud Run (`us-central1`, auto-scaling)
-- **Frontend:** Firebase Hosting (`mejora-gemeseg.web.app`)
-- **CI/CD:** Cloud Build + `cloudbuild.yaml`
+- **Backend:** Cloud Run (`us-central1`, auto-scaling) - deploy via `cloudbuild.yaml` (Cloud Build, dispara con push a `main`)
+- **Frontend:** Firebase Hosting (`mejora-gemeseg.web.app`, dominio publico `app.gemeseg.com`) - deploy via `.github/workflows/firebase-hosting-merge.yml` (GitHub Actions, dispara con push a `main`)
+- **CI/CD:** dos pipelines independientes, uno por servicio (no compartir la etapa de build del frontend entre ambos - ver `CLAUDE.md`)
 
 ### URLs
 - Frontend: https://mejora-gemeseg.web.app
@@ -170,6 +172,19 @@ FRONTEND_URL=http://localhost:5173
 - Un usuario puede tener multiples agentes asignados.
 - El agente global (createdBy: null) esta disponible para todos.
 - Cada combinacion usuario+agente tiene sus propias conversaciones.
+
+### Permisos por seccion (`/permissions`)
+Existen **dos capas de autorizacion independientes**, no una sola:
+1. **RolesGuard** (`@Roles(UserRole.ADMIN)`): rol grueso ADMIN/MANAGER/EMPLOYEE, por endpoint.
+2. **Permisos por seccion** (`PermissionsService`, modulo `permissions`): gatea modulos completos (DASHBOARD, PROJECTS, ADMIN, TOOLS, AGENTS, CACAO, COMPANY_SETTINGS, COMPANIES, CUSTODIAS, PERSONAL, VENTAS - ver `ALL_SECTIONS` en `permissions.service.ts`).
+
+Reglas:
+- Una seccion con `alwaysEnabled: true` (DASHBOARD, PROJECTS, ADMIN, TOOLS, AGENTS) esta siempre visible para toda empresa.
+- Las demas secciones deben habilitarse por empresa via `CompanySection` (`POST /permissions/sections/:companyId`, solo super admin).
+- Dentro de una seccion habilitada, un usuario puede ademas restringirse por `UserPermission.canView/canWrite` (`POST /permissions/users/:userId`, admin de esa empresa).
+- El Super Admin (`companyId: null`) ve y puede gestionar todas las secciones sin restriccion (`getMyPermissions` retorna `isSuperAdmin: true` y el listado completo de `ALL_SECTIONS`).
+- `GET /permissions/my` es el endpoint que el frontend consulta al cargar sesion; `contexts/PermissionsContext.tsx` + `hooks/usePermissions.ts` exponen `canView(section)`, usado por el wrapper `<SectionRoute section="...">` en `App.tsx` alrededor de las rutas de cada modulo.
+- **Al agregar un modulo nuevo:** agregarlo a `ALL_SECTIONS`, proteger sus endpoints, y envolver sus rutas de frontend en `SectionRoute`. Ninguna de las dos capas reemplaza a la otra - un endpoint puede tener `RolesGuard` correcto y aun asi quedar expuesto si no se agrega su seccion aqui.
 
 ### Empresas (White-labeling)
 - **Super Admin** (`admin@general.com`, `companyId: null`): puede ver y gestionar todas las empresas.
@@ -278,6 +293,15 @@ FRONTEND_URL=http://localhost:5173
 - `GET /personal/certifications/alerts` - Alertas de vencimiento
 - `POST /personal/drive/sync` - Sincronizar carpetas de Drive
 - `GET /personal/drive/compliance/:cedula` - Checklist de cumplimiento por cédula
+
+### Permissions (`/permissions`)
+- `GET /permissions/my` - Secciones y permisos del usuario autenticado (cualquier usuario)
+- `GET /permissions/sections/:companyId` - Secciones habilitadas de una empresa (solo ADMIN)
+- `POST /permissions/sections/:companyId` - Habilitar secciones para una empresa (solo super admin)
+- `GET /permissions/users/:companyId` - Permisos por usuario de una empresa (solo ADMIN)
+- `POST /permissions/users/:userId` - Establecer `canView`/`canWrite` por seccion para un usuario (admin de esa empresa)
+
+**Nota:** ver "Permisos por seccion" en Reglas de Negocio - esto es una segunda capa de autorizacion, independiente de `RolesGuard`.
 
 ### Companies (`/companies`)
 - `GET /companies` - Listar empresas (solo ADMIN; si tiene companyId retorna su empresa)
