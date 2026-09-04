@@ -19,3 +19,24 @@ coverage
 
 # Google service account credentials
 backend/google-service-account.json
+
+# Build artifacts
+.firebase/
+
+# Temp scripts
+backend/check-tables.js
+backend/create-tables.js
+backend/create-test-docx.js
+backend/test-conn.js
+backend/migrate-supabase.js
+backend/migrate-v2.js
+backend/.agents/
+backend/.env.bak
+deploy-gcp.ps1
+migrate-db.ps1
+
+# Data dumps
+*.dump
+
+# Old migrations
+backend/prisma/migrations/20260720_cacao_unit_conversion/
