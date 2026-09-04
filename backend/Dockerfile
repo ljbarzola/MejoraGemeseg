@@ -16,6 +16,8 @@ FROM node:20-alpine AS backend-builder
 
 WORKDIR /app
 
+ENV NODE_OPTIONS="--max_old_space_size=4096"
+
 COPY backend/package*.json ./
 RUN npm ci
 
