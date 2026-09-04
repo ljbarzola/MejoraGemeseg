@@ -1,4 +1,5 @@
 import { IsString, IsOptional, IsIn } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export const VERIFICATION_PLATFORMS = ['SICOSEP', 'SUT', 'IESS'] as const;
 export const VERIFICATION_STATUSES = ['PENDIENTE', 'VERIFICADO', 'NO_ENCONTRADO'] as const;
@@ -36,5 +37,6 @@ export class UpdateVerificationDto {
 export class TestDriveConnectionDto {
   @IsString()
   @IsOptional()
+  @Transform(({ value }) => value?.trim().replace(/\.+$/, ''))
   driveFolderId?: string;
 }

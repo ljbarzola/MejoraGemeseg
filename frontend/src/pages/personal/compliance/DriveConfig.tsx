@@ -28,13 +28,16 @@ export default function DriveConfig() {
       .finally(() => setLoading(false));
   }, []);
 
+  const sanitizeId = (id: string) => id.trim().replace(/\.+$/, '');
+
   const handleTest = async () => {
-    if (!folderId.trim()) { setError('Escribe el ID de la carpeta raíz para probar la conexión'); return; }
+    const cleanId = sanitizeId(folderId);
+    if (!cleanId) { setError('Escribe el ID de la carpeta raíz para probar la conexión'); return; }
     setTesting(true);
     setTestResult(null);
     setError('');
     try {
-      const result = await testDriveConnection({ driveFolderId: folderId.trim() });
+      const result = await testDriveConnection({ driveFolderId: cleanId });
       setTestResult(result);
     } catch (err: any) {
       setTestResult({ success: false, message: err.response?.data?.message || 'Error al probar conexión' });
@@ -44,13 +47,14 @@ export default function DriveConfig() {
   };
 
   const handleSave = async () => {
-    if (!folderId.trim()) { setError('Ingresa el ID de la carpeta'); return; }
+    const cleanId = sanitizeId(folderId);
+    if (!cleanId) { setError('Ingresa el ID de la carpeta'); return; }
     if (!folderName.trim()) { setError('Ingresa el nombre de la carpeta'); return; }
     setSaving(true);
     setError('');
     try {
-      await saveDriveConfig({ driveFolderId: folderId, driveFolderName: folderName });
-      setConfig({ driveFolderId: folderId, driveFolderName: folderName });
+      await saveDriveConfig({ driveFolderId: cleanId, driveFolderName: folderName.trim() });
+      setConfig({ driveFolderId: cleanId, driveFolderName: folderName.trim() });
     } catch (err: any) {
       if (err.response?.status === 403) {
         setError('Solo un administrador puede guardar la configuración de Drive. Pide a un admin que la guarde.');
@@ -86,6 +90,9 @@ export default function DriveConfig() {
             Para obtener el ID de la carpeta: abre la carpeta en Drive y mira la URL.
             <br />
             Ejemplo: <code>https://drive.google.com/drive/folders/1ABC123...</code> → el ID es <code>1ABC123...</code>
+          </p>
+          <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#c53030', fontWeight: 600 }}>
+            IMPORTANTE: Debes compartir la carpeta con <code>drive-sync@agentes-504115.iam.gserviceaccount.com</code> (permiso Lector).
           </p>
         </div>
 
@@ -144,7 +151,17 @@ export default function DriveConfig() {
               border: `1px solid ${testResult.success ? '#c6f6d5' : '#fed7d7'}`,
             }}>
               <p style={{ margin: 0, fontSize: '0.85rem', color: testResult.success ? '#276749' : '#c53030' }}>
-                {testResult.success ? `✅ Conexión exitosa: ${testResult.folderName} (${testResult.folderId})` : `❌ ${testResult.message}`}
+                {testResult.success
+                  ? `✅ Conexión exitosa: ${testResult.folderName} (${testResult.folderId})`
+                  : <>
+                      ❌ {testResult.message}
+                      {testResult.message?.includes('File not found') && (
+                        <span style={{ display: 'block', marginTop: '8px', fontSize: '0.8rem', color: '#742a2a' }}>
+                          <strong>Solución:</strong> Abre la carpeta en Google Drive → click derecho → Compartir → agrega <code>drive-sync@agentes-504115.iam.gserviceaccount.com</code> como Lector.
+                        </span>
+                      )}
+                    </>
+                }
               </p>
             </div>
           )}

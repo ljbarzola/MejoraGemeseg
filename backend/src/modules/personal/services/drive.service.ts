@@ -49,17 +49,21 @@ export class DriveService {
     return this.driveClient;
   }
 
+  private sanitizeFolderId(id: string): string {
+    return id?.trim().replace(/\.+$/, '') || '';
+  }
+
   async testConnection(companyId: number, folderId?: string) {
     if (!companyId) return { success: false, message: 'Usuario sin empresa asociada. Inicia sesión nuevamente.' };
     try {
       const drive = this.getDriveClient();
-      let targetFolderId = folderId?.trim();
+      let targetFolderId = this.sanitizeFolderId(folderId || '');
       if (!targetFolderId) {
         const config = await this.prisma.folderConfig.findFirst({ where: { companyId } });
         if (!config) {
           return { success: false, message: 'Escribe el ID de la carpeta raíz y pulsa Probar Conexión.' };
         }
-        targetFolderId = config.driveFolderId;
+        targetFolderId = this.sanitizeFolderId(config.driveFolderId);
       }
       const folder = await drive.files.get({
         fileId: targetFolderId,
@@ -68,8 +72,14 @@ export class DriveService {
       });
       return { success: true, folderName: folder.data.name, folderId: folder.data.id };
     } catch (error) {
-      this.logger.error(`Error de conexión: ${error.message}`);
-      return { success: false, message: `No se pudo conectar a Google Drive: ${error.message}. Verifica el ID de la carpeta y las credenciales.` };
+      this.logger.error(`Error de conexión Drive: ${error.message}`);
+      let hint = '';
+      if (error.message?.includes('File not found') || error.message?.includes('not found')) {
+        hint = ' La carpeta no fue encontrada. Verifica: (1) el ID es correcto, (2) la carpeta existe, (3) compartiste la carpeta con drive-sync@agentes-504115.iam.gserviceaccount.com.';
+      } else if (error.message?.includes('permission') || error.message?.includes('403')) {
+        hint = ' El service account no tiene permisos. Comparte la carpeta con drive-sync@agentes-504115.iam.gserviceaccount.com.';
+      }
+      return { success: false, message: `No se pudo conectar a Google Drive: ${error.message}.${hint}` };
     }
   }
 
@@ -80,15 +90,16 @@ export class DriveService {
 
   async saveConfig(companyId: number, driveFolderId: string, driveFolderName: string) {
     if (!companyId) throw new BadRequestException('Usuario sin empresa asociada');
+    const sanitizedId = this.sanitizeFolderId(driveFolderId);
     const existing = await this.prisma.folderConfig.findFirst({ where: { companyId } });
     if (existing) {
       return this.prisma.folderConfig.update({
         where: { id: existing.id },
-        data: { driveFolderId, driveFolderName },
+        data: { driveFolderId: sanitizedId, driveFolderName: driveFolderName?.trim() },
       });
     }
     return this.prisma.folderConfig.create({
-      data: { driveFolderId, driveFolderName, companyId },
+      data: { driveFolderId: sanitizedId, driveFolderName: driveFolderName?.trim(), companyId },
     });
   }
 
@@ -103,7 +114,7 @@ export class DriveService {
     const result = { custodias: 0, personal: 0, employees: 0, documents: 0, errors: [] as string[] };
 
     try {
-      const subFolders = await this.listSubFolders(config.driveFolderId);
+      const subFolders = await this.listSubFolders(this.sanitizeFolderId(config.driveFolderId));
 
       for (const subFolder of subFolders) {
         const subName = subFolder.name.toLowerCase();
@@ -415,7 +426,7 @@ export class DriveService {
       requestBody: {
         name: 'Reclutamiento',
         mimeType: 'application/vnd.google-apps.folder',
-        parents: [config.driveFolderId],
+        parents: [this.sanitizeFolderId(config.driveFolderId)],
       },
       fields: 'id',
       supportsAllDrives: true,
