@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   getJobPositions,
   createJobPosition,
+  updateJobPosition,
   deleteJobPosition,
   syncReclutamientoCandidates,
 } from '../../services/personal.service';
@@ -43,6 +44,7 @@ export default function ReclutamientoPage() {
   const [search, setSearch] = useState('');
 
   const [showPuestoModal, setShowPuestoModal] = useState(false);
+  const [editingPosition, setEditingPosition] = useState<JobPosition | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
 
   // New Position Form
@@ -65,6 +67,7 @@ export default function ReclutamientoPage() {
   const [nuevoArchivoInput, setNuevoArchivoInput] = useState('');
   const [savingPuesto, setSavingPuesto] = useState(false);
   const [puestoError, setPuestoError] = useState('');
+  const [syncError, setSyncError] = useState('');
 
   const loadPositions = () => {
     setLoadingPuestos(true);
@@ -76,11 +79,16 @@ export default function ReclutamientoPage() {
 
   const handleSync = () => {
     setSyncing(true);
+    setSyncError('');
     syncReclutamientoCandidates()
       .then((res) => {
         if (res?.candidatos) setCandidatos(res.candidatos);
+        if (res?.warning) setSyncError(res.warning);
       })
-      .catch(() => setCandidatos([]))
+      .catch((err: any) => {
+        setCandidatos([]);
+        setSyncError(err.response?.data?.message || 'No se pudo sincronizar con Google Drive. Verifica la configuraci�n de Drive.');
+      })
       .finally(() => setSyncing(false));
   };
 
@@ -106,14 +114,60 @@ export default function ReclutamientoPage() {
         archivosRequeridos: archivosList,
       });
       setShowPuestoModal(false);
-      setNuevoPuesto('');
-      setNuevaDescripcion('');
+      resetForm();
       loadPositions();
     } catch (err: any) {
       setPuestoError(err.response?.data?.message || 'Error al guardar el puesto.');
     } finally {
       setSavingPuesto(false);
     }
+  };
+
+  const handleEditPosition = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPuestoError('');
+    if (!editingPosition) return;
+    if (!nuevoPuesto.trim()) {
+      setPuestoError('El nombre del puesto es obligatorio.');
+      return;
+    }
+
+    setSavingPuesto(true);
+    try {
+      await updateJobPosition(editingPosition.id, {
+        puesto: nuevoPuesto.trim(),
+        descripcion: nuevaDescripcion.trim() || undefined,
+        camposRequeridos: camposList,
+        archivosRequeridos: archivosList,
+      });
+      setShowPuestoModal(false);
+      setEditingPosition(null);
+      resetForm();
+      loadPositions();
+    } catch (err: any) {
+      setPuestoError(err.response?.data?.message || 'Error al actualizar el puesto.');
+    } finally {
+      setSavingPuesto(false);
+    }
+  };
+
+  const openEditModal = (p: JobPosition) => {
+    setEditingPosition(p);
+    setNuevoPuesto(p.puesto);
+    setNuevaDescripcion(p.descripcion || '');
+    setCamposList(p.camposRequeridos || []);
+    setArchivosList(p.archivosRequeridos || []);
+    setShowPuestoModal(true);
+  };
+
+  const resetForm = () => {
+    setNuevoPuesto('');
+    setNuevaDescripcion('');
+    setCamposList(['Nombre completo', 'Cédula', 'Teléfono', 'Email']);
+    setArchivosList(['Hoja de Vida', 'Cédula', 'Antecedentes Penales', 'Título de Bachiller']);
+    setNuevoCampoInput('');
+    setNuevoArchivoInput('');
+    setPuestoError('');
   };
 
   const handleDeletePosition = async (id: number) => {
@@ -150,11 +204,15 @@ export default function ReclutamientoPage() {
           <button className="btn-secondary" onClick={handleSync} disabled={syncing}>
             {syncing ? 'Sincronizando...' : '🔄 Sincronizar'}
           </button>
-          <button className="auth-btn" onClick={() => setShowPuestoModal(true)}>
+          <button className="auth-btn" onClick={() => { resetForm(); setEditingPosition(null); setShowPuestoModal(true); }}>
             + Crear Puesto / Vacante
           </button>
         </div>
       </div>
+
+      {syncError && (
+        <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{syncError}</div>
+      )}
 
       {/* SECTION 1: VACANTES / PUESTOS DE TRABAJO */}
       <div className="admin-section" style={{ marginBottom: '24px' }}>
@@ -186,13 +244,22 @@ export default function ReclutamientoPage() {
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                     <div style={{ fontWeight: 800, fontSize: '1rem', color: '#100F31' }}>{p.puesto}</div>
-                    <button
-                      onClick={() => handleDeletePosition(p.id)}
-                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem' }}
-                      title="Eliminar vacante"
-                    >
-                      🗑️
-                    </button>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button
+                        onClick={() => openEditModal(p)}
+                        style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: '0.8rem' }}
+                        title="Editar vacante"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => handleDeletePosition(p.id)}
+                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem' }}
+                        title="Eliminar vacante"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
                   {p.descripcion && <p style={{ fontSize: '0.82rem', color: '#4a5568', marginBottom: '10px' }}>{p.descripcion}</p>}
 
@@ -407,14 +474,14 @@ export default function ReclutamientoPage() {
 
       {/* MODAL CREAR PUESTO / VACANTE */}
       {showPuestoModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={() => setShowPuestoModal(false)}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={() => { setShowPuestoModal(false); setEditingPosition(null); resetForm(); }}>
           <div style={{ background: '#fff', borderRadius: '16px', maxWidth: '550px', width: '95%', maxHeight: '85vh', overflow: 'auto', padding: '24px' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
-              <h2 style={{ margin: 0, color: '#100F31', fontSize: '1.1rem', fontWeight: 800 }}>Crear Puesto / Vacante</h2>
-              <button onClick={() => setShowPuestoModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.3rem', cursor: 'pointer' }}>✕</button>
+              <h2 style={{ margin: 0, color: '#100F31', fontSize: '1.1rem', fontWeight: 800 }}>{editingPosition ? 'Editar Puesto / Vacante' : 'Crear Puesto / Vacante'}</h2>
+              <button onClick={() => { setShowPuestoModal(false); setEditingPosition(null); resetForm(); }} style={{ background: 'none', border: 'none', fontSize: '1.3rem', cursor: 'pointer' }}>✕</button>
             </div>
 
-            <form onSubmit={handleCreatePosition} className="cacao-form">
+            <form onSubmit={editingPosition ? handleEditPosition : handleCreatePosition} className="cacao-form">
               {puestoError && <div className="form-error">{puestoError}</div>}
 
               <div className="form-group">
@@ -484,11 +551,11 @@ export default function ReclutamientoPage() {
               </div>
 
               <div className="form-actions" style={{ marginTop: '20px' }}>
-                <button type="button" className="btn-secondary" onClick={() => setShowPuestoModal(false)}>
+                <button type="button" className="btn-secondary" onClick={() => { setShowPuestoModal(false); setEditingPosition(null); resetForm(); }}>
                   Cancelar
                 </button>
                 <button type="submit" className="auth-btn" disabled={savingPuesto}>
-                  {savingPuesto ? 'Guardando en Drive...' : 'Crear Puesto en Drive'}
+                  {savingPuesto ? 'Guardando...' : editingPosition ? 'Guardar Cambios' : 'Crear Puesto en Drive'}
                 </button>
               </div>
             </form>

@@ -14,16 +14,34 @@ export class DriveService {
   private getDriveClient() {
     if (this.driveClient) return this.driveClient;
 
-    const keyPath = path.join(process.cwd(), 'google-service-account.json');
-    if (!fs.existsSync(keyPath)) {
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      const auth = new google.auth.GoogleAuth({
+        scopes: ['https://www.googleapis.com/auth/drive'],
+      });
+      this.driveClient = google.drive({ version: 'v3', auth });
+      return this.driveClient;
+    }
+
+    const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (!credentialsJson) {
+      const keyPath = path.join(process.cwd(), 'google-service-account.json');
+      if (fs.existsSync(keyPath)) {
+        const keyFile = JSON.parse(fs.readFileSync(keyPath, 'utf-8'));
+        const auth = new google.auth.GoogleAuth({
+          credentials: keyFile,
+          scopes: ['https://www.googleapis.com/auth/drive'],
+        });
+        this.driveClient = google.drive({ version: 'v3', auth });
+        return this.driveClient;
+      }
       throw new BadRequestException(
-        'Archivo google-service-account.json no encontrado. Colócalo en la raíz del backend.',
+        'Google Drive no configurado. Configura GOOGLE_APPLICATION_CREDENTIALS o GOOGLE_SERVICE_ACCOUNT_JSON.',
       );
     }
 
-    const keyFile = JSON.parse(fs.readFileSync(keyPath, 'utf-8'));
+    const credentials = JSON.parse(credentialsJson);
     const auth = new google.auth.GoogleAuth({
-      credentials: keyFile,
+      credentials,
       scopes: ['https://www.googleapis.com/auth/drive'],
     });
 
@@ -70,7 +88,7 @@ export class DriveService {
     });
   }
 
-  async syncFolder(companyId: number) {
+  async syncFolder(companyId: number, userId: number) {
     if (!companyId) throw new BadRequestException('Usuario sin empresa asociada');
     const drive = this.getDriveClient();
     const config = await this.prisma.folderConfig.findFirst({ where: { companyId } });
@@ -111,7 +129,7 @@ export class DriveService {
                   positionApplied: folderType === 'CUSTODIAS' ? 'Custodio' : 'Personal Administrativo',
                   columnId: firstCol?.id || null,
                   companyId,
-                  createdBy: 1,
+                  createdBy: userId,
                 },
               });
               result.employees++;
@@ -476,6 +494,56 @@ export class DriveService {
     return position;
   }
 
+  async updateJobPosition(
+    id: number,
+    dto: { puesto?: string; descripcion?: string; camposRequeridos?: string[]; archivosRequeridos?: string[] },
+    companyId: number
+  ) {
+    if (!companyId) throw new BadRequestException('Usuario sin empresa asociada');
+    const position = await this.prisma.jobPosition.findFirst({ where: { id, companyId } });
+    if (!position) throw new BadRequestException('Puesto no encontrado.');
+
+    const updateData: any = {};
+    if (dto.puesto !== undefined) updateData.puesto = dto.puesto.trim();
+    if (dto.descripcion !== undefined) updateData.descripcion = dto.descripcion?.trim() || null;
+    if (dto.camposRequeridos !== undefined) updateData.camposRequeridos = dto.camposRequeridos;
+    if (dto.archivosRequeridos !== undefined) updateData.archivosRequeridos = dto.archivosRequeridos;
+
+    const updated = await this.prisma.jobPosition.update({
+      where: { id },
+      data: updateData,
+    });
+
+    // Update JSON file in Google Drive if it exists
+    if (position.driveFileId) {
+      try {
+        const drive = this.getDriveClient();
+        const jsonPayload = JSON.stringify(
+          {
+            id: updated.id,
+            puesto: updated.puesto,
+            descripcion: updated.descripcion || '',
+            camposRequeridos: updated.camposRequeridos || [],
+            archivosRequeridos: updated.archivosRequeridos || [],
+            createdAt: updated.createdAt,
+            updatedAt: updated.updatedAt,
+          },
+          null,
+          2
+        );
+        await drive.files.update({
+          fileId: position.driveFileId,
+          media: { mimeType: 'application/json', body: jsonPayload },
+          supportsAllDrives: true,
+        });
+      } catch (err) {
+        this.logger.warn(`No se pudo actualizar el archivo JSON en Drive: ${err.message}`);
+      }
+    }
+
+    return updated;
+  }
+
   async deleteJobPosition(id: number, companyId: number) {
     if (!companyId) throw new BadRequestException('Usuario sin empresa asociada');
     const position = await this.prisma.jobPosition.findFirst({ where: { id, companyId } });
@@ -496,10 +564,37 @@ export class DriveService {
   async syncReclutamientoCandidates(companyId: number) {
     if (!companyId) throw new BadRequestException('Usuario sin empresa asociada');
 
-    const recFolderId = await this.getReclutamientoFolderId(companyId);
+    const config = await this.prisma.folderConfig.findFirst({ where: { companyId } });
+    if (!config) {
+      return {
+        puestosCount: 0,
+        candidatosCount: 0,
+        candidatos: [],
+        warning: 'No hay carpeta de Drive configurada. Configura la carpeta raíz de Recursos Humanos primero.',
+      };
+    }
+
+    let recFolderId: string;
+    try {
+      recFolderId = await this.getReclutamientoFolderId(companyId);
+    } catch (err) {
+      return {
+        puestosCount: 0,
+        candidatosCount: 0,
+        candidatos: [],
+        warning: `No se pudo acceder a la carpeta de Reclutamiento: ${err.message}`,
+      };
+    }
+
     const jobPositions = await this.getJobPositions(companyId);
 
-    const subFolders = await this.listSubFolders(recFolderId);
+    let subFolders: any[] = [];
+    try {
+      subFolders = await this.listSubFolders(recFolderId);
+    } catch (err) {
+      this.logger.warn(`Error listando subcarpetas de Reclutamiento: ${err.message}`);
+    }
+
     const drive = this.getDriveClient();
     const candidateList: any[] = [];
 
