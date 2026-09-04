@@ -6,7 +6,11 @@ import { CandidateService } from './services/candidate.service';
 import { ContractService } from './services/contract.service';
 import { CertificationService } from './services/certification.service';
 import { LogService } from './services/log.service';
-import { DriveService } from './services/drive.service';
+import { CreateKanbanColumnDto, UpdateKanbanColumnDto, ReorderKanbanDto } from './dto/kanban.dto';
+import { CreateCandidateDto, UpdateCandidateDto, MoveCandidateDto } from './dto/candidate.dto';
+import { CreateContractTemplateDto, UpdateContractDto, GenerateContractDto } from './dto/contract.dto';
+import { CreateCertificationDto, UpdateCertificationDto } from './dto/certification.dto';
+import { CreateLogTemplateDto, CreateLogEntryDto } from './dto/log.dto';
 
 @Controller('personal')
 @UseGuards(AuthGuard('jwt'))
@@ -17,8 +21,7 @@ export class PersonalController {
     private readonly candidateService: CandidateService,
     private readonly contractService: ContractService,
     private readonly certificationService: CertificationService,
-    private readonly logService: LogService,
-    private readonly driveService: DriveService,
+    private readonly logService: LogService
   ) {}
 
   @Get('dashboard')
@@ -32,12 +35,12 @@ export class PersonalController {
   }
 
   @Post('kanban/columns')
-  createColumn(@Body() body: { name: string; color?: string }, @Req() req: any) {
+  createColumn(@Body() body: CreateKanbanColumnDto, @Req() req: any) {
     return this.kanbanService.createColumn(body, req.user.companyId);
   }
 
   @Patch('kanban/columns/:id')
-  updateColumn(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+  updateColumn(@Param('id') id: string, @Body() body: UpdateKanbanColumnDto, @Req() req: any) {
     return this.kanbanService.updateColumn(+id, body, req.user.companyId);
   }
 
@@ -47,7 +50,7 @@ export class PersonalController {
   }
 
   @Post('kanban/reorder')
-  reorderColumns(@Body() body: { columns: { id: number; position: number }[] }, @Req() req: any) {
+  reorderColumns(@Body() body: ReorderKanbanDto, @Req() req: any) {
     return this.kanbanService.reorderColumns(body.columns, req.user.companyId);
   }
 
@@ -62,17 +65,17 @@ export class PersonalController {
   }
 
   @Post('candidates')
-  createCandidate(@Body() body: any, @Req() req: any) {
+  createCandidate(@Body() body: CreateCandidateDto, @Req() req: any) {
     return this.candidateService.create(body, req.user.companyId, req.user.userId);
   }
 
   @Patch('candidates/:id')
-  updateCandidate(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+  updateCandidate(@Param('id') id: string, @Body() body: UpdateCandidateDto, @Req() req: any) {
     return this.candidateService.update(+id, body, req.user.companyId);
   }
 
   @Patch('candidates/:id/move')
-  moveCandidate(@Param('id') id: string, @Body() body: { columnId: number | null }, @Req() req: any) {
+  moveCandidate(@Param('id') id: string, @Body() body: MoveCandidateDto, @Req() req: any) {
     return this.candidateService.move(+id, body.columnId, req.user.companyId, req.user.userId);
   }
 
@@ -87,7 +90,7 @@ export class PersonalController {
   }
 
   @Post('contracts/templates')
-  createTemplate(@Body() body: any, @Req() req: any) {
+  createTemplate(@Body() body: CreateContractTemplateDto, @Req() req: any) {
     return this.contractService.createTemplate(body, req.user.companyId, req.user.userId);
   }
 
@@ -97,7 +100,7 @@ export class PersonalController {
   }
 
   @Post('contracts/generate')
-  generateContract(@Body() body: { candidateId: number; templateId: number }, @Req() req: any) {
+  generateContract(@Body() body: GenerateContractDto, @Req() req: any) {
     return this.contractService.generateContract(body.candidateId, body.templateId, req.user.companyId, req.user.userId);
   }
 
@@ -107,7 +110,7 @@ export class PersonalController {
   }
 
   @Patch('contracts/:id')
-  updateContract(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+  updateContract(@Param('id') id: string, @Body() body: UpdateContractDto, @Req() req: any) {
     return this.contractService.updateContract(+id, body, req.user.companyId);
   }
 
@@ -117,12 +120,12 @@ export class PersonalController {
   }
 
   @Post('certifications')
-  createCertification(@Body() body: any, @Req() req: any) {
+  createCertification(@Body() body: CreateCertificationDto, @Req() req: any) {
     return this.certificationService.create(body, req.user.companyId, req.user.userId);
   }
 
   @Patch('certifications/:id')
-  updateCertification(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+  updateCertification(@Param('id') id: string, @Body() body: UpdateCertificationDto, @Req() req: any) {
     return this.certificationService.update(+id, body, req.user.companyId);
   }
 
@@ -142,7 +145,7 @@ export class PersonalController {
   }
 
   @Post('logs/templates')
-  createLogTemplate(@Body() body: any, @Req() req: any) {
+  createLogTemplate(@Body() body: CreateLogTemplateDto, @Req() req: any) {
     return this.logService.createTemplate(body, req.user.companyId, req.user.userId);
   }
 
@@ -157,7 +160,7 @@ export class PersonalController {
   }
 
   @Post('logs/entries')
-  createLogEntry(@Body() body: any, @Req() req: any) {
+  createLogEntry(@Body() body: CreateLogEntryDto, @Req() req: any) {
     return this.logService.createEntry(body, req.user.companyId, req.user.userId);
   }
 
@@ -166,58 +169,4 @@ export class PersonalController {
     return this.logService.deleteEntry(+id, req.user.companyId);
   }
 
-  @Get('drive/config')
-  getDriveConfig(@Req() req: any) {
-    return this.driveService.getConfig(req.user.companyId);
-  }
-
-  @Post('drive/config')
-  saveDriveConfig(@Body() body: { driveFolderId: string; driveFolderName: string }, @Req() req: any) {
-    return this.driveService.saveConfig(req.user.companyId, body.driveFolderId, body.driveFolderName);
-  }
-
-  @Post('drive/test')
-  testDriveConnection(@Req() req: any) {
-    return this.driveService.testConnection(req.user.companyId);
-  }
-
-  @Post('drive/sync')
-  syncDriveFolder(@Req() req: any) {
-    return this.driveService.syncFolder(req.user.companyId);
-  }
-
-  @Get('drive/compliance/:cedula')
-  getDriveCompliance(@Param('cedula') cedula: string, @Req() req: any) {
-    return this.driveService.getCompliance(cedula, req.user.companyId);
-  }
-
-  @Get('drive/tree')
-  getDriveTree(@Req() req: any) {
-    return this.driveService.getTree(req.user.companyId);
-  }
-
-  @Delete('drive/employee/:cedula')
-  deleteDriveEmployee(@Param('cedula') cedula: string, @Req() req: any) {
-    return this.driveService.deleteEmployeeByCedula(cedula, req.user.companyId);
-  }
-
-  @Get('document-types')
-  getDocumentTypes(@Req() req: any) {
-    return this.driveService.getDocumentTypes(req.user.companyId);
-  }
-
-  @Post('document-types')
-  createDocumentType(@Body() body: { name: string; folder: string; required?: boolean }, @Req() req: any) {
-    return this.driveService.createDocumentType(body, req.user.companyId);
-  }
-
-  @Patch('document-types/:id')
-  updateDocumentType(@Param('id') id: string, @Body() body: { name?: string; required?: boolean }, @Req() req: any) {
-    return this.driveService.updateDocumentType(+id, body, req.user.companyId);
-  }
-
-  @Delete('document-types/:id')
-  deleteDocumentType(@Param('id') id: string, @Req() req: any) {
-    return this.driveService.deleteDocumentType(+id, req.user.companyId);
-  }
 }

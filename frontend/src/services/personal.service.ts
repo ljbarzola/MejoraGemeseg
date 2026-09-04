@@ -48,5 +48,6 @@ export const deleteDocumentType = (id: number) => api.delete(`/personal/document
 
 export const getJobPositions = () => api.get('/personal/reclutamiento/puestos').then(r => r.data);
 export const createJobPosition = (data: { puesto: string; descripcion?: string; camposRequeridos?: string[]; archivosRequeridos?: string[] }) => api.post('/personal/reclutamiento/puestos', data).then(r => r.data);
+export const updateJobPosition = (id: number, data: { puesto?: string; descripcion?: string; camposRequeridos?: string[]; archivosRequeridos?: string[] }) => api.patch(`/personal/reclutamiento/puestos/${id}`, data).then(r => r.data);
 export const deleteJobPosition = (id: number) => api.delete(`/personal/reclutamiento/puestos/${id}`);
 export const syncReclutamientoCandidates = () => api.post('/personal/reclutamiento/sync').then(r => r.data);

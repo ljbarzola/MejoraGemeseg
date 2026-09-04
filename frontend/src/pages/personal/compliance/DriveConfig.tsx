@@ -22,7 +22,9 @@ export default function DriveConfig() {
           setFolderName(data.driveFolderName);
         }
       })
-      .catch(() => {})
+      .catch((err: any) => {
+        setError(err.response?.data?.message || 'No se pudo cargar la configuración de Drive');
+      })
       .finally(() => setLoading(false));
   }, []);
 

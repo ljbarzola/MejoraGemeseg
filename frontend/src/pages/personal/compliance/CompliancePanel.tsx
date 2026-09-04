@@ -10,6 +10,7 @@ export default function CompliancePanel() {
   const [compliance, setCompliance] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState('');
   const [loadingCompliance, setLoadingCompliance] = useState(false);
 
   const loadTree = () => {
@@ -21,10 +22,12 @@ export default function CompliancePanel() {
 
   const handleSync = async () => {
     setSyncing(true);
+    setSyncError('');
     try {
       await syncDriveFolder();
       loadTree();
-    } catch {
+    } catch (err: any) {
+      setSyncError(err.response?.data?.message || 'No se pudo sincronizar con Google Drive. Verifica la configuración de Drive.');
     } finally {
       setSyncing(false);
     }
@@ -82,6 +85,10 @@ export default function CompliancePanel() {
           </button>
         </div>
       </div>
+
+      {syncError && (
+        <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{syncError}</div>
+      )}
 
       <div style={{ display: 'flex', gap: '24px', marginTop: '20px' }}>
         <div style={{ width: '320px', flexShrink: 0 }}>

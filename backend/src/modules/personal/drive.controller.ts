@@ -1,6 +1,12 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { DriveService } from './services/drive.service';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
+import { SaveDriveConfigDto } from './dto/drive.dto';
+import { CreateDocumentTypeDto, UpdateDocumentTypeDto } from './dto/document-type.dto';
+import { CreateJobPositionDto, UpdateJobPositionDto } from './dto/job-position.dto';
 
 @Controller('personal')
 @UseGuards(AuthGuard('jwt'))
@@ -13,7 +19,9 @@ export class DriveController {
   }
 
   @Post('drive/config')
-  saveConfig(@Body() body: { driveFolderId: string; driveFolderName: string }, @Req() req: any) {
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN)
+  saveConfig(@Body() body: SaveDriveConfigDto, @Req() req: any) {
     return this.driveService.saveConfig(req.user.companyId, body.driveFolderId, body.driveFolderName);
   }
 
@@ -24,7 +32,7 @@ export class DriveController {
 
   @Post('drive/sync')
   syncFolder(@Req() req: any) {
-    return this.driveService.syncFolder(req.user.companyId);
+    return this.driveService.syncFolder(req.user.companyId, req.user.userId);
   }
 
   @Get('drive/compliance/:cedula')
@@ -43,16 +51,18 @@ export class DriveController {
   }
 
   @Post('document-types')
-  createDocumentType(@Body() body: { name: string; folder: string; required?: boolean }, @Req() req: any) {
+  createDocumentType(@Body() body: CreateDocumentTypeDto, @Req() req: any) {
     return this.driveService.createDocumentType(body, req.user.companyId);
   }
 
   @Patch('document-types/:id')
-  updateDocumentType(@Param('id') id: string, @Body() body: { name?: string; required?: boolean }, @Req() req: any) {
+  updateDocumentType(@Param('id') id: string, @Body() body: UpdateDocumentTypeDto, @Req() req: any) {
     return this.driveService.updateDocumentType(+id, body, req.user.companyId);
   }
 
   @Delete('document-types/:id')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN)
   deleteDocumentType(@Param('id') id: string, @Req() req: any) {
     return this.driveService.deleteDocumentType(+id, req.user.companyId);
   }
@@ -65,10 +75,19 @@ export class DriveController {
 
   @Post('reclutamiento/puestos')
   createJobPosition(
-    @Body() body: { puesto: string; descripcion?: string; camposRequeridos?: string[]; archivosRequeridos?: string[] },
+    @Body() body: CreateJobPositionDto,
     @Req() req: any
   ) {
     return this.driveService.createJobPosition(body, req.user.companyId);
+  }
+
+  @Patch('reclutamiento/puestos/:id')
+  updateJobPosition(
+    @Param('id') id: string,
+    @Body() body: UpdateJobPositionDto,
+    @Req() req: any
+  ) {
+    return this.driveService.updateJobPosition(+id, body, req.user.companyId);
   }
 
   @Delete('reclutamiento/puestos/:id')
@@ -79,5 +98,12 @@ export class DriveController {
   @Post('reclutamiento/sync')
   syncReclutamientoCandidates(@Req() req: any) {
     return this.driveService.syncReclutamientoCandidates(req.user.companyId);
+  }
+
+  @Delete('drive/employee/:cedula')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN)
+  deleteDriveEmployee(@Param('cedula') cedula: string, @Req() req: any) {
+    return this.driveService.deleteEmployeeByCedula(cedula, req.user.companyId);
   }
 }
