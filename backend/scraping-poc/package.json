@@ -1,0 +1,12 @@
+{
+  "name": "gemeseg-scraping-poc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Spike Sprint 2 RRHH: PoC AISLADO de viabilidad de scraping SICOSEP/SUT. No es parte del backend Nest (sin dependencias, solo fetch nativo de Node 18+).",
+  "scripts": {
+    "probe": "node run.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
