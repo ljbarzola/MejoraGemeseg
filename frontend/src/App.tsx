@@ -70,6 +70,11 @@ const VisitasPage = lazy(() => import('./pages/ventas/VisitasPage'));
 const LeadsPage = lazy(() => import('./pages/ventas/LeadsPage'));
 const VentasReportes = lazy(() => import('./pages/ventas/VentasReportes'));
 const WebhookConfig = lazy(() => import('./pages/ventas/WebhookConfig'));
+const TemplateList = lazy(() => import('./pages/ventas/TemplateList'));
+const TemplateConfig = lazy(() => import('./pages/ventas/TemplateConfig'));
+const ContratosList = lazy(() => import('./pages/ventas/ContratosList'));
+const ContratoForm = lazy(() => import('./pages/ventas/ContratoForm'));
+const ContratoResult = lazy(() => import('./pages/ventas/ContratoResult'));
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -292,6 +297,13 @@ function AppInner() {
         <Route path="/ventas/leads" element={<ProtectedLayout><SectionRoute section="VENTAS"><LeadsPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/reportes" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasReportes /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/webhook-config" element={<ProtectedLayout><SectionRoute section="VENTAS"><WebhookConfig /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/contratos" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratosList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/contratos/nuevo" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/contratos/nuevo/:templateId" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/contratos/:id" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoResult /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/contratos/configuracion" element={<ProtectedLayout><SectionRoute section="VENTAS"><TemplateConfig /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/contratos/configuracion/:id" element={<ProtectedLayout><SectionRoute section="VENTAS"><TemplateConfig /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/contratos/plantillas" element={<ProtectedLayout><SectionRoute section="VENTAS"><TemplateList /></SectionRoute></ProtectedLayout>} />
       </Routes>
       </Suspense>
 

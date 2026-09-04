@@ -92,7 +92,7 @@ export default function VentasDashboard() {
         <div className="admin-section" style={{ borderLeft: '4px solid #d69e2e', padding: '16px' }}>
           <div style={{ fontSize: '0.8rem', color: '#718096', fontWeight: 600 }}>VISITAS EN CAMPO ESTA SEMANA</div>
           <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#d69e2e', marginTop: '4px' }}>
-            {sellers.reduce((acc, s) => acc + s.completedVisits, 0)}
+            {sellers.reduce((acc, s) => acc + (s.completedVisits || 0), 0)}
           </div>
           <div style={{ fontSize: '0.78rem', color: '#718096', marginTop: '4px' }}>
             de {sellers.reduce((acc, s) => acc + s.goal, 0)} visitas obligatorias de meta
@@ -145,7 +145,7 @@ export default function VentasDashboard() {
                 <div style={{ background: '#edf2f7', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
                   <div
                     style={{
-                      width: `${Math.min(s.progressPct, 100)}%`, height: '100%', borderRadius: '4px',
+                      width: `${Math.min(s.progressPct || 0, 100)}%`, height: '100%', borderRadius: '4px',
                       background: s.statusColor === 'GREEN' ? '#38a169' : s.statusColor === 'YELLOW' ? '#d69e2e' : '#e53e3e',
                       transition: 'width 0.4s',
                     }}

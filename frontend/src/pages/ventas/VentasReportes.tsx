@@ -39,7 +39,7 @@ export default function VentasReportes() {
     const rows = visits.map((v) => [
       `"${v.clientName.replace(/"/g, '""')}"`,
       `"${(v.user?.fullName || '').replace(/"/g, '""')}"`,
-      `"${new Date(v.visitDate).toLocaleDateString('es-EC')}"`,
+      `"${v.visitDate ? new Date(v.visitDate).toLocaleDateString('es-EC') : ''}"`,
       `"${v.status}"`,
       v.isVerified ? 'SI' : 'NO',
       `"${(v.commercialOffer || '').replace(/"/g, '""')}"`,
@@ -160,7 +160,7 @@ export default function VentasReportes() {
                   <tr key={v.id}>
                     <td style={{ fontWeight: 600 }}>{v.clientName}</td>
                     <td>{v.user?.fullName || '—'}</td>
-                    <td>{new Date(v.visitDate).toLocaleDateString('es-EC')}</td>
+                    <td>{v.visitDate ? new Date(v.visitDate).toLocaleDateString('es-EC') : '—'}</td>
                     <td>{v.isVerified ? '✅ Verificado GPS' : 'Pendiente'}</td>
                     <td>{v.commercialOffer || '—'}</td>
                     <td style={{ fontWeight: 600 }}>${(v.quotedAmount || 0).toFixed(2)}</td>
