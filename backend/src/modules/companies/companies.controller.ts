@@ -15,9 +15,10 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage, FileFilterCallback } from 'multer';
+import { FileFilterCallback } from 'multer';
 import { Request } from 'express';
-import { extname, join } from 'path';
+import { memoryStorage } from 'multer';
+import { extname } from 'path';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
@@ -25,17 +26,7 @@ import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 
-const logoStorage = diskStorage({
-  destination: join(__dirname, '..', '..', '..', 'uploads', 'logos'),
-  filename: (
-    _req: Request,
-    file: Express.Multer.File,
-    cb: (error: Error | null, filename: string) => void,
-  ) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `company-${uniqueSuffix}${extname(file.originalname)}`);
-  },
-});
+const logoStorage = memoryStorage();
 
 const logoFilter = (
   _req: Request,
@@ -138,11 +129,11 @@ export class CompaniesController {
   uploadLogo(
     @Param('id', ParseIntPipe) id: number,
     @Req() req: any,
-    @UploadedFile() file: { filename: string; mimetype: string; size: number },
+    @UploadedFile() file: Express.Multer.File,
   ) {
     if (req.user.companyId && req.user.companyId !== id) {
       throw new ForbiddenException('Solo puedes cambiar el logo de tu empresa');
     }
-    return this.companiesService.uploadLogo(id, file.filename);
+    return this.companiesService.uploadLogo(id, file);
   }
 }

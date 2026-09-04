@@ -8,9 +8,16 @@ export class CacheService implements OnModuleDestroy {
   private readonly DEFAULT_TTL = 60;
 
   constructor() {
+    const redisUrl = process.env.REDIS_URL;
     const host = process.env.REDIS_HOST;
     const port = process.env.REDIS_PORT;
-    if (host) {
+
+    if (redisUrl) {
+      this.redis = new Redis(redisUrl);
+      this.redis.on('error', (err) =>
+        this.logger.warn(`Redis error: ${err.message}`),
+      );
+    } else if (host) {
       this.redis = new Redis({
         host,
         port: Number(port) || 6379,

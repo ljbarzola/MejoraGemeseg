@@ -2,13 +2,16 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
+import { extname } from 'path';
 
 @Injectable()
 export class CompaniesService {
+  private readonly logger = new Logger(CompaniesService.name);
   constructor(private prisma: PrismaService) {}
 
   async findAll() {
@@ -81,11 +84,40 @@ export class CompaniesService {
     return this.prisma.company.delete({ where: { id } });
   }
 
-  async uploadLogo(id: number, filename: string) {
+  async uploadLogo(id: number, file: Express.Multer.File) {
     await this.findOne(id);
+
+    const bucketName = process.env.GCS_BUCKET;
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const fileName = `logos/company-${uniqueSuffix}${extname(file.originalname)}`;
+
+    if (bucketName) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { Storage } = require('@google-cloud/storage');
+        const storage = new Storage();
+        const bucket = storage.bucket(bucketName);
+        const blob = bucket.file(fileName);
+
+        await blob.save(file.buffer, {
+          metadata: { contentType: file.mimetype },
+          public: true,
+        });
+
+        const publicUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
+        return this.prisma.company.update({
+          where: { id },
+          data: { logoUrl: publicUrl },
+        });
+      } catch (error) {
+        this.logger.error(`Error subiendo logo a GCS: ${error.message}`);
+      }
+    }
+
+    this.logger.warn('GCS no configurado, logo no persistido');
     return this.prisma.company.update({
       where: { id },
-      data: { logoUrl: `/uploads/logos/${filename}` },
+      data: { logoUrl: '/resources/logo.jpg' },
     });
   }
 }

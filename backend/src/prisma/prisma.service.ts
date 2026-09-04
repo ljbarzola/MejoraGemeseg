@@ -9,11 +9,14 @@ export class PrismaService
 {
   constructor() {
     const databaseUrl = process.env.DATABASE_URL || '';
-    const isRemote =
-      databaseUrl.includes('supabase') || databaseUrl.includes('pooler');
+    const useSsl =
+      databaseUrl.includes('supabase') ||
+      databaseUrl.includes('pooler') ||
+      databaseUrl.includes('cloudsql') ||
+      process.env.DATABASE_SSL === 'true';
     const adapter = new PrismaPg({
       connectionString: databaseUrl,
-      ...(isRemote ? { ssl: { rejectUnauthorized: false } } : {}),
+      ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
     });
     super({ adapter });
   }
