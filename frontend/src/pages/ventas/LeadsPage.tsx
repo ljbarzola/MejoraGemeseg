@@ -112,7 +112,7 @@ export default function LeadsPage() {
 
   const filtered = leads.filter(
     (l) =>
-      l.fullName.toLowerCase().includes(search.toLowerCase()) ||
+      l.fullName?.toLowerCase().includes(search.toLowerCase()) ||
       l.email?.toLowerCase().includes(search.toLowerCase()) ||
       l.companyName?.toLowerCase().includes(search.toLowerCase()) ||
       l.campaignName?.toLowerCase().includes(search.toLowerCase()),
@@ -172,7 +172,7 @@ export default function LeadsPage() {
               </thead>
               <tbody>
                 {filtered.map((l) => {
-                  const srcBadge = SOURCE_BADGES[l.source] || SOURCE_BADGES.MANUAL;
+                  const srcBadge = SOURCE_BADGES[l.source as keyof typeof SOURCE_BADGES] || SOURCE_BADGES.MANUAL;
                   const stBadge = STATUS_LABELS[l.status] || STATUS_LABELS.NEW;
 
                   return (

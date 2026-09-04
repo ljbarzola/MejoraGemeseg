@@ -193,7 +193,7 @@ export default function VisitasPage() {
                       {v.clientPhone && <div style={{ fontSize: '0.78rem', color: '#718096' }}>📞 {v.clientPhone}</div>}
                     </td>
                     <td>{v.user?.fullName || '—'}</td>
-                    <td>{new Date(v.visitDate).toLocaleDateString('es-EC')}</td>
+                    <td>{v.visitDate ? new Date(v.visitDate).toLocaleDateString('es-EC') : '—'}</td>
                     <td>
                       {v.isVerified ? (
                         <div style={{ color: '#276749', fontSize: '0.82rem', fontWeight: 600 }}>

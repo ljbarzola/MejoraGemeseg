@@ -54,6 +54,7 @@ export default function Sidebar() {
     { label: 'Certificaciones', path: '/personal/certifications', icon: '🎓' },
     { label: 'Contratos', path: '/personal/contracts', icon: '📄' },
     { label: 'Cumplimiento', path: '/personal/compliance', icon: '🔍' },
+    { label: 'Verificación SUT/SICOSEP', path: '/personal/verificacion', icon: '✅' },
   ];
 
   const bitacorasItems = [
@@ -69,8 +70,11 @@ export default function Sidebar() {
     { label: 'Dashboard', path: '/ventas', icon: '📊' },
     { label: 'Planificación y Campo', path: '/ventas/visitas', icon: '📍' },
     { label: 'Prospectos CRM', path: '/ventas/leads', icon: '🎯' },
+    { label: 'Contratos', path: '/ventas/contratos', icon: '📄' },
+    { label: 'Plantillas', path: '/ventas/contratos/plantillas', icon: '📋' },
+    { label: 'Configuración', path: '/ventas/contratos/configuracion', icon: '⚙️' },
     { label: 'Reportes', path: '/ventas/reportes', icon: '📈' },
-    { label: 'Config Webhook', path: '/ventas/webhook-config', icon: '⚙️' },
+    { label: 'Config Webhook', path: '/ventas/webhook-config', icon: '🔗' },
   ];
 
   const custodiasSubItems = [

@@ -23,18 +23,18 @@ export default function DriveConfig() {
         }
       })
       .catch((err: any) => {
-        setError(err.response?.data?.message || 'No se pudo cargar la configuraci�n de Drive');
+        setError(err.response?.data?.message || 'No se pudo cargar la configuraci�n de Drive');
       })
       .finally(() => setLoading(false));
   }, []);
 
   const handleTest = async () => {
-    if (!folderId.trim()) { setError('Ingresa el ID de la carpeta'); return; }
+    if (!folderId.trim()) { setError('Escribe el ID de la carpeta raíz para probar la conexión'); return; }
     setTesting(true);
     setTestResult(null);
     setError('');
     try {
-      const result = await testDriveConnection();
+      const result = await testDriveConnection({ driveFolderId: folderId.trim() });
       setTestResult(result);
     } catch (err: any) {
       setTestResult({ success: false, message: err.response?.data?.message || 'Error al probar conexión' });
@@ -52,7 +52,11 @@ export default function DriveConfig() {
       await saveDriveConfig({ driveFolderId: folderId, driveFolderName: folderName });
       setConfig({ driveFolderId: folderId, driveFolderName: folderName });
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al guardar');
+      if (err.response?.status === 403) {
+        setError('Solo un administrador puede guardar la configuración de Drive. Pide a un admin que la guarde.');
+      } else {
+        setError(err.response?.data?.message || 'Error al guardar');
+      }
     } finally {
       setSaving(false);
     }

@@ -116,7 +116,7 @@ export default function WebhookConfig() {
                       </code>
                       <button
                         className="btn-secondary-sm"
-                        onClick={() => copyToClipboard(k.apiKey)}
+                        onClick={() => copyToClipboard(k.apiKey || k.key)}
                         style={{ fontSize: '0.72rem' }}
                       >
                         {copiedKey === k.apiKey ? '✓ Copiado' : 'Copiar'}

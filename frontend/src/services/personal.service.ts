@@ -36,7 +36,7 @@ export const deleteLogEntry = (id: number) => api.delete(`/personal/logs/entries
 
 export const getDriveConfig = () => api.get('/personal/drive/config').then(r => r.data);
 export const saveDriveConfig = (data: { driveFolderId: string; driveFolderName: string }) => api.post('/personal/drive/config', data).then(r => r.data);
-export const testDriveConnection = () => api.post('/personal/drive/test').then(r => r.data);
+export const testDriveConnection = (data?: { driveFolderId?: string }) => api.post('/personal/drive/test', data || {}).then(r => r.data);
 export const syncDriveFolder = () => api.post('/personal/drive/sync').then(r => r.data);
 export const getDriveCompliance = (cedula: string) => api.get(`/personal/drive/compliance/${cedula}`).then(r => r.data);
 export const getDriveTree = () => api.get('/personal/drive/tree').then(r => r.data);
@@ -51,3 +51,8 @@ export const createJobPosition = (data: { puesto: string; descripcion?: string; 
 export const updateJobPosition = (id: number, data: { puesto?: string; descripcion?: string; camposRequeridos?: string[]; archivosRequeridos?: string[] }) => api.patch(`/personal/reclutamiento/puestos/${id}`, data).then(r => r.data);
 export const deleteJobPosition = (id: number) => api.delete(`/personal/reclutamiento/puestos/${id}`);
 export const syncReclutamientoCandidates = () => api.post('/personal/reclutamiento/sync').then(r => r.data);
+
+export const getVerifications = (cedula?: string) => api.get('/personal/verificacion', { params: cedula ? { cedula } : {} }).then(r => r.data);
+export const createVerification = (data: { cedula: string; platform: string; status?: string; notes?: string }) => api.post('/personal/verificacion', data).then(r => r.data);
+export const updateVerification = (id: number, data: { platform?: string; status?: string; notes?: string }) => api.patch(`/personal/verificacion/${id}`, data).then(r => r.data);
+export const deleteVerification = (id: number) => api.delete(`/personal/verificacion/${id}`);

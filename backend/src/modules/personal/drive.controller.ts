@@ -7,6 +7,7 @@ import { UserRole } from '@prisma/client';
 import { SaveDriveConfigDto } from './dto/drive.dto';
 import { CreateDocumentTypeDto, UpdateDocumentTypeDto } from './dto/document-type.dto';
 import { CreateJobPositionDto, UpdateJobPositionDto } from './dto/job-position.dto';
+import { TestDriveConnectionDto } from './dto/verification.dto';
 
 @Controller('personal')
 @UseGuards(AuthGuard('jwt'))
@@ -26,8 +27,8 @@ export class DriveController {
   }
 
   @Post('drive/test')
-  testConnection(@Req() req: any) {
-    return this.driveService.testConnection(req.user.companyId);
+  testConnection(@Body() body: TestDriveConnectionDto, @Req() req: any) {
+    return this.driveService.testConnection(req.user.companyId, body.driveFolderId);
   }
 
   @Post('drive/sync')
