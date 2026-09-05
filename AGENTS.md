@@ -78,6 +78,9 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 - **SIEMPRE hacer `git pull origin main` antes de crear una rama nueva** para evitar conflictos de versiones.
 - Commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`.
 - No hacer push sin confirmacion del usuario.
+- **Autoria de commits:** todos los commits van a nombre del duenio del repo (`Leidy Barzola <sistemas@gemeseg.com>`), nunca a nombre del asistente de IA. Configurar antes de commitear:
+  `git config user.name "Leidy Barzola" && git config user.email "sistemas@gemeseg.com"`
+- **No agregar trailers de atribucion de IA** (`Co-Authored-By: Claude...`, `Generated with...`) en mensajes de commit ni en descripciones de PR.
 
 ## Despliegue en Produccion
 
