@@ -92,7 +92,7 @@ export default function ContractsList() {
 
       <div className="admin-section">
         <h3 style={{ marginBottom: '12px' }}>Plantillas Disponibles</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))', gap: '12px', marginBottom: '24px' }}>
           {templates.length === 0 ? (
             <div style={{ color: '#718096', fontSize: '0.9rem' }}>No hay plantillas. Sube una plantilla DOCX para comenzar.</div>
           ) : templates.map((t) => (
@@ -154,7 +154,7 @@ export default function ContractsList() {
                         <div style={{ display: 'flex', gap: '6px' }}>
                           <button
                             className="btn-secondary"
-                            style={{ fontSize: '0.75rem', padding: '5px 10px' }}
+                            style={{ fontSize: '0.75rem', padding: '8px 10px', whiteSpace: 'nowrap' }}
                             disabled={busyId === `pdf-${c.id}`}
                             onClick={() => download(
                               () => downloadContractPdf(c.id),
@@ -166,7 +166,7 @@ export default function ContractsList() {
                           </button>
                           <button
                             className="btn-secondary"
-                            style={{ fontSize: '0.75rem', padding: '5px 10px' }}
+                            style={{ fontSize: '0.75rem', padding: '8px 10px', whiteSpace: 'nowrap' }}
                             disabled={busyId === `acta-${c.id}`}
                             onClick={() => download(
                               () => downloadActaUniformes(c.id),

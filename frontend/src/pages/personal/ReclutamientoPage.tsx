@@ -227,7 +227,7 @@ export default function ReclutamientoPage() {
             No hay puestos creados. Haz clic en <strong>"+ Crear Puesto / Vacante"</strong> para publicar uno.
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap: '16px' }}>
             {puestos.map((p) => (
               <div
                 key={p.id}

@@ -29,7 +29,7 @@ export default function PersonalDashboard() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: '16px', marginBottom: '24px' }}>
         {cards.map((card) => (
           <div
             key={card.label}
@@ -51,7 +51,7 @@ export default function PersonalDashboard() {
 
       <div className="admin-section">
         <h2 style={{ marginBottom: '16px', color: 'var(--azul-oscuro)' }}>Accesos Directos</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))', gap: '12px' }}>
           {[
             { label: 'Tablero de Reclutamiento', path: '/personal/kanban', icon: '📋' },
             { label: 'Candidatos', path: '/personal/candidates', icon: '👤' },

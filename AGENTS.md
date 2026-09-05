@@ -320,3 +320,23 @@ FRONTEND_URL=http://localhost:5173
 - Hardcodear URLs de API en el frontend (usar `VITE_API_URL`).
 - Usar archivos `.env` en produccion (usar Secret Manager / Firebase Hosting env vars).
 - Crear endpoints sin RolesGuard cuando la accion requiere rol ADMIN.
+
+## Vista movil
+
+El layout base es de escritorio (`.sidebar` fija de 240px + `.main-content` con
+`margin-left`). A partir de `@media (max-width: 768px)` (final de
+`frontend/src/styles.css`) el sidebar pasa a ser un cajon deslizante
+(`.sidebar-mobile-open`) con boton hamburguesa (`.sidebar-fab`) y fondo oscuro
+(`.sidebar-backdrop`), y el contenido ocupa todo el ancho.
+
+Reglas al crear pantallas nuevas:
+- Nada de columnas laterales con `width` fijo sin clase `personal-split-aside`.
+- En rejillas usar `minmax(min(Npx, 100%), 1fr)`, nunca `minmax(Npx, 1fr)`.
+- Campos de formulario a 16px en movil: por debajo, iOS hace zoom al enfocar.
+- Filas de botones: `flexWrap: 'wrap'` y objetivo tactil de ~40px.
+
+## Preview en dispositivo
+
+`./scripts/deploy-preview.sh [canal] [caducidad]` publica el frontend en un canal
+temporal de Firebase Hosting y devuelve una URL publica para abrir en el telefono.
+Requiere `npx firebase-tools login` en la maquina del desarrollador.

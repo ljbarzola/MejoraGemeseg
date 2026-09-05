@@ -137,8 +137,8 @@ export default function CompliancePanel() {
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{syncError}</div>
       )}
 
-      <div style={{ display: 'flex', gap: '24px', marginTop: '20px' }}>
-        <div style={{ width: '320px', flexShrink: 0 }}>
+      <div className="personal-split" style={{ display: 'flex', gap: '24px', marginTop: '20px' }}>
+        <div className="personal-split-aside" style={{ width: '320px', flexShrink: 0 }}>
           <div className="admin-section">
             <h3 style={{ margin: '0 0 16px', fontSize: '1rem', color: 'var(--azul-oscuro)' }}>
               🛡️ Custodios ({(tree.CUSTODIAS || []).length})
@@ -201,7 +201,7 @@ export default function CompliancePanel() {
           </div>
         </div>
 
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: '160px' }}>
           {loadingCompliance ? (
             <div className="admin-section">
               <div className="loading-state">Cargando cumplimiento...</div>
@@ -247,6 +247,7 @@ export default function CompliancePanel() {
                     key={i}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
+                      flexWrap: 'wrap',
                       borderRadius: '10px',
                       background: !doc.required ? '#f7fafc' : doc.status === 'present' ? '#f0fff4' : '#fff5f5',
                       border: `1px solid ${!doc.required ? '#e2e8f0' : doc.status === 'present' ? '#c6f6d5' : '#fed7d7'}`,
@@ -256,7 +257,7 @@ export default function CompliancePanel() {
                     <span style={{ fontSize: '1.2rem' }}>
                       {!doc.required ? '➖' : doc.status === 'present' ? '✅' : '❌'}
                     </span>
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: '160px' }}>
                       <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--azul-oscuro)' }}>
                         {doc.type}
                         {doc.required && <span style={{ color: '#c53030', marginLeft: '4px' }}>*</span>}
@@ -289,7 +290,7 @@ export default function CompliancePanel() {
                           onClick={() => openReview(doc.documentId, doc.fileName, 'APROBADO')}
                           title="Aprobar documento"
                           style={{
-                            padding: '6px 10px', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer',
+                            padding: '10px 14px', borderRadius: '6px', fontSize: '0.8rem', cursor: 'pointer', minHeight: '40px',
                             background: '#c6f6d5', color: '#276749', border: '1px solid #9ae6b4',
                           }}
                         >
@@ -299,7 +300,7 @@ export default function CompliancePanel() {
                           onClick={() => openReview(doc.documentId, doc.fileName, 'RECHAZADO')}
                           title="Rechazar documento (requiere motivo)"
                           style={{
-                            padding: '6px 10px', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer',
+                            padding: '10px 14px', borderRadius: '6px', fontSize: '0.8rem', cursor: 'pointer', minHeight: '40px',
                             background: '#fed7d7', color: '#c53030', border: '1px solid #feb2b2',
                           }}
                         >
@@ -338,11 +339,12 @@ export default function CompliancePanel() {
                         key={i}
                         style={{
                           display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px',
+                          flexWrap: 'wrap',
                           borderRadius: '8px', background: '#fffbeb', border: '1px solid #fefcbf',
                         }}
                       >
                         <span style={{ fontSize: '1rem' }}>📄</span>
-                        <div style={{ flex: 1 }}>
+                        <div style={{ flex: 1, minWidth: '160px' }}>
                           <div style={{ fontWeight: 500, fontSize: '0.85rem', color: '#975a16' }}>
                             {file.fileName}
                           </div>
@@ -370,13 +372,13 @@ export default function CompliancePanel() {
                           <div style={{ display: 'flex', gap: '6px' }}>
                             <button
                               onClick={() => openReview(file.documentId, file.fileName, 'APROBADO')}
-                              style={{ padding: '5px 9px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer', background: '#c6f6d5', color: '#276749', border: '1px solid #9ae6b4' }}
+                              style={{ padding: '10px 12px', borderRadius: '6px', fontSize: '0.78rem', cursor: 'pointer', minHeight: '40px', background: '#c6f6d5', color: '#276749', border: '1px solid #9ae6b4' }}
                             >
                               Aprobar
                             </button>
                             <button
                               onClick={() => openReview(file.documentId, file.fileName, 'RECHAZADO')}
-                              style={{ padding: '5px 9px', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer', background: '#fed7d7', color: '#c53030', border: '1px solid #feb2b2' }}
+                              style={{ padding: '10px 12px', borderRadius: '6px', fontSize: '0.78rem', cursor: 'pointer', minHeight: '40px', background: '#fed7d7', color: '#c53030', border: '1px solid #feb2b2' }}
                             >
                               Rechazar
                             </button>
@@ -420,7 +422,7 @@ export default function CompliancePanel() {
                           <span className="status-badge" style={{ backgroundColor: badge.bg, color: badge.color, fontSize: '0.7rem' }}>
                             {badge.label}
                           </span>
-                          <div style={{ flex: 1 }}>
+                          <div style={{ flex: 1, minWidth: '160px' }}>
                             <div style={{ fontWeight: 500, fontSize: '0.85rem', color: 'var(--azul-oscuro)' }}>{r.fileName}</div>
                             {r.reason && (
                               <div style={{ fontSize: '0.78rem', color: '#4a5568', marginTop: '2px' }}>Motivo: {r.reason}</div>

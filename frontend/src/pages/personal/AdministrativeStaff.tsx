@@ -83,8 +83,8 @@ export default function AdministrativeStaff() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '24px', marginTop: '20px' }}>
-        <div style={{ width: '320px', flexShrink: 0 }}>
+      <div className="personal-split" style={{ display: 'flex', gap: '24px', marginTop: '20px' }}>
+        <div className="personal-split-aside" style={{ width: '320px', flexShrink: 0 }}>
           <div className="admin-section">
             <h3 style={{ margin: '0 0 16px', fontSize: '1rem', color: 'var(--azul-oscuro)' }}>
               👥 Personal ({staff.length})
