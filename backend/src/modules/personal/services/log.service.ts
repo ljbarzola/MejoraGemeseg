@@ -28,7 +28,7 @@ export class LogService {
   async createEntry(data: any, companyId: number, userId: number) {
     // Sin esta comprobacion se podia enlazar la plantilla de otra empresa y
     // getEntries (include: template) devolvia su contenido.
-    if (data.templateId) {
+    if (data.templateId != null) {
       const template = await this.prisma.logTemplate.findFirst({ where: { id: data.templateId, companyId } });
       if (!template) throw new NotFoundException('Plantilla no encontrada');
     }

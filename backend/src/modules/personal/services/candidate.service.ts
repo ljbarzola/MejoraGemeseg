@@ -20,7 +20,9 @@ export class CandidateService {
   async create(data: any, companyId: number, userId: number) {
     const existing = await this.prisma.candidate.findFirst({ where: { companyId, cedula: data.cedula } });
     if (existing) throw new ConflictException('Ya existe un candidato con esa cédula');
-    if (data.columnId) await this.assertColumnBelongsToCompany(data.columnId, companyId);
+    // `!= null` y no truthiness: un columnId 0 debe fallar como columna inexistente,
+    // no colarse hasta un error de clave foranea.
+    if (data.columnId != null) await this.assertColumnBelongsToCompany(data.columnId, companyId);
     return this.prisma.candidate.create({
       data: { ...data, companyId, createdBy: userId },
     });
@@ -41,7 +43,7 @@ export class CandidateService {
     // a SIN_COLUMNA que nunca ocurrio.
     if (columnId === undefined) throw new BadRequestException('columnId es obligatorio (usa null para quitar de la columna)');
 
-    const toColumn = columnId ? await this.assertColumnBelongsToCompany(columnId, companyId) : null;
+    const toColumn = columnId != null ? await this.assertColumnBelongsToCompany(columnId, companyId) : null;
 
     await this.prisma.candidateHistory.create({
       data: {
