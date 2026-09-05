@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuards, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, Res, UseGuards, ParseIntPipe } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import type { Response } from 'express';
 import { PersonalService } from './personal.service';
 import { KanbanService } from './services/kanban.service';
 import { CandidateService } from './services/candidate.service';
@@ -13,6 +14,23 @@ import { CreateContractTemplateDto, UpdateContractDto, GenerateContractDto } fro
 import { CreateCertificationDto, UpdateCertificationDto } from './dto/certification.dto';
 import { CreateLogTemplateDto, CreateLogEntryDto } from './dto/log.dto';
 import { CreateVerificationDto, UpdateVerificationDto } from './dto/verification.dto';
+import { ReviewDocumentDto } from './dto/document-review.dto';
+import { DocumentReviewService } from './services/document-review.service';
+import { ContractPdfService } from './services/contract-pdf.service';
+
+/// Dotacion estandar que GEMESEG entrega al personal operativo. Vive aqui, y no
+/// en base de datos, hasta que RRHH pida configurarla por puesto.
+const UNIFORM_ITEMS = [
+  'Camisa de uniforme',
+  'Pantalón de uniforme',
+  'Chompa / casaca',
+  'Gorra institucional',
+  'Calzado de seguridad',
+  'Credencial de identificación',
+  'Radio de comunicación',
+  'Linterna',
+  'Chaleco reflectivo',
+];
 
 @Controller('personal')
 @UseGuards(AuthGuard('jwt'))
@@ -24,7 +42,9 @@ export class PersonalController {
     private readonly contractService: ContractService,
     private readonly certificationService: CertificationService,
     private readonly logService: LogService,
-    private readonly verificationService: VerificationService
+    private readonly verificationService: VerificationService,
+    private readonly documentReviewService: DocumentReviewService,
+    private readonly contractPdfService: ContractPdfService
   ) {}
 
   @Get('dashboard')
@@ -115,6 +135,48 @@ export class PersonalController {
   @Patch('contracts/:id')
   updateContract(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateContractDto, @Req() req: any) {
     return this.contractService.updateContract(id, body, req.user.companyId);
+  }
+
+  @Get('contracts/:id/pdf')
+  async downloadContractPdf(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Res() res: Response) {
+    const contract = await this.contractService.getContractForDocument(id, req.user.companyId);
+    const pdf = await this.contractPdfService.generarPdfContrato(contract);
+    this.sendPdf(res, pdf, `contrato_${contract.candidate?.cedula || id}.pdf`);
+  }
+
+  @Get('contracts/:id/acta-uniformes')
+  async downloadActaUniformes(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Res() res: Response) {
+    const contract = await this.contractService.getContractForDocument(id, req.user.companyId);
+    const pdf = await this.contractPdfService.generarPdfActaUniformes(contract, UNIFORM_ITEMS);
+    this.sendPdf(res, pdf, `acta_uniformes_${contract.candidate?.cedula || id}.pdf`);
+  }
+
+  private sendPdf(res: Response, pdf: Buffer, filename: string) {
+    // La cedula viene de la base y podria traer comillas o caracteres de control
+    // que rompen la cabecera (res.set lanza ERR_INVALID_CHAR y devuelve un 500).
+    const safeName = filename.replace(/[^\w.\-]/g, '_');
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${safeName}"`,
+      'Content-Length': pdf.length,
+    });
+    res.end(pdf);
+  }
+
+  // SPRINT 3 — Aprobacion/rechazo documental
+  @Patch('documents/:id/review')
+  reviewDocument(@Param('id', ParseIntPipe) id: number, @Body() body: ReviewDocumentDto, @Req() req: any) {
+    return this.documentReviewService.review(id, body, req.user.companyId, req.user.userId);
+  }
+
+  @Get('documents/:cedula/reviews')
+  getDocumentReviews(@Param('cedula') cedula: string, @Req() req: any) {
+    return this.documentReviewService.getHistoryByCedula(cedula, req.user.companyId);
+  }
+
+  @Get('documents/:cedula/list')
+  getDocumentsByCedula(@Param('cedula') cedula: string, @Req() req: any) {
+    return this.documentReviewService.getDocumentsByCedula(cedula, req.user.companyId);
   }
 
   @Get('certifications')

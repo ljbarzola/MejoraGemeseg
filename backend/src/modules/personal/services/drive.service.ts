@@ -247,9 +247,14 @@ export class DriveService {
         type: dt.name,
         required,
         status: matchResult ? 'present' : 'missing',
+        documentId: matchResult?.id || null,
         fileName: matchResult?.fileName || null,
         fileUrl: matchResult?.fileUrl || null,
         uploadedAt: matchResult?.createdAt || null,
+        // Estado del flujo de aprobacion/rechazo documental (Sprint 3).
+        reviewStatus: matchResult?.reviewStatus || null,
+        reviewReason: matchResult?.reviewReason || null,
+        reviewedAt: matchResult?.reviewedAt || null,
       };
     });
 
@@ -263,9 +268,13 @@ export class DriveService {
     const unmatchedFiles = employeeDocs
       .filter((doc) => !matchedFileNames.has(doc.fileName.toLowerCase()))
       .map((doc) => ({
+        documentId: doc.id,
         fileName: doc.fileName,
         fileUrl: doc.fileUrl,
         uploadedAt: doc.createdAt,
+        reviewStatus: doc.reviewStatus,
+        reviewReason: doc.reviewReason,
+        reviewedAt: doc.reviewedAt,
       }));
 
     return {
