@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsNumber } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsEnum } from 'class-validator';
+import { CandidateStatus } from '@prisma/client';
 
 export class CreateCandidateDto {
   @IsString()
@@ -100,9 +101,9 @@ export class UpdateCandidateDto {
   @IsOptional()
   cvUrl?: string;
 
-  @IsString()
+  @IsEnum(CandidateStatus)
   @IsOptional()
-  status?: string;
+  status?: CandidateStatus;
 }
 
 export class MoveCandidateDto {

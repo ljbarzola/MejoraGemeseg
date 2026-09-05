@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuards, ParseIntPipe } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PersonalService } from './personal.service';
 import { KanbanService } from './services/kanban.service';
@@ -43,13 +43,13 @@ export class PersonalController {
   }
 
   @Patch('kanban/columns/:id')
-  updateColumn(@Param('id') id: string, @Body() body: UpdateKanbanColumnDto, @Req() req: any) {
-    return this.kanbanService.updateColumn(+id, body, req.user.companyId);
+  updateColumn(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateKanbanColumnDto, @Req() req: any) {
+    return this.kanbanService.updateColumn(id, body, req.user.companyId);
   }
 
   @Delete('kanban/columns/:id')
-  deleteColumn(@Param('id') id: string, @Req() req: any) {
-    return this.kanbanService.deleteColumn(+id, req.user.companyId);
+  deleteColumn(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.kanbanService.deleteColumn(id, req.user.companyId);
   }
 
   @Post('kanban/reorder')
@@ -63,8 +63,8 @@ export class PersonalController {
   }
 
   @Get('candidates/:id')
-  getCandidate(@Param('id') id: string, @Req() req: any) {
-    return this.candidateService.findOne(+id, req.user.companyId);
+  getCandidate(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.candidateService.findOne(id, req.user.companyId);
   }
 
   @Post('candidates')
@@ -73,18 +73,18 @@ export class PersonalController {
   }
 
   @Patch('candidates/:id')
-  updateCandidate(@Param('id') id: string, @Body() body: UpdateCandidateDto, @Req() req: any) {
-    return this.candidateService.update(+id, body, req.user.companyId);
+  updateCandidate(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateCandidateDto, @Req() req: any) {
+    return this.candidateService.update(id, body, req.user.companyId);
   }
 
   @Patch('candidates/:id/move')
-  moveCandidate(@Param('id') id: string, @Body() body: MoveCandidateDto, @Req() req: any) {
-    return this.candidateService.move(+id, body.columnId, req.user.companyId, req.user.userId);
+  moveCandidate(@Param('id', ParseIntPipe) id: number, @Body() body: MoveCandidateDto, @Req() req: any) {
+    return this.candidateService.move(id, body.columnId, req.user.companyId, req.user.userId);
   }
 
   @Get('candidates/:id/history')
-  getCandidateHistory(@Param('id') id: string, @Req() req: any) {
-    return this.candidateService.getHistory(+id, req.user.companyId);
+  getCandidateHistory(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.candidateService.getHistory(id, req.user.companyId);
   }
 
   @Get('contracts/templates')
@@ -98,8 +98,8 @@ export class PersonalController {
   }
 
   @Delete('contracts/templates/:id')
-  deleteTemplate(@Param('id') id: string, @Req() req: any) {
-    return this.contractService.deleteTemplate(+id, req.user.companyId);
+  deleteTemplate(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.contractService.deleteTemplate(id, req.user.companyId);
   }
 
   @Post('contracts/generate')
@@ -113,8 +113,8 @@ export class PersonalController {
   }
 
   @Patch('contracts/:id')
-  updateContract(@Param('id') id: string, @Body() body: UpdateContractDto, @Req() req: any) {
-    return this.contractService.updateContract(+id, body, req.user.companyId);
+  updateContract(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateContractDto, @Req() req: any) {
+    return this.contractService.updateContract(id, body, req.user.companyId);
   }
 
   @Get('certifications')
@@ -128,13 +128,13 @@ export class PersonalController {
   }
 
   @Patch('certifications/:id')
-  updateCertification(@Param('id') id: string, @Body() body: UpdateCertificationDto, @Req() req: any) {
-    return this.certificationService.update(+id, body, req.user.companyId);
+  updateCertification(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateCertificationDto, @Req() req: any) {
+    return this.certificationService.update(id, body, req.user.companyId);
   }
 
   @Delete('certifications/:id')
-  deleteCertification(@Param('id') id: string, @Req() req: any) {
-    return this.certificationService.delete(+id, req.user.companyId);
+  deleteCertification(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.certificationService.delete(id, req.user.companyId);
   }
 
   @Get('certifications/alerts')
@@ -153,8 +153,8 @@ export class PersonalController {
   }
 
   @Delete('logs/templates/:id')
-  deleteLogTemplate(@Param('id') id: string, @Req() req: any) {
-    return this.logService.deleteTemplate(+id, req.user.companyId);
+  deleteLogTemplate(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.logService.deleteTemplate(id, req.user.companyId);
   }
 
   @Get('logs/entries')
@@ -168,8 +168,8 @@ export class PersonalController {
   }
 
   @Delete('logs/entries/:id')
-  deleteLogEntry(@Param('id') id: string, @Req() req: any) {
-    return this.logService.deleteEntry(+id, req.user.companyId);
+  deleteLogEntry(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.logService.deleteEntry(id, req.user.companyId);
   }
 
   @Get('verificacion')
@@ -183,12 +183,12 @@ export class PersonalController {
   }
 
   @Patch('verificacion/:id')
-  updateVerification(@Param('id') id: string, @Body() body: UpdateVerificationDto, @Req() req: any) {
-    return this.verificationService.update(+id, body, req.user.companyId, req.user.userId);
+  updateVerification(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateVerificationDto, @Req() req: any) {
+    return this.verificationService.update(id, body, req.user.companyId, req.user.userId);
   }
 
   @Delete('verificacion/:id')
-  deleteVerification(@Param('id') id: string, @Req() req: any) {
-    return this.verificationService.remove(+id, req.user.companyId);
+  deleteVerification(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.verificationService.remove(id, req.user.companyId);
   }
 }

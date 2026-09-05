@@ -295,7 +295,12 @@ export class DriveService {
     const accentlessTerms = accentlessType.split(/\s+/).filter((w) => w.length > 2);
 
     return docs.find((d) => {
-      const fileName = this.normalizeStr(d.fileName);
+      // Los documentos llegan con dos formas: filas de BD (`fileName`) y objetos
+      // crudos de la API de Drive (`name`). Sin el fallback, los segundos rompian
+      // con TypeError y el candidato se descartaba en silencio.
+      const rawName = d?.fileName ?? d?.name;
+      if (!rawName) return false;
+      const fileName = this.normalizeStr(rawName);
       const accentlessFile = this.removeAccents(fileName);
 
       if (fileName.includes(normalizedType) || accentlessFile.includes(accentlessType)) return true;
