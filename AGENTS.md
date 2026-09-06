@@ -82,6 +82,15 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
   `git config user.name "Leidy Barzola" && git config user.email "sistemas@gemeseg.com"`
 - **No agregar trailers de atribucion de IA** (`Co-Authored-By: Claude...`, `Generated with...`) en mensajes de commit ni en descripciones de PR.
 
+### Proceso de entrega (siempre, al terminar un bloque de trabajo)
+1. **Verificar** que compila y que las pruebas manuales pasan antes de commitear.
+2. **Commit** con mensaje descriptivo (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`).
+3. **Push** a la rama de trabajo: `git push -u origin <rama>`.
+4. **Abrir el Pull Request** hacia `main` con un resumen de lo entregado, como
+   verificarlo y lo que queda pendiente. Este paso no se omite: el trabajo no
+   esta entregado hasta que existe el PR.
+5. El PR va a nombre del duenio del repo y **sin** firmas ni footers de IA.
+
 ## Despliegue en Produccion
 
 ### Arquitectura
