@@ -247,9 +247,14 @@ export class DriveService {
         type: dt.name,
         required,
         status: matchResult ? 'present' : 'missing',
+        documentId: matchResult?.id || null,
         fileName: matchResult?.fileName || null,
         fileUrl: matchResult?.fileUrl || null,
         uploadedAt: matchResult?.createdAt || null,
+        // Estado del flujo de aprobacion/rechazo documental (Sprint 3).
+        reviewStatus: matchResult?.reviewStatus || null,
+        reviewReason: matchResult?.reviewReason || null,
+        reviewedAt: matchResult?.reviewedAt || null,
       };
     });
 
@@ -263,9 +268,13 @@ export class DriveService {
     const unmatchedFiles = employeeDocs
       .filter((doc) => !matchedFileNames.has(doc.fileName.toLowerCase()))
       .map((doc) => ({
+        documentId: doc.id,
         fileName: doc.fileName,
         fileUrl: doc.fileUrl,
         uploadedAt: doc.createdAt,
+        reviewStatus: doc.reviewStatus,
+        reviewReason: doc.reviewReason,
+        reviewedAt: doc.reviewedAt,
       }));
 
     return {
@@ -295,7 +304,12 @@ export class DriveService {
     const accentlessTerms = accentlessType.split(/\s+/).filter((w) => w.length > 2);
 
     return docs.find((d) => {
-      const fileName = this.normalizeStr(d.fileName);
+      // Los documentos llegan con dos formas: filas de BD (`fileName`) y objetos
+      // crudos de la API de Drive (`name`). Sin el fallback, los segundos rompian
+      // con TypeError y el candidato se descartaba en silencio.
+      const rawName = d?.fileName ?? d?.name;
+      if (!rawName) return false;
+      const fileName = this.normalizeStr(rawName);
       const accentlessFile = this.removeAccents(fileName);
 
       if (fileName.includes(normalizedType) || accentlessFile.includes(accentlessType)) return true;

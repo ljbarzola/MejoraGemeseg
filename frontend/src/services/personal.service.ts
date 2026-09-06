@@ -20,6 +20,9 @@ export const createContractTemplate = (data: any) => api.post('/personal/contrac
 export const deleteContractTemplate = (id: number) => api.delete(`/personal/contracts/templates/${id}`);
 export const generateContract = (data: any) => api.post('/personal/contracts/generate', data).then(r => r.data);
 export const getContracts = () => api.get('/personal/contracts').then(r => r.data);
+export const updateContract = (id: number, data: { status?: string; generatedUrl?: string }) => api.patch(`/personal/contracts/${id}`, data).then(r => r.data);
+export const downloadContractPdf = (id: number) => api.get(`/personal/contracts/${id}/pdf`, { responseType: 'blob' }).then(r => r.data);
+export const downloadActaUniformes = (id: number) => api.get(`/personal/contracts/${id}/acta-uniformes`, { responseType: 'blob' }).then(r => r.data);
 
 export const getCertifications = () => api.get('/personal/certifications').then(r => r.data);
 export const createCertification = (data: any) => api.post('/personal/certifications', data).then(r => r.data);
@@ -41,6 +44,10 @@ export const syncDriveFolder = () => api.post('/personal/drive/sync').then(r => 
 export const getDriveCompliance = (cedula: string) => api.get(`/personal/drive/compliance/${cedula}`).then(r => r.data);
 export const getDriveTree = () => api.get('/personal/drive/tree').then(r => r.data);
 export const deleteDriveEmployee = (cedula: string) => api.delete(`/personal/drive/employee/${cedula}`).then(r => r.data);
+export const reviewDocument = (documentId: number, data: { status: 'APROBADO' | 'RECHAZADO'; reason?: string }) =>
+  api.patch(`/personal/documents/${documentId}/review`, data).then(r => r.data);
+export const getDocumentReviews = (cedula: string) => api.get(`/personal/documents/${cedula}/reviews`).then(r => r.data);
+
 export const getDocumentTypes = () => api.get('/personal/document-types').then(r => r.data);
 export const createDocumentType = (data: any) => api.post('/personal/document-types', data).then(r => r.data);
 export const updateDocumentType = (id: number, data: any) => api.patch(`/personal/document-types/${id}`, data).then(r => r.data);

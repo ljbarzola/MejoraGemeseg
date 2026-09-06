@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getUser, removeToken } from '../../services/auth.service';
 import { useCompany } from '../../contexts/ThemeContext';
@@ -13,11 +13,16 @@ export default function Sidebar() {
   const isAdmin = user?.role === 'ADMIN';
   const isCompanyAdmin = isAdmin && !!user?.companyId;
   const [collapsed, setCollapsed] = useState(false);
+  // En movil el sidebar es un cajon deslizante: arranca cerrado para no
+  // tapar el contenido, y se cierra solo al navegar.
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [personalOpen, setPersonalOpen] = useState(false);
   const [custodiosOpen, setCustodiosOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
   const [ventasOpen, setVentasOpen] = useState(false);
   const [custodiasOpen, setCustodiasOpen] = useState(false);
+
+  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
   const handleLogout = () => {
     removeToken();
@@ -101,7 +106,26 @@ export default function Sidebar() {
   );
 
   return (
-    <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''}`}>
+    <>
+      {/* Con el cajon abierto el boton taparia el logo; cerrar se hace
+          tocando el fondo o navegando. */}
+      {!mobileOpen && (
+        <button
+          className="sidebar-fab"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Abrir menu"
+        >
+          ☰
+        </button>
+      )}
+      {mobileOpen && (
+        <button
+          className="sidebar-backdrop"
+          onClick={() => setMobileOpen(false)}
+          aria-label="Cerrar menu"
+        />
+      )}
+    <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''} ${mobileOpen ? 'sidebar-mobile-open' : ''}`}>
       <div className="sidebar-header">
         {!collapsed && (
           <div className="sidebar-brand" onClick={() => navigate('/dashboard')}>
@@ -285,5 +309,6 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

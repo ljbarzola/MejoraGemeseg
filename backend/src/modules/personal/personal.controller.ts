@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, Res, UseGuards, ParseIntPipe } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import type { Response } from 'express';
 import { PersonalService } from './personal.service';
 import { KanbanService } from './services/kanban.service';
 import { CandidateService } from './services/candidate.service';
@@ -13,6 +14,23 @@ import { CreateContractTemplateDto, UpdateContractDto, GenerateContractDto } fro
 import { CreateCertificationDto, UpdateCertificationDto } from './dto/certification.dto';
 import { CreateLogTemplateDto, CreateLogEntryDto } from './dto/log.dto';
 import { CreateVerificationDto, UpdateVerificationDto } from './dto/verification.dto';
+import { ReviewDocumentDto } from './dto/document-review.dto';
+import { DocumentReviewService } from './services/document-review.service';
+import { ContractPdfService } from './services/contract-pdf.service';
+
+/// Dotacion estandar que GEMESEG entrega al personal operativo. Vive aqui, y no
+/// en base de datos, hasta que RRHH pida configurarla por puesto.
+const UNIFORM_ITEMS = [
+  'Camisa de uniforme',
+  'Pantalón de uniforme',
+  'Chompa / casaca',
+  'Gorra institucional',
+  'Calzado de seguridad',
+  'Credencial de identificación',
+  'Radio de comunicación',
+  'Linterna',
+  'Chaleco reflectivo',
+];
 
 @Controller('personal')
 @UseGuards(AuthGuard('jwt'))
@@ -24,7 +42,9 @@ export class PersonalController {
     private readonly contractService: ContractService,
     private readonly certificationService: CertificationService,
     private readonly logService: LogService,
-    private readonly verificationService: VerificationService
+    private readonly verificationService: VerificationService,
+    private readonly documentReviewService: DocumentReviewService,
+    private readonly contractPdfService: ContractPdfService
   ) {}
 
   @Get('dashboard')
@@ -43,13 +63,13 @@ export class PersonalController {
   }
 
   @Patch('kanban/columns/:id')
-  updateColumn(@Param('id') id: string, @Body() body: UpdateKanbanColumnDto, @Req() req: any) {
-    return this.kanbanService.updateColumn(+id, body, req.user.companyId);
+  updateColumn(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateKanbanColumnDto, @Req() req: any) {
+    return this.kanbanService.updateColumn(id, body, req.user.companyId);
   }
 
   @Delete('kanban/columns/:id')
-  deleteColumn(@Param('id') id: string, @Req() req: any) {
-    return this.kanbanService.deleteColumn(+id, req.user.companyId);
+  deleteColumn(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.kanbanService.deleteColumn(id, req.user.companyId);
   }
 
   @Post('kanban/reorder')
@@ -63,8 +83,8 @@ export class PersonalController {
   }
 
   @Get('candidates/:id')
-  getCandidate(@Param('id') id: string, @Req() req: any) {
-    return this.candidateService.findOne(+id, req.user.companyId);
+  getCandidate(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.candidateService.findOne(id, req.user.companyId);
   }
 
   @Post('candidates')
@@ -73,18 +93,18 @@ export class PersonalController {
   }
 
   @Patch('candidates/:id')
-  updateCandidate(@Param('id') id: string, @Body() body: UpdateCandidateDto, @Req() req: any) {
-    return this.candidateService.update(+id, body, req.user.companyId);
+  updateCandidate(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateCandidateDto, @Req() req: any) {
+    return this.candidateService.update(id, body, req.user.companyId);
   }
 
   @Patch('candidates/:id/move')
-  moveCandidate(@Param('id') id: string, @Body() body: MoveCandidateDto, @Req() req: any) {
-    return this.candidateService.move(+id, body.columnId, req.user.companyId, req.user.userId);
+  moveCandidate(@Param('id', ParseIntPipe) id: number, @Body() body: MoveCandidateDto, @Req() req: any) {
+    return this.candidateService.move(id, body.columnId, req.user.companyId, req.user.userId);
   }
 
   @Get('candidates/:id/history')
-  getCandidateHistory(@Param('id') id: string, @Req() req: any) {
-    return this.candidateService.getHistory(+id, req.user.companyId);
+  getCandidateHistory(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.candidateService.getHistory(id, req.user.companyId);
   }
 
   @Get('contracts/templates')
@@ -98,8 +118,8 @@ export class PersonalController {
   }
 
   @Delete('contracts/templates/:id')
-  deleteTemplate(@Param('id') id: string, @Req() req: any) {
-    return this.contractService.deleteTemplate(+id, req.user.companyId);
+  deleteTemplate(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.contractService.deleteTemplate(id, req.user.companyId);
   }
 
   @Post('contracts/generate')
@@ -113,8 +133,50 @@ export class PersonalController {
   }
 
   @Patch('contracts/:id')
-  updateContract(@Param('id') id: string, @Body() body: UpdateContractDto, @Req() req: any) {
-    return this.contractService.updateContract(+id, body, req.user.companyId);
+  updateContract(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateContractDto, @Req() req: any) {
+    return this.contractService.updateContract(id, body, req.user.companyId);
+  }
+
+  @Get('contracts/:id/pdf')
+  async downloadContractPdf(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Res() res: Response) {
+    const contract = await this.contractService.getContractForDocument(id, req.user.companyId);
+    const pdf = await this.contractPdfService.generarPdfContrato(contract);
+    this.sendPdf(res, pdf, `contrato_${contract.candidate?.cedula || id}.pdf`);
+  }
+
+  @Get('contracts/:id/acta-uniformes')
+  async downloadActaUniformes(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Res() res: Response) {
+    const contract = await this.contractService.getContractForDocument(id, req.user.companyId);
+    const pdf = await this.contractPdfService.generarPdfActaUniformes(contract, UNIFORM_ITEMS);
+    this.sendPdf(res, pdf, `acta_uniformes_${contract.candidate?.cedula || id}.pdf`);
+  }
+
+  private sendPdf(res: Response, pdf: Buffer, filename: string) {
+    // La cedula viene de la base y podria traer comillas o caracteres de control
+    // que rompen la cabecera (res.set lanza ERR_INVALID_CHAR y devuelve un 500).
+    const safeName = filename.replace(/[^\w.\-]/g, '_');
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${safeName}"`,
+      'Content-Length': pdf.length,
+    });
+    res.end(pdf);
+  }
+
+  // SPRINT 3 — Aprobacion/rechazo documental
+  @Patch('documents/:id/review')
+  reviewDocument(@Param('id', ParseIntPipe) id: number, @Body() body: ReviewDocumentDto, @Req() req: any) {
+    return this.documentReviewService.review(id, body, req.user.companyId, req.user.userId);
+  }
+
+  @Get('documents/:cedula/reviews')
+  getDocumentReviews(@Param('cedula') cedula: string, @Req() req: any) {
+    return this.documentReviewService.getHistoryByCedula(cedula, req.user.companyId);
+  }
+
+  @Get('documents/:cedula/list')
+  getDocumentsByCedula(@Param('cedula') cedula: string, @Req() req: any) {
+    return this.documentReviewService.getDocumentsByCedula(cedula, req.user.companyId);
   }
 
   @Get('certifications')
@@ -128,13 +190,13 @@ export class PersonalController {
   }
 
   @Patch('certifications/:id')
-  updateCertification(@Param('id') id: string, @Body() body: UpdateCertificationDto, @Req() req: any) {
-    return this.certificationService.update(+id, body, req.user.companyId);
+  updateCertification(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateCertificationDto, @Req() req: any) {
+    return this.certificationService.update(id, body, req.user.companyId);
   }
 
   @Delete('certifications/:id')
-  deleteCertification(@Param('id') id: string, @Req() req: any) {
-    return this.certificationService.delete(+id, req.user.companyId);
+  deleteCertification(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.certificationService.delete(id, req.user.companyId);
   }
 
   @Get('certifications/alerts')
@@ -153,8 +215,8 @@ export class PersonalController {
   }
 
   @Delete('logs/templates/:id')
-  deleteLogTemplate(@Param('id') id: string, @Req() req: any) {
-    return this.logService.deleteTemplate(+id, req.user.companyId);
+  deleteLogTemplate(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.logService.deleteTemplate(id, req.user.companyId);
   }
 
   @Get('logs/entries')
@@ -168,8 +230,8 @@ export class PersonalController {
   }
 
   @Delete('logs/entries/:id')
-  deleteLogEntry(@Param('id') id: string, @Req() req: any) {
-    return this.logService.deleteEntry(+id, req.user.companyId);
+  deleteLogEntry(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.logService.deleteEntry(id, req.user.companyId);
   }
 
   @Get('verificacion')
@@ -183,12 +245,12 @@ export class PersonalController {
   }
 
   @Patch('verificacion/:id')
-  updateVerification(@Param('id') id: string, @Body() body: UpdateVerificationDto, @Req() req: any) {
-    return this.verificationService.update(+id, body, req.user.companyId, req.user.userId);
+  updateVerification(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateVerificationDto, @Req() req: any) {
+    return this.verificationService.update(id, body, req.user.companyId, req.user.userId);
   }
 
   @Delete('verificacion/:id')
-  deleteVerification(@Param('id') id: string, @Req() req: any) {
-    return this.verificationService.remove(+id, req.user.companyId);
+  deleteVerification(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.verificationService.remove(id, req.user.companyId);
   }
 }

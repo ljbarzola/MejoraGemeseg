@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Req, UseGuards, ParseIntPipe } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { DriveService } from './services/drive.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -57,15 +57,15 @@ export class DriveController {
   }
 
   @Patch('document-types/:id')
-  updateDocumentType(@Param('id') id: string, @Body() body: UpdateDocumentTypeDto, @Req() req: any) {
-    return this.driveService.updateDocumentType(+id, body, req.user.companyId);
+  updateDocumentType(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateDocumentTypeDto, @Req() req: any) {
+    return this.driveService.updateDocumentType(id, body, req.user.companyId);
   }
 
   @Delete('document-types/:id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN)
-  deleteDocumentType(@Param('id') id: string, @Req() req: any) {
-    return this.driveService.deleteDocumentType(+id, req.user.companyId);
+  deleteDocumentType(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.driveService.deleteDocumentType(id, req.user.companyId);
   }
 
   // RECLUTAMIENTO & PUESTOS
@@ -84,16 +84,16 @@ export class DriveController {
 
   @Patch('reclutamiento/puestos/:id')
   updateJobPosition(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateJobPositionDto,
     @Req() req: any
   ) {
-    return this.driveService.updateJobPosition(+id, body, req.user.companyId);
+    return this.driveService.updateJobPosition(id, body, req.user.companyId);
   }
 
   @Delete('reclutamiento/puestos/:id')
-  deleteJobPosition(@Param('id') id: string, @Req() req: any) {
-    return this.driveService.deleteJobPosition(+id, req.user.companyId);
+  deleteJobPosition(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.driveService.deleteJobPosition(id, req.user.companyId);
   }
 
   @Post('reclutamiento/sync')

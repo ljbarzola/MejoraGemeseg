@@ -78,6 +78,18 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 - **SIEMPRE hacer `git pull origin main` antes de crear una rama nueva** para evitar conflictos de versiones.
 - Commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`.
 - No hacer push sin confirmacion del usuario.
+- **Autoria de commits:** todos los commits van a nombre del duenio del repo (`Leidy Barzola <sistemas@gemeseg.com>`), nunca a nombre del asistente de IA. Configurar antes de commitear:
+  `git config user.name "Leidy Barzola" && git config user.email "sistemas@gemeseg.com"`
+- **No agregar trailers de atribucion de IA** (`Co-Authored-By: Claude...`, `Generated with...`) en mensajes de commit ni en descripciones de PR.
+
+### Proceso de entrega (siempre, al terminar un bloque de trabajo)
+1. **Verificar** que compila y que las pruebas manuales pasan antes de commitear.
+2. **Commit** con mensaje descriptivo (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`).
+3. **Push** a la rama de trabajo: `git push -u origin <rama>`.
+4. **Abrir el Pull Request** hacia `main` con un resumen de lo entregado, como
+   verificarlo y lo que queda pendiente. Este paso no se omite: el trabajo no
+   esta entregado hasta que existe el PR.
+5. El PR va a nombre del duenio del repo y **sin** firmas ni footers de IA.
 
 ## Despliegue en Produccion
 
@@ -317,3 +329,23 @@ FRONTEND_URL=http://localhost:5173
 - Hardcodear URLs de API en el frontend (usar `VITE_API_URL`).
 - Usar archivos `.env` en produccion (usar Secret Manager / Firebase Hosting env vars).
 - Crear endpoints sin RolesGuard cuando la accion requiere rol ADMIN.
+
+## Vista movil
+
+El layout base es de escritorio (`.sidebar` fija de 240px + `.main-content` con
+`margin-left`). A partir de `@media (max-width: 768px)` (final de
+`frontend/src/styles.css`) el sidebar pasa a ser un cajon deslizante
+(`.sidebar-mobile-open`) con boton hamburguesa (`.sidebar-fab`) y fondo oscuro
+(`.sidebar-backdrop`), y el contenido ocupa todo el ancho.
+
+Reglas al crear pantallas nuevas:
+- Nada de columnas laterales con `width` fijo sin clase `personal-split-aside`.
+- En rejillas usar `minmax(min(Npx, 100%), 1fr)`, nunca `minmax(Npx, 1fr)`.
+- Campos de formulario a 16px en movil: por debajo, iOS hace zoom al enfocar.
+- Filas de botones: `flexWrap: 'wrap'` y objetivo tactil de ~40px.
+
+## Preview en dispositivo
+
+`./scripts/deploy-preview.sh [canal] [caducidad]` publica el frontend en un canal
+temporal de Firebase Hosting y devuelve una URL publica para abrir en el telefono.
+Requiere `npx firebase-tools login` en la maquina del desarrollador.

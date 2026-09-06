@@ -1,7 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getContracts, getContractTemplates, generateContract } from '../../../services/personal.service';
+import { getContracts, getContractTemplates, generateContract, updateContract, downloadContractPdf, downloadActaUniformes } from '../../../services/personal.service';
 import { getCandidates } from '../../../services/personal.service';
+
+const CONTRACT_STATUSES = ['DRAFT', 'GENERADO', 'FIRMADO', 'ANULADO'] as const;
+
+const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
+  DRAFT: { bg: '#fefcbf', color: '#975a16' },
+  GENERADO: { bg: '#bee3f8', color: '#2c5282' },
+  FIRMADO: { bg: '#c6f6d5', color: '#276749' },
+  ANULADO: { bg: '#fed7d7', color: '#c53030' },
+};
 
 export default function ContractsList() {
   const navigate = useNavigate();
@@ -12,6 +21,8 @@ export default function ContractsList() {
   const [showGenerate, setShowGenerate] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<number | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
   const load = () => {
     setLoading(true);
@@ -31,6 +42,41 @@ export default function ContractsList() {
     load();
   };
 
+  // El backend responde el PDF como blob; lo abrimos como descarga del navegador.
+  const download = async (fetcher: () => Promise<Blob>, filename: string, key: string) => {
+    setBusyId(key);
+    setError('');
+    try {
+      const blob = await fetcher();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setError('No se pudo generar el documento.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleStatusChange = async (id: number, status: string) => {
+    setBusyId(`status-${id}`);
+    setError('');
+    try {
+      await updateContract(id, { status });
+      load();
+    } catch (err: any) {
+      const msg = err.response?.data?.message;
+      setError(Array.isArray(msg) ? msg.join('. ') : msg || 'No se pudo actualizar el estado.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <div className="page-container">
       <div className="page-header-row">
@@ -46,7 +92,7 @@ export default function ContractsList() {
 
       <div className="admin-section">
         <h3 style={{ marginBottom: '12px' }}>Plantillas Disponibles</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))', gap: '12px', marginBottom: '24px' }}>
           {templates.length === 0 ? (
             <div style={{ color: '#718096', fontSize: '0.9rem' }}>No hay plantillas. Sube una plantilla DOCX para comenzar.</div>
           ) : templates.map((t) => (
@@ -58,6 +104,11 @@ export default function ContractsList() {
         </div>
 
         <h3 style={{ marginBottom: '12px' }}>Contratos Generados</h3>
+        {error && (
+          <div style={{ background: '#fff5f5', border: '1px solid #fed7d7', color: '#c53030', borderRadius: '8px', padding: '10px 14px', fontSize: '0.82rem', marginBottom: '12px' }}>
+            {error}
+          </div>
+        )}
         {loading ? (
           <div className="loading-state">Cargando...</div>
         ) : contracts.length === 0 ? (
@@ -72,25 +123,64 @@ export default function ContractsList() {
                   <th>Plantilla</th>
                   <th>Estado</th>
                   <th>Fecha</th>
+                  <th>Documentos</th>
                 </tr>
               </thead>
               <tbody>
-                {contracts.map((c) => (
-                  <tr key={c.id}>
-                    <td style={{ fontWeight: 600 }}>{c.candidate?.fullName}</td>
-                    <td style={{ fontFamily: 'monospace' }}>{c.candidate?.cedula}</td>
-                    <td>{c.template?.name}</td>
-                    <td>
-                      <span className="status-badge" style={{
-                        backgroundColor: c.status === 'DRAFT' ? '#fefcbf' : '#c6f6d5',
-                        color: c.status === 'DRAFT' ? '#975a16' : '#276749',
-                      }}>
-                        {c.status}
-                      </span>
-                    </td>
-                    <td>{new Date(c.createdAt).toLocaleDateString('es-EC')}</td>
-                  </tr>
-                ))}
+                {contracts.map((c) => {
+                  const colors = STATUS_COLORS[c.status] || STATUS_COLORS.DRAFT;
+                  return (
+                    <tr key={c.id}>
+                      <td style={{ fontWeight: 600 }}>{c.candidate?.fullName}</td>
+                      <td style={{ fontFamily: 'monospace' }}>{c.candidate?.cedula}</td>
+                      <td>{c.template?.name}</td>
+                      <td>
+                        <select
+                          value={c.status}
+                          disabled={busyId === `status-${c.id}`}
+                          onChange={(e) => handleStatusChange(c.id, e.target.value)}
+                          title="Cambiar estado del contrato"
+                          style={{
+                            backgroundColor: colors.bg, color: colors.color, border: 'none',
+                            borderRadius: '12px', padding: '4px 10px', fontSize: '0.78rem',
+                            fontWeight: 600, cursor: 'pointer',
+                          }}
+                        >
+                          {CONTRACT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </td>
+                      <td>{new Date(c.createdAt).toLocaleDateString('es-EC')}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            className="btn-secondary"
+                            style={{ fontSize: '0.75rem', padding: '8px 10px', whiteSpace: 'nowrap' }}
+                            disabled={busyId === `pdf-${c.id}`}
+                            onClick={() => download(
+                              () => downloadContractPdf(c.id),
+                              `contrato_${c.candidate?.cedula || c.id}.pdf`,
+                              `pdf-${c.id}`,
+                            )}
+                          >
+                            {busyId === `pdf-${c.id}` ? '...' : '📄 Contrato'}
+                          </button>
+                          <button
+                            className="btn-secondary"
+                            style={{ fontSize: '0.75rem', padding: '8px 10px', whiteSpace: 'nowrap' }}
+                            disabled={busyId === `acta-${c.id}`}
+                            onClick={() => download(
+                              () => downloadActaUniformes(c.id),
+                              `acta_uniformes_${c.candidate?.cedula || c.id}.pdf`,
+                              `acta-${c.id}`,
+                            )}
+                          >
+                            {busyId === `acta-${c.id}` ? '...' : '👔 Acta uniformes'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

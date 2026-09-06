@@ -33,6 +33,7 @@ model Company {
   driveFolders   EmployeeDriveFolder[]
   documentTypes  DocumentType[]
   employeeDocuments EmployeeDocument[]
+  documentReviews DocumentReview[]
   folderConfigs  FolderConfig[]
   jobPositions   JobPosition[]
   verificationChecks VerificationCheck[]
@@ -104,6 +105,8 @@ model User {
   createdSalesTemplates   SalesTemplate[]
   createdSalesContracts   SalesContract[]
   verificationChecks  VerificationCheck[]
+  reviewedDocuments   EmployeeDocument[] @relation("DocumentReviewer")
+  documentReviews     DocumentReview[]   @relation("DocumentReviewPerformer")
 }
 
 model Project {
@@ -605,6 +608,12 @@ model Custodia {
   @@index([tipoCustodia])
 }
 
+enum DocumentReviewStatus {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+}
+
 enum CandidateStatus {
   POSTULADO
   VALIDACION_DOCUMENTAL
@@ -688,6 +697,9 @@ model ContractTemplate {
   fileName    String
   fileUrl     String
   fields      String[]
+  /// Cuerpo del contrato con variables {{NOMBRE}}, {{CEDULA}}, etc. Si esta vacio
+  /// se usa el texto base de GEMESEG al generar el PDF.
+  content     String?
   companyId   Int
   company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdBy   Int
@@ -804,7 +816,35 @@ model EmployeeDocument {
   companyId      Int
   company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt      DateTime @default(now())
+  reviewStatus   DocumentReviewStatus @default(PENDIENTE)
+  reviewReason   String?
+  reviewedAt     DateTime?
+  reviewedBy     Int?
+  reviewer       User?    @relation("DocumentReviewer", fields: [reviewedBy], references: [id])
+  reviews        DocumentReview[]
   @@unique([companyId, driveFileId])
+}
+
+/// Traza de cada aprobacion/rechazo documental. Se conserva el nombre del archivo
+/// y la cedula para que el historial siga siendo legible aunque el documento
+/// desaparezca de Drive en una sincronizacion posterior.
+model DocumentReview {
+  id         Int                  @id @default(autoincrement())
+  /// Opcional y con SetNull a proposito: si el documento desaparece (borrado del
+  /// empleado o resincronizacion de Drive) la decision debe sobrevivir, apoyada en
+  /// la cedula y el nombre de archivo que se copian abajo.
+  documentId Int?
+  document   EmployeeDocument?    @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  cedula     String
+  fileName   String
+  status     DocumentReviewStatus
+  reason     String?
+  companyId  Int
+  company    Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  reviewedBy Int
+  reviewer   User                 @relation("DocumentReviewPerformer", fields: [reviewedBy], references: [id])
+  createdAt  DateTime             @default(now())
+  @@index([companyId, cedula])
 }
 
 model FolderConfig {

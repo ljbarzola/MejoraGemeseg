@@ -10,11 +10,13 @@ import { CertificationService } from './services/certification.service';
 import { LogService } from './services/log.service';
 import { DriveService } from './services/drive.service';
 import { VerificationService } from './services/verification.service';
+import { DocumentReviewService } from './services/document-review.service';
+import { ContractPdfService } from './services/contract-pdf.service';
 
 @Module({
   imports: [PrismaModule],
   controllers: [PersonalController, DriveController],
-  providers: [PersonalService, KanbanService, CandidateService, ContractService, CertificationService, LogService, DriveService, VerificationService],
+  providers: [PersonalService, KanbanService, CandidateService, ContractService, CertificationService, LogService, DriveService, VerificationService, DocumentReviewService, ContractPdfService],
   exports: [PersonalService],
 })
 export class PersonalModule {}

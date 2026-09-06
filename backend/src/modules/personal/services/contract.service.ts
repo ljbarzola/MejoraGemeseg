@@ -52,4 +52,14 @@ export class ContractService {
     if (!c) throw new NotFoundException('Contrato no encontrado');
     return this.prisma.contract.update({ where: { id }, data });
   }
+
+  /** Contrato con todo lo que el generador de PDF necesita para rellenar la plantilla. */
+  async getContractForDocument(id: number, companyId: number) {
+    const contract = await this.prisma.contract.findFirst({
+      where: { id, companyId },
+      include: { candidate: true, template: true, company: true },
+    });
+    if (!contract) throw new NotFoundException('Contrato no encontrado');
+    return contract;
+  }
 }

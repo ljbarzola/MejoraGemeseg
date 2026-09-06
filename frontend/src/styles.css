@@ -3383,3 +3383,100 @@ body {
   @page { size: A4 portrait; }
 }
 
+
+/* ══════════════════════════════════════════════════════════════════
+   Adaptacion movil (<=768px)
+   El layout base asume escritorio: .sidebar es fija de 240px y
+   .main-content compensa con margin-left. En un telefono eso dejaba el
+   contenido en una columna de ~150px tapada por el sidebar. Aqui el
+   sidebar pasa a ser un cajon deslizante y el contenido ocupa el ancho.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Boton hamburguesa y fondo oscuro: solo existen en movil */
+.sidebar-fab,
+.sidebar-backdrop { display: none; }
+
+@media (max-width: 768px) {
+  .main-content,
+  .main-content.sidebar-collapsed {
+    margin-left: 0;
+    padding-top: 56px; /* deja sitio al boton hamburguesa fijo */
+  }
+
+  /* Cajon fuera de pantalla hasta que se abre */
+  .sidebar,
+  .sidebar.sidebar-collapsed {
+    width: 82vw;
+    max-width: 300px;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    z-index: 400;
+  }
+
+  .sidebar.sidebar-mobile-open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35);
+  }
+
+  /* En movil el cajon siempre va expandido: colapsarlo a 64px no aporta */
+  .sidebar.sidebar-collapsed .sidebar-label,
+  .sidebar.sidebar-collapsed .sidebar-brand { display: initial; }
+
+  .sidebar-fab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 401;
+    width: 44px;   /* objetivo tactil minimo */
+    height: 44px;
+    border: none;
+    border-radius: 10px;
+    background: var(--azul-oscuro);
+    color: white;
+    font-size: 1.25rem;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 399;
+    border: none;
+    width: 100%;
+  }
+
+  /* El toggle «/» de escritorio no tiene sentido dentro del cajon */
+  .sidebar-toggle { display: none; }
+
+  /* iOS hace zoom automatico al enfocar un campo de menos de 16px
+     y despues no vuelve a alejarse. */
+  .form-group input,
+  .form-group select,
+  .form-group textarea,
+  .form-input,
+  .auth-form input {
+    font-size: 16px;
+  }
+
+  /* Columnas laterales fijas de 320px: se apilan en vez de desbordar */
+  .personal-split { flex-direction: column; gap: 16px !important; }
+  .personal-split-aside { width: 100% !important; max-width: none !important; }
+
+  /* Filas de acciones: que envuelvan en lugar de aplastarse */
+  .doc-review-row { flex-wrap: wrap; }
+  .doc-review-actions { width: 100%; justify-content: flex-end; }
+}
+
+/* Rejillas auto-fit: el minimo no puede superar el ancho disponible,
+   o la rejilla desborda en pantallas estrechas. */
+.grid-auto-fit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 12px;
+}
