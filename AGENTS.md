@@ -7,11 +7,12 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 **Empresa:** GEMESEG (Ecuador)
 **Objetivo:** Centralizar, modernizar y automatizar procesos internos mediante un ecosistema de software.
 **Metodologia:** Scrum - sprints de 1-2 semanas
-**Plataforma:** Web (no movil)
+**Plataforma:** Web, con vista adaptada a movil (ver seccion "Vista movil")
 **Estado actual:** Fase 1 - Desplegado en produccion
 
 ### URLs de Produccion
-- **Frontend (Firebase Hosting):** https://mejora-gemeseg.web.app
+- **Frontend (dominio real, Firebase Hosting):** https://app.gemeseg.com
+- **Frontend (URL de Firebase sin dominio personalizado):** https://mejora-gemeseg.web.app
 - **Backend (Cloud Run):** https://mejora-gemeseg-backend-141953681725.us-central1.run.app
 - **API Docs (Swagger):** https://mejora-gemeseg-backend-141953681725.us-central1.run.app/docs
 
@@ -44,10 +45,11 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 - **Proyecto GCP:** `mejora-gemeseg` (org: `gemeseg.com`)
 - **Base de datos:** Cloud SQL - PostgreSQL 16 (`gemeseg-db`, `34.9.205.240`)
 - **Backend:** Cloud Run (`mejora-gemeseg-backend`, us-central1)
-- **Frontend:** Firebase Hosting (`mejora-gemeseg.web.app`)
+- **Frontend:** Firebase Hosting (`mejora-gemeseg.web.app`, dominio personalizado `app.gemeseg.com`)
 - **Registry:** Artifact Registry (`us-central1-docker.pkg.dev/mejora-gemeseg/gemeseg-repo`)
-- **Secrets:** Secret Manager (`DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`)
-- **Deploy:** `firebase deploy --only hosting` (frontend), Cloud Build / `gcloud run deploy` (backend)
+- **Secrets:** Secret Manager (`DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, `BOLDSIGN_API_KEY`)
+- **Deploy:** automatico via GitHub Actions (`.github/workflows/deploy.yml`) al hacer push/merge a `main`, o manual: `firebase deploy --only hosting` (frontend), `gcloud builds submit --config=cloudbuild.yaml .` (backend, usa Cloud Build)
+- **Migraciones Prisma:** NO se automatizan. Se aplican a mano contra Cloud SQL despues del deploy (`psql "$DATABASE_URL" -f backend/prisma/migrations/<carpeta>/migration.sql`). El workflow de CI solo avisa si detecta migraciones nuevas sin aplicar.
 
 ## Convenciones de Codigo
 
@@ -91,6 +93,15 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
    esta entregado hasta que existe el PR.
 5. El PR va a nombre del duenio del repo y **sin** firmas ni footers de IA.
 
+### CI/CD
+`.github/workflows/deploy.yml` despliega backend (Cloud Run, via `cloudbuild.yaml`)
+y frontend (Firebase Hosting, dominio `app.gemeseg.com`) en cada push/merge a
+`main`. Requiere el secreto de repo `GCP_SA_KEY` (llave JSON de la service
+account `github-deployer@mejora-gemeseg.iam.gserviceaccount.com`, creada a mano
+una sola vez - ver comandos en el PR que introdujo el workflow). Las migraciones
+de Prisma **no** se aplican solas: el workflow solo avisa si detecta archivos
+nuevos en `backend/prisma/migrations/`.
+
 ## Despliegue en Produccion
 
 ### Arquitectura
@@ -129,7 +140,8 @@ FRONTEND_URL=http://localhost:5173
 |-----|-------|
 | `DATABASE_URL` | Secret Manager: `DATABASE_URL` (Cloud SQL, socket: `/cloudsql/mejora-gemeseg:us-central1:gemeseg-db`) |
 | `JWT_SECRET` | Secret Manager: `JWT_SECRET` |
-| `FRONTEND_URL` | Secret Manager: `FRONTEND_URL` (`https://mejora-gemeseg.web.app`) |
+| `FRONTEND_URL` | Secret Manager: `FRONTEND_URL` (usada para CORS/redirects; verificar que el valor actual sea `https://app.gemeseg.com` y no la URL vieja `mejora-gemeseg.web.app`) |
+| `BOLDSIGN_API_KEY` | Secret Manager: `BOLDSIGN_API_KEY` (firma de contratos, modulo Ventas) |
 | `NODE_ENV` | `production` |
 
 ### Produccion - Frontend (Firebase Hosting)
