@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ForbiddenException, ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -35,6 +35,10 @@ async function bootstrap() {
     'https://mejora-gemeseg.firebaseapp.com',
   ].filter((url): url is string => Boolean(url));
 
+  // Canales de preview de Firebase Hosting:
+  // https://mejora-gemeseg--<canal>-<hash>.web.app
+  const previewChannel = /^https:\/\/mejora-gemeseg--[a-z0-9-]+\.web\.app$/;
+
   app.enableCors({
     origin: (
       origin: string | undefined,
@@ -43,11 +47,12 @@ async function bootstrap() {
       if (
         !origin ||
         origin.startsWith('http://localhost:') ||
-        allowedOrigins.includes(origin)
+        allowedOrigins.includes(origin) ||
+        previewChannel.test(origin)
       ) {
         callback(null, true);
       } else {
-        callback(new Error(`Origin ${origin} not allowed by CORS`));
+        callback(new ForbiddenException(`Origin ${origin} not allowed by CORS`));
       }
     },
     credentials: true,
