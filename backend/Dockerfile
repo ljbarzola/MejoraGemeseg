@@ -40,6 +40,7 @@ COPY --from=backend-builder /app/prisma.config.js ./prisma.config.js
 COPY --from=frontend-builder /app/frontend/dist ./public
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN mkdir -p /app/uploads/templates /app/uploads/contracts /app/uploads/logos && chown -R appuser:appgroup /app/uploads
 USER appuser
 
 EXPOSE 8080
