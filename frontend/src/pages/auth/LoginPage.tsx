@@ -68,8 +68,9 @@ export default function LoginPage() {
       const domain = data.email.split('@')[1];
       if (domain) {
         const slug = domain.split('.')[0];
-        await loadThemeBySlug(slug);
-        setDetectedCompany(true);
+        // No bloquear la navegacion por esto: es solo cosmetico (colores/logo)
+        // y no debe demorar el ingreso al dashboard si la API tarda en responder.
+        loadThemeBySlug(slug).then(() => setDetectedCompany(true));
       }
       navigate('/dashboard');
     } catch (err: any) {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { getMyPermissions } from '../services/permissions.service';
 import { getUser } from '../services/auth.service';
 
@@ -18,10 +19,11 @@ const EMPTY: PermissionsState = {
 
 export function usePermissions() {
   const [state, setState] = useState<PermissionsState>(EMPTY);
-  const user = getUser();
+  const location = useLocation();
 
   const load = useCallback(async () => {
-    if (!user) { setState(EMPTY); return; }
+    const user = getUser();
+    if (!user) { setState({ ...EMPTY, loading: false }); return; }
     try {
       const data = await getMyPermissions();
       const permMap: Record<string, { canView: boolean; canWrite: boolean }> = {};
@@ -37,9 +39,12 @@ export function usePermissions() {
     } catch {
       setState({ ...EMPTY, loading: false });
     }
-  }, [user?.id]);
+  }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Se re-evalua en cada cambio de ruta (ej. justo despues del login, cuando
+  // el usuario recien se guarda en localStorage) para no quedar pegado en el
+  // estado de un render anterior en el que aun no habia sesion.
+  useEffect(() => { load(); }, [load, location.pathname]);
 
   const canView = useCallback((section: string) => {
     if (state.isSuperAdmin) return true;
