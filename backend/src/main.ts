@@ -28,9 +28,12 @@ async function bootstrap() {
     exclude: ['health', 'docs', 'docs/(.*)'],
   });
 
-  const allowedOrigins = [process.env.FRONTEND_URL].filter(
-    (url): url is string => Boolean(url),
-  );
+  const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    'https://app.gemeseg.com',
+    'https://mejora-gemeseg.web.app',
+    'https://mejora-gemeseg.firebaseapp.com',
+  ].filter((url): url is string => Boolean(url));
 
   app.enableCors({
     origin: (
