@@ -9,11 +9,15 @@ export class PrismaService
 {
   constructor() {
     const databaseUrl = process.env.DATABASE_URL || '';
+    const isUnixSocket =
+      databaseUrl.includes('host=/cloudsql/') ||
+      databaseUrl.includes('host=%2Fcloudsql%2F');
     const useSsl =
-      databaseUrl.includes('supabase') ||
-      databaseUrl.includes('pooler') ||
-      databaseUrl.includes('cloudsql') ||
-      process.env.DATABASE_SSL === 'true';
+      !isUnixSocket &&
+      (databaseUrl.includes('supabase') ||
+        databaseUrl.includes('pooler') ||
+        databaseUrl.includes('cloudsql') ||
+        process.env.DATABASE_SSL === 'true');
     const adapter = new PrismaPg({
       connectionString: databaseUrl,
       ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
