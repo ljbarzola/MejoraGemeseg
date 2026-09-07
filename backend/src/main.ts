@@ -12,7 +12,12 @@ import { existsSync } from 'fs';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  app.use(helmet({ contentSecurityPolicy: false }));
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
   app.useGlobalFilters(new AllExceptionsFilter());
 
   app.use('/health', (_req: any, res: any) => {
@@ -23,15 +28,23 @@ async function bootstrap() {
     exclude: ['health', 'docs', 'docs/(.*)'],
   });
 
+  const allowedOrigins = [process.env.FRONTEND_URL].filter(
+    (url): url is string => Boolean(url),
+  );
+
   app.enableCors({
     origin: (
       origin: string | undefined,
       callback: (err: Error | null, allow?: boolean) => void,
     ) => {
-      if (!origin || origin.startsWith('http://localhost:')) {
+      if (
+        !origin ||
+        origin.startsWith('http://localhost:') ||
+        allowedOrigins.includes(origin)
+      ) {
         callback(null, true);
       } else {
-        callback(null, true);
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
       }
     },
     credentials: true,
