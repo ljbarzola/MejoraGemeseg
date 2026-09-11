@@ -73,11 +73,14 @@ options:
   machineType: 'E2_HIGHCPU_8'
   logging: CLOUD_LOGGING_ONLY
 
-# Fuerza el uso de la cuenta de servicio "legacy" de Cloud Build (la que
-# tiene roles/firebase.admin + roles/firebasehosting.admin ya otorgados),
-# en vez de la cuenta de servicio de Compute Engine que Google usa por
-# defecto en proyectos nuevos y que no tiene esos roles — eso era lo que
-# hacía fallar el paso de Firebase Hosting con 403 PERMISSION_DENIED.
-serviceAccount: 'projects/$PROJECT_ID/serviceAccounts/141953681725@cloudbuild.gserviceaccount.com'
+# Fuerza el uso de una service account propia (cloudbuild-deploy), con los
+# mismos roles que antes tenía la cuenta "legacy" de Cloud Build
+# (roles/firebase.admin + roles/firebasehosting.admin incluidos), en vez de
+# la cuenta de servicio de Compute Engine que Google usa por defecto en
+# proyectos nuevos y que no tiene esos roles — eso hacía fallar el paso de
+# Firebase Hosting con 403 PERMISSION_DENIED. La cuenta "legacy"
+# (@cloudbuild.gserviceaccount.com) ya no se puede referenciar aquí: Google
+# exige una service account "user-managed" o dejar este campo vacío.
+serviceAccount: 'projects/$PROJECT_ID/serviceAccounts/cloudbuild-deploy@mejora-gemeseg.iam.gserviceaccount.com'
 
 timeout: 1200s
