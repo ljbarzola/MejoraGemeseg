@@ -37,8 +37,32 @@ steps:
       - '--set-env-vars=NODE_ENV=production,REDIS_HOST=,REDIS_PORT=6379'
       - '--set-secrets=DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,FRONTEND_URL=FRONTEND_URL:latest,BOLDSIGN_API_KEY=BOLDSIGN_API_KEY:latest'
 
+  # Build frontend. El intento anterior de desplegarlo vía GitHub Actions
+  # (.github/workflows/firebase-hosting-merge.yml) fallaba porque requería un
+  # secret FIREBASE_SERVICE_ACCOUNT que nunca se configuró en el repo. Aquí no
+  # hace falta: Cloud Build ya corre con una identidad de GCP propia.
+  - name: 'node:20'
+    dir: 'frontend'
+    entrypoint: 'npm'
+    args: ['ci']
+
+  - name: 'node:20'
+    dir: 'frontend'
+    entrypoint: 'npm'
+    args: ['run', 'build']
+    env:
+      - 'VITE_API_URL=https://mejora-gemeseg-backend-141953681725.us-central1.run.app/api'
+
+  # Deploy frontend a Firebase Hosting usando la identidad de la cuenta de
+  # servicio de Cloud Build (sin secret aparte) — requiere que esa cuenta
+  # tenga el rol "Firebase Hosting Admin" en el proyecto "mejora-gemeseg".
+  - name: 'node:20'
+    dir: 'frontend'
+    entrypoint: 'npx'
+    args: ['--yes', 'firebase-tools', 'deploy', '--only', 'hosting', '--project', 'mejora-gemeseg']
+
 options:
   machineType: 'E2_HIGHCPU_8'
   logging: CLOUD_LOGGING_ONLY
 
-timeout: 600s
+timeout: 1200s

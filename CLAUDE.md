@@ -39,10 +39,14 @@ Services take a single `PrismaService` dependency, so specs instantiate the clas
 
 ## Architecture
 
-### Deployment: Cloud Run (API only) + Firebase Hosting (frontend only)
-`backend/Dockerfile` builds only the NestJS API; `cloudbuild.yaml` pushes it and deploys to Cloud Run (`mejora-gemeseg-backend`, us-central1) with `--set-secrets` for `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, `BOLDSIGN_API_KEY`. It does not build or serve the frontend.
+### Deployment: everything through `cloudbuild.yaml`, triggered on push to `main`
+A single Cloud Build trigger on `main` runs `cloudbuild.yaml` end to end:
+1. Builds `backend/Dockerfile` (NestJS API only, no frontend) and deploys it to Cloud Run (`mejora-gemeseg-backend`, us-central1) with `--set-secrets` for `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, `BOLDSIGN_API_KEY`.
+2. Builds the frontend (`npm ci && npm run build` in `frontend/`, `VITE_API_URL` set inline in the build step) and deploys it to **Firebase Hosting** via `npx firebase-tools deploy --only hosting --project mejora-gemeseg` — no separate secret needed, since Cloud Build already runs as a GCP service account. That account needs the **Firebase Hosting Admin** IAM role on the `mejora-gemeseg` project for this step to succeed.
 
-The frontend is built and deployed independently by `.github/workflows/firebase-hosting-merge.yml` on every push to `main` (`npm run build` in `frontend/`, `VITE_API_URL` from a GitHub secret), published to **Firebase Hosting**. `firebase.json` proxies `/api/**`, `/health`, `/docs/**` from Hosting to the Cloud Run service, so the two deploy independently but are served under one origin. The production URL is a custom domain (`app.gemeseg.com`) mapped onto Firebase Hosting, not the raw Cloud Run URL. Don't reintroduce building the frontend into `backend/Dockerfile` — that was removed because it duplicated this pipeline and could drift from what Firebase Hosting actually serves.
+`firebase.json` proxies `/api/**`, `/health`, `/docs/**` from Hosting to the Cloud Run service, so the two deploy from the same build but are served under one origin. The production URL is a custom domain (`app.gemeseg.com`) mapped onto Firebase Hosting, not the raw Cloud Run URL. Don't reintroduce building the frontend into `backend/Dockerfile` — keep it as a separate step in `cloudbuild.yaml` so a frontend-only failure doesn't block the backend deploy (they're sequential steps in the same build, not merged into one).
+
+A GitHub Actions workflow (`.github/workflows/firebase-hosting-merge.yml`) once tried to deploy the frontend this same way, but was removed (2026-09-11): it needed a `FIREBASE_SERVICE_ACCOUNT` repo secret that was never configured, so every run failed at the deploy step, and it duplicated what Cloud Build now does anyway. Don't re-add a GitHub Actions deploy path without first checking whether it's actually needed alongside the Cloud Build one above.
 
 ### Authorization has two independent layers — check both when adding a route
 1. **Role guard** (`common/guards/roles.guard.ts` + `@Roles(UserRole.ADMIN)` decorator): coarse ADMIN/MANAGER/EMPLOYEE check, enforced per-endpoint.
