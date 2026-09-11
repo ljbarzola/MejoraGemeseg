@@ -48,9 +48,20 @@ export class DriveService {
       }
     }
 
+    // Fallback para Cloud Run: el archivo está en .gitignore (es un secreto) y
+    // nunca llega a la imagen Docker, así que en producción las credenciales
+    // viajan como el contenido del JSON en esta env var (Secret Manager vía
+    // --set-secrets en cloudbuild.yaml), no como archivo.
+    if (!keyFile && process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+      keyFile = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      this.logger.log(
+        'DriveClient: loaded credentials from GOOGLE_SERVICE_ACCOUNT_JSON env var',
+      );
+    }
+
     if (!keyFile) {
       throw new BadRequestException(
-        'Google Drive no configurado. Coloca google-service-account.json en la raíz del backend.',
+        'Google Drive no configurado. Coloca google-service-account.json en la raíz del backend o define GOOGLE_SERVICE_ACCOUNT_JSON.',
       );
     }
 

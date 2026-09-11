@@ -8,52 +8,46 @@ interface Submodulo {
 
 const SUBMODULOS: Submodulo[] = [
   {
-    nombre: 'Reclutamiento',
+    nombre: '1. Reclutamiento',
     ruta: '/rrhh/reclutamiento',
     descripcion:
-      'Vacantes publicadas y candidatos que se postulan, sincronizados desde Drive. Es la puerta de entrada de gente nueva al sistema: cuando alguien queda contratado, se lo marca así desde su ficha de candidato — su carpeta pasa directamente a formar parte de Guardias, todavía sin una entidad asignada.',
+      'Punto de partida: vacantes publicadas y candidatos que se postulan subiendo sus documentos a una carpeta de Drive. Cuando alguien queda contratado, se lo marca desde su ficha con "Marcar como Contratado" — eso mueve su carpeta de Drive directo a Guardias, a la sub-carpeta "Sin Asignar" (todavía sin una entidad, eso se decide en el siguiente paso). No existe ningún tablero ni paso intermedio antes de esto: contratar es una sola acción, en esta pantalla.',
   },
   {
-    nombre: 'Kanban de Candidatos (seguimiento interno, no es la contratación)',
-    ruta: '/rrhh/kanban',
-    descripcion:
-      'Un tablero aparte para llevar el proceso de selección en columnas (Postulado → Validación Documental → Test Psicológico → Test Médico → Aprobado/Rechazado), independiente de Candidatos Postulados. No es el lugar donde se contrata a alguien — esa acción vive en Reclutamiento, como se explica arriba.',
-  },
-  {
-    nombre: 'Listado de Guardias',
+    nombre: '2. Listado de Guardias',
     ruta: '/rrhh/guardias',
     descripcion:
-      'Pantalla central de los guardias activos. Desde aquí se sincroniza la carpeta de Drive (que es la que manda sobre en qué entidad está cada guardia, o si todavía no tiene ninguna), se configuran los campos personalizados de la ficha de cada persona, y se registra la salida de alguien cuando deja de trabajar.',
+      'Aquí aparecen los guardias que ya pasaron por Reclutamiento (o que ya existían). "Sincronizar Drive" es lo que lee esa carpeta y decide en qué entidad está cada guardia (o si sigue en "Sin Asignar", esperando que alguien mueva su carpeta a Público/Privado/<Entidad> a mano). También desde aquí se configuran campos personalizados de cada ficha y se registra la salida cuando alguien deja de trabajar.',
   },
   {
-    nombre: 'Documentación',
-    ruta: '/rrhh/contracts',
-    descripcion:
-      'Generador de contratos y otros documentos a partir de plantillas Word. Los datos del guardia (nombre, cédula, entidad, horario, salario) se rellenan solos a partir de lo que ya está cargado en el sistema.',
-  },
-  {
-    nombre: 'Entidades y Requisitos',
+    nombre: '3. Entidades y Requisitos',
     ruta: '/rrhh/entidades',
     descripcion:
-      'Catálogo de las entidades (públicas o privadas) donde trabajan los guardias, y qué documentos exige cada una. Las entidades también se crean solas al sincronizar Drive. Desde aquí, un administrador puede además fusionar cédulas duplicadas si un guardia quedó registrado dos veces por error.',
+      'Catálogo de las entidades (públicas o privadas) donde terminan asignados los guardias del paso anterior, y qué documentos exige cada una — esa lista de requisitos es la que usa Cumplimiento para saber qué revisar. Las entidades se crean solas al sincronizar Drive, según las carpetas que existan. Un administrador también puede fusionar aquí cédulas duplicadas, si un guardia quedó registrado dos veces por error.',
   },
   {
-    nombre: 'Cumplimiento',
+    nombre: '4. Cumplimiento',
     ruta: '/rrhh/cumplimiento',
     descripcion:
-      'Vista de semáforo: qué guardia tiene su documentación al día, por vencer o vencida, según lo que exige su entidad. Desde aquí se aprueba o rechaza cada documento, se puede leer una fecha de vencimiento con IA, y se envía un recordatorio puntual a un guardia por correo.',
+      'Semáforo de documentos: para cada guardia, compara lo que subió contra lo que exige su entidad (definido en el paso anterior) y marca qué está al día, por vencer o vencido. Desde aquí se aprueba o rechaza cada documento con motivo, se puede leer una fecha de vencimiento con IA, y se envía un recordatorio puntual a un guardia por correo.',
   },
   {
-    nombre: 'Historial',
+    nombre: '5. Documentación',
+    ruta: '/rrhh/contracts',
+    descripcion:
+      'Generador de contratos y otros documentos a partir de plantillas Word. Se apoya en los datos que ya están cargados del guardia (nombre, cédula, entidad, horario, salario) para rellenarlos solos, en vez de tener que volver a escribirlos.',
+  },
+  {
+    nombre: '6. Historial',
     ruta: '/rrhh/historial',
     descripcion:
-      'Línea de tiempo de cada guardia: a qué entidades estuvo asignado y cuándo, junto con sus movimientos de entrada y salida. Es el lugar para reconstruir el recorrido completo de una persona en la empresa.',
+      'Línea de tiempo automática: cada vez que un guardia cambia de entidad (paso 2) o sale de la empresa, queda un registro aquí. Es el lugar para reconstruir el recorrido completo de una persona, sin tener que ir entidad por entidad.',
   },
   {
     nombre: 'Personal Administrativo',
     ruta: '/rrhh/administrativo',
     descripcion:
-      'El mismo tipo de checklist de documentos que Cumplimiento, pero para personal de oficina (no guardias). Tiene su propia carpeta de Drive, separada de la de Guardias.',
+      'Igual que Cumplimiento (checklist de documentos con semáforo), pero para personal de oficina en vez de guardias. Vive en una carpeta de Drive separada de la de Guardias, así que es independiente de los pasos 1-6.',
   },
 ];
 
@@ -70,9 +64,11 @@ export default function RrhhHelpModal({ onClose }: { onClose: () => void }) {
 
         <div className="modal-body">
           <p style={{ margin: 0, color: '#4a5568', fontSize: '0.9rem' }}>
-            Todo parte de una idea simple: la carpeta de Drive de cada guardia es la que
-            manda sobre dónde está trabajando hoy. El resto de las pantallas leen o
-            actúan sobre esa misma información, cada una desde un ángulo distinto.
+            Las pantallas de abajo están en el orden real en que se usan, de principio
+            a fin: cada una alimenta a la siguiente. Todo parte de la misma idea — la
+            carpeta de Drive de cada guardia es la que manda sobre dónde está
+            trabajando hoy — y el resto de las pantallas leen o actúan sobre esa misma
+            información, cada una desde un ángulo distinto.
           </p>
 
           {SUBMODULOS.map((s) => (
@@ -88,11 +84,11 @@ export default function RrhhHelpModal({ onClose }: { onClose: () => void }) {
 
           <p style={{ margin: '4px 0 0', color: '#718096', fontSize: '0.85rem', fontStyle: 'italic' }}>
             En resumen: Reclutamiento trae gente nueva y la contrata, Listado de
-            Guardias sincroniza y administra a quienes ya están (contratados o no),
-            Entidades y Requisitos define qué se exige dónde, Cumplimiento controla
-            que esa exigencia se cumpla, y Historial guarda la memoria de todo lo
-            anterior. El Kanban de Candidatos es un tablero de seguimiento aparte,
-            no un paso obligatorio de este recorrido.
+            Guardias sincroniza y decide en qué entidad queda cada quien, Entidades y
+            Requisitos define qué se exige en cada una, Cumplimiento controla que esa
+            exigencia se cumpla, Documentación genera lo que haga falta firmar, e
+            Historial guarda la memoria de todo lo anterior. Personal Administrativo
+            corre en paralelo, para el personal de oficina.
           </p>
         </div>
 

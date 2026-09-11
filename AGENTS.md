@@ -46,7 +46,7 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 - **Backend:** Cloud Run (`mejora-gemeseg-backend`, us-central1)
 - **Frontend:** Firebase Hosting (`mejora-gemeseg.web.app`)
 - **Registry:** Artifact Registry (`us-central1-docker.pkg.dev/mejora-gemeseg/gemeseg-repo`)
-- **Secrets:** Secret Manager (`DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`)
+- **Secrets:** Secret Manager (`DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, `BOLDSIGN_API_KEY`, `GOOGLE_SERVICE_ACCOUNT_JSON`)
 - **Deploy:** `firebase deploy --only hosting` (frontend), Cloud Build / `gcloud run deploy` (backend)
 
 ## Convenciones de Codigo
@@ -102,8 +102,12 @@ Google Cloud Platform (proyecto: mejora-gemeseg)
   ├── Cloud Run (NestJS backend, solo API) → mejora-gemeseg-backend
   ├── Firebase Hosting (React, dominio publico app.gemeseg.com) → mejora-gemeseg.web.app
   ├── Artifact Registry           → gemeseg-repo
-  └── Secret Manager              → DATABASE_URL, JWT_SECRET, FRONTEND_URL, BOLDSIGN_API_KEY
+  └── Secret Manager              → DATABASE_URL, JWT_SECRET, FRONTEND_URL, BOLDSIGN_API_KEY, GOOGLE_SERVICE_ACCOUNT_JSON
 ```
+
+`GOOGLE_SERVICE_ACCOUNT_JSON` es el contenido completo de `backend/google-service-account.json` (gitignored, nunca llega a la imagen Docker) — `DriveService`/`GmailMailService` lo usan como fallback cuando el archivo no existe en disco (ver `backend/src/modules/personal/services/drive.service.ts`, `getDriveClient()`). Si se rota la service account, actualizar este secreto (`gcloud secrets versions add GOOGLE_SERVICE_ACCOUNT_JSON --data-file=backend/google-service-account.json`), no solo el archivo local.
+
+El deploy de Firebase Hosting en `cloudbuild.yaml` no usa ningún secreto: corre con el builder oficial `us-docker.pkg.dev/firebase-cli/us/firebase`, que sí recoge correctamente la identidad ambiental de la cuenta de servicio de Cloud Build (que ya tiene `roles/firebasehosting.admin` + `roles/firebase.admin`). Se descartaron dos alternativas: un token personal `firebase login:ci` (`FIREBASE_TOKEN`) que resultó revocado/expirado, y una clave de service account descargada (bloqueada por política de la organización: `iam.serviceAccountKeys.create` denegado incluso para el owner del proyecto). Ver el comentario en `cloudbuild.yaml` para el detalle completo.
 
 ### Plataformas
 - **Base de datos:** Cloud SQL (PostgreSQL 16, `us-central1`)

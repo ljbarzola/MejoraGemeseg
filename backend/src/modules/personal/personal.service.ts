@@ -14,7 +14,7 @@ export class PersonalService {
   async getDashboard(companyId: number) {
     const now = new Date();
     const [
-      totalCandidates,
+      vacantesAbiertas,
       activeCertifications,
       pendingContracts,
       alertCount,
@@ -25,7 +25,11 @@ export class PersonalService {
       movimientosEnProceso,
       complianceOverview,
     ] = await Promise.all([
-      this.prisma.candidate.count({ where: { companyId } }),
+      // Antes contaba filas de `Candidate` (el Kanban de Sistema B, que no es
+      // el flujo real de contratación — ver .agents/modules/reclutamiento.md
+      // Sprint 6). El Reclutamiento real vive en Drive vía JobPosition, así
+      // que la vacante abierta es el número que de verdad refleja actividad.
+      this.prisma.jobPosition.count({ where: { companyId, estado: 'ABIERTA' } }),
       this.prisma.certification.count({
         where: { companyId, status: 'ACTIVE' },
       }),
@@ -85,7 +89,7 @@ export class PersonalService {
     );
 
     return {
-      totalCandidates,
+      vacantesAbiertas,
       activeCertifications,
       pendingContracts,
       alertCount,

@@ -67,7 +67,7 @@ export default function PersonalDashboard() {
   ];
 
   const resumenCards = [
-    { label: 'Reclutamiento', value: data?.totalCandidates || 0, icon: '👤', color: '#2b6cb0', onClick: () => navigate('/rrhh/kanban') },
+    { label: 'Vacantes Abiertas', value: data?.vacantesAbiertas || 0, icon: '👤', color: '#2b6cb0', onClick: () => navigate('/rrhh/reclutamiento') },
     { label: 'Documentos Pendientes', value: data?.pendingContracts || 0, icon: '📄', color: '#6b46c1', onClick: () => navigate('/rrhh/contracts') },
   ];
 

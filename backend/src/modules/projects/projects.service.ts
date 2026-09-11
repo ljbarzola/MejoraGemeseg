@@ -66,10 +66,21 @@ export class ProjectsService {
 
     const where: any = {};
 
-    if (companyId) {
-      where.createdBy = { companyId };
-    } else if (userRole !== UserRole.ADMIN) {
+    // Solo ADMIN ve todos los proyectos de su empresa (o de todas, si es
+    // super-admin con companyId null). Cualquier otro rol —incluido
+    // EMPLOYEE, que siempre tiene companyId— solo ve los proyectos que creó
+    // o donde es miembro; antes el chequeo de companyId iba primero y
+    // capturaba también a los no-admin, mostrándoles proyectos ajenos de
+    // toda la empresa sin haber sido agregados como miembros.
+    if (userRole === UserRole.ADMIN) {
+      if (companyId) {
+        where.createdBy = { companyId };
+      }
+    } else {
       where.OR = [{ createdById: userId }, { members: { some: { userId } } }];
+      if (companyId) {
+        where.createdBy = { companyId };
+      }
     }
 
     if (query.status) {

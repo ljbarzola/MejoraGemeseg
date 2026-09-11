@@ -5,12 +5,12 @@ import * as path from 'path';
 
 // Servicio de envío de correo (Fase C de Entidades/Cumplimiento) vía Gmail
 // API, usando la MISMA service account que ya usa DriveService (mismo
-// google-service-account.json, misma lógica de resolución de ruta —
-// copiada deliberadamente en vez de reutilizada, ver comentario abajo), pero
-// con un cliente de auth SEPARADO: distinto scope (`gmail.send` en vez de
-// `drive`) y `subject` (domain-wide delegation, "enviar como" una casilla
-// real del Workspace). No se toca DriveService.getDriveClient() ni su scope
-// para no arriesgar la sincronización de Drive, que ya funciona en producción.
+// google-service-account.json / GOOGLE_SERVICE_ACCOUNT_JSON, misma lógica de
+// resolución — copiada deliberadamente en vez de reutilizada, ver comentario
+// abajo), pero con un cliente de auth SEPARADO: distinto scope (`gmail.send`
+// en vez de `drive`) y `subject` (domain-wide delegation, "enviar como" una
+// casilla real del Workspace). No se toca DriveService.getDriveClient() ni su
+// scope para mantener este envío de correo aislado de la sincronización de Drive.
 @Injectable()
 export class GmailMailService {
   private readonly logger = new Logger(GmailMailService.name);
@@ -42,8 +42,16 @@ export class GmailMailService {
       }
     }
 
+    // Fallback para Cloud Run, mismo criterio que DriveService.getDriveClient().
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+      this.logger.log(
+        'GmailMailService: credenciales cargadas de GOOGLE_SERVICE_ACCOUNT_JSON',
+      );
+      return JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    }
+
     throw new Error(
-      'Google Service Account no configurado. Coloca google-service-account.json en la raíz del backend.',
+      'Google Service Account no configurado. Coloca google-service-account.json en la raíz del backend o define GOOGLE_SERVICE_ACCOUNT_JSON.',
     );
   }
 

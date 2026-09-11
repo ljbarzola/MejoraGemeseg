@@ -85,6 +85,7 @@ interface JobPosition {
   archivosRequeridos: ArchivoRequerido[];
   estado: string;
   createdAt: string;
+  driveFileId?: string | null;
 }
 
 interface Candidate {
@@ -746,9 +747,13 @@ export default function ReclutamientoPage() {
                   </div>
                 </div>
 
-                <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #e2e8f0', fontSize: '0.7rem', color: '#a0aec0', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Sincronizado con Drive JSON</span>
-                  <span>{new Date(p.createdAt).toLocaleDateString('es-EC')}</span>
+                <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #e2e8f0', fontSize: '0.7rem', display: 'flex', justifyContent: 'space-between' }}>
+                  {p.driveFileId ? (
+                    <span style={{ color: '#a0aec0' }}>Sincronizado con Drive JSON</span>
+                  ) : (
+                    <span style={{ color: '#c53030', fontWeight: 600 }}>⚠ No sincronizado con Drive</span>
+                  )}
+                  <span style={{ color: '#a0aec0' }}>{new Date(p.createdAt).toLocaleDateString('es-EC')}</span>
                 </div>
               </div>
             ))}
