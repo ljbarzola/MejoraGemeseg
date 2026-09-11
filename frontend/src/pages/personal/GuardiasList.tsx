@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, Settings, Settings2, X, Users, Building2, Landmark, UserX, LogOut, IdCard } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Settings, Settings2, X, Users, Building2, Landmark, UserX, LogOut, IdCard, ArrowRightLeft } from 'lucide-react';
 import { getAvailableCustodios } from '../../services/custodia.service';
 import {
   getAsignaciones,
   getEntidades,
   syncEntidadesFolder,
+  moverGuardiaAEntidad,
   type AsignacionGuardia,
   type Entidad,
   type EntidadTipo,
@@ -75,6 +76,13 @@ export default function GuardiasList() {
   const [salidaEnCurso, setSalidaEnCurso] = useState<string | null>(null);
   const [movimientoDetalleId, setMovimientoDetalleId] = useState<number | null>(null);
   const [showFieldsConfig, setShowFieldsConfig] = useState(false);
+
+  // Asignar/mover guardia a entidad (mueve la carpeta en Drive, ver
+  // handleConfirmMover más abajo).
+  const [moverGuardia, setMoverGuardia] = useState<GuardiaRow | null>(null);
+  const [moverEntidadId, setMoverEntidadId] = useState<number | ''>('');
+  const [moviendo, setMoviendo] = useState(false);
+  const [moverError, setMoverError] = useState('');
 
   // Sincronizar Drive
   const [syncing, setSyncing] = useState(false);
@@ -147,6 +155,27 @@ export default function GuardiasList() {
       setSyncError(err.response?.data?.message || 'No se pudo sincronizar con Drive.');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const openMoverModal = (r: GuardiaRow) => {
+    setMoverGuardia(r);
+    setMoverEntidadId(r.entidad?.id || '');
+    setMoverError('');
+  };
+
+  const handleConfirmMover = async () => {
+    if (!moverGuardia || !moverEntidadId) return;
+    setMoviendo(true);
+    setMoverError('');
+    try {
+      await moverGuardiaAEntidad(moverGuardia.cedula, moverEntidadId);
+      setMoverGuardia(null);
+      load();
+    } catch (err: any) {
+      setMoverError(err.response?.data?.message || 'No se pudo mover al guardia de entidad.');
+    } finally {
+      setMoviendo(false);
     }
   };
 
@@ -431,6 +460,17 @@ export default function GuardiasList() {
                             <IdCard size={15} />
                           </button>
                         )}
+                        {canEdit && !r.fuera && (
+                          <button
+                            onClick={() => openMoverModal(r)}
+                            disabled={!r.cedula}
+                            title={r.entidad ? 'Mover a otra entidad' : 'Asignar a una entidad'}
+                            className="btn-secondary"
+                            style={{ padding: '6px 8px', display: 'flex', alignItems: 'center' }}
+                          >
+                            <ArrowRightLeft size={15} />
+                          </button>
+                        )}
                         {!r.fuera && (
                           <button
                             onClick={() => handleRegistrarSalida(r)}
@@ -585,6 +625,56 @@ export default function GuardiasList() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ASIGNAR/MOVER GUARDIA A ENTIDAD */}
+      {moverGuardia && (
+        <div className="modal-overlay" onClick={() => !moviendo && setMoverGuardia(null)}>
+          <div className="modal" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ArrowRightLeft size={17} /> {moverGuardia.entidad ? 'Mover de entidad' : 'Asignar a entidad'}
+              </h3>
+              <button className="modal-close" onClick={() => setMoverGuardia(null)} disabled={moviendo}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <p style={{ margin: '0 0 14px', fontSize: '0.88rem', color: '#4a5568' }}>
+                Esto mueve la carpeta de Drive de <strong>{moverGuardia.name}</strong>
+                {moverGuardia.entidad ? <> de <strong>{moverGuardia.entidad.nombre}</strong> a</> : ' a'} la entidad que elijas — no se borra ningún documento, y la asignación queda actualizada de inmediato.
+              </p>
+
+              {moverError && <div className="form-error" style={{ marginBottom: '12px' }}>{moverError}</div>}
+
+              <div className="form-group">
+                <label>Entidad destino *</label>
+                <select
+                  value={moverEntidadId}
+                  onChange={(e) => setMoverEntidadId(e.target.value ? Number(e.target.value) : '')}
+                  style={{ width: '100%' }}
+                >
+                  <option value="">Selecciona una entidad...</option>
+                  {entidades.filter((e) => e.activo).map((e) => (
+                    <option key={e.id} value={e.id} disabled={e.id === moverGuardia.entidad?.id}>
+                      {e.nombre} ({TIPO_LABEL[e.tipo]})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setMoverGuardia(null)} disabled={moviendo}>
+                Cancelar
+              </button>
+              <button className="auth-btn" onClick={handleConfirmMover} disabled={moviendo || !moverEntidadId}>
+                {moviendo ? 'Moviendo...' : 'Confirmar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsIn } from 'class-validator';
+import { IsString, IsOptional, IsIn, IsInt } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export const FOLDER_CONFIG_TYPES = [
@@ -27,4 +27,9 @@ export class TestDriveConnectionDto {
   @IsIn([...FOLDER_CONFIG_TYPES])
   @IsOptional()
   type?: string;
+}
+
+export class MoverGuardiaEntidadDto {
+  @IsInt()
+  entidadId: number;
 }

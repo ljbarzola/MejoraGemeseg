@@ -1514,6 +1514,76 @@ export class DriveService {
     return { cedula, folderId: folder.folderId, archivedTo: config.driveFolderName };
   }
 
+  // Asigna o mueve a un guardia de entidad: mueve su carpeta de Drive a
+  // Público/Privado/<Entidad destino> (mismo mecanismo que archivarCarpetaGuardia
+  // y contratarCandidato — solo cambia de padre, no toca documentos). Drive
+  // sigue siendo la fuente de la verdad de la asignación (ver
+  // syncEntidadesFolder): esto NO escribe en AsignacionGuardia directamente,
+  // el llamador (drive.controller.ts) corre la sincronización justo después
+  // para que la asignación quede reflejada de inmediato, sin que RRHH tenga
+  // que apretar "Sincronizar Drive" a mano.
+  async moverGuardiaAEntidad(
+    companyId: number,
+    cedula: string,
+    entidadId: number,
+  ) {
+    if (!companyId)
+      throw new BadRequestException('Usuario sin empresa asociada');
+
+    const folder = await this.prisma.employeeDriveFolder.findUnique({
+      where: { companyId_cedula: { companyId, cedula } },
+    });
+    if (!folder) {
+      throw new BadRequestException(
+        'Este guardia no tiene una carpeta de Drive vinculada.',
+      );
+    }
+
+    const entidad = await this.prisma.entidad.findFirst({
+      where: { id: entidadId, companyId },
+    });
+    if (!entidad) {
+      throw new BadRequestException('Entidad no encontrada.');
+    }
+    if (!entidad.driveFolderId) {
+      throw new BadRequestException(
+        `"${entidad.nombre}" todavía no tiene una carpeta de Drive vinculada — sincroniza Drive primero (Listado de Guardias → Sincronizar Drive) para que se cree, o revisa la carpeta de la entidad.`,
+      );
+    }
+
+    const cedulasFuera = new Set(
+      await this.movimientoPersonalService.getCedulasFuera(companyId),
+    );
+    if (cedulasFuera.has(cedula)) {
+      throw new BadRequestException(
+        'Este guardia ya registró su salida completada; no se lo puede reasignar a una entidad.',
+      );
+    }
+
+    try {
+      const drive = this.getDriveClient();
+      const current = await drive.files.get({
+        fileId: folder.folderId,
+        fields: 'parents',
+        supportsAllDrives: true,
+      });
+      const previousParents = (current.data.parents || []).join(',');
+      await drive.files.update({
+        fileId: folder.folderId,
+        addParents: this.sanitizeFolderId(entidad.driveFolderId),
+        removeParents: previousParents,
+        fields: 'id, parents',
+        supportsAllDrives: true,
+      });
+    } catch (err) {
+      throw new BadRequestException(
+        `No se pudo mover la carpeta en Drive: ${err.message}`,
+      );
+    }
+
+    return { cedula, folderId: folder.folderId, movidoA: entidad.nombre };
+  }
+
   // La carpeta de Reclutamiento es su propia carpeta raíz dedicada (config
   // type='RECLUTAMIENTO'), independiente de la de Cumplimiento. Dentro de
   // ella hay una subcarpeta por cada Puesto/Vacante (creada automáticamente

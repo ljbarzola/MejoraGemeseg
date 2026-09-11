@@ -340,3 +340,19 @@ export interface SyncEntidadesResult {
 
 export const syncEntidadesFolder = (): Promise<SyncEntidadesResult> =>
   api.post('/personal/drive/sync-entidades').then((r) => r.data);
+
+// ASIGNAR/MOVER GUARDIA A ENTIDAD — mueve la carpeta del guardia en Drive a
+// Público/Privado/<entidad destino> y sincroniza de inmediato (ver
+// DriveService.moverGuardiaAEntidad). Drive sigue siendo la fuente de la
+// verdad: esto no crea la AsignacionGuardia directamente, la deja abierta
+// el sync que corre justo después, en el mismo request.
+export interface MoverGuardiaEntidadResult {
+  movimiento: { cedula: string; folderId: string; movidoA: string };
+  sync: SyncEntidadesResult;
+}
+
+export const moverGuardiaAEntidad = (
+  cedula: string,
+  entidadId: number,
+): Promise<MoverGuardiaEntidadResult> =>
+  api.post(`/personal/drive/guardia/${cedula}/mover-entidad`, { entidadId }).then((r) => r.data);

@@ -20,7 +20,11 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
 import { Section } from '../../common/decorators/section.decorator';
 import { UserRole } from '@prisma/client';
-import { SaveDriveConfigDto, TestDriveConnectionDto } from './dto/drive.dto';
+import {
+  SaveDriveConfigDto,
+  TestDriveConnectionDto,
+  MoverGuardiaEntidadDto,
+} from './dto/drive.dto';
 import {
   CreateDocumentTypeDto,
   UpdateDocumentTypeDto,
@@ -316,5 +320,28 @@ export class DriveController {
       req.user.companyId,
       cedula,
     );
+  }
+
+  // Asigna/mueve a un guardia a una entidad (mueve su carpeta en Drive y
+  // sincroniza de inmediato, mismo patrón que contratarCandidato de arriba)
+  // para que no haya que apretar "Sincronizar Drive" a mano después.
+  @Post('drive/guardia/:cedula/mover-entidad')
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('RRHH', 'write')
+  async moverGuardiaAEntidad(
+    @Param('cedula') cedula: string,
+    @Body() dto: MoverGuardiaEntidadDto,
+    @Req() req: any,
+  ) {
+    const movimiento = await this.driveService.moverGuardiaAEntidad(
+      req.user.companyId,
+      cedula,
+      dto.entidadId,
+    );
+    const sync = await this.driveService.syncEntidadesFolder(
+      req.user.companyId,
+      req.user.userId,
+    );
+    return { movimiento, sync };
   }
 }
