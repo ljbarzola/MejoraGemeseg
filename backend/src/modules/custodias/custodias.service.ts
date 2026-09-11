@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCustodiaDto } from './dto/create-custodia.dto';
 
@@ -19,9 +23,13 @@ export class CustodiasService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateCustodiaDto, companyId: number, userId: number) {
-    const normalizedType = dto.tipoCustodia.toUpperCase().replace(/\s+/g, '_') as any;
+    const normalizedType = dto.tipoCustodia
+      .toUpperCase()
+      .replace(/\s+/g, '_') as any;
 
-    const existing = await this.prisma.custodia.findUnique({ where: { numeroGuia: dto.numeroGuia } });
+    const existing = await this.prisma.custodia.findUnique({
+      where: { numeroGuia: dto.numeroGuia },
+    });
     if (existing) {
       throw new BadRequestException('El número de guía ya existe.');
     }
@@ -40,8 +48,12 @@ export class CustodiasService {
         placa: dto.placa?.trim() || '',
         direccionSalida: dto.direccionSalida?.trim() || '',
         direccionLlegada: dto.direccionLlegada?.trim() || '',
-        fechaHoraSalida: dto.fechaHoraSalida ? new Date(dto.fechaHoraSalida) : null,
-        fechaHoraLlegada: dto.fechaHoraLlegada ? new Date(dto.fechaHoraLlegada) : null,
+        fechaHoraSalida: dto.fechaHoraSalida
+          ? new Date(dto.fechaHoraSalida)
+          : null,
+        fechaHoraLlegada: dto.fechaHoraLlegada
+          ? new Date(dto.fechaHoraLlegada)
+          : null,
         observaciones: dto.observaciones?.trim() || null,
         nombreHacienda: dto.nombreHacienda?.trim() || null,
         cantidadSacos: dto.cantidadSacos || null,
@@ -52,12 +64,22 @@ export class CustodiasService {
     });
   }
 
-  async findAll(companyId: number, filters?: { fechaInicio?: string; fechaFin?: string; tipo?: string; estado?: string }) {
+  async findAll(
+    companyId: number,
+    filters?: {
+      fechaInicio?: string;
+      fechaFin?: string;
+      tipo?: string;
+      estado?: string;
+    },
+  ) {
     const where: any = { companyId };
     if (filters?.fechaInicio || filters?.fechaFin) {
       where.createdAt = {};
-      if (filters.fechaInicio) where.createdAt.gte = new Date(`${filters.fechaInicio}T00:00:00.000Z`);
-      if (filters.fechaFin) where.createdAt.lte = new Date(`${filters.fechaFin}T23:59:59.999Z`);
+      if (filters.fechaInicio)
+        where.createdAt.gte = new Date(`${filters.fechaInicio}T00:00:00.000Z`);
+      if (filters.fechaFin)
+        where.createdAt.lte = new Date(`${filters.fechaFin}T23:59:59.999Z`);
     }
     if (filters?.tipo) {
       where.tipoCustodia = filters.tipo.toUpperCase().replace(/\s+/g, '_');
@@ -65,11 +87,16 @@ export class CustodiasService {
     if (filters?.estado) {
       where.estado = filters.estado;
     }
-    return this.prisma.custodia.findMany({ where, orderBy: { createdAt: 'desc' } });
+    return this.prisma.custodia.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async findOne(id: number, companyId: number) {
-    const custodia = await this.prisma.custodia.findFirst({ where: { id, companyId } });
+    const custodia = await this.prisma.custodia.findFirst({
+      where: { id, companyId },
+    });
     if (!custodia) throw new NotFoundException('Custodia no encontrada.');
     return custodia;
   }
@@ -77,10 +104,15 @@ export class CustodiasService {
   async updateEstado(id: number, estado: string, companyId: number) {
     const validEstados = ['LISTO_PARA_CUSTODIAR', 'EN_CAMINO', 'LLEGO'];
     if (!validEstados.includes(estado)) {
-      throw new BadRequestException(`Estado inválido. Opciones: ${validEstados.join(', ')}`);
+      throw new BadRequestException(
+        `Estado inválido. Opciones: ${validEstados.join(', ')}`,
+      );
     }
     await this.findOne(id, companyId);
-    return this.prisma.custodia.update({ where: { id }, data: { estado } as any });
+    return this.prisma.custodia.update({
+      where: { id },
+      data: { estado } as any,
+    });
   }
 
   async remove(id: number, companyId: number) {
@@ -112,7 +144,9 @@ export class CustodiasService {
       });
     }
 
-    const candidateMap = new Map(candidates.map((c) => [c.cedula, c.column?.name || 'Inscrito']));
+    const candidateMap = new Map(
+      candidates.map((c) => [c.cedula, c.column?.name || 'Inscrito']),
+    );
 
     const list = driveCustodios.map((c) => ({
       name: c.employeeName,
@@ -122,7 +156,11 @@ export class CustodiasService {
 
     for (const cand of candidates) {
       if (cand.positionApplied?.toLowerCase().includes('custodio')) {
-        if (!list.some((item) => item.name.toLowerCase() === cand.fullName.toLowerCase())) {
+        if (
+          !list.some(
+            (item) => item.name.toLowerCase() === cand.fullName.toLowerCase(),
+          )
+        ) {
           list.push({
             name: cand.fullName,
             cedula: cand.cedula,
@@ -139,17 +177,25 @@ export class CustodiasService {
     const custodias = await this.findAll(companyId, { fechaInicio, fechaFin });
     const pagables = custodias.filter((c) => c.estado === 'LLEGO');
 
-    const empleadosMap = new Map<string, {
-      nombre: string;
-      cedula: string;
-      total_viajes: number;
-      por_tipo: Record<string, number>;
-      subtotales: Record<string, number>;
-      total_usd: number;
-      detalle: any[];
-    }>();
+    const empleadosMap = new Map<
+      string,
+      {
+        nombre: string;
+        cedula: string;
+        total_viajes: number;
+        por_tipo: Record<string, number>;
+        subtotales: Record<string, number>;
+        total_usd: number;
+        detalle: any[];
+      }
+    >();
 
-    const registrar = (nombre: string, cedula: string, rol: string, custodia: any) => {
+    const registrar = (
+      nombre: string,
+      cedula: string,
+      rol: string,
+      custodia: any,
+    ) => {
       const key = cedula?.trim() || nombre.trim();
       if (!empleadosMap.has(key)) {
         empleadosMap.set(key, {
@@ -165,8 +211,10 @@ export class CustodiasService {
       const emp = empleadosMap.get(key)!;
       const tarifa = CUSTODIA_RATES[custodia.tipoCustodia] || 0;
       emp.total_viajes++;
-      emp.por_tipo[custodia.tipoCustodia] = (emp.por_tipo[custodia.tipoCustodia] || 0) + 1;
-      emp.subtotales[custodia.tipoCustodia] = (emp.subtotales[custodia.tipoCustodia] || 0) + tarifa;
+      emp.por_tipo[custodia.tipoCustodia] =
+        (emp.por_tipo[custodia.tipoCustodia] || 0) + 1;
+      emp.subtotales[custodia.tipoCustodia] =
+        (emp.subtotales[custodia.tipoCustodia] || 0) + tarifa;
       emp.total_usd += tarifa;
       emp.detalle.push({
         numero_guia: custodia.numeroGuia,
@@ -189,18 +237,28 @@ export class CustodiasService {
       registrar(c.custodio2Name, c.custodio2Cedula, 'Custodio 2', c);
     }
 
-    const empleados = Array.from(empleadosMap.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    const empleados = Array.from(empleadosMap.values()).sort((a, b) =>
+      a.nombre.localeCompare(b.nombre),
+    );
     const total_pagado = empleados.reduce((sum, e) => sum + e.total_usd, 0);
 
-    const totales_por_tipo: Record<string, number> = { HACIENDA: 0, PUERTO: 0, VIP: 0 };
+    const totales_por_tipo: Record<string, number> = {
+      HACIENDA: 0,
+      PUERTO: 0,
+      VIP: 0,
+    };
     for (const c of pagables) totales_por_tipo[c.tipoCustodia]++;
 
     // Build chronological matrix
-    const trabajadoresCatalogo = await this.prisma.employeeDriveFolder.findMany({
-      where: { companyId, folderType: 'CUSTODIAS' },
-      orderBy: { employeeName: 'asc' },
-    });
-    const columnasTrabajadores = trabajadoresCatalogo.map((e) => e.employeeName);
+    const trabajadoresCatalogo = await this.prisma.employeeDriveFolder.findMany(
+      {
+        where: { companyId, folderType: 'CUSTODIAS' },
+        orderBy: { employeeName: 'asc' },
+      },
+    );
+    const columnasTrabajadores = trabajadoresCatalogo.map(
+      (e) => e.employeeName,
+    );
     const totalesMatrix: Record<string, number> = {};
     for (const t of columnasTrabajadores) totalesMatrix[t] = 0;
 
@@ -217,12 +275,21 @@ export class CustodiasService {
         const tipoTxt = TIPO_LABELS[c.tipoCustodia] || c.tipoCustodia;
         let label: string;
         if (p.rol === 'Chofer') label = `Chofer-${tipoTxt}: ${tarifa}`;
-        else label = `${p.rol === 'Custodio 1' ? 'Cust. 1' : 'Cust. 2'} ${c.tipoCustodia} ${tarifa} dolares`;
-        celdas[p.nombre] = { tipo: c.tipoCustodia, monto: tarifa, rol: p.rol, label };
-        if (totalesMatrix[p.nombre] !== undefined) totalesMatrix[p.nombre] += tarifa;
+        else
+          label = `${p.rol === 'Custodio 1' ? 'Cust. 1' : 'Cust. 2'} ${c.tipoCustodia} ${tarifa} dolares`;
+        celdas[p.nombre] = {
+          tipo: c.tipoCustodia,
+          monto: tarifa,
+          rol: p.rol,
+          label,
+        };
+        if (totalesMatrix[p.nombre] !== undefined)
+          totalesMatrix[p.nombre] += tarifa;
       }
       filas.push({
-        fecha: c.fechaHoraSalida ? this.formatFechaEC(c.fechaHoraSalida) : this.formatFechaEC(c.createdAt),
+        fecha: c.fechaHoraSalida
+          ? this.formatFechaEC(c.fechaHoraSalida)
+          : this.formatFechaEC(c.createdAt),
         fecha_hora: c.fechaHoraSalida || c.createdAt,
         numero_guia: c.numeroGuia,
         cliente: c.cliente,
@@ -258,9 +325,10 @@ export class CustodiasService {
 
   async getDashboardStats(companyId: number, mes?: string) {
     const now = new Date();
-    const targetMes = mes && /^\d{4}-\d{2}$/.test(mes)
-      ? mes
-      : `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    const targetMes =
+      mes && /^\d{4}-\d{2}$/.test(mes)
+        ? mes
+        : `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
     const [year, month] = targetMes.split('-').map(Number);
     const startDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
     const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
@@ -275,10 +343,33 @@ export class CustodiasService {
 
     const finalizadas = todas.filter((c) => c.estado === 'LLEGO');
 
-    const porTipoMap: Record<string, { tipo: string; cantidad: number; total_costo: number; tarifa_persona: number }> = {
-      HACIENDA: { tipo: 'HACIENDA', cantidad: 0, total_costo: 0, tarifa_persona: CUSTODIA_RATES.HACIENDA },
-      PUERTO: { tipo: 'PUERTO', cantidad: 0, total_costo: 0, tarifa_persona: CUSTODIA_RATES.PUERTO },
-      VIP: { tipo: 'VIP', cantidad: 0, total_costo: 0, tarifa_persona: CUSTODIA_RATES.VIP },
+    const porTipoMap: Record<
+      string,
+      {
+        tipo: string;
+        cantidad: number;
+        total_costo: number;
+        tarifa_persona: number;
+      }
+    > = {
+      HACIENDA: {
+        tipo: 'HACIENDA',
+        cantidad: 0,
+        total_costo: 0,
+        tarifa_persona: CUSTODIA_RATES.HACIENDA,
+      },
+      PUERTO: {
+        tipo: 'PUERTO',
+        cantidad: 0,
+        total_costo: 0,
+        tarifa_persona: CUSTODIA_RATES.PUERTO,
+      },
+      VIP: {
+        tipo: 'VIP',
+        cantidad: 0,
+        total_costo: 0,
+        tarifa_persona: CUSTODIA_RATES.VIP,
+      },
     };
 
     const porEstadoMap: Record<string, number> = {
@@ -297,10 +388,15 @@ export class CustodiasService {
     for (const c of finalizadas) {
       if (porTipoMap[c.tipoCustodia]) {
         porTipoMap[c.tipoCustodia].cantidad++;
-        porTipoMap[c.tipoCustodia].total_costo += (CUSTODIA_RATES[c.tipoCustodia] || 0) * 3;
+        porTipoMap[c.tipoCustodia].total_costo +=
+          (CUSTODIA_RATES[c.tipoCustodia] || 0) * 3;
       }
       total_nomina_usd += (CUSTODIA_RATES[c.tipoCustodia] || 0) * 3;
-      [c.choferCedula || c.choferName, c.custodio1Cedula || c.custodio1Name, c.custodio2Cedula || c.custodio2Name]
+      [
+        c.choferCedula || c.choferName,
+        c.custodio1Cedula || c.custodio1Name,
+        c.custodio2Cedula || c.custodio2Name,
+      ]
         .filter(Boolean)
         .forEach((key) => empleadosSet.add(key.trim()));
     }
@@ -318,12 +414,21 @@ export class CustodiasService {
         empleados_activos: empleadosSet.size,
       },
       por_tipo: Object.values(porTipoMap),
-      por_estado: Object.entries(porEstadoMap).map(([estado, cantidad]) => ({ estado, cantidad })),
+      por_estado: Object.entries(porEstadoMap).map(([estado, cantidad]) => ({
+        estado,
+        cantidad,
+      })),
     };
   }
 
-  async getTrabajadorByCedula(companyId: number, cedulaInput: string, mes?: string) {
-    const cedulaNorm = String(cedulaInput || '').trim().replace(/\s+/g, '');
+  async getTrabajadorByCedula(
+    companyId: number,
+    cedulaInput: string,
+    mes?: string,
+  ) {
+    const cedulaNorm = String(cedulaInput || '')
+      .trim()
+      .replace(/\s+/g, '');
     if (!cedulaNorm) {
       throw new BadRequestException('La cédula es requerida.');
     }
@@ -351,7 +456,8 @@ export class CustodiasService {
       where: { companyId, cedula: cedulaNorm },
     });
 
-    const knownName = driveEmployee?.employeeName || candidateEmployee?.fullName || '';
+    const knownName =
+      driveEmployee?.employeeName || candidateEmployee?.fullName || '';
 
     const whereClause: any = {
       companyId,
@@ -367,7 +473,7 @@ export class CustodiasService {
       whereClause.OR.push(
         { choferName: { contains: knownName, mode: 'insensitive' } },
         { custodio1Name: { contains: knownName, mode: 'insensitive' } },
-        { custodio2Name: { contains: knownName, mode: 'insensitive' } }
+        { custodio2Name: { contains: knownName, mode: 'insensitive' } },
       );
     }
 
@@ -387,13 +493,25 @@ export class CustodiasService {
     for (const c of rows) {
       const tarifa = CUSTODIA_RATES[c.tipoCustodia] || 0;
       let rol = 'Custodio';
-      if (c.choferCedula === cedulaNorm || (knownName && c.choferName.toLowerCase().includes(knownName.toLowerCase()))) {
+      if (
+        c.choferCedula === cedulaNorm ||
+        (knownName &&
+          c.choferName.toLowerCase().includes(knownName.toLowerCase()))
+      ) {
         rol = 'Chofer';
         if (!detectedName) detectedName = c.choferName;
-      } else if (c.custodio1Cedula === cedulaNorm || (knownName && c.custodio1Name.toLowerCase().includes(knownName.toLowerCase()))) {
+      } else if (
+        c.custodio1Cedula === cedulaNorm ||
+        (knownName &&
+          c.custodio1Name.toLowerCase().includes(knownName.toLowerCase()))
+      ) {
         rol = 'Custodio 1';
         if (!detectedName) detectedName = c.custodio1Name;
-      } else if (c.custodio2Cedula === cedulaNorm || (knownName && c.custodio2Name.toLowerCase().includes(knownName.toLowerCase()))) {
+      } else if (
+        c.custodio2Cedula === cedulaNorm ||
+        (knownName &&
+          c.custodio2Name.toLowerCase().includes(knownName.toLowerCase()))
+      ) {
         rol = 'Custodio 2';
         if (!detectedName) detectedName = c.custodio2Name;
       }
@@ -427,7 +545,8 @@ export class CustodiasService {
 
   async queryGemeBot(companyId: number, queryMessage: string) {
     const rawText = String(queryMessage || '').trim();
-    if (!rawText) throw new BadRequestException('El mensaje no puede estar vacío.');
+    if (!rawText)
+      throw new BadRequestException('El mensaje no puede estar vacío.');
 
     const norm = rawText
       .toLowerCase()
@@ -435,7 +554,9 @@ export class CustodiasService {
       .replace(/[\u0300-\u036f]/g, '');
 
     // Intent detection
-    let intent: 'antiguedad' | 'placa_puerto' | 'custodio_hacienda' | 'desconocido' = 'desconocido';
+    let intent:
+      'antiguedad' | 'placa_puerto' | 'custodio_hacienda' | 'desconocido' =
+      'desconocido';
 
     if (
       norm.includes('primer viaje') ||
@@ -464,7 +585,9 @@ export class CustodiasService {
 
     if (intent === 'placa_puerto') {
       const now = new Date();
-      const startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      const startDate = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+      );
       const PUERTORows = await this.prisma.custodia.findMany({
         where: {
           companyId,
@@ -487,7 +610,8 @@ export class CustodiasService {
       if (ranking.length === 0) {
         return {
           intent,
-          respuesta: 'No se encontraron viajes tipo PUERTO registrados en este mes.',
+          respuesta:
+            'No se encontraron viajes tipo PUERTO registrados en este mes.',
           datos: null,
         };
       }
@@ -535,7 +659,8 @@ export class CustodiasService {
       if (ranking.length === 0) {
         return {
           intent,
-          respuesta: 'No hay custodias registradas para HACIENDA en los últimos 30 días.',
+          respuesta:
+            'No hay custodias registradas para HACIENDA en los últimos 30 días.',
           datos: null,
         };
       }
@@ -543,7 +668,10 @@ export class CustodiasService {
       const top = ranking[0];
       const detalleRanking = ranking
         .slice(0, 5)
-        .map((r, i) => `${i + 1}. ${r.nombre} — ${r.viajes} viaje(s) como custodio`)
+        .map(
+          (r, i) =>
+            `${i + 1}. ${r.nombre} — ${r.viajes} viaje(s) como custodio`,
+        )
         .join('\n');
 
       return {
@@ -559,7 +687,14 @@ export class CustodiasService {
       });
 
       // Search for employee mentioned in query
-      let matchedEmp = custodiosDrive.find((e) => norm.includes(e.employeeName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')));
+      const matchedEmp = custodiosDrive.find((e) =>
+        norm.includes(
+          e.employeeName
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, ''),
+        ),
+      );
 
       if (!matchedEmp) {
         const firstCustodia = await this.prisma.custodia.findFirst({
@@ -575,7 +710,9 @@ export class CustodiasService {
           };
         }
 
-        const viajesCount = await this.prisma.custodia.count({ where: { companyId } });
+        const viajesCount = await this.prisma.custodia.count({
+          where: { companyId },
+        });
         return {
           intent,
           respuesta: `Primer viaje registrado en el sistema: Guía **${firstCustodia.numeroGuia}** (${firstCustodia.tipoCustodia}) el ${this.formatFechaEC(firstCustodia.createdAt)}. Total viajes registrados: ${viajesCount}. Si deseas consultar un guardia en específico, incluye su nombre completo.`,
@@ -608,26 +745,37 @@ export class CustodiasService {
       });
 
       const fechaInic = primerViaje?.createdAt || matchedEmp.createdAt;
-      const dias = Math.floor((Date.now() - new Date(fechaInic).getTime()) / (1000 * 60 * 60 * 24));
+      const dias = Math.floor(
+        (Date.now() - new Date(fechaInic).getTime()) / (1000 * 60 * 60 * 24),
+      );
       const meses = Math.floor(dias / 30);
-      const tiempoTexto = meses >= 12
-        ? `${Math.floor(meses / 12)} año(s) y ${meses % 12} mes(es)`
-        : meses >= 1
-          ? `${meses} mes(es)`
-          : `${dias} día(s)`;
+      const tiempoTexto =
+        meses >= 12
+          ? `${Math.floor(meses / 12)} año(s) y ${meses % 12} mes(es)`
+          : meses >= 1
+            ? `${meses} mes(es)`
+            : `${dias} día(s)`;
 
       return {
         intent,
-        respuesta: `**${matchedEmp.employeeName}** lleva registrado en el sistema ${tiempoTexto} (desde ${this.formatFechaEC(fechaInic)}).\n` +
-          (primerViaje ? `Su primer viaje registrado fue la guía **${primerViaje.numeroGuia}** (${primerViaje.tipoCustodia}) el ${this.formatFechaEC(primerViaje.createdAt)}.\n` : '') +
+        respuesta:
+          `**${matchedEmp.employeeName}** lleva registrado en el sistema ${tiempoTexto} (desde ${this.formatFechaEC(fechaInic)}).\n` +
+          (primerViaje
+            ? `Su primer viaje registrado fue la guía **${primerViaje.numeroGuia}** (${primerViaje.tipoCustodia}) el ${this.formatFechaEC(primerViaje.createdAt)}.\n`
+            : '') +
           `Total de custodias asociadas: **${totalViajes}**.`,
-        datos: { guardia: matchedEmp.employeeName, primer_viaje: primerViaje, total_viajes: totalViajes },
+        datos: {
+          guardia: matchedEmp.employeeName,
+          primer_viaje: primerViaje,
+          total_viajes: totalViajes,
+        },
       };
     }
 
     return {
       intent: 'desconocido',
-      respuesta: 'Lo siento, no logré entender la consulta. Puedes preguntarme sobre:\n1. Antigüedad / primer viaje de un guardia\n2. Placa más usada en PUERTO este mes\n3. Guardias con más viajes en HACIENDA en los últimos 30 días',
+      respuesta:
+        'Lo siento, no logré entender la consulta. Puedes preguntarme sobre:\n1. Antigüedad / primer viaje de un guardia\n2. Placa más usada en PUERTO este mes\n3. Guardias con más viajes en HACIENDA en los últimos 30 días',
       datos: null,
     };
   }

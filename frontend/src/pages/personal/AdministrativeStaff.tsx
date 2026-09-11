@@ -1,20 +1,57 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDriveTree, getDriveCompliance, syncDriveFolder, deleteDriveEmployee } from '../../services/personal.service';
+import { ArrowLeft, RefreshCw, Settings, FileCog, X, IdCard } from 'lucide-react';
+import {
+  getDriveTree,
+  syncPersonalAdminFolder,
+  deleteDriveEmployee,
+  getDriveConfig,
+  saveDriveConfig,
+  testDriveConnection,
+  getAdministrativoFicha,
+  type AdministrativeStaffFicha,
+} from '../../services/personal.service';
+import AdministrativoDetalleModal from '../../components/personal/AdministrativoDetalleModal';
+import DocumentosRequeridosModal from '../../components/personal/DocumentosRequeridosModal';
+
+interface StaffRow {
+  employeeName: string;
+  cedula: string;
+  puesto?: string | null;
+  documentCount: number;
+  folderUrl?: string;
+  lastSyncAt?: string;
+  ficha?: AdministrativeStaffFicha;
+}
 
 export default function AdministrativeStaff() {
   const navigate = useNavigate();
-  const [staff, setStaff] = useState<any[]>([]);
+  const [staff, setStaff] = useState<StaffRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
-  const [compliance, setCompliance] = useState<any>(null);
-  const [loadingCompliance, setLoadingCompliance] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<StaffRow | null>(null);
+  const [showDocTypesModal, setShowDocTypesModal] = useState(false);
+
+  // Configuración de la carpeta de Drive propia de Personal Administrativo
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [driveConfig, setDriveConfig] = useState<any>(null);
+  const [configFolderId, setConfigFolderId] = useState('');
+  const [loadingConfig, setLoadingConfig] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [testingConfig, setTestingConfig] = useState(false);
+  const [configTestResult, setConfigTestResult] = useState<any>(null);
+  const [configError, setConfigError] = useState('');
 
   const loadStaff = () => {
     setLoading(true);
     getDriveTree()
-      .then((tree) => setStaff(tree.PERSONAL || []))
+      .then(async (tree) => {
+        const rows: StaffRow[] = tree.PERSONAL_ADMIN || [];
+        const fichas = await Promise.all(
+          rows.map((r) => getAdministrativoFicha(r.cedula).catch(() => undefined)),
+        );
+        setStaff(rows.map((r, i) => ({ ...r, ficha: fichas[i] })));
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   };
@@ -24,7 +61,7 @@ export default function AdministrativeStaff() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      await syncDriveFolder();
+      await syncPersonalAdminFolder();
       loadStaff();
     } catch {
     } finally {
@@ -32,28 +69,62 @@ export default function AdministrativeStaff() {
     }
   };
 
-  const handleSelectEmployee = async (emp: any) => {
-    setSelectedEmployee(emp);
-    setLoadingCompliance(true);
+  const openConfigModal = () => {
+    setShowConfigModal(true);
+    setConfigError('');
+    setConfigTestResult(null);
+    setLoadingConfig(true);
+    getDriveConfig('PERSONAL_ADMIN')
+      .then((data) => {
+        if (data) {
+          setDriveConfig(data);
+          setConfigFolderId(data.driveFolderId || '');
+        }
+      })
+      .catch((err: any) => {
+        setConfigError(err.response?.data?.message || 'No se pudo cargar la configuración de Drive.');
+      })
+      .finally(() => setLoadingConfig(false));
+  };
+
+  const handleTestConfig = async () => {
+    const cleanId = configFolderId.trim().replace(/\.+$/, '');
+    if (!cleanId) { setConfigError('Escribe el ID de la carpeta raíz para probar la conexión.'); return; }
+    setTestingConfig(true);
+    setConfigTestResult(null);
+    setConfigError('');
     try {
-      const data = await getDriveCompliance(emp.cedula);
-      setCompliance(data);
-    } catch {
-      setCompliance(null);
+      const result = await testDriveConnection({ driveFolderId: cleanId, type: 'PERSONAL_ADMIN' });
+      setConfigTestResult(result);
+    } catch (err: any) {
+      setConfigTestResult({ success: false, message: err.response?.data?.message || 'Error al probar conexión.' });
     } finally {
-      setLoadingCompliance(false);
+      setTestingConfig(false);
     }
   };
 
-  const handleDeleteEmployee = async (e: React.MouseEvent, emp: any) => {
-    e.stopPropagation();
+  const handleSaveConfig = async () => {
+    const cleanId = configFolderId.trim().replace(/\.+$/, '');
+    if (!cleanId) { setConfigError('Ingresa el ID de la carpeta.'); return; }
+    setSavingConfig(true);
+    setConfigError('');
+    try {
+      const saved = await saveDriveConfig({ driveFolderId: cleanId, type: 'PERSONAL_ADMIN' });
+      setDriveConfig(saved);
+      setShowConfigModal(false);
+      handleSync();
+    } catch (err: any) {
+      setConfigError(err.response?.data?.message || 'Error al guardar.');
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+  const handleDeleteEmployee = async (emp: StaffRow) => {
     if (!window.confirm(`¿Estás seguro de eliminar a ${emp.employeeName}? Se borrará su registro de Drive y candidato.`)) return;
     try {
       await deleteDriveEmployee(emp.cedula);
-      if (selectedEmployee?.cedula === emp.cedula) {
-        setSelectedEmployee(null);
-        setCompliance(null);
-      }
+      if (selectedEmployee?.cedula === emp.cedula) setSelectedEmployee(null);
       loadStaff();
     } catch (err: any) {
       alert(err.response?.data?.message || 'Error al eliminar');
@@ -62,233 +133,209 @@ export default function AdministrativeStaff() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div>
-          <p className="page-eyebrow">MODULO PERSONAL</p>
-          <h1>Personal Administrativo</h1>
-          <p style={{ color: '#718096', fontSize: '0.85rem', marginTop: '4px' }}>
-            Personal de oficina y administrativo sincronizado desde Google Drive
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/personal')}>← Volver</button>
-          <button
-            className="auth-btn"
-            onClick={handleSync}
-            disabled={syncing}
-            style={{ opacity: syncing ? 0.6 : 1 }}
-          >
-            {syncing ? '⏳ Sincronizando...' : '🔄 Sincronizar Drive'}
-          </button>
+      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
+        <button className="cacao-back-btn" onClick={() => navigate('/rrhh')} style={{ alignSelf: 'flex-start' }}>
+          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
+        </button>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <p className="page-eyebrow">RECURSOS HUMANOS</p>
+            <h1>Personal Administrativo</h1>
+            <p style={{ color: '#718096', fontSize: '0.85rem', marginTop: '4px' }}>
+              Personal de oficina y administrativo sincronizado desde Google Drive
+            </p>
+          </div>
+
+          <div className="header-actions">
+            <button className="btn-secondary" onClick={handleSync} disabled={syncing}>
+              <RefreshCw size={16} className={syncing ? 'spin' : undefined} />
+              {syncing ? 'Sincronizando...' : 'Sincronizar Drive'}
+            </button>
+            <button className="btn-secondary" onClick={openConfigModal} title="Configurar carpeta de Drive de Personal Administrativo">
+              <Settings size={16} /> Configurar Drive
+            </button>
+            <button className="btn-secondary" onClick={() => setShowDocTypesModal(true)} title="Configurar qué documentos son obligatorios para este grupo">
+              <FileCog size={16} /> Documentos Requeridos
+            </button>
+          </div>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '24px', marginTop: '20px' }}>
-        <div style={{ width: '320px', flexShrink: 0 }}>
-          <div className="admin-section">
-            <h3 style={{ margin: '0 0 16px', fontSize: '1rem', color: 'var(--azul-oscuro)' }}>
-              👥 Personal ({staff.length})
-            </h3>
-            {loading ? (
-              <div className="loading-state">Cargando...</div>
-            ) : staff.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '32px', color: '#a0aec0' }}>
-                <div style={{ fontSize: '2rem', marginBottom: '8px' }}>📂</div>
-                <p>No hay personal administrativo en Drive</p>
-                <p style={{ fontSize: '0.8rem', marginTop: '8px' }}>
-                  Sincroniza Drive para importar carpetas
+      <div className="admin-section" style={{ marginTop: '20px' }}>
+        {loading ? (
+          <div className="loading-state">Cargando...</div>
+        ) : staff.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '48px 32px', color: '#a0aec0' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>📂</div>
+            <p>No hay personal administrativo en Drive</p>
+            <p style={{ fontSize: '0.8rem', marginTop: '8px' }}>
+              Configura la carpeta y sincroniza para importar
+            </p>
+          </div>
+        ) : (
+          <div className="tasks-table-wrapper">
+            <table className="tasks-table">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Puesto</th>
+                  <th>Departamento</th>
+                  <th>Fecha de ingreso</th>
+                  <th>Estado</th>
+                  <th>Cumplimiento</th>
+                  <th style={{ textAlign: 'right' }}>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staff.map((emp) => (
+                  <tr key={emp.cedula}>
+                    <td style={{ fontWeight: 700, color: 'var(--azul-oscuro)' }}>{emp.employeeName}</td>
+                    <td>{emp.puesto || '—'}</td>
+                    <td>{emp.ficha?.departamento || '—'}</td>
+                    <td>{emp.ficha?.fechaIngreso ? new Date(emp.ficha.fechaIngreso).toLocaleDateString('es-EC') : '—'}</td>
+                    <td>
+                      <span className="status-badge" style={{
+                        background: (emp.ficha?.activo ?? true) ? '#c6f6d5' : '#fed7d7',
+                        color: (emp.ficha?.activo ?? true) ? '#276749' : '#c53030',
+                      }}>
+                        {(emp.ficha?.activo ?? true) ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                    <td>{emp.documentCount} archivos</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => setSelectedEmployee(emp)}
+                          title="Ver detalle"
+                          className="btn-secondary"
+                          style={{ padding: '6px 8px', display: 'flex', alignItems: 'center' }}
+                        >
+                          <IdCard size={15} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteEmployee(emp)}
+                          title="Eliminar de la lista"
+                          className="btn-secondary"
+                          style={{ padding: '6px 8px', display: 'flex', alignItems: 'center', color: '#c53030' }}
+                        >
+                          <X size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <AdministrativoDetalleModal
+        employee={selectedEmployee}
+        onClose={() => setSelectedEmployee(null)}
+        onFichaSaved={loadStaff}
+      />
+
+      {showDocTypesModal && (
+        <DocumentosRequeridosModal onClose={() => setShowDocTypesModal(false)} />
+      )}
+
+      {/* MODAL CONFIGURACIÓN DE DRIVE - PERSONAL ADMINISTRATIVO */}
+      {showConfigModal && (
+        <div className="modal-overlay" onClick={() => setShowConfigModal(false)}>
+          <div className="modal modal-lg" style={{ maxWidth: '620px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Settings size={17} /> Configurar Carpeta de Drive — Personal Administrativo
+              </h3>
+              <button className="modal-close" onClick={() => setShowConfigModal(false)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div style={{ background: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '10px', padding: '16px' }}>
+                <p style={{ margin: '0 0 10px', fontSize: '0.85rem', color: '#2b6cb0' }}>
+                  Esta carpeta es <strong>independiente</strong> de la de Cumplimiento/Custodios — solo se usa para Personal Administrativo.
+                  Debe tener esta estructura exacta para que la sincronización funcione:
+                </p>
+                <pre style={{
+                  margin: 0, padding: '12px', background: '#fff', border: '1px solid #bee3f8', borderRadius: '8px',
+                  fontSize: '0.78rem', lineHeight: 1.6, color: '#1a202c', overflowX: 'auto',
+                }}>
+{`📁 (la carpeta raíz que configures abajo)
+ └── 📁 <Nombre Apellido - Puesto>   ← 1 carpeta por empleado, con ese formato exacto
+        └── (sus documentos: cédula, contrato, etc.)`}
+                </pre>
+                <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: '#718096' }}>
+                  A diferencia de Custodios, aquí el nombre de carpeta NO lleva cédula — va el <strong>puesto</strong> (ej. "María Torres - Contadora").
+                </p>
+                <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#718096' }}>
+                  Para obtener el ID de la carpeta raíz: ábrela en Drive y copia el ID de la URL —
+                  <br />
+                  <code>https://drive.google.com/drive/folders/1ABC123...</code> → el ID es <code>1ABC123...</code>
+                </p>
+                <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#c53030', fontWeight: 600 }}>
+                  IMPORTANTE: comparte esa carpeta (Lector) con <code>drive-sync@agentes-504115.iam.gserviceaccount.com</code>.
                 </p>
               </div>
-            ) : (
-              <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
-                {staff.map((emp: any) => (
-                  <div
-                    key={emp.cedula}
-                    onClick={() => handleSelectEmployee(emp)}
-                    style={{
-                      padding: '12px', marginBottom: '8px', borderRadius: '10px',
-                      border: selectedEmployee?.cedula === emp.cedula ? '2px solid var(--azul-claro)' : '1px solid #e2e8f0',
-                      background: selectedEmployee?.cedula === emp.cedula ? '#ebf8ff' : 'white',
-                      cursor: 'pointer', transition: 'all 0.15s',
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--azul-oscuro)' }}>
-                        {emp.employeeName}
-                      </div>
-                      <div style={{ fontSize: '0.78rem', color: '#718096', marginTop: '2px' }}>
-                        CC: {emp.cedula} · {emp.documentCount} archivos
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => handleDeleteEmployee(e, emp)}
-                      title="Eliminar de la lista"
-                      style={{
-                        background: 'none', border: 'none', color: '#e53e3e', fontSize: '1rem',
-                        cursor: 'pointer', padding: '4px 8px', borderRadius: '4px',
-                      }}
-                      onMouseOver={(e) => (e.currentTarget.style.background = '#fed7d7')}
-                      onMouseOut={(e) => (e.currentTarget.style.background = 'none')}
-                    >
-                      ✕
-                    </button>
+
+              {loadingConfig ? (
+                <div className="loading-state">Cargando configuración...</div>
+              ) : (
+                <>
+                  {configError && <div className="form-error">{configError}</div>}
+
+                  <div className="form-group">
+                    <label>ID de la carpeta raíz de Personal Administrativo en Drive *</label>
+                    <input
+                      type="text"
+                      value={configFolderId}
+                      onChange={(e) => { setConfigFolderId(e.target.value); setConfigTestResult(null); }}
+                      placeholder="Ej: 1ABC123def456GHI..."
+                      style={{ width: '100%' }}
+                    />
                   </div>
-                ))}
+
+                  {configTestResult && (
+                    <div style={{
+                      padding: '12px', borderRadius: '8px',
+                      background: configTestResult.success ? '#f0fff4' : '#fff5f5',
+                      border: `1px solid ${configTestResult.success ? '#c6f6d5' : '#fed7d7'}`,
+                    }}>
+                      <p style={{ margin: 0, fontSize: '0.85rem', color: configTestResult.success ? '#276749' : '#c53030' }}>
+                        {configTestResult.success
+                          ? `✅ Conexión exitosa: ${configTestResult.folderName} (${configTestResult.folderId})`
+                          : `❌ ${configTestResult.message}`}
+                      </p>
+                    </div>
+                  )}
+
+                  {driveConfig?.driveFolderId && (
+                    <div style={{ padding: '12px', background: '#f7fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                      <p style={{ margin: 0, fontSize: '0.85rem', color: '#718096' }}>
+                        <strong>Configuración actual:</strong> {driveConfig.driveFolderName} ({driveConfig.driveFolderId})
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {!loadingConfig && (
+              <div className="modal-actions">
+                <button className="btn-secondary" onClick={handleTestConfig} disabled={testingConfig} style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: testingConfig ? 0.6 : 1 }}>
+                  {testingConfig ? 'Probando...' : 'Probar Conexión'}
+                </button>
+                <button className="auth-btn" onClick={handleSaveConfig} disabled={savingConfig} style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: savingConfig ? 0.6 : 1 }}>
+                  {savingConfig ? 'Guardando...' : 'Guardar Configuración'}
+                </button>
               </div>
             )}
           </div>
         </div>
-
-        <div style={{ flex: 1 }}>
-          {loadingCompliance ? (
-            <div className="admin-section">
-              <div className="loading-state">Cargando cumplimiento...</div>
-            </div>
-          ) : compliance ? (
-            <div className="admin-section">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <div>
-                  <h2 style={{ margin: 0, color: 'var(--azul-oscuro)' }}>{compliance.employee}</h2>
-                  <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: '#718096' }}>
-                    CC: {compliance.cedula} · Carpeta: {compliance.folder}
-                  </p>
-                  {compliance.stage && (
-                    <span style={{
-                      display: 'inline-block', marginTop: '6px', padding: '3px 10px', borderRadius: '12px',
-                      fontSize: '0.75rem', fontWeight: 600,
-                      background: compliance.stage === 'Activo' ? '#c6f6d5' : compliance.stage === 'Contratado' ? '#fefcbf' : '#bee3f8',
-                      color: compliance.stage === 'Activo' ? '#276749' : compliance.stage === 'Contratado' ? '#975a16' : '#2b6cb0',
-                    }}>
-                      {compliance.stage}
-                    </span>
-                  )}
-                </div>
-                <div style={{
-                  fontSize: '2rem', fontWeight: 800,
-                  color: compliance.compliancePercent >= 80 ? '#276749' : compliance.compliancePercent >= 50 ? '#d69e2e' : '#c53030',
-                }}>
-                  {compliance.compliancePercent}%
-                </div>
-              </div>
-
-              <div style={{ background: '#e2e8f0', borderRadius: '8px', height: '8px', marginBottom: '24px', overflow: 'hidden' }}>
-                <div style={{
-                  width: `${compliance.compliancePercent}%`, height: '100%', borderRadius: '8px',
-                  background: compliance.compliancePercent >= 80 ? '#276749' : compliance.compliancePercent >= 50 ? '#d69e2e' : '#c53030',
-                  transition: 'width 0.5s',
-                }} />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {compliance.documents.map((doc: any, i: number) => (
-                  <div
-                    key={i}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
-                      borderRadius: '10px',
-                      background: !doc.required ? '#f7fafc' : doc.status === 'present' ? '#f0fff4' : '#fff5f5',
-                      border: `1px solid ${!doc.required ? '#e2e8f0' : doc.status === 'present' ? '#c6f6d5' : '#fed7d7'}`,
-                      opacity: !doc.required ? 0.6 : 1,
-                    }}
-                  >
-                    <span style={{ fontSize: '1.2rem' }}>
-                      {!doc.required ? '➖' : doc.status === 'present' ? '✅' : '❌'}
-                    </span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--azul-oscuro)' }}>
-                        {doc.type}
-                        {doc.required && <span style={{ color: '#c53030', marginLeft: '4px' }}>*</span>}
-                        {!doc.required && <span style={{ color: '#a0aec0', marginLeft: '4px', fontSize: '0.75rem' }}>(no requerido en esta etapa)</span>}
-                      </div>
-                      {doc.fileName && (
-                        <div style={{ fontSize: '0.78rem', color: '#718096', marginTop: '2px' }}>
-                          📄 {doc.fileName}
-                          {doc.uploadedAt && ` · ${new Date(doc.uploadedAt).toLocaleDateString('es-EC')}`}
-                        </div>
-                      )}
-                    </div>
-                    {doc.fileUrl && (
-                      <a
-                        href={doc.fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem',
-                          background: 'var(--azul-claro)', color: 'white', textDecoration: 'none',
-                        }}
-                      >
-                        Ver archivo
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {compliance.unmatchedFiles && compliance.unmatchedFiles.length > 0 && (
-                <div style={{ marginTop: '20px' }}>
-                  <h3 style={{ fontSize: '0.95rem', color: '#d69e2e', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    ⚠️ Archivos sin reconocer ({compliance.unmatchedFiles.length})
-                  </h3>
-                  <p style={{ fontSize: '0.8rem', color: '#718096', marginBottom: '12px' }}>
-                    Estos archivos están en la carpeta pero no coinciden con ningún tipo de documento requerido.
-                  </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {compliance.unmatchedFiles.map((file: any, i: number) => (
-                      <div
-                        key={i}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px',
-                          borderRadius: '8px', background: '#fffbeb', border: '1px solid #fefcbf',
-                        }}
-                      >
-                        <span style={{ fontSize: '1rem' }}>📄</span>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 500, fontSize: '0.85rem', color: '#975a16' }}>
-                            {file.fileName}
-                          </div>
-                          {file.uploadedAt && (
-                            <div style={{ fontSize: '0.75rem', color: '#b7791f', marginTop: '2px' }}>
-                              Subido: {new Date(file.uploadedAt).toLocaleDateString('es-EC')}
-                            </div>
-                          )}
-                        </div>
-                        {file.fileUrl && (
-                          <a
-                            href={file.fileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              padding: '5px 10px', borderRadius: '6px', fontSize: '0.75rem',
-                              background: '#d69e2e', color: 'white', textDecoration: 'none',
-                            }}
-                          >
-                            Ver
-                          </a>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {compliance.lastSyncAt && (
-                <p style={{ marginTop: '16px', fontSize: '0.78rem', color: '#a0aec0', textAlign: 'center' }}>
-                  Última sincronización: {new Date(compliance.lastSyncAt).toLocaleString('es-EC')}
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="admin-section">
-              <div style={{ textAlign: 'center', padding: '64px 32px', color: '#a0aec0' }}>
-                <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📋</div>
-                <h3 style={{ color: '#718096', marginBottom: '8px' }}>Selecciona un empleado</h3>
-                <p style={{ fontSize: '0.9rem' }}>Haz clic en un empleado de la lista para ver su estado de cumplimiento</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 }

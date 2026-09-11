@@ -64,7 +64,7 @@ export default function CandidateForm() {
           await moveCandidate(created.id, selectedColumn);
         }
       }
-      navigate('/personal/candidates');
+      navigate('/rrhh/candidates');
     } catch (err: any) {
       setError(err.response?.data?.message || err.response?.data?.error || 'Error al guardar');
     } finally {
@@ -76,9 +76,9 @@ export default function CandidateForm() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/personal/candidates')}>← Volver</button>
+          <button className="cacao-back-btn" onClick={() => navigate('/rrhh/candidates')}>← Volver</button>
           <div>
-            <p className="page-eyebrow">PERSONAL</p>
+            <p className="page-eyebrow">RECURSOS HUMANOS</p>
             <h1>{isEdit ? 'Editar Candidato' : 'Nuevo Candidato'}</h1>
           </div>
         </div>
@@ -158,7 +158,7 @@ export default function CandidateForm() {
           </div>
 
           <div className="form-actions">
-            <button type="button" className="btn-secondary" onClick={() => navigate('/personal/candidates')}>Cancelar</button>
+            <button type="button" className="btn-secondary" onClick={() => navigate('/rrhh/candidates')}>Cancelar</button>
             <button type="submit" className="auth-btn" disabled={saving}>{saving ? 'Guardando...' : isEdit ? 'Guardar Cambios' : 'Crear Candidato'}</button>
           </div>
         </form>

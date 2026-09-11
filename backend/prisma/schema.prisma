@@ -35,13 +35,25 @@ model Company {
   employeeDocuments EmployeeDocument[]
   folderConfigs  FolderConfig[]
   jobPositions   JobPosition[]
-  verificationChecks VerificationCheck[]
+  sistemasVerificacion SistemaVerificacion[]
+  movimientosPersonal  MovimientoPersonal[]
+  documentReviews    DocumentReview[]
+  documentReviewHistory DocumentReviewHistory[]
   salesGoals        SalesGoal[]
   clientVisits      ClientVisit[]
   leads             Lead[]
   salesApiKeys      SalesApiKey[]
   salesTemplates    SalesTemplate[]
   salesContracts    SalesContract[]
+  entidades            Entidad[]
+  requisitosDocumento  RequisitoDocumento[]
+  asignacionesGuardia  AsignacionGuardia[]
+  alertasVencimiento   AlertaVencimiento[]
+  guardiaContactos     GuardiaContacto[]
+  guardiaFichasPersonales GuardiaFichaPersonal[]
+  personalFieldDefinitions PersonalFieldDefinition[]
+  administrativeStaffFichas AdministrativeStaffFicha[]
+  cedulaMergeLogs      CedulaMergeLog[]
 }
 
 model Department {
@@ -103,7 +115,13 @@ model User {
   assignedLeads      Lead[]
   createdSalesTemplates   SalesTemplate[]
   createdSalesContracts   SalesContract[]
-  verificationChecks  VerificationCheck[]
+  documentReviews         DocumentReview[]
+  documentReviewActions   DocumentReviewHistory[]
+  asignacionesCreadas     AsignacionGuardia[]
+  expiryConfirmations     EmployeeDocument[]
+  movimientosPersonalCreados          MovimientoPersonal[]
+  movimientoPersonalItemsCompletados  MovimientoPersonalItem[]
+  cedulaMerges                        CedulaMergeLog[]
 }
 
 model Project {
@@ -614,12 +632,6 @@ enum CandidateStatus {
   RECHAZADO
 }
 
-enum ContractType {
-  TERMINO_INDEFINIDO
-  TERMINO_FIJO
-  ENTREGA_UNIFORMES
-}
-
 enum LogType {
   PERMISO_INGRESO
   RESPUESTA_ADMIN_CONTRATO
@@ -628,14 +640,18 @@ enum LogType {
 }
 
 model KanbanColumn {
-  id        Int      @id @default(autoincrement())
-  name      String
-  position  Int      @default(0)
-  color     String   @default("#718096")
-  companyId Int
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  candidates Candidate[]
-  createdAt DateTime @default(now())
+  id           Int      @id @default(autoincrement())
+  name         String
+  position     Int      @default(0)
+  color        String   @default("#718096")
+  // Al mover un candidato a la columna marcada, se crea automáticamente su
+  // caso de "Entrada" en MovimientoPersonal. Solo una columna por empresa
+  // puede tener este valor en true (se aplica en KanbanService).
+  triggersHire Boolean  @default(false)
+  companyId    Int
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  candidates   Candidate[]
+  createdAt    DateTime @default(now())
   @@unique([companyId, name])
   @@index([companyId])
 }
@@ -664,7 +680,7 @@ model Candidate {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   history          CandidateHistory[]
-  contracts        Contract[]
+  movimientosPersonal MovimientoPersonal[]
   @@unique([companyId, cedula])
   @@index([companyId])
 }
@@ -684,32 +700,59 @@ model CandidateHistory {
 model ContractTemplate {
   id          Int          @id @default(autoincrement())
   name        String
-  type        ContractType
-  fileName    String
-  fileUrl     String
-  fields      String[]
+  // Texto libre (no enum): el usuario define sus propios tipos de documento
+  // ("Contrato Término Indefinido", "Acta de Entrega de Uniformes",
+  // "Constancia Laboral", etc.) sin necesitar un cambio de código/migración
+  // por cada tipo nuevo.
+  type        String
+  // Link de Drive del .docx fuente y ruta local tras descargarlo — mismo
+  // patrón que SalesTemplate (ventas), ver ventas-templates.service.ts.
+  driveUrl    String?
+  docxPath    String?
   companyId   Int
   company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdBy   Int
   creator     User         @relation(fields: [createdBy], references: [id])
   createdAt   DateTime     @default(now())
+  fields      ContractField[]
   contracts   Contract[]
 }
 
-model Contract {
+// Una fila por variable ([NOMBRE], [CEDULA], etc.) detectada en el .docx de
+// la plantilla. systemField, si está presente, indica de qué dato del
+// guardia se autocompleta (ver ContractService.buildAutoFillValues); si es
+// null, el usuario la llena a mano al generar el contrato.
+model ContractField {
   id           Int              @id @default(autoincrement())
-  candidateId  Int
-  candidate    Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   templateId   Int
-  template     ContractTemplate @relation(fields: [templateId], references: [id])
-  generatedUrl String?
-  status       String           @default("DRAFT")
-  companyId    Int
-  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy    Int
-  creator      User             @relation(fields: [createdBy], references: [id])
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  template     ContractTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  variableName String
+  label        String
+  isRequired   Boolean          @default(true)
+  systemField  String?
+  order        Int              @default(0)
+}
+
+model Contract {
+  id            Int              @id @default(autoincrement())
+  // Identifica al guardia por cédula (mismo patrón que AsignacionGuardia/
+  // GuardiaFichaPersonal/Certification), no por FK a Candidate — así sigue
+  // funcionando aunque el guardia ya no tenga un registro vivo en el
+  // pipeline de reclutamiento.
+  cedula        String
+  nombreGuardia String
+  templateId    Int
+  template      ContractTemplate @relation(fields: [templateId], references: [id])
+  fieldValues   Json?
+  generatedUrl  String?
+  status        String           @default("DRAFT")
+  companyId     Int
+  company       Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy     Int
+  creator       User             @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  @@index([companyId, cedula])
 }
 
 model Certification {
@@ -771,6 +814,10 @@ model EmployeeDriveFolder {
   id          Int      @id @default(autoincrement())
   employeeName String
   cedula      String
+  // Rol/puesto extraído del nombre de carpeta "Nombre Apellido - Puesto" del
+  // bucket Personal Administrativo (folderType='PERSONAL_ADMIN'). Null para
+  // filas de Custodios/Personal (bucket CUMPLIMIENTO), que no lo tienen.
+  puesto      String?
   folderId    String
   folderUrl   String
   folderType  String   @default("PERSONAL")
@@ -789,6 +836,7 @@ model DocumentType {
   companyId   Int
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
+  reviews     DocumentReview[]
   @@unique([companyId, folder, name])
 }
 
@@ -804,17 +852,249 @@ model EmployeeDocument {
   companyId      Int
   company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt      DateTime @default(now())
+  // Vencimiento del documento (cédula, licencia, certificado, etc). Fase A:
+  // RRHH las carga manualmente vía PATCH .../drive/documents/:driveFileId/expiry.
+  // Fase B (futura): extracción asistida por IA desde el PDF, con esta misma
+  // confirmación manual como paso final antes de dar la fecha por buena.
+  issueDate         DateTime?
+  expiryDate        DateTime?
+  expiryConfirmedBy Int?
+  expiryConfirmer   User?     @relation(fields: [expiryConfirmedBy], references: [id])
+  alertasVencimiento AlertaVencimiento[]
   @@unique([companyId, driveFileId])
 }
 
+// Cliente/sitio al que se asignan guardias. tipo determina qué RequisitoDocumento
+// (aplicaA=PUBLICA/PRIVADA) le aplican además de los GLOBAL y los propios (ENTIDAD).
+model Entidad {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  tipo      String   // 'PUBLICA' | 'PRIVADA'
+  activo    Boolean  @default(true)
+  // ID de la carpeta de Drive vinculada, si ya se sincronizó al menos una
+  // vez (ver DriveService.syncEntidadesFolder). Ancla la identidad de la
+  // entidad a una carpeta estable: si RRHH renombra la carpeta después, el
+  // sync reconoce que sigue siendo la MISMA entidad (por este id, no por el
+  // nombre) y solo actualiza `nombre` — evita duplicar la entidad y
+  // desvincular por accidente sus RequisitoDocumento/historial ya creados.
+  // Null para entidades creadas a mano que todavía no tienen carpeta, o
+  // creadas antes de que existiera este campo (se ancla sola en el próximo
+  // sync que las encuentre por nombre).
+  driveFolderId String?
+  companyId Int
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  asignaciones AsignacionGuardia[]
+  requisitos   RequisitoDocumento[]
+  @@index([companyId])
+}
+
+// Documento requerido para poder asignar un guardia a una entidad.
+// aplicaA = GLOBAL (mínimo de toda la empresa) | PUBLICA | PRIVADA (según el
+// tipo de Entidad) | ENTIDAD (específico, requiere entidadId).
+model RequisitoDocumento {
+  id               Int      @id @default(autoincrement())
+  nombre           String
+  aplicaA          String
+  entidadId        Int?
+  entidad          Entidad? @relation(fields: [entidadId], references: [id], onDelete: Cascade)
+  // Cada cuanto vence este tipo de documento (null = no vence / no aplica)
+  duracionValor    Int?
+  duracionUnidad   String?  // 'DIAS' | 'MESES' | 'ANIOS'
+  // Con cuanta anticipacion avisar antes del vencimiento (Fase C, sin efecto todavía en Fase A)
+  anticipacionValor  Int    @default(30)
+  anticipacionUnidad String @default("DIAS")  // 'DIAS' | 'SEMANAS' | 'MESES'
+  companyId        Int
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+  alertasVencimiento AlertaVencimiento[]
+  @@index([companyId])
+  @@index([entidadId])
+}
+
+// Periodo en el que un guardia (identificado por cedula, sin tabla maestra
+// propia — mismo patrón que Certification/Candidate/Custodia en este schema)
+// está asignado a una Entidad. fechaFin null = asignación vigente.
+// Historial de solo lectura: lo escribe únicamente el sync de Drive
+// (DriveService.syncEntidadesFolder), nunca un formulario manual — ver
+// GuardiaContacto abajo para el correo, que se desacopló de aquí porque esta
+// tabla pasó a ser 100% generada automáticamente.
+model AsignacionGuardia {
+  id            Int       @id @default(autoincrement())
+  cedula        String
+  nombreGuardia String
+  entidadId     Int
+  entidad       Entidad   @relation(fields: [entidadId], references: [id], onDelete: Cascade)
+  fechaInicio   DateTime
+  fechaFin      DateTime? // null = asignacion vigente
+  companyId     Int
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy     Int
+  creator       User      @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime  @default(now())
+  @@index([companyId, cedula])
+  @@index([entidadId])
+}
+
+// Correo de contacto del guardia (identificado por cédula, mismo patrón que
+// el resto del módulo), independiente de en qué entidad esté asignado hoy —
+// sobrevive a la rotación entre entidades y a que AsignacionGuardia pase a
+// ser un historial 100% auto-generado. Único destino de los recordatorios
+// manuales de AlertaVencimientoService.
+model GuardiaContacto {
+  id        Int      @id @default(autoincrement())
+  cedula    String
+  email     String
+  companyId Int
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt
+  @@unique([companyId, cedula])
+}
+
+// Ficha personal editable desde la app (no desde Drive). Es la fuente de la
+// verdad para el .json de "Datos_Personales" que syncEntidadesFolder crea o
+// sobrescribe en la carpeta del guardia en cada sincronización — el archivo
+// en Drive es un espejo de solo lectura, nunca se lee de vuelta.
+model GuardiaFichaPersonal {
+  id                         Int       @id @default(autoincrement())
+  cedula                     String
+  companyId                  Int
+  company                    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  telefono                   String?
+  email                      String?
+  direccion                  String?
+  fechaNacimiento            DateTime?
+  contactoEmergenciaNombre   String?
+  contactoEmergenciaTelefono String?
+  // Datos laborales usados para autocompletar la generación de contratos
+  // (ver ContractService) — independientes de AsignacionGuardia, que es un
+  // historial de solo lectura generado por el sync de Drive y no debe
+  // recibir campos editables a mano (ver comentario en ese modelo).
+  horario                    String?
+  puestoFormal               String?
+  salarioAcordado            Float?
+  // ID del .json ya creado en Drive para este guardia, para actualizarlo
+  // directamente en vez de tener que listar la carpeta en cada sync.
+  driveFileId                String?
+  // Valores de campos personalizados definidos por PersonalFieldDefinition,
+  // { [fieldDefinition.key]: string }. Todo se guarda como string (el
+  // frontend interpreta según el `type` del campo) para no perder datos si
+  // el tipo de un campo cambia después de que ya existan valores. Si un
+  // campo se elimina, su key queda huérfana acá (no se borra retroactivamente
+  // de las fichas ya guardadas — mismo criterio de "nunca destruir datos" que
+  // el resto del módulo).
+  camposPersonalizados       Json      @default("{}")
+  updatedAt                  DateTime  @updatedAt
+  @@unique([companyId, cedula])
+}
+
+// Definición de un campo personalizado de la Ficha Personal, creable desde la
+// UI por cualquier usuario con acceso al módulo (sin requerir cambio de
+// código). `key` es un slug derivado de `label` al crear el campo y no
+// cambia después, aunque se edite `label` — es la llave que usan los JSON
+// guardados en GuardiaFichaPersonal.camposPersonalizados.
+model PersonalFieldDefinition {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  key       String
+  label     String
+  type      String   // 'TEXT' | 'NUMBER' | 'DATE'
+  // A qué ficha pertenece este campo — 'GUARDIA' (GuardiaFichaPersonal) o
+  // 'PERSONAL_ADMIN' (AdministrativeStaffFicha). Cada grupo gestiona sus
+  // propios campos personalizados sin mezclarse entre sí.
+  scope     String   @default("GUARDIA")
+  // En qué sección de la ficha se muestra — 'PERSONAL' (Datos personales) o
+  // 'LABORAL' (Datos laborales). Fijo desde la creación, igual que `type`.
+  category  String   @default("PERSONAL")
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([companyId, scope, key])
+  @@index([companyId])
+}
+
+// Ficha personal editable del personal administrativo (oficina) — análoga a
+// GuardiaFichaPersonal pero sin los campos de datos laborales orientados a
+// contratos de Guardias. `cedula` aquí es el identityKey sintético
+// ("PA-" + últimos 16 caracteres del folderId de Drive) que ya usa
+// EmployeeDriveFolder/EmployeeDocument para este grupo, no una cédula real.
+model AdministrativeStaffFicha {
+  id                         Int       @id @default(autoincrement())
+  cedula                     String
+  companyId                  Int
+  company                    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  departamento               String?
+  fechaIngreso               DateTime?
+  activo                     Boolean   @default(true)
+  tipoContrato               String?
+  telefono                   String?
+  direccion                  String?
+  contactoEmergenciaNombre   String?
+  contactoEmergenciaTelefono String?
+  salarioAcordado            Float?
+  camposPersonalizados       Json      @default("{}")
+  updatedAt                  DateTime  @updatedAt
+  @@unique([companyId, cedula])
+}
+
+// Registro de auditoría de una fusión de cédulas duplicadas (ver
+// CedulaMergeService). Operación irreversible sobre datos de producción —
+// se deja rastro igual que el resto de las acciones consecuentes del módulo
+// (AlertaVencimiento, DocumentReview) para poder explicar después por qué el
+// historial de un guardia luce como luce.
+model CedulaMergeLog {
+  id            Int      @id @default(autoincrement())
+  companyId     Int
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  cedulaOrigen  String
+  cedulaDestino String
+  nombreDestino String
+  resumen       Json     // snapshot de cuántas filas se movieron por tabla
+  mergedBy      Int
+  merger        User     @relation(fields: [mergedBy], references: [id])
+  mergedAt      DateTime @default(now())
+  @@index([companyId])
+}
+
+// Bookkeeping de avisos de vencimiento (Fase C) enviados por correo al
+// guardia. Evita reenviar el mismo aviso todos los días: antes de enviar se
+// busca una fila con éxito para (employeeDocumentId, requisitoDocumentoId,
+// expiryDateAlertado=EmployeeDocument.expiryDate actual) — si RRHH corrige la
+// fecha después, el snapshot cambia y un nuevo aviso vuelve a ser elegible.
+// Los intentos fallidos (success=false, p. ej. delegación de dominio aún sin
+// configurar) se reintentan al día siguiente en vez de tratarse como enviados.
+model AlertaVencimiento {
+  id                   Int      @id @default(autoincrement())
+  employeeDocumentId   Int
+  employeeDocument     EmployeeDocument @relation(fields: [employeeDocumentId], references: [id], onDelete: Cascade)
+  requisitoDocumentoId Int
+  requisitoDocumento   RequisitoDocumento @relation(fields: [requisitoDocumentoId], references: [id], onDelete: Cascade)
+  expiryDateAlertado   DateTime  // snapshot de EmployeeDocument.expiryDate al momento del envío
+  sentAt               DateTime  @default(now())
+  success              Boolean   @default(true)
+  errorMessage         String?
+  companyId            Int
+  company              Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  @@unique([employeeDocumentId, requisitoDocumentoId, expiryDateAlertado])
+  @@index([companyId])
+}
+
+// type distingue configuraciones independientes de carpeta raíz por área del
+// módulo Personal: 'CUMPLIMIENTO' (Custodios + Personal Administrativo, el
+// comportamiento histórico) y 'RECLUTAMIENTO' (candidatos/vacantes, su propia
+// carpeta separada). Default 'CUMPLIMIENTO' preserva el comportamiento de las
+// filas existentes tras la migración.
 model FolderConfig {
   id              Int      @id @default(autoincrement())
   driveFolderId   String
   driveFolderName String
+  type            String   @default("CUMPLIMIENTO")
   companyId       Int
   company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt       DateTime @default(now())
-  @@unique([companyId])
+  @@unique([companyId, type])
 }
 
 enum VisitStatus {
@@ -926,9 +1206,20 @@ model JobPosition {
   id                 Int      @id @default(autoincrement())
   puesto             String
   descripcion        String?
-  camposRequeridos   String[]
-  archivosRequeridos String[]
+  // Array de { nombre: string, tipo?: string } — tipo es una de CAMPO_TIPOS
+  // (TEXTO/ALFANUMERICO/NUMERICO/CORREO/TELEFONO/FECHA), solo guía visual
+  // para RRHH, el sistema no valida el contenido del formulario externo.
+  camposRequeridos   Json     @default("[]")
+  // Array de { nombre: string, extensiones?: string[] } — extensiones es solo
+  // guía visual para RRHH/candidato (ej. CV → pdf/doc), el sistema no valida
+  // ni rechaza archivos por extensión (el candidato sube directo a Drive).
+  archivosRequeridos Json     @default("[]")
+  // ABIERTA (recibe candidatos) | CERRADA (ya no recibe candidatos)
+  estado             String   @default("ABIERTA")
   driveFileId        String?
+  // Carpeta propia del puesto dentro de RECLUTAMIENTO (contiene el JSON y las
+  // carpetas de los candidatos postulados a esta vacante).
+  driveFolderId      String?
   companyId          Int
   company            Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt          DateTime @default(now())
@@ -937,18 +1228,128 @@ model JobPosition {
   @@index([companyId])
 }
 
-model VerificationCheck {
-  id         Int      @id @default(autoincrement())
-  cedula     String
-  platform   String   // SICOSEP | SUT | IESS
-  status     String   @default("PENDIENTE") // PENDIENTE | VERIFICADO | NO_ENCONTRADO
-  notes      String?
-  verifiedBy Int
-  verifier   User     @relation(fields: [verifiedBy], references: [id])
-  verifiedAt DateTime @default(now())
-  companyId  Int
-  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
+enum TipoMovimientoPersonal {
+  ENTRADA
+  SALIDA
+}
+
+enum EstadoMovimientoPersonal {
+  EN_PROCESO
+  COMPLETADO
+}
+
+// Catálogo configurable de sistemas externos donde RRHH debe registrar o dar
+// de baja manualmente a un guardia (IsyPlus, IESS, SUT, SICOSEP...). No hay
+// scraping (ver backend/scraping-poc/README.md) — esto solo define qué items
+// de checklist se generan al abrir un caso; el registro en el portal externo
+// lo hace una persona.
+model SistemaVerificacion {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  urlPortal String?
+  activo    Boolean  @default(true)
+  orden     Int      @default(0)
+  companyId Int
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  items     MovimientoPersonalItem[]
+
+  @@unique([companyId, nombre])
+  @@index([companyId])
+}
+
+// Caso/expediente de entrada o salida de un guardia (identificado por cedula,
+// sin tabla maestra propia — mismo patrón que AsignacionGuardia/Certification
+// en este schema). Cada entrada o salida de la misma persona a lo largo del
+// tiempo es una fila independiente, para ver el historial completo.
+model MovimientoPersonal {
+  id            Int                      @id @default(autoincrement())
+  cedula        String
+  nombreGuardia String
+  tipo          TipoMovimientoPersonal
+  estado        EstadoMovimientoPersonal @default(EN_PROCESO)
+  // Trazabilidad de origen, texto libre: "KANBAN_COLUMNA:<nombre>" | "MANUAL"
+  origen        String
+  candidateId   Int?
+  candidate     Candidate?               @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  companyId     Int
+  company       Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy     Int
+  creator       User                     @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime                 @default(now())
+  completadoAt  DateTime?
+  items         MovimientoPersonalItem[]
+
+  @@index([companyId, cedula])
+  @@index([companyId, tipo, estado])
+}
+
+// Item de checklist dentro de un caso — snapshot del catálogo
+// SistemaVerificacion al momento de crear el caso (nombreSistema copiado).
+// Si el catálogo cambia después, los casos ya creados no se ven afectados.
+model MovimientoPersonalItem {
+  id                    Int                  @id @default(autoincrement())
+  movimientoId          Int
+  movimiento            MovimientoPersonal   @relation(fields: [movimientoId], references: [id], onDelete: Cascade)
+  sistemaVerificacionId Int?
+  sistemaVerificacion   SistemaVerificacion? @relation(fields: [sistemaVerificacionId], references: [id], onDelete: SetNull)
+  nombreSistema         String
+  completado            Boolean              @default(false)
+  notas                 String?
+  completadoPor         Int?
+  completador           User?                @relation(fields: [completadoPor], references: [id])
+  completadoAt          DateTime?
+  createdAt             DateTime             @default(now())
+
+  @@index([movimientoId])
+}
+
+// Revision documental (Sprint 3): estado actual de aprobacion/rechazo.
+// Se revisa un tipo de documento del checklist (documentTypeId) o, si el archivo
+// no matchea ningun tipo, el archivo suelto de Drive (driveFileId).
+// La unicidad se define con indices parciales en la migracion SQL, porque
+// documentTypeId es nullable y Prisma no soporta indices unicos parciales.
+model DocumentReview {
+  id                  Int      @id @default(autoincrement())
+  cedula              String
+  documentTypeId      Int?
+  documentType        DocumentType? @relation(fields: [documentTypeId], references: [id], onDelete: Cascade)
+  driveFileId         String?  // solo para archivos sueltos (documentTypeId null)
+  status              String   @default("PENDIENTE") // PENDIENTE | APROBADO | RECHAZADO
+  reason              String?
+  reviewedDriveFileId String?  // snapshot del archivo revisado, para detectar re-subidas
+  reviewedFileName    String?
+  reviewedBy          Int
+  reviewer            User     @relation(fields: [reviewedBy], references: [id])
+  reviewedAt          DateTime @default(now())
+  companyId           Int
+  company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  history             DocumentReviewHistory[]
+
+  @@index([companyId, cedula])
+}
+
+// Traza append-only de cada aprobacion/rechazo. documentTypeName va denormalizado
+// para que el historial siga siendo legible si renombran o borran el DocumentType.
+model DocumentReviewHistory {
+  id               Int      @id @default(autoincrement())
+  reviewId         Int
+  review           DocumentReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  cedula           String
+  documentTypeName String
+  fromStatus       String?
+  toStatus         String
+  reason           String?
+  driveFileId      String?
+  fileName         String?
+  performedBy      Int
+  performer        User     @relation(fields: [performedBy], references: [id])
+  companyId        Int
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
 
   @@index([companyId, cedula])
 }
@@ -1020,6 +1421,19 @@ model SalesContract {
   company  Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   creator  User          @relation(fields: [createdBy], references: [id])
   template SalesTemplate @relation(fields: [templateId], references: [id])
+  contractDocuments SalesContractDocument[]
 
   @@index([companyId, status])
+}
+
+model SalesContractDocument {
+  id         Int      @id @default(autoincrement())
+  contractId Int
+  type       String   // GENERADO, ENVIADO
+  filePath   String   // "/api/ventas/contratos/file/{fileName}"
+  createdAt  DateTime @default(now())
+
+  contract SalesContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
 }

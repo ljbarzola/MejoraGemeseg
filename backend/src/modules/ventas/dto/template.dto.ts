@@ -1,4 +1,10 @@
-import { IsString, IsNumber, IsOptional, IsBoolean, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsOptional,
+  IsBoolean,
+  IsArray,
+} from 'class-validator';
 
 export class CreateTemplateDto {
   @IsString()
@@ -25,26 +31,6 @@ export class UpdateFieldDto {
   @IsOptional()
   fieldName?: string;
 
-  @IsNumber()
-  @IsOptional()
-  pageNumber?: number;
-
-  @IsNumber()
-  @IsOptional()
-  positionX?: number;
-
-  @IsNumber()
-  @IsOptional()
-  positionY?: number;
-
-  @IsNumber()
-  @IsOptional()
-  width?: number;
-
-  @IsNumber()
-  @IsOptional()
-  height?: number;
-
   @IsBoolean()
   @IsOptional()
   isRequired?: boolean;
@@ -52,10 +38,6 @@ export class UpdateFieldDto {
   @IsBoolean()
   @IsOptional()
   isClientField?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  isReadOnly?: boolean;
 
   @IsString()
   @IsOptional()
@@ -65,17 +47,9 @@ export class UpdateFieldDto {
   @IsOptional()
   dropdownOptions?: string[];
 
-  @IsString()
-  @IsOptional()
-  validation?: string;
-
   @IsNumber()
   @IsOptional()
   order?: number;
-
-  @IsString()
-  @IsOptional()
-  section?: string;
 }
 
 export class SaveFieldsDto {

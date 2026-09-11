@@ -1,10 +1,16 @@
 {
   "name": "gemeseg-scraping-poc",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Spike Sprint 2 RRHH: PoC AISLADO de viabilidad de scraping SICOSEP/SUT. No es parte del backend Nest (sin dependencias, solo fetch nativo de Node 18+).",
+  "description": "Spike Sprint 2/2b RRHH: PoC AISLADO de viabilidad de verificación automatizada en SICOSEP/SUT/IESS. No es parte del backend Nest. Playwright vive SOLO aquí: nunca en backend/package.json, porque metería ~400 MB de Chromium en la imagen de Cloud Run.",
   "scripts": {
-    "probe": "node run.js"
+    "probe": "node run.js",
+    "probe:headed": "node run.js --headed",
+    "probe:http": "node run.js --http-only",
+    "postinstall": "playwright install chromium"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
   },
   "engines": {
     "node": ">=18"

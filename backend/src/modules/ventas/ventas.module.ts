@@ -16,11 +16,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
     VentasTemplatesController,
     VentasContratosController,
   ],
-  providers: [
-    VentasService,
-    VentasTemplatesService,
-    VentasContratosService,
-  ],
+  providers: [VentasService, VentasTemplatesService, VentasContratosService],
   exports: [VentasService, VentasTemplatesService, VentasContratosService],
 })
 export class VentasModule {}

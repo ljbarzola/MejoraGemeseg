@@ -47,13 +47,13 @@ export default function CandidatesList() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/personal')}>← Volver</button>
+          <button className="cacao-back-btn" onClick={() => navigate('/rrhh')}>← Volver</button>
           <div>
-            <p className="page-eyebrow">PERSONAL</p>
+            <p className="page-eyebrow">RECURSOS HUMANOS</p>
             <h1>Candidatos</h1>
           </div>
         </div>
-        <button className="auth-btn" onClick={() => navigate('/personal/candidates/new')}>+ Nuevo Candidato</button>
+        <button className="auth-btn" onClick={() => navigate('/rrhh/candidates/new')}>+ Nuevo Candidato</button>
       </div>
 
       <div className="admin-section">
@@ -115,7 +115,7 @@ export default function CandidatesList() {
                       </select>
                     </td>
                     <td className="no-print">
-                      <button className="btn-sm-edit" onClick={() => navigate(`/personal/candidates/${c.id}`)}>Ver</button>
+                      <button className="btn-sm-edit" onClick={() => navigate(`/rrhh/candidates/${c.id}`)}>Ver</button>
                     </td>
                   </tr>
                 ))}

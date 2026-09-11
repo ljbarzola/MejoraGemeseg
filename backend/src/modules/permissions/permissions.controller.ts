@@ -1,10 +1,22 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { UserRole } from '@prisma/client';
 import { PermissionsService } from './permissions.service';
-import { SetCompanySectionsDto, SetUserPermissionsDto } from './dto/permission.dto';
+import {
+  SetCompanySectionsDto,
+  SetUserPermissionsDto,
+} from './dto/permission.dto';
 
 @Controller('permissions')
 export class PermissionsController {
@@ -19,7 +31,10 @@ export class PermissionsController {
   @Get('sections/:companyId')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN)
-  getCompanySections(@Param('companyId', ParseIntPipe) companyId: number, @Req() req: any) {
+  getCompanySections(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Req() req: any,
+  ) {
     if (this.service.isSuperAdmin(req.user)) {
       return this.service.getCompanySections(companyId);
     }
@@ -38,7 +53,9 @@ export class PermissionsController {
     @Req() req: any,
   ) {
     if (!this.service.isSuperAdmin(req.user)) {
-      throw new Error('Solo el super administrador puede gestionar secciones de empresa');
+      throw new Error(
+        'Solo el super administrador puede gestionar secciones de empresa',
+      );
     }
     return this.service.setCompanySections(companyId, dto.sections);
   }
@@ -46,7 +63,10 @@ export class PermissionsController {
   @Get('users/:companyId')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN)
-  getUserPermissionsForCompany(@Param('companyId', ParseIntPipe) companyId: number, @Req() req: any) {
+  getUserPermissionsForCompany(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Req() req: any,
+  ) {
     if (this.service.isSuperAdmin(req.user)) {
       return this.service.getUserPermissionsForCompany(companyId);
     }

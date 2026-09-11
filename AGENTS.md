@@ -176,7 +176,7 @@ FRONTEND_URL=http://localhost:5173
 ### Permisos por seccion (`/permissions`)
 Existen **dos capas de autorizacion independientes**, no una sola:
 1. **RolesGuard** (`@Roles(UserRole.ADMIN)`): rol grueso ADMIN/MANAGER/EMPLOYEE, por endpoint.
-2. **Permisos por seccion** (`PermissionsService`, modulo `permissions`): gatea modulos completos (DASHBOARD, PROJECTS, ADMIN, TOOLS, AGENTS, CACAO, COMPANY_SETTINGS, COMPANIES, CUSTODIAS, PERSONAL, VENTAS - ver `ALL_SECTIONS` en `permissions.service.ts`).
+2. **Permisos por seccion** (`PermissionsService`, modulo `permissions`): gatea modulos completos (DASHBOARD, PROJECTS, ADMIN, TOOLS, AGENTS, CACAO, COMPANY_SETTINGS, COMPANIES, CUSTODIAS, RRHH, VENTAS - ver `ALL_SECTIONS` en `permissions.service.ts`).
 
 Reglas:
 - Una seccion con `alwaysEnabled: true` (DASHBOARD, PROJECTS, ADMIN, TOOLS, AGENTS) esta siempre visible para toda empresa.
@@ -185,6 +185,22 @@ Reglas:
 - El Super Admin (`companyId: null`) ve y puede gestionar todas las secciones sin restriccion (`getMyPermissions` retorna `isSuperAdmin: true` y el listado completo de `ALL_SECTIONS`).
 - `GET /permissions/my` es el endpoint que el frontend consulta al cargar sesion; `contexts/PermissionsContext.tsx` + `hooks/usePermissions.ts` exponen `canView(section)`, usado por el wrapper `<SectionRoute section="...">` en `App.tsx` alrededor de las rutas de cada modulo.
 - **Al agregar un modulo nuevo:** agregarlo a `ALL_SECTIONS`, proteger sus endpoints, y envolver sus rutas de frontend en `SectionRoute`. Ninguna de las dos capas reemplaza a la otra - un endpoint puede tener `RolesGuard` correcto y aun asi quedar expuesto si no se agrega su seccion aqui.
+
+**`SectionPermissionGuard` (backend, agregado en Sprint 3 de Personal):**
+Hasta el Sprint 3, los permisos por seccion **solo se aplicaban en el frontend** (`SectionRoute`); el backend no los verificaba en ningun endpoint. `common/guards/section-permission.guard.ts` + `common/decorators/section.decorator.ts` cierran ese hueco:
+
+```ts
+@UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+@Section('RRHH', 'write')   // o 'view'
+```
+
+Replica **exactamente** la semantica de `hooks/usePermissions.ts`, en este orden:
+1. Super admin → pasa siempre.
+2. Seccion no habilitada para la empresa → 403.
+3. Existe fila `UserPermission` para la seccion → manda su `canView`/`canWrite`.
+4. **No existe fila → se permite** (default permisivo).
+
+El punto 4 es deliberado y esta cubierto por un test: invertirlo dejaria fuera a todos los usuarios que hoy no tienen permisos explicitos cargados. Usar este guard (y no `RolesGuard`) es lo correcto cuando el acceso depende del modulo y no del cargo - p. ej. los usuarios de RRHH estan cargados como `EMPLOYEE` (`nayelli@gemeseg.com`), asi que un `@Roles(ADMIN, MANAGER)` los habria bloqueado.
 
 ### Empresas (White-labeling)
 - **Super Admin** (`admin@general.com`, `companyId: null`): puede ver y gestionar todas las empresas.
@@ -283,7 +299,7 @@ Reglas:
 **Estados:** LISTO_PARA_CUSTODIAR → EN_CAMINO → LLEGO (solo LLEGO liquida nomina)
 **PDFs:** PDFKit - orden con firmas, matriz landscape, rol individual, masivo
 
-### Personal y RRHH (`/personal`)
+### Recursos Humanos (`/rrhh`)
 - `GET/POST/DELETE /personal/reclutamiento/puestos` - Creación de vacantes y sincronización JSON con Drive
 - `POST /personal/reclutamiento/sync` - Sincronización de candidatos postulados en Drive Reclutamiento
 - `GET/POST /personal/kanban/columns` - Columnas del Kanban
@@ -292,7 +308,25 @@ Reglas:
 - `GET /personal/certifications` - Certificaciones
 - `GET /personal/certifications/alerts` - Alertas de vencimiento
 - `POST /personal/drive/sync` - Sincronizar carpetas de Drive
-- `GET /personal/drive/compliance/:cedula` - Checklist de cumplimiento por cédula
+- `GET /personal/drive/compliance/:cedula` - Checklist de cumplimiento por cédula (incluye `review` por documento y `reviewSummary`)
+
+**Movimientos de Personal — entrada/salida de guardias (2026-09-09, reemplaza a "Verificación asistida" de Sprint 2; ver `.agents/modules/movimientos-personal.md`):**
+- `GET/POST/PATCH/DELETE /personal/sistemas-verificacion` - Catálogo configurable de sistemas externos (IsyPlus, IESS, SUT, SICOSEP), ya sembrado para `companyId=1`. Sin página propia — se administra desde un modal dentro de `/rrhh/movimientos`
+- `GET /personal/movimientos` (+ `/:id`), `POST /personal/movimientos/salida`, `PATCH /personal/movimientos/:id/items/:itemId` - Casos de entrada/salida por guardia, con checklist por sistema (snapshot del catálogo al crear el caso). **No** hay `POST .../entrada`: es un registro, no un alta manual — la entrada solo se crea sola
+- Entrada: única vía es automática, `KanbanColumn.triggersHire` (una sola columna por empresa) crea el caso al mover un candidato ahí (`CandidateService.move()`). Salida: ícono + `window.confirm` en `GuardiasList.tsx` (sin formulario, usa los datos de la fila). Ambas son idempotentes (no duplican un caso ya abierto para la misma cédula)
+- Contexto: el spike de `backend/scraping-poc/` concluyó que el scraping automatizado **no es viable** (WAF Incapsula + captcha en SICOSEP; login de empleador en SUT; datos abiertos solo agregados). La acción en el portal la hace una persona; el sistema guarda la traza. La vieja tabla `VerificationCheck` (log plano, sin dirección entrada/salida) se eliminó — sus datos, si existían, se migraron a un caso histórico por `(companyId, cedula)`.
+
+**Revisión documental (Sprint 3):**
+- `POST /personal/drive/documents/review` - Aprobar/rechazar un documento con motivo (obligatorio al rechazar, mínimo 5 caracteres). Acepta `documentTypeId` (fila del checklist) o `driveFileId` (archivo sin reconocer)
+- `GET /personal/drive/documents/reviews/:cedula` - Estado de revisión actual por empleado
+- `GET /personal/drive/documents/review-history?cedula=` - Traza append-only de aprobaciones/rechazos
+
+**Reglas:**
+- Modelos `DocumentReview` (estado actual) + `DocumentReviewHistory` (traza). Se separan de `EmployeeDocument` a propósito: `deleteEmployeeByCedula` borra los documentos y una re-subida genera un `driveFileId` nuevo, así que la traza no puede vivir ahí.
+- `review.stale = true` cuando el archivo actual ya no es el que se revisó (rechazaron y volvieron a subir) → la UI pide nueva revisión.
+- La traza **sobrevive** al borrado del empleado (no hay FK a `Candidate`, la relación es por cédula). Es deliberado: es un registro de auditoría.
+- El match entre archivo y tipo de documento exige frase completa, todos los términos, o ≥60 % cuando son 3 o más; **cada archivo se asigna a un solo tipo**. Antes bastaba una palabra suelta y un archivo podía aparecer en varias filas del checklist.
+- Estos 3 endpoints usan `SectionPermissionGuard` (sección RRHH), no `RolesGuard` - ver "Permisos por seccion".
 
 ### Permissions (`/permissions`)
 - `GET /permissions/my` - Secciones y permisos del usuario autenticado (cualquier usuario)

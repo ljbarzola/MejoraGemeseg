@@ -11,7 +11,7 @@ export const ALL_SECTIONS = [
   { key: 'COMPANY_SETTINGS', label: 'Mi Empresa', alwaysEnabled: false },
   { key: 'COMPANIES', label: 'Empresas', alwaysEnabled: false },
   { key: 'CUSTODIAS', label: 'Custodias', alwaysEnabled: false },
-  { key: 'PERSONAL', label: 'Personal', alwaysEnabled: false },
+  { key: 'RRHH', label: 'Recursos Humanos', alwaysEnabled: false },
   { key: 'VENTAS', label: 'Ventas y CRM', alwaysEnabled: false },
 ];
 
@@ -36,7 +36,9 @@ export class PermissionsService {
   }
 
   async setCompanySections(companyId: number, sections: string[]) {
-    const alwaysOn = ALL_SECTIONS.filter((s) => s.alwaysEnabled).map((s) => s.key);
+    const alwaysOn = ALL_SECTIONS.filter((s) => s.alwaysEnabled).map(
+      (s) => s.key,
+    );
     const allowed = [...new Set([...alwaysOn, ...sections])];
 
     await this.prisma.companySection.deleteMany({ where: { companyId } });
@@ -93,10 +95,16 @@ export class PermissionsService {
 
   async getMyPermissions(userId: number, companyId: number | null) {
     if (!companyId) {
-      return { isSuperAdmin: true, sections: ALL_SECTIONS.map((s) => s.key), permissions: [] };
+      return {
+        isSuperAdmin: true,
+        sections: ALL_SECTIONS.map((s) => s.key),
+        permissions: [],
+      };
     }
     const companySections = await this.getCompanySections(companyId);
-    const enabledSections = companySections.filter((s) => s.enabled).map((s) => s.key);
+    const enabledSections = companySections
+      .filter((s) => s.enabled)
+      .map((s) => s.key);
     const userPerms = await this.getUserPermissions(userId);
     return {
       isSuperAdmin: false,

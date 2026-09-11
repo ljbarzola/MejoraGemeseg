@@ -16,6 +16,7 @@ import ChatDrawer from './components/chat/ChatDrawer';
 import { CompanyProvider } from './contexts/ThemeContext';
 import { usePerm } from './contexts/PermissionsContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
+import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import { usePermissions } from './hooks/usePermissions';
 import { isAuthenticated } from './services/auth.service';
 
@@ -59,12 +60,14 @@ const RecruitmentKanban = lazy(() => import('./pages/personal/recruitment/Recrui
 const CandidatesList = lazy(() => import('./pages/personal/candidates/CandidatesList'));
 const CandidateForm = lazy(() => import('./pages/personal/candidates/CandidateForm'));
 const ContractsList = lazy(() => import('./pages/personal/contracts/ContractsList'));
-const CertificationsList = lazy(() => import('./pages/personal/certifications/CertificationsList'));
+const ContractTemplateConfig = lazy(() => import('./pages/personal/contracts/ContractTemplateConfig'));
+const GenerarDocumento = lazy(() => import('./pages/personal/contracts/GenerarDocumento'));
 const LogEntriesPage = lazy(() => import('./pages/personal/logs/LogEntries'));
-const CompliancePanel = lazy(() => import('./pages/personal/compliance/CompliancePanel'));
 const DriveConfig = lazy(() => import('./pages/personal/compliance/DriveConfig'));
 const DocumentTypeConfig = lazy(() => import('./pages/personal/compliance/DocumentTypeConfig'));
-const VerificacionPage = lazy(() => import('./pages/personal/VerificacionPage'));
+const EntidadesList = lazy(() => import('./pages/personal/entidades/EntidadesList'));
+const HistorialGuardia = lazy(() => import('./pages/personal/entidades/HistorialGuardia'));
+const CumplimientoEntidades = lazy(() => import('./pages/personal/entidades/CumplimientoEntidades'));
 const VentasDashboard = lazy(() => import('./pages/ventas/VentasDashboard'));
 const VisitasPage = lazy(() => import('./pages/ventas/VisitasPage'));
 const LeadsPage = lazy(() => import('./pages/ventas/LeadsPage'));
@@ -77,10 +80,11 @@ const ContratoForm = lazy(() => import('./pages/ventas/ContratoForm'));
 const ContratoResult = lazy(() => import('./pages/ventas/ContratoResult'));
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
+  const { collapsed } = useSidebar();
   return (
     <ProtectedRoute>
       <div className="no-print"><Sidebar /></div>
-      <div className="main-content">
+      <div className={`main-content${collapsed ? ' content-expanded' : ''}`}>
         {children}
       </div>
     </ProtectedRoute>
@@ -111,6 +115,7 @@ function AppInner() {
 
   return (
     <PermissionsProvider value={perms}>
+      <SidebarProvider>
       <Suspense fallback={<LoadingFallback />}>
       <Routes>
         <Route
@@ -277,21 +282,27 @@ function AppInner() {
         <Route path="/custodias/nomina" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><NominaPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/custodias/trabajador" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><ConsultaTrabajador /></SectionRoute></ProtectedLayout>} />
         <Route path="/custodias/gemebot" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><GemeBotChat /></SectionRoute></ProtectedLayout>} />
-        <Route path="/personal" element={<ProtectedLayout><SectionRoute section="PERSONAL"><PersonalDashboard /></SectionRoute></ProtectedLayout>} />
-        <Route path="/personal/reclutamiento" element={<ProtectedLayout><SectionRoute section="PERSONAL"><ReclutamientoPage /></SectionRoute></ProtectedLayout>} />
-        <Route path="/personal/guardias" element={<ProtectedLayout><SectionRoute section="PERSONAL"><GuardiasList /></SectionRoute></ProtectedLayout>} />
-        <Route path="/personal/administrativo" element={<ProtectedLayout><SectionRoute section="PERSONAL"><AdministrativeStaff /></SectionRoute></ProtectedLayout>} />
-        <Route path="/personal/kanban" element={<ProtectedLayout><SectionRoute section="PERSONAL"><RecruitmentKanban /></SectionRoute></ProtectedLayout>} />
-        <Route path="/personal/candidates" element={<ProtectedLayout><SectionRoute section="PERSONAL"><CandidatesList /></SectionRoute></ProtectedLayout>} />
-        <Route path="/personal/candidates/new" element={<ProtectedLayout><SectionRoute section="PERSONAL"><CandidateForm /></SectionRoute></ProtectedLayout>} />
-        <Route path="/personal/candidates/:id" element={<ProtectedLayout><SectionRoute section="PERSONAL"><CandidateForm /></SectionRoute></ProtectedLayout>} />
-        <Route path="/personal/contracts" element={<ProtectedLayout><SectionRoute section="PERSONAL"><ContractsList /></SectionRoute></ProtectedLayout>} />
-        <Route path="/personal/certifications" element={<ProtectedLayout><SectionRoute section="PERSONAL"><CertificationsList /></SectionRoute></ProtectedLayout>} />
-        <Route path="/personal/logs" element={<ProtectedLayout><SectionRoute section="PERSONAL"><LogEntriesPage /></SectionRoute></ProtectedLayout>} />
-        <Route path="/personal/compliance" element={<ProtectedLayout><SectionRoute section="PERSONAL"><CompliancePanel /></SectionRoute></ProtectedLayout>} />
-        <Route path="/personal/drive-config" element={<ProtectedLayout><SectionRoute section="PERSONAL"><DriveConfig /></SectionRoute></ProtectedLayout>} />
-        <Route path="/personal/document-types" element={<ProtectedLayout><SectionRoute section="PERSONAL"><DocumentTypeConfig /></SectionRoute></ProtectedLayout>} />
-        <Route path="/personal/verificacion" element={<ProtectedLayout><SectionRoute section="PERSONAL"><VerificacionPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh" element={<ProtectedLayout><SectionRoute section="RRHH"><PersonalDashboard /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/reclutamiento" element={<ProtectedLayout><SectionRoute section="RRHH"><ReclutamientoPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/guardias" element={<ProtectedLayout><SectionRoute section="RRHH"><GuardiasList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/administrativo" element={<ProtectedLayout><SectionRoute section="RRHH"><AdministrativeStaff /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/kanban" element={<ProtectedLayout><SectionRoute section="RRHH"><RecruitmentKanban /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/candidates" element={<ProtectedLayout><SectionRoute section="RRHH"><CandidatesList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/candidates/new" element={<ProtectedLayout><SectionRoute section="RRHH"><CandidateForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/candidates/:id" element={<ProtectedLayout><SectionRoute section="RRHH"><CandidateForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/contracts" element={<ProtectedLayout><SectionRoute section="RRHH"><ContractsList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/contracts/plantillas/nueva" element={<ProtectedLayout><SectionRoute section="RRHH"><ContractTemplateConfig /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/contracts/plantillas/:id" element={<ProtectedLayout><SectionRoute section="RRHH"><ContractTemplateConfig /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/contracts/generar" element={<ProtectedLayout><SectionRoute section="RRHH"><GenerarDocumento /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/logs" element={<ProtectedLayout><SectionRoute section="RRHH"><LogEntriesPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/drive-config" element={<ProtectedLayout><SectionRoute section="RRHH"><DriveConfig /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/document-types" element={<ProtectedLayout><SectionRoute section="RRHH"><DocumentTypeConfig /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/entidades" element={<ProtectedLayout><SectionRoute section="RRHH"><EntidadesList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/cumplimiento" element={<ProtectedLayout><SectionRoute section="RRHH"><CumplimientoEntidades /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/historial" element={<ProtectedLayout><SectionRoute section="RRHH"><HistorialGuardia /></SectionRoute></ProtectedLayout>} />
+        {/* Asignaciones y Movimientos se unieron en /rrhh/historial — se conservan como redirect por si hay enlaces guardados. */}
+        <Route path="/rrhh/asignaciones" element={<Navigate to="/rrhh/historial" replace />} />
+        <Route path="/rrhh/movimientos" element={<Navigate to="/rrhh/historial" replace />} />
         <Route path="/ventas" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasDashboard /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/visitas" element={<ProtectedLayout><SectionRoute section="VENTAS"><VisitasPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/leads" element={<ProtectedLayout><SectionRoute section="VENTAS"><LeadsPage /></SectionRoute></ProtectedLayout>} />
@@ -313,6 +324,7 @@ function AppInner() {
           <ChatDrawer isOpen={chatOpen} onClose={() => setChatOpen(false)} />
         </>
       )}
+      </SidebarProvider>
       </PermissionsProvider>
     );
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { getTemplates, getTemplate, createContract, SalesTemplate, SalesTemplateField } from '../../services/ventas.service';
 
 export default function ContratoForm() {
@@ -111,15 +112,21 @@ export default function ContratoForm() {
   const companyFields = selectedTemplate?.fields?.filter((f: SalesTemplateField) => !f.isClientField) || [];
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <button onClick={() => navigate('/ventas/contratos')} style={{ border: 'none', background: 'none', color: '#555', cursor: 'pointer', fontSize: 14 }}>← Volver</button>
-        <h2 style={{ margin: 0, fontSize: 18 }}>Nuevo Contrato</h2>
+    <div className="page-container">
+      <button className="cacao-back-btn" onClick={() => navigate('/ventas/contratos')} style={{ marginBottom: 16 }}>
+        <ArrowLeft size={16} strokeWidth={2.4} /> Volver
+      </button>
+
+      <div className="page-header-row">
+        <div>
+          <p className="page-eyebrow">Ventas y CRM</p>
+          <h1>Nuevo Contrato</h1>
+        </div>
       </div>
 
       {/* Template selector */}
       {!templateId && (
-        <div style={{ background: '#fff', borderRadius: 8, padding: 20, marginBottom: 16, border: '1px solid #e2e8f0' }}>
+        <div className="admin-section" style={{ marginBottom: 16 }}>
           <label style={{ fontSize: 12, fontWeight: 600, color: '#666', display: 'block', marginBottom: 6 }}>Seleccionar plantilla</label>
           <select value={selectedTemplate?.id || ''} onChange={e => loadTemplate(+e.target.value)}
             style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}>
@@ -216,8 +223,8 @@ export default function ContratoForm() {
 
           {/* Generate button */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-            <button onClick={handleGenerate} disabled={loading}
-              style={{ padding: '12px 32px', borderRadius: 6, border: 'none', background: '#1a1a2e', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 14, opacity: loading ? 0.5 : 1 }}>
+            <button className="auth-btn" onClick={handleGenerate} disabled={loading}
+              style={{ padding: '12px 32px', fontSize: 14 }}>
               {loading ? 'Generando...' : '⚡ Generar Contrato'}
             </button>
           </div>
@@ -229,7 +236,7 @@ export default function ContratoForm() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: '#fff', borderRadius: 8, padding: 20, marginBottom: 16, border: '1px solid #e2e8f0' }}>
+    <div className="admin-section" style={{ marginBottom: 16 }}>
       <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>{title}</h3>
       {children}
     </div>

@@ -1,4 +1,16 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import type { Response } from 'express';
 import { CustodiasService } from './custodias.service';
@@ -16,7 +28,11 @@ export class CustodiasController {
 
   @Post()
   create(@Body() dto: CreateCustodiaDto, @Req() req: any) {
-    return this.custodiasService.create(dto, req.user.companyId, req.user.userId);
+    return this.custodiasService.create(
+      dto,
+      req.user.companyId,
+      req.user.userId,
+    );
   }
 
   @Get()
@@ -27,7 +43,12 @@ export class CustodiasController {
     @Query('tipo') tipo?: string,
     @Query('estado') estado?: string,
   ) {
-    return this.custodiasService.findAll(req.user.companyId, { fechaInicio, fechaFin, tipo, estado });
+    return this.custodiasService.findAll(req.user.companyId, {
+      fechaInicio,
+      fechaFin,
+      tipo,
+      estado,
+    });
   }
 
   @Get('available-custodios')
@@ -41,8 +62,16 @@ export class CustodiasController {
   }
 
   @Get('trabajador')
-  getTrabajador(@Req() req: any, @Query('cedula') cedula: string, @Query('mes') mes?: string) {
-    return this.custodiasService.getTrabajadorByCedula(req.user.companyId, cedula, mes);
+  getTrabajador(
+    @Req() req: any,
+    @Query('cedula') cedula: string,
+    @Query('mes') mes?: string,
+  ) {
+    return this.custodiasService.getTrabajadorByCedula(
+      req.user.companyId,
+      cedula,
+      mes,
+    );
   }
 
   @Post('gemebot/query')
@@ -56,7 +85,11 @@ export class CustodiasController {
     @Query('fechaInicio') fechaInicio: string,
     @Query('fechaFin') fechaFin: string,
   ) {
-    return this.custodiasService.getNomina(req.user.companyId, fechaInicio, fechaFin);
+    return this.custodiasService.getNomina(
+      req.user.companyId,
+      fechaInicio,
+      fechaFin,
+    );
   }
 
   @Get('nomina/pdf')
@@ -69,14 +102,20 @@ export class CustodiasController {
     @Query('todos') todos?: string,
   ) {
     try {
-      const nomina = await this.custodiasService.getNomina(req.user.companyId, fechaInicio, fechaFin);
+      const nomina = await this.custodiasService.getNomina(
+        req.user.companyId,
+        fechaInicio,
+        fechaFin,
+      );
 
       let pdfBuffer: Buffer;
       let filename: string;
 
       if (cedula) {
         pdfBuffer = await this.pdfService.generarPdfIndividual(nomina, cedula);
-        const emp = nomina.empleados_detalle?.find((e: any) => e.cedula === cedula);
+        const emp = nomina.empleados_detalle?.find(
+          (e: any) => e.cedula === cedula,
+        );
         const slug = (emp?.nombre || 'empleado').replace(/\s+/g, '_');
         filename = `rol_pago_${slug}_${fechaInicio}_${fechaFin}.pdf`;
       } else if (todos === 'true') {
@@ -89,7 +128,10 @@ export class CustodiasController {
 
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Length', pdfBuffer.length.toString());
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${filename}"`,
+      );
       res.end(pdfBuffer);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -102,9 +144,16 @@ export class CustodiasController {
   }
 
   @Get(':id/pdf')
-  async exportarPdf(@Param('id') id: string, @Req() req: any, @Res() res: Response) {
+  async exportarPdf(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Res() res: Response,
+  ) {
     try {
-      const custodia = await this.custodiasService.findOne(+id, req.user.companyId);
+      const custodia = await this.custodiasService.findOne(
+        +id,
+        req.user.companyId,
+      );
       const pdfBuffer = await this.pdfService.generarPdfOrdenCustodia(custodia);
       const filename = `orden_custodia_${custodia.numeroGuia.replace(/[^a-zA-Z0-9\-]/g, '_')}.pdf`;
       res.setHeader('Content-Type', 'application/pdf');
@@ -117,8 +166,16 @@ export class CustodiasController {
   }
 
   @Patch(':id/estado')
-  updateEstado(@Param('id') id: string, @Body() dto: UpdateEstadoDto, @Req() req: any) {
-    return this.custodiasService.updateEstado(+id, dto.estado, req.user.companyId);
+  updateEstado(
+    @Param('id') id: string,
+    @Body() dto: UpdateEstadoDto,
+    @Req() req: any,
+  ) {
+    return this.custodiasService.updateEstado(
+      +id,
+      dto.estado,
+      req.user.companyId,
+    );
   }
 
   @Delete(':id')

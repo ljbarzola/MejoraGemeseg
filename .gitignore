@@ -19,9 +19,14 @@ coverage
 
 # Google service account credentials
 backend/google-service-account.json
+backend/cloudsql-proxy-key.json
 
 # Build artifacts
 .firebase/
+*.tsbuildinfo
+
+# Claude Code local tool state (session-specific, not project config)
+.claude/
 
 # Temp scripts
 backend/check-tables.js

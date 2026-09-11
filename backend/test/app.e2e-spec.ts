@@ -1,5 +1,7 @@
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret';
-process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/gemeseg?schema=public';
+process.env.DATABASE_URL =
+  process.env.DATABASE_URL ||
+  'postgresql://postgres:postgres@localhost:5432/gemeseg?schema=public';
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
@@ -34,9 +36,7 @@ describe('App (e2e)', () => {
   });
 
   it('/auth/status (GET) - should return auth status', () => {
-    return request(app.getHttpServer())
-      .get('/auth/status')
-      .expect(200);
+    return request(app.getHttpServer()).get('/auth/status').expect(200);
   });
 
   afterAll(async () => {

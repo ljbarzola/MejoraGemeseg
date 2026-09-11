@@ -1,4 +1,10 @@
-import { IsString, IsOptional, IsNumber, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsArray,
+  IsBoolean,
+} from 'class-validator';
 
 export class CreateKanbanColumnDto {
   @IsString()
@@ -7,6 +13,10 @@ export class CreateKanbanColumnDto {
   @IsString()
   @IsOptional()
   color?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  triggersHire?: boolean;
 }
 
 export class UpdateKanbanColumnDto {
@@ -21,6 +31,10 @@ export class UpdateKanbanColumnDto {
   @IsNumber()
   @IsOptional()
   position?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  triggersHire?: boolean;
 }
 
 export class ReorderKanbanDto {

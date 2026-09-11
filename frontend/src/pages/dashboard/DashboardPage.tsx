@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getUser } from '../../services/auth.service';
 import { getMyTasks } from '../../services/task.service';
 import { getProjects } from '../../services/project.service';
+import CreateTaskModal from '../../components/tasks/CreateTaskModal';
 import type { Task } from '../../types/task';
 import { STATUS_LABELS, PRIORITY_LABELS, STATUS_COLORS, PRIORITY_COLORS } from '../../types/task';
 
@@ -53,6 +54,8 @@ export default function DashboardPage() {
   const [projects, setProjects] = useState<{ id: number; name: string }[]>([]);
   const [sortField, setSortField] = useState<SortField>('status');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [showCreateTask, setShowCreateTask] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     getProjects({ page: 1 }).then((res) => {
@@ -67,7 +70,7 @@ export default function DashboardPage() {
       assignedToMe: assignedToMe || undefined,
       projectId: projectFilter !== '' ? Number(projectFilter) : undefined,
     }).then(setTasks).finally(() => setLoading(false));
-  }, [statusFilter, assignedToMe, projectFilter, location.key]);
+  }, [statusFilter, assignedToMe, projectFilter, location.key, reloadKey]);
 
   const sortedTasks = useMemo(() => {
     const sorted = [...tasks];
@@ -132,41 +135,9 @@ export default function DashboardPage() {
             <p className="page-eyebrow">TAREAS</p>
             <h1>Mis tareas</h1>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <select
-              className="filter-select"
-              value={projectFilter}
-              onChange={(e) => {
-                const val = e.target.value ? Number(e.target.value) : '';
-                setProjectFilter(val);
-                localStorage.setItem('dashboard_project_filter', String(val));
-              }}
-            >
-              <option value="">Todos los proyectos</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-
-            <button
-              className={`filter-btn ${assignedToMe ? 'active' : ''}`}
-              onClick={() => {
-                const next = !assignedToMe;
-                setAssignedToMe(next);
-                localStorage.setItem('dashboard_assigned_to_me', String(next));
-              }}
-            >
-              Asignadas a mí
-            </button>
-
-            <button
-              className="auth-btn"
-              onClick={() => navigate('/tasks/new')}
-              style={{ marginLeft: 4 }}
-            >
-              + Nueva tarea
-            </button>
-          </div>
+          <button className="auth-btn" onClick={() => setShowCreateTask(true)}>
+            + Nueva tarea
+          </button>
         </div>
 
         <div className="dashboard-status-filters">
@@ -182,7 +153,42 @@ export default function DashboardPage() {
               {opt.label}
             </button>
           ))}
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: '#4a5568', cursor: 'pointer', marginLeft: '4px' }}>
+            <input
+              type="checkbox"
+              checked={assignedToMe}
+              onChange={(e) => {
+                setAssignedToMe(e.target.checked);
+                localStorage.setItem('dashboard_assigned_to_me', String(e.target.checked));
+              }}
+            />
+            Asignadas a mí
+          </label>
+
+          <select
+            className="filter-select"
+            style={{ marginLeft: 'auto' }}
+            value={projectFilter}
+            onChange={(e) => {
+              const val = e.target.value ? Number(e.target.value) : '';
+              setProjectFilter(val);
+              localStorage.setItem('dashboard_project_filter', String(val));
+            }}
+          >
+            <option value="">Todos los proyectos</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
         </div>
+
+        {showCreateTask && (
+          <CreateTaskModal
+            onClose={() => setShowCreateTask(false)}
+            onCreated={() => setReloadKey((k) => k + 1)}
+          />
+        )}
 
         <div className="admin-section">
           {loading ? (

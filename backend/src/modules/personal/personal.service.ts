@@ -1,14 +1,33 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MovimientoPersonalService } from './services/movimiento-personal.service';
+import { CumplimientoEntidadService } from './services/cumplimiento-entidad.service';
 
 @Injectable()
 export class PersonalService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly movimientoPersonalService: MovimientoPersonalService,
+    private readonly cumplimientoEntidadService: CumplimientoEntidadService,
+  ) {}
 
   async getDashboard(companyId: number) {
-    const [totalCandidates, activeCertifications, pendingContracts, alertCount] = await Promise.all([
+    const [
+      totalCandidates,
+      activeCertifications,
+      pendingContracts,
+      alertCount,
+      driveCustodios,
+      candidatosCustodio,
+      asignacionesActivas,
+      cedulasFuera,
+      movimientosEnProceso,
+      complianceOverview,
+    ] = await Promise.all([
       this.prisma.candidate.count({ where: { companyId } }),
-      this.prisma.certification.count({ where: { companyId, status: 'ACTIVE' } }),
+      this.prisma.certification.count({
+        where: { companyId, status: 'ACTIVE' },
+      }),
       this.prisma.contract.count({ where: { companyId, status: 'DRAFT' } }),
       this.prisma.certification.count({
         where: {
@@ -17,8 +36,56 @@ export class PersonalService {
           expiryDate: { lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
         },
       }),
+      this.prisma.employeeDriveFolder.findMany({
+        where: { companyId, folderType: 'CUSTODIAS' },
+        select: { cedula: true },
+      }),
+      this.prisma.candidate.findMany({
+        where: {
+          companyId,
+          positionApplied: { contains: 'custodio', mode: 'insensitive' },
+        },
+        select: { cedula: true },
+      }),
+      this.prisma.asignacionGuardia.findMany({
+        where: { companyId, fechaFin: null },
+        select: { cedula: true },
+      }),
+      this.movimientoPersonalService.getCedulasFuera(companyId),
+      this.prisma.movimientoPersonal.count({
+        where: { companyId, estado: 'EN_PROCESO' },
+      }),
+      this.cumplimientoEntidadService.getComplianceOverview(companyId),
     ]);
 
-    return { totalCandidates, activeCertifications, pendingContracts, alertCount };
+    // Mismo criterio que GuardiasList.tsx/CustodiasService.getAvailableCustodios
+    // para decidir quién cuenta como "guardia activo": unión de carpetas de
+    // Drive tipo CUSTODIAS + candidatos de reclutamiento con puesto "custodio",
+    // excluyendo a quien ya registró salida completada.
+    const fueraSet = new Set(cedulasFuera);
+    const guardiaCedulas = new Set<string>();
+    driveCustodios.forEach((f) => guardiaCedulas.add(f.cedula));
+    candidatosCustodio.forEach((c) => guardiaCedulas.add(c.cedula));
+    fueraSet.forEach((c) => guardiaCedulas.delete(c));
+    const asignadasSet = new Set(asignacionesActivas.map((a) => a.cedula));
+    const guardiasSinAsignacion = Array.from(guardiaCedulas).filter(
+      (c) => !asignadasSet.has(c),
+    ).length;
+
+    const documentosVencidosOPorVencer = complianceOverview.reduce(
+      (acc, item) =>
+        acc + item.requisitosVencidos.length + item.requisitosPorVencer.length,
+      0,
+    );
+
+    return {
+      totalCandidates,
+      activeCertifications,
+      pendingContracts,
+      alertCount,
+      guardiasSinAsignacion,
+      documentosVencidosOPorVencer,
+      movimientosEnProceso,
+    };
   }
 }

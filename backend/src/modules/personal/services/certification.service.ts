@@ -6,7 +6,10 @@ export class CertificationService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(companyId: number) {
-    return this.prisma.certification.findMany({ where: { companyId }, orderBy: { expiryDate: 'asc' } });
+    return this.prisma.certification.findMany({
+      where: { companyId },
+      orderBy: { expiryDate: 'asc' },
+    });
   }
 
   async create(data: any, companyId: number, userId: number) {
@@ -16,13 +19,17 @@ export class CertificationService {
   }
 
   async update(id: number, data: any, companyId: number) {
-    const c = await this.prisma.certification.findFirst({ where: { id, companyId } });
+    const c = await this.prisma.certification.findFirst({
+      where: { id, companyId },
+    });
     if (!c) throw new NotFoundException('Certificación no encontrada');
     return this.prisma.certification.update({ where: { id }, data });
   }
 
   async delete(id: number, companyId: number) {
-    const c = await this.prisma.certification.findFirst({ where: { id, companyId } });
+    const c = await this.prisma.certification.findFirst({
+      where: { id, companyId },
+    });
     if (!c) throw new NotFoundException('Certificación no encontrada');
     return this.prisma.certification.delete({ where: { id } });
   }

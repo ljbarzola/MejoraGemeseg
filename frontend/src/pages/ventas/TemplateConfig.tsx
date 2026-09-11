@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { getTemplate, createTemplate, updateTemplate, downloadFromDrive, detectVariables, saveTemplateFields, SalesTemplateField } from '../../services/ventas.service';
+import { PRIMARY } from './contratoStyles';
 
 export default function TemplateConfig() {
   const { id } = useParams<{ id: string }>();
@@ -37,7 +39,10 @@ export default function TemplateConfig() {
 
   const handleDownload = async () => {
     if (!driveUrl.trim()) { alert('Pega el link de Drive'); return; }
-    if (!driveUrl.includes('drive.google.com')) { alert('El link debe ser de Google Drive'); return; }
+    if (!driveUrl.includes('drive.google.com') && !driveUrl.includes('docs.google.com')) {
+      alert('El link debe ser de Google Drive o de un Google Doc (docs.google.com)');
+      return;
+    }
     setDownloading(true);
     try {
       // Create template first if new
@@ -109,23 +114,29 @@ export default function TemplateConfig() {
   };
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <button onClick={() => navigate('/ventas/contratos')} style={{ border: 'none', background: 'none', color: '#555', cursor: 'pointer', fontSize: 14 }}>← Volver</button>
-        <h2 style={{ margin: 0, fontSize: 18 }}>Configuración de Plantilla</h2>
+    <div className="page-container">
+      <button className="cacao-back-btn" onClick={() => navigate('/ventas/contratos')} style={{ marginBottom: 16 }}>
+        <ArrowLeft size={16} strokeWidth={2.4} /> Volver
+      </button>
+
+      <div className="page-header-row">
+        <div>
+          <p className="page-eyebrow">Ventas y CRM</p>
+          <h1>Configuración de Plantilla</h1>
+        </div>
       </div>
 
       {/* Steps */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
         {[1, 2, 3].map(s => (
-          <div key={s} style={{ flex: 1, padding: '12px 16px', borderRadius: 8, background: step >= s ? '#1a1a2e' : '#e2e8f0', color: step >= s ? '#fff' : '#888', textAlign: 'center', fontWeight: 600, fontSize: 13 }}>
+          <div key={s} style={{ flex: 1, padding: '12px 16px', borderRadius: 8, background: step >= s ? PRIMARY : '#e2e8f0', color: step >= s ? '#fff' : '#888', textAlign: 'center', fontWeight: 600, fontSize: 13 }}>
             {s === 1 ? '1. Fuente del documento' : s === 2 ? '2. Detectar variables' : '3. Configurar campos'}
           </div>
         ))}
       </div>
 
       {/* Step 1: Document source */}
-      <div style={{ background: '#fff', borderRadius: 8, padding: 20, marginBottom: 16, border: '1px solid #e2e8f0' }}>
+      <div className="admin-section" style={{ marginBottom: 16 }}>
         <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>Fuente del documento</h3>
         <div style={{ marginBottom: 8 }}>
           <label style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>Nombre</label>
@@ -142,8 +153,8 @@ export default function TemplateConfig() {
           <div style={{ display: 'flex', gap: 8 }}>
             <input value={driveUrl} onChange={e => setDriveUrl(e.target.value)} placeholder="https://drive.google.com/file/d/..."
               style={{ flex: 1, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
-            <button onClick={handleDownload} disabled={downloading || !driveUrl.trim()}
-              style={{ padding: '8px 16px', borderRadius: 4, border: 'none', background: '#1a1a2e', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, opacity: downloading ? 0.5 : 1 }}>
+            <button className="auth-btn" onClick={handleDownload} disabled={downloading || !driveUrl.trim()}
+              style={{ padding: '8px 16px', fontSize: 12 }}>
               {downloading ? 'Descargando...' : 'Descargar'}
             </button>
           </div>
@@ -152,13 +163,13 @@ export default function TemplateConfig() {
 
       {/* Step 2: Detect variables */}
       {step >= 2 && (
-        <div style={{ background: '#fff', borderRadius: 8, padding: 20, marginBottom: 16, border: '1px solid #e2e8f0' }}>
+        <div className="admin-section" style={{ marginBottom: 16 }}>
           <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>Variables detectadas</h3>
           <p style={{ fontSize: 12, color: '#888', margin: '0 0 12px' }}>
             El sistema detectó estas variables en el documento (formato <code>&lt;&lt;VariableName&gt;&gt;</code>):
           </p>
-          <button onClick={handleDetect} disabled={detecting}
-            style={{ padding: '8px 16px', borderRadius: 4, border: '1px solid #1a1a2e', background: '#fff', color: '#1a1a2e', cursor: 'pointer', fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
+          <button className="btn-secondary" onClick={handleDetect} disabled={detecting}
+            style={{ padding: '8px 16px', fontSize: 12, marginBottom: 12 }}>
             {detecting ? 'Detectando...' : '🔍 Detectar variables del documento'}
           </button>
           {detectedVars.length > 0 && (
@@ -173,7 +184,7 @@ export default function TemplateConfig() {
 
       {/* Step 3: Configure fields */}
       {step >= 3 && fields.length > 0 && (
-        <div style={{ background: '#fff', borderRadius: 8, padding: 20, marginBottom: 16, border: '1px solid #e2e8f0' }}>
+        <div className="admin-section" style={{ marginBottom: 16 }}>
           <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>Configurar campos ({fields.length})</h3>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
@@ -228,7 +239,7 @@ export default function TemplateConfig() {
 
       {/* Step 4: Email config */}
       {step >= 3 && (
-        <div style={{ background: '#fff', borderRadius: 8, padding: 20, marginBottom: 16, border: '1px solid #e2e8f0' }}>
+        <div className="admin-section" style={{ marginBottom: 16 }}>
           <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>Configuración del correo</h3>
           <div style={{ marginBottom: 8 }}>
             <label style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>Asunto por defecto</label>
@@ -245,9 +256,8 @@ export default function TemplateConfig() {
 
       {/* Save button */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-        <button onClick={() => navigate('/ventas/contratos')} style={{ padding: '8px 20px', borderRadius: 4, border: '1px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
-        <button onClick={handleSave} disabled={saving || !name.trim()}
-          style={{ padding: '8px 20px', borderRadius: 4, border: 'none', background: '#1a1a2e', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 13, opacity: saving ? 0.5 : 1 }}>
+        <button className="btn-secondary" onClick={() => navigate('/ventas/contratos')} style={{ padding: '10px 20px' }}>Cancelar</button>
+        <button className="auth-btn" onClick={handleSave} disabled={saving || !name.trim()} style={{ padding: '10px 20px' }}>
           {saving ? 'Guardando...' : 'Guardar plantilla'}
         </button>
       </div>

@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 function getISOWeekNumber(d: Date): { year: number; weekNumber: number } {
@@ -6,7 +11,9 @@ function getISOWeekNumber(d: Date): { year: number; weekNumber: number } {
   const dayNum = date.getUTCDay() || 7;
   date.setUTCDate(date.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  const weekNo = Math.ceil(
+    ((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,
+  );
   return { year: date.getUTCFullYear(), weekNumber: weekNo };
 }
 
@@ -53,7 +60,8 @@ export class VentasService {
         },
       });
 
-      const pct = targetGoal > 0 ? Math.round((completedVisits / targetGoal) * 100) : 0;
+      const pct =
+        targetGoal > 0 ? Math.round((completedVisits / targetGoal) * 100) : 0;
       let statusColor: 'GREEN' | 'YELLOW' | 'RED' = 'RED';
       if (pct >= 100) statusColor = 'GREEN';
       else if (pct >= 50) statusColor = 'YELLOW';
@@ -73,24 +81,47 @@ export class VentasService {
     return { year: y, weekNumber: w, sellers: result };
   }
 
-  async setGoal(companyId: number, userId: number, year: number, weekNumber: number, weeklyVisitGoal: number) {
+  async setGoal(
+    companyId: number,
+    userId: number,
+    year: number,
+    weekNumber: number,
+    weeklyVisitGoal: number,
+  ) {
     if (!companyId) throw new BadRequestException('Empresa requerida');
     return this.prisma.salesGoal.upsert({
-      where: { companyId_userId_year_weekNumber: { companyId, userId, year, weekNumber } },
+      where: {
+        companyId_userId_year_weekNumber: {
+          companyId,
+          userId,
+          year,
+          weekNumber,
+        },
+      },
       create: { companyId, userId, year, weekNumber, weeklyVisitGoal },
       update: { weeklyVisitGoal },
     });
   }
 
   // ==================== VISITAS EN CAMPO ====================
-  async getVisits(companyId: number, filters?: { userId?: number; status?: string; startDate?: string; endDate?: string }) {
+  async getVisits(
+    companyId: number,
+    filters?: {
+      userId?: number;
+      status?: string;
+      startDate?: string;
+      endDate?: string;
+    },
+  ) {
     const where: any = { companyId };
     if (filters?.userId) where.userId = filters.userId;
     if (filters?.status) where.status = filters.status;
     if (filters?.startDate || filters?.endDate) {
       where.visitDate = {};
-      if (filters.startDate) where.visitDate.gte = new Date(`${filters.startDate}T00:00:00.000Z`);
-      if (filters.endDate) where.visitDate.lte = new Date(`${filters.endDate}T23:59:59.999Z`);
+      if (filters.startDate)
+        where.visitDate.gte = new Date(`${filters.startDate}T00:00:00.000Z`);
+      if (filters.endDate)
+        where.visitDate.lte = new Date(`${filters.endDate}T23:59:59.999Z`);
     }
 
     return this.prisma.clientVisit.findMany({
@@ -100,7 +131,17 @@ export class VentasService {
     });
   }
 
-  async createVisit(companyId: number, userId: number, data: { clientName: string; clientAddress?: string; clientPhone?: string; visitDate: string; notes?: string }) {
+  async createVisit(
+    companyId: number,
+    userId: number,
+    data: {
+      clientName: string;
+      clientAddress?: string;
+      clientPhone?: string;
+      visitDate: string;
+      notes?: string;
+    },
+  ) {
     return this.prisma.clientVisit.create({
       data: {
         clientName: data.clientName.trim(),
@@ -115,8 +156,16 @@ export class VentasService {
     });
   }
 
-  async checkInVisit(id: number, companyId: number, userId: number, lat?: number, lng?: number) {
-    const visit = await this.prisma.clientVisit.findFirst({ where: { id, companyId } });
+  async checkInVisit(
+    id: number,
+    companyId: number,
+    userId: number,
+    lat?: number,
+    lng?: number,
+  ) {
+    const visit = await this.prisma.clientVisit.findFirst({
+      where: { id, companyId },
+    });
     if (!visit) throw new NotFoundException('Visita no encontrada');
 
     return this.prisma.clientVisit.update({
@@ -135,9 +184,16 @@ export class VentasService {
     id: number,
     companyId: number,
     userId: number,
-    data: { commercialOffer?: string; quotedAmount?: number; outcome?: any; notes?: string },
+    data: {
+      commercialOffer?: string;
+      quotedAmount?: number;
+      outcome?: any;
+      notes?: string;
+    },
   ) {
-    const visit = await this.prisma.clientVisit.findFirst({ where: { id, companyId } });
+    const visit = await this.prisma.clientVisit.findFirst({
+      where: { id, companyId },
+    });
     if (!visit) throw new NotFoundException('Visita no encontrada');
 
     return this.prisma.clientVisit.update({
@@ -153,26 +209,35 @@ export class VentasService {
   }
 
   async cancelVisit(id: number, companyId: number, notes?: string) {
-    const visit = await this.prisma.clientVisit.findFirst({ where: { id, companyId } });
+    const visit = await this.prisma.clientVisit.findFirst({
+      where: { id, companyId },
+    });
     if (!visit) throw new NotFoundException('Visita no encontrada');
 
     return this.prisma.clientVisit.update({
       where: { id },
       data: {
         status: 'CANCELLED',
-        notes: notes ? `${visit.notes || ''}\nCancelado: ${notes}` : visit.notes,
+        notes: notes
+          ? `${visit.notes || ''}\nCancelado: ${notes}`
+          : visit.notes,
       },
     });
   }
 
   async deleteVisit(id: number, companyId: number) {
-    const visit = await this.prisma.clientVisit.findFirst({ where: { id, companyId } });
+    const visit = await this.prisma.clientVisit.findFirst({
+      where: { id, companyId },
+    });
     if (!visit) throw new NotFoundException('Visita no encontrada');
     return this.prisma.clientVisit.delete({ where: { id } });
   }
 
   // ==================== CRM LEADS ====================
-  async getLeads(companyId: number, filters?: { assignedUserId?: number; status?: string; source?: string }) {
+  async getLeads(
+    companyId: number,
+    filters?: { assignedUserId?: number; status?: string; source?: string },
+  ) {
     const where: any = { companyId };
     if (filters?.assignedUserId) where.assignedUserId = filters.assignedUserId;
     if (filters?.status) where.status = filters.status;
@@ -180,12 +245,27 @@ export class VentasService {
 
     return this.prisma.lead.findMany({
       where,
-      include: { assignedUser: { select: { id: true, fullName: true, email: true } } },
+      include: {
+        assignedUser: { select: { id: true, fullName: true, email: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async createLead(companyId: number, data: { fullName: string; email?: string; phone?: string; companyName?: string; source?: any; campaignName?: string; estimatedValue?: number; notes?: string; assignedUserId?: number }) {
+  async createLead(
+    companyId: number,
+    data: {
+      fullName: string;
+      email?: string;
+      phone?: string;
+      companyName?: string;
+      source?: any;
+      campaignName?: string;
+      estimatedValue?: number;
+      notes?: string;
+      assignedUserId?: number;
+    },
+  ) {
     let assignedUserId = data.assignedUserId;
 
     // If no specific seller assigned, perform Round-Robin
@@ -209,8 +289,22 @@ export class VentasService {
     });
   }
 
-  async ingestLeadFromWebhook(apiKeyStr: string, data: { fullName: string; email?: string; phone?: string; companyName?: string; source?: string; campaignName?: string; estimatedValue?: number; notes?: string }) {
-    const key = await this.prisma.salesApiKey.findUnique({ where: { apiKey: apiKeyStr } });
+  async ingestLeadFromWebhook(
+    apiKeyStr: string,
+    data: {
+      fullName: string;
+      email?: string;
+      phone?: string;
+      companyName?: string;
+      source?: string;
+      campaignName?: string;
+      estimatedValue?: number;
+      notes?: string;
+    },
+  ) {
+    const key = await this.prisma.salesApiKey.findUnique({
+      where: { apiKey: apiKeyStr },
+    });
     if (!key || !key.isActive) {
       throw new UnauthorizedException('API Key inválida o inactiva');
     }
@@ -226,7 +320,8 @@ export class VentasService {
       email: 'EMAIL',
     };
 
-    const normSource = sourceMap[data.source?.toLowerCase() || ''] || 'WEB_FORM';
+    const normSource =
+      sourceMap[data.source?.toLowerCase() || ''] || 'WEB_FORM';
 
     return this.prisma.lead.create({
       data: {
@@ -254,7 +349,12 @@ export class VentasService {
     });
   }
 
-  async updateLeadStatus(id: number, companyId: number, status: any, closedValue?: number) {
+  async updateLeadStatus(
+    id: number,
+    companyId: number,
+    status: any,
+    closedValue?: number,
+  ) {
     const lead = await this.prisma.lead.findFirst({ where: { id, companyId } });
     if (!lead) throw new NotFoundException('Lead no encontrado');
 
@@ -275,7 +375,9 @@ export class VentasService {
     return this.prisma.lead.delete({ where: { id } });
   }
 
-  private async getNextRoundRobinSeller(companyId: number): Promise<number | undefined> {
+  private async getNextRoundRobinSeller(
+    companyId: number,
+  ): Promise<number | undefined> {
     const sellers = await this.prisma.user.findMany({
       where: { companyId, isActive: true },
       select: { id: true },
@@ -295,13 +397,19 @@ export class VentasService {
       return sellers[0].id;
     }
 
-    const currentIndex = sellers.findIndex((s) => s.id === lastLead.assignedUserId);
+    const currentIndex = sellers.findIndex(
+      (s) => s.id === lastLead.assignedUserId,
+    );
     const nextIndex = (currentIndex + 1) % sellers.length;
     return sellers[nextIndex].id;
   }
 
   // ==================== DASHBOARD & MÉTRICAS $MD ====================
-  async getDashboardMetrics(companyId: number, year?: number, weekNumber?: number) {
+  async getDashboardMetrics(
+    companyId: number,
+    year?: number,
+    weekNumber?: number,
+  ) {
     const goalsData = await this.getGoals(companyId, year, weekNumber);
 
     // Marketing Return $MD: Sum of closedValue for leads with source != MANUAL and status = WON
@@ -325,7 +433,14 @@ export class VentasService {
     });
 
     // Funnel count
-    const leadStages = ['NEW', 'CONTACTED', 'QUALIFIED', 'QUOTED', 'WON', 'LOST'];
+    const leadStages = [
+      'NEW',
+      'CONTACTED',
+      'QUALIFIED',
+      'QUOTED',
+      'WON',
+      'LOST',
+    ];
     const funnel: Record<string, number> = {};
     for (const stage of leadStages) {
       funnel[stage] = await this.prisma.lead.count({
@@ -363,7 +478,9 @@ export class VentasService {
   }
 
   async deleteApiKey(id: number, companyId: number) {
-    const key = await this.prisma.salesApiKey.findFirst({ where: { id, companyId } });
+    const key = await this.prisma.salesApiKey.findFirst({
+      where: { id, companyId },
+    });
     if (!key) throw new NotFoundException('API Key no encontrada');
     return this.prisma.salesApiKey.delete({ where: { id } });
   }

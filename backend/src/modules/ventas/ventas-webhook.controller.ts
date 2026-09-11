@@ -1,4 +1,11 @@
-import { Controller, Post, Body, Query, Headers, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Query,
+  Headers,
+  BadRequestException,
+} from '@nestjs/common';
 import { VentasService } from './ventas.service';
 
 @Controller('ventas/webhook')
@@ -23,7 +30,9 @@ export class VentasWebhookController {
   ) {
     const apiKey = queryKey || headerKey;
     if (!apiKey) {
-      throw new BadRequestException('API Key no provista. Usa query param ?apiKey= o header X-API-KEY');
+      throw new BadRequestException(
+        'API Key no provista. Usa query param ?apiKey= o header X-API-KEY',
+      );
     }
     if (!body?.fullName) {
       throw new BadRequestException('El campo fullName es obligatorio');

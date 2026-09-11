@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { VentasService } from './ventas.service';
 
@@ -9,16 +20,36 @@ export class VentasController {
 
   // ==================== METAS Y SEMÁFORO ====================
   @Get('goals')
-  getGoals(@Req() req: any, @Query('year') year?: string, @Query('week') week?: string) {
-    return this.ventasService.getGoals(req.user.companyId, year ? +year : undefined, week ? +week : undefined);
+  getGoals(
+    @Req() req: any,
+    @Query('year') year?: string,
+    @Query('week') week?: string,
+  ) {
+    return this.ventasService.getGoals(
+      req.user.companyId,
+      year ? +year : undefined,
+      week ? +week : undefined,
+    );
   }
 
   @Post('goals')
   setGoal(
     @Req() req: any,
-    @Body() body: { userId: number; year: number; weekNumber: number; weeklyVisitGoal: number },
+    @Body()
+    body: {
+      userId: number;
+      year: number;
+      weekNumber: number;
+      weeklyVisitGoal: number;
+    },
   ) {
-    return this.ventasService.setGoal(req.user.companyId, body.userId, body.year, body.weekNumber, body.weeklyVisitGoal);
+    return this.ventasService.setGoal(
+      req.user.companyId,
+      body.userId,
+      body.year,
+      body.weekNumber,
+      body.weeklyVisitGoal,
+    );
   }
 
   // ==================== VISITAS ====================
@@ -41,9 +72,20 @@ export class VentasController {
   @Post('visits')
   createVisit(
     @Req() req: any,
-    @Body() body: { clientName: string; clientAddress?: string; clientPhone?: string; visitDate: string; notes?: string },
+    @Body()
+    body: {
+      clientName: string;
+      clientAddress?: string;
+      clientPhone?: string;
+      visitDate: string;
+      notes?: string;
+    },
   ) {
-    return this.ventasService.createVisit(req.user.companyId, req.user.userId, body);
+    return this.ventasService.createVisit(
+      req.user.companyId,
+      req.user.userId,
+      body,
+    );
   }
 
   @Post('visits/:id/checkin')
@@ -52,20 +94,41 @@ export class VentasController {
     @Req() req: any,
     @Body() body: { lat?: number; lng?: number },
   ) {
-    return this.ventasService.checkInVisit(+id, req.user.companyId, req.user.userId, body.lat, body.lng);
+    return this.ventasService.checkInVisit(
+      +id,
+      req.user.companyId,
+      req.user.userId,
+      body.lat,
+      body.lng,
+    );
   }
 
   @Post('visits/:id/complete')
   completeVisit(
     @Param('id') id: string,
     @Req() req: any,
-    @Body() body: { commercialOffer?: string; quotedAmount?: number; outcome?: string; notes?: string },
+    @Body()
+    body: {
+      commercialOffer?: string;
+      quotedAmount?: number;
+      outcome?: string;
+      notes?: string;
+    },
   ) {
-    return this.ventasService.completeVisit(+id, req.user.companyId, req.user.userId, body);
+    return this.ventasService.completeVisit(
+      +id,
+      req.user.companyId,
+      req.user.userId,
+      body,
+    );
   }
 
   @Post('visits/:id/cancel')
-  cancelVisit(@Param('id') id: string, @Req() req: any, @Body() body: { notes?: string }) {
+  cancelVisit(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body() body: { notes?: string },
+  ) {
     return this.ventasService.cancelVisit(+id, req.user.companyId, body.notes);
   }
 
@@ -92,19 +155,47 @@ export class VentasController {
   @Post('leads')
   createLead(
     @Req() req: any,
-    @Body() body: { fullName: string; email?: string; phone?: string; companyName?: string; source?: string; campaignName?: string; estimatedValue?: number; notes?: string; assignedUserId?: number },
+    @Body()
+    body: {
+      fullName: string;
+      email?: string;
+      phone?: string;
+      companyName?: string;
+      source?: string;
+      campaignName?: string;
+      estimatedValue?: number;
+      notes?: string;
+      assignedUserId?: number;
+    },
   ) {
     return this.ventasService.createLead(req.user.companyId, body);
   }
 
   @Patch('leads/:id/assign')
-  assignLead(@Param('id') id: string, @Req() req: any, @Body() body: { assignedUserId: number }) {
-    return this.ventasService.assignLead(+id, req.user.companyId, body.assignedUserId);
+  assignLead(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body() body: { assignedUserId: number },
+  ) {
+    return this.ventasService.assignLead(
+      +id,
+      req.user.companyId,
+      body.assignedUserId,
+    );
   }
 
   @Patch('leads/:id/status')
-  updateLeadStatus(@Param('id') id: string, @Req() req: any, @Body() body: { status: string; closedValue?: number }) {
-    return this.ventasService.updateLeadStatus(+id, req.user.companyId, body.status, body.closedValue);
+  updateLeadStatus(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body() body: { status: string; closedValue?: number },
+  ) {
+    return this.ventasService.updateLeadStatus(
+      +id,
+      req.user.companyId,
+      body.status,
+      body.closedValue,
+    );
   }
 
   @Delete('leads/:id')
@@ -114,8 +205,16 @@ export class VentasController {
 
   // ==================== DASHBOARD & MÉTRICAS ====================
   @Get('dashboard')
-  getDashboardMetrics(@Req() req: any, @Query('year') year?: string, @Query('week') week?: string) {
-    return this.ventasService.getDashboardMetrics(req.user.companyId, year ? +year : undefined, week ? +week : undefined);
+  getDashboardMetrics(
+    @Req() req: any,
+    @Query('year') year?: string,
+    @Query('week') week?: string,
+  ) {
+    return this.ventasService.getDashboardMetrics(
+      req.user.companyId,
+      year ? +year : undefined,
+      week ? +week : undefined,
+    );
   }
 
   // ==================== API KEYS ====================

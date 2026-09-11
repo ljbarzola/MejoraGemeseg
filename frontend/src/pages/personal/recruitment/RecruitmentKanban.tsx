@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getKanbanColumns, createKanbanColumn, deleteKanbanColumn, getCandidates, moveCandidate } from '../../../services/personal.service';
+import { getKanbanColumns, createKanbanColumn, updateKanbanColumn, deleteKanbanColumn, getCandidates, moveCandidate } from '../../../services/personal.service';
 
 const COLUMN_COLORS = ['#2b6cb0', '#276749', '#6b46c1', '#b7791f', '#c53030', '#2c7a7b'];
 
@@ -12,6 +12,9 @@ export default function RecruitmentKanban() {
   const [showNewColumn, setShowNewColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
   const [newColumnColor, setNewColumnColor] = useState(COLUMN_COLORS[0]);
+  const [newColumnTriggersHire, setNewColumnTriggersHire] = useState(false);
+  const [editingColumnId, setEditingColumnId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', color: COLUMN_COLORS[0], triggersHire: false });
   const [draggedCandidate, setDraggedCandidate] = useState<any>(null);
 
   const load = () => {
@@ -25,8 +28,9 @@ export default function RecruitmentKanban() {
 
   const handleAddColumn = async () => {
     if (!newColumnName.trim()) return;
-    await createKanbanColumn({ name: newColumnName, color: newColumnColor });
+    await createKanbanColumn({ name: newColumnName, color: newColumnColor, triggersHire: newColumnTriggersHire });
     setNewColumnName('');
+    setNewColumnTriggersHire(false);
     setShowNewColumn(false);
     load();
   };
@@ -34,6 +38,18 @@ export default function RecruitmentKanban() {
   const handleDeleteColumn = async (id: number) => {
     if (!confirm('¿Eliminar esta columna? Los candidatos se moverán a "Sin columna".')) return;
     await deleteKanbanColumn(id);
+    load();
+  };
+
+  const handleStartEditColumn = (col: any) => {
+    setEditingColumnId(col.id);
+    setEditForm({ name: col.name, color: col.color, triggersHire: !!col.triggersHire });
+  };
+
+  const handleSaveEditColumn = async () => {
+    if (editingColumnId == null || !editForm.name.trim()) return;
+    await updateKanbanColumn(editingColumnId, editForm);
+    setEditingColumnId(null);
     load();
   };
 
@@ -65,13 +81,13 @@ export default function RecruitmentKanban() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/personal')}>← Volver</button>
+          <button className="cacao-back-btn" onClick={() => navigate('/rrhh')}>← Volver</button>
           <div>
-            <p className="page-eyebrow">PERSONAL</p>
+            <p className="page-eyebrow">RECURSOS HUMANOS</p>
             <h1>Tablero de Reclutamiento</h1>
           </div>
         </div>
-        <button className="auth-btn" onClick={() => navigate('/personal/candidates/new')}>+ Nuevo Candidato</button>
+        <button className="auth-btn" onClick={() => navigate('/rrhh/candidates/new')}>+ Nuevo Candidato</button>
       </div>
 
       <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', paddingBottom: '16px', alignItems: 'flex-start' }}>
@@ -86,22 +102,62 @@ export default function RecruitmentKanban() {
               display: 'flex', flexDirection: 'column',
             }}
           >
-            <div style={{ padding: '12px 16px', borderBottom: `3px solid ${col.color}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <strong style={{ color: 'var(--azul-oscuro)' }}>{col.name}</strong>
-                <span style={{ marginLeft: '8px', fontSize: '0.8rem', color: '#718096' }}>
-                  ({getCandidatesForColumn(col.id).length})
-                </span>
+            {editingColumnId === col.id ? (
+              <div style={{ padding: '12px 16px', borderBottom: `3px solid ${col.color}` }}>
+                <input
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  style={{ width: '100%', padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', marginBottom: '8px', fontSize: '0.85rem' }}
+                  autoFocus
+                />
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+                  {COLUMN_COLORS.map((c) => (
+                    <div
+                      key={c}
+                      onClick={() => setEditForm({ ...editForm, color: c })}
+                      style={{ width: '20px', height: '20px', borderRadius: '50%', background: c, cursor: 'pointer', border: editForm.color === c ? '2px solid #1a202c' : '2px solid transparent' }}
+                    />
+                  ))}
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: '#4a5568', marginBottom: '10px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={editForm.triggersHire}
+                    onChange={(e) => setEditForm({ ...editForm, triggersHire: e.target.checked })}
+                  />
+                  Esta columna dispara la entrada
+                </label>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button className="auth-btn" onClick={handleSaveEditColumn} style={{ flex: 1, padding: '6px', fontSize: '0.8rem' }}>Guardar</button>
+                  <button className="btn-secondary" onClick={() => setEditingColumnId(null)} style={{ padding: '6px 10px', fontSize: '0.8rem' }}>Cancelar</button>
+                </div>
               </div>
-              <button onClick={() => handleDeleteColumn(col.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e0', fontSize: '1.1rem' }} title="Eliminar">×</button>
-            </div>
+            ) : (
+              <div style={{ padding: '12px 16px', borderBottom: `3px solid ${col.color}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <strong style={{ color: 'var(--azul-oscuro)' }}>{col.name}</strong>
+                  <span style={{ marginLeft: '8px', fontSize: '0.8rem', color: '#718096' }}>
+                    ({getCandidatesForColumn(col.id).length})
+                  </span>
+                  {col.triggersHire && (
+                    <div style={{ marginTop: '4px', fontSize: '0.7rem', color: '#276749', fontWeight: 600 }}>
+                      🔑 Dispara entrada automática
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button onClick={() => handleStartEditColumn(col)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a0aec0', fontSize: '0.95rem' }} title="Editar">✏️</button>
+                  <button onClick={() => handleDeleteColumn(col.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e0', fontSize: '1.1rem' }} title="Eliminar">×</button>
+                </div>
+              </div>
+            )}
             <div style={{ padding: '8px', flex: 1, minHeight: '100px' }}>
               {getCandidatesForColumn(col.id).map((cand) => (
                 <div
                   key={cand.id}
                   draggable
                   onDragStart={(e) => handleDragStart(e, cand)}
-                  onClick={() => navigate(`/personal/candidates/${cand.id}`)}
+                  onClick={() => navigate(`/rrhh/candidates/${cand.id}`)}
                   style={{
                     background: 'white', borderRadius: '8px', padding: '12px', marginBottom: '8px',
                     border: '1px solid #e2e8f0', cursor: 'grab', transition: 'box-shadow 0.15s',
@@ -140,6 +196,14 @@ export default function RecruitmentKanban() {
                   />
                 ))}
               </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: '#4a5568', marginBottom: '12px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={newColumnTriggersHire}
+                  onChange={(e) => setNewColumnTriggersHire(e.target.checked)}
+                />
+                Esta columna dispara la entrada (crea el caso de entrada en Historial al mover un candidato aquí)
+              </label>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button className="auth-btn" onClick={handleAddColumn} style={{ flex: 1 }}>Crear</button>
                 <button className="btn-secondary" onClick={() => setShowNewColumn(false)}>Cancelar</button>

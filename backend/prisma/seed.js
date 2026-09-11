@@ -725,19 +725,21 @@ Si no necesitas datos, responde directamente.`,
     await prisma.certification.create({ data: { employeeName: 'Patricia Acosta', cedula: '1107654321', type: 'Nivel 1', issueDate: new Date('2025-08-01'), expiryDate: in90Days, companyId: 2, createdBy: adminMikacao.id } });
     console.log('  ✓ Certificaciones creadas: 5');
 
-    // Contract Templates (3)
-    const tpl1 = await prisma.contractTemplate.create({ data: { name: 'Contrato a Término Indefinido', type: 'TERMINO_INDEFINIDO', fileName: 'contrato_indefinido.docx', fileUrl: '/templates/contrato_indefinido.docx', fields: ['[NOMBRE]', '[CEDULA]', '[PUESTO]', '[FECHA_INICIO]', '[SALARIO]', '[EMPRESA]'], companyId: 2, createdBy: adminMikacao.id } });
-    const tpl2 = await prisma.contractTemplate.create({ data: { name: 'Contrato a Término Fijo', type: 'TERMINO_FIJO', fileName: 'contrato_fijo.docx', fileUrl: '/templates/contrato_fijo.docx', fields: ['[NOMBRE]', '[CEDULA]', '[PUESTO]', '[FECHA_INICIO]', '[FECHA_FIN]', '[SALARIO]', '[EMPRESA]'], companyId: 2, createdBy: adminMikacao.id } });
-    const tpl3 = await prisma.contractTemplate.create({ data: { name: 'Acta de Entrega de Uniformes', type: 'ENTREGA_UNIFORMES', fileName: 'acta_uniformes.docx', fileUrl: '/templates/acta_uniformes.docx', fields: ['[NOMBRE]', '[CEDULA]', '[PUESTO]', '[FECHA]', '[ARTICULOS]'], companyId: 2, createdBy: adminMikacao.id } });
+    // Contract Templates (3) — driveUrl/docxPath se configuran desde la UI
+    // ("Plantillas de Contrato"), no traen un .docx de ejemplo en el seed.
+    const tpl1 = await prisma.contractTemplate.create({ data: { name: 'Contrato a Término Indefinido', type: 'TERMINO_INDEFINIDO', companyId: 2, createdBy: adminMikacao.id } });
+    const tpl2 = await prisma.contractTemplate.create({ data: { name: 'Contrato a Término Fijo', type: 'TERMINO_FIJO', companyId: 2, createdBy: adminMikacao.id } });
+    const tpl3 = await prisma.contractTemplate.create({ data: { name: 'Acta de Entrega de Uniformes', type: 'ENTREGA_UNIFORMES', companyId: 2, createdBy: adminMikacao.id } });
     console.log('  ✓ Plantillas de contrato creadas: 3');
 
-    // Contracts (3)
+    // Contracts (3) — identificados por cédula, no por FK a Candidate (ver
+    // comentario en el modelo Contract).
     const candAna = await prisma.candidate.findFirst({ where: { companyId: 2, cedula: '1712345678' } });
     const candLuis = await prisma.candidate.findFirst({ where: { companyId: 2, cedula: '1804567890' } });
     const candDiana = await prisma.candidate.findFirst({ where: { companyId: 2, cedula: '1103456789' } });
-    if (candAna) await prisma.contract.create({ data: { candidateId: candAna.id, templateId: tpl1.id, status: 'SIGNED', companyId: 2, createdBy: adminMikacao.id } });
-    if (candLuis) await prisma.contract.create({ data: { candidateId: candLuis.id, templateId: tpl2.id, status: 'DRAFT', companyId: 2, createdBy: adminMikacao.id } });
-    if (candDiana) await prisma.contract.create({ data: { candidateId: candDiana.id, templateId: tpl3.id, status: 'DRAFT', companyId: 2, createdBy: adminMikacao.id } });
+    if (candAna) await prisma.contract.create({ data: { cedula: candAna.cedula, nombreGuardia: candAna.fullName, templateId: tpl1.id, status: 'SIGNED', companyId: 2, createdBy: adminMikacao.id } });
+    if (candLuis) await prisma.contract.create({ data: { cedula: candLuis.cedula, nombreGuardia: candLuis.fullName, templateId: tpl2.id, status: 'DRAFT', companyId: 2, createdBy: adminMikacao.id } });
+    if (candDiana) await prisma.contract.create({ data: { cedula: candDiana.cedula, nombreGuardia: candDiana.fullName, templateId: tpl3.id, status: 'DRAFT', companyId: 2, createdBy: adminMikacao.id } });
     console.log('  ✓ Contratos creados: 3');
 
     // Log Entries (5)

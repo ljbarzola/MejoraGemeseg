@@ -14,7 +14,7 @@ const SECTION_META: Record<string, { icon: string; desc: string }> = {
   COMPANY_SETTINGS: { icon: '🎨', desc: 'Configuración de marca y colores' },
   COMPANIES: { icon: '🏢', desc: 'Gestión de empresas del plataforma' },
   CUSTODIAS: { icon: '🛡️', desc: 'Gestión de custodias y nómina de seguridad' },
-  PERSONAL: { icon: '👤', desc: 'Reclutamiento, contratos, certificaciones y bitácoras' },
+  RRHH: { icon: '👤', desc: 'Reclutamiento, contratos, certificaciones y bitácoras' },
 };
 
 export default function SuperAdminPermissions() {

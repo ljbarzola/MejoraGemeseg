@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getUser, removeToken } from '../../services/auth.service';
 import { useCompany } from '../../contexts/ThemeContext';
 import { usePerm } from '../../contexts/PermissionsContext';
+import { useSidebar } from '../../contexts/SidebarContext';
 
 export default function Sidebar() {
   const navigate = useNavigate();
@@ -12,10 +13,9 @@ export default function Sidebar() {
   const user = getUser();
   const isAdmin = user?.role === 'ADMIN';
   const isCompanyAdmin = isAdmin && !!user?.companyId;
-  const [collapsed, setCollapsed] = useState(false);
+  const { collapsed, setCollapsed } = useSidebar();
   const [personalOpen, setPersonalOpen] = useState(false);
   const [custodiosOpen, setCustodiosOpen] = useState(false);
-  const [configOpen, setConfigOpen] = useState(false);
   const [ventasOpen, setVentasOpen] = useState(false);
   const [custodiasOpen, setCustodiasOpen] = useState(false);
 
@@ -26,7 +26,7 @@ export default function Sidebar() {
   };
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
-  const isPersonalActive = location.pathname.startsWith('/personal');
+  const isPersonalActive = location.pathname.startsWith('/rrhh');
   const isVentasActive = location.pathname.startsWith('/ventas');
   const isCustodiasActive = location.pathname.startsWith('/custodias');
 
@@ -44,35 +44,30 @@ export default function Sidebar() {
   ];
 
   const personalMainItems = [
-    { label: 'Dashboard', path: '/personal', icon: '📊' },
-    { label: 'Reclutamiento', path: '/personal/reclutamiento', icon: '🎯' },
-    { label: 'Personal Administrativo', path: '/personal/administrativo', icon: '📋' },
+    { label: 'Dashboard', path: '/rrhh', icon: '📊' },
+    { label: 'Reclutamiento', path: '/rrhh/reclutamiento', icon: '🎯' },
+    { label: 'Personal Administrativo', path: '/rrhh/administrativo', icon: '📋' },
   ];
 
   const custodiosItems = [
-    { label: 'Listado de Guardias', path: '/personal/guardias', icon: '👮' },
-    { label: 'Certificaciones', path: '/personal/certifications', icon: '🎓' },
-    { label: 'Contratos', path: '/personal/contracts', icon: '📄' },
-    { label: 'Cumplimiento', path: '/personal/compliance', icon: '🔍' },
-    { label: 'Verificación SUT/SICOSEP', path: '/personal/verificacion', icon: '✅' },
+    { label: 'Listado de Guardias', path: '/rrhh/guardias', icon: '👮' },
+    { label: 'Documentación', path: '/rrhh/contracts', icon: '📄' },
+    { label: 'Entidades y Requisitos', path: '/rrhh/entidades', icon: '🏢' },
+    { label: 'Cumplimiento', path: '/rrhh/cumplimiento', icon: '📊' },
+    { label: 'Historial', path: '/rrhh/historial', icon: '🔄' },
   ];
 
-  const bitacorasItems = [
-    { label: 'Bitácoras', path: '/personal/logs', icon: '📝' },
-  ];
-
-  const configItems = [
-    { label: 'Configurar Drive', path: '/personal/drive-config', icon: '☁️' },
-    { label: 'Requisitos', path: '/personal/document-types', icon: '⚙️' },
-  ];
+  // "Bitácoras" (plantillas de texto libre para dejar constancia de permisos,
+  // novedades y respuestas administrativas por guardia — /rrhh/logs,
+  // LogEntries.tsx) se quitó del menú a pedido del cliente: no se estaba
+  // usando. El código y la data quedan intactos (por si se retoma más
+  // adelante), solo se dejó de mostrar aquí y en el Dashboard de Personal.
 
   const ventasItems = [
     { label: 'Dashboard', path: '/ventas', icon: '📊' },
     { label: 'Planificación y Campo', path: '/ventas/visitas', icon: '📍' },
     { label: 'Prospectos CRM', path: '/ventas/leads', icon: '🎯' },
     { label: 'Contratos', path: '/ventas/contratos', icon: '📄' },
-    { label: 'Plantillas', path: '/ventas/contratos/plantillas', icon: '📋' },
-    { label: 'Configuración', path: '/ventas/contratos/configuracion', icon: '⚙️' },
     { label: 'Reportes', path: '/ventas/reportes', icon: '📈' },
     { label: 'Config Webhook', path: '/ventas/webhook-config', icon: '🔗' },
   ];
@@ -113,7 +108,6 @@ export default function Sidebar() {
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
             )}
-            <span className="sidebar-brand-text">{theme.name}</span>
           </div>
         )}
         <button className="sidebar-toggle" onClick={() => setCollapsed(!collapsed)} title={collapsed ? 'Expandir' : 'Contraer'}>
@@ -134,24 +128,24 @@ export default function Sidebar() {
           </button>
         ))}
 
-        {canView('PERSONAL') && (
+        {canView('RRHH') && (
           <>
             <button
               className={`sidebar-link ${isPersonalActive ? 'sidebar-link-active' : ''}`}
               onClick={() => {
                 if (collapsed) {
-                  navigate('/personal');
+                  navigate('/rrhh');
                 } else {
                   setPersonalOpen(!personalOpen);
-                  if (!personalOpen) navigate('/personal');
+                  if (!personalOpen) navigate('/rrhh');
                 }
               }}
-              title={collapsed ? 'Personal' : undefined}
+              title={collapsed ? 'Recursos Humanos' : undefined}
               style={{ justifyContent: 'space-between' }}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span className="sidebar-icon">👤</span>
-                {!collapsed && <span className="sidebar-label">Personal</span>}
+                {!collapsed && <span className="sidebar-label">Recursos Humanos</span>}
               </span>
               {!collapsed && (
                 <span style={{ fontSize: '0.7rem', transition: 'transform 0.2s', transform: personalOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
@@ -178,23 +172,6 @@ export default function Sidebar() {
                   </span>
                 </button>
                 {custodiosOpen && renderSubItems(custodiosItems, 1)}
-
-                {renderSubItems(bitacorasItems)}
-
-                <button
-                  className={`sidebar-link sidebar-link-sub ${configItems.some(i => isActive(i.path)) ? 'sidebar-link-active' : ''}`}
-                  onClick={() => setConfigOpen(!configOpen)}
-                  style={{ fontSize: '0.82rem', padding: '7px 12px 7px 16px', justifyContent: 'space-between' }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span className="sidebar-icon" style={{ fontSize: '0.85rem' }}>⚙️</span>
-                    <span className="sidebar-label">Configuración</span>
-                  </span>
-                  <span style={{ fontSize: '0.65rem', transition: 'transform 0.2s', transform: configOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
-                    ▶
-                  </span>
-                </button>
-                {configOpen && renderSubItems(configItems, 1)}
               </div>
             )}
           </>

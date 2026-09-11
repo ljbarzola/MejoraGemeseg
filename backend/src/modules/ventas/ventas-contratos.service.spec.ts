@@ -31,6 +31,7 @@ describe('VentasContratosService', () => {
       delete: jest.Mock;
     };
     salesTemplate: { findFirst: jest.Mock };
+    salesContractDocument: { create: jest.Mock; findMany: jest.Mock };
   };
   const existsSyncMock = fs.existsSync as jest.Mock;
 
@@ -53,6 +54,7 @@ describe('VentasContratosService', () => {
         delete: jest.fn(),
       },
       salesTemplate: { findFirst: jest.fn() },
+      salesContractDocument: { create: jest.fn(), findMany: jest.fn() },
     };
     service = new VentasContratosService(prisma as unknown as PrismaService);
   });
@@ -173,7 +175,86 @@ describe('VentasContratosService', () => {
           }),
         }),
       );
+      expect(prisma.salesContractDocument.create).toHaveBeenCalledWith({
+        data: {
+          contractId: 10,
+          type: 'ENVIADO',
+          filePath: '/api/ventas/contratos/file/10_123.pdf',
+        },
+      });
       expect(result).toEqual({ success: true, documentId: 'doc-123' });
+    });
+  });
+
+  describe('getContractForFile', () => {
+    it('resolves the safe file name when the contract belongs to the company', async () => {
+      prisma.salesContract.findFirst.mockResolvedValue(makeContract());
+
+      const result = await service.getContractForFile('10_123.pdf', 1);
+
+      expect(result).toBe('10_123.pdf');
+      expect(prisma.salesContract.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ companyId: 1 }),
+        }),
+      );
+    });
+
+    it('rejects a file name that does not belong to any contract in the company', async () => {
+      prisma.salesContract.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.getContractForFile('10_123.pdf', 1),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('strips path traversal attempts down to a bare file name', async () => {
+      prisma.salesContract.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.getContractForFile('../../etc/passwd', 1),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.salesContract.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [
+              { generatedPdfPath: { endsWith: '/passwd' } },
+              {
+                contractDocuments: {
+                  some: { filePath: { endsWith: '/passwd' } },
+                },
+              },
+            ],
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('listContractDocuments', () => {
+    it('throws when the contract does not exist for that company', async () => {
+      prisma.salesContract.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.listContractDocuments(10, 1),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.salesContractDocument.findMany).not.toHaveBeenCalled();
+    });
+
+    it('returns the document history ordered by most recent first', async () => {
+      prisma.salesContract.findFirst.mockResolvedValue(makeContract());
+      prisma.salesContractDocument.findMany.mockResolvedValue([
+        { id: 2, contractId: 10, type: 'ENVIADO' },
+        { id: 1, contractId: 10, type: 'GENERADO' },
+      ]);
+
+      const result = await service.listContractDocuments(10, 1);
+
+      expect(prisma.salesContractDocument.findMany).toHaveBeenCalledWith({
+        where: { contractId: 10 },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(result).toHaveLength(2);
     });
   });
 

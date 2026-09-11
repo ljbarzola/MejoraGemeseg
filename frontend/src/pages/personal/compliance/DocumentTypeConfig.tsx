@@ -57,21 +57,24 @@ export default function DocumentTypeConfig() {
     }
   };
 
-  const custodiasTypes = docTypes.filter((d) => d.folder === 'CUSTODIAS');
-  const personalTypes = docTypes.filter((d) => d.folder === 'PERSONAL');
+  const FOLDER_GROUPS = [
+    { key: 'CUSTODIAS', label: 'Custodias', icon: '🛡️' },
+    { key: 'PERSONAL', label: 'Guardias (no custodia)', icon: '👤' },
+    { key: 'PERSONAL_ADMIN', label: 'Personal Administrativo', icon: '🏢' },
+  ];
 
   return (
     <div className="page-container">
       <div className="page-header-row">
         <div>
-          <p className="page-eyebrow">MODULO PERSONAL</p>
+          <p className="page-eyebrow">RECURSOS HUMANOS</p>
           <h1>Configuración de Requisitos</h1>
           <p style={{ color: '#718096', fontSize: '0.85rem', marginTop: '4px' }}>
             Define qué documentos son requeridos para cada tipo de carpeta
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/personal')}>← Volver</button>
+          <button className="cacao-back-btn" onClick={() => navigate('/rrhh')}>← Volver</button>
           <button className="auth-btn" onClick={() => { setShowForm(true); setEditingId(null); setForm({ name: '', folder: 'CUSTODIAS', required: true }); }}>
             + Nuevo Requisito
           </button>
@@ -102,7 +105,8 @@ export default function DocumentTypeConfig() {
               <label>Carpeta *</label>
               <select value={form.folder} onChange={(e) => setForm({ ...form, folder: e.target.value })}>
                 <option value="CUSTODIAS">🛡️ Custodias</option>
-                <option value="PERSONAL">👤 Personal Administrativo</option>
+                <option value="PERSONAL">👤 Guardias (no custodia)</option>
+                <option value="PERSONAL_ADMIN">🏢 Personal Administrativo</option>
               </select>
             </div>
             <div className="form-group">
@@ -131,76 +135,48 @@ export default function DocumentTypeConfig() {
       {loading ? (
         <div className="loading-state">Cargando requisitos...</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginTop: '20px' }}>
-          <div className="admin-section">
-            <h3 style={{ marginBottom: '16px', color: 'var(--azul-oscuro)' }}>🛡️ Custodias ({custodiasTypes.length})</h3>
-            {custodiasTypes.length === 0 ? (
-              <p style={{ color: '#a0aec0', textAlign: 'center', padding: '24px' }}>No hay requisitos definidos</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {custodiasTypes.map((dt) => (
-                  <div
-                    key={dt.id}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '10px 14px', borderRadius: '8px', background: '#f7fafc',
-                      border: '1px solid #e2e8f0',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--azul-oscuro)' }}>
-                        {dt.name}
-                      </span>
-                      {dt.required && (
-                        <span style={{ fontSize: '0.7rem', background: '#fed7d7', color: '#c53030', padding: '2px 6px', borderRadius: '4px' }}>
-                          REQUERIDO
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button className="btn-sm-edit" onClick={() => handleEdit(dt)}>✏️</button>
-                      <button className="btn-danger-sm" onClick={() => handleDelete(dt.id)}>🗑️</button>
-                    </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginTop: '20px' }}>
+          {FOLDER_GROUPS.map((group) => {
+            const types = docTypes.filter((d) => d.folder === group.key);
+            return (
+              <div className="admin-section" key={group.key}>
+                <h3 style={{ marginBottom: '16px', color: 'var(--azul-oscuro)' }}>
+                  {group.icon} {group.label} ({types.length})
+                </h3>
+                {types.length === 0 ? (
+                  <p style={{ color: '#a0aec0', textAlign: 'center', padding: '24px' }}>No hay requisitos definidos</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {types.map((dt) => (
+                      <div
+                        key={dt.id}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '10px 14px', borderRadius: '8px', background: '#f7fafc',
+                          border: '1px solid #e2e8f0',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--azul-oscuro)' }}>
+                            {dt.name}
+                          </span>
+                          {dt.required && (
+                            <span style={{ fontSize: '0.7rem', background: '#fed7d7', color: '#c53030', padding: '2px 6px', borderRadius: '4px' }}>
+                              REQUERIDO
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button className="btn-sm-edit" onClick={() => handleEdit(dt)}>✏️</button>
+                          <button className="btn-danger-sm" onClick={() => handleDelete(dt.id)}>🗑️</button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
-            )}
-          </div>
-
-          <div className="admin-section">
-            <h3 style={{ marginBottom: '16px', color: 'var(--azul-oscuro)' }}>👤 Personal Administrativo ({personalTypes.length})</h3>
-            {personalTypes.length === 0 ? (
-              <p style={{ color: '#a0aec0', textAlign: 'center', padding: '24px' }}>No hay requisitos definidos</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {personalTypes.map((dt) => (
-                  <div
-                    key={dt.id}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '10px 14px', borderRadius: '8px', background: '#f7fafc',
-                      border: '1px solid #e2e8f0',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--azul-oscuro)' }}>
-                        {dt.name}
-                      </span>
-                      {dt.required && (
-                        <span style={{ fontSize: '0.7rem', background: '#fed7d7', color: '#c53030', padding: '2px 6px', borderRadius: '4px' }}>
-                          REQUERIDO
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button className="btn-sm-edit" onClick={() => handleEdit(dt)}>✏️</button>
-                      <button className="btn-danger-sm" onClick={() => handleDelete(dt.id)}>🗑️</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+            );
+          })}
         </div>
       )}
     </div>

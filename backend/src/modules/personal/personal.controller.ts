@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PersonalService } from './personal.service';
 import { KanbanService } from './services/kanban.service';
@@ -6,13 +17,28 @@ import { CandidateService } from './services/candidate.service';
 import { ContractService } from './services/contract.service';
 import { CertificationService } from './services/certification.service';
 import { LogService } from './services/log.service';
-import { VerificationService } from './services/verification.service';
-import { CreateKanbanColumnDto, UpdateKanbanColumnDto, ReorderKanbanDto } from './dto/kanban.dto';
-import { CreateCandidateDto, UpdateCandidateDto, MoveCandidateDto } from './dto/candidate.dto';
-import { CreateContractTemplateDto, UpdateContractDto, GenerateContractDto } from './dto/contract.dto';
-import { CreateCertificationDto, UpdateCertificationDto } from './dto/certification.dto';
+import {
+  CreateKanbanColumnDto,
+  UpdateKanbanColumnDto,
+  ReorderKanbanDto,
+} from './dto/kanban.dto';
+import {
+  CreateCandidateDto,
+  UpdateCandidateDto,
+  MoveCandidateDto,
+} from './dto/candidate.dto';
+import {
+  CreateContractTemplateDto,
+  UpdateContractTemplateDto,
+  SaveContractFieldsDto,
+  UpdateContractDto,
+  GenerateContractDto,
+} from './dto/contract.dto';
+import {
+  CreateCertificationDto,
+  UpdateCertificationDto,
+} from './dto/certification.dto';
 import { CreateLogTemplateDto, CreateLogEntryDto } from './dto/log.dto';
-import { CreateVerificationDto, UpdateVerificationDto } from './dto/verification.dto';
 
 @Controller('personal')
 @UseGuards(AuthGuard('jwt'))
@@ -24,7 +50,6 @@ export class PersonalController {
     private readonly contractService: ContractService,
     private readonly certificationService: CertificationService,
     private readonly logService: LogService,
-    private readonly verificationService: VerificationService
   ) {}
 
   @Get('dashboard')
@@ -43,7 +68,11 @@ export class PersonalController {
   }
 
   @Patch('kanban/columns/:id')
-  updateColumn(@Param('id') id: string, @Body() body: UpdateKanbanColumnDto, @Req() req: any) {
+  updateColumn(
+    @Param('id') id: string,
+    @Body() body: UpdateKanbanColumnDto,
+    @Req() req: any,
+  ) {
     return this.kanbanService.updateColumn(+id, body, req.user.companyId);
   }
 
@@ -59,7 +88,10 @@ export class PersonalController {
 
   @Get('candidates')
   getCandidates(@Req() req: any, @Query('columnId') columnId?: string) {
-    return this.candidateService.findAll(req.user.companyId, columnId ? +columnId : undefined);
+    return this.candidateService.findAll(
+      req.user.companyId,
+      columnId ? +columnId : undefined,
+    );
   }
 
   @Get('candidates/:id')
@@ -69,17 +101,34 @@ export class PersonalController {
 
   @Post('candidates')
   createCandidate(@Body() body: CreateCandidateDto, @Req() req: any) {
-    return this.candidateService.create(body, req.user.companyId, req.user.userId);
+    return this.candidateService.create(
+      body,
+      req.user.companyId,
+      req.user.userId,
+    );
   }
 
   @Patch('candidates/:id')
-  updateCandidate(@Param('id') id: string, @Body() body: UpdateCandidateDto, @Req() req: any) {
+  updateCandidate(
+    @Param('id') id: string,
+    @Body() body: UpdateCandidateDto,
+    @Req() req: any,
+  ) {
     return this.candidateService.update(+id, body, req.user.companyId);
   }
 
   @Patch('candidates/:id/move')
-  moveCandidate(@Param('id') id: string, @Body() body: MoveCandidateDto, @Req() req: any) {
-    return this.candidateService.move(+id, body.columnId, req.user.companyId, req.user.userId);
+  moveCandidate(
+    @Param('id') id: string,
+    @Body() body: MoveCandidateDto,
+    @Req() req: any,
+  ) {
+    return this.candidateService.move(
+      +id,
+      body.columnId,
+      req.user.companyId,
+      req.user.userId,
+    );
   }
 
   @Get('candidates/:id/history')
@@ -87,14 +136,65 @@ export class PersonalController {
     return this.candidateService.getHistory(+id, req.user.companyId);
   }
 
+  @Get('contracts/system-fields')
+  getContractSystemFields() {
+    return this.contractService.getSystemFields();
+  }
+
   @Get('contracts/templates')
   getTemplates(@Req() req: any) {
     return this.contractService.getTemplates(req.user.companyId);
   }
 
+  @Get('contracts/templates/types')
+  getContractTemplateTypes(@Req() req: any) {
+    return this.contractService.getUsedTypes(req.user.companyId);
+  }
+
+  @Get('contracts/templates/:id')
+  getTemplate(@Param('id') id: string, @Req() req: any) {
+    return this.contractService.getTemplate(+id, req.user.companyId);
+  }
+
   @Post('contracts/templates')
   createTemplate(@Body() body: CreateContractTemplateDto, @Req() req: any) {
-    return this.contractService.createTemplate(body, req.user.companyId, req.user.userId);
+    return this.contractService.createTemplate(
+      body,
+      req.user.companyId,
+      req.user.userId,
+    );
+  }
+
+  @Patch('contracts/templates/:id')
+  updateTemplate(
+    @Param('id') id: string,
+    @Body() body: UpdateContractTemplateDto,
+    @Req() req: any,
+  ) {
+    return this.contractService.updateTemplate(+id, req.user.companyId, body);
+  }
+
+  @Post('contracts/templates/:id/download-drive')
+  downloadTemplateFromDrive(@Param('id') id: string, @Req() req: any) {
+    return this.contractService.downloadFromDrive(+id, req.user.companyId);
+  }
+
+  @Get('contracts/templates/:id/detect-variables')
+  detectTemplateVariables(@Param('id') id: string, @Req() req: any) {
+    return this.contractService.detectVariables(+id, req.user.companyId);
+  }
+
+  @Post('contracts/templates/:id/fields')
+  saveTemplateFields(
+    @Param('id') id: string,
+    @Body() body: SaveContractFieldsDto,
+    @Req() req: any,
+  ) {
+    return this.contractService.saveFields(
+      +id,
+      req.user.companyId,
+      body.fields,
+    );
   }
 
   @Delete('contracts/templates/:id')
@@ -102,9 +202,28 @@ export class PersonalController {
     return this.contractService.deleteTemplate(+id, req.user.companyId);
   }
 
+  @Get('contracts/autofill')
+  getContractAutofill(
+    @Req() req: any,
+    @Query('templateId') templateId: string,
+    @Query('cedula') cedula: string,
+    @Query('nombreGuardia') nombreGuardia: string,
+  ) {
+    return this.contractService.getAutofill(
+      +templateId,
+      req.user.companyId,
+      cedula,
+      nombreGuardia || '',
+    );
+  }
+
   @Post('contracts/generate')
   generateContract(@Body() body: GenerateContractDto, @Req() req: any) {
-    return this.contractService.generateContract(body.candidateId, body.templateId, req.user.companyId, req.user.userId);
+    return this.contractService.generateContract(
+      body,
+      req.user.companyId,
+      req.user.userId,
+    );
   }
 
   @Get('contracts')
@@ -113,7 +232,11 @@ export class PersonalController {
   }
 
   @Patch('contracts/:id')
-  updateContract(@Param('id') id: string, @Body() body: UpdateContractDto, @Req() req: any) {
+  updateContract(
+    @Param('id') id: string,
+    @Body() body: UpdateContractDto,
+    @Req() req: any,
+  ) {
     return this.contractService.updateContract(+id, body, req.user.companyId);
   }
 
@@ -124,11 +247,19 @@ export class PersonalController {
 
   @Post('certifications')
   createCertification(@Body() body: CreateCertificationDto, @Req() req: any) {
-    return this.certificationService.create(body, req.user.companyId, req.user.userId);
+    return this.certificationService.create(
+      body,
+      req.user.companyId,
+      req.user.userId,
+    );
   }
 
   @Patch('certifications/:id')
-  updateCertification(@Param('id') id: string, @Body() body: UpdateCertificationDto, @Req() req: any) {
+  updateCertification(
+    @Param('id') id: string,
+    @Body() body: UpdateCertificationDto,
+    @Req() req: any,
+  ) {
     return this.certificationService.update(+id, body, req.user.companyId);
   }
 
@@ -149,7 +280,11 @@ export class PersonalController {
 
   @Post('logs/templates')
   createLogTemplate(@Body() body: CreateLogTemplateDto, @Req() req: any) {
-    return this.logService.createTemplate(body, req.user.companyId, req.user.userId);
+    return this.logService.createTemplate(
+      body,
+      req.user.companyId,
+      req.user.userId,
+    );
   }
 
   @Delete('logs/templates/:id')
@@ -164,31 +299,15 @@ export class PersonalController {
 
   @Post('logs/entries')
   createLogEntry(@Body() body: CreateLogEntryDto, @Req() req: any) {
-    return this.logService.createEntry(body, req.user.companyId, req.user.userId);
+    return this.logService.createEntry(
+      body,
+      req.user.companyId,
+      req.user.userId,
+    );
   }
 
   @Delete('logs/entries/:id')
   deleteLogEntry(@Param('id') id: string, @Req() req: any) {
     return this.logService.deleteEntry(+id, req.user.companyId);
-  }
-
-  @Get('verificacion')
-  getVerifications(@Req() req: any, @Query('cedula') cedula?: string) {
-    return this.verificationService.findAll(req.user.companyId, cedula);
-  }
-
-  @Post('verificacion')
-  createVerification(@Body() body: CreateVerificationDto, @Req() req: any) {
-    return this.verificationService.create(body, req.user.companyId, req.user.userId);
-  }
-
-  @Patch('verificacion/:id')
-  updateVerification(@Param('id') id: string, @Body() body: UpdateVerificationDto, @Req() req: any) {
-    return this.verificationService.update(+id, body, req.user.companyId, req.user.userId);
-  }
-
-  @Delete('verificacion/:id')
-  deleteVerification(@Param('id') id: string, @Req() req: any) {
-    return this.verificationService.remove(+id, req.user.companyId);
   }
 }

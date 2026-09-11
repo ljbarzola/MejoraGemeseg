@@ -3,6 +3,11 @@
   --azul-claro: #12375F;
   --naranja: #EE3B1B;
   --gris-claro: #E6E6E6;
+  /* Borde de inputs/selects. --gris-claro (#E6E6E6) es casi blanco: pensado
+     para fondos, no para bordes — un input con ese borde se ve "sin borde" en
+     un modal blanco (RECOMENDACIONES_UX_UI.md §17). Usar esta variable en vez
+     de --gris-claro para cualquier borde que deba notarse. */
+  --borde-input: #A0AEC0;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -272,7 +277,7 @@ body {
 
 .form-group input {
   padding: 12px 16px;
-  border: 2px solid var(--gris-claro);
+  border: 2px solid var(--borde-input);
   border-radius: 12px;
   font-size: 0.95rem;
   font-family: inherit;
@@ -286,7 +291,7 @@ body {
 
 .form-group select {
   padding: 12px 16px;
-  border: 2px solid var(--gris-claro);
+  border: 2px solid var(--borde-input);
   border-radius: 12px;
   font-size: 0.95rem;
   font-family: inherit;
@@ -432,7 +437,7 @@ body {
 
 .form-textarea {
   padding: 12px 16px;
-  border: 2px solid var(--gris-claro);
+  border: 2px solid var(--borde-input);
   border-radius: 12px;
   font-size: 0.95rem;
   font-family: inherit;
@@ -467,6 +472,43 @@ body {
 
 .btn-secondary:hover {
   background: #d0d0d0;
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.header-actions .auth-btn,
+.header-actions .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+.candidate-modal-grid {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .candidate-modal-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .btn-back {
@@ -562,7 +604,7 @@ body {
 
 .filter-select {
   padding: 8px 12px;
-  border: 2px solid var(--gris-claro);
+  border: 2px solid var(--borde-input);
   border-radius: 8px;
   font-size: 0.85rem;
   background: white;
@@ -933,7 +975,7 @@ body {
 
 .form-group select {
   padding: 12px 16px;
-  border: 2px solid var(--gris-claro);
+  border: 2px solid var(--borde-input);
   border-radius: 12px;
   font-size: 0.95rem;
   font-family: inherit;
@@ -1396,7 +1438,7 @@ body {
 .admin-search {
   flex: 1;
   padding: 10px 16px;
-  border: 2px solid var(--gris-claro);
+  border: 2px solid var(--borde-input);
   border-radius: 10px;
   font-size: 0.9rem;
   font-family: inherit;
@@ -1409,7 +1451,7 @@ body {
 
 .admin-filter-select {
   padding: 10px 16px;
-  border: 2px solid var(--gris-claro);
+  border: 2px solid var(--borde-input);
   border-radius: 10px;
   font-size: 0.9rem;
   font-family: inherit;
@@ -1512,6 +1554,33 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* Estilo por defecto para inputs/selects sueltos dentro de un modal (sin
+   envolver en .form-group) — sin esto caen al estilo nativo del navegador
+   (borde cuadrado, línea negra fina, sin color). Mismos valores que
+   .form-group input/select para que se vean como el resto de la app. */
+.modal-body input:not([type='checkbox']):not([type='radio']),
+.modal-body select,
+.modal-body textarea {
+  padding: 12px 16px;
+  border: 2px solid var(--borde-input);
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: border-color 0.2s;
+  outline: none;
+}
+
+.modal-body select {
+  background: white;
+  cursor: pointer;
+}
+
+.modal-body input:focus,
+.modal-body select:focus,
+.modal-body textarea:focus {
+  border-color: var(--azul-claro);
 }
 
 .modal-actions {
@@ -1933,7 +2002,7 @@ body {
 .chat-input {
   flex: 1;
   padding: 12px 16px;
-  border: 2px solid var(--gris-claro);
+  border: 2px solid var(--borde-input);
   border-radius: 24px;
   font-size: 0.9rem;
   font-family: inherit;
@@ -1976,7 +2045,7 @@ body {
 
 .role-select {
   padding: 5px 10px;
-  border: 2px solid var(--gris-claro);
+  border: 2px solid var(--borde-input);
   border-radius: 8px;
   font-size: 0.8rem;
   font-weight: 600;
@@ -3228,6 +3297,27 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+/* Sin esto, el scroll del sidebar cae al scrollbar gris claro por defecto
+   del navegador, que desentona sobre el fondo azul oscuro. */
+.sidebar-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
 }
 
 .sidebar-link {
@@ -3370,7 +3460,11 @@ body {
   min-height: 100vh;
 }
 
-.main-content.sidebar-collapsed {
+/* Nombre de clase deliberadamente distinto a "sidebar-collapsed": esa clase ya
+   existe arriba con `width: 64px` para el propio <aside>, y al reusarla aquí
+   (antes: .main-content.sidebar-collapsed) el div de contenido heredaba
+   también esa regla suelta y quedaba con 64px de ancho en vez de expandirse. */
+.main-content.content-expanded {
   margin-left: 64px;
 }
 

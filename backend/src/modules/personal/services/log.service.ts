@@ -6,7 +6,10 @@ export class LogService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getTemplates(companyId: number) {
-    return this.prisma.logTemplate.findMany({ where: { companyId }, orderBy: { createdAt: 'desc' } });
+    return this.prisma.logTemplate.findMany({
+      where: { companyId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async createTemplate(data: any, companyId: number, userId: number) {
@@ -16,13 +19,19 @@ export class LogService {
   }
 
   async deleteTemplate(id: number, companyId: number) {
-    const t = await this.prisma.logTemplate.findFirst({ where: { id, companyId } });
+    const t = await this.prisma.logTemplate.findFirst({
+      where: { id, companyId },
+    });
     if (!t) throw new NotFoundException('Plantilla no encontrada');
     return this.prisma.logTemplate.delete({ where: { id } });
   }
 
   async getEntries(companyId: number) {
-    return this.prisma.logEntry.findMany({ where: { companyId }, include: { template: true }, orderBy: { createdAt: 'desc' } });
+    return this.prisma.logEntry.findMany({
+      where: { companyId },
+      include: { template: true },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async createEntry(data: any, companyId: number, userId: number) {
@@ -32,7 +41,9 @@ export class LogService {
   }
 
   async deleteEntry(id: number, companyId: number) {
-    const e = await this.prisma.logEntry.findFirst({ where: { id, companyId } });
+    const e = await this.prisma.logEntry.findFirst({
+      where: { id, companyId },
+    });
     if (!e) throw new NotFoundException('Registro no encontrado');
     return this.prisma.logEntry.delete({ where: { id } });
   }

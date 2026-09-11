@@ -21,7 +21,6 @@ export interface SalesTemplate {
   driveUrl?: string;
   docxPath?: string;
   generatedPdfPath?: string;
-  boldsignTemplateId?: string;
   emailSubject?: string;
   emailBody?: string;
   companyId: number;
@@ -29,6 +28,14 @@ export interface SalesTemplate {
   createdAt: string;
   fields?: SalesTemplateField[];
   _count?: { fields: number; contracts: number };
+}
+
+export interface SalesContractDocument {
+  id: number;
+  contractId: number;
+  type: 'GENERADO' | 'ENVIADO';
+  filePath: string;
+  createdAt: string;
 }
 
 export interface SalesContract {
@@ -81,9 +88,6 @@ export const detectVariables = (templateId: number) =>
 export const saveTemplateFields = (templateId: number, fields: any[]) =>
   api.post(`/ventas/templates/${templateId}/fields`, { fields }).then(r => r.data);
 
-export const syncTemplateToBoldSign = (templateId: number) =>
-  api.post(`/ventas/templates/${templateId}/sync-boldsign`).then(r => r.data);
-
 // ==================== CONTRACTS ====================
 export const getContracts = (params?: { status?: string; templateId?: number }) =>
   api.get('/ventas/contratos', { params }).then(r => r.data);
@@ -105,6 +109,16 @@ export const sendContract = (contractId: number) =>
 
 export const deleteContract = (id: number) =>
   api.delete(`/ventas/contratos/${id}`).then(r => r.data);
+
+export const getContractDocuments = (contractId: number): Promise<SalesContractDocument[]> =>
+  api.get(`/ventas/contratos/${contractId}/documents`).then(r => r.data);
+
+// Los PDFs de contratos requieren sesión iniciada; se descargan con la
+// instancia de axios autenticada (no un <iframe>/<a> directo) y se muestran
+// como blob. `apiPath` viene de la BD con el prefijo "/api/..." incluido,
+// que ya forma parte del baseURL de `api`, por eso se recorta aquí.
+export const fetchProtectedFile = (apiPath: string): Promise<Blob> =>
+  api.get(apiPath.replace(/^\/api/, ''), { responseType: 'blob' }).then(r => r.data);
 
 // ==================== LEGACY: VISITS ====================
 export interface ClientVisit {

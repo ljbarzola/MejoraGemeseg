@@ -6,7 +6,6 @@ export default function DriveConfig() {
   const navigate = useNavigate();
   const [config, setConfig] = useState<any>(null);
   const [folderId, setFolderId] = useState('');
-  const [folderName, setFolderName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -19,7 +18,6 @@ export default function DriveConfig() {
         if (data) {
           setConfig(data);
           setFolderId(data.driveFolderId);
-          setFolderName(data.driveFolderName);
         }
       })
       .catch((err: any) => {
@@ -49,18 +47,13 @@ export default function DriveConfig() {
   const handleSave = async () => {
     const cleanId = sanitizeId(folderId);
     if (!cleanId) { setError('Ingresa el ID de la carpeta'); return; }
-    if (!folderName.trim()) { setError('Ingresa el nombre de la carpeta'); return; }
     setSaving(true);
     setError('');
     try {
-      await saveDriveConfig({ driveFolderId: cleanId, driveFolderName: folderName.trim() });
-      setConfig({ driveFolderId: cleanId, driveFolderName: folderName.trim() });
+      const saved = await saveDriveConfig({ driveFolderId: cleanId });
+      setConfig(saved);
     } catch (err: any) {
-      if (err.response?.status === 403) {
-        setError('Solo un administrador puede guardar la configuración de Drive. Pide a un admin que la guarde.');
-      } else {
-        setError(err.response?.data?.message || 'Error al guardar');
-      }
+      setError(err.response?.data?.message || 'Error al guardar');
     } finally {
       setSaving(false);
     }
@@ -72,10 +65,10 @@ export default function DriveConfig() {
     <div className="page-container">
       <div className="page-header-row">
         <div>
-          <p className="page-eyebrow">MODULO PERSONAL</p>
+          <p className="page-eyebrow">RECURSOS HUMANOS</p>
           <h1>Configuración de Google Drive</h1>
         </div>
-        <button className="cacao-back-btn" onClick={() => navigate('/personal')}>← Volver</button>
+        <button className="cacao-back-btn" onClick={() => navigate('/rrhh')}>← Volver</button>
       </div>
 
       <div className="admin-section" style={{ maxWidth: '600px', marginTop: '20px' }}>
@@ -110,17 +103,6 @@ export default function DriveConfig() {
               value={folderId}
               onChange={(e) => { setFolderId(e.target.value); setTestResult(null); }}
               placeholder="Ej: 1ABC123def456GHI..."
-              style={{ width: '100%' }}
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Nombre de la carpeta *</label>
-            <input
-              type="text"
-              value={folderName}
-              onChange={(e) => setFolderName(e.target.value)}
-              placeholder="Ej: Recursos Humanos"
               style={{ width: '100%' }}
             />
           </div>
