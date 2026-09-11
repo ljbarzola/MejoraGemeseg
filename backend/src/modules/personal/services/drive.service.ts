@@ -928,6 +928,7 @@ export class DriveService {
         type: dt.name,
         required,
         status: matchResult ? 'present' : 'missing',
+        documentId: matchResult?.id || null,
         fileName: matchResult?.fileName || null,
         fileUrl: matchResult?.fileUrl || null,
         driveFileId: matchResult?.driveFileId || null,
@@ -950,6 +951,7 @@ export class DriveService {
     const unmatchedFiles = employeeDocs
       .filter((doc) => !usedDocIds.has(doc.id))
       .map((doc) => ({
+        documentId: doc.id,
         fileName: doc.fileName,
         fileUrl: doc.fileUrl,
         driveFileId: doc.driveFileId,

@@ -30,7 +30,7 @@ steps:
       - '--platform=managed'
       - '--memory=512Mi'
       - '--cpu=1'
-      - '--min-instances=0'
+      - '--min-instances=1'
       - '--max-instances=10'
       - '--port=8080'
       - '--add-cloudsql-instances=$PROJECT_ID:us-central1:gemeseg-db'

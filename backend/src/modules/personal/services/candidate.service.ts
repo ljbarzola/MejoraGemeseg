@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -45,6 +46,9 @@ export class CandidateService {
     });
     if (existing)
       throw new ConflictException('Ya existe un candidato con esa cédula');
+    // `!= null` y no truthiness: un columnId 0 debe fallar como columna inexistente,
+    // no colarse hasta un error de clave foranea.
+    if (data.columnId != null) await this.assertColumnBelongsToCompany(data.columnId, companyId);
     return this.prisma.candidate.create({
       data: { ...data, companyId, createdBy: userId },
     });
@@ -70,11 +74,12 @@ export class CandidateService {
     });
     if (!c) throw new NotFoundException('Candidato no encontrado');
 
-    const toColumn = columnId
-      ? await this.prisma.kanbanColumn.findFirst({
-          where: { id: columnId, companyId },
-        })
-      : null;
+    // `columnId` omitido no es lo mismo que `null` (sacar de la columna): sin esta
+    // distincion Prisma ignoraba el update pero el historial registraba un movimiento
+    // a SIN_COLUMNA que nunca ocurrio.
+    if (columnId === undefined) throw new BadRequestException('columnId es obligatorio (usa null para quitar de la columna)');
+
+    const toColumn = columnId != null ? await this.assertColumnBelongsToCompany(columnId, companyId) : null;
 
     await this.prisma.candidateHistory.create({
       data: {
@@ -109,6 +114,13 @@ export class CandidateService {
     }
 
     return updated;
+  }
+
+  /** Evita que un candidato aterrice en el tablero de otra empresa. */
+  private async assertColumnBelongsToCompany(columnId: number, companyId: number) {
+    const column = await this.prisma.kanbanColumn.findFirst({ where: { id: columnId, companyId } });
+    if (!column) throw new NotFoundException('Columna no encontrada');
+    return column;
   }
 
   async getHistory(id: number, companyId: number) {

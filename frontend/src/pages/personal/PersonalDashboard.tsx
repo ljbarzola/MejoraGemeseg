@@ -86,12 +86,12 @@ export default function PersonalDashboard() {
       {showHelp && <RrhhHelpModal onClose={() => setShowHelp(false)} />}
 
       <h2 style={{ margin: '0 0 12px', fontSize: '0.95rem', color: 'var(--azul-oscuro)' }}>Requiere tu atención</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '28px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: '16px', marginBottom: '28px' }}>
         {atencionCards.map((card) => <KpiCard key={card.label} {...card} />)}
       </div>
 
       <h2 style={{ margin: '0 0 12px', fontSize: '0.95rem', color: 'var(--azul-oscuro)' }}>Resumen general</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: '16px', marginBottom: '24px' }}>
         {resumenCards.map((card) => <KpiCard key={card.label} {...card} />)}
       </div>
 
@@ -106,7 +106,7 @@ export default function PersonalDashboard() {
           a pedido del cliente: no se estaba usando. El código y los datos ya
           guardados quedan intactos por si se retoma más adelante.
         */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: '16px' }}>
           {[
             { label: 'Candidatos', path: '/rrhh/candidates', icon: '👤' },
             { label: 'Personal Administrativo', path: '/rrhh/administrativo', icon: '🏢' },

@@ -9,6 +9,7 @@ import {
   Query,
   Req,
   UseGuards,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PersonalService } from './personal.service';
@@ -69,16 +70,16 @@ export class PersonalController {
 
   @Patch('kanban/columns/:id')
   updateColumn(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateKanbanColumnDto,
     @Req() req: any,
   ) {
-    return this.kanbanService.updateColumn(+id, body, req.user.companyId);
+    return this.kanbanService.updateColumn(id, body, req.user.companyId);
   }
 
   @Delete('kanban/columns/:id')
-  deleteColumn(@Param('id') id: string, @Req() req: any) {
-    return this.kanbanService.deleteColumn(+id, req.user.companyId);
+  deleteColumn(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.kanbanService.deleteColumn(id, req.user.companyId);
   }
 
   @Post('kanban/reorder')
@@ -95,8 +96,8 @@ export class PersonalController {
   }
 
   @Get('candidates/:id')
-  getCandidate(@Param('id') id: string, @Req() req: any) {
-    return this.candidateService.findOne(+id, req.user.companyId);
+  getCandidate(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.candidateService.findOne(id, req.user.companyId);
   }
 
   @Post('candidates')
@@ -110,21 +111,21 @@ export class PersonalController {
 
   @Patch('candidates/:id')
   updateCandidate(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateCandidateDto,
     @Req() req: any,
   ) {
-    return this.candidateService.update(+id, body, req.user.companyId);
+    return this.candidateService.update(id, body, req.user.companyId);
   }
 
   @Patch('candidates/:id/move')
   moveCandidate(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() body: MoveCandidateDto,
     @Req() req: any,
   ) {
     return this.candidateService.move(
-      +id,
+      id,
       body.columnId,
       req.user.companyId,
       req.user.userId,
@@ -132,8 +133,8 @@ export class PersonalController {
   }
 
   @Get('candidates/:id/history')
-  getCandidateHistory(@Param('id') id: string, @Req() req: any) {
-    return this.candidateService.getHistory(+id, req.user.companyId);
+  getCandidateHistory(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.candidateService.getHistory(id, req.user.companyId);
   }
 
   @Get('contracts/system-fields')
@@ -198,8 +199,8 @@ export class PersonalController {
   }
 
   @Delete('contracts/templates/:id')
-  deleteTemplate(@Param('id') id: string, @Req() req: any) {
-    return this.contractService.deleteTemplate(+id, req.user.companyId);
+  deleteTemplate(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.contractService.deleteTemplate(id, req.user.companyId);
   }
 
   @Get('contracts/autofill')
@@ -233,11 +234,11 @@ export class PersonalController {
 
   @Patch('contracts/:id')
   updateContract(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateContractDto,
     @Req() req: any,
   ) {
-    return this.contractService.updateContract(+id, body, req.user.companyId);
+    return this.contractService.updateContract(id, body, req.user.companyId);
   }
 
   @Get('certifications')
@@ -256,16 +257,16 @@ export class PersonalController {
 
   @Patch('certifications/:id')
   updateCertification(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateCertificationDto,
     @Req() req: any,
   ) {
-    return this.certificationService.update(+id, body, req.user.companyId);
+    return this.certificationService.update(id, body, req.user.companyId);
   }
 
   @Delete('certifications/:id')
-  deleteCertification(@Param('id') id: string, @Req() req: any) {
-    return this.certificationService.delete(+id, req.user.companyId);
+  deleteCertification(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.certificationService.delete(id, req.user.companyId);
   }
 
   @Get('certifications/alerts')
@@ -288,8 +289,8 @@ export class PersonalController {
   }
 
   @Delete('logs/templates/:id')
-  deleteLogTemplate(@Param('id') id: string, @Req() req: any) {
-    return this.logService.deleteTemplate(+id, req.user.companyId);
+  deleteLogTemplate(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.logService.deleteTemplate(id, req.user.companyId);
   }
 
   @Get('logs/entries')
@@ -307,7 +308,7 @@ export class PersonalController {
   }
 
   @Delete('logs/entries/:id')
-  deleteLogEntry(@Param('id') id: string, @Req() req: any) {
-    return this.logService.deleteEntry(+id, req.user.companyId);
+  deleteLogEntry(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.logService.deleteEntry(id, req.user.companyId);
   }
 }

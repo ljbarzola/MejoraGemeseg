@@ -51,6 +51,7 @@ export const getContractAutofill = (templateId: number, cedula: string, nombreGu
 export const generateContract = (data: { templateId: number; cedula: string; nombreGuardia: string; fieldValues: Record<string, string> }) =>
   api.post('/personal/contracts/generate', data).then(r => r.data);
 export const getContracts = () => api.get('/personal/contracts').then(r => r.data);
+export const updateContract = (id: number, data: { status?: string; generatedUrl?: string }) => api.patch(`/personal/contracts/${id}`, data).then(r => r.data);
 
 // generatedUrl ya viene como "/api/personal/contracts/file/..." — el origen
 // se resuelve quitando el sufijo /api de VITE_API_URL, mismo patrón que
