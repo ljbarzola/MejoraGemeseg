@@ -4,6 +4,7 @@ import { getUser } from '../../services/auth.service';
 import { getMyTasks } from '../../services/task.service';
 import { getProjects } from '../../services/project.service';
 import CreateTaskModal from '../../components/tasks/CreateTaskModal';
+import PendingSurveysBanner from '../../components/personal/PendingSurveysBanner';
 import type { Task } from '../../types/task';
 import { STATUS_LABELS, PRIORITY_LABELS, STATUS_COLORS, PRIORITY_COLORS } from '../../types/task';
 
@@ -130,6 +131,8 @@ export default function DashboardPage() {
       </header>
 
       <main className="page-container">
+        <PendingSurveysBanner />
+
         <div className="page-header-row">
           <div>
             <p className="page-eyebrow">TAREAS</p>

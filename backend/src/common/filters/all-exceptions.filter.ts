@@ -27,6 +27,21 @@ export class AllExceptionsFilter implements ExceptionFilter {
         typeof exResponse === 'string'
           ? exResponse
           : (exResponse as any).message || exception.message;
+
+      // El ValidationPipe global (whitelist/forbidNonWhitelisted) devuelve un
+      // array de mensajes técnicos de class-validator (ej. "fields.0.property
+      // id should not exist") — ilegible para un usuario final. Se registra
+      // completo en el log del servidor y se reemplaza por un mensaje
+      // genérico en la respuesta; los mensajes de negocio (string simple,
+      // ej. BadRequestException('No hay carpeta...')) siguen mostrándose tal
+      // cual porque sí están pensados para el usuario.
+      if (Array.isArray(message)) {
+        this.logger.warn(
+          `Validation error on ${request.method} ${request.url}: ${message.join(' | ')}`,
+        );
+        message =
+          'Hay datos no válidos en la solicitud. Si el problema persiste, contacta a Sistemas.';
+      }
     } else if (exception instanceof Error) {
       this.logger.error(
         `Unhandled exception: ${exception.message}`,

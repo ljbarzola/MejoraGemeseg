@@ -11,6 +11,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { SectionPermissionGuard } from '../../../common/guards/section-permission.guard';
+import { Section } from '../../../common/decorators/section.decorator';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { UserRole } from '@prisma/client';
@@ -21,14 +23,16 @@ export class CacaoQualitiesController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get()
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('CACAO', 'view')
   findAll() {
     return this.prisma.cacaoQuality.findMany({ orderBy: { name: 'asc' } });
   }
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
   @Roles(UserRole.ADMIN)
+  @Section('CACAO', 'write')
   create(
     @Body()
     dto: {
@@ -42,8 +46,9 @@ export class CacaoQualitiesController {
   }
 
   @Patch(':id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
   @Roles(UserRole.ADMIN)
+  @Section('CACAO', 'write')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body()
@@ -58,8 +63,9 @@ export class CacaoQualitiesController {
   }
 
   @Delete(':id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
   @Roles(UserRole.ADMIN)
+  @Section('CACAO', 'write')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.prisma.cacaoQuality.delete({ where: { id } });
   }

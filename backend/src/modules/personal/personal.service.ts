@@ -19,7 +19,6 @@ export class PersonalService {
       pendingContracts,
       alertCount,
       driveCustodios,
-      candidatosCustodio,
       asignacionesActivas,
       cedulasFuera,
       movimientosEnProceso,
@@ -50,13 +49,6 @@ export class PersonalService {
         where: { companyId, folderType: 'CUSTODIAS' },
         select: { cedula: true },
       }),
-      this.prisma.candidate.findMany({
-        where: {
-          companyId,
-          positionApplied: { contains: 'custodio', mode: 'insensitive' },
-        },
-        select: { cedula: true },
-      }),
       this.prisma.asignacionGuardia.findMany({
         where: { companyId, fechaFin: null },
         select: { cedula: true },
@@ -69,13 +61,13 @@ export class PersonalService {
     ]);
 
     // Mismo criterio que GuardiasList.tsx/CustodiasService.getAvailableCustodios
-    // para decidir quién cuenta como "guardia activo": unión de carpetas de
-    // Drive tipo CUSTODIAS + candidatos de reclutamiento con puesto "custodio",
-    // excluyendo a quien ya registró salida completada.
+    // para decidir quién cuenta como "guardia activo": carpetas de Drive tipo
+    // CUSTODIAS, excluyendo a quien ya registró salida completada. (Antes
+    // también unía candidatos del Kanban con puesto "custodio" — eliminado
+    // 2026-09-17 por no ser un flujo real, ver .agents/modules/recursos-humanos.md.)
     const fueraSet = new Set(cedulasFuera);
     const guardiaCedulas = new Set<string>();
     driveCustodios.forEach((f) => guardiaCedulas.add(f.cedula));
-    candidatosCustodio.forEach((c) => guardiaCedulas.add(c.cedula));
     fueraSet.forEach((c) => guardiaCedulas.delete(c));
     const asignadasSet = new Set(asignacionesActivas.map((a) => a.cedula));
     const guardiasSinAsignacion = Array.from(guardiaCedulas).filter(

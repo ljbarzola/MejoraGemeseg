@@ -8,8 +8,11 @@ import {
   Param,
   Query,
   Req,
+  Res,
   UseGuards,
+  ParseIntPipe,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
 import { Section } from '../../common/decorators/section.decorator';
@@ -24,6 +27,23 @@ import type { UpdateGuardiaFichaPersonalInput } from './services/guardia-ficha-p
 import { PersonalFieldDefinitionService } from './services/personal-field-definition.service';
 import { AdministrativeStaffFichaService } from './services/administrative-staff-ficha.service';
 import type { UpdateAdministrativeStaffFichaInput } from './services/administrative-staff-ficha.service';
+import { GuardiasExportService } from './services/guardias-export.service';
+import { ExportGuardiasPdfDto } from './dto/export-guardias-pdf.dto';
+import { ComplaintService } from './services/complaint.service';
+import {
+  CreateComplaintDto,
+  ChangeComplaintStageDto,
+} from './dto/complaint.dto';
+import { ComplaintFieldDefinitionService } from './services/complaint-field-definition.service';
+import {
+  CreateComplaintFieldDto,
+  UpdateComplaintFieldDto,
+} from './dto/complaint-field-definition.dto';
+import { ComplaintStageService } from './services/complaint-stage.service';
+import {
+  CreateComplaintStageDto,
+  UpdateComplaintStageDto,
+} from './dto/complaint-stage.dto';
 import { CreateEntidadDto, UpdateEntidadDto } from './dto/entidad.dto';
 import {
   CreateRequisitoDocumentoDto,
@@ -48,6 +68,10 @@ export class EntidadController {
     private readonly guardiaFichaPersonalService: GuardiaFichaPersonalService,
     private readonly personalFieldDefinitionService: PersonalFieldDefinitionService,
     private readonly administrativeStaffFichaService: AdministrativeStaffFichaService,
+    private readonly guardiasExportService: GuardiasExportService,
+    private readonly complaintService: ComplaintService,
+    private readonly complaintFieldDefinitionService: ComplaintFieldDefinitionService,
+    private readonly complaintStageService: ComplaintStageService,
   ) {}
 
   // ENTIDADES
@@ -219,6 +243,31 @@ export class EntidadController {
   // contacto de emergencia, etc. — fuente de la verdad del .json que se
   // crea/actualiza en la carpeta del guardia al sincronizar Drive).
 
+  @Get('guardia-ficha')
+  @Section('RRHH', 'view')
+  getAllGuardiaFichas(@Req() req: any) {
+    return this.guardiaFichaPersonalService.getAll(req.user.companyId);
+  }
+
+  @Post('guardias/export-pdf')
+  @Section('RRHH', 'view')
+  async exportGuardiasPdf(
+    @Body() dto: ExportGuardiasPdfDto,
+    @Res() res: Response,
+  ) {
+    const pdfBuffer = await this.guardiasExportService.exportPdf(
+      dto.columns,
+      dto.rows,
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', pdfBuffer.length.toString());
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="listado_guardias_${Date.now()}.pdf"`,
+    );
+    res.end(pdfBuffer);
+  }
+
   @Get('guardia-ficha/:cedula')
   @Section('RRHH', 'view')
   getGuardiaFicha(@Param('cedula') cedula: string, @Req() req: any) {
@@ -260,10 +309,7 @@ export class EntidadController {
     @Body() body: CreatePersonalFieldDefinitionDto,
     @Req() req: any,
   ) {
-    return this.personalFieldDefinitionService.create(
-      req.user.companyId,
-      body,
-    );
+    return this.personalFieldDefinitionService.create(req.user.companyId, body);
   }
 
   @Patch('personal-field-definitions/:id')
@@ -292,10 +338,7 @@ export class EntidadController {
   @Get('administrativo-ficha/:cedula')
   @Section('RRHH', 'view')
   getAdministrativoFicha(@Param('cedula') cedula: string, @Req() req: any) {
-    return this.administrativeStaffFichaService.get(
-      req.user.companyId,
-      cedula,
-    );
+    return this.administrativeStaffFichaService.get(req.user.companyId, cedula);
   }
 
   @Patch('administrativo-ficha/:cedula')
@@ -327,5 +370,106 @@ export class EntidadController {
       cedula,
       body?.medio,
     );
+  }
+
+  // BUZÓN DE QUEJAS (enviar es abierto a cualquier empleado con empresa,
+  // sin depender del permiso de sección RRHH — solo la gestión lo requiere).
+
+  @Post('complaints')
+  createComplaint(@Body() body: CreateComplaintDto, @Req() req: any) {
+    return this.complaintService.create(
+      body,
+      req.user.companyId,
+      req.user.userId,
+    );
+  }
+
+  @Get('complaints')
+  @Section('RRHH', 'view')
+  getAllComplaints(@Req() req: any) {
+    return this.complaintService.findAll(req.user.companyId);
+  }
+
+  @Patch('complaints/:id/stage')
+  @Section('RRHH', 'write')
+  changeComplaintStage(
+    @Param('id') id: string,
+    @Body() body: ChangeComplaintStageDto,
+    @Req() req: any,
+  ) {
+    return this.complaintService.changeStage(
+      Number(id),
+      body,
+      req.user.companyId,
+      req.user.userId,
+    );
+  }
+
+  // CAMPOS EXTRA DEL FORMULARIO DE QUEJAS (configurados por RRHH). El GET no
+  // lleva @Section: cualquier empleado que vaya a enviar una queja necesita
+  // poder leer qué campos existen para poder llenarlos.
+  @Get('complaint-fields')
+  getComplaintFields(@Req() req: any) {
+    return this.complaintFieldDefinitionService.findAll(req.user.companyId);
+  }
+
+  @Post('complaint-fields')
+  @Section('RRHH', 'write')
+  createComplaintField(@Body() body: CreateComplaintFieldDto, @Req() req: any) {
+    return this.complaintFieldDefinitionService.create(
+      req.user.companyId,
+      body,
+    );
+  }
+
+  @Patch('complaint-fields/:id')
+  @Section('RRHH', 'write')
+  updateComplaintField(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateComplaintFieldDto,
+    @Req() req: any,
+  ) {
+    return this.complaintFieldDefinitionService.update(
+      id,
+      req.user.companyId,
+      body,
+    );
+  }
+
+  @Delete('complaint-fields/:id')
+  @Section('RRHH', 'write')
+  deleteComplaintField(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.complaintFieldDefinitionService.delete(id, req.user.companyId);
+  }
+
+  // ETAPAS DEL PROCESO DE QUEJAS (Fase 5: reemplaza el enum fijo
+  // ComplaintStatus por una tabla editable por empresa). El GET no lleva
+  // @Section: el formulario/tablero público de quejas necesita poder listar
+  // las etapas igual que ya hace con complaint-fields.
+  @Get('complaint-stages')
+  getComplaintStages(@Req() req: any) {
+    return this.complaintStageService.findAll(req.user.companyId);
+  }
+
+  @Post('complaint-stages')
+  @Section('RRHH', 'write')
+  createComplaintStage(@Body() body: CreateComplaintStageDto, @Req() req: any) {
+    return this.complaintStageService.create(req.user.companyId, body);
+  }
+
+  @Patch('complaint-stages/:id')
+  @Section('RRHH', 'write')
+  updateComplaintStage(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateComplaintStageDto,
+    @Req() req: any,
+  ) {
+    return this.complaintStageService.update(id, req.user.companyId, body);
+  }
+
+  @Delete('complaint-stages/:id')
+  @Section('RRHH', 'write')
+  deleteComplaintStage(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.complaintStageService.delete(id, req.user.companyId);
   }
 }

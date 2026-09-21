@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getVisits, createVisit, checkInVisit, completeVisit, cancelVisit, deleteVisit, ClientVisit } from '../../services/ventas.service';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
+import PromptDialog from '../../components/common/PromptDialog';
 
 const OUTCOME_LABELS: Record<string, string> = {
   INTERESTED: 'Interesado',
@@ -18,6 +20,45 @@ export default function VisitasPage() {
   const [showOfferModal, setShowOfferModal] = useState<ClientVisit | null>(null);
   const [saving, setSaving] = useState(false);
   const [checkingInId, setCheckingInId] = useState<number | null>(null);
+
+  const [newVisitError, setNewVisitError] = useState('');
+  const newVisitErrorRef = useRef<HTMLDivElement>(null);
+  const [checkInInfo, setCheckInInfo] = useState('');
+  const checkInInfoRef = useRef<HTMLDivElement>(null);
+  const [checkInError, setCheckInError] = useState('');
+  const checkInErrorRef = useRef<HTMLDivElement>(null);
+  const [offerError, setOfferError] = useState('');
+  const offerErrorRef = useRef<HTMLDivElement>(null);
+  const [cancelError, setCancelError] = useState('');
+  const cancelErrorRef = useRef<HTMLDivElement>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const deleteErrorRef = useRef<HTMLDivElement>(null);
+  const [confirmDeleteVisit, setConfirmDeleteVisit] = useState<ClientVisit | null>(null);
+  const [promptCancelVisit, setPromptCancelVisit] = useState<ClientVisit | null>(null);
+
+  useEffect(() => {
+    if (newVisitError) newVisitErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [newVisitError]);
+
+  useEffect(() => {
+    if (checkInInfo) checkInInfoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [checkInInfo]);
+
+  useEffect(() => {
+    if (checkInError) checkInErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [checkInError]);
+
+  useEffect(() => {
+    if (offerError) offerErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [offerError]);
+
+  useEffect(() => {
+    if (cancelError) cancelErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [cancelError]);
+
+  useEffect(() => {
+    if (deleteError) deleteErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [deleteError]);
 
   // New Visit Form
   const [newForm, setNewForm] = useState({
@@ -48,7 +89,8 @@ export default function VisitasPage() {
 
   const handleCreateVisit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newForm.clientName.trim()) { alert('El nombre del cliente es obligatorio'); return; }
+    setNewVisitError('');
+    if (!newForm.clientName.trim()) { setNewVisitError('El nombre del cliente es obligatorio'); return; }
     setSaving(true);
     try {
       await createVisit(newForm);
@@ -56,7 +98,7 @@ export default function VisitasPage() {
       setNewForm({ clientName: '', clientAddress: '', clientPhone: '', visitDate: new Date().toISOString().split('T')[0], notes: '' });
       loadVisits();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Error al agendar visita');
+      setNewVisitError(err.response?.data?.message || 'Error al agendar visita');
     } finally {
       setSaving(false);
     }
@@ -64,13 +106,15 @@ export default function VisitasPage() {
 
   const handleCheckIn = async (visit: ClientVisit) => {
     setCheckingInId(visit.id);
+    setCheckInInfo('');
+    setCheckInError('');
     if (!navigator.geolocation) {
-      alert('Tu navegador no soporta geolocalización. Realizando Check-in sin GPS...');
+      setCheckInInfo('Tu navegador no soporta geolocalización. Realizando Check-in sin GPS...');
       try {
         await checkInVisit(visit.id);
         loadVisits();
       } catch (err: any) {
-        alert(err.response?.data?.message || 'Error en Check-in');
+        setCheckInError(err.response?.data?.message || 'Error en Check-in');
       } finally {
         setCheckingInId(null);
       }
@@ -86,7 +130,7 @@ export default function VisitasPage() {
           });
           loadVisits();
         } catch (err: any) {
-          alert(err.response?.data?.message || 'Error en Check-in');
+          setCheckInError(err.response?.data?.message || 'Error en Check-in');
         } finally {
           setCheckingInId(null);
         }
@@ -97,7 +141,7 @@ export default function VisitasPage() {
           await checkInVisit(visit.id);
           loadVisits();
         } catch (err: any) {
-          alert(err.response?.data?.message || 'Error en Check-in');
+          setCheckInError(err.response?.data?.message || 'Error en Check-in');
         } finally {
           setCheckingInId(null);
         }
@@ -110,35 +154,49 @@ export default function VisitasPage() {
     e.preventDefault();
     if (!showOfferModal) return;
     setSaving(true);
+    setOfferError('');
     try {
       await completeVisit(showOfferModal.id, offerForm);
       setShowOfferModal(null);
       loadVisits();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Error al registrar oferta comercial');
+      setOfferError(err.response?.data?.message || 'Error al registrar oferta comercial');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleCancelVisit = async (visit: ClientVisit) => {
-    const reason = prompt('Motivo de cancelación de la visita:');
-    if (reason === null) return;
+  const handleCancelVisit = (visit: ClientVisit) => {
+    setCancelError('');
+    setPromptCancelVisit(visit);
+  };
+
+  const confirmarCancelarVisita = async (reason: string) => {
+    const visit = promptCancelVisit;
+    if (!visit) return;
+    setPromptCancelVisit(null);
     try {
       await cancelVisit(visit.id, reason);
       loadVisits();
     } catch {
-      alert('Error al cancelar visita');
+      setCancelError('Error al cancelar visita');
     }
   };
 
-  const handleDeleteVisit = async (visit: ClientVisit) => {
-    if (!window.confirm(`¿Eliminar la visita a ${visit.clientName}?`)) return;
+  const handleDeleteVisit = (visit: ClientVisit) => {
+    setDeleteError('');
+    setConfirmDeleteVisit(visit);
+  };
+
+  const confirmarEliminarVisita = async () => {
+    if (!confirmDeleteVisit) return;
+    const visit = confirmDeleteVisit;
+    setConfirmDeleteVisit(null);
     try {
       await deleteVisit(visit.id);
       loadVisits();
     } catch {
-      alert('Error al eliminar visita');
+      setDeleteError('Error al eliminar visita');
     }
   };
 
@@ -154,6 +212,13 @@ export default function VisitasPage() {
         </div>
         <button className="auth-btn" onClick={() => setShowNewModal(true)}>+ Planificar Nueva Visita</button>
       </div>
+
+      {checkInInfo && (
+        <div ref={checkInInfoRef} style={{ background: '#ebf8ff', border: '1px solid #90cdf4', color: '#2b6cb0', borderRadius: '10px', padding: '10px 14px', marginTop: '16px', fontSize: '0.85rem' }}>{checkInInfo}</div>
+      )}
+      {checkInError && <div ref={checkInErrorRef} className="form-error" style={{ marginTop: '16px' }}>{checkInError}</div>}
+      {cancelError && <div ref={cancelErrorRef} className="form-error" style={{ marginTop: '16px' }}>{cancelError}</div>}
+      {deleteError && <div ref={deleteErrorRef} className="form-error" style={{ marginTop: '16px' }}>{deleteError}</div>}
 
       <div className="admin-section" style={{ marginTop: '16px' }}>
         {loading ? (
@@ -298,6 +363,7 @@ export default function VisitasPage() {
         <div className="modal-backdrop">
           <div className="modal-card" style={{ maxWidth: 500 }}>
             <h3>Planificar Nueva Visita</h3>
+            {newVisitError && <div ref={newVisitErrorRef} className="form-error" style={{ marginTop: '10px' }}>{newVisitError}</div>}
             <form onSubmit={handleCreateVisit} style={{ marginTop: '12px' }}>
               <div className="form-group">
                 <label>Nombre del Cliente / Empresa *</label>
@@ -368,6 +434,8 @@ export default function VisitasPage() {
               Cliente: <strong>{showOfferModal.clientName}</strong>
             </p>
 
+            {offerError && <div ref={offerErrorRef} className="form-error">{offerError}</div>}
+
             <form onSubmit={handleCompleteVisitSubmit} style={{ marginTop: '12px' }}>
               <div className="form-group">
                 <label>Productos / Servicios Ofrecidos (Detalle de Oferta) *</label>
@@ -425,6 +493,27 @@ export default function VisitasPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {confirmDeleteVisit && (
+        <ConfirmDialog
+          title="Eliminar visita"
+          message={`¿Eliminar la visita a ${confirmDeleteVisit.clientName}?`}
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={confirmarEliminarVisita}
+          onCancel={() => setConfirmDeleteVisit(null)}
+        />
+      )}
+
+      {promptCancelVisit && (
+        <PromptDialog
+          title="Cancelar visita"
+          message={`Motivo de cancelación de la visita a ${promptCancelVisit.clientName}:`}
+          confirmLabel="Cancelar visita"
+          onConfirm={confirmarCancelarVisita}
+          onCancel={() => setPromptCancelVisit(null)}
+        />
       )}
     </div>
   );

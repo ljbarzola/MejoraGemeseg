@@ -7,10 +7,14 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { VentasService } from './ventas.service';
+import { VentasContratosService } from './ventas-contratos.service';
 
 @Controller('ventas/webhook')
 export class VentasWebhookController {
-  constructor(private readonly ventasService: VentasService) {}
+  constructor(
+    private readonly ventasService: VentasService,
+    private readonly contratosService: VentasContratosService,
+  ) {}
 
   @Post('lead')
   async ingestLead(
@@ -45,5 +49,13 @@ export class VentasWebhookController {
       leadId: lead.id,
       assignedUserId: lead.assignedUserId,
     };
+  }
+
+  // Público, sin sesión — SignWell llama directamente a esta ruta. La
+  // verificación real está en handleSignWellWebhook (hash HMAC del propio
+  // evento, ver ventas-contratos.service.ts).
+  @Post('signwell')
+  async signwellWebhook(@Body() body: any) {
+    return this.contratosService.handleSignWellWebhook(body);
   }
 }

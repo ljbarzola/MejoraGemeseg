@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getProject, addMember, removeMember, updateMemberRole, updateProject, deleteProject } from '../../services/project.service';
 import { getTasksByProject } from '../../services/task.service';
@@ -7,6 +7,7 @@ import { getUser } from '../../services/auth.service';
 import type { Task } from '../../types/task';
 import type { AdminUser } from '../../services/user.service';
 import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_COLORS, STATUS_COLORS } from '../../types/task';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 const PROJECT_STATUS_COLORS: Record<string, string> = {
   ACTIVE: '#22c55e',
@@ -47,7 +48,21 @@ export default function ProjectDetailPage() {
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
   const [openRoleMenu, setOpenRoleMenu] = useState<number | null>(null);
+  const [confirmandoEliminarMiembro, setConfirmandoEliminarMiembro] = useState<number | null>(null);
+  const [confirmandoEliminarProyecto, setConfirmandoEliminarProyecto] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const actionErrorRef = useRef<HTMLDivElement>(null);
   const currentUser = getUser();
+
+  // Estas tres acciones (quitar miembro, cambiar rol, eliminar proyecto)
+  // pueden dispararse desde distintas partes de la página (lista de
+  // miembros o encabezado); un solo banner arriba del detalle evita que el
+  // error quede fuera de vista si la acción se hizo más abajo en la página.
+  useEffect(() => {
+    if (actionError) {
+      actionErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [actionError]);
 
   const userMembership = project?.members?.find(
     (m: any) => m.user.email === currentUser?.email,
@@ -115,15 +130,22 @@ export default function ProjectDetailPage() {
     }
   }
 
-  async function handleRemoveMember(targetUserId: number) {
+  function handleRemoveMember(targetUserId: number) {
     if (!id) return;
-    if (!confirm('¿Estás seguro de eliminar este miembro del proyecto?')) return;
+    setActionError('');
+    setConfirmandoEliminarMiembro(targetUserId);
+  }
+
+  async function confirmarEliminarMiembro() {
+    if (!id || confirmandoEliminarMiembro === null) return;
+    const targetUserId = confirmandoEliminarMiembro;
+    setConfirmandoEliminarMiembro(null);
     try {
       await removeMember(Number(id), targetUserId);
       const p = await getProject(Number(id));
       setProject(p);
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Error al eliminar miembro');
+      setActionError(err.response?.data?.message || 'Error al eliminar miembro');
     }
   }
 
@@ -134,7 +156,7 @@ export default function ProjectDetailPage() {
       const p = await getProject(Number(id));
       setProject(p);
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Error al cambiar rol');
+      setActionError(err.response?.data?.message || 'Error al cambiar rol');
     }
   }
 
@@ -172,14 +194,20 @@ export default function ProjectDetailPage() {
     }
   }
 
-  async function handleDeleteProject() {
+  function handleDeleteProject() {
     if (!id) return;
-    if (!confirm('¿Estás seguro de eliminar este proyecto? Esta acción no se puede deshacer.')) return;
+    setActionError('');
+    setConfirmandoEliminarProyecto(true);
+  }
+
+  async function confirmarEliminarProyecto() {
+    if (!id) return;
+    setConfirmandoEliminarProyecto(false);
     try {
       await deleteProject(Number(id));
       navigate('/projects');
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Error al eliminar proyecto');
+      setActionError(err.response?.data?.message || 'Error al eliminar proyecto');
     }
   }
 
@@ -222,6 +250,10 @@ export default function ProjectDetailPage() {
             )}
           </div>
         </div>
+
+        {actionError && (
+          <div ref={actionErrorRef} style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{actionError}</div>
+        )}
 
         {project.description && (
           <p className="project-detail-desc">{project.description}</p>
@@ -554,6 +586,28 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmandoEliminarMiembro !== null && (
+        <ConfirmDialog
+          title="Eliminar miembro"
+          message="¿Estás seguro de eliminar este miembro del proyecto?"
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={confirmarEliminarMiembro}
+          onCancel={() => setConfirmandoEliminarMiembro(null)}
+        />
+      )}
+
+      {confirmandoEliminarProyecto && (
+        <ConfirmDialog
+          title="Eliminar proyecto"
+          message="¿Estás seguro de eliminar este proyecto? Esta acción no se puede deshacer."
+          confirmLabel="Eliminar proyecto"
+          danger
+          onConfirm={confirmarEliminarProyecto}
+          onCancel={() => setConfirmandoEliminarProyecto(false)}
+        />
       )}
     </div>
   );

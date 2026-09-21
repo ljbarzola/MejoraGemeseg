@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { extname } from 'path';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class CompaniesService {
@@ -38,26 +39,115 @@ export class CompaniesService {
     return company;
   }
 
+  async findByDomain(domain: string) {
+    const normalized = domain.startsWith('@') ? domain : `@${domain}`;
+    const company = await this.prisma.company.findFirst({
+      where: { domain: { equals: normalized, mode: 'insensitive' } },
+    });
+    if (!company) throw new NotFoundException('Empresa no encontrada');
+    return company;
+  }
+
   async create(dto: CreateCompanyDto) {
-    const existing = await this.prisma.company.findUnique({
+    const existingCompany = await this.prisma.company.findUnique({
       where: { slug: dto.slug },
     });
-    if (existing) {
+    if (existingCompany) {
       throw new ConflictException('Ya existe una empresa con ese slug');
     }
 
-    return this.prisma.company.create({
-      data: {
-        name: dto.name,
-        slug: dto.slug,
-        logoUrl: dto.logoUrl,
-        primaryColor: dto.primaryColor || '#100F31',
-        secondaryColor: dto.secondaryColor || '#12375F',
-        accentColor: dto.accentColor || '#EE3B1B',
-        bgColor: dto.bgColor || '#f8fafc',
-        textColor: dto.textColor || '#1e293b',
-        domain: dto.domain,
-      },
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: dto.adminEmail },
+    });
+    if (existingUser) {
+      throw new ConflictException(
+        'Ya existe un usuario con el correo del administrador',
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.adminPassword, 10);
+
+    return this.prisma.$transaction(async (tx) => {
+      const company = await tx.company.create({
+        data: {
+          name: dto.name,
+          slug: dto.slug,
+          logoUrl: dto.logoUrl,
+          primaryColor: dto.primaryColor || '#100F31',
+          secondaryColor: dto.secondaryColor || '#12375F',
+          accentColor: dto.accentColor || '#EE3B1B',
+          bgColor: dto.bgColor || '#f8fafc',
+          textColor: dto.textColor || '#1e293b',
+          domain: dto.domain,
+        },
+      });
+
+      await tx.user.create({
+        data: {
+          fullName: dto.adminFullName,
+          email: dto.adminEmail,
+          password: hashedPassword,
+          role: 'ADMIN',
+          companyId: company.id,
+        },
+      });
+
+      // Etapas por defecto del buzón de "Quejas y Sugerencias" de RRHH (ver
+      // ComplaintStageService) — mismas 5 etapas/colores que se sembraron
+      // para las empresas existentes en la migración de la Fase 5, para que
+      // una empresa nueva también arranque con un tablero funcional en vez
+      // de sin ninguna etapa inicial configurada.
+      await tx.complaintStage.createMany({
+        data: [
+          {
+            companyId: company.id,
+            key: 'RECIBIDA',
+            label: 'Recibida',
+            color: '#718096',
+            order: 0,
+            isInitial: true,
+            isFinal: false,
+          },
+          {
+            companyId: company.id,
+            key: 'EN_SENSIBILIZACION',
+            label: 'En sensibilización',
+            color: '#975a16',
+            order: 1,
+            isInitial: false,
+            isFinal: false,
+          },
+          {
+            companyId: company.id,
+            key: 'EN_COMUNICACION',
+            label: 'En comunicación',
+            color: '#1d4ed8',
+            order: 2,
+            isInitial: false,
+            isFinal: false,
+          },
+          {
+            companyId: company.id,
+            key: 'EN_SOLUCION',
+            label: 'En solución',
+            color: '#6b46c1',
+            order: 3,
+            isInitial: false,
+            isFinal: false,
+          },
+          {
+            companyId: company.id,
+            key: 'CERRADA',
+            label: 'Cerrada',
+            color: '#276749',
+            order: 4,
+            isInitial: false,
+            isFinal: true,
+          },
+        ],
+      });
+
+      return company;
     });
   }
 

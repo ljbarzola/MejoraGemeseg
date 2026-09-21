@@ -8,6 +8,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { SectionPermissionGuard } from '../../../common/guards/section-permission.guard';
+import { Section } from '../../../common/decorators/section.decorator';
 import { CacaoLotsService } from './lots.service';
 
 @Controller('cacao/lots')
@@ -15,7 +17,8 @@ export class CacaoLotsController {
   constructor(private readonly service: CacaoLotsService) {}
 
   @Get()
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('CACAO', 'view')
   findAll(
     @Req() req: any,
     @Query()
@@ -25,13 +28,15 @@ export class CacaoLotsController {
   }
 
   @Get('next-code')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('CACAO', 'view')
   nextCode(@Req() req: any) {
     return this.service.getNextCode(req.user.companyId);
   }
 
   @Get(':id')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('CACAO', 'view')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.service.findOne(id, req.user.companyId);
   }

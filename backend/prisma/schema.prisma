@@ -8,52 +8,59 @@ datasource db {
 }
 
 model Company {
-  id             Int      @id @default(autoincrement())
-  name           String
-  slug           String   @unique
-  logoUrl        String?
-  primaryColor   String   @default("#100F31")
-  secondaryColor String   @default("#12375F")
-  accentColor    String   @default("#EE3B1B")
-  bgColor        String   @default("#f8fafc")
-  textColor      String   @default("#1e293b")
-  domain         String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  users          User[]
-  sections       CompanySection[]
-  custodias      Custodia[]
-  kanbanColumns  KanbanColumn[]
-  candidates     Candidate[]
-  contractTemplates ContractTemplate[]
-  contracts      Contract[]
-  certifications Certification[]
-  logTemplates   LogTemplate[]
-  logEntries     LogEntry[]
-  driveFolders   EmployeeDriveFolder[]
-  documentTypes  DocumentType[]
-  employeeDocuments EmployeeDocument[]
-  folderConfigs  FolderConfig[]
-  jobPositions   JobPosition[]
-  sistemasVerificacion SistemaVerificacion[]
-  movimientosPersonal  MovimientoPersonal[]
-  documentReviews    DocumentReview[]
-  documentReviewHistory DocumentReviewHistory[]
-  salesGoals        SalesGoal[]
-  clientVisits      ClientVisit[]
-  leads             Lead[]
-  salesApiKeys      SalesApiKey[]
-  salesTemplates    SalesTemplate[]
-  salesContracts    SalesContract[]
-  entidades            Entidad[]
-  requisitosDocumento  RequisitoDocumento[]
-  asignacionesGuardia  AsignacionGuardia[]
-  alertasVencimiento   AlertaVencimiento[]
-  guardiaContactos     GuardiaContacto[]
-  guardiaFichasPersonales GuardiaFichaPersonal[]
-  personalFieldDefinitions PersonalFieldDefinition[]
+  id                        Int                        @id @default(autoincrement())
+  name                      String
+  slug                      String                     @unique
+  logoUrl                   String?
+  primaryColor              String                     @default("#100F31")
+  secondaryColor            String                     @default("#12375F")
+  accentColor               String                     @default("#EE3B1B")
+  bgColor                   String                     @default("#f8fafc")
+  textColor                 String                     @default("#1e293b")
+  domain                    String?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  users                     User[]
+  sections                  CompanySection[]
+  custodias                 Custodia[]
+  contractTemplates         ContractTemplate[]
+  contracts                 Contract[]
+  certifications            Certification[]
+  logTemplates              LogTemplate[]
+  logEntries                LogEntry[]
+  driveFolders              EmployeeDriveFolder[]
+  documentTypes             DocumentType[]
+  employeeDocuments         EmployeeDocument[]
+  folderConfigs             FolderConfig[]
+  jobPositions              JobPosition[]
+  sistemasVerificacion      SistemaVerificacion[]
+  movimientosPersonal       MovimientoPersonal[]
+  documentReviews           DocumentReview[]
+  documentReviewHistory     DocumentReviewHistory[]
+  salesGoals                SalesGoal[]
+  clientVisits              ClientVisit[]
+  leads                     Lead[]
+  salesApiKeys              SalesApiKey[]
+  salesTemplates            SalesTemplate[]
+  salesContracts            SalesContract[]
+  entidades                 Entidad[]
+  requisitosDocumento       RequisitoDocumento[]
+  asignacionesGuardia       AsignacionGuardia[]
+  alertasVencimiento        AlertaVencimiento[]
+  guardiaContactos          GuardiaContacto[]
+  guardiaFichasPersonales   GuardiaFichaPersonal[]
+  personalFieldDefinitions  PersonalFieldDefinition[]
   administrativeStaffFichas AdministrativeStaffFicha[]
-  cedulaMergeLogs      CedulaMergeLog[]
+  cedulaMergeLogs           CedulaMergeLog[]
+  trainings                 Training[]
+  complaints                Complaint[]
+  complaintStages           ComplaintStage[]
+  complaintStageChanges     ComplaintStageChange[]
+  complaintFieldDefinitions ComplaintFieldDefinition[]
+  surveys                   Survey[]
+  notificationConfigs       NotificationConfig[]
+  ticketsSoporte            TicketSoporte[]
+  sistemasDriveConfig       SistemasDriveConfig?
 }
 
 model Department {
@@ -75,53 +82,59 @@ model Role {
 }
 
 model User {
-  id                 Int              @id @default(autoincrement())
-  fullName           String
-  email              String           @unique
-  password           String?
-  documentNumber     String?
-  position           String?
-  isActive           Boolean          @default(true)
-  departmentId       Int?
-  roleId             Int?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  role               UserRole         @default(EMPLOYEE)
-  activeAgentId      Int?
-  companyId          Int?
-  aiLogs             AiLog[]
-  conversations      Conversation[]
-  createdProjects    Project[]
-  projectMemberships ProjectMember[]
-  taskAssignees      TaskAssignee[]
-  toolAssignments    ToolAssignment[]
-  toolAudits         ToolAuditLog[]
-  activeAgent        Agent?           @relation("UserActiveAgent", fields: [activeAgentId], references: [id])
-  company            Company?         @relation(fields: [companyId], references: [id])
-  department         Department?      @relation(fields: [departmentId], references: [id])
-  roleRelation       Role?            @relation(fields: [roleId], references: [id])
-  agentLinks         UserAgent[]
-  permissions        UserPermission[]
-  createdCustodias   Custodia[]
-  createdCandidates  Candidate[]
-  candidateMoves     CandidateHistory[]
-  contractTemplates  ContractTemplate[]
-  contracts          Contract[]
-  certifications     Certification[]
-  logTemplates       LogTemplate[]
-  logEntries         LogEntry[]
-  salesGoals         SalesGoal[]
-  clientVisits       ClientVisit[]
-  assignedLeads      Lead[]
-  createdSalesTemplates   SalesTemplate[]
-  createdSalesContracts   SalesContract[]
-  documentReviews         DocumentReview[]
-  documentReviewActions   DocumentReviewHistory[]
-  asignacionesCreadas     AsignacionGuardia[]
-  expiryConfirmations     EmployeeDocument[]
-  movimientosPersonalCreados          MovimientoPersonal[]
-  movimientoPersonalItemsCompletados  MovimientoPersonalItem[]
-  cedulaMerges                        CedulaMergeLog[]
+  id                                 Int                      @id @default(autoincrement())
+  fullName                           String
+  email                              String                   @unique
+  password                           String?
+  documentNumber                     String?
+  position                           String?
+  isActive                           Boolean                  @default(true)
+  departmentId                       Int?
+  roleId                             Int?
+  createdAt                          DateTime                 @default(now())
+  updatedAt                          DateTime                 @updatedAt
+  role                               UserRole                 @default(EMPLOYEE)
+  activeAgentId                      Int?
+  companyId                          Int?
+  aiLogs                             AiLog[]
+  conversations                      Conversation[]
+  createdProjects                    Project[]
+  projectMemberships                 ProjectMember[]
+  taskAssignees                      TaskAssignee[]
+  toolAssignments                    ToolAssignment[]
+  toolAudits                         ToolAuditLog[]
+  activeAgent                        Agent?                   @relation("UserActiveAgent", fields: [activeAgentId], references: [id])
+  company                            Company?                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  department                         Department?              @relation(fields: [departmentId], references: [id])
+  roleRelation                       Role?                    @relation(fields: [roleId], references: [id])
+  agentLinks                         UserAgent[]
+  permissions                        UserPermission[]
+  createdCustodias                   Custodia[]
+  contractTemplates                  ContractTemplate[]
+  contracts                          Contract[]
+  certifications                     Certification[]
+  logTemplates                       LogTemplate[]
+  logEntries                         LogEntry[]
+  salesGoals                         SalesGoal[]
+  clientVisits                       ClientVisit[]
+  assignedLeads                      Lead[]
+  createdSalesTemplates              SalesTemplate[]
+  createdSalesContracts              SalesContract[]
+  documentReviews                    DocumentReview[]
+  documentReviewActions              DocumentReviewHistory[]
+  asignacionesCreadas                AsignacionGuardia[]
+  expiryConfirmations                EmployeeDocument[]
+  movimientosPersonalCreados         MovimientoPersonal[]
+  movimientoPersonalItemsCompletados MovimientoPersonalItem[]
+  cedulaMerges                       CedulaMergeLog[]
+  createdTrainings                   Training[]               @relation("TrainingCreator")
+  verifiedTrainings                  Training[]               @relation("TrainingVerifier")
+  submittedComplaints                Complaint[]
+  complaintStageChanges              ComplaintStageChange[]
+  createdSurveys                     Survey[]                 @relation("SurveyCreator")
+  surveyRecipientOf                  SurveyRecipient[]
+  surveyResponses                    SurveyResponse[]         @relation("SurveyRespondent")
+  ticketsSoporteCreados              TicketSoporte[]
 }
 
 model Project {
@@ -565,6 +578,7 @@ model CompanySection {
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   section   String
   createdAt DateTime @default(now())
+
   @@unique([companyId, section])
 }
 
@@ -576,6 +590,7 @@ model UserPermission {
   canView   Boolean  @default(true)
   canWrite  Boolean  @default(false)
   createdAt DateTime @default(now())
+
   @@unique([userId, section])
 }
 
@@ -618,18 +633,10 @@ model Custodia {
   creator          User           @relation(fields: [createdBy], references: [id])
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
+
   @@index([companyId])
   @@index([estado])
   @@index([tipoCustodia])
-}
-
-enum CandidateStatus {
-  POSTULADO
-  VALIDACION_DOCUMENTAL
-  TEST_PSICOLOGICO
-  TEST_MEDICO
-  APROBADO
-  RECHAZADO
 }
 
 enum LogType {
@@ -639,83 +646,25 @@ enum LogType {
   SALIDA_PERSONAL
 }
 
-model KanbanColumn {
-  id           Int      @id @default(autoincrement())
-  name         String
-  position     Int      @default(0)
-  color        String   @default("#718096")
-  // Al mover un candidato a la columna marcada, se crea automáticamente su
-  // caso de "Entrada" en MovimientoPersonal. Solo una columna por empresa
-  // puede tener este valor en true (se aplica en KanbanService).
-  triggersHire Boolean  @default(false)
-  companyId    Int
-  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  candidates   Candidate[]
-  createdAt    DateTime @default(now())
-  @@unique([companyId, name])
-  @@index([companyId])
-}
-
-model Candidate {
-  id               Int              @id @default(autoincrement())
-  fullName         String
-  cedula           String
-  phone            String?
-  email            String?
-  positionApplied  String
-  availability     String?
-  salaryExpected   Float?
-  education        String?
-  experience       String?
-  references       String?
-  observations     String?
-  cvUrl            String?
-  status           CandidateStatus  @default(POSTULADO)
-  columnId         Int?
-  column           KanbanColumn?    @relation(fields: [columnId], references: [id])
-  companyId        Int
-  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy        Int
-  creator          User             @relation(fields: [createdBy], references: [id])
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  history          CandidateHistory[]
-  movimientosPersonal MovimientoPersonal[]
-  @@unique([companyId, cedula])
-  @@index([companyId])
-}
-
-model CandidateHistory {
-  id          Int      @id @default(autoincrement())
-  candidateId Int
-  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  fromColumn  String?
-  toColumn    String
-  notes       String?
-  performedBy Int
-  performer   User    @relation(fields: [performedBy], references: [id])
-  createdAt   DateTime @default(now())
-}
-
 model ContractTemplate {
-  id          Int          @id @default(autoincrement())
-  name        String
+  id        Int             @id @default(autoincrement())
+  name      String
   // Texto libre (no enum): el usuario define sus propios tipos de documento
   // ("Contrato Término Indefinido", "Acta de Entrega de Uniformes",
   // "Constancia Laboral", etc.) sin necesitar un cambio de código/migración
   // por cada tipo nuevo.
-  type        String
+  type      String
   // Link de Drive del .docx fuente y ruta local tras descargarlo — mismo
   // patrón que SalesTemplate (ventas), ver ventas-templates.service.ts.
-  driveUrl    String?
-  docxPath    String?
-  companyId   Int
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy   Int
-  creator     User         @relation(fields: [createdBy], references: [id])
-  createdAt   DateTime     @default(now())
-  fields      ContractField[]
-  contracts   Contract[]
+  driveUrl  String?
+  docxPath  String?
+  companyId Int
+  company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy Int
+  creator   User            @relation(fields: [createdBy], references: [id])
+  createdAt DateTime        @default(now())
+  fields    ContractField[]
+  contracts Contract[]
 }
 
 // Una fila por variable ([NOMBRE], [CEDULA], etc.) detectada en el .docx de
@@ -736,9 +685,9 @@ model ContractField {
 model Contract {
   id            Int              @id @default(autoincrement())
   // Identifica al guardia por cédula (mismo patrón que AsignacionGuardia/
-  // GuardiaFichaPersonal/Certification), no por FK a Candidate — así sigue
-  // funcionando aunque el guardia ya no tenga un registro vivo en el
-  // pipeline de reclutamiento.
+  // GuardiaFichaPersonal/Certification), no por FK — así sigue funcionando
+  // aunque el guardia ya no tenga un registro vivo en el pipeline de
+  // reclutamiento.
   cedula        String
   nombreGuardia String
   templateId    Int
@@ -752,125 +701,355 @@ model Contract {
   creator       User             @relation(fields: [createdBy], references: [id])
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
+
   @@index([companyId, cedula])
 }
 
 model Certification {
-  id          Int      @id @default(autoincrement())
+  id           Int                  @id @default(autoincrement())
   employeeName String
-  cedula      String
-  type        String
-  issueDate   DateTime
-  expiryDate  DateTime
-  status      String   @default("ACTIVE")
-  documentUrl String?
-  companyId   Int
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy   Int
-  creator     User     @relation(fields: [createdBy], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  alerts      CertificationAlert[]
+  cedula       String
+  type         String
+  issueDate    DateTime
+  expiryDate   DateTime
+  status       String               @default("ACTIVE")
+  documentUrl  String?
+  companyId    Int
+  company      Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy    Int
+  creator      User                 @relation(fields: [createdBy], references: [id])
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  alerts       CertificationAlert[]
+
   @@index([companyId])
 }
 
 model CertificationAlert {
-  id              Int            @id @default(autoincrement())
+  id              Int           @id @default(autoincrement())
   certificationId Int
-  certification   Certification  @relation(fields: [certificationId], references: [id], onDelete: Cascade)
+  certification   Certification @relation(fields: [certificationId], references: [id], onDelete: Cascade)
   daysBefore      Int
   sentAt          DateTime?
-  createdAt       DateTime       @default(now())
+  createdAt       DateTime      @default(now())
+}
+
+// Plan anual de capacitaciones (o una capacitación puntual, ver
+// isAnnualPlan). El cumplimiento es GENERAL, no por guardia: se marca
+// completada una sola vez (completed/completedAt/completedBy), no hay
+// seguimiento de qué guardia específico asistió — ver TrainingService.
+model Training {
+  id           Int                  @id @default(autoincrement())
+  name         String
+  // Categoría de la capacitación (ej. "INDUCCION", "SEGURIDAD_FISICA",
+  // "OTRO" + texto libre) — se maneja como catálogo en el frontend, no como
+  // enum de Prisma, para poder agregar tipos nuevos sin migración.
+  type         String               @default("OTRO")
+  description  String?
+  dueDate      DateTime?
+  isAnnualPlan Boolean              @default(false)
+  completed    Boolean              @default(false)
+  completedAt  DateTime?
+  completedBy  Int?
+  verifier     User?                @relation("TrainingVerifier", fields: [completedBy], references: [id])
+  companyId    Int
+  company      Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy    Int
+  creator      User                 @relation("TrainingCreator", fields: [createdBy], references: [id])
+  createdAt    DateTime             @default(now())
+  attachments  TrainingAttachment[]
+
+  @@index([companyId])
+}
+
+// Varios archivos/enlaces por capacitación — tanto documentos del plan
+// (kind DOCUMENTO) como evidencia de que se realizó (kind EVIDENCIA), sin
+// límite de cantidad.
+model TrainingAttachment {
+  id         Int      @id @default(autoincrement())
+  trainingId Int
+  training   Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  url        String
+  name       String?
+  kind       String   @default("DOCUMENTO")
+  createdAt  DateTime @default(now())
+
+  @@index([trainingId])
+}
+
+// Buzón de quejas con proceso: submittedBy queda null cuando isAnonymous es
+// true (nunca se guarda el autor de una queja anónima, ni siquiera oculto).
+// `status` es un `key` libre de ComplaintStage (no un enum de Prisma desde la
+// Fase 5): cada empresa define/edita sus propias etapas desde la UI. La FK
+// compuesta (companyId, status) -> ComplaintStage(companyId, key) garantiza
+// que siempre apunte a una etapa que existe de esa misma empresa — se nombra
+// explícitamente "ComplaintToStage" para no chocar con la relación
+// Complaint.company -> Company, que también usa companyId.
+model Complaint {
+  id                Int                    @id @default(autoincrement())
+  description       String
+  isAnonymous       Boolean                @default(false)
+  submittedBy       Int?
+  submitter         User?                  @relation(fields: [submittedBy], references: [id])
+  companyId         Int
+  company           Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  status            String                 @default("RECIBIDA")
+  stage             ComplaintStage         @relation("ComplaintToStage", fields: [companyId, status], references: [companyId, key])
+  // Respuestas a los campos extra que RRHH haya configurado (ver
+  // ComplaintFieldDefinition), keyed por el id del campo — igual patrón que
+  // GuardiaFichaPersonal.camposPersonalizados.
+  customFieldValues Json                   @default("{}")
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  stageChanges      ComplaintStageChange[]
+
+  @@index([companyId])
+  @@index([companyId, status])
+}
+
+// Etapa editable del proceso de quejas y sugerencias (Fase 5: reemplaza el
+// enum fijo ComplaintStatus). `key` es el valor estable que se persiste en
+// Complaint.status/ComplaintStageChange.fromStatus/toStatus — no cambia
+// después de creada la etapa, aunque se edite `label`. Borrar una etapa con
+// quejas activas en ella está bloqueado (ver ComplaintStageService.delete),
+// igual que borrar la etapa marcada isInitial sin haber marcado otra antes.
+model ComplaintStage {
+  id         Int         @id @default(autoincrement())
+  companyId  Int
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  key        String
+  label      String
+  color      String      @default("#718096")
+  order      Int         @default(0)
+  isInitial  Boolean     @default(false)
+  isFinal    Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+  complaints Complaint[] @relation("ComplaintToStage")
+
+  @@unique([companyId, key])
+  @@index([companyId])
+}
+
+// Campos adicionales que RRHH puede agregar al formulario de "Enviar una
+// queja" (ej. Departamento, Cargo) — la descripción y el checkbox de
+// anónimo siempre están, esto es solo lo extra.
+model ComplaintFieldDefinition {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  label     String
+  // 'TEXT' | 'NUMBER' | 'DATE' — mismo patrón de PersonalFieldDefinition.type:
+  // String simple, no enum de Prisma, para no requerir migración al agregar.
+  type      String   @default("TEXT")
+  required  Boolean  @default(false)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+}
+
+// Historial append-only de cambios de etapa. fromStatus/toStatus se guardan
+// como texto simple SIN relación a ComplaintStage (a propósito): una etapa
+// borrada en el pasado debe poder seguir apareciendo aquí sin bloquear su
+// propio borrado ni perder el texto histórico.
+model ComplaintStageChange {
+  id          Int       @id @default(autoincrement())
+  complaintId Int
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  fromStatus  String
+  toStatus    String
+  notes       String?
+  changedBy   Int
+  changer     User      @relation(fields: [changedBy], references: [id])
+  companyId   Int
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@index([complaintId])
+}
+
+enum SurveyQuestionType {
+  SHORT_TEXT
+  LONG_TEXT
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  RATING
+}
+
+enum SurveyStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+// Encuesta tipo "Google Forms": RRHH define preguntas dinámicas, elige a
+// qué usuarios de la empresa enviarla (SurveyRecipient), y cada uno envía
+// como máximo una respuesta (SurveyResponse, identificada — ver
+// SurveyService). No llega a guardias sin cuenta en la app.
+model Survey {
+  id          Int               @id @default(autoincrement())
+  title       String
+  description String?
+  status      SurveyStatus      @default(DRAFT)
+  companyId   Int
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy   Int
+  creator     User              @relation("SurveyCreator", fields: [createdBy], references: [id])
+  createdAt   DateTime          @default(now())
+  questions   SurveyQuestion[]
+  recipients  SurveyRecipient[]
+  responses   SurveyResponse[]
+
+  @@index([companyId])
+}
+
+model SurveyQuestion {
+  id       Int                @id @default(autoincrement())
+  surveyId Int
+  survey   Survey             @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  label    String
+  type     SurveyQuestionType
+  // Para SINGLE_CHOICE/MULTIPLE_CHOICE: array de strings con las opciones.
+  options  Json?
+  required Boolean            @default(true)
+  order    Int                @default(0)
+  answers  SurveyAnswer[]
+
+  @@index([surveyId])
+}
+
+model SurveyRecipient {
+  id          Int       @id @default(autoincrement())
+  surveyId    Int
+  survey      Survey    @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  userId      Int
+  user        User      @relation(fields: [userId], references: [id])
+  respondedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([surveyId, userId])
+  @@index([userId])
+}
+
+model SurveyResponse {
+  id           Int            @id @default(autoincrement())
+  surveyId     Int
+  survey       Survey         @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  respondentId Int
+  respondent   User           @relation("SurveyRespondent", fields: [respondentId], references: [id])
+  submittedAt  DateTime       @default(now())
+  answers      SurveyAnswer[]
+
+  @@unique([surveyId, respondentId])
+  @@index([surveyId])
+}
+
+model SurveyAnswer {
+  id         Int            @id @default(autoincrement())
+  responseId Int
+  response   SurveyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  questionId Int
+  question   SurveyQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  // SHORT_TEXT/LONG_TEXT/RATING (como string) → valueText.
+  valueText  String?
+  // SINGLE_CHOICE (string) / MULTIPLE_CHOICE (string[]) → valueJson.
+  valueJson  Json?
+
+  @@index([responseId])
+  @@index([questionId])
 }
 
 model LogTemplate {
-  id        Int      @id @default(autoincrement())
+  id        Int        @id @default(autoincrement())
   name      String
   type      LogType
   content   String
   companyId Int
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdBy Int
-  creator   User     @relation(fields: [createdBy], references: [id])
-  createdAt DateTime @default(now())
+  creator   User       @relation(fields: [createdBy], references: [id])
+  createdAt DateTime   @default(now())
   entries   LogEntry[]
 }
 
 model LogEntry {
-  id         Int         @id @default(autoincrement())
+  id         Int          @id @default(autoincrement())
   templateId Int?
   template   LogTemplate? @relation(fields: [templateId], references: [id])
   title      String
   content    String
   type       LogType
   companyId  Int
-  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company    Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdBy  Int
-  creator    User        @relation(fields: [createdBy], references: [id])
-  createdAt  DateTime    @default(now())
+  creator    User         @relation(fields: [createdBy], references: [id])
+  createdAt  DateTime     @default(now())
 }
 
 model EmployeeDriveFolder {
-  id          Int      @id @default(autoincrement())
+  id           Int       @id @default(autoincrement())
   employeeName String
-  cedula      String
+  cedula       String
   // Rol/puesto extraído del nombre de carpeta "Nombre Apellido - Puesto" del
   // bucket Personal Administrativo (folderType='PERSONAL_ADMIN'). Null para
   // filas de Custodios/Personal (bucket CUMPLIMIENTO), que no lo tienen.
-  puesto      String?
-  folderId    String
-  folderUrl   String
-  folderType  String   @default("PERSONAL")
-  lastSyncAt  DateTime?
-  companyId   Int
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
+  puesto       String?
+  folderId     String
+  folderUrl    String
+  folderType   String    @default("PERSONAL")
+  lastSyncAt   DateTime?
+  companyId    Int
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+
   @@unique([companyId, cedula])
 }
 
 model DocumentType {
-  id          Int      @id @default(autoincrement())
-  name        String
-  folder      String
-  required    Boolean  @default(true)
-  companyId   Int
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  reviews     DocumentReview[]
+  id        Int              @id @default(autoincrement())
+  name      String
+  folder    String
+  required  Boolean          @default(true)
+  companyId Int
+  company   Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+  reviews   DocumentReview[]
+
   @@unique([companyId, folder, name])
 }
 
 model EmployeeDocument {
-  id             Int      @id @default(autoincrement())
-  employeeName   String
-  cedula         String
-  fileName       String
-  fileUrl        String
-  fileType       String
-  driveFileId    String   @unique
-  folder         String
-  companyId      Int
-  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt      DateTime @default(now())
+  id                 Int                 @id @default(autoincrement())
+  employeeName       String
+  cedula             String
+  fileName           String
+  fileUrl            String
+  fileType           String
+  driveFileId        String              @unique
+  folder             String
+  companyId          Int
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt          DateTime            @default(now())
   // Vencimiento del documento (cédula, licencia, certificado, etc). Fase A:
   // RRHH las carga manualmente vía PATCH .../drive/documents/:driveFileId/expiry.
   // Fase B (futura): extracción asistida por IA desde el PDF, con esta misma
   // confirmación manual como paso final antes de dar la fecha por buena.
-  issueDate         DateTime?
-  expiryDate        DateTime?
-  expiryConfirmedBy Int?
-  expiryConfirmer   User?     @relation(fields: [expiryConfirmedBy], references: [id])
+  issueDate          DateTime?
+  expiryDate         DateTime?
+  expiryConfirmedBy  Int?
+  expiryConfirmer    User?               @relation(fields: [expiryConfirmedBy], references: [id])
   alertasVencimiento AlertaVencimiento[]
+
   @@unique([companyId, driveFileId])
 }
 
 // Cliente/sitio al que se asignan guardias. tipo determina qué RequisitoDocumento
 // (aplicaA=PUBLICA/PRIVADA) le aplican además de los GLOBAL y los propios (ENTIDAD).
 model Entidad {
-  id        Int      @id @default(autoincrement())
-  nombre    String
-  tipo      String   // 'PUBLICA' | 'PRIVADA'
-  activo    Boolean  @default(true)
+  id            Int                  @id @default(autoincrement())
+  nombre        String
+  tipo          String // 'PUBLICA' | 'PRIVADA'
+  activo        Boolean              @default(true)
   // ID de la carpeta de Drive vinculada, si ya se sincronizó al menos una
   // vez (ver DriveService.syncEntidadesFolder). Ancla la identidad de la
   // entidad a una carpeta estable: si RRHH renombra la carpeta después, el
@@ -881,12 +1060,13 @@ model Entidad {
   // creadas antes de que existiera este campo (se ancla sola en el próximo
   // sync que las encuentre por nombre).
   driveFolderId String?
-  companyId Int
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  asignaciones AsignacionGuardia[]
-  requisitos   RequisitoDocumento[]
+  companyId     Int
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  asignaciones  AsignacionGuardia[]
+  requisitos    RequisitoDocumento[]
+
   @@index([companyId])
 }
 
@@ -894,27 +1074,28 @@ model Entidad {
 // aplicaA = GLOBAL (mínimo de toda la empresa) | PUBLICA | PRIVADA (según el
 // tipo de Entidad) | ENTIDAD (específico, requiere entidadId).
 model RequisitoDocumento {
-  id               Int      @id @default(autoincrement())
-  nombre           String
-  aplicaA          String
-  entidadId        Int?
-  entidad          Entidad? @relation(fields: [entidadId], references: [id], onDelete: Cascade)
+  id                 Int                 @id @default(autoincrement())
+  nombre             String
+  aplicaA            String
+  entidadId          Int?
+  entidad            Entidad?            @relation(fields: [entidadId], references: [id], onDelete: Cascade)
   // Cada cuanto vence este tipo de documento (null = no vence / no aplica)
-  duracionValor    Int?
-  duracionUnidad   String?  // 'DIAS' | 'MESES' | 'ANIOS'
+  duracionValor      Int?
+  duracionUnidad     String? // 'DIAS' | 'MESES' | 'ANIOS'
   // Con cuanta anticipacion avisar antes del vencimiento (Fase C, sin efecto todavía en Fase A)
-  anticipacionValor  Int    @default(30)
-  anticipacionUnidad String @default("DIAS")  // 'DIAS' | 'SEMANAS' | 'MESES'
-  companyId        Int
-  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt        DateTime @default(now())
+  anticipacionValor  Int                 @default(30)
+  anticipacionUnidad String              @default("DIAS") // 'DIAS' | 'SEMANAS' | 'MESES'
+  companyId          Int
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt          DateTime            @default(now())
   alertasVencimiento AlertaVencimiento[]
+
   @@index([companyId])
   @@index([entidadId])
 }
 
 // Periodo en el que un guardia (identificado por cedula, sin tabla maestra
-// propia — mismo patrón que Certification/Candidate/Custodia en este schema)
+// propia — mismo patrón que Certification/Custodia en este schema)
 // está asignado a una Entidad. fechaFin null = asignación vigente.
 // Historial de solo lectura: lo escribe únicamente el sync de Drive
 // (DriveService.syncEntidadesFolder), nunca un formulario manual — ver
@@ -933,6 +1114,7 @@ model AsignacionGuardia {
   createdBy     Int
   creator       User      @relation(fields: [createdBy], references: [id])
   createdAt     DateTime  @default(now())
+
   @@index([companyId, cedula])
   @@index([entidadId])
 }
@@ -949,7 +1131,23 @@ model GuardiaContacto {
   companyId Int
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   updatedAt DateTime @updatedAt
+
   @@unique([companyId, cedula])
+}
+
+model NotificationConfig {
+  id               Int      @id @default(autoincrement())
+  companyId        Int
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  senderEmail      String?
+  senderName       String?
+  whatsappProvider String?
+  whatsappApiKey   String?
+  whatsappFrom     String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([companyId])
 }
 
 // Ficha personal editable desde la app (no desde Drive). Es la fuente de la
@@ -986,6 +1184,7 @@ model GuardiaFichaPersonal {
   // el resto del módulo).
   camposPersonalizados       Json      @default("{}")
   updatedAt                  DateTime  @updatedAt
+
   @@unique([companyId, cedula])
 }
 
@@ -1000,7 +1199,7 @@ model PersonalFieldDefinition {
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   key       String
   label     String
-  type      String   // 'TEXT' | 'NUMBER' | 'DATE'
+  type      String // 'TEXT' | 'NUMBER' | 'DATE'
   // A qué ficha pertenece este campo — 'GUARDIA' (GuardiaFichaPersonal) o
   // 'PERSONAL_ADMIN' (AdministrativeStaffFicha). Cada grupo gestiona sus
   // propios campos personalizados sin mezclarse entre sí.
@@ -1008,9 +1207,14 @@ model PersonalFieldDefinition {
   // En qué sección de la ficha se muestra — 'PERSONAL' (Datos personales) o
   // 'LABORAL' (Datos laborales). Fijo desde la creación, igual que `type`.
   category  String   @default("PERSONAL")
+  // Puramente informativo en el frontend (ver ComplianceChecklist/asterisco
+  // rojo en GuardiaFichaModal/AdministrativoDetalleModal) — nunca bloquea
+  // guardar la ficha ni se mezcla con el % de cumplimiento documental.
+  required  Boolean  @default(false)
   order     Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
   @@unique([companyId, scope, key])
   @@index([companyId])
 }
@@ -1036,6 +1240,7 @@ model AdministrativeStaffFicha {
   salarioAcordado            Float?
   camposPersonalizados       Json      @default("{}")
   updatedAt                  DateTime  @updatedAt
+
   @@unique([companyId, cedula])
 }
 
@@ -1051,10 +1256,11 @@ model CedulaMergeLog {
   cedulaOrigen  String
   cedulaDestino String
   nombreDestino String
-  resumen       Json     // snapshot de cuántas filas se movieron por tabla
+  resumen       Json // snapshot de cuántas filas se movieron por tabla
   mergedBy      Int
   merger        User     @relation(fields: [mergedBy], references: [id])
   mergedAt      DateTime @default(now())
+
   @@index([companyId])
 }
 
@@ -1066,17 +1272,18 @@ model CedulaMergeLog {
 // Los intentos fallidos (success=false, p. ej. delegación de dominio aún sin
 // configurar) se reintentan al día siguiente en vez de tratarse como enviados.
 model AlertaVencimiento {
-  id                   Int      @id @default(autoincrement())
+  id                   Int                @id @default(autoincrement())
   employeeDocumentId   Int
-  employeeDocument     EmployeeDocument @relation(fields: [employeeDocumentId], references: [id], onDelete: Cascade)
+  employeeDocument     EmployeeDocument   @relation(fields: [employeeDocumentId], references: [id], onDelete: Cascade)
   requisitoDocumentoId Int
   requisitoDocumento   RequisitoDocumento @relation(fields: [requisitoDocumentoId], references: [id], onDelete: Cascade)
-  expiryDateAlertado   DateTime  // snapshot de EmployeeDocument.expiryDate al momento del envío
-  sentAt               DateTime  @default(now())
-  success              Boolean   @default(true)
+  expiryDateAlertado   DateTime // snapshot de EmployeeDocument.expiryDate al momento del envío
+  sentAt               DateTime           @default(now())
+  success              Boolean            @default(true)
   errorMessage         String?
   companyId            Int
-  company              Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company              Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   @@unique([employeeDocumentId, requisitoDocumentoId, expiryDateAlertado])
   @@index([companyId])
 }
@@ -1089,11 +1296,17 @@ model AlertaVencimiento {
 model FolderConfig {
   id              Int      @id @default(autoincrement())
   driveFolderId   String
+  // Enlace completo tal como lo pegó la persona (para volver a mostrarlo
+  // igual al recargar la pantalla) — driveFolderId es solo el ID extraído de
+  // ahí, el que de verdad usan las llamadas a la API de Drive. Nullable
+  // porque las filas creadas antes de este campo no lo tienen.
+  driveFolderLink String?
   driveFolderName String
   type            String   @default("CUMPLIMIENTO")
   companyId       Int
   company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt       DateTime @default(now())
+
   @@unique([companyId, type])
 }
 
@@ -1129,41 +1342,41 @@ enum LeadStatus {
 }
 
 model SalesGoal {
-  id               Int      @id @default(autoincrement())
-  userId           Int
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  weeklyVisitGoal  Int      @default(20)
-  year             Int
-  weekNumber       Int
-  companyId        Int
-  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weeklyVisitGoal Int      @default(20)
+  year            Int
+  weekNumber      Int
+  companyId       Int
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@unique([companyId, userId, year, weekNumber])
 }
 
 model ClientVisit {
-  id              Int          @id @default(autoincrement())
+  id              Int           @id @default(autoincrement())
   userId          Int
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   clientName      String
   clientAddress   String?
   clientPhone     String?
   visitDate       DateTime
-  status          VisitStatus  @default(PLANNED)
+  status          VisitStatus   @default(PLANNED)
   checkInTime     DateTime?
   checkInLat      Float?
   checkInLng      Float?
-  isVerified      Boolean      @default(false)
+  isVerified      Boolean       @default(false)
   commercialOffer String?
-  quotedAmount    Float?       @default(0)
+  quotedAmount    Float?        @default(0)
   outcome         VisitOutcome?
   notes           String?
   companyId       Int
-  company         Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  company         Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   @@index([companyId, userId])
 }
@@ -1191,13 +1404,13 @@ model Lead {
 }
 
 model SalesApiKey {
-  id          Int      @id @default(autoincrement())
-  name        String
-  apiKey      String   @unique
-  isActive    Boolean  @default(true)
-  companyId   Int
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  name      String
+  apiKey    String   @unique
+  isActive  Boolean  @default(true)
+  companyId Int
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
   @@index([companyId])
 }
@@ -1216,6 +1429,13 @@ model JobPosition {
   archivosRequeridos Json     @default("[]")
   // ABIERTA (recibe candidatos) | CERRADA (ya no recibe candidatos)
   estado             String   @default("ABIERTA")
+  // GUARDIA | ADMINISTRATIVO — decide a qué carpeta raíz de Drive va la carpeta
+  // del postulante cuando RRHH lo marca como contratado (ver
+  // DriveService.contratarCandidato). El default GUARDIA preserva el
+  // comportamiento previo a este campo, cuando contratar siempre creaba un
+  // guardia. Ojo: los dos destinos nombran la carpeta distinto — Guardias usa
+  // "Nombre - Cédula" y Personal Administrativo usa "Nombre - Puesto".
+  tipoContratacion   String   @default("GUARDIA")
   driveFileId        String?
   // Carpeta propia del puesto dentro de RECLUTAMIENTO (contiene el JSON y las
   // carpetas de los candidatos postulados a esta vacante).
@@ -1244,15 +1464,15 @@ enum EstadoMovimientoPersonal {
 // de checklist se generan al abrir un caso; el registro en el portal externo
 // lo hace una persona.
 model SistemaVerificacion {
-  id        Int      @id @default(autoincrement())
+  id        Int                      @id @default(autoincrement())
   nombre    String
   urlPortal String?
-  activo    Boolean  @default(true)
-  orden     Int      @default(0)
+  activo    Boolean                  @default(true)
+  orden     Int                      @default(0)
   companyId Int
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  company   Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
   items     MovimientoPersonalItem[]
 
   @@unique([companyId, nombre])
@@ -1269,10 +1489,8 @@ model MovimientoPersonal {
   nombreGuardia String
   tipo          TipoMovimientoPersonal
   estado        EstadoMovimientoPersonal @default(EN_PROCESO)
-  // Trazabilidad de origen, texto libre: "KANBAN_COLUMNA:<nombre>" | "MANUAL"
+  // Trazabilidad de origen, texto libre: "RECLUTAMIENTO_CONTRATAR" | "MANUAL_GUARDIAS_LIST"
   origen        String
-  candidateId   Int?
-  candidate     Candidate?               @relation(fields: [candidateId], references: [id], onDelete: SetNull)
   companyId     Int
   company       Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdBy     Int
@@ -1311,22 +1529,22 @@ model MovimientoPersonalItem {
 // La unicidad se define con indices parciales en la migracion SQL, porque
 // documentTypeId es nullable y Prisma no soporta indices unicos parciales.
 model DocumentReview {
-  id                  Int      @id @default(autoincrement())
+  id                  Int                     @id @default(autoincrement())
   cedula              String
   documentTypeId      Int?
-  documentType        DocumentType? @relation(fields: [documentTypeId], references: [id], onDelete: Cascade)
-  driveFileId         String?  // solo para archivos sueltos (documentTypeId null)
-  status              String   @default("PENDIENTE") // PENDIENTE | APROBADO | RECHAZADO
+  documentType        DocumentType?           @relation(fields: [documentTypeId], references: [id], onDelete: Cascade)
+  driveFileId         String? // solo para archivos sueltos (documentTypeId null)
+  status              String                  @default("PENDIENTE") // PENDIENTE | APROBADO | RECHAZADO
   reason              String?
-  reviewedDriveFileId String?  // snapshot del archivo revisado, para detectar re-subidas
+  reviewedDriveFileId String? // snapshot del archivo revisado, para detectar re-subidas
   reviewedFileName    String?
   reviewedBy          Int
-  reviewer            User     @relation(fields: [reviewedBy], references: [id])
-  reviewedAt          DateTime @default(now())
+  reviewer            User                    @relation(fields: [reviewedBy], references: [id])
+  reviewedAt          DateTime                @default(now())
   companyId           Int
-  company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  company             Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
   history             DocumentReviewHistory[]
 
   @@index([companyId, cedula])
@@ -1335,7 +1553,7 @@ model DocumentReview {
 // Traza append-only de cada aprobacion/rechazo. documentTypeName va denormalizado
 // para que el historial siga siendo legible si renombran o borran el DocumentType.
 model DocumentReviewHistory {
-  id               Int      @id @default(autoincrement())
+  id               Int            @id @default(autoincrement())
   reviewId         Int
   review           DocumentReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
   cedula           String
@@ -1346,48 +1564,54 @@ model DocumentReviewHistory {
   driveFileId      String?
   fileName         String?
   performedBy      Int
-  performer        User     @relation(fields: [performedBy], references: [id])
+  performer        User           @relation(fields: [performedBy], references: [id])
   companyId        Int
-  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt        DateTime @default(now())
+  company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt        DateTime       @default(now())
 
   @@index([companyId, cedula])
 }
 
 model SalesTemplate {
-  id                 Int      @id @default(autoincrement())
-  name               String
-  description        String?
-  driveUrl           String?  // Link de Google Drive con el .docx
-  docxPath           String?  // Ruta local del .docx descargado
-  generatedPdfPath   String?  // Ruta del último PDF generado
-  boldsignTemplateId String?
-  emailSubject       String?  // Asunto por defecto del correo
-  emailBody          String?  // Cuerpo por defecto del correo
-  companyId          Int
-  createdBy          Int
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id               Int      @id @default(autoincrement())
+  name             String
+  description      String?
+  driveUrl         String? // Link de Google Drive con el .docx
+  docxPath         String? // Ruta local del .docx descargado
+  generatedPdfPath String? // Ruta del último PDF generado
+  emailSubject     String? // Asunto por defecto del correo
+  emailBody        String? // Cuerpo por defecto del correo
+  numberingPrefix  String? // Prefijo del número de contrato, ej. "MEGAMONT"
+  numberingDigits  Int      @default(5) // Cantidad de dígitos del número, ej. 5 -> 00001
+  numberingNext    Int      @default(1) // Próximo número a asignar (se incrementa al crear un contrato)
+  driveFolderId    String? // Subcarpeta de Drive de esta plantilla (creada la primera vez que hace falta)
+  companyId        Int
+  createdBy        Int
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  company  Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  creator  User            @relation(fields: [createdBy], references: [id])
-  fields   SalesField[]
+  company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator   User            @relation(fields: [createdBy], references: [id])
+  fields    SalesField[]
   contracts SalesContract[]
 
   @@index([companyId])
 }
 
 model SalesField {
-  id               Int      @id @default(autoincrement())
-  templateId       Int
-  variableName     String   // Nombre de la variable en el doc: "ClientName"
-  label            String   // Etiqueta visible en el form
-  fieldType        String   // TEXT, NUMBER, DATE, EMAIL, CHECKBOX, DROPDOWN, SIGNATURE
-  isRequired       Boolean  @default(true)
-  isClientField    Boolean  @default(false) // true = cliente llena
-  defaultValue     String?
-  dropdownOptions  String[]
-  order            Int      @default(0)
+  id              Int      @id @default(autoincrement())
+  templateId      Int
+  variableName    String // Nombre de la variable en el doc: "ClientName"
+  label           String // Etiqueta visible en el form
+  fieldType       String // TEXT, NUMBER, DATE, EMAIL, CHECKBOX, DROPDOWN, SIGNATURE, TABLE, CONTRACT_NUMBER
+  isRequired      Boolean  @default(true)
+  isClientField   Boolean  @default(false) // true = cliente llena
+  defaultValue    String?
+  dropdownOptions String[]
+  allowMultiple   Boolean  @default(false) // Solo para fieldType DROPDOWN: selección única o múltiple
+  allowOther      Boolean  @default(false) // Solo para fieldType DROPDOWN: permite escribir una opción libre ("Otro")
+  tableConfig     Json? // Solo para fieldType TABLE: { columns: [{key,label,type}], maxRows }
+  order           Int      @default(0)
 
   template SalesTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
@@ -1395,32 +1619,35 @@ model SalesField {
 }
 
 model SalesContract {
-  id                  Int      @id @default(autoincrement())
-  templateId          Int
-  clientName          String
-  clientEmail         String
-  clientPhone         String?
-  clientCompany       String?
-  clientRuc           String?
-  clientAddress       String?
-  fieldValues         Json     // {variableName: value} — campos del vendedor
-  annexA              Json?    // Equipos
-  annexB              Json?    // Servicios
-  annexC              Json?    // Contactos
-  generatedPdfPath    String?  // Ruta del PDF generado
-  boldsignDocumentId  String?
-  boldsignStatus      String?
-  status              String   @default("DRAFT") // DRAFT, GENERATING, READY, SENT, SIGNED, CANCELLED
-  sentAt              DateTime?
-  signedAt            DateTime?
-  companyId           Int
-  createdBy           Int
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                 Int       @id @default(autoincrement())
+  templateId         Int
+  contractNumber     String? // Código autogenerado, ej. "MEGAMONT-00001" (null si la plantilla no tiene numeración)
+  clientName         String
+  clientEmail        String
+  clientPhone        String?
+  clientCompany      String?
+  clientRuc          String?
+  clientAddress      String?
+  fieldValues        Json // {variableName: value} — campos del vendedor
+  annexA             Json? // Equipos
+  annexB             Json? // Servicios
+  annexC             Json? // Contactos
+  generatedPdfPath   String? // Ruta del PDF generado
+  signwellDocumentId String? // Id del documento en SignWell (para cruzar el webhook de firma completada)
+  signwellStatus     String?
+  status             String    @default("DRAFT") // DRAFT, GENERATING, READY, SENT, SIGNED, CANCELLED
+  sentAt             DateTime?
+  signedAt           DateTime?
+  clientFillToken    String?   @unique // link público para que el cliente complete sus campos/tablas
+  clientFilledAt     DateTime? // cuándo el cliente envió su parte
+  companyId          Int
+  createdBy          Int
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  company  Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  creator  User          @relation(fields: [createdBy], references: [id])
-  template SalesTemplate @relation(fields: [templateId], references: [id])
+  company           Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator           User                    @relation(fields: [createdBy], references: [id])
+  template          SalesTemplate           @relation(fields: [templateId], references: [id])
   contractDocuments SalesContractDocument[]
 
   @@index([companyId, status])
@@ -1429,11 +1656,71 @@ model SalesContract {
 model SalesContractDocument {
   id         Int      @id @default(autoincrement())
   contractId Int
-  type       String   // GENERADO, ENVIADO
-  filePath   String   // "/api/ventas/contratos/file/{fileName}"
+  type       String // GENERADO, ENVIADO, FIRMADO
+  filePath   String // "/api/ventas/contratos/file/{fileName}"
   createdAt  DateTime @default(now())
 
   contract SalesContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
 
   @@index([contractId])
+}
+
+enum TicketSoporteTipo {
+  ERROR
+  MEJORA
+  PERMISO
+  OTRO
+}
+
+enum TicketSoporteEstado {
+  ABIERTO
+  EN_REVISION
+  RESUELTO
+}
+
+// Módulo Sistemas → Soporte Técnico: cualquier usuario puede reportar un
+// error, pedir un permiso o sugerir una mejora del software desde cualquier
+// parte de la app. La bandeja de gestión (listar/cambiar estado) requiere
+// acceso a la sección SISTEMAS vía Permisos de Usuario (SectionPermissionGuard,
+// igual que el resto de secciones) — distinto del buzón de quejas y
+// sugerencias (Complaint), que es a nivel empresa y no tiene relación con el
+// funcionamiento del software.
+model TicketSoporte {
+  id          Int                 @id @default(autoincrement())
+  companyId   Int?
+  createdById Int
+  tipo        TicketSoporteTipo
+  titulo      String
+  descripcion String
+  capturaUrl  String?
+  estado      TicketSoporteEstado @default(ABIERTO)
+  createdAt   DateTime            @default(now())
+  resueltoAt  DateTime?
+
+  company     Company?                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy   User                    @relation(fields: [createdById], references: [id])
+  attachments TicketSoporteAttachment[]
+
+  @@index([estado])
+}
+
+model TicketSoporteAttachment {
+  id        Int           @id @default(autoincrement())
+  ticketId  Int
+  url       String
+  nombre    String?
+  createdAt DateTime      @default(now())
+  ticket    TicketSoporte @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  @@index([ticketId])
+}
+
+model SistemasDriveConfig {
+  id              Int      @id @default(autoincrement())
+  companyId       Int      @unique
+  driveFolderId   String
+  // Ver comentario equivalente en FolderConfig.driveFolderLink.
+  driveFolderLink String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }

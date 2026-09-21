@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
-import { reviewDocument, reassignDocumentType } from '../../services/personal.service';
+import { reviewDocument, reassignDocumentType, approveAsAdditionalDocument } from '../../services/personal.service';
 import { updateDocumentExpiry, extractDocumentExpiry } from '../../services/entidades.service';
 import { usePerm } from '../../contexts/PermissionsContext';
 import DocumentReviewModal from './DocumentReviewModal';
+import AssignOrApproveModal from './AssignOrApproveModal';
 import { REVIEW_COLORS, STALE_COLOR } from './reviewStatus';
+import CopyLinkButton from '../common/CopyLinkButton';
 
 interface Props {
   compliance: any;
@@ -231,76 +233,14 @@ function ReviewBadge({ review }: { review: any }) {
   );
 }
 
-/**
- * Deja que RRHH le diga al sistema "este archivo adicional en realidad es el
- * documento requerido X" (p. ej. la cédula subida como adicional en vez de en
- * su casilla). Renombra el archivo en Drive para que el matching automático lo
- * reconozca; `onDone` recarga el cumplimiento para que el archivo pase a
- * mostrarse en su fila del checklist.
- */
-function ReassignControl({
-  driveFileId,
-  missingTypes,
-  onDone,
-}: {
-  driveFileId?: string;
-  missingTypes: { documentTypeId: number; type: string }[];
-  onDone: () => void;
-}) {
-  const [selected, setSelected] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  if (!driveFileId || missingTypes.length === 0) return null;
-
-  const handleAssign = async () => {
-    if (!selected) return;
-    setSaving(true);
-    setError('');
-    try {
-      await reassignDocumentType(driveFileId, Number(selected));
-      onDone();
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'No se pudo reasignar el archivo.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-      <select
-        value={selected}
-        onChange={(e) => setSelected(e.target.value)}
-        disabled={saving}
-        style={{ fontSize: '0.75rem', padding: '5px 6px', border: '1px solid #e2e8f0', borderRadius: '6px', maxWidth: '160px' }}
-      >
-        <option value="">Es el documento...</option>
-        {missingTypes.map((t) => (
-          <option key={t.documentTypeId} value={t.documentTypeId}>{t.type}</option>
-        ))}
-      </select>
-      <button
-        type="button"
-        disabled={!selected || saving}
-        onClick={handleAssign}
-        style={{
-          padding: '5px 10px', borderRadius: '6px', fontSize: '0.75rem', border: 'none',
-          background: '#3182ce', color: 'white', whiteSpace: 'nowrap',
-          cursor: !selected || saving ? 'default' : 'pointer', opacity: !selected || saving ? 0.5 : 1,
-        }}
-      >
-        {saving ? '⏳' : 'Asignar'}
-      </button>
-      {error && <span style={{ fontSize: '0.72rem', color: '#c53030' }}>{error}</span>}
-    </div>
-  );
-}
-
 export default function ComplianceChecklist({ compliance, onReviewed, readOnly, allowExpiryEdit, onExpiryUpdated, allowAiExtract }: Props) {
   const { canWrite } = usePerm();
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<Target | null>(null);
+  const [assignTarget, setAssignTarget] = useState<Target | null>(null);
+  const [assignMissingTypes, setAssignMissingTypes] = useState<{ documentTypeId: number; type: string }[]>([]);
+  const [assignSaving, setAssignSaving] = useState(false);
+  const [assignError, setAssignError] = useState('');
   const [error, setError] = useState('');
 
   const canReview = !readOnly && canWrite('RRHH');
@@ -323,6 +263,73 @@ export default function ComplianceChecklist({ compliance, onReviewed, readOnly, 
       setError(err.response?.data?.message || 'No se pudo guardar la revisión.');
     } finally {
       setPendingKey(null);
+    }
+  };
+
+  // Reemplaza el viejo par de controles sueltos "Aprobar" + "Es el
+  // documento... / Asignar" para un archivo no reconocido por un flujo de un
+  // solo clic (ver AssignOrApproveModal): renombra el archivo en Drive bajo
+  // el tipo elegido Y lo aprueba bajo ese tipo, en la misma acción.
+  const handleAssignAndApprove = async (documentTypeId: number) => {
+    if (!assignTarget?.driveFileId) return;
+    setAssignSaving(true);
+    setAssignError('');
+    try {
+      const updatedDoc = await reassignDocumentType(assignTarget.driveFileId, documentTypeId);
+      await reviewDocument({
+        cedula: compliance.cedula,
+        documentTypeId,
+        driveFileId: assignTarget.driveFileId,
+        fileName: updatedDoc?.fileName || assignTarget.fileName || undefined,
+        status: 'APROBADO',
+      });
+      setAssignTarget(null);
+      onReviewed?.();
+    } catch (err: any) {
+      setAssignError(err.response?.data?.message || 'No se pudo asignar y aprobar el archivo.');
+    } finally {
+      setAssignSaving(false);
+    }
+  };
+
+  const handleApproveAsAdditional = async (label: string) => {
+    if (!assignTarget?.driveFileId) return;
+    setAssignSaving(true);
+    setAssignError('');
+    try {
+      const updatedDoc = await approveAsAdditionalDocument(assignTarget.driveFileId, label);
+      await reviewDocument({
+        cedula: compliance.cedula,
+        driveFileId: assignTarget.driveFileId,
+        fileName: updatedDoc?.fileName || assignTarget.fileName || undefined,
+        status: 'APROBADO',
+      });
+      setAssignTarget(null);
+      onReviewed?.();
+    } catch (err: any) {
+      setAssignError(err.response?.data?.message || 'No se pudo aprobar el archivo.');
+    } finally {
+      setAssignSaving(false);
+    }
+  };
+
+  const handleApproveWithoutType = async () => {
+    if (!assignTarget) return;
+    setAssignSaving(true);
+    setAssignError('');
+    try {
+      await reviewDocument({
+        cedula: compliance.cedula,
+        driveFileId: assignTarget.driveFileId,
+        fileName: assignTarget.fileName || undefined,
+        status: 'APROBADO',
+      });
+      setAssignTarget(null);
+      onReviewed?.();
+    } catch (err: any) {
+      setAssignError(err.response?.data?.message || 'No se pudo aprobar el archivo.');
+    } finally {
+      setAssignSaving(false);
     }
   };
 
@@ -433,17 +440,20 @@ export default function ComplianceChecklist({ compliance, onReviewed, readOnly, 
                 }
               >
                 {doc.fileUrl && (
-                  <a
-                    href={doc.fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem',
-                      background: 'var(--azul-claro)', color: 'white', textDecoration: 'none', whiteSpace: 'nowrap',
-                    }}
-                  >
-                    Ver archivo
-                  </a>
+                  <>
+                    <a
+                      href={doc.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem',
+                        background: 'var(--azul-claro)', color: 'white', textDecoration: 'none', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Ver archivo
+                    </a>
+                    <CopyLinkButton url={doc.fileUrl} title="Copiar enlace del archivo" />
+                  </>
                 )}
                 {doc.status === 'present' && <ReviewActions target={target} />}
               </div>
@@ -498,25 +508,44 @@ export default function ComplianceChecklist({ compliance, onReviewed, readOnly, 
                     )}
                   </div>
                   {file.fileUrl && (
-                    <a
-                      href={file.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        padding: '5px 10px', borderRadius: '6px', fontSize: '0.75rem',
-                        background: '#d69e2e', color: 'white', textDecoration: 'none', whiteSpace: 'nowrap',
-                      }}
-                    >
-                      Ver
-                    </a>
+                    <>
+                      <a
+                        href={file.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          padding: '5px 10px', borderRadius: '6px', fontSize: '0.75rem',
+                          background: '#d69e2e', color: 'white', textDecoration: 'none', whiteSpace: 'nowrap',
+                        }}
+                      >
+                        Ver
+                      </a>
+                      <CopyLinkButton url={file.fileUrl} title="Copiar enlace del archivo" size={12} />
+                    </>
                   )}
-                  <ReviewActions target={target} />
                   {canReview && (
-                    <ReassignControl
-                      driveFileId={file.driveFileId}
-                      missingTypes={missingTypes}
-                      onDone={() => onReviewed?.()}
-                    />
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button
+                        disabled={pendingKey === target.key}
+                        style={{
+                          padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', border: 'none',
+                          background: '#276749', color: 'white', cursor: 'pointer', whiteSpace: 'nowrap',
+                        }}
+                        onClick={() => { setAssignError(''); setAssignMissingTypes(missingTypes); setAssignTarget(target); }}
+                      >
+                        ✔ Aprobar
+                      </button>
+                      <button
+                        disabled={pendingKey === target.key}
+                        style={{
+                          padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', border: 'none',
+                          background: '#c53030', color: 'white', cursor: 'pointer', whiteSpace: 'nowrap',
+                        }}
+                        onClick={() => setRejectTarget(target)}
+                      >
+                        ✖ Rechazar
+                      </button>
+                    </div>
                   )}
                 </div>
               );
@@ -533,6 +562,18 @@ export default function ComplianceChecklist({ compliance, onReviewed, readOnly, 
         saving={!!rejectTarget && pendingKey === rejectTarget.key}
         onConfirm={(reason) => rejectTarget && send(rejectTarget, 'RECHAZADO', reason)}
         onClose={() => setRejectTarget(null)}
+      />
+
+      <AssignOrApproveModal
+        open={!!assignTarget}
+        fileName={assignTarget?.fileName}
+        missingTypes={assignMissingTypes}
+        saving={assignSaving}
+        error={assignError}
+        onAssignAndApprove={handleAssignAndApprove}
+        onApproveWithoutType={handleApproveWithoutType}
+        onApproveAsAdditional={handleApproveAsAdditional}
+        onClose={() => { if (!assignSaving) { setAssignTarget(null); setAssignError(''); } }}
       />
     </>
   );

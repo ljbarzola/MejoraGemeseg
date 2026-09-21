@@ -9,6 +9,7 @@ import {
 import { getUser } from '../../services/auth.service';
 import type { Task, ProjectMember } from '../../types/task';
 import { STATUS_LABELS, STATUS_COLORS } from '../../types/task';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +26,7 @@ export default function TaskDetailPage() {
   const [isDirty, setIsDirty] = useState(false);
   const [showDiscardModal, setShowDiscardModal] = useState(false);
   const pendingNavigationRef = useRef<(() => void) | null>(null);
+  const [confirmandoEliminarTarea, setConfirmandoEliminarTarea] = useState(false);
 
   const isViewer = members.some(
     (m) => m.user.email === currentUser?.email && m.role === 'VIEWER',
@@ -120,9 +122,14 @@ export default function TaskDetailPage() {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!task) return;
-    if (!confirm('¿Eliminar esta tarea?')) return;
+    setConfirmandoEliminarTarea(true);
+  };
+
+  const confirmarEliminarTarea = async () => {
+    if (!task) return;
+    setConfirmandoEliminarTarea(false);
     try {
       await deleteTask(task.id);
       setIsDirty(false);
@@ -366,6 +373,17 @@ export default function TaskDetailPage() {
           )}
         </div>
       </div>
+
+      {confirmandoEliminarTarea && (
+        <ConfirmDialog
+          title="Eliminar tarea"
+          message="¿Eliminar esta tarea?"
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={confirmarEliminarTarea}
+          onCancel={() => setConfirmandoEliminarTarea(false)}
+        />
+      )}
     </div>
   );
 }

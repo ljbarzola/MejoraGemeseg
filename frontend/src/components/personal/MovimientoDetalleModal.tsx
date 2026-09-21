@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Archive } from 'lucide-react';
 import { getMovimiento, toggleMovimientoItem, type MovimientoPersonal, type MovimientoPersonalItem } from '../../services/movimiento-personal.service';
 import { archivarCarpetaGuardia } from '../../services/personal.service';
+import ConfirmDialog from '../common/ConfirmDialog';
 
 interface Props {
   /** null cierra el modal. */
@@ -18,6 +19,15 @@ export default function MovimientoDetalleModal({ movimientoId, onClose, onChange
   const [notasDraft, setNotasDraft] = useState<Record<number, string>>({});
   const [archivando, setArchivando] = useState(false);
   const [archivarMsg, setArchivarMsg] = useState('');
+  const [confirmandoArchivar, setConfirmandoArchivar] = useState(false);
+  const [itemError, setItemError] = useState('');
+  const itemErrorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (itemError) {
+      itemErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [itemError]);
 
   const load = () => {
     if (!movimientoId) return;
@@ -37,6 +47,7 @@ export default function MovimientoDetalleModal({ movimientoId, onClose, onChange
 
   const handleToggle = async (item: MovimientoPersonalItem) => {
     if (!movimiento) return;
+    setItemError('');
     try {
       const updated = await toggleMovimientoItem(movimiento.id, item.id, {
         completado: !item.completado,
@@ -45,13 +56,18 @@ export default function MovimientoDetalleModal({ movimientoId, onClose, onChange
       setMovimiento(updated);
       onChanged?.();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'No se pudo actualizar el ítem');
+      setItemError(err.response?.data?.message || 'No se pudo actualizar el ítem');
     }
   };
 
-  const handleArchivarCarpeta = async () => {
+  const handleArchivarCarpeta = () => {
     if (!movimiento) return;
-    if (!confirm(`¿Mover la carpeta de Drive de ${movimiento.nombreGuardia} a la carpeta de archivo configurada? No se borra ningún documento.`)) return;
+    setConfirmandoArchivar(true);
+  };
+
+  const confirmarArchivarCarpeta = async () => {
+    setConfirmandoArchivar(false);
+    if (!movimiento) return;
     setArchivando(true);
     setArchivarMsg('');
     try {
@@ -66,6 +82,7 @@ export default function MovimientoDetalleModal({ movimientoId, onClose, onChange
 
   const handleGuardarNotas = async (item: MovimientoPersonalItem) => {
     if (!movimiento) return;
+    setItemError('');
     try {
       const updated = await toggleMovimientoItem(movimiento.id, item.id, {
         completado: item.completado,
@@ -74,11 +91,12 @@ export default function MovimientoDetalleModal({ movimientoId, onClose, onChange
       setMovimiento(updated);
       onChanged?.();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'No se pudo guardar la nota');
+      setItemError(err.response?.data?.message || 'No se pudo guardar la nota');
     }
   };
 
   return (
+    <>
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -99,6 +117,7 @@ export default function MovimientoDetalleModal({ movimientoId, onClose, onChange
           <button className="modal-close" onClick={onClose}><X size={16} /></button>
         </div>
         <div className="modal-body">
+          {itemError && <div className="form-error" ref={itemErrorRef} style={{ marginBottom: '14px' }}>{itemError}</div>}
           {loading ? (
             <div className="loading-state">Cargando detalle...</div>
           ) : !movimiento ? (
@@ -147,5 +166,15 @@ export default function MovimientoDetalleModal({ movimientoId, onClose, onChange
         </div>
       </div>
     </div>
+    {confirmandoArchivar && movimiento && (
+      <ConfirmDialog
+        title="Archivar carpeta"
+        message={`¿Mover la carpeta de Drive de ${movimiento.nombreGuardia} a la carpeta de archivo configurada? No se borra ningún documento.`}
+        confirmLabel="Sí, archivar"
+        onConfirm={confirmarArchivarCarpeta}
+        onCancel={() => setConfirmandoArchivar(false)}
+      />
+    )}
+    </>
   );
 }

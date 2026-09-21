@@ -70,6 +70,9 @@ export class VentasTemplatesService {
     if (dto.driveUrl !== undefined) data.driveUrl = dto.driveUrl;
     if (dto.emailSubject !== undefined) data.emailSubject = dto.emailSubject;
     if (dto.emailBody !== undefined) data.emailBody = dto.emailBody;
+    if (dto.numberingPrefix !== undefined) data.numberingPrefix = dto.numberingPrefix;
+    if (dto.numberingDigits !== undefined) data.numberingDigits = dto.numberingDigits;
+    if (dto.numberingNext !== undefined) data.numberingNext = dto.numberingNext;
 
     return this.prisma.salesTemplate.update({ where: { id }, data });
   }
@@ -230,9 +233,12 @@ export class VentasTemplatesService {
     const fullText = allTexts.join(' ');
     const detected = new Set<string>();
 
-    // Support both <<Variable>> and [Variable] / [Variable Con Espacios] formats
+    // Support both <<Variable>> and [Variable] formats. The bracket form also
+    // allows the "namespaced" style some templates use, e.g.
+    // [Contacts.Número de Identificación (Cédula/RUC)] — dots, accents,
+    // parentheses and slashes, not just plain words with spaces.
     const regexDoubleAngle = /<<([A-Za-z_][A-Za-z0-9_]*)>>/g;
-    const regexBrackets = /\[([A-Za-z_][A-Za-z0-9_ ]*)\]/g;
+    const regexBrackets = /\[([A-Za-zÀ-ÿ_][A-Za-zÀ-ÿ0-9_ .()\/-]*)\]/g;
 
     let match;
     while ((match = regexDoubleAngle.exec(fullText)) !== null) {
@@ -271,6 +277,9 @@ export class VentasTemplatesService {
             isClientField: f.isClientField || false,
             defaultValue: f.defaultValue || null,
             dropdownOptions: f.dropdownOptions || [],
+            allowMultiple: f.fieldType === 'DROPDOWN' ? !!f.allowMultiple : false,
+            allowOther: f.fieldType === 'DROPDOWN' ? !!f.allowOther : false,
+            tableConfig: f.fieldType === 'TABLE' ? f.tableConfig || null : null,
             order: f.order ?? i,
           },
         }),

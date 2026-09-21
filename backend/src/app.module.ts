@@ -17,6 +17,7 @@ import { PermissionsModule } from './modules/permissions/permissions.module';
 import { CustodiasModule } from './modules/custodias/custodias.module';
 import { PersonalModule } from './modules/personal/personal.module';
 import { VentasModule } from './modules/ventas/ventas.module';
+import { SistemasModule } from './modules/sistemas/sistemas.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { VentasModule } from './modules/ventas/ventas.module';
     CustodiasModule,
     PersonalModule,
     VentasModule,
+    SistemasModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -33,17 +33,4 @@ export class CertificationService {
     if (!c) throw new NotFoundException('Certificación no encontrada');
     return this.prisma.certification.delete({ where: { id } });
   }
-
-  async getAlerts(companyId: number) {
-    const now = new Date();
-    const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-    return this.prisma.certification.findMany({
-      where: {
-        companyId,
-        status: 'ACTIVE',
-        expiryDate: { gte: now, lte: in30Days },
-      },
-      orderBy: { expiryDate: 'asc' },
-    });
-  }
 }

@@ -33,7 +33,6 @@ export interface MovimientoPersonal {
   tipo: TipoMovimientoPersonal;
   estado: EstadoMovimientoPersonal;
   origen: string;
-  candidateId: number | null;
   companyId: number;
   createdBy: number;
   creator?: { id: number; fullName: string };

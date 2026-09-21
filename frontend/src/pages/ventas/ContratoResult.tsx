@@ -1,23 +1,46 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { getContract, generateContractPdf, sendContract, getContractDocuments, fetchProtectedFile, SalesContract, SalesContractDocument } from '../../services/ventas.service';
+import { getContract, generateContractPdf, sendContract, getContractDocuments, fetchProtectedFile, uploadSignedContract, getContractSignatureStatus, SalesContract, SalesContractDocument, SignatureStatus } from '../../services/ventas.service';
 import { subPageTitle } from './contratoStyles';
+import { useToast } from '../../contexts/ToastContext';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   GENERADO: 'PDF generado',
   ENVIADO: 'Enviado a firma',
+  FIRMADO: 'Firmado',
 };
+
+// Traducción de los valores que devuelve SignWell (en inglés) a español.
+const SIGNWELL_STATUS_LABELS: Record<string, string> = {
+  Draft: 'Borrador', Created: 'Creado', Sending: 'Enviando', Sent: 'Enviado',
+  Pending: 'Pendiente de firma', Viewed: 'Visto por el cliente', Completed: 'Firmado',
+  'Manually completed': 'Firmado (manual)', Declined: 'Rechazado por el cliente',
+  Canceled: 'Cancelado', Bounced: 'No entregado (rebotó)', Blocked: 'Bloqueado',
+  Error: 'Error', Expired: 'Expirado',
+};
+const signwellStatusLabel = (s: string) => SIGNWELL_STATUS_LABELS[s] || s;
+
+// Cuando el contrato ya se envió a firmar, regenerar el PDF o editar los
+// campos no cancela ese envío en SignWell — el firmante seguiría viendo la
+// versión anterior. No lo bloqueamos, pero avisamos antes de dejar seguir.
+const SENT_WARNING = 'Este contrato ya se envió a firmar. Regenerar el PDF o editar los campos NO cancela ese envío en SignWell — el cliente seguiría viendo (y podría firmar) la versión anterior.';
 
 export default function ContratoResult() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const [contract, setContract] = useState<SalesContract | null>(null);
   const [documents, setDocuments] = useState<SalesContractDocument[]>([]);
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
+  const [uploadingSigned, setUploadingSigned] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [signatureStatus, setSignatureStatus] = useState<SignatureStatus | null>(null);
+  const [pendingSentAction, setPendingSentAction] = useState<null | 'generate' | 'edit'>(null);
   const [emailTo, setEmailTo] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
@@ -57,7 +80,7 @@ export default function ContratoResult() {
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch {
-      alert('No se pudo abrir el archivo');
+      showToast('No se pudo abrir el archivo', 'error');
     }
   };
 
@@ -68,21 +91,71 @@ export default function ContratoResult() {
       await generateContractPdf(+id);
       loadContract(+id);
     } catch (err: any) {
-      alert(err?.response?.data?.message || 'Error al generar PDF');
+      showToast(err?.response?.data?.message || 'Error al generar PDF', 'error');
     } finally { setGenerating(false); }
+  };
+
+  const handleGenerateClick = () => {
+    if (contract?.status === 'SENT') { setPendingSentAction('generate'); return; }
+    handleGenerate();
+  };
+
+  const handleEditFieldsClick = () => {
+    if (contract?.status === 'SENT') { setPendingSentAction('edit'); return; }
+    navigate(`/ventas/contratos/${contract!.id}/editar`);
+  };
+
+  const handleConfirmSentAction = () => {
+    const action = pendingSentAction;
+    setPendingSentAction(null);
+    if (action === 'generate') handleGenerate();
+    else if (action === 'edit') navigate(`/ventas/contratos/${contract!.id}/editar`);
+  };
+
+  const handleCheckStatus = async () => {
+    if (!id) return;
+    setCheckingStatus(true);
+    try {
+      const result = await getContractSignatureStatus(+id);
+      setSignatureStatus(result);
+      if (result.contractStatus === 'SIGNED' && contract?.status !== 'SIGNED') {
+        showToast('¡El contrato ya está firmado!', 'success');
+        loadContract(+id);
+      }
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Error al consultar el estado', 'error');
+    } finally { setCheckingStatus(false); }
   };
 
   const handleSend = async () => {
     if (!id) return;
-    if (!emailTo.trim()) { alert('El email del destinatario es requerido'); return; }
+    if (!emailTo.trim()) { showToast('El email del destinatario es requerido', 'error'); return; }
     setSending(true);
     try {
       await sendContract(+id);
-      alert('Correo enviado correctamente');
+      showToast('Correo enviado correctamente', 'success');
       loadContract(+id);
     } catch (err: any) {
-      alert(err?.response?.data?.message || 'Error al enviar');
+      showToast(err?.response?.data?.message || 'Error al enviar', 'error');
     } finally { setSending(false); }
+  };
+
+  // Respaldo manual: si el webhook de SignWell (document_completed) no está
+  // configurado en este entorno, o el documento se firmó fuera del sistema,
+  // quien reciba el PDF ya firmado lo sube aquí a mano.
+  const handleUploadSigned = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!id) return;
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingSigned(true);
+    try {
+      await uploadSignedContract(+id, file);
+      showToast('PDF firmado subido correctamente', 'success');
+      loadContract(+id);
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Error al subir el PDF firmado', 'error');
+    } finally { setUploadingSigned(false); }
   };
 
   if (!contract) return <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>Cargando...</div>;
@@ -103,15 +176,51 @@ export default function ContratoResult() {
         <button className="cacao-back-btn" onClick={() => navigate('/ventas/contratos')}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <h2 style={subPageTitle}>Contrato #{contract.id} — {contract.clientName}</h2>
+        <h2 style={subPageTitle}>Contrato {contract.contractNumber || `#${contract.id}`} — {contract.clientName}</h2>
         <span style={{ padding: '3px 10px', borderRadius: 12, background: statusColors[contract.status] || '#888', color: '#fff', fontSize: 11, fontWeight: 600 }}>{contract.status}</span>
         <div style={{ flex: 1 }} />
-        {isDraft && (
-          <button className="auth-btn" onClick={handleGenerate} disabled={generating} style={{ padding: '10px 20px', fontSize: 13 }}>
-            {generating ? 'Generando PDF...' : '⚡ Generar PDF'}
+        {contract.status !== 'SIGNED' && (
+          <button className="btn-secondary" onClick={handleEditFieldsClick} style={{ padding: '10px 20px', fontSize: 13 }}>
+            ✏️ Editar campos
+          </button>
+        )}
+        {contract.status !== 'SIGNED' && (
+          <button className="auth-btn" onClick={handleGenerateClick} disabled={generating} style={{ padding: '10px 20px', fontSize: 13 }}>
+            {generating ? 'Generando PDF...' : contract.generatedPdfPath ? '🔄 Regenerar PDF' : '⚡ Generar PDF'}
           </button>
         )}
       </div>
+
+      {pendingSentAction && (
+        <ConfirmDialog
+          title="Contrato ya enviado a firmar"
+          message={SENT_WARNING}
+          confirmLabel="Continuar de todas formas"
+          danger
+          onConfirm={handleConfirmSentAction}
+          onCancel={() => setPendingSentAction(null)}
+        />
+      )}
+
+      {contract.clientFillToken && (
+        <div style={{ padding: '10px 24px', background: contract.clientFilledAt ? '#f0fdf4' : '#fffbeb', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          {contract.clientFilledAt ? (
+            <span style={{ fontSize: 13, color: '#166534' }}>✅ El cliente ya envió su información.</span>
+          ) : (
+            <>
+              <span style={{ fontSize: 13, color: '#92400e' }}>El cliente todavía debe completar información antes de firmar.</span>
+              <button className="btn-secondary" style={{ padding: '4px 12px', fontSize: 12 }}
+                onClick={() => {
+                  const url = `${window.location.origin}/ventas/contratos/completar/${contract.clientFillToken}`;
+                  navigator.clipboard.writeText(url);
+                  showToast('Link copiado al portapapeles', 'success');
+                }}>
+                📋 Copiar link para el cliente
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left: PDF viewer */}
@@ -137,6 +246,32 @@ export default function ContratoResult() {
 
         {/* Right: Email config */}
         <div style={{ width: 380, background: '#fff', borderLeft: '1px solid #ddd', display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: 0 }}>
+          <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+          {/* Client fields — qué se le va a pedir al cliente, y cómo (antes o al firmar) */}
+          {clientFields.length > 0 && (
+            <div style={{ padding: 16, borderBottom: '1px solid #eee' }}>
+              <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#888', textTransform: 'uppercase' }}>Información que se le pedirá al cliente</h4>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #eee' }}>
+                    <th style={{ textAlign: 'left', padding: '4px 6px', color: '#888' }}>Campo</th>
+                    <th style={{ textAlign: 'left', padding: '4px 6px', color: '#888' }}>Cómo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientFields.map(f => (
+                    <tr key={f.id} style={{ borderBottom: '1px solid #f5f5f5' }}>
+                      <td style={{ padding: '4px 6px' }}>{f.label}</td>
+                      <td style={{ padding: '4px 6px', color: '#888' }}>
+                        {f.fieldType === 'TABLE' ? 'Por link, antes de firmar' : 'Dentro del documento, al firmar (SignWell)'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           <div style={{ padding: 16, borderBottom: '1px solid #eee' }}>
             <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>Envío de correo</h3>
             <div style={{ marginBottom: 8 }}>
@@ -156,26 +291,33 @@ export default function ContratoResult() {
             </div>
           </div>
 
-          {/* Client fields */}
-          {clientFields.length > 0 && (
-            <div style={{ padding: 16, borderBottom: '1px solid #eee', flex: 1, overflow: 'auto' }}>
-              <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#888', textTransform: 'uppercase' }}>Campos que el cliente debe llenar</h4>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid #eee' }}>
-                    <th style={{ textAlign: 'left', padding: '4px 6px', color: '#888' }}>Campo</th>
-                    <th style={{ textAlign: 'left', padding: '4px 6px', color: '#888' }}>Tipo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clientFields.map(f => (
-                    <tr key={f.id} style={{ borderBottom: '1px solid #f5f5f5' }}>
-                      <td style={{ padding: '4px 6px' }}>{f.label}</td>
-                      <td style={{ padding: '4px 6px', color: '#888' }}>{f.fieldType}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Estado de la firma en SignWell — a demanda, no hay polling automático */}
+          {contract.signwellDocumentId && (
+            <div style={{ padding: 16, borderBottom: '1px solid #eee' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <h4 style={{ margin: 0, fontSize: 12, color: '#888', textTransform: 'uppercase' }}>Estado de la firma</h4>
+                <button onClick={handleCheckStatus} disabled={checkingStatus}
+                  style={{ padding: '3px 10px', borderRadius: 4, border: '1px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: 11 }}>
+                  {checkingStatus ? 'Consultando...' : '🔄 Actualizar'}
+                </button>
+              </div>
+              <div style={{ fontSize: 12, marginBottom: signatureStatus ? 8 : 0 }}>
+                {signatureStatus ? signwellStatusLabel(signatureStatus.status) : signwellStatusLabel(contract.signwellStatus || 'Sent')}
+              </div>
+              {signatureStatus && signatureStatus.recipients.length > 0 && (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <tbody>
+                    {signatureStatus.recipients.map((r, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #f5f5f5' }}>
+                        <td style={{ padding: '4px 6px' }}>{r.name || r.email || '—'}</td>
+                        <td style={{ padding: '4px 6px', color: r.bounced ? '#c33' : '#888' }}>
+                          {r.bounced ? `No entregado${r.bouncedDetails ? `: ${r.bouncedDetails}` : ''}` : (r.status ? signwellStatusLabel(r.status) : '—')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           )}
 
@@ -208,13 +350,20 @@ export default function ContratoResult() {
               </table>
             </div>
           )}
+          </div>
 
-          {/* Send button */}
-          <div style={{ padding: 16 }}>
+          {/* Send button — outside the scroll area so it's always reachable */}
+          <div style={{ padding: 16, borderTop: '1px solid #eee', flexShrink: 0 }}>
             <button className="auth-btn" onClick={handleSend} disabled={sending || !isReady}
               style={{ width: '100%', padding: '10px', fontSize: 13, ...(isReady ? { background: '#059669' } : {}) }}>
-              {sending ? 'Enviando...' : isReady ? '✉️ Enviar Correo con BoldSign' : 'Genera el PDF primero'}
+              {sending ? 'Enviando...' : isReady ? '✉️ Enviar a Firma Electrónica (SignWell)' : 'Genera el PDF primero'}
             </button>
+            {contract.status !== 'DRAFT' && contract.status !== 'SIGNED' && (
+              <label className="btn-secondary" style={{ display: 'block', width: '100%', padding: '10px', fontSize: 13, textAlign: 'center', marginTop: 8, cursor: uploadingSigned ? 'default' : 'pointer', boxSizing: 'border-box' }}>
+                {uploadingSigned ? 'Subiendo...' : '📤 Subir PDF firmado'}
+                <input type="file" accept="application/pdf" onChange={handleUploadSigned} disabled={uploadingSigned} style={{ display: 'none' }} />
+              </label>
+            )}
           </div>
         </div>
       </div>

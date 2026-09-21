@@ -46,7 +46,7 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 - **Backend:** Cloud Run (`mejora-gemeseg-backend`, us-central1)
 - **Frontend:** Firebase Hosting (`mejora-gemeseg.web.app`)
 - **Registry:** Artifact Registry (`us-central1-docker.pkg.dev/mejora-gemeseg/gemeseg-repo`)
-- **Secrets:** Secret Manager (`DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, `BOLDSIGN_API_KEY`, `GOOGLE_SERVICE_ACCOUNT_JSON`)
+- **Secrets:** Secret Manager (`DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, `SIGNWELL_API_KEY`, `GOOGLE_SERVICE_ACCOUNT_JSON`) — `SIGNWELL_API_KEY` reemplaza a `BOLDSIGN_API_KEY` (2026-09-17); hay que crear ese secreto nuevo en Secret Manager antes del próximo deploy o `cloudbuild.yaml` fallará al desplegar el backend
 - **Deploy:** `firebase deploy --only hosting` (frontend), Cloud Build / `gcloud run deploy` (backend)
 
 ## Convenciones de Codigo
@@ -94,7 +94,9 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 ## Despliegue en Produccion
 
 ### Arquitectura
-Cloud Run y Firebase Hosting se despliegan por separado y con pipelines distintos - Cloud Run **solo sirve la API** (el `Dockerfile` de `backend/` no incluye el frontend). El dominio publico `app.gemeseg.com` esta mapeado como custom domain sobre Firebase Hosting, que hace de unico origen de cara al usuario y reenvia `/api/**`, `/health`, `/docs/**` a Cloud Run (ver `firebase.json`).
+Cloud Run **solo sirve la API** (el `Dockerfile` de `backend/` no incluye el frontend) y Firebase Hosting sirve el frontend estatico. Ambos se despliegan desde el **mismo pipeline**, `cloudbuild.yaml`, en pasos secuenciales dentro de una sola corrida (build+push+deploy del backend a Cloud Run, luego build+deploy del frontend a Firebase Hosting) - no son pipelines separados. El dominio publico `app.gemeseg.com` esta mapeado como custom domain sobre Firebase Hosting, que hace de unico origen de cara al usuario y reenvia `/api/**`, `/health`, `/docs/**` a Cloud Run (ver `firebase.json`).
+
+Hubo un intento previo de desplegar el frontend por separado via `.github/workflows/firebase-hosting-merge.yml` (GitHub Actions), pero se elimino el 2026-09-11: dependia de un secret `FIREBASE_SERVICE_ACCOUNT` que nunca se configuro, asi que cada corrida fallaba en el paso de deploy, y ademas duplicaba lo que ya hace `cloudbuild.yaml`. No reintroducir ese workflow sin antes revisar si hace falta junto al de Cloud Build.
 
 ```
 Google Cloud Platform (proyecto: mejora-gemeseg)
@@ -102,7 +104,7 @@ Google Cloud Platform (proyecto: mejora-gemeseg)
   ├── Cloud Run (NestJS backend, solo API) → mejora-gemeseg-backend
   ├── Firebase Hosting (React, dominio publico app.gemeseg.com) → mejora-gemeseg.web.app
   ├── Artifact Registry           → gemeseg-repo
-  └── Secret Manager              → DATABASE_URL, JWT_SECRET, FRONTEND_URL, BOLDSIGN_API_KEY, GOOGLE_SERVICE_ACCOUNT_JSON
+  └── Secret Manager              → DATABASE_URL, JWT_SECRET, FRONTEND_URL, SIGNWELL_API_KEY, GOOGLE_SERVICE_ACCOUNT_JSON
 ```
 
 `GOOGLE_SERVICE_ACCOUNT_JSON` es el contenido completo de `backend/google-service-account.json` (gitignored, nunca llega a la imagen Docker) — `DriveService`/`GmailMailService` lo usan como fallback cuando el archivo no existe en disco (ver `backend/src/modules/personal/services/drive.service.ts`, `getDriveClient()`). Si se rota la service account, actualizar este secreto (`gcloud secrets versions add GOOGLE_SERVICE_ACCOUNT_JSON --data-file=backend/google-service-account.json`), no solo el archivo local.
@@ -112,8 +114,8 @@ El deploy de Firebase Hosting en `cloudbuild.yaml` no usa ningún secreto: corre
 ### Plataformas
 - **Base de datos:** Cloud SQL (PostgreSQL 16, `us-central1`)
 - **Backend:** Cloud Run (`us-central1`, auto-scaling) - deploy via `cloudbuild.yaml` (Cloud Build, dispara con push a `main`)
-- **Frontend:** Firebase Hosting (`mejora-gemeseg.web.app`, dominio publico `app.gemeseg.com`) - deploy via `.github/workflows/firebase-hosting-merge.yml` (GitHub Actions, dispara con push a `main`)
-- **CI/CD:** dos pipelines independientes, uno por servicio (no compartir la etapa de build del frontend entre ambos - ver `CLAUDE.md`)
+- **Frontend:** Firebase Hosting (`mejora-gemeseg.web.app`, dominio publico `app.gemeseg.com`) - deploy via `cloudbuild.yaml` (mismo pipeline que el backend, dispara con push a `main`)
+- **CI/CD:** un solo pipeline (`cloudbuild.yaml`) que despliega backend y frontend en pasos secuenciales de la misma corrida - ver `CLAUDE.md`
 
 ### URLs
 - Frontend: https://mejora-gemeseg.web.app
@@ -123,12 +125,26 @@ El deploy de Firebase Hosting en `cloudbuild.yaml` no usa ningún secreto: corre
 ### Variables de Entorno
 
 ### Desarrollo (.env local)
+La base de datos de desarrollo es un **Postgres local** (servicio `db` de `docker-compose.yml`), completamente separado de la Cloud SQL de produccion (`gemeseg-db`) - crear/editar/eliminar en local nunca toca datos reales. Levantar la infra y poblarla:
+```bash
+docker compose up -d db redis
+cd backend
+npx prisma generate
+npx prisma db push
+npm run seed:minimal   # datos minimos: 1 empresa, 2 usuarios, 1 proyecto/tareas, Personal basico
+```
 ```bash
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gemeseg?schema=public
 JWT_SECRET=gemeseg-jwt-secret-2026
 GITHUB_TOKEN=<token_de_github_models>
 FRONTEND_URL=http://localhost:5173
 ```
+
+Si alguna vez hace falta inspeccionar datos reales de produccion (solo lectura, para depurar un bug reportado), conectar aparte via **Cloud SQL Auth Proxy**:
+```bash
+cloud-sql-proxy.exe mejora-gemeseg:us-central1:gemeseg-db --port 5434 --credentials-file "backend/cloudsql-proxy-key.json"
+```
+y apuntar una `DATABASE_URL` alterna a `127.0.0.1:5434` solo para esa sesion puntual - no dejarlo como el `.env` por defecto.
 
 ### Produccion - Backend (Cloud Run / Secret Manager)
 | Key | Value |
@@ -141,7 +157,7 @@ FRONTEND_URL=http://localhost:5173
 ### Produccion - Frontend (Firebase Hosting)
 | Key | Value |
 |-----|-------|
-| `VITE_API_URL` | `https://mejora-gemeseg-backend-141953681725.us-central1.run.app` |
+| `VITE_API_URL` | `https://mejora-gemeseg-backend-141953681725.us-central1.run.app/api` |
 
 ## Autenticacion
 
@@ -317,19 +333,33 @@ El punto 4 es deliberado y esta cubierto por un test: invertirlo dejaria fuera a
 
 ### Recursos Humanos (`/rrhh`)
 - `GET/POST/DELETE /personal/reclutamiento/puestos` - Creación de vacantes y sincronización JSON con Drive
-- `POST /personal/reclutamiento/sync` - Sincronización de candidatos postulados en Drive Reclutamiento
-- `GET/POST /personal/kanban/columns` - Columnas del Kanban
-- `GET/POST /personal/candidates` - Candidatos
-- `PATCH /personal/candidates/:id/move` - Mover candidato de columna
+- `POST /personal/reclutamiento/sync` - Sincronización de candidatos postulados en Drive Reclutamiento (devuelve `tipoContratacion` y `modoSubida` por candidato)
+- `POST /personal/reclutamiento/candidatos/:folderId/contratar` - Contratar: mueve la carpeta al destino que declara la vacante (`JobPosition.tipoContratacion`)
 - `GET /personal/certifications` - Certificaciones
-- `GET /personal/certifications/alerts` - Alertas de vencimiento
+- `GET /personal/alerts` - Certificaciones por vencer + capacitaciones pendientes combinadas (reemplaza al viejo `certifications/alerts`, eliminado 2026-09-15 por ser código muerto)
 - `POST /personal/drive/sync` - Sincronizar carpetas de Drive
 - `GET /personal/drive/compliance/:cedula` - Checklist de cumplimiento por cédula (incluye `review` por documento y `reviewSummary`)
+
+**Destino de contratación y análisis del "archivo único" (2026-09-16, ver `.agents/modules/reclutamiento.md` Sprints 7-8 para el detalle completo):**
+- `JobPosition.tipoContratacion` (`GUARDIA` | `ADMINISTRATIVO`, default `GUARDIA`) decide a qué carpeta raíz va el postulante al contratarlo. **Los dos buckets nombran distinto** — Guardias usa `Nombre - Cédula`, Personal Administrativo usa `Nombre - Puesto` (sin cédula) — así que contratar a un administrativo **renombra** la carpeta en la misma llamada que la mueve. Sin carpeta destino configurada, se bloquea sin mover nada. Duplicados: Guardias por cédula, Administrativos por nombre (ese bucket no guarda cédula).
+- `POST /personal/reclutamiento/candidatos/:folderId/analizar` (`?driveFileId=` opcional) - La IA **propone** qué documento requerido está en qué páginas de un PDF. **No está limitado a `modoSubida='archivo_unico'`**: sin `driveFileId` detecta el único PDF de la carpeta (el aviso morado del candidato); con `driveFileId` analiza ESE archivo puntual, sin importar el modo declarado — así RRHH puede pedir el análisis sobre cualquier PDF que haya quedado en "Archivos Adicionales" (2026-09-16, ver Sprint 8 actualizado). No escribe nada en Drive.
+  - **El prompt vive como un `Agent`** (`Agent.name = 'Revisor de Documentos (IA)'`, `createdBy: null`, `scope: 'RECLUTAMIENTO'`), no como una constante — editable desde `/admin/agents` (solo ADMIN) sin redeploy. Se autocrea con un criterio por defecto la primera vez que se usa (`ReclutamientoIaService.getDocumentReviewerInstructions`, se relee sin caché en cada análisis). Solo el CRITERIO (tono, reglas de confianza) es editable ahí — la lista de requisitos, el total de páginas y el contrato de salida en JSON los agrega siempre el código, para que un criterio mal editado degrade la respuesta pero nunca rompa el parseo.
+  - **Gotcha de axios/Express con este endpoint específico:** el body original mandaba `null` (`api.post(url, null, {...})`), que axios serializa como el texto literal `"null"`. El `body-parser` de Express en modo estricto (el default) solo acepta objeto o array como JSON de nivel superior, así que rechazaba con 400 `Unexpected token 'n', "null" is not valid JSON` **antes** de llegar al controller — un bug invisible por curl sin body, solo reproducible mandando ese body exacto. Corregido mandando `{}` en vez de `null` desde `personal.service.ts`.
+- `POST /personal/reclutamiento/candidatos/:folderId/aplicar-analisis` - RRHH confirmó/corrigió: parte el PDF en un archivo por documento (nombrados `"<Requisito> - <original>"`, el formato que reconoce `findMatchingFile`), conservando el original. Recibe **una lista de páginas** por documento, no un rango — la pantalla de revisión etiqueta miniatura por miniatura, así que un documento puede formarse con páginas no consecutivas (anverso/reverso separados) y aun así salir como un solo archivo. La traza va a `analisis-ia.json`, **nunca** a `candidato.json` (el portal de postulación lo reescribe desde cero y la borraría).
+- `GET /personal/reclutamiento/candidatos/:folderId/pdf/:driveFileId` - Proxy del PDF para el visor del navegador; valida que el archivo pertenezca a esa carpeta.
+- Requiere `GOOGLE_VERTEX_PROJECT` (+ `GOOGLE_VERTEX_LOCATION`, `GOOGLE_VERTEX_MODEL`). **Vertex AI no acepta API keys** — usa la misma service account de Drive con scope `cloud-platform`. Vacío = función deshabilitada, Reclutamiento sigue a mano.
+- **Verificado contra Vertex real el 2026-09-16** (auth + PDF embebido + JSON estructurado, ubicó bien los documentos, y también en navegador real con Playwright: login → sync → abrir candidato → clic en ambos puntos de entrada → miniaturas renderizadas → 0 errores de consola). Modelo: `gemini-2.5-flash`, el más nuevo al que `agentes-504115` tiene acceso — **toda la serie Gemini 3.x devuelve 404 NOT_FOUND ahí**. ⚠️ **Google retira los Gemini 2.5 el 16/10/2026**: antes de esa fecha hay que conseguir acceso a 3.x y mover `GOOGLE_VERTEX_MODEL`.
+- **Gotcha de entorno (recurrente en este repo, backend Y frontend):** al vivir bajo `Documents`/OneDrive, tanto `nest --watch` como el watcher de Vite pueden dejar de detectar cambios en archivos ya abiertos, sirviendo código viejo sin avisar. Si un fix "no aparece" (o un endpoint se comporta distinto a lo que dice el código), comparar el mtime de los archivos tocados contra la hora de arranque del proceso (`Get-Process -Id <pid> | select StartTime`) antes de sospechar del código — y reiniciar el proceso correspondiente si el archivo es más nuevo.
+
+**Capacitaciones, Buzón de Quejas y Sugerencias, Encuestas (2026-09-15, ver `.agents/modules/recursos-humanos.md` puntos 8-10 para el detalle completo):**
+- `GET/POST/PATCH/DELETE /personal/trainings`, `PATCH /personal/trainings/:id/completed`, `POST /personal/trainings/upload` (sube directo a Drive, no a disco), `POST/DELETE /personal/trainings/:id/attachments` - Capacitaciones, cumplimiento **general** (no por guardia), requiere `FolderConfig.type='CAPACITACIONES'` configurado antes de crear cualquier registro
+- `POST /personal/complaints` (abierto a cualquier empleado, sin `@Section`), `GET /personal/complaints` (RRHH), `PATCH /personal/complaints/:id/stage`, `GET/POST/PATCH/DELETE /personal/complaint-fields` - Buzón de Quejas y Sugerencias, con campos de formulario configurables por RRHH y gestión tipo Kanban
+- `GET/POST /personal/surveys`, `GET /personal/surveys/:id/results`, `GET /personal/surveys/pending/mine`, `GET/POST /personal/surveys/:id/respond` - Encuestas, solo a usuarios con cuenta (nunca a guardias), respuestas identificadas
 
 **Movimientos de Personal — entrada/salida de guardias (2026-09-09, reemplaza a "Verificación asistida" de Sprint 2; ver `.agents/modules/movimientos-personal.md`):**
 - `GET/POST/PATCH/DELETE /personal/sistemas-verificacion` - Catálogo configurable de sistemas externos (IsyPlus, IESS, SUT, SICOSEP), ya sembrado para `companyId=1`. Sin página propia — se administra desde un modal dentro de `/rrhh/movimientos`
 - `GET /personal/movimientos` (+ `/:id`), `POST /personal/movimientos/salida`, `PATCH /personal/movimientos/:id/items/:itemId` - Casos de entrada/salida por guardia, con checklist por sistema (snapshot del catálogo al crear el caso). **No** hay `POST .../entrada`: es un registro, no un alta manual — la entrada solo se crea sola
-- Entrada: única vía es automática, `KanbanColumn.triggersHire` (una sola columna por empresa) crea el caso al mover un candidato ahí (`CandidateService.move()`). Salida: ícono + `window.confirm` en `GuardiasList.tsx` (sin formulario, usa los datos de la fila). Ambas son idempotentes (no duplican un caso ya abierto para la misma cédula)
+- Entrada: única vía es automática, se crea al contratar un candidato desde Reclutamiento (`DriveService.contratarCandidato()`, ver `.agents/modules/reclutamiento.md` Sprint 8.3 y `.agents/modules/movimientos-personal.md`). El Kanban de Candidatos que antes disparaba esto se eliminó por completo el 2026-09-17 (modelos, servicios, páginas — ver `.agents/modules/recursos-humanos.md` punto 2). Si la cédula ya existía pero esa persona había salido, se permite recontratar (abre un caso ENTRADA nuevo) en vez de bloquear. Salida: ícono + `ConfirmDialog` (modal propio, no `window.confirm`) en `GuardiasList.tsx` (sin formulario, usa los datos de la fila). Ambas son idempotentes (no duplican un caso ya abierto para la misma cédula)
 - Contexto: el spike de `backend/scraping-poc/` concluyó que el scraping automatizado **no es viable** (WAF Incapsula + captcha en SICOSEP; login de empleador en SUT; datos abiertos solo agregados). La acción en el portal la hace una persona; el sistema guarda la traza. La vieja tabla `VerificationCheck` (log plano, sin dirección entrada/salida) se eliminó — sus datos, si existían, se migraron a un caso histórico por `(companyId, cedula)`.
 
 **Revisión documental (Sprint 3):**
@@ -340,9 +370,51 @@ El punto 4 es deliberado y esta cubierto por un test: invertirlo dejaria fuera a
 **Reglas:**
 - Modelos `DocumentReview` (estado actual) + `DocumentReviewHistory` (traza). Se separan de `EmployeeDocument` a propósito: `deleteEmployeeByCedula` borra los documentos y una re-subida genera un `driveFileId` nuevo, así que la traza no puede vivir ahí.
 - `review.stale = true` cuando el archivo actual ya no es el que se revisó (rechazaron y volvieron a subir) → la UI pide nueva revisión.
-- La traza **sobrevive** al borrado del empleado (no hay FK a `Candidate`, la relación es por cédula). Es deliberado: es un registro de auditoría.
+- La traza **sobrevive** al borrado del empleado (sin FK, la relación es por cédula). Es deliberado: es un registro de auditoría.
 - El match entre archivo y tipo de documento exige frase completa, todos los términos, o ≥60 % cuando son 3 o más; **cada archivo se asigna a un solo tipo**. Antes bastaba una palabra suelta y un archivo podía aparecer en varias filas del checklist.
 - Estos 3 endpoints usan `SectionPermissionGuard` (sección RRHH), no `RolesGuard` - ver "Permisos por seccion".
+
+### Ventas (`/ventas`) — CRM y Contratos
+*Nota de nomenclatura:* el módulo cubre dos cosas separadas: CRM (leads, visitas, metas) y un subsistema de generación/firma de contratos a partir de plantillas `.docx`. El diseño detallado del subsistema de contratos vive en `backend/.agents/CONTRATOS-PLAN.md` (gitignored, local — léelo primero antes de tocar `ventas-templates.*`/`ventas-contratos.*`).
+
+**CRM:**
+- `GET/POST /ventas/leads`, `PATCH /ventas/leads/:id/status`, `POST /ventas/leads/:id/assign` - Prospectos
+- `GET/POST /ventas/visitas`, `POST /ventas/visitas/:id/checkin`, `POST /ventas/visitas/:id/complete` - Visitas de campo con check-in geolocalizado
+- `GET /ventas/dashboard`, `POST /ventas/goals` - Metas de venta por vendedor
+- `POST /ventas/webhook/lead` - Ingesta de leads externos por API key (sin sesión)
+
+**Plantillas (`/ventas/templates`):**
+- `GET/POST/PATCH/DELETE /ventas/templates` - CRUD de plantilla (nombre, `driveUrl`, asunto/cuerpo de correo por defecto, numeración — ver abajo)
+- `POST /ventas/templates/:id/download-drive` - Descarga el `.docx` desde el link de Drive/Google Doc a disco local (`uploads/templates/`)
+- `POST /ventas/templates/:id/detect-variables` - Detecta variables `<<Var>>` o `[Var]` en el documento, incluyendo el formato "con espacio de nombres" `[Contrato.ID de Contrato]` (puntos, tildes, paréntesis, `/`)
+- `POST /ventas/templates/:id/fields` - Guarda la configuración de campos (reemplaza todos). Tipos: `TEXT`, `NUMBER`, `DATE`, `EMAIL`, `CHECKBOX`, `DROPDOWN`, `SIGNATURE`, `TABLE`, `CONTRACT_NUMBER`. `isClientField` decide quién completa el campo (ver abajo). Para `TABLE`, `tableConfig` (`{ columns: [{key,label,type}], maxRows }`) define sus columnas. Para `DROPDOWN`, `dropdownOptions: String[]` (editable opción por opción en un sub-panel en `TemplateConfig.tsx`, igual que las columnas de `TABLE`) + `allowMultiple: Boolean`: si es `true`, el vendedor marca varias opciones (checkboxes en `ContratoForm.tsx`, valor guardado como arreglo, se inserta como lista con viñetas en el PDF); si es `false`, sigue siendo un `<select>` de una sola opción. `allowOther: Boolean` (2026-09-16) agrega una opción "Otro" que deja escribir texto libre, en ambos modos.
+- Etiqueta por defecto de un campo detectado: no repite el espacio de nombres de la variable (`Contrato.ID de Contrato` → etiqueta por defecto "ID de Contrato", no el nombre completo) — se corrige en `TemplateConfig.tsx` `handleDetect()`.
+
+**Numeración automática de contrato (2026-09-16):** un campo `CONTRACT_NUMBER` (a lo sumo uno por plantilla) no se muestra como editable en ningún formulario — `createContract` lo calcula solo a partir de `SalesTemplate.numberingPrefix`/`numberingDigits`/`numberingNext` (ej. `MEGAMONT-00001`), dentro de una transacción Prisma que incrementa `numberingNext` para evitar números duplicados si dos contratos se crean casi al mismo tiempo. El resultado también se guarda en `SalesContract.contractNumber` (se muestra en listas en vez de `#id`). Se configura por plantilla, en `TemplateConfig.tsx`, tarjeta "⚙ Numeración de contrato".
+
+**Carpeta de Drive por plantilla (2026-09-16, reubicado 2026-09-16):** se configura una carpeta raíz de Drive **compartida por toda la empresa** (`FolderConfig` tipo `VENTAS_CONTRATOS`, mismo mecanismo genérico que usa RRHH — `GET/POST /personal/drive/config?type=VENTAS_CONTRATOS`) desde el botón "⚙" en `ContratosList.tsx` (`ContratosDriveConfigModal.tsx`) — a propósito NO vive en `TemplateConfig.tsx`, porque es una sola carpeta para toda la empresa, no una por plantilla. El sistema crea ahí una subcarpeta por plantilla la primera vez que hace falta (`SalesTemplate.driveFolderId`) y sube el PDF generado/enviado con un nombre descriptivo (`{contractNumber}_generado_{fecha}.pdf`, etc.) — es opcional y best-effort: si no está configurada o falla, la generación/envío del contrato no se ve afectada. El PDF ya firmado llega al sistema por dos vías: automáticamente vía el webhook `POST /ventas/webhook/signwell` (evento `document_completed`, ver abajo) cuando `SIGNWELL_WEBHOOK_ID` está configurado, o a mano vía `POST /ventas/contratos/:id/documents/signed` (multipart, botón "📤 Subir PDF firmado" en `ContratoResult.tsx`) como respaldo — ambas terminan igual: guardan el archivo, lo suben a Drive si aplica, y marcan el contrato como `SIGNED`.
+
+**Agrupamiento de campos por espacio de nombres (2026-09-16):** tanto en `ContratoForm.tsx` (llenar) como en `TemplateConfig.tsx` (configurar, agregado el mismo día) los campos cuya variable tiene un punto (ej. `Contrato.ID de Contrato`) se agrupan bajo un encabezado `"Campos de (Contrato)"`; los que no tienen punto van juntos bajo `"Otros"` (solo si hay alguno). Es solo de presentación — no afecta cómo se guardan ni se sustituyen las variables.
+
+**Editar campos y regenerar (2026-09-16):** `ContratoForm.tsx` se reutiliza también en modo edición (ruta `/ventas/contratos/:contractId/editar`, botón "✏️ Editar campos" en `ContratoResult.tsx`, oculto una vez `status='SIGNED'`) — carga el contrato existente con `getContract`, y al guardar llama `PATCH /ventas/contratos/:id` (`updateContract`) en vez de crear uno nuevo, sin tocar el `status`. El botón "Generar PDF" en `ContratoResult.tsx` ya no se oculta fuera de `DRAFT` — está disponible en cualquier estado salvo `SIGNED`, y se relabelea a "🔄 Regenerar PDF" cuando ya existe un PDF, para que el ciclo editar → regenerar se pueda repetir.
+
+**Contratos (`/ventas/contratos`):**
+- `GET/POST/PATCH/DELETE /ventas/contratos` - CRUD de contrato (nombre/email de envío + `fieldValues`, donde una tabla se guarda como arreglo de filas y un `DROPDOWN` de selección múltiple como arreglo de opciones marcadas)
+- `POST /ventas/contratos/:id/generate` - Fusiona `fieldValues` en el `.docx` de la plantilla y convierte a PDF con **LibreOffice headless** (`soffice --headless --convert-to pdf`, no HTML intermedio — preserva alineación/fuentes/imágenes del documento original; variable de entorno opcional `LIBREOFFICE_PATH`, instalado en `backend/Dockerfile` vía `apk add libreoffice`). Todo valor insertado (excepto tablas) se pone en negrita (`spliceBoldValue`, 2026-09-16 — ver `CONTRATOS-PLAN.md` punto 11 sobre por qué NO usa una regex sobre el archivo completo, eso colgaba el proceso contra el documento real). Un campo `TABLE` se inserta como tabla real de Word (OOXML `<w:tbl>`), no como texto — la variable debe estar sola en su propio párrafo en la plantilla. Sube el PDF a Drive si hay carpeta configurada (ver arriba).
+- `POST /ventas/contratos/:id/send` - Envía a firma electrónica vía **SignWell** (2026-09-17, reemplaza a BoldSign — ver `CONTRATOS-PLAN.md` punto 8/11 para el porqué del cambio y el diagnóstico de los dos bugs reales que tenía la integración de BoldSign). `POST https://www.signwell.com/api/v1/documents` con header `X-Api-Key` (`SIGNWELL_API_KEY`), `test_mode` controlado por `SIGNWELL_TEST_MODE` (default `true`), y `text_tags: true` — cualquier campo `isClientField` que no sea `TABLE` (casilla, firma, iniciales, texto, fecha...) se embebió como un SignWell text tag (`{{...}}`) directo en el documento al generar el PDF, así que el cliente lo completa/firma **dentro del mismo documento** al momento de firmar, sin ningún link ni correo aparte (ver `CONTRATOS-PLAN.md` sección 8). `with_signature_page: true` solo se agrega cuando la plantilla no trae ninguno de esos tags. Guarda `signwellDocumentId`/`signwellStatus` en el contrato.
+- `POST /ventas/webhook/signwell` - **Sin sesión** (SignWell llama directo). Verifica `event.hash` (HMAC-SHA256 de `"{event.type}@{event.time}"` con `SIGNWELL_WEBHOOK_ID` como llave — sin esa env var configurada, el evento se ignora) y, si es `document_completed`, descarga el PDF firmado (`GET /api/v1/documents/:id/completed_pdf`, con reintentos porque puede tardar unos segundos en estar listo) y marca el contrato `SIGNED`. `SIGNWELL_WEBHOOK_ID` se obtiene registrando el webhook a mano vía `POST /api/v1/hooks` una vez que exista una URL pública de callback (no se puede hacer en local) — hasta entonces, la subida manual de abajo es el único camino a `SIGNED`.
+- `GET /ventas/contratos/file/:fileName` - Descarga protegida por sesión + pertenencia a la empresa (antes era pública, corregido 2026-09-10)
+- `GET /ventas/contratos/:id/documents` - Historial de versiones del PDF (`SalesContractDocument`, tipos `GENERADO`/`ENVIADO`/`FIRMADO`) — cada generación/envío/firma queda registrado en vez de pisar el archivo anterior
+- `POST /ventas/contratos/:id/documents/signed` - Sube a mano el PDF ya firmado (multipart, respaldo del webhook de arriba)
+- `GET /ventas/contratos/public/:token`, `POST /ventas/contratos/public/:token/submit` - **Sin sesión**, protegidas solo por el token (`SalesContract.clientFillToken`, 24 bytes aleatorios). Página pública `/ventas/contratos/completar/:token`: cuando un campo `TABLE` está marcado `isClientField=true`, el cliente completa esa tabla aquí antes de que el vendedor genere/envíe el contrato — ninguna plataforma de firma soporta un campo nativo de "tabla con filas variables", por eso este paso vive en la app. Al enviar, el backend genera el PDF y lo manda a SignWell de inmediato (2026-09-17) y la respuesta trae `redirectToSign` — el cliente pasa de llenar la tabla a firmar en la misma visita, sin esperar un segundo correo (ver `CONTRATOS-PLAN.md` sección 8).
+
+**Quién completa cada campo (`isClientField`):** con `false`, lo llena el vendedor en `ContratoForm.tsx` al crear el contrato (para `TABLE`, un editor de filas dinámico). Con `true`, un campo simple lo completa el firmante dentro del propio documento al momento de firmar (SignWell text tag); un campo `TABLE` lo llena el cliente antes, por el link público de arriba. Un campo `CONTRACT_NUMBER` nunca es editable por nadie — lo asigna el sistema (ver arriba).
+
+**Reglas:**
+- Multi-tenant por `companyId` como el resto de la app; super admin (`companyId: null`) no puede crear contratos directamente (`createContract` exige empresa).
+- Los Anexos A/B/C (Equipos/Servicios/Contactos) que antes estaban hardcodeados en `ContratoForm.tsx`/`generatePdf` (2026-09-16) se eliminaron — el mecanismo genérico de campos `TABLE` los reemplaza para cualquier plantilla nueva.
+- `PersonalModule` exporta `DriveService` y `VentasModule` lo importa (2026-09-16) para reutilizar el mismo cliente de Google Drive que usa RRHH — no crear un segundo cliente de Drive independiente para Ventas.
+- `ContratoForm.tsx` ya no pide teléfono/empresa/RUC/dirección del cliente (2026-09-16) — la sección se renombró "Datos para el envío" y quedó solo con nombre y email, lo mínimo que necesita `sendContract` para mandar a firmar. Si una plantilla necesita esos datos, se configuran como campos normales (`Cliente.Teléfono`, etc.), no como un formulario fijo. Las columnas `SalesContract.clientPhone/clientCompany/clientRuc/clientAddress` siguen en el esquema (nadie las borra por ahora) pero ningún flujo del UI las escribe.
 
 ### Permissions (`/permissions`)
 - `GET /permissions/my` - Secciones y permisos del usuario autenticado (cualquier usuario)

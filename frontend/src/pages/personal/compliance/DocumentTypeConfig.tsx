@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDocumentTypes, createDocumentType, updateDocumentType, deleteDocumentType } from '../../../services/personal.service';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 
 export default function DocumentTypeConfig() {
   const navigate = useNavigate();
@@ -11,6 +12,7 @@ export default function DocumentTypeConfig() {
   const [form, setForm] = useState({ name: '', folder: 'CUSTODIAS', required: true });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmandoEliminarTipo, setConfirmandoEliminarTipo] = useState<number | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -48,8 +50,14 @@ export default function DocumentTypeConfig() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('¿Eliminar este tipo de documento?')) return;
+  const handleDelete = (id: number) => {
+    setConfirmandoEliminarTipo(id);
+  };
+
+  const confirmarEliminarTipo = async () => {
+    const id = confirmandoEliminarTipo;
+    if (id == null) return;
+    setConfirmandoEliminarTipo(null);
     try {
       await deleteDocumentType(id);
       load();
@@ -178,6 +186,17 @@ export default function DocumentTypeConfig() {
             );
           })}
         </div>
+      )}
+
+      {confirmandoEliminarTipo != null && (
+        <ConfirmDialog
+          title="Eliminar tipo de documento"
+          message="¿Eliminar este tipo de documento?"
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={confirmarEliminarTipo}
+          onCancel={() => setConfirmandoEliminarTipo(null)}
+        />
       )}
     </div>
   );

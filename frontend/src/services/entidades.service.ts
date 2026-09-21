@@ -10,6 +10,10 @@ export interface Entidad {
   companyId: number;
   createdAt: string;
   updatedAt: string;
+  // Calculado en el backend (nunca persistido) — false si el nombre no sigue
+  // el formato recomendado "Provincia - Nombre de la entidad". Solo viene en
+  // la respuesta de getEntidades(); puramente informativo.
+  formatoValido?: boolean;
 }
 
 export type RequisitoAplicaA = 'GLOBAL' | 'PUBLICA' | 'PRIVADA' | 'ENTIDAD';
@@ -286,6 +290,19 @@ export interface UpdateGuardiaFichaPersonalInput {
 export const getGuardiaFicha = (cedula: string): Promise<GuardiaFichaPersonal> =>
   api.get(`/personal/guardia-ficha/${cedula}`).then((r) => r.data);
 
+// Para la exportación configurable del listado de guardias — trae todas las
+// fichas de la empresa de una sola vez.
+export const getAllGuardiaFichas = (): Promise<GuardiaFichaPersonal[]> =>
+  api.get('/personal/guardia-ficha').then((r) => r.data);
+
+export const exportGuardiasPdf = (
+  columns: { key: string; label: string }[],
+  rows: Record<string, unknown>[],
+): Promise<Blob> =>
+  api
+    .post('/personal/guardias/export-pdf', { columns, rows }, { responseType: 'blob' })
+    .then((r) => r.data);
+
 export const setGuardiaFicha = (
   cedula: string,
   data: UpdateGuardiaFichaPersonalInput,
@@ -294,7 +311,7 @@ export const setGuardiaFicha = (
 // CAMPOS PERSONALIZADOS DE LA FICHA PERSONAL — creables desde la UI por
 // cualquier usuario con acceso al módulo (ver PersonalFieldsConfigModal).
 
-export type PersonalFieldType = 'TEXT' | 'NUMBER' | 'DATE';
+export type PersonalFieldType = 'TEXT' | 'NUMBER' | 'DATE' | 'BOOLEAN';
 export type PersonalFieldScope = 'GUARDIA' | 'PERSONAL_ADMIN';
 export type PersonalFieldCategory = 'PERSONAL' | 'LABORAL';
 
@@ -304,16 +321,20 @@ export interface PersonalFieldDefinition {
   label: string;
   type: PersonalFieldType;
   category: PersonalFieldCategory;
+  // Puramente informativo (asterisco rojo + insignia "N campos requeridos sin
+  // completar" en la Ficha Personal) — nunca bloquea guardar, y no se mezcla
+  // con compliancePercent (esa métrica mide documentos, no campos).
+  required: boolean;
   order: number;
 }
 
 export const getPersonalFieldDefinitions = (scope: PersonalFieldScope = 'GUARDIA'): Promise<PersonalFieldDefinition[]> =>
   api.get('/personal/personal-field-definitions', { params: { scope } }).then((r) => r.data);
 
-export const createPersonalFieldDefinition = (data: { label: string; type: PersonalFieldType; scope?: PersonalFieldScope; category?: PersonalFieldCategory }): Promise<PersonalFieldDefinition> =>
+export const createPersonalFieldDefinition = (data: { label: string; type: PersonalFieldType; scope?: PersonalFieldScope; category?: PersonalFieldCategory; required?: boolean }): Promise<PersonalFieldDefinition> =>
   api.post('/personal/personal-field-definitions', data).then((r) => r.data);
 
-export const updatePersonalFieldDefinition = (id: number, data: { label?: string; order?: number }): Promise<PersonalFieldDefinition> =>
+export const updatePersonalFieldDefinition = (id: number, data: { label?: string; order?: number; required?: boolean }): Promise<PersonalFieldDefinition> =>
   api.patch(`/personal/personal-field-definitions/${id}`, data).then((r) => r.data);
 
 export const deletePersonalFieldDefinition = (id: number) => api.delete(`/personal/personal-field-definitions/${id}`);
@@ -335,6 +356,9 @@ export interface SyncEntidadesResult {
   guardiasNoReconocidos: string[];
   renombresIgnorados: string[];
   guardiasFueraConCarpetaActiva: string[];
+  // Puramente informativo (Fase 3.2) — nombres de carpetas de Entidad que no
+  // siguen el formato "Provincia - Nombre de la entidad". Nunca bloquea nada.
+  entidadesFormatoInvalido: string[];
   errors: string[];
 }
 
@@ -351,8 +375,36 @@ export interface MoverGuardiaEntidadResult {
   sync: SyncEntidadesResult;
 }
 
+// Cuando la entidad destino todavía no tiene carpeta de Drive vinculada y no
+// se encontró ninguna carpeta parecida bajo Público/Privado, el backend no
+// mueve nada ni crea la carpeta sola: devuelve esto para que el frontend
+// confirme con RRHH antes de reintentar con `confirmCrearCarpeta: true`.
+export interface MoverGuardiaRequiereConfirmacion {
+  requiereConfirmacion: true;
+  entidadNombre: string;
+  tipoLabel: string;
+}
+
 export const moverGuardiaAEntidad = (
   cedula: string,
   entidadId: number,
-): Promise<MoverGuardiaEntidadResult> =>
-  api.post(`/personal/drive/guardia/${cedula}/mover-entidad`, { entidadId }).then((r) => r.data);
+  confirmCrearCarpeta?: boolean,
+): Promise<MoverGuardiaEntidadResult | MoverGuardiaRequiereConfirmacion> =>
+  api
+    .post(`/personal/drive/guardia/${cedula}/mover-entidad`, { entidadId, confirmCrearCarpeta })
+    .then((r) => r.data);
+
+// CONFIGURACION DE NOTIFICACIONES
+
+export interface NotificationConfig {
+  senderEmail: string | null;
+  senderName: string | null;
+  whatsappProvider: string | null;
+  whatsappFrom: string | null;
+}
+
+export const getNotificationConfig = (): Promise<NotificationConfig | null> =>
+  api.get('/personal/notification-config').then((r) => r.data);
+
+export const updateNotificationConfig = (data: Partial<NotificationConfig>): Promise<NotificationConfig> =>
+  api.patch('/personal/notification-config', data).then((r) => r.data);

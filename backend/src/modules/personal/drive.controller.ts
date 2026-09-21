@@ -8,18 +8,19 @@ import {
   Param,
   Query,
   Req,
+  Res,
   UseGuards,
   ParseIntPipe,
+  BadRequestException,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { DriveService } from './services/drive.service';
 import { DocumentReviewService } from './services/document-review.service';
 import { DocumentExtractionService } from './services/document-extraction.service';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { ReclutamientoIaService } from './services/reclutamiento-ia.service';
 import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
 import { Section } from '../../common/decorators/section.decorator';
-import { UserRole } from '@prisma/client';
 import {
   SaveDriveConfigDto,
   TestDriveConnectionDto,
@@ -34,11 +35,13 @@ import {
   UpdateJobPositionDto,
   ReassignReclutamientoFileDto,
   SaveCandidatoDatosDto,
+  AplicarAnalisisDto,
 } from './dto/job-position.dto';
 import { ReviewDocumentDto } from './dto/document-review.dto';
 import {
   UpdateDocumentExpiryDto,
   ReassignDocumentTypeDto,
+  ApproveAdditionalDocumentDto,
 } from './dto/document-type.dto';
 
 @Controller('personal')
@@ -48,6 +51,7 @@ export class DriveController {
     private readonly driveService: DriveService,
     private readonly documentReviewService: DocumentReviewService,
     private readonly documentExtractionService: DocumentExtractionService,
+    private readonly reclutamientoIaService: ReclutamientoIaService,
   ) {}
 
   @Get('drive/config')
@@ -71,11 +75,6 @@ export class DriveController {
       body.driveFolderId,
       body.type,
     );
-  }
-
-  @Post('drive/sync')
-  syncFolder(@Req() req: any) {
-    return this.driveService.syncFolder(req.user.companyId, req.user.userId);
   }
 
   // Sync de la carpeta Público/Privado/Entidad/Guardia (módulo de
@@ -187,6 +186,24 @@ export class DriveController {
     );
   }
 
+  // RRHH aprueba un archivo "adicional" dándole un nombre propio, sin
+  // asociarlo a un tipo de documento requerido. Ver
+  // DriveService.approveAsAdditionalDocument.
+  @Patch('drive/documents/:driveFileId/approve-additional')
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('RRHH', 'write')
+  approveAsAdditionalDocument(
+    @Param('driveFileId') driveFileId: string,
+    @Body() body: ApproveAdditionalDocumentDto,
+    @Req() req: any,
+  ) {
+    return this.driveService.approveAsAdditionalDocument(
+      driveFileId,
+      body.label,
+      req.user.companyId,
+    );
+  }
+
   @Get('document-types')
   getDocumentTypes(@Req() req: any) {
     return this.driveService.getDocumentTypes(req.user.companyId);
@@ -207,8 +224,8 @@ export class DriveController {
   }
 
   @Delete('document-types/:id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('RRHH', 'write')
   deleteDocumentType(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.driveService.deleteDocumentType(id, req.user.companyId);
   }
@@ -283,28 +300,134 @@ export class DriveController {
     );
   }
 
-  // Contrata a un postulante: mueve su carpeta de Reclutamiento a "Sin
-  // Asignar" dentro de Guardias y de inmediato corre la sincronización de
-  // Guardias, para que aparezca ya en Listado de Guardias sin que RRHH tenga
-  // que ir a apretar "Sincronizar Drive" a mano. Ver DriveService.contratarCandidato.
+  // Sirve al navegador el PDF de un postulante. Hace falta un proxy porque los
+  // archivos de Drive viven detrás de la service account: el front no los puede
+  // pedir directo. Se valida que el archivo esté REALMENTE dentro de la carpeta
+  // indicada antes de servirlo, para que este endpoint no se convierta en un
+  // lector universal de cualquier id de Drive que alguien adivine.
+  @Get('reclutamiento/candidatos/:folderId/pdf/:driveFileId')
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('RRHH', 'view')
+  async getCandidatoPdf(
+    @Param('folderId') folderId: string,
+    @Param('driveFileId') driveFileId: string,
+    @Res() res: Response,
+  ) {
+    const archivos = await this.driveService.listFilesInFolder(folderId);
+    if (!archivos.some((f: any) => f.id === driveFileId)) {
+      throw new BadRequestException(
+        'Ese archivo no pertenece a la carpeta de este postulante.',
+      );
+    }
+    const buffer = await this.driveService.downloadFileBuffer(driveFileId);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
+  }
+
+  // Devuelve la última propuesta de análisis guardada (si hay una), SIN
+  // llamar a Vertex AI. Se consulta al abrir el modal de revisión: si RRHH lo
+  // cerró para revisar otra cosa y vuelve, encuentra la misma propuesta en
+  // vez de tener que repetir el análisis. `GET`, no `POST` — es una simple
+  // lectura, no dispara ningún trabajo nuevo.
+  @Get('reclutamiento/candidatos/:folderId/analisis-pendiente')
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('RRHH', 'view')
+  obtenerAnalisisPendiente(
+    @Param('folderId') folderId: string,
+    @Req() req: any,
+    @Query('driveFileId') driveFileId?: string,
+  ) {
+    return this.reclutamientoIaService.obtenerPropuestaPendiente(
+      folderId,
+      req.user.companyId,
+      driveFileId,
+    );
+  }
+
+  // Análisis asistido del "archivo único": la IA PROPONE qué documento
+  // requerido está en qué páginas del PDF. No escribe nada en Drive — todo lo
+  // que toca archivos pasa por el endpoint de aplicar, de abajo. También
+  // guarda la propuesta como pendiente (ver obtenerAnalisisPendiente arriba).
+  // Ver ReclutamientoIaService.
+  @Post('reclutamiento/candidatos/:folderId/analizar')
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('RRHH', 'write')
+  analizarArchivoUnico(
+    @Param('folderId') folderId: string,
+    @Req() req: any,
+    @Query('driveFileId') driveFileId?: string,
+  ) {
+    return this.reclutamientoIaService.analizar(
+      folderId,
+      req.user.companyId,
+      driveFileId,
+    );
+  }
+
+  // RRHH confirmó/corrigió la propuesta: se parte el PDF en un archivo por
+  // documento dentro de la misma carpeta, conservando el original. A partir de
+  // aquí el postulante queda igual que uno que subió todo por separado.
+  @Post('reclutamiento/candidatos/:folderId/aplicar-analisis')
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('RRHH', 'write')
+  aplicarAnalisis(
+    @Param('folderId') folderId: string,
+    @Body() body: AplicarAnalisisDto,
+    @Req() req: any,
+  ) {
+    return this.reclutamientoIaService.aplicar(
+      folderId,
+      req.user.companyId,
+      body.asignaciones,
+      body.driveFileId,
+    );
+  }
+
+  // Contrata a un postulante: mueve su carpeta de Reclutamiento al destino que
+  // declara su vacante (Guardias/"Sin Asignar" o Personal Administrativo) y de
+  // inmediato corre la sincronización DE ESE destino, para que aparezca ya en
+  // su listado sin que RRHH tenga que ir a apretar "Sincronizar Drive" a mano.
+  // Ver DriveService.contratarCandidato.
   @Post('reclutamiento/candidatos/:folderId/contratar')
   @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
   @Section('RRHH', 'write')
-  async contratarCandidato(@Param('folderId') folderId: string, @Req() req: any) {
+  async contratarCandidato(
+    @Param('folderId') folderId: string,
+    @Req() req: any,
+  ) {
     const contratacion = await this.driveService.contratarCandidato(
       req.user.companyId,
       folderId,
-    );
-    const sync = await this.driveService.syncEntidadesFolder(
-      req.user.companyId,
       req.user.userId,
     );
+    const sync =
+      contratacion.tipoContratacion === 'ADMINISTRATIVO'
+        ? await this.driveService.syncPersonalAdminFolder(
+            req.user.companyId,
+            req.user.userId,
+          )
+        : await this.driveService.syncEntidadesFolder(
+            req.user.companyId,
+            req.user.userId,
+          );
     return { contratacion, sync };
   }
 
+  // Rescate retroactivo, por si RRHH creó un campo de Configuración DESPUÉS
+  // de contratar a alguien: revisa las fichas ya contratadas y, si no tienen
+  // guardado el JSON de postulación, lo busca en su carpeta actual de Drive.
+  // Ver DriveService.backfillPostulacion.
+  @Post('drive/backfill-postulacion')
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('RRHH', 'write')
+  backfillPostulacion(@Req() req: any) {
+    return this.driveService.backfillPostulacion(req.user.companyId);
+  }
+
   @Delete('drive/employee/:cedula')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('RRHH', 'write')
   deleteDriveEmployee(@Param('cedula') cedula: string, @Req() req: any) {
     return this.driveService.deleteEmployeeByCedula(cedula, req.user.companyId);
   }
@@ -316,10 +439,7 @@ export class DriveController {
   @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
   @Section('RRHH', 'write')
   archivarCarpetaGuardia(@Param('cedula') cedula: string, @Req() req: any) {
-    return this.driveService.archivarCarpetaGuardia(
-      req.user.companyId,
-      cedula,
-    );
+    return this.driveService.archivarCarpetaGuardia(req.user.companyId, cedula);
   }
 
   // Asigna/mueve a un guardia a una entidad (mueve su carpeta en Drive y
@@ -337,7 +457,14 @@ export class DriveController {
       req.user.companyId,
       cedula,
       dto.entidadId,
+      dto.confirmCrearCarpeta,
     );
+    // Si el servicio pide confirmación (entidad sin carpeta, sin candidata
+    // encontrada), todavía no se movió nada — no corre el sync, que asume
+    // que ya hubo un movimiento real para reflejar.
+    if ('requiereConfirmacion' in movimiento) {
+      return movimiento;
+    }
     const sync = await this.driveService.syncEntidadesFolder(
       req.user.companyId,
       req.user.userId,

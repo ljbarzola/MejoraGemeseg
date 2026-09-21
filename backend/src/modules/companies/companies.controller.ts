@@ -22,6 +22,8 @@ import { extname } from 'path';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
+import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
+import { Section } from '../../common/decorators/section.decorator';
 import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
@@ -45,8 +47,9 @@ export class CompaniesController {
   constructor(private readonly companiesService: CompaniesService) {}
 
   @Get()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
   @Roles(UserRole.ADMIN)
+  @Section('COMPANIES', 'view')
   findAll(@Req() req: any) {
     if (req.user.companyId) {
       return this.companiesService.findOne(req.user.companyId);
@@ -55,7 +58,8 @@ export class CompaniesController {
   }
 
   @Get('mine')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('COMPANY_SETTINGS', 'view')
   findMine(@Req() req: any) {
     if (!req.user.companyId) {
       return null;
@@ -68,9 +72,15 @@ export class CompaniesController {
     return this.companiesService.findBySlug(slug);
   }
 
+  @Get('domain/:domain')
+  findByDomain(@Param('domain') domain: string) {
+    return this.companiesService.findByDomain(domain);
+  }
+
   @Get(':id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
   @Roles(UserRole.ADMIN)
+  @Section('COMPANY_SETTINGS', 'view')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     if (req.user.companyId && req.user.companyId !== id) {
       throw new ForbiddenException('No tienes acceso a esta empresa');
@@ -79,8 +89,9 @@ export class CompaniesController {
   }
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
   @Roles(UserRole.ADMIN)
+  @Section('COMPANIES', 'write')
   create(@Req() req: any, @Body() dto: CreateCompanyDto) {
     if (req.user.companyId) {
       throw new ForbiddenException(
@@ -91,8 +102,9 @@ export class CompaniesController {
   }
 
   @Patch(':id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
   @Roles(UserRole.ADMIN)
+  @Section('COMPANY_SETTINGS', 'write')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Req() req: any,
@@ -105,8 +117,9 @@ export class CompaniesController {
   }
 
   @Delete(':id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
   @Roles(UserRole.ADMIN)
+  @Section('COMPANIES', 'write')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     if (req.user.companyId) {
       throw new ForbiddenException(
@@ -117,8 +130,9 @@ export class CompaniesController {
   }
 
   @Post(':id/logo')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
   @Roles(UserRole.ADMIN)
+  @Section('COMPANY_SETTINGS', 'write')
   @UseInterceptors(
     FileInterceptor('logo', {
       storage: logoStorage,

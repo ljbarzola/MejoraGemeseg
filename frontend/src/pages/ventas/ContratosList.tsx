@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Plus } from 'lucide-react';
+import { ArrowLeft, FileText, Plus, Settings } from 'lucide-react';
 import { getContracts, deleteContract, SalesContract } from '../../services/ventas.service';
 import { PRIMARY } from './contratoStyles';
+import ContratosDriveConfigModal from '../../components/ventas/ContratosDriveConfigModal';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 export default function ContratosList() {
   const navigate = useNavigate();
   const [contracts, setContracts] = useState<SalesContract[]>([]);
   const [filter, setFilter] = useState('');
+  const [showDriveConfig, setShowDriveConfig] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
-  useEffect(() => { loadContracts(); }, []);
+  useEffect(() => { loadContracts(); }, [filter]);
 
   const loadContracts = async () => {
     try {
@@ -18,8 +22,10 @@ export default function ContratosList() {
     } catch { /* */ }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('¿Eliminar este contrato?')) return;
+  const handleConfirmDelete = async () => {
+    const id = pendingDeleteId;
+    setPendingDeleteId(null);
+    if (id == null) return;
     try { await deleteContract(id); loadContracts(); } catch { /* */ }
   };
 
@@ -53,8 +59,14 @@ export default function ContratosList() {
             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', fontSize: '0.9rem' }}>
             <Plus size={16} /> Nuevo Contrato
           </button>
+          <button className="btn-secondary" onClick={() => setShowDriveConfig(true)} title="Carpeta de Drive para documentos"
+            style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', marginLeft: 8 }}>
+            <Settings size={16} />
+          </button>
         </div>
       </div>
+
+      <ContratosDriveConfigModal open={showDriveConfig} onClose={() => setShowDriveConfig(false)} />
 
       <div className="admin-section">
         {/* Filters */}
@@ -79,20 +91,31 @@ export default function ContratosList() {
               <div key={c.id} onClick={() => navigate(`/ventas/contratos/${c.id}`)}
                 style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #f0f0f0', cursor: 'pointer', gap: 12 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>#{c.id} — {c.clientName}</div>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{c.contractNumber || `#${c.id}`} — {c.clientName}</div>
                   <div style={{ fontSize: 11, color: '#888' }}>{c.clientEmail} · {c.template?.name}</div>
                 </div>
                 <span style={{ padding: '3px 10px', borderRadius: 12, background: statusColors[c.status] || '#888', color: '#fff', fontSize: 10, fontWeight: 600 }}>
                   {statusLabels[c.status] || c.status}
                 </span>
                 <span style={{ fontSize: 11, color: '#aaa' }}>{new Date(c.createdAt).toLocaleDateString('es-EC')}</span>
-                <button onClick={e => { e.stopPropagation(); handleDelete(c.id); }}
+                <button onClick={e => { e.stopPropagation(); setPendingDeleteId(c.id); }}
                   style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #e55', background: '#fff', color: '#c33', cursor: 'pointer', fontSize: 11 }}>✕</button>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {pendingDeleteId != null && (
+        <ConfirmDialog
+          title="Eliminar contrato"
+          message="¿Eliminar este contrato? Esta acción no se puede deshacer."
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setPendingDeleteId(null)}
+        />
+      )}
     </div>
   );
 }

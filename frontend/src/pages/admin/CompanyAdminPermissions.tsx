@@ -5,7 +5,8 @@ import { getUser } from '../../services/auth.service';
 
 const SECTION_ICONS: Record<string, string> = {
   DASHBOARD: '📊', PROJECTS: '📁', ADMIN: '👥', TOOLS: '🔧',
-  AGENTS: '🤖', CACAO: '🫘', COMPANY_SETTINGS: '🎨', COMPANIES: '🏢', CUSTODIAS: '🛡️', RRHH: '👤',
+  CACAO: '🫘', COMPANY_SETTINGS: '🎨', COMPANIES: '🏢', CUSTODIAS: '🛡️', RRHH: '👤',
+  VENTAS: '💼', SISTEMAS: '🖥️',
 };
 
 export default function CompanyAdminPermissions() {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Plus, Pencil, Trash2, Check, FileCog } from 'lucide-react';
 import { getDocumentTypes, createDocumentType, updateDocumentType, deleteDocumentType } from '../../services/personal.service';
+import ConfirmDialog from '../common/ConfirmDialog';
 
 interface DocumentType {
   id: number;
@@ -17,7 +18,13 @@ interface DocumentType {
  * grupo no tiene relación con la de Guardias. Por eso se gestiona en un modal
  * propio, siempre con folder='PERSONAL_ADMIN' fijo.
  */
-export default function DocumentosRequeridosModal({ onClose }: { onClose: () => void }) {
+interface Props {
+  onClose: () => void;
+  /** true cuando se embebe dentro de otro modal (ej. una pestaña): renderiza solo el contenido, sin overlay/header/footer propios. */
+  embedded?: boolean;
+}
+
+export default function DocumentosRequeridosModal({ onClose, embedded }: Props) {
   const [docTypes, setDocTypes] = useState<DocumentType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -28,6 +35,8 @@ export default function DocumentosRequeridosModal({ onClose }: { onClose: () => 
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState('');
+
+  const [confirmandoDelete, setConfirmandoDelete] = useState<DocumentType | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -76,8 +85,15 @@ export default function DocumentosRequeridosModal({ onClose }: { onClose: () => 
     }
   };
 
-  const handleDelete = async (dt: DocumentType) => {
-    if (!confirm(`¿Quitar "${dt.name}" de los documentos requeridos de Personal Administrativo?`)) return;
+  const handleDelete = (dt: DocumentType) => {
+    setError('');
+    setConfirmandoDelete(dt);
+  };
+
+  const confirmarDelete = async () => {
+    const dt = confirmandoDelete;
+    if (!dt) return;
+    setConfirmandoDelete(null);
     try {
       await deleteDocumentType(dt.id);
       load();
@@ -86,18 +102,8 @@ export default function DocumentosRequeridosModal({ onClose }: { onClose: () => 
     }
   };
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <FileCog size={17} /> Documentos requeridos — Personal Administrativo
-          </h3>
-          <button className="modal-close" onClick={onClose}>
-            <X size={16} />
-          </button>
-        </div>
-        <div className="modal-body">
+  const body = (
+    <>
           <p style={{ margin: '0 0 14px', fontSize: '0.82rem', color: '#718096' }}>
             Define qué documentos debe tener cada empleado administrativo. Esta lista es propia de este grupo, independiente de la de Guardias/Custodias.
           </p>
@@ -158,11 +164,50 @@ export default function DocumentosRequeridosModal({ onClose }: { onClose: () => 
               <Plus size={15} /> {saving ? 'Agregando...' : 'Agregar'}
             </button>
           </form>
+    </>
+  );
+
+  const deleteDialog = confirmandoDelete && (
+    <ConfirmDialog
+      title="Quitar documento requerido"
+      message={`¿Quitar "${confirmandoDelete.name}" de los documentos requeridos de Personal Administrativo?`}
+      confirmLabel="Sí, quitar"
+      danger
+      onConfirm={confirmarDelete}
+      onCancel={() => setConfirmandoDelete(null)}
+    />
+  );
+
+  if (embedded) {
+    return (
+      <>
+        {body}
+        {deleteDialog}
+      </>
+    );
+  }
+
+  return (
+    <>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <FileCog size={17} /> Documentos requeridos — Personal Administrativo
+          </h3>
+          <button className="modal-close" onClick={onClose}>
+            <X size={16} />
+          </button>
+        </div>
+        <div className="modal-body">
+          {body}
         </div>
         <div className="modal-actions">
           <button className="btn-secondary" onClick={onClose}>Cerrar</button>
         </div>
       </div>
     </div>
+    {deleteDialog}
+    </>
   );
 }

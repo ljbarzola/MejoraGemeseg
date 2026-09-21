@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getQualities, createQuality, updateQuality, deleteQuality } from '../../../services/cacao.service';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 
 export default function QualitiesPage() {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ export default function QualitiesPage() {
   const [form, setForm] = useState({ name: '', humidityDiscount: '7', impurityDiscount: '1', isFixedPrice: false, fixedPrice: '' });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState<number | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -64,8 +66,14 @@ export default function QualitiesPage() {
     setShowForm(true);
   }
 
-  async function handleDelete(id: number) {
-    if (!confirm('¿Eliminar esta calidad?')) return;
+  function handleDelete(id: number) {
+    setConfirmandoEliminar(id);
+  }
+
+  async function confirmarEliminar() {
+    const id = confirmandoEliminar;
+    if (!id) return;
+    setConfirmandoEliminar(null);
     try { await deleteQuality(id); load(); } catch {}
   }
 
@@ -170,6 +178,17 @@ export default function QualitiesPage() {
           </div>
         )}
       </div>
+
+      {confirmandoEliminar !== null && (
+        <ConfirmDialog
+          title="Eliminar calidad"
+          message="¿Eliminar esta calidad?"
+          confirmLabel="Sí, eliminar"
+          danger
+          onConfirm={confirmarEliminar}
+          onCancel={() => setConfirmandoEliminar(null)}
+        />
+      )}
     </div>
   );
 }

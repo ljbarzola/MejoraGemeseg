@@ -1,9 +1,13 @@
 # ============================================
-# GEMESEG - Iniciar Docker + PostgreSQL
+# GEMESEG - Iniciar Docker + PostgreSQL local de desarrollo
 # Ejecutar como ADMINISTRADOR
 # ============================================
+# Este Postgres es LOCAL y esta separado por completo de la Cloud SQL de
+# produccion (gemeseg-db) - lo que crees/edites/borres aqui nunca afecta produccion.
 
-Write-Host "=== GEMESEG: Iniciando Docker y PostgreSQL ===" -ForegroundColor Cyan
+Write-Host "=== GEMESEG: Iniciando Docker y PostgreSQL local ===" -ForegroundColor Cyan
+
+$repoRoot = "C:\Users\leidy\Documents\PROYECTO MEJORA\MejoraGemeseg"
 
 # 1. Iniciar servicio Docker (requiere admin)
 Write-Host "[1/5] Iniciando servicio Docker..." -ForegroundColor Yellow
@@ -40,10 +44,10 @@ if ($elapsed -ge $timeout) {
     exit 1
 }
 
-# 4. Levantar PostgreSQL
-Write-Host "[4/5] Levantando PostgreSQL..." -ForegroundColor Yellow
-Set-Location "C:\Users\leidy\Documents\GEMESEG\Gemeseg Mejora"
-docker compose up -d db
+# 4. Levantar PostgreSQL + Redis
+Write-Host "[4/5] Levantando PostgreSQL y Redis..." -ForegroundColor Yellow
+Set-Location $repoRoot
+docker compose up -d db redis
 
 # 5. Esperar a que PostgreSQL este listo
 Write-Host "[5/5] Esperando a que PostgreSQL acepte conexiones..." -ForegroundColor Yellow
@@ -56,9 +60,10 @@ if ($port) {
     Write-Host "=== PostgreSQL esta corriendo en puerto 5432 ===" -ForegroundColor Green
     Write-Host ""
     Write-Host "Ahora ejecuta:" -ForegroundColor Cyan
-    Write-Host '  cd "C:\Users\leidy\Documents\GEMESEG\Gemeseg Mejora\backend"' -ForegroundColor White
-    Write-Host '  npx prisma migrate dev --name add-auth-password' -ForegroundColor White
-    Write-Host '  npm run start:dev' -ForegroundColor White
+    Write-Host "  cd `"$repoRoot\backend`"" -ForegroundColor White
+    Write-Host "  npx prisma db push" -ForegroundColor White
+    Write-Host "  npm run seed:minimal" -ForegroundColor White
+    Write-Host "  npm run start:dev" -ForegroundColor White
 } else {
     Write-Host "PostgreSQL puede estar arrancando, espera 10s mas y verifica con: netstat -ano | findstr :5432" -ForegroundColor Yellow
 }

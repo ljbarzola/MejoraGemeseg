@@ -11,7 +11,6 @@ interface CrearMovimientoInput {
   companyId: number;
   userId: number;
   origen: string;
-  candidateId?: number;
 }
 
 @Injectable()
@@ -92,7 +91,6 @@ export class MovimientoPersonalService {
         estado: estadoInicial,
         completadoAt: estadoInicial === 'COMPLETADO' ? new Date() : null,
         origen: input.origen,
-        candidateId: input.candidateId,
         companyId: input.companyId,
         createdBy: input.userId,
         items: {

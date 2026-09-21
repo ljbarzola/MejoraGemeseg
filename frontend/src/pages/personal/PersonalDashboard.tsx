@@ -1,7 +1,7 @@
 import { useState, useEffect, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HelpCircle } from 'lucide-react';
-import { getPersonalDashboard } from '../../services/personal.service';
+import { getPersonalDashboard, getPersonalAlerts, type PersonalAlerts } from '../../services/personal.service';
 import RrhhHelpModal from '../../components/personal/RrhhHelpModal';
 
 function KpiCard({
@@ -31,11 +31,13 @@ function KpiCard({
 export default function PersonalDashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState<any>(null);
+  const [alerts, setAlerts] = useState<PersonalAlerts | null>(null);
   const [loading, setLoading] = useState(true);
   const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     getPersonalDashboard().then(setData).catch(() => {}).finally(() => setLoading(false));
+    getPersonalAlerts().then(setAlerts).catch(() => {});
   }, []);
 
   if (loading) return <div className="loading-state">Cargando dashboard...</div>;
@@ -43,6 +45,8 @@ export default function PersonalDashboard() {
   const sinAsignacion = data?.guardiasSinAsignacion || 0;
   const documentosPendientes = data?.documentosVencidosOPorVencer || 0;
   const movimientosEnProceso = data?.movimientosEnProceso || 0;
+  const capacitacionesVencidas = alerts?.trainingsVencidas.length || 0;
+  const capacitacionesPorVencer = alerts?.trainingsPorVencer.length || 0;
 
   // Fila de atención: solo cosas que pueden requerir una acción tuya. Se
   // pintan con tinte de color cuando el valor es > 0, para que resalten sin
@@ -63,6 +67,16 @@ export default function PersonalDashboard() {
       label: 'Movimientos en proceso', value: movimientosEnProceso, icon: '🔀',
       color: movimientosEnProceso > 0 ? '#2b6cb0' : '#a0aec0', bg: movimientosEnProceso > 0 ? '#ebf8ff' : undefined,
       onClick: () => navigate('/rrhh/historial'),
+    },
+    {
+      label: 'Capacitaciones vencidas', value: capacitacionesVencidas, icon: '🎓',
+      color: capacitacionesVencidas > 0 ? '#c53030' : '#a0aec0', bg: capacitacionesVencidas > 0 ? '#fff5f5' : undefined,
+      onClick: () => navigate('/rrhh/capacitaciones'),
+    },
+    {
+      label: 'Capacitaciones por vencer', value: capacitacionesPorVencer, icon: '🎓',
+      color: capacitacionesPorVencer > 0 ? '#975a16' : '#a0aec0', bg: capacitacionesPorVencer > 0 ? '#fffaf0' : undefined,
+      onClick: () => navigate('/rrhh/capacitaciones'),
     },
   ];
 
@@ -108,9 +122,10 @@ export default function PersonalDashboard() {
         */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: '16px' }}>
           {[
-            { label: 'Candidatos', path: '/rrhh/candidates', icon: '👤' },
             { label: 'Personal Administrativo', path: '/rrhh/administrativo', icon: '🏢' },
             { label: 'Entidades y Requisitos', path: '/rrhh/entidades', icon: '📋' },
+            { label: 'Capacitaciones', path: '/rrhh/capacitaciones', icon: '🎓' },
+            { label: 'Gestión de Quejas y Sugerencias', path: '/rrhh/quejas/gestion', icon: '📮' },
           ].map((item) => (
             <button
               key={item.path}

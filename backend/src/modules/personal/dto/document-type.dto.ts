@@ -4,6 +4,7 @@ import {
   IsBoolean,
   IsDateString,
   IsInt,
+  IsNotEmpty,
 } from 'class-validator';
 
 export class CreateDocumentTypeDto {
@@ -50,4 +51,13 @@ export class UpdateDocumentExpiryDto {
 export class ReassignDocumentTypeDto {
   @IsInt()
   documentTypeId: number;
+}
+
+// RRHH aprueba un archivo "adicional" (que no matcheó ningún tipo requerido)
+// dándole un nombre propio, sin asociarlo a un tipo de documento requerido.
+// Ver DriveService.approveAsAdditionalDocument.
+export class ApproveAdditionalDocumentDto {
+  @IsString()
+  @IsNotEmpty()
+  label: string;
 }

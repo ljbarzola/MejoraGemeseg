@@ -8,6 +8,8 @@ import {
   type CedulaMergeResult,
   type CedulaMergeLog,
 } from '../../../services/entidades.service';
+import CopyLinkButton from '../../../components/common/CopyLinkButton';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 
 const TABLA_LABEL: Record<string, string> = {
   asignacionGuardia: 'Asignaciones a entidades',
@@ -36,6 +38,7 @@ export default function CedulaMergeModal({ onClose }: { onClose: () => void }) {
   const [result, setResult] = useState<CedulaMergeResult | null>(null);
   const [historial, setHistorial] = useState<CedulaMergeLog[]>([]);
   const [showHistorial, setShowHistorial] = useState(false);
+  const [confirmandoMerge, setConfirmandoMerge] = useState(false);
 
   useEffect(() => {
     getCedulaMergeHistorial().then(setHistorial).catch(() => {});
@@ -60,9 +63,13 @@ export default function CedulaMergeModal({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const handleMerge = async () => {
+  const handleMerge = () => {
     if (!preview) return;
-    if (!confirm(`¿Fusionar ${cedulaOrigen} → ${cedulaDestino}? Esto es irreversible.`)) return;
+    setConfirmandoMerge(true);
+  };
+
+  const confirmarMerge = async () => {
+    setConfirmandoMerge(false);
     setMerging(true);
     setError('');
     try {
@@ -85,6 +92,7 @@ export default function CedulaMergeModal({ onClose }: { onClose: () => void }) {
     : [];
 
   return (
+    <>
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -145,7 +153,10 @@ export default function CedulaMergeModal({ onClose }: { onClose: () => void }) {
                       {preview.folderOrigen ? (
                         <>
                           <div style={{ fontWeight: 700 }}>{preview.folderOrigen.employeeName}</div>
-                          <a href={preview.folderOrigen.folderUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem' }}>Ver carpeta en Drive</a>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <a href={preview.folderOrigen.folderUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem' }}>Ver carpeta en Drive</a>
+                            <CopyLinkButton url={preview.folderOrigen.folderUrl} title="Copiar enlace de la carpeta" size={12} />
+                          </div>
                         </>
                       ) : (
                         <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Sin carpeta de Drive vinculada.</span>
@@ -156,7 +167,10 @@ export default function CedulaMergeModal({ onClose }: { onClose: () => void }) {
                       {preview.folderDestino ? (
                         <>
                           <div style={{ fontWeight: 700 }}>{preview.folderDestino.employeeName}</div>
-                          <a href={preview.folderDestino.folderUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem' }}>Ver carpeta en Drive</a>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <a href={preview.folderDestino.folderUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem' }}>Ver carpeta en Drive</a>
+                            <CopyLinkButton url={preview.folderDestino.folderUrl} title="Copiar enlace de la carpeta" size={12} />
+                          </div>
                         </>
                       ) : (
                         <span style={{ fontSize: '0.8rem', color: '#c53030' }}>Sin carpeta de Drive vinculada — confirma cuál cédula es la real antes de fusionar.</span>
@@ -220,5 +234,17 @@ export default function CedulaMergeModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
+
+    {confirmandoMerge && (
+      <ConfirmDialog
+        title="Fusionar cédulas duplicadas"
+        message={`¿Fusionar ${cedulaOrigen} → ${cedulaDestino}? Esto es irreversible.`}
+        confirmLabel="Confirmar fusión"
+        danger
+        onConfirm={confirmarMerge}
+        onCancel={() => setConfirmandoMerge(false)}
+      />
+    )}
+    </>
   );
 }

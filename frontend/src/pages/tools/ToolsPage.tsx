@@ -11,6 +11,7 @@ import {
   getAuditLog,
 } from '../../services/tool.service';
 import type { Tool, UserWithTools, ToolAssignment, ToolAuditLog } from '../../types/tool';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 export default function ToolsPage() {
   const [users, setUsers] = useState<UserWithTools[]>([]);
@@ -31,6 +32,8 @@ export default function ToolsPage() {
   const [editForm, setEditForm] = useState({ version: '', licenseKey: '' });
   const [formError, setFormError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
+  const [confirmandoEliminarHerramienta, setConfirmandoEliminarHerramienta] = useState<number | null>(null);
+  const [confirmandoEliminarAsignacion, setConfirmandoEliminarAsignacion] = useState<number | null>(null);
 
   const loadData = () => {
     setLoading(true);
@@ -117,8 +120,14 @@ export default function ToolsPage() {
     } finally { setFormLoading(false); }
   }
 
-  async function handleDeleteTool(id: number) {
-    if (!confirm('¿Eliminar esta herramienta y todas sus asignaciones?')) return;
+  function handleDeleteTool(id: number) {
+    setConfirmandoEliminarHerramienta(id);
+  }
+
+  async function confirmarEliminarHerramienta() {
+    if (confirmandoEliminarHerramienta === null) return;
+    const id = confirmandoEliminarHerramienta;
+    setConfirmandoEliminarHerramienta(null);
     try { await deleteTool(id); loadData(); } catch {}
   }
 
@@ -144,8 +153,14 @@ export default function ToolsPage() {
     } finally { setFormLoading(false); }
   }
 
-  async function handleDeleteAssignment(id: number) {
-    if (!confirm('¿Eliminar esta asignación?')) return;
+  function handleDeleteAssignment(id: number) {
+    setConfirmandoEliminarAsignacion(id);
+  }
+
+  async function confirmarEliminarAsignacion() {
+    if (confirmandoEliminarAsignacion === null) return;
+    const id = confirmandoEliminarAsignacion;
+    setConfirmandoEliminarAsignacion(null);
     try { await deleteAssignment(id); loadData(); } catch {}
   }
 
@@ -459,6 +474,28 @@ export default function ToolsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmandoEliminarHerramienta !== null && (
+        <ConfirmDialog
+          title="Eliminar herramienta"
+          message="¿Eliminar esta herramienta y todas sus asignaciones?"
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={confirmarEliminarHerramienta}
+          onCancel={() => setConfirmandoEliminarHerramienta(null)}
+        />
+      )}
+
+      {confirmandoEliminarAsignacion !== null && (
+        <ConfirmDialog
+          title="Eliminar asignación"
+          message="¿Eliminar esta asignación?"
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={confirmarEliminarAsignacion}
+          onCancel={() => setConfirmandoEliminarAsignacion(null)}
+        />
       )}
     </div>
   );

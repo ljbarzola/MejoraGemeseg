@@ -11,8 +11,9 @@ import {
 } from './cumplimiento-entidad.service';
 import { GmailMailService } from './gmail-mail.service';
 import { GuardiaContactoService } from './guardia-contacto.service';
+import { WhatsAppService } from './whatsapp.service';
 
-export type MedioRecordatorio = 'EMAIL';
+export type MedioRecordatorio = 'EMAIL' | 'WHATSAPP';
 
 export interface RecordatorioResult {
   enviado: boolean;
@@ -29,20 +30,17 @@ export class AlertaVencimientoService {
     private readonly cumplimientoEntidadService: CumplimientoEntidadService,
     private readonly gmailMailService: GmailMailService,
     private readonly guardiaContactoService: GuardiaContactoService,
+    private readonly whatsappService: WhatsAppService,
   ) {}
 
-  // Envío manual y personalizado (reemplaza el antiguo cron diario que
-  // avisaba en bulk a todos los guardias): RRHH decide, guardia por guardia,
-  // cuándo notificar. Junta en un solo correo todo lo FALTANTE/VENCIDO/POR_VENCER
-  // de ese guardia — no un correo por requisito.
   async enviarRecordatorio(
     companyId: number,
     cedula: string,
     medio: string,
   ): Promise<RecordatorioResult> {
-    if (medio !== 'EMAIL') {
+    if (medio !== 'EMAIL' && medio !== 'WHATSAPP') {
       throw new BadRequestException(
-        'Este medio de envío todavía no está disponible.',
+        'Medio de envío no válido. Usa EMAIL o WHATSAPP.',
       );
     }
 
@@ -73,6 +71,20 @@ export class AlertaVencimientoService {
       };
     }
 
+    if (medio === 'WHATSAPP') {
+      return this.enviarPorWhatsApp(companyId, cedula, compliance.asignacion!.nombreGuardia, compliance.entidad!.nombre, pendientes);
+    }
+
+    // EMAIL (flujo existente)
+    const config = await this.prisma.notificationConfig.findUnique({
+      where: { companyId },
+    });
+    if (!config?.senderEmail) {
+      throw new BadRequestException(
+        'No hay correo de envío configurado. Ve a "Configurar notificaciones" en la página de Cumplimiento.',
+      );
+    }
+
     const contacto = await this.guardiaContactoService.get(companyId, cedula);
     if (!contacto?.email) {
       throw new BadRequestException(
@@ -88,6 +100,48 @@ export class AlertaVencimientoService {
     });
 
     await this.gmailMailService.sendMail({ to: email, subject, bodyText });
+
+    await this.registrarAlertas(companyId, pendientes);
+
+    return { enviado: true, cantidadNotificada: pendientes.length };
+  }
+
+  private async enviarPorWhatsApp(
+    companyId: number,
+    cedula: string,
+    nombreGuardia: string,
+    entidadNombre: string,
+    pendientes: RequisitoConEstado[],
+  ): Promise<RecordatorioResult> {
+    const ficha = await this.prisma.guardiaFichaPersonal.findUnique({
+      where: { companyId_cedula: { companyId, cedula } },
+    });
+    if (!ficha?.telefono) {
+      throw new BadRequestException(
+        'Este guardia no tiene número de teléfono registrado. Actualiza su ficha personal antes de enviar por WhatsApp.',
+      );
+    }
+
+    const config = await this.prisma.notificationConfig.findUnique({
+      where: { companyId },
+    });
+    if (!config?.whatsappFrom) {
+      throw new BadRequestException(
+        'No hay número de WhatsApp Business configurado. Ve a Configuración de notificaciones en Cumplimiento.',
+      );
+    }
+
+    const bodyText = this.buildWhatsAppContent({
+      nombreGuardia,
+      entidadNombre,
+      pendientes,
+    });
+
+    await this.whatsappService.sendText({
+      to: ficha.telefono,
+      from: config.whatsappFrom,
+      body: bodyText,
+    });
 
     await this.registrarAlertas(companyId, pendientes);
 
@@ -170,5 +224,40 @@ export class AlertaVencimientoService {
     ].join('\n');
 
     return { subject, bodyText };
+  }
+
+  private buildWhatsAppContent(params: {
+    nombreGuardia: string;
+    entidadNombre: string;
+    pendientes: RequisitoConEstado[];
+  }): string {
+    const { nombreGuardia, entidadNombre, pendientes } = params;
+
+    const lineas = pendientes.map((r) => {
+      const nombre = (r.requisito as { nombre: string }).nombre;
+      if (r.estado === 'FALTANTE')
+        return `- ${nombre}: pendiente`;
+      const fechaStr = r.documento?.expiryDate
+        ? new Date(r.documento.expiryDate).toLocaleDateString('es-EC', {
+            timeZone: 'UTC',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+          })
+        : '';
+      return r.estado === 'VENCIDO'
+        ? `- ${nombre}: VENCIO el ${fechaStr}`
+        : `- ${nombre}: vence el ${fechaStr}`;
+    });
+
+    return [
+      `Hola ${nombreGuardia},`,
+      ``,
+      `Recordatorio de RRHH - Asignacion en ${entidadNombre}:`,
+      ``,
+      ...lineas,
+      ``,
+      `Gestiona la renovacion/entrega de estos documentos y coordina con RRHH.`,
+    ].join('\n');
   }
 }

@@ -692,25 +692,8 @@ Si no necesitas datos, responde directamente.`,
 
   // Personal Module (Mikacao companyId: 2)
   console.log('Creando datos del módulo Personal...');
-  const existingColumn = await prisma.kanbanColumn.findFirst({ where: { companyId: 2 } });
-  if (!existingColumn) {
-    // Kanban Columns
-    const col1 = await prisma.kanbanColumn.create({ data: { name: 'Postulado', position: 1, color: '#2b6cb0', companyId: 2 } });
-    const col2 = await prisma.kanbanColumn.create({ data: { name: 'Entrevista', position: 2, color: '#6b46c1', companyId: 2 } });
-    const col3 = await prisma.kanbanColumn.create({ data: { name: 'Verificación Documental', position: 3, color: '#b7791f', companyId: 2 } });
-    const col4 = await prisma.kanbanColumn.create({ data: { name: 'Test Médico', position: 4, color: '#2c7a7b', companyId: 2 } });
-    const col5 = await prisma.kanbanColumn.create({ data: { name: 'Contratado', position: 5, color: '#d69e2e', companyId: 2 } });
-    const col6 = await prisma.kanbanColumn.create({ data: { name: 'Activo', position: 6, color: '#276749', companyId: 2 } });
-    console.log('  ✓ Columnas Kanban creadas: 6');
-
-    // Candidates (5)
-    await prisma.candidate.create({ data: { fullName: 'Ana Lucía Vera', cedula: '1712345678', phone: '0991234567', email: 'ana.vera@email.com', positionApplied: 'Auxiliar de Logística', availability: 'Tiempo completo', salaryExpected: 450, education: 'Técnica en Logística', experience: '2 años en empresa importadora', references: 'Juan Pérez - Gerente LogisTIC', columnId: col6.id, companyId: 2, createdBy: adminMikacao.id } });
-    await prisma.candidate.create({ data: { fullName: 'Carlos Andrés Muñoz', cedula: '1309876543', phone: '0987654321', email: 'carlos.munoz@email.com', positionApplied: 'Operador de Montacargas', availability: 'Tiempo completo', salaryExpected: 400, education: 'Bachiller', experience: '1 año en bodega', columnId: col3.id, companyId: 2, createdBy: adminMikacao.id } });
-    await prisma.candidate.create({ data: { fullName: 'María José Paredes', cedula: '0502456789', phone: '0976543210', email: 'maria.paredes@email.com', positionApplied: 'Asistente Administrativa', availability: 'Medio tiempo', salaryExpected: 350, education: 'Universitaria en Administración', experience: 'Sin experiencia', columnId: col1.id, companyId: 2, createdBy: adminMikacao.id } });
-    await prisma.candidate.create({ data: { fullName: 'Luis Fernando Gómez', cedula: '1804567890', phone: '0965432109', email: 'luis.gomez@email.com', positionApplied: 'Chofer Liviano', availability: 'Tiempo completo', salaryExpected: 500, education: 'Bachiller', experience: '3 años conduciendo vehículos livianos', references: 'Transportes Rápidos S.A.', columnId: col4.id, companyId: 2, createdBy: adminMikacao.id } });
-    await prisma.candidate.create({ data: { fullName: 'Diana Carolina Torres', cedula: '1103456789', phone: '0954321098', email: 'diana.torres@email.com', positionApplied: 'Analista de Calidad', availability: 'Tiempo completo', salaryExpected: 600, education: 'Ingeniera Industrial', experience: '4 años en laboratorio de control de calidad', columnId: col2.id, companyId: 2, createdBy: adminMikacao.id } });
-    console.log('  ✓ Candidatos creados: 5');
-
+  const existingCertification = await prisma.certification.findFirst({ where: { companyId: 2 } });
+  if (!existingCertification) {
     // Certifications (5)
     const now = new Date();
     const in3Days = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
@@ -732,14 +715,12 @@ Si no necesitas datos, responde directamente.`,
     const tpl3 = await prisma.contractTemplate.create({ data: { name: 'Acta de Entrega de Uniformes', type: 'ENTREGA_UNIFORMES', companyId: 2, createdBy: adminMikacao.id } });
     console.log('  ✓ Plantillas de contrato creadas: 3');
 
-    // Contracts (3) — identificados por cédula, no por FK a Candidate (ver
-    // comentario en el modelo Contract).
-    const candAna = await prisma.candidate.findFirst({ where: { companyId: 2, cedula: '1712345678' } });
-    const candLuis = await prisma.candidate.findFirst({ where: { companyId: 2, cedula: '1804567890' } });
-    const candDiana = await prisma.candidate.findFirst({ where: { companyId: 2, cedula: '1103456789' } });
-    if (candAna) await prisma.contract.create({ data: { cedula: candAna.cedula, nombreGuardia: candAna.fullName, templateId: tpl1.id, status: 'SIGNED', companyId: 2, createdBy: adminMikacao.id } });
-    if (candLuis) await prisma.contract.create({ data: { cedula: candLuis.cedula, nombreGuardia: candLuis.fullName, templateId: tpl2.id, status: 'DRAFT', companyId: 2, createdBy: adminMikacao.id } });
-    if (candDiana) await prisma.contract.create({ data: { cedula: candDiana.cedula, nombreGuardia: candDiana.fullName, templateId: tpl3.id, status: 'DRAFT', companyId: 2, createdBy: adminMikacao.id } });
+    // Contracts (3) — identificados por cédula, no por FK (ver comentario en
+    // el modelo Contract). Nombres/cédulas fijos en vez de venir de Candidate
+    // (tabla eliminada 2026-09-17 junto con el Kanban de Candidatos).
+    await prisma.contract.create({ data: { cedula: '1712345678', nombreGuardia: 'Ana Lucía Vera', templateId: tpl1.id, status: 'SIGNED', companyId: 2, createdBy: adminMikacao.id } });
+    await prisma.contract.create({ data: { cedula: '1804567890', nombreGuardia: 'Luis Fernando Gómez', templateId: tpl2.id, status: 'DRAFT', companyId: 2, createdBy: adminMikacao.id } });
+    await prisma.contract.create({ data: { cedula: '1103456789', nombreGuardia: 'Diana Carolina Torres', templateId: tpl3.id, status: 'DRAFT', companyId: 2, createdBy: adminMikacao.id } });
     console.log('  ✓ Contratos creados: 3');
 
     // Log Entries (5)

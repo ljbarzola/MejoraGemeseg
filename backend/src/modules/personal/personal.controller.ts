@@ -9,25 +9,20 @@ import {
   Query,
   Req,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
   ParseIntPipe,
+  BadRequestException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { PersonalService } from './personal.service';
-import { KanbanService } from './services/kanban.service';
-import { CandidateService } from './services/candidate.service';
 import { ContractService } from './services/contract.service';
 import { CertificationService } from './services/certification.service';
 import { LogService } from './services/log.service';
-import {
-  CreateKanbanColumnDto,
-  UpdateKanbanColumnDto,
-  ReorderKanbanDto,
-} from './dto/kanban.dto';
-import {
-  CreateCandidateDto,
-  UpdateCandidateDto,
-  MoveCandidateDto,
-} from './dto/candidate.dto';
+import { TrainingService } from './services/training.service';
+import { PersonalAlertsService } from './services/personal-alerts.service';
 import {
   CreateContractTemplateDto,
   UpdateContractTemplateDto,
@@ -40,101 +35,28 @@ import {
   UpdateCertificationDto,
 } from './dto/certification.dto';
 import { CreateLogTemplateDto, CreateLogEntryDto } from './dto/log.dto';
+import {
+  CreateTrainingDto,
+  UpdateTrainingDto,
+  AddTrainingAttachmentDto,
+  SetTrainingCompletedDto,
+} from './dto/training.dto';
 
 @Controller('personal')
 @UseGuards(AuthGuard('jwt'))
 export class PersonalController {
   constructor(
     private readonly personalService: PersonalService,
-    private readonly kanbanService: KanbanService,
-    private readonly candidateService: CandidateService,
     private readonly contractService: ContractService,
     private readonly certificationService: CertificationService,
     private readonly logService: LogService,
+    private readonly trainingService: TrainingService,
+    private readonly personalAlertsService: PersonalAlertsService,
   ) {}
 
   @Get('dashboard')
   getDashboard(@Req() req: any) {
     return this.personalService.getDashboard(req.user.companyId);
-  }
-
-  @Get('kanban/columns')
-  getColumns(@Req() req: any) {
-    return this.kanbanService.getColumns(req.user.companyId);
-  }
-
-  @Post('kanban/columns')
-  createColumn(@Body() body: CreateKanbanColumnDto, @Req() req: any) {
-    return this.kanbanService.createColumn(body, req.user.companyId);
-  }
-
-  @Patch('kanban/columns/:id')
-  updateColumn(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: UpdateKanbanColumnDto,
-    @Req() req: any,
-  ) {
-    return this.kanbanService.updateColumn(id, body, req.user.companyId);
-  }
-
-  @Delete('kanban/columns/:id')
-  deleteColumn(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
-    return this.kanbanService.deleteColumn(id, req.user.companyId);
-  }
-
-  @Post('kanban/reorder')
-  reorderColumns(@Body() body: ReorderKanbanDto, @Req() req: any) {
-    return this.kanbanService.reorderColumns(body.columns, req.user.companyId);
-  }
-
-  @Get('candidates')
-  getCandidates(@Req() req: any, @Query('columnId') columnId?: string) {
-    return this.candidateService.findAll(
-      req.user.companyId,
-      columnId ? +columnId : undefined,
-    );
-  }
-
-  @Get('candidates/:id')
-  getCandidate(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
-    return this.candidateService.findOne(id, req.user.companyId);
-  }
-
-  @Post('candidates')
-  createCandidate(@Body() body: CreateCandidateDto, @Req() req: any) {
-    return this.candidateService.create(
-      body,
-      req.user.companyId,
-      req.user.userId,
-    );
-  }
-
-  @Patch('candidates/:id')
-  updateCandidate(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: UpdateCandidateDto,
-    @Req() req: any,
-  ) {
-    return this.candidateService.update(id, body, req.user.companyId);
-  }
-
-  @Patch('candidates/:id/move')
-  moveCandidate(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: MoveCandidateDto,
-    @Req() req: any,
-  ) {
-    return this.candidateService.move(
-      id,
-      body.columnId,
-      req.user.companyId,
-      req.user.userId,
-    );
-  }
-
-  @Get('candidates/:id/history')
-  getCandidateHistory(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
-    return this.candidateService.getHistory(id, req.user.companyId);
   }
 
   @Get('contracts/system-fields')
@@ -269,9 +191,75 @@ export class PersonalController {
     return this.certificationService.delete(id, req.user.companyId);
   }
 
-  @Get('certifications/alerts')
-  getCertificationAlerts(@Req() req: any) {
-    return this.certificationService.getAlerts(req.user.companyId);
+  @Get('trainings')
+  getTrainings(@Req() req: any) {
+    return this.trainingService.findAll(req.user.companyId);
+  }
+
+  @Post('trainings/upload')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  )
+  uploadTrainingFile(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
+    if (!file) throw new BadRequestException('No se recibió ningún archivo');
+    return this.trainingService.uploadFile(req.user.companyId, file);
+  }
+
+  @Post('trainings')
+  createTraining(@Body() body: CreateTrainingDto, @Req() req: any) {
+    return this.trainingService.create(body, req.user.companyId, req.user.userId);
+  }
+
+  @Patch('trainings/:id')
+  updateTraining(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateTrainingDto,
+    @Req() req: any,
+  ) {
+    return this.trainingService.update(id, body, req.user.companyId);
+  }
+
+  @Delete('trainings/:id')
+  deleteTraining(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.trainingService.delete(id, req.user.companyId);
+  }
+
+  @Post('trainings/:id/attachments')
+  addTrainingAttachment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: AddTrainingAttachmentDto,
+    @Req() req: any,
+  ) {
+    return this.trainingService.addAttachment(id, body, req.user.companyId);
+  }
+
+  @Delete('trainings/:id/attachments/:attachmentId')
+  removeTrainingAttachment(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('attachmentId', ParseIntPipe) attachmentId: number,
+    @Req() req: any,
+  ) {
+    return this.trainingService.removeAttachment(id, attachmentId, req.user.companyId);
+  }
+
+  @Patch('trainings/:id/completed')
+  setTrainingCompleted(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: SetTrainingCompletedDto,
+    @Req() req: any,
+  ) {
+    return this.trainingService.setCompleted(id, body.completed, req.user.companyId, req.user.userId);
+  }
+
+  // Reemplaza el antiguo GET certifications/alerts (código muerto: nada lo
+  // llamaba, sin cron ni consumidor) por uno combinado y realmente
+  // consumido desde el dashboard de Personal.
+  @Get('alerts')
+  getAlerts(@Req() req: any) {
+    return this.personalAlertsService.getAlerts(req.user.companyId);
   }
 
   @Get('logs/templates')

@@ -7,12 +7,16 @@ import {
 import { PrismaService } from '../../../prisma/prisma.service';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import {
   downloadDocxFromDrive,
   detectDocxVariables,
   fillDocxTemplate,
-  docxBufferToPdf,
 } from '../../../common/docx-templating/docx-merge.util';
+
+const execFileAsync = promisify(execFile);
 
 // Nombre de guardia/cédula usados en el nombre del PDF — solo alfanumérico,
 // guion y guion bajo (evita que un valor con "/", ".." u otros caracteres
@@ -38,6 +42,12 @@ export const SYSTEM_FIELDS = [
   { code: 'SALARIO', label: 'Salario acordado' },
   { code: 'FECHA_INICIO', label: 'Fecha de inicio' },
   { code: 'EMPRESA', label: 'Empresa (razón social)' },
+  { code: 'FECHA_NACIMIENTO', label: 'Fecha de nacimiento' },
+  { code: 'TELEFONO', label: 'Teléfono' },
+  { code: 'EMAIL', label: 'Correo electrónico' },
+  { code: 'DIRECCION', label: 'Dirección' },
+  { code: 'CONTACTO_EMERGENCIA_NOMBRE', label: 'Nombre de contacto de emergencia' },
+  { code: 'CONTACTO_EMERGENCIA_TELEFONO', label: 'Teléfono de contacto de emergencia' },
 ];
 
 @Injectable()
@@ -253,7 +263,7 @@ export class ContractService {
     cedula: string,
     nombreGuardia: string,
   ) {
-    const [ficha, asignacion, candidate, company] = await Promise.all([
+    const [ficha, asignacion, company] = await Promise.all([
       this.prisma.guardiaFichaPersonal.findUnique({
         where: { companyId_cedula: { companyId, cedula } },
       }),
@@ -262,21 +272,28 @@ export class ContractService {
         include: { entidad: true },
         orderBy: { fechaInicio: 'desc' },
       }),
-      this.prisma.candidate.findFirst({ where: { companyId, cedula } }),
       this.prisma.company.findUnique({ where: { id: companyId } }),
     ]);
 
-    const salario = ficha?.salarioAcordado ?? candidate?.salaryExpected ?? null;
+    const salario = ficha?.salarioAcordado ?? null;
 
     return {
-      NOMBRE: nombreGuardia || candidate?.fullName || '',
+      NOMBRE: nombreGuardia || '',
       CEDULA: cedula,
-      PUESTO: ficha?.puestoFormal || candidate?.positionApplied || '',
+      PUESTO: ficha?.puestoFormal || '',
       ENTIDAD: asignacion?.entidad?.nombre || '',
       HORARIO: ficha?.horario || '',
       SALARIO: salario != null ? String(salario) : '',
       FECHA_INICIO: new Date().toLocaleDateString('es-EC'),
       EMPRESA: company?.name || '',
+      FECHA_NACIMIENTO: ficha?.fechaNacimiento
+        ? ficha.fechaNacimiento.toLocaleDateString('es-EC')
+        : '',
+      TELEFONO: ficha?.telefono || '',
+      EMAIL: ficha?.email || '',
+      DIRECCION: ficha?.direccion || '',
+      CONTACTO_EMERGENCIA_NOMBRE: ficha?.contactoEmergenciaNombre || '',
+      CONTACTO_EMERGENCIA_TELEFONO: ficha?.contactoEmergenciaTelefono || '',
     } as Record<string, string>;
   }
 
@@ -374,7 +391,7 @@ export class ContractService {
         );
       }
 
-      const pdfBuffer = await docxBufferToPdf(filledDocxBuffer);
+      const pdfBuffer = await this.convertDocxToPdf(filledDocxBuffer);
 
       const pdfFileName = `${sanitizeForFilename(cedula)}_${Date.now()}.pdf`;
       fs.writeFileSync(path.join(CONTRACTS_DIR, pdfFileName), pdfBuffer);
@@ -403,6 +420,39 @@ export class ContractService {
 
   getContractFilePath(fileName: string): string {
     return path.join(CONTRACTS_DIR, fileName);
+  }
+
+  private async convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
+    const sofficePath = process.env.LIBREOFFICE_PATH || 'soffice';
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hr-contract-pdf-'));
+    const docxPath = path.join(workDir, 'input.docx');
+    const profileDir = path.join(workDir, 'profile');
+    fs.writeFileSync(docxPath, docxBuffer);
+
+    try {
+      await execFileAsync(
+        sofficePath,
+        [
+          '--headless',
+          '--norestore',
+          `-env:UserInstallation=file:///${profileDir.replace(/\\/g, '/')}`,
+          '--convert-to',
+          'pdf',
+          '--outdir',
+          workDir,
+          docxPath,
+        ],
+        { timeout: 60000 },
+      );
+
+      const pdfPath = path.join(workDir, 'input.pdf');
+      if (!fs.existsSync(pdfPath)) {
+        throw new Error('LibreOffice no generó el PDF esperado');
+      }
+      return fs.readFileSync(pdfPath);
+    } finally {
+      fs.rmSync(workDir, { recursive: true, force: true });
+    }
   }
 
   async getContracts(companyId: number) {

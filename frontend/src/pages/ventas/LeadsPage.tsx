@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getLeads, createLead, assignLead, updateLeadStatus, deleteLead, Lead } from '../../services/ventas.service';
 import { getUsers } from '../../services/user.service';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
+import PromptDialog from '../../components/common/PromptDialog';
 
 const SOURCE_BADGES: Record<string, { label: string; color: string }> = {
   GOOGLE_ADS: { label: 'Google Ads', color: '#319795' },
@@ -27,6 +29,33 @@ export default function LeadsPage() {
   const [showNewModal, setShowNewModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
+
+  const [createError, setCreateError] = useState('');
+  const createErrorRef = useRef<HTMLDivElement>(null);
+  const [assignError, setAssignError] = useState('');
+  const assignErrorRef = useRef<HTMLDivElement>(null);
+  const [statusError, setStatusError] = useState('');
+  const statusErrorRef = useRef<HTMLDivElement>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const deleteErrorRef = useRef<HTMLDivElement>(null);
+  const [confirmDeleteLead, setConfirmDeleteLead] = useState<Lead | null>(null);
+  const [promptWonLead, setPromptWonLead] = useState<Lead | null>(null);
+
+  useEffect(() => {
+    if (createError) createErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [createError]);
+
+  useEffect(() => {
+    if (assignError) assignErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [assignError]);
+
+  useEffect(() => {
+    if (statusError) statusErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [statusError]);
+
+  useEffect(() => {
+    if (deleteError) deleteErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [deleteError]);
 
   // Form for manual lead
   const [form, setForm] = useState({
@@ -55,7 +84,8 @@ export default function LeadsPage() {
 
   const handleCreateLead = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.fullName.trim()) { alert('El nombre es obligatorio'); return; }
+    setCreateError('');
+    if (!form.fullName.trim()) { setCreateError('El nombre es obligatorio'); return; }
     setSaving(true);
     try {
       await createLead(form);
@@ -63,7 +93,7 @@ export default function LeadsPage() {
       setForm({ fullName: '', email: '', phone: '', companyName: '', source: 'MANUAL', campaignName: '', estimatedValue: 0, notes: '' });
       loadData();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Error al crear prospecto');
+      setCreateError(err.response?.data?.message || 'Error al crear prospecto');
     } finally {
       setSaving(false);
     }
@@ -72,41 +102,64 @@ export default function LeadsPage() {
   const handleAssignUser = async (leadId: number, userIdStr: string) => {
     const userId = Number(userIdStr);
     if (!userId) return;
+    setAssignError('');
     try {
       await assignLead(leadId, userId);
       setLeads((prev) =>
         prev.map((l) => (l.id === leadId ? { ...l, assignedUserId: userId, assignedUser: users.find((u) => u.id === userId) } : l)),
       );
     } catch {
-      alert('Error al reasignar prospecto');
+      setAssignError('Error al reasignar prospecto');
     }
   };
 
   const handleStatusChange = async (lead: Lead, newStatus: string) => {
-    let closedVal = lead.closedValue;
     if (newStatus === 'WON') {
-      const valStr = prompt('Ingresa el valor real de la venta cerrada ($ USD):', String(lead.estimatedValue || 0));
-      if (valStr === null) return;
-      closedVal = Number(valStr) || 0;
+      setStatusError('');
+      setPromptWonLead(lead);
+      return;
     }
-
+    setStatusError('');
     try {
-      await updateLeadStatus(lead.id, newStatus, closedVal);
+      await updateLeadStatus(lead.id, newStatus, lead.closedValue);
       setLeads((prev) =>
-        prev.map((l) => (l.id === lead.id ? { ...l, status: newStatus as any, closedValue: closedVal } : l)),
+        prev.map((l) => (l.id === lead.id ? { ...l, status: newStatus as any } : l)),
       );
     } catch {
-      alert('Error al actualizar estado del prospecto');
+      setStatusError('Error al actualizar estado del prospecto');
     }
   };
 
-  const handleDeleteLead = async (lead: Lead) => {
-    if (!window.confirm(`¿Eliminar al prospecto ${lead.fullName}?`)) return;
+  const confirmarValorVenta = async (valStr: string) => {
+    const lead = promptWonLead;
+    if (!lead) return;
+    setPromptWonLead(null);
+    const closedVal = Number(valStr) || 0;
+    setStatusError('');
+    try {
+      await updateLeadStatus(lead.id, 'WON', closedVal);
+      setLeads((prev) =>
+        prev.map((l) => (l.id === lead.id ? { ...l, status: 'WON' as any, closedValue: closedVal } : l)),
+      );
+    } catch {
+      setStatusError('Error al actualizar estado del prospecto');
+    }
+  };
+
+  const handleDeleteLead = (lead: Lead) => {
+    setDeleteError('');
+    setConfirmDeleteLead(lead);
+  };
+
+  const confirmarEliminarLead = async () => {
+    if (!confirmDeleteLead) return;
+    const lead = confirmDeleteLead;
+    setConfirmDeleteLead(null);
     try {
       await deleteLead(lead.id);
       loadData();
     } catch {
-      alert('Error al eliminar prospecto');
+      setDeleteError('Error al eliminar prospecto');
     }
   };
 
@@ -133,6 +186,10 @@ export default function LeadsPage() {
           <button className="auth-btn" onClick={() => setShowNewModal(true)}>+ Nuevo Prospecto</button>
         </div>
       </div>
+
+      {assignError && <div ref={assignErrorRef} className="form-error" style={{ marginTop: '16px' }}>{assignError}</div>}
+      {statusError && <div ref={statusErrorRef} className="form-error" style={{ marginTop: '16px' }}>{statusError}</div>}
+      {deleteError && <div ref={deleteErrorRef} className="form-error" style={{ marginTop: '16px' }}>{deleteError}</div>}
 
       <div className="admin-section" style={{ marginTop: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -263,6 +320,7 @@ export default function LeadsPage() {
         <div className="modal-backdrop">
           <div className="modal-card" style={{ maxWidth: 500 }}>
             <h3>Registrar Prospecto Manual</h3>
+            {createError && <div ref={createErrorRef} className="form-error" style={{ marginTop: '10px' }}>{createError}</div>}
             <form onSubmit={handleCreateLead} style={{ marginTop: '12px' }}>
               <div className="form-group">
                 <label>Nombre Completo del Prospecto *</label>
@@ -331,6 +389,29 @@ export default function LeadsPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {confirmDeleteLead && (
+        <ConfirmDialog
+          title="Eliminar prospecto"
+          message={`¿Eliminar al prospecto ${confirmDeleteLead.fullName}?`}
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={confirmarEliminarLead}
+          onCancel={() => setConfirmDeleteLead(null)}
+        />
+      )}
+
+      {promptWonLead && (
+        <PromptDialog
+          title="Venta cerrada"
+          message="Ingresa el valor real de la venta cerrada ($ USD):"
+          defaultValue={String(promptWonLead.estimatedValue || 0)}
+          inputType="number"
+          confirmLabel="Guardar"
+          onConfirm={confirmarValorVenta}
+          onCancel={() => setPromptWonLead(null)}
+        />
       )}
     </div>
   );

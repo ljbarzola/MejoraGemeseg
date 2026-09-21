@@ -31,7 +31,18 @@ export async function getCompanyBySlug(slug: string): Promise<Company> {
   return res.data;
 }
 
-export async function createCompany(data: Partial<Company>): Promise<Company> {
+export async function getCompanyByDomain(domain: string): Promise<Company> {
+  const res = await api.get<Company>(`/companies/domain/${encodeURIComponent(domain)}`);
+  return res.data;
+}
+
+export interface CreateCompanyPayload extends Partial<Company> {
+  adminFullName: string;
+  adminEmail: string;
+  adminPassword: string;
+}
+
+export async function createCompany(data: CreateCompanyPayload): Promise<Company> {
   const res = await api.post<Company>('/companies', data);
   return res.data;
 }

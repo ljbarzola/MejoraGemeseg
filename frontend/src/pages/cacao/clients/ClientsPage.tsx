@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getClients, createClient, updateClient, deleteClient } from '../../../services/cacao.service';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 
 export default function ClientsPage() {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ export default function ClientsPage() {
   const [form, setForm] = useState({ name: '', country: '', contact: '', email: '', phone: '' });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState<number | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -50,8 +52,14 @@ export default function ClientsPage() {
     setShowForm(true);
   }
 
-  async function handleDelete(id: number) {
-    if (!confirm('¿Eliminar este cliente?')) return;
+  function handleDelete(id: number) {
+    setConfirmandoEliminar(id);
+  }
+
+  async function confirmarEliminar() {
+    const id = confirmandoEliminar;
+    if (!id) return;
+    setConfirmandoEliminar(null);
     try { await deleteClient(id); load(); } catch {}
   }
 
@@ -146,6 +154,17 @@ export default function ClientsPage() {
           </div>
         )}
       </div>
+
+      {confirmandoEliminar !== null && (
+        <ConfirmDialog
+          title="Eliminar cliente"
+          message="¿Eliminar este cliente?"
+          confirmLabel="Sí, eliminar"
+          danger
+          onConfirm={confirmarEliminar}
+          onCancel={() => setConfirmandoEliminar(null)}
+        />
+      )}
     </div>
   );
 }

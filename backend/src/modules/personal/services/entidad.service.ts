@@ -5,16 +5,25 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateEntidadDto, UpdateEntidadDto } from '../dto/entidad.dto';
+import { validarFormatoEntidad } from '../utils/entidad-folder-format.util';
 
 @Injectable()
 export class EntidadService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // `formatoValido` es un campo calculado (Fase 3.2) — nunca se persiste en
+  // BD, solo avisa en la UI si el nombre no sigue el formato recomendado
+  // "Provincia - Nombre de la entidad" (ver syncEntidadesFolder para el
+  // mismo chequeo aplicado durante el sync de Drive).
   async findAll(companyId: number) {
-    return this.prisma.entidad.findMany({
+    const entidades = await this.prisma.entidad.findMany({
       where: { companyId },
       orderBy: { nombre: 'asc' },
     });
+    return entidades.map((e) => ({
+      ...e,
+      formatoValido: validarFormatoEntidad(e.nombre).valido,
+    }));
   }
 
   async findOne(id: number, companyId: number) {

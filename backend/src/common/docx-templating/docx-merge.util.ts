@@ -5,7 +5,7 @@ const htmlPdfNode = require('html-pdf-node');
 
 // Lógica extraída de ventas-templates.service.ts / ventas-contratos.service.ts
 // (probada en producción en el módulo de Ventas) para poder reutilizarla en
-// Personal/RRHH sin depender de BoldSign ni de conceptos de cliente/anexos.
+// Personal/RRHH sin depender de firma electrónica ni de conceptos de cliente/anexos.
 
 export function extractDriveFileId(url: string): string | null {
   const patterns = [
@@ -73,7 +73,16 @@ export async function downloadDocxFromDrive(driveUrl: string): Promise<Buffer> {
 // Tolera espacios accidentales dentro de los corchetes ("[ NOMBRE ]" además
 // de "[NOMBRE]") — fácil de escribir sin querer al armar la plantilla en
 // Word, y sin esto la variable simplemente no se detectaba ni se rellenaba.
-const BRACKET_VARIABLE_RE = '\\[\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*\\]';
+// El charset acepta letras con acentos, espacios, puntos, paréntesis, "/" y
+// "-" además de dígitos y guion bajo — igual que el detector de variables de
+// Ventas (ventas-templates.service.ts) — para soportar nombres legibles como
+// "[Nombre Completo]" o "[Fecha de Emisión]", no solo identificadores simples.
+const BRACKET_VARIABLE_RE =
+  '\\[\\s*([A-Za-zÀ-ÿ_][A-Za-zÀ-ÿ0-9_ .()\\/-]*)\\s*\\]';
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 // Detecta variables en formato [Variable] dentro del cuerpo, encabezados y
 // pies de página del .docx. Solo se soporta este formato (no <<Variable>>)
@@ -110,7 +119,7 @@ export async function detectDocxVariables(
 
   let match;
   while ((match = regexBrackets.exec(fullText)) !== null)
-    detected.add(match[1]);
+    detected.add(match[1].trim());
 
   return Array.from(detected).sort();
 }
@@ -137,7 +146,10 @@ export async function fillDocxTemplate(
     }
     let content = await file.async('string');
     for (const [key, value] of Object.entries(data)) {
-      const regexBrackets = new RegExp(`\\[\\s*${key}\\s*\\]`, 'g');
+      const regexBrackets = new RegExp(
+        `\\[\\s*${escapeRegExp(key)}\\s*\\]`,
+        'g',
+      );
       content = content.replace(regexBrackets, escapeXmlText(String(value ?? '')));
     }
     updatedZip.file(fileName, content);

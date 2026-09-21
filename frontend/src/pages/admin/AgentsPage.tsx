@@ -9,6 +9,7 @@ import {
   unassignAgent,
 } from '../../services/agent.service';
 import type { Agent, AgentAssignment } from '../../types/agent';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 const SCOPE_OPTIONS = [
   { value: 'GLOBAL', label: 'Global', desc: 'Accede a toda la informacion del sistema' },
@@ -42,6 +43,8 @@ export default function AgentsPage() {
   const [assignForm, setAssignForm] = useState({ selectedUsers: [] as number[] });
   const [formError, setFormError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
+  const [confirmandoEliminarAgente, setConfirmandoEliminarAgente] = useState<number | null>(null);
+  const [confirmandoQuitarAsignacion, setConfirmandoQuitarAsignacion] = useState<number | null>(null);
 
   const loadData = () => {
     setLoading(true);
@@ -113,8 +116,14 @@ export default function AgentsPage() {
     } finally { setFormLoading(false); }
   }
 
-  async function handleDeleteAgent(id: number) {
-    if (!confirm('¿Eliminar este agente y todas sus asignaciones?')) return;
+  function handleDeleteAgent(id: number) {
+    setConfirmandoEliminarAgente(id);
+  }
+
+  async function confirmarEliminarAgente() {
+    if (confirmandoEliminarAgente === null) return;
+    const id = confirmandoEliminarAgente;
+    setConfirmandoEliminarAgente(null);
     try { await deleteAgent(id); loadData(); } catch {}
   }
 
@@ -136,8 +145,14 @@ export default function AgentsPage() {
     }
   }
 
-  async function handleUnassign(assignmentId: number) {
-    if (!confirm('¿Quitar este agente del usuario?')) return;
+  function handleUnassign(assignmentId: number) {
+    setConfirmandoQuitarAsignacion(assignmentId);
+  }
+
+  async function confirmarQuitarAsignacion() {
+    if (confirmandoQuitarAsignacion === null) return;
+    const assignmentId = confirmandoQuitarAsignacion;
+    setConfirmandoQuitarAsignacion(null);
     const a = assignments.find((x) => x.id === assignmentId);
     if (a) { try { await unassignAgent(a.agent.id, a.user.id); loadData(); } catch {} }
   }
@@ -398,6 +413,28 @@ export default function AgentsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmandoEliminarAgente !== null && (
+        <ConfirmDialog
+          title="Eliminar agente"
+          message="¿Eliminar este agente y todas sus asignaciones?"
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={confirmarEliminarAgente}
+          onCancel={() => setConfirmandoEliminarAgente(null)}
+        />
+      )}
+
+      {confirmandoQuitarAsignacion !== null && (
+        <ConfirmDialog
+          title="Quitar agente"
+          message="¿Quitar este agente del usuario?"
+          confirmLabel="Quitar"
+          danger
+          onConfirm={confirmarQuitarAsignacion}
+          onCancel={() => setConfirmandoQuitarAsignacion(null)}
+        />
       )}
     </div>
   );

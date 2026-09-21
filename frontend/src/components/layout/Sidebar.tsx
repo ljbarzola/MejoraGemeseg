@@ -21,6 +21,7 @@ export default function Sidebar() {
   const [custodiosOpen, setCustodiosOpen] = useState(false);
   const [ventasOpen, setVentasOpen] = useState(false);
   const [custodiasOpen, setCustodiasOpen] = useState(false);
+  const [sistemasOpen, setSistemasOpen] = useState(false);
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
@@ -34,15 +35,16 @@ export default function Sidebar() {
   const isPersonalActive = location.pathname.startsWith('/rrhh');
   const isVentasActive = location.pathname.startsWith('/ventas');
   const isCustodiasActive = location.pathname.startsWith('/custodias');
+  const isSistemasActive = location.pathname.startsWith('/sistemas');
 
   const navItems = [
     { label: 'Inicio', path: '/dashboard', icon: '⌂', show: true },
+    { label: 'Buzón de Quejas y Sugerencias', path: '/rrhh/quejas', icon: '📮', show: true },
+    { label: 'Encuestas', path: '/rrhh/encuestas', icon: '📝', show: true },
     { label: 'Proyectos', path: '/projects', icon: '📁', show: canView('PROJECTS') },
     { label: 'Administración', path: '/admin', icon: '👥', show: canView('ADMIN') },
     { label: 'Empresas', path: '/admin/companies', icon: '🏢', show: isSuperAdmin && canView('COMPANIES') },
     { label: 'Mi Empresa', path: '/admin/company-settings', icon: '🎨', show: isCompanyAdmin && canView('COMPANY_SETTINGS') },
-    { label: 'Herramientas', path: '/tools', icon: '🔧', show: canView('TOOLS') },
-    { label: 'Agentes', path: '/admin/agents', icon: '🤖', show: canView('AGENTS') },
     { label: 'Cacao', path: '/cacao', icon: '🫘', show: canView('CACAO') },
     { label: 'Permisos', path: '/admin/permissions', icon: '🔐', show: isSuperAdmin },
     { label: 'Permisos Usuarios', path: '/admin/user-permissions', icon: '🔑', show: isCompanyAdmin },
@@ -52,6 +54,9 @@ export default function Sidebar() {
     { label: 'Dashboard', path: '/rrhh', icon: '📊' },
     { label: 'Reclutamiento', path: '/rrhh/reclutamiento', icon: '🎯' },
     { label: 'Personal Administrativo', path: '/rrhh/administrativo', icon: '📋' },
+    { label: 'Capacitaciones', path: '/rrhh/capacitaciones', icon: '🎓' },
+    { label: 'Gestión de Quejas y Sugerencias', path: '/rrhh/quejas/gestion', icon: '📮' },
+    { label: 'Gestión de Encuestas', path: '/rrhh/encuestas/gestion', icon: '📝' },
   ];
 
   const custodiosItems = [
@@ -84,6 +89,13 @@ export default function Sidebar() {
     { label: 'Nómina y Liquidación', path: '/custodias/nomina', icon: '💰' },
     { label: 'Consulta por Cédula', path: '/custodias/trabajador', icon: '🔍' },
     { label: 'Asistente GEME-BOT', path: '/custodias/gemebot', icon: '🤖' },
+  ];
+
+  const sistemasSubItems = [
+    { label: 'Dashboard', path: '/sistemas/dashboard', icon: '📊' },
+    { label: 'Herramientas', path: '/sistemas/herramientas', icon: '🔧' },
+    { label: 'Agentes', path: '/sistemas/agentes', icon: '🤖' },
+    { label: 'Soporte Técnico', path: '/sistemas/soporte', icon: '🛠️' },
   ];
 
   const renderSubItems = (items: { label: string; path: string; icon: string }[], depth: number = 0) => (
@@ -264,6 +276,40 @@ export default function Sidebar() {
             {!collapsed && ventasOpen && (
               <div style={{ marginLeft: '12px', borderLeft: '2px solid #e2e8f0', paddingLeft: '0' }}>
                 {renderSubItems(ventasItems)}
+              </div>
+            )}
+          </>
+        )}
+
+        {canView('SISTEMAS') && (
+          <>
+            <button
+              className={`sidebar-link ${isSistemasActive ? 'sidebar-link-active' : ''}`}
+              onClick={() => {
+                if (collapsed) {
+                  navigate('/sistemas/dashboard');
+                } else {
+                  setSistemasOpen(!sistemasOpen);
+                  if (!sistemasOpen) navigate('/sistemas/dashboard');
+                }
+              }}
+              title={collapsed ? 'Sistemas' : undefined}
+              style={{ justifyContent: 'space-between' }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span className="sidebar-icon">🛠️</span>
+                {!collapsed && <span className="sidebar-label">Sistemas</span>}
+              </span>
+              {!collapsed && (
+                <span style={{ fontSize: '0.7rem', transition: 'transform 0.2s', transform: sistemasOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▶
+                </span>
+              )}
+            </button>
+
+            {!collapsed && sistemasOpen && (
+              <div style={{ marginLeft: '12px', borderLeft: '2px solid #e2e8f0', paddingLeft: '0' }}>
+                {renderSubItems(sistemasSubItems)}
               </div>
             )}
           </>

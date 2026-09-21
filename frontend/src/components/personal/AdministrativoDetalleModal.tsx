@@ -1,5 +1,5 @@
-import { useState, useEffect, type ReactNode } from 'react';
-import { X, Building2, User, Briefcase, Settings2, ListChecks } from 'lucide-react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { X, Building2, User, Briefcase, Settings2 } from 'lucide-react';
 import {
   getAdministrativoFicha,
   setAdministrativoFicha,
@@ -9,17 +9,20 @@ import {
 import { getPersonalFieldDefinitions, type PersonalFieldDefinition } from '../../services/entidades.service';
 import ComplianceChecklist from './ComplianceChecklist';
 import DocumentReviewHistory from './DocumentReviewHistory';
-import PersonalFieldsConfigModal from './PersonalFieldsConfigModal';
+import AdministrativeStaffConfigModal from './AdministrativeStaffConfigModal';
 
 /** Ver GuardiaFichaModal — misma tarjeta de sección reutilizada aquí. */
-function SeccionCard({ icon, title, subtitle, children }: { icon: ReactNode; title: string; subtitle?: string; children: ReactNode }) {
+function SeccionCard({ icon, title, subtitle, action, children }: { icon: ReactNode; title: string; subtitle?: string; action?: ReactNode; children: ReactNode }) {
   return (
     <div style={{ background: '#f8fafc', border: '1px solid #dfe3ea', borderRadius: '14px', padding: '18px 20px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: subtitle ? '2px' : '14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', borderRadius: '8px', background: 'var(--azul-oscuro)', color: '#fff', flexShrink: 0 }}>
-          {icon}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: subtitle ? '2px' : '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', borderRadius: '8px', background: 'var(--azul-oscuro)', color: '#fff', flexShrink: 0 }}>
+            {icon}
+          </div>
+          <strong style={{ fontSize: '0.9rem', color: 'var(--azul-oscuro)' }}>{title}</strong>
         </div>
-        <strong style={{ fontSize: '0.9rem', color: 'var(--azul-oscuro)' }}>{title}</strong>
+        {action}
       </div>
       {subtitle && <p style={{ margin: '0 0 14px 34px', fontSize: '0.78rem', color: '#718096' }}>{subtitle}</p>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
@@ -37,11 +40,10 @@ interface Props {
   onFichaSaved?: () => void;
 }
 
-const emptyForm = {
-  departamento: '', fechaIngreso: '', tipoContrato: '',
-  telefono: '', direccion: '', contactoEmergenciaNombre: '', contactoEmergenciaTelefono: '',
-  salarioAcordado: '',
-};
+// Clave del campo por defecto "Activo" (ver DEFAULT_FIELDS_BY_SCOPE.PERSONAL_ADMIN
+// en el backend) — vive en camposPersonalizados como cualquier otro campo
+// configurable, con valor 'true'/'false' en string.
+const ACTIVO_KEY = 'activo';
 
 /**
  * Modal único con la "información amplificada" de un empleado administrativo:
@@ -52,8 +54,6 @@ const emptyForm = {
  */
 export default function AdministrativoDetalleModal({ employee, onClose, onFichaSaved }: Props) {
   const [loadingFicha, setLoadingFicha] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [activo, setActivo] = useState(true);
   const [campos, setCampos] = useState<Record<string, string>>({});
   const [fieldDefs, setFieldDefs] = useState<PersonalFieldDefinition[]>([]);
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -81,38 +81,32 @@ export default function AdministrativoDetalleModal({ employee, onClose, onFichaS
     if (!employee) return;
     setLoadingFicha(true);
     setError('');
-    setForm(emptyForm);
     setCampos({});
     Promise.all([getAdministrativoFicha(employee.cedula), loadFieldDefs()])
       .then(([f]) => {
-        setForm({
-          departamento: f?.departamento || '',
-          fechaIngreso: f?.fechaIngreso ? f.fechaIngreso.slice(0, 10) : '',
-          tipoContrato: f?.tipoContrato || '',
-          telefono: f?.telefono || '',
-          direccion: f?.direccion || '',
-          contactoEmergenciaNombre: f?.contactoEmergenciaNombre || '',
-          contactoEmergenciaTelefono: f?.contactoEmergenciaTelefono || '',
-          salarioAcordado: f?.salarioAcordado != null ? String(f.salarioAcordado) : '',
-        });
-        setActivo(f?.activo ?? true);
         setCampos(f?.camposPersonalizados || {});
       })
-      .catch(() => setForm(emptyForm))
+      .catch(() => setCampos({}))
       .finally(() => setLoadingFicha(false));
     loadCompliance(employee.cedula);
   }, [employee]);
 
+  // Ver GuardiaFichaModal — misma métrica, puramente informativa y separada
+  // del % de cumplimiento documental.
+  const camposRequeridosFaltantes = useMemo(
+    () => fieldDefs.filter((f) => f.required && !(campos[f.key] || '').trim()).length,
+    [fieldDefs, campos],
+  );
+
   if (!employee) return null;
+
+  const activo = campos[ACTIVO_KEY] !== 'false';
 
   const handleSave = async () => {
     setSaving(true);
     setError('');
     try {
       await setAdministrativoFicha(employee.cedula, {
-        ...form,
-        activo,
-        salarioAcordado: form.salarioAcordado.trim() === '' ? null : Number(form.salarioAcordado),
         camposPersonalizados: campos,
       });
       onFichaSaved?.();
@@ -123,6 +117,31 @@ export default function AdministrativoDetalleModal({ employee, onClose, onFichaS
       setSaving(false);
     }
   };
+
+  const renderCampo = (f: PersonalFieldDefinition) => (
+    <div className="form-group" key={f.id}>
+      {f.type === 'BOOLEAN' ? (
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={campos[f.key] === 'true'}
+            onChange={(e) => setCampos({ ...campos, [f.key]: String(e.target.checked) })}
+            style={{ width: '16px', height: '16px' }}
+          />
+          {f.label}{f.required && <span style={{ color: '#c53030', marginLeft: '4px' }}>*</span>}
+        </label>
+      ) : (
+        <>
+          <label>{f.label}{f.required && <span style={{ color: '#c53030', marginLeft: '4px' }}>*</span>}</label>
+          <input
+            type={f.type === 'NUMBER' ? 'number' : f.type === 'DATE' ? 'date' : 'text'}
+            value={campos[f.key] || ''}
+            onChange={(e) => setCampos({ ...campos, [f.key]: e.target.value })}
+          />
+        </>
+      )}
+    </div>
+  );
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -137,6 +156,11 @@ export default function AdministrativoDetalleModal({ employee, onClose, onFichaS
               <span className="status-badge" style={{ background: activo ? '#c6f6d5' : '#fed7d7', color: activo ? '#276749' : '#c53030', fontSize: '0.68rem' }}>
                 Activo: {activo ? 'Sí' : 'No'}
               </span>
+              {camposRequeridosFaltantes > 0 && (
+                <span className="status-badge" style={{ background: '#fed7d7', color: '#c53030', fontSize: '0.68rem' }}>
+                  {camposRequeridosFaltantes} {camposRequeridosFaltantes === 1 ? 'campo requerido sin completar' : 'campos requeridos sin completar'}
+                </span>
+              )}
             </p>
           </div>
           <button className="modal-close" onClick={onClose}>
@@ -151,81 +175,33 @@ export default function AdministrativoDetalleModal({ employee, onClose, onFichaS
               {error && <div className="form-error" style={{ marginBottom: '14px' }}>{error}</div>}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
-                <SeccionCard icon={<User size={14} />} title="Datos generales">
-                  <div className="form-group">
-                    <label>Departamento / área</label>
-                    <input type="text" placeholder="Ej: Contabilidad" value={form.departamento} onChange={(e) => setForm({ ...form, departamento: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label>Fecha de ingreso</label>
-                    <input type="date" value={form.fechaIngreso} onChange={(e) => setForm({ ...form, fechaIngreso: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={activo} onChange={(e) => setActivo(e.target.checked)} style={{ width: '16px', height: '16px' }} />
-                      Activo
-                    </label>
-                  </div>
-                  <div className="form-group">
-                    <label>Teléfono</label>
-                    <input type="text" value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value })} />
-                  </div>
-                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                    <label>Dirección</label>
-                    <input type="text" value={form.direccion} onChange={(e) => setForm({ ...form, direccion: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label>Contacto de emergencia — nombre</label>
-                    <input type="text" value={form.contactoEmergenciaNombre} onChange={(e) => setForm({ ...form, contactoEmergenciaNombre: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label>Contacto de emergencia — teléfono</label>
-                    <input type="text" value={form.contactoEmergenciaTelefono} onChange={(e) => setForm({ ...form, contactoEmergenciaTelefono: e.target.value })} />
-                  </div>
-                </SeccionCard>
-
-                <SeccionCard icon={<Briefcase size={14} />} title="Datos laborales">
-                  <div className="form-group">
-                    <label>Tipo de contrato</label>
-                    <input type="text" placeholder="Ej: Indefinido, Fijo" value={form.tipoContrato} onChange={(e) => setForm({ ...form, tipoContrato: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label>Salario acordado</label>
-                    <input type="number" step="0.01" placeholder="Ej: 500.00" value={form.salarioAcordado} onChange={(e) => setForm({ ...form, salarioAcordado: e.target.value })} />
-                  </div>
-                </SeccionCard>
-
-                <div style={{ background: '#f8fafc', border: '1px solid #dfe3ea', borderRadius: '14px', padding: '18px 20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: fieldDefs.length ? '14px' : '4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', borderRadius: '8px', background: 'var(--azul-oscuro)', color: '#fff', flexShrink: 0 }}>
-                        <ListChecks size={14} />
-                      </div>
-                      <strong style={{ fontSize: '0.9rem', color: 'var(--azul-oscuro)' }}>Otros datos</strong>
-                    </div>
+                <SeccionCard
+                  icon={<User size={14} />}
+                  title="Datos generales"
+                  action={
                     <button type="button" className="btn-secondary" style={{ fontSize: '0.75rem', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: '5px' }} onClick={() => setShowConfigModal(true)}>
                       <Settings2 size={13} /> Configurar campos
                     </button>
-                  </div>
-                  {fieldDefs.length === 0 ? (
+                  }
+                >
+                  {fieldDefs.filter((f) => f.category === 'PERSONAL').length === 0 ? (
                     <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
-                      No hay campos personalizados todavía. Usa "Configurar campos" para agregar uno (ej. Edad).
+                      No hay campos configurados todavía. Usa "Configurar campos" para agregar uno.
                     </p>
                   ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
-                      {fieldDefs.map((f) => (
-                        <div className="form-group" key={f.id}>
-                          <label>{f.label}</label>
-                          <input
-                            type={f.type === 'NUMBER' ? 'number' : f.type === 'DATE' ? 'date' : 'text'}
-                            value={campos[f.key] || ''}
-                            onChange={(e) => setCampos({ ...campos, [f.key]: e.target.value })}
-                          />
-                        </div>
-                      ))}
-                    </div>
+                    fieldDefs.filter((f) => f.category === 'PERSONAL').map(renderCampo)
                   )}
-                </div>
+                </SeccionCard>
+
+                <SeccionCard icon={<Briefcase size={14} />} title="Datos laborales">
+                  {fieldDefs.filter((f) => f.category === 'LABORAL').length === 0 ? (
+                    <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
+                      No hay campos configurados todavía. Usa "Configurar campos" para agregar uno.
+                    </p>
+                  ) : (
+                    fieldDefs.filter((f) => f.category === 'LABORAL').map(renderCampo)
+                  )}
+                </SeccionCard>
               </div>
 
               <div className="modal-actions" style={{ padding: 0, marginBottom: '20px' }}>
@@ -272,10 +248,10 @@ export default function AdministrativoDetalleModal({ employee, onClose, onFichaS
       </div>
 
       {showConfigModal && (
-        <PersonalFieldsConfigModal
-          scope="PERSONAL_ADMIN"
+        <AdministrativeStaffConfigModal
+          initialTab="GENERALES"
           onClose={() => setShowConfigModal(false)}
-          onChanged={loadFieldDefs}
+          onFieldsChanged={loadFieldDefs}
         />
       )}
     </div>

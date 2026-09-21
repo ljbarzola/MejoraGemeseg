@@ -133,42 +133,16 @@ export class CustodiasService {
       });
     }
 
-    let candidates = await this.prisma.candidate.findMany({
-      where: { companyId },
-      include: { column: true },
-    });
-
-    if (candidates.length === 0) {
-      candidates = await this.prisma.candidate.findMany({
-        include: { column: true },
-      });
-    }
-
-    const candidateMap = new Map(
-      candidates.map((c) => [c.cedula, c.column?.name || 'Inscrito']),
-    );
-
+    // El "estado" (antes leído del Kanban de Candidatos, eliminado
+    // 2026-09-17 por no ser un flujo real) siempre era 'Inscrito' en la
+    // práctica — se preserva ese mismo valor fijo para no alterar lo que ya
+    // se veía acá.
     const list = driveCustodios.map((c) => ({
       name: c.employeeName,
       cedula: c.cedula,
-      status: candidateMap.get(c.cedula) || 'Inscrito',
+      status: 'Inscrito',
+      lastSyncAt: c.lastSyncAt,
     }));
-
-    for (const cand of candidates) {
-      if (cand.positionApplied?.toLowerCase().includes('custodio')) {
-        if (
-          !list.some(
-            (item) => item.name.toLowerCase() === cand.fullName.toLowerCase(),
-          )
-        ) {
-          list.push({
-            name: cand.fullName,
-            cedula: cand.cedula,
-            status: cand.column?.name || 'Inscrito',
-          });
-        }
-      }
-    }
 
     return list.sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -448,16 +422,12 @@ export class CustodiasService {
       };
     }
 
-    // Try finding employee name from Drive folders or Candidates
+    // Try finding employee name from Drive folders
     const driveEmployee = await this.prisma.employeeDriveFolder.findFirst({
       where: { companyId, cedula: cedulaNorm },
     });
-    const candidateEmployee = await this.prisma.candidate.findFirst({
-      where: { companyId, cedula: cedulaNorm },
-    });
 
-    const knownName =
-      driveEmployee?.employeeName || candidateEmployee?.fullName || '';
+    const knownName = driveEmployee?.employeeName || '';
 
     const whereClause: any = {
       companyId,

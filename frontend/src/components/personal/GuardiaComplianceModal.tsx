@@ -227,14 +227,14 @@ export default function GuardiaComplianceModal({ cedula, onClose, onChanged }: P
                       </button>
                       <button
                         type="button"
-                        disabled
-                        title="WhatsApp: próximamente"
+                        onClick={() => setMedio('WHATSAPP')}
                         style={{
                           display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 12px', border: 'none', borderLeft: '1px solid #e2e8f0',
-                          background: '#f7fafc', color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600, cursor: 'not-allowed',
+                          background: medio === 'WHATSAPP' ? 'var(--azul-oscuro)' : '#fff',
+                          color: medio === 'WHATSAPP' ? '#fff' : '#4a5568', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
                         }}
                       >
-                        <MessageCircle size={14} /> WhatsApp · Próximamente
+                        <MessageCircle size={14} /> WhatsApp
                       </button>
                     </div>
 

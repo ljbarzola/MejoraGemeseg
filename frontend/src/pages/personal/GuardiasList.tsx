@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, Settings, Settings2, X, Users, Building2, Landmark, UserX, LogOut, IdCard, ArrowRightLeft } from 'lucide-react';
 import { getAvailableCustodios } from '../../services/custodia.service';
@@ -7,17 +7,26 @@ import {
   getEntidades,
   syncEntidadesFolder,
   moverGuardiaAEntidad,
+  getAllGuardiaFichas,
+  getPersonalFieldDefinitions,
   type AsignacionGuardia,
   type Entidad,
   type EntidadTipo,
   type SyncEntidadesResult,
+  type GuardiaFichaPersonal,
+  type PersonalFieldDefinition,
+  type MoverGuardiaRequiereConfirmacion,
 } from '../../services/entidades.service';
+import GuardiasExportModal from '../../components/personal/GuardiasExportModal';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { getDriveConfig, saveDriveConfig, testDriveConnection } from '../../services/personal.service';
 import { registrarSalida, getCedulasFuera } from '../../services/movimiento-personal.service';
 import GuardiaFichaModal from '../../components/personal/GuardiaFichaModal';
 import MovimientoDetalleModal from '../../components/personal/MovimientoDetalleModal';
 import PersonalFieldsConfigModal from '../../components/personal/PersonalFieldsConfigModal';
 import { usePerm } from '../../contexts/PermissionsContext';
+import { extractDriveFolderId, buildDriveFolderLink } from '../../utils/driveLink';
+import { formatFechaHoraSync } from '../../utils/formatFechaHora';
 
 interface GuardiaRow {
   name: string;
@@ -55,10 +64,18 @@ export default function GuardiasList() {
   const { canWrite } = usePerm();
   const canEdit = canWrite('RRHH');
 
-  const [guardias, setGuardias] = useState<{ name: string; cedula: string; status: string }[]>([]);
+  const [guardias, setGuardias] = useState<{ name: string; cedula: string; status: string; lastSyncAt?: string }[]>([]);
+  const ultimaSincronizacion = guardias.reduce<string | undefined>((max, g) => {
+    if (!g.lastSyncAt) return max;
+    if (!max || new Date(g.lastSyncAt) > new Date(max)) return g.lastSyncAt;
+    return max;
+  }, undefined);
   const [asignaciones, setAsignaciones] = useState<AsignacionGuardia[]>([]);
   const [entidades, setEntidades] = useState<Entidad[]>([]);
   const [cedulasFuera, setCedulasFuera] = useState<string[]>([]);
+  const [fichas, setFichas] = useState<GuardiaFichaPersonal[]>([]);
+  const [fieldDefs, setFieldDefs] = useState<PersonalFieldDefinition[]>([]);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -74,6 +91,18 @@ export default function GuardiasList() {
 
   const [fichaGuardia, setFichaGuardia] = useState<{ name: string; cedula: string } | null>(null);
   const [salidaEnCurso, setSalidaEnCurso] = useState<string | null>(null);
+  const [confirmandoSalida, setConfirmandoSalida] = useState<GuardiaRow | null>(null);
+  const [salidaError, setSalidaError] = useState('');
+  const salidaErrorRef = useRef<HTMLDivElement>(null);
+
+  // La fila que dispara "Registrar salida" puede estar muy abajo en una
+  // tabla larga; el banner de error se pinta arriba de la página, así que se
+  // hace scrollIntoView para que RRHH no se lo pierda.
+  useEffect(() => {
+    if (salidaError) {
+      salidaErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [salidaError]);
   const [movimientoDetalleId, setMovimientoDetalleId] = useState<number | null>(null);
   const [showFieldsConfig, setShowFieldsConfig] = useState(false);
 
@@ -83,6 +112,11 @@ export default function GuardiasList() {
   const [moverEntidadId, setMoverEntidadId] = useState<number | ''>('');
   const [moviendo, setMoviendo] = useState(false);
   const [moverError, setMoverError] = useState('');
+  // Cuando la entidad destino no tiene carpeta de Drive vinculada y no se
+  // encontró ninguna parecida, el backend pide confirmar antes de crearla
+  // (ver handleConfirmMover) — este diálogo es independiente del modal de
+  // "mover" de arriba, que se mantiene abierto detrás mientras se confirma.
+  const [confirmarCrearCarpeta, setConfirmarCrearCarpeta] = useState<Pick<MoverGuardiaRequiereConfirmacion, 'entidadNombre' | 'tipoLabel'> | null>(null);
 
   // Sincronizar Drive
   const [syncing, setSyncing] = useState(false);
@@ -114,12 +148,16 @@ export default function GuardiasList() {
       getAsignaciones({ activasOnly: true }),
       getEntidades(),
       getCedulasFuera(),
+      getAllGuardiaFichas().catch(() => []),
+      getPersonalFieldDefinitions('GUARDIA').catch(() => []),
     ])
-      .then(([g, a, e, fuera]) => {
+      .then(([g, a, e, fuera, f, defs]) => {
         setGuardias(g);
         setAsignaciones(a || []);
         setEntidades(e || []);
         setCedulasFuera(fuera || []);
+        setFichas(f || []);
+        setFieldDefs(defs || []);
       })
       .catch((err: any) => setError(err.response?.data?.message || 'No se pudo cargar el listado de guardias.'))
       .finally(() => setLoading(false));
@@ -127,17 +165,23 @@ export default function GuardiasList() {
 
   useEffect(load, []);
 
-  // Doble validación antes de dar de baja: confirm nativo (mismo patrón que
-  // el resto del módulo, ver handleDeleteColumn en RecruitmentKanban.tsx) en
-  // vez de un formulario — cédula/nombre ya se conocen por la fila.
-  const handleRegistrarSalida = async (r: GuardiaRow) => {
-    if (!window.confirm(`¿Seguro que deseas registrar la salida de ${r.name}?`)) return;
+  // Doble validación antes de dar de baja: modal de confirmación propio (no
+  // formulario) — cédula/nombre ya se conocen por la fila.
+  const handleRegistrarSalida = (r: GuardiaRow) => {
+    setSalidaError('');
+    setConfirmandoSalida(r);
+  };
+
+  const confirmarRegistrarSalida = async () => {
+    const r = confirmandoSalida;
+    if (!r) return;
+    setConfirmandoSalida(null);
     setSalidaEnCurso(r.cedula);
     try {
       const movimiento = await registrarSalida({ cedula: r.cedula, nombreGuardia: r.name });
       setMovimientoDetalleId(movimiento.id);
     } catch (err: any) {
-      alert(err.response?.data?.message || 'No se pudo registrar la salida.');
+      setSalidaError(err.response?.data?.message || 'No se pudo registrar la salida.');
     } finally {
       setSalidaEnCurso(null);
     }
@@ -164,12 +208,16 @@ export default function GuardiasList() {
     setMoverError('');
   };
 
-  const handleConfirmMover = async () => {
+  const handleConfirmMover = async (confirmCrearCarpeta?: boolean) => {
     if (!moverGuardia || !moverEntidadId) return;
     setMoviendo(true);
     setMoverError('');
     try {
-      await moverGuardiaAEntidad(moverGuardia.cedula, moverEntidadId);
+      const result = await moverGuardiaAEntidad(moverGuardia.cedula, moverEntidadId, confirmCrearCarpeta);
+      if ('requiereConfirmacion' in result) {
+        setConfirmarCrearCarpeta({ entidadNombre: result.entidadNombre, tipoLabel: result.tipoLabel });
+        return;
+      }
       setMoverGuardia(null);
       load();
     } catch (err: any) {
@@ -177,6 +225,17 @@ export default function GuardiasList() {
     } finally {
       setMoviendo(false);
     }
+  };
+
+  // El guardia sigue sin moverse hasta que RRHH confirme — cancelar solo
+  // cierra este diálogo, no toca el modal de "mover" que puede quedar abierto.
+  const handleCancelarCrearCarpeta = () => {
+    setConfirmarCrearCarpeta(null);
+  };
+
+  const handleConfirmarCrearCarpeta = () => {
+    setConfirmarCrearCarpeta(null);
+    handleConfirmMover(true);
   };
 
   const openConfigModal = () => {
@@ -188,7 +247,7 @@ export default function GuardiasList() {
       .then((data) => {
         if (data) {
           setDriveConfig(data);
-          setConfigFolderId(data.driveFolderId || '');
+          setConfigFolderId(data.driveFolderId ? (data.driveFolderLink || buildDriveFolderLink(data.driveFolderId)) : '');
         }
       })
       .catch((err: any) => setConfigError(err.response?.data?.message || 'No se pudo cargar la configuración de Drive.'))
@@ -198,15 +257,15 @@ export default function GuardiasList() {
       .then((data) => {
         if (data) {
           setArchiveConfig(data);
-          setArchiveFolderId(data.driveFolderId || '');
+          setArchiveFolderId(data.driveFolderId ? (data.driveFolderLink || buildDriveFolderLink(data.driveFolderId)) : '');
         }
       })
       .catch(() => {});
   };
 
   const handleSaveArchiveConfig = async () => {
-    const cleanId = archiveFolderId.trim().replace(/\.+$/, '');
-    if (!cleanId) { setArchiveConfigError('Ingresa el ID de la carpeta.'); return; }
+    const cleanId = extractDriveFolderId(archiveFolderId);
+    if (!cleanId) { setArchiveConfigError('Pega el enlace completo de la carpeta.'); return; }
     setSavingArchiveConfig(true);
     setArchiveConfigError('');
     try {
@@ -220,8 +279,8 @@ export default function GuardiasList() {
   };
 
   const handleTestConfig = async () => {
-    const cleanId = configFolderId.trim().replace(/\.+$/, '');
-    if (!cleanId) { setConfigError('Escribe el ID de la carpeta raíz para probar la conexión.'); return; }
+    const cleanId = extractDriveFolderId(configFolderId);
+    if (!cleanId) { setConfigError('Pega el enlace completo de la carpeta raíz para probar la conexión.'); return; }
     setTestingConfig(true);
     setConfigTestResult(null);
     setConfigError('');
@@ -236,8 +295,8 @@ export default function GuardiasList() {
   };
 
   const handleSaveConfig = async () => {
-    const cleanId = configFolderId.trim().replace(/\.+$/, '');
-    if (!cleanId) { setConfigError('Ingresa el ID de la carpeta.'); return; }
+    const cleanId = extractDriveFolderId(configFolderId);
+    if (!cleanId) { setConfigError('Pega el enlace completo de la carpeta.'); return; }
     setSavingConfig(true);
     setConfigError('');
     try {
@@ -287,6 +346,61 @@ export default function GuardiasList() {
     return true;
   });
 
+  const fichaPorCedula = useMemo(() => new Map(fichas.map((f) => [f.cedula, f])), [fichas]);
+
+  // Columnas disponibles para el modal de exportación: las de la tabla +
+  // datos de la ficha personal + campos personalizados configurados para
+  // guardias — se arma dinámicamente para no repetir la lista a mano en dos
+  // sitios cuando alguien agrega un campo nuevo.
+  const exportColumns = useMemo(() => {
+    const base = [
+      { key: 'name', label: 'Guardia' },
+      { key: 'cedula', label: 'Cédula' },
+      { key: 'entidad', label: 'Entidad actual' },
+      { key: 'tipo', label: 'Tipo' },
+      { key: 'estado', label: 'Estado' },
+      { key: 'telefono', label: 'Teléfono' },
+      { key: 'email', label: 'Correo electrónico' },
+      { key: 'direccion', label: 'Dirección' },
+      { key: 'fechaNacimiento', label: 'Fecha de nacimiento' },
+      { key: 'contactoEmergenciaNombre', label: 'Contacto de emergencia' },
+      { key: 'contactoEmergenciaTelefono', label: 'Teléfono de emergencia' },
+      { key: 'horario', label: 'Horario' },
+      { key: 'puestoFormal', label: 'Puesto' },
+      { key: 'salarioAcordado', label: 'Salario acordado' },
+    ];
+    const custom = fieldDefs.map((d) => ({ key: `custom_${d.key}`, label: d.label }));
+    return [...base, ...custom];
+  }, [fieldDefs]);
+
+  const exportRows = useMemo(
+    () =>
+      filtered.map((r) => {
+        const ficha = fichaPorCedula.get(r.cedula);
+        const row: Record<string, string | number | null> = {
+          name: r.name,
+          cedula: r.cedula || '',
+          entidad: r.entidad?.nombre || '',
+          tipo: r.entidad ? TIPO_LABEL[r.entidad.tipo] : '',
+          estado: r.fuera ? 'Fuera' : 'Activo',
+          telefono: ficha?.telefono || '',
+          email: ficha?.email || '',
+          direccion: ficha?.direccion || '',
+          fechaNacimiento: ficha?.fechaNacimiento ? new Date(ficha.fechaNacimiento).toLocaleDateString('es-EC') : '',
+          contactoEmergenciaNombre: ficha?.contactoEmergenciaNombre || '',
+          contactoEmergenciaTelefono: ficha?.contactoEmergenciaTelefono || '',
+          horario: ficha?.horario || '',
+          puestoFormal: ficha?.puestoFormal || '',
+          salarioAcordado: ficha?.salarioAcordado ?? '',
+        };
+        for (const d of fieldDefs) {
+          row[`custom_${d.key}`] = ficha?.camposPersonalizados?.[d.key] || '';
+        }
+        return row;
+      }),
+    [filtered, fichaPorCedula, fieldDefs],
+  );
+
   return (
     <div className="page-container">
       <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
@@ -301,16 +415,23 @@ export default function GuardiasList() {
           </div>
 
           {canEdit && (
-            <div className="header-actions">
-              <button className="btn-secondary" onClick={handleSync} disabled={syncing}>
-                <RefreshCw size={16} className={syncing ? 'spin' : undefined} /> {syncing ? 'Sincronizando...' : 'Sincronizar Drive'}
-              </button>
-              <button className="btn-secondary" onClick={openConfigModal} title="Ver estructura de carpetas y configurar Drive">
-                <Settings size={16} /> Configurar Drive
-              </button>
-              <button className="btn-secondary" onClick={() => setShowFieldsConfig(true)} title="Agregar o quitar campos de la Ficha Personal">
-                <Settings2 size={16} /> Configurar campos
-              </button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+              <div className="header-actions">
+                <button className="btn-secondary" onClick={handleSync} disabled={syncing}>
+                  <RefreshCw size={16} className={syncing ? 'spin' : undefined} /> {syncing ? 'Sincronizando...' : 'Sincronizar Drive'}
+                </button>
+                <button className="btn-secondary" onClick={openConfigModal} title="Ver estructura de carpetas y configurar Drive">
+                  <Settings size={16} /> Configurar Drive
+                </button>
+                <button className="btn-secondary" onClick={() => setShowFieldsConfig(true)} title="Agregar o quitar campos de la Ficha Personal">
+                  <Settings2 size={16} /> Configurar campos
+                </button>
+              </div>
+              {ultimaSincronizacion && (
+                <span style={{ fontSize: '0.75rem', color: '#718096' }}>
+                  Última sincronización: {formatFechaHoraSync(ultimaSincronizacion)}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -322,6 +443,10 @@ export default function GuardiasList() {
 
       {syncError && (
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{syncError}</div>
+      )}
+
+      {salidaError && (
+        <div ref={salidaErrorRef} style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{salidaError}</div>
       )}
 
       {syncResult && (
@@ -341,6 +466,11 @@ export default function GuardiasList() {
               ⚠ Nombres de entidad duplicados entre carpetas: {syncResult.entidadesColisionNombre.join(' · ')}
             </p>
           )}
+          {syncResult.entidadesFormatoInvalido.length > 0 && (
+            <p style={{ margin: '8px 0 0', color: '#975a16' }}>
+              ⚠ Carpetas de entidad que no siguen el formato "Provincia - Nombre de la entidad": {syncResult.entidadesFormatoInvalido.join(', ')}
+            </p>
+          )}
           {syncResult.carpetasNoReconocidas.length > 0 && (
             <p style={{ margin: '8px 0 0', color: '#975a16' }}>
               ⚠ Carpetas de primer nivel no reconocidas (deben llamarse "Público" o "Privado"): {syncResult.carpetasNoReconocidas.join(', ')}
@@ -348,7 +478,7 @@ export default function GuardiasList() {
           )}
           {syncResult.guardiasNoReconocidos.length > 0 && (
             <p style={{ margin: '8px 0 0', color: '#975a16' }}>
-              ⚠ Carpetas de guardia no reconocidas (deben llamarse "Nombre Apellido - Cédula"), no se creó nada para ellas: {syncResult.guardiasNoReconocidos.join(', ')}
+              ⚠ Carpetas de guardia no reconocidas (deben llamarse "Nombre Apellido - Cédula"), no se generó ningún registro para estas carpetas: {syncResult.guardiasNoReconocidos.join(', ')}
             </p>
           )}
           {syncResult.renombresIgnorados.length > 0 && (
@@ -409,6 +539,9 @@ export default function GuardiasList() {
               {mostrarFuera ? 'Ocultar guardias fuera' : `Mostrar guardias fuera (${cantidadFuera})`}
             </button>
           )}
+          <button className="btn-secondary" onClick={() => setShowExportModal(true)} disabled={filtered.length === 0}>
+            📤 Exportar
+          </button>
         </div>
 
         {loading ? (
@@ -497,6 +630,13 @@ export default function GuardiasList() {
       {showFieldsConfig && (
         <PersonalFieldsConfigModal scope="GUARDIA" onClose={() => setShowFieldsConfig(false)} onChanged={() => {}} />
       )}
+      {showExportModal && (
+        <GuardiasExportModal
+          columns={exportColumns}
+          rows={exportRows}
+          onClose={() => setShowExportModal(false)}
+        />
+      )}
 
       {/* MODAL: CONFIGURAR CARPETA DE DRIVE (Público/Privado/Entidad/Guardia) */}
       {showConfigModal && (
@@ -537,9 +677,7 @@ export default function GuardiasList() {
                   Cada sincronización también crea o actualiza, dentro de la carpeta de cada guardia, un archivo <code>Datos_Personales.json</code> con su ficha (editable con el ícono <IdCard size={12} style={{ verticalAlign: 'middle' }} /> "Ficha personal" de cada fila).
                 </p>
                 <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#718096' }}>
-                  Para obtener el ID de la carpeta raíz: ábrela en Drive y copia el ID de la URL —
-                  <br />
-                  <code>https://drive.google.com/drive/folders/1ABC123...</code> → el ID es <code>1ABC123...</code>
+                  Abre la carpeta raíz en Drive y copia el enlace completo desde la barra de direcciones o con "Compartir → Copiar enlace".
                 </p>
                 <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#c53030', fontWeight: 600 }}>
                   IMPORTANTE: comparte esa carpeta como Editor (no solo Lector) con <code>drive-sync@agentes-504115.iam.gserviceaccount.com</code> — la sincronización necesita poder crear el archivo Datos_Personales.json en cada carpeta de guardia.
@@ -553,12 +691,12 @@ export default function GuardiasList() {
                   {configError && <div className="form-error" style={{ marginTop: '14px' }}>{configError}</div>}
 
                   <div className="form-group" style={{ marginTop: '14px' }}>
-                    <label>ID de la carpeta raíz en Drive *</label>
+                    <label>Enlace de la carpeta raíz en Drive *</label>
                     <input
                       type="text"
                       value={configFolderId}
                       onChange={(e) => { setConfigFolderId(e.target.value); setConfigTestResult(null); }}
-                      placeholder="Ej: 1ABC123def456GHI..."
+                      placeholder="https://drive.google.com/drive/folders/1ABC123..."
                       style={{ width: '100%' }}
                     />
                   </div>
@@ -598,7 +736,7 @@ export default function GuardiasList() {
                         type="text"
                         value={archiveFolderId}
                         onChange={(e) => setArchiveFolderId(e.target.value)}
-                        placeholder="Ej: 1XYZ789..."
+                        placeholder="https://drive.google.com/drive/folders/1XYZ789..."
                         style={{ flex: 1 }}
                       />
                       <button className="btn-secondary" onClick={handleSaveArchiveConfig} disabled={savingArchiveConfig}>
@@ -671,12 +809,33 @@ export default function GuardiasList() {
               <button className="btn-secondary" onClick={() => setMoverGuardia(null)} disabled={moviendo}>
                 Cancelar
               </button>
-              <button className="auth-btn" onClick={handleConfirmMover} disabled={moviendo || !moverEntidadId}>
+              <button className="auth-btn" onClick={() => handleConfirmMover()} disabled={moviendo || !moverEntidadId}>
                 {moviendo ? 'Moviendo...' : 'Confirmar'}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {confirmarCrearCarpeta && (
+        <ConfirmDialog
+          title="Crear carpeta de la entidad"
+          message={`No se encontró ninguna carpeta parecida a "${confirmarCrearCarpeta.entidadNombre}" en ${confirmarCrearCarpeta.tipoLabel}. ¿Crearla en Drive y vincularla a esta entidad?`}
+          confirmLabel="Sí, crear y vincular"
+          onConfirm={handleConfirmarCrearCarpeta}
+          onCancel={handleCancelarCrearCarpeta}
+        />
+      )}
+
+      {confirmandoSalida && (
+        <ConfirmDialog
+          title="Registrar salida"
+          message={`¿Seguro que deseas registrar la salida de ${confirmandoSalida.name}?`}
+          confirmLabel="Sí, registrar salida"
+          danger
+          onConfirm={confirmarRegistrarSalida}
+          onCancel={() => setConfirmandoSalida(null)}
+        />
       )}
     </div>
   );

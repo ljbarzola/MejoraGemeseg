@@ -9,6 +9,7 @@ import {
   type Company,
 } from '../../services/company.service';
 import { getUser } from '../../services/auth.service';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 const EMPTY_FORM = {
   name: '',
@@ -19,6 +20,9 @@ const EMPTY_FORM = {
   bgColor: '#f8fafc',
   textColor: '#1e293b',
   domain: '',
+  adminFullName: '',
+  adminEmail: '',
+  adminPassword: '',
 };
 
 export default function CompaniesPage() {
@@ -35,6 +39,7 @@ export default function CompaniesPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState<{ id: number; name: string } | null>(null);
 
   useEffect(() => {
     if (!isSuperAdmin) {
@@ -75,6 +80,9 @@ export default function CompaniesPage() {
       bgColor: c.bgColor,
       textColor: c.textColor,
       domain: c.domain || '',
+      adminFullName: '',
+      adminEmail: '',
+      adminPassword: '',
     });
     setLogoFile(null);
     setLogoPreview(c.logoUrl);
@@ -107,7 +115,9 @@ export default function CompaniesPage() {
     setSaving(true);
     try {
       if (editingId) {
-        await updateCompany(editingId, { ...form, domain: form.domain || null });
+        const { adminFullName, adminEmail, adminPassword, ...companyFields } = form;
+        void adminFullName; void adminEmail; void adminPassword;
+        await updateCompany(editingId, { ...companyFields, domain: form.domain || null });
         if (logoFile) await uploadCompanyLogo(editingId, logoFile);
       } else {
         const created = await createCompany({ ...form, domain: form.domain || null });
@@ -123,8 +133,14 @@ export default function CompaniesPage() {
     }
   };
 
-  const handleDelete = async (id: number, name: string) => {
-    if (!confirm(`¿Eliminar la empresa "${name}"? Esta acción no se puede deshacer.`)) return;
+  const handleDelete = (id: number, name: string) => {
+    setConfirmandoEliminar({ id, name });
+  };
+
+  const confirmarEliminar = async () => {
+    if (!confirmandoEliminar) return;
+    const { id } = confirmandoEliminar;
+    setConfirmandoEliminar(null);
     try {
       await deleteCompany(id);
       await loadCompanies();
@@ -217,6 +233,29 @@ export default function CompaniesPage() {
                 <input type="text" value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })} placeholder="@midominio.com" />
               </div>
 
+              {!editingId && (
+                <>
+                  <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 14, marginTop: 4 }}>
+                    <p style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569', margin: '0 0 10px' }}>Administrador de la empresa</p>
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ fontSize: '0.85rem' }}>Nombre completo</label>
+                    <input type="text" value={form.adminFullName} onChange={(e) => setForm({ ...form, adminFullName: e.target.value })} placeholder="Nombre del administrador" />
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ fontSize: '0.85rem' }}>Correo del administrador</label>
+                    <input type="email" value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} placeholder="admin@midominio.com" />
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ fontSize: '0.85rem' }}>Contraseña</label>
+                    <input type="password" value={form.adminPassword} onChange={(e) => setForm({ ...form, adminPassword: e.target.value })} placeholder="Mínimo 6 caracteres" />
+                  </div>
+                </>
+              )}
+
               <div className="form-group">
                 <label style={{ fontSize: '0.85rem' }}>Logo</label>
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={handleLogoChange} style={{ display: 'none' }} />
@@ -262,6 +301,17 @@ export default function CompaniesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmandoEliminar && (
+        <ConfirmDialog
+          title="Eliminar empresa"
+          message={`¿Eliminar la empresa "${confirmandoEliminar.name}"? Esta acción no se puede deshacer.`}
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={confirmarEliminar}
+          onCancel={() => setConfirmandoEliminar(null)}
+        />
       )}
     </div>
   );

@@ -17,9 +17,11 @@ import { CustodiasService } from './custodias.service';
 import { PdfService } from './pdf.service';
 import { CreateCustodiaDto } from './dto/create-custodia.dto';
 import { UpdateEstadoDto } from './dto/update-estado.dto';
+import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
+import { Section } from '../../common/decorators/section.decorator';
 
 @Controller('custodias')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
 export class CustodiasController {
   constructor(
     private readonly custodiasService: CustodiasService,
@@ -27,6 +29,7 @@ export class CustodiasController {
   ) {}
 
   @Post()
+  @Section('CUSTODIAS', 'write')
   create(@Body() dto: CreateCustodiaDto, @Req() req: any) {
     return this.custodiasService.create(
       dto,
@@ -36,6 +39,7 @@ export class CustodiasController {
   }
 
   @Get()
+  @Section('CUSTODIAS', 'view')
   findAll(
     @Req() req: any,
     @Query('fechaInicio') fechaInicio?: string,
@@ -52,16 +56,19 @@ export class CustodiasController {
   }
 
   @Get('available-custodios')
+  @Section('CUSTODIAS', 'view')
   getAvailableCustodios(@Req() req: any) {
     return this.custodiasService.getAvailableCustodios(req.user.companyId);
   }
 
   @Get('dashboard')
+  @Section('CUSTODIAS', 'view')
   getDashboard(@Req() req: any, @Query('mes') mes?: string) {
     return this.custodiasService.getDashboardStats(req.user.companyId, mes);
   }
 
   @Get('trabajador')
+  @Section('CUSTODIAS', 'view')
   getTrabajador(
     @Req() req: any,
     @Query('cedula') cedula: string,
@@ -75,11 +82,13 @@ export class CustodiasController {
   }
 
   @Post('gemebot/query')
+  @Section('CUSTODIAS', 'write')
   queryGemeBot(@Req() req: any, @Body('mensaje') mensaje: string) {
     return this.custodiasService.queryGemeBot(req.user.companyId, mensaje);
   }
 
   @Get('nomina')
+  @Section('CUSTODIAS', 'view')
   getNomina(
     @Req() req: any,
     @Query('fechaInicio') fechaInicio: string,
@@ -93,6 +102,7 @@ export class CustodiasController {
   }
 
   @Get('nomina/pdf')
+  @Section('CUSTODIAS', 'view')
   async exportarNominaPdf(
     @Req() req: any,
     @Res() res: Response,
@@ -139,11 +149,13 @@ export class CustodiasController {
   }
 
   @Get(':id')
+  @Section('CUSTODIAS', 'view')
   findOne(@Param('id') id: string, @Req() req: any) {
     return this.custodiasService.findOne(+id, req.user.companyId);
   }
 
   @Get(':id/pdf')
+  @Section('CUSTODIAS', 'view')
   async exportarPdf(
     @Param('id') id: string,
     @Req() req: any,
@@ -166,6 +178,7 @@ export class CustodiasController {
   }
 
   @Patch(':id/estado')
+  @Section('CUSTODIAS', 'write')
   updateEstado(
     @Param('id') id: string,
     @Body() dto: UpdateEstadoDto,
@@ -179,6 +192,7 @@ export class CustodiasController {
   }
 
   @Delete(':id')
+  @Section('CUSTODIAS', 'write')
   remove(@Param('id') id: string, @Req() req: any) {
     return this.custodiasService.remove(+id, req.user.companyId);
   }

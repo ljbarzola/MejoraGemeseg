@@ -39,7 +39,6 @@ describe('ContractService', () => {
     };
     guardiaFichaPersonal: { findUnique: jest.Mock };
     asignacionGuardia: { findFirst: jest.Mock };
-    candidate: { findFirst: jest.Mock };
     company: { findUnique: jest.Mock };
   };
   const existsSyncMock = fs.existsSync as jest.Mock;
@@ -72,7 +71,6 @@ describe('ContractService', () => {
       },
       guardiaFichaPersonal: { findUnique: jest.fn() },
       asignacionGuardia: { findFirst: jest.fn() },
-      candidate: { findFirst: jest.fn() },
       company: { findUnique: jest.fn() },
     };
     service = new ContractService(prisma as unknown as PrismaService);
@@ -149,7 +147,7 @@ describe('ContractService', () => {
   });
 
   describe('getAutofill', () => {
-    it('prefers the ficha personal over the candidate record, and falls back when missing', async () => {
+    it('fills fields from the ficha personal', async () => {
       prisma.contractTemplate.findFirst.mockResolvedValue(
         makeTemplate({
           fields: [
@@ -186,11 +184,6 @@ describe('ContractService', () => {
         horario: '8 horas, 5 días',
       });
       prisma.asignacionGuardia.findFirst.mockResolvedValue(null);
-      prisma.candidate.findFirst.mockResolvedValue({
-        fullName: 'Juan Pérez',
-        positionApplied: 'Custodio',
-        salaryExpected: 400,
-      });
       prisma.company.findUnique.mockResolvedValue({ name: 'Gemeseg' });
 
       const result = await service.getAutofill(
@@ -232,7 +225,7 @@ describe('ContractService', () => {
       ]);
     });
 
-    it('falls back to the candidate record when there is no ficha personal', async () => {
+    it('leaves the field empty when there is no ficha personal (no secondary source since Candidate was removed)', async () => {
       prisma.contractTemplate.findFirst.mockResolvedValue(
         makeTemplate({
           fields: [
@@ -247,9 +240,6 @@ describe('ContractService', () => {
       );
       prisma.guardiaFichaPersonal.findUnique.mockResolvedValue(null);
       prisma.asignacionGuardia.findFirst.mockResolvedValue(null);
-      prisma.candidate.findFirst.mockResolvedValue({
-        positionApplied: 'Custodio',
-      });
       prisma.company.findUnique.mockResolvedValue(null);
 
       const result = await service.getAutofill(
@@ -259,7 +249,7 @@ describe('ContractService', () => {
         'Juan Pérez',
       );
 
-      expect(result[0].value).toBe('Custodio');
+      expect(result[0].value).toBe('');
     });
 
     // Regresión: un error de Prisma no relacionado (ej. P2022 columna

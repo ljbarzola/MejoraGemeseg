@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { getCompanyBySlug, type Company } from '../services/company.service';
+import { getCompanyBySlug, getCompanyByDomain, type Company } from '../services/company.service';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -31,6 +31,7 @@ interface ThemeContextType {
   loading: boolean;
   applyTheme: (theme: CompanyTheme) => void;
   loadThemeBySlug: (slug: string) => Promise<void>;
+  loadThemeByDomain: (domain: string) => Promise<boolean>;
 }
 
 const ThemeContext = createContext<ThemeContextType>({
@@ -38,6 +39,7 @@ const ThemeContext = createContext<ThemeContextType>({
   loading: false,
   applyTheme: () => {},
   loadThemeBySlug: async () => {},
+  loadThemeByDomain: async () => false,
 });
 
 export function CompanyProvider({ children }: { children: React.ReactNode }) {
@@ -77,12 +79,26 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     }
   }, [applyTheme]);
 
+  const loadThemeByDomain = useCallback(async (domain: string) => {
+    setLoading(true);
+    try {
+      const company = await getCompanyByDomain(domain);
+      applyTheme({ ...company, logoUrl: resolveLogoUrl(company.logoUrl, company.slug) });
+      return true;
+    } catch {
+      // Si el dominio no coincide con ninguna empresa, no cambiar el tema — mantener el actual
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [applyTheme]);
+
   useEffect(() => {
     applyTheme(theme);
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, loading, applyTheme, loadThemeBySlug }}>
+    <ThemeContext.Provider value={{ theme, loading, applyTheme, loadThemeBySlug, loadThemeByDomain }}>
       {children}
     </ThemeContext.Provider>
   );
