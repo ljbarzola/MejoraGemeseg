@@ -1,20 +1,29 @@
 import { GuardiaFichaPersonalService } from './guardia-ficha-personal.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { MovimientoPersonalService } from './movimiento-personal.service';
+import { PersonalFieldDefinitionService } from './personal-field-definition.service';
 
 describe('GuardiaFichaPersonalService.upsert', () => {
   let service: GuardiaFichaPersonalService;
-  let prisma: { guardiaFichaPersonal: { upsert: jest.Mock } };
+  let prisma: {
+    guardiaFichaPersonal: { upsert: jest.Mock; findUnique: jest.Mock };
+  };
   let movimientoPersonalService: { isActivo: jest.Mock };
+  let personalFieldDefinitionService: { findAll: jest.Mock };
 
   beforeEach(() => {
     prisma = {
-      guardiaFichaPersonal: { upsert: jest.fn().mockResolvedValue({}) },
+      guardiaFichaPersonal: {
+        upsert: jest.fn().mockResolvedValue({}),
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
     };
     movimientoPersonalService = { isActivo: jest.fn().mockResolvedValue(true) };
+    personalFieldDefinitionService = { findAll: jest.fn().mockResolvedValue([]) };
     service = new GuardiaFichaPersonalService(
       prisma as unknown as PrismaService,
       movimientoPersonalService as unknown as MovimientoPersonalService,
+      personalFieldDefinitionService as unknown as PersonalFieldDefinitionService,
     );
   });
 

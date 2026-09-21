@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getSalesApiKeys, createSalesApiKey, deleteSalesApiKey, SalesApiKey } from '../../services/ventas.service';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 export default function WebhookConfig() {
   const navigate = useNavigate();
@@ -9,6 +10,19 @@ export default function WebhookConfig() {
   const [keyName, setKeyName] = useState('');
   const [creating, setSaving] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [createError, setCreateError] = useState('');
+  const createErrorRef = useRef<HTMLDivElement>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const deleteErrorRef = useRef<HTMLDivElement>(null);
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<{ id: number; name: string } | null>(null);
+
+  useEffect(() => {
+    if (createError) createErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [createError]);
+
+  useEffect(() => {
+    if (deleteError) deleteErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [deleteError]);
 
   const loadKeys = () => {
     setLoading(true);
@@ -24,24 +38,32 @@ export default function WebhookConfig() {
     e.preventDefault();
     if (!keyName.trim()) return;
     setSaving(true);
+    setCreateError('');
     try {
       await createSalesApiKey(keyName);
       setKeyName('');
       loadKeys();
     } catch {
-      alert('Error al generar API Key');
+      setCreateError('Error al generar API Key');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (id: number, name: string) => {
-    if (!window.confirm(`¿Eliminar la API Key "${name}"?`)) return;
+  const handleDelete = (id: number, name: string) => {
+    setDeleteError('');
+    setConfirmDeleteKey({ id, name });
+  };
+
+  const confirmarEliminarKey = async () => {
+    if (!confirmDeleteKey) return;
+    const { id } = confirmDeleteKey;
+    setConfirmDeleteKey(null);
     try {
       await deleteSalesApiKey(id);
       loadKeys();
     } catch {
-      alert('Error al eliminar API Key');
+      setDeleteError('Error al eliminar API Key');
     }
   };
 
@@ -75,6 +97,8 @@ export default function WebhookConfig() {
             Crea claves secretas para conectar tus formularios web, Google Ads, Zapier o Make.
           </p>
 
+          {createError && <div ref={createErrorRef} className="form-error" style={{ marginBottom: '12px' }}>{createError}</div>}
+
           <form onSubmit={handleCreate} style={{ display: 'flex', gap: '10px' }}>
             <input
               type="text"
@@ -93,6 +117,8 @@ export default function WebhookConfig() {
             <h4 style={{ margin: '0 0 12px', color: 'var(--azul-oscuro)', fontSize: '0.9rem' }}>
               Mis Claves de API Activas
             </h4>
+
+            {deleteError && <div ref={deleteErrorRef} className="form-error" style={{ marginBottom: '12px' }}>{deleteError}</div>}
 
             {loading ? (
               <div className="loading-state">Cargando claves...</div>
@@ -166,6 +192,17 @@ export default function WebhookConfig() {
           </div>
         </div>
       </div>
+
+      {confirmDeleteKey && (
+        <ConfirmDialog
+          title="Eliminar API Key"
+          message={`¿Eliminar la API Key "${confirmDeleteKey.name}"?`}
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={confirmarEliminarKey}
+          onCancel={() => setConfirmDeleteKey(null)}
+        />
+      )}
     </div>
   );
 }

@@ -16,7 +16,6 @@ Prisma v7 con adapter `@prisma/adapter-pg`
 | `Priority` | LOW, MEDIUM, HIGH, URGENT |
 | `CustodiaType` | HACIENDA, PUERTO, VIP |
 | `CustodiaEstado` | LISTO_PARA_CUSTODIAR, EN_CAMINO, LLEGO |
-| `CandidateStatus` | POSTULADO, VALIDACION_DOCUMENTAL, TEST_PSICOLOGICO, TEST_MEDICO, APROBADO, RECHAZADO |
 | `ContractType` | TERMINO_INDEFINIDO, TERMINO_FIJO, ENTREGA_UNIFORMES |
 | `LogType` | PERMISO_INGRESO, RESPUESTA_ADMIN_CONTRATO, NOVEDAD_OPERATIVA, SALIDA_PERSONAL |
 
@@ -29,8 +28,8 @@ CacaoSupplier, CacaoClient, CacaoQuality, CacaoLot, CacaoReception, CacaoSettlem
 ## Modelos Custodias (1)
 Custodia — campos: numeroGuia, tipoCustodia (HACIENDA/PUERTO/VIP), estado (LISTO_PARA_CUSTODIAR/EN_CAMINO/LLEGO), choferName/Cedula, custodio1Name/Cedula, custodio2Name/Cedula, cliente, placa, direccionSalida/Llegada, fechaHoraSalida/Llegada, observaciones, nombreHacienda, cantidadSacos, contenedores[], companyId, createdBy
 
-## Modelos Personal (13)
-KanbanColumn, Candidate, CandidateHistory, ContractTemplate, Contract, Certification, CertificationAlert, LogTemplate, LogEntry, EmployeeDriveFolder, DocumentType, EmployeeDocument, FolderConfig
+## Modelos Personal (10) — ⚠️ lista desactualizada, no lista los ~40 modelos reales de este módulo hoy (Entidad/RequisitoDocumento/AsignacionGuardia/MovimientoPersonal/Training/Complaint/Survey/etc. — ver `.agents/modules/recursos-humanos.md` y `.agents/modules/reclutamiento.md` para el inventario real)
+ContractTemplate, Contract, Certification, CertificationAlert, LogTemplate, LogEntry, EmployeeDriveFolder, DocumentType, EmployeeDocument, FolderConfig — (`KanbanColumn`/`Candidate`/`CandidateHistory` eliminados 2026-09-17, ver recursos-humanos.md punto 2)
 
 ## Modelos Ventas (4)
 SalesGoal, ClientVisit, Lead, SalesApiKey

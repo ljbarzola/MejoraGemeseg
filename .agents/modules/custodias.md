@@ -87,7 +87,7 @@ model Custodia {
 - **VIP**: sin campos extra
 
 ## Personal para Custodias
-- Empleados se obtienen de `EmployeeDriveFolder` (folderType='CUSTODIAS') + `Candidate` (positionApplied='Custodio')
+- Empleados se obtienen de `EmployeeDriveFolder` (folderType='CUSTODIAS'). (Hasta 2026-09-17 también se unían candidatos del Kanban de Candidatos con `positionApplied='Custodio'` — modelo eliminado por no ser un flujo real, ver `.agents/modules/recursos-humanos.md` punto 2; el "estado" que mostraba cada custodio ahora es un valor fijo `'Inscrito'`, igual que ya se veía en la práctica.)
 - El formulario usa `EmpleadoSelect` con busqueda por nombre/cedula
 - Exclusion automatica: no se puede repetir chofer y custodios
 - Opcion "+ Manual" para ingreso directo si no esta en la lista
@@ -115,4 +115,3 @@ model Custodia {
 ## Dependencias
 - `pdfkit` + `@types/pdfkit` - Generacion de PDFs
 - `EmployeeDriveFolder` (modulo Personal) - Empleados disponibles
-- `Candidate` (modulo Personal) - Candidatos a custodio

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, AlertTriangle, Hourglass, ClipboardCheck, Info } from 'lucide-react';
+import { ArrowLeft, RefreshCw, AlertTriangle, Hourglass, ClipboardCheck, Info, Settings } from 'lucide-react';
 import {
   getComplianceOverview,
   getEntidades,
@@ -8,6 +8,7 @@ import {
   type Entidad,
 } from '../../../services/entidades.service';
 import GuardiaComplianceModal from '../../../components/personal/GuardiaComplianceModal';
+import NotificationConfigModal from '../../../components/personal/NotificationConfigModal';
 
 const TIPO_COLOR: Record<string, { bg: string; fg: string }> = {
   PUBLICA: { bg: '#bfdbfe', fg: '#1d4ed8' },
@@ -26,6 +27,7 @@ export default function CumplimientoEntidades() {
   const [error, setError] = useState('');
 
   const [selectedCedula, setSelectedCedula] = useState<string | null>(null);
+  const [showConfigModal, setShowConfigModal] = useState(false);
 
   const [search, setSearch] = useState('');
   const [filtroEntidad, setFiltroEntidad] = useState<number | 'TODAS'>('TODAS');
@@ -90,6 +92,9 @@ export default function CumplimientoEntidades() {
           </div>
 
           <div className="header-actions">
+            <button className="btn-secondary" onClick={() => setShowConfigModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Settings size={16} /> Configurar notificaciones
+            </button>
             <button className="btn-secondary" onClick={load} disabled={loading}>
               <RefreshCw size={16} className={loading ? 'spin' : undefined} /> {loading ? 'Cargando...' : 'Actualizar'}
             </button>
@@ -111,7 +116,7 @@ export default function CumplimientoEntidades() {
           >
             Listado de Guardias
           </button>
-          . Si algo está desactualizado, sincronizá desde ahí.
+          . Si algo está desactualizado, sincroniza desde ahí.
         </span>
       </div>
 
@@ -248,6 +253,9 @@ export default function CumplimientoEntidades() {
 
       {/* MODAL DETALLE DE CUMPLIMIENTO (pieza compartida con GuardiasList.tsx) */}
       <GuardiaComplianceModal cedula={selectedCedula} onClose={closeDetail} onChanged={load} />
+      {showConfigModal && (
+        <NotificationConfigModal onClose={() => setShowConfigModal(false)} />
+      )}
     </div>
   );
 }

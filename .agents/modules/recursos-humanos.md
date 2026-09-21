@@ -4,15 +4,23 @@
 El módulo se llamaba **"Personal"** y pasa a llamarse **"Recursos Humanos (RRHH)"** de cara al usuario. El rename se pidió en dos capas — visible (menú/textos) **y** estructural (rutas `/personal/*` → `/rrhh/*`, clave de permisos `PERSONAL` → `RRHH`) — y **ambas ya están implementadas** (ver Backlog, punto 1, marcado como hecho). Deliberadamente **no** se tocó el prefijo de la API REST (`@Controller('personal')` sigue siendo `personal`, y `frontend/src/services/personal.service.ts` sigue llamando a `/personal/...`) ni ningún nombre de archivo/carpeta interno (`backend/src/modules/personal/`, `frontend/src/pages/personal/`, `PersonalDashboard.tsx`, etc.): es un contrato interno invisible para el usuario, y renombrarlo en los ~35 call sites que lo usan habría sido riesgo innecesario sin beneficio visible. Este documento describe el sistema **tal como existe hoy** y señala explícitamente qué falta para las otras iniciativas en curso. Este archivo reemplaza a `personal.md` (renombrado).
 
 ## Descripción
-Gestión integral de RRHH: reclutamiento externo, Kanban interno de candidatos, contratos, movimientos de entrada/salida de guardias, bitácoras, y cumplimiento documental de Entidades/Guardias + Personal Administrativo sincronizado desde Google Drive (Drive es la fuente de la verdad de en qué entidad está cada guardia — ver punto 3).
+Gestión integral de RRHH: reclutamiento externo, contratos, movimientos de entrada/salida de guardias, bitácoras, y cumplimiento documental de Entidades/Guardias + Personal Administrativo sincronizado desde Google Drive (Drive es la fuente de la verdad de en qué entidad está cada guardia — ver punto 3).
 
 ## Submódulos (estado actual)
 
 ### 1. Reclutamiento (`/personal/reclutamiento`)
-Documentado en detalle en [reclutamiento.md](reclutamiento.md) — no se duplica aquí. Resumen: `JobPosition` ahora tiene carpeta propia en Drive por puesto (contiene el JSON + carpetas de postulantes), campos de formulario con tipo de dato (`camposRequeridos: {nombre, tipo}[]`) y archivos requeridos con extensiones permitidas (`archivosRequeridos: {nombre, extensiones}[]`) — migraciones `20260908_add_job_position_drive_folder` y `20260908_campos_requeridos_json`. Candidatos sincronizados desde Drive son de solo lectura salvo por una acción: **"Marcar como Contratado"** (Sprint 6 de reclutamiento.md, 2026-09-10) — mueve la carpeta del candidato a Guardias (carpeta "Sin Asignar", todavía sin entidad) y la marca en su `candidato.json`. **Esta es la vía real de contratación que usa RRHH** — no el Kanban del punto 2, aunque ese siga existiendo y funcionando.
+Documentado en detalle en [reclutamiento.md](reclutamiento.md) — no se duplica aquí. Resumen: `JobPosition` ahora tiene carpeta propia en Drive por puesto (contiene el JSON + carpetas de postulantes), campos de formulario con tipo de dato (`camposRequeridos: {nombre, tipo}[]`) y archivos requeridos con extensiones permitidas (`archivosRequeridos: {nombre, extensiones}[]`) — migraciones `20260908_add_job_position_drive_folder` y `20260908_campos_requeridos_json`. Candidatos sincronizados desde Drive son de solo lectura salvo por una acción: **"Marcar como Contratado"** (Sprint 6 de reclutamiento.md, 2026-09-10) — mueve la carpeta del candidato a Guardias (carpeta "Sin Asignar", todavía sin entidad) y la marca en su `candidato.json`. **Esta es la única vía de contratación que usa RRHH.**
 
-### 2. Kanban de Candidatos (`/personal/kanban`, `/personal/candidates`) — sistema real y funcional, pero no es como RRHH contrata en la práctica
-Sistema en BD, independiente del sync de Drive. Columnas por defecto: POSTULADO → VALIDACION_DOCUMENTAL → TEST_PSICOLOGICO → TEST_MEDICO → APROBADO/RECHAZADO. Historial de movimientos en `CandidateHistory`. `KanbanColumn.triggersHire` (una columna marcada así por empresa) sigue creando automáticamente un caso de `MovimientoPersonal` ENTRADA al mover un candidato ahí (`CandidateService.move()`) — **aclarado por el usuario el 2026-09-10**: esto es código real y activo, pero **no es el mecanismo que RRHH usa de verdad para contratar** (ver punto 1 y Sprint 6 de reclutamiento.md). Es un sistema separado que sigue vivo; no confundirlo con el flujo real al documentar o explicarle el módulo al usuario (ver `RrhhHelpModal.tsx`).
+### 2. ~~Kanban de Candidatos~~ — ELIMINADO POR COMPLETO (2026-09-17)
+Hasta el 2026-09-17 existió aquí un tablero Kanban en BD (`/rrhh/kanban`, `/rrhh/candidates`, modelos `Candidate`/`KanbanColumn`/`CandidateHistory`), independiente del sync de Drive. **Nunca fue el mecanismo real de contratación** (ver punto 1) y, según confirmó el usuario, tampoco estaba enlazado desde ningún menú ni se usaba en la práctica — en la base de datos local solo había una fila de prueba. A pedido explícito del usuario ("no existe tal cosa como kanban en la parte de reclutamiento... bórralo") se eliminó por completo: modelos de Prisma, servicios (`candidate.service.ts`, `kanban.service.ts`), DTOs, endpoints, páginas (`RecruitmentKanban.tsx`, `CandidatesList.tsx`, `CandidateForm.tsx`) y rutas. El único mecanismo real que dependía de él — crear automáticamente un caso `ENTRADA` en Movimientos de Personal al contratar — ya se había migrado antes (2026-09-16) a `DriveService.contratarCandidato()`, ver [movimientos-personal.md](movimientos-personal.md). Si en el futuro se quiere un tablero de reclutamiento, se construye de cero — no queda nada de este código para reactivar.
+
+**Otras 5 dependencias vivas que se encontraron y se desengancharon al eliminarlo** (todas ya eran datos vacíos/inertes en la práctica, así que no cambió nada visible):
+- `custodias.service.ts::getAvailableCustodios()` — el "estado" de cada custodio (columna del Kanban) siempre caía a `'Inscrito'`; ahora es un valor fijo `'Inscrito'` sin consultar nada.
+- `personal.service.ts::getDashboard()` — el KPI "guardias sin asignación" ya no une candidatos del Kanban con puesto "custodio".
+- `contract.service.ts::buildAutoFillValues()` — el autocompletado de NOMBRE/PUESTO/SALARIO al generar un contrato ya no tiene un respaldo secundario en `Candidate`; si `GuardiaFichaPersonal` no tiene el dato, el campo queda vacío para llenarlo a mano (igual que antes, cuando ese respaldo casi nunca tenía datos reales).
+- `drive.service.ts::getCompliance()` — el tipo de documento "Contrato" era condicionalmente no-obligatorio según una columna del Kanban que siempre estaba vacía; se preservó ese mismo resultado (siempre no-obligatorio) de forma fija, con una nota en el código para quien quiera revisar esta regla de negocio a futuro.
+- `drive.service.ts::syncFichaPersonal()` — `Datos_Personales.json` ya no mezcla datos de `Candidate` como respaldo; usa solo `GuardiaFichaPersonal` + el nombre de la carpeta.
+- `cedula-merge.service.ts` — se quitó `'candidate'` de la lista de tablas que chequea la fusión de cédulas duplicadas.
 
 ### 3. Documentación — generador de documentos (`/rrhh/contracts`) — 2026-09-10
 Hasta el 2026-09-10 era un stub: `ContractTemplate`/`Contract` solo guardaban un registro en `DRAFT`, sin generar ningún documento real. Ahora replica el pipeline ya probado en `ventas-contratos.service.ts`/`ventas-templates.service.ts` (extraído a un helper compartido, `backend/src/common/docx-templating/docx-merge.util.ts`, sin nada de BoldSign): plantilla `.docx` pegada por link de Drive → detectar variables **formato `[VARIABLE]` únicamente** (no `<<VARIABLE>>`, se sacó ese formato a propósito para no confundir a quien arma la plantilla) → mapear cada una a un dato conocido del guardia (`ContractField.systemField`) o dejarla manual → generar PDF.
@@ -20,9 +28,9 @@ Hasta el 2026-09-10 era un stub: `ContractTemplate`/`Contract` solo guardaban un
 - Página renombrada de cara al usuario a **"Documentación"** (`ContractsList.tsx`, título visible; el path interno sigue siendo `/rrhh/contracts` — mismo criterio que el rename Personal→RRHH del punto 0: no tocar rutas/nombres internos solo por el nombre visible). Desde ahí: "+ Nueva plantilla" (`ContractTemplateConfig.tsx`) y "+ Generar Documento" (`GenerarDocumento.tsx`, página propia — **no vive en Listado de Guardias**, deliberado: elegir guardia + tipo de documento es el punto de entrada de Documentación, no una acción rápida de fila).
 - `ContractTemplate.type` es **texto libre**, no un enum — el usuario puede escribir cualquier tipo de documento, no solo los 3 originales. `GET /personal/contracts/templates/types` devuelve los tipos ya usados por la empresa para ofrecerlos en un select con opción "+ Agregar nuevo tipo...".
 - **Alcance actual: solo Guardias.** Extender esto a todo tipo de empleado queda pendiente para después.
-- `Contract` no tiene FK a `Candidate` — se identifica por `cedula`/`nombreGuardia` (mismo patrón que `AsignacionGuardia`/`GuardiaFichaPersonal`/`Certification`).
-- Los datos que se autocompletan (nombre, cédula, puesto, entidad asignada, horario, salario, fecha, empresa) salen de `Candidate` + `AsignacionGuardia`/`Entidad` + `GuardiaFichaPersonal` — ver `ContractService.buildAutoFillValues`. **Horario, puesto formal y salario acordado son campos nuevos en `GuardiaFichaPersonal`** (no en `AsignacionGuardia`, que es un historial de solo lectura generado por el sync de Drive — ver comentario en el modelo), editables desde `GuardiaFichaModal.tsx` en Listado de Guardias.
-- Firma: **física** (se genera el PDF, se imprime y se firma a mano) — no hay firma digital ni BoldSign en este alcance.
+- `Contract` no tiene FK — se identifica por `cedula`/`nombreGuardia` (mismo patrón que `AsignacionGuardia`/`GuardiaFichaPersonal`/`Certification`).
+- Los datos que se autocompletan (nombre, cédula, puesto, entidad asignada, horario, salario, fecha, empresa) salen de `AsignacionGuardia`/`Entidad` + `GuardiaFichaPersonal` — ver `ContractService.buildAutoFillValues`. **Horario, puesto formal y salario acordado son campos nuevos en `GuardiaFichaPersonal`** (no en `AsignacionGuardia`, que es un historial de solo lectura generado por el sync de Drive — ver comentario en el modelo), editables desde `GuardiaFichaModal.tsx` en Listado de Guardias. (Hasta 2026-09-17 había un respaldo secundario en `Candidate`/Kanban, eliminado junto con ese sistema — ver punto 2; si falta el dato en la ficha, el campo queda vacío para llenarlo a mano.)
+- Firma: **física** (se genera el PDF, se imprime y se firma a mano) — no hay firma electrónica (SignWell ni ningún otro proveedor) en este alcance.
 - PDFs y `.docx` se guardan en disco local (`uploads/hr-templates`, `uploads/hr-contracts`), misma limitación de disco no persistente en Cloud Run que ya tiene Ventas.
 
 ### 4. Certificaciones y Alertas de Vencimiento — ⚠️ huérfano de frontend
@@ -37,8 +45,9 @@ Reemplaza al viejo submódulo de "Verificación" (`VerificationCheck`/`Verificac
 - **Es un registro, no un formulario de alta** (decisión explícita del usuario 2026-09-09): no existe "crear entrada manual" en ningún lado de la UI ni endpoint `POST /movimientos/entrada`. Si alguien necesita entrar, se hace desde Reclutamiento (kanban) o subiendo su documentación a la carpeta de Drive de Guardias; si alguien necesita salir, desde el botón de salida en `GuardiasList.tsx` o borrando su carpeta de Drive — Movimientos de Personal solo refleja lo que ya pasó por esos caminos.
 - **Catálogo configurable** `SistemaVerificacion` (`nombre`, `urlPortal?`, `activo`, `orden`, por `companyId`) — IsyPlus, IESS, SUT, SICOSEP ya sembrados para `companyId=1` (GEMESEG). No es una página propia — vive como modal (`ConfiguracionSistemasModal.tsx`, botón "⚙ Configurar sistemas") dentro de la pantalla que lista movimientos. Título visible: "Configuración de Sistemas de Ingreso/Salida".
 - **Caso/expediente** `MovimientoPersonal` (`tipo`: ENTRADA/SALIDA, `estado`: EN_PROCESO/COMPLETADO, `cedula`, `nombreGuardia`, `origen`, `candidateId?`) + `MovimientoPersonalItem` (uno por sistema, snapshot de `nombreSistema` al crear el caso, `completado`/`notas`/`completadoPor`/`completadoAt`). Cuando todos los items de un caso quedan completados, el caso pasa solo a COMPLETADO (y viceversa si se desmarca uno).
-- **Entrada**: única vía es automática — `KanbanColumn.triggersHire` (booleano, solo una columna por empresa puede tenerlo en `true`, se configura editando la columna en `RecruitmentKanban.tsx`) — al mover un candidato a esa columna (`CandidateService.move()`), se crea automáticamente su caso de ENTRADA (idempotente: no duplica si ya hay uno abierto para esa cédula).
-- **Salida**: ícono (`LogOut`) por fila en `GuardiasList.tsx` (`/rrhh/guardias`) — sin formulario, doble validación con `window.confirm` (mismo patrón que `handleDeleteColumn` en `RecruitmentKanban.tsx`), usa la cédula/nombre que ya trae la fila; idempotente igual que la entrada (no duplica si ya hay una salida abierta para esa cédula). Una vez que la salida queda `COMPLETADO`, `MovimientoDetalleModal.tsx` habilita un botón **"Archivar carpeta"** que mueve (no borra) la carpeta de Drive del guardia a una ubicación de archivo configurable (nuevo `FolderConfig.type='GUARDIAS_ARCHIVO'`, ver `DriveService.archivarCarpetaGuardia`) — acción manual, nunca automática.
+- **Entrada**: única vía es automática — al contratar a alguien desde Reclutamiento (`DriveService.contratarCandidato()`, botón "Marcar como Contratado", ver punto 1), se crea automáticamente su caso de ENTRADA (idempotente: no duplica si ya hay uno abierto para esa cédula). Si la cédula ya tenía un caso de SALIDA completado (guardia que se fue y vuelve a postular), esto se permite igual — no se bloquea la recontratación. Hasta 2026-09-16 esto lo disparaba `KanbanColumn.triggersHire` al mover un candidato en el Kanban de Candidatos (eliminado por completo el 2026-09-17, ver punto 2 de este documento y [movimientos-personal.md](movimientos-personal.md)).
+- **Salida**: ícono (`LogOut`) por fila en `GuardiasList.tsx` (`/rrhh/guardias`) — sin formulario, doble validación con `ConfirmDialog` (`frontend/src/components/common/ConfirmDialog.tsx`, modal propio — hasta 2026-09-17 usaba `window.confirm`, ver nota de "Recontratación" abajo), usa la cédula/nombre que ya trae la fila; idempotente igual que la entrada (no duplica si ya hay una salida abierta para esa cédula). Una vez que la salida queda `COMPLETADO`, `MovimientoDetalleModal.tsx` habilita un botón **"Archivar carpeta"** que mueve (no borra) la carpeta de Drive del guardia a una ubicación de archivo configurable (nuevo `FolderConfig.type='GUARDIAS_ARCHIVO'`, ver `DriveService.archivarCarpetaGuardia`) — acción manual, nunca automática.
+- **Recontratación de un guardia que ya salió (fix 2026-09-17):** `DriveService.contratarCandidato()` rechazaba SIEMPRE que ya existiera una fila `EmployeeDriveFolder` con la misma cédula ("Ya existe un guardia con la cédula X"), sin importar si ese guardia seguía activo o ya se había dado de baja — `EmployeeDriveFolder` nunca se borra al salir (ancla por `@@unique([companyId, cedula])`, se actualiza sola en el próximo "Sincronizar Drive"), así que esto bloqueaba **para siempre** cualquier recontratación legítima de alguien que ya trabajó y volvió a postular. Encontrado probando el Flujo 1 de la checklist de abajo con un guardia de prueba que ya había pasado por salida. Fix: antes de bloquear, se consulta `MovimientoPersonalService.isActivo(companyId, cedula)` — si el guardia **no** está activo (su último movimiento es `SALIDA`/`COMPLETADO`), se permite continuar con la contratación (crea un caso `ENTRADA` nuevo, no reabre el de `SALIDA`); si sigue activo, se mantiene el bloqueo. El mensaje de error para el caso bloqueado ya **no** menciona "Fusionar cédulas duplicadas" (ese flujo es para dos cédulas *distintas* que resultan ser la misma persona — no aplica a una colisión de la *misma* cédula); ahora solo indica revisar Listado de Guardias.
 - **Fusión con Asignaciones (2026-09-10):** `MovimientosList.tsx` (`/rrhh/movimientos`) y `AsignacionesGuardias.tsx` (`/rrhh/asignaciones`) contaban la misma historia del guardia desde dos ángulos separados (entradas/salidas vs. asignación a entidades). Se reemplazaron ambas por una sola pantalla, **`HistorialGuardia.tsx`** (`/rrhh/historial`, "Historial"), que combina la línea de tiempo de `AsignacionGuardia` con los casos de `MovimientoPersonal` por guardia. Las rutas viejas (`/rrhh/movimientos`, `/rrhh/asignaciones`) redirigen a `/rrhh/historial` (`<Navigate>` en `App.tsx`) para no romper enlaces guardados; el Sidebar solo muestra la entrada nueva. Se conservó de `AsignacionesGuardias.tsx` el botón de eliminar una asignación mal generada por el sync (válvula de seguridad), y de `MovimientosList.tsx` el acceso a `ConfiguracionSistemasModal.tsx` y `MovimientoDetalleModal.tsx`.
 - Migración `20260909_replace_verificacion_with_movimientos` migra cualquier dato existente de `VerificationCheck` a un caso histórico ENTRADA por `(companyId, cedula)` antes de eliminar la tabla vieja.
 
@@ -51,7 +60,7 @@ Rediseñado por completo el 2026-09-09 (ver Backlog punto 3 más abajo para el d
   - Botón **"Sincronizar Drive"** → `POST /personal/drive/sync-entidades` (`DriveService.syncEntidadesFolder`) — ver Backlog punto 3 para el algoritmo completo. El parseo de "Nombre - Cédula" exige cédula de 10 dígitos (formato ecuatoriano real); una carpeta con una cédula mal escrita ya no crea un guardia nuevo, queda pendiente en `guardiasNoReconocidos` (ver Backlog punto 3, "Resiliencia"). Desde 2026-09-10 reconoce un tercer bucket de primer nivel, **"Sin Asignar"** (junto a Público/Privado): guardias directamente ahí se sincronizan igual (identidad, documentos, ficha personal) pero sin abrir ninguna `AsignacionGuardia` — es donde caen los recién contratados desde Reclutamiento (ver punto 1 y Sprint 6 de [reclutamiento.md](reclutamiento.md)).
   - Botón **"Configurar campos"**: abre `PersonalFieldsConfigModal.tsx` (ver punto 7-bis abajo) para los campos personalizados de la ficha de guardia.
   - Guardias cuyo último `MovimientoPersonal` es una `SALIDA` con `estado='COMPLETADO'` (ver punto 6) se **ocultan por defecto** de la tabla y de los KPIs — botón discreto "Mostrar guardias fuera (N)" para verlos igual, atenuados con etiqueta "Fuera". `GET /personal/movimientos/guardias-fuera` calcula esto mirando solo el movimiento más reciente por cédula.
-- **`EntidadesList.tsx`** (`/rrhh/entidades`, "Entidades y Requisitos"): catálogo de `Entidad` + `RequisitoDocumento` en 3 capas (Global/Pública/Privada/Específica), editable a mano. Las entidades también se crean solas al sincronizar Drive (ver Backlog punto 3) — este catálogo nunca se borra por un accidente de Drive. **El campo "Tipo" (Pública/Privada) es editable a mano desde 2026-09-10** (ya no tiene candado): si el tipo guardado no coincide con el de la carpeta de Drive, el sync sigue solo avisando (`entidadesTipoDistinto`), nunca lo sobreescribe — el aviso ahora indica explícitamente que se puede corregir desde aquí. Desde aquí, un ADMIN también puede abrir **`CedulaMergeModal.tsx`** ("Fusionar cédulas duplicadas") para fusionar dos cédulas que resultaron ser la misma persona: muestra una vista previa (carpeta de Drive, historial y contratos que se moverían) antes de confirmar, y deja traza en `CedulaMergeLog`.
+- **`EntidadesList.tsx`** (`/rrhh/entidades`, "Entidades y Requisitos"): catálogo de `Entidad` + `RequisitoDocumento` en 3 capas (Global/Pública/Privada/Específica), editable a mano. Las entidades también se crean solas al sincronizar Drive (ver Backlog punto 3) — este catálogo nunca se borra por un accidente de Drive. **El campo "Tipo" (Pública/Privada) es editable a mano desde 2026-09-10** (ya no tiene candado): si el tipo guardado no coincide con el de la carpeta de Drive, el sync sigue solo avisando (`entidadesTipoDistinto`), nunca lo sobreescribe — el aviso ahora indica explícitamente que se puede corregir desde aquí. Desde aquí, un ADMIN también puede abrir **`CedulaMergeModal.tsx`** ("Fusionar cédulas duplicadas") para fusionar dos cédulas *distintas* que resultaron ser la misma persona (típicamente un typo al parsear "Nombre - Cédula" de Drive) — **no aplica** a que la misma cédula ya exista y esté activa, ese es un caso distinto (ver "Recontratación" en el punto 6). Muestra una vista previa (carpeta de Drive, historial y contratos que se moverían) antes de confirmar, y deja traza en `CedulaMergeLog`. **Gating deliberado por `role === 'ADMIN'`** (`isAdmin` en `EntidadesList.tsx`), no por `canWrite('RRHH')` como el resto de los botones de este módulo — el backend (`cedula-merge.controller.ts`) lo restringe así a propósito ("mueve/borra datos de producción de forma irreversible... mismo nivel que `deleteDriveEmployee`"). Un usuario RRHH con rol `EMPLOYEE` (el caso típico, ver punto de Reglas más abajo) **no verá este botón aunque tenga acceso de escritura a RRHH** — no es un bug, es la razón más común por la que "no se encuentra" esta función.
 - **`HistorialGuardia.tsx`** (`/rrhh/historial`, "Historial"): ver punto 6 — reemplaza a `AsignacionesGuardias.tsx`/`MovimientosList.tsx`.
 - **`CumplimientoEntidades.tsx`** (`/rrhh/cumplimiento`, "Cumplimiento"): tabla semáforo (🟢 al día / 🟡 por vencer / 🔴 faltante o vencido) con búsqueda y filtros por entidad/estado. Clic en un guardia abre `GuardiaComplianceModal.tsx` con el checklist completo, ficha personal editable y envío manual de recordatorio.
 - **`AdministrativeStaff.tsx`** (`/rrhh/administrativo`, "Personal Administrativo"): mecanismo de checklist independiente, para personal de oficina. Desde 2026-09-08 tiene **carpeta y botón de configuración propios** (`FolderConfig.type='PERSONAL_ADMIN'`) — no comparte raíz ni lógica con Entidades/Guardias. Ver Backlog punto 2.
@@ -66,6 +75,34 @@ A pedido del usuario, la ficha de cada guardia admite campos extra sin tocar có
 - `PersonalFieldDefinition` tiene `scope` (`GUARDIA` | `PERSONAL_ADMIN`) para poder reusarse en Personal Administrativo sin mezclar catálogos.
 - **`DriveConfig.tsx`** (`/rrhh/drive-config`) y **`DocumentTypeConfig.tsx`** (`/rrhh/document-types`) siguen existiendo como rutas pero **están huérfanas: ningún link/botón de la UI navega a ellas** (verificado 2026-09-09, ni el Sidebar ni ninguna página las referencian). Es deuda de una época anterior a que cada submódulo tuviera su propio modal de configuración inline — no borrarlas sin confirmar con el usuario que de verdad no se usan, pero tampoco asumir que son parte de ningún flujo activo.
 
+### 8. Capacitaciones (`/rrhh/capacitaciones`) — 2026-09-15
+Cumplimiento **general, no por guardia**: una capacitación se marca completada una sola vez para todo el grupo (`Training.completed`/`completedAt`/`completedBy`), no hay seguimiento de qué guardia individual asistió — decisión explícita del usuario tras una primera versión que sí llevaba registro por guardia (`TrainingCompletion`, eliminada).
+- **Tipo** (`Training.type`): catálogo fijo del frontend (`TRAINING_TYPES` en `personal.service.ts`: Inducción, Seguridad física, Primeros auxilios, Uso de armas, Manejo defensivo, Legal, Otro) — no es un enum de Prisma, es un `String` simple, para poder agregar categorías sin migración; "Otro" revela un campo de texto libre.
+- **Adjuntos múltiples e ilimitados** (`TrainingAttachment`, `kind`: `DOCUMENTO` o `EVIDENCIA`): tanto el documento del plan/temario como la evidencia de cumplimiento admiten varios archivos y enlaces a la vez, cada uno agregado/quitado individualmente (`POST/DELETE /personal/trainings/:id/attachments`).
+- **Requiere carpeta de Drive configurada antes de crear cualquier capacitación** — `FolderConfig.type='CAPACITACIONES'`, botón "Configurar carpeta" en `TrainingsPage.tsx`, mismo patrón modal (enlace completo, no ID) que el resto del módulo. Si no hay carpeta configurada, `TrainingService.create`/`uploadFile` rechazan con `BadRequestException` y el botón "+ Nueva capacitación" queda deshabilitado en el frontend — **primer caso en todo el módulo con gating proactivo en la UI** (el resto de submódulos deja que el backend falle al intentar usar la función sin configurar).
+- **Subida de archivos va directo a Drive real**, nunca a disco local — `DriveService.uploadFile(folderId, buffer, fileName, mimeType)` (nuevo método, primer uso de `media.body` con un `Buffer`/stream real en `drive.service.ts`; el resto del servicio solo sube JSON generado por el sync). `POST /personal/trainings/upload` devuelve `{ url: "https://drive.google.com/file/d/<id>/view" }`, guardado tal cual en `TrainingAttachment.url`. No existe ya el viejo `TrainingFileController` que servía archivos desde `uploads/hr-training-evidence/` en disco — se eliminó junto con ese enfoque.
+- **UX de adjuntar** (`FileOrLinkInput`, componente compartido en `frontend/src/components/common/`): el usuario elige "Enlace" o "Subir archivo" — si sube archivo, se llama a `uploadTrainingFile` de inmediato (no depende de que la capacitación ya exista, el endpoint de subida es independiente del `trainingId`) y el resultado se puede adjuntar tanto al crear (adjuntos "staged" en memoria, se persisten recién al confirmar "Crear") como al editar (persistencia inmediata por cada adjunto agregado/quitado).
+- Botón de completar renombrado explícitamente a pedido del usuario: **"Registrar cumplimiento"** (no "Marcar completada") abre un modal donde se puede adjuntar evidencia antes de confirmar; una vez completada, el botón pasa a **"Revertir cumplimiento"** (con confirmación). El modal de edición muestra la sección "Evidencia de cumplimiento" tanto si la capacitación ya está completada como si ya tiene evidencia cargada (para no perder acceso a ella si se revierte el estado).
+- `PersonalAlertsService.getAlerts` (`GET /personal/alerts`, ver punto 4 de certificaciones) considera una capacitación "pendiente" si tiene `dueDate` dentro de los próximos 30 días (o ya vencida) y `completed=false` — sin cron, se calcula al pedirlo, consumido por un widget en `PersonalDashboard.tsx`.
+
+### 9. Buzón de Quejas y Sugerencias (`/rrhh/quejas` enviar, `/rrhh/quejas/gestion` gestionar) — 2026-09-15
+Deliberadamente **dos pantallas separadas**, no una sola mezclando envío y gestión (la primera versión las mezclaba y se corrigió a pedido del usuario):
+- **`ComplaintsPage.tsx`** (`/rrhh/quejas`): solo el formulario de envío. Accesible a **cualquier empleado autenticado**, sin exigir el permiso de sección `RRHH` (entrada de nivel superior en el Sidebar, no dentro del submenú de RRHH) — cualquiera puede tener algo que reportar, tenga o no acceso al módulo. Sin sección de "mis quejas enviadas": mezclar un historial personal con la opción de anonimato no tiene sentido (decisión explícita del usuario).
+- **`ComplaintsManagementPage.tsx`** (`/rrhh/quejas/gestion`, dentro del submódulo RRHH, gateada por sección): **tablero Kanban arrastrable** con las 5 etapas fijas del proceso (`ComplaintStatus`: `RECIBIDA → EN_SENSIBILIZACION → EN_COMUNICACION → EN_SOLUCION → CERRADA`) — drag-and-drop HTML5 nativo (sin librería), no relacionado con el Kanban de Candidatos del punto 2 (eliminado). Click en una tarjeta abre el detalle con el historial completo de cambios de etapa (`ComplaintStageChange`, con nota opcional en cada transición).
+- **Anonimato real**: si `isAnonymous=true`, `Complaint.submittedBy` queda `null` — no se guarda el autor ni siquiera de forma oculta (verificado en pruebas: una queja anónima no aparece ligada a ningún usuario en ningún endpoint, ni siquiera para RRHH).
+- **Campos configurables por RRHH** (`ComplaintFieldDefinition`: `label`, `type` `TEXT`/`NUMBER`/`DATE`, `required`): la descripción y el checkbox de anónimo son siempre fijos; RRHH puede agregar campos extra (ej. Departamento, Cargo) desde "Configurar campos del formulario" en `ComplaintsManagementPage.tsx`, marcando cada uno obligatorio u opcional — mismo patrón que `PersonalFieldDefinition` (String simple, no enum). Las respuestas se guardan en `Complaint.customFieldValues` (JSON, keyed por el id del campo).
+- No existe `GET /personal/complaints/mine` (se eliminó tras quitar la sección de "mis quejas") — evitar reintroducirlo sin que alguien lo vaya a consumir de verdad.
+
+### 10. Encuestas (`/rrhh/encuestas` responder, `/rrhh/encuestas/gestion` gestionar) — 2026-09-15
+Tipo "Google Forms": RRHH define preguntas dinámicas, elige a qué usuarios de la empresa enviarla, y ve un resumen de resultados agregados.
+- **Se crea y se publica en un solo paso** — no hay un estado de borrador editable por separado, para no complicar el flujo de esta primera versión (`Survey.status` empieza directo en `PUBLISHED`).
+- **Solo llega a usuarios con cuenta en la app** (`SurveyRecipient.userId` → `User`) — **nunca a guardias**, que no tienen login propio. Si más adelante se quiere llegar a guardias, hace falta darles algún tipo de acceso primero (fuera de alcance hoy).
+- **Tipos de pregunta** (`SurveyQuestionType`, enum real de Prisma — a diferencia de `PersonalFieldDefinition`/`ComplaintFieldDefinition`, aquí sí se usó un enum porque es un conjunto cerrado que no necesita ampliarse por RRHH): `SHORT_TEXT`, `LONG_TEXT`, `SINGLE_CHOICE`, `MULTIPLE_CHOICE`, `RATING` (escala 1-5).
+- **Respuestas identificadas** (`SurveyResponse.respondentId`, único por `(surveyId, respondentId)` — no se puede responder dos veces), a pedido explícito del usuario, para que RRHH pueda saber quién falta por responder.
+- **Notificación**: sin sistema de notificaciones completo (fuera de alcance) — un aviso "Encuestas pendientes" dentro de la app (`PendingSurveysBanner.tsx`, en el Dashboard general de toda la empresa, no solo RRHH) usando `GET /personal/surveys/pending/mine`.
+- **Resultados agregados** (`GET /personal/surveys/:id/results`): conteos por opción para preguntas de elección, promedio + distribución para escala, lista de respuestas para texto libre — junto con tasa de respuesta (`totalResponses`/`totalRecipients`).
+- No se puede eliminar una encuesta que ya tiene respuestas (se debe "Cerrar" en su lugar) — mismo criterio de protección que otros módulos con historial (ej. `ContractTemplate` con contratos generados).
+
 ## Arquitectura de carpetas Drive (`FolderConfig`)
 `FolderConfig` tiene un campo `type`, único por `(companyId, type)`:
 
@@ -75,8 +112,9 @@ A pedido del usuario, la ficha de cada guardia admite campos extra sin tocar có
 | `RECLUTAMIENTO` | Vacantes/candidatos | `<raíz>/<Puesto>/` — carpeta por puesto, contiene el JSON del puesto + carpetas de postulantes `[Nombre-Cedula]` |
 | `PERSONAL_ADMIN` | Personal Administrativo (carpeta propia, desde 2026-09-08) | `<raíz>/[Nombre Apellido - Puesto]` — una subcarpeta por empleado directamente bajo la raíz, sin cédula en el nombre |
 | `GUARDIAS_ARCHIVO` | Destino de "Archivar carpeta" al completar una salida (desde 2026-09-10, ver punto 6) | `<raíz>/[Nombre-Cedula]` — la carpeta del guardia se mueve aquí tal cual, sin borrar documentos |
+| `CAPACITACIONES` | Adjuntos de Capacitaciones (desde 2026-09-15, ver punto 8) | `<raíz>/` — carpeta plana, cada archivo subido se sube directo ahí (no arma subcarpetas por capacitación) |
 
-⚠️ **Riesgo conocido, no resuelto todavía**: `DriveService.syncFolder` (endpoint `POST /personal/drive/sync`, método viejo, estructura plana `<raíz>/Custodios|Personal/[Nombre-Cedula]`) sigue existiendo en el código y lee la **misma fila** `FolderConfig.type='CUMPLIMIENTO'` que ahora usa `syncEntidadesFolder` con la estructura nueva anidada. Verificado 2026-09-09: **ningún botón de la UI actual lo llama** (`syncDriveFolder` en `personal.service.ts` no tiene consumidores), así que hoy no es alcanzable por accidente desde la interfaz — pero sigue siendo un endpoint HTTP real, y si alguna vez algo lo invoca contra la carpeta raíz ya migrada a `Público/Privado/...`, interpretaría cada carpeta de Entidad como si fuera un empleado (creando `Candidate`/`EmployeeDriveFolder` basura). Pendiente: eliminar `syncFolder`/`POST /personal/drive/sync` o, si se decide conservarlo por alguna razón, separarlo a su propio `FolderConfig.type` para que no pueda chocar con la carpeta de Entidades.
+✅ **Riesgo resuelto (2026-09-17)**: `DriveService.syncFolder` (endpoint `POST /personal/drive/sync`, método viejo, estructura plana `<raíz>/Custodios|Personal/[Nombre-Cedula]`) era código muerto desde 2026-09-09 (ningún botón de la UI lo llamaba) y además dependía del `Candidate` que se eliminó ese mismo día — se borró por completo (el método, el endpoint y la función `syncDriveFolder` del frontend). No reintroducir sin que alguien lo vaya a usar de verdad.
 
 ## Modelos de Prisma relevantes (fuera de los ya cubiertos en reclutamiento.md)
 - `Certification` / `CertificationAlert` — certificaciones con vencimiento y alertas por `daysBefore`. **Nota 2026-09-09**: el backend (`GET/POST/PATCH/DELETE /personal/certifications`, `certification.service.ts`) sigue vivo, pero **no hay ninguna página/ruta frontend que lo consuma** (`CertificationsList.tsx` no existe, `/rrhh/certifications` no está en `App.tsx` ni en el Sidebar) — quedó huérfano, probablemente superado conceptualmente por `RequisitoDocumento`/`AsignacionGuardia` del punto 3. No borrar sin confirmar con el usuario.
@@ -84,7 +122,10 @@ A pedido del usuario, la ficha de cada guardia admite campos extra sin tocar có
 - `DocumentReview` / `DocumentReviewHistory` — estado de revisión (PENDIENTE/APROBADO/RECHAZADO) y traza append-only; sobrevive al borrado del empleado (relación por cédula, no FK — deliberado, para auditoría).
 - `FolderConfig` — una fila por `(companyId, type)`, ver tabla arriba.
 - `Entidad`, `RequisitoDocumento`, `AsignacionGuardia`, `GuardiaContacto`, `GuardiaFichaPersonal`, `AlertaVencimiento` — módulo de Entidades/Cumplimiento, ver Backlog punto 3.
-- `SistemaVerificacion`, `MovimientoPersonal`, `MovimientoPersonalItem` — Movimientos de Personal (entrada/salida de guardias), ver punto 6. `KanbanColumn.triggersHire` marca la columna que dispara la entrada automática.
+- `SistemaVerificacion`, `MovimientoPersonal`, `MovimientoPersonalItem` — Movimientos de Personal (entrada/salida de guardias), ver punto 6. La entrada automática la dispara `DriveService.contratarCandidato()` al contratar desde Reclutamiento (antes `KanbanColumn.triggersHire`, eliminado junto con el Kanban de Candidatos — ver punto 2).
+- `Training`, `TrainingAttachment` — Capacitaciones, cumplimiento general (no por guardia), ver punto 8.
+- `Complaint`, `ComplaintStageChange`, `ComplaintFieldDefinition` — Buzón de Quejas y Sugerencias, ver punto 9.
+- `Survey`, `SurveyQuestion`, `SurveyRecipient`, `SurveyResponse`, `SurveyAnswer` — Encuestas, ver punto 10.
 
 ## Endpoints (fuera de Reclutamiento, ver ese doc para los suyos)
 - `GET/POST /personal/certifications`, `PATCH/DELETE /personal/certifications/:id`, `GET /personal/certifications/alerts` — huérfano de frontend, ver nota en Modelos de Prisma arriba.
@@ -93,7 +134,7 @@ A pedido del usuario, la ficha de cada guardia admite campos extra sin tocar có
 - `GET /personal/movimientos` (+ `/:id`), `GET /personal/movimientos/guardias-fuera`, `POST /personal/movimientos/salida`, `PATCH /personal/movimientos/:id/items/:itemId` — Movimientos de Personal. **No** hay `POST /personal/movimientos/entrada` (deliberado, ver punto 6)
 - `GET /personal/drive/tree`, `GET /personal/drive/compliance/:cedula`, `DELETE /personal/drive/employee/:cedula`
 - `GET/POST /personal/document-types`, `PATCH/DELETE /personal/document-types/:id`
-- `GET/POST /personal/drive/config`, `POST /personal/drive/test`, `POST /personal/drive/sync` (⚠️ estructura plana vieja, ver riesgo conocido arriba), `POST /personal/drive/sync-entidades` (estructura Público/Privado/Entidad/Guardia, la que usa hoy `/rrhh/guardias`), `POST /personal/drive/sync-personal-admin`
+- `GET/POST /personal/drive/config`, `POST /personal/drive/test`, `POST /personal/drive/sync-entidades` (estructura Público/Privado/Entidad/Guardia, la que usa hoy `/rrhh/guardias`), `POST /personal/drive/sync-personal-admin`. (`POST /personal/drive/sync`, estructura plana vieja, eliminado 2026-09-17 — ver nota arriba.)
 - `POST /personal/drive/documents/review`, `GET /personal/drive/documents/reviews/:cedula`, `GET /personal/drive/documents/review-history`
 - `GET/POST/PATCH/DELETE /personal/contracts/templates`, `POST /personal/contracts/generate`, `GET /personal/contracts`
 - `GET /personal/dashboard`
@@ -106,6 +147,10 @@ A pedido del usuario, la ficha de cada guardia admite campos extra sin tocar có
 - `GET/PATCH /personal/guardia-contacto/:cedula` — correo de contacto para recordatorios (independiente de `AsignacionGuardia`).
 - `GET/PATCH /personal/guardia-ficha/:cedula` — ficha personal editable (teléfono, dirección, fecha de nacimiento, contacto de emergencia); fuente de la verdad del `Datos_Personales.json` que el sync escribe en Drive.
 - `POST /personal/cumplimiento-entidades/guardia/:cedula/enviar-recordatorio` — envío manual y personalizado por guardia (reemplaza al viejo cron diario, ver Backlog punto 3). **No** existe ya `POST /personal/alertas-vencimiento/ejecutar` ni ningún cron automático — decisión explícita del usuario.
+- `GET/POST/PATCH/DELETE /personal/trainings`, `PATCH /personal/trainings/:id/completed`, `POST /personal/trainings/upload`, `POST/DELETE /personal/trainings/:id/attachments(/:attachmentId)` — Capacitaciones (punto 8).
+- `GET /personal/alerts` — certificaciones por vencer + capacitaciones pendientes combinadas; **reemplaza** al viejo `GET /personal/certifications/alerts` (código muerto, sin cron ni consumidor — eliminado el 2026-09-15).
+- `POST /personal/complaints`, `GET /personal/complaints` (RRHH), `PATCH /personal/complaints/:id/stage`, `GET/POST/PATCH/DELETE /personal/complaint-fields` — Buzón de Quejas y Sugerencias (punto 9).
+- `GET/POST /personal/surveys`, `GET /personal/surveys/:id`, `GET /personal/surveys/:id/results`, `PATCH /personal/surveys/:id/close`, `DELETE /personal/surveys/:id`, `GET /personal/surveys/pending/mine`, `GET/POST /personal/surveys/:id/respond` — Encuestas (punto 10).
 
 ## Rutas frontend (actuales, todas bajo `/rrhh`, guardadas con `SectionRoute section="RRHH"` — verificado contra `App.tsx` 2026-09-10)
 ```
@@ -113,18 +158,19 @@ A pedido del usuario, la ficha de cada guardia admite campos extra sin tocar có
 /rrhh/reclutamiento      -> ReclutamientoPage
 /rrhh/guardias           -> GuardiasList
 /rrhh/administrativo     -> AdministrativeStaff
-/rrhh/kanban             -> RecruitmentKanban
-/rrhh/candidates         -> CandidatesList
-/rrhh/candidates/new     -> CandidateForm
-/rrhh/candidates/:id     -> CandidateForm
 /rrhh/contracts          -> ContractsList        (Documentación)
 /rrhh/entidades          -> EntidadesList       (Entidades y Requisitos; incluye Fusionar cédulas duplicadas)
 /rrhh/cumplimiento       -> CumplimientoEntidades
 /rrhh/historial          -> HistorialGuardia    (fusiona la vieja Asignaciones + Movimientos, ver punto 6)
 /rrhh/drive-config       -> DriveConfig        ⚠️ huérfana, ningún link de la UI la usa (ver nota en sección 7)
 /rrhh/document-types     -> DocumentTypeConfig ⚠️ huérfana, ningún link de la UI la usa (ver nota en sección 7)
+/rrhh/capacitaciones     -> TrainingsPage      (Capacitaciones, punto 8)
+/rrhh/quejas             -> ComplaintsPage     (Buzón de Quejas y Sugerencias — enviar; SIN SectionRoute, accesible a cualquier empleado, ver punto 9)
+/rrhh/quejas/gestion     -> ComplaintsManagementPage (gestión Kanban, ver punto 9)
+/rrhh/encuestas          -> SurveysPage        (Encuestas — responder; SIN SectionRoute, mismo motivo que Quejas, ver punto 10)
+/rrhh/encuestas/gestion  -> SurveyManagementPage (gestión + resultados, ver punto 10)
 ```
-**Ya no existen** `/rrhh/certifications` (`CertificationsList.tsx` no existe como archivo) ni `/rrhh/compliance` (`CompliancePanel.tsx` fue eliminado) — si ves una referencia a cualquiera de los dos en código o en un doc viejo, es texto desactualizado, no algo que reintroducir.
+**Ya no existen** `/rrhh/certifications` (`CertificationsList.tsx` no existe como archivo) ni `/rrhh/compliance` (`CompliancePanel.tsx` fue eliminado), ni `/rrhh/kanban`/`/rrhh/candidates`/`/rrhh/candidates/new`/`/rrhh/candidates/:id` (Kanban de Candidatos, eliminado por completo el 2026-09-17, ver punto 2) — si ves una referencia a cualquiera de estos en código o en un doc viejo, es texto desactualizado, no algo que reintroducir.
 
 `/rrhh/logs` (`LogEntriesPage`, Bitácoras) **sigue existiendo como ruta** — el backend y el componente no se borraron (ver punto 5) — pero ya no tiene ningún link desde el Sidebar ni el Dashboard, así que en la práctica es huérfana igual que `drive-config`/`document-types`.
 
@@ -135,16 +181,14 @@ A pedido del usuario, la ficha de cada guardia admite campos extra sin tocar có
 ## Reglas
 - Multitenant con `companyId`.
 - Permiso de sección: `RRHH` (ver `PermissionsService.ALL_SECTIONS`), verificado con `SectionPermissionGuard` — importa que los usuarios de RRHH suelen estar cargados como rol `EMPLOYEE`, no `ADMIN`/`MANAGER` (ver `AGENTS.md`), así que el control de acceso real es por sección, no por rol.
-- Historial completo de movimientos en Kanban y de revisiones documentales.
+- Historial completo de movimientos de entrada/salida (punto 6) y de revisiones documentales.
 - Alertas de vencimiento (Entidades/Guardias, punto 3): envío real por correo, pero siempre manual y por guardia — nunca automático/masivo (decisión explícita del usuario). El submódulo viejo de `Certification`/`CertificationAlert` (punto 4) sigue sin envío real, solo cálculo/visualización, y está huérfano de frontend.
 
 ## Datos de Ejemplo (Seed)
-- **5 Kanban columns**: Postulado, Validación Documental, Test Psicológico, Test Médico, Aprobado
-- **5 Candidates**: Ana Vera (Aprobado), Carlos Muñoz (Test Psicológico), María Paredes (Postulado), Luis Gómez (Test Médico), Diana Torres (Validación Documental)
 - **5 Certifications**: Roberto Díaz (Nivel 1), Sandra Luna (Reentrenamiento), Fernando Castro (Examen Ocupacional), Eduardo Reyes (Nivel 2), Patricia Acosta (Nivel 1)
 - **5 Log Entries**: 2 permisos de ingreso, 1 novedad operativa, 1 salida de personal, 1 respuesta a administrador
 - **3 Contract Templates**: Término Indefinido, Término Fijo, Acta de Entrega de Uniformes
-- **3 Contracts**: Ana Vera (SIGNED), Luis Gómez (DRAFT), Diana Torres (DRAFT)
+- **3 Contracts**: Ana Lucía Vera (SIGNED), Luis Fernando Gómez (DRAFT), Diana Carolina Torres (DRAFT) — nombre/cédula fijos en el seed desde 2026-09-17 (antes venían de `Candidate`, eliminado junto con el Kanban de Candidatos, ver punto 2).
 
 ---
 
@@ -192,7 +236,7 @@ Confirmado con el usuario y ya implementado:
 - Cubierto extensivamente en `drive.service.spec.ts` (`describe('DriveService.syncEntidadesFolder', ...)`: rename de entidad, backfill de `driveFolderId`, colisión de nombre entre 2 carpetas, rename de guardia con cédula distinta, carpeta de guardia no reconocible, rotación de entidad de un guardia "fuera").
 - **`AsignacionGuardia` es 100% de solo lectura desde la UI** — sin `email` (se movió a `GuardiaContacto`). `AsignacionesGuardias.tsx` (`/rrhh/asignaciones`) solo muestra el historial y permite eliminar una fila como válvula de seguridad si el sync generó algo erróneo por una carpeta mal configurada.
 - **`GuardiaContacto`** (`cedula, email` por `companyId`) — correo del guardia para recordatorios, editable desde `GuardiaComplianceModal.tsx`, independiente de en qué entidad esté hoy (sobrevive a que rote).
-- **`GuardiaFichaPersonal`** (`cedula, telefono, email, direccion, fechaNacimiento, contactoEmergenciaNombre, contactoEmergenciaTelefono` por `companyId`) — ficha editable desde `GuardiaComplianceModal.tsx` (sección "Ficha personal"), **nunca desde Drive**. Es la fuente de la verdad de `Datos_Personales.json`, que `syncEntidadesFolder` crea o sobrescribe en la carpeta de cada guardia en cada sincronización (mezclado con datos de `Candidate` si el guardia vino del Kanban de Reclutamiento). El archivo en Drive es un espejo de solo lectura — nunca se lee de vuelta. Un fallo al escribirlo (ej. la carpeta raíz solo está compartida como "Lector" en vez de "Editor") se reporta en `errors` del resultado del sync pero no interrumpe el resto.
+- **`GuardiaFichaPersonal`** (`cedula, telefono, email, direccion, fechaNacimiento, contactoEmergenciaNombre, contactoEmergenciaTelefono` por `companyId`) — ficha editable desde `GuardiaComplianceModal.tsx` (sección "Ficha personal"), **nunca desde Drive**. Es la fuente de la verdad de `Datos_Personales.json`, que `syncEntidadesFolder` crea o sobrescribe en la carpeta de cada guardia en cada sincronización. (Hasta 2026-09-17 se mezclaba con datos de `Candidate` si el guardia venía del Kanban de Reclutamiento — ya no, ver punto 2.) El archivo en Drive es un espejo de solo lectura — nunca se lee de vuelta. Un fallo al escribirlo (ej. la carpeta raíz solo está compartida como "Lector" en vez de "Editor") se reporta en `errors` del resultado del sync pero no interrumpe el resto.
 - **Estados de cumplimiento**: `CUMPLIDO` / `FALTANTE` / `VENCIDO` / `POR_VENCER` (dentro de la ventana `anticipacionValor`/`anticipacionUnidad` del requisito). **Fix 2026-09-09**: un requisito configurado como "no vence" (`duracionValor: null`) nunca se marca `VENCIDO`/`POR_VENCER`, sin importar qué `expiryDate` haya extraído Drive/IA del documento — antes sí se colaba una fecha extraída y avisaba igual, contradiciendo la config de RRHH. Cubierto por test en `cumplimiento-entidad.service.spec.ts`.
 - **`CumplimientoEntidades.tsx`** (`/rrhh/cumplimiento`): tabla semáforo (verde/amarillo/rojo) por guardia, con búsqueda (nombre/cédula) y filtros por entidad y por estado — ya no hay botones de "Requisitos" ni "Probar alertas ahora" en esta pantalla (ver siguiente punto).
 - **Recordatorios: manuales y personalizados, sin cron.** `AlertaVencimientoService.enviarRecordatorio(companyId, cedula, medio)` (`POST /personal/cumplimiento-entidades/guardia/:cedula/enviar-recordatorio`, botón "Enviar recordatorio" en `GuardiaComplianceModal.tsx`) — RRHH decide a qué guardia, por qué medio (hoy solo `EMAIL`; `WHATSAPP` deshabilitado en la UI, anotado para el futuro) y en qué momento notificar. **No existe ningún cron ni endpoint de "ejecutar para todos"** — se eliminó `AlertaVencimientoScheduler` y el viejo `POST /personal/alertas-vencimiento/ejecutar` por decisión explícita del usuario ("no es la idea enviar a todo el mundo de una, sino que sea personalizado"). El envío sigue bloqueado en producción hasta que se configure domain-wide delegation en Google Workspace (ver checklist en Fase C más abajo, sigue vigente sin cambios).
@@ -226,6 +270,106 @@ Confirmado con el usuario y ya implementado:
   5. **Configurar también** `RRHH_CONTACT_EMAIL=<correo de RRHH>` (a dónde le pide el correo al guardia que envíe el documento renovado) — si no se configura, el correo usa una frase genérica ("contacta a Recursos Humanos") en vez de un correo roto o vacío.
   6. **Cómo probar una vez esté lista la delegación**: usar el botón "Enviar recordatorio" sobre cualquier guardia con algo pendiente en `GuardiaComplianceModal.tsx`, o `POST /personal/cumplimiento-entidades/guardia/:cedula/enviar-recordatorio` directamente — el resultado (`enviado`, `cantidadNotificada`) confirma de inmediato si el envío real está funcionando. Antes de que la delegación esté lista, este mismo botón sirve para probar el resto del pipeline (cálculo de pendientes) — solo el envío en sí fallará, y el motivo queda registrado en `AlertaVencimiento.errorMessage`.
 - **Fuera de alcance todavía**: WhatsApp como canal (selector ya existe en la UI, deshabilitado con "Próximamente"), y una pantalla de historial de alertas dedicada.
+
+## Flujos de prueba end-to-end (RRHH completo) — 2026-09-17
+
+Checklist de pruebas manuales para verificar que **todo el módulo funciona junto**, no solo cada pantalla por separado — pocos flujos completos que de punta a punta atraviesan casi todas las piezas, en vez de un caso por submódulo. Pedido explícito del usuario: "que lleven un guardia desde contratarlo hasta sacarlo... para verificar TODO".
+
+### ⚠️ Antes de empezar
+
+- **No corras esto contra la carpeta de Drive de producción sin avisar a nadie.** Varios pasos mueven/renombran carpetas reales (contratar un candidato, archivar un guardia) — usa una vacante/candidato de prueba explícitamente marcado como tal (ej. nombre "PRUEBA QA — no usar"), y bórralo/archívalo al terminar.
+- Corre esto contra tu Postgres **local** (`docker compose up -d db redis`, `npx prisma db push`, `npm run seed:minimal` si hace falta), no contra Cloud SQL de producción.
+- Usuario sugerido: `sistemas@gemeseg.com` (ver `README.md` → "Credenciales de prueba"), empresa GEMESEG — es donde vive el catálogo real de `SistemaVerificacion` (IsyPlus/IESS/SUT/SICOSEP) y donde tiene sentido de negocio probar Guardias. Rol EMPLOYEE alcanza para casi todo; si algún paso pide ADMIN (fusión de cédulas, alguna configuración), usa `admin@gemeseg.com`.
+- **Precondiciones de configuración** (si ya están hechas en tu entorno, sáltate esto — son de una sola vez, no por prueba):
+  - [ ] Al menos una vacante en Reclutamiento con `tipoContratacion = GUARDIA` y su carpeta de Drive.
+  - [ ] `FolderConfig` configurado para `CUMPLIMIENTO`, `GUARDIAS_ARCHIVO` y `PERSONAL_ADMIN` (botones "Configurar Drive" en `/rrhh/guardias` y `/rrhh/administrativo`).
+  - [ ] Al menos una `Entidad` con `RequisitoDocumento` definidos, en `/rrhh/entidades`.
+  - [ ] Al menos una plantilla de contrato en `/rrhh/contracts` → "+ Nueva plantilla", con `driveUrl` apuntando a un `.docx` con variables `[Variable]`.
+  - [ ] Catálogo de `SistemaVerificacion` revisado en el modal "⚙ Configurar sistemas" (dentro de `/rrhh/historial`).
+  - [ ] Si vas a probar el envío de recordatorio por correo: sabe de antemano que **va a fallar limpiamente** salvo que ya se haya hecho la delegación de dominio de Gmail (ver Backlog punto 3, Fase C, arriba) — no es un bug si falla, es el estado esperado hoy.
+
+### Flujo 1 — Ciclo de vida completo de un Guardia (contratar → cumplimiento → capacitación → salida)
+
+El flujo principal: un guardia entra por Reclutamiento y sale por Movimientos de Personal, tocando en el medio Cumplimiento, Documentación y Capacitaciones.
+
+**1.1 Reclutamiento → Contratar**
+- [ ] En `/rrhh/reclutamiento`, pestaña "Candidatos Postulados", abre un candidato de prueba.
+- [ ] Botón **"Marcar como Contratado"** en el modal de detalle → confirmar en el modal propio (`ConfirmDialog`, ya no `window.confirm` desde 2026-09-17).
+- [ ] Verificar: la carpeta del candidato se mueve a la carpeta de Guardias, con `estado: 'CONTRATADO'` y `fechaContratacion` en su `candidato.json`.
+- [ ] Ir a `/rrhh/guardias` → el guardia debe aparecer ahí, en la entidad **"Sin Asignar"** (sync automático, no hace falta apretar "Sincronizar Drive" a mano).
+- [ ] Si intentas contratar la misma cédula dos veces **mientras sigue activo**, debe rechazarlo por duplicado en vez de crear un segundo registro. Si en cambio esa cédula ya había salido (`SALIDA`/`COMPLETADO`), debe **permitir** la recontratación sin bloquear (ver "Recontratación" en el punto 6 arriba).
+
+**1.2 Ficha del guardia y campos personalizados**
+- [ ] Abrir la ficha del guardia (`GuardiaFichaModal.tsx`) desde `/rrhh/guardias` → completar teléfono, dirección, fecha de nacimiento, contacto de emergencia, **horario**, **puesto formal** y **salario acordado**.
+- [ ] Si tienes algún campo personalizado definido (botón "Configurar campos" → `PersonalFieldsConfigModal.tsx`), confirmar que aparece en esta ficha y que el valor se guarda.
+- [ ] Configurar el correo de `GuardiaContacto` (necesario para el recordatorio del punto 1.3).
+
+**1.3 Cumplimiento documental**
+- [ ] Ir a `/rrhh/cumplimiento` → buscar al guardia, confirmar que aparece con semáforo 🔴 o 🟡 (documentación incompleta es lo esperado recién contratado).
+- [ ] Abrir su `GuardiaComplianceModal.tsx` → ver el checklist completo contra los `RequisitoDocumento` de su entidad.
+- [ ] Subir a su carpeta de Drive (Guardias) uno o más de los documentos que faltan, con el nombre esperado por el checklist.
+- [ ] Sincronizar y confirmar que el semáforo mejora (pasa a 🟢 si ya subiste todo lo obligatorio).
+- [ ] Probar el botón **"Enviar recordatorio"** — si Gmail no está delegado todavía, debe fallar con un mensaje claro (no romper la pantalla); si ya está delegado, confirmar que llega el correo consolidado.
+
+**1.4 Documentación (generar contrato)**
+- [ ] Ir a `/rrhh/contracts` → **"+ Generar Documento"** (`/rrhh/contracts/generar`).
+- [ ] Elegir el guardia de prueba + un tipo de plantilla ya configurada.
+- [ ] Confirmar que el autocompletado trae bien: nombre, cédula, puesto formal, horario, salario acordado (de `GuardiaFichaPersonal`), entidad asignada (de `AsignacionGuardia`), fecha.
+- [ ] Generar el PDF y abrirlo — confirmar visualmente que los datos insertados son correctos y legibles.
+- [ ] Confirmar que el contrato queda listado en la pantalla de Documentación, no solo como un archivo suelto.
+
+**1.5 Capacitaciones**
+- [ ] En `/rrhh/capacitaciones`, crear una capacitación de prueba con `dueDate` dentro de los próximos 30 días, sin marcar completada.
+- [ ] Ir a `/rrhh` (Dashboard) → confirmar que aparece en el widget de alertas pendientes (`GET /personal/alerts`).
+- [ ] Volver a Capacitaciones → botón **"Registrar cumplimiento"**, adjuntar al menos una evidencia antes de confirmar.
+- [ ] Confirmar que desaparece del widget de alertas.
+- [ ] Probar **"Revertir cumplimiento"** → confirmar que la sección "Evidencia de cumplimiento" se sigue viendo (no se pierde el adjunto al revertir).
+
+**1.6 Movimientos de Personal — Salida (offboarding)**
+- [ ] En `/rrhh/guardias`, ícono de salida (rojo, `LogOut`) en la fila del guardia de prueba → confirmar en el modal propio (`ConfirmDialog`, ya no `window.confirm` desde 2026-09-17).
+- [ ] Ir a `/rrhh/historial` → confirmar que aparece un caso `SALIDA` para este guardia, con sus items por cada `SistemaVerificacion` activo.
+- [ ] Marcar todos los items del caso como completados → confirmar que el caso pasa solo a `COMPLETADO` (sin botón manual para eso).
+- [ ] Con el caso ya `COMPLETADO`, abrir su detalle (`MovimientoDetalleModal.tsx`) → botón **"Archivar carpeta"** → confirmar que mueve (no borra) la carpeta de Drive del guardia a la carpeta de archivo configurada.
+- [ ] Volver a `/rrhh/guardias` → el guardia **no debe aparecer** en la tabla ni en los KPIs por defecto.
+- [ ] Botón "Mostrar guardias fuera (N)" → confirmar que ahí sí aparece, atenuado, con etiqueta "Fuera".
+- [ ] Revisar `/rrhh/cumplimiento` → el guardia archivado no debería seguir apareciendo como pendiente activo.
+
+**Con esto quedan tocados:** Reclutamiento, Listado de Guardias + ficha + campos personalizados, Cumplimiento documental + recordatorio, Documentación/Contratos, Capacitaciones + alertas, Movimientos de Personal (entrada implícita + salida), Historial, archivado de Drive, y el Dashboard de RRHH.
+
+### Flujo 2 — Personal Administrativo (lo que cambia respecto a Guardias)
+
+No repite todo el Flujo 1 — solo lo que este bucket hace **distinto**.
+
+- [ ] Contratar un candidato de una vacante con `tipoContratacion = ADMINISTRATIVO` (mismo botón "Marcar como Contratado").
+- [ ] Verificar que la carpeta termina nombrada **"Nombre - Puesto"** (sin cédula), no "Nombre - Cédula".
+- [ ] Verificar que aparece en `/rrhh/administrativo`, no en `/rrhh/guardias`.
+- [ ] Confirmar que el control de duplicados es **por nombre normalizado**, no por cédula: intenta contratar dos candidatos con el mismo nombre y confirma que lo rechaza.
+- [ ] Confirmar que `/rrhh/administrativo` tiene su propio botón "Configurar Drive" (`FolderConfig.type='PERSONAL_ADMIN'`), independiente del de Guardias.
+- [ ] Confirmar que este empleado **no puede** recibir un documento vía `/rrhh/contracts/generar` — alcance actual es solo Guardias (si la UI lo permite, es un bug a reportar, no algo esperado).
+
+### Flujo 3 — Quejas y Encuestas (independientes de un guardia puntual)
+
+Estos dos módulos no dependen de un guardia específico — dependen de **usuarios con cuenta** en la app (nunca guardias, que no tienen login).
+
+- [ ] Como cualquier usuario con cuenta: enviar una queja/sugerencia en `/rrhh/quejas`.
+- [ ] Como RRHH: gestionarla en `/rrhh/quejas/gestion`, moverla de etapa y confirmar que el historial de cambios de etapa queda registrado.
+- [ ] Como RRHH: crear una encuesta en `/rrhh/encuestas/gestion` con al menos una pregunta de cada tipo (texto corto, texto largo, opción única, opción múltiple, escala 1-5) y asignarle destinatarios.
+- [ ] Confirmar que a esos usuarios les aparece el aviso "Encuestas pendientes" en su Dashboard general (`PendingSurveysBanner.tsx`), no solo en RRHH.
+- [ ] Responder la encuesta como uno de los destinatarios en `/rrhh/encuestas` → confirmar que no deja responder dos veces.
+- [ ] Ver resultados agregados en `/rrhh/encuestas/gestion` → confirmar conteos por opción, promedio de escala, y tasa de respuesta.
+
+### Cosas que esta checklist no puede verificar todavía (bloqueos conocidos, no bugs)
+
+- El envío real de recordatorios por Gmail requiere domain-wide delegation configurada por un administrador de Workspace — sin eso, el fallo es esperado (Backlog punto 3, arriba).
+- WhatsApp como canal de recordatorio: deshabilitado en la UI ("Próximamente"), no probar.
+- El flujo de "Marcar como Contratado" y "Archivar carpeta" mueven carpetas reales de Drive — si no tienes un entorno de Drive de prueba separado, o usas datos claramente marcados como prueba, o coordinas con el resto del equipo antes de correr este flujo contra el Drive compartido.
+- Verificación asistida contra SUT/SICOSEP/IESS por scraping: descartada (ver `backend/scraping-poc/README.md`) — no es parte de ningún flujo de esta checklist.
+
+### Al terminar
+
+- [ ] Archivar o eliminar (según corresponda) al guardia/empleado de prueba creado en el Flujo 1/2, para no dejar datos falsos mezclados con los reales.
+- [ ] Si generaste un contrato de prueba, bórralo desde `/rrhh/contracts`.
+- [ ] Si creaste una capacitación o encuesta de prueba, ciérrala o bórrala si todavía no tiene respuestas/evidencia real de nadie más.
 
 ## Referencias
 - [reclutamiento.md](reclutamiento.md) — detalle completo del submódulo de Reclutamiento (más actualizado que este archivo en lo suyo).

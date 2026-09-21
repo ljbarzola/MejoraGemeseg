@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo, type CSSProperties } from 'react';
+import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Plus, Pencil, Trash2, X, Building2, Layers, Check, Lock, Clock, Infinity as InfinityIcon, GitMerge } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, X, Building2, Layers, Check, Lock, Clock, Infinity as InfinityIcon, GitMerge, AlertTriangle } from 'lucide-react';
 import { getUser } from '../../../services/auth.service';
 import CedulaMergeModal from './CedulaMergeModal';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import {
   getEntidades,
   createEntidad,
@@ -195,6 +196,29 @@ export default function EntidadesList() {
   const [mostrarInactivas, setMostrarInactivas] = useState(false);
   const [error, setError] = useState('');
 
+  // Cambiar estado activo/inactivo de una entidad
+  const [toggleActivoError, setToggleActivoError] = useState('');
+  const toggleActivoErrorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (toggleActivoError) toggleActivoErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [toggleActivoError]);
+
+  // Eliminar entidad
+  const [confirmandoEliminarEntidad, setConfirmandoEliminarEntidad] = useState<Entidad | null>(null);
+  const [eliminarEntidadError, setEliminarEntidadError] = useState('');
+  const eliminarEntidadErrorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (eliminarEntidadError) eliminarEntidadErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [eliminarEntidadError]);
+
+  // Quitar requisito (específico de entidad o de nivel general)
+  const [confirmandoQuitarRequisito, setConfirmandoQuitarRequisito] = useState<number | null>(null);
+  const [quitarRequisitoError, setQuitarRequisitoError] = useState('');
+  const quitarRequisitoErrorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (quitarRequisitoError) quitarRequisitoErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [quitarRequisitoError]);
+
   // Modal crear/editar entidad
   const [showEntidadModal, setShowEntidadModal] = useState(false);
   const [editingEntidad, setEditingEntidad] = useState<Entidad | null>(null);
@@ -311,21 +335,29 @@ export default function EntidadesList() {
   };
 
   const handleToggleActivo = async (e: Entidad) => {
+    setToggleActivoError('');
     try {
       await updateEntidad(e.id, { activo: !e.activo });
       load();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'No se pudo cambiar el estado de la entidad.');
+      setToggleActivoError(err.response?.data?.message || 'No se pudo cambiar el estado de la entidad.');
     }
   };
 
-  const handleDeleteEntidad = async (e: Entidad) => {
-    if (!confirm(`¿Eliminar la entidad "${e.nombre}"? Esto también elimina sus requisitos específicos.`)) return;
+  const handleDeleteEntidad = (e: Entidad) => {
+    setEliminarEntidadError('');
+    setConfirmandoEliminarEntidad(e);
+  };
+
+  const confirmarEliminarEntidad = async () => {
+    const e = confirmandoEliminarEntidad;
+    if (!e) return;
+    setConfirmandoEliminarEntidad(null);
     try {
       await deleteEntidad(e.id);
       load();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'No se pudo eliminar la entidad.');
+      setEliminarEntidadError(err.response?.data?.message || 'No se pudo eliminar la entidad.');
     }
   };
 
@@ -384,15 +416,22 @@ export default function EntidadesList() {
     }
   };
 
-  const handleRemoveRequisito = async (id: number) => {
-    if (!confirm('¿Quitar este requisito?')) return;
+  const handleRemoveRequisito = (id: number) => {
+    setQuitarRequisitoError('');
+    setConfirmandoQuitarRequisito(id);
+  };
+
+  const confirmarQuitarRequisito = async () => {
+    const id = confirmandoQuitarRequisito;
+    if (id == null) return;
+    setConfirmandoQuitarRequisito(null);
     try {
       await deleteRequisito(id);
       if (editingReqId === id) resetReqForm();
       if (editingTierReqId === id) resetTierReqForm();
       load();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'No se pudo quitar el requisito.');
+      setQuitarRequisitoError(err.response?.data?.message || 'No se pudo quitar el requisito.');
     }
   };
 
@@ -488,6 +527,14 @@ export default function EntidadesList() {
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{error}</div>
       )}
 
+      {toggleActivoError && (
+        <div ref={toggleActivoErrorRef} style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{toggleActivoError}</div>
+      )}
+
+      {eliminarEntidadError && (
+        <div ref={eliminarEntidadErrorRef} style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{eliminarEntidadError}</div>
+      )}
+
       <div style={{ background: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '10px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.82rem', color: '#2b6cb0' }}>
         Las entidades también pueden aparecer solas al sincronizar Drive desde <button onClick={() => navigate('/rrhh/guardias', { state: { from: location.pathname } })} style={{ background: 'none', border: 'none', padding: 0, color: '#1d4ed8', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', fontSize: 'inherit' }}>Listado de Guardias</button> (una carpeta nueva bajo Público/Privado crea su Entidad automáticamente). Editar nombre, tipo y requisitos sigue siendo manual, aquí.
       </div>
@@ -538,7 +585,19 @@ export default function EntidadesList() {
                   const reqCount = requisitosPorEntidad.get(e.id)?.length || 0;
                   return (
                     <tr key={e.id} style={{ opacity: e.activo ? 1 : 0.6 }}>
-                      <td style={{ fontWeight: 700, color: 'var(--azul-oscuro)' }}>{e.nombre}</td>
+                      <td style={{ fontWeight: 700, color: 'var(--azul-oscuro)' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          {e.nombre}
+                          {e.formatoValido === false && (
+                            <span
+                              title='El nombre de la carpeta no sigue el formato "Provincia - Nombre"'
+                              style={{ display: 'inline-flex' }}
+                            >
+                              <AlertTriangle size={14} color="#d97706" />
+                            </span>
+                          )}
+                        </span>
+                      </td>
                       <td>
                         <span className="status-badge" style={{ background: TIPO_COLOR[e.tipo].bg, color: TIPO_COLOR[e.tipo].fg }}>
                           {TIPO_LABEL[e.tipo]}
@@ -647,6 +706,8 @@ export default function EntidadesList() {
                 Además de los que agregues aquí, a esta entidad ya le aplican automáticamente los requisitos <strong>Globales</strong> y los de tipo <strong>{TIPO_LABEL[detailEntidad.tipo]}</strong> (ver "Requisitos Generales" en la cabecera de la página).
               </div>
 
+              {quitarRequisitoError && <div ref={quitarRequisitoErrorRef} className="form-error">{quitarRequisitoError}</div>}
+
               {reqError && <div className="form-error">{reqError}</div>}
 
               {canEdit && (
@@ -725,6 +786,8 @@ export default function EntidadesList() {
               </button>
             </div>
             <div className="modal-body">
+              {quitarRequisitoError && <div ref={quitarRequisitoErrorRef} className="form-error" style={{ marginBottom: '14px' }}>{quitarRequisitoError}</div>}
+
               {canEdit && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '16px 18px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                   <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: 'var(--azul-oscuro)' }}>
@@ -816,6 +879,28 @@ export default function EntidadesList() {
       )}
 
       {showMergeModal && <CedulaMergeModal onClose={() => setShowMergeModal(false)} />}
+
+      {confirmandoEliminarEntidad && (
+        <ConfirmDialog
+          title="Eliminar entidad"
+          message={`¿Eliminar la entidad "${confirmandoEliminarEntidad.nombre}"? Esto también elimina sus requisitos específicos.`}
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={confirmarEliminarEntidad}
+          onCancel={() => setConfirmandoEliminarEntidad(null)}
+        />
+      )}
+
+      {confirmandoQuitarRequisito != null && (
+        <ConfirmDialog
+          title="Quitar requisito"
+          message="¿Quitar este requisito?"
+          confirmLabel="Quitar"
+          danger
+          onConfirm={confirmarQuitarRequisito}
+          onCancel={() => setConfirmandoQuitarRequisito(null)}
+        />
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getCustodias, deleteCustodia } from '../../services/custodia.service';
 import EstadoSelect from '../../components/custodias/EstadoSelect';
 import CustodiaDetalleModal from '../../components/custodias/CustodiaDetalleModal';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 const TYPE_COLORS: Record<string, string> = {
   HACIENDA: '#276749',
@@ -39,6 +40,7 @@ export default function CustodiasList() {
   const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
   const [detalle, setDetalle] = useState<any>(null);
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState<number | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -52,8 +54,14 @@ export default function CustodiasList() {
 
   useEffect(() => { load(); }, []);
 
-  async function handleDelete(id: number) {
-    if (!confirm('¿Eliminar esta custodia?')) return;
+  function handleDelete(id: number) {
+    setConfirmandoEliminar(id);
+  }
+
+  async function confirmarEliminar() {
+    if (confirmandoEliminar === null) return;
+    const id = confirmandoEliminar;
+    setConfirmandoEliminar(null);
     await deleteCustodia(id);
     load();
   }
@@ -159,6 +167,17 @@ export default function CustodiasList() {
       </div>
 
       <CustodiaDetalleModal custodia={detalle} onClose={() => setDetalle(null)} />
+
+      {confirmandoEliminar !== null && (
+        <ConfirmDialog
+          title="Eliminar custodia"
+          message="¿Eliminar esta custodia?"
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={confirmarEliminar}
+          onCancel={() => setConfirmandoEliminar(null)}
+        />
+      )}
     </div>
   );
 }

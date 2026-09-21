@@ -96,7 +96,9 @@ export class MovimientoPersonalController {
   }
 
   // No hay POST /movimientos/entrada: la entrada solo se crea automáticamente
-  // desde CandidateService.move() (columna del kanban con triggersHire=true).
+  // desde DriveService.contratarCandidato() al marcar un postulante como
+  // contratado en Reclutamiento (antes era CandidateService.move() en el
+  // Kanban de Candidatos, eliminado 2026-09-17).
   // Movimientos de Personal es un registro, no un formulario de alta manual —
   // decisión explícita del usuario 2026-09-09 (ver .agents/modules/movimientos-personal.md).
 

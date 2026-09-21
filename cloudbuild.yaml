@@ -35,7 +35,7 @@ steps:
       - '--port=8080'
       - '--add-cloudsql-instances=$PROJECT_ID:us-central1:gemeseg-db'
       - '--set-env-vars=NODE_ENV=production,REDIS_HOST=,REDIS_PORT=6379'
-      - '--set-secrets=DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,FRONTEND_URL=FRONTEND_URL:latest,BOLDSIGN_API_KEY=BOLDSIGN_API_KEY:latest,GOOGLE_SERVICE_ACCOUNT_JSON=GOOGLE_SERVICE_ACCOUNT_JSON:latest'
+      - '--set-secrets=DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,FRONTEND_URL=FRONTEND_URL:latest,SIGNWELL_API_KEY=SIGNWELL_API_KEY:latest,GOOGLE_SERVICE_ACCOUNT_JSON=GOOGLE_SERVICE_ACCOUNT_JSON:latest'
 
   # Build frontend. El intento anterior de desplegarlo vía GitHub Actions
   # (.github/workflows/firebase-hosting-merge.yml) fallaba porque requería un

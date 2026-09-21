@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import {
   getSistemasVerificacion,
@@ -7,6 +7,7 @@ import {
   deleteSistemaVerificacion,
   type SistemaVerificacion,
 } from '../../services/movimiento-personal.service';
+import ConfirmDialog from '../common/ConfirmDialog';
 
 interface Props {
   open: boolean;
@@ -23,6 +24,9 @@ export default function ConfiguracionSistemasModal({ open, onClose }: Props) {
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmandoDelete, setConfirmandoDelete] = useState<SistemaVerificacion | null>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const deleteErrorRef = useRef<HTMLDivElement>(null);
 
   const load = () => {
     setLoading(true);
@@ -30,6 +34,14 @@ export default function ConfiguracionSistemasModal({ open, onClose }: Props) {
   };
 
   useEffect(() => { if (open) load(); }, [open]);
+
+  // El botón de eliminar vive en la lista (fuera del formulario de arriba);
+  // se hace scrollIntoView para que el error no quede fuera de vista.
+  useEffect(() => {
+    if (deleteError) {
+      deleteErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [deleteError]);
 
   if (!open) return null;
 
@@ -68,17 +80,25 @@ export default function ConfiguracionSistemasModal({ open, onClose }: Props) {
     load();
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('¿Eliminar este sistema? Los casos ya creados que lo incluyan no se ven afectados.')) return;
+  const handleDelete = (s: SistemaVerificacion) => {
+    setDeleteError('');
+    setConfirmandoDelete(s);
+  };
+
+  const confirmarDelete = async () => {
+    const s = confirmandoDelete;
+    if (!s) return;
+    setConfirmandoDelete(null);
     try {
-      await deleteSistemaVerificacion(id);
+      await deleteSistemaVerificacion(s.id);
       load();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Error al eliminar');
+      setDeleteError(err.response?.data?.message || 'Error al eliminar');
     }
   };
 
   return (
+    <>
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -91,6 +111,7 @@ export default function ConfiguracionSistemasModal({ open, onClose }: Props) {
           <button className="modal-close" onClick={onClose}><X size={16} /></button>
         </div>
         <div className="modal-body">
+          {deleteError && <div className="form-error" ref={deleteErrorRef} style={{ marginBottom: '14px' }}>{deleteError}</div>}
           {showForm ? (
             <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', marginBottom: '16px' }}>
               <h4 style={{ margin: '0 0 12px', color: 'var(--azul-oscuro)' }}>
@@ -165,7 +186,7 @@ export default function ConfiguracionSistemasModal({ open, onClose }: Props) {
                       {s.activo ? 'Desactivar' : 'Activar'}
                     </button>
                     <button className="btn-sm-edit" onClick={() => handleEdit(s)}>✏️</button>
-                    <button className="btn-danger-sm" onClick={() => handleDelete(s.id)}>🗑️</button>
+                    <button className="btn-danger-sm" onClick={() => handleDelete(s)}>🗑️</button>
                   </div>
                 </div>
               ))}
@@ -177,5 +198,16 @@ export default function ConfiguracionSistemasModal({ open, onClose }: Props) {
         </div>
       </div>
     </div>
+    {confirmandoDelete && (
+      <ConfirmDialog
+        title="Eliminar sistema"
+        message="¿Eliminar este sistema? Los casos ya creados que lo incluyan no se ven afectados."
+        confirmLabel="Sí, eliminar"
+        danger
+        onConfirm={confirmarDelete}
+        onCancel={() => setConfirmandoDelete(null)}
+      />
+    )}
+    </>
   );
 }

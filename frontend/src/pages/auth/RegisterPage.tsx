@@ -31,7 +31,7 @@ type RegisterForm = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { theme, loadThemeBySlug } = useCompany();
+  const { theme, loadThemeByDomain } = useCompany();
   const [serverError, setServerError] = useState('');
   const [loading, setLoading] = useState(false);
   const [detectedCompany, setDetectedCompany] = useState(false);
@@ -47,18 +47,24 @@ export default function RegisterPage() {
   useEffect(() => {
     const emailInput = document.getElementById('reg-email') as HTMLInputElement;
     if (!emailInput) return;
-    const handler = async () => {
-      const email = emailInput.value;
-      const domain = email.split('@')[1];
-      if (domain) {
-        const slug = domain.split('.')[0];
-        await loadThemeBySlug(slug);
-        setDetectedCompany(true);
-      }
+    let debounceTimer: ReturnType<typeof setTimeout>;
+    const handler = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
+        const email = emailInput.value;
+        const domain = email.split('@')[1];
+        if (domain && domain.includes('.')) {
+          const found = await loadThemeByDomain(domain);
+          if (found) setDetectedCompany(true);
+        }
+      }, 300);
     };
-    emailInput.addEventListener('blur', handler);
-    return () => emailInput.removeEventListener('blur', handler);
-  }, [loadThemeBySlug]);
+    emailInput.addEventListener('input', handler);
+    return () => {
+      clearTimeout(debounceTimer);
+      emailInput.removeEventListener('input', handler);
+    };
+  }, [loadThemeByDomain]);
 
   const onSubmit = async (data: RegisterForm) => {
     setServerError('');

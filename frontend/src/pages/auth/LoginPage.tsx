@@ -20,7 +20,7 @@ type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { theme, loadThemeBySlug } = useCompany();
+  const { theme, loadThemeByDomain } = useCompany();
   const [serverError, setServerError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
@@ -40,23 +40,26 @@ export default function LoginPage() {
   });
 
   useEffect(() => {
-    const detectCompany = async () => {
-      const emailInput = document.getElementById('email') as HTMLInputElement;
-      if (!emailInput) return;
-      const handler = async () => {
+    const emailInput = document.getElementById('email') as HTMLInputElement;
+    if (!emailInput) return;
+    let debounceTimer: ReturnType<typeof setTimeout>;
+    const handler = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
         const email = emailInput.value;
         const domain = email.split('@')[1];
-        if (domain) {
-          const slug = domain.split('.')[0];
-          await loadThemeBySlug(slug);
-          setDetectedCompany(true);
+        if (domain && domain.includes('.')) {
+          const found = await loadThemeByDomain(domain);
+          if (found) setDetectedCompany(true);
         }
-      };
-      emailInput.addEventListener('blur', handler);
-      return () => emailInput.removeEventListener('blur', handler);
+      }, 300);
     };
-    detectCompany();
-  }, [loadThemeBySlug]);
+    emailInput.addEventListener('input', handler);
+    return () => {
+      clearTimeout(debounceTimer);
+      emailInput.removeEventListener('input', handler);
+    };
+  }, [loadThemeByDomain]);
 
   const onSubmit = async (data: LoginForm) => {
     setServerError('');
@@ -67,10 +70,9 @@ export default function LoginPage() {
       saveAuth(res);
       const domain = data.email.split('@')[1];
       if (domain) {
-        const slug = domain.split('.')[0];
         // No bloquear la navegacion por esto: es solo cosmetico (colores/logo)
         // y no debe demorar el ingreso al dashboard si la API tarda en responder.
-        loadThemeBySlug(slug).then(() => setDetectedCompany(true));
+        loadThemeByDomain(domain).then((found) => { if (found) setDetectedCompany(true); });
       }
       navigate('/dashboard');
     } catch (err: any) {

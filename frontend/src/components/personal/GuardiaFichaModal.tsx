@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { X, IdCard, User, Briefcase } from 'lucide-react';
 import { getGuardiaFicha, setGuardiaFicha, getPersonalFieldDefinitions, type PersonalFieldDefinition } from '../../services/entidades.service';
 
@@ -31,11 +31,6 @@ interface Props {
   onClose: () => void;
 }
 
-const emptyForm = {
-  telefono: '', direccion: '', fechaNacimiento: '', contactoEmergenciaNombre: '', contactoEmergenciaTelefono: '',
-  horario: '', puestoFormal: '', salarioAcordado: '',
-};
-
 /**
  * Ficha personal del guardia — teléfono, dirección, datos laborales para
  * contratos, etc. Vive en Listado de Guardias, separada a propósito del
@@ -47,7 +42,6 @@ const emptyForm = {
  */
 export default function GuardiaFichaModal({ guardia, onClose }: Props) {
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState(emptyForm);
   const [activo, setActivo] = useState(true);
   const [campos, setCampos] = useState<Record<string, string>>({});
   const [fieldDefs, setFieldDefs] = useState<PersonalFieldDefinition[]>([]);
@@ -60,26 +54,24 @@ export default function GuardiaFichaModal({ guardia, onClose }: Props) {
     if (!guardia) return;
     setLoading(true);
     setError('');
-    setForm(emptyForm);
     setCampos({});
     Promise.all([getGuardiaFicha(guardia.cedula), loadFieldDefs()])
       .then(([f]) => {
-        setForm({
-          telefono: f?.telefono || '',
-          direccion: f?.direccion || '',
-          fechaNacimiento: f?.fechaNacimiento ? f.fechaNacimiento.slice(0, 10) : '',
-          contactoEmergenciaNombre: f?.contactoEmergenciaNombre || '',
-          contactoEmergenciaTelefono: f?.contactoEmergenciaTelefono || '',
-          horario: f?.horario || '',
-          puestoFormal: f?.puestoFormal || '',
-          salarioAcordado: f?.salarioAcordado != null ? String(f.salarioAcordado) : '',
-        });
         setActivo(f?.activo ?? true);
         setCampos(f?.camposPersonalizados || {});
       })
-      .catch(() => setForm(emptyForm))
+      .catch(() => setCampos({}))
       .finally(() => setLoading(false));
   }, [guardia]);
+
+  // Puramente informativo — cuenta cuántos campos personalizados marcados
+  // como "Requerido" (ver PersonalFieldsConfigModal) todavía no tienen valor
+  // en `campos`. Nunca bloquea guardar y nunca se mezcla con el % de
+  // cumplimiento documental (esa métrica mide documentos, no campos).
+  const camposRequeridosFaltantes = useMemo(
+    () => fieldDefs.filter((f) => f.required && !(campos[f.key] || '').trim()).length,
+    [fieldDefs, campos],
+  );
 
   if (!guardia) return null;
 
@@ -88,8 +80,6 @@ export default function GuardiaFichaModal({ guardia, onClose }: Props) {
     setError('');
     try {
       await setGuardiaFicha(guardia.cedula, {
-        ...form,
-        salarioAcordado: form.salarioAcordado.trim() === '' ? null : Number(form.salarioAcordado),
         camposPersonalizados: campos,
       });
       onClose();
@@ -99,6 +89,31 @@ export default function GuardiaFichaModal({ guardia, onClose }: Props) {
       setSaving(false);
     }
   };
+
+  const renderCampo = (f: PersonalFieldDefinition) => (
+    <div className="form-group" key={f.id}>
+      {f.type === 'BOOLEAN' ? (
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={campos[f.key] === 'true'}
+            onChange={(e) => setCampos({ ...campos, [f.key]: String(e.target.checked) })}
+            style={{ width: '16px', height: '16px' }}
+          />
+          {f.label}{f.required && <span style={{ color: '#c53030', marginLeft: '4px' }}>*</span>}
+        </label>
+      ) : (
+        <>
+          <label>{f.label}{f.required && <span style={{ color: '#c53030', marginLeft: '4px' }}>*</span>}</label>
+          <input
+            type={f.type === 'NUMBER' ? 'number' : f.type === 'DATE' ? 'date' : 'text'}
+            value={campos[f.key] || ''}
+            onChange={(e) => setCampos({ ...campos, [f.key]: e.target.value })}
+          />
+        </>
+      )}
+    </div>
+  );
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -113,6 +128,11 @@ export default function GuardiaFichaModal({ guardia, onClose }: Props) {
               <span className="status-badge" style={{ background: activo ? '#c6f6d5' : '#fed7d7', color: activo ? '#276749' : '#c53030', fontSize: '0.68rem' }}>
                 Activo: {activo ? 'Sí' : 'No'}
               </span>
+              {camposRequeridosFaltantes > 0 && (
+                <span className="status-badge" style={{ background: '#fed7d7', color: '#c53030', fontSize: '0.68rem' }}>
+                  {camposRequeridosFaltantes} {camposRequeridosFaltantes === 1 ? 'campo requerido sin completar' : 'campos requeridos sin completar'}
+                </span>
+              )}
             </p>
           </div>
           <button className="modal-close" onClick={onClose}>
@@ -132,61 +152,23 @@ export default function GuardiaFichaModal({ guardia, onClose }: Props) {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <SeccionCard icon={<User size={14} />} title="Datos personales">
-                  <div className="form-group">
-                    <label>Teléfono</label>
-                    <input type="text" value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label>Fecha de nacimiento</label>
-                    <input type="date" value={form.fechaNacimiento} onChange={(e) => setForm({ ...form, fechaNacimiento: e.target.value })} />
-                  </div>
-                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                    <label>Dirección</label>
-                    <input type="text" value={form.direccion} onChange={(e) => setForm({ ...form, direccion: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label>Contacto de emergencia — nombre</label>
-                    <input type="text" value={form.contactoEmergenciaNombre} onChange={(e) => setForm({ ...form, contactoEmergenciaNombre: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label>Contacto de emergencia — teléfono</label>
-                    <input type="text" value={form.contactoEmergenciaTelefono} onChange={(e) => setForm({ ...form, contactoEmergenciaTelefono: e.target.value })} />
-                  </div>
-                  {fieldDefs.filter((f) => f.category === 'PERSONAL').map((f) => (
-                    <div className="form-group" key={f.id}>
-                      <label>{f.label}</label>
-                      <input
-                        type={f.type === 'NUMBER' ? 'number' : f.type === 'DATE' ? 'date' : 'text'}
-                        value={campos[f.key] || ''}
-                        onChange={(e) => setCampos({ ...campos, [f.key]: e.target.value })}
-                      />
-                    </div>
-                  ))}
+                  {fieldDefs.filter((f) => f.category === 'PERSONAL').length === 0 ? (
+                    <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
+                      No hay campos configurados todavía.
+                    </p>
+                  ) : (
+                    fieldDefs.filter((f) => f.category === 'PERSONAL').map(renderCampo)
+                  )}
                 </SeccionCard>
 
                 <SeccionCard icon={<Briefcase size={14} />} title="Datos laborales" subtitle="Se usan para autocompletar la generación de contratos.">
-                  <div className="form-group">
-                    <label>Horario de trabajo</label>
-                    <input type="text" placeholder="Ej: 8 horas, 5 días" value={form.horario} onChange={(e) => setForm({ ...form, horario: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label>Puesto</label>
-                    <input type="text" placeholder="Ej: Guardia de seguridad" value={form.puestoFormal} onChange={(e) => setForm({ ...form, puestoFormal: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label>Salario acordado</label>
-                    <input type="number" step="0.01" placeholder="Ej: 460.00" value={form.salarioAcordado} onChange={(e) => setForm({ ...form, salarioAcordado: e.target.value })} />
-                  </div>
-                  {fieldDefs.filter((f) => f.category === 'LABORAL').map((f) => (
-                    <div className="form-group" key={f.id}>
-                      <label>{f.label}</label>
-                      <input
-                        type={f.type === 'NUMBER' ? 'number' : f.type === 'DATE' ? 'date' : 'text'}
-                        value={campos[f.key] || ''}
-                        onChange={(e) => setCampos({ ...campos, [f.key]: e.target.value })}
-                      />
-                    </div>
-                  ))}
+                  {fieldDefs.filter((f) => f.category === 'LABORAL').length === 0 ? (
+                    <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
+                      No hay campos configurados todavía.
+                    </p>
+                  ) : (
+                    fieldDefs.filter((f) => f.category === 'LABORAL').map(renderCampo)
+                  )}
                 </SeccionCard>
               </div>
             </>

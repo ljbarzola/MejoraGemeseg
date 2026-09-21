@@ -1,6 +1,17 @@
 import { api } from './auth.service';
 
 // ==================== TYPES ====================
+export interface TableColumn {
+  key: string;
+  label: string;
+  type: 'TEXT' | 'NUMBER' | 'DATE';
+}
+
+export interface TableFieldConfig {
+  columns: TableColumn[];
+  maxRows: number;
+}
+
 export interface SalesTemplateField {
   id: number;
   templateId: number;
@@ -11,6 +22,9 @@ export interface SalesTemplateField {
   isClientField: boolean;
   defaultValue?: string;
   dropdownOptions: string[];
+  allowMultiple?: boolean;
+  allowOther?: boolean;
+  tableConfig?: TableFieldConfig | null;
   order: number;
 }
 
@@ -23,6 +37,10 @@ export interface SalesTemplate {
   generatedPdfPath?: string;
   emailSubject?: string;
   emailBody?: string;
+  numberingPrefix?: string | null;
+  numberingDigits: number;
+  numberingNext: number;
+  driveFolderId?: string | null;
   companyId: number;
   createdBy: number;
   createdAt: string;
@@ -33,7 +51,7 @@ export interface SalesTemplate {
 export interface SalesContractDocument {
   id: number;
   contractId: number;
-  type: 'GENERADO' | 'ENVIADO';
+  type: 'GENERADO' | 'ENVIADO' | 'FIRMADO';
   filePath: string;
   createdAt: string;
 }
@@ -52,15 +70,32 @@ export interface SalesContract {
   annexA?: any;
   annexB?: any;
   annexC?: any;
+  contractNumber?: string | null;
   generatedPdfPath?: string;
-  boldsignDocumentId?: string;
-  boldsignStatus?: string;
+  signwellDocumentId?: string;
+  signwellStatus?: string;
   status: string;
   sentAt?: string;
   signedAt?: string;
+  clientFillToken?: string | null;
+  clientFilledAt?: string | null;
   companyId: number;
   createdBy: number;
   createdAt: string;
+}
+
+export interface PublicFillField {
+  variableName: string;
+  label: string;
+  tableConfig: TableFieldConfig;
+  value: Record<string, string>[];
+}
+
+export interface PublicContractFill {
+  contractId: number;
+  clientName: string;
+  alreadySubmitted: boolean;
+  fields: PublicFillField[];
 }
 
 // ==================== TEMPLATES ====================
@@ -107,11 +142,60 @@ export const generateContractPdf = (contractId: number) =>
 export const sendContract = (contractId: number) =>
   api.post(`/ventas/contratos/${contractId}/send`).then(r => r.data);
 
+export interface SignatureStatus {
+  documentId: string;
+  status: string;
+  contractStatus: string;
+  recipients: Array<{
+    name: string | null;
+    email: string | null;
+    status: string | null;
+    bounced: boolean;
+    bouncedDetails: string | null;
+  }>;
+}
+
+export const getContractSignatureStatus = (contractId: number): Promise<SignatureStatus> =>
+  api.get(`/ventas/contratos/${contractId}/signature-status`).then(r => r.data);
+
 export const deleteContract = (id: number) =>
   api.delete(`/ventas/contratos/${id}`).then(r => r.data);
 
+// Público (sin sesión) — para el link que completa el cliente
+export const getPublicContractFill = (token: string): Promise<PublicContractFill> =>
+  api.get(`/ventas/contratos/public/${token}`).then(r => r.data);
+
+// `redirectToSign`: si el contrato tiene una tabla para el cliente, el
+// backend genera el PDF y lo manda a SignWell de inmediato tras este
+// submit — este link es a dónde redirigir al cliente para que firme en la
+// misma sesión, sin esperar un segundo correo (ver CONTRATOS-PLAN.md).
+export interface PublicContractFillResult {
+  success: true;
+  redirectToSign?: string | null;
+}
+
+export const submitPublicContractFill = (token: string, values: Record<string, any>): Promise<PublicContractFillResult> =>
+  api.post(`/ventas/contratos/public/${token}/submit`, { values }).then(r => r.data);
+
 export const getContractDocuments = (contractId: number): Promise<SalesContractDocument[]> =>
   api.get(`/ventas/contratos/${contractId}/documents`).then(r => r.data);
+
+// Sube a mano el PDF ya firmado — respaldo para cuando el webhook de
+// SignWell no está configurado en este entorno (ver CONTRATOS-PLAN.md).
+export const uploadSignedContract = (contractId: number, file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post(`/ventas/contratos/${contractId}/documents/signed`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+};
+
+// Carpeta raíz de Drive para los documentos de Contratos — compartida por
+// toda la empresa, reutiliza el mismo endpoint genérico de FolderConfig que
+// ya usa RRHH (`type` distinto por módulo).
+export const getVentasDriveConfig = () =>
+  api.get('/personal/drive/config', { params: { type: 'VENTAS_CONTRATOS' } }).then(r => r.data);
+
+export const saveVentasDriveConfig = (driveFolderId: string) =>
+  api.post('/personal/drive/config', { driveFolderId, type: 'VENTAS_CONTRATOS' }).then(r => r.data);
 
 // Los PDFs de contratos requieren sesión iniciada; se descargan con la
 // instancia de axios autenticada (no un <iframe>/<a> directo) y se muestran

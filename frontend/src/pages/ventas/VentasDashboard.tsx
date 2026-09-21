@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getVentasDashboard, setGoal, SalesGoalSeller } from '../../services/ventas.service';
 
@@ -9,6 +9,12 @@ export default function VentasDashboard() {
   const [editingGoal, setEditingGoal] = useState<SalesGoalSeller | null>(null);
   const [goalInput, setGoalInput] = useState<number>(20);
   const [savingGoal, setSavingGoal] = useState(false);
+  const [goalError, setGoalError] = useState('');
+  const goalErrorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (goalError) goalErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [goalError]);
 
   const loadData = () => {
     setLoading(true);
@@ -23,6 +29,7 @@ export default function VentasDashboard() {
   const handleSaveGoal = async () => {
     if (!editingGoal || !data?.goals) return;
     setSavingGoal(true);
+    setGoalError('');
     try {
       await setGoal({
         userId: editingGoal.sellerId,
@@ -33,7 +40,7 @@ export default function VentasDashboard() {
       setEditingGoal(null);
       loadData();
     } catch {
-      alert('Error al guardar la meta');
+      setGoalError('Error al guardar la meta');
     } finally {
       setSavingGoal(false);
     }
@@ -130,7 +137,7 @@ export default function VentasDashboard() {
                     <button
                       className="btn-secondary-sm"
                       style={{ padding: '2px 6px', fontSize: '0.72rem' }}
-                      onClick={() => { setEditingGoal(s); setGoalInput(s.goal); }}
+                      onClick={() => { setEditingGoal(s); setGoalInput(s.goal); setGoalError(''); }}
                     >
                       Editar Meta
                     </button>
@@ -195,6 +202,7 @@ export default function VentasDashboard() {
             <p style={{ fontSize: '0.85rem', color: '#718096' }}>
               Vendedor: <strong>{editingGoal.fullName}</strong>
             </p>
+            {goalError && <div ref={goalErrorRef} className="form-error">{goalError}</div>}
             <div className="form-group" style={{ marginTop: '12px' }}>
               <label>Meta de Visitas Semanales Obligatorias *</label>
               <input

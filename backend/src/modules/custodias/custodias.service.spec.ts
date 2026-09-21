@@ -39,7 +39,6 @@ describe('CustodiasService', () => {
       count: jest.Mock;
     };
     employeeDriveFolder: { findMany: jest.Mock; findFirst: jest.Mock };
-    candidate: { findMany: jest.Mock; findFirst: jest.Mock };
   };
 
   beforeEach(() => {
@@ -54,10 +53,6 @@ describe('CustodiasService', () => {
         count: jest.fn(),
       },
       employeeDriveFolder: {
-        findMany: jest.fn().mockResolvedValue([]),
-        findFirst: jest.fn(),
-      },
-      candidate: {
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
       },

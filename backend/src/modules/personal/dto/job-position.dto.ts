@@ -1,11 +1,28 @@
-import { IsString, IsOptional, IsArray, IsIn, IsObject } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsArray,
+  IsIn,
+  IsObject,
+  IsInt,
+  Min,
+  ValidateNested,
+  ArrayNotEmpty,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 export const JOB_POSITION_ESTADOS = ['ABIERTA', 'CERRADA'] as const;
+
+// A qué parte de la empresa entra un postulante de esta vacante cuando RRHH lo
+// marca como contratado. No es solo la carpeta destino: cada bucket nombra sus
+// carpetas distinto ("Nombre - Cédula" en Guardias, "Nombre - Puesto" en
+// Personal Administrativo), así que contratar tiene que renombrar la carpeta
+// del postulante en el caso ADMINISTRATIVO. Ver DriveService.contratarCandidato.
+export const TIPOS_CONTRATACION = ['GUARDIA', 'ADMINISTRATIVO'] as const;
 
 // tipo de dato esperado para un campo del formulario que llena el candidato
 export const CAMPO_TIPOS = [
   'TEXTO',
-  'ALFANUMERICO',
   'NUMERICO',
   'CORREO',
   'TELEFONO',
@@ -43,6 +60,10 @@ export class CreateJobPositionDto {
   @IsOptional()
   estado?: string;
 
+  @IsIn([...TIPOS_CONTRATACION])
+  @IsOptional()
+  tipoContratacion?: string;
+
   @IsString()
   @IsOptional()
   driveFileId?: string;
@@ -62,6 +83,36 @@ export class ReassignReclutamientoFileDto {
 export class SaveCandidatoDatosDto {
   @IsObject()
   datos: Record<string, string>;
+}
+
+// RRHH confirma (o corrige) la propuesta de la IA sobre el "archivo único" de
+// un postulante: qué documento requerido está en qué rango de páginas. Solo
+// llegan acá los que RRHH dio por buenos — los que marcó como "no está"
+// simplemente no se envían. Ver ReclutamientoIaService.aplicar.
+export class AsignacionAnalisisDto {
+  @IsString()
+  requisito: string;
+
+  // Lista de páginas (desde 1), no un rango: la pantalla de revisión etiqueta
+  // página por página, así que un documento puede quedar formado por páginas
+  // no consecutivas. Ver ReclutamientoIaService.AsignacionConfirmada.
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  paginas: number[];
+}
+
+export class AplicarAnalisisDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AsignacionAnalisisDto)
+  asignaciones: AsignacionAnalisisDto[];
+
+  // Solo hace falta si la carpeta tiene más de un PDF y hay que desambiguar.
+  @IsString()
+  @IsOptional()
+  driveFileId?: string;
 }
 
 export class UpdateJobPositionDto {
@@ -84,6 +135,10 @@ export class UpdateJobPositionDto {
   @IsIn([...JOB_POSITION_ESTADOS])
   @IsOptional()
   estado?: string;
+
+  @IsIn([...TIPOS_CONTRATACION])
+  @IsOptional()
+  tipoContratacion?: string;
 
   @IsString()
   @IsOptional()

@@ -40,8 +40,9 @@ export class UpdateContractTemplateDto {
 
 export class ContractFieldDto {
   @IsString()
-  @Matches(/^[A-Za-z_][A-Za-z0-9_]*$/, {
-    message: 'variableName debe ser el nombre detectado en el documento (solo letras, números y guion bajo)',
+  @Matches(/^[A-Za-zÀ-ÿ_][A-Za-zÀ-ÿ0-9_ .()/-]*$/, {
+    message:
+      'variableName debe ser el nombre detectado en el documento (letras, números, espacios, acentos, puntos, paréntesis, "/" o "-")',
   })
   variableName: string;
 

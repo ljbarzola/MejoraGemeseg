@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../../../services/cacao.service';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 
 export default function SuppliersPage() {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ export default function SuppliersPage() {
   const [form, setForm] = useState({ name: '', contact: '', phone: '', paymentTerms: '', bank: '' });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState<number | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -50,8 +52,14 @@ export default function SuppliersPage() {
     setShowForm(true);
   }
 
-  async function handleDelete(id: number) {
-    if (!confirm('¿Eliminar este proveedor?')) return;
+  function handleDelete(id: number) {
+    setConfirmandoEliminar(id);
+  }
+
+  async function confirmarEliminar() {
+    const id = confirmandoEliminar;
+    if (!id) return;
+    setConfirmandoEliminar(null);
     try { await deleteSupplier(id); load(); } catch {}
   }
 
@@ -146,6 +154,17 @@ export default function SuppliersPage() {
           </div>
         )}
       </div>
+
+      {confirmandoEliminar !== null && (
+        <ConfirmDialog
+          title="Eliminar proveedor"
+          message="¿Eliminar este proveedor?"
+          confirmLabel="Sí, eliminar"
+          danger
+          onConfirm={confirmarEliminar}
+          onCancel={() => setConfirmandoEliminar(null)}
+        />
+      )}
     </div>
   );
 }

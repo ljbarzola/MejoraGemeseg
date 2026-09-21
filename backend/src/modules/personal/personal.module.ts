@@ -6,14 +6,14 @@ import { DriveController } from './drive.controller';
 import { EntidadController } from './entidad.controller';
 import { MovimientoPersonalController } from './movimiento-personal.controller';
 import { CedulaMergeController } from './cedula-merge.controller';
+import { SurveyController } from './survey.controller';
 import { PersonalService } from './personal.service';
-import { KanbanService } from './services/kanban.service';
-import { CandidateService } from './services/candidate.service';
 import { ContractService } from './services/contract.service';
 import { CertificationService } from './services/certification.service';
 import { LogService } from './services/log.service';
 import { DriveService } from './services/drive.service';
 import { DocumentExtractionService } from './services/document-extraction.service';
+import { ReclutamientoIaService } from './services/reclutamiento-ia.service';
 import { SistemaVerificacionService } from './services/sistema-verificacion.service';
 import { MovimientoPersonalService } from './services/movimiento-personal.service';
 import { DocumentReviewService } from './services/document-review.service';
@@ -28,6 +28,16 @@ import { GuardiaFichaPersonalService } from './services/guardia-ficha-personal.s
 import { PersonalFieldDefinitionService } from './services/personal-field-definition.service';
 import { AdministrativeStaffFichaService } from './services/administrative-staff-ficha.service';
 import { CedulaMergeService } from './services/cedula-merge.service';
+import { GuardiasExportService } from './services/guardias-export.service';
+import { TrainingService } from './services/training.service';
+import { PersonalAlertsService } from './services/personal-alerts.service';
+import { ComplaintService } from './services/complaint.service';
+import { ComplaintFieldDefinitionService } from './services/complaint-field-definition.service';
+import { ComplaintStageService } from './services/complaint-stage.service';
+import { SurveyService } from './services/survey.service';
+import { NotificationConfigService } from './services/notification-config.service';
+import { NotificationConfigController } from './notification-config.controller';
+import { WhatsAppService } from './services/whatsapp.service';
 import { PermissionsModule } from '../permissions/permissions.module';
 
 @Module({
@@ -39,16 +49,17 @@ import { PermissionsModule } from '../permissions/permissions.module';
     EntidadController,
     MovimientoPersonalController,
     CedulaMergeController,
+    SurveyController,
+    NotificationConfigController,
   ],
   providers: [
     PersonalService,
-    KanbanService,
-    CandidateService,
     ContractService,
     CertificationService,
     LogService,
     DriveService,
     DocumentExtractionService,
+    ReclutamientoIaService,
     SistemaVerificacionService,
     MovimientoPersonalService,
     DocumentReviewService,
@@ -63,7 +74,16 @@ import { PermissionsModule } from '../permissions/permissions.module';
     PersonalFieldDefinitionService,
     AdministrativeStaffFichaService,
     CedulaMergeService,
+    GuardiasExportService,
+    TrainingService,
+    PersonalAlertsService,
+    ComplaintService,
+    ComplaintFieldDefinitionService,
+    ComplaintStageService,
+    SurveyService,
+    NotificationConfigService,
+    WhatsAppService,
   ],
-  exports: [PersonalService],
+  exports: [PersonalService, DriveService],
 })
 export class PersonalModule {}

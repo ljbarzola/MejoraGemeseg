@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, FilePlus, FileText } from 'lucide-react';
 import { getContracts, getContractTemplates, deleteContractTemplate, resolveContractFileUrl, type ContractTemplate } from '../../../services/personal.service';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 
 export default function ContractsList() {
   const navigate = useNavigate();
@@ -9,6 +10,16 @@ export default function ContractsList() {
   const [contracts, setContracts] = useState<any[]>([]);
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [confirmandoEliminarPlantilla, setConfirmandoEliminarPlantilla] = useState<number | null>(null);
+  const [deleteTemplateError, setDeleteTemplateError] = useState('');
+  const deleteTemplateErrorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (deleteTemplateError) {
+      deleteTemplateErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [deleteTemplateError]);
 
   const load = () => {
     setLoading(true);
@@ -19,13 +30,20 @@ export default function ContractsList() {
 
   useEffect(() => { load(); }, []);
 
-  const handleDeleteTemplate = async (id: number) => {
-    if (!window.confirm('¿Eliminar esta plantilla? Solo se puede si no tiene contratos generados.')) return;
+  const handleDeleteTemplate = (id: number) => {
+    setDeleteTemplateError('');
+    setConfirmandoEliminarPlantilla(id);
+  };
+
+  const confirmarEliminarPlantilla = async () => {
+    const id = confirmandoEliminarPlantilla;
+    if (id == null) return;
+    setConfirmandoEliminarPlantilla(null);
     try {
       await deleteContractTemplate(id);
       load();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'No se pudo eliminar la plantilla.');
+      setDeleteTemplateError(err.response?.data?.message || 'No se pudo eliminar la plantilla.');
     }
   };
 
@@ -50,6 +68,10 @@ export default function ContractsList() {
           </div>
         </div>
       </div>
+
+      {deleteTemplateError && (
+        <div ref={deleteTemplateErrorRef} style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{deleteTemplateError}</div>
+      )}
 
       <div className="admin-section">
         <h3 style={{ marginBottom: '12px' }}>Plantillas</h3>
@@ -123,6 +145,17 @@ export default function ContractsList() {
           </div>
         )}
       </div>
+
+      {confirmandoEliminarPlantilla !== null && (
+        <ConfirmDialog
+          title="Eliminar plantilla"
+          message="¿Eliminar esta plantilla? Solo se puede si no tiene contratos generados."
+          confirmLabel="Sí, eliminar"
+          danger
+          onConfirm={confirmarEliminarPlantilla}
+          onCancel={() => setConfirmandoEliminarPlantilla(null)}
+        />
+      )}
     </div>
   );
 }

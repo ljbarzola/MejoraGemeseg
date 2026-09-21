@@ -1,5 +1,10 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { extractDriveFolderId, buildDriveFolderLink } from '../../utils/driveLink';
+import { formatFechaHoraSync } from '../../utils/formatFechaHora';
+import { getUser } from '../../services/auth.service';
+import CopyLinkButton from '../../components/common/CopyLinkButton';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import {
   ArrowLeft,
   RefreshCw,
@@ -16,6 +21,8 @@ import {
   Plug,
   Save,
   UserCheck,
+  Sparkles,
+  Lock,
 } from 'lucide-react';
 import {
   getJobPositions,
@@ -31,9 +38,16 @@ import {
   reassignReclutamientoFile,
   saveCandidatoDatos,
   contratarCandidato,
+  backfillPostulacion,
 } from '../../services/personal.service';
 import { usePerm } from '../../contexts/PermissionsContext';
 import DocumentReviewModal from '../../components/personal/DocumentReviewModal';
+// Lazy a propósito: este modal arrastra pdfjs-dist (~370 kB) y solo se abre
+// para los postulantes que entregaron todo en un archivo. Importado de forma
+// normal, ReclutamientoPage pasaba de 43 kB a 413 kB para todos los demás.
+const AnalisisArchivoUnicoModal = lazy(
+  () => import('./reclutamiento/AnalisisArchivoUnicoModal'),
+);
 import { REVIEW_COLORS } from '../../components/personal/reviewStatus';
 
 interface CampoRequerido {
@@ -54,7 +68,6 @@ interface ArchivoRequerido {
 
 const CAMPO_TIPOS: { value: string; label: string }[] = [
   { value: 'TEXTO', label: 'Texto' },
-  { value: 'ALFANUMERICO', label: 'Alfanumérico' },
   { value: 'NUMERICO', label: 'Numérico' },
   { value: 'CORREO', label: 'Correo electrónico' },
   { value: 'TELEFONO', label: 'Teléfono' },
@@ -65,11 +78,63 @@ const campoTipoLabel = (tipo?: string) => CAMPO_TIPOS.find((t) => t.value === ti
 const ARCHIVO_EXTENSIONES = ['pdf', 'jpg', 'png', 'doc', 'docx'];
 
 const DEFAULT_CAMPOS: CampoRequerido[] = [
-  { nombre: 'Nombre completo', tipo: 'TEXTO', obligatorio: true },
+  { nombre: 'Nombres', tipo: 'TEXTO', obligatorio: true },
+  { nombre: 'Apellidos', tipo: 'TEXTO', obligatorio: true },
   { nombre: 'Cédula', tipo: 'NUMERICO', obligatorio: true },
   { nombre: 'Teléfono', tipo: 'TELEFONO', obligatorio: true },
   { nombre: 'Email', tipo: 'CORREO', obligatorio: true },
 ];
+
+// Nombre (completo o partido en Nombres/Apellidos) y Cédula alimentan
+// directamente el nombre de la carpeta del postulante en Drive
+// (findOrCreateCandidateFolder, backend RECLUTAMIENTO). Si una vacante se
+// guardara sin forma alguna de armar el nombre, o sin Cédula, todas las
+// postulaciones caerían en la misma carpeta y se mezclarían los documentos
+// de candidatos distintos — por eso Cédula nunca se puede quitar ni volver
+// opcional.
+//
+// El nombre tiene dos esquemas posibles: el campo único "Nombre completo"
+// (vacantes viejas) o el par "Nombres" + "Apellidos" (vacantes nuevas, ver
+// Fase 6). Uno de los dos esquemas siempre debe quedar completo, así que el
+// bloqueo es cruzado y depende de qué otros campos tenga la MISMA vacante:
+// - Si están los dos esquemas a la vez, cualquiera de los dos se puede
+//   quitar libremente (el otro ya cubre la necesidad).
+// - Si solo está uno de los dos, ese esquema queda bloqueado campo por
+//   campo (no se puede dejar a medias quitando solo Nombres o solo
+//   Apellidos) hasta que se agregue el otro esquema completo.
+const NOMBRE_COMPLETO_KEYS = ['nombre', 'nombre completo'];
+const NOMBRES_KEY = 'nombres';
+const APELLIDOS_KEY = 'apellidos';
+const CEDULA_KEYS = ['cédula', 'cedula'];
+
+function isLockedCampo(nombre: string, camposActuales: CampoRequerido[]): boolean {
+  const key = nombre.trim().toLowerCase();
+  if (CEDULA_KEYS.includes(key)) return true;
+
+  const presentKeys = new Set(camposActuales.map((c) => c.nombre.trim().toLowerCase()));
+  const hasNombreCompleto = NOMBRE_COMPLETO_KEYS.some((k) => presentKeys.has(k));
+  const hasNombresYApellidos = presentKeys.has(NOMBRES_KEY) && presentKeys.has(APELLIDOS_KEY);
+
+  if (NOMBRE_COMPLETO_KEYS.includes(key)) {
+    // Bloqueado salvo que el esquema Nombres+Apellidos ya esté completo.
+    return !hasNombresYApellidos;
+  }
+  if (key === NOMBRES_KEY || key === APELLIDOS_KEY) {
+    // Bloqueado salvo que Nombre completo ya esté presente.
+    return !hasNombreCompleto;
+  }
+  return false;
+}
+
+// Texto del tooltip del candado, distinto según por qué está bloqueado el
+// campo (Cédula siempre vs. el esquema de nombre cruzado — ver isLockedCampo).
+function lockedCampoReason(nombre: string): string {
+  const key = nombre.trim().toLowerCase();
+  if (CEDULA_KEYS.includes(key)) {
+    return 'Se usa para crear la carpeta de la postulación, no se puede quitar';
+  }
+  return 'Se usa para el nombre del candidato en la carpeta de la postulación; agrega el otro esquema de nombre completo antes de quitarlo';
+}
 const DEFAULT_ARCHIVOS: ArchivoRequerido[] = [
   { nombre: 'Hoja de Vida', extensiones: ['pdf', 'doc', 'docx'], obligatorio: true },
   { nombre: 'Cédula', extensiones: ['pdf', 'jpg', 'png'], obligatorio: true },
@@ -84,6 +149,9 @@ interface JobPosition {
   camposRequeridos: CampoRequerido[];
   archivosRequeridos: ArchivoRequerido[];
   estado: string;
+  // GUARDIA | ADMINISTRATIVO — decide a qué carpeta de Drive va el postulante
+  // al contratarlo. Ver DriveService.contratarCandidato.
+  tipoContratacion?: string;
   createdAt: string;
   driveFileId?: string | null;
 }
@@ -93,6 +161,11 @@ interface Candidate {
   nombre: string;
   cedula: string;
   puestoAplicado: string;
+  // Heredado de la vacante a la que postuló — define el destino al contratar.
+  tipoContratacion?: string;
+  // Cómo entregó su documentación: 'individual' (un archivo por documento) o
+  // 'archivo_unico' (todo en un PDF). Lo elige el postulante en el portal.
+  modoSubida?: 'individual' | 'archivo_unico';
   completitudPercent: number;
   archivosSubidosCount: number;
   archivosRequeridosCount: number;
@@ -174,17 +247,20 @@ function ReassignAdicionalControl({
 }
 
 /** Interruptor on/off accesible (rol switch, operable con teclado por ser un <button>). */
-function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
+function Switch({ checked, onChange, label, disabled, title }: { checked: boolean; onChange: (v: boolean) => void; label?: string; disabled?: boolean; title?: string }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       aria-label={label || 'Obligatorio'}
-      onClick={() => onChange(!checked)}
+      aria-disabled={disabled}
+      title={title}
+      onClick={() => { if (!disabled) onChange(!checked); }}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: '6px', border: 'none', background: 'none',
-        cursor: 'pointer', padding: '2px', font: 'inherit', color: checked ? 'var(--naranja)' : '#8b93a1',
+        cursor: disabled ? 'not-allowed' : 'pointer', padding: '2px', font: 'inherit',
+        color: checked ? 'var(--naranja)' : '#8b93a1', opacity: disabled ? 0.55 : 1,
       }}
     >
       <span
@@ -214,21 +290,67 @@ function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
+// La lista de candidatos viene de Drive (no de la BD) y sincronizarla es
+// costoso — lista carpetas y lee un archivo por candidato. Sin esta caché, F5
+// o volver a entrar a la página siempre mostraba la lista vacía y obligaba a
+// sincronizar de nuevo para ver LO MISMO que ya se había traído antes. Se
+// guarda en localStorage (por empresa, para no mezclar datos si el mismo
+// navegador se usa con más de una cuenta) y solo se refresca cuando RRHH pulsa
+// "Sincronizar" — nunca sola. `try/catch` porque localStorage puede fallar
+// (modo privado, cuota llena) sin que eso deba romper la página.
+function cacheKey(sufijo: string): string {
+  const companyId = getUser()?.companyId ?? 'sin-empresa';
+  return `reclutamiento_${companyId}_${sufijo}`;
+}
+
+function leerCandidatosCacheados(): Candidate[] {
+  try {
+    const raw = localStorage.getItem(cacheKey('candidatos'));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function leerUltimaSincronizacion(): string | null {
+  try {
+    return localStorage.getItem(cacheKey('ultima_sincronizacion'));
+  } catch {
+    return null;
+  }
+}
+
+function guardarCacheSincronizacion(candidatos: Candidate[]): string {
+  const ahora = new Date().toISOString();
+  try {
+    localStorage.setItem(cacheKey('candidatos'), JSON.stringify(candidatos));
+    localStorage.setItem(cacheKey('ultima_sincronizacion'), ahora);
+  } catch {
+    /* localStorage no disponible (modo privado, cuota llena): la sesión
+       sigue funcionando, solo no sobrevive a un F5. */
+  }
+  return ahora;
+}
+
 export default function ReclutamientoPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { canWrite } = usePerm();
 
   const [puestos, setPuestos] = useState<JobPosition[]>([]);
-  const [candidatos, setCandidatos] = useState<Candidate[]>([]);
+  const [candidatos, setCandidatos] = useState<Candidate[]>(leerCandidatosCacheados);
+  const [ultimaSincronizacion, setUltimaSincronizacion] = useState<string | null>(leerUltimaSincronizacion);
   const [loadingPuestos, setLoadingPuestos] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  // La sincronización con Drive lista carpetas y lee archivos de cada
-  // candidato: es costosa, así que ya no se dispara sola al entrar a la
-  // página — solo al pulsar "Sincronizar" (o tras guardar la config de Drive).
-  const [hasSynced, setHasSynced] = useState(false);
+  // hasSynced arranca en true si ya hay una sincronización guardada (de una
+  // visita anterior) — así RRHH ve la última lista conocida de inmediato, sin
+  // el placeholder de "aún no sincronizado" pidiendo un clic innecesario.
+  const [hasSynced, setHasSynced] = useState(() => leerUltimaSincronizacion() !== null);
   const [search, setSearch] = useState('');
   const [mostrarCerradas, setMostrarCerradas] = useState(false);
+  const [confirmandoBackfill, setConfirmandoBackfill] = useState(false);
+  const [backfillLoading, setBackfillLoading] = useState(false);
+  const [backfillMensaje, setBackfillMensaje] = useState<{ ok: boolean; texto: string } | null>(null);
 
   const [showPuestoModal, setShowPuestoModal] = useState(false);
   const [editingPosition, setEditingPosition] = useState<JobPosition | null>(null);
@@ -252,6 +374,34 @@ export default function ReclutamientoPage() {
   // Asignar) y ya no vuelve a aparecer en esta lista. Ver DriveService.contratarCandidato.
   const [contratando, setContratando] = useState(false);
   const [contratarError, setContratarError] = useState('');
+  const [confirmandoContratar, setConfirmandoContratar] = useState(false);
+  const contratarErrorRef = useRef<HTMLDivElement>(null);
+
+  // El botón "Marcar como Contratado" vive en el footer fijo del modal; si
+  // RRHH ya había bajado el scroll del modal-body para revisar documentos,
+  // un error que se pinta arriba del todo queda fuera de vista. Se hace
+  // scrollIntoView cada vez que aparece un error nuevo.
+  useEffect(() => {
+    if (contratarError) {
+      contratarErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [contratarError]);
+
+  // Revisión con IA de un PDF del postulante. No está limitado al caso
+  // modoSubida='archivo_unico' (ese es solo el aviso destacado, el caso más
+  // común): también se puede invocar sobre cualquier PDF que haya quedado
+  // como "archivo adicional" (p. ej. alguien marcó 'individual' pero en
+  // realidad subió todo junto, o subió varios documentos combinados en un
+  // solo PDF fuera de su casilla). `analisisDriveFileId` es undefined cuando
+  // se abre desde el aviso morado (el backend detecta solo el único PDF de la
+  // carpeta); si trae un id, es el archivo concreto que se pidió analizar.
+  const [showAnalisisModal, setShowAnalisisModal] = useState(false);
+  const [analisisDriveFileId, setAnalisisDriveFileId] = useState<string | undefined>(undefined);
+
+  const openAnalisisModal = (driveFileId?: string) => {
+    setAnalisisDriveFileId(driveFileId);
+    setShowAnalisisModal(true);
+  };
 
   // New Position Form
   const [nuevoPuesto, setNuevoPuesto] = useState('');
@@ -266,9 +416,19 @@ export default function ReclutamientoPage() {
   const [nuevoArchivoExts, setNuevoArchivoExts] = useState<string[]>([]);
   const [nuevoArchivoObligatorio, setNuevoArchivoObligatorio] = useState(true);
   const [nuevoEstado, setNuevoEstado] = useState('ABIERTA');
+  const [nuevoTipoContratacion, setNuevoTipoContratacion] = useState('GUARDIA');
   const [savingPuesto, setSavingPuesto] = useState(false);
   const [puestoError, setPuestoError] = useState('');
   const [syncError, setSyncError] = useState('');
+
+  // Cambiar estado (Abierta/Cerrada) de una vacante, desde su tarjeta.
+  const [estadoVacanteError, setEstadoVacanteError] = useState('');
+  const estadoVacanteErrorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (estadoVacanteError) {
+      estadoVacanteErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [estadoVacanteError]);
 
   // Configuración de la carpeta de Drive propia de Reclutamiento
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -289,7 +449,7 @@ export default function ReclutamientoPage() {
       .then((data) => {
         if (data) {
           setDriveConfig(data);
-          setConfigFolderId(data.driveFolderId || '');
+          setConfigFolderId(data.driveFolderId ? (data.driveFolderLink || buildDriveFolderLink(data.driveFolderId)) : '');
         }
       })
       .catch((err: any) => {
@@ -299,8 +459,8 @@ export default function ReclutamientoPage() {
   };
 
   const handleTestConfig = async () => {
-    const cleanId = configFolderId.trim().replace(/\.+$/, '');
-    if (!cleanId) { setConfigError('Escribe el ID de la carpeta raíz para probar la conexión.'); return; }
+    const cleanId = extractDriveFolderId(configFolderId);
+    if (!cleanId) { setConfigError('Pega el enlace completo de la carpeta raíz para probar la conexión.'); return; }
     setTestingConfig(true);
     setConfigTestResult(null);
     setConfigError('');
@@ -315,8 +475,8 @@ export default function ReclutamientoPage() {
   };
 
   const handleSaveConfig = async () => {
-    const cleanId = configFolderId.trim().replace(/\.+$/, '');
-    if (!cleanId) { setConfigError('Ingresa el ID de la carpeta.'); return; }
+    const cleanId = extractDriveFolderId(configFolderId);
+    if (!cleanId) { setConfigError('Pega el enlace completo de la carpeta.'); return; }
     setSavingConfig(true);
     setConfigError('');
     try {
@@ -339,6 +499,31 @@ export default function ReclutamientoPage() {
       .finally(() => setLoadingPuestos(false));
   };
 
+  // Rescate retroactivo (ver DriveService.backfillPostulacion): para
+  // contrataciones ya hechas antes de que existiera el traspaso continuo de
+  // campos de postulación, busca en Drive el candidato.json de cada una y
+  // rellena camposPersonalizados con lo que encuentre. Un solo clic, seguro
+  // de repetir (nunca pisa nada ya cargado).
+  const handleBackfillPostulacion = async () => {
+    setConfirmandoBackfill(false);
+    setBackfillLoading(true);
+    setBackfillMensaje(null);
+    try {
+      const r = await backfillPostulacion();
+      setBackfillMensaje({
+        ok: true,
+        texto: `Listo: ${r.actualizadas} de ${r.procesadas} fichas actualizadas con datos de su postulación.${r.errores.length ? ` (${r.errores.length} con errores, revisa los logs del servidor)` : ''}`,
+      });
+    } catch (err: any) {
+      setBackfillMensaje({
+        ok: false,
+        texto: err.response?.data?.message || 'No se pudo completar el rescate de datos de postulación.',
+      });
+    } finally {
+      setBackfillLoading(false);
+    }
+  };
+
   const handleSyncAll = async () => {
     setSyncing(true);
     setSyncError('');
@@ -348,11 +533,16 @@ export default function ReclutamientoPage() {
         loadPositions();
       }
       const candRes: any = await syncReclutamientoCandidates();
-      if (candRes?.candidatos) setCandidatos(candRes.candidatos);
+      if (candRes?.candidatos) {
+        setCandidatos(candRes.candidatos);
+        setUltimaSincronizacion(guardarCacheSincronizacion(candRes.candidatos));
+      }
       const warning = candRes?.warning || puestosRes?.warning;
       if (warning) setSyncError(warning);
     } catch (err: any) {
-      setCandidatos([]);
+      // No se borra la lista actual: es la última que sí se sincronizó con
+      // éxito (de esta visita o de una anterior, vía caché) — un fallo
+      // pasajero de Drive no debería dejar la pantalla vacía de golpe.
       setSyncError(err.response?.data?.message || 'No se pudo sincronizar con Google Drive. Verifica la configuración de Drive.');
     } finally {
       setSyncing(false);
@@ -383,6 +573,7 @@ export default function ReclutamientoPage() {
         camposRequeridos: camposList,
         archivosRequeridos: archivosList,
         estado: nuevoEstado,
+        tipoContratacion: nuevoTipoContratacion,
       });
       setShowPuestoModal(false);
       resetForm();
@@ -411,6 +602,7 @@ export default function ReclutamientoPage() {
         camposRequeridos: camposList,
         archivosRequeridos: archivosList,
         estado: nuevoEstado,
+        tipoContratacion: nuevoTipoContratacion,
       });
       setShowPuestoModal(false);
       setEditingPosition(null);
@@ -431,6 +623,7 @@ export default function ReclutamientoPage() {
     setCamposList(p.camposRequeridos || []);
     setArchivosList(p.archivosRequeridos || []);
     setNuevoEstado(p.estado || 'ABIERTA');
+    setNuevoTipoContratacion(p.tipoContratacion || 'GUARDIA');
     setShowPuestoModal(true);
   };
 
@@ -440,6 +633,7 @@ export default function ReclutamientoPage() {
     setCamposList(DEFAULT_CAMPOS);
     setArchivosList(DEFAULT_ARCHIVOS);
     setNuevoEstado('ABIERTA');
+    setNuevoTipoContratacion('GUARDIA');
     setNuevoCampoNombre('');
     setNuevoCampoTipo('TEXTO');
     setNuevoCampoObligatorio(true);
@@ -479,11 +673,12 @@ export default function ReclutamientoPage() {
 
   const handleToggleEstado = async (p: JobPosition) => {
     const nuevo = p.estado === 'CERRADA' ? 'ABIERTA' : 'CERRADA';
+    setEstadoVacanteError('');
     try {
       await updateJobPosition(p.id, { estado: nuevo });
       loadPositions();
     } catch {
-      alert('Error al cambiar el estado de la vacante.');
+      setEstadoVacanteError('Error al cambiar el estado de la vacante.');
     }
   };
 
@@ -504,6 +699,8 @@ export default function ReclutamientoPage() {
     setEditingDatos(false);
     setDatosError('');
     setContratarError('');
+    setShowAnalisisModal(false);
+    setAnalisisDriveFileId(undefined);
   };
 
   const sendReview = async (driveFileId: string, fileName: string | undefined, status: 'APROBADO' | 'RECHAZADO', reason?: string) => {
@@ -530,6 +727,7 @@ export default function ReclutamientoPage() {
       const candRes: any = await syncReclutamientoCandidates();
       if (candRes?.candidatos) {
         setCandidatos(candRes.candidatos);
+        setUltimaSincronizacion(guardarCacheSincronizacion(candRes.candidatos));
         setSelectedCandidate((prev) =>
           prev ? candRes.candidatos.find((c: Candidate) => c.id === prev.id) || prev : prev,
         );
@@ -542,13 +740,11 @@ export default function ReclutamientoPage() {
 
   // Mueve la carpeta del postulante a Guardias (Sin Asignar) y sincroniza de
   // inmediato — al terminar, ya no aparece en esta lista.
-  const handleContratar = async () => {
-    if (!selectedCandidate) return;
-    const confirmado = window.confirm(
-      `Se moverá la carpeta de Drive de "${selectedCandidate.nombre}" a Guardias (carpeta "Sin Asignar", todavía sin entidad) y dejará de aparecer en Candidatos Postulados. ¿Continuar?`,
-    );
-    if (!confirmado) return;
+  const handleContratar = () => setConfirmandoContratar(true);
 
+  const confirmarContratar = async () => {
+    if (!selectedCandidate) return;
+    setConfirmandoContratar(false);
     setContratando(true);
     setContratarError('');
     try {
@@ -627,20 +823,48 @@ export default function ReclutamientoPage() {
             <h1>Reclutamiento y Vacantes</h1>
           </div>
 
-          <div className="header-actions">
-            <button className="btn-secondary" onClick={handleSyncAll} disabled={syncing}>
-              <RefreshCw size={16} className={syncing ? 'spin' : undefined} />
-              {syncing ? 'Sincronizando...' : 'Sincronizar Carpeta'}
-            </button>
-            <button className="btn-secondary" onClick={openConfigModal} title="Configurar carpeta de Drive de Reclutamiento">
-              <Settings size={16} /> Configurar Drive
-            </button>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+            <div className="header-actions">
+              <button className="btn-secondary" onClick={handleSyncAll} disabled={syncing}>
+                <RefreshCw size={16} className={syncing ? 'spin' : undefined} />
+                {syncing ? 'Sincronizando...' : 'Sincronizar Carpeta'}
+              </button>
+              <button className="btn-secondary" onClick={openConfigModal} title="Configurar carpeta de Drive de Reclutamiento">
+                <Settings size={16} /> Configurar Drive
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => setConfirmandoBackfill(true)}
+                disabled={backfillLoading}
+                title="Rescata, para contrataciones ya hechas, los datos de postulación que quedaron sin migrar a la Ficha Personal"
+              >
+                <UserCheck size={16} /> {backfillLoading ? 'Rescatando...' : 'Rescatar datos de postulación'}
+              </button>
+            </div>
+            {backfillMensaje && (
+              <span style={{ fontSize: '0.75rem', color: backfillMensaje.ok ? '#276749' : '#c53030', maxWidth: '340px', textAlign: 'right' }}>
+                {backfillMensaje.texto}
+              </span>
+            )}
+            {/* La lista de candidatos se guarda localmente al sincronizar, así
+                que recargar la página o volver a entrar no la borra ni obliga
+                a sincronizar de nuevo — este texto es lo que le dice a RRHH
+                qué tan vieja es la lista que está viendo. */}
+            {ultimaSincronizacion && (
+              <span style={{ fontSize: '0.75rem', color: '#718096' }}>
+                Última sincronización: {formatFechaHoraSync(ultimaSincronizacion)}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
       {syncError && (
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{syncError}</div>
+      )}
+
+      {estadoVacanteError && (
+        <div ref={estadoVacanteErrorRef} style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{estadoVacanteError}</div>
       )}
 
       {/* SECTION 1: VACANTES / PUESTOS DE TRABAJO */}
@@ -715,6 +939,14 @@ export default function ReclutamientoPage() {
                       >
                         ● {p.estado === 'CERRADA' ? 'Cerrada' : 'Abierta'}
                       </button>
+                      {/* Destino al contratar. Se muestra solo en las vacantes
+                          administrativas: Guardia es el default y marcarlo en
+                          todas las demás sería ruido. */}
+                      {p.tipoContratacion === 'ADMINISTRATIVO' && (
+                        <span className="status-badge" style={{ background: '#e9d8fd', color: '#553c9a' }} title="Al contratar, el postulante entra a Personal Administrativo">
+                          Administrativo
+                        </span>
+                      )}
                     </div>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <button
@@ -888,8 +1120,46 @@ export default function ReclutamientoPage() {
 
             <div className="modal-body">
               {contratarError && (
-                <div className="auth-error-banner">{contratarError}</div>
+                <div className="auth-error-banner" ref={contratarErrorRef}>{contratarError}</div>
               )}
+
+              {/* El postulante entregó TODO en un solo archivo (lo eligió él en
+                  el portal de postulación). Se ofrece separarlo con ayuda de
+                  IA; mientras no se separe, el checklist de abajo lo va a ver
+                  casi todo como faltante, porque matchea por nombre de archivo. */}
+              {selectedCandidate.modoSubida === 'archivo_unico' && (
+                <div
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
+                    padding: '12px 14px', marginBottom: '12px', borderRadius: '8px',
+                    background: '#faf5ff', border: '1px solid #d6bcfa',
+                  }}
+                >
+                  <strong style={{ flex: '1 1 260px', fontSize: '0.85rem', color: '#553c9a' }}>
+                    Entregó todo en un solo archivo
+                  </strong>
+                  {/* El "para qué sirve" va como tooltip del botón, no como
+                      párrafo aparte: el botón ya es genérico (funciona sobre
+                      cualquier PDF, también los de "Archivos Adicionales" más
+                      abajo), así que un texto fijo aquí sonaría a que la
+                      función es exclusiva de este aviso. */}
+                  {canWrite('RRHH') && (
+                    <button
+                      type="button"
+                      onClick={() => openAnalisisModal(undefined)}
+                      title="La IA identifica qué documento está en cada página, para que las revises y confirmes su separación"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '5px',
+                        padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 600,
+                        border: '1px solid #d6bcfa', background: '#fff', color: '#6b46c1', cursor: 'pointer',
+                      }}
+                    >
+                      <Sparkles size={13} /> Analizar con IA
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div className="candidate-modal-grid">
                 {/* FICHA DE IDENTIDAD + COMPLETITUD */}
                 <div style={{ padding: '14px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '12px', height: 'fit-content' }}>
@@ -1106,10 +1376,35 @@ export default function ReclutamientoPage() {
                                 f.name.toLowerCase().includes(req.nombre.toLowerCase()),
                               ),
                           );
+                          const esPdf = file.name.toLowerCase().endsWith('.pdf');
                           return (
                             <div key={file.id} style={{ padding: '10px 12px', background: '#fffbeb', borderRadius: '8px', border: '1px solid #fefcbf' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', color: '#975a16' }}>
-                                <FileText size={13} /> {file.name}
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', color: '#975a16' }}>
+                                  <FileText size={13} /> {file.name}
+                                </div>
+                                {/* No depende de modoSubida: cualquier PDF que
+                                    haya quedado sin coincidir con un requisito
+                                    puede en realidad contener varios documentos
+                                    combinados (alguien marcó "individual" pero
+                                    subió todo junto, o mezcló documentos aquí
+                                    por error). RRHH puede pedir el mismo
+                                    análisis sobre ESTE archivo puntual. */}
+                                {esPdf && canWrite('RRHH') && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openAnalisisModal(file.id)}
+                                    title="Revisar con IA si este archivo contiene más de un documento"
+                                    style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                      padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600,
+                                      border: '1px solid #d6bcfa', background: '#faf5ff', color: '#6b46c1', cursor: 'pointer',
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    <Sparkles size={11} /> Analizar con IA
+                                  </button>
+                                )}
                               </div>
                               {canWrite('RRHH') && (
                                 <ReassignAdicionalControl file={file} faltantes={faltantes} onDone={refreshCandidatos} />
@@ -1145,9 +1440,54 @@ export default function ReclutamientoPage() {
               >
                 <FolderOpen size={16} /> Ver Carpeta en Drive
               </button>
+              <CopyLinkButton url={selectedCandidate.folderUrl} title="Copiar enlace de la carpeta" />
             </div>
           </div>
         </div>
+      )}
+
+      {confirmandoContratar && selectedCandidate && (
+        <ConfirmDialog
+          title="Marcar como Contratado"
+          message={
+            selectedCandidate.tipoContratacion === 'ADMINISTRATIVO'
+              ? `Se moverá la carpeta de Drive de "${selectedCandidate.nombre}" a Personal Administrativo, renombrando la carpeta a "${selectedCandidate.nombre} - ${selectedCandidate.puestoAplicado}", y dejará de aparecer en Candidatos Postulados. ¿Continuar?`
+              : `Se moverá la carpeta de Drive de "${selectedCandidate.nombre}" a Guardias (carpeta "Sin Asignar", todavía sin entidad) y dejará de aparecer en Candidatos Postulados. ¿Continuar?`
+          }
+          confirmLabel="Sí, marcar como contratado"
+          onConfirm={confirmarContratar}
+          onCancel={() => setConfirmandoContratar(false)}
+        />
+      )}
+
+      {confirmandoBackfill && (
+        <ConfirmDialog
+          title="Rescatar datos de postulación"
+          message="Revisa las fichas ya contratadas de Personal Administrativo y Guardias: si no tienen guardado el JSON con las respuestas de su postulación, lo busca en su carpeta de Drive y lo guarda. No pisa ningún valor ya cargado a mano y es seguro correrlo más de una vez. ¿Continuar?"
+          confirmLabel="Sí, rescatar"
+          onConfirm={handleBackfillPostulacion}
+          onCancel={() => setConfirmandoBackfill(false)}
+        />
+      )}
+
+      {showAnalisisModal && selectedCandidate && (
+        <Suspense fallback={null}>
+          <AnalisisArchivoUnicoModal
+          folderId={selectedCandidate.id}
+          driveFileId={analisisDriveFileId}
+          nombreCandidato={selectedCandidate.nombre}
+          onClose={() => { setShowAnalisisModal(false); setAnalisisDriveFileId(undefined); }}
+          onApplied={() => {
+            // Tras separar, la carpeta del postulante cambió en Drive: se
+            // cierra todo y se vuelve a sincronizar para que el checklist
+            // refleje los documentos ya reconocidos.
+            setShowAnalisisModal(false);
+            setAnalisisDriveFileId(undefined);
+            closeCandidateModal();
+            void refreshCandidatos();
+          }}
+          />
+        </Suspense>
       )}
 
       <DocumentReviewModal
@@ -1191,6 +1531,19 @@ export default function ReclutamientoPage() {
                 </div>
 
                 <div className="form-group">
+                  <label>Al contratar, esta persona entra como *</label>
+                  <select value={nuevoTipoContratacion} onChange={(e) => setNuevoTipoContratacion(e.target.value)}>
+                    <option value="GUARDIA">Guardia</option>
+                    <option value="ADMINISTRATIVO">Personal administrativo</option>
+                  </select>
+                  <small style={{ color: '#718096', fontSize: '0.78rem', lineHeight: 1.5, display: 'block', marginTop: '4px' }}>
+                    {nuevoTipoContratacion === 'ADMINISTRATIVO'
+                      ? 'Su carpeta irá a Personal Administrativo y se renombrará a "Nombre - Puesto", que es como se nombran las carpetas de esa sección.'
+                      : 'Su carpeta irá a Guardias, en "Sin Asignar", hasta que le asignes una entidad.'}
+                  </small>
+                </div>
+
+                <div className="form-group">
                   <label>Descripción</label>
                   <textarea value={nuevaDescripcion} onChange={(e) => setNuevaDescripcion(e.target.value)} rows={2} placeholder="Ej: Puesto para custodia en rutas de transporte..." />
                 </div>
@@ -1200,6 +1553,9 @@ export default function ReclutamientoPage() {
                 {/* CAMPOS REQUERIDOS DE FORMULARIO */}
                 <div className="form-group">
                   <label>Datos que debe llenar</label>
+                  <small style={{ display: 'block', color: 'var(--azul-claro)', opacity: 0.75, margin: '-2px 0 8px' }}>
+                    Cédula, y el nombre del candidato (ya sea "Nombre completo" o el par "Nombres" + "Apellidos"), se usan para crear la carpeta de la postulación en Drive. Cédula no se puede quitar ni marcar como opcional; el nombre solo se puede quitar de un esquema si el otro esquema ya está completo en esta vacante.
+                  </small>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <input
                       type="text"
@@ -1230,6 +1586,7 @@ export default function ReclutamientoPage() {
                     <div style={{ marginTop: '10px', border: '1px solid var(--gris-claro)', borderRadius: '10px', overflow: 'hidden' }}>
                       {camposList.map((c, i) => {
                         const obligatorio = c.obligatorio !== false;
+                        const locked = isLockedCampo(c.nombre, camposList);
                         return (
                           <div
                             key={i}
@@ -1240,15 +1597,30 @@ export default function ReclutamientoPage() {
                           >
                             <span style={{ fontWeight: 600, color: 'var(--azul-oscuro)' }}>{c.nombre}</span>
                             <span style={{ color: 'var(--azul-claro)', fontSize: '0.78rem' }}>{campoTipoLabel(c.tipo)}</span>
-                            <Switch checked={obligatorio} onChange={() => toggleCampoObligatorio(i)} label={obligatorio ? 'Obligatorio' : 'Opcional'} />
-                            <button
-                              type="button"
-                              onClick={() => setCamposList((prev) => prev.filter((_, idx) => idx !== i))}
-                              title="Quitar"
-                              style={{ border: 'none', background: 'none', color: 'var(--azul-claro)', opacity: 0.55, cursor: 'pointer', display: 'flex', justifySelf: 'end' }}
-                            >
-                              <X size={14} />
-                            </button>
+                            <Switch
+                              checked={obligatorio}
+                              onChange={() => toggleCampoObligatorio(i)}
+                              label={obligatorio ? 'Obligatorio' : 'Opcional'}
+                              disabled={locked}
+                              title={locked ? lockedCampoReason(c.nombre) : undefined}
+                            />
+                            {locked ? (
+                              <span
+                                title={lockedCampoReason(c.nombre)}
+                                style={{ color: 'var(--azul-claro)', opacity: 0.55, display: 'flex', justifySelf: 'end' }}
+                              >
+                                <Lock size={14} />
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setCamposList((prev) => prev.filter((_, idx) => idx !== i))}
+                                title="Quitar"
+                                style={{ border: 'none', background: 'none', color: 'var(--azul-claro)', opacity: 0.55, cursor: 'pointer', display: 'flex', justifySelf: 'end' }}
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
                           </div>
                         );
                       })}
@@ -1377,9 +1749,7 @@ export default function ReclutamientoPage() {
                   La carpeta del puesto (ej. <code>Guardia</code>) y su <code>Puesto_*.json</code> se crean automáticamente al usar <strong>"+ Nueva Vacante"</strong> en esta página — no hace falta crearlos a mano en Drive.
                 </p>
                 <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#718096' }}>
-                  Para obtener el ID de la carpeta raíz: ábrela en Drive y copia el ID de la URL —
-                  <br />
-                  <code>https://drive.google.com/drive/folders/1ABC123...</code> → el ID es <code>1ABC123...</code>
+                  Abre la carpeta raíz en Drive y copia el enlace completo desde la barra de direcciones o con "Compartir → Copiar enlace".
                 </p>
                 <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#c53030', fontWeight: 600 }}>
                   IMPORTANTE: comparte esa carpeta (Lector) con <code>drive-sync@agentes-504115.iam.gserviceaccount.com</code>.
@@ -1393,12 +1763,12 @@ export default function ReclutamientoPage() {
                   {configError && <div className="form-error">{configError}</div>}
 
                   <div className="form-group">
-                    <label>ID de la carpeta raíz de Reclutamiento en Drive *</label>
+                    <label>Enlace de la carpeta raíz de Reclutamiento en Drive *</label>
                     <input
                       type="text"
                       value={configFolderId}
                       onChange={(e) => { setConfigFolderId(e.target.value); setConfigTestResult(null); }}
-                      placeholder="Ej: 1ABC123def456GHI..."
+                      placeholder="https://drive.google.com/drive/folders/1ABC123..."
                       style={{ width: '100%' }}
                     />
                   </div>

@@ -1,6 +1,9 @@
 import { CumplimientoEntidadService } from './cumplimiento-entidad.service';
 import { DriveService } from './drive.service';
 import { MovimientoPersonalService } from './movimiento-personal.service';
+import { PersonalFieldDefinitionService } from './personal-field-definition.service';
+import { AdministrativeStaffFichaService } from './administrative-staff-ficha.service';
+import { GuardiaFichaPersonalService } from './guardia-ficha-personal.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 jest.mock('googleapis');
@@ -58,6 +61,9 @@ describe('CumplimientoEntidadService.getComplianceForGuardia', () => {
     const driveService = new DriveService(
       {} as unknown as PrismaService,
       {} as unknown as MovimientoPersonalService,
+      {} as unknown as PersonalFieldDefinitionService,
+      {} as unknown as AdministrativeStaffFichaService,
+      {} as unknown as GuardiaFichaPersonalService,
     );
     const movimientoPersonalService = {
       getCedulasFuera: jest.fn().mockResolvedValue([]),
@@ -179,6 +185,9 @@ describe('CumplimientoEntidadService.getComplianceOverview', () => {
     const driveService = new DriveService(
       {} as unknown as PrismaService,
       {} as unknown as MovimientoPersonalService,
+      {} as unknown as PersonalFieldDefinitionService,
+      {} as unknown as AdministrativeStaffFichaService,
+      {} as unknown as GuardiaFichaPersonalService,
     );
     // Solo 'B' está "fuera" (última SALIDA completada) — 'A' sigue activo.
     const movimientoPersonalService = {

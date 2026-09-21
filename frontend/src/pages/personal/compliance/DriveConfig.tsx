@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDriveConfig, saveDriveConfig, testDriveConnection } from '../../../services/personal.service';
+import { extractDriveFolderId, buildDriveFolderLink } from '../../../utils/driveLink';
 
 export default function DriveConfig() {
   const navigate = useNavigate();
   const [config, setConfig] = useState<any>(null);
-  const [folderId, setFolderId] = useState('');
+  const [folderLink, setFolderLink] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -17,7 +18,7 @@ export default function DriveConfig() {
       .then((data) => {
         if (data) {
           setConfig(data);
-          setFolderId(data.driveFolderId);
+          setFolderLink(data.driveFolderLink || buildDriveFolderLink(data.driveFolderId));
         }
       })
       .catch((err: any) => {
@@ -26,11 +27,9 @@ export default function DriveConfig() {
       .finally(() => setLoading(false));
   }, []);
 
-  const sanitizeId = (id: string) => id.trim().replace(/\.+$/, '');
-
   const handleTest = async () => {
-    const cleanId = sanitizeId(folderId);
-    if (!cleanId) { setError('Escribe el ID de la carpeta raíz para probar la conexión'); return; }
+    const cleanId = extractDriveFolderId(folderLink);
+    if (!cleanId) { setError('Pega el enlace completo de la carpeta de Drive'); return; }
     setTesting(true);
     setTestResult(null);
     setError('');
@@ -45,8 +44,8 @@ export default function DriveConfig() {
   };
 
   const handleSave = async () => {
-    const cleanId = sanitizeId(folderId);
-    if (!cleanId) { setError('Ingresa el ID de la carpeta'); return; }
+    const cleanId = extractDriveFolderId(folderLink);
+    if (!cleanId) { setError('Pega el enlace completo de la carpeta de Drive'); return; }
     setSaving(true);
     setError('');
     try {
@@ -77,12 +76,10 @@ export default function DriveConfig() {
         <div style={{ background: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '10px', padding: '16px', marginBottom: '20px' }}>
           <p style={{ margin: 0, fontSize: '0.85rem', color: '#2b6cb0' }}>
             <strong>Instrucciones:</strong> Necesitas el archivo <code>google-service-account.json</code> en la raíz del backend
-            y el ID de la carpeta "Recursos Humanos" de tu Google Drive.
+            y el enlace de la carpeta "Recursos Humanos" de tu Google Drive.
           </p>
           <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#718096' }}>
-            Para obtener el ID de la carpeta: abre la carpeta en Drive y mira la URL.
-            <br />
-            Ejemplo: <code>https://drive.google.com/drive/folders/1ABC123...</code> → el ID es <code>1ABC123...</code>
+            Abre la carpeta en Drive y copia el enlace completo desde la barra de direcciones o con "Compartir → Copiar enlace".
           </p>
           <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#c53030', fontWeight: 600 }}>
             IMPORTANTE: Debes compartir la carpeta con <code>drive-sync@agentes-504115.iam.gserviceaccount.com</code> (permiso Lector).
@@ -97,12 +94,12 @@ export default function DriveConfig() {
 
         <div className="cacao-form">
           <div className="form-group">
-            <label>ID de la carpeta raíz en Drive *</label>
+            <label>Enlace de la carpeta raíz en Drive *</label>
             <input
               type="text"
-              value={folderId}
-              onChange={(e) => { setFolderId(e.target.value); setTestResult(null); }}
-              placeholder="Ej: 1ABC123def456GHI..."
+              value={folderLink}
+              onChange={(e) => { setFolderLink(e.target.value); setTestResult(null); }}
+              placeholder="https://drive.google.com/drive/folders/1ABC123..."
               style={{ width: '100%' }}
             />
           </div>

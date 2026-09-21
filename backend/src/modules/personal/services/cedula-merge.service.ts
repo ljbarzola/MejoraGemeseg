@@ -17,7 +17,6 @@ const MULTI_ROW_TABLES = [
 const UNIQUE_TABLES = [
   'guardiaContacto',
   'guardiaFichaPersonal',
-  'candidate',
 ] as const;
 
 // Fusiona dos cédulas que resultaron ser la misma persona (típicamente por

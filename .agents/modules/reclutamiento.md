@@ -1,13 +1,202 @@
 # Modulo Reclutamiento
 
 ## Estado actual
-Activo en desarrollo. Sprint 1 (estabilizacion Personal), Sprint 2 (verificacion asistida), Sprint 2b (PoC navegador real — veredicto negativo confirmado), Sprint 3 (aprobacion/rechazo documental), Sprint 4 (fix sync BD↔Drive de vacantes + reasignacion de archivos adicionales), Sprint 5 (requisitos obligatorios/opcionales, expediente del postulante, rediseño del modal de vacante) y Sprint 6 (contratar un postulante → Guardia sin entidad) completados. El modulo de Reclutamiento funciona con dos sistemas paralelos: candidatos sincronizados desde Google Drive (solo lectura, salvo la acción de contratar) y candidatos en base de datos (CRUD completo con Kanban) — son sistemas independientes, **no** se alimentan entre sí (ver Sprint 6 y "Decisiones pendientes" punto 1).
+Activo en desarrollo. Sprint 1 (estabilizacion Personal), Sprint 2 (verificacion asistida), Sprint 2b (PoC navegador real — veredicto negativo confirmado), Sprint 3 (aprobacion/rechazo documental), Sprint 4 (fix sync BD↔Drive de vacantes + reasignacion de archivos adicionales), Sprint 5 (requisitos obligatorios/opcionales, expediente del postulante, rediseño del modal de vacante) , Sprint 6 (contratar un postulante → Guardia sin entidad), Sprint 7 (destino de contratación según la vacante: Guardias o Personal Administrativo) , Sprint 8 (análisis con IA del "archivo único"), Sprint 8.1 (fix de bug de arranque, generalizado a cualquier PDF vía "Archivos Adicionales", prompt movido a un `Agent` editable en `/admin/agents`), Sprint 8.2 (persistencia de la propuesta + botón reintentar, fix de thinking-tokens, etiquetado manual cuando la IA falla, miniaturas de mayor calidad, caché de sincronización con "Última sincronización", limpieza de menciones a Kanban) y Sprint 8.3 (fix de bloqueo de recontratación tras una salida, reemplazo de `window.confirm`/`alert` por un modal propio, scroll automático a errores en modales) completados, todos verificados con Vertex AI real y navegador real. El modulo de Reclutamiento trabaja con candidatos sincronizados desde Google Drive (solo lectura, salvo la acción de contratar) — no hay ningún tablero Kanban en Reclutamiento; esa idea se descartó explícitamente por el usuario (2026-09-16), ver nota en "Arquitectura del módulo" más abajo.
+
+## Sprint 8.3 — Fix de recontratación bloqueada, modal de confirmación propio, scroll a errores (2026-09-17)
+
+Probando el Flujo 1 de la checklist end-to-end de `recursos-humanos.md` (contratar → ... → salida), el usuario reportó cuatro problemas reales al intentar contratar un postulante de prueba ("Juan Rodríguez").
+
+### 1. Bloqueo permanente al recontratar a alguien que ya había salido
+
+**Causa raíz:** `DriveService.contratarCandidato()` rechazaba con "Ya existe un guardia con la cédula X" apenas encontraba **cualquier** fila `EmployeeDriveFolder` con esa cédula, sin mirar si ese guardia seguía activo. `EmployeeDriveFolder` ancla su identidad por `@@unique([companyId, cedula])` y **nunca se borra** al registrar una salida (solo se actualiza sola en el próximo "Sincronizar Drive") — así que una cédula que alguna vez pasó por Guardias queda bloqueada para siempre, incluso si esa persona ya salió hace tiempo y vuelve a postular de cero. Confirmado con datos reales: el candidato de prueba tenía, en efecto, una `MovimientoPersonal` de tipo `SALIDA`/`estado='COMPLETADO'` de una prueba anterior, y por eso "no aparecía en Listado de Guardias" (se oculta por defecto, ver punto 7 de `recursos-humanos.md`) pero sí bloqueaba el alta nueva.
+
+**Fix:** antes de bloquear, se consulta `MovimientoPersonalService.isActivo(companyId, cedula)` (el mismo criterio que ya usa la Ficha Personal para "Activo: Sí/No", no uno nuevo). Si el guardia **no** está activo, se permite continuar — `crearEntrada()` abre un caso `ENTRADA` nuevo (es idempotente por `tipo`, así que no reabre el `SALIDA` viejo). Si sigue activo, se mantiene el bloqueo, pero el mensaje ya no sugiere "Fusionar cédulas duplicadas" como remedio: ese flujo es para dos cédulas *distintas* que resultan ser la misma persona (un typo al parsear una carpeta de Drive), no para una colisión de la *misma* cédula — no tenía nada que fusionar en este caso, y encima esa pantalla solo es visible para `role==='ADMIN'` (no para `canWrite('RRHH')`, que es el nivel real que tienen los usuarios de RRHH — ver nota en `recursos-humanos.md` punto 7), así que apuntar ahí como solución era doblemente confuso.
+
+Test nuevo en `drive.service.spec.ts` cubre este caso (`isActivo` mockeado en `false` → la contratación pasa igual, se llama `crearEntrada`).
+
+### 2. `window.confirm`/`window.alert` nativos — pedido explícito y repetido de eliminarlos
+
+El usuario reiteró (ya lo había pedido antes) que no deben usarse diálogos nativos del navegador en ninguna parte de la app. Se creó `frontend/src/components/common/ConfirmDialog.tsx` (modal propio, mismo patrón visual `modal-overlay`/`modal`/`modal-header`/`modal-body`/`modal-actions` que ya usa el resto del módulo) y se reemplazó en los dos sitios de este flujo: `ReclutamientoPage.tsx` (`handleContratar`, antes `window.confirm`) y `GuardiasList.tsx` (`handleRegistrarSalida`, antes `window.confirm` + `alert` para el error). **Quedan sin migrar** otros usos de `window.confirm`/`alert` en el resto de la app (`AnalisisArchivoUnicoModal.tsx`, `ComplaintFieldsConfigModal.tsx`, `TrainingsPage.tsx`, `SurveyManagementPage.tsx`, `AdministrativeStaff.tsx`, `ContractsList.tsx`, y 3 archivos de Ventas) — no se tocaron en esta sesión por estar fuera del flujo reportado, quedan como deuda para una migración más amplia.
+
+### 3. El error de "ya existe un guardia" no se veía — quedaba fuera de vista por el scroll
+
+El botón "Marcar como Contratado" vive en el footer fijo del modal, mientras el banner de error se pinta arriba del todo del `modal-body` (que es scrolleable); si RRHH ya había bajado el scroll para revisar el checklist de documentos, el error quedaba fuera de la vista visible y parecía que "no pasó nada". Fix: `useEffect` + `ref` + `scrollIntoView({ behavior: 'smooth', block: 'center' })` cada vez que aparece un error nuevo, tanto en `ReclutamientoPage.tsx` (`contratarError`) como en `GuardiasList.tsx` (`salidaError`, que además ni tenía banner propio antes — usaba `alert()`).
+
+### 4. Kanban de Candidatos eliminado por completo (mismo día, pedido aparte)
+
+El usuario también pidió, en el mismo intercambio, borrar de raíz el código del Kanban de Candidatos (`/rrhh/kanban`, ver punto 5 de Sprint 8.2 más abajo — ahí solo se había limpiado la documentación, no el código). Se hizo: modelos de Prisma, servicios, DTOs, endpoints y páginas de frontend, más 5 dependencias vivas que se encontraron de paso (`custodias.service.ts`, `personal.service.ts`, `contract.service.ts`, `drive.service.ts` ×2) — detalle completo en `.agents/modules/recursos-humanos.md` punto 2 y `.agents/modules/movimientos-personal.md`. Esto es un tema de RRHH en general, no específico de Reclutamiento (que nunca dependió de él), pero se documenta acá también porque el punto 5 de Sprint 8.2 quedaba directamente superado por esto.
+
+Además, la migración del `window.confirm`/`alert` se extendió ese mismo día a **toda la aplicación** (no solo RRHH) a pedido explícito del usuario — 33 archivos, 34 confirms + 45 alerts + 2 prompts reemplazados por `ConfirmDialog`/`PromptDialog` (`frontend/src/components/common/`). Se dejaron fuera a propósito los archivos del subsistema de contratos de Ventas (`ContratosList.tsx`, `ContratoResult.tsx`) porque otro agente los estaba editando en paralelo en el mismo repo.
+
+### Verificación
+
+Backend: 172/172 tests en verde en todo el módulo `personal` (incluye `custodias.service.spec.ts`/`contract.service.spec.ts`/`drive.service.spec.ts` reescritos tras quitar `Candidate`). `tsc` limpio en backend y frontend, incluida la migración de `window.confirm`/`alert`/`prompt` de toda la app.
+
+Navegador real (Playwright, contra Drive/Postgres reales, escuchando el evento `dialog` de Playwright para confirmar que ningún diálogo nativo se dispara): recontratar al guardia de prueba que ya había salido funcionó sin bloqueo, ambos modales de confirmación (contratar y registrar salida) son propios y con el texto correcto, y el guardia recontratado aparece de inmediato en Listado de Guardias como activo (ya no bajo "Mostrar guardias fuera"). Se aplicó `prisma db push` a la base local con el schema sin Kanban (con confirmación explícita del usuario, ver política de acciones destructivas).
+
+## Sprint 8 — Análisis con IA del "archivo único" (2026-09-16)
+
+**El problema:** el portal de postulación deja que el candidato entregue su documentación de dos formas (`modoSubida` en `candidato.json`). Con `'archivo_unico'` llega **un solo PDF con todo adentro**, y como todo el resto del módulo matchea **por nombre de archivo** (`findMatchingFile`), ese postulante aparecía con casi todo el checklist en "faltante" aunque hubiera entregado todo.
+
+### Decisión de arquitectura: partir el PDF, no anotar rangos
+
+Se evaluaron dos caminos y **el usuario eligió partir el PDF** (2026-09-15): al confirmar, se crea un archivo por documento dentro de la misma carpeta, conservando el original. La alternativa (guardar "la cédula está en las páginas 3-4" y enseñar al resto del sistema a entender rangos) se descartó porque habría obligado a tocar `syncReclutamientoCandidates`, `completitudPercent`, Cumplimiento por Entidad y el flujo de contratar. Partiendo, **un candidato `archivo_unico` se convierte en uno `individual`** y nada aguas abajo se entera de que este modo existe.
+
+### Proveedor: Vertex AI + Gemini multimodal (no GitHub Models, no Document AI)
+
+- **Por qué no `gpt-4o-mini` vía GitHub Models** (lo que ya usa `DocumentExtractionService` para fechas): es solo texto. El usuario confirmó que los PDFs son **casi siempre fotos/escaneos** de cédulas y papeletas, donde `pdf-parse` no devuelve nada — exactamente el caso que ese servicio declara fuera de alcance.
+- **Por qué no Document AI Custom Splitter/Classifier:** $5 por 1.000 páginas **más $36/mes fijos** por procesador desplegado, y exige entrenarlo con muestras etiquetadas. Para el volumen de GEMESEG es caro y lento sin dar mejor resultado que un modelo multimodal.
+- **Autenticación — el punto no obvio:** Vertex AI **NO acepta API keys**, exige OAuth2. Y esta organización de GCP tiene bloqueada por política `iam.serviceAccountKeys.create`, así que **no se puede crear una credencial nueva**. Se reutiliza la misma service account que ya usa Drive (`drive-sync@agentes-504115`, archivo en local / `GOOGLE_SERVICE_ACCOUNT_JSON` en Cloud Run) con el scope `cloud-platform`. Falta, del lado de GCP: habilitar `aiplatform.googleapis.com` y otorgar `roles/aiplatform.user` a esa cuenta.
+- Variables: `GOOGLE_VERTEX_PROJECT` (si está vacía, la función queda **deshabilitada** y Reclutamiento sigue funcionando a mano — mismo criterio que `CacheService` con `REDIS_HOST` vacío), `GOOGLE_VERTEX_LOCATION` (ya existía en `backend/.env` pero **ningún código la leía**), `GOOGLE_VERTEX_MODEL`.
+
+### Verificación contra Vertex real (2026-09-16) y el modelo que se puede usar
+
+Se probó de extremo a extremo contra `agentes-504115`/`us-central1` con la service account de Drive. Resultados:
+
+- **Auth y API: OK.** La API ya estaba habilitada y la cuenta tenía permiso (el primer intento devolvió 404 del modelo, no 403 — eso confirmó que la parte de IAM no era el problema).
+- **La serie Gemini 3.x NO está disponible en este proyecto:** `gemini-3.8-flash`, `gemini-3.7-flash`, `gemini-3-flash`, `gemini-3-pro` y `gemini-3.1-flash-lite` devuelven todos `404 NOT_FOUND` ("your project does not have access to it"). Solo responden **`gemini-2.5-flash` y `gemini-2.5-pro`**. Por eso el default quedó en `gemini-2.5-flash` y no en el 3.8 que se había puesto inicialmente.
+- **El mecanismo completo funciona:** con un PDF de 4 páginas embebido en `inlineData` (una por documento, más una en blanco) y `responseMimeType: 'application/json'`, el modelo devolvió el JSON esperado ubicando los 3 documentos en sus páginas correctas, con confianza alta, y dejando la página en blanco sin asignar. Consumo: ~1.750 tokens totales para ese PDF de prueba.
+
+⚠️ **Deuda con fecha: Google retira los modelos Gemini 2.5 el 16 de octubre de 2026.** Cuando llegue, esta función deja de responder. Hay que conseguir acceso a la serie 3.x en el proyecto (o mover el proyecto a uno que lo tenga) y apuntar `GOOGLE_VERTEX_MODEL` al modelo nuevo. Se dejó configurable por entorno precisamente para que ese cambio no exija un despliegue de código.
+
+### `ReclutamientoIaService`
+
+Dos reglas heredadas de `DocumentExtractionService`, deliberadas:
+1. **`analizar` NUNCA escribe.** Solo propone. Todo lo que toca Drive pasa por `aplicar`, que corre únicamente con lo que RRHH confirmó o corrigió.
+2. Cuando algo falla, falla **visible y con mensaje accionable** en vez de adivinar (`NO_CONFIGURADO`, `SIN_PDF`, `VARIOS_PDF`, `SIN_REQUISITOS`, `PDF_ILEGIBLE`, `PDF_MUY_GRANDE`, `ERROR_DRIVE`, `ERROR_IA`, `RESPUESTA_INVALIDA`). El postulante siempre se puede trabajar a mano.
+
+Parseo defensivo de la respuesta del modelo: se **descartan** los requisitos que el modelo se inventó (los que no están en la vacante — generarían una fila que RRHH no puede confirmar) y los rangos de página fuera del PDF. Un rango a medias se trata como "no encontrado" en vez de completar el extremo que falta. Los requisitos que el modelo omitió se agregan como "no encontrado" para que RRHH vea el checklist entero, no solo lo hallado. El detalle crudo del error de Vertex queda en el log; hacia la UI solo viaja el código de estado (no filtrar rutas internas del proyecto de GCP).
+
+`aplicar` **valida todo antes de escribir el primer archivo**, para que una asignación inválida no deje la carpeta a medio partir. Los archivos generados se nombran `"<Requisito> - <original>.pdf"`, **el mismo formato que `reassignReclutamientoFile`**, que es lo que hace que `findMatchingFile` los reconozca sin ningún modelo de asociación nuevo.
+
+**`aplicar` recibe una LISTA de páginas por documento, no un rango** (`AsignacionConfirmada { requisito, paginas: number[] }`). Es consecuencia directa de la interfaz de miniaturas: al etiquetar página por página, un documento puede quedar formado por páginas **no consecutivas** — el caso real es el anverso de la cédula en una página y el reverso en otra, con algo distinto en medio. Con rangos habría que emitir dos archivos con el mismo nombre; con una lista sale un único archivo con exactamente esas páginas, ordenadas según el original. Un requisito repetido en dos entradas se rechaza por el mismo motivo. La IA sigue razonando en rangos (es lo natural para el modelo) y el frontend los despliega a etiquetas por página al recibir la propuesta.
+
+### La traza va en `analisis-ia.json`, NUNCA en `candidato.json`
+
+Motivo concreto (ver "Contexto crítico" más abajo): `uploadCandidateJson` del portal reconstruye `candidato.json` desde cero con seis claves fijas, así que si el postulante **vuelve a postular** para agregar un documento, cualquier clave añadida desde MejoraGemeseg se borra en silencio — y RRHH tendría que revisar el PDF entero otra vez. Un archivo aparte es invisible para el portal.
+
+### Frontend
+
+- `pages/personal/reclutamiento/AnalisisArchivoUnicoModal.tsx`: **cuadrícula de miniaturas, una por página** (renderizadas con `pdfjs-dist`, que ya estaba en `package.json` pero **sin usar en ningún archivo**). Bajo cada miniatura, un desplegable con el documento que la IA cree que es, ya preseleccionado, más el badge verde/ámbar/rojo de confianza que `ComplianceChecklist` usa en Cumplimiento (no se introdujo otro lenguaje visual). Clic en una miniatura la amplía a pantalla completa — una foto de cédula en miniatura no siempre se puede juzgar.
+  **Elección del usuario (2026-09-16)** entre cuatro diseños propuestos (miniaturas etiquetadas, vista dividida PDF+checklist, asistente paso a paso, arrastrar y soltar). El criterio decisivo: siendo los PDFs fotos escaneadas, RRHH valida mirando **la imagen de la página**, no traduciendo mentalmente un número de página. Una primera versión con la vista dividida llegó a construirse y fue reemplazada.
+  Las miniaturas se renderizan **una sola vez** y se guardan como JPEG en memoria, para que cambiar una etiqueta no vuelva a dibujar el PDF completo.
+- **Importado con `React.lazy`**, no de forma normal: `pdfjs-dist` pesa ~370 kB y con un import directo `ReclutamientoPage` pasaba de 43 kB a 413 kB **para todos los postulantes**, incluidos los que no usan esta función. Con lazy, Reclutamiento vuelve a 44 kB y pdfjs queda en su propio bloque bajo demanda.
+- Aviso morado + botón ✨ "Analizar con IA" en el modal del candidato, visible solo si `modoSubida === 'archivo_unico'` y con `canWrite('RRHH')`.
+- `syncReclutamientoCandidates` ahora expone `modoSubida` por candidato ('individual' por defecto, que es lo que corresponde a las carpetas anteriores al portal actual).
+
+### Endpoint de PDF: por qué existe un proxy
+
+`GET /personal/reclutamiento/candidatos/:folderId/pdf/:driveFileId` sirve el PDF al navegador porque los archivos de Drive viven detrás de la service account — el front no los puede pedir directo. **Valida que el archivo esté realmente dentro de la carpeta indicada** antes de servirlo, para que no se convierta en un lector universal de cualquier id de Drive que alguien adivine.
+
+### Tests
+
+`reclutamiento-ia.service.spec.ts` (21 casos). `pdf-lib` se usa **de verdad** (no se mockea): las pruebas de `aplicar` generan un PDF real de 6 páginas y verifican que el recorte tenga el número de páginas correcto, no solo que se llamara a la API. Cubre: no configurado (sin gastar llamada), rangos propuestos, requisitos omitidos marcados como no encontrados, páginas sin clasificar, descarte de requisitos inventados y páginas fuera de rango, error de Vertex sin filtrar el detalle crudo, vacante sin requisitos, carpeta con varios PDFs, nombres de archivo generados, recorte real, conservación del original, traza en `analisis-ia.json`, un rango inválido que **no sube ningún archivo**, páginas no consecutivas agrupadas en un solo documento, requisito repetido rechazado, y el bloque de "criterio de análisis" (ver Sprint 8.1 abajo): autocreación del Agent, uso del criterio guardado, criterio inactivo cae al default, fallo leyendo el Agent no rompe el análisis, y el contrato JSON + lista de requisitos **siempre** se agregan sin importar qué diga el Agent.
+
+## Sprint 8.1 — Bug de arranque + generalización + prompt como Agent (2026-09-16, mismo día, sesión de seguimiento)
+
+Tres pedidos del usuario tras probar Sprint 8 en local: (1) el botón "Analizar con IA" fallaba con `Unexpected token 'n', "null" is not valid JSON`; (2) el análisis no debía limitarse al caso `modoSubida='archivo_unico'` — también hace falta para un postulante que marcó "individual" pero en realidad subió todo en un archivo, o que combinó varios documentos en un PDF dentro de "archivos adicionales"; (3) el prompt debía vivir "en Agentes", para que sea editable y reutilizable.
+
+### El bug: axios manda `null`, Express lo rechaza con 400 — invisible por curl sin body
+
+`analizarArchivoUnico` llamaba `api.post(url, null, {...})`. Axios, en el navegador, serializa `data: null` como el texto literal `"null"` con `Content-Type: application/json`. El `body-parser` de Express que usa Nest corre en modo **estricto** por defecto: solo acepta objeto o array como JSON de nivel superior — un `null` desnudo lo rechaza **antes de que la petición llegue al controller**, con el mismo formato de mensaje que un `JSON.parse` nativo fallido. `JSON.parse('null')` en sí es válido (por eso `curl` sin `-d` nunca reprodujo el bug: sin body no hay nada que parsear). Reproducido primero con Playwright contra la app real, luego confirmado con `curl -d 'null' -H "Content-Type: application/json"` contra el mismo endpoint. **Fix:** mandar `{}` en vez de `null` desde `personal.service.ts` — el endpoint no tiene `@Body()` (recibe todo por `:folderId`/`?driveFileId`), así que el contenido del body es irrelevante para la lógica, solo tenía que ser JSON válido de nivel superior.
+
+**Nota para la próxima vez que algo "no aparezca" en local:** durante esta misma sesión, tanto el backend (`nest --watch`) como el frontend (Vite) quedaron sirviendo código de horas antes sin ningún error visible — el watcher de archivos no detecta cambios de forma confiable en este repo (vive bajo OneDrive). Antes de asumir un bug de lógica, comparar `Get-Item <archivo> | select LastWriteTime` contra `Get-Process -Id <pid> | select StartTime` del proceso escuchando el puerto, y reiniciar si el archivo es más nuevo.
+
+### Generalización: analizar cualquier PDF, no solo el "archivo único" declarado
+
+El backend (`ReclutamientoIaService.analizar`/`resolverContexto`) **ya aceptaba** un `driveFileId` opcional desde que se escribió — nunca estuvo atado a `modoSubida`. Lo que faltaba era el punto de entrada en la UI. Se agregó un botón "Analizar con IA" **por archivo**, dentro de la sección "Archivos Adicionales" del expediente del candidato (visible para cualquier PDF que no haya matcheado ningún requisito, sin importar `modoSubida`), que llama `analizarArchivoUnico(folderId, file.id)`. El aviso morado (banner "Entregó todo en un solo archivo") sigue existiendo para el caso más común y obvio — detecta el único PDF de la carpeta sin que RRHH tenga que indicarlo — pero ya no es la única puerta: el botón por archivo cubre exactamente los dos casos que planteó el usuario (alguien marcó "individual" pero subió todo en un archivo → ese archivo termina en "adicionales"; o combinó varios documentos en un PDF fuera de su casilla → mismo lugar). `AnalisisArchivoUnicoModal` ahora recibe un `driveFileId?: string` opcional: sin él, autodetecta (comportamiento de antes); con él, analiza ese archivo puntual.
+
+### El prompt como `Agent`, no como constante
+
+`Agent.name = 'Revisor de Documentos (IA)'`, `createdBy: null` (agente de sistema, mismo patrón que "Agente GEMESEG" en `ai.service.ts`), `scope: 'RECLUTAMIENTO'`. **Autocreación en el primer uso** (`getDocumentReviewerInstructions`): si no existe, se crea con un criterio por defecto; no depende de un paso de seed manual. Se relee de la BD en **cada** análisis, sin caché — un ajuste que haga un ADMIN desde `/admin/agents` se nota de inmediato, sin redeploy. Si el Agent está `isActive: false`, se ignora su texto y se usa el criterio por defecto (no un prompt vacío).
+
+**División deliberada entre lo editable y lo fijo:** el Agent solo controla el CRITERIO (tono, reglas de qué es "alta/media/baja" confianza, qué anotar) — es la parte de "prompt" que de verdad vale la pena editar sin tocar código. La lista de documentos requeridos de la vacante, el total de páginas del PDF, y el contrato de salida en JSON (`{"documentos": [...]}`) los agrega el código **siempre**, en cada llamada, sin importar qué tanto edite alguien el criterio. Motivo: si esa parte fuera editable y alguien borra el contrato JSON por accidente, el parseo de la respuesta se rompe — con esta división, lo peor que puede pasar es una respuesta de peor calidad, nunca una que no se pueda interpretar. El texto por defecto mide ~1.280 caracteres, bien por debajo del límite de 2.000 que impone `UpdateAgentDto.systemMsg` (el formulario de `/admin/agents`), dejando margen para que un ADMIN lo extienda.
+
+**Solo visible/editable por rol ADMIN** — `/admin/agents` (`AgentsController`) exige `@Roles(UserRole.ADMIN)`, no `RRHH`. Verificado: con un usuario `EMPLOYEE` la pantalla devuelve 403 en las llamadas de listado (se ve vacía, sin aviso de error); con el usuario `admin@gemeseg.com` semillado, el agente aparece correctamente en la tabla.
+
+### Verificación real (no solo tests unitarios)
+
+Todo lo de arriba se probó con Playwright contra la app corriendo de verdad (backend + frontend + Postgres local + Drive real + Vertex AI real), con un candidato real (postulante con `modoSubida='archivo_unico'`, PDF de 8 páginas con documentos reales escaneados): login → sincronizar → abrir candidato → botón del aviso morado (8 miniaturas renderizadas, 2 documentos ubicados correctamente, confianza alta) → cerrar → botón por-archivo en "Archivos Adicionales" sobre el mismo PDF (mismo resultado, con `?driveFileId=` en la URL confirmando que apuntó al archivo correcto) → `/admin/agents` con usuario ADMIN mostrando el agente recién autocreado. Cero errores de consola del navegador en todas las corridas.
+
+### Pendiente
+
+- **Falta probar `aplicar-analisis` (el "Confirmar y separar") contra Drive real** end-to-end — lo verificado en navegador llegó hasta ver las miniaturas correctamente etiquetadas, sin llegar a confirmar y partir el PDF de verdad (para no dejar archivos de prueba en una carpeta real de Reclutamiento sin que el usuario lo pidiera).
+- **Antes del 16/10/2026**: conseguir acceso a Gemini 3.x y mover `GOOGLE_VERTEX_MODEL` (ver Sprint 8 arriba).
+- No hay OCR de respaldo: si el modelo no reconoce un documento, RRHH lo ubica a mano con los campos de página. Es suficiente porque la corrección manual siempre está disponible.
+- El botón por-archivo en "Archivos Adicionales" solo se ofrece para archivos `.pdf` — un archivo adicional que sea imagen suelta (`.jpg`/`.png`) no tiene análisis con IA (no aplica: no hay nada que "partir" en una sola imagen).
+
+## Sprint 8.2 — Persistencia de la propuesta, causa raíz de "respuesta no interpretable", calidad de miniaturas, caché de sincronización (2026-09-16, mismo día, segunda sesión de seguimiento)
+
+Cinco pedidos del usuario tras probar Sprint 8.1 en vivo:
+
+### 1. La propuesta de análisis se perdía al cerrar el modal, y no había forma de reintentar
+
+**Antes:** el resultado de `analizar()` solo vivía en el estado de React del modal — cerrarlo para revisar otra cosa y volver obligaba a repetir la llamada a Vertex AI (tiempo + costo) y perdía cualquier corrección que RRHH ya hubiera hecho.
+
+**Ahora:** `ReclutamientoIaService.analizar()` guarda la propuesta en `analisis-ia-pendiente.json` (archivo nuevo, aparte de `analisis-ia.json` que ya existía como traza de lo *confirmado*) apenas termina con éxito. Nuevo endpoint `GET .../candidatos/:folderId/analisis-pendiente` la devuelve **sin llamar a Vertex AI**. El modal, al abrir, intenta primero esa lectura rápida; solo si no hay nada guardado dispara el análisis real. `aplicar()` borra ese archivo al confirmar — ya no tiene sentido ofrecerlo como "guardado" para un archivo que ya se separó. Verificado en vivo: cerrar el modal y reabrirlo muestra la misma propuesta al instante, con "Propuesta guardada el `<fecha>`" y **cero** llamadas nuevas a `/analizar`.
+
+Se agregó también un botón "Reintentar" (si falló) / "Analizar de nuevo" (si tuvo éxito) en el encabezado del modal, que siempre fuerza una llamada fresca a la IA — con confirmación previa si ya hay páginas etiquetadas, para no perder trabajo manual sin avisar.
+
+### 2. Causa probable de "La IA no devolvió una respuesta interpretable"
+
+**Diagnóstico** (probado contra el PDF real que falló, 2026-09-16): `gemini-2.5-flash` razona internamente ("thinking") antes de responder, y esos tokens de pensamiento **salen del mismo cupo** que `maxOutputTokens`. Sobre el mismo archivo y el mismo prompt, tres llamadas seguidas gastaron entre 834 y 1.287 tokens solo en pensar, de forma no determinista — con el prompt real (más largo que el de la prueba, por el criterio del Agent) y `maxOutputTokens: 2048`, es plausible que ese consumo deje sin espacio la respuesta final, explicando por qué la primera vez funcionó y la segunda no.
+
+**Fix:** `thinkingConfig: { thinkingBudget: 0 }` (desactiva el razonamiento — esta tarea es clasificación, no necesita cadena de pensamiento) + `maxOutputTokens` subido a 4096 (margen para vacantes con más requisitos). Además, el código ahora distingue por `finishReason`: si el modelo se queda literalmente sin espacio (`MAX_TOKENS` + texto vacío), el motivo es `SIN_ESPACIO_RESPUESTA` con un mensaje que invita a reintentar — no el genérico "respuesta no interpretable", que se reserva para cuando la IA sí respondió pero con algo que no es JSON válido.
+
+No se pudo reproducir el fallo original de forma determinista para confirmar al 100 % que esta era la única causa, pero es una configuración estrictamente más segura (sin esa clase de fallo posible) sin downside observado, y las ~6 llamadas reales hechas después del fix (en esta sesión y en pruebas de navegador) tardaron 1-12 s y respondieron bien todas las veces.
+
+### 3. La IA ahora puede fallar sin dejar a RRHH sin herramienta
+
+Si `analizar()` falla en un punto donde ya se sabe qué archivo es y cuántas páginas tiene (`ERROR_IA`, `RESPUESTA_INVALIDA`, `SIN_ESPACIO_RESPUESTA`), el resultado igual incluye `archivo`, `totalPaginas` y `requisitos` — el frontend arma la misma cuadrícula de miniaturas, pero con todas las páginas en "(ninguno)", para que RRHH etiquete a mano en vez de chocar con un callejón sin salida. Si ni siquiera eso se pudo determinar (`PDF_ILEGIBLE`, `PDF_MUY_GRANDE`, `SIN_REQUISITOS`), no hay nada que mostrar y el mensaje de error sigue siendo el único resultado — no tendría sentido ofrecer una cuadrícula sin poder abrir el archivo.
+
+### 4. Calidad de las miniaturas
+
+Se subió la resolución de render de 220px a 1000px de ancho (JPEG calidad 0.9, antes 0.7). El costo es una sola vez por página (se cachean como imagen, no se re-renderizan al cambiar una etiqueta), y el beneficio se nota sobre todo al ampliar una miniatura — antes se veía pixelada al estirarla a pantalla completa, porque el zoom usa la MISMA imagen renderizada, no vuelve a dibujar a mayor resolución.
+
+### 5. Ningún rastro de "Kanban" en Reclutamiento
+
+El usuario confirmó, de forma tajante, que el Kanban de Candidatos (`Candidate`/`KanbanColumn`/`RecruitmentKanban.tsx`, ruta `/rrhh/kanban`) **no es parte de Reclutamiento** — ni conceptualmente ni en la práctica (no está enlazado desde el Sidebar, RRHH nunca lo usa). Se limpiaron todas las menciones de este módulo en la documentación de Reclutamiento (este archivo y `AGENTS.md`): la sección "Sistema B", las tablas de endpoints/modelos/rutas de Kanban, el flujo end-to-end que terminaba en "agregar al Kanban", los puntos de "Decisiones pendientes" que lo mencionaban. En este momento (2026-09-16) no se borró el código, solo la documentación — pero el usuario pidió esa eliminación completa poco después y ya se ejecutó el 2026-09-17: ver Sprint 8.3 más abajo y `.agents/modules/recursos-humanos.md` punto 2 para el detalle.
+
+### 6. Caché de sincronización + "Última sincronización"
+
+La lista de candidatos (viene de Drive, no de la BD) vivía solo en memoria de React — recargar la página o volver a entrar la vaciaba y obligaba a sincronizar de nuevo para ver lo mismo que ya se había traído. Ahora se guarda en `localStorage` (clave por `companyId`, vía `getUser()` de `auth.service.ts`) junto con la fecha/hora de la sincronización, y se muestra "Última sincronización: `<fecha y hora>`" junto al botón. `hasSynced` arranca en `true` si ya hay caché, así que la pantalla muestra la última lista conocida de inmediato en vez del placeholder de "aún no sincronizado". De paso, un fallo de sincronización (p. ej. un hipo de Drive) ya no borra la lista actual — antes `catch` hacía `setCandidatos([])`, perdiendo de golpe lo último bueno por un error pasajero.
+
+### Verificación
+
+Backend: 29 tests en `reclutamiento-ia.service.spec.ts` (antes 21) — cubren la persistencia/lectura de la propuesta pendiente, el borrado al aplicar, `thinkingConfig` en la petición real, la distinción `SIN_ESPACIO_RESPUESTA` vs `RESPUESTA_INVALIDA`, y que `requisitos`/`archivo`/`totalPaginas` viajen incluso cuando la IA falla. 122 tests en total en el módulo `personal`, todos en verde. `tsc` limpio en backend y frontend.
+
+Navegador real (Playwright, contra Vertex AI y Drive reales): confirmado que el aviso morado ya no tiene el párrafo redundante y el botón lleva tooltip; que cerrar el modal y reabrirlo reutiliza la propuesta guardada sin llamar de nuevo a la IA; que el botón "Analizar de nuevo"/"Reintentar" aparece; que las miniaturas se ven claramente más nítidas (texto de certificados legible a simple vista); y que "Última sincronización" se muestra y sobrevive a session nuevas del navegador. Cero errores de consola en todas las corridas.
+
+## Sprint 7 — Destino de contratación según la vacante (Guardias | Personal Administrativo)
+
+**Contexto (2026-09-15):** hasta Sprint 6, contratar siempre creaba un **guardia** — `contratarCandidato` tenía fija la carpeta `FolderConfig type='CUMPLIMIENTO'` y el bucket "Sin Asignar". No había forma de contratar a un administrativo desde Reclutamiento.
+
+- **`JobPosition.tipoContratacion`** (`'GUARDIA' | 'ADMINISTRATIVO'`, default `'GUARDIA'`): lo declara la vacante y lo heredan todos sus postulantes. El default preserva el comportamiento previo, así que ninguna vacante existente cambia de conducta. Migración aditiva `20260915_add_tipo_contratacion_job_position`. Se normaliza con `normalizeTipoContratacion` (cualquier valor no reconocido cae en `GUARDIA`), se espeja al JSON del puesto en Drive, y —igual que `camposRequeridos`/`archivosRequeridos`— `syncJobPositionsFromDrive` solo lo lee del JSON al **crear** una vacante detectada en Drive; para una que ya existe, Postgres manda.
+- **La trampa que motivó el sprint:** los dos buckets destino **nombran sus carpetas distinto**. Guardias usa `Nombre - Cédula` (10 dígitos, `parseEmployeeFolderName`) y Personal Administrativo usa `Nombre - Puesto`, **sin cédula** (`parsePersonalAdminFolderName`, cuya identidad en BD es `PA-<folderId>`). Un postulante siempre llega con el formato de cédula: movido tal cual al bucket administrativo, `syncPersonalAdminFolder` leería `1712345678` **como si fuera el puesto**. Por eso contratar a un administrativo **renombra** la carpeta, y el renombrado va en la **misma llamada** `files.update` que el movimiento — así la carpeta nunca llega a existir bajo esa raíz con el nombre equivocado, ni siquiera durante una ventana breve.
+- **La cédula no se pierde:** `contratarCandidato` la escribe explícitamente en `candidato.json` (junto a `estado`/`fechaContratacion`/`tipoContratacion`), que viaja con la carpeta.
+- **Control de duplicados, distinto por bucket:** Guardias sigue comparando por cédula contra `EmployeeDriveFolder`. Administrativos **no pueden** — ese bucket no guarda cédula — así que se compara por `employeeName` normalizado (sin tildes ni mayúsculas) entre las filas `folderType='PERSONAL_ADMIN'`. Es más débil que la cédula, pero es lo único que ese modelo permite hoy.
+- **Falta la carpeta destino → se bloquea antes de tocar nada**, con el mensaje que indica en qué pantalla configurarla (Guardias ya lo tenía; administrativos reutiliza el de `getPersonalAdminFolderId`). La carpeta del postulante se queda intacta en Reclutamiento en vez de quedar a medio camino.
+- **Resolución de la vacante:** por la carpeta **padre** del postulante (`JobPosition.driveFolderId`), que es el vínculo más fiable; si falla (carpeta movida a mano en Drive), cae al `puestoId` que el portal deja en `candidato.json`; sin vacante identificable asume `GUARDIA`.
+- **El controlador sincroniza el destino correcto:** `POST .../contratar` ahora corre `syncPersonalAdminFolder` o `syncEntidadesFolder` según `tipoContratacion`, no siempre el de Guardias.
+- **Frontend:** selector "Al contratar, esta persona entra como" en el modal de vacante (con texto que explica a dónde irá la carpeta y que se renombrará), distintivo "Administrativo" en la tarjeta de la vacante, y el modal de confirmación de contratar (`ConfirmDialog` desde Sprint 8.3, antes `window.confirm`) nombra el destino real e incluye el nombre nuevo de la carpeta antes de confirmar.
+- **`syncReclutamientoCandidates`** expone `tipoContratacion` por candidato (heredado de su vacante) para que el modal pueda anticipar el destino.
+- **Tests:** `drive.service.spec.ts` → `describe('cuando la vacante es ADMINISTRATIVO', ...)` (mueve+renombra en una sola llamada, no usa "Sin Asignar", deja la cédula en `candidato.json`, bloquea sin carpeta configurada, bloquea por nombre duplicado, no aplica el chequeo de cédula de Guardias) y un caso nuevo en el camino guardia que verifica que **no** se renombre.
+- **Pendiente de probar contra Drive real** antes de considerarse verificado end-to-end (mueve y renombra carpetas reales).
+
+### Contexto crítico: el portal de postulación vive en OTRO repositorio
+
+`modoSubida: 'individual' | 'archivo_unico'` (cómo el postulante entrega su documentación) **no se decide aquí**: lo elige el candidato en el portal público, que es un proyecto separado en `C:\Users\leidy\Documents\RECLUTAMIENTO` (módulo `recruitment`). Los dos sistemas se comunican **solo a través de Google Drive** — el portal escribe la carpeta del candidato y su `candidato.json`, MejoraGemeseg lo lee con `syncReclutamientoCandidates`. No hay API entre ellos.
+
+Dos cosas a tener presentes al tocar `candidato.json` desde este lado:
+1. `uploadCandidateJson` del portal **reconstruye el archivo desde cero** con seis claves fijas (`datosFormulario`, `puesto`, `puestoId`, `fechaPostulacion`, `archivos`, `modoSubida`). Cualquier clave agregada por MejoraGemeseg se borra si el candidato **vuelve a postular** a la misma vacante.
+2. Eso **no** afecta a `estado`/`fechaContratacion`: al contratar, la carpeta se mueve fuera de Reclutamiento y el portal (que busca solo dentro de la carpeta de la vacante) ya no la encuentra — crea una carpeta nueva en vez de pisar la del contratado. Sí afectaría a datos escritos **mientras el candidato sigue en Reclutamiento**, por lo que el análisis con IA debe guardarse en un archivo aparte (`analisis-ia.json`), no dentro de `candidato.json`.
 
 ## Sprint 6 — Contratar un postulante (Candidatos Postulados → Guardia "Sin Asignar")
 
-**Contexto (aclarado por el usuario 2026-09-10):** la documentación previa de este módulo (y el modal de ayuda del Dashboard de RRHH) describía el Kanban de Candidatos (Sistema B, `/rrhh/kanban`) como el mecanismo real de contratación. El usuario corrigió esto: en la práctica, RRHH no usa ese Kanban para contratar — el flujo real ocurre enteramente sobre el **Sistema A** (candidatos sincronizados desde Drive, "Candidatos Postulados" en `ReclutamientoPage.tsx`): se marca al postulante como contratado y su carpeta pasa a ser, directamente, una carpeta de Guardias — sin entidad todavía, porque eso se decide después. El Kanban (Sistema B) sigue existiendo y sigue siendo funcional (`CandidateService.move()` con `KanbanColumn.triggersHire` sigue creando un `MovimientoPersonal` de tipo ENTRADA), pero sigue siendo un sistema separado, no el que RRHH usa de verdad para esto.
+**Contexto (aclarado por el usuario 2026-09-10, reforzado 2026-09-16):** RRHH contrata enteramente desde "Candidatos Postulados" en `ReclutamientoPage.tsx` (los candidatos sincronizados desde Drive): se marca al postulante como contratado y su carpeta pasa a ser, directamente, una carpeta de Guardias (o de Personal Administrativo, ver Sprint 7) — sin entidad todavía, porque eso se decide después. No hay ningún tablero intermedio en este flujo.
 
-- **Botón "Marcar como Contratado"** en el modal de detalle del candidato (`ReclutamientoPage.tsx`, footer del modal, junto a "Ver Carpeta en Drive"), visible solo con `canWrite('RRHH')`. Confirmación previa vía `window.confirm` (mismo patrón que el botón de salida en `GuardiasList.tsx`) porque mueve una carpeta real de Drive.
+- **Botón "Marcar como Contratado"** en el modal de detalle del candidato (`ReclutamientoPage.tsx`, footer del modal, junto a "Ver Carpeta en Drive"), visible solo con `canWrite('RRHH')`. Confirmación previa vía `ConfirmDialog` (mismo patrón que el botón de salida en `GuardiasList.tsx`; antes `window.confirm`, ver Sprint 8.3) porque mueve una carpeta real de Drive. Si la cédula ya existe pero ese guardia ya había salido, la contratación se permite igual (recontratación, ver Sprint 8.3) — solo se bloquea si sigue activo.
 - **`DriveService.contratarCandidato(companyId, folderId)`** (`drive.service.ts`, cerca de `saveCandidatoDatos`):
   1. Lee la carpeta del candidato y parsea "Nombre - Cédula" (mismo parser de 10 dígitos que usa `syncEntidadesFolder`, `parseEmployeeFolderName`) — si no parsea, rechaza con un mensaje claro en vez de mover una carpeta con identidad ambigua.
   2. **Chequeo de duplicado** (mismo espíritu que evitó el caso de los "Juan Perez"): si ya existe un `EmployeeDriveFolder` con esa cédula, rechaza sin mover nada.
@@ -88,23 +277,16 @@ RRHH puede aprobar o rechazar cada documento del checklist de cumplimiento, con 
 
 ## Arquitectura del modulo
 
-El modulo de Reclutamiento es parte del modulo `Personal` y opera con **dos sistemas de candidatos** que se complementan:
+El modulo de Reclutamiento es parte del modulo `Personal`. Los candidatos vienen **exclusivamente** de Google Drive (solo lectura, salvo la acción de contratar):
 
-### Sistema A: Candidatos sincronizados desde Google Drive (solo lectura, salvo Contratar)
 - **Backend:** `DriveService.syncReclutamientoCandidates()`, `DriveService.contratarCandidato()` (Sprint 6)
 - **Frontend:** `ReclutamientoPage.tsx`
 - **Fuente de datos:** Carpetas en Google Drive dentro de `Reclutamiento/<Nombre>-<Cedula>/`
 - **Almacenamiento:** No crea registros en BD — los datos se leen de Drive al momento del sync
-- **Proposito:** Monitorear postulantes externos que suben documentos a Drive, y **contratarlos** (Sprint 6): esta es la vía real de contratación que usa RRHH, no el Kanban (Sistema B).
-- **Funcionalidades:** Tracking de completitud, checklist de documentos, links a carpetas de Drive, "Marcar como Contratado" (mueve la carpeta a Guardias/Sin Asignar)
+- **Proposito:** Monitorear postulantes externos que suben documentos a Drive, y **contratarlos** (Sprint 6) — la única vía de contratación real que usa RRHH.
+- **Funcionalidades:** Tracking de completitud, checklist de documentos, links a carpetas de Drive, "Marcar como Contratado" (mueve la carpeta a Guardias/Sin Asignar o a Personal Administrativo, según la vacante — ver Sprint 7), análisis con IA del "archivo único" (ver Sprint 8).
 
-### Sistema B: Candidatos en base de datos (CRUD completo)
-- **Backend:** `CandidateService`
-- **Frontend:** `RecruitmentKanban.tsx`, `CandidatesList.tsx`, `CandidateForm.tsx`
-- **Fuente de datos:** Tabla `Candidate` en PostgreSQL
-- **Almacenamiento:** Registros completos con asignacion a columnas Kanban
-- **Proposito:** Gestion interna del pipeline de RRHH
-- **Funcionalidades:** Kanban drag-and-drop, historial de movimientos, generacion de contratos, verificacion
+> ⚠️ **El Kanban de Candidatos (`Candidate`/`KanbanColumn`/`RecruitmentKanban.tsx`, ruta `/rrhh/kanban`) nunca fue parte de Reclutamiento** y se eliminó por completo el 2026-09-17 (ver Sprint 8.3 más abajo) — no reintroducirlo en esta documentación ni confundirlo con este flujo si en algún momento se reconstruye algo similar desde cero.
 
 ## Flujo end-to-end
 
@@ -116,6 +298,7 @@ El modulo de Reclutamiento es parte del modulo `Personal` y opera con **dos sist
      -> Crea archivo JSON en Google Drive/Reclutamiento/
 
 2. Postulantes suben documentos a Google Drive/Reclutamiento/<Nombre>-<Cedula>/
+   (o un solo archivo con todo junto, ver Sprint 8)
 
 3. RRHH hace click en "Sincronizar" en ReclutamientoPage
    -> POST /personal/reclutamiento/sync
@@ -126,17 +309,9 @@ El modulo de Reclutamiento es parte del modulo `Personal` y opera con **dos sist
      -> Calcula porcentaje de completitud
      -> Retorna lista de candidatos al frontend
 
-4. RRHH agrega candidatos prometedores al Kanban
-   -> POST /personal/candidates
-   -> CandidateService.create()
-
-5. RRHH mueve candidatos por las etapas del pipeline
-   -> PATCH /personal/candidates/:id/move
-   -> CandidateService.move() (crea registro de historial)
-
-6. RRHH genera contrato para candidato aprobado
-   -> POST /personal/contracts/generate
-   -> ContractService genera contrato desde plantilla
+4. RRHH marca al postulante como "Contratado"
+   -> POST /personal/reclutamiento/candidatos/:folderId/contratar
+   -> DriveService.contratarCandidato() (ver Sprint 6-7)
 ```
 
 ## Archivos clave
@@ -146,29 +321,22 @@ El modulo de Reclutamiento es parte del modulo `Personal` y opera con **dos sist
 | Archivo | Descripcion |
 |---------|-------------|
 | `backend/src/modules/personal/drive.controller.ts` | Endpoints REST de Drive + Reclutamiento |
-| `backend/src/modules/personal/personal.controller.ts` | Endpoints REST de Candidatos + Kanban |
 | `backend/src/modules/personal/services/drive.service.ts` | Integracion Drive + logica de Reclutamiento |
-| `backend/src/modules/personal/services/candidate.service.ts` | CRUD candidatos + movimiento |
-| `backend/src/modules/personal/services/kanban.service.ts` | Gestion de columnas Kanban |
+| `backend/src/modules/personal/services/reclutamiento-ia.service.ts` | Análisis con IA del "archivo único" (Sprint 8) |
 | `backend/src/modules/personal/personal.service.ts` | KPIs del dashboard |
 | `backend/src/modules/personal/personal.module.ts` | wiring del modulo |
 | `backend/src/modules/personal/dto/job-position.dto.ts` | DTOs de puestos |
-| `backend/src/modules/personal/dto/candidate.dto.ts` | DTOs de candidatos |
-| `backend/src/modules/personal/dto/kanban.dto.ts` | DTOs de kanban |
 | `backend/src/modules/personal/dto/drive.dto.ts` | DTO de configuracion Drive |
 | `backend/src/modules/personal/dto/document-type.dto.ts` | DTOs de tipos de documento |
-| `backend/prisma/schema.prisma` | Modelos JobPosition, Candidate, KanbanColumn, etc. (lineas 608-938) |
+| `backend/prisma/schema.prisma` | Modelo `JobPosition` |
 | `backend/prisma/migrations/20260904_add_job_positions/migration.sql` | Migracion JobPosition |
-| `backend/prisma/migrations/20260904_add_verification_checks/migration.sql` | Migracion VerificationCheck |
 
 ### Frontend
 
 | Archivo | Descripcion |
 |---------|-------------|
-| `frontend/src/pages/personal/ReclutamientoPage.tsx` | Pagina principal de Reclutamiento (567 lineas) |
-| `frontend/src/pages/personal/recruitment/RecruitmentKanban.tsx` | Tablero Kanban drag-and-drop (163 lineas) |
-| `frontend/src/pages/personal/candidates/CandidatesList.tsx` | Tabla de candidatos (129 lineas) |
-| `frontend/src/pages/personal/candidates/CandidateForm.tsx` | Formulario crear/editar candidato (196 lineas) |
+| `frontend/src/pages/personal/ReclutamientoPage.tsx` | Pagina principal de Reclutamiento |
+| `frontend/src/pages/personal/reclutamiento/AnalisisArchivoUnicoModal.tsx` | Revisión con IA del "archivo único" (Sprint 8) |
 | `frontend/src/pages/personal/PersonalDashboard.tsx` | Dashboard del modulo Personal (82 lineas) |
 | `frontend/src/services/personal.service.ts` | Todas las funciones API |
 | `frontend/src/App.tsx` | Definicion de rutas (lineas 280-294) |
@@ -185,28 +353,11 @@ El modulo de Reclutamiento es parte del modulo `Personal` y opera con **dos sist
 | `PATCH` | `/personal/reclutamiento/puestos/:id` | JWT | Actualizar puesto (actualiza BD + JSON en Drive) |
 | `DELETE` | `/personal/reclutamiento/puestos/:id` | JWT | Eliminar puesto (elimina BD + JSON de Drive) |
 | `POST` | `/personal/reclutamiento/sync` | JWT | Sincronizar candidatos desde carpetas de Drive |
-| `POST` | `/personal/reclutamiento/candidatos/:folderId/contratar` | JWT+RRHH(write) | Contratar: mueve la carpeta a Guardias/Sin Asignar, marca `candidato.json` y sincroniza Guardias (Sprint 6) |
-
-### Candidatos (Kanban)
-
-| Metodo | Ruta | Auth | Descripcion |
-|--------|------|------|-------------|
-| `GET` | `/personal/candidates` | JWT | Listar candidatos (filtro opcional `?columnId=`) |
-| `GET` | `/personal/candidates/:id` | JWT | Detalle candidato con historial |
-| `POST` | `/personal/candidates` | JWT | Crear candidato |
-| `PATCH` | `/personal/candidates/:id` | JWT | Actualizar candidato |
-| `PATCH` | `/personal/candidates/:id/move` | JWT | Mover candidato a columna Kanban |
-| `GET` | `/personal/candidates/:id/history` | JWT | Historial de movimientos |
-
-### Columnas Kanban
-
-| Metodo | Ruta | Auth | Descripcion |
-|--------|------|------|-------------|
-| `GET` | `/personal/kanban/columns` | JWT | Obtener columnas con candidatos |
-| `POST` | `/personal/kanban/columns` | JWT | Crear columna |
-| `PATCH` | `/personal/kanban/columns/:id` | JWT | Actualizar columna |
-| `DELETE` | `/personal/kanban/columns/:id` | JWT | Eliminar columna (candidatos desvinculados) |
-| `POST` | `/personal/kanban/reorder` | JWT | Reordenar columnas en lote |
+| `POST` | `/personal/reclutamiento/candidatos/:folderId/contratar` | JWT+RRHH(write) | Contratar: mueve la carpeta a Guardias/Sin Asignar (o Personal Administrativo), marca `candidato.json` y sincroniza (Sprint 6-7) |
+| `POST` | `/personal/reclutamiento/candidatos/:folderId/analizar` | JWT+RRHH(write) | IA propone qué documento está en qué páginas (Sprint 8) |
+| `GET` | `/personal/reclutamiento/candidatos/:folderId/analisis-pendiente` | JWT+RRHH(view) | Última propuesta guardada, sin llamar a la IA (Sprint 8.1) |
+| `POST` | `/personal/reclutamiento/candidatos/:folderId/aplicar-analisis` | JWT+RRHH(write) | RRHH confirma: separa el PDF en archivos (Sprint 8) |
+| `GET` | `/personal/reclutamiento/candidatos/:folderId/pdf/:driveFileId` | JWT+RRHH(view) | Proxy del PDF para el visor (Sprint 8) |
 
 ### Drive
 
@@ -242,65 +393,10 @@ model JobPosition {
   updatedAt          DateTime @updatedAt
 }
 ```
-**Actualizado 2026-09-09** (antes decía `String[]` para ambos campos y no tenía `driveFolderId`/`estado` — quedó desactualizado tras la migración `20260908_campos_requeridos_json`; ver [recursos-humanos.md](recursos-humanos.md) punto 1 para el contexto de ese cambio).
-
-### Candidate
-```prisma
-model Candidate {
-  id               Int              @id @default(autoincrement())
-  fullName         String
-  cedula           String
-  phone            String?
-  email            String?
-  positionApplied  String
-  availability     String?
-  salaryExpected   Float?
-  education        String?
-  experience       String?
-  references       String?
-  observations     String?
-  cvUrl            String?
-  status           CandidateStatus  @default(POSTULADO)
-  columnId         Int?             // Columna Kanban actual
-  companyId        Int
-  createdBy        Int
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  history          CandidateHistory[]
-  contracts        Contract[]
-  @@unique([companyId, cedula])
-}
-```
-
-### KanbanColumn
-```prisma
-model KanbanColumn {
-  id        Int      @id @default(autoincrement())
-  name      String
-  position  Int      @default(0)
-  color     String   @default("#718096")
-  companyId Int
-  candidates Candidate[]
-  createdAt DateTime @default(now())
-  @@unique([companyId, name])
-}
-```
+**Actualizado 2026-09-09** (antes decía `String[]` para ambos campos y no tenía `driveFolderId`/`estado` — quedó desactualizado tras la migración `20260908_campos_requeridos_json`; ver [recursos-humanos.md](recursos-humanos.md) punto 1 para el contexto de ese cambio). Ver Sprint 7 más arriba para el campo `tipoContratacion` agregado después.
 
 ### ⚠️ VerificationCheck — eliminado (2026-09-09)
 Este modelo ya **no existe**. Fue reemplazado por `SistemaVerificacion`/`MovimientoPersonal`/`MovimientoPersonalItem` (migración `20260909_replace_verificacion_with_movimientos`, que migró cualquier fila existente a un caso histórico `ENTRADA` antes de eliminar la tabla). Ver [movimientos-personal.md](movimientos-personal.md) para el modelo actual.
-
-## Enums
-
-```prisma
-enum CandidateStatus {
-  POSTULADO
-  VALIDACION_DOCUMENTAL
-  TEST_PSICOLOGICO
-  TEST_MEDICO
-  APROBADO
-  RECHAZADO
-}
-```
 
 ## Algoritmo de syncReclutamientoCandidates
 
@@ -321,19 +417,15 @@ enum CandidateStatus {
 ## Reglas de negocio
 
 ### Permisos
-- **Cualquier usuario autenticado (EMPLOYEE, RRHH):** Puede ver candidatos, mover en Kanban, crear puestos
+- **Cualquier usuario autenticado (EMPLOYEE, RRHH):** Puede ver candidatos, crear puestos
 - **Solo ADMIN:** Puede guardar configuracion Drive, eliminar carpetas de empleados, eliminar tipos de documento
 
 ### Validaciones
-- Cedula unica por empresa en candidatos (`@@unique([companyId, cedula])`)
-- Nombre unico por empresa en columnas Kanban (`@@unique([companyId, name])`)
 - Nombre + folder unico por empresa en tipos de documento (`@@unique([companyId, folder, name])`)
 
 ### Integridad de datos
 - Todos los modelos tienen `companyId` con `onDelete: Cascade`
-- Eliminar una empresa elimina todos sus candidatos, puestos, columnas, etc.
-- Eliminar una columna Kanban desvincula los candidatos (no los elimina)
-- `CandidateHistory` registra cada movimiento de candidato con `fromColumn`, `toColumn`, `performedBy`
+- Eliminar una empresa elimina todos sus puestos, etc.
 
 ## Dependencias externas
 
@@ -344,21 +436,15 @@ enum CandidateStatus {
 
 ## Decisiones pendientes / Deuda tecnica
 
-1. **Dualidad de candidatos:** Los candidatos de Drive y los de BD (Kanban) siguen siendo sistemas separados, sin sincronización entre ellos. Lo que cambió en Sprint 6 es que un candidato de Drive ya no necesita pasar por el Kanban para convertirse en guardia — "Contratar" lo mueve directo a Guardias (Sin Asignar). Un candidato de Drive agregado al Kanban (Sistema B) sigue siendo un registro aparte, sin relación con esto.
-2. **Sin notificaciones:** No hay sistema de notificaciones cuando un candidato sube documentos o cuando se completa un checklist.
-3. **Sin filtros avanzados en Kanban:** El Kanban no tiene filtros por puesto, fecha, o estado.
-4. **Sin exportacion:** No hay exportacion de candidatos a CSV/PDF.
-5. **drive.module.ts duplicado:** Existe un `drive.module.ts` que duplica el registro de `DriveController` y `DriveService`. El modulo autoritativo es `personal.module.ts`.
+1. **Sin notificaciones:** No hay sistema de notificaciones cuando un candidato sube documentos o cuando se completa un checklist.
+2. **Sin exportacion:** No hay exportacion de candidatos a CSV/PDF.
+3. **drive.module.ts duplicado:** Existe un `drive.module.ts` que duplica el registro de `DriveController` y `DriveService`. El modulo autoritativo es `personal.module.ts`.
 
 ## Rutas frontend
 **Actualizado 2026-09-09** — el prefijo pasó de `/personal` a `/rrhh` (ver [recursos-humanos.md](recursos-humanos.md) punto 1); esta sección quedó con las rutas viejas y ya no eran correctas. Lista completa y verificada contra `App.tsx` en recursos-humanos.md — solo las de Reclutamiento aquí:
 ```
 /rrhh                    -> PersonalDashboard
 /rrhh/reclutamiento      -> ReclutamientoPage
-/rrhh/kanban             -> RecruitmentKanban
-/rrhh/candidates         -> CandidatesList
-/rrhh/candidates/new     -> CandidateForm (crear)
-/rrhh/candidates/:id     -> CandidateForm (editar)
 ```
 
 ## Navegación Sidebar

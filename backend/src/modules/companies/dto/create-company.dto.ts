@@ -1,4 +1,10 @@
-import { IsString, IsOptional, Matches } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEmail,
+  MinLength,
+  Matches,
+} from 'class-validator';
 
 export class CreateCompanyDto {
   @IsString()
@@ -6,6 +12,16 @@ export class CreateCompanyDto {
 
   @IsString()
   slug: string;
+
+  @IsString()
+  adminFullName: string;
+
+  @IsEmail()
+  adminEmail: string;
+
+  @IsString()
+  @MinLength(6)
+  adminPassword: string;
 
   @IsOptional()
   @IsString()

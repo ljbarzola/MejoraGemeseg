@@ -1,11 +1,54 @@
 import { BadRequestException } from '@nestjs/common';
 import { DriveService } from './drive.service';
 import { MovimientoPersonalService } from './movimiento-personal.service';
+import { PersonalFieldDefinitionService } from './personal-field-definition.service';
+import { AdministrativeStaffFichaService } from './administrative-staff-ficha.service';
+import { GuardiaFichaPersonalService } from './guardia-ficha-personal.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 const noopMovimientoPersonalService = {
   getCedulasFuera: jest.fn().mockResolvedValue([]),
 } as unknown as MovimientoPersonalService;
+
+// Traspaso automático de campos (contratarCandidato, 4.3): sin definiciones
+// configuradas por defecto, así que no interfiere con los specs que no lo
+// ejercitan explícitamente.
+const noopPersonalFieldDefinitionService = {
+  findAll: jest.fn().mockResolvedValue([]),
+} as unknown as PersonalFieldDefinitionService;
+
+const noopAdministrativeStaffFichaService = {
+  get: jest.fn().mockResolvedValue({
+    cedula: '',
+    departamento: null,
+    fechaIngreso: null,
+    activo: true,
+    tipoContrato: null,
+    telefono: null,
+    direccion: null,
+    contactoEmergenciaNombre: null,
+    contactoEmergenciaTelefono: null,
+    salarioAcordado: null,
+    camposPersonalizados: {},
+  }),
+} as unknown as AdministrativeStaffFichaService;
+
+const noopGuardiaFichaPersonalService = {
+  get: jest.fn().mockResolvedValue({
+    cedula: '',
+    telefono: null,
+    email: null,
+    direccion: null,
+    fechaNacimiento: null,
+    contactoEmergenciaNombre: null,
+    contactoEmergenciaTelefono: null,
+    horario: null,
+    puestoFormal: null,
+    salarioAcordado: null,
+    camposPersonalizados: {},
+    activo: true,
+  }),
+} as unknown as GuardiaFichaPersonalService;
 
 // getCompliance no toca Google Drive, pero el módulo se importa al cargar el
 // servicio: se auto-mockea para no arrastrar la librería real en los specs.
@@ -17,7 +60,6 @@ describe('DriveService.getCompliance', () => {
     employeeDriveFolder: { findFirst: jest.Mock };
     documentType: { findMany: jest.Mock };
     employeeDocument: { findMany: jest.Mock };
-    candidate: { findFirst: jest.Mock };
     documentReview: { findMany: jest.Mock };
   };
 
@@ -41,12 +83,14 @@ describe('DriveService.getCompliance', () => {
       employeeDriveFolder: { findFirst: jest.fn().mockResolvedValue(folder) },
       documentType: { findMany: jest.fn().mockResolvedValue([]) },
       employeeDocument: { findMany: jest.fn().mockResolvedValue([]) },
-      candidate: { findFirst: jest.fn().mockResolvedValue(null) },
       documentReview: { findMany: jest.fn().mockResolvedValue([]) },
     };
     service = new DriveService(
       prisma as unknown as PrismaService,
       noopMovimientoPersonalService,
+      noopPersonalFieldDefinitionService,
+      noopAdministrativeStaffFichaService,
+      noopGuardiaFichaPersonalService,
     );
   });
 
@@ -242,18 +286,14 @@ describe('DriveService.getCompliance', () => {
     });
   });
 
-  it('el contrato deja de ser requerido si el candidato no está Activo/Contratado', async () => {
+  it('el tipo de documento "Contrato" respeta el flag `required` configurado, sin excepción especial', async () => {
     prisma.documentType.findMany.mockResolvedValue([
       { id: 9, name: 'Contrato', required: true },
     ]);
-    prisma.candidate.findFirst.mockResolvedValue({
-      column: { name: 'Postulado' },
-    });
 
     const result = await service.getCompliance('0912345678', 1);
 
-    expect(result.documents[0].required).toBe(false);
-    expect(result.compliancePercent).toBe(0);
+    expect(result.documents[0].required).toBe(true);
   });
 });
 
@@ -281,6 +321,9 @@ describe('DriveService.updateJobPosition', () => {
     service = new DriveService(
       prisma as unknown as PrismaService,
       noopMovimientoPersonalService,
+      noopPersonalFieldDefinitionService,
+      noopAdministrativeStaffFichaService,
+      noopGuardiaFichaPersonalService,
     );
     driveFilesUpdate = jest.fn().mockResolvedValue({});
     driveFilesCreate = jest
@@ -376,6 +419,9 @@ describe('DriveService.syncJobPositionsFromDrive', () => {
     service = new DriveService(
       prisma as unknown as PrismaService,
       noopMovimientoPersonalService,
+      noopPersonalFieldDefinitionService,
+      noopAdministrativeStaffFichaService,
+      noopGuardiaFichaPersonalService,
     );
     (service as any).listSubFolders = jest
       .fn()
@@ -456,6 +502,9 @@ describe('DriveService.reassignDocumentType', () => {
     service = new DriveService(
       prisma as unknown as PrismaService,
       noopMovimientoPersonalService,
+      noopPersonalFieldDefinitionService,
+      noopAdministrativeStaffFichaService,
+      noopGuardiaFichaPersonalService,
     );
     driveFilesUpdate = jest.fn().mockResolvedValue({});
     (service as any).getDriveClient = jest
@@ -523,7 +572,6 @@ describe('DriveService.syncEntidadesFolder', () => {
     employeeDriveFolder: { upsert: jest.Mock; findFirst: jest.Mock };
     employeeDocument: { upsert: jest.Mock };
     guardiaFichaPersonal: { findUnique: jest.Mock };
-    candidate: { findUnique: jest.Mock };
     asignacionGuardia: {
       findMany: jest.Mock;
       update: jest.Mock;
@@ -568,7 +616,6 @@ describe('DriveService.syncEntidadesFolder', () => {
       },
       employeeDocument: { upsert: jest.fn().mockResolvedValue({}) },
       guardiaFichaPersonal: { findUnique: jest.fn().mockResolvedValue(null) },
-      candidate: { findUnique: jest.fn().mockResolvedValue(null) },
       asignacionGuardia: {
         findMany: jest.fn().mockResolvedValue([]),
         update: jest.fn().mockResolvedValue({}),
@@ -578,6 +625,9 @@ describe('DriveService.syncEntidadesFolder', () => {
     service = new DriveService(
       prisma as unknown as PrismaService,
       movimientoPersonalService as unknown as MovimientoPersonalService,
+      noopPersonalFieldDefinitionService,
+      noopAdministrativeStaffFichaService,
+      noopGuardiaFichaPersonalService,
     );
 
     // Raíz -> [Público] -> [Banco Pichincha] -> [Juan Perez - 0912345678]
@@ -671,19 +721,37 @@ describe('DriveService.syncEntidadesFolder', () => {
     expect(result.entidadesColisionNombre[0]).toContain('Banco Pichincha');
   });
 
-  it('crea Datos_Personales.json en la carpeta del guardia y lo excluye de EmployeeDocument', async () => {
+  it('crea datos.json en la carpeta del guardia y lo excluye de EmployeeDocument', async () => {
     const result = await service.syncEntidadesFolder(1, 1);
 
     expect(driveFilesCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         requestBody: expect.objectContaining({
-          name: 'Datos_Personales.json',
+          name: 'datos.json',
           parents: ['g-1'],
         }),
       }),
     );
     expect(result.fichasPersonales).toBe(1);
     // Solo Cedula.pdf debía convertirse en EmployeeDocument, nunca la ficha.
+    expect(prisma.employeeDocument.upsert).toHaveBeenCalledTimes(1);
+    expect(result.documentos).toBe(1);
+  });
+
+  it('excluye candidato.json y las trazas de análisis con IA de EmployeeDocument (quedaban como "documento no identificado")', async () => {
+    (service as any).listFilesInFolder = jest.fn().mockResolvedValue([
+      { id: 'doc-1', name: 'Cedula.pdf', mimeType: 'application/pdf' },
+      { id: 'cj-1', name: 'candidato.json', mimeType: 'application/json' },
+      { id: 'ia-1', name: 'analisis-ia.json', mimeType: 'application/json' },
+      {
+        id: 'iap-1',
+        name: 'analisis-ia-pendiente.json',
+        mimeType: 'application/json',
+      },
+    ]);
+
+    const result = await service.syncEntidadesFolder(1, 1);
+
     expect(prisma.employeeDocument.upsert).toHaveBeenCalledTimes(1);
     expect(result.documentos).toBe(1);
   });
@@ -708,7 +776,7 @@ describe('DriveService.syncEntidadesFolder', () => {
     expect(result.fichasPersonales).toBe(1);
   });
 
-  it('un fallo al escribir Datos_Personales.json (ej. carpeta compartida solo como Lector) no rompe el resto del sync', async () => {
+  it('un fallo al escribir datos.json (ej. carpeta compartida solo como Lector) no rompe el resto del sync', async () => {
     driveFilesCreate.mockRejectedValue(
       new Error('The user does not have sufficient permissions'),
     );
@@ -716,7 +784,7 @@ describe('DriveService.syncEntidadesFolder', () => {
     const result = await service.syncEntidadesFolder(1, 1);
 
     expect(result.fichasPersonales).toBe(0);
-    expect(result.errors[0]).toContain('Datos_Personales.json');
+    expect(result.errors[0]).toContain('datos.json');
     // El resto del sync (entidad, asignación) se completó igual.
     expect(result.entidadesCreadas).toEqual(['Banco Pichincha']);
     expect(result.asignacionesAbiertas).toBe(1);
@@ -885,8 +953,9 @@ describe('DriveService.syncEntidadesFolder', () => {
 describe('DriveService.contratarCandidato', () => {
   let service: DriveService;
   let prisma: {
-    employeeDriveFolder: { findFirst: jest.Mock };
+    employeeDriveFolder: { findFirst: jest.Mock; findMany: jest.Mock };
     folderConfig: { findFirst: jest.Mock };
+    jobPosition: { findFirst: jest.Mock };
   };
   let driveFilesGet: jest.Mock;
   let driveFilesUpdate: jest.Mock;
@@ -894,29 +963,56 @@ describe('DriveService.contratarCandidato', () => {
   let movimientoPersonalService: Record<string, jest.Mock>;
 
   beforeEach(() => {
-    movimientoPersonalService = {};
+    movimientoPersonalService = {
+      crearEntrada: jest.fn().mockResolvedValue({}),
+      isActivo: jest.fn().mockResolvedValue(true),
+    };
     prisma = {
-      employeeDriveFolder: { findFirst: jest.fn().mockResolvedValue(null) },
+      employeeDriveFolder: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       folderConfig: {
         findFirst: jest.fn().mockResolvedValue({ driveFolderId: 'root-1' }),
+      },
+      // Por defecto la vacante del postulante es de guardias — el destino que
+      // contratar tenía siempre antes de que existiera tipoContratacion.
+      jobPosition: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 7,
+          puesto: 'Guardia de Seguridad',
+          driveFolderId: 'puesto-1',
+          tipoContratacion: 'GUARDIA',
+        }),
       },
     };
     service = new DriveService(
       prisma as unknown as PrismaService,
       movimientoPersonalService as unknown as MovimientoPersonalService,
+      noopPersonalFieldDefinitionService,
+      noopAdministrativeStaffFichaService,
+      noopGuardiaFichaPersonalService,
     );
 
     driveFilesGet = jest.fn().mockImplementation(({ fileId }) => {
       if (fileId === 'cand-1')
         return Promise.resolve({
-          data: { id: 'cand-1', name: 'Maria Lopez - 0923456789', parents: ['puesto-1'] },
+          data: {
+            id: 'cand-1',
+            name: 'Maria Lopez - 0923456789',
+            parents: ['puesto-1'],
+          },
         });
       throw new Error(`unexpected fileId ${fileId}`);
     });
     driveFilesUpdate = jest.fn().mockResolvedValue({});
     driveFilesCreate = jest.fn().mockResolvedValue({ data: { id: 'sa-new' } });
     (service as any).getDriveClient = jest.fn().mockReturnValue({
-      files: { get: driveFilesGet, update: driveFilesUpdate, create: driveFilesCreate },
+      files: {
+        get: driveFilesGet,
+        update: driveFilesUpdate,
+        create: driveFilesCreate,
+      },
     });
     (service as any).listFilesInFolder = jest.fn().mockResolvedValue([]);
     (service as any).listSubFolders = jest.fn().mockResolvedValue([]);
@@ -927,7 +1023,7 @@ describe('DriveService.contratarCandidato', () => {
       data: { id: 'cand-1', name: 'carpeta rara', parents: ['puesto-1'] },
     });
 
-    await expect(service.contratarCandidato(1, 'cand-1')).rejects.toThrow(
+    await expect(service.contratarCandidato(1, 'cand-1', 2)).rejects.toThrow(
       /cédula/i,
     );
     expect(driveFilesUpdate).not.toHaveBeenCalled();
@@ -939,15 +1035,29 @@ describe('DriveService.contratarCandidato', () => {
       employeeName: 'Maria Lopez',
     });
 
-    await expect(service.contratarCandidato(1, 'cand-1')).rejects.toThrow(
+    await expect(service.contratarCandidato(1, 'cand-1', 2)).rejects.toThrow(
       /ya existe un guardia/i,
     );
     expect(driveFilesUpdate).not.toHaveBeenCalled();
     expect(driveFilesCreate).not.toHaveBeenCalled();
   });
 
+  it('permite recontratar una cédula que ya existe si el guardia está marcado como "fuera" (salida completada)', async () => {
+    prisma.employeeDriveFolder.findFirst.mockResolvedValue({
+      cedula: '0923456789',
+      employeeName: 'Maria Lopez',
+    });
+    movimientoPersonalService.isActivo.mockResolvedValue(false);
+
+    const result = await service.contratarCandidato(1, 'cand-1', 2);
+
+    expect(result.cedula).toBe('0923456789');
+    expect(driveFilesUpdate).toHaveBeenCalled();
+    expect(movimientoPersonalService.crearEntrada).toHaveBeenCalled();
+  });
+
   it('crea la carpeta "Sin Asignar" si todavía no existe, mueve la carpeta del candidato ahí y marca su estado', async () => {
-    const result = await service.contratarCandidato(1, 'cand-1');
+    const result = await service.contratarCandidato(1, 'cand-1', 2);
 
     expect(driveFilesCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -978,7 +1088,18 @@ describe('DriveService.contratarCandidato', () => {
       cedula: '0923456789',
       nombre: 'Maria Lopez',
       carpetaDestino: 'Sin Asignar',
+      tipoContratacion: 'GUARDIA',
     });
+  });
+
+  it('no renombra la carpeta al contratar a un guardia (Guardias la nombra "Nombre - Cédula", que es como ya viene)', async () => {
+    await service.contratarCandidato(1, 'cand-1', 2);
+
+    const moveCall = driveFilesUpdate.mock.calls.find(
+      ([arg]) => arg?.fileId === 'cand-1' && arg?.addParents,
+    );
+    expect(moveCall).toBeDefined();
+    expect(moveCall![0].requestBody).toBeUndefined();
   });
 
   it('reusa la carpeta "Sin Asignar" si ya existe en vez de crear una duplicada', async () => {
@@ -986,7 +1107,7 @@ describe('DriveService.contratarCandidato', () => {
       .fn()
       .mockResolvedValue([{ id: 'sa-existente', name: 'Sin Asignar' }]);
 
-    await service.contratarCandidato(1, 'cand-1');
+    await service.contratarCandidato(1, 'cand-1', 2);
 
     expect(driveFilesCreate).not.toHaveBeenCalledWith(
       expect.objectContaining({
@@ -998,5 +1119,383 @@ describe('DriveService.contratarCandidato', () => {
     expect(driveFilesUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ addParents: 'sa-existente' }),
     );
+  });
+
+  // Vacante ADMINISTRATIVO: otro destino y, sobre todo, otro formato de nombre
+  // de carpeta ("Nombre - Puesto" en vez de "Nombre - Cédula").
+  describe('cuando la vacante es ADMINISTRATIVO', () => {
+    beforeEach(() => {
+      prisma.jobPosition.findFirst.mockResolvedValue({
+        id: 9,
+        puesto: 'Contadora',
+        driveFolderId: 'puesto-1',
+        tipoContratacion: 'ADMINISTRATIVO',
+      });
+      prisma.folderConfig.findFirst.mockImplementation(({ where }: any) =>
+        Promise.resolve(
+          where.type === 'PERSONAL_ADMIN'
+            ? { driveFolderId: 'admin-root' }
+            : { driveFolderId: 'root-1' },
+        ),
+      );
+    });
+
+    it('mueve la carpeta a Personal Administrativo y la renombra a "Nombre - Puesto" en la misma llamada', async () => {
+      const result = await service.contratarCandidato(1, 'cand-1', 2);
+
+      const moveCall = driveFilesUpdate.mock.calls.find(
+        ([arg]) => arg?.fileId === 'cand-1' && arg?.addParents,
+      );
+      expect(moveCall).toBeDefined();
+      // El renombrado viaja junto al movimiento: la carpeta nunca existe bajo
+      // la raíz de administrativos con el nombre "Nombre - Cédula", que ese
+      // sync leería como si la cédula fuera el puesto.
+      expect(moveCall![0]).toEqual(
+        expect.objectContaining({
+          addParents: 'admin-root',
+          removeParents: 'puesto-1',
+          requestBody: { name: 'Maria Lopez - Contadora' },
+        }),
+      );
+      expect(result).toEqual({
+        cedula: '0923456789',
+        nombre: 'Maria Lopez',
+        carpetaDestino: 'Personal Administrativo',
+        tipoContratacion: 'ADMINISTRATIVO',
+      });
+    });
+
+    it('no crea ni usa el bucket "Sin Asignar" de Guardias', async () => {
+      await service.contratarCandidato(1, 'cand-1', 2);
+
+      expect(driveFilesCreate).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({ name: 'Sin Asignar' }),
+        }),
+      );
+    });
+
+    it('deja la cédula escrita en candidato.json, ya que el nombre de la carpeta la pierde', async () => {
+      await service.contratarCandidato(1, 'cand-1', 2);
+
+      expect(driveFilesCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({ name: 'candidato.json' }),
+          media: expect.objectContaining({
+            body: expect.stringContaining('"cedula": "0923456789"'),
+          }),
+        }),
+      );
+    });
+
+    it('bloquea sin mover nada si no hay carpeta de Personal Administrativo configurada', async () => {
+      prisma.folderConfig.findFirst.mockImplementation(({ where }: any) =>
+        Promise.resolve(
+          where.type === 'PERSONAL_ADMIN' ? null : { driveFolderId: 'root-1' },
+        ),
+      );
+
+      await expect(service.contratarCandidato(1, 'cand-1', 2)).rejects.toThrow(
+        /Personal Administrativo/i,
+      );
+      expect(driveFilesUpdate).not.toHaveBeenCalled();
+      expect(driveFilesCreate).not.toHaveBeenCalled();
+    });
+
+    it('bloquea si ya existe un administrativo con ese nombre (compara sin tildes ni mayúsculas)', async () => {
+      prisma.employeeDriveFolder.findMany.mockResolvedValue([
+        { employeeName: 'MARÍA LOPEZ', folderType: 'PERSONAL_ADMIN' },
+      ]);
+
+      await expect(service.contratarCandidato(1, 'cand-1', 2)).rejects.toThrow(
+        /ya existe un empleado administrativo/i,
+      );
+      expect(driveFilesUpdate).not.toHaveBeenCalled();
+    });
+
+    it('no aplica el chequeo de cédula duplicada de Guardias', async () => {
+      // Esa cédula ya existe como guardia, pero contratar a un administrativo
+      // no debe bloquearse por eso: son bucket e identidad distintos.
+      prisma.employeeDriveFolder.findFirst.mockResolvedValue({
+        cedula: '0923456789',
+        employeeName: 'Maria Lopez',
+      });
+
+      await expect(service.contratarCandidato(1, 'cand-1', 2)).resolves.toEqual(
+        expect.objectContaining({ carpetaDestino: 'Personal Administrativo' }),
+      );
+    });
+  });
+});
+
+describe('DriveService.contratarCandidato — traspaso de campos personalizados', () => {
+  let service: DriveService;
+  let prisma: {
+    employeeDriveFolder: { findFirst: jest.Mock; findMany: jest.Mock };
+    folderConfig: { findFirst: jest.Mock };
+    jobPosition: { findFirst: jest.Mock };
+    guardiaFichaPersonal: { findUnique: jest.Mock; upsert: jest.Mock };
+  };
+  let personalFieldDefinitionService: { findAll: jest.Mock };
+  let driveFilesUpdate: jest.Mock;
+  let driveFilesCreate: jest.Mock;
+  let movimientoPersonalService: Record<string, jest.Mock>;
+
+  beforeEach(() => {
+    movimientoPersonalService = {
+      crearEntrada: jest.fn().mockResolvedValue({}),
+      isActivo: jest.fn().mockResolvedValue(true),
+    };
+    personalFieldDefinitionService = {
+      findAll: jest.fn().mockResolvedValue([
+        { id: 1, key: 'altura', label: 'Altura', required: false },
+        { id: 2, key: 'talla_camisa', label: 'Talla de camisa', required: false },
+      ]),
+    };
+    prisma = {
+      employeeDriveFolder: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      folderConfig: {
+        findFirst: jest.fn().mockResolvedValue({ driveFolderId: 'root-1' }),
+      },
+      jobPosition: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 7,
+          puesto: 'Guardia de Seguridad',
+          driveFolderId: 'puesto-1',
+          tipoContratacion: 'GUARDIA',
+        }),
+      },
+      guardiaFichaPersonal: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn().mockResolvedValue({}),
+      },
+    };
+    service = new DriveService(
+      prisma as unknown as PrismaService,
+      movimientoPersonalService as unknown as MovimientoPersonalService,
+      personalFieldDefinitionService as unknown as PersonalFieldDefinitionService,
+      noopAdministrativeStaffFichaService,
+      noopGuardiaFichaPersonalService,
+    );
+
+    (service as any).getDriveClient = jest.fn().mockReturnValue({
+      files: {
+        get: jest.fn().mockImplementation(({ fileId }) => {
+          if (fileId === 'cand-1')
+            return Promise.resolve({
+              data: {
+                id: 'cand-1',
+                name: 'Maria Lopez - 0923456789',
+                parents: ['puesto-1'],
+              },
+            });
+          throw new Error(`unexpected fileId ${fileId}`);
+        }),
+        update: (driveFilesUpdate = jest.fn().mockResolvedValue({})),
+        create: (driveFilesCreate = jest
+          .fn()
+          .mockResolvedValue({ data: { id: 'sa-new' } })),
+      },
+    });
+    (service as any).listFilesInFolder = jest.fn().mockResolvedValue([]);
+    (service as any).listSubFolders = jest.fn().mockResolvedValue([]);
+  });
+
+  it('rellena los campos requeridos vacíos con lo que el candidato llenó en el formulario', async () => {
+    (service as any).listFilesInFolder = jest.fn().mockResolvedValue([
+      { id: 'json-1', name: 'candidato.json' },
+    ]);
+    (service as any).getDriveClient = jest.fn().mockReturnValue({
+      files: {
+        get: jest.fn().mockImplementation(({ fileId, alt }) => {
+          if (fileId === 'cand-1')
+            return Promise.resolve({
+              data: {
+                id: 'cand-1',
+                name: 'Maria Lopez - 0923456789',
+                parents: ['puesto-1'],
+              },
+            });
+          if (fileId === 'json-1' && alt === 'media')
+            return Promise.resolve({
+              data: JSON.stringify({
+                datosFormulario: { Altura: '1.75', 'Talla de camisa': 'M' },
+              }),
+            });
+          throw new Error(`unexpected fileId ${fileId}`);
+        }),
+        update: driveFilesUpdate,
+        create: driveFilesCreate,
+      },
+    });
+
+    await service.contratarCandidato(1, 'cand-1', 2);
+
+    // Además de rellenar los campos que ya matchean (altura, talla_camisa),
+    // se guarda el datosFormulario completo bajo POSTULACION_STASH_KEY para
+    // rescatar campos configurados DESPUÉS de contratar (ver resolverCamposConPostulacion).
+    const camposEsperados = {
+      altura: '1.75',
+      talla_camisa: 'M',
+      __postulacion: { Altura: '1.75', 'Talla de camisa': 'M' },
+    };
+    expect(prisma.guardiaFichaPersonal.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          camposPersonalizados: camposEsperados,
+        }),
+        update: expect.objectContaining({
+          camposPersonalizados: camposEsperados,
+        }),
+      }),
+    );
+  });
+
+  it('nunca pisa un valor ya cargado a mano en la ficha, solo rellena lo que está vacío', async () => {
+    prisma.guardiaFichaPersonal.findUnique.mockResolvedValue({
+      camposPersonalizados: { altura: '1.80' },
+    });
+    (service as any).listFilesInFolder = jest.fn().mockResolvedValue([
+      { id: 'json-1', name: 'candidato.json' },
+    ]);
+    (service as any).getDriveClient = jest.fn().mockReturnValue({
+      files: {
+        get: jest.fn().mockImplementation(({ fileId, alt }) => {
+          if (fileId === 'cand-1')
+            return Promise.resolve({
+              data: {
+                id: 'cand-1',
+                name: 'Maria Lopez - 0923456789',
+                parents: ['puesto-1'],
+              },
+            });
+          if (fileId === 'json-1' && alt === 'media')
+            return Promise.resolve({
+              data: JSON.stringify({
+                datosFormulario: { Altura: '1.75', 'Talla de camisa': 'M' },
+              }),
+            });
+          throw new Error(`unexpected fileId ${fileId}`);
+        }),
+        update: driveFilesUpdate,
+        create: driveFilesCreate,
+      },
+    });
+
+    await service.contratarCandidato(1, 'cand-1', 2);
+
+    expect(prisma.guardiaFichaPersonal.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          // altura ya tenía valor ('1.80') y no se pisa; talla_camisa estaba
+          // vacía y sí se rellena con lo que trae el formulario. El stash de
+          // postulación se guarda igual, para rescatar campos configurados
+          // después de contratar.
+          camposPersonalizados: {
+            altura: '1.80',
+            talla_camisa: 'M',
+            __postulacion: { Altura: '1.75', 'Talla de camisa': 'M' },
+          },
+        }),
+      }),
+    );
+  });
+
+  it('un fallo al traspasar campos nunca impide que la contratación se complete', async () => {
+    prisma.guardiaFichaPersonal.findUnique.mockRejectedValue(
+      new Error('DB caída'),
+    );
+
+    await expect(
+      service.contratarCandidato(1, 'cand-1', 2),
+    ).resolves.toEqual(expect.objectContaining({ cedula: '0923456789' }));
+  });
+});
+
+describe('DriveService.syncPersonalAdminFolder', () => {
+  let service: DriveService;
+  let prisma: {
+    folderConfig: { findFirst: jest.Mock };
+    employeeDriveFolder: { upsert: jest.Mock };
+    employeeDocument: { upsert: jest.Mock };
+  };
+
+  beforeEach(() => {
+    prisma = {
+      folderConfig: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ driveFolderId: 'root-admin-1' }),
+      },
+      employeeDriveFolder: { upsert: jest.fn().mockResolvedValue({}) },
+      employeeDocument: { upsert: jest.fn().mockResolvedValue({}) },
+    };
+    service = new DriveService(
+      prisma as unknown as PrismaService,
+      noopMovimientoPersonalService,
+      noopPersonalFieldDefinitionService,
+      noopAdministrativeStaffFichaService,
+      noopGuardiaFichaPersonalService,
+    );
+    (service as any).listSubFolders = jest
+      .fn()
+      .mockResolvedValue([
+        { id: 'emp-1', name: 'Juan Perez - 0912345678 - Contador' },
+      ]);
+    (service as any).getDriveClient = jest.fn().mockReturnValue({
+      files: {
+        create: jest.fn().mockResolvedValue({ data: { id: 'ficha-1' } }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    });
+  });
+
+  it('rechaza carpetas sin el formato "Apellidos Nombres - Cédula - Puesto" en vez de crear una identidad silenciosa', async () => {
+    (service as any).listSubFolders = jest
+      .fn()
+      .mockResolvedValue([{ id: 'emp-1', name: 'Juan Perez - Contador' }]);
+    (service as any).listFilesInFolder = jest.fn().mockResolvedValue([]);
+
+    const result = await service.syncPersonalAdminFolder(1, 1);
+
+    expect(result.errors[0]).toMatch(/formato "Apellidos Nombres - Cédula - Puesto"/);
+    expect(prisma.employeeDriveFolder.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { companyId_cedula: { companyId: 1, cedula: 'ID-emp-1' } },
+      }),
+    );
+  });
+
+  it('excluye candidato.json y las trazas de análisis con IA de EmployeeDocument (antes no excluía nada)', async () => {
+    (service as any).listFilesInFolder = jest.fn().mockResolvedValue([
+      { id: 'doc-1', name: 'Cedula.pdf', mimeType: 'application/pdf' },
+      { id: 'cj-1', name: 'candidato.json', mimeType: 'application/json' },
+      { id: 'ia-1', name: 'analisis-ia.json', mimeType: 'application/json' },
+      {
+        id: 'iap-1',
+        name: 'analisis-ia-pendiente.json',
+        mimeType: 'application/json',
+      },
+    ]);
+
+    const result = await service.syncPersonalAdminFolder(1, 1);
+
+    expect(prisma.employeeDocument.upsert).toHaveBeenCalledTimes(1);
+    expect(result.documentsCount).toBe(1);
+  });
+
+  it('sigue creando EmployeeDocument para archivos reales', async () => {
+    (service as any).listFilesInFolder = jest.fn().mockResolvedValue([
+      { id: 'doc-1', name: 'Cedula.pdf', mimeType: 'application/pdf' },
+      { id: 'doc-2', name: 'Hoja de vida.pdf', mimeType: 'application/pdf' },
+    ]);
+
+    const result = await service.syncPersonalAdminFolder(1, 1);
+
+    expect(prisma.employeeDocument.upsert).toHaveBeenCalledTimes(2);
+    expect(result.documentsCount).toBe(2);
   });
 });

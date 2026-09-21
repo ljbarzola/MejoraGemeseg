@@ -12,14 +12,17 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { VentasService } from './ventas.service';
+import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
+import { Section } from '../../common/decorators/section.decorator';
 
 @Controller('ventas')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
 export class VentasController {
   constructor(private readonly ventasService: VentasService) {}
 
   // ==================== METAS Y SEMÁFORO ====================
   @Get('goals')
+  @Section('VENTAS', 'view')
   getGoals(
     @Req() req: any,
     @Query('year') year?: string,
@@ -33,6 +36,7 @@ export class VentasController {
   }
 
   @Post('goals')
+  @Section('VENTAS', 'write')
   setGoal(
     @Req() req: any,
     @Body()
@@ -54,6 +58,7 @@ export class VentasController {
 
   // ==================== VISITAS ====================
   @Get('visits')
+  @Section('VENTAS', 'view')
   getVisits(
     @Req() req: any,
     @Query('userId') userId?: string,
@@ -70,6 +75,7 @@ export class VentasController {
   }
 
   @Post('visits')
+  @Section('VENTAS', 'write')
   createVisit(
     @Req() req: any,
     @Body()
@@ -89,6 +95,7 @@ export class VentasController {
   }
 
   @Post('visits/:id/checkin')
+  @Section('VENTAS', 'write')
   checkInVisit(
     @Param('id') id: string,
     @Req() req: any,
@@ -104,6 +111,7 @@ export class VentasController {
   }
 
   @Post('visits/:id/complete')
+  @Section('VENTAS', 'write')
   completeVisit(
     @Param('id') id: string,
     @Req() req: any,
@@ -124,6 +132,7 @@ export class VentasController {
   }
 
   @Post('visits/:id/cancel')
+  @Section('VENTAS', 'write')
   cancelVisit(
     @Param('id') id: string,
     @Req() req: any,
@@ -133,12 +142,14 @@ export class VentasController {
   }
 
   @Delete('visits/:id')
+  @Section('VENTAS', 'write')
   deleteVisit(@Param('id') id: string, @Req() req: any) {
     return this.ventasService.deleteVisit(+id, req.user.companyId);
   }
 
   // ==================== CRM LEADS ====================
   @Get('leads')
+  @Section('VENTAS', 'view')
   getLeads(
     @Req() req: any,
     @Query('assignedUserId') assignedUserId?: string,
@@ -153,6 +164,7 @@ export class VentasController {
   }
 
   @Post('leads')
+  @Section('VENTAS', 'write')
   createLead(
     @Req() req: any,
     @Body()
@@ -172,6 +184,7 @@ export class VentasController {
   }
 
   @Patch('leads/:id/assign')
+  @Section('VENTAS', 'write')
   assignLead(
     @Param('id') id: string,
     @Req() req: any,
@@ -185,6 +198,7 @@ export class VentasController {
   }
 
   @Patch('leads/:id/status')
+  @Section('VENTAS', 'write')
   updateLeadStatus(
     @Param('id') id: string,
     @Req() req: any,
@@ -199,12 +213,14 @@ export class VentasController {
   }
 
   @Delete('leads/:id')
+  @Section('VENTAS', 'write')
   deleteLead(@Param('id') id: string, @Req() req: any) {
     return this.ventasService.deleteLead(+id, req.user.companyId);
   }
 
   // ==================== DASHBOARD & MÉTRICAS ====================
   @Get('dashboard')
+  @Section('VENTAS', 'view')
   getDashboardMetrics(
     @Req() req: any,
     @Query('year') year?: string,
@@ -219,16 +235,19 @@ export class VentasController {
 
   // ==================== API KEYS ====================
   @Get('api-keys')
+  @Section('VENTAS', 'view')
   getApiKeys(@Req() req: any) {
     return this.ventasService.getApiKeys(req.user.companyId);
   }
 
   @Post('api-keys')
+  @Section('VENTAS', 'write')
   createApiKey(@Req() req: any, @Body() body: { name: string }) {
     return this.ventasService.createApiKey(req.user.companyId, body.name);
   }
 
   @Delete('api-keys/:id')
+  @Section('VENTAS', 'write')
   deleteApiKey(@Param('id') id: string, @Req() req: any) {
     return this.ventasService.deleteApiKey(+id, req.user.companyId);
   }

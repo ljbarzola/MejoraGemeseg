@@ -6,13 +6,13 @@ export const ALL_SECTIONS = [
   { key: 'PROJECTS', label: 'Proyectos', alwaysEnabled: true },
   { key: 'ADMIN', label: 'Administración', alwaysEnabled: true },
   { key: 'TOOLS', label: 'Herramientas', alwaysEnabled: true },
-  { key: 'AGENTS', label: 'Agentes de IA', alwaysEnabled: true },
   { key: 'CACAO', label: 'Cacao', alwaysEnabled: false },
   { key: 'COMPANY_SETTINGS', label: 'Mi Empresa', alwaysEnabled: false },
   { key: 'COMPANIES', label: 'Empresas', alwaysEnabled: false },
   { key: 'CUSTODIAS', label: 'Custodias', alwaysEnabled: false },
   { key: 'RRHH', label: 'Recursos Humanos', alwaysEnabled: false },
   { key: 'VENTAS', label: 'Ventas y CRM', alwaysEnabled: false },
+  { key: 'SISTEMAS', label: 'Sistemas', alwaysEnabled: false },
 ];
 
 @Injectable()

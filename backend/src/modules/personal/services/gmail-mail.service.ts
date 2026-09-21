@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { google } from 'googleapis';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -50,7 +50,7 @@ export class GmailMailService {
       return JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
     }
 
-    throw new Error(
+    throw new BadRequestException(
       'Google Service Account no configurado. Coloca google-service-account.json en la raíz del backend o define GOOGLE_SERVICE_ACCOUNT_JSON.',
     );
   }
@@ -65,7 +65,7 @@ export class GmailMailService {
 
     const senderAddress = process.env.GMAIL_SENDER_ADDRESS;
     if (!senderAddress) {
-      throw new Error(
+      throw new BadRequestException(
         'GMAIL_SENDER_ADDRESS no está configurado. Define esta variable de entorno con la casilla de Google Workspace que enviará los avisos (requiere domain-wide delegation habilitada para la service account) antes de poder enviar correo.',
       );
     }

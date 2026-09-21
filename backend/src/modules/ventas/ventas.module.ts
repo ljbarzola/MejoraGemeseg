@@ -7,9 +7,11 @@ import { VentasTemplatesService } from './ventas-templates.service';
 import { VentasContratosController } from './ventas-contratos.controller';
 import { VentasContratosService } from './ventas-contratos.service';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { PersonalModule } from '../personal/personal.module';
+import { PermissionsModule } from '../permissions/permissions.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, PersonalModule, PermissionsModule],
   controllers: [
     VentasController,
     VentasWebhookController,

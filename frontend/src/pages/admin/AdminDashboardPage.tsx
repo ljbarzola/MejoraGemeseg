@@ -12,6 +12,7 @@ import { getProjects } from '../../services/project.service';
 import type { AdminUser, UserStats, AdminProjectStats } from '../../services/user.service';
 import type { Project } from '../../types/project';
 import { getUser } from '../../services/auth.service';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrador',
@@ -65,6 +66,7 @@ export default function AdminDashboardPage() {
   });
   const [formError, setFormError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
+  const [confirmandoDesactivar, setConfirmandoDesactivar] = useState<{ id: number; name: string } | null>(null);
 
   const currentUser = getUser();
 
@@ -174,8 +176,14 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleDelete = async (userId: number, userName: string) => {
-    if (!confirm(`¿Desactivar usuario "${userName}"?`)) return;
+  const handleDelete = (userId: number, userName: string) => {
+    setConfirmandoDesactivar({ id: userId, name: userName });
+  };
+
+  const confirmarDesactivar = async () => {
+    if (!confirmandoDesactivar) return;
+    const { id: userId } = confirmandoDesactivar;
+    setConfirmandoDesactivar(null);
     try {
       await deleteUser(userId);
       loadData();
@@ -537,6 +545,17 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmandoDesactivar && (
+        <ConfirmDialog
+          title="Desactivar usuario"
+          message={`¿Desactivar usuario "${confirmandoDesactivar.name}"?`}
+          confirmLabel="Desactivar"
+          danger
+          onConfirm={confirmarDesactivar}
+          onCancel={() => setConfirmandoDesactivar(null)}
+        />
       )}
     </div>
   );

@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, Settings, FileCog, X, IdCard } from 'lucide-react';
+import { extractDriveFolderId, buildDriveFolderLink } from '../../utils/driveLink';
+import { formatFechaHoraSync } from '../../utils/formatFechaHora';
 import {
   getDriveTree,
   syncPersonalAdminFolder,
@@ -12,7 +14,8 @@ import {
   type AdministrativeStaffFicha,
 } from '../../services/personal.service';
 import AdministrativoDetalleModal from '../../components/personal/AdministrativoDetalleModal';
-import DocumentosRequeridosModal from '../../components/personal/DocumentosRequeridosModal';
+import AdministrativeStaffConfigModal from '../../components/personal/AdministrativeStaffConfigModal';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 interface StaffRow {
   employeeName: string;
@@ -41,6 +44,27 @@ export default function AdministrativeStaff() {
   const [testingConfig, setTestingConfig] = useState(false);
   const [configTestResult, setConfigTestResult] = useState<any>(null);
   const [configError, setConfigError] = useState('');
+
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState<StaffRow | null>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const deleteErrorRef = useRef<HTMLDivElement>(null);
+
+  // El botón "Eliminar" puede estar en una fila lejos del inicio de una tabla
+  // larga; el banner de error se pinta arriba de la página, así que se hace
+  // scrollIntoView para que RRHH no se lo pierda.
+  useEffect(() => {
+    if (deleteError) {
+      deleteErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [deleteError]);
+
+  // La más reciente entre todas las filas — cada una trae su propio
+  // lastSyncAt (EmployeeDriveFolder), no hace falta guardar nada aparte.
+  const ultimaSincronizacion = staff.reduce<string | undefined>((max, r) => {
+    if (!r.lastSyncAt) return max;
+    if (!max || new Date(r.lastSyncAt) > new Date(max)) return r.lastSyncAt;
+    return max;
+  }, undefined);
 
   const loadStaff = () => {
     setLoading(true);
@@ -78,7 +102,7 @@ export default function AdministrativeStaff() {
       .then((data) => {
         if (data) {
           setDriveConfig(data);
-          setConfigFolderId(data.driveFolderId || '');
+          setConfigFolderId(data.driveFolderId ? (data.driveFolderLink || buildDriveFolderLink(data.driveFolderId)) : '');
         }
       })
       .catch((err: any) => {
@@ -88,8 +112,8 @@ export default function AdministrativeStaff() {
   };
 
   const handleTestConfig = async () => {
-    const cleanId = configFolderId.trim().replace(/\.+$/, '');
-    if (!cleanId) { setConfigError('Escribe el ID de la carpeta raíz para probar la conexión.'); return; }
+    const cleanId = extractDriveFolderId(configFolderId);
+    if (!cleanId) { setConfigError('Pega el enlace completo de la carpeta raíz para probar la conexión.'); return; }
     setTestingConfig(true);
     setConfigTestResult(null);
     setConfigError('');
@@ -104,8 +128,8 @@ export default function AdministrativeStaff() {
   };
 
   const handleSaveConfig = async () => {
-    const cleanId = configFolderId.trim().replace(/\.+$/, '');
-    if (!cleanId) { setConfigError('Ingresa el ID de la carpeta.'); return; }
+    const cleanId = extractDriveFolderId(configFolderId);
+    if (!cleanId) { setConfigError('Pega el enlace completo de la carpeta.'); return; }
     setSavingConfig(true);
     setConfigError('');
     try {
@@ -120,14 +144,21 @@ export default function AdministrativeStaff() {
     }
   };
 
-  const handleDeleteEmployee = async (emp: StaffRow) => {
-    if (!window.confirm(`¿Estás seguro de eliminar a ${emp.employeeName}? Se borrará su registro de Drive y candidato.`)) return;
+  const handleDeleteEmployee = (emp: StaffRow) => {
+    setDeleteError('');
+    setConfirmandoEliminar(emp);
+  };
+
+  const confirmarEliminarEmployee = async () => {
+    const emp = confirmandoEliminar;
+    if (!emp) return;
+    setConfirmandoEliminar(null);
     try {
       await deleteDriveEmployee(emp.cedula);
       if (selectedEmployee?.cedula === emp.cedula) setSelectedEmployee(null);
       loadStaff();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Error al eliminar');
+      setDeleteError(err.response?.data?.message || 'Error al eliminar');
     }
   };
 
@@ -145,22 +176,36 @@ export default function AdministrativeStaff() {
             <p style={{ color: '#718096', fontSize: '0.85rem', marginTop: '4px' }}>
               Personal de oficina y administrativo sincronizado desde Google Drive
             </p>
+            <p style={{ color: '#a0aec0', fontSize: '0.78rem', marginTop: '2px' }}>
+              A diferencia de Guardias (que usa "Nombre - Cédula"), aquí la carpeta se guarda como "Nombre - Puesto", sin cédula.
+            </p>
           </div>
 
-          <div className="header-actions">
-            <button className="btn-secondary" onClick={handleSync} disabled={syncing}>
-              <RefreshCw size={16} className={syncing ? 'spin' : undefined} />
-              {syncing ? 'Sincronizando...' : 'Sincronizar Drive'}
-            </button>
-            <button className="btn-secondary" onClick={openConfigModal} title="Configurar carpeta de Drive de Personal Administrativo">
-              <Settings size={16} /> Configurar Drive
-            </button>
-            <button className="btn-secondary" onClick={() => setShowDocTypesModal(true)} title="Configurar qué documentos son obligatorios para este grupo">
-              <FileCog size={16} /> Documentos Requeridos
-            </button>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+            <div className="header-actions">
+              <button className="btn-secondary" onClick={handleSync} disabled={syncing}>
+                <RefreshCw size={16} className={syncing ? 'spin' : undefined} />
+                {syncing ? 'Sincronizando...' : 'Sincronizar Drive'}
+              </button>
+              <button className="btn-secondary" onClick={openConfigModal} title="Configurar carpeta de Drive de Personal Administrativo">
+                <Settings size={16} /> Configurar Drive
+              </button>
+              <button className="btn-secondary" onClick={() => setShowDocTypesModal(true)} title="Configurar datos, campos y documentos requeridos de este grupo">
+                <FileCog size={16} /> Configuración
+              </button>
+            </div>
+            {ultimaSincronizacion && (
+              <span style={{ fontSize: '0.75rem', color: '#718096' }}>
+                Última sincronización: {formatFechaHoraSync(ultimaSincronizacion)}
+              </span>
+            )}
           </div>
         </div>
       </div>
+
+      {deleteError && (
+        <div ref={deleteErrorRef} style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginTop: '16px', fontSize: '0.85rem' }}>{deleteError}</div>
+      )}
 
       <div className="admin-section" style={{ marginTop: '20px' }}>
         {loading ? (
@@ -238,7 +283,11 @@ export default function AdministrativeStaff() {
       />
 
       {showDocTypesModal && (
-        <DocumentosRequeridosModal onClose={() => setShowDocTypesModal(false)} />
+        <AdministrativeStaffConfigModal
+          initialTab="DOCUMENTOS"
+          onClose={() => setShowDocTypesModal(false)}
+          onFieldsChanged={() => {}}
+        />
       )}
 
       {/* MODAL CONFIGURACIÓN DE DRIVE - PERSONAL ADMINISTRATIVO */}
@@ -272,9 +321,7 @@ export default function AdministrativeStaff() {
                   A diferencia de Custodios, aquí el nombre de carpeta NO lleva cédula — va el <strong>puesto</strong> (ej. "María Torres - Contadora").
                 </p>
                 <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#718096' }}>
-                  Para obtener el ID de la carpeta raíz: ábrela en Drive y copia el ID de la URL —
-                  <br />
-                  <code>https://drive.google.com/drive/folders/1ABC123...</code> → el ID es <code>1ABC123...</code>
+                  Abre la carpeta raíz en Drive y copia el enlace completo desde la barra de direcciones o con "Compartir → Copiar enlace".
                 </p>
                 <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#c53030', fontWeight: 600 }}>
                   IMPORTANTE: comparte esa carpeta (Lector) con <code>drive-sync@agentes-504115.iam.gserviceaccount.com</code>.
@@ -288,12 +335,12 @@ export default function AdministrativeStaff() {
                   {configError && <div className="form-error">{configError}</div>}
 
                   <div className="form-group">
-                    <label>ID de la carpeta raíz de Personal Administrativo en Drive *</label>
+                    <label>Enlace de la carpeta raíz de Personal Administrativo en Drive *</label>
                     <input
                       type="text"
                       value={configFolderId}
                       onChange={(e) => { setConfigFolderId(e.target.value); setConfigTestResult(null); }}
-                      placeholder="Ej: 1ABC123def456GHI..."
+                      placeholder="https://drive.google.com/drive/folders/1ABC123..."
                       style={{ width: '100%' }}
                     />
                   </div>
@@ -335,6 +382,17 @@ export default function AdministrativeStaff() {
             )}
           </div>
         </div>
+      )}
+
+      {confirmandoEliminar && (
+        <ConfirmDialog
+          title="Eliminar empleado"
+          message={`¿Estás seguro de eliminar a ${confirmandoEliminar.employeeName}? Se borrará su registro de Drive y candidato.`}
+          confirmLabel="Sí, eliminar"
+          danger
+          onConfirm={confirmarEliminarEmployee}
+          onCancel={() => setConfirmandoEliminar(null)}
+        />
       )}
     </div>
   );

@@ -1,28 +1,42 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { DriveService } from '../personal/services/drive.service';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import { randomBytes, createHmac, timingSafeEqual } from 'crypto';
 import JSZip from 'jszip';
-import * as mammoth from 'mammoth';
-const htmlPdfNode = require('html-pdf-node');
 import axios from 'axios';
+
+const VENTAS_DRIVE_FOLDER_TYPE = 'VENTAS_CONTRATOS';
+const SIGNWELL_API_BASE = 'https://www.signwell.com/api/v1';
+
+const execFileAsync = promisify(execFile);
 
 const TEMPLATES_DIR = path.resolve(process.cwd(), 'uploads', 'templates');
 const CONTRACTS_DIR = path.resolve(process.cwd(), 'uploads', 'contracts');
 
 @Injectable()
 export class VentasContratosService {
-  constructor(private readonly prisma: PrismaService) {
+  private readonly logger = new Logger(VentasContratosService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly driveService: DriveService,
+  ) {
     if (!fs.existsSync(CONTRACTS_DIR))
       fs.mkdirSync(CONTRACTS_DIR, { recursive: true });
   }
 
-  private getBoldSignKey(): string {
-    return process.env.BOLDSIGN_API_KEY || '';
+  private getSignWellKey(): string {
+    return process.env.SIGNWELL_API_KEY || '';
   }
 
   async listContracts(
@@ -60,26 +74,79 @@ export class VentasContratosService {
     if (!companyId) throw new BadRequestException('Se requiere una empresa');
     const template = await this.prisma.salesTemplate.findFirst({
       where: { id: dto.templateId, companyId },
+      include: { fields: true },
     });
     if (!template) throw new NotFoundException('Plantilla no encontrada');
 
-    return this.prisma.salesContract.create({
-      data: {
-        templateId: dto.templateId,
-        clientName: dto.clientName,
-        clientEmail: dto.clientEmail,
-        clientPhone: dto.clientPhone || null,
-        clientCompany: dto.clientCompany || null,
-        clientRuc: dto.clientRuc || null,
-        clientAddress: dto.clientAddress || null,
-        fieldValues: dto.fieldValues || {},
-        annexA: dto.annexA || null,
-        annexB: dto.annexB || null,
-        annexC: dto.annexC || null,
-        companyId,
-        createdBy,
-      },
-      include: { template: { select: { id: true, name: true } } },
+    // If the template has any table field assigned to the client, generate
+    // a link (token) so they can fill it in themselves before the contract
+    // is finalized — SignWell's own signer form fields don't support a
+    // "table with a variable number of rows", only fixed-position fields.
+    const hasClientTableField = template.fields.some(
+      (f) => f.fieldType === 'TABLE' && f.isClientField,
+    );
+    const clientFillToken = hasClientTableField
+      ? randomBytes(24).toString('hex')
+      : null;
+
+    // Campos fieldValues nunca deben incluir un valor manual para la
+    // variable de número de contrato — la asigna el sistema abajo.
+    const numberField = template.fields.find(
+      (f) => f.fieldType === 'CONTRACT_NUMBER',
+    );
+    const fieldValues: Record<string, any> = { ...(dto.fieldValues || {}) };
+    if (numberField) delete fieldValues[numberField.variableName];
+
+    const createData = {
+      templateId: dto.templateId,
+      clientName: dto.clientName,
+      clientEmail: dto.clientEmail,
+      clientPhone: dto.clientPhone || null,
+      clientCompany: dto.clientCompany || null,
+      clientRuc: dto.clientRuc || null,
+      clientAddress: dto.clientAddress || null,
+      annexA: dto.annexA || null,
+      annexB: dto.annexB || null,
+      annexC: dto.annexC || null,
+      clientFillToken,
+      companyId,
+      createdBy,
+    };
+
+    if (!numberField) {
+      return this.prisma.salesContract.create({
+        data: { ...createData, fieldValues },
+        include: { template: { select: { id: true, name: true } } },
+      });
+    }
+
+    // La lectura+incremento del contador y la creación del contrato deben
+    // ir en una sola transacción — si dos contratos se crean casi al mismo
+    // tiempo para la misma plantilla, sin esto podrían recibir el mismo
+    // número.
+    return this.prisma.$transaction(async (tx) => {
+      const fresh = await tx.salesTemplate.findUniqueOrThrow({
+        where: { id: dto.templateId },
+      });
+      const digits = fresh.numberingDigits ?? 5;
+      const next = fresh.numberingNext ?? 1;
+      const code = fresh.numberingPrefix
+        ? `${fresh.numberingPrefix}-${String(next).padStart(digits, '0')}`
+        : String(next).padStart(digits, '0');
+
+      await tx.salesTemplate.update({
+        where: { id: dto.templateId },
+        data: { numberingNext: { increment: 1 } },
+      });
+
+      return tx.salesContract.create({
+        data: {
+          ...createData,
+          contractNumber: code,
+          fieldValues: { ...fieldValues, [numberField.variableName]: code },
+        },
+        include: { template: { select: { id: true, name: true } } },
+      });
     });
   }
 
@@ -108,6 +175,106 @@ export class VentasContratosService {
     });
   }
 
+  // ==================== CLIENT DATA COLLECTION (public link) ====================
+
+  /**
+   * Public, token-scoped view of a contract's client-fillable table fields.
+   * No auth guard — the unguessable token (24 random bytes) IS the access
+   * control. Returns only what the client needs to see, never company/CRM
+   * data.
+   */
+  async getPublicContractForFill(token: string) {
+    const contract = await this.prisma.salesContract.findFirst({
+      where: { clientFillToken: token },
+      include: { template: { include: { fields: true } } },
+    });
+    if (!contract) throw new NotFoundException('Link no válido o expirado');
+
+    const clientTableFields = contract.template.fields.filter(
+      (f) => f.fieldType === 'TABLE' && f.isClientField,
+    );
+    const fieldValues = (contract.fieldValues as Record<string, any>) || {};
+
+    return {
+      contractId: contract.id,
+      clientName: contract.clientName,
+      alreadySubmitted: !!contract.clientFilledAt,
+      fields: clientTableFields.map((f) => ({
+        variableName: f.variableName,
+        label: f.label,
+        tableConfig: f.tableConfig,
+        value: fieldValues[f.variableName] || [],
+      })),
+    };
+  }
+
+  /**
+   * Saves what the client submitted. Only accepts values for variable
+   * names that are actually configured as client-fillable TABLE fields on
+   * this contract's template — the client can't inject arbitrary keys into
+   * fieldValues.
+   *
+   * This link only ever exists because of a client TABLE field (dynamic
+   * rows are the one thing SignWell genuinely can't collect on its own —
+   * see CONTRATOS-PLAN.md sección 8), so as soon as the client submits,
+   * the contract is generated and sent to SignWell right away, and the
+   * client is bounced in the same session straight into the signing page
+   * (`redirectToSign`) instead of waiting for a second email. If that
+   * auto-send fails for any reason, the client's submission is still
+   * saved — the vendor can generate/send by hand from ContratoResult.tsx.
+   */
+  async submitPublicFill(
+    token: string,
+    values: Record<string, any>,
+  ): Promise<{ success: true; redirectToSign?: string | null }> {
+    const contract = await this.prisma.salesContract.findFirst({
+      where: { clientFillToken: token },
+      include: { template: { include: { fields: true } } },
+    });
+    if (!contract) throw new NotFoundException('Link no válido o expirado');
+    if (contract.clientFilledAt) {
+      throw new BadRequestException('Esta información ya fue enviada');
+    }
+
+    const clientTableFieldNames = new Set(
+      contract.template.fields
+        .filter((f) => f.fieldType === 'TABLE' && f.isClientField)
+        .map((f) => f.variableName),
+    );
+
+    const currentValues = (contract.fieldValues as Record<string, any>) || {};
+    const merged = { ...currentValues };
+    for (const [key, rows] of Object.entries(values || {})) {
+      if (clientTableFieldNames.has(key) && Array.isArray(rows)) {
+        merged[key] = rows;
+      }
+    }
+
+    const updatedContract = await this.prisma.salesContract.update({
+      where: { id: contract.id },
+      data: { fieldValues: merged, clientFilledAt: new Date() },
+      include: { template: { include: { fields: true } } },
+    });
+
+    if (clientTableFieldNames.size === 0) {
+      // Shouldn't happen — this link only ever gets created when there's a
+      // client table — but if it does, don't auto-send without a reason.
+      return { success: true };
+    }
+
+    try {
+      const { pdfBuffer, pdfUrl } = await this.generatePdfInternal(updatedContract);
+      (updatedContract as any).generatedPdfPath = pdfUrl;
+      const { signingUrl } = await this.sendToSignWellInternal(updatedContract, pdfBuffer);
+      return { success: true, redirectToSign: signingUrl };
+    } catch (err: any) {
+      this.logger.warn(
+        `Auto-envío a SignWell falló tras completar el link público del contrato ${contract.id}: ${err.message}`,
+      );
+      return { success: true };
+    }
+  }
+
   // ==================== PDF GENERATION ====================
 
   async generatePdf(contractId: number, companyId: number | null) {
@@ -115,9 +282,42 @@ export class VentasContratosService {
     if (companyId) where.companyId = companyId;
     const contract = await this.prisma.salesContract.findFirst({
       where,
-      include: { template: true },
+      include: { template: { include: { fields: true } } },
     });
     if (!contract) throw new NotFoundException('Contrato no encontrado');
+
+    // Campos que llena el vendedor (no el cliente, no tablas) marcados como
+    // obligatorios en la plantilla — el frontend ya valida esto, pero un
+    // llamado directo a la API no debería poder saltárselo.
+    const fieldValues = (contract.fieldValues as Record<string, any>) || {};
+    const missing = contract.template.fields.filter((f) => {
+      if (!f.isRequired || f.isClientField || f.fieldType === 'TABLE' || f.fieldType === 'CONTRACT_NUMBER') {
+        return false;
+      }
+      const v = fieldValues[f.variableName];
+      if (Array.isArray(v)) return v.length === 0;
+      return v === undefined || v === null || String(v).trim() === '';
+    });
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Faltan campos requeridos: ${missing.map((f) => f.label).join(', ')}`,
+      );
+    }
+
+    const { pdfUrl } = await this.generatePdfInternal(contract);
+    return { success: true, pdfUrl };
+  }
+
+  /**
+   * The actual PDF-generation work, shared by the `POST .../generate`
+   * endpoint above and by the auto-send-on-client-submit path
+   * (`submitPublicFill`) — both need the exact same merge+convert
+   * pipeline, just triggered from different places.
+   */
+  private async generatePdfInternal(
+    contract: any,
+  ): Promise<{ pdfBuffer: Buffer; pdfUrl: string }> {
+    const contractId = contract.id;
 
     // Set status to GENERATING
     await this.prisma.salesContract.update({
@@ -137,14 +337,44 @@ export class VentasContratosService {
       const docxBuffer = fs.readFileSync(template.docxPath);
       const zip = await JSZip.loadAsync(docxBuffer);
 
-      // 2. Process with docxtemplater
+      // 2. Read the raw XML so variables can be substituted as text
       const docXml = await zip.file('word/document.xml')?.async('string');
       if (!docXml)
         throw new BadRequestException('No se pudo leer el documento');
 
-      // Build template data from fieldValues + client data
-      const templateData: Record<string, string> = {
-        ...((contract.fieldValues as Record<string, string>) || {}),
+      const fieldValues = (contract.fieldValues as Record<string, any>) || {};
+      const tableFields = template.fields.filter(
+        (f: any) => f.fieldType === 'TABLE',
+      );
+      const tableFieldNames = new Set(tableFields.map((f: any) => f.variableName));
+
+      // Client fields (not TABLE) that become SignWell "text tags" embedded
+      // directly in the document — the client fills/signs these inside the
+      // SignWell session itself (checkbox, signature, initials, a plain
+      // text/date field), instead of a value stored in fieldValues. See
+      // CONTRATOS-PLAN.md sección 8 for why (SignWell, like BoldSign,
+      // requires page/coordinate data for positioned form fields, which
+      // this app never captured — text tags sidestep that entirely).
+      const clientTagFields = template.fields.filter(
+        (f: any) => f.isClientField && this.buildSignWellTextTag(f) !== null,
+      );
+      const clientTagFieldNames = new Set(
+        clientTagFields.map((f: any) => f.variableName),
+      );
+
+      // Build template data from fieldValues + client data. Table-type and
+      // client-tag variables are excluded here — tables are spliced in
+      // separately below as real Word tables, and client-tag fields become
+      // a SignWell marker instead of a value. Values are kept in their raw
+      // shape (string or string[] for a multi-select DROPDOWN) — the
+      // substitution step below decides how to render each shape (a
+      // multi-value field becomes a bulleted list, not a joined string).
+      const templateData: Record<string, string | string[]> = {
+        ...Object.fromEntries(
+          Object.entries(fieldValues).filter(
+            ([key]) => !tableFieldNames.has(key) && !clientTagFieldNames.has(key),
+          ),
+        ),
         ClientName: contract.clientName,
         ClientEmail: contract.clientEmail,
         ClientPhone: contract.clientPhone || '',
@@ -154,20 +384,6 @@ export class VentasContratosService {
         ContractDate: new Date().toLocaleDateString('es-EC'),
         ContractId: String(contract.id),
       };
-
-      // Process annexes into HTML tables
-      if (contract.annexA) {
-        const items = (contract.annexA as any)?.items || [];
-        templateData.AnnexA = this.buildAnnexATable(items);
-      }
-      if (contract.annexB) {
-        const b = contract.annexB as any;
-        templateData.AnnexB = this.buildAnnexBTable(b);
-      }
-      if (contract.annexC) {
-        const c = contract.annexC as any;
-        templateData.AnnexC = this.buildAnnexCTable(c);
-      }
 
       // Replace variables only in the actual XML/text parts of the docx.
       // Binary parts (images in word/media/, embedded fonts in word/fonts/,
@@ -187,13 +403,47 @@ export class VentasContratosService {
           continue;
         }
         let content = await file.async('string');
-        // Replace both <<Variable>> and [Variable] patterns
+        // Replace both <<Variable>> and [Variable] patterns. Every inserted
+        // value is rendered in its own bold run (regardless of the run
+        // formatting the placeholder happened to have) so it's visually
+        // obvious in the document which text was filled in by the system.
         for (const [key, value] of Object.entries(templateData)) {
-          const regexDoubleAngle = new RegExp(`<<${key}>>`, 'g');
-          const regexBrackets = new RegExp(`\\[${key}\\]`, 'g');
-          content = content.replace(regexDoubleAngle, String(value));
-          content = content.replace(regexBrackets, String(value));
+          content = this.substituteInsertedValue(content, key, value);
         }
+
+        // Client-tag fields: plain literal substitution, no bold — this
+        // text isn't meant to be read by a human, it's a marker SignWell
+        // scans for when `text_tags: true` is sent (see sendToSignWellInternal).
+        for (const field of clientTagFields) {
+          const tag = this.buildSignWellTextTag(field);
+          if (!tag) continue;
+          content = content.split(`[${field.variableName}]`).join(tag);
+          content = content.split(`<<${field.variableName}>>`).join(tag);
+        }
+
+        // Table-type variables must become a real Word table (<w:tbl>), not
+        // plain text — a <w:t> run can't contain one, so the whole paragraph
+        // holding the placeholder is replaced instead. This requires the
+        // placeholder to sit alone in its own paragraph in the template.
+        for (const field of tableFields) {
+          const rows = Array.isArray(fieldValues[field.variableName])
+            ? fieldValues[field.variableName]
+            : [];
+          const config = (field.tableConfig as any) || { columns: [] };
+          const tableXml = this.buildTableXml(config.columns || [], rows);
+          const escapedKey = this.escapeRegExp(field.variableName);
+          const paragraphBrackets = new RegExp(
+            `<w:p\\b[^>]*>(?:(?!</?w:p\\b)[\\s\\S])*?\\[${escapedKey}\\](?:(?!</?w:p\\b)[\\s\\S])*?</w:p>`,
+            'g',
+          );
+          const paragraphAngle = new RegExp(
+            `<w:p\\b[^>]*>(?:(?!</?w:p\\b)[\\s\\S])*?<<${escapedKey}>>(?:(?!</?w:p\\b)[\\s\\S])*?</w:p>`,
+            'g',
+          );
+          content = content.replace(paragraphBrackets, tableXml);
+          content = content.replace(paragraphAngle, tableXml);
+        }
+
         updatedZip.file(fileName, content);
       }
 
@@ -201,46 +451,15 @@ export class VentasContratosService {
         type: 'nodebuffer',
       });
 
-      // 3. Convert .docx → HTML with mammoth
-      const { value: htmlBody } = await mammoth.convertToHtml({
-        buffer: filledDocxBuffer,
-      });
-
-      // Mammoth strips direct (non-style) run formatting like font-family,
-      // so the actual font the template was authored in never survives into
-      // its HTML output. Recover it by finding the font used most often in
-      // the document and, if it's embedded in the .docx, inlining the real
-      // TTF via @font-face so the PDF renders in that font instead of an
-      // unrelated hardcoded one.
-      const { fontFaceCss, bodyFontFamily } = await this.buildFontCss(
-        zip,
-        docXml,
-      );
-
-      const fullHtml = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-  ${fontFaceCss}
-  body { font-family: '${bodyFontFamily}', Calibri, Arial, sans-serif; font-size: 12pt; line-height: 1.5; margin: 0; padding: 40px 60px; color: #000; }
-  table { border-collapse: collapse; width: 100%; margin: 8px 0; }
-  td, th { border: 1px solid #000; padding: 4px 6px; text-align: left; font-size: 11pt; }
-  th { background: #f5f5f5; font-weight: bold; }
-  p { margin: 4px 0; }
-  h1 { font-size: 18pt; } h2 { font-size: 14pt; } h3 { font-size: 12pt; }
-  img { max-width: 100%; height: auto; }
-</style></head><body>${htmlBody}</body></html>`;
-
-      // 4. Convert HTML → PDF
-      const pdfBuffer = await htmlPdfNode.generatePdf(
-        { content: fullHtml },
-        {
-          format: 'A4',
-          margin: { top: '20mm', bottom: '20mm', left: '15mm', right: '15mm' },
-          printBackground: true,
-        },
-      );
+      // 3. Convert .docx → PDF directly with LibreOffice (headless). This
+      // renders the document the same way Word/LibreOffice would show it —
+      // preserving alignment, spacing, images and fonts — unlike the
+      // previous mammoth→HTML→Puppeteer pipeline, which discarded most
+      // direct formatting by design (mammoth only maps to semantic HTML).
+      const pdfBuffer = await this.convertDocxToPdf(filledDocxBuffer);
 
       // 5. Save PDF
-      const pdfFileName = `${contract.id}_${Date.now()}.pdf`;
+      const pdfFileName = `${contractId}_${Date.now()}.pdf`;
       const pdfPath = path.join(CONTRACTS_DIR, pdfFileName);
       fs.writeFileSync(pdfPath, pdfBuffer);
 
@@ -257,10 +476,14 @@ export class VentasContratosService {
         data: { contractId, type: 'GENERADO', filePath: generatedPdfPath },
       });
 
-      return {
-        success: true,
-        pdfUrl: `/api/ventas/contratos/file/${pdfFileName}`,
-      };
+      await this.uploadToDriveIfConfigured(
+        template,
+        contract.companyId,
+        pdfBuffer,
+        this.driveFileName(contract, 'generado'),
+      );
+
+      return { pdfBuffer, pdfUrl: generatedPdfPath };
     } catch (err: any) {
       // Revert to DRAFT on error
       await this.prisma.salesContract.update({
@@ -271,111 +494,370 @@ export class VentasContratosService {
     }
   }
 
-  // ==================== FONT RECOVERY ====================
+  /**
+   * Maps a client-facing `SalesField` to a SignWell "text tag" — a
+   * `{{...}}` marker embedded directly in the document's text that
+   * SignWell detects on its own (`text_tags: true`, no page/coordinate
+   * data needed). Format confirmed against a real SignWell SDK example
+   * (`signwell-sdk-ruby`, `examples/12_text_tags.rb`), not guessed from
+   * documentation prose — an earlier attempt at this got conflicting
+   * answers (`:` vs `|` as the delimiter) from two different doc pages, so
+   * this went by working code instead. Signer number is always `1`: today
+   * a contract only ever has one client recipient (`recipients[0]` in
+   * `sendToSignWellInternal`). Returns null for field types with no text
+   * tag equivalent (TABLE, CONTRACT_NUMBER, DROPDOWN).
+   */
+  private buildSignWellTextTag(field: {
+    fieldType: string;
+    isRequired: boolean;
+    label: string;
+  }): string | null {
+    const required = field.isRequired ? 'y' : 'n';
+    // ':' and '}' are the tag's own delimiters (SignWell splits on them) —
+    // strip them from the label or a label like "Fecha: hoy" breaks the tag
+    // and SignWell fails the whole document with a generic text_tags error.
+    const label = this.escapeXml((field.label || '').replace(/[:}]/g, ''));
+    switch (field.fieldType) {
+      case 'CHECKBOX':
+        // SignWell's own docs (developers.signwell.com/reference/text-tag-options)
+        // say the label part only applies to `text` and `date` tags — adding
+        // one to `check` is what SignWell was rejecting with the generic
+        // "unknown error processing text_tags" error.
+        return `{{check:1:${required}}}`;
+      case 'SIGNATURE':
+        return `{{signature:1}}`;
+      case 'INITIAL':
+        return `{{initial:1:y}}`;
+      case 'TEXT':
+      case 'EMAIL':
+      case 'NUMBER':
+        return `{{text:1:${required}:${label}}}`;
+      case 'DATE':
+        return `{{date:1:${required}}}`;
+      default:
+        return null;
+    }
+  }
+
+  // ==================== PDF CONVERSION (LibreOffice) ====================
 
   /**
-   * Finds the font used most often in the document's runs (w:rFonts) and,
-   * if the .docx embeds that font's actual TTF files (word/fontTable.xml +
-   * word/fonts/*.ttf), base64-inlines them as @font-face rules so the PDF
-   * can render in it instead of mammoth's stripped-formatting fallback.
+   * Converts a merged .docx buffer to PDF using LibreOffice in headless
+   * mode. This renders the document the way Word/LibreOffice actually
+   * displays it (fonts, alignment, spacing, images) instead of going
+   * through an HTML approximation. `-env:UserInstallation` points each
+   * invocation at its own throwaway profile dir so concurrent conversions
+   * don't collide on LibreOffice's single-instance profile lock.
    */
-  private async buildFontCss(
-    zip: JSZip,
-    docXml: string,
-  ): Promise<{ fontFaceCss: string; bodyFontFamily: string }> {
-    const fontCounts: Record<string, number> = {};
-    const rFontsRegex = /<w:rFonts\b[^>]*\bw:ascii="([^"]+)"[^>]*\/>/g;
-    let m: RegExpExecArray | null;
-    while ((m = rFontsRegex.exec(docXml)) !== null) {
-      fontCounts[m[1]] = (fontCounts[m[1]] || 0) + 1;
-    }
-    const dominantFont = Object.entries(fontCounts).sort(
-      (a, b) => b[1] - a[1],
-    )[0]?.[0];
+  private async convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
+    const sofficePath = process.env.LIBREOFFICE_PATH || 'soffice';
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'contrato-pdf-'));
+    const docxPath = path.join(workDir, 'input.docx');
+    const profileDir = path.join(workDir, 'profile');
+    fs.writeFileSync(docxPath, docxBuffer);
 
-    if (!dominantFont) return { fontFaceCss: '', bodyFontFamily: 'Calibri' };
-
-    let fontFaceCss = '';
-    const fontTableFile = zip.file('word/fontTable.xml');
-    const relsFile = zip.file('word/_rels/fontTable.xml.rels');
-    if (fontTableFile && relsFile) {
-      const fontTableXml = await fontTableFile.async('string');
-      const relsXml = await relsFile.async('string');
-      const relMap: Record<string, string> = {};
-      const relRegex = /<Relationship\b[^>]*\bId="([^"]+)"[^>]*\bTarget="([^"]+)"/g;
-      let rm: RegExpExecArray | null;
-      while ((rm = relRegex.exec(relsXml)) !== null) relMap[rm[1]] = rm[2];
-
-      const fontBlockMatch = fontTableXml.match(
-        new RegExp(`<w:font w:name="${dominantFont}">([\\s\\S]*?)</w:font>`),
+    try {
+      await execFileAsync(
+        sofficePath,
+        [
+          '--headless',
+          '--norestore',
+          `-env:UserInstallation=file:///${profileDir.replace(/\\/g, '/')}`,
+          '--convert-to',
+          'pdf',
+          '--outdir',
+          workDir,
+          docxPath,
+        ],
+        { timeout: 60000 },
       );
-      if (fontBlockMatch) {
-        const variants: Array<{ tag: string; weight: string; style: string }> = [
-          { tag: 'embedRegular', weight: 'normal', style: 'normal' },
-          { tag: 'embedBold', weight: 'bold', style: 'normal' },
-          { tag: 'embedItalic', weight: 'normal', style: 'italic' },
-          { tag: 'embedBoldItalic', weight: 'bold', style: 'italic' },
-        ];
-        for (const v of variants) {
-          const idMatch = fontBlockMatch[1].match(
-            new RegExp(`<w:${v.tag}\\b[^>]*\\br:id="([^"]+)"`),
-          );
-          const target = idMatch && relMap[idMatch[1]];
-          const fontFile = target && zip.file(`word/${target}`);
-          if (!fontFile) continue;
-          const fontBuffer = await fontFile.async('nodebuffer');
-          fontFaceCss += `@font-face { font-family: '${dominantFont}'; src: url(data:font/ttf;base64,${fontBuffer.toString('base64')}) format('truetype'); font-weight: ${v.weight}; font-style: ${v.style}; }\n`;
-        }
+
+      const pdfPath = path.join(workDir, 'input.pdf');
+      if (!fs.existsSync(pdfPath)) {
+        throw new Error('LibreOffice no generó el PDF esperado');
       }
+      return fs.readFileSync(pdfPath);
+    } finally {
+      fs.rmSync(workDir, { recursive: true, force: true });
     }
-
-    return { fontFaceCss, bodyFontFamily: dominantFont };
   }
 
-  // ==================== ANNEX TABLE BUILDERS ====================
+  // ==================== GOOGLE DRIVE STORAGE (per-template folder) ====================
 
-  private buildAnnexATable(items: any[]): string {
-    if (!items.length) return '<p>Sin equipos</p>';
-    let html =
-      '<table><tr><th>#</th><th>Nombre</th><th>Marca/Modelo</th><th>Serie</th><th>Estado</th><th>Valor</th></tr>';
-    items.forEach((item, i) => {
-      html += `<tr><td>${i + 1}</td><td>${item.nombre || ''}</td><td>${item.modelo || ''}</td><td>${item.serie || ''}</td><td>${item.estado || ''}</td><td>${item.valor || ''}</td></tr>`;
+  /**
+   * Best-effort upload of a generated/sent/signed PDF into this template's
+   * Drive folder. Drive storage is optional — if the company hasn't
+   * configured a root folder (FolderConfig type=VENTAS_CONTRATOS), this is
+   * a no-op. Any Drive failure is logged and swallowed: generating/sending
+   * a contract must never fail because of a Drive problem.
+   */
+  private async uploadToDriveIfConfigured(
+    template: { id: number; name: string; driveFolderId: string | null },
+    companyId: number,
+    pdfBuffer: Buffer,
+    fileName: string,
+  ): Promise<void> {
+    try {
+      const folderId = await this.getOrCreateTemplateDriveFolder(
+        template,
+        companyId,
+      );
+      if (!folderId) return;
+      await this.driveService.uploadFile(
+        folderId,
+        pdfBuffer,
+        fileName,
+        'application/pdf',
+      );
+    } catch (err: any) {
+      this.logger.warn(
+        `No se pudo subir "${fileName}" a Drive para la plantilla ${template.id}: ${err.message}`,
+      );
+    }
+  }
+
+  /**
+   * Returns this template's Drive subfolder, creating it lazily inside the
+   * company's root Ventas/Contratos folder (FolderConfig type=
+   * VENTAS_CONTRATOS) the first time it's needed. Returns null if the
+   * company hasn't configured a root folder — callers treat that as
+   * "Drive storage not enabled", not an error.
+   */
+  private async getOrCreateTemplateDriveFolder(
+    template: { id: number; name: string; driveFolderId: string | null },
+    companyId: number,
+  ): Promise<string | null> {
+    if (template.driveFolderId) return template.driveFolderId;
+
+    const rootConfig = await this.driveService.getConfig(
+      companyId,
+      VENTAS_DRIVE_FOLDER_TYPE,
+    );
+    if (!rootConfig?.driveFolderId) return null;
+
+    const folderId = await this.driveService.createSubfolder(
+      rootConfig.driveFolderId,
+      template.name,
+    );
+    await this.prisma.salesTemplate.update({
+      where: { id: template.id },
+      data: { driveFolderId: folderId },
     });
-    html += '</table>';
-    return html;
+    return folderId;
   }
 
-  private buildAnnexBTable(data: any): string {
-    let html = '<div>';
-    if (data.servicios?.length) {
-      html +=
-        '<p><strong>Servicios:</strong> ' + data.servicios.join(', ') + '</p>';
+  private driveFileName(
+    contract: { id: number; contractNumber: string | null },
+    stage: string,
+  ): string {
+    const label = contract.contractNumber || String(contract.id);
+    const date = new Date().toISOString().slice(0, 10);
+    return `${label}_${stage}_${date}.pdf`;
+  }
+
+  // ==================== TABLE FIELD HELPERS ====================
+
+  private escapeRegExp(value: string): string {
+    // Variable names can contain regex-special characters (e.g. the
+    // namespaced style "Contacts.Número de Identificación (Cédula/RUC)"),
+    // so they must be escaped before building a RegExp from them —
+    // otherwise "." matches any character, "(" ")" form an unintended
+    // group, etc.
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  private escapeXml(value: string): string {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  }
+
+  /**
+   * Replaces a `[Key]`/`<<Key>>` placeholder with the value the user
+   * entered, rendered in its own bold run — regardless of whatever
+   * formatting the placeholder's run happened to have — so an inserted
+   * value is visually obvious in the generated document.
+   *
+   * Deliberately NOT implemented with a single regex over the whole file:
+   * an earlier version used `<w:r\b[^>]*>(<w:rPr>...)?<w:t...>...</w:t></w:r>`
+   * with `.replace(regex, fn)`, and against the real (~230KB, ~550-run)
+   * MEGAMONT template each successive field call got dramatically slower
+   * (390ms → 530ms → 1.1s → 4.7s → …) — the regex engine re-scanning an
+   * ever-growing string for every one of ~20 fields blew up to the point a
+   * single PDF generation never finished. `indexOf`/`lastIndexOf` string
+   * scanning below is plain O(n) per occurrence, so it doesn't have that
+   * failure mode.
+   */
+  private substituteInsertedValue(
+    content: string,
+    key: string,
+    value: string | string[],
+  ): string {
+    content = this.spliceBoldValue(content, `[${key}]`, value);
+    content = this.spliceBoldValue(content, `<<${key}>>`, value);
+    return content;
+  }
+
+  /**
+   * Finds every occurrence of `placeholder` and, when it sits cleanly
+   * inside one `<w:t>...</w:t>` inside one `<w:r>...</w:r>` (with at most a
+   * `<w:rPr>...</w:rPr>` between them — the normal shape for a short
+   * bracketed placeholder Word/Google Docs hasn't split across runs),
+   * splits that run into up to three: the text before the placeholder and
+   * after it (kept in the original run formatting), and the value itself
+   * in a bold run. If the surrounding structure doesn't match that exact
+   * shape, it falls back to a plain (non-bold) substitution instead of
+   * leaving the placeholder untouched — the same behavior this method
+   * originally had, minus the bold.
+   */
+  /**
+   * `content.lastIndexOf('<w:r', pos)` also matches inside `<w:rPr`,
+   * `<w:rFonts`, `<w:rsid...` — anything starting with the same 4
+   * characters — since it's a plain substring search. Same problem for
+   * `<w:t` matching inside `<w:tbl`, `<w:tr`, `<w:tc`, `<w:tab`, etc. This
+   * walks backward until it finds an occurrence of `tagName` actually
+   * followed by a space, `>` or `/` (a real tag boundary, not the start of
+   * a longer tag name).
+   */
+  private findLastOpenTag(
+    content: string,
+    tagName: string,
+    before: number,
+  ): number {
+    let searchPos = before;
+    while (true) {
+      const pos = content.lastIndexOf(tagName, searchPos);
+      if (pos === -1) return -1;
+      const nextChar = content[pos + tagName.length];
+      if (nextChar === ' ' || nextChar === '>' || nextChar === '/') return pos;
+      searchPos = pos - 1;
     }
-    if (data.tabla?.length) {
-      html +=
-        '<table><tr><th>Servicio</th><th>Detalle</th><th>Valor Mensual</th></tr>';
-      data.tabla.forEach((row: any) => {
-        html += `<tr><td>${row.servicio || ''}</td><td>${row.detalle || ''}</td><td>${row.valor || ''}</td></tr>`;
-      });
-      html += '</table>';
+  }
+
+  private spliceBoldValue(
+    content: string,
+    placeholder: string,
+    value: string | string[],
+  ): string {
+    let result = '';
+    let searchFrom = 0;
+    const plainValue = Array.isArray(value) ? value.join(', ') : value;
+
+    while (true) {
+      const idx = content.indexOf(placeholder, searchFrom);
+      if (idx === -1) {
+        result += content.slice(searchFrom);
+        break;
+      }
+
+      const tOpenStart = this.findLastOpenTag(content, '<w:t', idx);
+      const tOpenEnd = tOpenStart === -1 ? -1 : content.indexOf('>', tOpenStart);
+      const tCloseStart = content.indexOf('</w:t>', idx);
+      const rOpenStart =
+        tOpenStart === -1 ? -1 : this.findLastOpenTag(content, '<w:r', tOpenStart);
+      const rOpenEnd = rOpenStart === -1 ? -1 : content.indexOf('>', rOpenStart);
+      const rCloseStart =
+        tCloseStart === -1 ? -1 : content.indexOf('</w:r>', tCloseStart);
+      const between =
+        rOpenEnd !== -1 && tOpenStart !== -1
+          ? content.slice(rOpenEnd + 1, tOpenStart)
+          : '';
+      const isCleanRun =
+        tOpenStart !== -1 &&
+        tOpenEnd !== -1 &&
+        tOpenEnd < idx &&
+        tCloseStart !== -1 &&
+        rOpenStart !== -1 &&
+        rOpenEnd !== -1 &&
+        rCloseStart !== -1 &&
+        (between === '' || (between.startsWith('<w:rPr>') && between.endsWith('</w:rPr>')));
+
+      if (!isCleanRun) {
+        result += content.slice(searchFrom, idx) + this.escapeXml(plainValue);
+        searchFrom = idx + placeholder.length;
+        continue;
+      }
+
+      const rPr = between;
+      const before = content.slice(tOpenEnd + 1, idx);
+      const after = content.slice(idx + placeholder.length, tCloseStart);
+      const boldRPr = rPr
+        ? rPr.replace('</w:rPr>', '<w:b/></w:rPr>')
+        : '<w:rPr><w:b/></w:rPr>';
+      const plainRun = (text: string) =>
+        text
+          ? `<w:r>${rPr}<w:t xml:space="preserve">${this.escapeXml(text)}</w:t></w:r>`
+          : '';
+
+      result += content.slice(searchFrom, rOpenStart);
+      result += `${plainRun(before)}<w:r>${boldRPr}${this.buildValueRunContent(value)}</w:r>${plainRun(after)}`;
+      searchFrom = rCloseStart + '</w:r>'.length;
     }
-    html += '</div>';
-    return html;
+
+    return result;
   }
 
-  private buildAnnexCTable(data: any): string {
-    const contactos = data?.contactos || [];
-    if (!contactos.length) return '<p>Sin contactos</p>';
-    let html =
-      '<table><tr><th>#</th><th>Nombre</th><th>Cargo</th><th>Teléfono</th><th>Email</th></tr>';
-    contactos.forEach((c: any, i: number) => {
-      html += `<tr><td>${i + 1}</td><td>${c.nombre || ''}</td><td>${c.cargo || ''}</td><td>${c.telefono || ''}</td><td>${c.email || ''}</td></tr>`;
-    });
-    html += '</table>';
-    return html;
+  /**
+   * A scalar value becomes one bold `<w:t>`. An array (a multi-select
+   * DROPDOWN) becomes a bulleted list within the same run, using `<w:br/>`
+   * line breaks — that keeps it inline with the surrounding paragraph
+   * instead of requiring separate paragraphs, while still reading as a
+   * list rather than a single comma-joined line.
+   */
+  private buildValueRunContent(value: string | string[]): string {
+    if (Array.isArray(value)) {
+      return value
+        .map(
+          (item, i) =>
+            `${i > 0 ? '<w:br/>' : ''}<w:t xml:space="preserve">• ${this.escapeXml(item)}</w:t>`,
+        )
+        .join('');
+    }
+    return `<w:t xml:space="preserve">${this.escapeXml(String(value))}</w:t>`;
   }
 
-  // ==================== SEND VIA BOLDSIGN ====================
+  /**
+   * Builds a real Word table (OOXML `<w:tbl>`) from a table-field's column
+   * definitions and submitted rows, so it renders as an actual table once
+   * spliced into the document — not an HTML string embedded as plain text
+   * (which Word/LibreOffice show literally, they don't interpret HTML).
+   */
+  private buildTableXml(
+    columns: Array<{ key: string; label: string }>,
+    rows: Array<Record<string, string>>,
+  ): string {
+    if (!columns.length) return '';
+    const colWidth = Math.floor(9000 / columns.length);
+    const gridCols = columns
+      .map(() => `<w:gridCol w:w="${colWidth}"/>`)
+      .join('');
+    const cell = (text: string, bold: boolean) =>
+      `<w:tc><w:tcPr><w:tcW w:w="${colWidth}" w:type="dxa"/></w:tcPr><w:p><w:r>${
+        bold ? '<w:rPr><w:b/></w:rPr>' : ''
+      }<w:t xml:space="preserve">${this.escapeXml(text)}</w:t></w:r></w:p></w:tc>`;
+    const headerRow = `<w:tr>${columns.map((c) => cell(c.label, true)).join('')}</w:tr>`;
+    const dataRows = rows
+      .map(
+        (row) =>
+          `<w:tr>${columns.map((c) => cell(String(row[c.key] ?? ''), false)).join('')}</w:tr>`,
+      )
+      .join('');
+    const borders =
+      '<w:tblBorders>' +
+      '<w:top w:val="single" w:sz="4" w:color="000000"/>' +
+      '<w:left w:val="single" w:sz="4" w:color="000000"/>' +
+      '<w:bottom w:val="single" w:sz="4" w:color="000000"/>' +
+      '<w:right w:val="single" w:sz="4" w:color="000000"/>' +
+      '<w:insideH w:val="single" w:sz="4" w:color="000000"/>' +
+      '<w:insideV w:val="single" w:sz="4" w:color="000000"/>' +
+      '</w:tblBorders>';
+    return `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/>${borders}</w:tblPr><w:tblGrid>${gridCols}</w:tblGrid>${headerRow}${dataRows}</w:tbl>`;
+  }
+
+  // ==================== SEND VIA SIGNWELL ====================
 
   async sendContract(id: number, companyId: number | null) {
     const where: any = { id };
@@ -390,69 +872,378 @@ export class VentasContratosService {
     if (!contract.generatedPdfPath)
       throw new BadRequestException('Primero genera el PDF');
 
-    const apiKey = this.getBoldSignKey();
-    if (!apiKey)
-      throw new BadRequestException('BOLDSIGN_API_KEY no configurada');
-
     // Read PDF
     const pdfFileName = path.basename(contract.generatedPdfPath);
     const pdfPath = path.join(CONTRACTS_DIR, pdfFileName);
     if (!fs.existsSync(pdfPath))
       throw new BadRequestException('PDF no encontrado');
     const pdfBuffer = fs.readFileSync(pdfPath);
-    const pdfBase64 = `data:application/pdf;base64,${pdfBuffer.toString('base64')}`;
 
-    // Build client fields for BoldSign
-    const clientFields = contract.template.fields
-      .filter((f: any) => f.isClientField)
-      .map((f: any) => ({
-        Id: f.variableName,
-        FieldType: this.mapFieldType(f.fieldType),
-        IsRequired: f.isRequired,
-      }));
+    const { documentId } = await this.sendToSignWellInternal(contract, pdfBuffer);
+    return { success: true, documentId };
+  }
+
+  /**
+   * The actual SignWell send, shared by the `POST .../send` endpoint above
+   * and by the auto-send-on-client-submit path (`submitPublicFill`).
+   *
+   * Unlike the earlier (broken) BoldSign integration, this does NOT try to
+   * send `SalesField`s the client is supposed to fill in as provider-side
+   * *positioned* form fields (BoldSign, and SignWell's own `fields` array,
+   * both require page/coordinate data this app never captured — see
+   * CONTRATOS-PLAN.md sección 8/11 for the full history). Instead, any
+   * client field that isn't a TABLE was already turned into a SignWell
+   * "text tag" (`{{...}}`) embedded in the document itself, back in
+   * `generatePdfInternal`/`buildSignWellTextTag` — `text_tags: true` here
+   * just tells SignWell to scan for those. `with_signature_page` is only
+   * added as a fallback when the template has no SIGNATURE/INITIAL/CHECKBOX
+   * client field of its own to sign/check — if it does, that tag's position
+   * in the document is respected instead of forcing an extra page.
+   */
+  private async sendToSignWellInternal(
+    contract: any,
+    pdfBuffer: Buffer,
+  ): Promise<{ documentId: string; signingUrl: string | null }> {
+    const apiKey = this.getSignWellKey();
+    if (!apiKey)
+      throw new BadRequestException('SIGNWELL_API_KEY no configurada');
+
+    // `SIGNWELL_TEST_MODE` defaults to true on purpose: a test-mode document
+    // doesn't count against the account's paid quota and isn't legally
+    // binding, so accidentally sending a real contract while wiring this up
+    // costs nothing. Set SIGNWELL_TEST_MODE=false explicitly once this has
+    // been verified end to end.
+    const testMode = process.env.SIGNWELL_TEST_MODE !== 'false';
+
+    const SIGNATURE_TAG_TYPES = ['SIGNATURE', 'INITIAL', 'CHECKBOX'];
+    const hasOwnSignatureTag = (contract.template.fields || []).some(
+      (f: any) => f.isClientField && SIGNATURE_TAG_TYPES.includes(f.fieldType),
+    );
 
     try {
       const response = await axios.post(
-        'https://api.boldsign.com/v1/document/send',
+        `${SIGNWELL_API_BASE}/documents`,
         {
-          Files: [pdfBase64],
-          Title: `Contrato #${contract.id} - ${contract.clientName}`,
-          Signers: [
+          test_mode: testMode,
+          text_tags: true,
+          ...(hasOwnSignatureTag ? {} : { with_signature_page: true }),
+          subject: contract.template.emailSubject || `Contrato #${contract.contractNumber || contract.id}`,
+          message: contract.template.emailBody || undefined,
+          files: [
             {
-              Name: contract.clientName,
-              Email: contract.clientEmail,
-              SignerType: 'Signer',
-              FormFields: clientFields,
+              name: `contrato_${contract.contractNumber || contract.id}.pdf`,
+              file_base64: pdfBuffer.toString('base64'),
+            },
+          ],
+          recipients: [
+            {
+              id: '1',
+              name: contract.clientName,
+              email: contract.clientEmail,
             },
           ],
         },
         {
-          headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+          headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
         },
       );
 
-      const documentId = response.data?.documentId;
+      const documentId = response.data?.id;
+      const signingUrl = response.data?.recipients?.[0]?.signing_url || null;
+
       await this.prisma.salesContract.update({
-        where: { id },
+        where: { id: contract.id },
         data: {
           status: 'SENT',
           sentAt: new Date(),
-          boldsignDocumentId: documentId,
-          boldsignStatus: 'SENT',
+          signwellDocumentId: documentId,
+          signwellStatus: response.data?.status || 'Sent',
         },
       });
       await this.prisma.salesContractDocument.create({
         data: {
-          contractId: id,
+          contractId: contract.id,
           type: 'ENVIADO',
           filePath: contract.generatedPdfPath,
         },
       });
 
-      return { success: true, documentId };
+      await this.uploadToDriveIfConfigured(
+        contract.template,
+        contract.companyId,
+        pdfBuffer,
+        this.driveFileName(contract, 'enviado'),
+      );
+
+      return { documentId, signingUrl };
     } catch (err: any) {
-      throw new BadRequestException(`Error al enviar: ${err.message}`);
+      const providerMessage = err.response?.data?.errors || err.response?.data?.message;
+      // Log the full SignWell response — the generic "unknown error processing
+      // text_tags" message shown to the user often hides more detail (an
+      // error code, an implicated field) elsewhere in the response body.
+      this.logger.error(
+        `SignWell rechazó el documento del contrato ${contract.id}: ${JSON.stringify(err.response?.data ?? err.message)}`,
+      );
+      throw new BadRequestException(
+        `Error al enviar: ${providerMessage ? JSON.stringify(providerMessage) : err.message}`,
+      );
     }
+  }
+
+  // ==================== SIGNWELL WEBHOOK (document_completed) ====================
+
+  /**
+   * Verifies a SignWell webhook event and, if it's `document_completed`,
+   * downloads the completed PDF and marks the matching contract SIGNED.
+   * Called from `VentasWebhookController` — no session/company scoping is
+   * possible here (SignWell calls this directly), so the signwellDocumentId
+   * match plus the HMAC check below are the only guards.
+   *
+   * Verification follows SignWell's documented scheme: `event.hash` is
+   * HMAC-SHA256 of `"{event.type}@{event.time}"`, keyed with the webhook's
+   * own id (returned once, when the webhook was registered via
+   * `POST /api/v1/hooks` — see CONTRATOS-PLAN.md). No raw-body middleware
+   * needed, unlike some other providers' signature schemes.
+   */
+  async handleSignWellWebhook(payload: any): Promise<{ received: boolean }> {
+    const webhookId = process.env.SIGNWELL_WEBHOOK_ID;
+    const event = payload?.event;
+    const documentId = payload?.data?.object?.id;
+    if (!webhookId) {
+      this.logger.warn(
+        'Webhook de SignWell recibido pero SIGNWELL_WEBHOOK_ID no está configurado — se ignora.',
+      );
+      return { received: false };
+    }
+    if (!event?.type || !event?.time || !event?.hash || !documentId) {
+      this.logger.warn('Webhook de SignWell con forma inesperada, se ignora.');
+      return { received: false };
+    }
+
+    const expectedHash = createHmac('sha256', webhookId)
+      .update(`${event.type}@${event.time}`)
+      .digest('hex');
+    const receivedHash = String(event.hash);
+    const isValid =
+      expectedHash.length === receivedHash.length &&
+      timingSafeEqual(Buffer.from(expectedHash), Buffer.from(receivedHash));
+    if (!isValid) {
+      this.logger.warn('Webhook de SignWell con hash inválido, se ignora.');
+      return { received: false };
+    }
+
+    if (event.type !== 'document_completed') {
+      return { received: true };
+    }
+
+    const contract = await this.prisma.salesContract.findFirst({
+      where: { signwellDocumentId: documentId },
+      include: { template: true },
+    });
+    if (!contract) {
+      this.logger.warn(
+        `Webhook de SignWell: documento ${documentId} no corresponde a ningún contrato conocido.`,
+      );
+      return { received: true };
+    }
+
+    const pdfBuffer = await this.downloadSignWellCompletedPdf(documentId);
+    if (!pdfBuffer) {
+      this.logger.warn(
+        `No se pudo descargar el PDF firmado de SignWell para el documento ${documentId}.`,
+      );
+      return { received: true };
+    }
+
+    await this.markContractSigned(contract, pdfBuffer);
+    return { received: true };
+  }
+
+  /**
+   * Shared by the webhook (above) and by a manual status refresh (below) —
+   * both paths end up needing to do exactly the same thing once SignWell
+   * confirms a document is done: save the signed PDF, log it in the
+   * document history, mark the contract SIGNED, and push it to Drive.
+   */
+  private async markContractSigned(
+    contract: {
+      id: number;
+      companyId: number;
+      contractNumber: string | null;
+      template: any;
+    },
+    pdfBuffer: Buffer,
+  ): Promise<void> {
+    const fileName = `${contract.id}_firmado_${Date.now()}.pdf`;
+    const filePath = path.join(CONTRACTS_DIR, fileName);
+    fs.writeFileSync(filePath, pdfBuffer);
+    const publicPath = `/api/ventas/contratos/file/${fileName}`;
+
+    await this.prisma.salesContractDocument.create({
+      data: { contractId: contract.id, type: 'FIRMADO', filePath: publicPath },
+    });
+    await this.prisma.salesContract.update({
+      where: { id: contract.id },
+      data: { status: 'SIGNED', signedAt: new Date(), signwellStatus: 'Completed' },
+    });
+    await this.uploadToDriveIfConfigured(
+      contract.template,
+      contract.companyId,
+      pdfBuffer,
+      this.driveFileName(contract, 'firmado'),
+    );
+  }
+
+  // ==================== SIGNWELL: CONSULTAR ESTADO A DEMANDA ====================
+
+  /**
+   * Manual "check status" (button in ContratoResult.tsx) — reads the live
+   * status directly from SignWell instead of waiting on the webhook, which
+   * may not be registered in every environment. If SignWell already reports
+   * the document as completed but our own webhook never fired (e.g. no
+   * public callback URL configured), this reaches the same end state
+   * (`markContractSigned`) so the UI doesn't get stuck showing SENT forever.
+   */
+  async getSignatureStatus(contractId: number, companyId: number | null) {
+    const where: any = { id: contractId };
+    if (companyId) where.companyId = companyId;
+    const contract = await this.prisma.salesContract.findFirst({
+      where,
+      include: { template: true },
+    });
+    if (!contract) throw new NotFoundException('Contrato no encontrado');
+    if (!contract.signwellDocumentId) {
+      throw new BadRequestException('Este contrato todavía no se ha enviado a firmar');
+    }
+
+    const apiKey = this.getSignWellKey();
+    if (!apiKey)
+      throw new BadRequestException('SIGNWELL_API_KEY no configurada');
+
+    let response;
+    try {
+      response = await axios.get(
+        `${SIGNWELL_API_BASE}/documents/${contract.signwellDocumentId}`,
+        { headers: { 'X-Api-Key': apiKey } },
+      );
+    } catch (err: any) {
+      const providerMessage = err.response?.data?.errors || err.response?.data?.message;
+      throw new BadRequestException(
+        `Error al consultar el estado: ${providerMessage ? JSON.stringify(providerMessage) : err.message}`,
+      );
+    }
+
+    const remoteStatus: string = response.data?.status || 'Unknown';
+    const recipients = (response.data?.recipients || []).map((r: any) => ({
+      name: r.name || null,
+      email: r.email || null,
+      status: r.status || null,
+      bounced: !!r.bounced,
+      bouncedDetails: r.bounced_details || null,
+    }));
+
+    let contractStatus = contract.status;
+    const isCompleted = remoteStatus === 'Completed' || remoteStatus === 'Manually completed';
+    if (isCompleted && contract.status !== 'SIGNED') {
+      const pdfBuffer = await this.downloadSignWellCompletedPdf(contract.signwellDocumentId);
+      if (pdfBuffer) {
+        await this.markContractSigned(contract, pdfBuffer);
+        contractStatus = 'SIGNED';
+      }
+    } else if (!isCompleted) {
+      await this.prisma.salesContract.update({
+        where: { id: contract.id },
+        data: { signwellStatus: remoteStatus },
+      });
+    }
+
+    return {
+      documentId: contract.signwellDocumentId,
+      status: remoteStatus,
+      contractStatus,
+      recipients,
+    };
+  }
+
+  /**
+   * The completed PDF can take a few seconds to become available right
+   * after the `document_completed` event fires (per SignWell's docs), so
+   * this retries a handful of times with a short delay instead of assuming
+   * it's ready on the first try.
+   */
+  private async downloadSignWellCompletedPdf(
+    documentId: string,
+  ): Promise<Buffer | null> {
+    const apiKey = this.getSignWellKey();
+    if (!apiKey) return null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const response = await axios.get(
+          `${SIGNWELL_API_BASE}/documents/${documentId}/completed_pdf`,
+          {
+            headers: { 'X-Api-Key': apiKey },
+            responseType: 'arraybuffer',
+          },
+        );
+        return Buffer.from(response.data);
+      } catch (err) {
+        if (attempt === 3) {
+          this.logger.warn(
+            `Descarga de completed_pdf falló tras reintentos para ${documentId}: ${(err as any).message}`,
+          );
+          return null;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    }
+    return null;
+  }
+
+  // ==================== SIGNED DOCUMENT UPLOAD (manual fallback) ====================
+
+  /**
+   * Manual fallback for when the SignWell webhook isn't configured (e.g.
+   * this environment has no public callback URL yet) or the document was
+   * signed outside the system: whoever has the signed copy uploads it here
+   * by hand. Saved locally, pushed to the template's Drive folder if
+   * configured, and the contract is marked SIGNED — same end state the
+   * webhook above reaches automatically.
+   */
+  async uploadSignedDocument(
+    contractId: number,
+    companyId: number | null,
+    file: Express.Multer.File,
+  ) {
+    const where: any = { id: contractId };
+    if (companyId) where.companyId = companyId;
+    const contract = await this.prisma.salesContract.findFirst({
+      where,
+      include: { template: true },
+    });
+    if (!contract) throw new NotFoundException('Contrato no encontrado');
+    if (!file) throw new BadRequestException('No se recibió ningún archivo');
+
+    const fileName = `${contract.id}_firmado_${Date.now()}.pdf`;
+    const filePath = path.join(CONTRACTS_DIR, fileName);
+    fs.writeFileSync(filePath, file.buffer);
+
+    const publicPath = `/api/ventas/contratos/file/${fileName}`;
+    await this.prisma.salesContractDocument.create({
+      data: { contractId, type: 'FIRMADO', filePath: publicPath },
+    });
+    await this.prisma.salesContract.update({
+      where: { id: contractId },
+      data: { status: 'SIGNED', signedAt: new Date() },
+    });
+
+    await this.uploadToDriveIfConfigured(
+      contract.template,
+      contract.companyId,
+      file.buffer,
+      this.driveFileName(contract, 'firmado'),
+    );
+
+    return { success: true, filePath: publicPath };
   }
 
   // ==================== FILE ACCESS / DOCUMENT HISTORY ====================
@@ -500,20 +1291,5 @@ export class VentasContratosService {
       if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
     }
     return this.prisma.salesContract.delete({ where: { id } });
-  }
-
-  private mapFieldType(type: string): string {
-    const map: Record<string, string> = {
-      TEXT: 'TextBox',
-      NUMBER: 'TextBox',
-      DATE: 'EditableDate',
-      EMAIL: 'TextBox',
-      CHECKBOX: 'CheckBox',
-      DROPDOWN: 'Dropdown',
-      SIGNATURE: 'Signature',
-      INITIAL: 'Initial',
-      LABEL: 'Label',
-    };
-    return map[type] || 'TextBox';
   }
 }

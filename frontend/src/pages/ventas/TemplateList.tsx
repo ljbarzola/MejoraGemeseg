@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Pencil, Trash2 } from 'lucide-react';
 import { getTemplates, deleteTemplate, SalesTemplate } from '../../services/ventas.service';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 export default function TemplateList() {
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<SalesTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   useEffect(() => { loadTemplates(); }, []);
 
@@ -15,8 +17,14 @@ export default function TemplateList() {
     try { setTemplates(await getTemplates()); } catch { /* */ } finally { setLoading(false); }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('¿Eliminar esta plantilla?')) return;
+  const handleDelete = (id: number) => {
+    setConfirmDeleteId(id);
+  };
+
+  const confirmarEliminar = async () => {
+    if (confirmDeleteId == null) return;
+    const id = confirmDeleteId;
+    setConfirmDeleteId(null);
     try { await deleteTemplate(id); loadTemplates(); } catch { /* */ }
   };
 
@@ -80,6 +88,17 @@ export default function TemplateList() {
           </div>
         )}
       </div>
+
+      {confirmDeleteId != null && (
+        <ConfirmDialog
+          title="Eliminar plantilla"
+          message="¿Eliminar esta plantilla?"
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={confirmarEliminar}
+          onCancel={() => setConfirmDeleteId(null)}
+        />
+      )}
     </div>
   );
 }

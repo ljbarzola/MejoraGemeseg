@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getClients, getLots, createShipment, getUnitConfig, getNextShipmentId } from '../../../services/cacao.service';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FULL: Record<string, string> = { TON: 'Toneladas', KG: 'Kilogramos', SACO: 'Sacos' };
@@ -33,6 +34,7 @@ export default function ShipmentForm() {
   const isDirty = useRef(false);
   const [showUnsaved, setShowUnsaved] = useState(false);
   const pendingNav = useRef<(() => void) | null>(null);
+  const [confirmandoMargenNegativo, setConfirmandoMargenNegativo] = useState(false);
 
   useEffect(() => {
     Promise.all([getClients(), getLots({ status: 'OPEN' }), getUnitConfig(), getNextShipmentId()])
@@ -135,9 +137,15 @@ export default function ShipmentForm() {
     }
 
     if (Number(margin) < 0) {
-      if (!confirm('El margen es negativo. ¿Desea continuar de todas formas?')) return;
+      setConfirmandoMargenNegativo(true);
+      return;
     }
 
+    await confirmarCrearEmbarque();
+  }
+
+  async function confirmarCrearEmbarque() {
+    setConfirmandoMargenNegativo(false);
     setSaving(true);
     setError('');
     try {
@@ -357,6 +365,16 @@ export default function ShipmentForm() {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmandoMargenNegativo && (
+        <ConfirmDialog
+          title="Margen negativo"
+          message="El margen es negativo. ¿Desea continuar de todas formas?"
+          confirmLabel="Sí, continuar"
+          onConfirm={confirmarCrearEmbarque}
+          onCancel={() => setConfirmandoMargenNegativo(false)}
+        />
       )}
     </div>
   );
