@@ -1,19 +1,29 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Plus, Settings } from 'lucide-react';
-import { getContracts, deleteContract, SalesContract } from '../../services/ventas.service';
+import { ArrowLeft, FileText, Plus, FolderOpen } from 'lucide-react';
+import { getContracts, deleteContract, getVentasDriveConfig, SalesContract } from '../../services/ventas.service';
 import { PRIMARY } from './contratoStyles';
-import ContratosDriveConfigModal from '../../components/ventas/ContratosDriveConfigModal';
+import { buildDriveFolderLink } from '../../utils/driveLink';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 export default function ContratosList() {
   const navigate = useNavigate();
   const [contracts, setContracts] = useState<SalesContract[]>([]);
   const [filter, setFilter] = useState('');
-  const [showDriveConfig, setShowDriveConfig] = useState(false);
+  const [driveFolderUrl, setDriveFolderUrl] = useState('');
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
   useEffect(() => { loadContracts(); }, [filter]);
+
+  useEffect(() => {
+    getVentasDriveConfig()
+      .then((c) => {
+        if (c?.driveFolderId) {
+          setDriveFolderUrl(c.driveFolderLink || buildDriveFolderLink(c.driveFolderId));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const loadContracts = async () => {
     try {
@@ -51,22 +61,25 @@ export default function ContratosList() {
           <h1>Contratos</h1>
         </div>
         <div className="header-actions">
-          <button className="btn-secondary" onClick={() => navigate('/ventas/contratos/plantillas')}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', fontSize: '0.9rem' }}>
+          <button className="btn-secondary" onClick={() => navigate('/ventas/contratos/plantillas')}>
             <FileText size={16} /> Plantillas
           </button>
-          <button className="auth-btn" onClick={() => navigate('/ventas/contratos/nuevo')}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', fontSize: '0.9rem' }}>
-            <Plus size={16} /> Nuevo Contrato
+          <button className="auth-btn" onClick={() => navigate('/ventas/contratos/nuevo')}>
+            <Plus size={16} /> Nuevo contrato
           </button>
-          <button className="btn-secondary" onClick={() => setShowDriveConfig(true)} title="Carpeta de Drive para documentos"
-            style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', marginLeft: 8 }}>
-            <Settings size={16} />
-          </button>
+          {driveFolderUrl && (
+            <a
+              className="btn-secondary"
+              href={driveFolderUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Abrir la carpeta de contratos en Google Drive"
+            >
+              <FolderOpen size={16} /> Ver carpeta
+            </a>
+          )}
         </div>
       </div>
-
-      <ContratosDriveConfigModal open={showDriveConfig} onClose={() => setShowDriveConfig(false)} />
 
       <div className="admin-section">
         {/* Filters */}

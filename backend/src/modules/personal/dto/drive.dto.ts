@@ -1,13 +1,13 @@
 import { IsString, IsOptional, IsIn, IsInt, IsBoolean } from 'class-validator';
 import { Transform } from 'class-transformer';
+import {
+  CONFIGURABLE_DRIVE_FOLDER_TYPES,
+  LOCKED_DRIVE_FOLDER_TYPES,
+} from '../constants/hardcoded-drive-folders';
 
 export const FOLDER_CONFIG_TYPES = [
-  'CUMPLIMIENTO',
-  'RECLUTAMIENTO',
-  'PERSONAL_ADMIN',
-  'GUARDIAS_ARCHIVO',
-  'CAPACITACIONES',
-  'VENTAS_CONTRATOS',
+  ...CONFIGURABLE_DRIVE_FOLDER_TYPES,
+  ...LOCKED_DRIVE_FOLDER_TYPES,
 ] as const;
 
 export class SaveDriveConfigDto {
@@ -15,7 +15,7 @@ export class SaveDriveConfigDto {
   @Transform(({ value }) => value?.trim().replace(/\.+$/, ''))
   driveFolderId: string;
 
-  @IsIn([...FOLDER_CONFIG_TYPES])
+  @IsIn([...CONFIGURABLE_DRIVE_FOLDER_TYPES])
   @IsOptional()
   type?: string;
 }

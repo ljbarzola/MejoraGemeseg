@@ -49,14 +49,18 @@ export interface ValidacionFormatoEntidad {
   valido: boolean;
 }
 
-// Espera el formato "Provincia - Nombre de la entidad": separador " - " y la
-// parte antes del guion debe ser una de las 24 provincias del Ecuador
-// (comparado sin tildes ni mayúsculas).
+// Espera "Provincia - Nombre de la entidad". El guion admite cualquier
+// cantidad de espacios alrededor (incluido ninguno): "GUAYAS- ZUMOCACAO",
+// "Guayas-Zumocacao" y "Guayas - Zumocacao" cuentan igual. La provincia se
+// compara sin tildes ni mayúsculas. No se renombra nada en Drive.
 export function validarFormatoEntidad(
   nombre: string,
 ): ValidacionFormatoEntidad {
   if (!nombre) return { valido: false };
-  const partes = nombre.split(' - ');
+  const partes = nombre
+    .split(/\s*-\s*/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
   if (partes.length < 2) return { valido: false };
 
   const provincia = normalizar(partes[0]);

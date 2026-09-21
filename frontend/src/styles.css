@@ -507,6 +507,7 @@ body {
   flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
+  align-items: center;
 }
 
 .header-actions .auth-btn,
@@ -517,6 +518,35 @@ body {
   padding: 10px 18px;
   font-size: 0.9rem;
   white-space: nowrap;
+}
+
+/* Tuerca / iconos de configuración: mismo alto que los botones con texto,
+   siempre al extremo derecho del grupo. Sin etiqueta: el title/aria-label
+   dice qué abre. */
+.header-actions .btn-icon-toolbar {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  gap: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gris-claro);
+  color: var(--azul-oscuro);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.header-actions .btn-icon-toolbar:hover {
+  background: #d0d0d0;
+}
+
+.header-actions .btn-icon-toolbar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 @keyframes spin {
@@ -970,6 +1000,10 @@ body {
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
+  }
+
+  .header-actions {
+    width: 100%;
   }
 
   .project-grid {

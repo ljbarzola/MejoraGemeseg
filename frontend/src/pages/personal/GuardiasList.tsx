@@ -420,11 +420,23 @@ export default function GuardiasList() {
                 <button className="btn-secondary" onClick={handleSync} disabled={syncing}>
                   <RefreshCw size={16} className={syncing ? 'spin' : undefined} /> {syncing ? 'Sincronizando...' : 'Sincronizar Drive'}
                 </button>
-                <button className="btn-secondary" onClick={openConfigModal} title="Ver estructura de carpetas y configurar Drive">
-                  <Settings size={16} /> Configurar Drive
+                <button
+                  type="button"
+                  className="btn-icon-toolbar"
+                  onClick={() => setShowFieldsConfig(true)}
+                  title="Campos de la ficha personal"
+                  aria-label="Campos de la ficha personal"
+                >
+                  <Settings2 size={18} />
                 </button>
-                <button className="btn-secondary" onClick={() => setShowFieldsConfig(true)} title="Agregar o quitar campos de la Ficha Personal">
-                  <Settings2 size={16} /> Configurar campos
+                <button
+                  type="button"
+                  className="btn-icon-toolbar"
+                  onClick={openConfigModal}
+                  title="Carpeta de Drive"
+                  aria-label="Carpeta de Drive"
+                >
+                  <Settings size={18} />
                 </button>
               </div>
               {ultimaSincronizacion && (
@@ -468,7 +480,7 @@ export default function GuardiasList() {
           )}
           {syncResult.entidadesFormatoInvalido.length > 0 && (
             <p style={{ margin: '8px 0 0', color: '#975a16' }}>
-              ⚠ Carpetas de entidad que no siguen el formato "Provincia - Nombre de la entidad": {syncResult.entidadesFormatoInvalido.join(', ')}
+              ⚠ Carpetas de entidad que no se pudieron leer como provincia y nombre (ej. GUAYAS - ZUMOCACAO): {syncResult.entidadesFormatoInvalido.join(', ')}
             </p>
           )}
           {syncResult.carpetasNoReconocidas.length > 0 && (
@@ -478,7 +490,7 @@ export default function GuardiasList() {
           )}
           {syncResult.guardiasNoReconocidos.length > 0 && (
             <p style={{ margin: '8px 0 0', color: '#975a16' }}>
-              ⚠ Carpetas de guardia no reconocidas (deben llamarse "Nombre Apellido - Cédula"), no se generó ningún registro para estas carpetas: {syncResult.guardiasNoReconocidos.join(', ')}
+              ⚠ Carpetas de guardia no reconocidas (deben llamarse "Apellidos - Nombres", con la cédula en el formulario de postulación), no se generó ningún registro para estas carpetas: {syncResult.guardiasNoReconocidos.join(', ')}
             </p>
           )}
           {syncResult.renombresIgnorados.length > 0 && (
@@ -662,13 +674,14 @@ export default function GuardiasList() {
                 }}>
 {`📁 (la carpeta raíz que configures abajo)
  ├── 📁 Público                          ← exactamente ese nombre
- │     └── 📁 <Nombre de la Entidad>        ← 1 carpeta por entidad pública
- │            └── 📁 <Nombre Apellido - Cédula>  ← 1 carpeta por guardia
+ │     └── 📁 <Provincia - Entidad>         ← ej. GUAYAS - ZUMOCACAO
+ │            └── 📁 <Apellidos - Nombres>  ← 1 carpeta por guardia
  │                   └── (sus documentos)
- └── 📁 Privado                          ← exactamente ese nombre
-       └── 📁 <Nombre de la Entidad>        ← 1 carpeta por entidad privada
-              └── 📁 <Nombre Apellido - Cédula>
-                     └── (sus documentos)`}
+ ├── 📁 Privado                          ← exactamente ese nombre
+ │     └── 📁 <Provincia - Entidad>
+ │            └── 📁 <Apellidos - Nombres>
+ └── 📁 Sin Asignar                      ← recién contratados, aún sin entidad
+       └── 📁 <Apellidos - Nombres>`}
                 </pre>
                 <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: '#718096' }}>
                   Si el nombre de una carpeta de entidad no existe todavía en "Entidades y Requisitos", se crea automáticamente al sincronizar. Nunca se borra una entidad ni sus requisitos por borrar o mover una carpeta — el guardia solo queda "sin asignación" hasta que la carpeta reaparezca con el mismo nombre.

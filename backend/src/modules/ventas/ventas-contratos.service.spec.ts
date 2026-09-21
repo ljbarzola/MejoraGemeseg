@@ -239,6 +239,62 @@ describe('VentasContratosService', () => {
     });
   });
 
+  describe('buildSignWellTextTag', () => {
+    it('does not embed human labels (spaces/accents wrap in the PDF and SignWell rejects the document)', () => {
+      const tag = (service as any).buildSignWellTextTag({
+        id: 42,
+        fieldType: 'TEXT',
+        isRequired: true,
+        variableName: 'Cliente.Nombre/Razón Social',
+        label: 'Nombre/Razón Social',
+      });
+      expect(tag).toBe('{{text:1:y:::f42:160:18}}');
+      expect(tag).not.toMatch(/Razón|Nombre| |\/|á|é|í|ó|ú/i);
+    });
+
+    it('keeps the checkbox tag short so it stays on the same line, and autofills the signing date', () => {
+      expect(
+        (service as any).buildSignWellTextTag({
+          id: 7,
+          fieldType: 'CHECKBOX',
+          isRequired: true,
+          label: 'Acepto los términos',
+        }),
+      ).toBe('{{c}}');
+      expect(
+        (service as any).buildSignWellTextTag({
+          id: 8,
+          fieldType: 'DATE',
+          isRequired: true,
+          label: 'Fecha de firma',
+        }),
+      ).toBe('{{date:1:n:::f8:80:16:y:dd/mm/yyyy}}');
+    });
+
+    it('gives each repeated placeholder a unique API id (SignWell rejects duplicates)', () => {
+      const field = { id: 498, fieldType: 'TEXT', isRequired: true };
+      expect((service as any).buildSignWellTextTag(field, 0)).toBe(
+        '{{text:1:y:::f498:160:18}}',
+      );
+      expect((service as any).buildSignWellTextTag(field, 1)).toBe(
+        '{{text:1:y:::f498n1:160:18}}',
+      );
+    });
+
+    it('splices the tag into its own white run instead of a long in-line label', () => {
+      const xml = '<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>Hola [Cliente.Nombre] fin</w:t></w:r>';
+      const out = (service as any).spliceSignWellTag(
+        xml,
+        '[Cliente.Nombre]',
+        () => '{{text:1:y:f1}}',
+      );
+      expect(out).toContain('{{text:1:y:f1}}');
+      expect(out).toContain('w:val="FFFFFF"');
+      expect(out).not.toContain('[Cliente.Nombre]');
+      expect(out).toContain('>Hola </w:t>');
+    });
+  });
+
   describe('submitPublicFill', () => {
     it('throws when the token does not match any contract', async () => {
       prisma.salesContract.findFirst.mockResolvedValue(null);

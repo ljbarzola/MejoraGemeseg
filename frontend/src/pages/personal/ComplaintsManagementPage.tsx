@@ -124,12 +124,24 @@ export default function ComplaintsManagementPage() {
             <p className="page-eyebrow">RECURSOS HUMANOS</p>
             <h1>Gestión de Quejas y Sugerencias</h1>
           </div>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button className="btn-secondary" onClick={() => setShowStagesConfig(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <ListOrdered size={16} /> Configurar etapas
+          <div className="header-actions">
+            <button
+              type="button"
+              className="btn-icon-toolbar"
+              onClick={() => setShowStagesConfig(true)}
+              title="Etapas del tablero"
+              aria-label="Etapas del tablero"
+            >
+              <ListOrdered size={18} />
             </button>
-            <button className="btn-secondary" onClick={() => setShowFieldsConfig(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Settings2 size={16} /> Configurar campos del formulario
+            <button
+              type="button"
+              className="btn-icon-toolbar"
+              onClick={() => setShowFieldsConfig(true)}
+              title="Campos del formulario"
+              aria-label="Campos del formulario"
+            >
+              <Settings2 size={18} />
             </button>
           </div>
         </div>
@@ -153,7 +165,7 @@ export default function ComplaintsManagementPage() {
 
       {stages.length === 0 ? (
         <p style={{ fontSize: '0.85rem', color: '#a0aec0' }}>
-          Esta empresa aún no tiene etapas configuradas. Usa "Configurar etapas" para crear la primera.
+          Esta empresa aún no tiene etapas configuradas. Usa el botón de etapas (arriba a la derecha) para crear la primera.
         </p>
       ) : (
         <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', paddingBottom: '16px', alignItems: 'flex-start' }}>

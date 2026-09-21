@@ -25,6 +25,8 @@ export interface SalesTemplateField {
   allowMultiple?: boolean;
   allowOther?: boolean;
   tableConfig?: TableFieldConfig | null;
+  clientPrompt?: string | null;
+  clientFieldKey?: string | null;
   order: number;
 }
 
@@ -79,6 +81,7 @@ export interface SalesContract {
   signedAt?: string;
   clientFillToken?: string | null;
   clientFilledAt?: string | null;
+  salesClientId?: number | null;
   companyId: number;
   createdBy: number;
   createdAt: string;
@@ -188,14 +191,10 @@ export const uploadSignedContract = (contractId: number, file: File) => {
   return api.post(`/ventas/contratos/${contractId}/documents/signed`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
 };
 
-// Carpeta raíz de Drive para los documentos de Contratos — compartida por
-// toda la empresa, reutiliza el mismo endpoint genérico de FolderConfig que
-// ya usa RRHH (`type` distinto por módulo).
+// Carpeta raíz de Drive para los documentos de Contratos: ID fijo en
+// backend `HARDCODED_DRIVE_FOLDERS.VENTAS_CONTRATOS` (no se configura en la UI).
 export const getVentasDriveConfig = () =>
   api.get('/personal/drive/config', { params: { type: 'VENTAS_CONTRATOS' } }).then(r => r.data);
-
-export const saveVentasDriveConfig = (driveFolderId: string) =>
-  api.post('/personal/drive/config', { driveFolderId, type: 'VENTAS_CONTRATOS' }).then(r => r.data);
 
 // Los PDFs de contratos requieren sesión iniciada; se descargan con la
 // instancia de axios autenticada (no un <iframe>/<a> directo) y se muestran
@@ -253,3 +252,53 @@ export interface SalesApiKey {
 export const getSalesApiKeys = () => api.get('/ventas/api-keys').then(r => r.data);
 export const createSalesApiKey = (data: any) => api.post('/ventas/api-keys', data).then(r => r.data);
 export const deleteSalesApiKey = (id: number) => api.delete(`/ventas/api-keys/${id}`).then(r => r.data);
+
+export interface SalesClientField {
+  id: number;
+  companyId: number;
+  key: string;
+  label: string;
+  fieldType: string;
+  isCore: boolean;
+  order: number;
+}
+
+export interface SalesClient {
+  id: number;
+  companyId: number;
+  name: string;
+  email: string;
+  phone?: string | null;
+  ruc?: string | null;
+  address?: string | null;
+  extra?: Record<string, string>;
+  createdAt: string;
+}
+
+export const getSalesClientFields = () =>
+  api.get('/ventas/clientes/fields').then(r => r.data as SalesClientField[]);
+export const addSalesClientField = (data: { label: string; key?: string; fieldType?: string }) =>
+  api.post('/ventas/clientes/fields', data).then(r => r.data as SalesClientField);
+export const deleteSalesClientField = (id: number) =>
+  api.delete(`/ventas/clientes/fields/${id}`).then(r => r.data);
+export const getSalesClients = () =>
+  api.get('/ventas/clientes').then(r => r.data as SalesClient[]);
+export const getSalesClient = (id: number) =>
+  api.get(`/ventas/clientes/${id}`).then(r => r.data as SalesClient);
+export const createSalesClient = (data: Partial<SalesClient> & { name: string; email: string }) =>
+  api.post('/ventas/clientes', data).then(r => r.data as SalesClient);
+export const updateSalesClient = (id: number, data: Partial<SalesClient>) =>
+  api.patch(`/ventas/clientes/${id}`, data).then(r => r.data as SalesClient);
+export const deleteSalesClient = (id: number) =>
+  api.delete(`/ventas/clientes/${id}`).then(r => r.data);
+
+export function salesClientValue(client: SalesClient | null | undefined, key: string): string {
+  if (!client || !key) return '';
+  if (key === 'name') return client.name || '';
+  if (key === 'email') return client.email || '';
+  if (key === 'phone') return client.phone || '';
+  if (key === 'ruc') return client.ruc || '';
+  if (key === 'address') return client.address || '';
+  return client.extra?.[key] != null ? String(client.extra[key]) : '';
+}
+

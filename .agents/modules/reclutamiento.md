@@ -173,7 +173,7 @@ Navegador real (Playwright, contra Vertex AI y Drive reales): confirmado que el 
 **Contexto (2026-09-15):** hasta Sprint 6, contratar siempre creaba un **guardia** — `contratarCandidato` tenía fija la carpeta `FolderConfig type='CUMPLIMIENTO'` y el bucket "Sin Asignar". No había forma de contratar a un administrativo desde Reclutamiento.
 
 - **`JobPosition.tipoContratacion`** (`'GUARDIA' | 'ADMINISTRATIVO'`, default `'GUARDIA'`): lo declara la vacante y lo heredan todos sus postulantes. El default preserva el comportamiento previo, así que ninguna vacante existente cambia de conducta. Migración aditiva `20260915_add_tipo_contratacion_job_position`. Se normaliza con `normalizeTipoContratacion` (cualquier valor no reconocido cae en `GUARDIA`), se espeja al JSON del puesto en Drive, y —igual que `camposRequeridos`/`archivosRequeridos`— `syncJobPositionsFromDrive` solo lo lee del JSON al **crear** una vacante detectada en Drive; para una que ya existe, Postgres manda.
-- **La trampa que motivó el sprint:** los dos buckets destino **nombran sus carpetas distinto**. Guardias usa `Nombre - Cédula` (10 dígitos, `parseEmployeeFolderName`) y Personal Administrativo usa `Nombre - Puesto`, **sin cédula** (`parsePersonalAdminFolderName`, cuya identidad en BD es `PA-<folderId>`). Un postulante siempre llega con el formato de cédula: movido tal cual al bucket administrativo, `syncPersonalAdminFolder` leería `1712345678` **como si fuera el puesto**. Por eso contratar a un administrativo **renombra** la carpeta, y el renombrado va en la **misma llamada** `files.update` que el movimiento — así la carpeta nunca llega a existir bajo esa raíz con el nombre equivocado, ni siquiera durante una ventana breve.
+- **La trampa que motivó el sprint:** los dos buckets destino **nombran sus carpetas distinto**. Guardias usa `Apellidos - Nombres` (cédula en `candidato.json`; las carpetas viejas `Nombre - Cédula` de 10 dígitos siguen parseándose, `parseEmployeeFolderName`) y Personal Administrativo usa `Nombre - Puesto`, **sin cédula** (`parsePersonalAdminFolderName`). Un postulante con cédula en el nombre, movido tal cual al bucket administrativo, haría que `syncPersonalAdminFolder` leyera `1712345678` **como si fuera el puesto**. Por eso contratar a un administrativo **renombra** la carpeta, y el renombrado va en la **misma llamada** `files.update` que el movimiento — así la carpeta nunca llega a existir bajo esa raíz con el nombre equivocado, ni siquiera durante una ventana breve.
 - **La cédula no se pierde:** `contratarCandidato` la escribe explícitamente en `candidato.json` (junto a `estado`/`fechaContratacion`/`tipoContratacion`), que viaja con la carpeta.
 - **Control de duplicados, distinto por bucket:** Guardias sigue comparando por cédula contra `EmployeeDriveFolder`. Administrativos **no pueden** — ese bucket no guarda cédula — así que se compara por `employeeName` normalizado (sin tildes ni mayúsculas) entre las filas `folderType='PERSONAL_ADMIN'`. Es más débil que la cédula, pero es lo único que ese modelo permite hoy.
 - **Falta la carpeta destino → se bloquea antes de tocar nada**, con el mensaje que indica en qué pantalla configurarla (Guardias ya lo tenía; administrativos reutiliza el de `getPersonalAdminFolderId`). La carpeta del postulante se queda intacta en Reclutamiento en vez de quedar a medio camino.
@@ -198,7 +198,7 @@ Dos cosas a tener presentes al tocar `candidato.json` desde este lado:
 
 - **Botón "Marcar como Contratado"** en el modal de detalle del candidato (`ReclutamientoPage.tsx`, footer del modal, junto a "Ver Carpeta en Drive"), visible solo con `canWrite('RRHH')`. Confirmación previa vía `ConfirmDialog` (mismo patrón que el botón de salida en `GuardiasList.tsx`; antes `window.confirm`, ver Sprint 8.3) porque mueve una carpeta real de Drive. Si la cédula ya existe pero ese guardia ya había salido, la contratación se permite igual (recontratación, ver Sprint 8.3) — solo se bloquea si sigue activo.
 - **`DriveService.contratarCandidato(companyId, folderId)`** (`drive.service.ts`, cerca de `saveCandidatoDatos`):
-  1. Lee la carpeta del candidato y parsea "Nombre - Cédula" (mismo parser de 10 dígitos que usa `syncEntidadesFolder`, `parseEmployeeFolderName`) — si no parsea, rechaza con un mensaje claro en vez de mover una carpeta con identidad ambigua.
+  1. Lee la carpeta del candidato: acepta "Apellidos - Nombres" (cédula en `candidato.json`) o el formato viejo "… - Cédula" de 10 dígitos (`parseEmployeeFolderName`). Si no hay cédula en ninguno de los dos sitios, rechaza con un mensaje claro en vez de mover una carpeta con identidad ambigua.
   2. **Chequeo de duplicado** (mismo espíritu que evitó el caso de los "Juan Perez"): si ya existe un `EmployeeDriveFolder` con esa cédula, rechaza sin mover nada.
   3. Marca `estado: 'CONTRATADO'` y `fechaContratacion` en el `candidato.json` de la carpeta (mismo patrón create-vs-update que `saveCandidatoDatos`).
   4. Resuelve (o crea, la primera vez) una carpeta **"Sin Asignar"** como tercer bucket de primer nivel dentro de la raíz de Guardias (`FolderConfig type='CUMPLIMIENTO'`), junto a `Público`/`Privado`.
@@ -400,13 +400,13 @@ Este modelo ya **no existe**. Fue reemplazado por `SistemaVerificacion`/`Movimie
 
 ## Algoritmo de syncReclutamientoCandidates
 
-1. Obtiene la carpeta raiz configurada en `FolderConfig` para la empresa
-2. Busca o crea la subcarpeta `Reclutamiento/` dentro de la raiz
+1. Obtiene la carpeta raíz **fija en código** (`HARDCODED_DRIVE_FOLDERS.RECLUTAMIENTO`, mismo ID que el portal de postulación). Ya no se lee ni se guarda `FolderConfig` para este tipo.
+2. Lista las subcarpetas de puesto dentro de esa raíz (una por vacante; el JSON del puesto vive ahí)
 3. Carga todos los `JobPosition` de la empresa para conocer archivos requeridos
-4. Lista todas las subcarpetas dentro de `Reclutamiento/`
+4. Lista las carpetas de candidatos dentro de cada puesto
 5. Para cada carpeta de candidato:
-   a. Parsea el nombre de la carpeta (patron `Nombre Apellido - 1234567890`)
-   b. Lee un archivo `candidato.json` (si existe) para datos adicionales
+   a. Parsea el nombre (`Apellidos - Nombres`; cédula desde JSON si no está en el nombre)
+   b. Lee `candidato.json` (si existe) para datos adicionales
    c. Compara el `puestoAplicado` contra los `JobPosition` definidos
    d. Calcula `completitudPercent` = (archivos requeridos encontrados / total archivos requeridos) * 100
    e. Recopila todos los archivos subidos

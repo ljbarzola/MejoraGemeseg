@@ -250,8 +250,14 @@ export default function HistorialGuardia() {
             <button className="btn-secondary" onClick={load} disabled={loading}>
               <RefreshCw size={16} className={loading ? 'spin' : undefined} /> {loading ? 'Cargando...' : 'Actualizar'}
             </button>
-            <button className="btn-secondary" onClick={() => setShowConfigSistemas(true)} title="Configurar sistemas de ingreso/salida">
-              <Settings size={16} /> Configurar sistemas
+            <button
+              type="button"
+              className="btn-icon-toolbar"
+              onClick={() => setShowConfigSistemas(true)}
+              title="Sistemas de ingreso y salida"
+              aria-label="Sistemas de ingreso y salida"
+            >
+              <Settings size={18} />
             </button>
           </div>
         </div>

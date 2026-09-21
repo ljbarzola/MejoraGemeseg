@@ -177,7 +177,7 @@ export default function AdministrativeStaff() {
               Personal de oficina y administrativo sincronizado desde Google Drive
             </p>
             <p style={{ color: '#a0aec0', fontSize: '0.78rem', marginTop: '2px' }}>
-              A diferencia de Guardias (que usa "Nombre - Cédula"), aquí la carpeta se guarda como "Nombre - Puesto", sin cédula.
+              A diferencia de Guardias (que usa "Apellidos - Nombres"), aquí la carpeta se guarda como "Nombre - Puesto", sin cédula.
             </p>
           </div>
 
@@ -185,13 +185,25 @@ export default function AdministrativeStaff() {
             <div className="header-actions">
               <button className="btn-secondary" onClick={handleSync} disabled={syncing}>
                 <RefreshCw size={16} className={syncing ? 'spin' : undefined} />
-                {syncing ? 'Sincronizando...' : 'Sincronizar Drive'}
+                {syncing ? 'Sincronizando...' : 'Sincronizar'}
               </button>
-              <button className="btn-secondary" onClick={openConfigModal} title="Configurar carpeta de Drive de Personal Administrativo">
-                <Settings size={16} /> Configurar Drive
+              <button
+                type="button"
+                className="btn-icon-toolbar"
+                onClick={() => setShowDocTypesModal(true)}
+                title="Datos, campos y documentos requeridos"
+                aria-label="Datos, campos y documentos requeridos"
+              >
+                <FileCog size={18} />
               </button>
-              <button className="btn-secondary" onClick={() => setShowDocTypesModal(true)} title="Configurar datos, campos y documentos requeridos de este grupo">
-                <FileCog size={16} /> Configuración
+              <button
+                type="button"
+                className="btn-icon-toolbar"
+                onClick={openConfigModal}
+                title="Carpeta de Drive"
+                aria-label="Carpeta de Drive"
+              >
+                <Settings size={18} />
               </button>
             </div>
             {ultimaSincronizacion && (
@@ -215,7 +227,7 @@ export default function AdministrativeStaff() {
             <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>📂</div>
             <p>No hay personal administrativo en Drive</p>
             <p style={{ fontSize: '0.8rem', marginTop: '8px' }}>
-              Configura la carpeta y sincroniza para importar
+              Configura la carpeta (tuerca) y sincroniza para importar
             </p>
           </div>
         ) : (

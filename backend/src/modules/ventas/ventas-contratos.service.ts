@@ -109,6 +109,7 @@ export class VentasContratosService {
       annexB: dto.annexB || null,
       annexC: dto.annexC || null,
       clientFillToken,
+      salesClientId: dto.salesClientId || null,
       companyId,
       createdBy,
     };
@@ -167,6 +168,7 @@ export class VentasContratosService {
     if (dto.annexA !== undefined) data.annexA = dto.annexA;
     if (dto.annexB !== undefined) data.annexB = dto.annexB;
     if (dto.annexC !== undefined) data.annexC = dto.annexC;
+    if (dto.salesClientId !== undefined) data.salesClientId = dto.salesClientId;
 
     return this.prisma.salesContract.update({
       where: { id },
@@ -355,8 +357,19 @@ export class VentasContratosService {
       // CONTRATOS-PLAN.md sección 8 for why (SignWell, like BoldSign,
       // requires page/coordinate data for positioned form fields, which
       // this app never captured — text tags sidestep that entirely).
+      const fieldHasValue = (v: unknown) => {
+        if (Array.isArray(v)) return v.length > 0;
+        return v !== undefined && v !== null && String(v).trim() !== '';
+      };
+      // Client fields become SignWell tags only when they still have no
+      // value — if the vendedor mapped them from a SalesClient (or filled
+      // them in the form), they are stamped like any other field, so the
+      // name/RUC can appear in every copy of the placeholder.
       const clientTagFields = template.fields.filter(
-        (f: any) => f.isClientField && this.buildSignWellTextTag(f) !== null,
+        (f: any) =>
+          f.isClientField &&
+          this.buildSignWellTextTag(f) !== null &&
+          !fieldHasValue(fieldValues[f.variableName]),
       );
       const clientTagFieldNames = new Set(
         clientTagFields.map((f: any) => f.variableName),
@@ -411,14 +424,18 @@ export class VentasContratosService {
           content = this.substituteInsertedValue(content, key, value);
         }
 
-        // Client-tag fields: plain literal substitution, no bold — this
-        // text isn't meant to be read by a human, it's a marker SignWell
-        // scans for when `text_tags: true` is sent (see sendToSignWellInternal).
+        // Client-tag fields: SignWell markers, not human-readable values.
+        // Each occurrence gets a unique API ID (SignWell rejects duplicates
+        // with "already has a Field with this API ID"). The tag is spliced
+        // into its own white run so LibreOffice cannot wrap it across lines.
         for (const field of clientTagFields) {
-          const tag = this.buildSignWellTextTag(field);
-          if (!tag) continue;
-          content = content.split(`[${field.variableName}]`).join(tag);
-          content = content.split(`<<${field.variableName}>>`).join(tag);
+          let occurrence = 0;
+          const nextTag = () => {
+            const tag = this.buildSignWellTextTag(field, occurrence++);
+            return tag ? { tag, hint: field.clientPrompt || '' } : null;
+          };
+          content = this.spliceSignWellTag(content, `[${field.variableName}]`, nextTag);
+          content = this.spliceSignWellTag(content, `<<${field.variableName}>>`, nextTag);
         }
 
         // Table-type variables must become a real Word table (<w:tbl>), not
@@ -498,45 +515,164 @@ export class VentasContratosService {
    * Maps a client-facing `SalesField` to a SignWell "text tag" — a
    * `{{...}}` marker embedded directly in the document's text that
    * SignWell detects on its own (`text_tags: true`, no page/coordinate
-   * data needed). Format confirmed against a real SignWell SDK example
-   * (`signwell-sdk-ruby`, `examples/12_text_tags.rb`), not guessed from
-   * documentation prose — an earlier attempt at this got conflicting
-   * answers (`:` vs `|` as the delimiter) from two different doc pages, so
-   * this went by working code instead. Signer number is always `1`: today
-   * a contract only ever has one client recipient (`recipients[0]` in
-   * `sendToSignWellInternal`). Returns null for field types with no text
-   * tag equivalent (TABLE, CONTRACT_NUMBER, DROPDOWN).
+   * data needed).
+   *
+   * Tags MUST stay short, ASCII-only, and free of spaces. Option 4 is a
+   * Label and SignWell's parser treats spaces as tag-width padding (see
+   * developers.signwell.com/reference/adding-text-tags). Putting the
+   * human field label here — e.g. `{{text:1:y:Nombre/Razón Social}}` —
+   * made LibreOffice wrap the marker across lines in the generated PDF
+   * (verified on contrato 18). SignWell then fails the whole document
+   * with "unknown error processing text_tags".
+   *
+   * Option 6 (API ID) MUST be unique per tag — SignWell errors with
+   * "already has a Field with this API ID" if the same id appears twice
+   * (it does not copy values the way HelloSign does). Repeated
+   * placeholders therefore get `f42`, `f42n1`, `f42n2`. Width/height
+   * (options 7-8) override the default "size of the tag text", which made
+   * checkboxes huge. DATE uses option 9 to lock/autofill the signing date
+   * (`dd/mm/yyyy`) on every copy. Signer number is always `1`. Returns
+   * null for field types with no text tag equivalent (TABLE,
+   * CONTRACT_NUMBER, DROPDOWN).
    */
-  private buildSignWellTextTag(field: {
-    fieldType: string;
-    isRequired: boolean;
-    label: string;
-  }): string | null {
+  private buildSignWellTextTag(
+    field: {
+      id?: number;
+      fieldType: string;
+      isRequired: boolean;
+      variableName?: string;
+    },
+    occurrence = 0,
+  ): string | null {
     const required = field.isRequired ? 'y' : 'n';
-    // ':' and '}' are the tag's own delimiters (SignWell splits on them) —
-    // strip them from the label or a label like "Fecha: hoy" breaks the tag
-    // and SignWell fails the whole document with a generic text_tags error.
-    const label = this.escapeXml((field.label || '').replace(/[:}]/g, ''));
+    const apiId = this.signWellApiId(field, occurrence);
+    // type:signer:required:label:prefill:apiId:width:height[:dateLock:dateFormat]
     switch (field.fieldType) {
       case 'CHECKBOX':
-        // SignWell's own docs (developers.signwell.com/reference/text-tag-options)
-        // say the label part only applies to `text` and `date` tags — adding
-        // one to `check` is what SignWell was rejecting with the generic
-        // "unknown error processing text_tags" error.
-        return `{{check:1:${required}}}`;
+        // Shortest valid tag so it stays on the same line as "Acepto...".
+        // A long `{{check:1:y:::f7:16:16}}` wrapped below the heading.
+        // SignWell assigns its own id when option 6 is omitted.
+        return `{{c}}`;
       case 'SIGNATURE':
-        return `{{signature:1}}`;
+        return `{{signature:1:y:::${apiId}}}`;
       case 'INITIAL':
-        return `{{initial:1:y}}`;
+        return `{{initial:1:y:::${apiId}}}`;
       case 'TEXT':
       case 'EMAIL':
       case 'NUMBER':
-        return `{{text:1:${required}:${label}}}`;
+        return `{{text:1:${required}:::${apiId}:160:18}}`;
       case 'DATE':
-        return `{{date:1:${required}}}`;
+        // Not a field the signer types: option 9 `y` fills/locks the
+        // signing date. Ecuador day-first format.
+        return `{{date:1:n:::${apiId}:80:16:y:dd/mm/yyyy}}`;
       default:
         return null;
     }
+  }
+
+  /**
+   * ASCII identifier used as SignWell option 6 (API ID). Unique per
+   * occurrence because SignWell does not allow the same id twice.
+   * Letters+digits only — no spaces, slashes, accents or punctuation.
+   */
+  private signWellApiId(
+    field: { id?: number; variableName?: string },
+    occurrence: number,
+  ): string {
+    const base =
+      field.id != null
+        ? `f${field.id}`
+        : `f${String(field.variableName || 'x')
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '')
+            .slice(0, 10) || 'x'}`;
+    return occurrence > 0 ? `${base}n${occurrence}` : base;
+  }
+
+  /**
+   * Replaces every `placeholder` with a SignWell text tag in its own
+   * white-on-white run (`xml:space="preserve"`). White hides the marker
+   * (SignWell does not strip tags from the PDF). A dedicated run keeps
+   * the tag contiguous so it cannot inherit a line-break from the
+   * surrounding paragraph's existing text.
+   */
+  private spliceSignWellTag(
+    content: string,
+    placeholder: string,
+    nextTag: () => string | { tag: string; hint?: string } | null,
+  ): string {
+    let result = '';
+    let searchFrom = 0;
+
+    while (true) {
+      const idx = content.indexOf(placeholder, searchFrom);
+      if (idx === -1) {
+        result += content.slice(searchFrom);
+        break;
+      }
+
+      const produced = nextTag();
+      if (!produced) {
+        result += content.slice(searchFrom);
+        break;
+      }
+      const tag = typeof produced === 'string' ? produced : produced.tag;
+      const hint =
+        typeof produced === 'string' ? '' : (produced.hint || '').trim();
+      const escapedTag = this.escapeXml(tag);
+
+      const tOpenStart = this.findLastOpenTag(content, '<w:t', idx);
+      const tOpenEnd = tOpenStart === -1 ? -1 : content.indexOf('>', tOpenStart);
+      const tCloseStart = content.indexOf('</w:t>', idx);
+      const rOpenStart =
+        tOpenStart === -1 ? -1 : this.findLastOpenTag(content, '<w:r', tOpenStart);
+      const rOpenEnd = rOpenStart === -1 ? -1 : content.indexOf('>', rOpenStart);
+      const rCloseStart =
+        tCloseStart === -1 ? -1 : content.indexOf('</w:r>', tCloseStart);
+      const between =
+        rOpenEnd !== -1 && tOpenStart !== -1
+          ? content.slice(rOpenEnd + 1, tOpenStart)
+          : '';
+      const isCleanRun =
+        tOpenStart !== -1 &&
+        tOpenEnd !== -1 &&
+        tOpenEnd < idx &&
+        tCloseStart !== -1 &&
+        rOpenStart !== -1 &&
+        rOpenEnd !== -1 &&
+        rCloseStart !== -1 &&
+        (between === '' ||
+          (between.startsWith('<w:rPr>') && between.endsWith('</w:rPr>')));
+
+      if (!isCleanRun) {
+        result += content.slice(searchFrom, idx) + escapedTag;
+        searchFrom = idx + placeholder.length;
+        continue;
+      }
+
+      const rPr = between;
+      const before = content.slice(tOpenEnd + 1, idx);
+      const after = content.slice(idx + placeholder.length, tCloseStart);
+      const plainRun = (text: string) =>
+        text
+          ? `<w:r>${rPr}<w:t xml:space="preserve">${this.escapeXml(text)}</w:t></w:r>`
+          : '';
+      const hintRun = hint
+        ? `<w:r>${rPr}<w:t xml:space="preserve">${this.escapeXml(hint + ' ')}</w:t></w:r>`
+        : '';
+      // Keep the original run's font size/position so a heading-sized
+      // "Acepto..." line doesn't drop a 10pt checkbox onto the next line.
+      const tagRPr = rPr
+        ? rPr.replace('</w:rPr>', '<w:color w:val="FFFFFF"/></w:rPr>')
+        : '<w:rPr><w:color w:val="FFFFFF"/></w:rPr>';
+      const tagRun = `<w:r>${tagRPr}<w:t xml:space="preserve">${escapedTag}</w:t></w:r>`;
+
+      result += content.slice(searchFrom, rOpenStart);
+      result += `${plainRun(before)}${hintRun}${tagRun}${plainRun(after)}`;
+      searchFrom = rCloseStart + '</w:r>'.length;
+    }
+
+    return result;
   }
 
   // ==================== PDF CONVERSION (LibreOffice) ====================
@@ -587,8 +723,8 @@ export class VentasContratosService {
   /**
    * Best-effort upload of a generated/sent/signed PDF into this template's
    * Drive folder. Drive storage is optional — if the company hasn't
-   * configured a root folder (FolderConfig type=VENTAS_CONTRATOS), this is
-   * a no-op. Any Drive failure is logged and swallowed: generating/sending
+   * hardcoded Drive root (VENTAS_CONTRATOS in HARDCODED_DRIVE_FOLDERS), this
+   * is a no-op. Any Drive failure is logged and swallowed: generating/sending
    * a contract must never fail because of a Drive problem.
    */
   private async uploadToDriveIfConfigured(
@@ -618,10 +754,9 @@ export class VentasContratosService {
 
   /**
    * Returns this template's Drive subfolder, creating it lazily inside the
-   * company's root Ventas/Contratos folder (FolderConfig type=
-   * VENTAS_CONTRATOS) the first time it's needed. Returns null if the
-   * company hasn't configured a root folder — callers treat that as
-   * "Drive storage not enabled", not an error.
+   * company's hardcoded Ventas/Contratos root (VENTAS_CONTRATOS) the first
+   * time it's needed. Returns null if that root has no ID yet — callers
+   * treat that as "Drive storage not enabled", not an error.
    */
   private async getOrCreateTemplateDriveFolder(
     template: { id: number; name: string; driveFolderId: string | null },

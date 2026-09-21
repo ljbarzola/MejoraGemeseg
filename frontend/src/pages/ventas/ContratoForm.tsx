@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { getTemplates, getTemplate, getContract, createContract, updateContract, SalesTemplate, SalesTemplateField, TableColumn } from '../../services/ventas.service';
+import { getTemplates, getTemplate, getContract, createContract, updateContract, getSalesClients, getSalesClientFields, addSalesClientField, salesClientValue, SalesTemplate, SalesTemplateField, TableColumn, SalesClient, SalesClientField } from '../../services/ventas.service';
 import { useToast } from '../../contexts/ToastContext';
 
 export default function ContratoForm() {
@@ -19,6 +19,10 @@ export default function ContratoForm() {
   // campos normales de la plantilla si hacen falta).
   const [clientName, setClientName] = useState('');
   const [clientEmail, setClientEmail] = useState('');
+  const [clients, setClients] = useState<SalesClient[]>([]);
+  const [clientFieldDefs, setClientFieldDefs] = useState<SalesClientField[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<number | ''>('');
+  const [newClientFieldLabel, setNewClientFieldLabel] = useState('');
 
   // Field values (from template fields where isClientField = false). Un
   // DROPDOWN de selección múltiple guarda un arreglo de opciones marcadas
@@ -30,6 +34,10 @@ export default function ContratoForm() {
   const [tableValues, setTableValues] = useState<Record<string, Record<string, string>[]>>({});
 
   useEffect(() => { if (!isEditMode) loadTemplates(); }, [isEditMode]);
+  useEffect(() => {
+    getSalesClients().then(setClients).catch(() => setClients([]));
+    getSalesClientFields().then(setClientFieldDefs).catch(() => setClientFieldDefs([]));
+  }, []);
 
   useEffect(() => {
     if (isEditMode && contractId) {
@@ -80,10 +88,46 @@ export default function ContratoForm() {
       setSelectedTemplate(c.template || null);
       setClientName(c.clientName);
       setClientEmail(c.clientEmail);
+      setSelectedClientId(c.salesClientId || '');
       const { defaults, tables } = initFieldValues(c.template?.fields, c.fieldValues || {});
       setFieldValues(defaults);
       setTableValues(tables);
     } catch { navigate('/ventas/contratos'); }
+  };
+
+  const applyClient = (client: SalesClient | undefined, fields: SalesTemplateField[] | undefined) => {
+    if (!client) return;
+    setClientName(client.name);
+    setClientEmail(client.email);
+    setFieldValues((prev) => {
+      const next: Record<string, any> = { ...prev };
+      fields?.forEach((f) => {
+        if (!f.clientFieldKey || f.fieldType === 'TABLE' || f.fieldType === 'CONTRACT_NUMBER') return;
+        const v = salesClientValue(client, f.clientFieldKey);
+        if (v) next[f.variableName] = v;
+      });
+      return next;
+    });
+  };
+
+  const handleSelectClient = (id: number | '') => {
+    setSelectedClientId(id);
+    if (!id) return;
+    const client = clients.find((c) => c.id === id);
+    applyClient(client, selectedTemplate?.fields);
+  };
+
+  const handleAddClientField = async (variableName: string) => {
+    const label = newClientFieldLabel.trim() || selectedTemplate?.fields.find((f) => f.variableName === variableName)?.label || '';
+    if (!label) { showToast('Escribe el nombre del campo a añadir', 'error'); return; }
+    try {
+      const created = await addSalesClientField({ label });
+      setClientFieldDefs((prev) => [...prev, created]);
+      setNewClientFieldLabel('');
+      showToast(`Campo "${created.label}" añadido. Mapealo en la plantilla o llénalo en Clientes.`, 'success');
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'No se pudo añadir el campo', 'error');
+    }
   };
 
   const handleFieldChange = (varName: string, value: string) => {
@@ -166,6 +210,7 @@ export default function ContratoForm() {
       if (isEditMode && contractId) {
         await updateContract(+contractId, {
           clientName, clientEmail,
+          salesClientId: selectedClientId || null,
           fieldValues: { ...fieldValues, ...tableValues },
         });
         showToast('Campos actualizados', 'success');
@@ -174,6 +219,7 @@ export default function ContratoForm() {
         const contract = await createContract({
           templateId: selectedTemplate.id,
           clientName, clientEmail,
+          salesClientId: selectedClientId || undefined,
           fieldValues: { ...fieldValues, ...tableValues },
         });
         navigate(`/ventas/contratos/${contract.id}`);
@@ -242,13 +288,59 @@ export default function ContratoForm() {
 
       {selectedTemplate && (
         <>
-          {/* Datos para el envío — lo mínimo para mandar el contrato a firmar, no una ficha del cliente */}
-          <Section title="Datos para el envío">
-            <p style={{ fontSize: 12, color: '#666', margin: '-4px 0 12px' }}>Necesarios para enviar el contrato a firmar.</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Input label="Nombre *" value={clientName} onChange={setClientName} />
-              <Input label="Email *" value={clientEmail} onChange={setClientEmail} type="email" />
+          <Section title="Datos del cliente">
+            <p style={{ fontSize: 12, color: '#666', margin: '-4px 0 12px' }}>
+              Elige un cliente de la ficha. Los campos mapeados en la plantilla se rellenan solos; si el documento pide algo que el cliente no tiene, puedes llenarlo aquí o añadir el campo en Clientes.
+            </p>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+              <select value={selectedClientId} onChange={(e) => handleSelectClient(e.target.value ? +e.target.value : '')}
+                style={{ flex: 1, minWidth: 220, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}>
+                <option value="">— Seleccionar cliente —</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.email})</option>
+                ))}
+              </select>
+              <button type="button" className="btn-secondary" onClick={() => navigate('/ventas/clientes?nuevo=1')}
+                style={{ padding: '8px 12px', fontSize: 12 }}>Ir a Clientes</button>
             </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <Input label="Nombre para el envío *" value={clientName} onChange={setClientName} />
+              <Input label="Email para el envío *" value={clientEmail} onChange={setClientEmail} type="email" />
+            </div>
+            {allFields.filter((f) => f.fieldType !== 'TABLE' && f.fieldType !== 'CONTRACT_NUMBER').map((f) => {
+              const mapped = !!f.clientFieldKey;
+              const fromClient = selectedClientId ? salesClientValue(clients.find((c) => c.id === selectedClientId), f.clientFieldKey || '') : '';
+              const missingOnClient = mapped && selectedClientId && !fromClient && !fieldValues[f.variableName];
+              const unmapped = !mapped && f.isClientField;
+              if (!mapped && !unmapped) return null;
+              return (
+                <div key={f.variableName} style={{ padding: '8px 10px', border: '1px solid #eee', borderRadius: 6, marginBottom: 8, background: missingOnClient || unmapped ? '#fffbeb' : '#f8fafc' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{f.label}</div>
+                  {mapped && fromClient ? (
+                    <div style={{ fontSize: 12, color: '#166534' }}>Mapeado desde el cliente: {fromClient}</div>
+                  ) : (
+                    <>
+                      <p style={{ fontSize: 11, color: '#92400e', margin: '0 0 6px' }}>
+                        {unmapped
+                          ? 'Este campo está en el documento y no está mapeado a la ficha de Cliente.'
+                          : 'El cliente no tiene este dato. Llénalo para este contrato o añádelo a la ficha.'}
+                      </p>
+                      {f.fieldType !== 'CHECKBOX' && f.fieldType !== 'SIGNATURE' && f.fieldType !== 'DATE' && (
+                        <Input label="Valor para este contrato" value={fieldValues[f.variableName] || ''} onChange={(v) => handleFieldChange(f.variableName, v)} />
+                      )}
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <input value={newClientFieldLabel} onChange={(e) => setNewClientFieldLabel(e.target.value)} placeholder="Nombre del campo en Clientes"
+                          style={{ flex: 1, minWidth: 160, padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }} />
+                        <button type="button" className="btn-secondary" onClick={() => handleAddClientField(f.variableName)}
+                          style={{ padding: '6px 10px', fontSize: 11 }}>Añadir campo a Clientes</button>
+                        <button type="button" className="btn-secondary" onClick={() => navigate('/ventas/clientes')}
+                          style={{ padding: '6px 10px', fontSize: 11 }}>Abrir Clientes</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </Section>
 
           {/* Company fields, grouped by variable namespace ("Contrato.Campo" -> "Campos de (Contrato)") */}

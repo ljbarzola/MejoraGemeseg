@@ -60,10 +60,10 @@ export default function ContractsList() {
           </div>
           <div className="header-actions">
             <button className="btn-secondary" onClick={() => navigate('/rrhh/contracts/generar')}>
-              <FileText size={16} /> Generar Documento
+              <FileText size={16} /> Generar documento
             </button>
-            <button className="btn-secondary" onClick={() => navigate('/rrhh/contracts/plantillas/nueva')}>
-              <FilePlus size={16} /> Nueva Plantilla
+            <button className="auth-btn" onClick={() => navigate('/rrhh/contracts/plantillas/nueva')}>
+              <FilePlus size={16} /> Nueva plantilla
             </button>
           </div>
         </div>
