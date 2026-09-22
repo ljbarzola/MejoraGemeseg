@@ -7,6 +7,7 @@ import { createTask, getProjectMembers } from '../../services/task.service';
 import { getProjects } from '../../services/project.service';
 import { STATUS_LABELS, STATUS_COLORS } from '../../types/task';
 import type { ProjectMember } from '../../types/task';
+import DateInput from '../common/DateInput';
 
 const taskSchema = z.object({
   title: z.string().min(1, 'El título es requerido'),
@@ -203,12 +204,12 @@ export default function CreateTaskModal({ projectId, onClose, onCreated }: Props
             <div className="form-row">
               <div className="form-group">
                 <label htmlFor="startDate">Fecha inicio</label>
-                <input id="startDate" type="date" {...register('startDate')} />
+                <DateInput id="startDate" value={watch('startDate') || ''} onChange={(v) => setValue('startDate', v)} />
               </div>
 
               <div className="form-group">
                 <label htmlFor="endDate">Fecha fin</label>
-                <input id="endDate" type="date" {...register('endDate')} />
+                <DateInput id="endDate" value={watch('endDate') || ''} onChange={(v) => setValue('endDate', v)} />
               </div>
             </div>
 

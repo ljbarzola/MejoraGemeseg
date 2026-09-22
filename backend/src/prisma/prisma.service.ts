@@ -27,11 +27,12 @@ export class PrismaService
     const isUnixSocket =
       databaseUrl.includes('host=/cloudsql/') ||
       databaseUrl.includes('host=%2Fcloudsql%2F');
+    // SSL para cualquier conexión remota. La base es Cloud SQL (`gemeseg-db`);
+    // el socket Unix de Cloud Run ya va cifrado y no lo necesita.
     const useSsl =
       !isUnixSocket &&
-      (databaseUrl.includes('supabase') ||
+      (databaseUrl.includes('cloudsql') ||
         databaseUrl.includes('pooler') ||
-        databaseUrl.includes('cloudsql') ||
         process.env.DATABASE_SSL === 'true');
     const adapter = new PrismaPg({
       connectionString: databaseUrl,

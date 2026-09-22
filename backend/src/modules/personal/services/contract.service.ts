@@ -5,6 +5,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { DriveService } from './drive.service';
+import { hardcodedFolderId } from '../constants/hardcoded-drive-folders';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -26,6 +28,15 @@ function sanitizeForFilename(value: string): string {
   return value.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60) || 'documento';
 }
 
+// OJO: en produccion (Cloud Run) estos directorios son EFIMEROS. El
+// contenedor se apaga al quedar inactivo (--min-instances=0) y vuelve a
+// arrancar con el disco vacio, y ademas varias instancias no comparten
+// filesystem: el archivo que escribio una puede no existir para la siguiente
+// peticion. Por eso nada aqui puede asumir que un archivo escrito antes
+// sigue estando: son una CACHE, no un almacen.
+//   - La plantilla .docx se vuelve a bajar de Drive sola (ensureDocxLocal).
+//   - El PDF generado se vuelve a armar solo (ensureContractFile), porque
+//     plantilla + fieldValues guardados en BD bastan para reproducirlo.
 const TEMPLATES_DIR = path.resolve(process.cwd(), 'uploads', 'hr-templates');
 const CONTRACTS_DIR = path.resolve(process.cwd(), 'uploads', 'hr-contracts');
 
@@ -54,7 +65,10 @@ export const SYSTEM_FIELDS = [
 export class ContractService {
   private readonly logger = new Logger(ContractService.name);
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly driveService: DriveService,
+  ) {
     if (!fs.existsSync(TEMPLATES_DIR))
       fs.mkdirSync(TEMPLATES_DIR, { recursive: true });
     if (!fs.existsSync(CONTRACTS_DIR))
@@ -218,12 +232,9 @@ export class ContractService {
       where: { id: templateId, companyId },
     });
     if (!template) throw new NotFoundException('Plantilla no encontrada');
-    if (!template.docxPath || !fs.existsSync(template.docxPath)) {
-      throw new BadRequestException('Primero descarga el documento de Drive');
-    }
-
+    // Se recupera de Drive si la copia local ya no esta (ver ensureDocxLocal).
+    const docxBuffer = await this.ensureDocxLocal(template);
     try {
-      const docxBuffer = fs.readFileSync(template.docxPath);
       return await detectDocxVariables(docxBuffer);
     } catch (err) {
       this.handleUnexpectedError(err, 'detectar las variables del documento');
@@ -333,27 +344,28 @@ export class ContractService {
   async generateContract(
     dto: {
       templateId: number;
-      cedula: string;
+      cedula?: string;
       nombreGuardia: string;
       fieldValues?: Record<string, string>;
     },
     companyId: number,
     userId: number,
   ) {
-    const cedula = dto.cedula.trim();
+    // Sin cédula = modo manual (documento para alguien fuera del padrón de
+    // guardias). Lo único imprescindible es el nombre: es lo que identifica
+    // el documento en el listado de Documentos Generados.
+    const cedula = (dto.cedula || '').trim();
     const nombreGuardia = dto.nombreGuardia.trim();
-    if (!cedula) throw new BadRequestException('Selecciona un guardia');
+    if (!nombreGuardia)
+      throw new BadRequestException(
+        'Escribe a nombre de quién se genera el documento.',
+      );
 
     const template = await this.prisma.contractTemplate.findFirst({
       where: { id: dto.templateId, companyId },
       include: { fields: true },
     });
     if (!template) throw new NotFoundException('Plantilla no encontrada');
-    if (!template.docxPath || !fs.existsSync(template.docxPath)) {
-      throw new BadRequestException(
-        'El documento fuente no está disponible. Descárgalo de Drive primero.',
-      );
-    }
 
     // Rellena SOLO con los campos que la plantilla realmente tiene
     // configurados (nunca lo que venga suelto en el body), recortando
@@ -376,7 +388,8 @@ export class ContractService {
     }
 
     try {
-      const docxBuffer = fs.readFileSync(template.docxPath);
+      // Se baja de Drive sola si la copia local ya no esta (ver ensureDocxLocal).
+      const docxBuffer = await this.ensureDocxLocal(template);
       const filledDocxBuffer = await fillDocxTemplate(docxBuffer, fieldValues);
 
       // Red de seguridad: si la plantilla tiene variables que no están en
@@ -393,9 +406,39 @@ export class ContractService {
 
       const pdfBuffer = await this.convertDocxToPdf(filledDocxBuffer);
 
-      const pdfFileName = `${sanitizeForFilename(cedula)}_${Date.now()}.pdf`;
+      const pdfFileName = `${sanitizeForFilename(cedula || nombreGuardia)}_${Date.now()}.pdf`;
       fs.writeFileSync(path.join(CONTRACTS_DIR, pdfFileName), pdfBuffer);
       const generatedUrl = `/api/personal/contracts/file/${pdfFileName}`;
+
+      // Copia permanente en Drive. El disco del servidor se recicla, así que
+      // esta es la que de verdad guarda el documento entregado. Si falla, la
+      // generación NO se cae: el PDF ya está hecho y servido desde disco, y
+      // el fallo queda en el log del servidor para revisarlo.
+      const nombreLegible = `${nombreGuardia || cedula} - ${template.name} - ${new Date().toLocaleDateString('es-EC')}.pdf`;
+      let driveFileId: string | null = null;
+      let driveUrl: string | null = null;
+      try {
+        const carpeta = hardcodedFolderId('RRHH_DOCUMENTOS');
+        if (carpeta) {
+          const subido = await this.driveService.uploadFile(
+            carpeta,
+            pdfBuffer,
+            nombreLegible,
+            'application/pdf',
+          );
+          driveFileId = subido.id;
+          driveUrl = subido.url;
+        } else {
+          this.logger.warn(
+            'RRHH_DOCUMENTOS no tiene carpeta de Drive configurada en código: el PDF quedó solo en disco.',
+          );
+        }
+      } catch (err) {
+        this.logger.error(
+          `No se pudo subir a Drive el documento "${nombreLegible}"`,
+          (err as Error)?.stack || String(err),
+        );
+      }
 
       return this.prisma.contract.create({
         data: {
@@ -405,6 +448,8 @@ export class ContractService {
           fieldValues,
           status: 'READY',
           generatedUrl,
+          driveFileId,
+          driveUrl,
           companyId,
           createdBy: userId,
         },
@@ -420,6 +465,98 @@ export class ContractService {
 
   getContractFilePath(fileName: string): string {
     return path.join(CONTRACTS_DIR, fileName);
+  }
+
+  /**
+   * Devuelve el .docx de la plantilla como buffer, bajandolo de Drive si la
+   * copia local ya no esta (instancia reciclada, ver comentario de
+   * TEMPLATES_DIR). Asi RRHH no tiene que volver a pulsar "Descargar de
+   * Drive" cada vez que el servidor se reinicia, ni el flujo depende de que
+   * el archivo lo haya bajado una maquina en particular.
+   */
+  private async ensureDocxLocal(template: {
+    id: number;
+    docxPath: string | null;
+    driveUrl: string | null;
+  }): Promise<Buffer> {
+    if (template.docxPath && fs.existsSync(template.docxPath)) {
+      return fs.readFileSync(template.docxPath);
+    }
+    if (!template.driveUrl) {
+      throw new BadRequestException(
+        'Esta plantilla no tiene un enlace de Drive configurado, y su documento ya no esta en el servidor. Agrega el enlace en la plantilla y vuelve a intentar.',
+      );
+    }
+
+    let buffer: Buffer;
+    try {
+      buffer = await downloadDocxFromDrive(template.driveUrl);
+    } catch (err: any) {
+      throw new BadRequestException(
+        `El documento de la plantilla no esta en el servidor y no se pudo recuperar de Drive: ${err.message}`,
+      );
+    }
+
+    const filePath = path.join(TEMPLATES_DIR, `${Date.now()}.docx`);
+    fs.writeFileSync(filePath, buffer);
+    await this.prisma.contractTemplate.update({
+      where: { id: template.id },
+      data: { docxPath: filePath },
+    });
+    return buffer;
+  }
+
+  /**
+   * Garantiza que el PDF ya generado exista en disco antes de servirlo. Si la
+   * instancia que lo genero ya no esta, se rehace a partir de la plantilla y
+   * de los fieldValues guardados en el Contract: el resultado es identico,
+   * asi que el enlace de "Documentos Generados" nunca se rompe.
+   * Devuelve null si ese archivo no corresponde a ningun contrato.
+   */
+  async ensureContractFile(fileName: string): Promise<string | null> {
+    const filePath = path.join(CONTRACTS_DIR, fileName);
+    if (fs.existsSync(filePath)) return filePath;
+
+    const contract = await this.prisma.contract.findFirst({
+      where: { generatedUrl: `/api/personal/contracts/file/${fileName}` },
+      include: { template: true },
+    });
+    if (!contract?.template) return null;
+
+    // 1) Drive primero: es el documento REAL que se entregó. Regenerarlo
+    // daría uno distinto si la plantilla cambió desde entonces, y eso en un
+    // documento firmado no es aceptable.
+    if (contract.driveFileId) {
+      try {
+        const buffer = await this.driveService.downloadFileBuffer(
+          contract.driveFileId,
+        );
+        fs.writeFileSync(filePath, buffer);
+        return filePath;
+      } catch (err) {
+        this.logger.warn(
+          `No se pudo recuperar de Drive el PDF ${fileName}, se regenerará: ${(err as Error)?.message}`,
+        );
+      }
+    }
+
+    // 2) Último recurso: rehacerlo con la plantilla y los datos guardados.
+    try {
+      const docxBuffer = await this.ensureDocxLocal(contract.template);
+      const filled = await fillDocxTemplate(
+        docxBuffer,
+        (contract.fieldValues as Record<string, string>) || {},
+      );
+      const pdfBuffer = await this.convertDocxToPdf(filled);
+      fs.writeFileSync(filePath, pdfBuffer);
+      return filePath;
+    } catch (err) {
+      this.logger.error(
+        `No se pudo regenerar el PDF ${fileName} del contrato ${contract.id}`,
+        (err as Error)?.stack || String(err),
+      );
+      return null;
+    }
   }
 
   private async convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {

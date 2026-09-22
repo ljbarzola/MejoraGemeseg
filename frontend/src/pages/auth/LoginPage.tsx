@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate, Link } from 'react-router-dom';
-import { login as loginService, saveAuth, forgotPassword } from '../../services/auth.service';
+import { login as loginService, saveAuth, requestPasswordReset, confirmPasswordReset } from '../../services/auth.service';
 import { useCompany } from '../../contexts/ThemeContext';
 
 const loginSchema = z.object({
@@ -24,11 +24,25 @@ export default function LoginPage() {
   const [serverError, setServerError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
+  // Recuperar contraseña son DOS pasos: primero se pide el código al correo,
+  // después se canjea por la contraseña nueva. Antes bastaba con poner un
+  // correo y una contraseña para cambiarla, sin verificar nada.
+  const [forgotPaso, setForgotPaso] = useState<'PEDIR_CODIGO' | 'CONFIRMAR'>('PEDIR_CODIGO');
   const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotCode, setForgotCode] = useState('');
   const [forgotPassword2, setForgotPassword2] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotMsg, setForgotMsg] = useState('');
   const [forgotError, setForgotError] = useState('');
+
+  const cerrarForgot = () => {
+    setShowForgot(false);
+    setForgotPaso('PEDIR_CODIGO');
+    setForgotCode('');
+    setForgotPassword2('');
+    setForgotMsg('');
+    setForgotError('');
+  };
   const [detectedCompany, setDetectedCompany] = useState(false);
 
   const {
@@ -74,7 +88,9 @@ export default function LoginPage() {
         // y no debe demorar el ingreso al dashboard si la API tarda en responder.
         loadThemeByDomain(domain).then((found) => { if (found) setDetectedCompany(true); });
       }
-      navigate('/dashboard');
+      // A la raiz, no a /dashboard: RootRedirect decide la primera seccion
+      // que este usuario puede ver (ver App.tsx).
+      navigate('/');
     } catch (err: any) {
       const msg =
         err.response?.data?.message ||
@@ -90,18 +106,30 @@ export default function LoginPage() {
     e.preventDefault();
     setForgotError('');
     setForgotMsg('');
-    if (forgotPassword2.length < 7) {
-      setForgotError('La contraseña debe tener al menos 7 caracteres');
-      return;
-    }
     setForgotLoading(true);
     try {
-      await forgotPassword({ email: forgotEmail, newPassword: forgotPassword2 });
-      setForgotMsg('Contraseña actualizada. Ya puedes iniciar sesión.');
-      setForgotEmail('');
+      if (forgotPaso === 'PEDIR_CODIGO') {
+        const res = await requestPasswordReset({ email: forgotEmail });
+        setForgotMsg(res.message);
+        setForgotPaso('CONFIRMAR');
+        return;
+      }
+
+      if (forgotPassword2.length < 8) {
+        setForgotError('La contraseña debe tener al menos 8 caracteres');
+        return;
+      }
+      const res = await confirmPasswordReset({
+        email: forgotEmail,
+        code: forgotCode,
+        newPassword: forgotPassword2,
+      });
+      setForgotMsg(res.message);
+      setForgotPaso('PEDIR_CODIGO');
+      setForgotCode('');
       setForgotPassword2('');
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Error al actualizar contraseña';
+      const msg = err.response?.data?.message || 'No se pudo completar la recuperación. Inténtalo de nuevo.';
       setForgotError(Array.isArray(msg) ? msg[0] : msg);
     } finally {
       setForgotLoading(false);
@@ -133,9 +161,11 @@ export default function LoginPage() {
           )}
           <h1>{showForgot ? 'Recuperar contraseña' : 'Iniciar sesión'}</h1>
           <p className="auth-subtitle">
-            {showForgot
-              ? 'Ingresa tu correo y la nueva contraseña'
-              : 'Ingresa con tu correo corporativo para acceder al sistema'}
+            {!showForgot
+              ? 'Ingresa con tu correo corporativo para acceder al sistema'
+              : forgotPaso === 'PEDIR_CODIGO'
+                ? 'Te enviaremos un código a tu correo para verificar que eres tú'
+                : `Escribe el código que te enviamos a ${forgotEmail} y tu nueva contraseña`}
           </p>
         </div>
 
@@ -214,33 +244,66 @@ export default function LoginPage() {
                   placeholder="tu@correo.com"
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
+                  disabled={forgotPaso === 'CONFIRMAR'}
                   required
                 />
               </div>
 
-              <div className="form-group">
-                <label htmlFor="forgot-password">Nueva contraseña</label>
-                <input
-                  id="forgot-password"
-                  type="password"
-                  placeholder="Mínimo 7 caracteres"
-                  value={forgotPassword2}
-                  onChange={(e) => setForgotPassword2(e.target.value)}
-                  required
-                />
-              </div>
+              {forgotPaso === 'CONFIRMAR' && (
+                <>
+                  <div className="form-group">
+                    <label htmlFor="forgot-code">Código de 6 dígitos</label>
+                    <input
+                      id="forgot-code"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      placeholder="000000"
+                      value={forgotCode}
+                      onChange={(e) => setForgotCode(e.target.value.replace(/\D/g, ''))}
+                      style={{ letterSpacing: '0.35em', fontSize: '1.15rem', textAlign: 'center', fontFamily: 'monospace' }}
+                      required
+                      autoFocus
+                    />
+                    <p style={{ fontSize: '0.75rem', color: '#718096', margin: '6px 0 0' }}>
+                      Caduca en 15 minutos y solo sirve una vez.
+                    </p>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="forgot-password">Nueva contraseña</label>
+                    <input
+                      id="forgot-password"
+                      type="password"
+                      placeholder="Mínimo 8 caracteres"
+                      value={forgotPassword2}
+                      onChange={(e) => setForgotPassword2(e.target.value)}
+                      minLength={8}
+                      required
+                    />
+                  </div>
+                </>
+              )}
 
               <button type="submit" className="auth-btn" disabled={forgotLoading}>
-                {forgotLoading ? 'Actualizando...' : 'Actualizar contraseña'}
+                {forgotLoading
+                  ? (forgotPaso === 'PEDIR_CODIGO' ? 'Enviando...' : 'Actualizando...')
+                  : (forgotPaso === 'PEDIR_CODIGO' ? 'Enviarme el código' : 'Cambiar contraseña')}
               </button>
             </form>
 
             <div className="auth-footer">
-              <span
-                onClick={() => { setShowForgot(false); setForgotMsg(''); setForgotError(''); }}
-                className="auth-link"
-                style={{ cursor: 'pointer' }}
-              >
+              {forgotPaso === 'CONFIRMAR' && (
+                <span
+                  onClick={() => { setForgotPaso('PEDIR_CODIGO'); setForgotCode(''); setForgotError(''); setForgotMsg(''); }}
+                  className="auth-link"
+                  style={{ cursor: 'pointer', display: 'block', marginBottom: 8 }}
+                >
+                  No me llegó, enviar otro código
+                </span>
+              )}
+              <span onClick={cerrarForgot} className="auth-link" style={{ cursor: 'pointer' }}>
                 Volver al inicio de sesión
               </span>
             </div>

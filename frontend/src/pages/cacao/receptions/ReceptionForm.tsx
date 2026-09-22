@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getSuppliers, getQualities, createReception, getNextLotCode, getUnitConfig } from '../../../services/cacao.service';
+import DateInput from '../../../components/common/DateInput';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FULL: Record<string, string> = { TON: 'Toneladas', KG: 'Kilogramos', SACO: 'Sacos' };
@@ -192,7 +193,7 @@ export default function ReceptionForm() {
           <div className="form-row">
             <div className="form-group">
               <label>Fecha de Recepción *</label>
-              <input type="date" value={form.date} onChange={(e) => setField('date', e.target.value)} />
+              <DateInput value={form.date} onChange={(v) => setField('date', v)} />
             </div>
             <div className="form-group">
               <label>Proveedor *</label>

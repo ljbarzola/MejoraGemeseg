@@ -105,6 +105,7 @@ export class VentasClientesService {
     return this.prisma.salesClient.findMany({
       where: { companyId },
       orderBy: { name: 'asc' },
+      include: { creator: { select: { id: true, fullName: true } } },
     });
   }
 
@@ -112,6 +113,7 @@ export class VentasClientesService {
     if (!companyId) throw new BadRequestException('Se requiere una empresa');
     const client = await this.prisma.salesClient.findFirst({
       where: { id, companyId },
+      include: { creator: { select: { id: true, fullName: true } } },
     });
     if (!client) throw new NotFoundException('Cliente no encontrado');
     return client;
@@ -131,8 +133,10 @@ export class VentasClientesService {
         phone: dto.phone?.trim() || null,
         ruc: dto.ruc?.trim() || null,
         address: dto.address?.trim() || null,
+        observaciones: dto.observaciones?.trim() || null,
         extra: dto.extra || {},
       },
+      include: { creator: { select: { id: true, fullName: true } } },
     });
   }
 
@@ -144,8 +148,13 @@ export class VentasClientesService {
     if (dto.phone !== undefined) data.phone = dto.phone ? String(dto.phone).trim() : null;
     if (dto.ruc !== undefined) data.ruc = dto.ruc ? String(dto.ruc).trim() : null;
     if (dto.address !== undefined) data.address = dto.address ? String(dto.address).trim() : null;
+    if (dto.observaciones !== undefined) data.observaciones = dto.observaciones ? String(dto.observaciones).trim() : null;
     if (dto.extra !== undefined) data.extra = dto.extra;
-    return this.prisma.salesClient.update({ where: { id }, data });
+    return this.prisma.salesClient.update({
+      where: { id },
+      data,
+      include: { creator: { select: { id: true, fullName: true } } },
+    });
   }
 
   async deleteClient(companyId: number | null, id: number) {

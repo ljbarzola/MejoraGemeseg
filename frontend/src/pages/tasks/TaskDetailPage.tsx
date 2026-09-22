@@ -10,6 +10,7 @@ import { getUser } from '../../services/auth.service';
 import type { Task, ProjectMember } from '../../types/task';
 import { STATUS_LABELS, STATUS_COLORS } from '../../types/task';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import DateInput from '../../components/common/DateInput';
 
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -288,22 +289,20 @@ export default function TaskDetailPage() {
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="startDate">Fecha inicio</label>
-              <input
+              <DateInput
                 id="startDate"
-                type="date"
                 value={form.startDate}
-                onChange={(e) => handleChange('startDate', e.target.value)}
+                onChange={(v) => handleChange('startDate', v)}
                 disabled={isViewer}
               />
             </div>
 
             <div className="form-group">
               <label htmlFor="endDate">Fecha fin</label>
-              <input
+              <DateInput
                 id="endDate"
-                type="date"
                 value={form.endDate}
-                onChange={(e) => handleChange('endDate', e.target.value)}
+                onChange={(v) => handleChange('endDate', v)}
                 disabled={isViewer}
               />
             </div>

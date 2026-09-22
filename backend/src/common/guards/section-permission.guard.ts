@@ -5,7 +5,10 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { PermissionsService } from '../../modules/permissions/permissions.service';
+import {
+  PermissionsService,
+  esSeccionSiempreVisible,
+} from '../../modules/permissions/permissions.service';
 import {
   SECTION_KEY,
   SectionRequirement,
@@ -67,6 +70,12 @@ export class SectionPermissionGuard implements CanActivate {
         `La sección ${requirement.section} no está habilitada para tu empresa`,
       );
     }
+
+    // Fijas por código (Inicio, Proyectos) o marcadas por la empresa como
+    // visibles para todos: no se niegan usuario por usuario.
+    if (esSeccionSiempreVisible(requirement.section)) return true;
+    const fijas = await this.permissionsService.getFixedSections(user.companyId);
+    if (fijas.includes(requirement.section)) return true;
 
     const perms = await this.permissionsService.getUserPermissions(user.userId);
     const perm = perms.find((p) => p.section === requirement.section);

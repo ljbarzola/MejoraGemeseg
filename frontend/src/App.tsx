@@ -61,9 +61,6 @@ const AdministrativeStaff = lazy(() => import('./pages/personal/AdministrativeSt
 const ContractsList = lazy(() => import('./pages/personal/contracts/ContractsList'));
 const ContractTemplateConfig = lazy(() => import('./pages/personal/contracts/ContractTemplateConfig'));
 const GenerarDocumento = lazy(() => import('./pages/personal/contracts/GenerarDocumento'));
-const LogEntriesPage = lazy(() => import('./pages/personal/logs/LogEntries'));
-const DriveConfig = lazy(() => import('./pages/personal/compliance/DriveConfig'));
-const DocumentTypeConfig = lazy(() => import('./pages/personal/compliance/DocumentTypeConfig'));
 const EntidadesList = lazy(() => import('./pages/personal/entidades/EntidadesList'));
 const HistorialGuardia = lazy(() => import('./pages/personal/entidades/HistorialGuardia'));
 const CumplimientoEntidades = lazy(() => import('./pages/personal/entidades/CumplimientoEntidades'));
@@ -71,6 +68,7 @@ const TrainingsPage = lazy(() => import('./pages/personal/TrainingsPage'));
 const ComplaintsPage = lazy(() => import('./pages/personal/ComplaintsPage'));
 const ComplaintsManagementPage = lazy(() => import('./pages/personal/ComplaintsManagementPage'));
 const SurveysPage = lazy(() => import('./pages/personal/SurveysPage'));
+const PublicSurveyPage = lazy(() => import('./pages/personal/PublicSurveyPage'));
 const SurveyManagementPage = lazy(() => import('./pages/personal/SurveyManagementPage'));
 const VentasDashboard = lazy(() => import('./pages/ventas/VentasDashboard'));
 const VisitasPage = lazy(() => import('./pages/ventas/VisitasPage'));
@@ -101,10 +99,37 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
 }
 
 function SectionRoute({ section, children }: { section: string; children: React.ReactNode }) {
-  const { canView, loading } = usePerm();
+  const { canView, loading, landingRoute } = usePerm();
   if (loading) return <LoadingFallback />;
-  if (!canView(section)) return <Navigate to="/dashboard" replace />;
+  if (!canView(section)) {
+    // Se redirige a la primera seccion que este usuario SI puede ver, nunca
+    // a una fija. Antes esto mandaba siempre a /dashboard, y como el
+    // Dashboard tambien es una seccion que se puede negar por usuario, a
+    // quien la tuviera en "no" lo dejaba en un bucle de redirecciones con la
+    // pantalla en blanco (reportado por el usuario: "a unas cuentas les sale
+    // el bienvenido y a otras no").
+    if (!landingRoute) return <SinSeccionesDisponibles />;
+    return <Navigate to={landingRoute} replace />;
+  }
   return <>{children}</>;
+}
+
+// Caso límite: a este usuario le negaron TODAS las secciones. Sin esto
+// quedaría en un bucle de redirecciones sin explicación.
+function SinSeccionesDisponibles() {
+  return (
+    <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ maxWidth: 420, textAlign: 'center' }}>
+        <h2 style={{ fontSize: '1.15rem', color: '#1a202c', marginBottom: 8 }}>
+          Tu usuario todavía no tiene ningún módulo habilitado
+        </h2>
+        <p style={{ color: '#718096', fontSize: '0.9rem', margin: 0 }}>
+          Pídele al administrador de tu empresa que te active al menos una
+          sección desde Administración &rarr; Permisos de usuario.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function LoadingFallback() {
@@ -118,6 +143,22 @@ function LoadingFallback() {
   );
 }
 
+// La raíz manda a la primera sección que el usuario puede ver, no a
+// /dashboard fijo (ver SectionRoute).
+function RootRedirect() {
+  const { loading, landingRoute } = usePerm();
+  if (!isAuthenticated()) return <Navigate to="/login" replace />;
+  if (loading) return <LoadingFallback />;
+  if (!landingRoute) {
+    return (
+      <ProtectedLayout>
+        <SinSeccionesDisponibles />
+      </ProtectedLayout>
+    );
+  }
+  return <Navigate to={landingRoute} replace />;
+}
+
 function AppInner() {
   const perms = usePermissions();
   const [chatOpen, setChatOpen] = useState(false);
@@ -127,19 +168,14 @@ function AppInner() {
       <SidebarProvider>
       <Suspense fallback={<LoadingFallback />}>
       <Routes>
-        <Route
-          path="/"
-          element={
-            isAuthenticated() ? (
-              <Navigate to="/dashboard" replace />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
+        <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/ventas/contratos/completar/:token" element={<CompletarContrato />} />
+        {/* Encuesta por enlace público: la responde gente SIN cuenta (incluido
+            desde el celular), por eso va fuera de ProtectedLayout y sin
+            SectionRoute. El token de la URL es la única credencial. */}
+        <Route path="/encuesta/:token" element={<PublicSurveyPage />} />
         <Route
           path="/dashboard"
           element={
@@ -300,9 +336,6 @@ function AppInner() {
         <Route path="/rrhh/contracts/plantillas/nueva" element={<ProtectedLayout><SectionRoute section="RRHH"><ContractTemplateConfig /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/contracts/plantillas/:id" element={<ProtectedLayout><SectionRoute section="RRHH"><ContractTemplateConfig /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/contracts/generar" element={<ProtectedLayout><SectionRoute section="RRHH"><GenerarDocumento /></SectionRoute></ProtectedLayout>} />
-        <Route path="/rrhh/logs" element={<ProtectedLayout><SectionRoute section="RRHH"><LogEntriesPage /></SectionRoute></ProtectedLayout>} />
-        <Route path="/rrhh/drive-config" element={<ProtectedLayout><SectionRoute section="RRHH"><DriveConfig /></SectionRoute></ProtectedLayout>} />
-        <Route path="/rrhh/document-types" element={<ProtectedLayout><SectionRoute section="RRHH"><DocumentTypeConfig /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/entidades" element={<ProtectedLayout><SectionRoute section="RRHH"><EntidadesList /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/cumplimiento" element={<ProtectedLayout><SectionRoute section="RRHH"><CumplimientoEntidades /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/historial" element={<ProtectedLayout><SectionRoute section="RRHH"><HistorialGuardia /></SectionRoute></ProtectedLayout>} />

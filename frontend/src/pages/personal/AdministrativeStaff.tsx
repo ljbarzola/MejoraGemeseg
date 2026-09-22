@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useResizableColumns } from '../../hooks/useResizableColumns';
+import { useSortableTable } from '../../hooks/useSortableTable';
 import { ArrowLeft, RefreshCw, Settings, FileCog, X, IdCard } from 'lucide-react';
 import { extractDriveFolderId, buildDriveFolderLink } from '../../utils/driveLink';
 import { formatFechaHoraSync } from '../../utils/formatFechaHora';
@@ -29,6 +31,7 @@ interface StaffRow {
 
 export default function AdministrativeStaff() {
   const navigate = useNavigate();
+  const tablaRef = useResizableColumns('personal-administrativo');
   const [staff, setStaff] = useState<StaffRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -162,6 +165,18 @@ export default function AdministrativeStaff() {
     }
   };
 
+  // Ordenar por cualquier columna, igual que el listado de tareas del Inicio.
+  const { filas: filasOrdenadas, thProps, SortIcon } = useSortableTable(
+    staff,
+    {
+      nombre: (e) => e.employeeName,
+      puesto: (e) => e.puesto,
+      departamento: (e) => e.ficha?.departamento,
+      ingreso: (e) => e.ficha?.fechaIngreso,
+    },
+    'nombre',
+  );
+
   return (
     <div className="page-container">
       <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
@@ -169,7 +184,7 @@ export default function AdministrativeStaff() {
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS</p>
             <h1>Personal Administrativo</h1>
@@ -177,7 +192,7 @@ export default function AdministrativeStaff() {
               Personal de oficina y administrativo sincronizado desde Google Drive
             </p>
             <p style={{ color: '#a0aec0', fontSize: '0.78rem', marginTop: '2px' }}>
-              A diferencia de Guardias (que usa "Apellidos - Nombres"), aquí la carpeta se guarda como "Nombre - Puesto", sin cédula.
+              La carpeta se nombra igual que en Guardias: "Apellidos Nombres". El puesto y la cédula se guardan dentro de datos.json, no en el nombre.
             </p>
           </div>
 
@@ -232,24 +247,26 @@ export default function AdministrativeStaff() {
           </div>
         ) : (
           <div className="tasks-table-wrapper">
-            <table className="tasks-table">
+            <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th>Nombre</th>
-                  <th>Puesto</th>
-                  <th>Departamento</th>
-                  <th>Fecha de ingreso</th>
+                  <th {...thProps('nombre')}>Nombre <SortIcon campo="nombre" /></th>
+                  <th {...thProps('puesto')}>Puesto <SortIcon campo="puesto" /></th>
+                  <th {...thProps('departamento')}>Departamento <SortIcon campo="departamento" /></th>
+                  <th {...thProps('ingreso')}>Fecha de ingreso <SortIcon campo="ingreso" /></th>
                   <th>Estado</th>
                   <th>Cumplimiento</th>
                   <th style={{ textAlign: 'right' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {staff.map((emp) => (
+                {filasOrdenadas.map((emp) => (
                   <tr key={emp.cedula}>
-                    <td style={{ fontWeight: 700, color: 'var(--azul-oscuro)' }}>{emp.employeeName}</td>
-                    <td>{emp.puesto || '—'}</td>
-                    <td>{emp.ficha?.departamento || '—'}</td>
+                    <td style={{ fontWeight: 700, color: 'var(--azul-oscuro)' }}>
+                      <span className="truncate" title={emp.employeeName}>{emp.employeeName}</span>
+                    </td>
+                    <td><span className="truncate" title={emp.puesto || undefined}>{emp.puesto || '—'}</span></td>
+                    <td><span className="truncate" title={emp.ficha?.departamento || undefined}>{emp.ficha?.departamento || '—'}</span></td>
                     <td>{emp.ficha?.fechaIngreso ? new Date(emp.ficha.fechaIngreso).toLocaleDateString('es-EC') : '—'}</td>
                     <td>
                       <span className="status-badge" style={{
@@ -326,11 +343,11 @@ export default function AdministrativeStaff() {
                   fontSize: '0.78rem', lineHeight: 1.6, color: '#1a202c', overflowX: 'auto',
                 }}>
 {`📁 (la carpeta raíz que configures abajo)
- └── 📁 <Nombre Apellido - Puesto>   ← 1 carpeta por empleado, con ese formato exacto
+ └── 📁 <Apellidos Nombres>   ← 1 carpeta por empleado, con ese formato exacto
         └── (sus documentos: cédula, contrato, etc.)`}
                 </pre>
                 <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: '#718096' }}>
-                  A diferencia de Custodios, aquí el nombre de carpeta NO lleva cédula — va el <strong>puesto</strong> (ej. "María Torres - Contadora").
+                  El nombre de la carpeta es solo <strong>apellidos y nombres</strong>, sin guion, sin cédula y sin puesto (ej. "Torres Vega María José"). La cédula y el puesto se guardan dentro de <code>datos.json</code>, en la misma carpeta. Las carpetas con el formato viejo se siguen leyendo: la sincronización solo te avisa cuáles conviene renombrar.
                 </p>
                 <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#718096' }}>
                   Abre la carpeta raíz en Drive y copia el enlace completo desde la barra de direcciones o con "Compartir → Copiar enlace".

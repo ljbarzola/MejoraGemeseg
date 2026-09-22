@@ -1,17 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Plus, FolderOpen } from 'lucide-react';
+import { FileText, Plus, FolderOpen, HelpCircle } from 'lucide-react';
 import { getContracts, deleteContract, getVentasDriveConfig, SalesContract } from '../../services/ventas.service';
-import { PRIMARY } from './contratoStyles';
 import { buildDriveFolderLink } from '../../utils/driveLink';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import TemplateHelpModal from '../../components/ventas/TemplateHelpModal';
+import { useResizableColumns } from '../../hooks/useResizableColumns';
+import { useSortableTable } from '../../hooks/useSortableTable';
 
 export default function ContratosList() {
   const navigate = useNavigate();
   const [contracts, setContracts] = useState<SalesContract[]>([]);
   const [filter, setFilter] = useState('');
+  const [search, setSearch] = useState('');
   const [driveFolderUrl, setDriveFolderUrl] = useState('');
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
+  const tablaRef = useResizableColumns('ventas-contratos');
 
   useEffect(() => { loadContracts(); }, [filter]);
 
@@ -49,23 +55,46 @@ export default function ContratosList() {
     SENT: 'Enviado', SIGNED: 'Firmado', CANCELLED: 'Cancelado',
   };
 
+  const filteredContracts = contracts.filter((c) => {
+    const q = search.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      (c.contractNumber || '').toLowerCase().includes(q) ||
+      c.clientName?.toLowerCase().includes(q) ||
+      c.clientEmail?.toLowerCase().includes(q) ||
+      (c.template?.name || '').toLowerCase().includes(q)
+    );
+  });
+
+  const { filas: filasOrdenadas, thProps, SortIcon } = useSortableTable(
+    filteredContracts,
+    {
+      contractNumber: (c) => c.contractNumber || `#${c.id}`,
+      clientName: (c) => c.clientName,
+      template: (c) => c.template?.name,
+      status: (c) => statusLabels[c.status] || c.status,
+      createdAt: (c) => c.createdAt,
+    },
+    'createdAt',
+    'desc',
+  );
+
   return (
     <div className="page-container">
-      <button className="cacao-back-btn" onClick={() => navigate('/ventas')} style={{ marginBottom: 16 }}>
-        <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-      </button>
-
       <div className="page-header-row">
         <div>
           <p className="page-eyebrow">Ventas y CRM</p>
           <h1>Contratos</h1>
         </div>
         <div className="header-actions">
-          <button className="btn-secondary" onClick={() => navigate('/ventas/contratos/plantillas')}>
-            <FileText size={16} /> Plantillas
-          </button>
-          <button className="auth-btn" onClick={() => navigate('/ventas/contratos/nuevo')}>
-            <Plus size={16} /> Nuevo contrato
+          <button
+            type="button"
+            onClick={() => setShowHelp(true)}
+            title="Cómo funciona Contratos"
+            aria-label="Ayuda"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 6, border: 'none', background: 'var(--naranja)', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+          >
+            <HelpCircle size={18} /> Ayuda
           </button>
           {driveFolderUrl && (
             <a
@@ -74,47 +103,85 @@ export default function ContratosList() {
               target="_blank"
               rel="noopener noreferrer"
               title="Abrir la carpeta de contratos en Google Drive"
+              aria-label="Ver carpeta en Google Drive"
+              style={{ display: 'inline-flex', alignItems: 'center', padding: '8px 10px' }}
             >
-              <FolderOpen size={16} /> Ver carpeta
+              <FolderOpen size={16} />
             </a>
           )}
+          <button className="btn-secondary" onClick={() => navigate('/ventas/contratos/plantillas')}>
+            <FileText size={16} /> Plantillas
+          </button>
+          <button className="auth-btn" onClick={() => navigate('/ventas/contratos/nuevo')}>
+            <Plus size={16} /> Nuevo contrato
+          </button>
+        </div>
+      </div>
+
+      <div className="filter-bar">
+        <div className="filter-bar-fields">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por número, cliente, email o plantilla..."
+            style={{ flex: '1 1 280px', minWidth: 0, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
+          />
+          <select className="filter-select" value={filter} onChange={(e) => setFilter(e.target.value)}>
+            <option value="">Todos los estados</option>
+            {(['DRAFT', 'READY', 'SENT', 'SIGNED'] as const).map((s) => (
+              <option key={s} value={s}>{statusLabels[s]}</option>
+            ))}
+          </select>
+        </div>
+        <div className="filter-bar-actions">
+          <ClearFiltersButton onClear={() => { setSearch(''); setFilter(''); }} disabled={!search && !filter} />
         </div>
       </div>
 
       <div className="admin-section">
-        {/* Filters */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          {['', 'DRAFT', 'READY', 'SENT', 'SIGNED'].map(s => (
-            <button key={s} onClick={() => { setFilter(s); }}
-              style={{ padding: '4px 12px', borderRadius: 12, border: filter === s ? `2px solid ${PRIMARY}` : '1px solid #ddd', background: filter === s ? '#f0f0f8' : '#fff', cursor: 'pointer', fontSize: 11, fontWeight: filter === s ? 700 : 400 }}>
-              {s ? statusLabels[s] : 'Todos'}
-            </button>
-          ))}
-        </div>
-
-        {/* List */}
         {contracts.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36, marginBottom: 8 }}>📄</div>
             <div>No hay contratos aún</div>
           </div>
+        ) : filasOrdenadas.length === 0 ? (
+          <p style={{ color: '#888', fontSize: 13 }}>No hay contratos que coincidan con la búsqueda.</p>
         ) : (
-          <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
-            {contracts.map(c => (
-              <div key={c.id} onClick={() => navigate(`/ventas/contratos/${c.id}`)}
-                style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #f0f0f0', cursor: 'pointer', gap: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{c.contractNumber || `#${c.id}`} — {c.clientName}</div>
-                  <div style={{ fontSize: 11, color: '#888' }}>{c.clientEmail} · {c.template?.name}</div>
-                </div>
-                <span style={{ padding: '3px 10px', borderRadius: 12, background: statusColors[c.status] || '#888', color: '#fff', fontSize: 10, fontWeight: 600 }}>
-                  {statusLabels[c.status] || c.status}
-                </span>
-                <span style={{ fontSize: 11, color: '#aaa' }}>{new Date(c.createdAt).toLocaleDateString('es-EC')}</span>
-                <button onClick={e => { e.stopPropagation(); setPendingDeleteId(c.id); }}
-                  style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #e55', background: '#fff', color: '#c33', cursor: 'pointer', fontSize: 11 }}>✕</button>
-              </div>
-            ))}
+          <div className="tasks-table-wrapper">
+            <table className="tasks-table resizable-table" ref={tablaRef}>
+              <thead>
+                <tr>
+                  <th {...thProps('contractNumber')}>Número <SortIcon campo="contractNumber" /></th>
+                  <th {...thProps('clientName')}>Cliente <SortIcon campo="clientName" /></th>
+                  <th {...thProps('template')}>Plantilla <SortIcon campo="template" /></th>
+                  <th {...thProps('status')}>Estado <SortIcon campo="status" /></th>
+                  <th {...thProps('createdAt')}>Fecha <SortIcon campo="createdAt" /></th>
+                  <th style={{ textAlign: 'right' }}>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filasOrdenadas.map((c) => (
+                  <tr key={c.id} onClick={() => navigate(`/ventas/contratos/${c.id}`)} style={{ cursor: 'pointer' }}>
+                    <td style={{ fontWeight: 600 }}>{c.contractNumber || `#${c.id}`}</td>
+                    <td>
+                      <div>{c.clientName}</div>
+                      <div style={{ fontSize: 11, color: '#888' }}>{c.clientEmail}</div>
+                    </td>
+                    <td>{c.template?.name || '—'}</td>
+                    <td>
+                      <span style={{ padding: '3px 10px', borderRadius: 12, background: statusColors[c.status] || '#888', color: '#fff', fontSize: 10, fontWeight: 600 }}>
+                        {statusLabels[c.status] || c.status}
+                      </span>
+                    </td>
+                    <td>{new Date(c.createdAt).toLocaleDateString('es-EC')}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button onClick={e => { e.stopPropagation(); setPendingDeleteId(c.id); }}
+                        style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #e55', background: '#fff', color: '#c33', cursor: 'pointer', fontSize: 11 }}>✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -129,6 +196,8 @@ export default function ContratosList() {
           onCancel={() => setPendingDeleteId(null)}
         />
       )}
+
+      {showHelp && <TemplateHelpModal onClose={() => setShowHelp(false)} />}
     </div>
   );
 }

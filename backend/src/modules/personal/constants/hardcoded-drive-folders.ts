@@ -12,6 +12,7 @@ export const LOCKED_DRIVE_FOLDER_TYPES = [
   'RECLUTAMIENTO',
   'CAPACITACIONES',
   'VENTAS_CONTRATOS',
+  'RRHH_DOCUMENTOS',
 ] as const;
 
 export type LockedDriveFolderType =
@@ -41,6 +42,14 @@ export const HARDCODED_DRIVE_FOLDERS: Record<
   VENTAS_CONTRATOS: {
     id: '',
     name: 'Contratos de ventas',
+  },
+  // Documentos generados desde RRHH > Documentación (contratos y demás
+  // papeles de GUARDIAS). Nada que ver con VENTAS_CONTRATOS, que es el
+  // subsistema de contratos de venta con firma electrónica: son dos flujos
+  // distintos y no deben mezclarse.
+  RRHH_DOCUMENTOS: {
+    id: '1LLnPLU7UFSFvIwi-FpMNyIQDkoZI-B8s',
+    name: 'Documentos generados (RRHH)',
   },
 };
 

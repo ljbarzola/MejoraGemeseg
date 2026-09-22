@@ -225,16 +225,25 @@ export default function GuardiaComplianceModal({ cedula, onClose, onChanged }: P
                       >
                         <Mail size={14} /> Correo
                       </button>
+                      {/* WhatsApp queda bloqueado a propósito: el envío
+                           necesita una cuenta de WhatsApp Business aprobada por
+                           Meta y un proveedor contratado (Twilio), trámites
+                           externos que todavía no están. Dejarlo pulsable solo
+                           servía para que el envío fallara. */}
                       <button
                         type="button"
-                        onClick={() => setMedio('WHATSAPP')}
+                        disabled
+                        title="Próximamente. Requiere una cuenta de WhatsApp Business aprobada por Meta y el proveedor de mensajería contratado."
                         style={{
                           display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 12px', border: 'none', borderLeft: '1px solid #e2e8f0',
-                          background: medio === 'WHATSAPP' ? 'var(--azul-oscuro)' : '#fff',
-                          color: medio === 'WHATSAPP' ? '#fff' : '#4a5568', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                          background: '#f1f5f9',
+                          color: '#a0aec0', fontSize: '0.8rem', fontWeight: 600, cursor: 'not-allowed',
                         }}
                       >
                         <MessageCircle size={14} /> WhatsApp
+                        <span style={{ fontSize: '0.65rem', background: '#e2e8f0', color: '#718096', borderRadius: 999, padding: '1px 6px', fontWeight: 700 }}>
+                          Próximamente
+                        </span>
                       </button>
                     </div>
 

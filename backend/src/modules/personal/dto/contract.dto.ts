@@ -84,9 +84,13 @@ export class GenerateContractDto {
   @IsNumber()
   templateId: number;
 
+  // Opcional: en modo manual el documento se genera para alguien que no está
+  // en el padrón de guardias (un cliente, un tercero, un guardia todavía sin
+  // ficha), así que no hay cédula que seleccionar. El nombre sí es
+  // obligatorio siempre — es a nombre de quién sale el documento.
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  cedula: string;
+  cedula?: string;
 
   @IsString()
   @IsNotEmpty()

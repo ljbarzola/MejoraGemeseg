@@ -3,6 +3,32 @@
 ## Estado actual
 Activo en desarrollo. Sprint 1 (estabilizacion Personal), Sprint 2 (verificacion asistida), Sprint 2b (PoC navegador real — veredicto negativo confirmado), Sprint 3 (aprobacion/rechazo documental), Sprint 4 (fix sync BD↔Drive de vacantes + reasignacion de archivos adicionales), Sprint 5 (requisitos obligatorios/opcionales, expediente del postulante, rediseño del modal de vacante) , Sprint 6 (contratar un postulante → Guardia sin entidad), Sprint 7 (destino de contratación según la vacante: Guardias o Personal Administrativo) , Sprint 8 (análisis con IA del "archivo único"), Sprint 8.1 (fix de bug de arranque, generalizado a cualquier PDF vía "Archivos Adicionales", prompt movido a un `Agent` editable en `/admin/agents`), Sprint 8.2 (persistencia de la propuesta + botón reintentar, fix de thinking-tokens, etiquetado manual cuando la IA falla, miniaturas de mayor calidad, caché de sincronización con "Última sincronización", limpieza de menciones a Kanban) y Sprint 8.3 (fix de bloqueo de recontratación tras una salida, reemplazo de `window.confirm`/`alert` por un modal propio, scroll automático a errores en modales) completados, todos verificados con Vertex AI real y navegador real. El modulo de Reclutamiento trabaja con candidatos sincronizados desde Google Drive (solo lectura, salvo la acción de contratar) — no hay ningún tablero Kanban en Reclutamiento; esa idea se descartó explícitamente por el usuario (2026-09-16), ver nota en "Arquitectura del módulo" más abajo.
 
+## Sprint 9 — Estándar de nombres y limpieza del formulario de vacante (2026-09-22)
+
+Pedidos directos del usuario sobre la pantalla de Reclutamiento, todos de comprensión/consistencia más que de funcionalidad nueva:
+
+### 1. Un solo esquema de nombre: `Apellidos` + `Nombres`
+"Datos que debe llenar" ofrecía **dos** esquemas de nombre (el campo único "Nombre completo" o el par "Nombres" + "Apellidos"), con una regla de bloqueo cruzado entre ambos que era imposible de explicar en la UI. Se eliminó el esquema "Nombre completo": queda `Apellidos` + `Nombres`, en ese orden (el mismo en que se arma la carpeta). Son los **dos únicos campos bloqueados**, porque sin ellos no hay con qué nombrar la carpeta del postulante. `isLockedCampo` pasó de una función con lógica cruzada sobre toda la lista a una comparación de dos claves.
+
+Los fallbacks del backend que leen `nombre completo`/`nombreCompleto` de un `candidato.json` viejo **se conservaron** — son para postulaciones ya guardadas con un único campo.
+
+### 2. La cédula dejó de ser un campo bloqueado
+Pedido literal: *"la cédula sigue siendo un campo como cualquier otro, como por ejemplo teléfono o email, ya no es un campo no editable"*. Se puede quitar o volver opcional como cualquier otro. Sigue siendo la llave que une postulación ↔ ficha ↔ cumplimiento ↔ nómina, pero ahora vive dentro de `candidato.json`, no en el nombre de la carpeta, así que quitarla de una vacante ya no rompe el nombrado (ver `recursos-humanos.md` punto 13).
+
+### 3. "Teléfono" → "Celular"
+El campo por defecto se llama ahora **Celular**. El *tipo* de dato sigue llamándose "Teléfono" (es un tipo, no un campo).
+
+### 4. Nota de formatos en "Documentos que debe subir"
+No estaba claro qué pasaba si no se marcaba ninguna extensión. Se agregó una nota bajo el título ("si no marcas ninguno, ese documento acepta archivos de cualquier tipo") y la etiqueta de los chips cambia a "Formatos que acepta (ninguno marcado = cualquiera):" mientras no haya ninguno marcado. Es solo texto — el comportamiento ya era ese.
+
+### 5. Eliminar una vacante desde la pantalla
+`DELETE /personal/reclutamiento/puestos/:id` existía desde antes pero **ninguna pantalla lo llamaba**: las vacantes solo se podían crear, editar y abrir/cerrar, nunca borrar, así que las de prueba se quedaban ahí para siempre. Ahora hay un botón de papelera junto al de editar, con `ConfirmDialog` que indica cuántos postulantes sincronizados hay dentro de esa vacante antes de confirmar. El backend ya enviaba la carpeta de Drive a la **papelera** (reversible) en vez de borrarla, justamente porque puede contener carpetas de candidatos reales — eso no cambió.
+
+### 6. Botón "Completar fichas" eliminado
+Ver `recursos-humanos.md` punto 11. Se había relabeleado dos veces porque RRHH no entendía qué hacía; a la tercera el usuario pidió borrarlo. Se fueron el botón, su `ConfirmDialog`, el wrapper del frontend, el endpoint `POST /personal/drive/backfill-postulacion` y `DriveService.backfillPostulacion()`. El traspaso automático al contratar no se tocó.
+
+---
+
 ## Sprint 8.3 — Fix de recontratación bloqueada, modal de confirmación propio, scroll a errores (2026-09-17)
 
 Probando el Flujo 1 de la checklist end-to-end de `recursos-humanos.md` (contratar → ... → salida), el usuario reportó cuatro problemas reales al intentar contratar un postulante de prueba ("Juan Rodríguez").
@@ -173,7 +199,8 @@ Navegador real (Playwright, contra Vertex AI y Drive reales): confirmado que el 
 **Contexto (2026-09-15):** hasta Sprint 6, contratar siempre creaba un **guardia** — `contratarCandidato` tenía fija la carpeta `FolderConfig type='CUMPLIMIENTO'` y el bucket "Sin Asignar". No había forma de contratar a un administrativo desde Reclutamiento.
 
 - **`JobPosition.tipoContratacion`** (`'GUARDIA' | 'ADMINISTRATIVO'`, default `'GUARDIA'`): lo declara la vacante y lo heredan todos sus postulantes. El default preserva el comportamiento previo, así que ninguna vacante existente cambia de conducta. Migración aditiva `20260915_add_tipo_contratacion_job_position`. Se normaliza con `normalizeTipoContratacion` (cualquier valor no reconocido cae en `GUARDIA`), se espeja al JSON del puesto en Drive, y —igual que `camposRequeridos`/`archivosRequeridos`— `syncJobPositionsFromDrive` solo lo lee del JSON al **crear** una vacante detectada en Drive; para una que ya existe, Postgres manda.
-- **La trampa que motivó el sprint:** los dos buckets destino **nombran sus carpetas distinto**. Guardias usa `Apellidos - Nombres` (cédula en `candidato.json`; las carpetas viejas `Nombre - Cédula` de 10 dígitos siguen parseándose, `parseEmployeeFolderName`) y Personal Administrativo usa `Nombre - Puesto`, **sin cédula** (`parsePersonalAdminFolderName`). Un postulante con cédula en el nombre, movido tal cual al bucket administrativo, haría que `syncPersonalAdminFolder` leyera `1712345678` **como si fuera el puesto**. Por eso contratar a un administrativo **renombra** la carpeta, y el renombrado va en la **misma llamada** `files.update` que el movimiento — así la carpeta nunca llega a existir bajo esa raíz con el nombre equivocado, ni siquiera durante una ventana breve.
+- **La trampa que motivó el sprint:** los dos buckets destino **nombraban sus carpetas distinto**. Guardias usaba `Apellidos - Nombres` y Personal Administrativo `Nombre - Puesto`, sin cédula, así que un postulante con cédula en el nombre movido tal cual al bucket administrativo hacía que `syncPersonalAdminFolder` leyera `1712345678` **como si fuera el puesto**. Por eso contratar **renombra** la carpeta, y el renombrado va en la **misma llamada** `files.update` que el movimiento — así la carpeta nunca llega a existir bajo esa raíz con el nombre equivocado, ni siquiera durante una ventana breve.
+  ⚠️ **Actualizado 2026-09-22:** los dos buckets ahora nombran **igual**, `Apellidos Nombres` (sin guion, sin cédula, sin puesto — ver `recursos-humanos.md` punto 13). El renombrado al contratar sigue existiendo y sigue yendo en la misma llamada, pero ya no es para evitar esa confusión sino para normalizar al formato único. Los parsers (`parseEmployeeFolderName`, `parsePersonalAdminFolderName`) conservan los formatos viejos.
 - **La cédula no se pierde:** `contratarCandidato` la escribe explícitamente en `candidato.json` (junto a `estado`/`fechaContratacion`/`tipoContratacion`), que viaja con la carpeta.
 - **Control de duplicados, distinto por bucket:** Guardias sigue comparando por cédula contra `EmployeeDriveFolder`. Administrativos **no pueden** — ese bucket no guarda cédula — así que se compara por `employeeName` normalizado (sin tildes ni mayúsculas) entre las filas `folderType='PERSONAL_ADMIN'`. Es más débil que la cédula, pero es lo único que ese modelo permite hoy.
 - **Falta la carpeta destino → se bloquea antes de tocar nada**, con el mensaje que indica en qué pantalla configurarla (Guardias ya lo tenía; administrativos reutiliza el de `getPersonalAdminFolderId`). La carpeta del postulante se queda intacta en Reclutamiento en vez de quedar a medio camino.
@@ -198,7 +225,7 @@ Dos cosas a tener presentes al tocar `candidato.json` desde este lado:
 
 - **Botón "Marcar como Contratado"** en el modal de detalle del candidato (`ReclutamientoPage.tsx`, footer del modal, junto a "Ver Carpeta en Drive"), visible solo con `canWrite('RRHH')`. Confirmación previa vía `ConfirmDialog` (mismo patrón que el botón de salida en `GuardiasList.tsx`; antes `window.confirm`, ver Sprint 8.3) porque mueve una carpeta real de Drive. Si la cédula ya existe pero ese guardia ya había salido, la contratación se permite igual (recontratación, ver Sprint 8.3) — solo se bloquea si sigue activo.
 - **`DriveService.contratarCandidato(companyId, folderId)`** (`drive.service.ts`, cerca de `saveCandidatoDatos`):
-  1. Lee la carpeta del candidato: acepta "Apellidos - Nombres" (cédula en `candidato.json`) o el formato viejo "… - Cédula" de 10 dígitos (`parseEmployeeFolderName`). Si no hay cédula en ninguno de los dos sitios, rechaza con un mensaje claro en vez de mover una carpeta con identidad ambigua.
+  1. Lee la carpeta del candidato: acepta el formato estándar "Apellidos Nombres" (cédula en `candidato.json`) y los viejos "Apellidos - Nombres" y "… - Cédula" de 10 dígitos (`parseEmployeeFolderName`). Si no hay cédula en ninguno de los dos sitios, rechaza con un mensaje claro en vez de mover una carpeta con identidad ambigua.
   2. **Chequeo de duplicado** (mismo espíritu que evitó el caso de los "Juan Perez"): si ya existe un `EmployeeDriveFolder` con esa cédula, rechaza sin mover nada.
   3. Marca `estado: 'CONTRATADO'` y `fechaContratacion` en el `candidato.json` de la carpeta (mismo patrón create-vs-update que `saveCandidatoDatos`).
   4. Resuelve (o crea, la primera vez) una carpeta **"Sin Asignar"** como tercer bucket de primer nivel dentro de la raíz de Guardias (`FolderConfig type='CUMPLIMIENTO'`), junto a `Público`/`Privado`.
@@ -405,7 +432,7 @@ Este modelo ya **no existe**. Fue reemplazado por `SistemaVerificacion`/`Movimie
 3. Carga todos los `JobPosition` de la empresa para conocer archivos requeridos
 4. Lista las carpetas de candidatos dentro de cada puesto
 5. Para cada carpeta de candidato:
-   a. Parsea el nombre (`Apellidos - Nombres`; cédula desde JSON si no está en el nombre)
+   a. Parsea el nombre (`Apellidos Nombres`; cédula desde JSON si no está en el nombre)
    b. Lee `candidato.json` (si existe) para datos adicionales
    c. Compara el `puestoAplicado` contra los `JobPosition` definidos
    d. Calcula `completitudPercent` = (archivos requeridos encontrados / total archivos requeridos) * 100
@@ -448,4 +475,4 @@ Este modelo ya **no existe**. Fue reemplazado por `SistemaVerificacion`/`Movimie
 ```
 
 ## Navegación Sidebar
-**Actualizado 2026-09-09** — ver [recursos-humanos.md](recursos-humanos.md) para el árbol completo verificado contra `Sidebar.tsx`. Resumen: ya no hay ítems separados de "Custodios" ni "Verificación SUT/SICOSEP" (reemplazado por "Movimientos de Personal", ver [movimientos-personal.md](movimientos-personal.md)); "Certificaciones", "Tipos de Documento" y "Configuración Drive" ya no aparecen en el Sidebar (quedaron huérfanas o pasaron a modales inline dentro de cada pantalla — ver recursos-humanos.md sección 7).
+**Actualizado 2026-09-09** — ver [recursos-humanos.md](recursos-humanos.md) para el árbol completo verificado contra `Sidebar.tsx`. Resumen: ya no hay ítems separados de "Custodios" ni "Verificación SUT/SICOSEP" (reemplazado por "Movimientos de Personal", ver [movimientos-personal.md](movimientos-personal.md)); "Tipos de Documento" y "Configuración Drive" ya no aparecen en el Sidebar (quedaron huérfanas o pasaron a modales inline dentro de cada pantalla — ver recursos-humanos.md sección 7); "Certificaciones" se eliminó por completo el 2026-09-22 (ver recursos-humanos.md punto 4).

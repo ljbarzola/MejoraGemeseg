@@ -101,6 +101,9 @@ export class PersonalFieldDefinitionService {
         label: dto.label?.trim(),
         order: dto.order,
         required: dto.required,
+        // Ver nota en UpdatePersonalFieldDefinitionDto: cambiar el tipo no
+        // toca los valores ya guardados en camposPersonalizados.
+        type: dto.type as never,
       },
     });
   }

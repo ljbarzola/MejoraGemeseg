@@ -7,9 +7,11 @@ const PermissionsContext = createContext<PermissionsContextType>({
   isSuperAdmin: false,
   sections: [],
   permissions: {},
+  fixedSections: [],
   loading: true,
   canView: () => false,
   canWrite: () => false,
+  landingRoute: null,
   reload: async () => {},
 });
 

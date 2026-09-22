@@ -9,7 +9,6 @@ yarn-error.log*
 .env
 
 # Production migrations (local only)
-scripts/supabase-migrate-production.sql
 
 # Logs
 *.log
@@ -18,7 +17,16 @@ scripts/supabase-migrate-production.sql
 coverage
 
 # Google service account credentials
-backend/google-service-account.json
+# Claves de cuentas de servicio de Google. El patron amplio es a proposito:
+# antes se listaban archivo por archivo y bastaba con que alguien descargara
+# una clave nueva con el nombre que le pone Google por defecto
+# (<proyecto>-<keyid>.json) para que quedara fuera del ignore y a un commit
+# de publicarse. NUNCA commitear una de estas.
+backend/google-service-account*.json
+backend/*-*.json
+!backend/package*.json
+!backend/tsconfig*.json
+!backend/nest-cli.json
 backend/cloudsql-proxy-key.json
 
 # Build artifacts
@@ -33,7 +41,6 @@ backend/check-tables.js
 backend/create-tables.js
 backend/create-test-docx.js
 backend/test-conn.js
-backend/migrate-supabase.js
 backend/migrate-v2.js
 backend/.agents/
 backend/.env.bak

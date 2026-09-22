@@ -1,8 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, Settings, Settings2, X, Users, Building2, Landmark, UserX, LogOut, IdCard, ArrowRightLeft } from 'lucide-react';
-import { getAvailableCustodios } from '../../services/custodia.service';
+import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import { useResizableColumns } from '../../hooks/useResizableColumns';
+import { useSortableTable } from '../../hooks/useSortableTable';
 import {
+  getGuardias,
+  type GuardiaPadron,
   getAsignaciones,
   getEntidades,
   syncEntidadesFolder,
@@ -30,8 +34,10 @@ import { formatFechaHoraSync } from '../../utils/formatFechaHora';
 
 interface GuardiaRow {
   name: string;
+  apellidos: string;
+  nombres: string;
+  nombreSeparadoExacto: boolean;
   cedula: string;
-  status: string;
   asignacion: AsignacionGuardia | null;
   entidad: Entidad | null;
   fuera: boolean;
@@ -64,7 +70,8 @@ export default function GuardiasList() {
   const { canWrite } = usePerm();
   const canEdit = canWrite('RRHH');
 
-  const [guardias, setGuardias] = useState<{ name: string; cedula: string; status: string; lastSyncAt?: string }[]>([]);
+  const tablaRef = useResizableColumns('guardias');
+  const [guardias, setGuardias] = useState<GuardiaPadron[]>([]);
   const ultimaSincronizacion = guardias.reduce<string | undefined>((max, g) => {
     if (!g.lastSyncAt) return max;
     if (!max || new Date(g.lastSyncAt) > new Date(max)) return g.lastSyncAt;
@@ -144,7 +151,7 @@ export default function GuardiasList() {
     setLoading(true);
     setError('');
     Promise.all([
-      getAvailableCustodios().then((data) => (Array.isArray(data) ? data : Array.isArray(data?.value) ? data.value : [])),
+      getGuardias().then((data) => (Array.isArray(data) ? data : [])),
       getAsignaciones({ activasOnly: true }),
       getEntidades(),
       getCedulasFuera(),
@@ -346,6 +353,19 @@ export default function GuardiasList() {
     return true;
   });
 
+  // Ordenar por cualquier columna, igual que el listado de tareas del Inicio.
+  const { filas: filasOrdenadas, thProps, SortIcon } = useSortableTable(
+    filtered,
+    {
+      apellidos: (r) => r.apellidos,
+      nombres: (r) => r.nombres,
+      cedula: (r) => r.cedula,
+      entidad: (r) => r.entidad?.nombre,
+      tipo: (r) => (r.entidad ? TIPO_LABEL[r.entidad.tipo] : ''),
+    },
+    'apellidos',
+  );
+
   const fichaPorCedula = useMemo(() => new Map(fichas.map((f) => [f.cedula, f])), [fichas]);
 
   // Columnas disponibles para el modal de exportación: las de la tabla +
@@ -408,7 +428,7 @@ export default function GuardiasList() {
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS</p>
             <h1>Guardias</h1>
@@ -490,7 +510,14 @@ export default function GuardiasList() {
           )}
           {syncResult.guardiasNoReconocidos.length > 0 && (
             <p style={{ margin: '8px 0 0', color: '#975a16' }}>
-              ⚠ Carpetas de guardia no reconocidas (deben llamarse "Apellidos - Nombres", con la cédula en el formulario de postulación), no se generó ningún registro para estas carpetas: {syncResult.guardiasNoReconocidos.join(', ')}
+              ⚠ Carpetas de guardia no reconocidas (deben llamarse "Apellidos Nombres", con la cédula en el formulario de postulación), no se generó ningún registro para estas carpetas: {syncResult.guardiasNoReconocidos.join(', ')}
+            </p>
+          )}
+          {/* Formato viejo: la carpeta SÍ se sincronizó, esto solo marca cuáles
+              conviene renombrar en Drive. El sistema nunca renombra solo. */}
+          {(syncResult.guardiasFormatoInvalido?.length ?? 0) > 0 && (
+            <p style={{ margin: '8px 0 0', color: '#975a16' }}>
+              ⚠ Estas carpetas se sincronizaron bien, pero su nombre no sigue el formato "Apellidos Nombres" (sin guion, sin cédula y sin puesto): {syncResult.guardiasFormatoInvalido.join(' · ')}
             </p>
           )}
           {syncResult.renombresIgnorados.length > 0 && (
@@ -517,43 +544,51 @@ export default function GuardiasList() {
       </div>
 
       <div className="admin-section">
-        <div className="filter-bar" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap' }}>
-          <input
-            type="text"
-            placeholder="Buscar por nombre o cédula..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ flex: '1 1 220px', minWidth: '200px', padding: '10px 14px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.9rem' }}
-          />
-          <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value as EntidadTipo | 'TODOS')} style={{ padding: '10px 12px', borderRadius: '10px', border: '2px solid #e2e8f0' }}>
-            <option value="TODOS">Todos los tipos</option>
-            <option value="PUBLICA">Pública</option>
-            <option value="PRIVADA">Privada</option>
-          </select>
-          <select
-            value={String(filtroEntidad)}
-            onChange={(e) => setFiltroEntidad(e.target.value === 'TODAS' || e.target.value === 'SIN_ASIGNAR' ? e.target.value : Number(e.target.value))}
-            style={{ padding: '10px 12px', borderRadius: '10px', border: '2px solid #e2e8f0' }}
-          >
-            <option value="TODAS">Todas las entidades</option>
-            <option value="SIN_ASIGNAR">Sin asignación</option>
-            {entidades.map((e) => (
-              <option key={e.id} value={e.id}>{e.nombre}</option>
-            ))}
-          </select>
-          {(search || filtroTipo !== 'TODOS' || filtroEntidad !== 'TODAS') && (
-            <button className="btn-secondary" onClick={() => { setSearch(''); setFiltroTipo('TODOS'); setFiltroEntidad('TODAS'); }}>
-              Limpiar filtros
+        {/* Filtros a la izquierda, acciones SIEMPRE a la derecha. "Limpiar"
+            no aparece y desaparece (eso empujaba "Exportar" a la línea de
+            abajo al escribir en un filtro): está fijo y solo se deshabilita.
+            Ver la sección LAYOUT ESTABLE en styles.css. */}
+        <div className="filter-bar" style={{ marginBottom: '16px', alignItems: 'center' }}>
+          <div className="filter-bar-fields">
+            <input
+              type="text"
+              placeholder="Buscar por nombre o cédula..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ flex: '1 1 200px', minWidth: 0, padding: '10px 14px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.9rem' }}
+            />
+            <select className="filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value as EntidadTipo | 'TODOS')}>
+              <option value="TODOS">Todos los tipos</option>
+              <option value="PUBLICA">Pública</option>
+              <option value="PRIVADA">Privada</option>
+            </select>
+            <select
+              className="filter-select"
+              value={String(filtroEntidad)}
+              onChange={(e) => setFiltroEntidad(e.target.value === 'TODAS' || e.target.value === 'SIN_ASIGNAR' ? e.target.value : Number(e.target.value))}
+            >
+              <option value="TODAS">Todas las entidades</option>
+              <option value="SIN_ASIGNAR">Sin asignación</option>
+              {entidades.map((e) => (
+                <option key={e.id} value={e.id}>{e.nombre}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-bar-actions">
+            <ClearFiltersButton
+              onClear={() => { setSearch(''); setFiltroTipo('TODOS'); setFiltroEntidad('TODAS'); }}
+              disabled={!search && filtroTipo === 'TODOS' && filtroEntidad === 'TODAS'}
+            />
+            {cantidadFuera > 0 && (
+              <button className="btn-secondary" onClick={() => setMostrarFuera((v) => !v)} style={{ padding: '8px 14px', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                {mostrarFuera ? 'Ocultar fuera' : `Mostrar fuera (${cantidadFuera})`}
+              </button>
+            )}
+            <button className="btn-secondary" onClick={() => setShowExportModal(true)} disabled={filtered.length === 0} style={{ whiteSpace: 'nowrap' }}>
+              📤 Exportar
             </button>
-          )}
-          {cantidadFuera > 0 && (
-            <button className="btn-secondary" onClick={() => setMostrarFuera((v) => !v)} style={{ padding: '6px 14px', fontSize: '0.78rem' }}>
-              {mostrarFuera ? 'Ocultar guardias fuera' : `Mostrar guardias fuera (${cantidadFuera})`}
-            </button>
-          )}
-          <button className="btn-secondary" onClick={() => setShowExportModal(true)} disabled={filtered.length === 0}>
-            📤 Exportar
-          </button>
+          </div>
         </div>
 
         {loading ? (
@@ -562,29 +597,41 @@ export default function GuardiasList() {
           <div className="empty-state">No se encontraron guardias con estos filtros.</div>
         ) : (
           <div className="tasks-table-wrapper">
-            <table className="tasks-table">
+            <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th>Guardia</th>
-                  <th>Cédula</th>
-                  <th>Entidad actual</th>
-                  <th>Tipo</th>
+                  <th {...thProps('apellidos')}>Apellidos <SortIcon campo="apellidos" /></th>
+                  <th {...thProps('nombres')}>Nombres <SortIcon campo="nombres" /></th>
+                  <th {...thProps('cedula')}>Cédula <SortIcon campo="cedula" /></th>
+                  <th {...thProps('entidad')}>Entidad actual <SortIcon campo="entidad" /></th>
+                  <th {...thProps('tipo')}>Tipo <SortIcon campo="tipo" /></th>
                   <th style={{ textAlign: 'right' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((r) => (
+                {filasOrdenadas.map((r) => (
                   <tr key={r.cedula || r.name} style={{ opacity: r.fuera ? 0.6 : 1 }}>
                     <td>
                       <div style={{ fontWeight: 700, color: 'var(--azul-oscuro)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {r.name}
+                        <span
+                          className="truncate"
+                          title={r.nombreSeparadoExacto ? r.apellidos : `${r.name} — la separación en apellidos y nombres es aproximada: esta persona no tiene guardado el formulario de postulación, así que se asumieron dos apellidos.`}
+                          style={!r.nombreSeparadoExacto ? { borderBottom: '1px dotted #cbd5e1' } : undefined}
+                        >
+                          {r.apellidos || '—'}
+                        </span>
                         {r.fuera && (
                           <span className="status-badge" style={{ background: '#edf2f7', color: '#718096', fontSize: '0.68rem' }}>Fuera</span>
                         )}
                       </div>
                     </td>
+                    <td>
+                      <span className="truncate" title={r.nombreSeparadoExacto ? r.nombres : r.name}>
+                        {r.nombres || '—'}
+                      </span>
+                    </td>
                     <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{r.cedula || '—'}</td>
-                    <td>{r.entidad ? r.entidad.nombre : <span style={{ color: '#a0aec0' }}>Sin asignación</span>}</td>
+                    <td><span className="truncate" title={r.entidad?.nombre}>{r.entidad ? r.entidad.nombre : <span style={{ color: '#a0aec0' }}>Sin asignación</span>}</span></td>
                     <td>
                       {r.entidad ? (
                         <span className="status-badge" style={{ background: TIPO_COLOR[r.entidad.tipo].bg, color: TIPO_COLOR[r.entidad.tipo].fg }}>
@@ -675,13 +722,13 @@ export default function GuardiasList() {
 {`📁 (la carpeta raíz que configures abajo)
  ├── 📁 Público                          ← exactamente ese nombre
  │     └── 📁 <Provincia - Entidad>         ← ej. GUAYAS - ZUMOCACAO
- │            └── 📁 <Apellidos - Nombres>  ← 1 carpeta por guardia
+ │            └── 📁 <Apellidos Nombres>  ← 1 carpeta por guardia
  │                   └── (sus documentos)
  ├── 📁 Privado                          ← exactamente ese nombre
  │     └── 📁 <Provincia - Entidad>
- │            └── 📁 <Apellidos - Nombres>
+ │            └── 📁 <Apellidos Nombres>
  └── 📁 Sin Asignar                      ← recién contratados, aún sin entidad
-       └── 📁 <Apellidos - Nombres>`}
+       └── 📁 <Apellidos Nombres>`}
                 </pre>
                 <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: '#718096' }}>
                   Si el nombre de una carpeta de entidad no existe todavía en "Entidades y Requisitos", se crea automáticamente al sincronizar. Nunca se borra una entidad ni sus requisitos por borrar o mover una carpeta — el guardia solo queda "sin asignación" hasta que la carpeta reaparezca con el mismo nombre.

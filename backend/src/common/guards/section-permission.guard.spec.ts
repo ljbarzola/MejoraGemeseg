@@ -11,6 +11,7 @@ describe('SectionPermissionGuard', () => {
     isSuperAdmin: jest.Mock;
     getCompanySections: jest.Mock;
     getUserPermissions: jest.Mock;
+    getFixedSections: jest.Mock;
   };
 
   const context = (user: any) =>
@@ -33,6 +34,9 @@ describe('SectionPermissionGuard', () => {
         .fn()
         .mockResolvedValue([{ key: 'RRHH', enabled: true }]),
       getUserPermissions: jest.fn().mockResolvedValue([]),
+      // Módulos que la empresa marcó como visibles para todos. Vacío = cada
+      // sección se resuelve por el permiso individual, como antes.
+      getFixedSections: jest.fn().mockResolvedValue([]),
     };
     guard = new SectionPermissionGuard(
       reflector as unknown as Reflector,

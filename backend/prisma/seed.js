@@ -4,7 +4,8 @@ const { PrismaPg } = require('@prisma/adapter-pg');
 const bcrypt = require('bcryptjs');
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/gemeseg?schema=public';
-const isRemote = DATABASE_URL.includes('supabase') || DATABASE_URL.includes('pooler');
+// Remoto = Cloud SQL (o cualquier pooler); local = Postgres en Docker, sin SSL.
+const isRemote = DATABASE_URL.includes('cloudsql') || DATABASE_URL.includes('pooler');
 const adapter = new PrismaPg({
   connectionString: DATABASE_URL,
   ...(isRemote ? { ssl: { rejectUnauthorized: false } } : {}),

@@ -54,10 +54,6 @@ export const updateContract = (id: number, data: { status?: string; generatedUrl
 export const resolveContractFileUrl = (generatedUrl: string) =>
   `${(import.meta.env.VITE_API_URL || 'http://localhost:3000').replace(/\/api\/?$/, '')}${generatedUrl}`;
 
-export const getCertifications = () => api.get('/personal/certifications').then(r => r.data);
-export const createCertification = (data: any) => api.post('/personal/certifications', data).then(r => r.data);
-export const updateCertification = (id: number, data: any) => api.patch(`/personal/certifications/${id}`, data).then(r => r.data);
-export const deleteCertification = (id: number) => api.delete(`/personal/certifications/${id}`);
 // ==================== CAPACITACIONES ====================
 
 export interface TrainingAttachment {
@@ -112,10 +108,9 @@ export const uploadTrainingFile = (file: File): Promise<{ url: string }> => {
   return api.post('/personal/trainings/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
 };
 
-// ==================== ALERTAS (certificaciones + capacitaciones) ====================
+// ==================== ALERTAS (capacitaciones) ====================
 
 export interface PersonalAlerts {
-  certifications: any[];
   trainingsVencidas: Training[];
   trainingsPorVencer: Training[];
 }
@@ -191,13 +186,6 @@ export const updateComplaintStage = (id: number, data: Partial<{ label: string; 
   api.patch(`/personal/complaint-stages/${id}`, data).then(r => r.data);
 export const deleteComplaintStage = (id: number) => api.delete(`/personal/complaint-stages/${id}`);
 
-export const getLogTemplates = () => api.get('/personal/logs/templates').then(r => r.data);
-export const createLogTemplate = (data: any) => api.post('/personal/logs/templates', data).then(r => r.data);
-export const deleteLogTemplate = (id: number) => api.delete(`/personal/logs/templates/${id}`);
-export const getLogEntries = () => api.get('/personal/logs/entries').then(r => r.data);
-export const createLogEntry = (data: any) => api.post('/personal/logs/entries', data).then(r => r.data);
-export const deleteLogEntry = (id: number) => api.delete(`/personal/logs/entries/${id}`);
-
 export const getDriveConfig = (type?: string) => api.get('/personal/drive/config', { params: type ? { type } : {} }).then(r => r.data);
 export const saveDriveConfig = (data: { driveFolderId: string; type?: string }) => api.post('/personal/drive/config', data).then(r => r.data);
 export const testDriveConnection = (data?: { driveFolderId?: string; type?: string }) => api.post('/personal/drive/test', data || {}).then(r => r.data);
@@ -207,8 +195,6 @@ export const getDriveCompliance = (cedula: string) => api.get(`/personal/drive/c
 export const getDriveTree = () => api.get('/personal/drive/tree').then(r => r.data);
 export const deleteDriveEmployee = (cedula: string) => api.delete(`/personal/drive/employee/${cedula}`).then(r => r.data);
 export const archivarCarpetaGuardia = (cedula: string) => api.post(`/personal/drive/guardia/${cedula}/archivar-carpeta`).then(r => r.data);
-export const backfillPostulacion = (): Promise<{ procesadas: number; actualizadas: number; sinCarpeta: number; sinCandidatoJson: number; errores: string[] }> =>
-  api.post('/personal/drive/backfill-postulacion').then(r => r.data);
 export interface AdministrativeStaffFicha {
   cedula: string;
   departamento: string | null;
@@ -370,6 +356,10 @@ export interface Survey {
   title: string;
   description: string | null;
   status: SurveyStatus;
+  // Enlace público: cuando publicEnabled es true, publicToken arma la URL
+  // /encuesta/<token> que responde cualquiera sin cuenta.
+  publicEnabled?: boolean;
+  publicToken?: string | null;
   createdAt: string;
   creator?: { id: number; fullName: string };
   _count?: { recipients: number; responses: number };
@@ -399,8 +389,20 @@ export interface SurveyResults {
 
 export const getSurveys = (): Promise<Survey[]> => api.get('/personal/surveys').then(r => r.data);
 export const getSurvey = (id: number): Promise<Survey> => api.get(`/personal/surveys/${id}`).then(r => r.data);
-export const createSurvey = (data: { title: string; description?: string; questions: SurveyQuestionInput[]; recipientUserIds: number[] }): Promise<Survey> =>
-  api.post('/personal/surveys', data).then(r => r.data);
+export const createSurvey = (data: {
+  title: string;
+  description?: string;
+  questions: SurveyQuestionInput[];
+  recipientUserIds: number[];
+  publicEnabled?: boolean;
+  guardarComoBorrador?: boolean;
+}): Promise<Survey> => api.post('/personal/surveys', data).then(r => r.data);
+
+export const publishSurvey = (id: number): Promise<Survey> =>
+  api.patch(`/personal/surveys/${id}/publish`).then(r => r.data);
+
+export const setSurveyPublicLink = (id: number, enabled: boolean): Promise<Survey> =>
+  api.patch(`/personal/surveys/${id}/public-link`, { enabled }).then(r => r.data);
 export const closeSurvey = (id: number): Promise<Survey> => api.patch(`/personal/surveys/${id}/close`).then(r => r.data);
 export const deleteSurvey = (id: number) => api.delete(`/personal/surveys/${id}`);
 export const getSurveyResults = (id: number): Promise<SurveyResults> => api.get(`/personal/surveys/${id}/results`).then(r => r.data);
@@ -413,6 +415,8 @@ export interface SurveyIndividualAnswer {
 }
 
 export interface SurveyIndividualResponse {
+  /** Id de la respuesta. `respondentId` es null en las que llegan por enlace. */
+  id: number;
   respondentId: number;
   respondentName: string;
   respondentEmail: string;

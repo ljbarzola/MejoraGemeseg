@@ -19,6 +19,10 @@ export class CreateSalesClientDto {
   @IsOptional()
   address?: string;
 
+  @IsString()
+  @IsOptional()
+  observaciones?: string;
+
   @IsOptional()
   extra?: Record<string, string>;
 }
@@ -43,6 +47,10 @@ export class UpdateSalesClientDto {
   @IsString()
   @IsOptional()
   address?: string;
+
+  @IsString()
+  @IsOptional()
+  observaciones?: string;
 
   @IsOptional()
   extra?: Record<string, string>;

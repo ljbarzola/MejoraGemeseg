@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getNomina, getNominaPdfUrl } from '../../services/custodia.service';
+import DateInput from '../../components/common/DateInput';
 
 const TARIFAS: Record<string, number> = { HACIENDA: 20, PUERTO: 10, VIP: 23 };
 const TIPO_LABELS: Record<string, string> = { HACIENDA: 'Hacienda', PUERTO: 'Puerto', VIP: 'VIP' };
@@ -65,11 +66,11 @@ export default function NominaPage() {
           <div className="form-row">
             <div className="form-group">
               <label>Fecha Inicio *</label>
-              <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} required />
+              <DateInput value={fechaInicio} onChange={setFechaInicio} required />
             </div>
             <div className="form-group">
               <label>Fecha Fin *</label>
-              <input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} required />
+              <DateInput value={fechaFin} onChange={setFechaFin} required />
             </div>
             <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end' }}>
               <button type="submit" className="auth-btn" disabled={loading} style={{ width: '100%' }}>{loading ? 'Calculando...' : 'Calcular Nómina'}</button>

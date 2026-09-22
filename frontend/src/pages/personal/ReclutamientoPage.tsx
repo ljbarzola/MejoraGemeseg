@@ -20,9 +20,11 @@ import {
   UserCheck,
   Sparkles,
   Lock,
+  Trash2,
 } from 'lucide-react';
 import {
   getJobPositions,
+  deleteJobPosition,
   createJobPosition,
   updateJobPosition,
   syncReclutamientoCandidates,
@@ -33,7 +35,6 @@ import {
   reassignReclutamientoFile,
   saveCandidatoDatos,
   contratarCandidato,
-  backfillPostulacion,
 } from '../../services/personal.service';
 import { usePerm } from '../../contexts/PermissionsContext';
 import DocumentReviewModal from '../../components/personal/DocumentReviewModal';
@@ -72,63 +73,35 @@ const campoTipoLabel = (tipo?: string) => CAMPO_TIPOS.find((t) => t.value === ti
 
 const ARCHIVO_EXTENSIONES = ['pdf', 'jpg', 'png', 'doc', 'docx'];
 
+// Apellidos va primero porque es el orden en que se arma el nombre de la
+// carpeta ("Apellidos Nombres", ver nombre-persona.util en el backend).
 const DEFAULT_CAMPOS: CampoRequerido[] = [
-  { nombre: 'Nombres', tipo: 'TEXTO', obligatorio: true },
   { nombre: 'Apellidos', tipo: 'TEXTO', obligatorio: true },
+  { nombre: 'Nombres', tipo: 'TEXTO', obligatorio: true },
   { nombre: 'Cédula', tipo: 'NUMERICO', obligatorio: true },
-  { nombre: 'Teléfono', tipo: 'TELEFONO', obligatorio: true },
+  { nombre: 'Celular', tipo: 'TELEFONO', obligatorio: true },
   { nombre: 'Email', tipo: 'CORREO', obligatorio: true },
 ];
 
-// Nombre (completo o partido en Nombres/Apellidos) y Cédula alimentan
-// directamente el nombre de la carpeta del postulante en Drive
-// (findOrCreateCandidateFolder, backend RECLUTAMIENTO). Si una vacante se
-// guardara sin forma alguna de armar el nombre, o sin Cédula, todas las
-// postulaciones caerían en la misma carpeta y se mezclarían los documentos
-// de candidatos distintos — por eso Cédula nunca se puede quitar ni volver
-// opcional.
+// Estándar único desde 2026-09-22: la carpeta del postulante en Drive se
+// llama "Apellidos Nombres", sin guion, sin cédula y sin puesto (ver
+// nombre-persona.util en el backend). Por eso Apellidos y Nombres son los
+// DOS únicos campos que no se pueden quitar ni volver opcionales: sin ellos
+// no hay con qué nombrar la carpeta y todas las postulaciones caerían juntas.
 //
-// El nombre tiene dos esquemas posibles: el campo único "Nombre completo"
-// (vacantes viejas) o el par "Nombres" + "Apellidos" (vacantes nuevas, ver
-// Fase 6). Uno de los dos esquemas siempre debe quedar completo, así que el
-// bloqueo es cruzado y depende de qué otros campos tenga la MISMA vacante:
-// - Si están los dos esquemas a la vez, cualquiera de los dos se puede
-//   quitar libremente (el otro ya cubre la necesidad).
-// - Si solo está uno de los dos, ese esquema queda bloqueado campo por
-//   campo (no se puede dejar a medias quitando solo Nombres o solo
-//   Apellidos) hasta que se agregue el otro esquema completo.
-const NOMBRE_COMPLETO_KEYS = ['nombre', 'nombre completo'];
+// La Cédula ya NO está bloqueada: es un campo normal como Celular o Email.
+// Sigue siendo la llave que une postulación ↔ ficha ↔ cumplimiento, pero
+// viaja dentro de candidato.json, no en el nombre de la carpeta.
 const NOMBRES_KEY = 'nombres';
 const APELLIDOS_KEY = 'apellidos';
-const CEDULA_KEYS = ['cédula', 'cedula'];
 
-function isLockedCampo(nombre: string, camposActuales: CampoRequerido[]): boolean {
+function isLockedCampo(nombre: string): boolean {
   const key = nombre.trim().toLowerCase();
-  if (CEDULA_KEYS.includes(key)) return true;
-
-  const presentKeys = new Set(camposActuales.map((c) => c.nombre.trim().toLowerCase()));
-  const hasNombreCompleto = NOMBRE_COMPLETO_KEYS.some((k) => presentKeys.has(k));
-  const hasNombresYApellidos = presentKeys.has(NOMBRES_KEY) && presentKeys.has(APELLIDOS_KEY);
-
-  if (NOMBRE_COMPLETO_KEYS.includes(key)) {
-    // Bloqueado salvo que el esquema Nombres+Apellidos ya esté completo.
-    return !hasNombresYApellidos;
-  }
-  if (key === NOMBRES_KEY || key === APELLIDOS_KEY) {
-    // Bloqueado salvo que Nombre completo ya esté presente.
-    return !hasNombreCompleto;
-  }
-  return false;
+  return key === NOMBRES_KEY || key === APELLIDOS_KEY;
 }
 
-// Texto del tooltip del candado, distinto según por qué está bloqueado el
-// campo (Cédula siempre vs. el esquema de nombre cruzado — ver isLockedCampo).
-function lockedCampoReason(nombre: string): string {
-  const key = nombre.trim().toLowerCase();
-  if (CEDULA_KEYS.includes(key)) {
-    return 'Se usa para crear la carpeta de la postulación, no se puede quitar';
-  }
-  return 'Se usa para el nombre del candidato en la carpeta de la postulación; agrega el otro esquema de nombre completo antes de quitarlo';
+function lockedCampoReason(): string {
+  return 'Con Apellidos y Nombres se arma el nombre de la carpeta en Drive, no se puede quitar';
 }
 const DEFAULT_ARCHIVOS: ArchivoRequerido[] = [
   { nombre: 'Hoja de Vida', extensiones: ['pdf', 'doc', 'docx'], obligatorio: true },
@@ -343,9 +316,6 @@ export default function ReclutamientoPage() {
   const [hasSynced, setHasSynced] = useState(() => leerUltimaSincronizacion() !== null);
   const [search, setSearch] = useState('');
   const [mostrarCerradas, setMostrarCerradas] = useState(false);
-  const [confirmandoBackfill, setConfirmandoBackfill] = useState(false);
-  const [backfillLoading, setBackfillLoading] = useState(false);
-  const [backfillMensaje, setBackfillMensaje] = useState<{ ok: boolean; texto: string } | null>(null);
 
   const [showPuestoModal, setShowPuestoModal] = useState(false);
   const [editingPosition, setEditingPosition] = useState<JobPosition | null>(null);
@@ -417,6 +387,8 @@ export default function ReclutamientoPage() {
   const [syncError, setSyncError] = useState('');
 
   // Cambiar estado (Abierta/Cerrada) de una vacante, desde su tarjeta.
+  const [confirmandoEliminarVacante, setConfirmandoEliminarVacante] = useState<JobPosition | null>(null);
+  const [eliminandoVacante, setEliminandoVacante] = useState(false);
   const [estadoVacanteError, setEstadoVacanteError] = useState('');
   const estadoVacanteErrorRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -433,31 +405,6 @@ export default function ReclutamientoPage() {
       .then(setPuestos)
       .catch(() => setPuestos([]))
       .finally(() => setLoadingPuestos(false));
-  };
-
-  // Rescate retroactivo (ver DriveService.backfillPostulacion): para
-  // contrataciones ya hechas antes de que existiera el traspaso continuo de
-  // campos de postulación, busca en Drive el candidato.json de cada una y
-  // rellena camposPersonalizados con lo que encuentre. Un solo clic, seguro
-  // de repetir (nunca pisa nada ya cargado).
-  const handleBackfillPostulacion = async () => {
-    setConfirmandoBackfill(false);
-    setBackfillLoading(true);
-    setBackfillMensaje(null);
-    try {
-      const r = await backfillPostulacion();
-      setBackfillMensaje({
-        ok: true,
-        texto: `Listo: ${r.actualizadas} de ${r.procesadas} fichas actualizadas con datos de su postulación.${r.errores.length ? ` (${r.errores.length} con errores, revisa los logs del servidor)` : ''}`,
-      });
-    } catch (err: any) {
-      setBackfillMensaje({
-        ok: false,
-        texto: err.response?.data?.message || 'No se pudieron completar las fichas con los datos de postulación.',
-      });
-    } finally {
-      setBackfillLoading(false);
-    }
   };
 
   const handleSyncAll = async () => {
@@ -625,6 +572,35 @@ export default function ReclutamientoPage() {
     }
   };
 
+  // Eliminar una vacante. El backend manda su carpeta de Drive a la PAPELERA
+  // (no la borra definitivamente), justamente porque ahí adentro pueden vivir
+  // las carpetas de candidatos que ya se postularon: si se elimina por error,
+  // se recupera desde Drive. Aun así se confirma antes, y el diálogo dice
+  // cuántos postulantes hay dentro para que la decisión sea informada.
+  const handleEliminarVacante = async () => {
+    const vacante = confirmandoEliminarVacante;
+    if (!vacante) return;
+    setEliminandoVacante(true);
+    setEstadoVacanteError('');
+    try {
+      await deleteJobPosition(vacante.id);
+      setConfirmandoEliminarVacante(null);
+      loadPositions();
+    } catch (err: any) {
+      setConfirmandoEliminarVacante(null);
+      setEstadoVacanteError(
+        err.response?.data?.message || 'No se pudo eliminar la vacante. Inténtalo de nuevo.',
+      );
+    } finally {
+      setEliminandoVacante(false);
+    }
+  };
+
+  // Postulantes ya sincronizados que apuntan a esta vacante, para avisar en el
+  // diálogo. Solo cuenta lo que se trajo en la última sincronización.
+  const contarCandidatosDe = (vacante: JobPosition) =>
+    candidatos.filter((c) => c.puestoAplicado === vacante.puesto).length;
+
   const openCandidateModal = (c: Candidate) => {
     setSelectedCandidate(c);
     setReviewError('');
@@ -760,7 +736,7 @@ export default function ReclutamientoPage() {
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS</p>
             <h1>Reclutamiento y Vacantes</h1>
@@ -771,14 +747,6 @@ export default function ReclutamientoPage() {
               <button className="btn-secondary" onClick={handleSyncAll} disabled={syncing}>
                 <RefreshCw size={16} className={syncing ? 'spin' : undefined} />
                 {syncing ? 'Sincronizando...' : 'Sincronizar'}
-              </button>
-              <button
-                className="btn-secondary"
-                onClick={() => setConfirmandoBackfill(true)}
-                disabled={backfillLoading}
-                title="Para gente ya contratada: copia a su ficha las respuestas del formulario de postulación que no se alcanzaron a guardar en su momento. No borra nada que hayas escrito a mano."
-              >
-                <UserCheck size={16} /> {backfillLoading ? 'Copiando...' : 'Completar fichas'}
               </button>
               {driveFolderUrl && (
                 <a
@@ -792,11 +760,6 @@ export default function ReclutamientoPage() {
                 </a>
               )}
             </div>
-            {backfillMensaje && (
-              <span style={{ fontSize: '0.75rem', color: backfillMensaje.ok ? '#276749' : '#c53030', maxWidth: '340px', textAlign: 'right' }}>
-                {backfillMensaje.texto}
-              </span>
-            )}
             {/* La lista de candidatos se guarda localmente al sincronizar, así
                 que recargar la página o volver a entrar no la borra ni obliga
                 a sincronizar de nuevo — este texto es lo que le dice a RRHH
@@ -906,6 +869,13 @@ export default function ReclutamientoPage() {
                         title="Editar vacante"
                       >
                         <Pencil size={15} />
+                      </button>
+                      <button
+                        onClick={() => { setEstadoVacanteError(''); setConfirmandoEliminarVacante(p); }}
+                        style={{ background: 'none', border: 'none', color: '#c53030', cursor: 'pointer', display: 'flex', padding: '4px' }}
+                        title="Eliminar vacante"
+                      >
+                        <Trash2 size={15} />
                       </button>
                     </div>
                   </div>
@@ -1402,7 +1372,7 @@ export default function ReclutamientoPage() {
           title="Marcar como Contratado"
           message={
             selectedCandidate.tipoContratacion === 'ADMINISTRATIVO'
-              ? `Se moverá la carpeta de Drive de "${selectedCandidate.nombre}" a Personal Administrativo, renombrando la carpeta a "${selectedCandidate.nombre} - ${selectedCandidate.puestoAplicado}", y dejará de aparecer en Candidatos Postulados. ¿Continuar?`
+              ? `Se moverá la carpeta de Drive de "${selectedCandidate.nombre}" a Personal Administrativo, renombrándola a "${selectedCandidate.nombre}" (solo apellidos y nombres; el puesto queda guardado en su ficha), y dejará de aparecer en Candidatos Postulados. ¿Continuar?`
               : `Se moverá la carpeta de Drive de "${selectedCandidate.nombre}" a Guardias (carpeta "Sin Asignar", todavía sin entidad) y dejará de aparecer en Candidatos Postulados. ¿Continuar?`
           }
           confirmLabel="Sí, marcar como contratado"
@@ -1411,13 +1381,20 @@ export default function ReclutamientoPage() {
         />
       )}
 
-      {confirmandoBackfill && (
+      {confirmandoEliminarVacante && (
         <ConfirmDialog
-          title="Completar fichas con datos de postulación"
-          message="Cuando alguien se postula, llena un formulario (teléfono, talla, etc.). Al contratarlo, esos datos se copian solos a su Ficha Personal. Este botón es solo para personas que se contrataron antes de esa copia automática: busca el formulario original en su carpeta de Drive y lo pega en la ficha. No borra nada que ya hayas escrito a mano, y se puede usar más de una vez. ¿Continuar?"
-          confirmLabel="Sí, completar fichas"
-          onConfirm={handleBackfillPostulacion}
-          onCancel={() => setConfirmandoBackfill(false)}
+          title="Eliminar vacante"
+          message={(() => {
+            const n = contarCandidatosDe(confirmandoEliminarVacante);
+            const base = `Se eliminará la vacante "${confirmandoEliminarVacante.puesto}" y su carpeta de Drive se moverá a la papelera.`;
+            const conCandidatos = n > 0
+              ? ` Ojo: dentro hay ${n} postulante${n === 1 ? '' : 's'} sincronizado${n === 1 ? '' : 's'}, y su documentación se va a la papelera junto con la carpeta.`
+              : '';
+            return `${base}${conCandidatos} No es definitivo: puedes recuperarla desde la papelera de Google Drive. ¿Continuar?`;
+          })()}
+          confirmLabel={eliminandoVacante ? 'Eliminando...' : 'Sí, eliminar'}
+          onConfirm={handleEliminarVacante}
+          onCancel={() => setConfirmandoEliminarVacante(null)}
         />
       )}
 
@@ -1489,7 +1466,7 @@ export default function ReclutamientoPage() {
                   </select>
                   <small style={{ color: '#718096', fontSize: '0.78rem', lineHeight: 1.5, display: 'block', marginTop: '4px' }}>
                     {nuevoTipoContratacion === 'ADMINISTRATIVO'
-                      ? 'Su carpeta irá a Personal Administrativo y se renombrará a "Nombre - Puesto", que es como se nombran las carpetas de esa sección.'
+                      ? 'Su carpeta irá a Personal Administrativo, renombrada a "Apellidos Nombres". El puesto queda guardado en su ficha, no en el nombre de la carpeta.'
                       : 'Su carpeta irá a Guardias, en "Sin Asignar", hasta que le asignes una entidad.'}
                   </small>
                 </div>
@@ -1505,7 +1482,7 @@ export default function ReclutamientoPage() {
                 <div className="form-group">
                   <label>Datos que debe llenar</label>
                   <small style={{ display: 'block', color: 'var(--azul-claro)', opacity: 0.75, margin: '-2px 0 8px' }}>
-                    Cédula, y el nombre del candidato (ya sea "Nombre completo" o el par "Nombres" + "Apellidos"), se usan para crear la carpeta de la postulación en Drive. Cédula no se puede quitar ni marcar como opcional; el nombre solo se puede quitar de un esquema si el otro esquema ya está completo en esta vacante.
+Con "Apellidos" y "Nombres" se arma el nombre de la carpeta de la postulación en Drive, que siempre queda como "Apellidos Nombres" —sin guion, sin cédula y sin puesto—. Por eso esos dos campos no se pueden quitar ni volver opcionales. Todos los demás, incluida la Cédula, son campos normales que puedes agregar, quitar o dejar opcionales.
                   </small>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <input
@@ -1537,7 +1514,7 @@ export default function ReclutamientoPage() {
                     <div style={{ marginTop: '10px', border: '1px solid var(--gris-claro)', borderRadius: '10px', overflow: 'hidden' }}>
                       {camposList.map((c, i) => {
                         const obligatorio = c.obligatorio !== false;
-                        const locked = isLockedCampo(c.nombre, camposList);
+                        const locked = isLockedCampo(c.nombre);
                         return (
                           <div
                             key={i}
@@ -1553,11 +1530,11 @@ export default function ReclutamientoPage() {
                               onChange={() => toggleCampoObligatorio(i)}
                               label={obligatorio ? 'Obligatorio' : 'Opcional'}
                               disabled={locked}
-                              title={locked ? lockedCampoReason(c.nombre) : undefined}
+                              title={locked ? lockedCampoReason() : undefined}
                             />
                             {locked ? (
                               <span
-                                title={lockedCampoReason(c.nombre)}
+                                title={lockedCampoReason()}
                                 style={{ color: 'var(--azul-claro)', opacity: 0.55, display: 'flex', justifySelf: 'end' }}
                               >
                                 <Lock size={14} />
@@ -1584,6 +1561,9 @@ export default function ReclutamientoPage() {
                 {/* ARCHIVOS REQUERIDOS */}
                 <div className="form-group">
                   <label>Documentos que debe subir</label>
+                  <small style={{ display: 'block', color: 'var(--azul-claro)', opacity: 0.75, margin: '-2px 0 8px' }}>
+                    Los formatos son opcionales: si no marcas ninguno, ese documento acepta archivos de cualquier tipo.
+                  </small>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <input
                       type="text"

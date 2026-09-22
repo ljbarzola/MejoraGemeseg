@@ -87,6 +87,16 @@ export class UpdatePersonalFieldDefinitionDto {
   @IsOptional()
   label?: string;
 
+  // El tipo se puede corregir después de crear el campo (2026-09-22, pedido
+  // del usuario: antes solo se podía renombrar, así que un campo creado como
+  // Texto que debía ser Número obligaba a borrarlo y volverlo a crear,
+  // perdiendo los valores ya cargados). Los valores ya guardados NO se
+  // convierten ni se borran: se siguen mostrando y se reinterpretan con el
+  // tipo nuevo, por eso el frontend pide confirmación antes de cambiarlo.
+  @IsIn([...PERSONAL_FIELD_TYPES])
+  @IsOptional()
+  type?: string;
+
   @IsInt()
   @IsOptional()
   order?: number;

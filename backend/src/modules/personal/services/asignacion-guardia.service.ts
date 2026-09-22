@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { separarNombre } from '../utils/separar-nombre.util';
 import {
   CreateAsignacionGuardiaDto,
   UpdateAsignacionGuardiaDto,
@@ -8,6 +9,52 @@ import {
 @Injectable()
 export class AsignacionGuardiaService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // Padrón de guardias de la empresa, tal como lo necesita Listado de
+  // Guardias (RRHH). Antes esta pantalla lo pedía a
+  // GET /custodias/available-custodios, que está detrás de la sección
+  // CUSTODIAS: una empresa con RRHH pero sin Custodias veía la pantalla
+  // cargar y luego romperse con "No tienes acceso a CUSTODIAS", sin que ese
+  // mensaje tuviera nada que ver con lo que estaba haciendo. El dato en sí
+  // es de RRHH (carpetas de Drive de guardias), no del módulo de viajes.
+  async findGuardias(companyId: number) {
+    const carpetas = await this.prisma.employeeDriveFolder.findMany({
+      where: { companyId, folderType: 'CUSTODIAS' },
+      orderBy: { employeeName: 'asc' },
+    });
+
+    // Apellidos y nombres se muestran en columnas separadas, pero la carpeta
+    // los guarda juntos ("APELLIDOS NOMBRES"). El dato exacto está en el
+    // formulario de postulación, dentro de la ficha — se traen todas de una
+    // vez para no hacer una consulta por guardia (ver separar-nombre.util).
+    const fichas = await this.prisma.guardiaFichaPersonal.findMany({
+      where: { companyId, cedula: { in: carpetas.map((c) => c.cedula) } },
+      select: { cedula: true, camposPersonalizados: true },
+    });
+    const fichaPorCedula = new Map(
+      fichas.map((f) => [
+        f.cedula,
+        f.camposPersonalizados as Record<string, unknown> | null,
+      ]),
+    );
+
+    return carpetas
+      .map((c) => {
+        const { apellidos, nombres, exacto } = separarNombre(
+          c.employeeName,
+          fichaPorCedula.get(c.cedula),
+        );
+        return {
+          name: c.employeeName,
+          apellidos,
+          nombres,
+          nombreSeparadoExacto: exacto,
+          cedula: c.cedula,
+          lastSyncAt: c.lastSyncAt,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
 
   async findAll(
     companyId: number,

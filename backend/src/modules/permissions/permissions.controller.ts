@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   ParseIntPipe,
@@ -15,6 +16,7 @@ import { UserRole } from '@prisma/client';
 import { PermissionsService } from './permissions.service';
 import {
   SetCompanySectionsDto,
+  SetFixedSectionsDto,
   SetUserPermissionsDto,
 } from './dto/permission.dto';
 
@@ -58,6 +60,26 @@ export class PermissionsController {
       );
     }
     return this.service.setCompanySections(companyId, dto.sections);
+  }
+
+  // Módulos fijos (visibles para todos) de una empresa. Lo gestiona el
+  // administrador de esa empresa, no el super admin: es una decisión de cómo
+  // trabaja cada organización, no de qué tiene contratado.
+  @Post('sections/:companyId/fixed')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN)
+  setFixedSections(
+    @Param('companyId', ParseIntPipe) companyId: number,
+    @Body() dto: SetFixedSectionsDto,
+    @Req() req: any,
+  ) {
+    if (
+      !this.service.isSuperAdmin(req.user) &&
+      req.user.companyId !== companyId
+    ) {
+      throw new ForbiddenException('No tienes acceso a esta empresa');
+    }
+    return this.service.setFixedSections(companyId, dto.sections);
   }
 
   @Get('users/:companyId')

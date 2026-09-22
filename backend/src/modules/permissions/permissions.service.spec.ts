@@ -74,9 +74,14 @@ describe('PermissionsService', () => {
 
       await service.setCompanySections(1, ['CACAO']);
 
+      // Solo se borran las que SALEN, no todas: borrar y recrear todo perdía
+      // el marcador `fixedForAll` de cada sección en cada guardado.
       expect(prisma.companySection.deleteMany).toHaveBeenCalledWith({
-        where: { companyId: 1 },
+        where: { companyId: 1, section: { notIn: expect.any(Array) } },
       });
+      const borradas = (prisma.companySection.deleteMany as jest.Mock).mock
+        .calls[0][0].where.section.notIn as string[];
+      expect(borradas).toContain('CACAO');
       const createMany = prisma.companySection.createMany as jest.Mock<
         unknown,
         [{ data: { section: string }[] }]

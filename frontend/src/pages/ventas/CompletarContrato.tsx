@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { getPublicContractFill, submitPublicContractFill, PublicContractFill } from '../../services/ventas.service';
+import DateInput from '../../components/common/DateInput';
 
 // Página pública (sin sesión): el cliente llega por un link con un token y
 // completa aquí las tablas que el vendedor marcó como "las llena el
@@ -103,12 +104,20 @@ export default function CompletarContrato() {
                   {columns.map((col) => (
                     <div key={col.key}>
                       <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>{col.label}</label>
-                      <input
-                        type={col.type === 'DATE' ? 'date' : col.type === 'NUMBER' ? 'number' : 'text'}
-                        value={row[col.key] || ''}
-                        onChange={(e) => updateCell(field.variableName, i, col.key, e.target.value)}
-                        style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12, boxSizing: 'border-box' }}
-                      />
+                      {col.type === 'DATE' ? (
+                        <DateInput
+                          value={row[col.key] || ''}
+                          onChange={(v) => updateCell(field.variableName, i, col.key, v)}
+                          style={{ padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }}
+                        />
+                      ) : (
+                        <input
+                          type={col.type === 'NUMBER' ? 'number' : 'text'}
+                          value={row[col.key] || ''}
+                          onChange={(e) => updateCell(field.variableName, i, col.key, e.target.value)}
+                          style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12, boxSizing: 'border-box' }}
+                        />
+                      )}
                     </div>
                   ))}
                   <button onClick={() => removeRow(field.variableName, i)}

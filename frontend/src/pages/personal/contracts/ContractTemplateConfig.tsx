@@ -152,7 +152,7 @@ export default function ContractTemplateConfig() {
         <button className="cacao-back-btn" onClick={() => navigate('/rrhh/contracts')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS · DOCUMENTACIÓN</p>
             <h1>Configuración de Plantilla</h1>

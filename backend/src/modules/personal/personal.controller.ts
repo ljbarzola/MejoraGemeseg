@@ -19,8 +19,6 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { PersonalService } from './personal.service';
 import { ContractService } from './services/contract.service';
-import { CertificationService } from './services/certification.service';
-import { LogService } from './services/log.service';
 import { TrainingService } from './services/training.service';
 import { PersonalAlertsService } from './services/personal-alerts.service';
 import {
@@ -30,11 +28,6 @@ import {
   UpdateContractDto,
   GenerateContractDto,
 } from './dto/contract.dto';
-import {
-  CreateCertificationDto,
-  UpdateCertificationDto,
-} from './dto/certification.dto';
-import { CreateLogTemplateDto, CreateLogEntryDto } from './dto/log.dto';
 import {
   CreateTrainingDto,
   UpdateTrainingDto,
@@ -48,8 +41,6 @@ export class PersonalController {
   constructor(
     private readonly personalService: PersonalService,
     private readonly contractService: ContractService,
-    private readonly certificationService: CertificationService,
-    private readonly logService: LogService,
     private readonly trainingService: TrainingService,
     private readonly personalAlertsService: PersonalAlertsService,
   ) {}
@@ -163,34 +154,6 @@ export class PersonalController {
     return this.contractService.updateContract(id, body, req.user.companyId);
   }
 
-  @Get('certifications')
-  getCertifications(@Req() req: any) {
-    return this.certificationService.findAll(req.user.companyId);
-  }
-
-  @Post('certifications')
-  createCertification(@Body() body: CreateCertificationDto, @Req() req: any) {
-    return this.certificationService.create(
-      body,
-      req.user.companyId,
-      req.user.userId,
-    );
-  }
-
-  @Patch('certifications/:id')
-  updateCertification(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: UpdateCertificationDto,
-    @Req() req: any,
-  ) {
-    return this.certificationService.update(id, body, req.user.companyId);
-  }
-
-  @Delete('certifications/:id')
-  deleteCertification(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
-    return this.certificationService.delete(id, req.user.companyId);
-  }
-
   @Get('trainings')
   getTrainings(@Req() req: any) {
     return this.trainingService.findAll(req.user.companyId);
@@ -254,49 +217,10 @@ export class PersonalController {
     return this.trainingService.setCompleted(id, body.completed, req.user.companyId, req.user.userId);
   }
 
-  // Reemplaza el antiguo GET certifications/alerts (código muerto: nada lo
-  // llamaba, sin cron ni consumidor) por uno combinado y realmente
-  // consumido desde el dashboard de Personal.
+  // Alertas de capacitaciones (vencidas y por vencer), consumidas desde el
+  // dashboard de Personal.
   @Get('alerts')
   getAlerts(@Req() req: any) {
     return this.personalAlertsService.getAlerts(req.user.companyId);
-  }
-
-  @Get('logs/templates')
-  getLogTemplates(@Req() req: any) {
-    return this.logService.getTemplates(req.user.companyId);
-  }
-
-  @Post('logs/templates')
-  createLogTemplate(@Body() body: CreateLogTemplateDto, @Req() req: any) {
-    return this.logService.createTemplate(
-      body,
-      req.user.companyId,
-      req.user.userId,
-    );
-  }
-
-  @Delete('logs/templates/:id')
-  deleteLogTemplate(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
-    return this.logService.deleteTemplate(id, req.user.companyId);
-  }
-
-  @Get('logs/entries')
-  getLogEntries(@Req() req: any) {
-    return this.logService.getEntries(req.user.companyId);
-  }
-
-  @Post('logs/entries')
-  createLogEntry(@Body() body: CreateLogEntryDto, @Req() req: any) {
-    return this.logService.createEntry(
-      body,
-      req.user.companyId,
-      req.user.userId,
-    );
-  }
-
-  @Delete('logs/entries/:id')
-  deleteLogEntry(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
-    return this.logService.deleteEntry(id, req.user.companyId);
   }
 }

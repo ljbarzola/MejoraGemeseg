@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, FilePlus, FileText } from 'lucide-react';
-import { getContracts, getContractTemplates, deleteContractTemplate, resolveContractFileUrl, type ContractTemplate } from '../../../services/personal.service';
+import { ArrowLeft, FilePlus, FileText, FolderOpen } from 'lucide-react';
+import { getContracts, getContractTemplates, deleteContractTemplate, resolveContractFileUrl, getDriveConfig, type ContractTemplate } from '../../../services/personal.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 
 export default function ContractsList() {
@@ -13,7 +13,17 @@ export default function ContractsList() {
 
   const [confirmandoEliminarPlantilla, setConfirmandoEliminarPlantilla] = useState<number | null>(null);
   const [deleteTemplateError, setDeleteTemplateError] = useState('');
+  // Carpeta de Drive donde quedan los documentos generados. Está fija en
+  // código (RRHH_DOCUMENTOS), no se configura desde la app — pero sí se ofrece
+  // el enlace para abrirla, que es lo que hace falta en el día a día.
+  const [carpetaDriveUrl, setCarpetaDriveUrl] = useState<string | null>(null);
   const deleteTemplateErrorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    getDriveConfig('RRHH_DOCUMENTOS')
+      .then((c: { driveFolderLink?: string } | null) => setCarpetaDriveUrl(c?.driveFolderLink || null))
+      .catch(() => setCarpetaDriveUrl(null));
+  }, []);
 
   useEffect(() => {
     if (deleteTemplateError) {
@@ -53,12 +63,23 @@ export default function ContractsList() {
         <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/rrhh')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS</p>
             <h1>Documentación</h1>
           </div>
           <div className="header-actions">
+            {carpetaDriveUrl && (
+              <a
+                className="btn-secondary"
+                href={carpetaDriveUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Abrir en Google Drive la carpeta donde se guardan los documentos generados"
+              >
+                <FolderOpen size={16} /> Ver carpeta
+              </a>
+            )}
             <button className="btn-secondary" onClick={() => navigate('/rrhh/contracts/generar')}>
               <FileText size={16} /> Generar documento
             </button>

@@ -1096,7 +1096,7 @@ describe('DriveService.contratarCandidato', () => {
     expect(driveFilesUpdate).not.toHaveBeenCalled();
   });
 
-  it('contrata un guardia nombrado "Apellidos - Nombres" usando la cédula de candidato.json', async () => {
+  it('contrata un guardia nombrado "Apellidos Nombres" usando la cédula de candidato.json', async () => {
     driveFilesGet.mockImplementation(({ fileId, alt }: { fileId: string; alt?: string }) => {
       if (fileId === 'cand-1' && !alt)
         return Promise.resolve({
@@ -1121,7 +1121,9 @@ describe('DriveService.contratarCandidato', () => {
     const result = await service.contratarCandidato(1, 'cand-1', 2);
 
     expect(result.cedula).toBe('0923456789');
-    expect(result.nombre).toBe('LOPEZ - MARIA');
+    // Formato estandar "Apellidos Nombres": el guion del nombre de la carpeta
+    // vieja no se arrastra al nombre que queda registrado.
+    expect(result.nombre).toBe('LOPEZ MARIA');
     expect(driveFilesUpdate).toHaveBeenCalled();
   });
 
@@ -1236,21 +1238,21 @@ describe('DriveService.contratarCandidato', () => {
       );
     });
 
-    it('mueve la carpeta a Personal Administrativo y la renombra a "Nombre - Puesto" en la misma llamada', async () => {
+    it('mueve la carpeta a Personal Administrativo y la renombra a "Apellidos Nombres", sin el puesto', async () => {
       const result = await service.contratarCandidato(1, 'cand-1', 2);
 
       const moveCall = driveFilesUpdate.mock.calls.find(
         ([arg]) => arg?.fileId === 'cand-1' && arg?.addParents,
       );
       expect(moveCall).toBeDefined();
-      // El renombrado viaja junto al movimiento: la carpeta nunca existe bajo
-      // la raíz de administrativos con el nombre "Nombre - Cédula", que ese
-      // sync leería como si la cédula fuera el puesto.
+      // El renombrado viaja junto al movimiento. Desde el estandar de
+      // nombres, la carpeta queda solo con apellidos y nombres: ni el puesto
+      // ni la cedula van en el nombre, viven en datos.json / candidato.json.
       expect(moveCall![0]).toEqual(
         expect.objectContaining({
           addParents: 'admin-root',
           removeParents: 'puesto-1',
-          requestBody: { name: 'Maria Lopez - Contadora' },
+          requestBody: { name: 'Maria Lopez' },
         }),
       );
       expect(result).toEqual({
@@ -1515,7 +1517,7 @@ describe('DriveService.syncPersonalAdminFolder', () => {
   let service: DriveService;
   let prisma: {
     folderConfig: { findFirst: jest.Mock };
-    employeeDriveFolder: { upsert: jest.Mock };
+    employeeDriveFolder: { upsert: jest.Mock; findFirst: jest.Mock };
     employeeDocument: { upsert: jest.Mock };
   };
 
@@ -1526,7 +1528,12 @@ describe('DriveService.syncPersonalAdminFolder', () => {
           .fn()
           .mockResolvedValue({ driveFolderId: 'root-admin-1' }),
       },
-      employeeDriveFolder: { upsert: jest.fn().mockResolvedValue({}) },
+      employeeDriveFolder: {
+        upsert: jest.fn().mockResolvedValue({}),
+        // Ancla de identidad por folderId: null = carpeta que el sync ve por
+        // primera vez.
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       employeeDocument: { upsert: jest.fn().mockResolvedValue({}) },
     };
     service = new DriveService(
@@ -1549,7 +1556,10 @@ describe('DriveService.syncPersonalAdminFolder', () => {
     });
   });
 
-  it('rechaza carpetas sin el formato "Apellidos Nombres - Cédula - Puesto" en vez de crear una identidad silenciosa', async () => {
+  // Sin cedula en el nombre NI en datos.json no hay a quien atribuir la
+  // carpeta: se reporta y se salta, en vez de inventar una identidad
+  // sintetica "ID-..." que despues fragmenta al mismo empleado en varias.
+  it('reporta y salta la carpeta cuando no puede saber de quien es', async () => {
     (service as any).listSubFolders = jest
       .fn()
       .mockResolvedValue([{ id: 'emp-1', name: 'Juan Perez - Contador' }]);
@@ -1557,12 +1567,48 @@ describe('DriveService.syncPersonalAdminFolder', () => {
 
     const result = await service.syncPersonalAdminFolder(1, 1);
 
-    expect(result.errors[0]).toMatch(/formato "Apellidos Nombres - Cédula - Puesto"/);
+    expect(result.errors[0]).toMatch(/no se pudo identificar|No se pudo identificar/);
+    expect(prisma.employeeDriveFolder.upsert).not.toHaveBeenCalled();
+  });
+
+  // El formato nuevo no lleva cedula en el nombre: se lee de datos.json y la
+  // carpeta sincroniza normalmente, sin advertencia.
+  it('acepta "Apellidos Nombres" leyendo la cedula de datos.json', async () => {
+    (service as any).listSubFolders = jest
+      .fn()
+      .mockResolvedValue([{ id: 'emp-1', name: 'Perez Gomez Juan' }]);
+    (service as any).listFilesInFolder = jest
+      .fn()
+      .mockResolvedValue([{ id: 'ficha-1', name: 'datos.json' }]);
+    (service as any).leerCedulaDeJsonEnCarpeta = jest
+      .fn()
+      .mockResolvedValue('0912345678');
+
+    const result = await service.syncPersonalAdminFolder(1, 1);
+
     expect(prisma.employeeDriveFolder.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { companyId_cedula: { companyId: 1, cedula: 'ID-emp-1' } },
+        where: { companyId_cedula: { companyId: 1, cedula: '0912345678' } },
       }),
     );
+    expect(result.errors).toEqual([]);
+  });
+
+  // Formato viejo: se sincroniza IGUAL (no se renombra nada en Drive), solo
+  // se avisa para que RRHH lo corrija cuando quiera.
+  it('sincroniza el formato viejo pero avisa que no sigue "Apellidos Nombres"', async () => {
+    // Carpeta "Juan Perez - 0912345678 - Contador" (la del beforeEach): la
+    // cedula sale del propio nombre, no hace falta leer ningun JSON.
+    (service as any).listFilesInFolder = jest.fn().mockResolvedValue([]);
+
+    const result = await service.syncPersonalAdminFolder(1, 1);
+
+    expect(prisma.employeeDriveFolder.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { companyId_cedula: { companyId: 1, cedula: '0912345678' } },
+      }),
+    );
+    expect(result.errors.join(' ')).toMatch(/Apellidos Nombres/);
   });
 
   it('excluye candidato.json y las trazas de análisis con IA de EmployeeDocument (antes no excluía nada)', async () => {

@@ -1,9 +1,10 @@
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
-import { getTemplate, createTemplate, updateTemplate, downloadFromDrive, detectVariables, saveTemplateFields, getSalesClientFields, SalesTemplateField, TableColumn, SalesClientField } from '../../services/ventas.service';
+import { ArrowLeft, HelpCircle } from 'lucide-react';
+import { getTemplate, createTemplate, updateTemplate, downloadFromDrive, uploadTemplateDocx, detectVariables, saveTemplateFields, getSalesClientFields, SalesTemplateField, TableColumn, SalesClientField } from '../../services/ventas.service';
 import { PRIMARY } from './contratoStyles';
 import { useToast } from '../../contexts/ToastContext';
+import TemplateHelpModal from '../../components/ventas/TemplateHelpModal';
 
 export default function TemplateConfig() {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +20,11 @@ export default function TemplateConfig() {
   const [fields, setFields] = useState<Partial<SalesTemplateField>[]>([]);
   const [detectedVars, setDetectedVars] = useState<string[]>([]);
   const [downloading, setDownloading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [sourceMode, setSourceMode] = useState<'drive' | 'upload'>('drive');
+  const [uploadFileName, setUploadFileName] = useState('');
+  const [showHelp, setShowHelp] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [detecting, setDetecting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState(1);
@@ -76,6 +82,31 @@ export default function TemplateConfig() {
       const msg = ax?.response?.data?.message || ax.message || 'Error al descargar';
       showToast(`Error: ${msg}\n\nAsegúrate de que:\n1. El link es de Google Drive\n2. El archivo está compartido como "Cualquier persona con el link"\n3. El archivo es un documento Word (.docx)`, 'error');
     } finally { setDownloading(false); }
+  };
+
+  const handleUploadDocx = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.docx')) {
+      showToast('El archivo debe ser un documento Word (.docx)', 'error');
+      return;
+    }
+    setUploadFileName(file.name);
+    setUploading(true);
+    try {
+      let tid = isEdit ? +id! : null;
+      if (!isEdit) {
+        const created = await createTemplate({ name: name || 'Plantilla sin nombre' });
+        tid = created.id;
+        navigate(`/ventas/contratos/configuracion/${tid}`, { replace: true });
+      }
+      if (tid) {
+        const result = await uploadTemplateDocx(tid, file);
+        showToast(`Documento subido (${result.size ? Math.round(result.size / 1024) + ' KB' : 'OK'})`, 'success');
+      }
+      setStep(2);
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { message?: string } }; message?: string };
+      showToast(ax?.response?.data?.message || ax.message || 'Error al subir el documento', 'error');
+    } finally { setUploading(false); }
   };
 
   const handleDetect = async () => {
@@ -243,6 +274,17 @@ export default function TemplateConfig() {
           <p className="page-eyebrow">Ventas y CRM</p>
           <h1>Configuración de Plantilla</h1>
         </div>
+        <div className="header-actions">
+          <button
+            type="button"
+            onClick={() => setShowHelp(true)}
+            title="Cómo funciona Contratos"
+            aria-label="Ayuda"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 6, border: 'none', background: 'var(--naranja)', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+          >
+            <HelpCircle size={18} /> Ayuda
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
@@ -265,18 +307,75 @@ export default function TemplateConfig() {
           <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Descripción opcional"
             style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
         </div>
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>Link de Google Drive</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input value={driveUrl} onChange={e => setDriveUrl(e.target.value)} placeholder="https://drive.google.com/file/d/..."
-              style={{ flex: 1, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
-            <button className="auth-btn" onClick={handleDownload} disabled={downloading || !driveUrl.trim()}
-              style={{ padding: '8px 16px', fontSize: 12 }}>
-              {downloading ? 'Descargando...' : 'Descargar'}
+        <div style={{ marginBottom: 8 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>Documento</label>
+          <div style={{ display: 'flex', gap: 4, marginTop: 4, marginBottom: 10 }}>
+            <button type="button" onClick={() => setSourceMode('drive')}
+              style={{
+                padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderRadius: '6px 0 0 6px',
+                borderTop: `1px solid ${sourceMode === 'drive' ? PRIMARY : '#ddd'}`,
+                borderBottom: `1px solid ${sourceMode === 'drive' ? PRIMARY : '#ddd'}`,
+                borderLeft: `1px solid ${sourceMode === 'drive' ? PRIMARY : '#ddd'}`,
+                borderRight: `1px solid ${sourceMode === 'drive' ? PRIMARY : '#ddd'}`,
+                background: sourceMode === 'drive' ? PRIMARY : '#fff',
+                color: sourceMode === 'drive' ? '#fff' : '#666',
+              }}>
+              Link de Google Drive
+            </button>
+            <button type="button" onClick={() => setSourceMode('upload')}
+              style={{
+                padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderRadius: '0 6px 6px 0',
+                borderTop: `1px solid ${sourceMode === 'upload' ? PRIMARY : '#ddd'}`,
+                borderBottom: `1px solid ${sourceMode === 'upload' ? PRIMARY : '#ddd'}`,
+                borderRight: `1px solid ${sourceMode === 'upload' ? PRIMARY : '#ddd'}`,
+                borderLeft: 'none',
+                background: sourceMode === 'upload' ? PRIMARY : '#fff',
+                color: sourceMode === 'upload' ? '#fff' : '#666',
+              }}>
+              Subir documento
             </button>
           </div>
+
+          {sourceMode === 'drive' ? (
+            <div key="drive-mode">
+              <p style={{ fontSize: 11, color: '#888', margin: '0 0 6px' }}>
+                El documento debe estar compartido en Drive con acceso "Cualquier persona con el enlace" y rol <strong>Lector</strong>; si no, la descarga falla.
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input value={driveUrl} onChange={e => setDriveUrl(e.target.value)} placeholder="https://drive.google.com/file/d/..."
+                  style={{ flex: 1, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
+                <button className="auth-btn" onClick={handleDownload} disabled={downloading || !driveUrl.trim()}
+                  style={{ padding: '8px 16px', fontSize: 12 }}>
+                  {downloading ? 'Descargando...' : 'Descargar'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div key="upload-mode">
+              <p style={{ fontSize: 11, color: '#888', margin: '0 0 6px' }}>
+                Sube el archivo .docx directo desde tu computador, sin depender de Drive ni de permisos de compartir.
+              </p>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".docx"
+                  disabled={uploading}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadDocx(f); e.target.value = ''; }}
+                  style={{ display: 'none' }}
+                />
+                <button type="button" className="btn-secondary" onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                  style={{ padding: '8px 16px', fontSize: 12 }}>
+                  {uploading ? 'Subiendo...' : 'Elegir archivo .docx'}
+                </button>
+                {uploadFileName && !uploading && <span style={{ fontSize: 12, color: '#888' }}>{uploadFileName}</span>}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {showHelp && <TemplateHelpModal onClose={() => setShowHelp(false)} />}
 
       {step >= 2 && (
         <div className="admin-section" style={{ marginBottom: 16 }}>

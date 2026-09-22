@@ -8,8 +8,12 @@ import {
   Param,
   Req,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { VentasTemplatesService } from './ventas-templates.service';
 import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
 import { Section } from '../../common/decorators/section.decorator';
@@ -57,6 +61,22 @@ export class VentasTemplatesController {
   @Section('VENTAS', 'write')
   downloadDrive(@Param('id') id: string, @Req() req: any) {
     return this.templatesService.downloadFromDrive(+id, req.user.companyId);
+  }
+
+  @Post(':id/upload-docx')
+  @Section('VENTAS', 'write')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  )
+  uploadDocx(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: any,
+  ) {
+    return this.templatesService.uploadDocx(+id, req.user.companyId, file);
   }
 
   @Post(':id/detect-variables')

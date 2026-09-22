@@ -28,13 +28,24 @@ Hasta el 2026-09-10 era un stub: `ContractTemplate`/`Contract` solo guardaban un
 - Página renombrada de cara al usuario a **"Documentación"** (`ContractsList.tsx`, título visible; el path interno sigue siendo `/rrhh/contracts` — mismo criterio que el rename Personal→RRHH del punto 0: no tocar rutas/nombres internos solo por el nombre visible). Desde ahí: "+ Nueva plantilla" (`ContractTemplateConfig.tsx`) y "+ Generar Documento" (`GenerarDocumento.tsx`, página propia — **no vive en Listado de Guardias**, deliberado: elegir guardia + tipo de documento es el punto de entrada de Documentación, no una acción rápida de fila).
 - `ContractTemplate.type` es **texto libre**, no un enum — el usuario puede escribir cualquier tipo de documento, no solo los 3 originales. `GET /personal/contracts/templates/types` devuelve los tipos ya usados por la empresa para ofrecerlos en un select con opción "+ Agregar nuevo tipo...".
 - **Alcance actual: solo Guardias.** Extender esto a todo tipo de empleado queda pendiente para después.
-- `Contract` no tiene FK — se identifica por `cedula`/`nombreGuardia` (mismo patrón que `AsignacionGuardia`/`GuardiaFichaPersonal`/`Certification`).
+- `Contract` no tiene FK — se identifica por `cedula`/`nombreGuardia` (mismo patrón que `AsignacionGuardia`/`GuardiaFichaPersonal`).
 - Los datos que se autocompletan (nombre, cédula, puesto, entidad asignada, horario, salario, fecha, empresa) salen de `AsignacionGuardia`/`Entidad` + `GuardiaFichaPersonal` — ver `ContractService.buildAutoFillValues`. **Horario, puesto formal y salario acordado son campos nuevos en `GuardiaFichaPersonal`** (no en `AsignacionGuardia`, que es un historial de solo lectura generado por el sync de Drive — ver comentario en el modelo), editables desde `GuardiaFichaModal.tsx` en Listado de Guardias. (Hasta 2026-09-17 había un respaldo secundario en `Candidate`/Kanban, eliminado junto con ese sistema — ver punto 2; si falta el dato en la ficha, el campo queda vacío para llenarlo a mano.)
 - Firma: **física** (se genera el PDF, se imprime y se firma a mano) — no hay firma electrónica (SignWell ni ningún otro proveedor) en este alcance.
-- PDFs y `.docx` se guardan en disco local (`uploads/hr-templates`, `uploads/hr-contracts`), misma limitación de disco no persistente en Cloud Run que ya tiene Ventas.
+- PDFs y `.docx` se guardan en disco local (`uploads/hr-templates`, `uploads/hr-contracts`), que en Cloud Run es **efímero**: el contenedor se apaga al quedar inactivo (`--min-instances=0`) y vuelve a arrancar con el disco vacío, y varias instancias no comparten filesystem. **Desde el 2026-09-22 eso ya no rompe el flujo** (ver punto 14): esos directorios se tratan como caché, no como almacén — la plantilla `.docx` se vuelve a bajar de Drive sola (`ensureDocxLocal`) y el PDF ya generado se rehace a partir de la plantilla + los `fieldValues` guardados en BD (`ensureContractFile`). Ventas conserva la limitación original, no se tocó.
+- **Modo manual (2026-09-22):** "Generar Documento" tiene dos modos — elegir un guardia del padrón (autocompleta su ficha) o **"Llenar a mano"**, para documentos dirigidos a alguien que no está en el listado de guardias (un tercero, o un guardia que todavía no tiene ficha). En modo manual la **cédula deja de ser obligatoria**; lo único imprescindible es el nombre, que es como aparece el documento en Documentos Generados y también da nombre al PDF. `GenerateContractDto.cedula` pasó a `@IsOptional()`.
 
-### 4. Certificaciones y Alertas de Vencimiento — ⚠️ huérfano de frontend
-`Certification` + `CertificationAlert` (`daysBefore` por alerta). El patrón de "anticipación configurable" que tenía este submódulo terminó reutilizándose (renombrado a `anticipacionValor`/`anticipacionUnidad`) en `RequisitoDocumento` para el módulo de Entidades (punto 3/Backlog punto 3), que hoy cumple el mismo propósito con más contexto (por entidad, no solo por empleado). El backend de `Certification` (`/personal/certifications`) sigue vivo pero **no tiene página ni ruta frontend que lo consuma** desde que se verificó el 2026-09-09 — no reintroducir una pantalla nueva para esto sin antes confirmar con el usuario si prefiere migrar sus datos a `RequisitoDocumento` o revivir esta pantalla tal cual.
+### 4. ~~Certificaciones y Alertas de Vencimiento~~ — ELIMINADO POR COMPLETO (2026-09-22)
+Existieron `Certification` + `CertificationAlert` con su servicio, DTOs y endpoints `/personal/certifications`. **Nunca tuvieron página en el frontend**: el KPI que los contaba en el dashboard de RRHH tampoco se llegó a mostrar, y el único consumidor real de "vencimientos" terminó siendo `RequisitoDocumento` del módulo de Entidades (punto 7 / Backlog punto 3), que cubre lo mismo con más contexto (por entidad, no solo por empleado).
+
+A pedido explícito del usuario ("limpia lo de certificaciones, que no quede rastro") se eliminó todo el 2026-09-22, **incluida la tabla** — el usuario confirmó explícitamente que quería la migración destructiva de una sola vez, no dejarla huérfana:
+- Backend: `certification.service.ts`, `dto/certification.dto.ts`, los 4 endpoints, el provider en `personal.module.ts`.
+- `personal.service.ts::getDashboard()` — se quitaron los KPIs `activeCertifications` y `alertCount` (ningún componente del frontend los leía).
+- `personal-alerts.service.ts` — `GET /personal/alerts` ahora devuelve **solo** capacitaciones (`trainingsVencidas`, `trainingsPorVencer`); ya no incluye `certifications`.
+- `cedula-merge.service.ts` — se quitó `'certification'` de las tablas que recorre la fusión de cédulas.
+- Frontend: los 4 wrappers de `personal.service.ts`, la etiqueta en `CedulaMergeModal.tsx` y la mención en la descripción de la sección RRHH de `SuperAdminPermissions.tsx`.
+- Prisma: migración `20260922_drop_certification` (`DROP TABLE CertificationAlert` + `Certification`, en ese orden por la FK).
+
+No queda nada que reactivar. Si RRHH vuelve a necesitar certificaciones con vencimiento, el camino es `RequisitoDocumento`, no resucitar esto.
 
 ### 5. Bitácoras — ❌ RETIRADA de la navegación (2026-09-10)
 Existían 4 plantillas (permiso de ingreso, respuesta a administrador de contrato, novedad operativa, salida de personal) en `/rrhh/logs` (`LogEntries.tsx`). A pedido del usuario ("no sirve más") se quitó el link del Sidebar y del Dashboard de RRHH — el backend (`log.service.ts`, `GET/POST /personal/logs/templates`, `GET/POST /personal/logs/entries`) y los datos ya guardados **siguen intactos**, no se borró nada, solo dejó de ser alcanzable desde la UI. No reintroducir el link sin que el usuario lo pida.
@@ -83,7 +94,7 @@ Cumplimiento **general, no por guardia**: una capacitación se marca completada 
 - **Subida de archivos va directo a Drive real**, nunca a disco local — `DriveService.uploadFile(folderId, buffer, fileName, mimeType)` (nuevo método, primer uso de `media.body` con un `Buffer`/stream real en `drive.service.ts`; el resto del servicio solo sube JSON generado por el sync). `POST /personal/trainings/upload` devuelve `{ url: "https://drive.google.com/file/d/<id>/view" }`, guardado tal cual en `TrainingAttachment.url`. No existe ya el viejo `TrainingFileController` que servía archivos desde `uploads/hr-training-evidence/` en disco — se eliminó junto con ese enfoque.
 - **UX de adjuntar** (`FileOrLinkInput`, componente compartido en `frontend/src/components/common/`): el usuario elige "Enlace" o "Subir archivo" — si sube archivo, se llama a `uploadTrainingFile` de inmediato (no depende de que la capacitación ya exista, el endpoint de subida es independiente del `trainingId`) y el resultado se puede adjuntar tanto al crear (adjuntos "staged" en memoria, se persisten recién al confirmar "Crear") como al editar (persistencia inmediata por cada adjunto agregado/quitado).
 - Botón de completar renombrado explícitamente a pedido del usuario: **"Registrar cumplimiento"** (no "Marcar completada") abre un modal donde se puede adjuntar evidencia antes de confirmar; una vez completada, el botón pasa a **"Revertir cumplimiento"** (con confirmación). El modal de edición muestra la sección "Evidencia de cumplimiento" tanto si la capacitación ya está completada como si ya tiene evidencia cargada (para no perder acceso a ella si se revierte el estado).
-- `PersonalAlertsService.getAlerts` (`GET /personal/alerts`, ver punto 4 de certificaciones) considera una capacitación "pendiente" si tiene `dueDate` dentro de los próximos 30 días (o ya vencida) y `completed=false` — sin cron, se calcula al pedirlo, consumido por un widget en `PersonalDashboard.tsx`.
+- `PersonalAlertsService.getAlerts` (`GET /personal/alerts`) considera una capacitación "pendiente" si tiene `dueDate` dentro de los próximos 30 días (o ya vencida) y `completed=false` — sin cron, se calcula al pedirlo, consumido por un widget en `PersonalDashboard.tsx`.
 
 ### 9. Buzón de Quejas y Sugerencias (`/rrhh/quejas` enviar, `/rrhh/quejas/gestion` gestionar) — 2026-09-15
 Deliberadamente **dos pantallas separadas**, no una sola mezclando envío y gestión (la primera versión las mezclaba y se corrigió a pedido del usuario):
@@ -96,7 +107,13 @@ Deliberadamente **dos pantallas separadas**, no una sola mezclando envío y gest
 ### 10. Encuestas (`/rrhh/encuestas` responder, `/rrhh/encuestas/gestion` gestionar) — 2026-09-15
 Tipo "Google Forms": RRHH define preguntas dinámicas, elige a qué usuarios de la empresa enviarla, y ve un resumen de resultados agregados.
 - **Se crea y se publica en un solo paso** — no hay un estado de borrador editable por separado, para no complicar el flujo de esta primera versión (`Survey.status` empieza directo en `PUBLISHED`).
-- **Solo llega a usuarios con cuenta en la app** (`SurveyRecipient.userId` → `User`) — **nunca a guardias**, que no tienen login propio. Si más adelante se quiere llegar a guardias, hace falta darles algún tipo de acceso primero (fuera de alcance hoy).
+- **Dos canales, combinables en la misma encuesta (enlace público añadido el 2026-09-22):**
+  - *Destinatarios de la app* (`SurveyRecipient.userId` → `User`): la reciben en "Mis Encuestas", responden una sola vez y quedan identificados.
+  - *Enlace público* (`Survey.publicEnabled` + `Survey.publicToken`): una URL `/encuesta/<token>` que **cualquiera abre sin cuenta ni login**, desde el computador o el celular. Pedido explícito del usuario para llegar a externos (proveedores, clientes, postulantes) que nunca van a tener usuario en la app.
+  - Al crear la encuesta debe quedar activo **al menos uno** de los dos, si no no le llegaría a nadie — lo valida `SurveyService.create`, no el DTO (`recipientUserIds` pasó a opcional).
+- **Quién responde por el enlace público:** decisión explícita del usuario — **no se pide nada fijo**. Si RRHH quiere nombre, correo o cédula, los agrega como preguntas normales de la encuesta. Por eso `SurveyResponse.respondentId` pasó a **opcional**: `null` = respuesta llegada por el enlace. En Postgres un `UNIQUE` con `NULL` no colisiona, así que el `@@unique([surveyId, respondentId])` sigue impidiendo que un usuario con cuenta responda dos veces, y a la vez admite tantas respuestas públicas como personas abran el enlace.
+- **Seguridad del enlace:** el token (24 bytes aleatorios en hex) **es la única credencial**. `PublicSurveyController` va sin `AuthGuard` ni `SectionPermissionGuard` a propósito, y el service devuelve únicamente título, descripción y preguntas — nunca destinatarios, respuestas de otros ni nada de la empresa. La búsqueda es por `(publicToken, publicEnabled)`, así que adivinar un `id` no sirve: una encuesta sin enlace activo no se puede leer ni responder por esa vía. Desactivar el enlace **conserva** el token, para que reactivarlo no invalide una URL ya repartida.
+- **Nunca llega a guardias por la vía interna**, que no tienen login propio — pero desde el enlace público sí se les puede hacer llegar una encuesta sin darles cuenta.
 - **Tipos de pregunta** (`SurveyQuestionType`, enum real de Prisma — a diferencia de `PersonalFieldDefinition`/`ComplaintFieldDefinition`, aquí sí se usó un enum porque es un conjunto cerrado que no necesita ampliarse por RRHH): `SHORT_TEXT`, `LONG_TEXT`, `SINGLE_CHOICE`, `MULTIPLE_CHOICE`, `RATING` (escala 1-5).
 - **Respuestas identificadas** (`SurveyResponse.respondentId`, único por `(surveyId, respondentId)` — no se puede responder dos veces), a pedido explícito del usuario, para que RRHH pueda saber quién falta por responder.
 - **Notificación**: sin sistema de notificaciones completo (fuera de alcance) — un aviso "Encuestas pendientes" dentro de la app (`PendingSurveysBanner.tsx`, en el Dashboard general de toda la empresa, no solo RRHH) usando `GET /personal/surveys/pending/mine`.
@@ -106,17 +123,171 @@ Tipo "Google Forms": RRHH define preguntas dinámicas, elige a qué usuarios de 
 ### 11. Formato de carpetas de Guardias y Entidades — 2026-09-21
 Pedido explícito del usuario al ver el Listado de Guardias y el Drive real:
 
-- **Guardias:** el formato que se acepta (y el que se muestra en ayuda / modal de Drive) pasa a **"Apellidos - Nombres"** (ej. `PEREZ GARCIA - JUAN CARLOS`). La cédula **no** va en el nombre de la carpeta: se lee de `candidato.json` o `datos.json` (10 dígitos). Las carpetas viejas `"Nombre - 1234567890"` siguen parseándose igual — no hay que renombrar nada a mano. Contratar desde Reclutamiento ya no exige cédula en el nombre; si no está ahí, usa el formulario de postulación. Una carpeta nueva sin cédula en nombre ni JSON sigue yendo a `guardiasNoReconocidos` (no se inventa identidad).
+- **Guardias:** el formato pasó a "Apellidos - Nombres". La cédula **no** va en el nombre de la carpeta: se lee de `candidato.json` o `datos.json` (10 dígitos). ⚠️ **Superado el 2026-09-22 por el punto 13**, que quitó también el guion: el formato vigente es `Apellidos Nombres`. Lo que sigue valiendo de aquí: las carpetas viejas se siguen parseando (no hay que renombrar nada), contratar no exige cédula en el nombre, y una carpeta nueva sin cédula ni en el nombre ni en el JSON sigue yendo a `guardiasNoReconocidos` (no se inventa identidad).
 - **Entidades:** el formato recomendado sigue siendo "Provincia - Nombre", pero el parser **deja de exigir el espacio exacto alrededor del guion**. `GUAYAS- ZUMOCACAO`, `Guayas-Zumocacao` y `Guayas - Zumocacao` cuentan como válidos (provincia sin tildes/mayúsculas). **No se renombra la carpeta en Drive** y no se muestra aviso — el usuario no tiene que "arreglar" nada. Un nombre sin provincia reconocible (ej. `Banco Pichincha`) sigue marcándose como formato inválido, solo como aviso, igual que antes.
-- **Botón de Reclutamiento** (antes "Rescatar datos de postulación"): era un backfill de una sola vez (`POST /personal/drive/backfill-postulacion`) para fichas contratadas **antes** de que el formulario de postulación se copiara solo a la Ficha Personal. Se relabeleó a **"Completar fichas con datos de postulación"** con texto que lo explica, porque RRHH no entendía qué hacía. No pisa valores escritos a mano. En el día a día no hace falta usarlo.
+- ~~**Botón "Completar fichas con datos de postulación"** (antes "Rescatar datos de postulación")~~ — **ELIMINADO el 2026-09-22**. Era un backfill de una sola vez (`POST /personal/drive/backfill-postulacion`) para fichas contratadas antes de que el formulario de postulación se copiara solo a la Ficha Personal. Se había relabeleado con un texto explicativo porque RRHH no entendía qué hacía, y aun así siguió sin entenderse ("Completar fichas sigo sin entenderla, borra ese botón"). Se quitaron el botón, su diálogo de confirmación, el wrapper del frontend, el endpoint y `DriveService.backfillPostulacion()`. El traspaso automático de datos de postulación al contratar (`POSTULACION_STASH_KEY`) sigue funcionando igual — era solo el rescate retroactivo lo que sobraba.
 
 ### 12. Carpetas de Drive fijas vs configurables — 2026-09-21
 Pedido explícito: **nadie debe poder cambiar** las carpetas de Reclutamiento, Capacitaciones ni Contratos de ventas desde la app; solo Sistemas, en código (`backend/src/modules/personal/constants/hardcoded-drive-folders.ts`).
 
-- **Fijas:** `RECLUTAMIENTO`, `CAPACITACIONES`, `VENTAS_CONTRATOS`. `POST /personal/drive/config` las rechaza. `GET` responde el ID quemado (Reclutamiento coincide con el portal de postulación). En cada listado hay **"Ver carpeta"** (abre Drive); ya no hay tuerca de configuración. IDs vacíos de Capacitaciones/Contratos: se lee `FolderConfig` en solo lectura hasta completar el constante.
+- **Fijas:** `RECLUTAMIENTO`, `CAPACITACIONES`, `VENTAS_CONTRATOS`, `RRHH_DOCUMENTOS` (documentos generados desde RRHH > Documentación, ver punto 16c — no confundir con `VENTAS_CONTRATOS`). `POST /personal/drive/config` las rechaza. `GET` responde el ID quemado (Reclutamiento coincide con el portal de postulación). En cada listado hay **"Ver carpeta"** (abre Drive); ya no hay tuerca de configuración. IDs vacíos de Capacitaciones/Contratos: se lee `FolderConfig` en solo lectura hasta completar el constante.
 - **Siguen configurables** (tuerca, como hasta ahora): Listado de Guardias (`CUMPLIMIENTO`), archivo de guardias (`GUARDIAS_ARCHIVO`), Personal Administrativo (`PERSONAL_ADMIN`).
 
 No compartir un mismo ID de Drive entre empresas en el frontend: el ID vive en el backend y `GET /personal/drive/config` lo entrega por `companyId` del usuario.
+
+### 13. Estándar único de nombre de persona: "Apellidos Nombres" — 2026-09-22
+Pedido explícito del usuario: *"para reclutamiento, listado de guardias, administrativos, todo siempre debe ser apellidos y nombres, sin cédula, sin puesto, sin nada, sin guion; así es como se debe guardar las carpetas, mostrar en listados y todo"*.
+
+Hasta ahora cada submódulo nombraba sus carpetas distinto (`Apellidos - Nombres` en Guardias, `Apellidos Nombres - Cédula - Puesto` o `Nombre - Puesto` en Personal Administrativo), y los listados mostraban lo que cayera. Ahora hay **un solo formato en todas partes**:
+
+```
+APELLIDOS NOMBRES
+```
+
+sin guion, sin cédula y sin puesto. El estándar vive en un único lugar: `backend/src/modules/personal/utils/nombre-persona.util.ts` (`formatNombrePersona`, `normalizarNombrePersona`, `validarNombrePersona`, `advertenciaNombreCarpeta`).
+
+- **La cédula y el puesto no se pierden**: viajan dentro de `candidato.json` / `datos.json`, en la misma carpeta. El sync los lee de ahí para resolver la identidad. Se agregó `puesto` al JSON de Personal Administrativo (`syncFichaAdministrativo`), que antes no lo escribía porque vivía en el nombre de la carpeta.
+- **No se renombra NADA en Drive** — decisión explícita del usuario (*"no renombres nada, al sincronizar debe decir que el formato está mal, pero igual leerlas"*). Los parsers siguen aceptando los tres formatos viejos y la carpeta **sí se sincroniza**; lo único que cambia es que el sync agrega una advertencia informativa diciendo cuáles conviene renombrar a mano. Se descartó tanto el renombrado automático como un botón de renombrado en lote.
+  - Guardias: nuevo `guardiasFormatoInvalido[]` en el resultado de `sync-entidades`, mostrado en `GuardiasList.tsx` junto a los avisos que ya había.
+  - Personal Administrativo: la advertencia va en `errors[]` de `sync-personal-admin`.
+- **Personal Administrativo dejó de depender del nombre para identificar**. Antes, si el nombre no traía cédula, se inventaba un id sintético `ID-<folderId>` que fragmentaba al mismo empleado en varias identidades. Ahora sigue el mismo criterio que Guardias: lee la cédula de `datos.json`, y si no la encuentra ni en el nombre ni en el JSON **reporta y salta** esa carpeta en vez de inventar una identidad. Además ancla por `folderId` (una carpeta ya vinculada nunca cambia de dueño por un rename), y conserva el `puesto` que ya estaba en BD cuando el nombre nuevo ya no lo trae.
+- **Contratar a un administrativo** ya no exige que la vacante tenga puesto (antes bloqueaba, porque el puesto formaba parte del nombre de la carpeta): el puesto se guarda en su ficha, que es lo que alimenta `datos.json`.
+- **Formulario de postulación (Reclutamiento):**
+  - Se eliminó el esquema alternativo "Nombre completo". Queda **un solo esquema**: `Apellidos` + `Nombres`, en ese orden (que es el orden en que se arma la carpeta). Son los dos únicos campos bloqueados (no se pueden quitar ni volver opcionales), porque sin ellos no hay con qué nombrar la carpeta.
+  - **La cédula dejó de estar bloqueada**: a pedido del usuario es *"un campo como cualquier otro, como teléfono o email"*. Sigue siendo la llave que une postulación ↔ ficha ↔ cumplimiento ↔ nómina, pero ahora vive en el JSON, no en el nombre, así que quitarla de una vacante ya no rompe el nombrado de carpetas.
+  - El campo por defecto **"Teléfono" se renombró a "Celular"** (pedido del usuario). El *tipo* de dato sigue llamándose "Teléfono".
+- Los fallbacks que leen `nombre completo` / `nombreCompleto` de un `candidato.json` viejo **se conservaron**: sirven para postulaciones que se guardaron con un único campo de nombre.
+
+### 14. Documentación no depende de la máquina donde corre — 2026-09-22
+Pedido explícito: *"verifica los flujos que están en RRHH, que funcionen en otra máquina, que no dependan de NADA de lo que yo tengo instalado en mi computadora"*.
+
+Lo que se revisó y su estado:
+
+| Dependencia | Estado |
+|---|---|
+| LibreOffice headless (`soffice`, conversión .docx→PDF) | ✅ Ya venía instalado en `backend/Dockerfile` (`apk add libreoffice`), en PATH. No hace falta `LIBREOFFICE_PATH`. |
+| Chromium/Puppeteer (PDFs de Custodias/RRHH) | ✅ Ya venía instalado en el Dockerfile. |
+| Credenciales de Google Drive | ✅ Ya se resuelven por el secreto `GOOGLE_SERVICE_ACCOUNT_JSON` cuando el archivo no está en disco. |
+| `uploads/hr-templates` y `uploads/hr-contracts` | ❌ **Era un problema real, corregido acá.** |
+
+El disco de Cloud Run es efímero y no se comparte entre instancias, así que:
+- La plantilla `.docx` que se bajaba de Drive una vez y quedaba cacheada desaparecía al reciclarse el contenedor, y "Generar documento" fallaba con *"El documento fuente no está disponible. Descárgalo de Drive primero."* — un error que solo veía quien no fuera la máquina/instancia que la bajó. Ahora `ContractService.ensureDocxLocal()` la vuelve a bajar sola desde `ContractTemplate.driveUrl` cuando la copia local no está, y actualiza `docxPath`. Lo usan `detectVariables` y `generateContract`.
+- El PDF generado también desaparecía, rompiendo el enlace de Documentos Generados. `ContractService.ensureContractFile()` lo **regenera** a partir de la plantilla y los `fieldValues` que ya están guardados en el `Contract` — el resultado es idéntico, así que el enlace nunca se rompe. `ContractFileController.serveFile` pasó a `async` y lo usa en lugar de mirar el disco directamente.
+
+Estos dos directorios quedan documentados en código como **caché, no almacén**. Ventas tiene la misma limitación y **no se tocó** en este cambio.
+
+### 15. Correcciones de UX y el bucle de redirección del login — 2026-09-22 (segunda ronda)
+Hallazgos al probar la app levantada en local, todos reportados por el usuario.
+
+**a) "A una cuenta le sale el bienvenido y a otras no" — bucle de redirección.**
+No era el saludo: esas cuentas **nunca llegaban a ninguna pantalla**. `SectionRoute`, al negar el acceso, redirigía *siempre* a `/dashboard`, pero `/dashboard` está envuelto en su propio `SectionRoute section="DASHBOARD"` — y DASHBOARD, aunque es `alwaysEnabled` a nivel de empresa, **se puede negar por usuario** con `UserPermission.canView = false`. Cuando eso pasaba: login → `/dashboard` → denegado → `/dashboard` → denegado → … pantalla en blanco, sin ningún mensaje. Reproducido con `sistemas@gemeseg.com`, que tiene justamente `DASHBOARD canView=false`.
+
+Arreglo (`hooks/usePermissions.ts` + `App.tsx`):
+- Nuevo `landingRoute` en `usePermissions`: la primera sección de `LANDING_ROUTES` que el usuario **de verdad** puede ver. Redirigir ahí siempre es seguro, porque por definición esa sección lo va a dejar pasar.
+- `SectionRoute` redirige a `landingRoute` en vez de a `/dashboard` fijo.
+- Si `landingRoute` es `null` (le negaron TODAS las secciones) se renderiza `SinSeccionesDisponibles`, un mensaje que le dice a la persona que pida acceso, en vez de redirigir a ningún lado.
+- `/` dejó de ser un `<Navigate to="/dashboard">` fijo: ahora es `RootRedirect`, que usa la misma lógica. Y `LoginPage` navega a `/` en vez de a `/dashboard`, para pasar por ahí.
+
+Al agregar una sección nueva conviene sumarla a `LANDING_ROUTES` si tiene sentido como primera pantalla.
+
+**b) El tipo de un campo personalizado ya se puede cambiar.** Antes `UpdatePersonalFieldDefinitionDto` solo aceptaba `label`/`order`/`required`, así que un campo creado como Texto que debía ser Número obligaba a **borrarlo y recrearlo**, perdiendo los valores ya cargados. Ahora acepta `type`. Los valores guardados en `camposPersonalizados` **no se convierten ni se borran** — se reinterpretan con el tipo nuevo, y por eso el frontend avisa de eso en la confirmación.
+
+**c) `PersonalFieldsConfigModal` y `DocumentosRequeridosModal`: edición explícita.** Antes cada cosa se guardaba sola al tocarla (marcar "requerido" disparaba un PATCH inmediato) y el único "guardar" era un ícono de check diminuto al renombrar. Ahora una fila entra en modo edición, se editan todos sus campos juntos, y se confirman con un botón **Guardar** + `ConfirmDialog` que resume exactamente qué va a cambiar. Los dos modales comparten el mismo patrón a propósito: viven uno dentro del otro como pestañas de Configuración de Personal Administrativo, y tenerlos distintos se veía desordenado.
+
+**d) Ancho de los modales de configuración.** Nueva clase `.modal-xl` (760px) en `styles.css`, usada por `PersonalFieldsConfigModal` y `AdministrativeStaffConfigModal`: a 560px una fila con nombre + tipo + "requerido" + acciones se partía en varias líneas.
+
+**e) `RowActionsMenu` (`components/common/RowActionsMenu.tsx`), nuevo.** Menú compacto de acciones secundarias de una fila, con cierre por clic afuera y por Escape. Nace de Gestión de Encuestas, que tras sumar el enlace público llegó a **cinco botones sueltos por fila** y dejó de leerse. Ahí ahora queda visible solo "Resultados" y el resto va en el menú. Reutilizable en cualquier tabla que acumule acciones.
+
+**f) Eliminar vacante desde Reclutamiento.** El endpoint `DELETE /personal/reclutamiento/puestos/:id` existía desde antes pero **ninguna pantalla lo llamaba**. Ahora hay un botón junto al de editar, con confirmación que dice cuántos postulantes sincronizados hay dentro. El backend manda la carpeta a la papelera de Drive (recuperable), no la borra.
+
+**g) `npm run start:dev` se quedaba sin memoria.** El script pasó a `node --max-old-space-size=6144 node_modules/@nestjs/cli/bin/nest.js start --watch`. El Dockerfile ya daba 4 GB en producción (`NODE_OPTIONS`), pero en local no había nada y la compilación moría con "JavaScript heap out of memory". Se usó `node` directo en vez de `cross-env` para no agregar una dependencia.
+
+**h) Conteo de opciones en resultados de encuestas.** `getResults` leía la opción única **solo** de `valueText` e ignoraba `valueJson`. La UI propia manda `valueText`, así que nunca falló ahí — pero con el enlace público abierto, una respuesta con la otra forma se guardaba y **desaparecía de los conteos sin avisar**. Ahora se normaliza con `extraerOpciones()`, que acepta ambas formas para los dos tipos de pregunta. Con test de regresión.
+
+### 16. Limpieza, Drive para documentos generados y reglas de layout — 2026-09-22 (tercera ronda)
+
+**a) Bitácoras eliminadas por completo.** El área las descartó el 2026-09-10 y desde entonces eran código inalcanzable. Se retiraron `log.service.ts`, `dto/log.dto.ts`, los 6 endpoints `/personal/logs/*`, `LogEntries.tsx`, la ruta `/rrhh/logs`, los wrappers del frontend y los modelos `LogTemplate`/`LogEntry` + el enum `LogType`. Migración `20260922_drop_bitacoras` (**destructiva**, confirmada por el usuario). El punto 5 de este documento queda solo como historia.
+
+**b) Pantallas huérfanas eliminadas.** `DriveConfig.tsx` (`/rrhh/drive-config`) y `DocumentTypeConfig.tsx` (`/rrhh/document-types`) se borraron con sus rutas: eran duplicados exactos de la tuerca ⚙ de cada listado y de la pestaña "Documentos requeridos". Ya no hay pantallas huérfanas en RRHH.
+
+**c) Los documentos generados se guardan en Drive.** Nuevo tipo fijo `RRHH_DOCUMENTOS` en `hardcoded-drive-folders.ts` (`1LLnPLU7UFSFvIwi-FpMNyIQDkoZI-B8s`). Al generar, `ContractService` sube el PDF ahí con un nombre legible ("Persona - Tipo - Fecha.pdf") y guarda `Contract.driveFileId`/`driveUrl` (migración `20260922_contract_drive_copy`).
+
+Orden al servir el PDF (`ensureContractFile`): **disco → Drive → regenerar**. Drive va ANTES de regenerar a propósito: regenerar produce un documento *distinto* si la plantilla cambió después de emitirlo, y en un papel ya firmado eso no es aceptable. Regenerar queda solo como último recurso. Si la subida a Drive falla, la generación **no** se cae: el PDF ya está hecho y el fallo queda en el log.
+
+⚠️ Esto es solo RRHH (Documentación de **Guardias**). Los contratos de **Ventas** son otro subsistema, con su propia carpeta (`VENTAS_CONTRATOS`) y firma electrónica — no se tocó ni debe mezclarse.
+
+**d) Reglas de layout estable** (`styles.css`, sección `LAYOUT ESTABLE`). Motivo: escribir en un filtro hacía aparecer "Limpiar filtros", y ese botón empujaba "Exportar" a la línea de abajo; y en varias pantallas los botones de cabecera terminaban abajo a la izquierda al envolverse. Las cuatro reglas están escritas en el CSS. Herramientas nuevas:
+- `.page-title-row` — reemplaza el `display:flex; justify-content:space-between; flex-wrap:wrap` suelto que estaba copiado en 15 pantallas. El bloque de texto encoge (`min-width:0`) y las acciones llevan `margin-left:auto`, así que **aunque bajen de línea siguen a la derecha**.
+- `.filter-bar-fields` / `.filter-bar-actions` — filtros que encogen a la izquierda, acciones fijas a la derecha.
+- `.filter-select` — ancho máximo, para que una entidad de nombre largo no ensanche el select.
+- `.icon-btn` — botón cuadrado solo-ícono. "Limpiar filtros" pasó a ser la brocha sin texto y **siempre visible**, deshabilitada cuando no hay nada que limpiar: así nunca cambia el ancho de la fila.
+- `.truncate` — recorte con "…" para celdas de tabla.
+
+**No introducir controles que aparezcan y desaparezcan en medio de una fila.** Si algo es condicional, o va deshabilitado, o va en un menú de acciones (`RowActionsMenu`).
+
+**e) Listado de Guardias: columnas Apellidos y Nombres separadas.** El problema: la carpeta guarda "APELLIDOS NOMBRES" en una sola cadena, sin separador, así que de ahí **no se puede saber** dónde terminan los apellidos. `separar-nombre.util.ts` resuelve en dos niveles:
+1. **Exacto** — el formulario de postulación guardó "Apellidos" y "Nombres" por separado, y ese dato vive en el stash de postulación de la ficha.
+2. **Aproximado** — se asumen dos apellidos (convención ecuatoriana) y se marca `exacto: false`.
+
+La tabla muestra las aproximadas con subrayado punteado y un tooltip que lo explica, en vez de presentar una separación deducida como si fuera un dato real. ⚠️ En carpetas antiguas cuyo nombre está en orden "Nombres Apellidos" la separación sale **invertida**; no hay forma de detectarlo desde la cadena, y por eso se marca. Se corrige sola cuando esa persona tenga el formulario de postulación, o renombrando la carpeta al estándar.
+
+**f) Secciones que no se pueden negar por usuario.** `ALL_SECTIONS` gana `siempreVisible: true` en `DASHBOARD` (etiqueta ahora **"Inicio"**) y `PROJECTS`; Quejas y Encuestas ya estaban abiertas a nivel de ruta. `SectionPermissionGuard` y `usePermissions.canView` las dejan pasar siempre, y `CompanyAdminPermissions.tsx` muestra su casilla bloqueada con la insignia "Siempre visible". Cierra la causa de fondo del bucle del punto 15a: se le podía quitar el Inicio a alguien y dejarlo sin ningún lugar a donde entrar.
+
+**g) Encuestas.** `GET /personal/surveys/:id/individual-results` ahora devuelve `id` por respuesta (`respondentId` es null en todas las públicas, así que no servía ni como clave de lista). Los resultados individuales se agrupan en dos desplegables — "Respuestas por enlace público" y "Respuestas por la app" — y recién dentro va el detalle por persona. Gestión de Encuestas ganó búsqueda por título/descripción y filtros por estado y por canal.
+
+**h) WhatsApp bloqueado.** El botón de `GuardiaComplianceModal` y el campo de `NotificationConfigModal` quedan deshabilitados con la insignia "Próximamente". El código de Twilio sigue ahí; lo que falta es contratar el proveedor y una cuenta de WhatsApp Business aprobada por Meta.
+
+### 17. Cuarta ronda — 2026-09-22
+
+**a) Bitácoras y pantallas huérfanas: eliminadas.** Ver punto 16a/16b. Ya no queda ninguna.
+
+**b) Documentos generados van a una carpeta fija de Drive, con botón para abrirla.** `RRHH_DOCUMENTOS` = `1LLnPLU7UFSFvIwi-FpMNyIQDkoZI-B8s`. La pantalla de Documentación tiene "Ver carpeta" (lee `GET /personal/drive/config?type=RRHH_DOCUMENTOS`, que ya resolvía los tipos fijos). **No confundir con Ventas**, que tiene su propio subsistema de contratos con firma electrónica.
+
+**c) Supabase eliminado de todo el repo.** No se usaba desde hace tiempo pero seguía en el README, en `.agents/architecture.md`, en `.agents/database.md`, en la detección de SSL de `prisma.service.ts` y `seed.js`, y en dos scripts SQL muertos (`scripts/supabase-*.sql`, borrados). La base es Cloud SQL `gemeseg-db`; la detección de SSL ahora mira `cloudsql`/`pooler`.
+
+**d) Claves de cuentas de servicio: el `.gitignore` tenía un hueco.** Listaba los archivos uno por uno, así que una clave descargada con el nombre por defecto de Google (`<proyecto>-<keyid>.json`) quedaba FUERA del ignore, a un commit de publicarse — fue exactamente lo que pasó con `agentes-504115-27cd9fb56874.json`. Ahora el patrón es amplio (`backend/*-*.json`, `backend/google-service-account*.json`) con excepciones explícitas para `package*.json`, `tsconfig*.json` y `nest-cli.json`.
+
+**e) Correo: cuenta de servicio propia.** Ver la sección "Correo saliente" de `AGENTS.md`. `GmailMailService` se movió a `backend/src/modules/mail/` con su `MailModule`, para que Auth pueda usarlo sin depender del módulo de RRHH.
+
+**f) Recuperación de contraseña con código.** El endpoint viejo (`POST /auth/forgot-password`, correo + contraseña nueva, sin verificar nada) **se eliminó**: era apoderamiento de cuenta abierto a cualquiera que supiera un correo, incluidas las de administrador. Ahora son dos pasos:
+- `POST /auth/forgot-password/request` — manda un código de 6 dígitos. Responde **siempre lo mismo**, exista o no la cuenta: lo contrario sería una forma de averiguar qué correos existen.
+- `POST /auth/forgot-password/confirm` — canjea código + contraseña nueva (mínimo 8 caracteres).
+
+`PasswordResetCode` guarda el código **hasheado con bcrypt**, con caducidad de 15 minutos, un solo uso, máximo 5 intentos (son 6 dígitos: sin tope se podrían probar todos) y un código nuevo invalida los anteriores. Migración `20260922_password_reset_code`.
+
+**g) Encuestas: guardar como borrador.** `guardarComoBorrador` en el alta deja `status: 'DRAFT'`. Un borrador no exige canal (puede estar a medias) y **su enlace público no abre** aunque tenga token — publicarlo sería filtrar algo a medio hacer. `PATCH /personal/surveys/:id/publish` lo publica, y recién ahí se exige que tenga destinatarios o enlace. Los resultados individuales ya no anidan un segundo desplegable: el canal agrupa, y el detalle de cada persona va visible.
+
+**h) Listado de Guardias y tablas en general.** Columnas Apellidos/Nombres separadas (punto 16e), botón de limpiar estándar (`ClearFiltersButton`, escobita sin texto) y **columnas redimensionables** (`useResizableColumns`) con el ancho recordado por persona. Ver la sección de layout en `CLAUDE.md`: aplicar a toda tabla de listado nueva.
+
+**i) WhatsApp bloqueado con "Próximamente"** (punto 16h).
+
+### 19. El remitente de correo por empresa ahora funciona de verdad — 2026-09-22
+
+Pregunta del usuario ("si pongo otro que no es sistemas, ¿funciona?") que destapó un problema: el campo **"Correo de envío"** de *Configurar notificaciones* se **exigía** para poder enviar, pero después **nunca se usaba**. El remitente real salía siempre de `GMAIL_SENDER_ADDRESS`. Escribir `rrhh@gemeseg.com` ahí no cambiaba nada, y no había forma de notarlo salvo mirando el correo recibido.
+
+Qué cambió:
+- `GmailMailService` cachea **un cliente por remitente** (`clientesPorRemitente`), no uno solo. La delegación de dominio impersona a una persona concreta, así que cada casilla necesita su propio cliente — con uno solo, el primero en usarse se quedaba fijo para todo.
+- `sendMail` acepta `from` y `fromName`. Con nombre, el encabezado sale como `Recursos Humanos <rrhh@gemeseg.com>`, codificado en base64 para no romper las tildes.
+- `AlertaVencimientoService` pasa `config.senderEmail` / `config.senderName`.
+- El **código de recuperación de contraseña** también usa el remitente de la empresa de esa persona: recibirlo desde una dirección distinta a la habitual parecería phishing.
+- `NotificationConfigService.upsert` valida la casilla contra Google **antes de guardar** y **sin enviar nada** (`verificarRemitente` pide el token impersonando, que es justo el paso que falla si la casilla no existe).
+- `explicarErrorGoogle` ahora busca sobre todas las piezas del error juntas. El código (`invalid_grant`) y el texto (`Invalid email or User ID`) vienen en campos distintos según el fallo, y quedarse con uno solo hacía que la traducción no reconociera el error y saliera el mensaje crudo de Google.
+
+Verificado en local: guardar `noexiste@gemeseg.com` se rechaza con un mensaje entendible y no se guarda; guardar `rrhh@gemeseg.com` se acepta, y el log confirma `Correo enviado a ... desde rrhh@gemeseg.com` aunque `GMAIL_SENDER_ADDRESS` siga siendo `sistemas@`.
+
+**Requisito que no se puede evitar:** el remitente debe ser un usuario REAL del dominio, con buzón propio. Los alias y los grupos no sirven.
+
+### 18. Quinta ronda — 2026-09-22
+
+**a) El correo YA FUNCIONA.** Faltaba habilitar la Gmail API en el proyecto `agentes-504115`. Verificado enviando de verdad a `test@gemeseg.com` (id `1a0cadba8d0dbf9c`) y por el flujo real de recuperación de contraseña. Remitente: `sistemas@gemeseg.com`; cuenta de servicio `correo-gemeseg-com@` (client_id `115386168102739974811`). Las casillas `correo@`, `info@` y `admin@gemeseg.com` **no existen** en el dominio.
+
+**b) Bug real en `useResizableColumns`: las columnas nunca fueron arrastrables.** El hook usaba `useRef` y su efecto corría al montar, cuando la tabla todavía no estaba en el DOM (la pantalla mostraba "Cargando..."), así que los tiradores no llegaban a colocarse nunca. Ahora devuelve un **callback ref**: el montaje de la tabla dispara la instalación, y la reinstala si la tabla se desmonta y vuelve. Además el tirador ahora corta también el `click`, porque si no, soltar tras arrastrar reordenaba la columna.
+
+**c) Ordenamiento por columna: `useSortableTable`** (`hooks/useSortableTable.tsx`). Mismo aspecto que el listado de tareas del Inicio (de ahí sale el patrón). Compara con `localeCompare(…, 'es')` para que tildes y ñ queden bien, y manda los vacíos al final en las dos direcciones. Aplicado a Guardias, Personal Administrativo y Gestión de Encuestas.
+
+**d) Tuerca de módulos fijos también en la pantalla del super admin.** Estaba solo en `/admin/user-permissions`, que exige ser ADMIN **con empresa** — un usuario EMPLOYEE ni siquiera ve ese ítem del menú, y por eso parecía que no existía. Ahora también está en `/admin/permissions` (Gestión de Secciones por Empresa), que es donde el super admin ya trabaja.
+
+**e) La barra lateral muestra el CARGO, no el rol.** Debajo del nombre salía "EMPLOYEE", que no le dice nada a nadie. Ahora muestra `User.position` (campo que ya existía y se edita desde Administración de usuarios), y si está vacío muestra el correo. `position` se agregó a la respuesta de login/registro. **Ojo:** las sesiones ya abiertas guardan el usuario viejo en el navegador, así que hay que volver a entrar para verlo.
 
 ## Arquitectura de carpetas Drive (`FolderConfig`)
 `FolderConfig` tiene un campo `type`, único por `(companyId, type)`:
@@ -133,7 +304,6 @@ No compartir un mismo ID de Drive entre empresas en el frontend: el ID vive en e
 ✅ **Riesgo resuelto (2026-09-17)**: `DriveService.syncFolder` (endpoint `POST /personal/drive/sync`, método viejo, estructura plana `<raíz>/Custodios|Personal/[Nombre-Cedula]`) era código muerto desde 2026-09-09 (ningún botón de la UI lo llamaba) y además dependía del `Candidate` que se eliminó ese mismo día — se borró por completo (el método, el endpoint y la función `syncDriveFolder` del frontend). No reintroducir sin que alguien lo vaya a usar de verdad.
 
 ## Modelos de Prisma relevantes (fuera de los ya cubiertos en reclutamiento.md)
-- `Certification` / `CertificationAlert` — certificaciones con vencimiento y alertas por `daysBefore`. **Nota 2026-09-09**: el backend (`GET/POST/PATCH/DELETE /personal/certifications`, `certification.service.ts`) sigue vivo, pero **no hay ninguna página/ruta frontend que lo consuma** (`CertificationsList.tsx` no existe, `/rrhh/certifications` no está en `App.tsx` ni en el Sidebar) — quedó huérfano, probablemente superado conceptualmente por `RequisitoDocumento`/`AsignacionGuardia` del punto 3. No borrar sin confirmar con el usuario.
 - `EmployeeDriveFolder`, `DocumentType`, `EmployeeDocument` — checklist de cumplimiento por empleado (Personal Administrativo).
 - `DocumentReview` / `DocumentReviewHistory` — estado de revisión (PENDIENTE/APROBADO/RECHAZADO) y traza append-only; sobrevive al borrado del empleado (relación por cédula, no FK — deliberado, para auditoría).
 - `FolderConfig` — una fila por `(companyId, type)`, ver tabla arriba.
@@ -141,11 +311,11 @@ No compartir un mismo ID de Drive entre empresas en el frontend: el ID vive en e
 - `SistemaVerificacion`, `MovimientoPersonal`, `MovimientoPersonalItem` — Movimientos de Personal (entrada/salida de guardias), ver punto 6. La entrada automática la dispara `DriveService.contratarCandidato()` al contratar desde Reclutamiento (antes `KanbanColumn.triggersHire`, eliminado junto con el Kanban de Candidatos — ver punto 2).
 - `Training`, `TrainingAttachment` — Capacitaciones, cumplimiento general (no por guardia), ver punto 8.
 - `Complaint`, `ComplaintStageChange`, `ComplaintFieldDefinition` — Buzón de Quejas y Sugerencias, ver punto 9.
-- `Survey`, `SurveyQuestion`, `SurveyRecipient`, `SurveyResponse`, `SurveyAnswer` — Encuestas, ver punto 10.
+- `Survey`, `SurveyQuestion`, `SurveyRecipient`, `SurveyResponse`, `SurveyAnswer` — Encuestas, ver punto 10. `Survey.publicToken`/`publicEnabled` y `SurveyResponse.respondentId` opcional son del enlace público (migración `20260922_survey_public_link`).
+- ~~`Certification` / `CertificationAlert`~~ — eliminados por completo el 2026-09-22 junto con su tabla, ver punto 4.
 
 ## Endpoints (fuera de Reclutamiento, ver ese doc para los suyos)
-- `GET/POST /personal/certifications`, `PATCH/DELETE /personal/certifications/:id`, `GET /personal/certifications/alerts` — huérfano de frontend, ver nota en Modelos de Prisma arriba.
-- `GET/POST /personal/logs/templates`, `DELETE /personal/logs/templates/:id`, `GET/POST /personal/logs/entries`, `DELETE /personal/logs/entries/:id`
+- ~~`/personal/logs/*`~~ — Bitácoras, eliminadas por completo el 2026-09-22 (punto 16a).
 - `GET/POST/PATCH/DELETE /personal/sistemas-verificacion` — catálogo de sistemas (IsyPlus/IESS/SUT/SICOSEP), consumido desde el modal `ConfiguracionSistemasModal.tsx` dentro de `/rrhh/movimientos`, no tiene página propia
 - `GET /personal/movimientos` (+ `/:id`), `GET /personal/movimientos/guardias-fuera`, `POST /personal/movimientos/salida`, `PATCH /personal/movimientos/:id/items/:itemId` — Movimientos de Personal. **No** hay `POST /personal/movimientos/entrada` (deliberado, ver punto 6)
 - `GET /personal/drive/tree`, `GET /personal/drive/compliance/:cedula`, `DELETE /personal/drive/employee/:cedula`
@@ -156,7 +326,7 @@ No compartir un mismo ID de Drive entre empresas en el frontend: el ID vive en e
 - `GET /personal/dashboard`
 - `GET/POST/PATCH/DELETE /personal/entidades`, `/personal/requisitos-documento` — módulo de Entidades/Cumplimiento, ver Backlog punto 3.
 - `GET /personal/asignaciones`, `GET /personal/asignaciones/guardia/:cedula/historial`, `DELETE /personal/asignaciones/:id` — historial de solo lectura generado por `sync-entidades`, consumido hoy por `HistorialGuardia.tsx` (`/rrhh/historial`, ver punto 6). `POST /personal/asignaciones` y `PATCH /personal/asignaciones/:id/finalizar` siguen existiendo en el backend (los usa internamente el sync) pero **no tienen consumidor en la UI**, no reintroducir un formulario manual sobre ellos sin volver a confirmar con el usuario.
-- `GET/POST/PATCH/DELETE /personal/personal-field-definitions` — catálogo de campos personalizados de la ficha (punto 7-bis), consumido por `PersonalFieldsConfigModal.tsx`.
+- `GET/POST/PATCH/DELETE /personal/personal-field-definitions` — catálogo de campos personalizados de la ficha (punto 7-bis), consumido por `PersonalFieldsConfigModal.tsx`. El `PATCH` acepta `type` desde 2026-09-22 (ver punto 15b): cambiar el tipo NO convierte ni borra los valores ya guardados.
 - `GET /personal/cedula-merge/preview`, `POST /personal/cedula-merge`, `GET /personal/cedula-merge/historial` — vista previa, ejecución y traza de la fusión de cédulas duplicadas (punto 3 de Entidades; solo ADMIN), consumido por `CedulaMergeModal.tsx`.
 - `POST /personal/drive/guardia/:cedula/archivar-carpeta` — mueve la carpeta de Drive de un guardia a `FolderConfig.type='GUARDIAS_ARCHIVO'` tras una salida completada (punto 6), consumido por el botón "Archivar carpeta" en `MovimientoDetalleModal.tsx`.
 - `GET /personal/cumplimiento-entidades` (+ `/:cedula`) — cálculo de cumplimiento (estado `CUMPLIDO`/`FALTANTE`/`VENCIDO`/`POR_VENCER`) contra la entidad vigente de cada guardia.
@@ -164,9 +334,12 @@ No compartir un mismo ID de Drive entre empresas en el frontend: el ID vive en e
 - `GET/PATCH /personal/guardia-ficha/:cedula` — ficha personal editable (teléfono, dirección, fecha de nacimiento, contacto de emergencia); fuente de la verdad del `Datos_Personales.json` que el sync escribe en Drive.
 - `POST /personal/cumplimiento-entidades/guardia/:cedula/enviar-recordatorio` — envío manual y personalizado por guardia (reemplaza al viejo cron diario, ver Backlog punto 3). **No** existe ya `POST /personal/alertas-vencimiento/ejecutar` ni ningún cron automático — decisión explícita del usuario.
 - `GET/POST/PATCH/DELETE /personal/trainings`, `PATCH /personal/trainings/:id/completed`, `POST /personal/trainings/upload`, `POST/DELETE /personal/trainings/:id/attachments(/:attachmentId)` — Capacitaciones (punto 8).
-- `GET /personal/alerts` — certificaciones por vencer + capacitaciones pendientes combinadas; **reemplaza** al viejo `GET /personal/certifications/alerts` (código muerto, sin cron ni consumidor — eliminado el 2026-09-15).
+- `GET /personal/alerts` — capacitaciones vencidas + por vencer. Hasta el 2026-09-22 incluía también `certifications`; ya no, ver punto 4.
 - `POST /personal/complaints`, `GET /personal/complaints` (RRHH), `PATCH /personal/complaints/:id/stage`, `GET/POST/PATCH/DELETE /personal/complaint-fields` — Buzón de Quejas y Sugerencias (punto 9).
-- `GET/POST /personal/surveys`, `GET /personal/surveys/:id`, `GET /personal/surveys/:id/results`, `PATCH /personal/surveys/:id/close`, `DELETE /personal/surveys/:id`, `GET /personal/surveys/pending/mine`, `GET/POST /personal/surveys/:id/respond` — Encuestas (punto 10).
+- `GET/POST /personal/surveys`, `GET /personal/surveys/:id`, `GET /personal/surveys/:id/results`, `GET /personal/surveys/:id/individual-results`, `PATCH /personal/surveys/:id/public-link`, `PATCH /personal/surveys/:id/close`, `DELETE /personal/surveys/:id`, `GET /personal/surveys/pending/mine`, `GET/POST /personal/surveys/:id/respond` — Encuestas (punto 10).
+- **`GET /public/surveys/:token`, `POST /public/surveys/:token/responses`** — encuesta por enlace público. **Sin `AuthGuard` ni `SectionPermissionGuard`**, es la única superficie del módulo que se usa sin sesión (`PublicSurveyController`, punto 10). No agregarles guards "por prolijidad": rompería el caso de uso entero.
+- `GET /personal/guardias` — padrón de guardias de la empresa (nombre + cédula), sección `RRHH`. **Reemplaza el uso de `GET /custodias/available-custodios` desde pantallas de RRHH** (2026-09-22): ese endpoint está detrás de la sección `CUSTODIAS`, así que Listado de Guardias y Generar Documento fallaban con *"No tienes acceso a CUSTODIAS"* en una empresa con RRHH pero sin Custodias — un mensaje que además no tenía nada que ver con lo que el usuario estaba haciendo. El dato en sí (carpetas de Drive de guardias) es de RRHH, no del módulo de viajes. `/custodias/available-custodios` **sigue existiendo** para las pantallas de Custodias; `EmpleadoSelect` recibe un prop `source` para elegir cuál usar.
+- ~~`POST /personal/drive/backfill-postulacion`~~ — eliminado el 2026-09-22 junto con el botón "Completar fichas", ver punto 11.
 
 ## Rutas frontend (actuales, todas bajo `/rrhh`, guardadas con `SectionRoute section="RRHH"` — verificado contra `App.tsx` 2026-09-10)
 ```
@@ -184,7 +357,12 @@ No compartir un mismo ID de Drive entre empresas en el frontend: el ID vive en e
 /rrhh/quejas             -> ComplaintsPage     (Buzón de Quejas y Sugerencias — enviar; SIN SectionRoute, accesible a cualquier empleado, ver punto 9)
 /rrhh/quejas/gestion     -> ComplaintsManagementPage (gestión Kanban, ver punto 9)
 /rrhh/encuestas          -> SurveysPage        (Encuestas — responder; SIN SectionRoute, mismo motivo que Quejas, ver punto 10)
-/rrhh/encuestas/gestion  -> SurveyManagementPage (gestión + resultados, ver punto 10)
+/rrhh/encuestas/gestion  -> SurveyManagementPage (gestión + resultados + enlace público, ver punto 10)
+```
+
+**Fuera de `/rrhh` y fuera de `ProtectedLayout`:**
+```
+/encuesta/:token         -> PublicSurveyPage   (encuesta por enlace público; SIN login, SIN SectionRoute — ver punto 10)
 ```
 **Ya no existen** `/rrhh/certifications` (`CertificationsList.tsx` no existe como archivo) ni `/rrhh/compliance` (`CompliancePanel.tsx` fue eliminado), ni `/rrhh/kanban`/`/rrhh/candidates`/`/rrhh/candidates/new`/`/rrhh/candidates/:id` (Kanban de Candidatos, eliminado por completo el 2026-09-17, ver punto 2) — si ves una referencia a cualquiera de estos en código o en un doc viejo, es texto desactualizado, no algo que reintroducir.
 
@@ -198,7 +376,7 @@ No compartir un mismo ID de Drive entre empresas en el frontend: el ID vive en e
 - Multitenant con `companyId`.
 - Permiso de sección: `RRHH` (ver `PermissionsService.ALL_SECTIONS`), verificado con `SectionPermissionGuard` — importa que los usuarios de RRHH suelen estar cargados como rol `EMPLOYEE`, no `ADMIN`/`MANAGER` (ver `AGENTS.md`), así que el control de acceso real es por sección, no por rol.
 - Historial completo de movimientos de entrada/salida (punto 6) y de revisiones documentales.
-- Alertas de vencimiento (Entidades/Guardias, punto 3): envío real por correo, pero siempre manual y por guardia — nunca automático/masivo (decisión explícita del usuario). El submódulo viejo de `Certification`/`CertificationAlert` (punto 4) sigue sin envío real, solo cálculo/visualización, y está huérfano de frontend.
+- Alertas de vencimiento (Entidades/Guardias, punto 3): envío real por correo, pero siempre manual y por guardia — nunca automático/masivo (decisión explícita del usuario). El submódulo viejo de `Certification`/`CertificationAlert` se eliminó por completo el 2026-09-22 (punto 4).
 
 ## Datos de Ejemplo (Seed)
 - **5 Certifications**: Roberto Díaz (Nivel 1), Sandra Luna (Reentrenamiento), Fernando Castro (Examen Ocupacional), Eduardo Reyes (Nivel 2), Patricia Acosta (Nivel 1)

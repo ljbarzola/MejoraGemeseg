@@ -14,7 +14,11 @@ import { AuthGuard } from '@nestjs/passport';
 import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
 import { Section } from '../../common/decorators/section.decorator';
 import { SurveyService } from './services/survey.service';
-import { CreateSurveyDto, SubmitSurveyResponseDto } from './dto/survey.dto';
+import {
+  CreateSurveyDto,
+  SetSurveyPublicLinkDto,
+  SubmitSurveyResponseDto,
+} from './dto/survey.dto';
 
 @Controller('personal/surveys')
 @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
@@ -51,6 +55,28 @@ export class SurveyController {
   @Section('RRHH', 'view')
   getIndividualResults(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.surveyService.getIndividualResults(id, req.user.companyId);
+  }
+
+  // Activa o desactiva el enlace público de una encuesta ya creada.
+  @Patch(':id/public-link')
+  @Section('RRHH', 'write')
+  setPublicLink(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: SetSurveyPublicLinkDto,
+    @Req() req: any,
+  ) {
+    return this.surveyService.setPublicLink(
+      id,
+      req.user.companyId,
+      body.enabled,
+    );
+  }
+
+  // Publica un borrador (ver SurveyService.publish).
+  @Patch(':id/publish')
+  @Section('RRHH', 'write')
+  publish(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.surveyService.publish(id, req.user.companyId);
   }
 
   @Patch(':id/close')

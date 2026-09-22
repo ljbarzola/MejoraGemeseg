@@ -178,7 +178,7 @@ export default function LeadsPage() {
         <button className="cacao-back-btn" onClick={() => navigate('/ventas')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="page-title-row">
           <div>
             <p className="page-eyebrow">Ventas y CRM</p>
             <h1>Prospectos</h1>

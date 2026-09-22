@@ -626,6 +626,156 @@ body {
   flex-wrap: wrap;
 }
 
+/* ============================================================
+   LAYOUT ESTABLE — regla general, no la rompas al agregar UI
+   ============================================================
+   Problema que resuelve (reportado 2026-09-22): escribir en un filtro hacía
+   aparecer el botón "Limpiar filtros", y ese botón nuevo empujaba "Exportar"
+   a la línea de abajo. Es decir: UN cambio movía TODO lo demás de sitio.
+
+   Reglas:
+   1. Un control que aparece y desaparece según el contenido NO va en medio
+      de una fila. O se deja siempre visible (deshabilitado cuando no aplica),
+      o se le reserva su espacio.
+   2. Los botones de acción van agrupados a la DERECHA, en su propio
+      contenedor, y no comparten espacio flexible con los filtros.
+   3. Nada crece sin límite por su contenido: un nombre de entidad largo se
+      recorta con "…", no ensancha su columna ni empuja al vecino.
+   4. Todo contenedor flex que pueda encoger lleva `min-width: 0`, si no el
+      texto largo lo infla y el recorte nunca se aplica.
+   ============================================================ */
+
+/* Filtros a la izquierda (encogen), acciones a la derecha (fijas). */
+.filter-bar-fields {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex: 1 1 280px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.filter-bar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+/* Un select no debe ensancharse porque una de sus opciones sea larga. */
+.filter-select {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 2px solid #e2e8f0;
+  max-width: 220px;
+  min-width: 0;
+  text-overflow: ellipsis;
+  font-family: inherit;
+  font-size: 0.88rem;
+  background: #fff;
+}
+
+/* Botón cuadrado solo-ícono: ocupa siempre lo mismo, con o sin contenido. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+/* Recorte con "…" para celdas de tabla y textos que no deben empujar. */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  display: block;
+}
+
+/* Celdas de tabla que deben recortar en vez de estirar la tabla. */
+.tasks-table td .truncate {
+  max-width: 280px;
+}
+
+/* ---- Tablas con columnas redimensionables (hooks/useResizableColumns) ----
+   Estándar de la app: toda tabla de listado debería permitir arrastrar el
+   borde de sus encabezados. Los nombres de personas, entidades y puestos
+   varían mucho de largo y cada persona necesita ver distinto. Doble clic en
+   el tirador devuelve esa columna a su ancho automático. */
+.resizable-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.resizable-table th {
+  position: relative;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resizable-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.col-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+}
+
+.col-resizer::after {
+  content: '';
+  position: absolute;
+  top: 25%;
+  right: 3px;
+  width: 2px;
+  height: 50%;
+  background: transparent;
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+
+.col-resizer:hover::after,
+.resizable-table.resizing .col-resizer::after {
+  background: var(--azul-claro, #12375f);
+}
+
+/* Fila de título + acciones de una pantalla.
+   El bloque de texto de la izquierda encoge (`min-width: 0`) en vez de
+   empujar; las acciones llevan `margin-left: auto`, así que aunque bajen a
+   su propia línea siguen alineadas a la DERECHA. Antes, con solo
+   `space-between`, al envolverse los botones aparecían abajo a la
+   izquierda. Ver LAYOUT ESTABLE arriba. */
+.page-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.page-title-row > *:first-child {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.page-title-row > .header-actions,
+.page-title-row > *:last-child:not(:first-child) {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
 .filter-btn {
   padding: 8px 16px;
   border: 2px solid var(--gris-claro);
@@ -2260,6 +2410,13 @@ body {
 
 .modal-lg {
   max-width: 560px;
+}
+
+/* Modales de configuración (Configurar campos, Configuración de Personal
+   Administrativo): cada fila lleva nombre + tipo + "requerido" + acciones en
+   una sola línea, y a 560px eso se apretujaba o se partía. */
+.modal-xl {
+  max-width: 760px;
 }
 
 .tools-actions {

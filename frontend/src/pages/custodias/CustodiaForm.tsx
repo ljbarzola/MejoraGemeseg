@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { createCustodia, getCustodiaPdfUrl } from '../../services/custodia.service';
 import EmpleadoSelect from '../../components/custodias/EmpleadoSelect';
 import ImprimirOrdenModal from '../../components/custodias/ImprimirOrdenModal';
+import DateInput from '../../components/common/DateInput';
 
 const initialForm = {
   numeroGuia: '',
@@ -202,7 +203,7 @@ export default function CustodiaForm() {
           <div className="form-row">
             <div className="form-group">
               <label>Fecha Salida</label>
-              <input type="date" name="fechaSalida" value={form.fechaSalida} onChange={handleChange} />
+              <DateInput value={form.fechaSalida} onChange={(v) => setForm({ ...form, fechaSalida: v })} />
             </div>
             <div className="form-group">
               <label>Hora Salida</label>
@@ -210,7 +211,7 @@ export default function CustodiaForm() {
             </div>
             <div className="form-group">
               <label>Fecha Llegada</label>
-              <input type="date" name="fechaLlegada" value={form.fechaLlegada} onChange={handleChange} />
+              <DateInput value={form.fechaLlegada} onChange={(v) => setForm({ ...form, fechaLlegada: v })} />
             </div>
             <div className="form-group">
               <label>Hora Llegada</label>

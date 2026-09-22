@@ -49,10 +49,25 @@ export class CreateSurveyDto {
   @Type(() => SurveyQuestionInput)
   questions: SurveyQuestionInput[];
 
+  // Puede venir vacio cuando la encuesta es SOLO de enlace publico (nadie de
+  // la app la recibe en su bandeja). El service valida que haya al menos uno
+  // de los dos canales: destinatarios o enlace publico.
+  @IsOptional()
   @IsArray()
-  @ArrayNotEmpty()
   @IsInt({ each: true })
-  recipientUserIds: number[];
+  recipientUserIds?: number[];
+
+  // Genera un enlace público para que respondan personas sin cuenta.
+  @IsOptional()
+  @IsBoolean()
+  publicEnabled?: boolean;
+
+  // true = se guarda como BORRADOR: no le llega a nadie todavía, el enlace
+  // público no responde, y se puede terminar y publicar después. Un borrador
+  // no exige destinatarios ni enlace, justamente porque está a medias.
+  @IsOptional()
+  @IsBoolean()
+  guardarComoBorrador?: boolean;
 }
 
 export class SubmitSurveyAnswerDto {
@@ -74,4 +89,14 @@ export class SubmitSurveyResponseDto {
   @ValidateNested({ each: true })
   @Type(() => SubmitSurveyAnswerDto)
   answers: SubmitSurveyAnswerDto[];
+}
+
+// Mismo cuerpo que el envio autenticado: por el enlace publico solo llegan
+// las respuestas a las preguntas. Quien responde no se identifica salvo que
+// la encuesta lo pida como una pregunta mas.
+export class SubmitPublicSurveyResponseDto extends SubmitSurveyResponseDto {}
+
+export class SetSurveyPublicLinkDto {
+  @IsBoolean()
+  enabled: boolean;
 }

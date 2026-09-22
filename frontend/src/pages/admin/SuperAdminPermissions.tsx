@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Settings2 } from 'lucide-react';
+import ModulosFijosModal from '../../components/admin/ModulosFijosModal';
 import { getCompanies, type Company } from '../../services/company.service';
 import { getCompanySections, setCompanySections, type SectionConfig } from '../../services/permissions.service';
 import { getUser } from '../../services/auth.service';
 
 const SECTION_META: Record<string, { icon: string; desc: string }> = {
-  DASHBOARD: { icon: '📊', desc: 'Panel principal con métricas y resumen' },
+  DASHBOARD: { icon: '🏠', desc: 'Pantalla de inicio. Siempre visible para todos.' },
   PROJECTS: { icon: '📁', desc: 'Gestión de proyectos y tablero Kanban' },
   ADMIN: { icon: '👥', desc: 'Administración de usuarios del sistema' },
   TOOLS: { icon: '🔧', desc: 'Catálogo y asignación de herramientas' },
@@ -13,7 +15,7 @@ const SECTION_META: Record<string, { icon: string; desc: string }> = {
   COMPANY_SETTINGS: { icon: '🎨', desc: 'Configuración de marca y colores' },
   COMPANIES: { icon: '🏢', desc: 'Gestión de empresas del plataforma' },
   CUSTODIAS: { icon: '🛡️', desc: 'Gestión de custodias y nómina de seguridad' },
-  RRHH: { icon: '👤', desc: 'Reclutamiento, contratos, certificaciones y bitácoras' },
+  RRHH: { icon: '👤', desc: 'Reclutamiento, contratos, capacitaciones y bitácoras' },
   VENTAS: { icon: '💼', desc: 'Leads, visitas, metas y contratos de venta' },
   SISTEMAS: { icon: '🖥️', desc: 'Dashboard, herramientas, agentes de IA y soporte técnico interno' },
 };
@@ -28,6 +30,7 @@ export default function SuperAdminPermissions() {
   const [loadingSections, setLoadingSections] = useState(false);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
+  const [showModulosFijos, setShowModulosFijos] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -83,6 +86,20 @@ export default function SuperAdminPermissions() {
             <p className="page-eyebrow">SUPER ADMIN</p>
             <h1>Gestión de Secciones por Empresa</h1>
           </div>
+        </div>
+        {/* Misma tuerca que en Permisos de Usuarios: desde aquí también se
+            define qué módulos ve todo el personal de la empresa elegida. */}
+        <div className="header-actions">
+          <button
+            type="button"
+            className="btn-icon-toolbar"
+            onClick={() => setShowModulosFijos(true)}
+            disabled={!selectedCompanyId}
+            title="Módulos visibles para todos"
+            aria-label="Módulos visibles para todos"
+          >
+            <Settings2 size={18} />
+          </button>
         </div>
       </div>
 
@@ -290,6 +307,18 @@ export default function SuperAdminPermissions() {
             </div>
           </div>
         </>
+      )}
+
+      {showModulosFijos && selectedCompanyId && (
+        <ModulosFijosModal
+          companyId={selectedCompanyId}
+          sections={sections}
+          onClose={() => setShowModulosFijos(false)}
+          onSaved={(actualizadas) => {
+            setSections(actualizadas);
+            setSuccess('Módulos visibles para todos actualizados');
+          }}
+        />
       )}
     </div>
   );
