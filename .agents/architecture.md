@@ -22,7 +22,7 @@ MejoraGemeseg es una plataforma web multi-tenant para gestionar procesos interno
 
 ### Infraestructura
 - **Desarrollo:** Docker (PostgreSQL + Redis), Backend :3000, Frontend :5173
-- **Produccion:** Supabase (DB), Railway (backend), Vercel (frontend)
+- **Produccion:** Google Cloud SQL (DB, instancia `gemeseg-db`), Cloud Run (backend), Firebase Hosting (frontend)
 
 ## Patrones de Diseno
 

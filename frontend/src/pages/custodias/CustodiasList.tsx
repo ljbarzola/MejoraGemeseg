@@ -4,6 +4,7 @@ import { getCustodias, deleteCustodia } from '../../services/custodia.service';
 import EstadoSelect from '../../components/custodias/EstadoSelect';
 import CustodiaDetalleModal from '../../components/custodias/CustodiaDetalleModal';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import DateInput from '../../components/common/DateInput';
 
 const TYPE_COLORS: Record<string, string> = {
   HACIENDA: '#276749',
@@ -81,9 +82,9 @@ export default function CustodiasList() {
 
       <div className="admin-section">
         <div className="filter-bar" style={{ flexWrap: 'wrap', gap: '10px' }}>
-          <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} style={{ padding: '10px 14px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.9rem' }} />
+          <DateInput value={fechaInicio} onChange={setFechaInicio} style={{ padding: '10px 14px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.9rem' }} />
           <span style={{ color: '#718096', alignSelf: 'center' }}>a</span>
-          <input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} style={{ padding: '10px 14px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.9rem' }} />
+          <DateInput value={fechaFin} onChange={setFechaFin} style={{ padding: '10px 14px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.9rem' }} />
           <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} style={{ padding: '10px 14px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.9rem' }}>
             <option value="">Todos los tipos</option>
             <option value="HACIENDA">Hacienda</option>

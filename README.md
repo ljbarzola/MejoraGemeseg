@@ -166,7 +166,7 @@ GitHub (repo: MejoraGemeseg/)
 ### Plataformas
 | Servicio | Proveedor | URL |
 |----------|-----------|-----|
-| Base de datos | Supabase | https://supabase.com |
+| Base de datos | Google Cloud SQL (`gemeseg-db`) | https://console.cloud.google.com/sql |
 | Backend | Railway | https://mejoragemeseg-production.up.railway.app |
 | Frontend | Vercel | https://mejora-gemeseg.vercel.app |
 
@@ -175,7 +175,7 @@ GitHub (repo: MejoraGemeseg/)
 **Backend (Railway):**
 | Key | Value |
 |-----|-------|
-| `DATABASE_URL` | `postgresql://...@aws-0-us-east-1.pooler.supabase.com:6543/postgres` |
+| `DATABASE_URL` | `postgresql://...@/gemeseg?host=/cloudsql/mejora-gemeseg:us-central1:gemeseg-db` (produccion, socket Unix) |
 | `JWT_SECRET` | *(configurar en panel de Railway)* |
 | `FRONTEND_URL` | `https://mejora-gemeseg.vercel.app` |
 | `PORT` | `3000` |
@@ -243,7 +243,6 @@ MejoraGemeseg/
 │       ├── types/              # TypeScript types
 │       └── styles.css          # Estilos globales
 └── scripts/
-    └── supabase-schema.sql     # SQL para Supabase (Schema Editor)
 ```
 
 ## Endpoints disponibles
@@ -318,12 +317,12 @@ MejoraGemeseg/
 ## Tecnologia
 - **Frontend**: React 18 + Vite + TypeScript
 - **Backend**: NestJS + TypeScript + Prisma ORM v7
-- **Base de datos**: PostgreSQL 17 (Supabase en produccion)
+- **Base de datos**: PostgreSQL 16 (Cloud SQL `gemeseg-db` en produccion)
 - **Autenticacion**: JWT (Passport.js)
 - **Validacion**: class-validator (backend) + Zod (frontend)
 - **IA**: GitHub Models (gpt-4o-mini)
 - **Estilos**: CSS custom con paleta corporativa GEMESEG
-- **Deploy**: Railway (backend) + Vercel (frontend) + Supabase (DB)
+- **Deploy**: Cloud Run (backend) + Firebase Hosting (frontend) + Cloud SQL (DB), todo desde `cloudbuild.yaml`
 
 ## Colores corporativos
 - Azul oscuro: `#100F31`
@@ -340,13 +339,15 @@ MejoraGemeseg/
 - `feature/user-01-profile` - Perfil de usuario
 - `fix/T01-T02-task-corrections` - Correcciones a tareas
 
-## Base de datos en Supabase
-Para configurar la base de datos en Supabase:
-1. Ir a SQL Editor en el panel de Supabase
-2. Ejecutar el contenido de `scripts/supabase-schema.sql`
-3. Configurar las variables de entorno en Railway con la URL del pooler
+## Base de datos en produccion (Cloud SQL)
+La base vive en la instancia `gemeseg-db` (proyecto `mejora-gemeseg`, region
+us-central1). El esquema se aplica con Prisma; ver `AGENTS.md` y
+`.agents/database.md` para el detalle, incluidos los pasos para conectarse en
+local con el Cloud SQL Auth Proxy.
 
-Las credenciales de prueba se crean ejecutando `node prisma/seed.js` contra la base de datos.
+**Aviso:** los cambios de esquema NO se aplican solos al publicar
+(`cloudbuild.yaml` no corre migraciones). Hay que ejecutarlos a mano contra la
+base de produccion.
 
 ## Historias de usuario completadas
 - [x] HU-ADM-01: Registro e inicio de sesion

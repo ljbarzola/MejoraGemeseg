@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { getAvailableCustodios } from '../../services/custodia.service';
+import { getGuardias } from '../../services/entidades.service';
 
 interface Empleado {
   name: string;
   cedula: string;
-  status: string;
+  status?: string;
 }
 
 interface Props {
@@ -13,9 +14,17 @@ interface Props {
   onChange: (val: { nombre: string; cedula: string }) => void;
   excludeCedulas?: string[];
   required?: boolean;
+  /**
+   * De qué módulo se pide el padrón de guardias. Es la MISMA lista, pero cada
+   * endpoint está detrás de la sección de su módulo: una pantalla de RRHH que
+   * pida la de Custodias falla con "No tienes acceso a CUSTODIAS" en empresas
+   * que no tienen ese módulo contratado, y viceversa. Por eso cada pantalla
+   * declara de dónde viene.
+   */
+  source?: 'CUSTODIAS' | 'RRHH';
 }
 
-export default function EmpleadoSelect({ label, value, onChange, excludeCedulas = [], required }: Props) {
+export default function EmpleadoSelect({ label, value, onChange, excludeCedulas = [], required, source = 'CUSTODIAS' }: Props) {
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [search, setSearch] = useState(value.nombre || '');
   const [open, setOpen] = useState(false);
@@ -28,8 +37,9 @@ export default function EmpleadoSelect({ label, value, onChange, excludeCedulas 
 
   useEffect(() => {
     setLoading(true);
-    getAvailableCustodios()
-      .then((data) => {
+    const cargar = source === 'RRHH' ? getGuardias() : getAvailableCustodios();
+    cargar
+      .then((data: any) => {
         if (Array.isArray(data)) {
           setEmpleados(data);
         } else if (data && Array.isArray(data.value)) {
@@ -38,7 +48,7 @@ export default function EmpleadoSelect({ label, value, onChange, excludeCedulas 
       })
       .catch(() => setEmpleados([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [source]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -179,18 +189,20 @@ export default function EmpleadoSelect({ label, value, onChange, excludeCedulas 
                   <div style={{ fontWeight: 600, fontSize: '0.88rem', color: '#100F31' }}>{e.name}</div>
                   <div style={{ fontSize: '0.72rem', color: '#718096' }}>Cédula: {e.cedula || '—'}</div>
                 </div>
-                <span
-                  style={{
-                    fontSize: '0.7rem',
-                    padding: '2px 8px',
-                    borderRadius: '8px',
-                    background: '#e2e8f0',
-                    color: '#2d3748',
-                    fontWeight: 600,
-                  }}
-                >
-                  {e.status}
-                </span>
+                {e.status && (
+                  <span
+                    style={{
+                      fontSize: '0.7rem',
+                      padding: '2px 8px',
+                      borderRadius: '8px',
+                      background: '#e2e8f0',
+                      color: '#2d3748',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {e.status}
+                  </span>
+                )}
               </div>
             ))
           )}

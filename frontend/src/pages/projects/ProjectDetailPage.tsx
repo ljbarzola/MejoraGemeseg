@@ -8,6 +8,7 @@ import type { Task } from '../../types/task';
 import type { AdminUser } from '../../services/user.service';
 import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_COLORS, STATUS_COLORS } from '../../types/task';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import DateInput from '../../components/common/DateInput';
 
 const PROJECT_STATUS_COLORS: Record<string, string> = {
   ACTIVE: '#22c55e',
@@ -544,18 +545,16 @@ export default function ProjectDetailPage() {
               <div className="form-row">
                 <div className="form-group">
                   <label>Fecha de inicio</label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={editForm.startDate}
-                    onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
+                    onChange={(v) => setEditForm({ ...editForm, startDate: v })}
                   />
                 </div>
                 <div className="form-group">
                   <label>Fecha de fin</label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={editForm.endDate}
-                    onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })}
+                    onChange={(v) => setEditForm({ ...editForm, endDate: v })}
                   />
                 </div>
               </div>

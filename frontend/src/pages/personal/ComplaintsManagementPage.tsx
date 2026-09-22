@@ -119,7 +119,7 @@ export default function ComplaintsManagementPage() {
         <button className="cacao-back-btn" onClick={() => navigate('/rrhh')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} /> Volver
         </button>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS</p>
             <h1>Gestión de Quejas y Sugerencias</h1>

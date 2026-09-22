@@ -4,6 +4,7 @@ import { ArrowLeft, Plus } from 'lucide-react';
 import { getVisits, createVisit, checkInVisit, completeVisit, cancelVisit, deleteVisit, ClientVisit } from '../../services/ventas.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import PromptDialog from '../../components/common/PromptDialog';
+import DateInput from '../../components/common/DateInput';
 
 const OUTCOME_LABELS: Record<string, string> = {
   INTERESTED: 'Interesado',
@@ -207,7 +208,7 @@ export default function VisitasPage() {
         <button className="cacao-back-btn" onClick={() => navigate('/ventas')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="page-title-row">
           <div>
             <p className="page-eyebrow">Ventas y CRM</p>
             <h1>Visitas</h1>
@@ -402,10 +403,9 @@ export default function VisitasPage() {
                 </div>
                 <div className="form-group">
                   <label>Fecha Programada *</label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={newForm.visitDate}
-                    onChange={(e) => setNewForm({ ...newForm, visitDate: e.target.value })}
+                    onChange={(v) => setNewForm({ ...newForm, visitDate: v })}
                     required
                   />
                 </div>

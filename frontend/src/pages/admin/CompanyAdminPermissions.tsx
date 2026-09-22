@@ -1,7 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Settings2 } from 'lucide-react';
+import ModulosFijosModal from '../../components/admin/ModulosFijosModal';
 import { getCompanySections, getUsersWithPermissions, setUserPermissions, type SectionConfig, type UserWithPermissions, type UserPerm } from '../../services/permissions.service';
 import { getUser } from '../../services/auth.service';
+
+// Secciones que no se pueden negar a un usuario: son la pantalla de inicio y
+// los canales abiertos a cualquier empleado. Espejo de
+// SECCIONES_SIEMPRE_VISIBLES en el backend (permissions.service.ts).
+// Quitarle el Inicio a alguien lo dejaba sin ningún lugar a donde entrar.
+// Fijas por producto, iguales para todas las empresas. Las que cada empresa
+// marque además vienen del servidor en SectionConfig.fixedForAll.
+const SECCIONES_SIEMPRE_VISIBLES = ['DASHBOARD', 'PROJECTS'];
 
 const SECTION_ICONS: Record<string, string> = {
   DASHBOARD: '📊', PROJECTS: '📁', ADMIN: '👥', TOOLS: '🔧',
@@ -16,6 +26,7 @@ export default function CompanyAdminPermissions() {
   const [sections, setSections] = useState<SectionConfig[]>([]);
   const [users, setUsers] = useState<UserWithPermissions[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserWithPermissions | null>(null);
+  const [showModulosFijos, setShowModulosFijos] = useState(false);
   const [userPerms, setUserPerms] = useState<Record<string, { canView: boolean; canWrite: boolean }>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -128,6 +139,18 @@ export default function CompanyAdminPermissions() {
             <p className="page-eyebrow">ADMINISTRACIÓN</p>
             <h1>Permisos de Usuarios</h1>
           </div>
+        </div>
+        <div className="header-actions">
+          <button
+            type="button"
+            className="btn-icon-toolbar"
+            onClick={() => setShowModulosFijos(true)}
+            disabled={!selectedCompanyId}
+            title="Módulos visibles para todos"
+            aria-label="Módulos visibles para todos"
+          >
+            <Settings2 size={18} />
+          </button>
         </div>
       </div>
 
@@ -262,20 +285,32 @@ export default function CompanyAdminPermissions() {
                   <tbody>
                     {enabledSections.map((s) => {
                       const perm = userPerms[s.key];
+                      const fija = SECCIONES_SIEMPRE_VISIBLES.includes(s.key) || Boolean(s.fixedForAll);
                       return (
-                        <tr key={s.key} style={{ opacity: perm?.canView ? 1 : 0.5 }}>
+                        <tr key={s.key} style={{ opacity: fija || perm?.canView ? 1 : 0.5 }}>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                               <span style={{ fontSize: '18px' }}>{SECTION_ICONS[s.key] || '📦'}</span>
                               <span style={{ fontWeight: 600, color: '#1a202c' }}>{s.label}</span>
+                              {fija && (
+                                <span
+                                  className="status-badge"
+                                  style={{ background: '#e2e8f0', color: '#718096', fontSize: '0.68rem' }}
+                                  title="Todo usuario la ve siempre: es la pantalla de inicio y el menú básico. Si se pudiera quitar, esa persona se quedaría sin ningún lugar a donde entrar al iniciar sesión."
+                                >
+                                  Siempre visible
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             <input
                               type="checkbox"
-                              checked={perm?.canView || false}
+                              checked={fija ? true : perm?.canView || false}
                               onChange={() => togglePerm(s.key, 'canView')}
-                              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#48bb78' }}
+                              disabled={fija}
+                              title={fija ? 'Esta sección la ve siempre todo usuario' : undefined}
+                              style={{ width: '18px', height: '18px', cursor: fija ? 'not-allowed' : 'pointer', accentColor: '#48bb78' }}
                             />
                           </td>
                           <td style={{ textAlign: 'center' }}>
@@ -283,8 +318,8 @@ export default function CompanyAdminPermissions() {
                               type="checkbox"
                               checked={perm?.canWrite || false}
                               onChange={() => togglePerm(s.key, 'canWrite')}
-                              disabled={!perm?.canView}
-                              style={{ width: '18px', height: '18px', cursor: perm?.canView ? 'pointer' : 'not-allowed', accentColor: '#48bb78' }}
+                              disabled={!fija && !perm?.canView}
+                              style={{ width: '18px', height: '18px', cursor: fija || perm?.canView ? 'pointer' : 'not-allowed', accentColor: '#48bb78' }}
                             />
                           </td>
                         </tr>
@@ -305,6 +340,20 @@ export default function CompanyAdminPermissions() {
           )}
         </div>
       </div>
+
+      {showModulosFijos && selectedCompanyId && (
+        <ModulosFijosModal
+          companyId={selectedCompanyId}
+          sections={sections}
+          onClose={() => setShowModulosFijos(false)}
+          onSaved={(actualizadas) => {
+            // Se refleja al instante en la tabla de permisos: los módulos que
+            // pasaron a ser fijos aparecen marcados y bloqueados para todos.
+            setSections(actualizadas);
+            setSuccess('Módulos visibles para todos actualizados');
+          }}
+        />
+      )}
     </div>
   );
 }

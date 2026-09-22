@@ -16,7 +16,6 @@ const TABLA_LABEL: Record<string, string> = {
   movimientoPersonal: 'Movimientos (entradas/salidas)',
   employeeDocument: 'Documentos',
   contract: 'Contratos',
-  certification: 'Certificaciones',
   guardiaContacto: 'Contacto (correo)',
   guardiaFichaPersonal: 'Ficha personal',
   candidate: 'Registro de candidato',

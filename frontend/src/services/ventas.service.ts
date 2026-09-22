@@ -120,6 +120,12 @@ export const deleteTemplate = (id: number) =>
 export const downloadFromDrive = (templateId: number) =>
   api.post(`/ventas/templates/${templateId}/download-drive`).then(r => r.data);
 
+export const uploadTemplateDocx = (templateId: number, file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post(`/ventas/templates/${templateId}/upload-docx`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+};
+
 export const detectVariables = (templateId: number) =>
   api.post(`/ventas/templates/${templateId}/detect-variables`).then(r => r.data);
 
@@ -271,8 +277,10 @@ export interface SalesClient {
   phone?: string | null;
   ruc?: string | null;
   address?: string | null;
+  observaciones?: string | null;
   extra?: Record<string, string>;
   createdAt: string;
+  creator?: { id: number; fullName: string } | null;
 }
 
 export const getSalesClientFields = () =>

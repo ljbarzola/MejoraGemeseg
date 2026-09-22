@@ -7,6 +7,7 @@ import DocumentReviewModal from './DocumentReviewModal';
 import AssignOrApproveModal from './AssignOrApproveModal';
 import { REVIEW_COLORS, STALE_COLOR } from './reviewStatus';
 import CopyLinkButton from '../common/CopyLinkButton';
+import DateInput from '../common/DateInput';
 
 interface Props {
   compliance: any;
@@ -190,11 +191,11 @@ function ExpiryEditor({ doc, onSaved, allowAiExtract }: { doc: any; onSaved?: ()
       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
         <label style={{ fontSize: '0.72rem', color: '#718096', display: 'flex', flexDirection: 'column', gap: '2px', flex: '1 1 160px' }}>
           Fecha de emisión
-          <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} style={{ fontSize: '0.78rem', padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
+          <DateInput value={issueDate} onChange={setIssueDate} style={{ fontSize: '0.78rem', padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
         </label>
         <label style={{ fontSize: '0.72rem', color: '#718096', display: 'flex', flexDirection: 'column', gap: '2px', flex: '1 1 160px' }}>
           Fecha de vencimiento
-          <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} style={{ fontSize: '0.78rem', padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
+          <DateInput value={expiryDate} onChange={setExpiryDate} style={{ fontSize: '0.78rem', padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
         </label>
       </div>
       <div style={{ display: 'flex', gap: '8px' }}>

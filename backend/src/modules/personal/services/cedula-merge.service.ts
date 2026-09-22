@@ -8,7 +8,6 @@ const MULTI_ROW_TABLES = [
   'movimientoPersonal',
   'employeeDocument',
   'contract',
-  'certification',
 ] as const;
 
 // Tablas con @@unique([companyId, cedula]): si el destino ya tiene fila
@@ -107,10 +106,8 @@ export class CedulaMergeService {
 
       for (const tabla of MULTI_ROW_TABLES) {
         const data: Record<string, unknown> = { cedula: cedulaDestino };
-        // Certification no tiene nombreGuardia editable aquí (queda como
-        // está, es solo histórico); el resto sí lo tiene y se alinea al
-        // nombre real para no dejar el historial mostrando el nombre bajo
-        // la cédula descartada.
+        // Las tablas con nombreGuardia se alinean al nombre real para no
+        // dejar el historial mostrando el nombre bajo la cédula descartada.
         if (
           ['asignacionGuardia', 'movimientoPersonal', 'contract'].includes(
             tabla,

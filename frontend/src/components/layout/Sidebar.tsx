@@ -73,14 +73,18 @@ export default function Sidebar() {
   // usando. El código y la data quedan intactos (por si se retoma más
   // adelante), solo se dejó de mostrar aquí y en el Dashboard de Personal.
 
+  // Ventas/CRM está en construcción: solo Clientes y Contratos están
+  // terminados, el resto se deja visible pero bloqueado (gris, sin clic)
+  // hasta que se completen. No hace falta proteger las rutas porque nadie
+  // llega a ellas por URL directa.
   const ventasItems = [
-    { label: 'Dashboard', path: '/ventas', icon: '📊' },
-    { label: 'Planificación y Campo', path: '/ventas/visitas', icon: '📍' },
-    { label: 'Prospectos CRM', path: '/ventas/leads', icon: '🎯' },
+    { label: 'Dashboard', path: '/ventas', icon: '📊', disabled: true },
+    { label: 'Planificación y Campo', path: '/ventas/visitas', icon: '📍', disabled: true },
+    { label: 'Prospectos CRM', path: '/ventas/leads', icon: '🎯', disabled: true },
     { label: 'Clientes', path: '/ventas/clientes', icon: '👤' },
     { label: 'Contratos', path: '/ventas/contratos', icon: '📄' },
-    { label: 'Reportes', path: '/ventas/reportes', icon: '📈' },
-    { label: 'Config Webhook', path: '/ventas/webhook-config', icon: '🔗' },
+    { label: 'Reportes', path: '/ventas/reportes', icon: '📈', disabled: true },
+    { label: 'Config Webhook', path: '/ventas/webhook-config', icon: '🔗', disabled: true },
   ];
 
   const custodiasSubItems = [
@@ -99,13 +103,20 @@ export default function Sidebar() {
     { label: 'Soporte Técnico', path: '/sistemas/soporte', icon: '🛠️' },
   ];
 
-  const renderSubItems = (items: { label: string; path: string; icon: string }[], depth: number = 0) => (
+  const renderSubItems = (items: { label: string; path: string; icon: string; disabled?: boolean }[], depth: number = 0) => (
     items.map((child) => (
       <button
         key={child.path}
         className={`sidebar-link sidebar-link-sub ${isActive(child.path) ? 'sidebar-link-active' : ''}`}
-        onClick={() => navigate(child.path)}
-        style={{ fontSize: '0.82rem', padding: `7px 12px 7px ${16 + depth * 16}px` }}
+        onClick={child.disabled ? undefined : () => navigate(child.path)}
+        disabled={child.disabled}
+        aria-disabled={child.disabled}
+        title={child.disabled ? 'Próximamente' : undefined}
+        style={{
+          fontSize: '0.82rem',
+          padding: `7px 12px 7px ${16 + depth * 16}px`,
+          ...(child.disabled ? { opacity: 0.45, cursor: 'not-allowed' } : {}),
+        }}
       >
         <span className="sidebar-icon" style={{ fontSize: '0.85rem' }}>{child.icon}</span>
         <span className="sidebar-label">{child.label}</span>
@@ -254,10 +265,9 @@ export default function Sidebar() {
               className={`sidebar-link ${isVentasActive ? 'sidebar-link-active' : ''}`}
               onClick={() => {
                 if (collapsed) {
-                  navigate('/ventas');
+                  navigate('/ventas/clientes');
                 } else {
                   setVentasOpen(!ventasOpen);
-                  if (!ventasOpen) navigate('/ventas');
                 }
               }}
               title={collapsed ? 'Ventas' : undefined}
@@ -323,7 +333,11 @@ export default function Sidebar() {
             <div className="sidebar-avatar">{user.fullName.charAt(0)}</div>
             <div className="sidebar-user-info">
               <div className="sidebar-user-name">{user.fullName}</div>
-              <div className="sidebar-user-role">{user.role}</div>
+              {/* El CARGO de la persona, no su rol del sistema. "EMPLOYEE"
+                   debajo del nombre no le decía nada a nadie. Si todavía no
+                   tiene cargo cargado se muestra el correo, que al menos
+                   sirve para saber con qué cuenta se entró. */}
+              <div className="sidebar-user-role">{user.position || user.email}</div>
             </div>
           </div>
         )}

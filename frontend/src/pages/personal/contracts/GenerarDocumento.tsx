@@ -14,7 +14,14 @@ import EmpleadoSelect from '../../../components/custodias/EmpleadoSelect';
 export default function GenerarDocumento() {
   const navigate = useNavigate();
 
+  // Dos formas de generar el mismo documento:
+  //  - 'GUARDIA': se elige a alguien del padron y sus datos se autocompletan.
+  //  - 'MANUAL' : no se elige a nadie (el documento es para un tercero, o para
+  //               un guardia que todavia no tiene ficha) y se escribe todo a
+  //               mano. La cedula deja de ser obligatoria.
+  const [modo, setModo] = useState<'GUARDIA' | 'MANUAL'>('GUARDIA');
   const [guardia, setGuardia] = useState({ nombre: '', cedula: '' });
+  const [nombreManual, setNombreManual] = useState('');
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [templateId, setTemplateId] = useState<number | null>(null);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
@@ -38,26 +45,36 @@ export default function GenerarDocumento() {
       .finally(() => setLoadingTemplates(false));
   }, []);
 
+  // En modo manual no hay cedula con la que buscar: se piden igual los campos
+  // de la plantilla, solo que llegan vacios para llenarlos a mano.
+  const cedulaAutofill = modo === 'GUARDIA' ? guardia.cedula : '';
+  const nombreAutofill = modo === 'GUARDIA' ? guardia.nombre : nombreManual;
+  const listoParaCargarCampos = modo === 'GUARDIA' ? Boolean(guardia.cedula) : true;
+
   useEffect(() => {
     setFields([]);
     setValues({});
-    if (!guardia.cedula || !templateId) return;
+    if (!listoParaCargarCampos || !templateId) return;
     setLoadingAutofill(true);
     setError('');
-    getContractAutofill(templateId, guardia.cedula, guardia.nombre)
+    getContractAutofill(templateId, cedulaAutofill, nombreAutofill)
       .then((f) => {
         setFields(f);
         setValues(Object.fromEntries(f.map((x) => [x.variableName, x.value || ''])));
       })
       .catch((err: any) => setError(err.response?.data?.message || 'No se pudo cargar el formulario de la plantilla.'))
       .finally(() => setLoadingAutofill(false));
-  }, [guardia.cedula, guardia.nombre, templateId]);
+  }, [listoParaCargarCampos, cedulaAutofill, nombreAutofill, templateId]);
 
   const selectedTemplate = templates.find((t) => t.id === templateId);
-  const guardiaEscritaSinSeleccionar = guardia.nombre.trim() !== '' && !guardia.cedula;
+  const guardiaEscritaSinSeleccionar =
+    modo === 'GUARDIA' && guardia.nombre.trim() !== '' && !guardia.cedula;
+  const nombreDocumento = modo === 'GUARDIA' ? guardia.nombre : nombreManual;
 
   const reset = () => {
+    setModo('GUARDIA');
     setGuardia({ nombre: '', cedula: '' });
+    setNombreManual('');
     setTemplateId(null);
     setFields([]);
     setValues({});
@@ -73,8 +90,12 @@ export default function GenerarDocumento() {
   };
 
   const handleGenerate = async () => {
-    if (!guardia.cedula) {
-      setError('Selecciona un guardia de la lista antes de continuar.');
+    if (modo === 'GUARDIA' && !guardia.cedula) {
+      setError('Selecciona un guardia de la lista, o cambia a "Llenar a mano" si no esta registrado.');
+      return;
+    }
+    if (modo === 'MANUAL' && !nombreManual.trim()) {
+      setError('Escribe a nombre de quien se genera el documento.');
       return;
     }
     if (!templateId) {
@@ -101,8 +122,8 @@ export default function GenerarDocumento() {
       );
       const contract = await generateContract({
         templateId,
-        cedula: guardia.cedula,
-        nombreGuardia: guardia.nombre.trim(),
+        cedula: modo === 'GUARDIA' ? guardia.cedula : '',
+        nombreGuardia: nombreDocumento.trim(),
         fieldValues: trimmedValues,
       });
       setResultUrl(contract.generatedUrl);
@@ -119,7 +140,7 @@ export default function GenerarDocumento() {
         <button className="cacao-back-btn" onClick={() => navigate('/rrhh/contracts')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS · DOCUMENTACIÓN</p>
             <h1>Generar Documento</h1>
@@ -133,7 +154,7 @@ export default function GenerarDocumento() {
 
       {resultUrl ? (
         <div className="admin-section" style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <p style={{ color: '#276749', fontWeight: 700, fontSize: '1.05rem', marginBottom: 20 }}>✓ Documento generado correctamente para {guardia.nombre}.</p>
+          <p style={{ color: '#276749', fontWeight: 700, fontSize: '1.05rem', marginBottom: 20 }}>✓ Documento generado correctamente para {nombreDocumento}.</p>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
             <a
               href={resolveContractFileUrl(resultUrl)}
@@ -150,14 +171,62 @@ export default function GenerarDocumento() {
       ) : (
         <>
           <div className="admin-section" style={{ marginBottom: 16 }}>
-            <h3 style={{ marginBottom: 12 }}>1. Guardia y tipo de documento</h3>
+            <h3 style={{ marginBottom: 12 }}>1. Para quién y tipo de documento</h3>
+
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+              {([
+                { key: 'GUARDIA', label: 'Elegir un guardia registrado' },
+                { key: 'MANUAL', label: 'Llenar a mano' },
+              ] as const).map((op) => (
+                <button
+                  key={op.key}
+                  type="button"
+                  onClick={() => { setModo(op.key); setError(''); }}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: 999,
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border: `1px solid ${modo === op.key ? 'var(--azul-claro)' : '#e2e8f0'}`,
+                    background: modo === op.key ? 'rgba(18, 55, 95, 0.08)' : '#fff',
+                    color: modo === op.key ? 'var(--azul-claro)' : '#6b7280',
+                  }}
+                >
+                  {op.label}
+                </button>
+              ))}
+            </div>
+            <p style={{ fontSize: '0.78rem', color: '#718096', margin: '0 0 14px' }}>
+              {modo === 'GUARDIA'
+                ? 'Sus datos (cédula, entidad, horario, salario) se traen solos de su ficha, y los puedes corregir antes de generar.'
+                : 'Para alguien que no está en el listado de guardias. Todos los campos del documento se escriben a mano; la cédula no es obligatoria.'}
+            </p>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div>
-                <EmpleadoSelect label="Guardia" value={guardia} onChange={setGuardia} required />
-                {guardiaEscritaSinSeleccionar && (
-                  <p style={{ fontSize: '0.75rem', color: '#c53030', margin: '4px 0 0' }}>
-                    Elige un guardia de la lista — "{guardia.nombre}" no coincide con ninguno registrado.
-                  </p>
+                {modo === 'GUARDIA' ? (
+                  <>
+                    <EmpleadoSelect label="Guardia" value={guardia} onChange={setGuardia} required source="RRHH" />
+                    {guardiaEscritaSinSeleccionar && (
+                      <p style={{ fontSize: '0.75rem', color: '#c53030', margin: '4px 0 0' }}>
+                        Elige un guardia de la lista — "{guardia.nombre}" no coincide con ninguno registrado. Si no está registrado, usa "Llenar a mano".
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <div className="form-group">
+                    <label>A nombre de *</label>
+                    <input
+                      type="text"
+                      value={nombreManual}
+                      onChange={(e) => setNombreManual(e.target.value)}
+                      placeholder="Apellidos y nombres"
+                    />
+                    <p style={{ fontSize: '0.75rem', color: '#718096', margin: '4px 0 0' }}>
+                      Así aparecerá el documento en el listado de Documentos Generados.
+                    </p>
+                  </div>
                 )}
               </div>
 
@@ -194,13 +263,15 @@ export default function GenerarDocumento() {
             </div>
           </div>
 
-          {loadingAutofill && <div className="loading-state">Cargando datos del guardia...</div>}
+          {loadingAutofill && <div className="loading-state">Cargando datos del documento...</div>}
 
-          {!loadingAutofill && guardia.cedula && selectedTemplate && fields.length > 0 && (
+          {!loadingAutofill && listoParaCargarCampos && selectedTemplate && fields.length > 0 && (
             <div className="admin-section" style={{ marginBottom: 16 }}>
               <h3 style={{ marginBottom: 12 }}>2. Datos del documento</h3>
               <p style={{ fontSize: '0.8rem', color: '#718096', margin: '0 0 12px' }}>
-                Revisados y editables antes de generar — la cédula del guardia, por ejemplo, es la que aparecerá en el documento salvo que la corrijas aquí.
+                {modo === 'GUARDIA'
+                  ? 'Revisados y editables antes de generar — la cédula del guardia, por ejemplo, es la que aparecerá en el documento salvo que la corrijas aquí.'
+                  : 'Escribe aquí todo lo que debe aparecer en el documento. Nada se autocompleta en este modo.'}
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
                 {fields.map((f) => (

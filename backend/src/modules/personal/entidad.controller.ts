@@ -143,6 +143,14 @@ export class EntidadController {
 
   // ASIGNACIONES DE GUARDIAS
 
+  // Padrón de guardias para Listado de Guardias. Vive en RRHH a propósito:
+  // ver AsignacionGuardiaService.findGuardias.
+  @Get('guardias')
+  @Section('RRHH', 'view')
+  findGuardias(@Req() req: any) {
+    return this.asignacionGuardiaService.findGuardias(req.user.companyId);
+  }
+
   @Get('asignaciones')
   @Section('RRHH', 'view')
   findAllAsignaciones(

@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
 import { createProject } from '../../services/project.service';
+import DateInput from '../../components/common/DateInput';
 
 const projectSchema = z
   .object({
@@ -32,6 +33,8 @@ export default function CreateProjectPage() {
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<ProjectForm>({
     resolver: zodResolver(projectSchema),
@@ -98,19 +101,19 @@ export default function CreateProjectPage() {
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="startDate">Fecha de inicio</label>
-              <input
+              <DateInput
                 id="startDate"
-                type="date"
-                {...register('startDate')}
+                value={watch('startDate') || ''}
+                onChange={(v) => setValue('startDate', v)}
               />
             </div>
 
             <div className="form-group">
               <label htmlFor="endDate">Fecha de fin</label>
-              <input
+              <DateInput
                 id="endDate"
-                type="date"
-                {...register('endDate')}
+                value={watch('endDate') || ''}
+                onChange={(v) => setValue('endDate', v)}
                 className={errors.endDate ? 'input-error' : ''}
               />
               {errors.endDate && (

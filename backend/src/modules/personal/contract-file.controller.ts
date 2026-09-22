@@ -1,6 +1,5 @@
 import { Controller, Get, Param, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import * as fs from 'fs';
 import { ContractService } from './services/contract.service';
 
 // Sin @UseGuards: el PDF se abre directamente en el navegador (<a href>,
@@ -12,7 +11,7 @@ export class ContractFileController {
   constructor(private readonly contractService: ContractService) {}
 
   @Get('file/:fileName')
-  serveFile(@Param('fileName') fileName: string, @Res() res: Response) {
+  async serveFile(@Param('fileName') fileName: string, @Res() res: Response) {
     // Ruta pública sin JWT: nunca confiar en fileName tal cual llega —
     // rechaza cualquier cosa que no sea "cedula_timestamp.pdf" (el formato
     // que genera ContractService.generateContract) antes de tocar el
@@ -23,8 +22,11 @@ export class ContractFileController {
       return;
     }
 
-    const filePath = this.contractService.getContractFilePath(fileName);
-    if (!fs.existsSync(filePath)) {
+    // No basta con mirar el disco: en Cloud Run el contenedor se recicla y se
+    // lleva los PDF generados, asi que el archivo se rehace a partir de la
+    // plantilla y los datos guardados si hace falta (ver ensureContractFile).
+    const filePath = await this.contractService.ensureContractFile(fileName);
+    if (!filePath) {
       res.status(404).json({ message: 'Archivo no encontrado' });
       return;
     }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getSuppliers, getLots, createSettlement, getNextSettlementId } from '../../../services/cacao.service';
+import DateInput from '../../../components/common/DateInput';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
@@ -290,7 +291,7 @@ export default function SettlementForm() {
           <div className="form-row">
             <div className="form-group">
               <label>Fecha *</label>
-              <input type="date" value={form.date} onChange={(e) => setField('date', e.target.value)} />
+              <DateInput value={form.date} onChange={(v) => setField('date', v)} />
             </div>
             <div className="form-group">
               <label>Proveedor *</label>
@@ -305,11 +306,11 @@ export default function SettlementForm() {
           <div className="form-row">
             <div className="form-group">
               <label>Fecha Inicio *</label>
-              <input type="date" value={form.periodStart} onChange={(e) => setField('periodStart', e.target.value)} />
+              <DateInput value={form.periodStart} onChange={(v) => setField('periodStart', v)} />
             </div>
             <div className="form-group">
               <label>Fecha Fin *</label>
-              <input type="date" value={form.periodEnd} onChange={(e) => setField('periodEnd', e.target.value)} />
+              <DateInput value={form.periodEnd} onChange={(v) => setField('periodEnd', v)} />
             </div>
           </div>
 

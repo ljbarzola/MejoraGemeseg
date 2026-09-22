@@ -25,9 +25,6 @@ model Company {
   custodias                 Custodia[]
   contractTemplates         ContractTemplate[]
   contracts                 Contract[]
-  certifications            Certification[]
-  logTemplates              LogTemplate[]
-  logEntries                LogEntry[]
   driveFolders              EmployeeDriveFolder[]
   documentTypes             DocumentType[]
   employeeDocuments         EmployeeDocument[]
@@ -111,12 +108,10 @@ model User {
   roleRelation                       Role?                    @relation(fields: [roleId], references: [id])
   agentLinks                         UserAgent[]
   permissions                        UserPermission[]
+  passwordResetCodes                 PasswordResetCode[]
   createdCustodias                   Custodia[]
   contractTemplates                  ContractTemplate[]
   contracts                          Contract[]
-  certifications                     Certification[]
-  logTemplates                       LogTemplate[]
-  logEntries                         LogEntry[]
   salesGoals                         SalesGoal[]
   clientVisits                       ClientVisit[]
   assignedLeads                      Lead[]
@@ -575,11 +570,39 @@ enum Priority {
   URGENT
 }
 
+/// Código de un solo uso para recuperar la contraseña.
+///
+/// Reemplaza al endpoint viejo, que recibía correo + contraseña nueva y la
+/// cambiaba SIN verificar nada: cualquiera que supiera un correo se apoderaba
+/// de esa cuenta, incluidas las de administrador.
+///
+/// El código NUNCA se guarda en claro (`codeHash`, bcrypt): quien lea la base
+/// de datos no debe poder usarlo. Caduca, se invalida al usarse y limita los
+/// intentos para que no se pueda adivinar por fuerza bruta (son 6 dígitos).
+model PasswordResetCode {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
 model CompanySection {
   id        Int      @id @default(autoincrement())
   companyId Int
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   section   String
+  // true = esta sección la ven TODOS los usuarios de la empresa y no se puede
+  // negar uno por uno. Lo decide el administrador de cada empresa desde
+  // Administración → Permisos → ⚙ Módulos fijos. Es distinto de
+  // `siempreVisible` en ALL_SECTIONS, que es una decisión de producto fija en
+  // código (Inicio, Proyectos) e igual para todas las empresas.
+  fixedForAll Boolean @default(false)
   createdAt DateTime @default(now())
 
   @@unique([companyId, section])
@@ -642,13 +665,6 @@ model Custodia {
   @@index([tipoCustodia])
 }
 
-enum LogType {
-  PERMISO_INGRESO
-  RESPUESTA_ADMIN_CONTRATO
-  NOVEDAD_OPERATIVA
-  SALIDA_PERSONAL
-}
-
 model ContractTemplate {
   id        Int             @id @default(autoincrement())
   name      String
@@ -688,7 +704,7 @@ model ContractField {
 model Contract {
   id            Int              @id @default(autoincrement())
   // Identifica al guardia por cédula (mismo patrón que AsignacionGuardia/
-  // GuardiaFichaPersonal/Certification), no por FK — así sigue funcionando
+  // GuardiaFichaPersonal), no por FK — así sigue funcionando
   // aunque el guardia ya no tenga un registro vivo en el pipeline de
   // reclutamiento.
   cedula        String
@@ -697,6 +713,13 @@ model Contract {
   template      ContractTemplate @relation(fields: [templateId], references: [id])
   fieldValues   Json?
   generatedUrl  String?
+  // Copia permanente en Google Drive del PDF entregado. El disco del servidor
+  // es efímero (ver ContractService), así que esta es la única copia que
+  // sobrevive: al pedir el PDF se sirve desde aquí, y solo si falta se
+  // regenera. Importante que sea el archivo REAL entregado y no uno nuevo —
+  // si la plantilla cambió después, regenerar daría otro documento.
+  driveFileId   String?
+  driveUrl      String?
   status        String           @default("DRAFT")
   companyId     Int
   company       Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -706,35 +729,6 @@ model Contract {
   updatedAt     DateTime         @updatedAt
 
   @@index([companyId, cedula])
-}
-
-model Certification {
-  id           Int                  @id @default(autoincrement())
-  employeeName String
-  cedula       String
-  type         String
-  issueDate    DateTime
-  expiryDate   DateTime
-  status       String               @default("ACTIVE")
-  documentUrl  String?
-  companyId    Int
-  company      Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy    Int
-  creator      User                 @relation(fields: [createdBy], references: [id])
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  alerts       CertificationAlert[]
-
-  @@index([companyId])
-}
-
-model CertificationAlert {
-  id              Int           @id @default(autoincrement())
-  certificationId Int
-  certification   Certification @relation(fields: [certificationId], references: [id], onDelete: Cascade)
-  daysBefore      Int
-  sentAt          DateTime?
-  createdAt       DateTime      @default(now())
 }
 
 // Plan anual de capacitaciones (o una capacitación puntual, ver
@@ -894,6 +888,12 @@ model Survey {
   title       String
   description String?
   status      SurveyStatus      @default(DRAFT)
+  // Enlace público: cuando publicEnabled es true, cualquiera con la URL
+  // /encuesta/<publicToken> puede responder SIN cuenta ni login (proveedores,
+  // clientes, postulantes). Las preguntas son las mismas; si RRHH quiere
+  // saber quién respondió, lo pide como una pregunta más de la encuesta.
+  publicToken   String?         @unique
+  publicEnabled Boolean         @default(false)
   companyId   Int
   company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdBy   Int
@@ -938,8 +938,12 @@ model SurveyResponse {
   id           Int            @id @default(autoincrement())
   surveyId     Int
   survey       Survey         @relation(fields: [surveyId], references: [id], onDelete: Cascade)
-  respondentId Int
-  respondent   User           @relation("SurveyRespondent", fields: [respondentId], references: [id])
+  // null = respuesta llegada por el enlace público (sin cuenta en la app).
+  // En Postgres un UNIQUE con NULL no colisiona, así que el enlace público
+  // admite tantas respuestas como personas lo abran, mientras que un usuario
+  // con cuenta sigue pudiendo responder una sola vez.
+  respondentId Int?
+  respondent   User?          @relation("SurveyRespondent", fields: [respondentId], references: [id])
   submittedAt  DateTime       @default(now())
   answers      SurveyAnswer[]
 
@@ -960,33 +964,6 @@ model SurveyAnswer {
 
   @@index([responseId])
   @@index([questionId])
-}
-
-model LogTemplate {
-  id        Int        @id @default(autoincrement())
-  name      String
-  type      LogType
-  content   String
-  companyId Int
-  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy Int
-  creator   User       @relation(fields: [createdBy], references: [id])
-  createdAt DateTime   @default(now())
-  entries   LogEntry[]
-}
-
-model LogEntry {
-  id         Int          @id @default(autoincrement())
-  templateId Int?
-  template   LogTemplate? @relation(fields: [templateId], references: [id])
-  title      String
-  content    String
-  type       LogType
-  companyId  Int
-  company    Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy  Int
-  creator    User         @relation(fields: [createdBy], references: [id])
-  createdAt  DateTime     @default(now())
 }
 
 model EmployeeDriveFolder {
@@ -1098,7 +1075,7 @@ model RequisitoDocumento {
 }
 
 // Periodo en el que un guardia (identificado por cedula, sin tabla maestra
-// propia — mismo patrón que Certification/Custodia en este schema)
+// propia — mismo patrón que Custodia en este schema)
 // está asignado a una Entidad. fechaFin null = asignación vigente.
 // Historial de solo lectura: lo escribe únicamente el sync de Drive
 // (DriveService.syncEntidadesFolder), nunca un formulario manual — ver
@@ -1482,7 +1459,7 @@ model SistemaVerificacion {
 }
 
 // Caso/expediente de entrada o salida de un guardia (identificado por cedula,
-// sin tabla maestra propia — mismo patrón que AsignacionGuardia/Certification
+// sin tabla maestra propia — mismo patrón que AsignacionGuardia
 // en este schema). Cada entrada o salida de la misma persona a lo largo del
 // tiempo es una fila independiente, para ver el historial completo.
 model MovimientoPersonal {
@@ -1696,6 +1673,7 @@ model SalesClient {
   phone     String?
   ruc       String?
   address   String?
+  observaciones String?
   extra     Json     @default("{}")
   createdBy Int
   createdAt DateTime @default(now())

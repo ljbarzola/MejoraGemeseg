@@ -14,6 +14,18 @@ export class SetCompanySectionsDto {
   sections: string[];
 }
 
+/**
+ * Módulos fijos de una empresa. A diferencia de SetCompanySectionsDto, aquí la
+ * lista SÍ puede venir vacía: vacía significa "ninguno es fijo", que es un
+ * estado legítimo y la única forma de desmarcar el último. Con @ArrayNotEmpty
+ * quedaba imposible quitar el último módulo fijo.
+ */
+export class SetFixedSectionsDto {
+  @IsArray()
+  @IsString({ each: true })
+  sections: string[];
+}
+
 export class UserPermissionItemDto {
   @IsString()
   section: string;

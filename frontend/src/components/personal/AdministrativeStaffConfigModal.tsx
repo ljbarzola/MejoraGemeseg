@@ -33,7 +33,7 @@ export default function AdministrativeStaffConfigModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-xl" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Settings2 size={17} /> Configuración — Personal Administrativo

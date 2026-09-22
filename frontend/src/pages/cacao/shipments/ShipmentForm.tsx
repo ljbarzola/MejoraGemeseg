@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getClients, getLots, createShipment, getUnitConfig, getNextShipmentId } from '../../../services/cacao.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import DateInput from '../../../components/common/DateInput';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FULL: Record<string, string> = { TON: 'Toneladas', KG: 'Kilogramos', SACO: 'Sacos' };
@@ -232,7 +233,7 @@ export default function ShipmentForm() {
           <div className="form-row">
             <div className="form-group">
               <label>Fecha *</label>
-              <input type="date" value={form.date} onChange={(e) => setField('date', e.target.value)} />
+              <DateInput value={form.date} onChange={(v) => setField('date', v)} />
             </div>
             <div className="form-group">
               <label>Cliente *</label>

@@ -26,28 +26,86 @@ function formatAnswerValue(answer: { valueText: string | null; valueJson: unknow
   return answer.valueText || '';
 }
 
-function IndividualResponseCard({ response, questions }: { response: SurveyIndividualResponse; questions: SurveyIndividualResults['questions'] }) {
-  const [expanded, setExpanded] = useState(false);
+/**
+ * Grupo desplegable de respuestas de un mismo canal. Las respuestas por
+ * enlace público y las de gente con cuenta se leen distinto (unas son
+ * anónimas, otras identificadas), así que se muestran separadas en vez de
+ * mezcladas en una sola lista.
+ */
+function GrupoRespuestas({
+  titulo,
+  descripcion,
+  respuestas,
+  questions,
+  abiertoPorDefecto,
+}: {
+  titulo: string;
+  descripcion: string;
+  respuestas: SurveyIndividualResponse[];
+  questions: SurveyIndividualResults['questions'];
+  abiertoPorDefecto: boolean;
+}) {
+  const [abierto, setAbierto] = useState(abiertoPorDefecto);
 
   return (
-    <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', marginBottom: '8px', overflow: 'hidden' }}>
+    <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', marginBottom: '12px', overflow: 'hidden' }}>
       <button
         type="button"
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => setAbierto((v) => !v)}
+        aria-expanded={abierto}
         style={{
           display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
-          padding: '10px 12px', border: 'none', background: expanded ? '#f7fafc' : '#fff',
-          cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem',
+          padding: '12px 14px', border: 'none', background: '#f7fafc',
+          cursor: 'pointer', textAlign: 'left',
         }}
       >
-        {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        {abierto ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        <span style={{ fontWeight: 700, color: 'var(--azul-oscuro)', fontSize: '0.88rem' }}>{titulo}</span>
+        <span className="status-badge" style={{ background: '#e2e8f0', color: '#475569', fontSize: '0.72rem' }}>
+          {respuestas.length}
+        </span>
+        <span style={{ color: '#a0aec0', fontSize: '0.75rem', marginLeft: 'auto', textAlign: 'right' }}>
+          {descripcion}
+        </span>
+      </button>
+      {abierto && (
+        <div style={{ padding: '10px 12px' }}>
+          {respuestas.length === 0 ? (
+            <p style={{ fontSize: '0.82rem', color: '#a0aec0', margin: '4px 0' }}>
+              Todavía no hay respuestas por este medio.
+            </p>
+          ) : (
+            respuestas.map((r) => (
+              <IndividualResponseCard key={r.id} response={r} questions={questions} />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// El detalle de cada persona va SIEMPRE visible: el desplegable de canal ya
+// separa lo suficiente, y anidar un segundo desplegable obligaba a dos clics
+// para leer una sola respuesta.
+function IndividualResponseCard({ response, questions }: { response: SurveyIndividualResponse; questions: SurveyIndividualResults['questions'] }) {
+  return (
+    <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', marginBottom: '8px', overflow: 'hidden' }}>
+      <div
+        style={{
+          display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap',
+          padding: '10px 12px', background: '#fff', fontSize: '0.85rem',
+        }}
+      >
         <strong style={{ color: 'var(--azul-oscuro)' }}>{response.respondentName}</strong>
-        <span style={{ color: '#718096', fontSize: '0.78rem' }}>{response.respondentEmail}</span>
+        {response.respondentEmail && (
+          <span style={{ color: '#718096', fontSize: '0.78rem' }}>{response.respondentEmail}</span>
+        )}
         <span style={{ color: '#a0aec0', fontSize: '0.75rem', marginLeft: 'auto' }}>
           {new Date(response.submittedAt).toLocaleString('es-EC')}
         </span>
-      </button>
-      {expanded && (
+      </div>
+      {(
         <div style={{ padding: '12px 16px', borderTop: '1px solid #e2e8f0', background: '#f7fafc' }}>
           {questions.map((q) => {
             const answer = response.answers.find((a) => a.questionId === q.questionId);
@@ -197,9 +255,23 @@ export default function SurveyResultsModal({ surveyId, onClose }: Props) {
                     <div className="empty-state">Aún no hay respuestas registradas.</div>
                   ) : (
                     <div>
-                      {individualResults.responses.map((r) => (
-                        <IndividualResponseCard key={r.respondentId} response={r} questions={individualResults.questions} />
-                      ))}
+                      {/* Primero el canal, después la persona: las de enlace
+                          son anónimas y las de la app están identificadas, así
+                          que mezclarlas en una sola lista confundía. */}
+                      <GrupoRespuestas
+                        titulo="Respuestas por enlace público"
+                        descripcion="Personas sin cuenta en la app"
+                        respuestas={individualResults.responses.filter((r) => r.respondentId === null)}
+                        questions={individualResults.questions}
+                        abiertoPorDefecto={individualResults.responses.some((r) => r.respondentId === null)}
+                      />
+                      <GrupoRespuestas
+                        titulo="Respuestas por la app"
+                        descripcion="Usuarios con cuenta, identificados"
+                        respuestas={individualResults.responses.filter((r) => r.respondentId !== null)}
+                        questions={individualResults.questions}
+                        abiertoPorDefecto={!individualResults.responses.some((r) => r.respondentId === null)}
+                      />
                     </div>
                   )}
                 </>

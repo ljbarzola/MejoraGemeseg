@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, X, CheckCircle2, RotateCcw, Paperclip, Trash2, FolderOpen } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import DateInput from '../../components/common/DateInput';
 import {
   getTrainings,
   createTraining,
@@ -312,7 +313,7 @@ export default function TrainingsPage() {
         <button className="cacao-back-btn" onClick={() => navigate('/rrhh')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} /> Volver
         </button>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS</p>
             <h1>Capacitaciones</h1>
@@ -466,7 +467,7 @@ export default function TrainingsPage() {
               </div>
               <div className="form-group">
                 <label>Fecha límite</label>
-                <input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+                <DateInput value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
               </div>
               <div className="form-group">
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

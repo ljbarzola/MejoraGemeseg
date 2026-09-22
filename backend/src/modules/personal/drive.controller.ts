@@ -414,17 +414,6 @@ export class DriveController {
     return { contratacion, sync };
   }
 
-  // Rescate retroactivo, por si RRHH creó un campo de Configuración DESPUÉS
-  // de contratar a alguien: revisa las fichas ya contratadas y, si no tienen
-  // guardado el JSON de postulación, lo busca en su carpeta actual de Drive.
-  // Ver DriveService.backfillPostulacion.
-  @Post('drive/backfill-postulacion')
-  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
-  @Section('RRHH', 'write')
-  backfillPostulacion(@Req() req: any) {
-    return this.driveService.backfillPostulacion(req.user.companyId);
-  }
-
   @Delete('drive/employee/:cedula')
   @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
   @Section('RRHH', 'write')

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { getTemplates, getTemplate, getContract, createContract, updateContract, getSalesClients, getSalesClientFields, addSalesClientField, salesClientValue, SalesTemplate, SalesTemplateField, TableColumn, SalesClient, SalesClientField } from '../../services/ventas.service';
 import { useToast } from '../../contexts/ToastContext';
+import DateInput from '../../components/common/DateInput';
 
 export default function ContratoForm() {
   const navigate = useNavigate();
@@ -20,7 +21,9 @@ export default function ContratoForm() {
   const [clientName, setClientName] = useState('');
   const [clientEmail, setClientEmail] = useState('');
   const [clients, setClients] = useState<SalesClient[]>([]);
-  const [clientFieldDefs, setClientFieldDefs] = useState<SalesClientField[]>([]);
+  // Solo se escribe (al añadir un campo de cliente desde aquí); la lista que
+  // se muestra vive en la pantalla de Clientes, por eso no hay getter.
+  const [, setClientFieldDefs] = useState<SalesClientField[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number | ''>('');
   const [newClientFieldLabel, setNewClientFieldLabel] = useState('');
 
@@ -60,7 +63,7 @@ export default function ContratoForm() {
     const defaults: Record<string, any> = {};
     const tables: Record<string, Record<string, string>[]> = {};
     fields?.forEach((f) => {
-      if (f.isClientField) return;
+      if (f.isClientField && f.fieldType === 'TABLE') return; // esas van en clientTableFields, las llena el cliente por link
       if (f.fieldType === 'TABLE') {
         tables[f.variableName] = Array.isArray(existingValues[f.variableName]) ? existingValues[f.variableName] : [];
       } else if (f.fieldType === 'DROPDOWN' && f.allowMultiple) {
@@ -95,30 +98,45 @@ export default function ContratoForm() {
     } catch { navigate('/ventas/contratos'); }
   };
 
-  const applyClient = (client: SalesClient | undefined, fields: SalesTemplateField[] | undefined) => {
+  // Al elegir cliente solo se autocompletan los datos de envío (a quién le
+  // llega el link de firma) — los campos del documento mapeados al cliente
+  // se autocompletan aparte, con el botón de la sección "Cliente" (ver
+  // handleAutocompleteClientFields), para que sea una acción explícita y no
+  // algo que pasa solo sin que se note.
+  const applyClientContactInfo = (client: SalesClient | undefined) => {
     if (!client) return;
     setClientName(client.name);
     setClientEmail(client.email);
-    setFieldValues((prev) => {
-      const next: Record<string, any> = { ...prev };
-      fields?.forEach((f) => {
-        if (!f.clientFieldKey || f.fieldType === 'TABLE' || f.fieldType === 'CONTRACT_NUMBER') return;
-        const v = salesClientValue(client, f.clientFieldKey);
-        if (v) next[f.variableName] = v;
-      });
-      return next;
-    });
   };
 
   const handleSelectClient = (id: number | '') => {
     setSelectedClientId(id);
     if (!id) return;
     const client = clients.find((c) => c.id === id);
-    applyClient(client, selectedTemplate?.fields);
+    applyClientContactInfo(client);
+  };
+
+  const handleAutocompleteClientFields = (fields: SalesTemplateField[]) => {
+    if (!selectedClientId) {
+      showToast('No se ha escogido un cliente aún', 'error');
+      return;
+    }
+    const client = clients.find((c) => c.id === selectedClientId);
+    if (!client) return;
+    setFieldValues((prev) => {
+      const next: Record<string, any> = { ...prev };
+      fields.forEach((f) => {
+        if (!f.clientFieldKey) return;
+        const v = salesClientValue(client, f.clientFieldKey);
+        if (v) next[f.variableName] = v;
+      });
+      return next;
+    });
+    showToast('Campos de cliente autocompletados', 'success');
   };
 
   const handleAddClientField = async (variableName: string) => {
-    const label = newClientFieldLabel.trim() || selectedTemplate?.fields.find((f) => f.variableName === variableName)?.label || '';
+    const label = newClientFieldLabel.trim() || selectedTemplate?.fields?.find((f) => f.variableName === variableName)?.label || '';
     if (!label) { showToast('Escribe el nombre del campo a añadir', 'error'); return; }
     try {
       const created = await addSalesClientField({ label });
@@ -198,7 +216,7 @@ export default function ContratoForm() {
     if (!clientName.trim()) { showToast('El nombre es requerido', 'error'); return; }
     if (!clientEmail.trim()) { showToast('El email es requerido', 'error'); return; }
 
-    const missingField = companyFields.find((f) => f.isRequired && isFieldEmpty(f));
+    const missingField = requiredCheckFields.find((f) => f.isRequired && isFieldEmpty(f));
     if (missingField) {
       showToast(`Falta llenar: ${missingField.label}`, 'error');
       focusField(missingField.variableName);
@@ -235,19 +253,23 @@ export default function ContratoForm() {
   };
 
   const allFields = selectedTemplate?.fields || [];
-  const companyFields = allFields.filter((f) => !f.isClientField && f.fieldType !== 'TABLE' && f.fieldType !== 'CONTRACT_NUMBER');
   const companyTableFields = allFields.filter((f) => !f.isClientField && f.fieldType === 'TABLE');
   const clientTableFields = allFields.filter((f) => f.isClientField && f.fieldType === 'TABLE');
   const hasContractNumber = allFields.some((f) => f.fieldType === 'CONTRACT_NUMBER');
+  const requiredCheckFields = allFields.filter((f) => f.fieldType !== 'TABLE' && f.fieldType !== 'CONTRACT_NUMBER');
 
   // Variables tipo "Contrato.Nombre del Campo" se agrupan bajo "Campos de
   // (Contrato)"; las que no tienen punto van juntas en "Otros" (solo si hay
-  // alguna).
-  const fieldGroups: { title: string; fields: SalesTemplateField[] }[] = [];
+  // alguna). Se agrupan TODOS los campos, sean o no del cliente: si la
+  // plantilla trae variables "Cliente.Algo", eso arma solo un grupo llamado
+  // "Cliente" (ver render más abajo, ahí es donde aparece el botón de
+  // autocompletar) — si la plantilla no usa ese prefijo, simplemente no
+  // existe esa sección, no hace falta nada especial acá.
+  const fieldGroups: { title: string; prefix: string; fields: SalesTemplateField[] }[] = [];
   {
     const byPrefix = new Map<string, SalesTemplateField[]>();
     const others: SalesTemplateField[] = [];
-    for (const f of companyFields) {
+    for (const f of requiredCheckFields) {
       const dot = f.variableName.indexOf('.');
       if (dot > 0) {
         const prefix = f.variableName.slice(0, dot);
@@ -257,8 +279,8 @@ export default function ContratoForm() {
         others.push(f);
       }
     }
-    for (const [prefix, fs] of byPrefix) fieldGroups.push({ title: `Campos de (${prefix})`, fields: fs });
-    if (others.length > 0) fieldGroups.push({ title: 'Otros', fields: others });
+    for (const [prefix, fs] of byPrefix) fieldGroups.push({ title: `Campos de (${prefix})`, prefix, fields: fs });
+    if (others.length > 0) fieldGroups.push({ title: 'Otros', prefix: '', fields: others });
   }
 
   return (
@@ -288,9 +310,9 @@ export default function ContratoForm() {
 
       {selectedTemplate && (
         <>
-          <Section title="Datos del cliente">
+          <Section title="Datos de envío">
             <p style={{ fontSize: 12, color: '#666', margin: '-4px 0 12px' }}>
-              Elige un cliente de la ficha. Los campos mapeados en la plantilla se rellenan solos; si el documento pide algo que el cliente no tiene, puedes llenarlo aquí o añadir el campo en Clientes.
+              A quién se le envía el link para firmar. Si eliges un cliente de la ficha, el nombre y el email se autocompletan (igual editables).
             </p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
               <select value={selectedClientId} onChange={(e) => handleSelectClient(e.target.value ? +e.target.value : '')}
@@ -303,71 +325,71 @@ export default function ContratoForm() {
               <button type="button" className="btn-secondary" onClick={() => navigate('/ventas/clientes?nuevo=1')}
                 style={{ padding: '8px 12px', fontSize: 12 }}>Ir a Clientes</button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Input label="Nombre para el envío *" value={clientName} onChange={setClientName} />
               <Input label="Email para el envío *" value={clientEmail} onChange={setClientEmail} type="email" />
             </div>
-            {allFields.filter((f) => f.fieldType !== 'TABLE' && f.fieldType !== 'CONTRACT_NUMBER').map((f) => {
-              const mapped = !!f.clientFieldKey;
-              const fromClient = selectedClientId ? salesClientValue(clients.find((c) => c.id === selectedClientId), f.clientFieldKey || '') : '';
-              const missingOnClient = mapped && selectedClientId && !fromClient && !fieldValues[f.variableName];
-              const unmapped = !mapped && f.isClientField;
-              if (!mapped && !unmapped) return null;
-              return (
-                <div key={f.variableName} style={{ padding: '8px 10px', border: '1px solid #eee', borderRadius: 6, marginBottom: 8, background: missingOnClient || unmapped ? '#fffbeb' : '#f8fafc' }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{f.label}</div>
-                  {mapped && fromClient ? (
-                    <div style={{ fontSize: 12, color: '#166534' }}>Mapeado desde el cliente: {fromClient}</div>
-                  ) : (
-                    <>
-                      <p style={{ fontSize: 11, color: '#92400e', margin: '0 0 6px' }}>
-                        {unmapped
-                          ? 'Este campo está en el documento y no está mapeado a la ficha de Cliente.'
-                          : 'El cliente no tiene este dato. Llénalo para este contrato o añádelo a la ficha.'}
-                      </p>
-                      {f.fieldType !== 'CHECKBOX' && f.fieldType !== 'SIGNATURE' && f.fieldType !== 'DATE' && (
-                        <Input label="Valor para este contrato" value={fieldValues[f.variableName] || ''} onChange={(v) => handleFieldChange(f.variableName, v)} />
-                      )}
-                      <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                        <input value={newClientFieldLabel} onChange={(e) => setNewClientFieldLabel(e.target.value)} placeholder="Nombre del campo en Clientes"
-                          style={{ flex: 1, minWidth: 160, padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }} />
-                        <button type="button" className="btn-secondary" onClick={() => handleAddClientField(f.variableName)}
-                          style={{ padding: '6px 10px', fontSize: 11 }}>Añadir campo a Clientes</button>
-                        <button type="button" className="btn-secondary" onClick={() => navigate('/ventas/clientes')}
-                          style={{ padding: '6px 10px', fontSize: 11 }}>Abrir Clientes</button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            })}
           </Section>
 
-          {/* Company fields, grouped by variable namespace ("Contrato.Campo" -> "Campos de (Contrato)") */}
-          {fieldGroups.map(group => (
-            <Section key={group.title} title={group.title}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                {group.fields.map(f => (
-                  <div key={f.variableName} id={`field-${f.variableName}`}>
-                    {f.fieldType === 'DROPDOWN' && f.allowMultiple ? (
-                      <MultiSelect label={`${f.label} ${f.isRequired ? '*' : ''}`} value={Array.isArray(fieldValues[f.variableName]) ? fieldValues[f.variableName] : []}
-                        onChange={(opt, checked) => handleMultiFieldToggle(f.variableName, opt, checked)}
-                        onOtherChange={text => handleMultiOtherChange(f.variableName, f.dropdownOptions, text)}
-                        options={f.dropdownOptions} allowOther={f.allowOther} />
-                    ) : f.fieldType === 'DROPDOWN' ? (
-                      <Select label={`${f.label} ${f.isRequired ? '*' : ''}`} value={fieldValues[f.variableName] || ''} onChange={v => handleFieldChange(f.variableName, v)}
-                        options={f.dropdownOptions} allowOther={f.allowOther} />
-                    ) : f.fieldType === 'CHECKBOX' ? (
-                      <Checkbox label={f.label} checked={fieldValues[f.variableName] === 'true'} onChange={v => handleFieldChange(f.variableName, v ? 'true' : 'false')} />
-                    ) : (
-                      <Input label={`${f.label} ${f.isRequired ? '*' : ''}`} value={fieldValues[f.variableName] || ''} onChange={v => handleFieldChange(f.variableName, v)}
-                        type={f.fieldType === 'DATE' ? 'date' : f.fieldType === 'EMAIL' ? 'email' : f.fieldType === 'NUMBER' ? 'number' : 'text'} />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </Section>
-          ))}
+          {/* Campos agrupados por prefijo de variable ("Contrato.Campo" -> "Campos de (Contrato)").
+              Si la plantilla trae variables "Cliente.Algo" esto arma solo un grupo llamado
+              "Cliente", y ese es el único que recibe el botón de autocompletar — si la
+              plantilla no usa ese prefijo, la sección ni aparece. */}
+          {fieldGroups.map(group => {
+            const isClienteGroup = group.prefix.toLowerCase() === 'cliente';
+            return (
+              <Section
+                key={group.title}
+                title={group.title}
+                headerExtra={isClienteGroup ? (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => handleAutocompleteClientFields(group.fields)}
+                    style={{ padding: '6px 12px', fontSize: 12 }}
+                  >
+                    Autocompletar campos de cliente{selectedClientId ? `: ${clients.find((c) => c.id === selectedClientId)?.name}` : ''}
+                  </button>
+                ) : undefined}
+              >
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  {group.fields.map(f => (
+                    <div key={f.variableName} id={`field-${f.variableName}`}>
+                      {f.fieldType === 'DROPDOWN' && f.allowMultiple ? (
+                        <MultiSelect label={`${f.label} ${f.isRequired ? '*' : ''}`} value={Array.isArray(fieldValues[f.variableName]) ? fieldValues[f.variableName] : []}
+                          onChange={(opt, checked) => handleMultiFieldToggle(f.variableName, opt, checked)}
+                          onOtherChange={text => handleMultiOtherChange(f.variableName, f.dropdownOptions, text)}
+                          options={f.dropdownOptions} allowOther={f.allowOther} />
+                      ) : f.fieldType === 'DROPDOWN' ? (
+                        <Select label={`${f.label} ${f.isRequired ? '*' : ''}`} value={fieldValues[f.variableName] || ''} onChange={v => handleFieldChange(f.variableName, v)}
+                          options={f.dropdownOptions} allowOther={f.allowOther} />
+                      ) : f.fieldType === 'CHECKBOX' ? (
+                        <Checkbox label={f.label} checked={fieldValues[f.variableName] === 'true'} onChange={v => handleFieldChange(f.variableName, v ? 'true' : 'false')} />
+                      ) : (
+                        <Input label={`${f.label} ${f.isRequired ? '*' : ''}`} value={fieldValues[f.variableName] || ''} onChange={v => handleFieldChange(f.variableName, v)}
+                          type={f.fieldType === 'DATE' ? 'date' : f.fieldType === 'EMAIL' ? 'email' : f.fieldType === 'NUMBER' ? 'number' : 'text'} />
+                      )}
+                      {f.isClientField && (
+                        f.clientFieldKey ? (
+                          <p style={{ fontSize: 11, color: '#166534', margin: '4px 0 0' }}>Se autocompleta desde el cliente elegido arriba.</p>
+                        ) : (
+                          <div style={{ marginTop: 6 }}>
+                            <p style={{ fontSize: 11, color: '#92400e', margin: '0 0 6px' }}>Este campo no está mapeado a la ficha de Cliente.</p>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                              <input value={newClientFieldLabel} onChange={(e) => setNewClientFieldLabel(e.target.value)} placeholder="Nombre del campo en Clientes"
+                                style={{ flex: 1, minWidth: 140, padding: '5px 7px', borderRadius: 4, border: '1px solid #ddd', fontSize: 11 }} />
+                              <button type="button" className="btn-secondary" onClick={() => handleAddClientField(f.variableName)}
+                                style={{ padding: '5px 8px', fontSize: 10 }}>Añadir a Clientes</button>
+                            </div>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            );
+          })}
 
           {hasContractNumber && (
             <Section title="Número de contrato">
@@ -425,10 +447,13 @@ export default function ContratoForm() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, headerExtra, children }: { title: string; headerExtra?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="admin-section" style={{ marginBottom: 16 }}>
-      <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>{title}</h3>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
+        <h3 style={{ margin: 0, fontSize: 14 }}>{title}</h3>
+        {headerExtra}
+      </div>
       {children}
     </div>
   );
@@ -438,8 +463,13 @@ function Input({ label, value, onChange, type = 'text' }: { label: string; value
   return (
     <div>
       <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>{label}</label>
-      <input type={type} value={value} onChange={e => onChange(e.target.value)}
-        style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12, boxSizing: 'border-box' }} />
+      {type === 'date' ? (
+        <DateInput value={value} onChange={onChange}
+          style={{ padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }} />
+      ) : (
+        <input type={type} value={value} onChange={e => onChange(e.target.value)}
+          style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12, boxSizing: 'border-box' }} />
+      )}
     </div>
   );
 }

@@ -37,6 +37,12 @@ export default function DocumentosRequeridosModal({ onClose, embedded }: Props) 
   const [editingName, setEditingName] = useState('');
 
   const [confirmandoDelete, setConfirmandoDelete] = useState<DocumentType | null>(null);
+  // Mismo patrón que PersonalFieldsConfigModal: nombre y "requerido" se
+  // editan juntos y se confirman con un botón Guardar explícito, en vez de
+  // guardarse solos al tocarlos.
+  const [editingRequired, setEditingRequired] = useState(false);
+  const [confirmandoGuardar, setConfirmandoGuardar] = useState<DocumentType | null>(null);
+  const [guardando, setGuardando] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -65,23 +71,46 @@ export default function DocumentosRequeridosModal({ onClose, embedded }: Props) 
     }
   };
 
-  const handleSaveName = async (id: number) => {
-    if (!editingName.trim()) return;
+  const abrirEdicion = (dt: DocumentType) => {
+    setError('');
+    setEditingId(dt.id);
+    setEditingName(dt.name);
+    setEditingRequired(dt.required);
+  };
+
+  const cancelarEdicion = () => {
+    setEditingId(null);
+    setError('');
+  };
+
+  const pedirConfirmacion = (dt: DocumentType) => {
+    if (!editingName.trim()) {
+      setError('El nombre del documento no puede quedar vacío.');
+      return;
+    }
+    const sinCambios = editingName.trim() === dt.name && editingRequired === dt.required;
+    if (sinCambios) {
+      setEditingId(null);
+      return;
+    }
+    setConfirmandoGuardar(dt);
+  };
+
+  const guardarCambios = async () => {
+    const dt = confirmandoGuardar;
+    if (!dt) return;
+    setGuardando(true);
+    setError('');
     try {
-      await updateDocumentType(id, { name: editingName.trim() });
+      await updateDocumentType(dt.id, { name: editingName.trim(), required: editingRequired });
+      setConfirmandoGuardar(null);
       setEditingId(null);
       load();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'No se pudo renombrar el documento.');
-    }
-  };
-
-  const handleToggleRequired = async (dt: DocumentType) => {
-    try {
-      await updateDocumentType(dt.id, { required: !dt.required });
-      load();
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'No se pudo actualizar el documento.');
+      setConfirmandoGuardar(null);
+      setError(err.response?.data?.message || 'No se pudo guardar el documento.');
+    } finally {
+      setGuardando(false);
     }
   };
 
@@ -117,37 +146,62 @@ export default function DocumentosRequeridosModal({ onClose, embedded }: Props) 
               {docTypes.length === 0 && (
                 <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: 0 }}>No hay documentos requeridos todavía.</p>
               )}
-              {docTypes.map((dt) => (
-                <div key={dt.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
-                  {editingId === dt.id ? (
-                    <input
-                      type="text"
-                      value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      style={{ flex: 1 }}
-                      autoFocus
-                    />
+              {docTypes.map((dt) => {
+                const enEdicion = editingId === dt.id;
+                return (
+                <div
+                  key={dt.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '10px', padding: enEdicion ? '12px' : '8px 12px',
+                    border: `1px solid ${enEdicion ? 'var(--azul-claro)' : '#e2e8f0'}`, borderRadius: '10px',
+                    background: enEdicion ? 'rgba(18, 55, 95, 0.04)' : '#fff', flexWrap: 'wrap',
+                  }}
+                >
+                  {enEdicion ? (
+                    <>
+                      <input
+                        type="text"
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); pedirConfirmacion(dt); } if (e.key === 'Escape') cancelarEdicion(); }}
+                        style={{ flex: '1 1 200px', minWidth: 0 }}
+                        aria-label="Nombre del documento"
+                        autoFocus
+                      />
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', color: '#4a5568', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        <input type="checkbox" checked={editingRequired} onChange={(e) => setEditingRequired(e.target.checked)} style={{ width: '15px', height: '15px' }} />
+                        Requerido
+                      </label>
+                      <div style={{ display: 'flex', gap: '6px', marginLeft: 'auto' }}>
+                        <button type="button" className="btn-secondary" onClick={cancelarEdicion} style={{ padding: '7px 12px', fontSize: '0.8rem' }}>
+                          Cancelar
+                        </button>
+                        <button type="button" className="auth-btn" onClick={() => pedirConfirmacion(dt)} style={{ padding: '7px 14px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <Check size={14} /> Guardar
+                        </button>
+                      </div>
+                    </>
                   ) : (
-                    <span style={{ flex: 1, fontWeight: 600, color: 'var(--azul-oscuro)' }}>{dt.name}</span>
+                    <>
+                      <span style={{ flex: '1 1 180px', fontWeight: 600, color: 'var(--azul-oscuro)', minWidth: 0 }}>{dt.name}</span>
+                      {dt.required && (
+                        <span className="status-badge" style={{ background: '#fed7d7', color: '#c53030', fontSize: '0.7rem' }}>
+                          Requerido
+                        </span>
+                      )}
+                      <div style={{ display: 'flex', gap: '2px', marginLeft: 'auto' }}>
+                        <button onClick={() => abrirEdicion(dt)} style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', display: 'flex', padding: '4px' }} title="Editar documento">
+                          <Pencil size={14} />
+                        </button>
+                        <button onClick={() => handleDelete(dt)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', padding: '4px' }} title="Quitar documento">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </>
                   )}
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.72rem', color: '#718096', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={dt.required} onChange={() => handleToggleRequired(dt)} style={{ width: '14px', height: '14px' }} />
-                    Requerido
-                  </label>
-                  {editingId === dt.id ? (
-                    <button onClick={() => handleSaveName(dt.id)} style={{ background: 'none', border: 'none', color: '#276749', cursor: 'pointer', display: 'flex' }} title="Guardar">
-                      <Check size={15} />
-                    </button>
-                  ) : (
-                    <button onClick={() => { setEditingId(dt.id); setEditingName(dt.name); }} style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', display: 'flex' }} title="Renombrar">
-                      <Pencil size={14} />
-                    </button>
-                  )}
-                  <button onClick={() => handleDelete(dt)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex' }} title="Quitar">
-                    <Trash2 size={14} />
-                  </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -160,11 +214,27 @@ export default function DocumentosRequeridosModal({ onClose, embedded }: Props) 
               <input type="checkbox" checked={newRequired} onChange={(e) => setNewRequired(e.target.checked)} style={{ width: '16px', height: '16px' }} />
               Requerido
             </label>
-            <button type="submit" className="auth-btn" disabled={saving || !newName.trim()} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button type="submit" className="auth-btn" disabled={saving || !newName.trim()} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
               <Plus size={15} /> {saving ? 'Agregando...' : 'Agregar'}
             </button>
           </form>
     </>
+  );
+
+  const guardarDialog = confirmandoGuardar && (
+    <ConfirmDialog
+      title="Guardar cambios del documento"
+      message={(() => {
+        const dt = confirmandoGuardar;
+        const partes: string[] = [];
+        if (editingName.trim() !== dt.name) partes.push(`se renombrará de "${dt.name}" a "${editingName.trim()}"`);
+        if (editingRequired !== dt.required) partes.push(editingRequired ? 'pasará a ser obligatorio' : 'dejará de ser obligatorio');
+        return `El documento ${partes.join('; ')}. Aplica al checklist de todo el personal administrativo. ¿Deseas guardar?`;
+      })()}
+      confirmLabel={guardando ? 'Guardando...' : 'Sí, guardar'}
+      onConfirm={guardarCambios}
+      onCancel={() => setConfirmandoGuardar(null)}
+    />
   );
 
   const deleteDialog = confirmandoDelete && (
@@ -182,7 +252,9 @@ export default function DocumentosRequeridosModal({ onClose, embedded }: Props) 
     return (
       <>
         {body}
-        {deleteDialog}
+        {guardarDialog}
+        {guardarDialog}
+    {deleteDialog}
       </>
     );
   }

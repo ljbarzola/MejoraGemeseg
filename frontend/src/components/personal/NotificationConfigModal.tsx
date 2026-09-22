@@ -67,7 +67,9 @@ export default function NotificationConfigModal({ onClose, onSaved }: Props) {
           ) : (
             <>
               <p style={{ fontSize: '0.82rem', color: '#718096', margin: '0 0 16px' }}>
-                Configura el remitente de correos y el numero de WhatsApp Business para enviar recordatorios de cumplimiento.
+                Desde qué dirección salen los avisos de tu empresa: los recordatorios de
+                documentos a los guardias y el código para recuperar la contraseña.
+                No cambia a quién se le envía — eso sigue siendo el correo de cada persona.
               </p>
 
               {/* Correo */}
@@ -75,16 +77,18 @@ export default function NotificationConfigModal({ onClose, onSaved }: Props) {
                 <h4 style={{ fontSize: '0.85rem', color: 'var(--azul-oscuro)', margin: '0 0 10px' }}>Correo electronico (Gmail)</h4>
                 <div style={{ display: 'grid', gap: '10px' }}>
                   <div className="form-group">
-                    <label style={{ fontSize: '0.8rem' }}>Correo de envio</label>
+                    <label style={{ fontSize: '0.8rem' }}>Correo de envío</label>
                     <input
                       type="email"
                       value={senderEmail}
                       onChange={(e) => setSenderEmail(e.target.value)}
-                      placeholder="rrhh@tudominio.com"
+                      placeholder="rrhh@gemeseg.com"
                       style={{ fontSize: '0.82rem' }}
                     />
                     <p style={{ fontSize: '0.72rem', color: '#a0aec0', margin: '4px 0 0' }}>
-                      Debe coincidir con la casilla configurada en Google Workspace para domain-wide delegation.
+                      Tiene que ser una casilla real de tu dominio, con su propio buzón
+                      (no un alias ni un grupo). Al guardar se comprueba contra Google:
+                      si no existe, te avisa aquí mismo y no se guarda.
                     </p>
                   </div>
                   <div className="form-group">
@@ -93,27 +97,41 @@ export default function NotificationConfigModal({ onClose, onSaved }: Props) {
                       type="text"
                       value={senderName}
                       onChange={(e) => setSenderName(e.target.value)}
-                      placeholder="Recursos Humanos - Gemeseg"
+                      placeholder="Recursos Humanos - GEMESEG"
                       style={{ fontSize: '0.82rem' }}
                     />
+                    <p style={{ fontSize: '0.72rem', color: '#a0aec0', margin: '4px 0 0' }}>
+                      Opcional. Es el nombre que ve quien recibe el correo
+                      {senderName.trim() && senderEmail.trim()
+                        ? `: "${senderName.trim()} <${senderEmail.trim()}>"`
+                        : '.'}
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* WhatsApp */}
-              <div style={{ marginBottom: '16px' }}>
-                <h4 style={{ fontSize: '0.85rem', color: 'var(--azul-oscuro)', margin: '0 0 10px' }}>WhatsApp Business (Twilio)</h4>
+              {/* WhatsApp: bloqueado hasta tener proveedor y cuenta de
+                   WhatsApp Business aprobada por Meta. El campo se deja
+                   visible (para que se sepa que está previsto) pero sin poder
+                   escribirse, en vez de dejar configurar algo que no enviaría. */}
+              <div style={{ marginBottom: '16px', opacity: 0.65 }}>
+                <h4 style={{ fontSize: '0.85rem', color: 'var(--azul-oscuro)', margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  WhatsApp Business
+                  <span style={{ fontSize: '0.65rem', background: '#e2e8f0', color: '#718096', borderRadius: 999, padding: '2px 8px', fontWeight: 700 }}>
+                    Próximamente
+                  </span>
+                </h4>
                 <div className="form-group">
-                  <label style={{ fontSize: '0.8rem' }}>Numero de WhatsApp Business</label>
+                  <label style={{ fontSize: '0.8rem' }}>Número de WhatsApp Business</label>
                   <input
                     type="text"
                     value={whatsappFrom}
-                    onChange={(e) => setWhatsappFrom(e.target.value)}
+                    disabled
                     placeholder="+593991234567"
-                    style={{ fontSize: '0.82rem' }}
+                    style={{ fontSize: '0.82rem', background: '#f1f5f9', cursor: 'not-allowed' }}
                   />
                   <p style={{ fontSize: '0.72rem', color: '#a0aec0', margin: '4px 0 0' }}>
-                    Numero aprobado por Meta para WhatsApp Business. Requiere TWILIO_ACCOUNT_SID y TWILIO_AUTH_TOKEN en el servidor.
+                    Todavía no disponible: hace falta contratar el proveedor de mensajería y obtener una cuenta de WhatsApp Business aprobada por Meta. Mientras tanto, los recordatorios se envían por correo.
                   </p>
                 </div>
               </div>

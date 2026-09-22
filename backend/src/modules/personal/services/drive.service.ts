@@ -9,6 +9,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Readable } from 'stream';
 import {
+  advertenciaNombreCarpeta,
+  formatNombrePersona,
+  normalizarNombrePersona,
+  validarNombrePersona,
+} from '../utils/nombre-persona.util';
+import {
   FICHA_PERSONAL_FILENAME,
   FICHA_PERSONAL_FILENAME_LEGACY,
   NON_DOCUMENT_FILENAMES,
@@ -212,9 +218,15 @@ export class DriveService {
       where: { companyId, type },
     });
     if (!row) return null;
+    // Filas antiguas guardaron acá lo que la persona pegó tal cual, y en
+    // algunos casos fue solo el ID pelado (no una URL) — usarlo directo como
+    // link rompía el botón "Ver carpeta". Solo se reusa si de verdad es una URL.
+    const validLink = row.driveFolderLink?.trim().startsWith('http')
+      ? row.driveFolderLink
+      : null;
     return {
       ...row,
-      driveFolderLink: row.driveFolderLink || driveFolderPublicUrl(row.driveFolderId),
+      driveFolderLink: validLink || driveFolderPublicUrl(row.driveFolderId),
       hardcoded: true,
     };
   }
@@ -371,6 +383,10 @@ export class DriveService {
       carpetasNoReconocidas: [] as string[],
       guardiasNoReconocidos: [] as string[],
       renombresIgnorados: [] as string[],
+      // Puramente informativo: carpetas de guardia cuyo nombre no sigue el
+      // estándar "Apellidos Nombres" (ver nombre-persona.util). Se
+      // sincronizan igual — no se renombra nada en Drive.
+      guardiasFormatoInvalido: [] as string[],
       guardiasFueraConCarpetaActiva: [] as string[],
       errors: [] as string[],
     };
@@ -603,6 +619,7 @@ export class DriveService {
     result: {
       guardiasNoReconocidos: string[];
       renombresIgnorados: string[];
+      guardiasFormatoInvalido: string[];
       documentos: number;
       fichasPersonales: number;
       guardiasActualizados: number;
@@ -661,7 +678,16 @@ export class DriveService {
         result.renombresIgnorados.push(
           cedulaConfiable
             ? `"${guardiaFolder.name}" — antes "${existente.employeeName} - ${existente.cedula}", la cédula detectada ahora sería "${cedulaLeida}"; se mantuvo la cédula original por seguridad`
-            : `"${guardiaFolder.name}" no se pudo leer como "Apellidos - Nombres" ni como "... - Cédula"; se mantuvo la identidad original "${existente.employeeName} - ${existente.cedula}"`,
+            : `"${guardiaFolder.name}" no se pudo leer como "Apellidos Nombres" ni como "... - Cédula"; se mantuvo la identidad original "${existente.employeeName}" (${existente.cedula})`,
+        );
+      }
+
+      // Advertencia de formato, independiente de la identidad: la carpeta ya
+      // quedó sincronizada, esto solo le dice a RRHH cuáles conviene
+      // renombrar en Drive para dejar todo en "Apellidos Nombres".
+      if (!validarNombrePersona(guardiaFolder.name).valido) {
+        result.guardiasFormatoInvalido.push(
+          advertenciaNombreCarpeta(guardiaFolder.name),
         );
       }
 
@@ -749,7 +775,7 @@ export class DriveService {
   // Personal Administrativo tiene su propia carpeta raíz (config
   // type='PERSONAL_ADMIN'), independiente de la de Cumplimiento/Custodios.
   // Dentro de ella hay una subcarpeta por empleado, hermanas entre sí,
-  // nombradas "Nombre Apellido - Puesto" (sin cédula).
+  // nombradas "Apellidos Nombres" (el puesto y la cédula viven en datos.json).
   private async getPersonalAdminFolderId(companyId: number): Promise<string> {
     const config = await this.prisma.folderConfig.findFirst({
       where: { companyId, type: 'PERSONAL_ADMIN' },
@@ -765,7 +791,8 @@ export class DriveService {
   // Parser exclusivo del bucket Personal Administrativo. NO reutiliza ni
   // toca `parseEmployeeFolderName` (que sigue siendo el único parser usado
   // por Custodios/CUMPLIMIENTO, con cédulas reales). Aquí el nombre de
-  // Formato actual: "Apellidos Nombres - Cédula - Puesto" (mismas 10 cifras
+  // Formatos VIEJOS que sigue leyendo: "Apellidos Nombres - Cédula - Puesto"
+  // y "Apellidos Nombres - Cédula" (mismas 10 cifras
   // que `parseEmployeeFolderName` usa para Custodios/Cumplimiento) — la
   // cédula real es ahora la identidad de la fila en BD, igual que Guardias,
   // en vez del ID de carpeta de Drive. Si la carpeta no trae una cédula
@@ -823,14 +850,50 @@ export class DriveService {
 
     for (const empFolder of employeeFolders) {
       try {
-        const { name, puesto, cedula, cedulaConfiable } =
-          this.parsePersonalAdminFolderName(empFolder.name, empFolder.id);
+        const parsed = this.parsePersonalAdminFolderName(
+          empFolder.name,
+          empFolder.id,
+        );
+        const name = normalizarNombrePersona(parsed.name);
+        const files = await this.listFilesInFolder(empFolder.id);
 
-        if (!cedulaConfiable) {
+        // El formato estándar ("Apellidos Nombres") ya no lleva la cédula en
+        // el nombre, así que cuando el parser no la encuentra ahí se lee de
+        // datos.json / candidato.json — igual que hace el sync de Guardias.
+        const cedulaLeida = parsed.cedulaConfiable
+          ? parsed.cedula
+          : await this.leerCedulaDeJsonEnCarpeta(files);
+        const cedulaConfiable = /^\d{10}$/.test(cedulaLeida);
+
+        // Ancla de identidad por folderId (el mismo criterio que Guardias):
+        // si la carpeta ya estaba vinculada a una cédula, un rename o un JSON
+        // ilegible nunca crea una identidad nueva ni parte al empleado en dos.
+        const existente = await this.prisma.employeeDriveFolder.findFirst({
+          where: { companyId, folderId: empFolder.id },
+        });
+
+        let cedula: string;
+        if (cedulaConfiable) {
+          cedula = cedulaLeida;
+        } else if (existente) {
+          cedula = existente.cedula;
+        } else {
           result.errors.push(
-            `Carpeta "${empFolder.name}" no tiene el formato "Apellidos Nombres - Cédula - Puesto" — renómbrala en Drive para que sincronice correctamente.`,
+            `No se pudo identificar a quién pertenece la carpeta "${empFolder.name}": su cédula no está en datos.json ni en el nombre. Agrégala desde la app y vuelve a sincronizar.`,
           );
+          continue;
         }
+
+        // Advertencia informativa, nunca bloquea ni renombra nada en Drive.
+        const formato = validarNombrePersona(empFolder.name);
+        if (!formato.valido) {
+          result.errors.push(advertenciaNombreCarpeta(empFolder.name));
+        }
+
+        // El puesto dejó de vivir en el nombre de la carpeta: si el parser no
+        // lo encuentra ahí (formato nuevo), se conserva el que ya estaba en BD
+        // en vez de borrarlo. La fuente real es la ficha → datos.json.
+        const puesto = parsed.puesto || existente?.puesto || null;
 
         await this.prisma.employeeDriveFolder.upsert({
           where: {
@@ -856,7 +919,6 @@ export class DriveService {
           },
         });
 
-        const files = await this.listFilesInFolder(empFolder.id);
         const fichaFile = files.find(
           (f: { id?: string; name?: string }) =>
             f.name === FICHA_PERSONAL_FILENAME ||
@@ -2385,7 +2447,7 @@ export class DriveService {
 
     const jobPositions = await this.getJobPositions(companyId);
 
-    // Estructura esperada: RECLUTAMIENTO/<Puesto>/<Apellidos - Nombres>/archivos...
+    // Estructura esperada: RECLUTAMIENTO/<Puesto>/<Apellidos Nombres>/archivos...
     // Cada subcarpeta de la raíz es un PUESTO (idealmente con el mismo nombre
     // que un JobPosition); los candidatos viven un nivel más abajo, dentro de
     // su carpeta de puesto. Los "Puesto_*.json" quedan sueltos en la raíz y
@@ -2459,15 +2521,20 @@ export class DriveService {
           const nombres = buscarDatoFormulario(datosFormulario, [
             'nombres',
           ]);
+          // Formato estándar "Apellidos Nombres" (ver nombre-persona.util).
+          // Los fallbacks siguen ahí solo para postulaciones viejas cuyo JSON
+          // guardó un único campo de nombre.
           const nombre =
-            (apellidos && nombres ? `${apellidos} - ${nombres}` : '') ||
-            buscarDatoFormulario(datosFormulario, [
-              'nombre completo',
-              'nombre',
-            ]) ||
-            candidatoJsonData?.nombreCompleto ||
-            candidatoJsonData?.nombre ||
-            parsed.name;
+            formatNombrePersona(apellidos, nombres) ||
+            normalizarNombrePersona(
+              buscarDatoFormulario(datosFormulario, [
+                'nombre completo',
+                'nombre',
+              ]) ||
+                candidatoJsonData?.nombreCompleto ||
+                candidatoJsonData?.nombre ||
+                parsed.name,
+            );
           const cedula =
             this.extraerCedulaConfiableDeObjeto(candidatoJsonData) ||
             (parsed.cedulaConfiable ? parsed.cedula : '');
@@ -2797,14 +2864,11 @@ export class DriveService {
   //                    'PERSONAL_ADMIN'), como hija directa — ese bucket no
   //                    tiene sub-buckets (ver syncPersonalAdminFolder).
   //
-  // Ojo, los dos destinos NOMBRAN sus carpetas distinto: Guardias usa
-  // "Apellidos - Nombres" (cédula en candidato.json o, en carpetas viejas,
-  // "... - Cédula" de 10 dígitos) y Personal Administrativo usa
-  // "Nombre - Puesto", sin cédula (parsePersonalAdminFolderName).
-  // Por eso contratar a un administrativo además RENOMBRA la carpeta: movida
-  // tal cual, ese sync leería la cédula como si fuera el puesto y lo listaría
-  // mal. La cédula no se pierde — queda escrita en candidato.json, que viaja
-  // con la carpeta.
+  // Los dos destinos nombran igual: "Apellidos Nombres", sin guion, sin
+  // cédula y sin puesto (ver nombre-persona.util). Contratar RENOMBRA la
+  // carpeta del postulante a ese formato. Ni la cédula ni el puesto se
+  // pierden — quedan escritos en candidato.json / datos.json, que viajan con
+  // la carpeta y son lo que el sync lee para resolver la identidad.
   //
   // Si falta la carpeta destino configurada, se corta antes de tocar nada: la
   // carpeta del postulante se queda intacta en Reclutamiento en vez de quedar
@@ -2837,7 +2901,7 @@ export class DriveService {
 
     // candidato.json se lee ANTES de decidir nada: el puestoId que deja ahí el
     // portal de postulación es el respaldo para ubicar la vacante, la cédula
-    // puede vivir aquí (formato "Apellidos - Nombres" sin cédula en el
+    // puede vivir aquí (formato "Apellidos Nombres" sin cédula en el
     // nombre), y más abajo este mismo objeto se reescribe con el estado de
     // contratación.
     const filesEnCarpeta = await this.listFilesInFolder(folderId);
@@ -2878,8 +2942,8 @@ export class DriveService {
     ]);
     const nombres = buscarDatoFormulario(datosFormularioNombre, ['nombres']);
     const nombre =
-      (apellidos && nombres ? `${apellidos} - ${nombres}` : '') ||
-      parsed.name;
+      formatNombrePersona(apellidos, nombres) ||
+      normalizarNombrePersona(parsed.name);
 
     // La vacante manda. Se ubica por la carpeta padre del postulante (la
     // carpeta de la vacante), que es el vínculo más fiable; si eso no da
@@ -3012,15 +3076,30 @@ export class DriveService {
         );
       }
 
+      // El puesto ya NO va en el nombre de la carpeta: se guarda en la ficha
+      // (campo `puesto`), que syncFichaAdministrativo vuelca a datos.json. Por
+      // eso una vacante sin puesto ya no bloquea la contratación.
       const puestoCarpeta = (vacante?.puesto || '').trim();
-      if (!puestoCarpeta) {
-        throw new BadRequestException(
-          'No se pudo determinar el puesto de la vacante de este postulante, y Personal Administrativo nombra sus carpetas "Nombre - Puesto". Revisa a qué vacante pertenece su carpeta en Drive antes de contratar.',
-        );
+      if (puestoCarpeta) {
+        try {
+          await this.prisma.administrativeStaffFicha.upsert({
+            where: { companyId_cedula: { companyId, cedula } },
+            create: {
+              companyId,
+              cedula,
+              camposPersonalizados: { puesto: puestoCarpeta },
+            },
+            update: {},
+          });
+        } catch (err: any) {
+          this.logger.warn(
+            `No se pudo guardar el puesto "${puestoCarpeta}" en la ficha de ${cedula}: ${err.message}`,
+          );
+        }
       }
 
       destinoParentId = raizAdmin;
-      nuevoNombreCarpeta = `${nombre} - ${puestoCarpeta}`;
+      nuevoNombreCarpeta = nombre;
       carpetaDestino = 'Personal Administrativo';
     } else {
       // Mismo espíritu que evitó el caso de los "Juan Perez" duplicados: no se
@@ -3142,97 +3221,6 @@ export class DriveService {
     }
 
     return { cedula, nombre, carpetaDestino, tipoContratacion };
-  }
-
-  // Backfill retroactivo del arreglo de contratarCandidato (POSTULACION_STASH_KEY):
-  // recorre las fichas YA contratadas antes de este cambio, y para las que
-  // todavía no tienen el stash de postulación, busca su carpeta actual en
-  // Drive (vía EmployeeDriveFolder, que ya mapea cédula→carpeta desde el
-  // último sync) y si encuentra candidato.json ahí, lo guarda. Idempotente —
-  // corre seguro más de una vez, nunca pisa un stash ya guardado.
-  async backfillPostulacion(companyId: number) {
-    if (!companyId)
-      throw new BadRequestException('Usuario sin empresa asociada');
-
-    const resultado = {
-      procesadas: 0,
-      actualizadas: 0,
-      sinCarpeta: 0,
-      sinCandidatoJson: 0,
-      errores: [] as string[],
-    };
-
-    for (const esAdministrativo of [true, false]) {
-      const fichas = esAdministrativo
-        ? await this.prisma.administrativeStaffFicha.findMany({
-            where: { companyId },
-            select: { cedula: true, camposPersonalizados: true },
-          })
-        : await this.prisma.guardiaFichaPersonal.findMany({
-            where: { companyId },
-            select: { cedula: true, camposPersonalizados: true },
-          });
-
-      for (const ficha of fichas) {
-        resultado.procesadas++;
-        const campos =
-          (ficha.camposPersonalizados as Record<string, any>) || {};
-        if (campos[POSTULACION_STASH_KEY]) continue;
-
-        try {
-          const folder = await this.prisma.employeeDriveFolder.findUnique({
-            where: { companyId_cedula: { companyId, cedula: ficha.cedula } },
-          });
-          if (!folder) {
-            resultado.sinCarpeta++;
-            continue;
-          }
-
-          const archivos = await this.listFilesInFolder(folder.folderId);
-          const jsonFile = archivos.find((f: any) =>
-            f.name.toLowerCase().endsWith('.json'),
-          );
-          if (!jsonFile) {
-            resultado.sinCandidatoJson++;
-            continue;
-          }
-
-          const drive = this.getDriveClient();
-          const fileRes = await drive.files.get(
-            { fileId: jsonFile.id, alt: 'media', supportsAllDrives: true },
-            { responseType: 'text' },
-          );
-          const candidatoJsonData =
-            (typeof fileRes.data === 'string'
-              ? JSON.parse(fileRes.data)
-              : fileRes.data) || {};
-          const datosFormulario =
-            candidatoJsonData?.datosFormulario || candidatoJsonData || {};
-          if (!Object.keys(datosFormulario).length) {
-            resultado.sinCandidatoJson++;
-            continue;
-          }
-
-          const nuevosCampos = { ...campos, [POSTULACION_STASH_KEY]: datosFormulario };
-          if (esAdministrativo) {
-            await this.prisma.administrativeStaffFicha.update({
-              where: { companyId_cedula: { companyId, cedula: ficha.cedula } },
-              data: { camposPersonalizados: nuevosCampos },
-            });
-          } else {
-            await this.prisma.guardiaFichaPersonal.update({
-              where: { companyId_cedula: { companyId, cedula: ficha.cedula } },
-              data: { camposPersonalizados: nuevosCampos },
-            });
-          }
-          resultado.actualizadas++;
-        } catch (err: any) {
-          resultado.errores.push(`${ficha.cedula}: ${err.message}`);
-        }
-      }
-    }
-
-    return resultado;
   }
 
   // Resuelve (o crea si es la primera vez) un bucket de primer nivel bajo la
@@ -3418,6 +3406,9 @@ export class DriveService {
       cedula,
       nombreCompleto: nombreCarpeta,
       activo: campos.activo != null ? campos.activo === 'true' : ficha.activo,
+      // El puesto ya no va en el nombre de la carpeta (ver
+      // nombre-persona.util), así que este JSON es donde queda registrado.
+      puesto: campos.puesto || null,
       departamento: campos.departamento || null,
       tipoContrato: campos.tipo_contrato || null,
       telefono: campos.telefono || null,
@@ -3461,7 +3452,7 @@ export class DriveService {
 
   // Identidad de una carpeta de guardia:
   //  1. "… - 1234567890" (10 dígitos al final) — formato viejo, sigue válido.
-  //  2. "Apellidos - Nombres" (sin cédula en el nombre) — formato actual;
+  //  2. "Apellidos Nombres" (sin cédula en el nombre) — formato estándar;
   //     la cédula se lee de candidato.json / datos.json (ver
   //     extraerCedulaConfiableDeObjeto). cedulaConfiable=false acá solo
   //     significa "no venía en el nombre".

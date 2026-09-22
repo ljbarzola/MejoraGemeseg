@@ -4,13 +4,11 @@ import { PrismaService } from '../../../prisma/prisma.service';
 describe('PersonalAlertsService.getAlerts', () => {
   let service: PersonalAlertsService;
   let prisma: {
-    certification: { findMany: jest.Mock };
     training: { findMany: jest.Mock };
   };
 
   beforeEach(() => {
     prisma = {
-      certification: { findMany: jest.fn().mockResolvedValue([]) },
       training: { findMany: jest.fn().mockResolvedValue([]) },
     };
     service = new PersonalAlertsService(prisma as unknown as PrismaService);

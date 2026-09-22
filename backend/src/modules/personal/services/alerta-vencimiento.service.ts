@@ -9,7 +9,7 @@ import {
   CumplimientoEntidadService,
   RequisitoConEstado,
 } from './cumplimiento-entidad.service';
-import { GmailMailService } from './gmail-mail.service';
+import { GmailMailService } from '../../mail/gmail-mail.service';
 import { GuardiaContactoService } from './guardia-contacto.service';
 import { WhatsAppService } from './whatsapp.service';
 
@@ -99,7 +99,18 @@ export class AlertaVencimientoService {
       pendientes,
     });
 
-    await this.gmailMailService.sendMail({ to: email, subject, bodyText });
+    // El remitente es el que la empresa configuró, no una dirección fija del
+    // servidor. Hasta 2026-09-22 este `senderEmail` se exigía pero NO se
+    // usaba: todo salía desde GMAIL_SENDER_ADDRESS, así que la pantalla
+    // prometía algo que no cumplía y nadie podía notarlo salvo mirando el
+    // correo recibido.
+    await this.gmailMailService.sendMail({
+      to: email,
+      subject,
+      bodyText,
+      from: config.senderEmail,
+      fromName: config.senderName,
+    });
 
     await this.registrarAlertas(companyId, pendientes);
 

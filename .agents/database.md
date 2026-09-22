@@ -1,7 +1,7 @@
 # Base de Datos
 
 ## Motor
-PostgreSQL 17 (Supabase en produccion, Docker en desarrollo)
+PostgreSQL 16 (Cloud SQL `gemeseg-db` en produccion, Docker en desarrollo)
 
 ## ORM
 Prisma v7 con adapter `@prisma/adapter-pg`
@@ -29,7 +29,7 @@ CacaoSupplier, CacaoClient, CacaoQuality, CacaoLot, CacaoReception, CacaoSettlem
 Custodia — campos: numeroGuia, tipoCustodia (HACIENDA/PUERTO/VIP), estado (LISTO_PARA_CUSTODIAR/EN_CAMINO/LLEGO), choferName/Cedula, custodio1Name/Cedula, custodio2Name/Cedula, cliente, placa, direccionSalida/Llegada, fechaHoraSalida/Llegada, observaciones, nombreHacienda, cantidadSacos, contenedores[], companyId, createdBy
 
 ## Modelos Personal (10) — ⚠️ lista desactualizada, no lista los ~40 modelos reales de este módulo hoy (Entidad/RequisitoDocumento/AsignacionGuardia/MovimientoPersonal/Training/Complaint/Survey/etc. — ver `.agents/modules/recursos-humanos.md` y `.agents/modules/reclutamiento.md` para el inventario real)
-ContractTemplate, Contract, Certification, CertificationAlert, LogTemplate, LogEntry, EmployeeDriveFolder, DocumentType, EmployeeDocument, FolderConfig — (`KanbanColumn`/`Candidate`/`CandidateHistory` eliminados 2026-09-17, ver recursos-humanos.md punto 2)
+ContractTemplate, Contract, LogTemplate, LogEntry, EmployeeDriveFolder, DocumentType, EmployeeDocument, FolderConfig — (`KanbanColumn`/`Candidate`/`CandidateHistory` eliminados 2026-09-17, ver recursos-humanos.md punto 2; `Certification`/`CertificationAlert` eliminados 2026-09-22 con su tabla, ver punto 4)
 
 ## Modelos Ventas (4)
 SalesGoal, ClientVisit, Lead, SalesApiKey
@@ -39,6 +39,5 @@ SalesGoal, ClientVisit, Lead, SalesApiKey
 - Lot IDs: 5-digit format `LOTE-YYYY-00001`
 - Settlements: `LIQ-XXXX`, Shipments: `EMB-XXXX`
 - Contratos generados con campos `[NOMBRE]`, `[CEDULA]`, etc.
-- Alertas de certificacion: 30, 15, 7, 1 dia antes del vencimiento
 - Custodias: Solo estado `LLEGO` liquida nomina
 - Custodias: Tarifas $20/$10/$23 por persona segun tipo

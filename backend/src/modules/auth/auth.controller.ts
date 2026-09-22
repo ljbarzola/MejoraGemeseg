@@ -3,7 +3,10 @@ import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import {
+  ConfirmPasswordResetDto,
+  RequestPasswordResetDto,
+} from './dto/forgot-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -19,9 +22,16 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
-  @Post('forgot-password')
-  forgotPassword(@Body() dto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(dto);
+  // Dos pasos. El endpoint viejo de un solo paso (correo + contraseña nueva,
+  // sin verificar nada) se eliminó: era un apoderamiento de cuenta abierto.
+  @Post('forgot-password/request')
+  requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
+    return this.authService.requestPasswordReset(dto);
+  }
+
+  @Post('forgot-password/confirm')
+  confirmPasswordReset(@Body() dto: ConfirmPasswordResetDto) {
+    return this.authService.confirmPasswordReset(dto);
   }
 
   @UseGuards(AuthGuard('jwt'))

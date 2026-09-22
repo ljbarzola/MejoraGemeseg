@@ -170,6 +170,29 @@ export const updateRequisito = (
 
 export const deleteRequisito = (id: number) => api.delete(`/personal/requisitos-documento/${id}`);
 
+// PADRÓN DE GUARDIAS
+
+export interface GuardiaPadron {
+  /** Nombre completo tal como está la carpeta en Drive ("APELLIDOS NOMBRES"). */
+  name: string;
+  apellidos: string;
+  nombres: string;
+  /**
+   * false = la separación se dedujo del nombre completo (se asumieron dos
+   * apellidos) porque esa persona no tiene el formulario de postulación
+   * guardado. La interfaz lo advierte en vez de darlo por cierto.
+   */
+  nombreSeparadoExacto: boolean;
+  cedula: string;
+  lastSyncAt: string | null;
+}
+
+// Vive en RRHH (/personal/guardias), no en Custodias: esta pantalla es de
+// RRHH y no debe fallar con "No tienes acceso a CUSTODIAS" en una empresa
+// que no tiene contratado ese módulo.
+export const getGuardias = (): Promise<GuardiaPadron[]> =>
+  api.get('/personal/guardias').then((r) => r.data);
+
 // ASIGNACIONES DE GUARDIAS (historial de solo lectura, generado por el sync
 // de Drive — ver syncEntidadesFolder más abajo)
 
@@ -335,7 +358,7 @@ export const getPersonalFieldDefinitions = (scope: PersonalFieldScope = 'GUARDIA
 export const createPersonalFieldDefinition = (data: { label: string; type: PersonalFieldType; scope?: PersonalFieldScope; category?: PersonalFieldCategory; required?: boolean }): Promise<PersonalFieldDefinition> =>
   api.post('/personal/personal-field-definitions', data).then((r) => r.data);
 
-export const updatePersonalFieldDefinition = (id: number, data: { label?: string; order?: number; required?: boolean }): Promise<PersonalFieldDefinition> =>
+export const updatePersonalFieldDefinition = (id: number, data: { label?: string; order?: number; required?: boolean; type?: PersonalFieldType }): Promise<PersonalFieldDefinition> =>
   api.patch(`/personal/personal-field-definitions/${id}`, data).then((r) => r.data);
 
 export const deletePersonalFieldDefinition = (id: number) => api.delete(`/personal/personal-field-definitions/${id}`);
@@ -356,6 +379,9 @@ export interface SyncEntidadesResult {
   carpetasNoReconocidas: string[];
   guardiasNoReconocidos: string[];
   renombresIgnorados: string[];
+  // Puramente informativo — carpetas de guardia que no siguen el estándar
+  // "Apellidos Nombres". Se sincronizan igual, nunca se renombra nada.
+  guardiasFormatoInvalido: string[];
   guardiasFueraConCarpetaActiva: string[];
   // Puramente informativo (Fase 3.2) — nombres de carpetas de Entidad que no
   // siguen el formato "Provincia - Entidad" (espacios del guion opcionales). Nunca bloquea nada.

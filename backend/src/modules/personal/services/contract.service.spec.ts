@@ -3,6 +3,7 @@ import * as path from 'path';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ContractService } from './contract.service';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { DriveService } from './drive.service';
 import * as docxMerge from '../../../common/docx-templating/docx-merge.util';
 
 jest.mock('fs');
@@ -22,6 +23,7 @@ function makeTemplate(overrides: Partial<any> = {}) {
 
 describe('ContractService', () => {
   let service: ContractService;
+  let driveService: { uploadFile: jest.Mock; downloadFileBuffer: jest.Mock };
   let prisma: {
     contractTemplate: {
       findFirst: jest.Mock;
@@ -73,7 +75,16 @@ describe('ContractService', () => {
       asignacionGuardia: { findFirst: jest.fn() },
       company: { findUnique: jest.fn() },
     };
-    service = new ContractService(prisma as unknown as PrismaService);
+    // DriveService solo se usa para subir/bajar la copia del PDF en Drive;
+    // acá se anula para que los tests no toquen la red.
+    driveService = {
+      uploadFile: jest.fn().mockResolvedValue({ id: 'drive-1', url: 'https://drive.google.com/file/d/drive-1/view' }),
+      downloadFileBuffer: jest.fn(),
+    };
+    service = new ContractService(
+      prisma as unknown as PrismaService,
+      driveService as unknown as DriveService,
+    );
   });
 
   describe('deleteTemplate', () => {
@@ -282,17 +293,50 @@ describe('ContractService', () => {
 
     beforeEach(() => {
       (docxMerge.detectDocxVariables as jest.Mock).mockResolvedValue([]);
+      // convertDocxToPdf lanza LibreOffice headless por execFile: no puede
+      // correr en un unit test (ni depender de que este instalado en la
+      // maquina que corre las pruebas), asi que se sustituye por su salida.
+      jest
+        .spyOn(service as any, 'convertDocxToPdf')
+        .mockResolvedValue(Buffer.from('fake-pdf'));
     });
 
-    it('rejects when no guardia (cedula) was selected', async () => {
+    // Desde el modo manual, generar sin cedula es valido (documento para
+    // alguien que no esta en el padron de guardias). Lo unico imprescindible
+    // es a nombre de quien sale el documento.
+    it('rejects when no name was given', async () => {
       await expect(
         service.generateContract(
-          { templateId: 1, cedula: '   ', nombreGuardia: 'Juan Pérez' },
+          { templateId: 1, cedula: '0912345678', nombreGuardia: '   ' },
           1,
           1,
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(prisma.contractTemplate.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('accepts a manual document with no cedula, naming the PDF after the person', async () => {
+      prisma.contractTemplate.findFirst.mockResolvedValue(
+        makeTemplate({ fields: [] }),
+      );
+      (docxMerge.fillDocxTemplate as jest.Mock).mockResolvedValue(
+        Buffer.from('filled-docx'),
+      );
+      prisma.contract.create.mockResolvedValue({ id: 9 });
+
+      await service.generateContract(
+        { templateId: 1, nombreGuardia: 'Torres Vega Maria' },
+        1,
+        7,
+      );
+
+      expect(prisma.contract.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ cedula: '', nombreGuardia: 'Torres Vega Maria' }),
+        }),
+      );
+      const writtenPath = (fs.writeFileSync as jest.Mock).mock.calls[0][0] as string;
+      expect(path.basename(writtenPath)).toMatch(/^TorresVegaMaria_\d+\.pdf$/);
     });
 
     it('rejects when the template has no downloaded document yet', async () => {
@@ -359,7 +403,6 @@ describe('ContractService', () => {
         makeTemplate({ fields: fieldsForGenerate }),
       );
       (docxMerge.fillDocxTemplate as jest.Mock).mockResolvedValue(Buffer.from('filled-docx'));
-      (docxMerge.docxBufferToPdf as jest.Mock).mockResolvedValue(Buffer.from('fake-pdf'));
       prisma.contract.create.mockResolvedValue({
         id: 5,
         generatedUrl: '/api/personal/contracts/file/x.pdf',
@@ -403,7 +446,6 @@ describe('ContractService', () => {
     it('sanitizes the cedula before using it in the PDF filename', async () => {
       prisma.contractTemplate.findFirst.mockResolvedValue(makeTemplate({ fields: [] }));
       (docxMerge.fillDocxTemplate as jest.Mock).mockResolvedValue(Buffer.from('filled-docx'));
-      (docxMerge.docxBufferToPdf as jest.Mock).mockResolvedValue(Buffer.from('fake-pdf'));
       prisma.contract.create.mockResolvedValue({ id: 1 });
 
       await service.generateContract(
@@ -415,6 +457,56 @@ describe('ContractService', () => {
       const writtenPath = (fs.writeFileSync as jest.Mock).mock.calls[0][0] as string;
       expect(path.basename(writtenPath)).toMatch(/^etcpasswd_\d+\.pdf$/);
       expect(writtenPath.split(path.sep).filter((seg) => seg === '..')).toHaveLength(0);
+    });
+
+    // El disco de Cloud Run es efímero: si el PDF entregado no queda en Drive,
+    // desaparece con el contenedor.
+    it('sube el PDF generado a la carpeta fija de Drive y guarda el enlace', async () => {
+      prisma.contractTemplate.findFirst.mockResolvedValue(makeTemplate({ fields: [] }));
+      (docxMerge.fillDocxTemplate as jest.Mock).mockResolvedValue(Buffer.from('filled-docx'));
+      prisma.contract.create.mockResolvedValue({ id: 3 });
+
+      await service.generateContract(
+        { templateId: 1, cedula: '0912345678', nombreGuardia: 'Perez Ana' },
+        1,
+        7,
+      );
+
+      expect(driveService.uploadFile).toHaveBeenCalledWith(
+        '1LLnPLU7UFSFvIwi-FpMNyIQDkoZI-B8s',
+        expect.any(Buffer),
+        expect.stringContaining('Perez Ana'),
+        'application/pdf',
+      );
+      expect(prisma.contract.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            driveFileId: 'drive-1',
+            driveUrl: 'https://drive.google.com/file/d/drive-1/view',
+          }),
+        }),
+      );
+    });
+
+    it('si Drive falla, igual entrega el documento en vez de tumbar la generación', async () => {
+      prisma.contractTemplate.findFirst.mockResolvedValue(makeTemplate({ fields: [] }));
+      (docxMerge.fillDocxTemplate as jest.Mock).mockResolvedValue(Buffer.from('filled-docx'));
+      driveService.uploadFile.mockRejectedValue(new Error('Drive caido'));
+      prisma.contract.create.mockResolvedValue({ id: 4 });
+
+      await expect(
+        service.generateContract(
+          { templateId: 1, cedula: '0912345678', nombreGuardia: 'Perez Ana' },
+          1,
+          7,
+        ),
+      ).resolves.toBeDefined();
+
+      expect(prisma.contract.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ driveFileId: null, driveUrl: null }),
+        }),
+      );
     });
 
     it('wraps a merge/render failure in a BadRequestException', async () => {

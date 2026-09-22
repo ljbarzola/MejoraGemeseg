@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Download, Printer } from 'lucide-react';
 import { getVisits, getLeads, ClientVisit, Lead } from '../../services/ventas.service';
+import DateInput from '../../components/common/DateInput';
 
 export default function VentasReportes() {
   const navigate = useNavigate();
@@ -64,7 +65,7 @@ export default function VentasReportes() {
         <button className="cacao-back-btn no-print" onClick={() => navigate('/ventas')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="page-title-row">
           <div>
             <p className="page-eyebrow">Ventas y CRM</p>
             <h1>Reportes</h1>
@@ -84,19 +85,17 @@ export default function VentasReportes() {
       <div className="admin-section no-print" style={{ marginTop: '16px', display: 'flex', gap: '16px', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--azul-oscuro)' }}>Desde:</label>
-          <input
-            type="date"
+          <DateInput
             value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            onChange={(v) => setStartDate(v)}
             style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #cbd5e0' }}
           />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--azul-oscuro)' }}>Hasta:</label>
-          <input
-            type="date"
+          <DateInput
             value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            onChange={(v) => setEndDate(v)}
             style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #cbd5e0' }}
           />
         </div>

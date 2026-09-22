@@ -173,6 +173,33 @@ export class VentasTemplatesService {
     }
   }
 
+  // Alternativa a "pegar un link de Drive": la persona sube el .docx
+  // directamente desde su computadora, sin depender de que el archivo esté
+  // compartido en Drive con el permiso correcto.
+  async uploadDocx(
+    templateId: number,
+    companyId: number | null,
+    file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('No se recibió ningún archivo');
+    const where: any = { id: templateId };
+    if (companyId) where.companyId = companyId;
+    const template = await this.prisma.salesTemplate.findFirst({ where });
+    if (!template) throw new NotFoundException('Plantilla no encontrada');
+
+    const buffer = file.buffer;
+    if (!buffer || buffer.length < 100) {
+      throw new BadRequestException('El archivo subido es demasiado pequeño');
+    }
+    if (buffer[0] !== 0x50 || buffer[1] !== 0x4b) {
+      throw new BadRequestException(
+        'El archivo no es un documento Word (.docx) válido',
+      );
+    }
+
+    return this.saveDocx(templateId, buffer);
+  }
+
   private async saveDocx(templateId: number, buffer: Buffer) {
     const fileName = `${Date.now()}.docx`;
     const filePath = path.join(TEMPLATES_DIR, fileName);

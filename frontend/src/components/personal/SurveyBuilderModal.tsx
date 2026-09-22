@@ -15,17 +15,27 @@ interface Props {
 
 const EMPTY_QUESTION: SurveyQuestionInput = { label: '', type: 'SHORT_TEXT', required: true, options: [] };
 
-// Constructor de encuestas: RRHH arma preguntas dinámicas y elige a quién de
-// la empresa enviarla — se crea y se publica en un solo paso (sin borrador
-// editable por separado, para no complicar el flujo de la primera versión).
+// Constructor de encuestas: RRHH arma preguntas dinámicas y elige por dónde
+// enviarla — se crea y se publica en un solo paso (sin borrador editable por
+// separado, para no complicar el flujo).
+//
+// Dos canales, que se pueden combinar en la misma encuesta:
+//  - Destinatarios de la app: la reciben en "Mis Encuestas" y responden una
+//    sola vez, identificados.
+//  - Enlace público: una URL que cualquiera abre sin cuenta ni login. Si RRHH
+//    quiere saber quién respondió, lo agrega como una pregunta más.
+// Debe quedar activo al menos uno; si no, la encuesta no le llegaría a nadie.
 export default function SurveyBuilderModal({ onClose, onCreated }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<SurveyQuestionInput[]>([{ ...EMPTY_QUESTION }]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<Set<number>>(new Set());
+  const [publicEnabled, setPublicEnabled] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Qué botón se pulsó, para mostrar el texto correcto mientras guarda.
+  const [guardandoComo, setGuardandoComo] = useState<'BORRADOR' | 'PUBLICAR' | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -50,7 +60,7 @@ export default function SurveyBuilderModal({ onClose, onCreated }: Props) {
 
   const needsOptions = (type: SurveyQuestionType) => type === 'SINGLE_CHOICE' || type === 'MULTIPLE_CHOICE';
 
-  const handleSave = async () => {
+  const handleSave = async (comoBorrador = false) => {
     if (!title.trim()) { setError('Ponle un título a la encuesta.'); return; }
     const validQuestions = questions.filter((q) => q.label.trim());
     if (validQuestions.length === 0) { setError('Agrega al menos una pregunta.'); return; }
@@ -60,10 +70,16 @@ export default function SurveyBuilderModal({ onClose, onCreated }: Props) {
         return;
       }
     }
-    if (selectedUserIds.size === 0) { setError('Selecciona al menos un destinatario.'); return; }
+    // Un borrador puede quedar a medias: todavía no le llega a nadie, así que
+    // no tiene sentido exigirle un canal. Eso se pide al publicarlo.
+    if (!comoBorrador && selectedUserIds.size === 0 && !publicEnabled) {
+      setError('Elige al menos un destinatario, o activa el enlace público para que respondan personas sin cuenta.');
+      return;
+    }
 
     setError('');
     setSaving(true);
+    setGuardandoComo(comoBorrador ? 'BORRADOR' : 'PUBLICAR');
     try {
       await createSurvey({
         title: title.trim(),
@@ -74,6 +90,8 @@ export default function SurveyBuilderModal({ onClose, onCreated }: Props) {
           order: i,
         })),
         recipientUserIds: [...selectedUserIds],
+        publicEnabled,
+        guardarComoBorrador: comoBorrador,
       });
       onCreated();
       onClose();
@@ -81,6 +99,7 @@ export default function SurveyBuilderModal({ onClose, onCreated }: Props) {
       setError(err.response?.data?.message || 'No se pudo crear la encuesta.');
     } finally {
       setSaving(false);
+      setGuardandoComo(null);
     }
   };
 
@@ -168,7 +187,32 @@ export default function SurveyBuilderModal({ onClose, onCreated }: Props) {
 
           <div style={{ marginTop: '18px' }}>
             <p style={{ margin: '0 0 8px', fontSize: '0.85rem', fontWeight: 700, color: 'var(--azul-oscuro)' }}>
-              Destinatarios <span style={{ fontWeight: 400, color: '#a0aec0' }}>({selectedUserIds.size} seleccionados)</span>
+              ¿Por dónde se responde?
+            </p>
+            <label
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: '0.82rem',
+                border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', marginBottom: 12, cursor: 'pointer',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={publicEnabled}
+                onChange={(e) => setPublicEnabled(e.target.checked)}
+                style={{ marginTop: 3 }}
+              />
+              <span>
+                <strong>Generar enlace público</strong>
+                <span style={{ display: 'block', color: '#718096', marginTop: 2 }}>
+                  Para que respondan personas sin cuenta (proveedores, clientes, postulantes), desde el
+                  computador o el celular. El enlace aparece en el listado al crear la encuesta.
+                  Si necesitas saber quién respondió, agrégalo como una pregunta más.
+                </span>
+              </span>
+            </label>
+
+            <p style={{ margin: '0 0 8px', fontSize: '0.85rem', fontWeight: 700, color: 'var(--azul-oscuro)' }}>
+              Destinatarios en la app <span style={{ fontWeight: 400, color: '#a0aec0' }}>({selectedUserIds.size} seleccionados)</span>
             </p>
             {loadingUsers ? (
               <p style={{ fontSize: '0.8rem', color: '#a0aec0' }}>Cargando empleados...</p>
@@ -185,9 +229,19 @@ export default function SurveyBuilderModal({ onClose, onCreated }: Props) {
           </div>
         </div>
         <div className="modal-actions">
-          <button className="btn-secondary" onClick={onClose}>Cancelar</button>
-          <button className="auth-btn" onClick={handleSave} disabled={saving}>
-            {saving ? 'Enviando...' : 'Crear y enviar'}
+          <button className="btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+          {/* Guardar como borrador: la deja lista para terminarla después. No
+              le llega a nadie y el enlace público no responde hasta publicarla. */}
+          <button
+            className="btn-secondary"
+            onClick={() => handleSave(true)}
+            disabled={saving}
+            title="La guarda sin enviarla. Puedes terminarla y publicarla después."
+          >
+            {guardandoComo === 'BORRADOR' ? 'Guardando...' : 'Guardar como borrador'}
+          </button>
+          <button className="auth-btn" onClick={() => handleSave(false)} disabled={saving}>
+            {guardandoComo === 'PUBLICAR' ? 'Enviando...' : 'Crear y enviar'}
           </button>
         </div>
       </div>

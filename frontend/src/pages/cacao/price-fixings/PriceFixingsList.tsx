@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getPriceFixings, createPriceFixing, fixPrice, getLots } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
+import DateInput from '../../../components/common/DateInput';
 
 export default function PriceFixingsList() {
   const navigate = useNavigate();
@@ -201,7 +202,7 @@ export default function PriceFixingsList() {
             <div className="form-row">
               <div className="form-group" style={{ maxWidth: '50%' }}>
                 <label>Fecha Límite para Fijar</label>
-                <input type="date" value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
+                <DateInput value={form.deadline} onChange={(v) => setForm({ ...form, deadline: v })} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
@@ -347,7 +348,7 @@ export default function PriceFixingsList() {
               </div>
               <div className="form-group">
                 <label>Fecha Límite</label>
-                <input type="date" value={editForm.deadline} onChange={(e) => setEditForm({ ...editForm, deadline: e.target.value })} />
+                <DateInput value={editForm.deadline} onChange={(v) => setEditForm({ ...editForm, deadline: v })} />
               </div>
             </div>
             <div className="modal-actions">

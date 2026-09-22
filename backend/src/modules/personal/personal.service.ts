@@ -12,12 +12,9 @@ export class PersonalService {
   ) {}
 
   async getDashboard(companyId: number) {
-    const now = new Date();
     const [
       vacantesAbiertas,
-      activeCertifications,
       pendingContracts,
-      alertCount,
       driveCustodios,
       asignacionesActivas,
       cedulasFuera,
@@ -29,22 +26,7 @@ export class PersonalService {
       // Sprint 6). El Reclutamiento real vive en Drive vía JobPosition, así
       // que la vacante abierta es el número que de verdad refleja actividad.
       this.prisma.jobPosition.count({ where: { companyId, estado: 'ABIERTA' } }),
-      this.prisma.certification.count({
-        where: { companyId, status: 'ACTIVE' },
-      }),
       this.prisma.contract.count({ where: { companyId, status: 'DRAFT' } }),
-      // Mismo criterio que CertificationService.getAlerts: sin el `gte` el KPI
-      // sumaba certificaciones ya vencidas y no cuadraba con la lista de alertas.
-      this.prisma.certification.count({
-        where: {
-          companyId,
-          status: 'ACTIVE',
-          expiryDate: {
-            gte: now,
-            lte: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
-          },
-        },
-      }),
       this.prisma.employeeDriveFolder.findMany({
         where: { companyId, folderType: 'CUSTODIAS' },
         select: { cedula: true },
@@ -82,9 +64,7 @@ export class PersonalService {
 
     return {
       vacantesAbiertas,
-      activeCertifications,
       pendingContracts,
-      alertCount,
       guardiasSinAsignacion,
       documentosVencidosOPorVencer,
       movimientosEnProceso,

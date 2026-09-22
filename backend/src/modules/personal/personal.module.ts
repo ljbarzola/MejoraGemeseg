@@ -7,10 +7,9 @@ import { EntidadController } from './entidad.controller';
 import { MovimientoPersonalController } from './movimiento-personal.controller';
 import { CedulaMergeController } from './cedula-merge.controller';
 import { SurveyController } from './survey.controller';
+import { PublicSurveyController } from './public-survey.controller';
 import { PersonalService } from './personal.service';
 import { ContractService } from './services/contract.service';
-import { CertificationService } from './services/certification.service';
-import { LogService } from './services/log.service';
 import { DriveService } from './services/drive.service';
 import { DocumentExtractionService } from './services/document-extraction.service';
 import { ReclutamientoIaService } from './services/reclutamiento-ia.service';
@@ -21,7 +20,6 @@ import { EntidadService } from './services/entidad.service';
 import { RequisitoDocumentoService } from './services/requisito-documento.service';
 import { AsignacionGuardiaService } from './services/asignacion-guardia.service';
 import { CumplimientoEntidadService } from './services/cumplimiento-entidad.service';
-import { GmailMailService } from './services/gmail-mail.service';
 import { AlertaVencimientoService } from './services/alerta-vencimiento.service';
 import { GuardiaContactoService } from './services/guardia-contacto.service';
 import { GuardiaFichaPersonalService } from './services/guardia-ficha-personal.service';
@@ -39,9 +37,10 @@ import { NotificationConfigService } from './services/notification-config.servic
 import { NotificationConfigController } from './notification-config.controller';
 import { WhatsAppService } from './services/whatsapp.service';
 import { PermissionsModule } from '../permissions/permissions.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
-  imports: [PrismaModule, PermissionsModule],
+  imports: [PrismaModule, PermissionsModule, MailModule],
   controllers: [
     PersonalController,
     ContractFileController,
@@ -50,13 +49,12 @@ import { PermissionsModule } from '../permissions/permissions.module';
     MovimientoPersonalController,
     CedulaMergeController,
     SurveyController,
+    PublicSurveyController,
     NotificationConfigController,
   ],
   providers: [
     PersonalService,
     ContractService,
-    CertificationService,
-    LogService,
     DriveService,
     DocumentExtractionService,
     ReclutamientoIaService,
@@ -67,7 +65,6 @@ import { PermissionsModule } from '../permissions/permissions.module';
     RequisitoDocumentoService,
     AsignacionGuardiaService,
     CumplimientoEntidadService,
-    GmailMailService,
     AlertaVencimientoService,
     GuardiaContactoService,
     GuardiaFichaPersonalService,

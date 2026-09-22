@@ -34,11 +34,26 @@ export async function login(data: {
   return res.data;
 }
 
-export async function forgotPassword(data: {
+/**
+ * Paso 1: pide un código de recuperación al correo.
+ *
+ * Responde lo mismo exista o no la cuenta — a propósito: si dijera "ese correo
+ * no está registrado" serviría para averiguar qué cuentas existen.
+ */
+export async function requestPasswordReset(data: {
   email: string;
+}): Promise<{ message: string }> {
+  const res = await api.post<{ message: string }>('/auth/forgot-password/request', data);
+  return res.data;
+}
+
+/** Paso 2: canjea el código por la contraseña nueva. */
+export async function confirmPasswordReset(data: {
+  email: string;
+  code: string;
   newPassword: string;
 }): Promise<{ message: string }> {
-  const res = await api.post<{ message: string }>('/auth/forgot-password', data);
+  const res = await api.post<{ message: string }>('/auth/forgot-password/confirm', data);
   return res.data;
 }
 
@@ -51,7 +66,7 @@ export function getToken(): string | null {
   return localStorage.getItem('token');
 }
 
-export function getUser(): { id: number; email: string; fullName: string; role: string; companyId: number | null } | null {
+export function getUser(): { id: number; email: string; fullName: string; position?: string | null; role: string; companyId: number | null } | null {
   const raw = localStorage.getItem('user');
   if (!raw) return null;
   try {
