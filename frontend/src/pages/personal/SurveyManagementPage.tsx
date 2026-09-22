@@ -99,9 +99,11 @@ export default function SurveyManagementPage() {
             <p className="page-eyebrow">RECURSOS HUMANOS</p>
             <h1>Gestión de Encuestas</h1>
           </div>
-          <button className="auth-btn" onClick={() => setShowBuilder(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Plus size={16} /> Nueva encuesta
-          </button>
+          <div className="header-actions">
+            <button className="auth-btn" onClick={() => setShowBuilder(true)}>
+              <Plus size={16} /> Nueva encuesta
+            </button>
+          </div>
         </div>
       </div>
 

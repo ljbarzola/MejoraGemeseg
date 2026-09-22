@@ -1,0 +1,51 @@
+# On-demand Cloud SQL backup + prune. Invoked weekly by Cloud Scheduler
+# (Sunday 04:00 America/Guayaquil). Does not enable native daily backups/PITR.
+#
+# Trigger: weekly-cloudsql-backup (manual + inline config; run via Scheduler or
+# `gcloud builds triggers run weekly-cloudsql-backup`).
+
+substitutions:
+  _INSTANCE: gemeseg-db
+  _KEEP: '4'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1800s
+
+steps:
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: backup-and-prune
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        INSTANCE='${_INSTANCE}'
+        KEEP='${_KEEP}'
+        echo "Creating on-demand backup of $${INSTANCE}"
+        gcloud sql backups create \
+          --instance="$${INSTANCE}" \
+          --project="${PROJECT_ID}" \
+          --description="weekly-scheduled"
+        gcloud sql backups list \
+          --instance="$${INSTANCE}" \
+          --project="${PROJECT_ID}" \
+          --filter="type=ON_DEMAND AND status=SUCCESSFUL" \
+          --sort-by="~windowStartTime" \
+          --format="value(id)" > /tmp/backup-ids
+        echo "Successful on-demand backups:"
+        cat /tmp/backup-ids
+        i=0
+        while read -r id; do
+          [ -z "$${id}" ] && continue
+          i=$$((i + 1))
+          if [ "$${i}" -gt "$${KEEP}" ]; then
+            echo "Deleting old on-demand backup $${id}"
+            gcloud sql backups delete "$${id}" \
+              --instance="$${INSTANCE}" \
+              --project="${PROJECT_ID}" \
+              --quiet
+          fi
+        done < /tmp/backup-ids
+        echo "Kept up to $${KEEP} on-demand backups"

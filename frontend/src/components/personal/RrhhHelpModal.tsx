@@ -12,8 +12,9 @@ const FLUJO_PRINCIPAL: Submodulo[] = [
     nombre: '1. Reclutamiento',
     ruta: '/rrhh/reclutamiento',
     parrafos: [
-      'Punto de partida: vacantes publicadas y candidatos que se postulan subiendo sus documentos a una carpeta de Drive. Al crear la vacante se elige si quien entre será guardia o personal administrativo, y eso decide a dónde va su carpeta al contratarlo.',
-      'Cuando alguien queda contratado, se lo marca desde su ficha con "Marcar como Contratado": si es guardia va a la sub-carpeta "Sin Asignar" (todavía sin entidad, eso se decide en el siguiente paso), y si es administrativo va a Personal Administrativo, renombrando la carpeta con su puesto.',
+      'Punto de partida: vacantes publicadas y candidatos que se postulan subiendo sus documentos a una carpeta de Drive (fija, no se cambia desde la app). El botón "Ver carpeta" abre esa carpeta en Drive. Al crear la vacante se elige si quien entre será guardia o personal administrativo, y eso decide a dónde va su carpeta al contratarlo.',
+      'Cuando alguien queda contratado, se lo marca desde su ficha con "Marcar como Contratado": si es guardia va a la sub-carpeta "Sin Asignar" (todavía sin entidad, eso se decide en el siguiente paso), y si es administrativo va a Personal Administrativo, renombrando la carpeta con su puesto. La carpeta del postulante se nombra "Apellidos - Nombres"; la cédula viaja en el formulario de la postulación, no en el nombre de la carpeta.',
+      'El botón "Completar fichas con datos de postulación" es un arreglo puntual: si alguien se contrató antes de que esas respuestas se copiaran solas a la ficha, las busca en Drive y las pega, sin borrar lo que ya esté escrito a mano. En el día a día no hace falta usarlo.',
       'Si esa carpeta destino todavía no está configurada, el sistema avisa y no mueve nada. No existe ningún tablero ni paso intermedio: contratar es una sola acción, en esta pantalla.',
       'Al postularse, la persona elige si sube un archivo por documento o todo junto en un solo PDF. En ese segundo caso su ficha lo avisa y aparece el botón "Analizar con IA", que lee el archivo y propone qué documento es cada página.',
       'Se abre una pantalla con todas las páginas en miniatura, cada una con su documento ya marcado: solo revisas y corriges las que estén mal, y puedes hacer clic en cualquier miniatura para verla en grande. Dos páginas marcadas con el mismo documento se guardan juntas en un solo archivo, aunque no estén seguidas.',
@@ -25,8 +26,8 @@ const FLUJO_PRINCIPAL: Submodulo[] = [
     nombre: '2. Listado de Guardias',
     ruta: '/rrhh/guardias',
     parrafos: [
-      'Aquí aparecen los guardias que ya pasaron por Reclutamiento (o que ya existían). "Sincronizar Drive" es lo que lee esa carpeta y decide en qué entidad está cada guardia, o si sigue en "Sin Asignar", esperando que alguien mueva su carpeta a Público/Privado/<Entidad> a mano.',
-      'También desde aquí se configuran campos personalizados de cada ficha y se registra la salida cuando alguien deja de trabajar.',
+      'Aquí aparecen los guardias que ya pasaron por Reclutamiento (o que ya existían). Cada carpeta de guardia se llama "Apellidos - Nombres" (ej. PEREZ GARCIA - JUAN CARLOS). "Sincronizar Drive" lee esa estructura y decide en qué entidad está cada guardia, o si sigue en "Sin Asignar", esperando que alguien mueva su carpeta a Público/Privado/<Entidad> a mano.',
+      'También desde aquí se configuran la carpeta de Drive de Guardias, la carpeta de archivo, campos personalizados de cada ficha y se registra la salida cuando alguien deja de trabajar.',
     ],
   },
   {
@@ -34,7 +35,7 @@ const FLUJO_PRINCIPAL: Submodulo[] = [
     ruta: '/rrhh/entidades',
     parrafos: [
       'Catálogo de las entidades (públicas o privadas) donde terminan asignados los guardias del paso anterior, y qué documentos exige cada una — esa lista de requisitos es la que usa Cumplimiento para saber qué revisar.',
-      'Las entidades se crean solas al sincronizar Drive, según las carpetas que existan. Un administrador también puede fusionar aquí cédulas duplicadas, si un guardia quedó registrado dos veces por error.',
+      'Las entidades se crean solas al sincronizar Drive, según las carpetas que existan. El nombre recomendado es "Provincia - Entidad" (ej. GUAYAS - ZUMOCACAO): da igual si el espacio alrededor del guion falta o sobra. Un administrador también puede fusionar aquí cédulas duplicadas, si un guardia quedó registrado dos veces por error.',
     ],
   },
   {
@@ -68,8 +69,8 @@ const MODULOS_INDEPENDIENTES: Submodulo[] = [
     nombre: 'Personal Administrativo',
     ruta: '/rrhh/administrativo',
     parrafos: [
-      'Igual que Cumplimiento (checklist de documentos con semáforo), pero para personal de oficina en vez de guardias. Vive en una carpeta de Drive separada de la de Guardias, así que es independiente de los pasos 1 a 6.',
-      'A diferencia de Guardias (carpeta "Nombre - Cédula"), aquí cada carpeta se guarda como "Nombre - Puesto", sin cédula.',
+      'Igual que Cumplimiento (checklist de documentos con semáforo), pero para personal de oficina en vez de guardias. Vive en una carpeta de Drive separada de la de Guardias (esa sí se configura aquí con la tuerca), así que es independiente de los pasos 1 a 6.',
+      'A diferencia de Guardias (carpeta "Apellidos - Nombres"), aquí cada carpeta se guarda como "Nombre - Puesto", sin cédula.',
     ],
   },
   {
@@ -77,7 +78,7 @@ const MODULOS_INDEPENDIENTES: Submodulo[] = [
     ruta: '/rrhh/capacitaciones',
     parrafos: [
       'Plan anual o capacitaciones puntuales, con cumplimiento general: se marca completada una sola vez, no por guardia.',
-      'Antes de crear la primera hay que configurar una carpeta de Drive propia — ahí se guardan tanto el documento del plan como la evidencia de que se realizó, pudiendo subir varios archivos o enlaces.',
+      'Los documentos y evidencias se guardan en una carpeta de Drive fija (no se configura desde aquí). El botón "Ver carpeta" la abre.',
     ],
   },
   {

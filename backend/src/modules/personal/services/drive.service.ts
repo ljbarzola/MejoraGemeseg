@@ -20,6 +20,13 @@ import {
   POSTULACION_STASH_KEY,
 } from '../utils/form-data.util';
 import { extractDriveFolderId } from '../../../common/utils/drive-link.util';
+import {
+  driveFolderPublicUrl,
+  hardcodedFolderId,
+  HARDCODED_DRIVE_FOLDERS,
+  isLockedDriveFolderType,
+  type LockedDriveFolderType,
+} from '../constants/hardcoded-drive-folders';
 
 @Injectable()
 export class DriveService {
@@ -102,22 +109,36 @@ export class DriveService {
       };
     try {
       const drive = this.getDriveClient();
-      let targetFolderId = this.sanitizeFolderId(folderId || '');
-      this.logger.log(
-        `testConnection: raw folderId=${folderId}, sanitized=${targetFolderId}`,
-      );
-      if (!targetFolderId) {
-        const config = await this.prisma.folderConfig.findFirst({
-          where: { companyId, type },
-        });
-        if (!config) {
+      let targetFolderId = '';
+      if (isLockedDriveFolderType(type)) {
+        targetFolderId = this.sanitizeFolderId(
+          (await this.resolveLockedFolderId(companyId, type)) || '',
+        );
+        if (!targetFolderId) {
           return {
             success: false,
             message:
-              'Escribe el ID de la carpeta raíz y pulsa Probar Conexión.',
+              'Esta carpeta de Drive está fijada en código y todavía no tiene ID.',
           };
         }
-        targetFolderId = this.sanitizeFolderId(config.driveFolderId);
+      } else {
+        targetFolderId = this.sanitizeFolderId(folderId || '');
+        this.logger.log(
+          `testConnection: raw folderId=${folderId}, sanitized=${targetFolderId}`,
+        );
+        if (!targetFolderId) {
+          const config = await this.prisma.folderConfig.findFirst({
+            where: { companyId, type },
+          });
+          if (!config) {
+            return {
+              success: false,
+              message:
+                'Escribe el ID de la carpeta raíz y pulsa Probar Conexión.',
+            };
+          }
+          targetFolderId = this.sanitizeFolderId(config.driveFolderId);
+        }
       }
       const folder = await drive.files.get({
         fileId: targetFolderId,
@@ -154,7 +175,48 @@ export class DriveService {
 
   async getConfig(companyId: number, type: string = 'CUMPLIMIENTO') {
     if (!companyId) return null;
+    if (isLockedDriveFolderType(type)) {
+      return this.getLockedConfig(companyId, type);
+    }
     return this.prisma.folderConfig.findFirst({ where: { companyId, type } });
+  }
+
+  private async resolveLockedFolderId(
+    companyId: number,
+    type: LockedDriveFolderType,
+  ): Promise<string | null> {
+    const fromCode = hardcodedFolderId(type);
+    if (fromCode) return fromCode;
+    const row = await this.prisma.folderConfig.findFirst({
+      where: { companyId, type },
+    });
+    return row?.driveFolderId ? this.sanitizeFolderId(row.driveFolderId) : null;
+  }
+
+  private async getLockedConfig(companyId: number, type: LockedDriveFolderType) {
+    const meta = HARDCODED_DRIVE_FOLDERS[type];
+    const fromCode = hardcodedFolderId(type);
+    if (fromCode) {
+      return {
+        id: 0,
+        companyId,
+        type,
+        driveFolderId: fromCode,
+        driveFolderName: meta.name,
+        driveFolderLink: driveFolderPublicUrl(fromCode),
+        createdAt: new Date(0),
+        hardcoded: true,
+      };
+    }
+    const row = await this.prisma.folderConfig.findFirst({
+      where: { companyId, type },
+    });
+    if (!row) return null;
+    return {
+      ...row,
+      driveFolderLink: row.driveFolderLink || driveFolderPublicUrl(row.driveFolderId),
+      hardcoded: true,
+    };
   }
 
   // Sube un archivo arbitrario (no un .json generado por el sync, uno real
@@ -210,6 +272,11 @@ export class DriveService {
   ) {
     if (!companyId)
       throw new BadRequestException('Usuario sin empresa asociada');
+    if (isLockedDriveFolderType(type)) {
+      throw new BadRequestException(
+        'Esta carpeta de Drive está fijada en el código y no se puede cambiar desde la aplicación.',
+      );
+    }
     const sanitizedId = this.sanitizeFolderId(driveFolderId);
     if (!sanitizedId)
       throw new BadRequestException('Ingresa el ID de la carpeta raíz.');
@@ -543,10 +610,18 @@ export class DriveService {
     },
   ) {
     try {
+      const files = await this.listFilesInFolder(guardiaFolder.id);
       const parsed = this.parseEmployeeFolderName(
         guardiaFolder.name,
         guardiaFolder.id,
       );
+      const cedulaDeJson = parsed.cedulaConfiable
+        ? ''
+        : await this.leerCedulaDeJsonEnCarpeta(files);
+      const cedulaLeida = parsed.cedulaConfiable
+        ? parsed.cedula
+        : cedulaDeJson;
+      const cedulaConfiable = /^\d{10}$/.test(cedulaLeida);
 
       // Ancla de identidad: la MISMA carpeta de Drive (folderId, estable)
       // ya vinculada a una cédula. Si alguien renombra la carpeta y el
@@ -564,19 +639,18 @@ export class DriveService {
       let nombreGuardia: string;
 
       if (!existente) {
-        if (!parsed.cedulaConfiable) {
-          // Carpeta nueva y no se pudo leer "Nombre - Cédula": no se
-          // inventa una identidad — mejor no detectarlo que crear un
-          // guardia fantasma con cédula sintética.
+        if (!cedulaConfiable) {
+          // Carpeta nueva sin cédula en el nombre ni en candidato.json /
+          // datos.json: no se inventa una identidad.
           result.guardiasNoReconocidos.push(guardiaFolder.name);
           return;
         }
-        cedula = parsed.cedula;
+        cedula = cedulaLeida;
         nombreGuardia = parsed.name;
-      } else if (parsed.cedulaConfiable && parsed.cedula === existente.cedula) {
+      } else if (cedulaConfiable && cedulaLeida === existente.cedula) {
         // Mismo folderId, misma cédula (el nombre pudo cambiar
         // cosméticamente) — actualización normal.
-        cedula = parsed.cedula;
+        cedula = cedulaLeida;
         nombreGuardia = parsed.name;
       } else {
         // El folderId ya existía con OTRA cédula (o la nueva no se
@@ -585,9 +659,9 @@ export class DriveService {
         cedula = existente.cedula;
         nombreGuardia = existente.employeeName;
         result.renombresIgnorados.push(
-          parsed.cedulaConfiable
-            ? `"${guardiaFolder.name}" — antes "${existente.employeeName} - ${existente.cedula}", la cédula detectada ahora sería "${parsed.cedula}"; se mantuvo la cédula original por seguridad`
-            : `"${guardiaFolder.name}" no se pudo leer como "Nombre - Cédula"; se mantuvo la identidad original "${existente.employeeName} - ${existente.cedula}"`,
+          cedulaConfiable
+            ? `"${guardiaFolder.name}" — antes "${existente.employeeName} - ${existente.cedula}", la cédula detectada ahora sería "${cedulaLeida}"; se mantuvo la cédula original por seguridad`
+            : `"${guardiaFolder.name}" no se pudo leer como "Apellidos - Nombres" ni como "... - Cédula"; se mantuvo la identidad original "${existente.employeeName} - ${existente.cedula}"`,
         );
       }
 
@@ -612,8 +686,6 @@ export class DriveService {
           lastSyncAt: new Date(),
         },
       });
-
-      const files = await this.listFilesInFolder(guardiaFolder.id);
       const fichaFile = files.find(
         (f: { id?: string; name?: string }) =>
           f.name === FICHA_PERSONAL_FILENAME ||
@@ -1740,21 +1812,16 @@ export class DriveService {
     return { cedula, folderId: folder.folderId, movidoA: entidad.nombre };
   }
 
-  // La carpeta de Reclutamiento es su propia carpeta raíz dedicada (config
-  // type='RECLUTAMIENTO'), independiente de la de Cumplimiento. Dentro de
-  // ella hay una subcarpeta por cada Puesto/Vacante (creada automáticamente
-  // al crear el puesto); esa subcarpeta contiene el JSON del puesto y, como
-  // hermanas, las carpetas de los candidatos postulados a esa vacante.
+  // La carpeta de Reclutamiento es fija en código (HARDCODED_DRIVE_FOLDERS),
+  // independiente de Cumplimiento. Dentro hay una subcarpeta por Puesto.
   private async getReclutamientoFolderId(companyId: number): Promise<string> {
-    const config = await this.prisma.folderConfig.findFirst({
-      where: { companyId, type: 'RECLUTAMIENTO' },
-    });
-    if (!config) {
+    const folderId = await this.resolveLockedFolderId(companyId, 'RECLUTAMIENTO');
+    if (!folderId) {
       throw new BadRequestException(
-        'No hay carpeta de Drive configurada para Reclutamiento. Configúrala en la tuerca ⚙ de la página de Reclutamiento.',
+        'No hay carpeta de Drive de Reclutamiento definida en código.',
       );
     }
-    return this.sanitizeFolderId(config.driveFolderId);
+    return this.sanitizeFolderId(folderId);
   }
 
   async getJobPositions(companyId: number) {
@@ -2318,7 +2385,7 @@ export class DriveService {
 
     const jobPositions = await this.getJobPositions(companyId);
 
-    // Estructura esperada: RECLUTAMIENTO/<Puesto>/<Nombre - Cédula>/archivos...
+    // Estructura esperada: RECLUTAMIENTO/<Puesto>/<Apellidos - Nombres>/archivos...
     // Cada subcarpeta de la raíz es un PUESTO (idealmente con el mismo nombre
     // que un JobPosition); los candidatos viven un nivel más abajo, dentro de
     // su carpeta de puesto. Los "Puesto_*.json" quedan sueltos en la raíz y
@@ -2354,8 +2421,8 @@ export class DriveService {
 
       for (const folder of candidateFolders) {
         try {
-          const parsed = this.parseEmployeeFolderName(folder.name, folder.id);
           const files = await this.listFilesInFolder(folder.id);
+          const parsed = this.parseEmployeeFolderName(folder.name, folder.id);
 
           let candidatoJsonData: any = null;
           const jsonFile = files.find((f: any) =>
@@ -2386,7 +2453,14 @@ export class DriveService {
           const datosFormulario: Record<string, any> =
             candidatoJsonData?.datosFormulario || candidatoJsonData || {};
 
+          const apellidos = buscarDatoFormulario(datosFormulario, [
+            'apellidos',
+          ]);
+          const nombres = buscarDatoFormulario(datosFormulario, [
+            'nombres',
+          ]);
           const nombre =
+            (apellidos && nombres ? `${apellidos} - ${nombres}` : '') ||
             buscarDatoFormulario(datosFormulario, [
               'nombre completo',
               'nombre',
@@ -2395,9 +2469,8 @@ export class DriveService {
             candidatoJsonData?.nombre ||
             parsed.name;
           const cedula =
-            buscarDatoFormulario(datosFormulario, ['cedula']) ||
-            candidatoJsonData?.cedula ||
-            parsed.cedula;
+            this.extraerCedulaConfiableDeObjeto(candidatoJsonData) ||
+            (parsed.cedulaConfiable ? parsed.cedula : '');
           const telefono =
             buscarDatoFormulario(datosFormulario, [
               'telefono',
@@ -2725,8 +2798,9 @@ export class DriveService {
   //                    tiene sub-buckets (ver syncPersonalAdminFolder).
   //
   // Ojo, los dos destinos NOMBRAN sus carpetas distinto: Guardias usa
-  // "Nombre - Cédula" (el formato con el que ya llega el postulante) y Personal
-  // Administrativo usa "Nombre - Puesto", sin cédula (parsePersonalAdminFolderName).
+  // "Apellidos - Nombres" (cédula en candidato.json o, en carpetas viejas,
+  // "... - Cédula" de 10 dígitos) y Personal Administrativo usa
+  // "Nombre - Puesto", sin cédula (parsePersonalAdminFolderName).
   // Por eso contratar a un administrativo además RENOMBRA la carpeta: movida
   // tal cual, ese sync leería la cédula como si fuera el puesto y lo listaría
   // mal. La cédula no se pierde — queda escrita en candidato.json, que viaja
@@ -2761,17 +2835,11 @@ export class DriveService {
       );
     }
 
-    const parsed = this.parseEmployeeFolderName(folder.name, folder.id);
-    if (!parsed.cedulaConfiable) {
-      throw new BadRequestException(
-        'No se pudo leer la cédula del nombre de esta carpeta ("Nombre - Cédula", 10 dígitos). Corrígelo en Drive antes de contratar.',
-      );
-    }
-    const { cedula, name: nombre } = parsed;
-
     // candidato.json se lee ANTES de decidir nada: el puestoId que deja ahí el
-    // portal de postulación es el respaldo para ubicar la vacante, y más abajo
-    // este mismo objeto se reescribe con el estado de contratación.
+    // portal de postulación es el respaldo para ubicar la vacante, la cédula
+    // puede vivir aquí (formato "Apellidos - Nombres" sin cédula en el
+    // nombre), y más abajo este mismo objeto se reescribe con el estado de
+    // contratación.
     const filesEnCarpeta = await this.listFilesInFolder(folderId);
     const jsonFile = filesEnCarpeta.find((f: any) =>
       f.name.toLowerCase().endsWith('.json'),
@@ -2793,6 +2861,25 @@ export class DriveService {
         );
       }
     }
+
+    const parsed = this.parseEmployeeFolderName(folder.name, folder.id);
+    const cedula =
+      this.extraerCedulaConfiableDeObjeto(candidatoJsonData) ||
+      (parsed.cedulaConfiable ? parsed.cedula : '');
+    if (!/^\d{10}$/.test(cedula)) {
+      throw new BadRequestException(
+        'No se pudo leer la cédula de esta carpeta. Debe estar en el formulario de postulación o, en carpetas antiguas, al final del nombre ("... - 10 dígitos"). Corrígelo antes de contratar.',
+      );
+    }
+    const datosFormularioNombre: Record<string, any> =
+      candidatoJsonData?.datosFormulario || candidatoJsonData || {};
+    const apellidos = buscarDatoFormulario(datosFormularioNombre, [
+      'apellidos',
+    ]);
+    const nombres = buscarDatoFormulario(datosFormularioNombre, ['nombres']);
+    const nombre =
+      (apellidos && nombres ? `${apellidos} - ${nombres}` : '') ||
+      parsed.name;
 
     // La vacante manda. Se ubica por la carpeta padre del postulante (la
     // carpeta de la vacante), que es el vínculo más fiable; si eso no da
@@ -3372,18 +3459,15 @@ export class DriveService {
     return true;
   }
 
-  // `cedulaConfiable: false` marca que no se pudo leer "Nombre - Cédula" ni
-  // "Cédula" del nombre de carpeta y se usó un id sintético de respaldo — el
-  // llamador (syncEntidadesFolder) usa esta señal para NO crear una identidad
-  // nueva a partir de una carpeta mal nombrada/mal renombrada.
-  //
-  // Exige exactamente 10 dígitos (formato de cédula ecuatoriana) en vez de
-  // aceptar cualquier alfanumérico de 7-13 caracteres: la validación laxa
-  // anterior dejaba que variantes mal escritas de la misma cédula (ej.
-  // "09999999" y "0999999999") se parsearan como cédulas distintas y
-  // válidas, creando guardias duplicados. Una carpeta con una "cédula" que no
-  // cumpla el formato cae al id sintético de respaldo (cedulaConfiable:
-  // false) en vez de crear una identidad nueva.
+  // Identidad de una carpeta de guardia:
+  //  1. "… - 1234567890" (10 dígitos al final) — formato viejo, sigue válido.
+  //  2. "Apellidos - Nombres" (sin cédula en el nombre) — formato actual;
+  //     la cédula se lee de candidato.json / datos.json (ver
+  //     extraerCedulaConfiableDeObjeto). cedulaConfiable=false acá solo
+  //     significa "no venía en el nombre".
+  //  3. Solo 10 dígitos.
+  // `cedulaConfiable: false` + id sintético es el fallback cuando no hay
+  // cédula en el nombre; el llamador decide si mira JSON o rechaza.
   private parseEmployeeFolderName(
     folderName: string,
     folderId?: string,
@@ -3412,5 +3496,55 @@ export class DriveService {
       cedula: fallbackCedula,
       cedulaConfiable: false,
     };
+  }
+
+  private extraerCedulaConfiableDeObjeto(data: any): string {
+    if (!data || typeof data !== 'object') return '';
+    const form =
+      data.datosFormulario && typeof data.datosFormulario === 'object'
+        ? data.datosFormulario
+        : data;
+    const candidatos = [
+      buscarDatoFormulario(form, ['cedula']),
+      buscarDatoFormulario(data, ['cedula']),
+      data.cedula,
+    ];
+    for (const c of candidatos) {
+      const s = String(c || '').trim();
+      if (/^\d{10}$/.test(s)) return s;
+    }
+    return '';
+  }
+
+  private async leerCedulaDeJsonEnCarpeta(
+    files: { id?: string; name?: string }[],
+  ): Promise<string> {
+    const porNombre = (n: string) => n.toLowerCase();
+    const jsonFile =
+      files.find((f) => porNombre(f.name || '') === 'candidato.json') ||
+      files.find(
+        (f) =>
+          porNombre(f.name || '') === FICHA_PERSONAL_FILENAME.toLowerCase() ||
+          f.name === FICHA_PERSONAL_FILENAME_LEGACY,
+      ) ||
+      files.find((f) => porNombre(f.name || '').endsWith('.json'));
+    if (!jsonFile?.id) return '';
+    try {
+      const drive = this.getDriveClient();
+      const fileRes = await drive.files.get(
+        { fileId: jsonFile.id, alt: 'media', supportsAllDrives: true },
+        { responseType: 'text' },
+      );
+      const data =
+        (typeof fileRes.data === 'string'
+          ? JSON.parse(fileRes.data)
+          : fileRes.data) || {};
+      return this.extraerCedulaConfiableDeObjeto(data);
+    } catch (err: any) {
+      this.logger.warn(
+        `No se pudo leer cédula de ${jsonFile.name}: ${err.message}`,
+      );
+      return '';
+    }
   }
 }

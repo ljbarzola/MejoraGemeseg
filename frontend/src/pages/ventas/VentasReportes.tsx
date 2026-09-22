@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Download, Printer } from 'lucide-react';
 import { getVisits, getLeads, ClientVisit, Lead } from '../../services/ventas.service';
 
 export default function VentasReportes() {
@@ -59,17 +60,23 @@ export default function VentasReportes() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn no-print" onClick={() => navigate('/ventas')}>← Volver</button>
+      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
+        <button className="cacao-back-btn no-print" onClick={() => navigate('/ventas')} style={{ alignSelf: 'flex-start' }}>
+          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
+        </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
           <div>
-            <p className="page-eyebrow">INFORMES Y MÉTRICAS</p>
-            <h1>Reporte Ejecutivo de Ventas y Campo</h1>
+            <p className="page-eyebrow">Ventas y CRM</p>
+            <h1>Reportes</h1>
           </div>
-        </div>
-        <div style={{ display: 'flex', gap: '10px' }} className="no-print">
-          <button className="cacao-back-btn" onClick={exportCSV}>📥 Exportar Excel (CSV)</button>
-          <button className="auth-btn" onClick={() => window.print()}>🖨️ Imprimir / PDF</button>
+          <div className="header-actions no-print">
+            <button className="btn-secondary" onClick={exportCSV}>
+              <Download size={16} /> Exportar CSV
+            </button>
+            <button className="auth-btn" onClick={() => window.print()}>
+              <Printer size={16} /> Imprimir
+            </button>
+          </div>
         </div>
       </div>
 

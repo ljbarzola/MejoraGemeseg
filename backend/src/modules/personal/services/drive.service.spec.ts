@@ -866,6 +866,73 @@ describe('DriveService.syncEntidadesFolder', () => {
     expect(result.asignacionesAbiertas).toBe(0);
   });
 
+  it('acepta "Apellidos - Nombres" leyendo la cédula de candidato.json, sin exigirla en el nombre', async () => {
+    (service as any).listSubFolders = jest
+      .fn()
+      .mockImplementation((parentId: string) => {
+        if (parentId === 'root-1')
+          return Promise.resolve([{ id: 'pub-1', name: 'Público' }]);
+        if (parentId === 'pub-1')
+          return Promise.resolve([{ id: 'ent-1', name: 'GUAYAS- ZUMOCACAO' }]);
+        if (parentId === 'ent-1')
+          return Promise.resolve([
+            { id: 'g-1', name: 'PEREZ GARCIA - JUAN CARLOS' },
+          ]);
+        return Promise.resolve([]);
+      });
+    (service as any).listFilesInFolder = jest.fn().mockResolvedValue([
+      { id: 'json-1', name: 'candidato.json', mimeType: 'application/json' },
+    ]);
+    (service as any).getDriveClient = jest.fn().mockReturnValue({
+      files: {
+        create: driveFilesCreate,
+        update: driveFilesUpdate,
+        get: jest.fn().mockResolvedValue({
+          data: JSON.stringify({
+            datosFormulario: { Cédula: '0912345678' },
+          }),
+        }),
+      },
+    });
+
+    const result = await service.syncEntidadesFolder(1, 1);
+
+    expect(result.guardiasNoReconocidos).toEqual([]);
+    expect(result.entidadesFormatoInvalido).toEqual([]);
+    expect(prisma.employeeDriveFolder.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { companyId_cedula: { companyId: 1, cedula: '0912345678' } },
+        create: expect.objectContaining({
+          employeeName: 'PEREZ GARCIA - JUAN CARLOS',
+          cedula: '0912345678',
+        }),
+      }),
+    );
+  });
+
+  it('rechaza "Apellidos - Nombres" si no hay cédula en JSON (no inventa identidad)', async () => {
+    (service as any).listSubFolders = jest
+      .fn()
+      .mockImplementation((parentId: string) => {
+        if (parentId === 'root-1')
+          return Promise.resolve([{ id: 'pub-1', name: 'Público' }]);
+        if (parentId === 'pub-1')
+          return Promise.resolve([{ id: 'ent-1', name: 'Banco Pichincha' }]);
+        if (parentId === 'ent-1')
+          return Promise.resolve([
+            { id: 'g-1', name: 'PEREZ GARCIA - JUAN CARLOS' },
+          ]);
+        return Promise.resolve([]);
+      });
+
+    const result = await service.syncEntidadesFolder(1, 1);
+
+    expect(result.guardiasNoReconocidos).toEqual([
+      'PEREZ GARCIA - JUAN CARLOS',
+    ]);
+    expect(prisma.employeeDriveFolder.upsert).not.toHaveBeenCalled();
+  });
+
   it('abre una asignación nueva normalmente para un guardia que aparece por primera vez y no está "fuera"', async () => {
     const result = await service.syncEntidadesFolder(1, 1);
 
@@ -1027,6 +1094,35 @@ describe('DriveService.contratarCandidato', () => {
       /cédula/i,
     );
     expect(driveFilesUpdate).not.toHaveBeenCalled();
+  });
+
+  it('contrata un guardia nombrado "Apellidos - Nombres" usando la cédula de candidato.json', async () => {
+    driveFilesGet.mockImplementation(({ fileId, alt }: { fileId: string; alt?: string }) => {
+      if (fileId === 'cand-1' && !alt)
+        return Promise.resolve({
+          data: {
+            id: 'cand-1',
+            name: 'LOPEZ - MARIA',
+            parents: ['puesto-1'],
+          },
+        });
+      if (fileId === 'json-1' && alt === 'media')
+        return Promise.resolve({
+          data: JSON.stringify({
+            datosFormulario: { Cédula: '0923456789', Apellidos: 'LOPEZ', Nombres: 'MARIA' },
+          }),
+        });
+      throw new Error(`unexpected fileId ${fileId}`);
+    });
+    (service as any).listFilesInFolder = jest
+      .fn()
+      .mockResolvedValue([{ id: 'json-1', name: 'candidato.json' }]);
+
+    const result = await service.contratarCandidato(1, 'cand-1', 2);
+
+    expect(result.cedula).toBe('0923456789');
+    expect(result.nombre).toBe('LOPEZ - MARIA');
+    expect(driveFilesUpdate).toHaveBeenCalled();
   });
 
   it('rechaza si ya existe un guardia con esa cédula, sin mover ni escribir nada', async () => {
@@ -1497,5 +1593,66 @@ describe('DriveService.syncPersonalAdminFolder', () => {
 
     expect(prisma.employeeDocument.upsert).toHaveBeenCalledTimes(2);
     expect(result.documentsCount).toBe(2);
+  });
+});
+
+describe('DriveService carpetas de Drive fijas en código', () => {
+  let service: DriveService;
+  let prisma: {
+    folderConfig: { findFirst: jest.Mock; create: jest.Mock; update: jest.Mock };
+  };
+
+  beforeEach(() => {
+    prisma = {
+      folderConfig: {
+        findFirst: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+    };
+    service = new DriveService(
+      prisma as unknown as PrismaService,
+      noopMovimientoPersonalService,
+      noopPersonalFieldDefinitionService,
+      noopAdministrativeStaffFichaService,
+      noopGuardiaFichaPersonalService,
+    );
+  });
+
+  it('getConfig de Reclutamiento ignora la BD y usa el ID quemado', async () => {
+    const config = await service.getConfig(1, 'RECLUTAMIENTO');
+    expect(prisma.folderConfig.findFirst).not.toHaveBeenCalled();
+    expect(config).toMatchObject({
+      type: 'RECLUTAMIENTO',
+      driveFolderId: '1VM4Ypbbs0xOBvt-TSLQqQuSrTEUp_Bru',
+      hardcoded: true,
+    });
+    expect(config?.driveFolderLink).toContain('1VM4Ypbbs0xOBvt-TSLQqQuSrTEUp_Bru');
+  });
+
+  it('saveConfig rechaza Reclutamiento, Capacitaciones y Contratos de ventas', async () => {
+    await expect(
+      service.saveConfig(1, 'cualquier-id', 'RECLUTAMIENTO'),
+    ).rejects.toThrow(/fijada en el código/i);
+    await expect(
+      service.saveConfig(1, 'cualquier-id', 'CAPACITACIONES'),
+    ).rejects.toThrow(/fijada en el código/i);
+    await expect(
+      service.saveConfig(1, 'cualquier-id', 'VENTAS_CONTRATOS'),
+    ).rejects.toThrow(/fijada en el código/i);
+    expect(prisma.folderConfig.create).not.toHaveBeenCalled();
+    expect(prisma.folderConfig.update).not.toHaveBeenCalled();
+  });
+
+  it('getConfig de Guardias sigue leyendo FolderConfig', async () => {
+    prisma.folderConfig.findFirst.mockResolvedValue({
+      driveFolderId: 'guardias-root',
+      type: 'CUMPLIMIENTO',
+    });
+    const config = await service.getConfig(1, 'CUMPLIMIENTO');
+    expect(prisma.folderConfig.findFirst).toHaveBeenCalledWith({
+      where: { companyId: 1, type: 'CUMPLIMIENTO' },
+    });
+    expect(config).toMatchObject({ driveFolderId: 'guardias-root' });
   });
 });

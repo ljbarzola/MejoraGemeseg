@@ -280,6 +280,8 @@ export class VentasTemplatesService {
             allowMultiple: f.fieldType === 'DROPDOWN' ? !!f.allowMultiple : false,
             allowOther: f.fieldType === 'DROPDOWN' ? !!f.allowOther : false,
             tableConfig: f.fieldType === 'TABLE' ? f.tableConfig || null : null,
+            clientPrompt: f.isClientField ? (f.clientPrompt || null) : null,
+            clientFieldKey: f.clientFieldKey || null,
             order: f.order ?? i,
           },
         }),

@@ -92,11 +92,17 @@ export default function CumplimientoEntidades() {
           </div>
 
           <div className="header-actions">
-            <button className="btn-secondary" onClick={() => setShowConfigModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Settings size={16} /> Configurar notificaciones
-            </button>
             <button className="btn-secondary" onClick={load} disabled={loading}>
               <RefreshCw size={16} className={loading ? 'spin' : undefined} /> {loading ? 'Cargando...' : 'Actualizar'}
+            </button>
+            <button
+              type="button"
+              className="btn-icon-toolbar"
+              onClick={() => setShowConfigModal(true)}
+              title="Notificaciones"
+              aria-label="Notificaciones"
+            >
+              <Settings size={18} />
             </button>
           </div>
         </div>

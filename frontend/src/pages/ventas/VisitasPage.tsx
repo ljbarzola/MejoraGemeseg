@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Plus } from 'lucide-react';
 import { getVisits, createVisit, checkInVisit, completeVisit, cancelVisit, deleteVisit, ClientVisit } from '../../services/ventas.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import PromptDialog from '../../components/common/PromptDialog';
@@ -202,15 +203,21 @@ export default function VisitasPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/ventas')}>← Volver</button>
+      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
+        <button className="cacao-back-btn" onClick={() => navigate('/ventas')} style={{ alignSelf: 'flex-start' }}>
+          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
+        </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
           <div>
-            <p className="page-eyebrow">VENTAS Y CAMPO</p>
-            <h1>Agenda y Verificación de Visitas</h1>
+            <p className="page-eyebrow">Ventas y CRM</p>
+            <h1>Visitas</h1>
+          </div>
+          <div className="header-actions">
+            <button className="auth-btn" onClick={() => setShowNewModal(true)}>
+              <Plus size={16} /> Nueva visita
+            </button>
           </div>
         </div>
-        <button className="auth-btn" onClick={() => setShowNewModal(true)}>+ Planificar Nueva Visita</button>
       </div>
 
       {checkInInfo && (

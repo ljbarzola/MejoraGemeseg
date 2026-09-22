@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { getSalesApiKeys, createSalesApiKey, deleteSalesApiKey, SalesApiKey } from '../../services/ventas.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 
@@ -77,13 +78,13 @@ export default function WebhookConfig() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/ventas/leads')}>← Volver a CRM</button>
-          <div>
-            <p className="page-eyebrow">CONFIGURACIÓN API & INTEGRACIÓN</p>
-            <h1>Webhook para Ingesta Automática de Leads</h1>
-          </div>
+      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
+        <button className="cacao-back-btn" onClick={() => navigate('/ventas/leads')} style={{ alignSelf: 'flex-start' }}>
+          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
+        </button>
+        <div>
+          <p className="page-eyebrow">Ventas y CRM</p>
+          <h1>API de prospectos</h1>
         </div>
       </div>
 

@@ -590,7 +590,7 @@ export default function EntidadesList() {
                           {e.nombre}
                           {e.formatoValido === false && (
                             <span
-                              title='El nombre de la carpeta no sigue el formato "Provincia - Nombre"'
+                              title='El nombre no empieza por una provincia del Ecuador (ej. GUAYAS - ZUMOCACAO). El espacio alrededor del guion da igual.'
                               style={{ display: 'inline-flex' }}
                             >
                               <AlertTriangle size={14} color="#d97706" />

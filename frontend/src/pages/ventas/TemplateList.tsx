@@ -40,9 +40,8 @@ export default function TemplateList() {
           <h1>Plantillas de Contrato</h1>
         </div>
         <div className="header-actions">
-          <button className="auth-btn" onClick={() => navigate('/ventas/contratos/configuracion')}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', fontSize: '0.9rem' }}>
-            <Plus size={16} /> Nueva Plantilla
+          <button className="auth-btn" onClick={() => navigate('/ventas/contratos/configuracion')}>
+            <Plus size={16} /> Nueva plantilla
           </button>
         </div>
       </div>

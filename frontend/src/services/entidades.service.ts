@@ -11,7 +11,8 @@ export interface Entidad {
   createdAt: string;
   updatedAt: string;
   // Calculado en el backend (nunca persistido) — false si el nombre no sigue
-  // el formato recomendado "Provincia - Nombre de la entidad". Solo viene en
+  // el formato recomendado "Provincia - Entidad". El espacio alrededor del
+  // guion no importa. Solo viene en
   // la respuesta de getEntidades(); puramente informativo.
   formatoValido?: boolean;
 }
@@ -357,7 +358,7 @@ export interface SyncEntidadesResult {
   renombresIgnorados: string[];
   guardiasFueraConCarpetaActiva: string[];
   // Puramente informativo (Fase 3.2) — nombres de carpetas de Entidad que no
-  // siguen el formato "Provincia - Nombre de la entidad". Nunca bloquea nada.
+  // siguen el formato "Provincia - Entidad" (espacios del guion opcionales). Nunca bloquea nada.
   entidadesFormatoInvalido: string[];
   errors: string[];
 }

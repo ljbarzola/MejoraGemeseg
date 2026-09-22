@@ -75,6 +75,7 @@ const SurveyManagementPage = lazy(() => import('./pages/personal/SurveyManagemen
 const VentasDashboard = lazy(() => import('./pages/ventas/VentasDashboard'));
 const VisitasPage = lazy(() => import('./pages/ventas/VisitasPage'));
 const LeadsPage = lazy(() => import('./pages/ventas/LeadsPage'));
+const VentasClientesPage = lazy(() => import('./pages/ventas/VentasClientesPage'));
 const VentasReportes = lazy(() => import('./pages/ventas/VentasReportes'));
 const WebhookConfig = lazy(() => import('./pages/ventas/WebhookConfig'));
 const TemplateList = lazy(() => import('./pages/ventas/TemplateList'));
@@ -322,6 +323,7 @@ function AppInner() {
         <Route path="/ventas" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasDashboard /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/visitas" element={<ProtectedLayout><SectionRoute section="VENTAS"><VisitasPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/leads" element={<ProtectedLayout><SectionRoute section="VENTAS"><LeadsPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/clientes" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasClientesPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/reportes" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasReportes /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/webhook-config" element={<ProtectedLayout><SectionRoute section="VENTAS"><WebhookConfig /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/contratos" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratosList /></SectionRoute></ProtectedLayout>} />

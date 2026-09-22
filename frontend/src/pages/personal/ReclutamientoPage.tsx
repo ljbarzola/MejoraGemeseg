@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { extractDriveFolderId, buildDriveFolderLink } from '../../utils/driveLink';
+import { buildDriveFolderLink } from '../../utils/driveLink';
 import { formatFechaHoraSync } from '../../utils/formatFechaHora';
 import { getUser } from '../../services/auth.service';
 import CopyLinkButton from '../../components/common/CopyLinkButton';
@@ -9,7 +9,6 @@ import {
   ArrowLeft,
   RefreshCw,
   Plus,
-  Settings,
   Pin,
   Users,
   Pencil,
@@ -18,8 +17,6 @@ import {
   FolderOpen,
   FileText,
   AlertTriangle,
-  Plug,
-  Save,
   UserCheck,
   Sparkles,
   Lock,
@@ -31,8 +28,6 @@ import {
   syncReclutamientoCandidates,
   syncJobPositionsFromDrive,
   getDriveConfig,
-  saveDriveConfig,
-  testDriveConnection,
   getDocumentReviews,
   reviewDocument,
   reassignReclutamientoFile,
@@ -430,66 +425,7 @@ export default function ReclutamientoPage() {
     }
   }, [estadoVacanteError]);
 
-  // Configuración de la carpeta de Drive propia de Reclutamiento
-  const [showConfigModal, setShowConfigModal] = useState(false);
-  const [driveConfig, setDriveConfig] = useState<any>(null);
-  const [configFolderId, setConfigFolderId] = useState('');
-  const [loadingConfig, setLoadingConfig] = useState(false);
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [testingConfig, setTestingConfig] = useState(false);
-  const [configTestResult, setConfigTestResult] = useState<any>(null);
-  const [configError, setConfigError] = useState('');
-
-  const openConfigModal = () => {
-    setShowConfigModal(true);
-    setConfigError('');
-    setConfigTestResult(null);
-    setLoadingConfig(true);
-    getDriveConfig('RECLUTAMIENTO')
-      .then((data) => {
-        if (data) {
-          setDriveConfig(data);
-          setConfigFolderId(data.driveFolderId ? (data.driveFolderLink || buildDriveFolderLink(data.driveFolderId)) : '');
-        }
-      })
-      .catch((err: any) => {
-        setConfigError(err.response?.data?.message || 'No se pudo cargar la configuración de Drive.');
-      })
-      .finally(() => setLoadingConfig(false));
-  };
-
-  const handleTestConfig = async () => {
-    const cleanId = extractDriveFolderId(configFolderId);
-    if (!cleanId) { setConfigError('Pega el enlace completo de la carpeta raíz para probar la conexión.'); return; }
-    setTestingConfig(true);
-    setConfigTestResult(null);
-    setConfigError('');
-    try {
-      const result = await testDriveConnection({ driveFolderId: cleanId, type: 'RECLUTAMIENTO' });
-      setConfigTestResult(result);
-    } catch (err: any) {
-      setConfigTestResult({ success: false, message: err.response?.data?.message || 'Error al probar conexión.' });
-    } finally {
-      setTestingConfig(false);
-    }
-  };
-
-  const handleSaveConfig = async () => {
-    const cleanId = extractDriveFolderId(configFolderId);
-    if (!cleanId) { setConfigError('Pega el enlace completo de la carpeta.'); return; }
-    setSavingConfig(true);
-    setConfigError('');
-    try {
-      const saved = await saveDriveConfig({ driveFolderId: cleanId, type: 'RECLUTAMIENTO' });
-      setDriveConfig(saved);
-      setShowConfigModal(false);
-      handleSyncAll();
-    } catch (err: any) {
-      setConfigError(err.response?.data?.message || 'Error al guardar.');
-    } finally {
-      setSavingConfig(false);
-    }
-  };
+  const [driveFolderUrl, setDriveFolderUrl] = useState('');
 
   const loadPositions = () => {
     setLoadingPuestos(true);
@@ -517,7 +453,7 @@ export default function ReclutamientoPage() {
     } catch (err: any) {
       setBackfillMensaje({
         ok: false,
-        texto: err.response?.data?.message || 'No se pudo completar el rescate de datos de postulación.',
+        texto: err.response?.data?.message || 'No se pudieron completar las fichas con los datos de postulación.',
       });
     } finally {
       setBackfillLoading(false);
@@ -543,7 +479,7 @@ export default function ReclutamientoPage() {
       // No se borra la lista actual: es la última que sí se sincronizó con
       // éxito (de esta visita o de una anterior, vía caché) — un fallo
       // pasajero de Drive no debería dejar la pantalla vacía de golpe.
-      setSyncError(err.response?.data?.message || 'No se pudo sincronizar con Google Drive. Verifica la configuración de Drive.');
+      setSyncError(err.response?.data?.message || 'No se pudo sincronizar con Google Drive.');
     } finally {
       setSyncing(false);
       setHasSynced(true);
@@ -555,6 +491,13 @@ export default function ReclutamientoPage() {
   // no gastar cuota de la API de Drive en cada visita a la página.
   useEffect(() => {
     loadPositions();
+    getDriveConfig('RECLUTAMIENTO')
+      .then((data) => {
+        if (data?.driveFolderId) {
+          setDriveFolderUrl(data.driveFolderLink || buildDriveFolderLink(data.driveFolderId));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const handleCreatePosition = async (e: React.FormEvent) => {
@@ -827,19 +770,27 @@ export default function ReclutamientoPage() {
             <div className="header-actions">
               <button className="btn-secondary" onClick={handleSyncAll} disabled={syncing}>
                 <RefreshCw size={16} className={syncing ? 'spin' : undefined} />
-                {syncing ? 'Sincronizando...' : 'Sincronizar Carpeta'}
-              </button>
-              <button className="btn-secondary" onClick={openConfigModal} title="Configurar carpeta de Drive de Reclutamiento">
-                <Settings size={16} /> Configurar Drive
+                {syncing ? 'Sincronizando...' : 'Sincronizar'}
               </button>
               <button
                 className="btn-secondary"
                 onClick={() => setConfirmandoBackfill(true)}
                 disabled={backfillLoading}
-                title="Rescata, para contrataciones ya hechas, los datos de postulación que quedaron sin migrar a la Ficha Personal"
+                title="Para gente ya contratada: copia a su ficha las respuestas del formulario de postulación que no se alcanzaron a guardar en su momento. No borra nada que hayas escrito a mano."
               >
-                <UserCheck size={16} /> {backfillLoading ? 'Rescatando...' : 'Rescatar datos de postulación'}
+                <UserCheck size={16} /> {backfillLoading ? 'Copiando...' : 'Completar fichas'}
               </button>
+              {driveFolderUrl && (
+                <a
+                  className="btn-secondary"
+                  href={driveFolderUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Abrir la carpeta de postulantes en Google Drive"
+                >
+                  <FolderOpen size={16} /> Ver carpeta
+                </a>
+              )}
             </div>
             {backfillMensaje && (
               <span style={{ fontSize: '0.75rem', color: backfillMensaje.ok ? '#276749' : '#c53030', maxWidth: '340px', textAlign: 'right' }}>
@@ -1462,9 +1413,9 @@ export default function ReclutamientoPage() {
 
       {confirmandoBackfill && (
         <ConfirmDialog
-          title="Rescatar datos de postulación"
-          message="Revisa las fichas ya contratadas de Personal Administrativo y Guardias: si no tienen guardado el JSON con las respuestas de su postulación, lo busca en su carpeta de Drive y lo guarda. No pisa ningún valor ya cargado a mano y es seguro correrlo más de una vez. ¿Continuar?"
-          confirmLabel="Sí, rescatar"
+          title="Completar fichas con datos de postulación"
+          message="Cuando alguien se postula, llena un formulario (teléfono, talla, etc.). Al contratarlo, esos datos se copian solos a su Ficha Personal. Este botón es solo para personas que se contrataron antes de esa copia automática: busca el formulario original en su carpeta de Drive y lo pega en la ficha. No borra nada que ya hayas escrito a mano, y se puede usar más de una vez. ¿Continuar?"
+          confirmLabel="Sí, completar fichas"
           onConfirm={handleBackfillPostulacion}
           onCancel={() => setConfirmandoBackfill(false)}
         />
@@ -1712,102 +1663,6 @@ export default function ReclutamientoPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL CONFIGURACIÓN DE DRIVE - RECLUTAMIENTO */}
-      {showConfigModal && (
-        <div className="modal-overlay" onClick={() => setShowConfigModal(false)}>
-          <div className="modal modal-lg" style={{ maxWidth: '620px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Settings size={17} /> Configurar Carpeta de Drive — Reclutamiento
-              </h3>
-              <button className="modal-close" onClick={() => setShowConfigModal(false)}>
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="modal-body">
-              <div style={{ background: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '10px', padding: '16px' }}>
-                <p style={{ margin: '0 0 10px', fontSize: '0.85rem', color: '#2b6cb0' }}>
-                  Esta carpeta es <strong>independiente</strong> de la de Cumplimiento/Custodios — solo se usa para Reclutamiento.
-                  Debe tener esta estructura exacta para que la sincronización funcione:
-                </p>
-                <pre style={{
-                  margin: 0, padding: '12px', background: '#fff', border: '1px solid #bee3f8', borderRadius: '8px',
-                  fontSize: '0.78rem', lineHeight: 1.6, color: '#1a202c', overflowX: 'auto',
-                }}>
-{`📁 (la carpeta raíz que configures abajo)
- └── 📁 Guardia                    ← 1 carpeta por cada Puesto/Vacante (se crea sola)
-       ├── 📄 Puesto_Guardia.json  ← se crea junto con la carpeta, no la edites a mano
-       └── 📁 <Nombre Apellido - Cédula>   ← 1 carpeta por candidato, con ese formato exacto
-              └── (sus documentos: CV, cédula, etc.)`}
-                </pre>
-                <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: '#718096' }}>
-                  La carpeta del puesto (ej. <code>Guardia</code>) y su <code>Puesto_*.json</code> se crean automáticamente al usar <strong>"+ Nueva Vacante"</strong> en esta página — no hace falta crearlos a mano en Drive.
-                </p>
-                <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#718096' }}>
-                  Abre la carpeta raíz en Drive y copia el enlace completo desde la barra de direcciones o con "Compartir → Copiar enlace".
-                </p>
-                <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#c53030', fontWeight: 600 }}>
-                  IMPORTANTE: comparte esa carpeta (Lector) con <code>drive-sync@agentes-504115.iam.gserviceaccount.com</code>.
-                </p>
-              </div>
-
-              {loadingConfig ? (
-                <div className="loading-state">Cargando configuración...</div>
-              ) : (
-                <>
-                  {configError && <div className="form-error">{configError}</div>}
-
-                  <div className="form-group">
-                    <label>Enlace de la carpeta raíz de Reclutamiento en Drive *</label>
-                    <input
-                      type="text"
-                      value={configFolderId}
-                      onChange={(e) => { setConfigFolderId(e.target.value); setConfigTestResult(null); }}
-                      placeholder="https://drive.google.com/drive/folders/1ABC123..."
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-
-                  {configTestResult && (
-                    <div style={{
-                      padding: '12px', borderRadius: '8px',
-                      background: configTestResult.success ? '#f0fff4' : '#fff5f5',
-                      border: `1px solid ${configTestResult.success ? '#c6f6d5' : '#fed7d7'}`,
-                    }}>
-                      <p style={{ margin: 0, fontSize: '0.85rem', color: configTestResult.success ? '#276749' : '#c53030' }}>
-                        {configTestResult.success
-                          ? `✅ Conexión exitosa: ${configTestResult.folderName} (${configTestResult.folderId})`
-                          : `❌ ${configTestResult.message}`}
-                      </p>
-                    </div>
-                  )}
-
-                  {driveConfig?.driveFolderId && (
-                    <div style={{ padding: '12px', background: '#f7fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                      <p style={{ margin: 0, fontSize: '0.85rem', color: '#718096' }}>
-                        <strong>Configuración actual:</strong> {driveConfig.driveFolderName} ({driveConfig.driveFolderId})
-                      </p>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-
-            {!loadingConfig && (
-              <div className="modal-actions">
-                <button className="btn-secondary" onClick={handleTestConfig} disabled={testingConfig} style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: testingConfig ? 0.6 : 1 }}>
-                  <Plug size={16} /> {testingConfig ? 'Probando...' : 'Probar Conexión'}
-                </button>
-                <button className="auth-btn" onClick={handleSaveConfig} disabled={savingConfig} style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: savingConfig ? 0.6 : 1 }}>
-                  <Save size={16} /> {savingConfig ? 'Guardando...' : 'Guardar Configuración'}
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}

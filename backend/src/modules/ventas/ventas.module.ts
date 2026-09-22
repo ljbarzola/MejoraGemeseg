@@ -6,6 +6,8 @@ import { VentasTemplatesController } from './ventas-templates.controller';
 import { VentasTemplatesService } from './ventas-templates.service';
 import { VentasContratosController } from './ventas-contratos.controller';
 import { VentasContratosService } from './ventas-contratos.service';
+import { VentasClientesService } from './ventas-clientes.service';
+import { VentasClientesController } from './ventas-clientes.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { PersonalModule } from '../personal/personal.module';
 import { PermissionsModule } from '../permissions/permissions.module';
@@ -17,8 +19,9 @@ import { PermissionsModule } from '../permissions/permissions.module';
     VentasWebhookController,
     VentasTemplatesController,
     VentasContratosController,
+    VentasClientesController,
   ],
-  providers: [VentasService, VentasTemplatesService, VentasContratosService],
-  exports: [VentasService, VentasTemplatesService, VentasContratosService],
+  providers: [VentasService, VentasTemplatesService, VentasContratosService, VentasClientesService],
+  exports: [VentasService, VentasTemplatesService, VentasContratosService, VentasClientesService],
 })
 export class VentasModule {}

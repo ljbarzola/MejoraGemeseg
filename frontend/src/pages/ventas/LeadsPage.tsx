@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Plus, Settings } from 'lucide-react';
 import { getLeads, createLead, assignLead, updateLeadStatus, deleteLead, Lead } from '../../services/ventas.service';
 import { getUsers } from '../../services/user.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
@@ -173,17 +174,29 @@ export default function LeadsPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/ventas')}>← Volver</button>
+      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
+        <button className="cacao-back-btn" onClick={() => navigate('/ventas')} style={{ alignSelf: 'flex-start' }}>
+          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
+        </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
           <div>
-            <p className="page-eyebrow">CRM Y MARKETING DIGITAL</p>
-            <h1>Prospectos e Ingesta de Leads</h1>
+            <p className="page-eyebrow">Ventas y CRM</p>
+            <h1>Prospectos</h1>
           </div>
-        </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/ventas/webhook-config')}>⚙️ Config Webhook API Key</button>
-          <button className="auth-btn" onClick={() => setShowNewModal(true)}>+ Nuevo Prospecto</button>
+          <div className="header-actions">
+            <button className="auth-btn" onClick={() => setShowNewModal(true)}>
+              <Plus size={16} /> Nuevo prospecto
+            </button>
+            <button
+              type="button"
+              className="btn-icon-toolbar"
+              onClick={() => navigate('/ventas/webhook-config')}
+              title="API de ingreso de prospectos"
+              aria-label="API de ingreso de prospectos"
+            >
+              <Settings size={18} />
+            </button>
+          </div>
         </div>
       </div>
 

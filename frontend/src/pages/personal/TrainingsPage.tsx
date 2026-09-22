@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, X, CheckCircle2, RotateCcw, Paperclip, Trash2, Settings } from 'lucide-react';
+import { ArrowLeft, Plus, X, CheckCircle2, RotateCcw, Paperclip, Trash2, FolderOpen } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import {
   getTrainings,
@@ -12,14 +12,12 @@ import {
   removeTrainingAttachment,
   uploadTrainingFile,
   getDriveConfig,
-  saveDriveConfig,
-  testDriveConnection,
   TRAINING_TYPES,
   type Training,
   type TrainingAttachment,
 } from '../../services/personal.service';
 import { usePerm } from '../../contexts/PermissionsContext';
-import { extractDriveFolderId, buildDriveFolderLink } from '../../utils/driveLink';
+import { buildDriveFolderLink } from '../../utils/driveLink';
 import FileOrLinkInput from '../../components/common/FileOrLinkInput';
 
 const DRIVE_FOLDER_TYPE = 'CAPACITACIONES';
@@ -97,12 +95,6 @@ export default function TrainingsPage() {
 
   const [driveConfig, setDriveConfig] = useState<any>(null);
   const [loadingConfig, setLoadingConfig] = useState(true);
-  const [showConfigModal, setShowConfigModal] = useState(false);
-  const [configFolderLink, setConfigFolderLink] = useState('');
-  const [configTestResult, setConfigTestResult] = useState<any>(null);
-  const [testingConfig, setTestingConfig] = useState(false);
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [configError, setConfigError] = useState('');
 
   const [showModal, setShowModal] = useState(false);
   const [editingTraining, setEditingTraining] = useState<Training | null>(null);
@@ -167,44 +159,9 @@ export default function TrainingsPage() {
 
   useEffect(() => { load(); loadConfig(); }, []);
 
-  const openConfigModal = () => {
-    setConfigFolderLink(driveConfig?.driveFolderId ? (driveConfig.driveFolderLink || buildDriveFolderLink(driveConfig.driveFolderId)) : '');
-    setConfigTestResult(null);
-    setConfigError('');
-    setShowConfigModal(true);
-  };
-
-  const handleTestConfig = async () => {
-    const cleanId = extractDriveFolderId(configFolderLink);
-    if (!cleanId) { setConfigError('Pega el enlace completo de la carpeta.'); return; }
-    setTestingConfig(true);
-    setConfigTestResult(null);
-    setConfigError('');
-    try {
-      const result = await testDriveConnection({ driveFolderId: cleanId, type: DRIVE_FOLDER_TYPE });
-      setConfigTestResult(result);
-    } catch (err: any) {
-      setConfigTestResult({ success: false, message: err.response?.data?.message || 'Error al probar conexión.' });
-    } finally {
-      setTestingConfig(false);
-    }
-  };
-
-  const handleSaveConfig = async () => {
-    const cleanId = extractDriveFolderId(configFolderLink);
-    if (!cleanId) { setConfigError('Pega el enlace completo de la carpeta.'); return; }
-    setSavingConfig(true);
-    setConfigError('');
-    try {
-      const saved = await saveDriveConfig({ driveFolderId: cleanId, type: DRIVE_FOLDER_TYPE });
-      setDriveConfig(saved);
-      setShowConfigModal(false);
-    } catch (err: any) {
-      setConfigError(err.response?.data?.message || 'Error al guardar.');
-    } finally {
-      setSavingConfig(false);
-    }
-  };
+  const driveFolderUrl = driveConfig?.driveFolderId
+    ? (driveConfig.driveFolderLink || buildDriveFolderLink(driveConfig.driveFolderId))
+    : '';
 
   const openCreate = () => {
     setEditingTraining(null);
@@ -360,27 +317,35 @@ export default function TrainingsPage() {
             <p className="page-eyebrow">RECURSOS HUMANOS</p>
             <h1>Capacitaciones</h1>
           </div>
-          {canEdit && (
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button className="btn-secondary" onClick={openConfigModal} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Settings size={16} /> Configurar carpeta
-              </button>
-              <button className="auth-btn" onClick={openCreate} disabled={!driveConfig} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="header-actions">
+            {canEdit && (
+              <button className="auth-btn" onClick={openCreate} disabled={!driveConfig}>
                 <Plus size={16} /> Nueva capacitación
               </button>
-            </div>
-          )}
+            )}
+            {driveFolderUrl && (
+              <a
+                className="btn-secondary"
+                href={driveFolderUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Abrir la carpeta de capacitaciones en Google Drive"
+              >
+                <FolderOpen size={16} /> Ver carpeta
+              </a>
+            )}
+          </div>
         </div>
       </div>
 
-      {canEdit && !driveConfig && (
+      {canEdit && !loadingConfig && !driveConfig && (
         <div style={{ background: '#fffaf0', border: '1px solid #fbd38d', color: '#975a16', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '0.85rem' }}>
-          Antes de crear capacitaciones, configura la carpeta de Drive donde se guardarán sus documentos y evidencias — botón "Configurar carpeta" arriba.
+          Falta definir la carpeta de Drive de Capacitaciones en el sistema. Avísale a Sistemas.
         </div>
       )}
 
       <p style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '20px' }}>
-        El cumplimiento es general (una vez registrado, ya está listo) y puedes adjuntar varios documentos y enlaces, guardados en la carpeta de Drive configurada.
+        El cumplimiento es general (una vez registrado, ya está listo) y puedes adjuntar varios documentos y enlaces, guardados en la carpeta de Drive de Capacitaciones.
       </p>
 
       {error && <div className="form-error" style={{ marginBottom: '16px' }}>{error}</div>}
@@ -462,57 +427,6 @@ export default function TrainingsPage() {
           </div>
         )}
       </div>
-
-      {/* MODAL: CONFIGURAR CARPETA DE DRIVE */}
-      {showConfigModal && (
-        <div className="modal-overlay" onClick={() => setShowConfigModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Configurar carpeta de Drive — Capacitaciones</h3>
-              <button className="modal-close" onClick={() => setShowConfigModal(false)}><X size={16} /></button>
-            </div>
-            <div className="modal-body">
-              <p style={{ fontSize: '0.82rem', color: '#718096', marginBottom: '14px' }}>
-                Los documentos y evidencias que se suban desde esta pantalla se guardan en esta carpeta de Drive.
-              </p>
-              {configError && <div className="form-error" style={{ marginBottom: '12px' }}>{configError}</div>}
-              <div className="form-group">
-                <label>Enlace de la carpeta *</label>
-                <input
-                  type="text"
-                  value={configFolderLink}
-                  onChange={(e) => { setConfigFolderLink(e.target.value); setConfigTestResult(null); }}
-                  placeholder="https://drive.google.com/drive/folders/1ABC123..."
-                />
-              </div>
-              {configTestResult && (
-                <div style={{
-                  padding: '12px', borderRadius: '8px', marginTop: '10px',
-                  background: configTestResult.success ? '#f0fff4' : '#fff5f5',
-                  border: `1px solid ${configTestResult.success ? '#c6f6d5' : '#fed7d7'}`,
-                }}>
-                  <p style={{ margin: 0, fontSize: '0.85rem', color: configTestResult.success ? '#276749' : '#c53030' }}>
-                    {configTestResult.success ? `✅ Conexión exitosa: ${configTestResult.folderName}` : `❌ ${configTestResult.message}`}
-                  </p>
-                </div>
-              )}
-              {driveConfig?.driveFolderId && (
-                <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: '#718096' }}>
-                  <strong>Configuración actual:</strong> {driveConfig.driveFolderName}
-                </p>
-              )}
-            </div>
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={handleTestConfig} disabled={testingConfig}>
-                {testingConfig ? 'Probando...' : 'Probar conexión'}
-              </button>
-              <button className="auth-btn" onClick={handleSaveConfig} disabled={savingConfig}>
-                {savingConfig ? 'Guardando...' : 'Guardar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* MODAL: CREAR / EDITAR */}
       {showModal && (

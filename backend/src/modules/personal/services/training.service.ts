@@ -22,7 +22,7 @@ export class TrainingService {
     const config = await this.driveService.getConfig(companyId, DRIVE_FOLDER_TYPE);
     if (!config) {
       throw new BadRequestException(
-        'Primero configura la carpeta de Drive de Capacitaciones (botón "Configurar carpeta").',
+        'No hay carpeta de Drive de Capacitaciones definida en el sistema.',
       );
     }
     return config;

@@ -92,9 +92,17 @@ export default function PersonalDashboard() {
           <p className="page-eyebrow">RECURSOS HUMANOS</p>
           <h1>Dashboard de Personal</h1>
         </div>
-        <button className="btn-secondary" onClick={() => setShowHelp(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <HelpCircle size={16} /> Ayuda
-        </button>
+        <div className="header-actions">
+          <button
+            type="button"
+            className="btn-icon-toolbar"
+            onClick={() => setShowHelp(true)}
+            title="Cómo funciona Recursos Humanos"
+            aria-label="Ayuda"
+          >
+            <HelpCircle size={18} />
+          </button>
+        </div>
       </div>
 
       {showHelp && <RrhhHelpModal onClose={() => setShowHelp(false)} />}

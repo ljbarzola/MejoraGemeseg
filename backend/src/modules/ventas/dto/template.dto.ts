@@ -41,6 +41,14 @@ export class UpdateFieldDto {
 
   @IsString()
   @IsOptional()
+  clientPrompt?: string;
+
+  @IsString()
+  @IsOptional()
+  clientFieldKey?: string;
+
+  @IsString()
+  @IsOptional()
   defaultValue?: string;
 
   @IsArray()
@@ -150,6 +158,10 @@ export class CreateContractDto {
   @IsOptional()
   fieldValues?: Record<string, any>;
 
+  @IsNumber()
+  @IsOptional()
+  salesClientId?: number;
+
   @IsOptional()
   annexA?: AnnexAItemDto[];
 
@@ -187,6 +199,10 @@ export class UpdateContractDto {
 
   @IsOptional()
   fieldValues?: Record<string, any>;
+
+  @IsNumber()
+  @IsOptional()
+  salesClientId?: number;
 
   @IsOptional()
   annexA?: AnnexAItemDto[];

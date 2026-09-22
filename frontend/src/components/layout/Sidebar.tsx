@@ -77,6 +77,7 @@ export default function Sidebar() {
     { label: 'Dashboard', path: '/ventas', icon: '📊' },
     { label: 'Planificación y Campo', path: '/ventas/visitas', icon: '📍' },
     { label: 'Prospectos CRM', path: '/ventas/leads', icon: '🎯' },
+    { label: 'Clientes', path: '/ventas/clientes', icon: '👤' },
     { label: 'Contratos', path: '/ventas/contratos', icon: '📄' },
     { label: 'Reportes', path: '/ventas/reportes', icon: '📈' },
     { label: 'Config Webhook', path: '/ventas/webhook-config', icon: '🔗' },

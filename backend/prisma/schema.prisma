@@ -43,6 +43,8 @@ model Company {
   salesApiKeys              SalesApiKey[]
   salesTemplates            SalesTemplate[]
   salesContracts            SalesContract[]
+  salesClients              SalesClient[]
+  salesClientFields         SalesClientField[]
   entidades                 Entidad[]
   requisitosDocumento       RequisitoDocumento[]
   asignacionesGuardia       AsignacionGuardia[]
@@ -120,6 +122,7 @@ model User {
   assignedLeads                      Lead[]
   createdSalesTemplates              SalesTemplate[]
   createdSalesContracts              SalesContract[]
+  createdSalesClients                SalesClient[]
   documentReviews                    DocumentReview[]
   documentReviewActions              DocumentReviewHistory[]
   asignacionesCreadas                AsignacionGuardia[]
@@ -1288,11 +1291,10 @@ model AlertaVencimiento {
   @@index([companyId])
 }
 
-// type distingue configuraciones independientes de carpeta raíz por área del
-// módulo Personal: 'CUMPLIMIENTO' (Custodios + Personal Administrativo, el
-// comportamiento histórico) y 'RECLUTAMIENTO' (candidatos/vacantes, su propia
-// carpeta separada). Default 'CUMPLIMIENTO' preserva el comportamiento de las
-// filas existentes tras la migración.
+// type distingue configuraciones independientes de carpeta raíz.
+// Editables desde la app: CUMPLIMIENTO, PERSONAL_ADMIN, GUARDIAS_ARCHIVO.
+// Fijas en código (HARDCODED_DRIVE_FOLDERS): RECLUTAMIENTO, CAPACITACIONES,
+// VENTAS_CONTRATOS — POST /personal/drive/config las rechaza.
 model FolderConfig {
   id              Int      @id @default(autoincrement())
   driveFolderId   String
@@ -1611,6 +1613,8 @@ model SalesField {
   allowMultiple   Boolean  @default(false) // Solo para fieldType DROPDOWN: selección única o múltiple
   allowOther      Boolean  @default(false) // Solo para fieldType DROPDOWN: permite escribir una opción libre ("Otro")
   tableConfig     Json? // Solo para fieldType TABLE: { columns: [{key,label,type}], maxRows }
+  clientPrompt    String? // Texto guía visible en el PDF para campos que llena el cliente
+  clientFieldKey  String? // Clave de SalesClientField / campo núcleo (name, email, ruc...)
   order           Int      @default(0)
 
   template SalesTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
@@ -1640,6 +1644,7 @@ model SalesContract {
   signedAt           DateTime?
   clientFillToken    String?   @unique // link público para que el cliente complete sus campos/tablas
   clientFilledAt     DateTime? // cuándo el cliente envió su parte
+  salesClientId      Int?
   companyId          Int
   createdBy          Int
   createdAt          DateTime  @default(now())
@@ -1648,9 +1653,11 @@ model SalesContract {
   company           Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
   creator           User                    @relation(fields: [createdBy], references: [id])
   template          SalesTemplate           @relation(fields: [templateId], references: [id])
+  salesClient       SalesClient?            @relation(fields: [salesClientId], references: [id], onDelete: SetNull)
   contractDocuments SalesContractDocument[]
 
   @@index([companyId, status])
+  @@index([salesClientId])
 }
 
 model SalesContractDocument {
@@ -1663,6 +1670,42 @@ model SalesContractDocument {
   contract SalesContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
 
   @@index([contractId])
+}
+
+model SalesClientField {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  key       String
+  label     String
+  fieldType String   @default("TEXT")
+  isCore    Boolean  @default(false)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, key])
+  @@index([companyId])
+}
+
+model SalesClient {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  name      String
+  email     String
+  phone     String?
+  ruc       String?
+  address   String?
+  extra     Json     @default("{}")
+  createdBy Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator   User            @relation(fields: [createdBy], references: [id])
+  contracts SalesContract[]
+
+  @@index([companyId])
 }
 
 enum TicketSoporteTipo {

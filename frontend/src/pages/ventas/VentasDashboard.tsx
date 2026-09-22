@@ -62,15 +62,15 @@ export default function VentasDashboard() {
     <div className="page-container">
       <div className="page-header-row">
         <div>
-          <p className="page-eyebrow">MÓDULO VENTAS Y CRM</p>
-          <h1>Dashboard Comercial</h1>
+          <p className="page-eyebrow">Ventas y CRM</p>
+          <h1>Dashboard comercial</h1>
           <p style={{ color: '#718096', fontSize: '0.85rem', marginTop: '4px' }}>
             Semana {goals?.weekNumber} · Año {goals?.year} — Seguimiento de campo y retorno digital
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/ventas/visitas')}>Agenda de Visitas 📍</button>
-          <button className="auth-btn" onClick={() => navigate('/ventas/leads')}>CRM Prospectos 🎯</button>
+        <div className="header-actions">
+          <button className="btn-secondary" onClick={() => navigate('/ventas/visitas')}>Visitas</button>
+          <button className="auth-btn" onClick={() => navigate('/ventas/leads')}>Prospectos</button>
         </div>
       </div>
 

@@ -15,7 +15,7 @@ export const JOB_POSITION_ESTADOS = ['ABIERTA', 'CERRADA'] as const;
 
 // A qué parte de la empresa entra un postulante de esta vacante cuando RRHH lo
 // marca como contratado. No es solo la carpeta destino: cada bucket nombra sus
-// carpetas distinto ("Nombre - Cédula" en Guardias, "Nombre - Puesto" en
+// carpetas distinto ("Apellidos - Nombres" en Guardias, "Nombre - Puesto" en
 // Personal Administrativo), así que contratar tiene que renombrar la carpeta
 // del postulante en el caso ADMINISTRATIVO. Ver DriveService.contratarCandidato.
 export const TIPOS_CONTRATACION = ['GUARDIA', 'ADMINISTRATIVO'] as const;
