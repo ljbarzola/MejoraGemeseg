@@ -11,6 +11,8 @@ import {
   type TicketSoporteEstado,
 } from '../../services/sistemas.service';
 import { extractDriveFolderId, buildDriveFolderLink } from '../../utils/driveLink';
+import { getUser } from '../../services/auth.service';
+import { getCompanies, type Company } from '../../services/company.service';
 
 const TIPO_LABEL: Record<string, string> = {
   ERROR: 'Error',
@@ -157,6 +159,10 @@ export default function SoporteTecnicoPage() {
 }
 
 function DriveConfigModal({ onClose }: { onClose: () => void }) {
+  const user = getUser();
+  const isSuperAdmin = user?.role === 'ADMIN' && !user.companyId;
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companyId, setCompanyId] = useState<number | null>(user?.companyId ?? null);
   const [folderLink, setFolderLink] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -165,13 +171,36 @@ function DriveConfigModal({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    getSistemasDriveConfig()
-      .then((config) => {
-        if (config) setFolderLink(config.driveFolderLink || buildDriveFolderLink(config.driveFolderId));
+    if (!isSuperAdmin) return;
+    getCompanies()
+      .then((list) => {
+        setCompanies(list);
+        if (list.length > 0) setCompanyId((current) => current ?? list[0].id);
       })
-      .catch(() => {})
+      .catch(() => setError('No se pudieron cargar las empresas'));
+  }, [isSuperAdmin]);
+
+  useEffect(() => {
+    if (isSuperAdmin && !companyId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setTestResult(null);
+    setError('');
+    getSistemasDriveConfig(isSuperAdmin ? companyId ?? undefined : undefined)
+      .then((config) => {
+        setFolderLink(
+          config
+            ? (config.driveFolderLink?.startsWith('http')
+                ? config.driveFolderLink
+                : buildDriveFolderLink(config.driveFolderId))
+            : '',
+        );
+      })
+      .catch((err: any) => setError(err.response?.data?.message || 'No se pudo cargar la carpeta'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [isSuperAdmin, companyId]);
 
   const handleTest = async () => {
     const id = extractDriveFolderId(folderLink);
@@ -180,7 +209,7 @@ function DriveConfigModal({ onClose }: { onClose: () => void }) {
     setTestResult(null);
     setError('');
     try {
-      setTestResult(await testSistemasDriveConnection(id));
+      setTestResult(await testSistemasDriveConnection(folderLink.trim()));
     } catch (err: any) {
       setTestResult({ success: false, message: err.response?.data?.message || 'Error al probar' });
     } finally {
@@ -191,10 +220,11 @@ function DriveConfigModal({ onClose }: { onClose: () => void }) {
   const handleSave = async () => {
     const id = extractDriveFolderId(folderLink);
     if (!id) { setError('Pega el enlace completo de la carpeta de Drive'); return; }
+    if (isSuperAdmin && !companyId) { setError('Elige la empresa'); return; }
     setSaving(true);
     setError('');
     try {
-      await saveSistemasDriveConfig(id);
+      await saveSistemasDriveConfig(folderLink.trim(), isSuperAdmin ? companyId ?? undefined : undefined);
       onClose();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al guardar');
@@ -220,6 +250,20 @@ function DriveConfigModal({ onClose }: { onClose: () => void }) {
             IMPORTANTE: Comparte la carpeta como Editor con <code>drive-sync@agentes-504115.iam.gserviceaccount.com</code>.
           </p>
           {error && <div className="form-error" style={{ marginBottom: '10px' }}>{error}</div>}
+          {isSuperAdmin && (
+            <label style={{ display: 'block', marginBottom: '12px', fontSize: '0.85rem', fontWeight: 600, color: '#4a5568' }}>
+              Empresa
+              <select
+                value={companyId ?? ''}
+                onChange={(e) => setCompanyId(Number(e.target.value))}
+                style={{ display: 'block', width: '100%', marginTop: '6px', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem', boxSizing: 'border-box' }}
+              >
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <input
             type="text"
             value={folderLink}

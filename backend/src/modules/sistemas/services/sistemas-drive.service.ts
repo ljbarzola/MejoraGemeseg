@@ -61,12 +61,25 @@ export class SistemasDriveService {
   }
 
   async getDriveConfig(companyId: number) {
+    if (!companyId) return null;
     return this.prisma.sistemasDriveConfig.findUnique({
       where: { companyId },
     });
   }
 
   async saveDriveConfig(companyId: number, driveFolderId: string) {
+    if (!companyId) {
+      throw new BadRequestException(
+        'Elige la empresa a la que pertenece esta carpeta de capturas.',
+      );
+    }
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true },
+    });
+    if (!company) {
+      throw new BadRequestException('Empresa no encontrada.');
+    }
     const sanitized = extractDriveFolderId(driveFolderId);
     // Igual que en DriveService.saveConfig: se guarda el ID (para las
     // llamadas a Drive) y aparte el texto tal como lo pegó la persona, para

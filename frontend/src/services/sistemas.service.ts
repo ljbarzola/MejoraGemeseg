@@ -54,11 +54,11 @@ export interface SistemasDriveConfig {
   driveFolderLink?: string | null;
 }
 
-export const getSistemasDriveConfig = (): Promise<SistemasDriveConfig | null> =>
-  api.get('/sistemas/drive-config').then((r) => r.data);
+export const getSistemasDriveConfig = (companyId?: number): Promise<SistemasDriveConfig | null> =>
+  api.get('/sistemas/drive-config', { params: companyId ? { companyId } : {} }).then((r) => r.data);
 
-export const saveSistemasDriveConfig = (driveFolderId: string): Promise<SistemasDriveConfig> =>
-  api.post('/sistemas/drive-config', { driveFolderId }).then((r) => r.data);
+export const saveSistemasDriveConfig = (driveFolderId: string, companyId?: number): Promise<SistemasDriveConfig> =>
+  api.post('/sistemas/drive-config', { driveFolderId, ...(companyId ? { companyId } : {}) }).then((r) => r.data);
 
 export const testSistemasDriveConnection = (driveFolderId: string): Promise<{ success: boolean; message: string }> =>
   api.post('/sistemas/drive-config/test', { driveFolderId }).then((r) => r.data);
