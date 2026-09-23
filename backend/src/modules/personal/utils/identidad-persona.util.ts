@@ -60,18 +60,14 @@ export async function reasignarCedulaPersona(
     );
   }
 
-  const fichasUnicas = [
-    'guardiaFichaPersonal',
-    'guardiaContacto',
-    'administrativeStaffFicha',
-  ] as const;
-  for (const tabla of fichasUnicas) {
-    const destino = await prisma[tabla].findUnique({
-      where: { companyId_cedula: { companyId, cedula: hacia } },
-    });
-    if (destino) {
-      throw new BadRequestException('Ya hay otra ficha con esa cédula.');
-    }
+  const cedulaDestino = { companyId_cedula: { companyId, cedula: hacia } };
+  const fichasEnDestino = await Promise.all([
+    prisma.guardiaFichaPersonal.findUnique({ where: cedulaDestino }),
+    prisma.guardiaContacto.findUnique({ where: cedulaDestino }),
+    prisma.administrativeStaffFicha.findUnique({ where: cedulaDestino }),
+  ]);
+  if (fichasEnDestino.some((ficha) => ficha)) {
+    throw new BadRequestException('Ya hay otra ficha con esa cédula.');
   }
 
   const donde = { companyId, cedula: desde };

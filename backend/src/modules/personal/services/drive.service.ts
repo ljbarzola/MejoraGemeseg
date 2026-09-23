@@ -1641,7 +1641,9 @@ export class DriveService {
     return this.prisma.documentType.delete({ where: { id } });
   }
 
-  private async listSubFolders(parentId: string) {
+  private async listSubFolders(
+    parentId: string,
+  ): Promise<{ id: string; name: string }[]> {
     const drive = this.getDriveClient();
     const files: { id?: string | null; name?: string | null }[] = [];
     let pageToken: string | undefined;
@@ -1657,7 +1659,11 @@ export class DriveService {
       files.push(...(res.data.files || []));
       pageToken = res.data.nextPageToken ?? undefined;
     } while (pageToken);
-    return files;
+    // Drive siempre devuelve id/name para carpetas reales; se filtra por si
+    // acaso para que el resto del servicio pueda trabajar con tipos no-nulos.
+    return files.filter(
+      (f): f is { id: string; name: string } => !!f.id && !!f.name,
+    );
   }
 
   // Público desde que ReclutamientoIaService necesita listar la carpeta de un
