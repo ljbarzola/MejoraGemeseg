@@ -298,4 +298,25 @@ describe('SurveyService', () => {
       expect(prisma.survey.update).not.toHaveBeenCalled();
     });
   });
+
+  describe('reopen', () => {
+    it('vuelve a publicar una encuesta cerrada sin tocar las respuestas', async () => {
+      prisma.survey.findFirst.mockResolvedValue({ id: 3, status: 'CLOSED' });
+
+      await service.reopen(3, 1);
+
+      expect(prisma.survey.update).toHaveBeenCalledWith({
+        where: { id: 3 },
+        data: { status: 'PUBLISHED' },
+      });
+      expect(prisma.surveyResponse.create).not.toHaveBeenCalled();
+    });
+
+    it('no reabre una encuesta que sigue activa', async () => {
+      prisma.survey.findFirst.mockResolvedValue({ id: 3, status: 'PUBLISHED' });
+
+      await expect(service.reopen(3, 1)).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.survey.update).not.toHaveBeenCalled();
+    });
+  });
 });

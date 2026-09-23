@@ -18,6 +18,7 @@ import {
 import AdministrativoDetalleModal from '../../components/personal/AdministrativoDetalleModal';
 import AdministrativeStaffConfigModal from '../../components/personal/AdministrativeStaffConfigModal';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import OpenFolderButton from '../../components/common/OpenFolderButton';
 
 interface StaffRow {
   employeeName: string;
@@ -372,13 +373,16 @@ export default function AdministrativeStaff() {
 
                   <div className="form-group">
                     <label>Enlace de la carpeta raíz de Personal Administrativo en Drive *</label>
-                    <input
-                      type="text"
-                      value={configFolderId}
-                      onChange={(e) => { setConfigFolderId(e.target.value); setConfigTestResult(null); }}
-                      placeholder="https://drive.google.com/drive/folders/1ABC123..."
-                      style={{ width: '100%' }}
-                    />
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        value={configFolderId}
+                        onChange={(e) => { setConfigFolderId(e.target.value); setConfigTestResult(null); }}
+                        placeholder="https://drive.google.com/drive/folders/1ABC123..."
+                        style={{ flex: 1, minWidth: 0 }}
+                      />
+                      <OpenFolderButton value={configFolderId} />
+                    </div>
                   </div>
 
                   {configTestResult && (

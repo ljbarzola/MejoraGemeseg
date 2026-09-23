@@ -17,6 +17,7 @@ import {
 import {
   ANALISIS_IA_FILENAME,
   ANALISIS_IA_PENDIENTE_FILENAME,
+  REVISION_ARCHIVOS_IA_FILENAME,
   FICHA_PERSONAL_FILENAME,
   FICHA_PERSONAL_FILENAME_LEGACY,
   NO_MOSTRAR_EN_LISTA_FILENAME,
@@ -308,6 +309,87 @@ export class DriveService {
     if (!id)
       throw new Error(`Drive no devolvió un id al crear la carpeta "${name}".`);
     return id;
+  }
+
+  // Busca una subcarpeta por nombre, sin importar mayúsculas. Pagina por si
+  // la carpeta padre tiene más de 100 hijas.
+  async findChildFolderByName(
+    parentId: string,
+    name: string,
+  ): Promise<{ id: string; name: string } | null> {
+    const objetivo = name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('es');
+    if (!objetivo) return null;
+    const drive = this.getDriveClient();
+    const parent = this.sanitizeFolderId(parentId);
+    let pageToken: string | undefined;
+    do {
+      const res = await drive.files.list({
+        q: `'${parent}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        fields: 'nextPageToken, files(id, name)',
+        pageSize: 100,
+        pageToken,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+      const hit = (res.data.files || []).find(
+        (f: { id?: string | null; name?: string | null }) =>
+          (f.name || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('es') === objetivo,
+      );
+      if (hit?.id) return { id: hit.id, name: hit.name || name };
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
+    return null;
+  }
+
+  // Mueve la carpeta al padre indicado y le pone el nombre pedido. Si ya
+  // está en ese padre, solo renombra.
+  async relocateFolder(folderId: string, parentId: string, name: string): Promise<void> {
+    const drive = this.getDriveClient();
+    const parent = this.sanitizeFolderId(parentId);
+    const current = await drive.files.get({
+      fileId: folderId,
+      fields: 'parents',
+      supportsAllDrives: true,
+    });
+    const parents = (current.data.parents || []).filter((p: string | null): p is string => !!p);
+    const sameParent = parents.includes(parent);
+    await drive.files.update({
+      fileId: folderId,
+      addParents: sameParent ? undefined : parent,
+      removeParents: sameParent ? undefined : parents.join(','),
+      requestBody: { name },
+      supportsAllDrives: true,
+    });
+  }
+
+  // Pasa los archivos y subcarpetas de una carpeta a otra. La carpeta de
+  // origen se queda vacía (no se borra).
+  async moveFolderContents(fromFolderId: string, toFolderId: string): Promise<void> {
+    if (fromFolderId === toFolderId) return;
+    const drive = this.getDriveClient();
+    const from = this.sanitizeFolderId(fromFolderId);
+    const to = this.sanitizeFolderId(toFolderId);
+    let pageToken: string | undefined;
+    do {
+      const res = await drive.files.list({
+        q: `'${from}' in parents and trashed = false`,
+        fields: 'nextPageToken, files(id)',
+        pageSize: 100,
+        pageToken,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+      for (const file of res.data.files || []) {
+        if (!file.id) continue;
+        await drive.files.update({
+          fileId: file.id,
+          addParents: to,
+          removeParents: from,
+          supportsAllDrives: true,
+        });
+      }
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
   }
 
   // El nombre de la carpeta no lo escribe el usuario: se lee de Drive con el
@@ -4145,6 +4227,7 @@ export class DriveService {
     const ignorados = new Set([
       ANALISIS_IA_FILENAME.toLowerCase(),
       ANALISIS_IA_PENDIENTE_FILENAME.toLowerCase(),
+      REVISION_ARCHIVOS_IA_FILENAME.toLowerCase(),
     ]);
     const rank = (name: string) => {
       const n = porNombre(name);

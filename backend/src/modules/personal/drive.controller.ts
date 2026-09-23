@@ -36,6 +36,7 @@ import {
   ReassignReclutamientoFileDto,
   SaveCandidatoDatosDto,
   AplicarAnalisisDto,
+  RevisarArchivosDto,
 } from './dto/job-position.dto';
 import { ReviewDocumentDto } from './dto/document-review.dto';
 import {
@@ -374,6 +375,38 @@ export class DriveController {
       folderId,
       req.user.companyId,
       driveFileId,
+    );
+  }
+
+  // Archivos subidos por separado: ¿el de la casilla "Cédula" es una cédula?
+  // Y, para los que quedaron como adicionales, una frase de qué documento es.
+  // No parte ni renombra nada.
+  @Post('reclutamiento/candidatos/:folderId/revisar-archivos')
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('RRHH', 'write')
+  revisarArchivos(
+    @Param('folderId') folderId: string,
+    @Body() body: RevisarArchivosDto,
+    @Req() req: any,
+  ) {
+    return this.reclutamientoIaService.revisarArchivos(
+      folderId,
+      req.user.companyId,
+      body.requeridos || [],
+      body.adicionales || [],
+    );
+  }
+
+  @Get('reclutamiento/candidatos/:folderId/revision-archivos')
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('RRHH', 'view')
+  obtenerRevisionArchivos(
+    @Param('folderId') folderId: string,
+    @Req() req: any,
+  ) {
+    return this.reclutamientoIaService.obtenerRevisionArchivos(
+      folderId,
+      req.user.companyId,
     );
   }
 

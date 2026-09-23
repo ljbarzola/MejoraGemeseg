@@ -8,6 +8,7 @@ import { DriveService } from './drive.service';
 import {
   ANALISIS_IA_FILENAME,
   ANALISIS_IA_PENDIENTE_FILENAME,
+  REVISION_ARCHIVOS_IA_FILENAME,
 } from '../constants/employee-document-exclusions';
 
 // Modelo de Vertex AI. Se elige un Flash (no Flash-Lite) a propósito: el caso
@@ -118,6 +119,31 @@ export interface AnalisisResult {
 // anverso de la cédula en la página 1 y el reverso en la 4, con otra cosa en
 // medio. Con rangos eso obligaría a generar dos archivos con el mismo nombre;
 // con una lista sale un único archivo con exactamente esas páginas.
+export interface RevisionRequerido {
+  requisito: string;
+  driveFileId: string;
+  fileName: string;
+  confianza: 'alta' | 'media' | 'baja' | null;
+  probabilidad: number | null;
+  notas: string | null;
+}
+
+export interface RevisionAdicional {
+  driveFileId: string;
+  fileName: string;
+  descripcion: string | null;
+}
+
+export interface RevisionArchivosResult {
+  success: boolean;
+  reason?: AnalisisReason | 'SIN_REVISION' | 'SIN_ARCHIVOS';
+  message?: string;
+  requeridos?: RevisionRequerido[];
+  adicionales?: RevisionAdicional[];
+  guardadoEn?: string;
+  desdeCache?: boolean;
+}
+
 export interface AsignacionConfirmada {
   requisito: string;
   paginas: number[];
@@ -147,6 +173,7 @@ export interface AsignacionConfirmada {
 // nuevo y se borra en `aplicar()` una vez que la propuesta ya se usó — deja de
 // tener sentido ofrecerla como "guardada" cuando ya se aplicó.
 const PENDIENTE_FILENAME = ANALISIS_IA_PENDIENTE_FILENAME;
+const REVISION_FILENAME = REVISION_ARCHIVOS_IA_FILENAME;
 @Injectable()
 export class ReclutamientoIaService {
   private readonly logger = new Logger(ReclutamientoIaService.name);
@@ -413,6 +440,258 @@ export class ReclutamientoIaService {
     }
 
     return { ...guardado, desdeCache: true };
+  }
+
+  async obtenerRevisionArchivos(
+    folderId: string,
+    companyId: number,
+  ): Promise<RevisionArchivosResult> {
+    if (!companyId)
+      throw new BadRequestException('Usuario sin empresa asociada');
+    const guardado = await this.driveService
+      .readJsonFile(folderId, REVISION_FILENAME)
+      .catch(() => null);
+    if (!guardado?.success) {
+      return { success: false, reason: 'SIN_REVISION' };
+    }
+    return { ...guardado, desdeCache: true };
+  }
+
+  // Cada archivo de una casilla del puesto se califica solo: alta solo si
+  // parece ser ESE documento. Los adicionales no se fuerzan a una casilla;
+  // sale una frase de qué son. No renombra ni parte archivos.
+  async revisarArchivos(
+    folderId: string,
+    companyId: number,
+    requeridos: { requisito: string; driveFileId: string }[],
+    adicionales: { driveFileId: string }[],
+  ): Promise<RevisionArchivosResult> {
+    if (!companyId)
+      throw new BadRequestException('Usuario sin empresa asociada');
+    if (requeridos.length === 0 && adicionales.length === 0) {
+      return {
+        success: false,
+        reason: 'SIN_ARCHIVOS',
+        message: 'No hay archivos subidos para revisar.',
+      };
+    }
+    if (!this.estaConfigurado()) {
+      return {
+        success: false,
+        reason: 'NO_CONFIGURADO',
+        message:
+          'El análisis con IA no está configurado en este entorno (falta GOOGLE_VERTEX_PROJECT). Revisa los documentos manualmente.',
+      };
+    }
+
+    const files = await this.driveService.listFilesInFolder(folderId);
+    const porId = new Map<string, { id: string; name: string; mimeType?: string }>(
+      files.map((f: any) => [f.id, f]),
+    );
+
+    const filasRequeridos = await Promise.all(
+      requeridos.map((item) =>
+        this.revisarUnRequerido(porId.get(item.driveFileId), item),
+      ),
+    );
+    const filasAdicionales = await Promise.all(
+      adicionales.map((item) =>
+        this.revisarUnAdicional(porId.get(item.driveFileId), item.driveFileId),
+      ),
+    );
+
+    const resultado: RevisionArchivosResult = {
+      success: true,
+      requeridos: filasRequeridos,
+      adicionales: filasAdicionales,
+      guardadoEn: new Date().toISOString(),
+    };
+    try {
+      await this.driveService.upsertJsonFile(folderId, REVISION_FILENAME, resultado);
+    } catch (err: any) {
+      this.logger.warn(
+        `No se pudo guardar la revisión de archivos en ${folderId}: ${err.message}`,
+      );
+    }
+    return resultado;
+  }
+
+  private async revisarUnRequerido(
+    archivo: { id: string; name: string; mimeType?: string } | undefined,
+    item: { requisito: string; driveFileId: string },
+  ): Promise<RevisionRequerido> {
+    const base = {
+      requisito: item.requisito,
+      driveFileId: item.driveFileId,
+      fileName: archivo?.name || '',
+    };
+    if (!archivo) {
+      return {
+        ...base,
+        confianza: null,
+        probabilidad: null,
+        notas: 'Ese archivo no está en la carpeta de este postulante.',
+      };
+    }
+    const mime = this.mimeLegible(archivo);
+    if (!mime) {
+      return {
+        ...base,
+        confianza: null,
+        probabilidad: null,
+        notas: 'Este formato no se puede leer con IA. Sirven PDF e imágenes.',
+      };
+    }
+    try {
+      const buffer = await this.driveService.downloadFileBuffer(archivo.id);
+      if (buffer.length > MAX_PDF_BYTES) {
+        return {
+          ...base,
+          confianza: null,
+          probabilidad: null,
+          notas: 'El archivo es demasiado grande para revisarlo con IA.',
+        };
+      }
+      const obj = await this.pedirJson(
+        buffer,
+        mime,
+        `Este archivo se subió en la casilla "${item.requisito}" de una postulación.
+Dime si el contenido ES realmente ese documento y no otro parecido.
+"probabilidad" es un entero 0-100. "confianza" es "alta" solo desde 85 y si puedes citar una frase visible; "media" entre 55 y 84; "baja" por debajo de 55.
+"notas" es una frase corta en español: por qué sí o por qué no.
+Responde ÚNICAMENTE con un objeto JSON: {"probabilidad": <0-100>, "confianza": "alta"|"media"|"baja", "evidencia": "<frase visible>" o null, "notas": "<frase>"}`,
+      );
+      if (!obj) {
+        return {
+          ...base,
+          confianza: null,
+          probabilidad: null,
+          notas: 'La IA no devolvió una respuesta para este archivo.',
+        };
+      }
+      const calificada = this.interpretarConfianza(obj);
+      const notas =
+        typeof obj.notas === 'string' && obj.notas.trim()
+          ? obj.notas.trim()
+          : calificada.confianza === 'baja'
+            ? `No parece ser ${item.requisito}.`
+            : null;
+      return {
+        ...base,
+        confianza: calificada.confianza,
+        probabilidad: calificada.probabilidad,
+        notas,
+      };
+    } catch (err: any) {
+      this.logger.warn(`No se pudo revisar ${archivo.id}: ${err.message}`);
+      return {
+        ...base,
+        confianza: null,
+        probabilidad: null,
+        notas: 'No se pudo revisar este archivo.',
+      };
+    }
+  }
+
+  private async revisarUnAdicional(
+    archivo: { id: string; name: string; mimeType?: string } | undefined,
+    driveFileId: string,
+  ): Promise<RevisionAdicional> {
+    const base = { driveFileId, fileName: archivo?.name || '' };
+    if (!archivo) {
+      return { ...base, descripcion: 'Ese archivo no está en la carpeta de este postulante.' };
+    }
+    const mime = this.mimeLegible(archivo);
+    if (!mime) {
+      return { ...base, descripcion: 'Este formato no se puede leer con IA. Sirven PDF e imágenes.' };
+    }
+    try {
+      const buffer = await this.driveService.downloadFileBuffer(archivo.id);
+      if (buffer.length > MAX_PDF_BYTES) {
+        return { ...base, descripcion: 'El archivo es demasiado grande para identificarlo con IA.' };
+      }
+      const obj = await this.pedirJson(
+        buffer,
+        mime,
+        `Mira este archivo y di en una sola frase en español qué documento es (por ejemplo "cédula de ciudadanía", "papeleta de votación", "foto personal", "contrato de trabajo"). Si no se puede saber, dilo.
+Responde ÚNICAMENTE con un objeto JSON: {"descripcion": "<una frase>"}`,
+      );
+      const descripcion =
+        typeof obj?.descripcion === 'string' && obj.descripcion.trim()
+          ? obj.descripcion.trim()
+          : 'No se pudo identificar este archivo.';
+      return { ...base, descripcion };
+    } catch (err: any) {
+      this.logger.warn(`No se pudo identificar ${archivo.id}: ${err.message}`);
+      return { ...base, descripcion: 'No se pudo identificar este archivo.' };
+    }
+  }
+
+  private mimeLegible(archivo: { name: string; mimeType?: string }): string | null {
+    const mime = (archivo.mimeType || '').toLowerCase();
+    if (mime === 'application/pdf' || mime.startsWith('image/')) {
+      return mime === 'image/jpg' ? 'image/jpeg' : mime;
+    }
+    const ext = (archivo.name.split('.').pop() || '').toLowerCase();
+    const porExtension: Record<string, string> = {
+      pdf: 'application/pdf',
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      webp: 'image/webp',
+      gif: 'image/gif',
+    };
+    return porExtension[ext] || null;
+  }
+
+  private async pedirJson(
+    buffer: Buffer,
+    mime: string,
+    prompt: string,
+  ): Promise<any | null> {
+    const token = await this.getAccessToken();
+    const url = `https://${this.location}-aiplatform.googleapis.com/v1/projects/${this.project}/locations/${this.location}/publishers/google/models/${MODEL}:generateContent`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inlineData: { mimeType: mime, data: buffer.toString('base64') } },
+              { text: prompt },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: 'application/json',
+          maxOutputTokens: 1024,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      }),
+    });
+    if (!response.ok) {
+      const errorBody = await response.text();
+      this.logger.error(`Vertex AI ${response.status}: ${errorBody}`);
+      throw new Error(`el servicio respondió ${response.status}`);
+    }
+    const data: any = await response.json();
+    const texto: string = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+    if (!texto) return null;
+    let limpio = texto;
+    const fence = limpio.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    if (fence) limpio = fence[1].trim();
+    try {
+      return JSON.parse(limpio);
+    } catch {
+      this.logger.warn(`Respuesta de IA no es JSON válido: ${limpio.slice(0, 200)}`);
+      return null;
+    }
   }
 
   // Ubica el PDF del postulante y los documentos que su vacante exige. Se

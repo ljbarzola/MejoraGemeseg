@@ -11,6 +11,7 @@ import {
   type TicketSoporteEstado,
 } from '../../services/sistemas.service';
 import { extractDriveFolderId, buildDriveFolderLink } from '../../utils/driveLink';
+import OpenFolderButton from '../../components/common/OpenFolderButton';
 import { getUser } from '../../services/auth.service';
 import { getCompanies, type Company } from '../../services/company.service';
 
@@ -264,13 +265,16 @@ function DriveConfigModal({ onClose }: { onClose: () => void }) {
               </select>
             </label>
           )}
-          <input
-            type="text"
-            value={folderLink}
-            onChange={(e) => setFolderLink(e.target.value)}
-            placeholder="https://drive.google.com/drive/folders/..."
-            style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem', boxSizing: 'border-box' }}
-          />
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input
+              type="text"
+              value={folderLink}
+              onChange={(e) => setFolderLink(e.target.value)}
+              placeholder="https://drive.google.com/drive/folders/..."
+              style={{ flex: 1, minWidth: 0, padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem', boxSizing: 'border-box' }}
+            />
+            <OpenFolderButton value={folderLink} />
+          </div>
           {testResult && (
             <p style={{ fontSize: '0.8rem', color: testResult.success ? '#276749' : '#c53030', margin: '8px 0 0' }}>
               {testResult.message}

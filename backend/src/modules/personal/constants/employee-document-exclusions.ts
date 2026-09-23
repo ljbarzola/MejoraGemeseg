@@ -16,6 +16,9 @@ export const FICHA_PERSONAL_FILENAME_LEGACY = 'Datos_Personales.json';
 export const CANDIDATO_JSON_FILENAME = 'candidato.json';
 export const ANALISIS_IA_FILENAME = 'analisis-ia.json';
 export const ANALISIS_IA_PENDIENTE_FILENAME = 'analisis-ia-pendiente.json';
+// Resultado de "Revisar con IA" sobre archivos sueltos y adicionales.
+// No es un documento del postulante.
+export const REVISION_ARCHIVOS_IA_FILENAME = 'revision-archivos-ia.json';
 
 // Lo escribe "quitar de la lista" en la carpeta de un guardia que ya está
 // fuera. El sync lo ve y no vuelve a crear el registro. No es un documento
@@ -28,5 +31,6 @@ export const NON_DOCUMENT_FILENAMES: readonly string[] = [
   CANDIDATO_JSON_FILENAME,
   ANALISIS_IA_FILENAME,
   ANALISIS_IA_PENDIENTE_FILENAME,
+  REVISION_ARCHIVOS_IA_FILENAME,
   NO_MOSTRAR_EN_LISTA_FILENAME,
 ];
