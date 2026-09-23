@@ -37,7 +37,12 @@ export default function TemplateConfig() {
   const [numberingNext, setNumberingNext] = useState(1);
 
   useEffect(() => { if (isEdit && id) loadTemplate(+id); }, [id]);
-  useEffect(() => { getSalesClientFields().then(setClientFields).catch(() => setClientFields([])); }, []);
+  useEffect(() => {
+    getSalesClientFields().then(setClientFields).catch((err: any) => {
+      setClientFields([]);
+      showToast(err?.response?.data?.message || 'No se pudieron cargar los campos de cliente', 'error');
+    });
+  }, []);
 
   const loadTemplate = async (tid: number) => {
     try {
@@ -53,7 +58,11 @@ export default function TemplateConfig() {
       setNumberingNext(t.numberingNext ?? 1);
       if (t.driveUrl) setStep(2);
       if (t.fields?.length) setStep(3);
-    } catch { navigate('/ventas/contratos'); }
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { message?: string } } };
+      showToast(ax?.response?.data?.message || 'No se pudo cargar la plantilla', 'error');
+      navigate('/ventas/contratos');
+    }
   };
 
   const handleDownload = async () => {

@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Download, Printer } from 'lucide-react';
 import { getVisits, getLeads, ClientVisit, Lead } from '../../services/ventas.service';
 import DateInput from '../../components/common/DateInput';
+import { useToast } from '../../contexts/ToastContext';
 
 export default function VentasReportes() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [visits, setVisits] = useState<ClientVisit[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,7 +24,9 @@ export default function VentasReportes() {
         setVisits(vData);
         setLeads(lData);
       })
-      .catch(() => {})
+      .catch((err: any) => {
+        showToast(err?.response?.data?.message || 'No se pudo cargar el reporte', 'error');
+      })
       .finally(() => setLoading(false));
   };
 

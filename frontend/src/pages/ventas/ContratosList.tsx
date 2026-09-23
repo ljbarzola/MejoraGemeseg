@@ -8,9 +8,11 @@ import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import TemplateHelpModal from '../../components/ventas/TemplateHelpModal';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
+import { useToast } from '../../contexts/ToastContext';
 
 export default function ContratosList() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [contracts, setContracts] = useState<SalesContract[]>([]);
   const [filter, setFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -28,21 +30,30 @@ export default function ContratosList() {
           setDriveFolderUrl(c.driveFolderLink || buildDriveFolderLink(c.driveFolderId));
         }
       })
-      .catch(() => {});
+      .catch((err: any) => {
+        showToast(err?.response?.data?.message || 'No se pudo cargar la carpeta de Drive de contratos', 'error');
+      });
   }, []);
 
   const loadContracts = async () => {
     try {
       const data = await getContracts(filter ? { status: filter } : undefined);
       setContracts(data);
-    } catch { /* */ }
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'No se pudieron cargar los contratos', 'error');
+    }
   };
 
   const handleConfirmDelete = async () => {
     const id = pendingDeleteId;
     setPendingDeleteId(null);
     if (id == null) return;
-    try { await deleteContract(id); loadContracts(); } catch { /* */ }
+    try {
+      await deleteContract(id);
+      loadContracts();
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'No se pudo eliminar el contrato', 'error');
+    }
   };
 
   const statusColors: Record<string, string> = {

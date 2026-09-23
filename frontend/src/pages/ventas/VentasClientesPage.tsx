@@ -39,6 +39,8 @@ export default function VentasClientesPage() {
       const [c, f] = await Promise.all([getSalesClients(), getSalesClientFields()]);
       setClients(c);
       setFields(f);
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'No se pudieron cargar los clientes', 'error');
     } finally {
       setLoading(false);
     }

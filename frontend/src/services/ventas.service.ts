@@ -145,10 +145,31 @@ export const createContract = (data: any) =>
 export const updateContract = (id: number, data: any) =>
   api.patch(`/ventas/contratos/${id}`, data).then(r => r.data);
 
-export const generateContractPdf = (contractId: number) =>
+export interface GenerateContractPdfResult {
+  success: boolean;
+  pdfUrl: string;
+  // Presente solo si el respaldo en Google Drive falló — el PDF se generó
+  // igual (ver uploadToDriveIfConfigured en el backend).
+  driveWarning?: string;
+}
+
+export const generateContractPdf = (contractId: number): Promise<GenerateContractPdfResult> =>
   api.post(`/ventas/contratos/${contractId}/generate`).then(r => r.data);
 
-export const sendContract = (contractId: number) =>
+export interface SendContractResult {
+  success: boolean;
+  documentId: string;
+  // Link directo de la sesión de firma en SignWell para el destinatario del
+  // contrato — se puede copiar y abrir sin depender de que el correo llegue
+  // (útil en pruebas, con SIGNWELL_TEST_MODE). No es exclusivo de ninguna
+  // plantilla: SignWell lo genera para cualquier documento enviado.
+  signingUrl: string | null;
+  // Presente solo si el respaldo en Google Drive falló — el envío en sí ya
+  // se completó igual (ver uploadToDriveIfConfigured en el backend).
+  driveWarning?: string;
+}
+
+export const sendContract = (contractId: number): Promise<SendContractResult> =>
   api.post(`/ventas/contratos/${contractId}/send`).then(r => r.data);
 
 export interface SignatureStatus {
@@ -161,7 +182,11 @@ export interface SignatureStatus {
     status: string | null;
     bounced: boolean;
     bouncedDetails: string | null;
+    signingUrl: string | null;
   }>;
+  // Presente solo si, al detectar que el documento ya se firmó, el respaldo
+  // en Google Drive del PDF firmado falló (ver uploadToDriveIfConfigured).
+  driveWarning?: string;
 }
 
 export const getContractSignatureStatus = (contractId: number): Promise<SignatureStatus> =>
@@ -189,9 +214,17 @@ export const submitPublicContractFill = (token: string, values: Record<string, a
 export const getContractDocuments = (contractId: number): Promise<SalesContractDocument[]> =>
   api.get(`/ventas/contratos/${contractId}/documents`).then(r => r.data);
 
+export interface UploadSignedContractResult {
+  success: boolean;
+  filePath: string;
+  // Presente solo si el respaldo en Google Drive falló — la subida en sí ya
+  // se completó igual (ver uploadToDriveIfConfigured en el backend).
+  driveWarning?: string;
+}
+
 // Sube a mano el PDF ya firmado — respaldo para cuando el webhook de
 // SignWell no está configurado en este entorno (ver CONTRATOS-PLAN.md).
-export const uploadSignedContract = (contractId: number, file: File) => {
+export const uploadSignedContract = (contractId: number, file: File): Promise<UploadSignedContractResult> => {
   const formData = new FormData();
   formData.append('file', file);
   return api.post(`/ventas/contratos/${contractId}/documents/signed`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);

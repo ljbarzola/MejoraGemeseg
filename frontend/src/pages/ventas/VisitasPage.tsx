@@ -5,6 +5,7 @@ import { getVisits, createVisit, checkInVisit, completeVisit, cancelVisit, delet
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import PromptDialog from '../../components/common/PromptDialog';
 import DateInput from '../../components/common/DateInput';
+import { useToast } from '../../contexts/ToastContext';
 
 const OUTCOME_LABELS: Record<string, string> = {
   INTERESTED: 'Interesado',
@@ -16,6 +17,7 @@ const OUTCOME_LABELS: Record<string, string> = {
 
 export default function VisitasPage() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [visits, setVisits] = useState<ClientVisit[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewModal, setShowNewModal] = useState(false);
@@ -83,7 +85,9 @@ export default function VisitasPage() {
     setLoading(true);
     getVisits()
       .then(setVisits)
-      .catch(() => {})
+      .catch((err: any) => {
+        showToast(err?.response?.data?.message || 'No se pudieron cargar las visitas', 'error');
+      })
       .finally(() => setLoading(false));
   };
 

@@ -12,6 +12,7 @@ import {
   UseGuards,
   ParseIntPipe,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
@@ -20,7 +21,8 @@ import { DocumentReviewService } from './services/document-review.service';
 import { DocumentExtractionService } from './services/document-extraction.service';
 import { ReclutamientoIaService } from './services/reclutamiento-ia.service';
 import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
-import { Section } from '../../common/decorators/section.decorator';
+import { Section, NoSectionCheck } from '../../common/decorators/section.decorator';
+import { PermissionsService } from '../permissions/permissions.service';
 import {
   SaveDriveConfigDto,
   TestDriveConnectionDto,
@@ -54,10 +56,25 @@ export class DriveController {
     private readonly documentReviewService: DocumentReviewService,
     private readonly documentExtractionService: DocumentExtractionService,
     private readonly reclutamientoIaService: ReclutamientoIaService,
+    private readonly permissionsService: PermissionsService,
   ) {}
 
+  // El controller entero exige @Section('RRHH','view'), pero esta ruta
+  // también la usa Ventas (type=VENTAS_CONTRATOS) para leer el enlace de
+  // Drive de los contratos — de ahí NoSectionCheck() y la validación manual
+  // según el `type` recibido.
   @Get('drive/config')
-  getConfig(@Req() req: any, @Query('type') type?: string) {
+  @NoSectionCheck()
+  async getConfig(@Req() req: any, @Query('type') type?: string) {
+    const section = type === 'VENTAS_CONTRATOS' ? 'VENTAS' : 'RRHH';
+    const allowed = await this.permissionsService.hasSectionAccess(
+      req.user,
+      section,
+      'view',
+    );
+    if (!allowed) {
+      throw new ForbiddenException(`No tienes acceso a ${section}`);
+    }
     return this.driveService.getConfig(req.user.companyId, type);
   }
 

@@ -210,7 +210,30 @@ describe('VentasContratosService', () => {
           filePath: '/api/ventas/contratos/file/10_123.pdf',
         },
       });
-      expect(result).toEqual({ success: true, documentId: 'doc-123' });
+      expect(result).toEqual({ success: true, documentId: 'doc-123', signingUrl: null });
+    });
+
+    it('returns the signing URL SignWell gives the recipient, so it can be copied without depending on email delivery', async () => {
+      process.env.SIGNWELL_API_KEY = 'test-key';
+      prisma.salesContract.findFirst.mockResolvedValue(makeContract());
+      prisma.salesContract.update.mockResolvedValue(
+        makeContract({ status: 'SENT' }),
+      );
+      (axios.post as jest.Mock).mockResolvedValue({
+        data: {
+          id: 'doc-123',
+          status: 'Sent',
+          recipients: [{ signing_url: 'https://www.signwell.com/sign/doc-123' }],
+        },
+      });
+
+      const result = await service.sendContract(10, 1);
+
+      expect(result).toEqual({
+        success: true,
+        documentId: 'doc-123',
+        signingUrl: 'https://www.signwell.com/sign/doc-123',
+      });
     });
 
     it('omits with_signature_page when the template has its own client SIGNATURE/CHECKBOX field (embedded as a text tag instead)', async () => {

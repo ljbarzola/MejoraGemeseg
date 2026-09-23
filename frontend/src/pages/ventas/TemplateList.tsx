@@ -3,18 +3,27 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Pencil, Trash2 } from 'lucide-react';
 import { getTemplates, deleteTemplate, SalesTemplate } from '../../services/ventas.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import { useToast } from '../../contexts/ToastContext';
 
 export default function TemplateList() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [templates, setTemplates] = useState<SalesTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [blockedDeleteMessage, setBlockedDeleteMessage] = useState<string | null>(null);
 
   useEffect(() => { loadTemplates(); }, []);
 
   const loadTemplates = async () => {
     setLoading(true);
-    try { setTemplates(await getTemplates()); } catch { /* */ } finally { setLoading(false); }
+    try {
+      setTemplates(await getTemplates());
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'No se pudieron cargar las plantillas', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = (id: number) => {
@@ -24,8 +33,20 @@ export default function TemplateList() {
   const confirmarEliminar = async () => {
     if (confirmDeleteId == null) return;
     const id = confirmDeleteId;
+    const template = templates.find((t) => t.id === id);
     setConfirmDeleteId(null);
-    try { await deleteTemplate(id); loadTemplates(); } catch { /* */ }
+    try {
+      await deleteTemplate(id);
+      loadTemplates();
+    } catch (err: any) {
+      const backendMessage = err?.response?.data?.message;
+      const contractCount = template?._count?.contracts ?? 0;
+      setBlockedDeleteMessage(
+        backendMessage
+          ? `${backendMessage}${contractCount > 0 ? ` (${contractCount} contrato${contractCount === 1 ? '' : 's'} vinculado${contractCount === 1 ? '' : 's'})` : ''}. Elimina o reasigna primero esos contratos para poder borrar la plantilla.`
+          : 'No se pudo eliminar la plantilla. Intenta de nuevo más tarde.',
+      );
+    }
   };
 
   return (
@@ -96,6 +117,17 @@ export default function TemplateList() {
           danger
           onConfirm={confirmarEliminar}
           onCancel={() => setConfirmDeleteId(null)}
+        />
+      )}
+
+      {blockedDeleteMessage != null && (
+        <ConfirmDialog
+          title="No se puede eliminar la plantilla"
+          message={blockedDeleteMessage}
+          confirmLabel="Entendido"
+          hideCancel
+          onConfirm={() => setBlockedDeleteMessage(null)}
+          onCancel={() => setBlockedDeleteMessage(null)}
         />
       )}
     </div>
