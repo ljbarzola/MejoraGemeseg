@@ -2000,6 +2000,33 @@ export class DriveService {
     return /gserviceaccount\.com$/i.test(email || '');
   }
 
+  // Un service account no tiene cuota de almacenamiento propia: crear un
+  // archivo NUEVO con él falla con "Service Accounts do not have storage
+  // quota" en cualquier carpeta que no sea una Unidad compartida, aunque el
+  // service account sí pueda leer/listar/actualizar ahí sin problema. Se
+  // impersona al dueño humano de la carpeta (misma delegación de dominio que
+  // ya usa moverCarpetaATrash) para que el archivo nuevo quede en la cuota de
+  // esa persona en vez de en la del service account.
+  private async resolverClienteParaCrear(drive: any, folderId: string) {
+    try {
+      const meta = await drive.files.get({
+        fileId: folderId,
+        fields: 'owners(emailAddress), parents, driveId',
+        supportsAllDrives: true,
+      });
+      if (meta.data?.driveId) return drive;
+      let ownerEmail = meta.data?.owners?.[0]?.emailAddress || '';
+      if (!ownerEmail || this.esCuentaDeServicio(ownerEmail)) {
+        ownerEmail =
+          (await this.buscarDuenoHumano(drive, meta.data?.parents || [])) ||
+          '';
+      }
+      return ownerEmail ? this.getDriveClientComoDueno(ownerEmail) : drive;
+    } catch {
+      return drive;
+    }
+  }
+
   // Sube por los padres hasta hallar una persona. La raíz de Guardias está
   // compartida con la cuenta de servicio, pero el dueño de esa raíz es quien
   // abre Drive.
@@ -4165,7 +4192,11 @@ export class DriveService {
         supportsAllDrives: true,
       });
     } else {
-      await drive.files.create({
+      const clienteCreacion = await this.resolverClienteParaCrear(
+        drive,
+        folderId,
+      );
+      await clienteCreacion.files.create({
         requestBody: {
           name: FICHA_PERSONAL_FILENAME,
           parents: [folderId],
@@ -4244,7 +4275,11 @@ export class DriveService {
         supportsAllDrives: true,
       });
     } else {
-      await drive.files.create({
+      const clienteCreacion = await this.resolverClienteParaCrear(
+        drive,
+        folderId,
+      );
+      await clienteCreacion.files.create({
         requestBody: {
           name: FICHA_PERSONAL_FILENAME,
           parents: [folderId],
