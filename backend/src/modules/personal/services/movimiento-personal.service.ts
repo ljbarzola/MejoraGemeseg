@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   TipoMovimientoPersonal,
@@ -47,6 +51,29 @@ export class MovimientoPersonalService {
     });
     if (!movimiento) throw new NotFoundException('Movimiento no encontrado');
     return movimiento;
+  }
+
+  // Solo se puede cancelar/eliminar un caso mientras sigue EN_PROCESO — un
+  // caso COMPLETADO ya pudo haber disparado efectos de negocio (cierre de
+  // AsignacionGuardia en cerrarAsignacionSiSalidaCompletada) y es parte del
+  // histórico de RRHH, así que no se toca. Es borrado físico (no un estado
+  // CANCELADO): mientras está EN_PROCESO el caso todavía no tuvo ningún
+  // efecto de negocio, así que no hace falta dejar rastro — y borrarlo libera
+  // a la cédula para que un ENTRADA/SALIDA nuevo se pueda volver a crear (la
+  // idempotencia de crear() reutiliza el caso EN_PROCESO existente si no se
+  // elimina primero).
+  async remove(id: number, companyId: number) {
+    const movimiento = await this.prisma.movimientoPersonal.findFirst({
+      where: { id, companyId },
+    });
+    if (!movimiento) throw new NotFoundException('Movimiento no encontrado');
+    if (movimiento.estado !== 'EN_PROCESO') {
+      throw new BadRequestException(
+        'Solo se puede cancelar/eliminar un movimiento mientras está en proceso. Este ya fue completado.',
+      );
+    }
+    await this.prisma.movimientoPersonal.delete({ where: { id } });
+    return { success: true };
   }
 
   async crearEntrada(input: CrearMovimientoInput) {

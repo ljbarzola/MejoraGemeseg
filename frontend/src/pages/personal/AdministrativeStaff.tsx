@@ -51,6 +51,7 @@ export default function AdministrativeStaff() {
   const [confirmandoEliminar, setConfirmandoEliminar] = useState<StaffRow | null>(null);
   const [deleteError, setDeleteError] = useState('');
   const deleteErrorRef = useRef<HTMLDivElement>(null);
+  const [syncError, setSyncError] = useState('');
 
   // El botón "Eliminar" puede estar en una fila lejos del inicio de una tabla
   // larga; el banner de error se pinta arriba de la página, así que se hace
@@ -87,10 +88,12 @@ export default function AdministrativeStaff() {
 
   const handleSync = async () => {
     setSyncing(true);
+    setSyncError('');
     try {
       await syncPersonalAdminFolder();
       loadStaff();
-    } catch {
+    } catch (err: any) {
+      setSyncError(err.response?.data?.message || 'No se pudo sincronizar con Drive.');
     } finally {
       setSyncing(false);
     }
@@ -232,6 +235,10 @@ export default function AdministrativeStaff() {
 
       {deleteError && (
         <div ref={deleteErrorRef} style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginTop: '16px', fontSize: '0.85rem' }}>{deleteError}</div>
+      )}
+
+      {syncError && (
+        <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginTop: '16px', fontSize: '0.85rem' }}>{syncError}</div>
       )}
 
       <div className="admin-section" style={{ marginTop: '20px' }}>

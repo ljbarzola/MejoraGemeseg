@@ -217,3 +217,53 @@ describe('MovimientoPersonalService.toggleItem', () => {
     expect(prisma.asignacionGuardia.updateMany).not.toHaveBeenCalled();
   });
 });
+
+describe('MovimientoPersonalService.remove', () => {
+  let service: MovimientoPersonalService;
+  let prisma: {
+    movimientoPersonal: { findFirst: jest.Mock; delete: jest.Mock };
+  };
+
+  beforeEach(() => {
+    prisma = {
+      movimientoPersonal: {
+        findFirst: jest.fn(),
+        delete: jest.fn().mockResolvedValue({}),
+      },
+    };
+    service = new MovimientoPersonalService(prisma as unknown as PrismaService);
+  });
+
+  it('elimina un movimiento EN_PROCESO', async () => {
+    prisma.movimientoPersonal.findFirst.mockResolvedValue({
+      id: 1,
+      estado: 'EN_PROCESO',
+    });
+
+    const result = await service.remove(1, 1);
+
+    expect(prisma.movimientoPersonal.delete).toHaveBeenCalledWith({
+      where: { id: 1 },
+    });
+    expect(result).toEqual({ success: true });
+  });
+
+  it('NO permite eliminar un movimiento ya COMPLETADO', async () => {
+    prisma.movimientoPersonal.findFirst.mockResolvedValue({
+      id: 1,
+      estado: 'COMPLETADO',
+    });
+
+    await expect(service.remove(1, 1)).rejects.toThrow(
+      'Solo se puede cancelar/eliminar un movimiento mientras está en proceso. Este ya fue completado.',
+    );
+    expect(prisma.movimientoPersonal.delete).not.toHaveBeenCalled();
+  });
+
+  it('lanza NotFoundException si el movimiento no existe o es de otra empresa', async () => {
+    prisma.movimientoPersonal.findFirst.mockResolvedValue(null);
+
+    await expect(service.remove(1, 1)).rejects.toThrow('Movimiento no encontrado');
+    expect(prisma.movimientoPersonal.delete).not.toHaveBeenCalled();
+  });
+});

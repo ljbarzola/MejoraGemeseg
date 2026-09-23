@@ -178,7 +178,8 @@ export default function GuardiaComplianceModal({ cedula, onClose, onChanged }: P
                         {contactoError && <div className="form-error" style={{ marginBottom: '6px' }}>{contactoError}</div>}
                         <div style={{ display: 'flex', gap: '6px' }}>
                           <input
-                            type="email"
+                            type="text"
+                            inputMode="email"
                             value={contactoInput}
                             onChange={(e) => setContactoInput(e.target.value)}
                             placeholder="correo@dominio.com"

@@ -5,6 +5,7 @@ import { PersonalFieldDefinitionService } from './personal-field-definition.serv
 import { AdministrativeStaffFichaService } from './administrative-staff-ficha.service';
 import { GuardiaFichaPersonalService } from './guardia-ficha-personal.service';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { resumirExpediente } from '../utils/expediente-completitud.util';
 
 const noopMovimientoPersonalService = {
   getCedulasFuera: jest.fn().mockResolvedValue([]),
@@ -1748,5 +1749,96 @@ describe('DriveService carpetas de Drive fijas en código', () => {
       where: { companyId: 1, type: 'CUMPLIMIENTO' },
     });
     expect(config).toMatchObject({ driveFolderId: 'guardias-root' });
+  });
+});
+
+// Bug reportado por QA: aprobar los documentos obligatorios de un candidato
+// sube la completitud a 100%, pero una resincronización posterior ("recargar"
+// en la jerga de QA es el botón "Sincronizar", el ícono de refresh) la vuelve
+// a 0% aunque el servidor sí conservó las aprobaciones — la cédula se computa
+// igual en ambos lados, pero cuando un candidato tiene dos archivos que
+// matchean el mismo casillero con el MISMO puntaje (un duplicado, algo real
+// en este módulo — ver el fix de "Archivos Adicionales" para el mismo caso),
+// `findMatchingFile` desempata quedándose con el PRIMERO del array que recibe
+// — y `listFilesInFolder` nunca ordena esa lista, así que el orden depende de
+// lo que la API de Drive decida devolver en cada llamada (no garantizado
+// estable). Si Drive devuelve el orden invertido en la resincronización, el
+// casillero pasa a apuntar al archivo SIN revisión, y como
+// `DocumentReview.driveFileId` sigue apuntando al archivo original, la
+// revisión "desaparece" para ese casillero.
+describe('DriveService — estabilidad del matching de archivos duplicados', () => {
+  let service: DriveService;
+
+  beforeEach(() => {
+    service = new DriveService(
+      {} as unknown as PrismaService,
+      noopMovimientoPersonalService,
+      noopPersonalFieldDefinitionService,
+      noopAdministrativeStaffFichaService,
+      noopGuardiaFichaPersonalService,
+    );
+  });
+
+  it('reproduce el bug: findMatchingFile elige un archivo distinto para el mismo casillero solo por el orden de la lista', () => {
+    // Dos archivos que matchean "Cédula" con el mismo puntaje (mismo prefijo,
+    // uno es la resubida/duplicado del otro).
+    const archivoOriginal = { id: 'file-original', name: 'Cedula.pdf' };
+    const archivoDuplicado = { id: 'file-duplicado', name: 'Cedula (2).pdf' };
+
+    const eligeEnOrdenA = (service as any).findMatchingFile(
+      [archivoOriginal, archivoDuplicado],
+      'Cédula',
+    );
+    const eligeEnOrdenB = (service as any).findMatchingFile(
+      [archivoDuplicado, archivoOriginal],
+      'Cédula',
+    );
+
+    // Antes del fix, cada orden "gana" el primero de la lista: esto
+    // demuestra que la elección depende del orden y no de cuál archivo se
+    // aprobó. Con la lista ordenada de forma determinística (el fix), las
+    // dos llamadas deben elegir SIEMPRE el mismo archivo.
+    expect(eligeEnOrdenA.id).toBe(eligeEnOrdenB.id);
+  });
+
+  it('simula la resincronización: una lista de Drive en distinto orden no debe hacer perder una aprobación ya registrada', () => {
+    const archivoOriginal = { id: 'file-original', name: 'Cedula.pdf' };
+    const archivoDuplicado = { id: 'file-duplicado', name: 'Cedula (2).pdf' };
+
+    // Primer sync: Drive devuelve [original, duplicado]. RRHH aprueba el
+    // archivo que el casillero resolvió en ESE momento.
+    const primeraResolucion = (service as any).resolverArchivoDeRequisito(
+      'Cédula',
+      [archivoOriginal, archivoDuplicado],
+      [],
+    );
+    const reviews = new Map<string, string>([
+      [primeraResolucion.file.id, 'APROBADO'],
+    ]);
+
+    // Resincronización: Drive devuelve la MISMA carpeta pero en orden
+    // inverso (no hay garantía de orden estable en la API sin `orderBy`).
+    const segundaResolucion = (service as any).resolverArchivoDeRequisito(
+      'Cédula',
+      [archivoDuplicado, archivoOriginal],
+      [],
+    );
+
+    const resumen = resumirExpediente(
+      [
+        {
+          nombre: 'Cédula',
+          obligatorio: true,
+          driveFileId: segundaResolucion.file.id,
+        },
+      ],
+      reviews,
+    );
+
+    // Con el fix, el casillero sigue resolviendo al MISMO archivo
+    // (file-original) sin importar el orden que Drive haya devuelto, así
+    // que la aprobación se sigue viendo.
+    expect(segundaResolucion.file.id).toBe(primeraResolucion.file.id);
+    expect(resumen.completitudPercent).toBe(100);
   });
 });

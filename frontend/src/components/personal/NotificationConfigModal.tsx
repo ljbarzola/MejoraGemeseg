@@ -79,7 +79,8 @@ export default function NotificationConfigModal({ onClose, onSaved }: Props) {
                   <div className="form-group">
                     <label style={{ fontSize: '0.8rem' }}>Correo de envío</label>
                     <input
-                      type="email"
+                      type="text"
+                      inputMode="email"
                       value={senderEmail}
                       onChange={(e) => setSenderEmail(e.target.value)}
                       placeholder="rrhh@gemeseg.com"

@@ -263,6 +263,39 @@ describe('ContractService', () => {
       expect(result[0].value).toBe('');
     });
 
+    // Regresión: producción reportó PDFs con "ID-M9m4K_pW5o" impreso como
+    // cédula (10/9/2026, ficha de MARIA ZAMBRANO) — un id sintético de
+    // carpeta de Drive, no una cédula real. El listado de Guardias ya sabe
+    // mostrar "Sin cédula" en ese caso (cedulaVisible/esCedulaSintetica);
+    // el generador de contratos debe usar el mismo criterio en vez de
+    // imprimir el identificador interno tal cual.
+    it('shows "Sin cédula" instead of a synthetic ID- identifier for the CEDULA field', async () => {
+      prisma.contractTemplate.findFirst.mockResolvedValue(
+        makeTemplate({
+          fields: [
+            {
+              variableName: 'CEDULA',
+              label: 'Cédula',
+              isRequired: true,
+              systemField: 'CEDULA',
+            },
+          ],
+        }),
+      );
+      prisma.guardiaFichaPersonal.findUnique.mockResolvedValue(null);
+      prisma.asignacionGuardia.findFirst.mockResolvedValue(null);
+      prisma.company.findUnique.mockResolvedValue(null);
+
+      const result = await service.getAutofill(
+        1,
+        1,
+        'ID-M9m4K_pW5o',
+        'Maria Zambrano',
+      );
+
+      expect(result[0].value).toBe('Sin cédula');
+    });
+
     // Regresión: un error de Prisma no relacionado (ej. P2022 columna
     // faltante por drift de schema/DB, como pasó en producción con
     // GuardiaFichaPersonal.camposPersonalizados) escapaba sin convertirse en
