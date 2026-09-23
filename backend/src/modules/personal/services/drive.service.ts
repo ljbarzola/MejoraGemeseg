@@ -15,8 +15,11 @@ import {
   validarNombrePersona,
 } from '../utils/nombre-persona.util';
 import {
+  ANALISIS_IA_FILENAME,
+  ANALISIS_IA_PENDIENTE_FILENAME,
   FICHA_PERSONAL_FILENAME,
   FICHA_PERSONAL_FILENAME_LEGACY,
+  NO_MOSTRAR_EN_LISTA_FILENAME,
   NON_DOCUMENT_FILENAMES,
 } from '../constants/employee-document-exclusions';
 import { validarFormatoEntidad } from '../utils/entidad-folder-format.util';
@@ -48,6 +51,8 @@ import {
 export class DriveService {
   private readonly logger = new Logger(DriveService.name);
   private driveClient: any = null;
+  private driveKeyFile: any = null;
+  private driveClientsPorDueno = new Map<string, any>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -57,8 +62,8 @@ export class DriveService {
     private readonly guardiaFichaPersonalService: GuardiaFichaPersonalService,
   ) {}
 
-  private getDriveClient() {
-    if (this.driveClient) return this.driveClient;
+  private loadDriveServiceAccountKey(): any {
+    if (this.driveKeyFile) return this.driveKeyFile;
 
     const candidates = [
       path.join(process.cwd(), 'google-service-account.json'),
@@ -75,12 +80,11 @@ export class DriveService {
       `DriveClient: process.cwd()=${process.cwd()}, __dirname=${__dirname}`,
     );
 
-    let keyFile: any = null;
     for (const candidate of candidates) {
       if (fs.existsSync(candidate)) {
-        keyFile = JSON.parse(fs.readFileSync(candidate, 'utf-8'));
+        this.driveKeyFile = JSON.parse(fs.readFileSync(candidate, 'utf-8'));
         this.logger.log(`DriveClient: loaded credentials from ${candidate}`);
-        break;
+        return this.driveKeyFile;
       }
     }
 
@@ -88,25 +92,47 @@ export class DriveService {
     // nunca llega a la imagen Docker, así que en producción las credenciales
     // viajan como el contenido del JSON en esta env var (Secret Manager vía
     // --set-secrets en cloudbuild.yaml), no como archivo.
-    if (!keyFile && process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-      keyFile = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+      this.driveKeyFile = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
       this.logger.log(
         'DriveClient: loaded credentials from GOOGLE_SERVICE_ACCOUNT_JSON env var',
       );
+      return this.driveKeyFile;
     }
 
-    if (!keyFile) {
-      throw new BadRequestException(
-        'Google Drive no configurado. Coloca google-service-account.json en la raíz del backend o define GOOGLE_SERVICE_ACCOUNT_JSON.',
-      );
-    }
+    throw new BadRequestException(
+      'Google Drive no configurado. Coloca google-service-account.json en la raíz del backend o define GOOGLE_SERVICE_ACCOUNT_JSON.',
+    );
+  }
+
+  private getDriveClient() {
+    if (this.driveClient) return this.driveClient;
 
     const auth = new google.auth.GoogleAuth({
-      credentials: keyFile,
+      credentials: this.loadDriveServiceAccountKey(),
       scopes: ['https://www.googleapis.com/auth/drive'],
     });
     this.driveClient = google.drive({ version: 'v3', auth });
     return this.driveClient;
+  }
+
+  // La papelera de Drive es del dueño del archivo. La cuenta de servicio, si
+  // manda a la papelera por su cuenta, o no puede (no es dueña) o lo esconde
+  // en una papelera que nadie abre. Impersonar al dueño deja la carpeta en
+  // la papelera de esa persona. Requiere delegación de dominio del scope
+  // drive sobre drive-sync; si no está, Google responde unauthorized_client.
+  private getDriveClientComoDueno(email: string) {
+    const cacheado = this.driveClientsPorDueno.get(email);
+    if (cacheado) return cacheado;
+
+    const auth = new google.auth.GoogleAuth({
+      credentials: this.loadDriveServiceAccountKey(),
+      scopes: ['https://www.googleapis.com/auth/drive'],
+      clientOptions: { subject: email },
+    });
+    const cliente = google.drive({ version: 'v3', auth });
+    this.driveClientsPorDueno.set(email, cliente);
+    return cliente;
   }
 
   private sanitizeFolderId(id: string): string {
@@ -638,6 +664,16 @@ export class DriveService {
   ) {
     try {
       const files = await this.listFilesInFolder(guardiaFolder.id);
+      // Marcador de cuando la X solo ocultaba, sin tocar Drive. Las que se
+      // quitan ahora van a la papelera y este listado ya no las ve.
+      if (
+        files.some(
+          (f: { name?: string }) =>
+            (f.name || '').toLowerCase() === NO_MOSTRAR_EN_LISTA_FILENAME,
+        )
+      ) {
+        return;
+      }
       const parsed = this.parseEmployeeFolderName(
         guardiaFolder.name,
         guardiaFolder.id,
@@ -664,20 +700,51 @@ export class DriveService {
 
       let cedula: string;
       let nombreGuardia: string;
+      const nombreValido = validarNombrePersona(guardiaFolder.name).valido;
+
+      if (
+        existente &&
+        cedulaConfiable &&
+        existente.cedula.startsWith('ID-') &&
+        cedulaLeida !== existente.cedula
+      ) {
+        const migrada = await this.reemplazarCedulaSintetica(
+          companyId,
+          existente.cedula,
+          cedulaLeida,
+        );
+        if (migrada) existente.cedula = cedulaLeida;
+      }
 
       if (!existente) {
-        if (!cedulaConfiable) {
-          // Carpeta nueva sin cédula en el nombre ni en candidato.json /
-          // datos.json: no se inventa una identidad.
+        if (cedulaConfiable) {
+          cedula = cedulaLeida;
+          nombreGuardia = parsed.name;
+        } else if (nombreValido) {
+          // "Apellidos Nombres" vale en mayúsculas o minúsculas. Sin cédula
+          // en el formulario igual entra a la lista; la cédula real reemplaza
+          // esta clave interna en cuanto el JSON la traiga.
+          cedula = `ID-${guardiaFolder.id}`;
+          nombreGuardia = parsed.name;
+        } else {
+          // Carpeta nueva que ni siquiera sigue el formato (guion, vacía…):
+          // no se inventa una identidad.
           result.guardiasNoReconocidos.push(guardiaFolder.name);
           return;
         }
-        cedula = cedulaLeida;
-        nombreGuardia = parsed.name;
       } else if (cedulaConfiable && cedulaLeida === existente.cedula) {
         // Mismo folderId, misma cédula (el nombre pudo cambiar
         // cosméticamente) — actualización normal.
         cedula = cedulaLeida;
+        nombreGuardia = parsed.name;
+      } else if (
+        !cedulaConfiable &&
+        existente.cedula.startsWith('ID-') &&
+        nombreValido
+      ) {
+        // Sigue sin cédula, pero el nombre (en cualquier combinación de
+        // mayúsculas) ya es válido: se actualiza el nombre y no se avisa.
+        cedula = existente.cedula;
         nombreGuardia = parsed.name;
       } else {
         // El folderId ya existía con OTRA cédula (o la nueva no se
@@ -1735,6 +1802,169 @@ export class DriveService {
     return this.prisma.employeeDriveFolder.deleteMany({
       where: { companyId, cedula },
     });
+  }
+
+  // Quita de Listado de Guardias a alguien que ya está fuera y manda su
+  // carpeta a la papelera del dueño en Drive (se puede restaurar desde ahí).
+  // Si Drive no la suelta, el registro se queda: si no, el sync la recrearía.
+  // El historial de movimientos se conserva.
+  async quitarGuardiaFueraDeLista(cedula: string, companyId: number) {
+    if (!companyId)
+      throw new BadRequestException('Usuario sin empresa asociada');
+
+    const activo = await this.movimientoPersonalService.isActivo(
+      companyId,
+      cedula,
+    );
+    if (activo) {
+      throw new BadRequestException(
+        'Solo se puede quitar de la lista a un guardia que ya está fuera.',
+      );
+    }
+
+    const folder = await this.prisma.employeeDriveFolder.findUnique({
+      where: { companyId_cedula: { companyId, cedula } },
+    });
+
+    if (folder?.folderId) {
+      try {
+        await this.enviarCarpetaAPapeleraDelDueno(folder.folderId);
+      } catch (err: any) {
+        if (err instanceof BadRequestException) throw err;
+        if (!this.driveNoEncuentra(err)) {
+          throw new BadRequestException(
+            `No se pudo enviar la carpeta a la papelera de Drive, así que no se quitó de la lista: ${err.message}`,
+          );
+        }
+      }
+    }
+
+    await this.deleteEmployeeByCedula(cedula, companyId);
+    return { cedula };
+  }
+
+  private esCuentaDeServicio(email: string): boolean {
+    return /gserviceaccount\.com$/i.test(email || '');
+  }
+
+  // Sube por los padres hasta hallar una persona. La raíz de Guardias está
+  // compartida con la cuenta de servicio, pero el dueño de esa raíz es quien
+  // abre Drive.
+  private async buscarDuenoHumano(
+    drive: any,
+    parentIds: string[],
+    profundidad = 0,
+  ): Promise<string | null> {
+    if (profundidad > 8) return null;
+    for (const parentId of parentIds) {
+      const parent = await drive.files.get({
+        fileId: parentId,
+        fields: 'owners(emailAddress), parents',
+        supportsAllDrives: true,
+      });
+      const email = parent.data?.owners?.[0]?.emailAddress || '';
+      if (email && !this.esCuentaDeServicio(email)) return email;
+      const arriba = await this.buscarDuenoHumano(
+        drive,
+        parent.data?.parents || [],
+        profundidad + 1,
+      );
+      if (arriba) return arriba;
+    }
+    return null;
+  }
+
+  private async enviarCarpetaAPapeleraDelDueno(folderId: string) {
+    const drive = this.getDriveClient();
+    let meta: any;
+    try {
+      meta = await drive.files.get({
+        fileId: folderId,
+        fields: 'id, trashed, driveId, owners(emailAddress), parents',
+        supportsAllDrives: true,
+      });
+    } catch (err: any) {
+      if (this.driveNoEncuentra(err)) return;
+      throw err;
+    }
+    if (meta.data?.trashed) return;
+
+    // En una unidad compartida la papelera es la de esa unidad.
+    if (meta.data?.driveId) {
+      await drive.files.update({
+        fileId: folderId,
+        requestBody: { trashed: true },
+        supportsAllDrives: true,
+      });
+      return;
+    }
+
+    let ownerEmail: string = meta.data?.owners?.[0]?.emailAddress || '';
+    if (!ownerEmail || this.esCuentaDeServicio(ownerEmail)) {
+      const humano = await this.buscarDuenoHumano(
+        drive,
+        meta.data?.parents || [],
+      );
+      if (!humano) {
+        throw new BadRequestException(
+          'No se encontró al dueño de la carpeta para enviarla a su papelera.',
+        );
+      }
+      if (this.esCuentaDeServicio(ownerEmail)) {
+        await drive.permissions.create({
+          fileId: folderId,
+          transferOwnership: true,
+          requestBody: { role: 'owner', type: 'user', emailAddress: humano },
+        });
+      }
+      ownerEmail = humano;
+    }
+
+    try {
+      const comoDueno = this.getDriveClientComoDueno(ownerEmail);
+      await comoDueno.files.update({
+        fileId: folderId,
+        requestBody: { trashed: true },
+        supportsAllDrives: true,
+      });
+    } catch (err: any) {
+      const msg = String(err?.message || err || '');
+      if (/unauthorized_client/i.test(msg)) {
+        throw new BadRequestException(
+          `No se pudo enviar la carpeta a la papelera de ${ownerEmail}. La cuenta de Drive no tiene delegación de dominio para actuar como esa persona.`,
+        );
+      }
+      throw err;
+    }
+  }
+
+  private driveNoEncuentra(err: any): boolean {
+    const code = err?.code || err?.response?.status;
+    const msg = String(err?.message || err || '');
+    return code === 404 || /not found|file not found/i.test(msg);
+  }
+
+  // La primera vez que una carpeta "Apellidos Nombres" no trae cédula se
+  // guarda con una clave interna ID-<folderId>. Cuando el formulario ya
+  // tiene la cédula real, se reemplaza esa clave en la misma fila.
+  private async reemplazarCedulaSintetica(
+    companyId: number,
+    cedulaActual: string,
+    cedulaReal: string,
+  ): Promise<boolean> {
+    const ocupada = await this.prisma.employeeDriveFolder.findFirst({
+      where: { companyId, cedula: cedulaReal },
+    });
+    if (ocupada) return false;
+    await this.prisma.employeeDriveFolder.update({
+      where: { companyId_cedula: { companyId, cedula: cedulaActual } },
+      data: { cedula: cedulaReal },
+    });
+    await this.prisma.employeeDocument.updateMany({
+      where: { companyId, cedula: cedulaActual },
+      data: { cedula: cedulaReal },
+    });
+    return true;
   }
 
   // Mueve la carpeta de un guardia a la carpeta de archivo configurada
@@ -3870,20 +4100,40 @@ export class DriveService {
     };
   }
 
+  private cedulaDeValor(raw: unknown): string {
+    const digits = String(raw ?? '').replace(/\D/g, '');
+    return /^\d{10}$/.test(digits) ? digits : '';
+  }
+
+  private claveEsCedula(key: string): boolean {
+    const normalizada = key
+      .normalize('NFD')
+      .replace(/\p{Mn}/gu, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+    return (
+      normalizada === 'cedula' ||
+      normalizada.includes('cedula') ||
+      normalizada === 'ci' ||
+      normalizada === 'identificacion'
+    );
+  }
+
   private extraerCedulaConfiableDeObjeto(data: any): string {
     if (!data || typeof data !== 'object') return '';
-    const form =
+    const fuentes = [
       data.datosFormulario && typeof data.datosFormulario === 'object'
         ? data.datosFormulario
-        : data;
-    const candidatos = [
-      buscarDatoFormulario(form, ['cedula']),
-      buscarDatoFormulario(data, ['cedula']),
-      data.cedula,
+        : null,
+      data,
     ];
-    for (const c of candidatos) {
-      const s = String(c || '').trim();
-      if (/^\d{10}$/.test(s)) return s;
+    for (const fuente of fuentes) {
+      if (!fuente || typeof fuente !== 'object') continue;
+      for (const key of Object.keys(fuente)) {
+        if (!this.claveEsCedula(key)) continue;
+        const cedula = this.cedulaDeValor(fuente[key]);
+        if (cedula) return cedula;
+      }
     }
     return '';
   }
@@ -3891,32 +4141,48 @@ export class DriveService {
   private async leerCedulaDeJsonEnCarpeta(
     files: { id?: string; name?: string }[],
   ): Promise<string> {
-    const porNombre = (n: string) => n.toLowerCase();
-    const jsonFile =
-      files.find((f) => porNombre(f.name || '') === 'candidato.json') ||
-      files.find(
-        (f) =>
-          porNombre(f.name || '') === FICHA_PERSONAL_FILENAME.toLowerCase() ||
-          f.name === FICHA_PERSONAL_FILENAME_LEGACY,
-      ) ||
-      files.find((f) => porNombre(f.name || '').endsWith('.json'));
-    if (!jsonFile?.id) return '';
-    try {
-      const drive = this.getDriveClient();
-      const fileRes = await drive.files.get(
-        { fileId: jsonFile.id, alt: 'media', supportsAllDrives: true },
-        { responseType: 'text' },
-      );
-      const data =
-        (typeof fileRes.data === 'string'
-          ? JSON.parse(fileRes.data)
-          : fileRes.data) || {};
-      return this.extraerCedulaConfiableDeObjeto(data);
-    } catch (err: any) {
-      this.logger.warn(
-        `No se pudo leer cédula de ${jsonFile.name}: ${err.message}`,
-      );
-      return '';
+    const porNombre = (n: string) => (n || '').toLowerCase();
+    const ignorados = new Set([
+      ANALISIS_IA_FILENAME.toLowerCase(),
+      ANALISIS_IA_PENDIENTE_FILENAME.toLowerCase(),
+    ]);
+    const rank = (name: string) => {
+      const n = porNombre(name);
+      if (n === 'candidato.json') return 0;
+      if (
+        n === FICHA_PERSONAL_FILENAME.toLowerCase() ||
+        n === FICHA_PERSONAL_FILENAME_LEGACY.toLowerCase()
+      ) {
+        return 1;
+      }
+      return 2;
+    };
+    const jsons = files
+      .filter((f) => {
+        const n = porNombre(f.name || '');
+        return n.endsWith('.json') && !ignorados.has(n) && !!f.id;
+      })
+      .sort((a, b) => rank(a.name || '') - rank(b.name || ''));
+
+    const drive = jsons.length > 0 ? this.getDriveClient() : null;
+    for (const jsonFile of jsons) {
+      try {
+        const fileRes = await drive.files.get(
+          { fileId: jsonFile.id, alt: 'media', supportsAllDrives: true },
+          { responseType: 'text' },
+        );
+        const data =
+          (typeof fileRes.data === 'string'
+            ? JSON.parse(fileRes.data)
+            : fileRes.data) || {};
+        const cedula = this.extraerCedulaConfiableDeObjeto(data);
+        if (cedula) return cedula;
+      } catch (err: any) {
+        this.logger.warn(
+          `No se pudo leer cédula de ${jsonFile.name}: ${err.message}`,
+        );
+      }
     }
+    return '';
   }
 }

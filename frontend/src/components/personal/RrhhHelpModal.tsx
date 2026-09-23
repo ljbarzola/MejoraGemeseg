@@ -16,7 +16,7 @@ const FLUJO_PRINCIPAL: Submodulo[] = [
       'Cuando alguien queda contratado, se lo marca desde su ficha con "Marcar como Contratado": si es guardia va a la sub-carpeta "Sin Asignar" (todavía sin entidad, eso se decide en el siguiente paso), y si es administrativo va a Personal Administrativo, renombrando la carpeta. En todas partes la carpeta de una persona se llama igual: "Apellidos Nombres", sin guion, sin cédula y sin puesto. La cédula y el puesto viajan dentro del archivo de datos de la carpeta, no en su nombre.',
       'Si esa carpeta destino todavía no está configurada, el sistema avisa y no mueve nada. No existe ningún tablero ni paso intermedio: contratar es una sola acción, en esta pantalla.',
       'Al postularse, la persona elige si sube un archivo por documento o todo junto en un solo PDF. En ese segundo caso su ficha lo avisa y aparece el botón "Analizar con IA", que lee el archivo y propone qué documento es cada página.',
-      'Se abre una pantalla con todas las páginas en miniatura, cada una con su documento ya marcado: solo revisas y corriges las que estén mal, y puedes hacer clic en cualquier miniatura para verla en grande. Dos páginas marcadas con el mismo documento se guardan juntas en un solo archivo, aunque no estén seguidas.',
+      'Se abre una pantalla con todas las páginas en miniatura, cada una con su documento ya marcado y una probabilidad: alta solo si la página se parece de verdad a ese documento; si no, queda en media, baja o sin asignar. Clic en una miniatura la abre en grande: ahí se puede acercar, alejar, arrastrar cuando está ampliada y volver al 100% con el porcentaje. Dos páginas marcadas con el mismo documento se guardan juntas en un solo archivo, aunque no estén seguidas.',
       'Nada se modifica hasta que confirmes: recién ahí se separan los documentos y se conserva el original. Si la IA no logra leer el archivo, se puede seguir trabajando a mano como siempre.',
       'Este mismo botón también aparece junto a cualquier archivo que quede en "Archivos Adicionales" (los que no coincidieron con ningún documento pedido): sirve para el caso de alguien que dijo subir por separado pero en realidad mandó todo junto, o mezcló varios documentos en un solo PDF por error.',
     ],
@@ -25,8 +25,8 @@ const FLUJO_PRINCIPAL: Submodulo[] = [
     nombre: '2. Listado de Guardias',
     ruta: '/rrhh/guardias',
     parrafos: [
-      'Aquí aparecen los guardias que ya pasaron por Reclutamiento (o que ya existían). Cada carpeta de guardia se llama "Apellidos Nombres" (ej. PEREZ GARCIA JUAN CARLOS), sin guion ni cédula. "Sincronizar Drive" lee esa estructura y decide en qué entidad está cada guardia, o si sigue en "Sin Asignar", esperando que alguien mueva su carpeta a Público/Privado/<Entidad> a mano.',
-      'También desde aquí se configuran la carpeta de Drive de Guardias, la carpeta de archivo, campos personalizados de cada ficha y se registra la salida cuando alguien deja de trabajar.',
+      'Aquí aparecen los guardias que ya pasaron por Reclutamiento (o que ya existían). Cada carpeta de guardia se llama "Apellidos Nombres" (ej. PEREZ GARCIA JUAN CARLOS). Mayúsculas y minúsculas valen igual. "Sincronizar Drive" lee esa estructura y decide en qué entidad está cada guardia, o si sigue en "Sin Asignar", esperando que alguien mueva su carpeta a Público/Privado/<Entidad> a mano. Si el formulario todavía no trae la cédula, igual entra a la lista como "Sin cédula".',
+      'También desde aquí se configuran la carpeta de Drive de Guardias, la carpeta de archivo, campos personalizados de cada ficha y se registra la salida cuando alguien deja de trabajar. En "Mostrar fuera", la X pide confirmación, quita a esa persona de la lista y manda su carpeta a la papelera de Drive de quien es dueño. No vuelve a aparecer al sincronizar. Desde esa papelera se puede restaurar.',
     ],
   },
   {

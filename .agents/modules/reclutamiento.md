@@ -86,6 +86,8 @@ Se probó de extremo a extremo contra `agentes-504115`/`us-central1` con la serv
 
 ⚠️ **Deuda con fecha: Google retira los modelos Gemini 2.5 el 16 de octubre de 2026.** Cuando llegue, esta función deja de responder. Hay que conseguir acceso a la serie 3.x en el proyecto (o mover el proyecto a uno que lo tenga) y apuntar `GOOGLE_VERTEX_MODEL` al modelo nuevo. Se dejó configurable por entorno precisamente para que ese cambio no exija un despliegue de código.
 
+**Producción: la consola no conserva las tres variables (2026-09-23):** en `app.gemeseg.com` el análisis se arreglaba poniendo a mano `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` y `GOOGLE_VERTEX_MODEL` en Cloud Run, y al siguiente deploy volvía "falta GOOGLE_VERTEX_PROJECT". Causa: `gcloud run deploy --set-env-vars` **reemplaza** todas las variables planas por la lista del yaml, que solo tenía `NODE_ENV` y `REDIS_*`. Desde este día `cloudbuild.yaml` incluye las tres: `agentes-504115`, `us-central1`, `gemini-2.5-flash`. El cambio del yaml llega a producción cuando se despliega esa revisión; hasta entonces, volver a guardarlas en la consola las reactiva, y el próximo deploy a `main` (con este yaml) ya no las borra.
+
 ### `ReclutamientoIaService`
 
 Dos reglas heredadas de `DocumentExtractionService`, deliberadas:
@@ -93,6 +95,8 @@ Dos reglas heredadas de `DocumentExtractionService`, deliberadas:
 2. Cuando algo falla, falla **visible y con mensaje accionable** en vez de adivinar (`NO_CONFIGURADO`, `SIN_PDF`, `VARIOS_PDF`, `SIN_REQUISITOS`, `PDF_ILEGIBLE`, `PDF_MUY_GRANDE`, `ERROR_DRIVE`, `ERROR_IA`, `RESPUESTA_INVALIDA`). El postulante siempre se puede trabajar a mano.
 
 Parseo defensivo de la respuesta del modelo: se **descartan** los requisitos que el modelo se inventó (los que no están en la vacante — generarían una fila que RRHH no puede confirmar) y los rangos de página fuera del PDF. Un rango a medias se trata como "no encontrado" en vez de completar el extremo que falta. Los requisitos que el modelo omitió se agregan como "no encontrado" para que RRHH vea el checklist entero, no solo lo hallado. El detalle crudo del error de Vertex queda en el log; hacia la UI solo viaja el código de estado (no filtrar rutas internas del proyecto de GCP).
+
+**Confianza (2026-09-23):** el modelo ponía `confianza: "alta"` en casi todo, incluso cuando un requisito nuevo no tenía nada que ver con la página (ej. una carta de recomendación laboral marcada sobre otro documento). Ahora manda `probabilidad` 0-100, que el código traduce: alta solo desde 85 **y** con una frase visible que nombre el documento; 55-84 es media; por debajo de 55 es baja y **no se preseleccionan** esas páginas. La etiqueta que mande el modelo se ignora si contradice el número. Una propuesta ya guardada sigue con la confianza vieja hasta que RRHH pulse "Analizar de nuevo". La vista ampliada de cada página se puede acercar, alejar y arrastrar.
 
 `aplicar` **valida todo antes de escribir el primer archivo**, para que una asignación inválida no deje la carpeta a medio partir. Los archivos generados se nombran `"<Requisito> - <original>.pdf"`, **el mismo formato que `reassignReclutamientoFile`**, que es lo que hace que `findMatchingFile` los reconozca sin ningún modelo de asociación nuevo.
 

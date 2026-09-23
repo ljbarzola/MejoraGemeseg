@@ -197,6 +197,7 @@ export const syncPersonalAdminFolder = () => api.post('/personal/drive/sync-pers
 export const getDriveCompliance = (cedula: string) => api.get(`/personal/drive/compliance/${cedula}`).then(r => r.data);
 export const getDriveTree = () => api.get('/personal/drive/tree').then(r => r.data);
 export const deleteDriveEmployee = (cedula: string) => api.delete(`/personal/drive/employee/${cedula}`).then(r => r.data);
+export const quitarGuardiaFueraDeLista = (cedula: string) => api.delete(`/personal/drive/guardia/${cedula}/lista`).then(r => r.data);
 export const archivarCarpetaGuardia = (cedula: string) => api.post(`/personal/drive/guardia/${cedula}/archivar-carpeta`).then(r => r.data);
 export interface AdministrativeStaffFicha {
   cedula: string;
@@ -258,6 +259,7 @@ export interface DocumentoDetectado {
   paginaInicio: number | null;
   paginaFin: number | null;
   confianza: 'alta' | 'media' | 'baja';
+  probabilidad?: number | null;
   notas: string | null;
 }
 

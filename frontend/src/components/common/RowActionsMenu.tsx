@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, type ReactNode } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { MoreHorizontal } from 'lucide-react';
 
 export interface RowAction {
@@ -31,13 +32,54 @@ export default function RowActionsMenu({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // La tabla vive en un contenedor con overflow, así que un menú absoluto
+  // se recorta y solo se ve una franja blanca. Se pinta en el body, pegado
+  // al botón, y se abre hacia arriba cuando abajo no cabe.
+  useLayoutEffect(() => {
+    if (!open) {
+      setCoords(null);
+      return;
+    }
+    const place = () => {
+      const btn = btnRef.current;
+      const menu = menuRef.current;
+      if (!btn || !menu) return;
+      const rect = btn.getBoundingClientRect();
+      const menuHeight = menu.offsetHeight;
+      const menuWidth = menu.offsetWidth;
+      const gap = 4;
+      const spaceBelow = window.innerHeight - rect.bottom - gap;
+      const spaceAbove = rect.top - gap;
+      const openUp = spaceBelow < menuHeight && spaceAbove > spaceBelow;
+      const maxHeight = Math.max(120, Math.min(360, openUp ? spaceAbove : spaceBelow));
+      const top = openUp
+        ? Math.max(8, rect.top - gap - Math.min(menuHeight, maxHeight))
+        : rect.bottom + gap;
+      let left = rect.right - menuWidth;
+      left = Math.max(8, Math.min(left, window.innerWidth - menuWidth - 8));
+      setCoords({ top, left, maxHeight });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, actions.length]);
 
   useEffect(() => {
     if (!open) return;
     const onClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (ref.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -71,21 +113,24 @@ export default function RowActionsMenu({
         <MoreHorizontal size={16} />
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
+          ref={menuRef}
           role="menu"
           style={{
-            position: 'absolute',
-            top: 'calc(100% + 4px)',
-            right: 0,
+            position: 'fixed',
+            top: coords?.top ?? -9999,
+            left: coords?.left ?? -9999,
             minWidth: 224,
+            maxHeight: coords?.maxHeight,
+            overflowY: 'auto',
             background: '#fff',
             border: '1px solid #e2e8f0',
             borderRadius: 10,
             boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
-            zIndex: 50,
-            overflow: 'hidden',
+            zIndex: 1000,
             padding: '4px',
+            visibility: coords ? 'visible' : 'hidden',
           }}
         >
           {actions.map((a) => (
@@ -131,7 +176,8 @@ export default function RowActionsMenu({
               </span>
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

@@ -55,7 +55,7 @@ Reglas:
 2. Para cada documento requerido, indica el rango de páginas donde aparece, numerando desde 1 (la primera página del archivo es la página 1).
 3. Un documento puede ocupar una sola página o varias consecutivas.
 4. Si un documento requerido NO está, devuelve null en sus páginas. No inventes ubicaciones: es peor asignar mal un documento que declararlo ausente.
-5. "confianza" es "alta" si reconociste el documento con claridad, "media" si hay ambigüedad (p. ej. no distingues entre dos certificados similares), y "baja" si estás adivinando o la imagen es poco legible.
+5. "probabilidad" es un entero de 0 a 100: qué tan seguro estás de que esas páginas SON ese documento y no otro. "confianza" tiene que coincidir con ese número (alta solo desde 85, y solo si puedes citar texto visible que nombre el documento). Si la página es otra cosa, no la asignes.
 6. "notas" es un texto breve y opcional para señalar algo que un humano debería revisar (imagen borrosa, documento cortado, parece vencido). Usa null si no hay nada que anotar.
 7. No uses el mismo rango de páginas para dos documentos distintos salvo que genuinamente compartan página.`;
 
@@ -86,6 +86,8 @@ export interface DocumentoDetectado {
   paginaInicio: number | null;
   paginaFin: number | null;
   confianza: 'alta' | 'media' | 'baja';
+  /** 0-100. Null en propuestas anteriores a este campo. */
+  probabilidad: number | null;
   notas: string | null;
 }
 
@@ -339,6 +341,7 @@ export class ReclutamientoIaService {
           paginaInicio: null,
           paginaFin: null,
           confianza: 'baja',
+          probabilidad: null,
           notas: 'La IA no encontró este documento dentro del archivo.',
         }
       );
@@ -522,8 +525,15 @@ export class ReclutamientoIaService {
 Este archivo tiene ${totalPaginas} página(s). Documentos requeridos para esta vacante:
 ${requisitos.map((r, i) => `${i + 1}. ${r}`).join('\n')}
 
+Calificación, obligatoria. No repartas las páginas entre los requisitos por descarte:
+- "probabilidad" (entero 0-100) es la chance de que esas páginas sean EXACTAMENTE ese documento, no uno parecido ni "el que sobra".
+- 85-100 y "confianza" "alta" SOLO si en la página se lee el nombre de ese documento o su contenido típico (una cédula se ve como cédula; una carta de recomendación laboral se lee como recomendación de un empleo). "evidencia" es una frase corta copiada de lo que se ve. Sin esa frase, no puede ser alta.
+- 55-84 y "confianza" "media" si se parece pero no estás seguro.
+- 0-54 y "confianza" "baja": paginaInicio y paginaFin en null. Un requisito que no está en el archivo (por ejemplo un campo nuevo que no tiene nada que ver con las páginas) NO se asigna a páginas de otro documento.
+- No marques todo como "alta". La mayoría de los expedientes mezcla documentos distintos; cada uno se califica por separado.
+
 Responde ÚNICAMENTE con un objeto JSON, sin texto antes ni después y sin bloques de código markdown, con exactamente esta forma:
-{"documentos": [{"requisito": "<uno de los nombres de la lista, copiado literal>", "paginaInicio": <número> o null, "paginaFin": <número> o null, "confianza": "alta" | "media" | "baja", "notas": "<texto breve>" o null}]}`;
+{"documentos": [{"requisito": "<uno de los nombres de la lista, copiado literal>", "paginaInicio": <número> o null, "paginaFin": <número> o null, "probabilidad": <entero 0-100>, "confianza": "alta" | "media" | "baja", "evidencia": "<frase visible>" o null, "notas": "<texto breve>" o null}]}`;
   }
 
   private async consultarModelo(
@@ -640,19 +650,27 @@ Responde ÚNICAMENTE con un objeto JSON, sin texto antes ni después y sin bloqu
         [inicio, fin] = [fin, inicio];
       }
 
-      const confianza = ['alta', 'media', 'baja'].includes(item?.confianza)
-        ? item.confianza
-        : 'baja';
+      const calificada = this.interpretarConfianza(item);
+      if (calificada.descartarPaginas) {
+        inicio = null;
+        fin = null;
+      }
+
+      const notasModelo =
+        typeof item?.notas === 'string' && item.notas.trim()
+          ? item.notas.trim()
+          : null;
 
       resultado.push({
         requisito,
         paginaInicio: inicio,
         paginaFin: fin,
-        confianza,
-        notas:
-          typeof item?.notas === 'string' && item.notas.trim()
-            ? item.notas.trim()
-            : null,
+        confianza: calificada.confianza,
+        probabilidad: calificada.probabilidad,
+        notas: calificada.descartarPaginas
+          ? notasModelo ||
+            'Probabilidad baja: la página no parece ser este documento, así que no se preseleccionó.'
+          : notasModelo,
       });
     }
 
@@ -663,6 +681,38 @@ Responde ÚNICAMENTE con un objeto JSON, sin texto antes ni después y sin bloqu
     const n = Number(valor);
     if (!Number.isInteger(n) || n < 1 || n > totalPaginas) return null;
     return n;
+  }
+
+  // La palabra "alta" que devuelve el modelo no se cree sola: Gemini la pone
+  // casi siempre. Manda el número. Sin frase visible que nombre el documento,
+  // alta queda en media. Por debajo de 55 las páginas no se preseleccionan.
+  private interpretarConfianza(item: any): {
+    confianza: 'alta' | 'media' | 'baja';
+    probabilidad: number | null;
+    descartarPaginas: boolean;
+  } {
+    const cruda = Number(item?.probabilidad);
+    const probabilidad = Number.isFinite(cruda)
+      ? Math.max(0, Math.min(100, Math.round(cruda)))
+      : null;
+
+    if (probabilidad === null) {
+      const etiqueta = ['alta', 'media', 'baja'].includes(item?.confianza)
+        ? item.confianza
+        : 'baja';
+      return { confianza: etiqueta, probabilidad: null, descartarPaginas: false };
+    }
+
+    const evidencia =
+      typeof item?.evidencia === 'string' && item.evidencia.trim().length >= 3;
+    let confianza: 'alta' | 'media' | 'baja' =
+      probabilidad >= 85 ? 'alta' : probabilidad >= 55 ? 'media' : 'baja';
+    if (confianza === 'alta' && !evidencia) confianza = 'media';
+    return {
+      confianza,
+      probabilidad,
+      descartarPaginas: probabilidad < 55,
+    };
   }
 
   // Aplica lo que RRHH confirmó: parte el PDF en un archivo por documento,
