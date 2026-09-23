@@ -17,6 +17,7 @@ import {
   detectDocxVariables,
   fillDocxTemplate,
 } from '../../../common/docx-templating/docx-merge.util';
+import { esCedulaSintetica } from '../utils/postulacion-validacion.util';
 
 const execFileAsync = promisify(execFile);
 
@@ -290,7 +291,13 @@ export class ContractService {
 
     return {
       NOMBRE: nombreGuardia || '',
-      CEDULA: cedula,
+      // `cedula` puede ser el id sintético `ID-<folderId>`/`TEMP-...` que usa
+      // Drive/Guardias cuando la carpeta no trae una cédula real (ver
+      // parsePersonalAdminFolderName en drive.service.ts) — eso es un
+      // identificador interno, nunca debe imprimirse en un documento legal
+      // como si fuera la cédula. Mismo criterio que `cedulaVisible` usa en
+      // el listado de Guardias (frontend/src/utils/postulacionValidacion.ts).
+      CEDULA: esCedulaSintetica(cedula) ? 'Sin cédula' : cedula,
       PUESTO: ficha?.puestoFormal || '',
       ENTIDAD: asignacion?.entidad?.nombre || '',
       HORARIO: ficha?.horario || '',

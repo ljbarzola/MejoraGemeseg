@@ -59,3 +59,6 @@ export const getCedulasFuera = () =>
   api.get('/personal/movimientos/guardias-fuera').then((r) => r.data as string[]);
 export const toggleMovimientoItem = (movimientoId: number, itemId: number, data: { completado: boolean; notas?: string }) =>
   api.patch(`/personal/movimientos/${movimientoId}/items/${itemId}`, data).then((r) => r.data as MovimientoPersonal);
+// Solo funciona mientras el caso sigue EN_PROCESO — el backend rechaza
+// (400) intentar eliminar uno ya COMPLETADO.
+export const deleteMovimiento = (id: number) => api.delete(`/personal/movimientos/${id}`);

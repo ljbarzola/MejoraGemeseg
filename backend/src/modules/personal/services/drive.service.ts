@@ -1220,12 +1220,31 @@ export class DriveService {
     );
   }
 
+  // El desempate ante puntaje IGUAL se resuelve por `id`/`fileName` (lo que
+  // haya), no por posición en `files`: la API de Drive no garantiza orden
+  // estable entre llamadas (sin `orderBy`, dos `files.list` de la misma
+  // carpeta pueden volver en distinto orden aunque nada haya cambiado). Con
+  // desempate por posición, un candidato con dos archivos que matchean el
+  // mismo casillero con el mismo puntaje (duplicados — caso real en
+  // Reclutamiento, ver `archivosAdicionales`) podía resolver a un archivo
+  // DISTINTO en cada sincronización, dejando "huérfana" una aprobación ya
+  // registrada en `DocumentReview` y devolviendo la completitud a 0% aunque
+  // el servidor nunca perdió nada. Comparar por `id`/`fileName` hace que el
+  // mismo archivo gane siempre, sin importar el orden de entrada.
   private findMatchingFile(files: any[], docTypeName: string): any {
     let best: any;
     let bestScore = 0;
     for (const f of files) {
       const score = this.scoreMatch(f.fileName ?? f.name, docTypeName);
-      if (score > bestScore) {
+      if (score <= 0) continue;
+      if (
+        score > bestScore ||
+        (score === bestScore &&
+          best &&
+          String(f.id ?? f.fileName ?? f.name ?? '').localeCompare(
+            String(best.id ?? best.fileName ?? best.name ?? ''),
+          ) < 0)
+      ) {
         bestScore = score;
         best = f;
       }
@@ -1430,6 +1449,21 @@ export class DriveService {
   // Público desde que ReclutamientoIaService necesita listar la carpeta de un
   // postulante para ubicar su PDF único (mismo criterio que findMatchingDocument:
   // se expone en vez de duplicar la consulta en el otro servicio).
+  //
+  // Se ordena por `id` antes de devolver: la API de Drive no garantiza orden
+  // estable entre llamadas cuando no se pide `orderBy` (dos `files.list` de
+  // la misma carpeta, sin cambios de por medio, pueden volver en distinto
+  // orden). Eso importaba en la práctica porque `findMatchingFile` desempata
+  // por posición ("el primero que iguala el mejor puntaje") cuando dos
+  // archivos matchean el mismo casillero con el mismo puntaje — un caso real
+  // en Reclutamiento (duplicados, p. ej. una resubida o una separación con IA
+  // corrida más de una vez, ver `archivosAdicionales` más abajo). Sin orden
+  // determinístico, una resincronización podía resolver un casillero a un
+  // archivo DISTINTO del que se aprobó la vez anterior — la aprobación seguía
+  // existiendo en `DocumentReview`, pero quedaba huérfana de ese casillero y
+  // la completitud volvía a 0% aunque el servidor nunca perdió nada. Ordenar
+  // por `id` (estable e inmutable por archivo) hace que el mismo archivo gane
+  // el desempate siempre, sin importar qué orden haya devuelto Drive.
   async listFilesInFolder(folderId: string) {
     const drive = this.getDriveClient();
     const res = await drive.files.list({
@@ -1439,7 +1473,10 @@ export class DriveService {
       supportsAllDrives: true,
       includeItemsFromAllDrives: true,
     });
-    return res.data.files || [];
+    const files = res.data.files || [];
+    return [...files].sort((a, b) =>
+      String(a.id || '').localeCompare(String(b.id || '')),
+    );
   }
 
   // Fase A del módulo de cumplimiento por entidad: RRHH confirma manualmente
@@ -2686,12 +2723,18 @@ export class DriveService {
             // adicional" en vez de en su casilla). RRHH puede reclasificarlos
             // con reassignReclutamientoFile. El/los .json (candidato.json) se
             // excluyen: son metadata del expediente, no un documento del
-            // postulante.
-            archivosAdicionales: files
+            // postulante. Un archivo también se excluye si su nombre ya
+            // matchea (scoreMatch > 0) algún archivoRequerido aunque no haya
+            // sido el elegido para ese casillero: es un duplicado del mismo
+            // documento (p. ej. una separación con IA corrida más de una
+            // vez), no algo nuevo que RRHH tenga que reclasificar.
+            archivosAdicionales: archivosPostulante
               .filter(
                 (f: any) =>
                   !matchedFileIds.includes(f.id) &&
-                  !f.name.toLowerCase().endsWith('.json'),
+                  !archivosRequeridos.some(
+                    (r) => this.scoreMatch(f.name, r.nombre) > 0,
+                  ),
               )
               .map((f: any) => ({ id: f.id, name: f.name })),
             folderUrl: `https://drive.google.com/drive/folders/${folder.id}`,

@@ -791,13 +791,28 @@ export default function ReclutamientoPage() {
 
   const confirmarContratar = async () => {
     if (!selectedCandidate) return;
+    const contratadoId = selectedCandidate.id;
     setConfirmandoContratar(false);
     setContratando(true);
     setContratarError('');
     try {
-      await contratarCandidato(selectedCandidate.id);
+      await contratarCandidato(contratadoId);
       closeCandidateModal();
-      await refreshCandidatos();
+      // Se saca de la lista al instante: Drive tiene consistencia eventual,
+      // así que una resincronización pedida justo después de mover la
+      // carpeta puede devolver todavía al candidato en su vacante de
+      // origen. Se filtra localmente ya mismo y, cuando la resincronización
+      // en segundo plano termine, se vuelve a filtrar por si esa respuesta
+      // también llegó desactualizada.
+      const quitarContratado = (lista: Candidate[]) => {
+        const next = lista.filter((c) => c.id !== contratadoId);
+        guardarCandidatos(next);
+        return next;
+      };
+      setCandidatos(quitarContratado);
+      refreshCandidatos()
+        .then(() => setCandidatos(quitarContratado))
+        .catch(() => {});
     } catch (err: any) {
       setContratarError(err.response?.data?.message || 'No se pudo contratar al candidato.');
     } finally {
@@ -1243,7 +1258,8 @@ export default function ReclutamientoPage() {
                         <label key={campo.nombre} style={{ fontSize: '0.72rem', color: '#718096', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                           {campo.nombre}{campo.obligatorio !== false && <span style={{ color: '#c53030' }}> *</span>}
                           <input
-                            type={campo.tipo === 'CORREO' ? 'email' : campo.tipo === 'TELEFONO' ? 'tel' : campo.tipo === 'FECHA' ? 'date' : 'text'}
+                            type={campo.tipo === 'TELEFONO' ? 'tel' : campo.tipo === 'FECHA' ? 'date' : 'text'}
+                            inputMode={campo.tipo === 'CORREO' ? 'email' : undefined}
                             value={datosForm[campo.nombre] || ''}
                             onChange={(e) => setDatosForm((prev) => ({ ...prev, [campo.nombre]: e.target.value }))}
                             style={{ fontSize: '0.82rem', padding: '5px 7px', border: '1px solid #e2e8f0', borderRadius: '6px' }}

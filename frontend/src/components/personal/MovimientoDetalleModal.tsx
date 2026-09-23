@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Archive } from 'lucide-react';
-import { getMovimiento, toggleMovimientoItem, type MovimientoPersonal, type MovimientoPersonalItem } from '../../services/movimiento-personal.service';
+import { X, Archive, Trash2 } from 'lucide-react';
+import { getMovimiento, toggleMovimientoItem, deleteMovimiento, type MovimientoPersonal, type MovimientoPersonalItem } from '../../services/movimiento-personal.service';
 import { archivarCarpetaGuardia } from '../../services/personal.service';
 import ConfirmDialog from '../common/ConfirmDialog';
+import { usePerm } from '../../contexts/PermissionsContext';
 
 interface Props {
   /** null cierra el modal. */
@@ -14,12 +15,17 @@ interface Props {
 const TIPO_LABEL: Record<string, string> = { ENTRADA: 'Entrada', SALIDA: 'Salida' };
 
 export default function MovimientoDetalleModal({ movimientoId, onClose, onChanged }: Props) {
+  const { canWrite } = usePerm();
+  const canEdit = canWrite('RRHH');
   const [movimiento, setMovimiento] = useState<MovimientoPersonal | null>(null);
   const [loading, setLoading] = useState(false);
   const [notasDraft, setNotasDraft] = useState<Record<number, string>>({});
   const [archivando, setArchivando] = useState(false);
   const [archivarMsg, setArchivarMsg] = useState('');
   const [confirmandoArchivar, setConfirmandoArchivar] = useState(false);
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
+  const [eliminarError, setEliminarError] = useState('');
   const [itemError, setItemError] = useState('');
   const itemErrorRef = useRef<HTMLDivElement>(null);
 
@@ -77,6 +83,28 @@ export default function MovimientoDetalleModal({ movimientoId, onClose, onChange
       setArchivarMsg(err.response?.data?.message || 'No se pudo archivar la carpeta.');
     } finally {
       setArchivando(false);
+    }
+  };
+
+  const handleEliminar = () => {
+    if (!movimiento) return;
+    setEliminarError('');
+    setConfirmandoEliminar(true);
+  };
+
+  const confirmarEliminar = async () => {
+    if (!movimiento) return;
+    setConfirmandoEliminar(false);
+    setEliminando(true);
+    setEliminarError('');
+    try {
+      await deleteMovimiento(movimiento.id);
+      onChanged?.();
+      onClose();
+    } catch (err: any) {
+      setEliminarError(err.response?.data?.message || 'No se pudo eliminar el movimiento.');
+    } finally {
+      setEliminando(false);
     }
   };
 
@@ -156,10 +184,26 @@ export default function MovimientoDetalleModal({ movimientoId, onClose, onChange
             {archivarMsg}
           </div>
         )}
+        {eliminarError && (
+          <div style={{ margin: '0 24px 8px', fontSize: '0.8rem', color: '#c53030' }}>
+            {eliminarError}
+          </div>
+        )}
         <div className="modal-actions">
           {movimiento?.tipo === 'SALIDA' && movimiento.estado === 'COMPLETADO' && (
             <button className="btn-secondary" onClick={handleArchivarCarpeta} disabled={archivando} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: 'auto' }}>
               <Archive size={15} /> {archivando ? 'Archivando...' : 'Archivar carpeta'}
+            </button>
+          )}
+          {canEdit && movimiento?.estado === 'EN_PROCESO' && (
+            <button
+              className="btn-secondary"
+              onClick={handleEliminar}
+              disabled={eliminando}
+              title="Solo se puede eliminar mientras el movimiento sigue en proceso"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: 'auto', color: '#c53030', borderColor: '#feb2b2' }}
+            >
+              <Trash2 size={15} /> {eliminando ? 'Eliminando...' : 'Eliminar'}
             </button>
           )}
           <button className="btn-secondary" onClick={onClose}>Cerrar</button>
@@ -173,6 +217,16 @@ export default function MovimientoDetalleModal({ movimientoId, onClose, onChange
         confirmLabel="Sí, archivar"
         onConfirm={confirmarArchivarCarpeta}
         onCancel={() => setConfirmandoArchivar(false)}
+      />
+    )}
+    {confirmandoEliminar && movimiento && (
+      <ConfirmDialog
+        title="Eliminar movimiento"
+        message={`¿Eliminar esta ${TIPO_LABEL[movimiento.tipo].toLowerCase()} en proceso de ${movimiento.nombreGuardia}? Esta acción no se puede deshacer. Úsalo para corregir un caso abierto por error.`}
+        confirmLabel="Sí, eliminar"
+        danger
+        onConfirm={confirmarEliminar}
+        onCancel={() => setConfirmandoEliminar(false)}
       />
     )}
     </>

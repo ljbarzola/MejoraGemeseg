@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, X, CheckCircle2, RotateCcw, Paperclip, Trash2, FolderOpen } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
@@ -35,20 +35,32 @@ function isPending(t: Training) {
   return new Date(t.dueDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 }
 
+// Handle expuesto por AttachmentSection para que el padre pueda, al
+// enviar el formulario, recuperar (y limpiar) un archivo/enlace que el
+// usuario ya subió o pegó pero todavía no confirmó con "Agregar" — así
+// no se pierde silenciosamente ni queda huérfano en Drive.
+export interface AttachmentSectionHandle {
+  getPendingUrl: () => string;
+  clearPending: () => void;
+}
+
 // Lista de adjuntos reutilizada tanto para "staged" (sin id de capacitación
 // todavía, ej. al crear) como para persistidos de inmediato (al editar) —
 // el padre decide qué hace onAdd/onRemove en cada caso.
-function AttachmentSection({
-  title, items, onAdd, onRemove, canEdit, uploadFn,
-}: {
+const AttachmentSection = forwardRef<AttachmentSectionHandle, {
   title: string;
   items: { key: string | number; url: string; name?: string | null }[];
   onAdd: (url: string, name?: string) => void;
   onRemove: (key: string | number) => void;
   canEdit: boolean;
   uploadFn: (file: File) => Promise<{ url: string }>;
-}) {
+}>(function AttachmentSection({ title, items, onAdd, onRemove, canEdit, uploadFn }, ref) {
   const [pendingUrl, setPendingUrl] = useState('');
+
+  useImperativeHandle(ref, () => ({
+    getPendingUrl: () => pendingUrl.trim(),
+    clearPending: () => setPendingUrl(''),
+  }), [pendingUrl]);
 
   return (
     <div style={{ marginBottom: '16px' }}>
@@ -84,7 +96,7 @@ function AttachmentSection({
       )}
     </div>
   );
-}
+});
 
 export default function TrainingsPage() {
   const navigate = useNavigate();
@@ -115,6 +127,14 @@ export default function TrainingsPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [stagedDocs, setStagedDocs] = useState<StagedAttachment[]>([]);
   const [saving, setSaving] = useState(false);
+
+  // Referencias a las secciones de adjuntos del modal de crear/editar y del
+  // de registrar cumplimiento, para poder recuperar (y adjuntar) al enviar
+  // el formulario un archivo/enlace "listo" que el usuario no confirmó con
+  // "Agregar" — evita guardar la capacitación sin él silenciosamente.
+  const docsAttachmentRef = useRef<AttachmentSectionHandle>(null);
+  const evidenciaAttachmentRef = useRef<AttachmentSectionHandle>(null);
+  const completeEvidenciaAttachmentRef = useRef<AttachmentSectionHandle>(null);
 
   const [completingTraining, setCompletingTraining] = useState<Training | null>(null);
   const [completing, setCompleting] = useState(false);
@@ -216,14 +236,28 @@ export default function TrainingsPage() {
         dueDate: form.dueDate || undefined,
         isAnnualPlan: form.isAnnualPlan,
       };
+      // Un archivo/enlace ya subido o pegado pero no confirmado con
+      // "Agregar" no debe perderse al pulsar "Crear"/"Guardar": se adjunta
+      // automáticamente antes de terminar de guardar.
+      const pendingDocUrl = docsAttachmentRef.current?.getPendingUrl() || '';
+      const pendingEvidenciaUrl = evidenciaAttachmentRef.current?.getPendingUrl() || '';
       if (editingTraining) {
         await updateTraining(editingTraining.id, payload);
+        if (pendingDocUrl) {
+          await addTrainingAttachment(editingTraining.id, { url: pendingDocUrl, kind: 'DOCUMENTO' });
+        }
+        if (pendingEvidenciaUrl) {
+          await addTrainingAttachment(editingTraining.id, { url: pendingEvidenciaUrl, kind: 'EVIDENCIA' });
+        }
       } else {
         const created = await createTraining(payload);
-        for (const doc of stagedDocs) {
+        const docsToAttach = pendingDocUrl ? [...stagedDocs, { url: pendingDocUrl }] : stagedDocs;
+        for (const doc of docsToAttach) {
           await addTrainingAttachment(created.id, { url: doc.url, name: doc.name, kind: 'DOCUMENTO' });
         }
       }
+      docsAttachmentRef.current?.clearPending();
+      evidenciaAttachmentRef.current?.clearPending();
       setShowModal(false);
       load();
     } catch (err: any) {
@@ -288,7 +322,16 @@ export default function TrainingsPage() {
     setCompleting(true);
     setCompleteError('');
     try {
+      // Misma protección que en el modal de crear/editar: si hay un
+      // archivo/enlace de evidencia "listo" sin confirmar con "Agregar", se
+      // adjunta automáticamente antes de marcar la capacitación como
+      // cumplida.
+      const pendingUrl = completeEvidenciaAttachmentRef.current?.getPendingUrl() || '';
+      if (pendingUrl) {
+        await addTrainingAttachment(completingTraining.id, { url: pendingUrl, kind: 'EVIDENCIA' });
+      }
       await setTrainingCompleted(completingTraining.id, true);
+      completeEvidenciaAttachmentRef.current?.clearPending();
       setCompletingTraining(null);
       load();
     } catch (err: any) {
@@ -492,6 +535,7 @@ export default function TrainingsPage() {
               <div style={{ paddingTop: '10px', borderTop: '1px solid #f1f5f9' }}>
                 {editingTraining ? (
                   <AttachmentSection
+                    ref={docsAttachmentRef}
                     title="Documentos del plan"
                     items={editDocs.map((a) => ({ key: a.id, url: a.url, name: a.name }))}
                     onAdd={(url) => handleAddLiveAttachment(editingTraining.id, 'DOCUMENTO', url)}
@@ -501,6 +545,7 @@ export default function TrainingsPage() {
                   />
                 ) : (
                   <AttachmentSection
+                    ref={docsAttachmentRef}
                     title="Documentos del plan"
                     items={stagedDocs.map((d, i) => ({ key: i, url: d.url, name: d.name }))}
                     onAdd={(url) => setStagedDocs((prev) => [...prev, { url }])}
@@ -512,6 +557,7 @@ export default function TrainingsPage() {
 
                 {editingTraining && (editingTraining.completed || editEvidencia.length > 0) && (
                   <AttachmentSection
+                    ref={evidenciaAttachmentRef}
                     title="Evidencia de cumplimiento"
                     items={editEvidencia.map((a) => ({ key: a.id, url: a.url, name: a.name }))}
                     onAdd={(url) => handleAddLiveAttachment(editingTraining.id, 'EVIDENCIA', url)}
@@ -547,6 +593,7 @@ export default function TrainingsPage() {
                 Puedes adjuntar evidencia (foto de asistencia, certificado, lo que sea) antes de confirmar — es opcional.
               </p>
               <AttachmentSection
+                ref={completeEvidenciaAttachmentRef}
                 title="Evidencia de cumplimiento"
                 items={(completingTraining.attachments || []).filter((a) => a.kind === 'EVIDENCIA').map((a: TrainingAttachment) => ({ key: a.id, url: a.url, name: a.name }))}
                 onAdd={(url) => handleAddLiveAttachment(completingTraining.id, 'EVIDENCIA', url)}

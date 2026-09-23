@@ -114,6 +114,15 @@ export class MovimientoPersonalController {
     });
   }
 
+  // Cancelar/eliminar solo mientras el caso sigue EN_PROCESO (ver
+  // MovimientoPersonalService.remove) — un caso COMPLETADO no se puede
+  // borrar desde acá, es parte del histórico.
+  @Delete('movimientos/:id')
+  @Section('RRHH', 'write')
+  removeMovimiento(@Param('id') id: string, @Req() req: any) {
+    return this.movimientoPersonalService.remove(+id, req.user.companyId);
+  }
+
   @Patch('movimientos/:id/items/:itemId')
   @Section('RRHH', 'write')
   toggleItem(
