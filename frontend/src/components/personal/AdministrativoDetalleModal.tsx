@@ -10,6 +10,7 @@ import { getPersonalFieldDefinitions, type PersonalFieldDefinition } from '../..
 import ComplianceChecklist from './ComplianceChecklist';
 import DocumentReviewHistory from './DocumentReviewHistory';
 import AdministrativeStaffConfigModal from './AdministrativeStaffConfigModal';
+import CamposIdentidad from './CamposIdentidad';
 
 /** Ver GuardiaFichaModal — misma tarjeta de sección reutilizada aquí. */
 function SeccionCard({ icon, title, subtitle, action, children }: { icon: ReactNode; title: string; subtitle?: string; action?: ReactNode; children: ReactNode }) {
@@ -55,6 +56,7 @@ const ACTIVO_KEY = 'activo';
 export default function AdministrativoDetalleModal({ employee, onClose, onFichaSaved }: Props) {
   const [loadingFicha, setLoadingFicha] = useState(false);
   const [campos, setCampos] = useState<Record<string, string>>({});
+  const [cedulaIngresada, setCedulaIngresada] = useState('');
   const [fieldDefs, setFieldDefs] = useState<PersonalFieldDefinition[]>([]);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -82,9 +84,11 @@ export default function AdministrativoDetalleModal({ employee, onClose, onFichaS
     setLoadingFicha(true);
     setError('');
     setCampos({});
+    setCedulaIngresada('');
     Promise.all([getAdministrativoFicha(employee.cedula), loadFieldDefs()])
       .then(([f]) => {
         setCampos(f?.camposPersonalizados || {});
+        setCedulaIngresada(f?.cedulaVisible || '');
       })
       .catch(() => setCampos({}))
       .finally(() => setLoadingFicha(false));
@@ -108,6 +112,7 @@ export default function AdministrativoDetalleModal({ employee, onClose, onFichaS
     try {
       await setAdministrativoFicha(employee.cedula, {
         camposPersonalizados: campos,
+        cedulaIngresada,
       });
       onFichaSaved?.();
       onClose();
@@ -178,19 +183,32 @@ export default function AdministrativoDetalleModal({ employee, onClose, onFichaS
                 <SeccionCard
                   icon={<User size={14} />}
                   title="Datos generales"
+                  subtitle="La cédula queda vacía hasta que la escribas."
                   action={
                     <button type="button" className="btn-secondary" style={{ fontSize: '0.75rem', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: '5px' }} onClick={() => setShowConfigModal(true)}>
                       <Settings2 size={13} /> Configurar campos
                     </button>
                   }
                 >
-                  {fieldDefs.filter((f) => f.category === 'PERSONAL').length === 0 ? (
-                    <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
-                      No hay campos configurados todavía. Usa "Configurar campos" para agregar uno.
-                    </p>
-                  ) : (
-                    fieldDefs.filter((f) => f.category === 'PERSONAL').map(renderCampo)
-                  )}
+                  <CamposIdentidad
+                    apellidos={campos.apellidos || ''}
+                    nombres={campos.nombres || ''}
+                    cedula={cedulaIngresada}
+                    correo={campos.email || ''}
+                    correoRequerido={fieldDefs.some((f) => f.key === 'email' && f.required)}
+                    onChange={(patch) => {
+                      if (patch.cedula !== undefined) setCedulaIngresada(patch.cedula);
+                      setCampos((prev) => ({
+                        ...prev,
+                        ...(patch.apellidos !== undefined ? { apellidos: patch.apellidos } : {}),
+                        ...(patch.nombres !== undefined ? { nombres: patch.nombres } : {}),
+                        ...(patch.correo !== undefined ? { email: patch.correo } : {}),
+                      }));
+                    }}
+                  />
+                  {fieldDefs
+                    .filter((f) => f.category === 'PERSONAL' && f.key !== 'email')
+                    .map(renderCampo)}
                 </SeccionCard>
 
                 <SeccionCard icon={<Briefcase size={14} />} title="Datos laborales">

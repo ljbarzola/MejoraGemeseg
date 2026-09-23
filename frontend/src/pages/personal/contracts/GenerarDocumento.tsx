@@ -29,6 +29,7 @@ export default function GenerarDocumento() {
   const [fields, setFields] = useState<ContractAutofillField[]>([]);
   const [values, setValues] = useState<Record<string, string>>({});
   const [generating, setGenerating] = useState(false);
+  const [preguntarDestino, setPreguntarDestino] = useState(false);
   const [error, setError] = useState('');
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Set<string>>(new Set());
@@ -89,6 +90,30 @@ export default function GenerarDocumento() {
     el?.focus();
   };
 
+  const generar = async (guardarEn: 'general' | 'guardia') => {
+    if (!templateId) return;
+    setGenerating(true);
+    setError('');
+    setPreguntarDestino(false);
+    try {
+      const trimmedValues = Object.fromEntries(
+        Object.entries(values).map(([k, v]) => [k, (v ?? '').trim()]),
+      );
+      const contract = await generateContract({
+        templateId,
+        cedula: modo === 'GUARDIA' ? guardia.cedula : '',
+        nombreGuardia: nombreDocumento.trim(),
+        fieldValues: trimmedValues,
+        guardarEn,
+      });
+      setResultUrl(contract.generatedUrl);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'No se pudo generar el documento.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const handleGenerate = async () => {
     if (modo === 'GUARDIA' && !guardia.cedula) {
       setError('Selecciona un guardia de la lista, o cambia a "Llenar a mano" si no esta registrado.');
@@ -114,24 +139,12 @@ export default function GenerarDocumento() {
 
     setFieldErrors(new Set());
     setTemplateError(false);
-    setGenerating(true);
     setError('');
-    try {
-      const trimmedValues = Object.fromEntries(
-        Object.entries(values).map(([k, v]) => [k, (v ?? '').trim()]),
-      );
-      const contract = await generateContract({
-        templateId,
-        cedula: modo === 'GUARDIA' ? guardia.cedula : '',
-        nombreGuardia: nombreDocumento.trim(),
-        fieldValues: trimmedValues,
-      });
-      setResultUrl(contract.generatedUrl);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'No se pudo generar el documento.');
-    } finally {
-      setGenerating(false);
+    if (modo === 'MANUAL') {
+      await generar('general');
+      return;
     }
+    setPreguntarDestino(true);
   };
 
   return (
@@ -316,6 +329,32 @@ export default function GenerarDocumento() {
             </button>
           </div>
         </>
+      )}
+
+      {preguntarDestino && (
+        <div className="modal-overlay" style={{ zIndex: 1200 }} onClick={() => setPreguntarDestino(false)}>
+          <div className="modal" style={{ maxWidth: '460px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>¿Dónde guardamos este documento?</h3>
+            </div>
+            <div className="modal-body">
+              <p style={{ margin: 0, color: '#2d3748', lineHeight: 1.5 }}>
+                Puedes dejarlo en la carpeta general de documentos, o en la carpeta de Drive de {guardia.nombre}.
+              </p>
+            </div>
+            <div className="modal-actions" style={{ flexWrap: 'wrap' }}>
+              <button className="btn-secondary" onClick={() => setPreguntarDestino(false)} disabled={generating}>
+                Cancelar
+              </button>
+              <button className="btn-secondary" onClick={() => generar('general')} disabled={generating}>
+                Carpeta general
+              </button>
+              <button className="auth-btn" onClick={() => generar('guardia')} disabled={generating}>
+                Carpeta de {guardia.nombre}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

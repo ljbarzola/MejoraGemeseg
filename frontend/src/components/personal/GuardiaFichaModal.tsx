@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { X, IdCard, User, Briefcase } from 'lucide-react';
 import { getGuardiaFicha, setGuardiaFicha, getPersonalFieldDefinitions, type PersonalFieldDefinition } from '../../services/entidades.service';
+import CamposIdentidad from './CamposIdentidad';
 
 /**
  * Tarjeta de sección con ícono + título propios, para que dos grupos de
@@ -29,6 +30,7 @@ interface Props {
   /** Guardia a mostrar; null/undefined cierra el modal. */
   guardia: { name: string; cedula: string } | null;
   onClose: () => void;
+  onSaved?: () => void;
 }
 
 /**
@@ -40,9 +42,10 @@ interface Props {
  * carpeta del guardia en Drive la próxima vez que se sincronice — el archivo
  * en Drive nunca se lee de vuelta.
  */
-export default function GuardiaFichaModal({ guardia, onClose }: Props) {
+export default function GuardiaFichaModal({ guardia, onClose, onSaved }: Props) {
   const [loading, setLoading] = useState(false);
   const [activo, setActivo] = useState(true);
+  const [cedulaIngresada, setCedulaIngresada] = useState('');
   const [campos, setCampos] = useState<Record<string, string>>({});
   const [fieldDefs, setFieldDefs] = useState<PersonalFieldDefinition[]>([]);
   const [saving, setSaving] = useState(false);
@@ -55,10 +58,12 @@ export default function GuardiaFichaModal({ guardia, onClose }: Props) {
     setLoading(true);
     setError('');
     setCampos({});
+    setCedulaIngresada('');
     Promise.all([getGuardiaFicha(guardia.cedula), loadFieldDefs()])
       .then(([f]) => {
         setActivo(f?.activo ?? true);
         setCampos(f?.camposPersonalizados || {});
+        setCedulaIngresada(f?.cedulaVisible || '');
       })
       .catch(() => setCampos({}))
       .finally(() => setLoading(false));
@@ -81,7 +86,9 @@ export default function GuardiaFichaModal({ guardia, onClose }: Props) {
     try {
       await setGuardiaFicha(guardia.cedula, {
         camposPersonalizados: campos,
+        cedulaIngresada,
       });
+      onSaved?.();
       onClose();
     } catch (err: any) {
       setError(err.response?.data?.message || 'No se pudo guardar la ficha personal.');
@@ -151,14 +158,30 @@ export default function GuardiaFichaModal({ guardia, onClose }: Props) {
               {error && <div className="form-error" style={{ marginBottom: '14px' }}>{error}</div>}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <SeccionCard icon={<User size={14} />} title="Datos personales">
-                  {fieldDefs.filter((f) => f.category === 'PERSONAL').length === 0 ? (
-                    <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
-                      No hay campos configurados todavía.
-                    </p>
-                  ) : (
-                    fieldDefs.filter((f) => f.category === 'PERSONAL').map(renderCampo)
-                  )}
+                <SeccionCard
+                  icon={<User size={14} />}
+                  title="Datos personales"
+                  subtitle="La cédula queda vacía hasta que la escribas. El correo de contacto es el que usa Cumplimiento para los recordatorios."
+                >
+                  <CamposIdentidad
+                    apellidos={campos.apellidos || ''}
+                    nombres={campos.nombres || ''}
+                    cedula={cedulaIngresada}
+                    correo={campos.email || ''}
+                    correoRequerido={fieldDefs.some((f) => f.key === 'email' && f.required)}
+                    onChange={(patch) => {
+                      if (patch.cedula !== undefined) setCedulaIngresada(patch.cedula);
+                      setCampos((prev) => ({
+                        ...prev,
+                        ...(patch.apellidos !== undefined ? { apellidos: patch.apellidos } : {}),
+                        ...(patch.nombres !== undefined ? { nombres: patch.nombres } : {}),
+                        ...(patch.correo !== undefined ? { email: patch.correo } : {}),
+                      }));
+                    }}
+                  />
+                  {fieldDefs
+                    .filter((f) => f.category === 'PERSONAL' && f.key !== 'email')
+                    .map(renderCampo)}
                 </SeccionCard>
 
                 <SeccionCard icon={<Briefcase size={14} />} title="Datos laborales" subtitle="Se usan para autocompletar la generación de contratos.">

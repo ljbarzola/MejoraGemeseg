@@ -354,6 +354,7 @@ export class ContractService {
       cedula?: string;
       nombreGuardia: string;
       fieldValues?: Record<string, string>;
+      guardarEn?: 'general' | 'guardia';
     },
     companyId: number,
     userId: number,
@@ -395,6 +396,7 @@ export class ContractService {
     }
 
     try {
+      const carpetaDestino = await this.carpetaDestino(companyId, cedula, dto.guardarEn);
       // Se baja de Drive sola si la copia local ya no esta (ver ensureDocxLocal).
       const docxBuffer = await this.ensureDocxLocal(template);
       const filledDocxBuffer = await fillDocxTemplate(docxBuffer, fieldValues);
@@ -425,7 +427,7 @@ export class ContractService {
       let driveFileId: string | null = null;
       let driveUrl: string | null = null;
       try {
-        const carpeta = hardcodedFolderId('RRHH_DOCUMENTOS');
+        const carpeta = carpetaDestino;
         if (carpeta) {
           const subido = await this.driveService.uploadFile(
             carpeta,
@@ -441,6 +443,7 @@ export class ContractService {
           );
         }
       } catch (err) {
+        if (err instanceof BadRequestException) throw err;
         this.logger.error(
           `No se pudo subir a Drive el documento "${nombreLegible}"`,
           (err as Error)?.stack || String(err),
@@ -472,6 +475,28 @@ export class ContractService {
 
   getContractFilePath(fileName: string): string {
     return path.join(CONTRACTS_DIR, fileName);
+  }
+
+  // "Llenar a mano" no trae cédula, así que aunque pidan la carpeta del
+  // guardia se usa la general. Con un guardia elegido, la carpeta es la que
+  // el sync de Listado de Guardias ya vinculó a esa cédula.
+  private async carpetaDestino(
+    companyId: number,
+    cedula: string,
+    guardarEn?: 'general' | 'guardia',
+  ): Promise<string | null> {
+    if (guardarEn === 'guardia' && cedula) {
+      const folder = await this.prisma.employeeDriveFolder.findFirst({
+        where: { companyId, cedula, folderType: 'CUSTODIAS' },
+      });
+      if (!folder?.folderId) {
+        throw new BadRequestException(
+          'Este guardia no tiene carpeta en Drive. Sincroniza el Listado de Guardias, o guarda el documento en la carpeta general.',
+        );
+      }
+      return folder.folderId;
+    }
+    return hardcodedFolderId('RRHH_DOCUMENTOS');
   }
 
   /**

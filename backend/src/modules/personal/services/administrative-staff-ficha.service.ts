@@ -1,10 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PersonalFieldDefinitionService } from './personal-field-definition.service';
 import {
   resolverCamposConPostulacion,
   preservarStashPostulacion,
 } from '../utils/form-data.util';
+import { formatNombrePersona } from '../utils/nombre-persona.util';
+import {
+  cedulaMostrable,
+  reasignarCedulaPersona,
+  validarCedulaIngresada,
+  validarCorreoContacto,
+} from '../utils/identidad-persona.util';
 
 export interface UpdateAdministrativeStaffFichaInput {
   departamento?: string | null;
@@ -17,6 +24,7 @@ export interface UpdateAdministrativeStaffFichaInput {
   contactoEmergenciaTelefono?: string | null;
   salarioAcordado?: number | null;
   camposPersonalizados?: Record<string, string>;
+  cedulaIngresada?: string | null;
 }
 
 // Mapea las columnas fijas legadas (pre-PersonalFieldDefinition) a la `key`
@@ -85,9 +93,11 @@ export class AdministrativeStaffFichaService {
       ),
       ficha,
     );
-    if (ficha) return { ...ficha, camposPersonalizados: campos };
+    const cedulaVisible = cedulaMostrable(cedula);
+    if (ficha) return { ...ficha, camposPersonalizados: campos, cedulaVisible };
     return {
       cedula,
+      cedulaVisible,
       departamento: null,
       fechaIngreso: null,
       activo: true,
@@ -110,6 +120,21 @@ export class AdministrativeStaffFichaService {
       where: { companyId_cedula: { companyId, cedula } },
       select: { camposPersonalizados: true },
     });
+    const campos = preservarStashPostulacion(
+      data.camposPersonalizados,
+      actual?.camposPersonalizados as Record<string, any> | undefined,
+    );
+    let ingresada: string | null = null;
+    if (data.cedulaIngresada !== undefined) {
+      ingresada = validarCedulaIngresada(data.cedulaIngresada || '');
+      if (!ingresada && /^\d{10}$/.test(cedula)) {
+        throw new BadRequestException(
+          'Esta persona ya tiene cédula. No se puede dejar vacía.',
+        );
+      }
+      const correo = validarCorreoContacto(String(campos.email ?? ''));
+      campos.email = correo || '';
+    }
     const payload = {
       departamento: data.departamento?.trim() || null,
       fechaIngreso: data.fechaIngreso ? new Date(data.fechaIngreso) : null,
@@ -124,15 +149,36 @@ export class AdministrativeStaffFichaService {
         data.salarioAcordado === null || data.salarioAcordado === undefined
           ? null
           : Number(data.salarioAcordado),
-      camposPersonalizados: preservarStashPostulacion(
-        data.camposPersonalizados,
-        actual?.camposPersonalizados as Record<string, any> | undefined,
-      ),
+      camposPersonalizados: campos,
     };
-    return this.prisma.administrativeStaffFicha.upsert({
+    const ficha = await this.prisma.administrativeStaffFicha.upsert({
       where: { companyId_cedula: { companyId, cedula } },
       create: { companyId, cedula, ...payload },
       update: payload,
     });
+
+    if (data.cedulaIngresada === undefined) return ficha;
+
+    let cedulaFinal = cedula;
+    if (ingresada && ingresada !== cedula) {
+      await reasignarCedulaPersona(this.prisma, companyId, cedula, ingresada);
+      cedulaFinal = ingresada;
+    }
+
+    const apellidos = String(campos.apellidos || '').trim();
+    const nombres = String(campos.nombres || '').trim();
+    if (apellidos && nombres) {
+      const employeeName = formatNombrePersona(apellidos, nombres);
+      await this.prisma.employeeDriveFolder.updateMany({
+        where: { companyId, cedula: cedulaFinal },
+        data: { employeeName },
+      });
+      await this.prisma.employeeDocument.updateMany({
+        where: { companyId, cedula: cedulaFinal },
+        data: { employeeName },
+      });
+    }
+
+    return this.get(companyId, cedulaFinal);
   }
 }

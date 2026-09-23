@@ -9,6 +9,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Readable } from 'stream';
 import {
+  cedulaEsDigitosDeCarpeta,
+  reasignarCedulaPersona,
+} from '../utils/identidad-persona.util';
+import {
   advertenciaNombreCarpeta,
   formatNombrePersona,
   normalizarNombrePersona,
@@ -798,14 +802,22 @@ export class DriveService {
         if (migrada) existente.cedula = cedulaLeida;
       }
 
+      if (existente && !cedulaConfiable && nombreValido) {
+        existente.cedula = await this.corregirCedulaInventada(
+          companyId,
+          guardiaFolder.id,
+          existente.cedula,
+        );
+      }
+
       if (!existente) {
         if (cedulaConfiable) {
           cedula = cedulaLeida;
           nombreGuardia = parsed.name;
         } else if (nombreValido) {
           // "Apellidos Nombres" vale en mayúsculas o minúsculas. Sin cédula
-          // en el formulario igual entra a la lista; la cédula real reemplaza
-          // esta clave interna en cuanto el JSON la traiga.
+          // igual entra a la lista. La clave interna no se escribe en el
+          // JSON ni se muestra: la cédula queda vacía hasta que RRHH la cargue.
           cedula = `ID-${guardiaFolder.id}`;
           nombreGuardia = parsed.name;
         } else {
@@ -849,6 +861,15 @@ export class DriveService {
           advertenciaNombreCarpeta(guardiaFolder.name),
         );
       }
+
+      const fichaNombre = await this.guardiaFichaPersonalService.get(
+        companyId,
+        cedula,
+      );
+      nombreGuardia = this.nombreDesdeFicha(
+        fichaNombre.camposPersonalizados,
+        nombreGuardia,
+      );
 
       await this.prisma.employeeDriveFolder.upsert({
         where: {
@@ -1013,7 +1034,7 @@ export class DriveService {
           empFolder.name,
           empFolder.id,
         );
-        const name = normalizarNombrePersona(parsed.name);
+        let name = normalizarNombrePersona(parsed.name);
         const files = await this.listFilesInFolder(empFolder.id);
 
         // El formato estándar ("Apellidos Nombres") ya no lleva la cédula en
@@ -1023,6 +1044,7 @@ export class DriveService {
           ? parsed.cedula
           : await this.leerCedulaDeJsonEnCarpeta(files);
         const cedulaConfiable = /^\d{10}$/.test(cedulaLeida);
+        const nombreValido = validarNombrePersona(empFolder.name).valido;
 
         // Ancla de identidad por folderId (el mismo criterio que Guardias):
         // si la carpeta ya estaba vinculada a una cédula, un rename o un JSON
@@ -1031,23 +1053,59 @@ export class DriveService {
           where: { companyId, folderId: empFolder.id },
         });
 
+        if (
+          existente &&
+          cedulaConfiable &&
+          existente.cedula.startsWith('ID-') &&
+          cedulaLeida !== existente.cedula
+        ) {
+          const migrada = await this.reemplazarCedulaSintetica(
+            companyId,
+            existente.cedula,
+            cedulaLeida,
+          );
+          if (migrada) existente.cedula = cedulaLeida;
+        }
+
+        if (existente && !cedulaConfiable && nombreValido) {
+          existente.cedula = await this.corregirCedulaInventada(
+            companyId,
+            empFolder.id,
+            existente.cedula,
+          );
+        }
+
         let cedula: string;
         if (cedulaConfiable) {
           cedula = cedulaLeida;
         } else if (existente) {
           cedula = existente.cedula;
+        } else if (nombreValido) {
+          // Carpeta nueva "Apellidos Nombres", todavía sin cédula ni
+          // datos.json. Entra a la lista y el JSON se crea abajo solo con
+          // el nombre. La cédula real reemplaza esta clave cuando aparezca.
+          cedula = `ID-${empFolder.id}`;
         } else {
           result.errors.push(
-            `No se pudo identificar a quién pertenece la carpeta "${empFolder.name}": su cédula no está en datos.json ni en el nombre. Agrégala desde la app y vuelve a sincronizar.`,
+            `La carpeta "${empFolder.name}" no sigue el formato "Apellidos Nombres" y no tiene cédula. Corrígele el nombre en Drive y vuelve a sincronizar.`,
           );
           continue;
         }
 
         // Advertencia informativa, nunca bloquea ni renombra nada en Drive.
-        const formato = validarNombrePersona(empFolder.name);
-        if (!formato.valido) {
+        // Una carpeta nueva con el nombre bien puesto no avisa.
+        if (!nombreValido) {
           result.errors.push(advertenciaNombreCarpeta(empFolder.name));
         }
+
+        const fichaNombre = await this.administrativeStaffFichaService.get(
+          companyId,
+          cedula,
+        );
+        name = this.nombreDesdeFicha(
+          fichaNombre.camposPersonalizados,
+          name,
+        );
 
         // El puesto dejó de vivir en el nombre de la carpeta: si el parser no
         // lo encuentra ahí (formato nuevo), se conserva el que ya estaba en BD
@@ -1585,14 +1643,21 @@ export class DriveService {
 
   private async listSubFolders(parentId: string) {
     const drive = this.getDriveClient();
-    const res = await drive.files.list({
-      q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-      fields: 'files(id, name)',
-      pageSize: 100,
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-    });
-    return res.data.files || [];
+    const files: { id?: string | null; name?: string | null }[] = [];
+    let pageToken: string | undefined;
+    do {
+      const res = await drive.files.list({
+        q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        fields: 'nextPageToken, files(id, name)',
+        pageSize: 100,
+        pageToken,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+      files.push(...(res.data.files || []));
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
+    return files;
   }
 
   // Público desde que ReclutamientoIaService necesita listar la carpeta de un
@@ -2034,19 +2099,45 @@ export class DriveService {
     cedulaActual: string,
     cedulaReal: string,
   ): Promise<boolean> {
-    const ocupada = await this.prisma.employeeDriveFolder.findFirst({
-      where: { companyId, cedula: cedulaReal },
-    });
-    if (ocupada) return false;
-    await this.prisma.employeeDriveFolder.update({
-      where: { companyId_cedula: { companyId, cedula: cedulaActual } },
-      data: { cedula: cedulaReal },
-    });
-    await this.prisma.employeeDocument.updateMany({
-      where: { companyId, cedula: cedulaActual },
-      data: { cedula: cedulaReal },
-    });
-    return true;
+    try {
+      await reasignarCedulaPersona(
+        this.prisma,
+        companyId,
+        cedulaActual,
+        cedulaReal,
+      );
+      return true;
+    } catch (err) {
+      if (err instanceof BadRequestException) return false;
+      throw err;
+    }
+  }
+
+  // Si la cédula guardada son exactamente los dígitos del id de la carpeta,
+  // no es una cédula: se vuelve a la clave interna y en la ficha queda vacía.
+  private async corregirCedulaInventada(
+    companyId: number,
+    folderId: string,
+    cedulaActual: string,
+  ): Promise<string> {
+    if (!cedulaEsDigitosDeCarpeta(cedulaActual, folderId)) return cedulaActual;
+    const clave = `ID-${folderId}`;
+    const migrada = await this.reemplazarCedulaSintetica(
+      companyId,
+      cedulaActual,
+      clave,
+    );
+    return migrada ? clave : cedulaActual;
+  }
+
+  private nombreDesdeFicha(
+    campos: { apellidos?: string; nombres?: string } | null | undefined,
+    fallback: string,
+  ): string {
+    const apellidos = String(campos?.apellidos || '').trim();
+    const nombres = String(campos?.nombres || '').trim();
+    if (!apellidos || !nombres) return fallback;
+    return formatNombrePersona(apellidos, nombres);
   }
 
   // Mueve la carpeta de un guardia a la carpeta de archivo configurada
@@ -4021,10 +4112,19 @@ export class DriveService {
       cedula,
     );
     const campos = ficha.camposPersonalizados || {};
+    const apellidos = String(campos.apellidos || '').trim();
+    const nombres = String(campos.nombres || '').trim();
 
     const payload = {
-      cedula,
-      nombreCompleto: nombreCarpeta,
+      // La clave interna ID-<folderId> no es una cédula. Si todavía no hay
+      // una de 10 dígitos, el archivo queda con el campo vacío.
+      cedula: /^\d{10}$/.test(cedula) ? cedula : '',
+      apellidos: apellidos || null,
+      nombres: nombres || null,
+      nombreCompleto:
+        apellidos && nombres
+          ? formatNombrePersona(apellidos, nombres)
+          : nombreCarpeta,
       // Refleja el mismo cálculo que "Activo: Sí/No" en la Ficha Personal de
       // la app (última SALIDA completada = inactivo) — así RRHH puede ver el
       // estado del guardia con solo abrir este archivo en Drive.
@@ -4094,10 +4194,20 @@ export class DriveService {
       cedula,
     );
     const campos = ficha.camposPersonalizados || {};
+    const apellidos = String(campos.apellidos || '').trim();
+    const nombres = String(campos.nombres || '').trim();
 
     const payload = {
-      cedula,
-      nombreCompleto: nombreCarpeta,
+      // Una carpeta recién creada todavía no tiene cédula: el JSON guarda
+      // el nombre y deja la cédula vacía, no la clave interna ID-...
+      cedula: /^\d{10}$/.test(cedula) ? cedula : '',
+      apellidos: apellidos || null,
+      nombres: nombres || null,
+      nombreCompleto:
+        apellidos && nombres
+          ? formatNombrePersona(apellidos, nombres)
+          : nombreCarpeta,
+      email: campos.email || null,
       activo: campos.activo != null ? campos.activo === 'true' : ficha.activo,
       // El puesto ya no va en el nombre de la carpeta (ver
       // nombre-persona.util), así que este JSON es donde queda registrado.
@@ -4183,7 +4293,12 @@ export class DriveService {
   }
 
   private cedulaDeValor(raw: unknown): string {
-    const digits = String(raw ?? '').replace(/\D/g, '');
+    const texto = String(raw ?? '').trim();
+    // "ID-<folderId>" no es una cédula. Si se le quitan las letras pueden
+    // quedar justo 10 dígitos del id de Drive y el sync los guardaba como
+    // si fueran la cédula de la persona.
+    if (/^(ID|TEMP)-/i.test(texto)) return '';
+    const digits = texto.replace(/\D/g, '');
     return /^\d{10}$/.test(digits) ? digits : '';
   }
 
