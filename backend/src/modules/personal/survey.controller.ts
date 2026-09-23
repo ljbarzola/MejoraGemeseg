@@ -85,6 +85,12 @@ export class SurveyController {
     return this.surveyService.close(id, req.user.companyId);
   }
 
+  @Patch(':id/reopen')
+  @Section('RRHH', 'write')
+  reopen(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.surveyService.reopen(id, req.user.companyId);
+  }
+
   @Delete(':id')
   @Section('RRHH', 'write')
   delete(@Param('id', ParseIntPipe) id: number, @Req() req: any) {

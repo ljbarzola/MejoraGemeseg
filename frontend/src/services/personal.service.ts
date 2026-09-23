@@ -72,6 +72,7 @@ export interface Training {
   description: string | null;
   dueDate: string | null;
   isAnnualPlan: boolean;
+  driveFolderId?: string | null;
   completed: boolean;
   completedAt: string | null;
   completedBy: number | null;
@@ -79,6 +80,11 @@ export interface Training {
   createdAt: string;
   attachments: TrainingAttachment[];
 }
+
+export type CarpetaDecision = {
+  folderAction?: 'usar_existente' | 'nuevo_nombre';
+  folderName?: string;
+};
 
 export const TRAINING_TYPES: { value: string; label: string }[] = [
   { value: 'INDUCCION', label: 'Inducción' },
@@ -91,9 +97,9 @@ export const TRAINING_TYPES: { value: string; label: string }[] = [
 ];
 
 export const getTrainings = (): Promise<Training[]> => api.get('/personal/trainings').then(r => r.data);
-export const createTraining = (data: { name: string; type?: string; description?: string; dueDate?: string; isAnnualPlan?: boolean }): Promise<Training> =>
+export const createTraining = (data: { name: string; type?: string; description?: string; dueDate?: string; isAnnualPlan?: boolean } & CarpetaDecision): Promise<Training> =>
   api.post('/personal/trainings', data).then(r => r.data);
-export const updateTraining = (id: number, data: Partial<{ name: string; type: string; description: string; dueDate: string; isAnnualPlan: boolean }>): Promise<Training> =>
+export const updateTraining = (id: number, data: Partial<{ name: string; type: string; description: string; dueDate: string; isAnnualPlan: boolean }> & CarpetaDecision): Promise<Training> =>
   api.patch(`/personal/trainings/${id}`, data).then(r => r.data);
 export const deleteTraining = (id: number) => api.delete(`/personal/trainings/${id}`);
 export const setTrainingCompleted = (id: number, completed: boolean): Promise<Training> =>
@@ -102,9 +108,16 @@ export const addTrainingAttachment = (id: number, data: { url: string; name?: st
   api.post(`/personal/trainings/${id}/attachments`, data).then(r => r.data);
 export const removeTrainingAttachment = (id: number, attachmentId: number) =>
   api.delete(`/personal/trainings/${id}/attachments/${attachmentId}`);
-export const uploadTrainingFile = (file: File): Promise<{ url: string }> => {
+export const uploadTrainingFile = (
+  file: File,
+  trainingId?: number,
+  decision?: CarpetaDecision,
+): Promise<{ url: string }> => {
   const formData = new FormData();
   formData.append('file', file);
+  if (trainingId) formData.append('trainingId', String(trainingId));
+  if (decision?.folderAction) formData.append('folderAction', decision.folderAction);
+  if (decision?.folderName) formData.append('folderName', decision.folderName);
   return api.post('/personal/trainings/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
 };
 
@@ -287,6 +300,41 @@ export interface AnalisisArchivoUnico {
 export const analizarArchivoUnico = (folderId: string, driveFileId?: string): Promise<AnalisisArchivoUnico> =>
   api.post(`/personal/reclutamiento/candidatos/${folderId}/analizar`, {}, { params: driveFileId ? { driveFileId } : undefined }).then(r => r.data);
 
+export interface RevisionRequerido {
+  requisito: string;
+  driveFileId: string;
+  fileName: string;
+  confianza: 'alta' | 'media' | 'baja' | null;
+  probabilidad: number | null;
+  notas: string | null;
+}
+
+export interface RevisionAdicional {
+  driveFileId: string;
+  fileName: string;
+  descripcion: string | null;
+}
+
+export interface RevisionArchivos {
+  success: boolean;
+  reason?: string;
+  message?: string;
+  requeridos?: RevisionRequerido[];
+  adicionales?: RevisionAdicional[];
+  guardadoEn?: string;
+  desdeCache?: boolean;
+}
+
+export const revisarArchivosCandidato = (
+  folderId: string,
+  requeridos: { requisito: string; driveFileId: string }[],
+  adicionales: { driveFileId: string }[],
+): Promise<RevisionArchivos> =>
+  api.post(`/personal/reclutamiento/candidatos/${folderId}/revisar-archivos`, { requeridos, adicionales }).then(r => r.data);
+
+export const obtenerRevisionArchivos = (folderId: string): Promise<RevisionArchivos> =>
+  api.get(`/personal/reclutamiento/candidatos/${folderId}/revision-archivos`).then(r => r.data);
+
 // Última propuesta guardada (si hay una), SIN llamar a Vertex AI. Se consulta
 // antes de analizar: si RRHH cerró el modal para revisar otra cosa y vuelve,
 // evita repetir la llamada a la IA.
@@ -409,6 +457,7 @@ export const publishSurvey = (id: number): Promise<Survey> =>
 export const setSurveyPublicLink = (id: number, enabled: boolean): Promise<Survey> =>
   api.patch(`/personal/surveys/${id}/public-link`, { enabled }).then(r => r.data);
 export const closeSurvey = (id: number): Promise<Survey> => api.patch(`/personal/surveys/${id}/close`).then(r => r.data);
+export const reopenSurvey = (id: number): Promise<Survey> => api.patch(`/personal/surveys/${id}/reopen`).then(r => r.data);
 export const deleteSurvey = (id: number) => api.delete(`/personal/surveys/${id}`);
 export const getSurveyResults = (id: number): Promise<SurveyResults> => api.get(`/personal/surveys/${id}/results`).then(r => r.data);
 

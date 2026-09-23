@@ -23,6 +23,7 @@ import {
 } from '../../services/entidades.service';
 import GuardiasExportModal from '../../components/personal/GuardiasExportModal';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import OpenFolderButton from '../../components/common/OpenFolderButton';
 import { getDriveConfig, saveDriveConfig, testDriveConnection, quitarGuardiaFueraDeLista } from '../../services/personal.service';
 import { registrarSalida, getCedulasFuera } from '../../services/movimiento-personal.service';
 import GuardiaFichaModal from '../../components/personal/GuardiaFichaModal';
@@ -42,10 +43,6 @@ interface GuardiaRow {
   asignacion: AsignacionGuardia | null;
   entidad: Entidad | null;
   fuera: boolean;
-}
-
-function cedulaVisible(cedula: string): string {
-  return /^\d{10}$/.test(cedula) ? cedula : '';
 }
 
 const TIPO_LABEL: Record<EntidadTipo, string> = { PUBLICA: 'Pública', PRIVADA: 'Privada' };
@@ -790,13 +787,16 @@ export default function GuardiasList() {
 
                   <div className="form-group" style={{ marginTop: '14px' }}>
                     <label>Enlace de la carpeta raíz en Drive *</label>
-                    <input
-                      type="text"
-                      value={configFolderId}
-                      onChange={(e) => { setConfigFolderId(e.target.value); setConfigTestResult(null); }}
-                      placeholder="https://drive.google.com/drive/folders/1ABC123..."
-                      style={{ width: '100%' }}
-                    />
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        value={configFolderId}
+                        onChange={(e) => { setConfigFolderId(e.target.value); setConfigTestResult(null); }}
+                        placeholder="https://drive.google.com/drive/folders/1ABC123..."
+                        style={{ flex: 1, minWidth: 0 }}
+                      />
+                      <OpenFolderButton value={configFolderId} />
+                    </div>
                   </div>
 
                   {configTestResult && (
@@ -829,14 +829,15 @@ export default function GuardiasList() {
                       Destino del botón "Archivar carpeta" (detalle de una salida completada, en Historial). Independiente de la carpeta raíz de arriba.
                     </p>
                     {archiveConfigError && <div className="form-error" style={{ marginBottom: '10px' }}>{archiveConfigError}</div>}
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <input
                         type="text"
                         value={archiveFolderId}
                         onChange={(e) => setArchiveFolderId(e.target.value)}
                         placeholder="https://drive.google.com/drive/folders/1XYZ789..."
-                        style={{ flex: 1 }}
+                        style={{ flex: 1, minWidth: 0 }}
                       />
+                      <OpenFolderButton value={archiveFolderId} title="Abrir carpeta de archivo" />
                       <button className="btn-secondary" onClick={handleSaveArchiveConfig} disabled={savingArchiveConfig}>
                         {savingArchiveConfig ? 'Guardando...' : 'Guardar'}
                       </button>

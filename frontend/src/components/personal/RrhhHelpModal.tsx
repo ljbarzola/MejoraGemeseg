@@ -15,7 +15,7 @@ const FLUJO_PRINCIPAL: Submodulo[] = [
       'Punto de partida: vacantes publicadas y candidatos que se postulan subiendo sus documentos a una carpeta de Drive (fija, no se cambia desde la app). El botón "Ver carpeta" abre esa carpeta en Drive. Al crear la vacante se elige si quien entre será guardia o personal administrativo, y eso decide a dónde va su carpeta al contratarlo.',
       'Cuando alguien queda contratado, se lo marca desde su ficha con "Marcar como Contratado": si es guardia va a la sub-carpeta "Sin Asignar" (todavía sin entidad, eso se decide en el siguiente paso), y si es administrativo va a Personal Administrativo, renombrando la carpeta. En todas partes la carpeta de una persona se llama igual: "Apellidos Nombres", sin guion, sin cédula y sin puesto. La cédula y el puesto viajan dentro del archivo de datos de la carpeta, no en su nombre.',
       'Si esa carpeta destino todavía no está configurada, el sistema avisa y no mueve nada. No existe ningún tablero ni paso intermedio: contratar es una sola acción, en esta pantalla.',
-      'Al postularse, la persona elige si sube un archivo por documento o todo junto en un solo PDF. En ese segundo caso su ficha lo avisa y aparece el botón "Analizar con IA", que lee el archivo y propone qué documento es cada página.',
+      'Al postularse, la persona elige si sube un archivo por documento o todo junto en un solo PDF. En ese segundo caso su ficha lo avisa y aparece el botón "Analizar con IA", que lee el archivo y propone qué documento es cada página. Si subió un archivo por documento, "Revisar con IA" dice si cada archivo es de verdad el documento que se pidió (alta, media o baja). En los archivos adicionales, sea uno por uno o todo junto, deja una frase de qué documento parece ser.',
       'Se abre una pantalla con todas las páginas en miniatura, cada una con su documento ya marcado y una probabilidad: alta solo si la página se parece de verdad a ese documento; si no, queda en media, baja o sin asignar. Clic en una miniatura la abre en grande: ahí se puede acercar, alejar, arrastrar cuando está ampliada y volver al 100% con el porcentaje. Dos páginas marcadas con el mismo documento se guardan juntas en un solo archivo, aunque no estén seguidas.',
       'Nada se modifica hasta que confirmes: recién ahí se separan los documentos y se conserva el original. Si la IA no logra leer el archivo, se puede seguir trabajando a mano como siempre.',
       'Este mismo botón también aparece junto a cualquier archivo que quede en "Archivos Adicionales" (los que no coincidieron con ningún documento pedido): sirve para el caso de alguien que dijo subir por separado pero en realidad mandó todo junto, o mezcló varios documentos en un solo PDF por error.',
@@ -77,7 +77,7 @@ const MODULOS_INDEPENDIENTES: Submodulo[] = [
     ruta: '/rrhh/capacitaciones',
     parrafos: [
       'Plan anual o capacitaciones puntuales, con cumplimiento general: se marca completada una sola vez, no por guardia. Se puede registrar la capacitación, la fecha y un enlace aunque todavía no haya carpeta de Drive.',
-      'Subir un archivo sí necesita la carpeta de Drive de Capacitaciones, que está fija en el sistema. Cuando existe, el botón "Ver carpeta" la abre.',
+      'Cuando la carpeta de Capacitaciones está definida, cada capacitación crea la suya: las del plan anual dentro de la carpeta Anual, y las puntuales directo en Capacitaciones. Si Anual no existe, se crea. Si ya hay una carpeta con el mismo nombre, se pregunta si se agregan los documentos ahí o si se usa otro nombre.',
     ],
   },
   {
@@ -94,7 +94,7 @@ const MODULOS_INDEPENDIENTES: Submodulo[] = [
     parrafos: [
       'RRHH arma una encuesta con preguntas de distinto tipo (texto, opción única/múltiple, escala) y elige por dónde se responde: enviándola a personas con cuenta en la app, generando un enlace público, o las dos cosas a la vez.',
       'El enlace público lo puede abrir cualquiera, sin cuenta y sin iniciar sesión, desde el computador o el celular — sirve para proveedores, clientes o postulantes. Si necesitas saber quién respondió, agrégalo como una pregunta más de la encuesta.',
-      'Desde "Gestión de Encuestas" se copia o se desactiva ese enlace en cualquier momento, y se ven los resultados agregados. Quien tiene cuenta responde una sola vez.',
+      'Desde "Gestión de Encuestas" se copia o se desactiva ese enlace en cualquier momento, y se ven los resultados agregados. Si se cerró por error, "Volver a abrir" la deja otra vez activa sin perder las respuestas. Quien tiene cuenta responde una sola vez.',
     ],
   },
 ];

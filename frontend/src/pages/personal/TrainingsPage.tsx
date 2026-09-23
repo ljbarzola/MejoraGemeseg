@@ -16,6 +16,7 @@ import {
   TRAINING_TYPES,
   type Training,
   type TrainingAttachment,
+  type CarpetaDecision,
 } from '../../services/personal.service';
 import { usePerm } from '../../contexts/PermissionsContext';
 import { buildDriveFolderLink } from '../../utils/driveLink';
@@ -109,24 +110,21 @@ export default function TrainingsPage() {
 
   const [driveConfig, setDriveConfig] = useState<any>(null);
   const [loadingConfig, setLoadingConfig] = useState(true);
-  const subirArchivoCapacitacion = async (file: File) => {
-    if (!driveConfig) {
-      throw {
-        response: {
-          data: {
-            message: 'Subir un archivo necesita la carpeta de Drive de Capacitaciones. Mientras tanto puedes pegar un enlace.',
-          },
-        },
-      };
-    }
-    return uploadTrainingFile(file);
-  };
 
   const [showModal, setShowModal] = useState(false);
   const [editingTraining, setEditingTraining] = useState<Training | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [stagedDocs, setStagedDocs] = useState<StagedAttachment[]>([]);
   const [saving, setSaving] = useState(false);
+  const archivosLocales = useRef<Map<string, File>>(new Map());
+  const creadaRef = useRef<Training | null>(null);
+  const decisionRef = useRef<{
+    resolve: (d: CarpetaDecision) => void;
+    reject: (reason?: unknown) => void;
+  } | null>(null);
+  const [conflictoCarpeta, setConflictoCarpeta] = useState<{ folderName: string; ubicacion: string } | null>(null);
+  const [pidiendoNombre, setPidiendoNombre] = useState(false);
+  const [nombreCarpeta, setNombreCarpeta] = useState('');
 
   // Referencias a las secciones de adjuntos del modal de crear/editar y del
   // de registrar cumplimiento, para poder recuperar (y adjuntar) al enviar
@@ -197,7 +195,79 @@ export default function TrainingsPage() {
     ? (driveConfig.driveFolderLink || buildDriveFolderLink(driveConfig.driveFolderId))
     : '';
 
+  const soltarArchivosLocales = () => {
+    for (const url of archivosLocales.current.keys()) URL.revokeObjectURL(url);
+    archivosLocales.current.clear();
+  };
+
+  const esConflictoCarpeta = (err: any) => {
+    const data = err?.response?.data;
+    if (err?.response?.status === 409 && data?.code === 'CARPETA_EXISTE') {
+      return { folderName: String(data.folderName || ''), ubicacion: String(data.ubicacion || 'Capacitaciones') };
+    }
+    return null;
+  };
+
+  const pedirDecisionCarpeta = (conflicto: { folderName: string; ubicacion: string }) => {
+    setPidiendoNombre(false);
+    setNombreCarpeta('');
+    setConflictoCarpeta(conflicto);
+    return new Promise<CarpetaDecision>((resolve, reject) => {
+      decisionRef.current = { resolve, reject };
+    });
+  };
+
+  const cerrarDecisionCarpeta = (elegida?: CarpetaDecision) => {
+    const pending = decisionRef.current;
+    decisionRef.current = null;
+    setConflictoCarpeta(null);
+    setPidiendoNombre(false);
+    if (elegida?.folderAction) pending?.resolve(elegida);
+    else pending?.reject(new Error('cancelada'));
+  };
+
+  const cerrarModal = () => {
+    if (decisionRef.current) cerrarDecisionCarpeta();
+    soltarArchivosLocales();
+    creadaRef.current = null;
+    setShowModal(false);
+  };
+
+  const subirArchivoCapacitacion = async (file: File) => {
+    if (!driveConfig) {
+      throw {
+        response: {
+          data: {
+            message: 'Subir un archivo necesita la carpeta de Drive de Capacitaciones. Mientras tanto puedes pegar un enlace.',
+          },
+        },
+      };
+    }
+    const trainingId = editingTraining?.id ?? completingTraining?.id ?? creadaRef.current?.id;
+    if (!trainingId) {
+      const url = URL.createObjectURL(file);
+      archivosLocales.current.set(url, file);
+      return { url };
+    }
+    let decision: CarpetaDecision | undefined;
+    for (;;) {
+      try {
+        return await uploadTrainingFile(file, trainingId, decision);
+      } catch (err: any) {
+        const conflicto = esConflictoCarpeta(err);
+        if (!conflicto) throw err;
+        try {
+          decision = await pedirDecisionCarpeta(conflicto);
+        } catch {
+          throw { response: { data: { message: 'No se subió el archivo.' } } };
+        }
+      }
+    }
+  };
+
   const openCreate = () => {
+    soltarArchivosLocales();
+    creadaRef.current = null;
     setEditingTraining(null);
     setForm(EMPTY_FORM);
     setStagedDocs([]);
@@ -207,6 +277,8 @@ export default function TrainingsPage() {
   };
 
   const openEdit = (t: Training) => {
+    soltarArchivosLocales();
+    creadaRef.current = null;
     setEditingTraining(t);
     const knownType = TRAINING_TYPES.some((tt) => tt.value === t.type);
     setForm({
@@ -229,20 +301,44 @@ export default function TrainingsPage() {
     setSaving(true);
     setSaveError('');
     try {
-      const payload = {
-        name: form.name,
+      const payloadBase = {
+        name: form.name.trim(),
         type: form.type === 'OTRO' ? form.customType.trim() : form.type,
         description: form.description,
         dueDate: form.dueDate || undefined,
         isAnnualPlan: form.isAnnualPlan,
       };
-      // Un archivo/enlace ya subido o pegado pero no confirmado con
-      // "Agregar" no debe perderse al pulsar "Crear"/"Guardar": se adjunta
-      // automáticamente antes de terminar de guardar.
       const pendingDocUrl = docsAttachmentRef.current?.getPendingUrl() || '';
       const pendingEvidenciaUrl = evidenciaAttachmentRef.current?.getPendingUrl() || '';
+      let decision: CarpetaDecision | undefined;
+      let guardada: Training;
+      for (;;) {
+        const payload = {
+          ...payloadBase,
+          ...(decision?.folderAction === 'nuevo_nombre' && decision.folderName
+            ? { name: decision.folderName, folderAction: decision.folderAction, folderName: decision.folderName }
+            : decision?.folderAction === 'usar_existente'
+              ? { folderAction: 'usar_existente' as const }
+              : {}),
+        };
+        try {
+          if (editingTraining) {
+            guardada = await updateTraining(editingTraining.id, payload);
+          } else if (creadaRef.current) {
+            guardada = await updateTraining(creadaRef.current.id, payload);
+          } else {
+            guardada = await createTraining(payload);
+            creadaRef.current = guardada;
+          }
+          break;
+        } catch (err: any) {
+          const conflicto = esConflictoCarpeta(err);
+          if (!conflicto) throw err;
+          decision = await pedirDecisionCarpeta(conflicto);
+        }
+      }
+
       if (editingTraining) {
-        await updateTraining(editingTraining.id, payload);
         if (pendingDocUrl) {
           await addTrainingAttachment(editingTraining.id, { url: pendingDocUrl, kind: 'DOCUMENTO' });
         }
@@ -250,18 +346,37 @@ export default function TrainingsPage() {
           await addTrainingAttachment(editingTraining.id, { url: pendingEvidenciaUrl, kind: 'EVIDENCIA' });
         }
       } else {
-        const created = await createTraining(payload);
-        const docsToAttach = pendingDocUrl ? [...stagedDocs, { url: pendingDocUrl }] : stagedDocs;
-        for (const doc of docsToAttach) {
-          await addTrainingAttachment(created.id, { url: doc.url, name: doc.name, kind: 'DOCUMENTO' });
+        const id = guardada!.id;
+        let queue = pendingDocUrl ? [...stagedDocs, { url: pendingDocUrl }] : [...stagedDocs];
+        while (queue.length) {
+          const doc = queue[0];
+          const file = archivosLocales.current.get(doc.url);
+          let url = doc.url;
+          let name = doc.name || file?.name;
+          if (file) {
+            const uploaded = await uploadTrainingFile(file, id);
+            url = uploaded.url;
+            name = file.name;
+            URL.revokeObjectURL(doc.url);
+            archivosLocales.current.delete(doc.url);
+          }
+          if (!url.startsWith('blob:')) {
+            await addTrainingAttachment(id, { url, name, kind: 'DOCUMENTO' });
+          }
+          queue = queue.slice(1);
+          setStagedDocs(queue.filter((d) => d.url !== pendingDocUrl));
         }
       }
       docsAttachmentRef.current?.clearPending();
       evidenciaAttachmentRef.current?.clearPending();
+      soltarArchivosLocales();
+      creadaRef.current = null;
       setShowModal(false);
       load();
     } catch (err: any) {
-      setSaveError(err.response?.data?.message || 'Error al guardar.');
+      if (err?.message !== 'cancelada' && !decisionRef.current) {
+        setSaveError(err.response?.data?.message || 'Error al guardar.');
+      }
     } finally {
       setSaving(false);
     }
@@ -402,7 +517,7 @@ export default function TrainingsPage() {
       )}
 
       <p style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '20px' }}>
-        El cumplimiento es general (una vez registrado, ya está listo) y puedes adjuntar varios documentos y enlaces, guardados en la carpeta de Drive de Capacitaciones.
+        El cumplimiento es general (una vez registrado, ya está listo). Cada capacitación crea su propia carpeta en Drive: las del plan anual, dentro de la carpeta Anual; las puntuales, directo en Capacitaciones.
       </p>
 
       {error && <div className="form-error" style={{ marginBottom: '16px' }}>{error}</div>}
@@ -487,11 +602,11 @@ export default function TrainingsPage() {
 
       {/* MODAL: CREAR / EDITAR */}
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+        <div className="modal-overlay" onClick={cerrarModal}>
           <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{editingTraining ? 'Editar capacitación' : 'Nueva capacitación'}</h3>
-              <button className="modal-close" onClick={() => setShowModal(false)}><X size={16} /></button>
+              <button className="modal-close" onClick={cerrarModal}><X size={16} /></button>
             </div>
             <div className="modal-body">
               {saveError && <div ref={saveErrorRef} className="form-error" style={{ marginBottom: '12px' }}>{saveError}</div>}
@@ -547,7 +662,11 @@ export default function TrainingsPage() {
                   <AttachmentSection
                     ref={docsAttachmentRef}
                     title="Documentos del plan"
-                    items={stagedDocs.map((d, i) => ({ key: i, url: d.url, name: d.name }))}
+                    items={stagedDocs.map((d, i) => ({
+                      key: i,
+                      url: d.url,
+                      name: archivosLocales.current.get(d.url)?.name || d.name,
+                    }))}
                     onAdd={(url) => setStagedDocs((prev) => [...prev, { url }])}
                     onRemove={(key) => setStagedDocs((prev) => prev.filter((_, i) => i !== Number(key)))}
                     canEdit={canEdit}
@@ -569,7 +688,7 @@ export default function TrainingsPage() {
               </div>
             </div>
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
+              <button className="btn-secondary" onClick={cerrarModal}>Cancelar</button>
               <button className="auth-btn" onClick={handleSave} disabled={saving || !form.name.trim() || (form.type === 'OTRO' && !form.customType.trim())}>
                 {saving ? 'Guardando...' : editingTraining ? 'Guardar' : 'Crear'}
               </button>
@@ -631,6 +750,65 @@ export default function TrainingsPage() {
           onConfirm={confirmarRevertir}
           onCancel={() => setConfirmandoRevertir(null)}
         />
+      )}
+
+      {conflictoCarpeta && (
+        <div className="modal-overlay" style={{ zIndex: 1200 }} onClick={() => cerrarDecisionCarpeta()}>
+          <div className="modal" style={{ maxWidth: '460px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Ya existe esa carpeta</h3>
+            </div>
+            <div className="modal-body">
+              <p style={{ margin: '0 0 14px', color: '#2d3748', lineHeight: 1.5 }}>
+                {conflictoCarpeta.ubicacion === 'Anual'
+                  ? `Dentro de la carpeta Anual ya hay una carpeta llamada «${conflictoCarpeta.folderName}».`
+                  : `En Capacitaciones ya hay una carpeta llamada «${conflictoCarpeta.folderName}».`}
+                {' '}Puedes guardar ahí los documentos de esta capacitación, o usar otro nombre.
+              </p>
+              {pidiendoNombre ? (
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>Nombre de la carpeta</label>
+                  <input
+                    type="text"
+                    value={nombreCarpeta}
+                    autoFocus
+                    onChange={(e) => setNombreCarpeta(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && nombreCarpeta.trim()) {
+                        cerrarDecisionCarpeta({ folderAction: 'nuevo_nombre', folderName: nombreCarpeta.trim() });
+                      }
+                    }}
+                  />
+                  <p style={{ margin: '8px 0 0', fontSize: '0.78rem', color: '#718096' }}>
+                    La capacitación queda con este mismo nombre.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+            <div className="modal-actions">
+              {pidiendoNombre ? (
+                <>
+                  <button className="btn-secondary" onClick={() => setPidiendoNombre(false)}>Volver</button>
+                  <button
+                    className="auth-btn"
+                    disabled={!nombreCarpeta.trim()}
+                    onClick={() => cerrarDecisionCarpeta({ folderAction: 'nuevo_nombre', folderName: nombreCarpeta.trim() })}
+                  >
+                    Crear carpeta
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="btn-secondary" onClick={() => cerrarDecisionCarpeta()}>Cancelar</button>
+                  <button className="btn-secondary" onClick={() => setPidiendoNombre(true)}>Cambiar nombre</button>
+                  <button className="auth-btn" onClick={() => cerrarDecisionCarpeta({ folderAction: 'usar_existente' })}>
+                    Agregar a esa carpeta
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

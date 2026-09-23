@@ -179,7 +179,14 @@ export class PersonalController {
   )
   uploadTrainingFile(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
     if (!file) throw new BadRequestException('No se recibió ningún archivo');
-    return this.trainingService.uploadFile(req.user.companyId, file);
+    const rawId = req.body?.trainingId;
+    const trainingId = rawId ? parseInt(String(rawId), 10) : undefined;
+    const folderAction = req.body?.folderAction;
+    return this.trainingService.uploadFile(req.user.companyId, file, {
+      trainingId: Number.isFinite(trainingId) ? trainingId : undefined,
+      folderAction: folderAction === 'usar_existente' || folderAction === 'nuevo_nombre' ? folderAction : undefined,
+      folderName: typeof req.body?.folderName === 'string' ? req.body.folderName : undefined,
+    });
   }
 
   @Post('trainings')

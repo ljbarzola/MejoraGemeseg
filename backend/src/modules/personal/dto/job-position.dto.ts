@@ -103,6 +103,33 @@ export class AsignacionAnalisisDto {
   paginas: number[];
 }
 
+export class ArchivoRequeridoRevisionDto {
+  @IsString()
+  requisito: string;
+
+  @IsString()
+  driveFileId: string;
+}
+
+export class ArchivoAdicionalRevisionDto {
+  @IsString()
+  driveFileId: string;
+}
+
+// Revisión de archivos sueltos: cada casilla del puesto y cada adicional.
+// Las listas pueden ir vacías, pero no las dos a la vez (lo valida el servicio).
+export class RevisarArchivosDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ArchivoRequeridoRevisionDto)
+  requeridos: ArchivoRequeridoRevisionDto[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ArchivoAdicionalRevisionDto)
+  adicionales: ArchivoAdicionalRevisionDto[];
+}
+
 export class AplicarAnalisisDto {
   @IsArray()
   @ValidateNested({ each: true })

@@ -745,6 +745,9 @@ model Training {
   description  String?
   dueDate      DateTime?
   isAnnualPlan Boolean              @default(false)
+  // Carpeta de Drive de esta capacitación (dentro de Anual, o directo en
+  // Capacitaciones). Null si todavía no hay carpeta raíz configurada.
+  driveFolderId String?
   completed    Boolean              @default(false)
   completedAt  DateTime?
   completedBy  Int?

@@ -274,6 +274,23 @@ export class SurveyService {
     });
   }
 
+  // Un cierre accidental no debe obligar a recrear la encuesta. Vuelve a
+  // PUBLISHED: las respuestas ya guardadas se quedan, y quien no había
+  // respondido (o el enlace público, si seguía activo) puede hacerlo otra vez.
+  async reopen(id: number, companyId: number) {
+    const survey = await this.prisma.survey.findFirst({
+      where: { id, companyId },
+    });
+    if (!survey) throw new NotFoundException('Encuesta no encontrada');
+    if (survey.status !== 'CLOSED') {
+      throw new BadRequestException('Solo se puede volver a abrir una encuesta cerrada.');
+    }
+    return this.prisma.survey.update({
+      where: { id },
+      data: { status: 'PUBLISHED' },
+    });
+  }
+
   async delete(id: number, companyId: number) {
     const survey = await this.prisma.survey.findFirst({
       where: { id, companyId },

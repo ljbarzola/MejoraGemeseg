@@ -19,6 +19,16 @@ export class CreateTrainingDto {
   @IsOptional()
   @IsBoolean()
   isAnnualPlan?: boolean;
+
+  // Qué hacer si ya hay una carpeta con el mismo nombre. Sin esto, el
+  // servicio responde 409 y la pantalla pregunta.
+  @IsOptional()
+  @IsIn(['usar_existente', 'nuevo_nombre'])
+  folderAction?: 'usar_existente' | 'nuevo_nombre';
+
+  @IsOptional()
+  @IsString()
+  folderName?: string;
 }
 
 export class UpdateTrainingDto {
@@ -41,6 +51,14 @@ export class UpdateTrainingDto {
   @IsOptional()
   @IsBoolean()
   isAnnualPlan?: boolean;
+
+  @IsOptional()
+  @IsIn(['usar_existente', 'nuevo_nombre'])
+  folderAction?: 'usar_existente' | 'nuevo_nombre';
+
+  @IsOptional()
+  @IsString()
+  folderName?: string;
 }
 
 export class AddTrainingAttachmentDto {

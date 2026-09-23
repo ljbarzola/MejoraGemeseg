@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { DriveService } from './drive.service';
 import {
@@ -9,7 +9,13 @@ import {
 import * as path from 'path';
 
 const DRIVE_FOLDER_TYPE = 'CAPACITACIONES';
+const CARPETA_ANUAL = 'Anual';
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.doc', '.docx'];
+
+type DecisionCarpeta = {
+  folderAction?: 'usar_existente' | 'nuevo_nombre';
+  folderName?: string;
+};
 
 @Injectable()
 export class TrainingService {
@@ -28,23 +34,109 @@ export class TrainingService {
     return config;
   }
 
-  // Sube un adjunto (documento del plan, o evidencia de que se realizó) a la
-  // carpeta de Drive configurada para Capacitaciones — nunca a disco local.
-  async uploadFile(companyId: number, file: Express.Multer.File): Promise<{ url: string }> {
-    const config = await this.requireFolder(companyId);
+  // Sube un adjunto a la carpeta de ESA capacitación. Si todavía no tiene
+  // carpeta, la crea (o pregunta, vía 409, si el nombre ya existe). Sin
+  // trainingId se deja en la raíz: solo lo usa un cliente viejo.
+  async uploadFile(
+    companyId: number,
+    file: Express.Multer.File,
+    destino?: { trainingId?: number } & DecisionCarpeta,
+  ): Promise<{ url: string }> {
     const ext = path.extname(file.originalname).toLowerCase();
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
       throw new BadRequestException(
         `Tipo de archivo no permitido (${ext || 'sin extensión'}). Permitidos: ${ALLOWED_EXTENSIONS.join(', ')}`,
       );
     }
+
+    let folderId: string;
+    if (destino?.trainingId) {
+      const training = await this.prisma.training.findFirst({
+        where: { id: destino.trainingId, companyId },
+      });
+      if (!training) throw new NotFoundException('Capacitación no encontrada');
+      const ubicada = training.driveFolderId
+        || await this.ubicarCarpeta(companyId, training.name, training.isAnnualPlan, destino, null);
+      if (!ubicada) {
+        throw new BadRequestException(
+          'No hay carpeta de Drive de Capacitaciones definida en el sistema.',
+        );
+      }
+      folderId = ubicada;
+      if (!training.driveFolderId) {
+        await this.prisma.training.update({
+          where: { id: training.id },
+          data: { driveFolderId: folderId },
+        });
+      }
+    } else {
+      folderId = (await this.requireFolder(companyId)).driveFolderId;
+    }
+
     const { url } = await this.driveService.uploadFile(
-      config.driveFolderId,
+      folderId,
       file.buffer,
       file.originalname,
       file.mimetype,
     );
     return { url };
+  }
+
+  // Carpeta de la capacitación. Si es del plan anual, vive dentro de "Anual"
+  // (esa carpeta se crea si no está, sin preguntar). Si no, vive directo en
+  // Capacitaciones. El nombre de la capacitación sí se revisa: si ya hay una
+  // carpeta igual, 409 para que la pantalla pregunte.
+  private async ubicarCarpeta(
+    companyId: number,
+    trainingName: string,
+    isAnnualPlan: boolean,
+    decision: DecisionCarpeta,
+    currentFolderId: string | null,
+  ): Promise<string | null> {
+    const config = await this.driveService.getConfig(companyId, DRIVE_FOLDER_TYPE);
+    if (!config?.driveFolderId) return null;
+
+    let parentId = config.driveFolderId;
+    if (isAnnualPlan) {
+      const anual = await this.driveService.findChildFolderByName(parentId, CARPETA_ANUAL);
+      parentId = anual?.id ?? await this.driveService.createSubfolder(parentId, CARPETA_ANUAL);
+    }
+
+    const desired = (decision.folderAction === 'nuevo_nombre' ? decision.folderName : trainingName)
+      ?.trim()
+      .replace(/\s+/g, ' ');
+    if (!desired) throw new BadRequestException('El nombre de la carpeta no puede estar vacío.');
+
+    const existing = await this.driveService.findChildFolderByName(parentId, desired);
+    if (existing && existing.id !== currentFolderId) {
+      if (decision.folderAction === 'usar_existente') {
+        if (currentFolderId) {
+          await this.driveService.moveFolderContents(currentFolderId, existing.id);
+        }
+        return existing.id;
+      }
+      throw new ConflictException({
+        statusCode: 409,
+        message: `Ya existe una carpeta llamada "${existing.name}".`,
+        code: 'CARPETA_EXISTE',
+        folderId: existing.id,
+        folderName: existing.name,
+        ubicacion: isAnnualPlan ? 'Anual' : 'Capacitaciones',
+      });
+    }
+
+    if (currentFolderId) {
+      try {
+        await this.driveService.relocateFolder(currentFolderId, parentId, desired);
+        return currentFolderId;
+      } catch (err) {
+        const code = (err as { code?: number; response?: { status?: number } }).code
+          ?? (err as { response?: { status?: number } }).response?.status;
+        if (code !== 404) throw err;
+      }
+    }
+
+    return this.driveService.createSubfolder(parentId, desired);
   }
 
   async findAll(companyId: number) {
@@ -56,16 +148,20 @@ export class TrainingService {
   }
 
   async create(dto: CreateTrainingDto, companyId: number, userId: number) {
-    // El registro vive en la base. La carpeta de Drive solo hace falta para
-    // subir un archivo (uploadFile). Sin carpeta, igual se puede dar de alta
-    // la capacitación, ponerle fecha y pegar un enlace.
+    const name = decisionNombre(dto.name, dto);
+    const isAnnualPlan = dto.isAnnualPlan ?? false;
+    // Sin carpeta raíz configurada el registro igual se guarda (fecha y
+    // enlaces). Con carpeta, se crea la subcarpeta ahora, aunque todavía
+    // no haya archivos.
+    const driveFolderId = await this.ubicarCarpeta(companyId, name, isAnnualPlan, dto, null);
     return this.prisma.training.create({
       data: {
-        name: dto.name,
+        name,
         type: dto.type || 'OTRO',
         description: dto.description || null,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-        isAnnualPlan: dto.isAnnualPlan ?? false,
+        isAnnualPlan,
+        driveFolderId,
         companyId,
         createdBy: userId,
       },
@@ -79,14 +175,23 @@ export class TrainingService {
     });
     if (!training) throw new NotFoundException('Capacitación no encontrada');
 
+    const name = decisionNombre(dto.name ?? training.name, dto);
+    const isAnnualPlan = dto.isAnnualPlan ?? training.isAnnualPlan;
+    const nombreCambio = name !== training.name;
+    const anualCambio = isAnnualPlan !== training.isAnnualPlan;
+    const driveFolderId = (nombreCambio || anualCambio || !training.driveFolderId || dto.folderAction)
+      ? await this.ubicarCarpeta(companyId, name, isAnnualPlan, dto, training.driveFolderId)
+      : training.driveFolderId;
+
     return this.prisma.training.update({
       where: { id },
       data: {
-        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.name !== undefined || dto.folderAction === 'nuevo_nombre' ? { name } : {}),
         ...(dto.type !== undefined ? { type: dto.type || 'OTRO' } : {}),
         ...(dto.description !== undefined ? { description: dto.description || null } : {}),
         ...(dto.dueDate !== undefined ? { dueDate: dto.dueDate ? new Date(dto.dueDate) : null } : {}),
-        ...(dto.isAnnualPlan !== undefined ? { isAnnualPlan: dto.isAnnualPlan } : {}),
+        ...(dto.isAnnualPlan !== undefined ? { isAnnualPlan } : {}),
+        ...(driveFolderId ? { driveFolderId } : {}),
       },
       include: { attachments: true },
     });
@@ -143,4 +248,11 @@ export class TrainingService {
       include: { attachments: true },
     });
   }
+}
+
+function decisionNombre(nombre: string, decision: DecisionCarpeta): string {
+  if (decision.folderAction === 'nuevo_nombre' && decision.folderName?.trim()) {
+    return decision.folderName.trim().replace(/\s+/g, ' ');
+  }
+  return nombre.trim().replace(/\s+/g, ' ');
 }

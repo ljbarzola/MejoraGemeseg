@@ -557,4 +557,58 @@ describe('ReclutamientoIaService', () => {
       );
     });
   });
+
+  describe('revisarArchivos', () => {
+    it('califica cada casilla y describe cada adicional', async () => {
+      drive.listFilesInFolder.mockResolvedValue([
+        { id: 'ced-1', name: 'cedula.pdf', mimeType: 'application/pdf' },
+        { id: 'extra-1', name: 'suelto.jpg', mimeType: 'image/jpeg' },
+      ]);
+      global.fetch = jest.fn().mockImplementation(async (_url: string, init: any) => {
+        const body = JSON.parse(init.body);
+        const prompt = body.contents[0].parts.find((p: any) => p.text)?.text || '';
+        const payload = prompt.includes('casilla')
+          ? { probabilidad: 30, confianza: 'alta', evidencia: null, notas: 'Es una foto personal' }
+          : { descripcion: 'Papeleta de votación' };
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(payload),
+          json: async () => ({
+            candidates: [{ content: { parts: [{ text: JSON.stringify(payload) }] } }],
+          }),
+        };
+      }) as any;
+
+      const res = await service.revisarArchivos(
+        'cand-1',
+        1,
+        [{ requisito: 'Cédula', driveFileId: 'ced-1' }],
+        [{ driveFileId: 'extra-1' }],
+      );
+
+      expect(res.success).toBe(true);
+      expect(res.requeridos?.[0]).toEqual(
+        expect.objectContaining({
+          requisito: 'Cédula',
+          confianza: 'baja',
+          probabilidad: 30,
+        }),
+      );
+      expect(res.adicionales?.[0]?.descripcion).toBe('Papeleta de votación');
+      expect(drive.upsertJsonFile).toHaveBeenCalled();
+    });
+
+    it('no llama a la IA si el archivo no está en la carpeta del postulante', async () => {
+      global.fetch = jest.fn() as any;
+      const res = await service.revisarArchivos(
+        'cand-1',
+        1,
+        [{ requisito: 'Cédula', driveFileId: 'ajeno' }],
+        [],
+      );
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(res.requeridos?.[0]?.notas).toMatch(/no está en la carpeta/i);
+    });
+  });
 });

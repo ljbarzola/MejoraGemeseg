@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, BarChart3, Link2, LinkIcon, Copy, Lock, Trash2, Send } from 'lucide-react';
+import { ArrowLeft, Plus, BarChart3, Link2, LinkIcon, Copy, Lock, Unlock, Trash2, Send } from 'lucide-react';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import RowActionsMenu from '../../components/common/RowActionsMenu';
-import { getSurveys, closeSurvey, deleteSurvey, setSurveyPublicLink, publishSurvey, type Survey, type SurveyStatus } from '../../services/personal.service';
+import { getSurveys, closeSurvey, reopenSurvey, deleteSurvey, setSurveyPublicLink, publishSurvey, type Survey, type SurveyStatus } from '../../services/personal.service';
 import { buildPublicSurveyUrl } from '../../services/publicSurvey.service';
 import { usePerm } from '../../contexts/PermissionsContext';
 import SurveyBuilderModal from '../../components/personal/SurveyBuilderModal';
@@ -34,6 +34,7 @@ export default function SurveyManagementPage() {
   const [resultsId, setResultsId] = useState<number | null>(null);
 
   const [confirmandoCerrar, setConfirmandoCerrar] = useState<Survey | null>(null);
+  const [confirmandoReabrir, setConfirmandoReabrir] = useState<Survey | null>(null);
   const [cerrarError, setCerrarError] = useState('');
   const cerrarErrorRef = useRef<HTMLDivElement>(null);
 
@@ -78,6 +79,18 @@ export default function SurveyManagementPage() {
       load();
     } catch (err: any) {
       setCerrarError(err.response?.data?.message || 'No se pudo cerrar.');
+    }
+  };
+
+  const confirmarReabrir = async () => {
+    const s = confirmandoReabrir;
+    if (!s) return;
+    setConfirmandoReabrir(null);
+    try {
+      await reopenSurvey(s.id);
+      load();
+    } catch (err: any) {
+      setCerrarError(err.response?.data?.message || 'No se pudo volver a abrir.');
     }
   };
 
@@ -344,6 +357,14 @@ export default function SurveyManagementPage() {
                                   onClick: () => handleClose(s),
                                 }]
                               : []),
+                            ...(s.status === 'CLOSED'
+                              ? [{
+                                  label: 'Volver a abrir',
+                                  icon: <Unlock size={14} />,
+                                  hint: 'Vuelve a aceptar respuestas. Las ya recibidas se quedan',
+                                  onClick: () => { setCerrarError(''); setConfirmandoReabrir(s); },
+                                }]
+                              : []),
                             ...((s._count?.responses ?? 0) === 0
                               ? [{
                                   label: 'Eliminar encuesta',
@@ -374,6 +395,16 @@ export default function SurveyManagementPage() {
           confirmLabel="Sí, cerrar"
           onConfirm={confirmarCerrar}
           onCancel={() => setConfirmandoCerrar(null)}
+        />
+      )}
+
+      {confirmandoReabrir && (
+        <ConfirmDialog
+          title="Volver a abrir"
+          message={`¿Volver a abrir la encuesta "${confirmandoReabrir.title}"? Aceptará respuestas otra vez. Las que ya llegaron se conservan, y quien ya respondió no puede hacerlo de nuevo.`}
+          confirmLabel="Sí, abrir"
+          onConfirm={confirmarReabrir}
+          onCancel={() => setConfirmandoReabrir(null)}
         />
       )}
 

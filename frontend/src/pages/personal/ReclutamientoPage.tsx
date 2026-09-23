@@ -35,6 +35,8 @@ import {
   reassignReclutamientoFile,
   saveCandidatoDatos,
   contratarCandidato,
+  obtenerRevisionArchivos,
+  type RevisionArchivos,
 } from '../../services/personal.service';
 import { usePerm } from '../../contexts/PermissionsContext';
 import DocumentReviewModal from '../../components/personal/DocumentReviewModal';
@@ -43,6 +45,9 @@ import DocumentReviewModal from '../../components/personal/DocumentReviewModal';
 // normal, ReclutamientoPage pasaba de 43 kB a 413 kB para todos los demás.
 const AnalisisArchivoUnicoModal = lazy(
   () => import('./reclutamiento/AnalisisArchivoUnicoModal'),
+);
+const RevisionArchivosModal = lazy(
+  () => import('./reclutamiento/RevisionArchivosModal'),
 );
 import { REVIEW_COLORS } from '../../components/personal/reviewStatus';
 import { cedulaVisible, validarDatosPostulacion, valorCampoPostulacion } from '../../utils/postulacionValidacion';
@@ -450,6 +455,8 @@ export default function ReclutamientoPage() {
   // carpeta); si trae un id, es el archivo concreto que se pidió analizar.
   const [showAnalisisModal, setShowAnalisisModal] = useState(false);
   const [analisisDriveFileId, setAnalisisDriveFileId] = useState<string | undefined>(undefined);
+  const [showRevisionModal, setShowRevisionModal] = useState(false);
+  const [revisionArchivos, setRevisionArchivos] = useState<RevisionArchivos | null>(null);
 
   const openAnalisisModal = (driveFileId?: string) => {
     setAnalisisDriveFileId(driveFileId);
@@ -708,12 +715,16 @@ export default function ReclutamientoPage() {
 
   const openCandidateModal = (c: Candidate) => {
     setSelectedCandidate(c);
+    setRevisionArchivos(null);
     setReviewError('');
     setLoadingReviews(true);
     getDocumentReviews(c.cedula)
       .then((reviews: any[]) => setCandidateReviews(reviews || []))
       .catch(() => setCandidateReviews([]))
       .finally(() => setLoadingReviews(false));
+    obtenerRevisionArchivos(c.id)
+      .then((rev) => setRevisionArchivos(rev.success ? rev : null))
+      .catch(() => setRevisionArchivos(null));
   };
 
   const closeCandidateModal = () => {
@@ -725,6 +736,8 @@ export default function ReclutamientoPage() {
     setContratarError('');
     setShowAnalisisModal(false);
     setAnalisisDriveFileId(undefined);
+    setShowRevisionModal(false);
+    setRevisionArchivos(null);
   };
 
   const sendReview = async (driveFileId: string, fileName: string | undefined, status: 'APROBADO' | 'RECHAZADO', reason?: string) => {
@@ -1337,9 +1350,27 @@ export default function ReclutamientoPage() {
 
                 {/* LISTA DE ARCHIVOS SOLICITADOS: SUBIDO + VALIDADO POR RRHH */}
                 <div>
-                  <h4 style={{ margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 700, color: 'var(--azul-oscuro)' }}>
+                  <h4 style={{ margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 700, color: 'var(--azul-oscuro)', flexWrap: 'wrap' }}>
                     <FolderOpen size={15} /> Archivos Requeridos para el Puesto ({selectedCandidate.archivosRequeridosCount})
                     {loadingReviews && <span style={{ fontWeight: 400, fontSize: '0.75rem', color: '#a0aec0' }}>cargando validaciones...</span>}
+                    {canWrite('RRHH') && (
+                      ((selectedCandidate.slots || []).some((s) => s.driveFileId) ||
+                        selectedCandidate.archivosAdicionales.length > 0) && (
+                        <button
+                          type="button"
+                          onClick={() => setShowRevisionModal(true)}
+                          title="Revisa si cada archivo subido es el documento que se pidió, y dice qué es cada adicional"
+                          style={{
+                            marginLeft: 'auto',
+                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                            padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600,
+                            border: '1px solid #d6bcfa', background: '#faf5ff', color: '#6b46c1', cursor: 'pointer',
+                          }}
+                        >
+                          <Sparkles size={12} /> Revisar con IA
+                        </button>
+                      )
+                    )}
                   </h4>
 
                   {reviewError && (
@@ -1363,6 +1394,9 @@ export default function ReclutamientoPage() {
                               (f) => !f.name.toLowerCase().endsWith('.json') && f.name.toLowerCase().includes(req.nombre.toLowerCase()),
                             );
                         const review = file ? candidateReviews.find((r) => r.driveFileId === file.id) : null;
+                        const revisionReq = file
+                          ? revisionArchivos?.requeridos?.find((r) => r.driveFileId === file.id && r.requisito === req.nombre)
+                          : undefined;
                         const reviewColor = REVIEW_COLORS[review?.status || 'PENDIENTE'];
                         const busy = !!file && pendingReviewKey === file.id;
                         const fileExt = file ? file.name.split('.').pop()?.toLowerCase() : undefined;
@@ -1427,6 +1461,12 @@ export default function ReclutamientoPage() {
                             {review?.status === 'RECHAZADO' && review.reason && (
                               <div style={{ fontSize: '0.78rem', color: '#c53030', marginTop: '6px' }}>Motivo: {review.reason}</div>
                             )}
+                            {revisionReq?.confianza && (
+                              <div style={{ fontSize: '0.75rem', marginTop: '6px', color: '#553c9a' }}>
+                                IA: {revisionReq.confianza}{revisionReq.probabilidad != null ? ` ${revisionReq.probabilidad}%` : ''}
+                                {revisionReq.notas ? ` — ${revisionReq.notas}` : ''}
+                              </div>
+                            )}
                             {file && canWrite('RRHH') && (
                               <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
                                 <button
@@ -1468,6 +1508,7 @@ export default function ReclutamientoPage() {
                               ),
                           );
                           const esPdf = file.name.toLowerCase().endsWith('.pdf');
+                          const descripcionIa = revisionArchivos?.adicionales?.find((a) => a.driveFileId === file.id)?.descripcion;
                           return (
                             <div key={file.id} style={{ padding: '10px 12px', background: '#fffbeb', borderRadius: '8px', border: '1px solid #fefcbf' }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
@@ -1497,6 +1538,9 @@ export default function ReclutamientoPage() {
                                   </button>
                                 )}
                               </div>
+                              {descripcionIa && (
+                                <div style={{ fontSize: '0.78rem', color: '#553c9a', marginTop: '6px' }}>{descripcionIa}</div>
+                              )}
                               {canWrite('RRHH') && (
                                 <ReassignAdicionalControl file={file} faltantes={faltantes} onDone={refreshCandidatos} />
                               )}
@@ -1568,6 +1612,24 @@ export default function ReclutamientoPage() {
         />
       )}
 
+      {showRevisionModal && selectedCandidate && (
+        <Suspense fallback={null}>
+          <RevisionArchivosModal
+            folderId={selectedCandidate.id}
+            nombreCandidato={selectedCandidate.nombre}
+            requeridos={(selectedCandidate.slots || [])
+              .filter((s) => s.driveFileId)
+              .map((s) => ({
+                requisito: s.nombre,
+                driveFileId: s.driveFileId as string,
+                fileName: selectedCandidate.archivosSubidosList.find((f) => f.id === s.driveFileId)?.name || '',
+              }))}
+            adicionales={selectedCandidate.archivosAdicionales.map((f) => ({ driveFileId: f.id, fileName: f.name }))}
+            onClose={() => setShowRevisionModal(false)}
+            onResult={setRevisionArchivos}
+          />
+        </Suspense>
+      )}
       {showAnalisisModal && selectedCandidate && (
         <Suspense fallback={null}>
           <AnalisisArchivoUnicoModal
