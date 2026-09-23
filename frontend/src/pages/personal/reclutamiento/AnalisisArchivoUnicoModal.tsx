@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Sparkles, X, AlertTriangle, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Sparkles, X, AlertTriangle, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import {
@@ -38,7 +38,172 @@ interface PaginaState {
   miniatura: string | null;
   requisito: string;
   confianza: 'alta' | 'media' | 'baja' | null;
+  probabilidad: number | null;
   notas: string | null;
+}
+
+const ESCALA_MIN = 1;
+const ESCALA_MAX = 4;
+
+function VisorPagina({
+  src,
+  alt,
+  onClose,
+}: {
+  src: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [arrastrando, setArrastrando] = useState(false);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const scaleRef = useRef(1);
+  const offsetRef = useRef(offset);
+  const dragRef = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null);
+  scaleRef.current = scale;
+  offsetRef.current = offset;
+
+  const aplicarZoom = useCallback((siguiente: number, clientX?: number, clientY?: number) => {
+    const previa = scaleRef.current;
+    const clamped = Math.min(ESCALA_MAX, Math.max(ESCALA_MIN, siguiente));
+    if (clamped === ESCALA_MIN) {
+      setScale(1);
+      setOffset({ x: 0, y: 0 });
+      return;
+    }
+    const vp = viewportRef.current;
+    let ox = offsetRef.current.x;
+    let oy = offsetRef.current.y;
+    if (vp && clientX != null && clientY != null && previa > 0) {
+      const rect = vp.getBoundingClientRect();
+      const cx = clientX - rect.left - rect.width / 2;
+      const cy = clientY - rect.top - rect.height / 2;
+      const ratio = clamped / previa;
+      ox = cx - (cx - ox) * ratio;
+      oy = cy - (cy - oy) * ratio;
+    }
+    setScale(clamped);
+    setOffset({ x: ox, y: oy });
+  }, []);
+
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      aplicarZoom(scaleRef.current * factor, e.clientX, e.clientY);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === '+' || e.key === '=') aplicarZoom(scaleRef.current * 1.25);
+      if (e.key === '-' || e.key === '_') aplicarZoom(scaleRef.current / 1.25);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [aplicarZoom, onClose]);
+
+  const acercado = scale > 1;
+
+  return (
+    <div
+      className="modal-overlay"
+      style={{ background: 'rgba(0,0,0,0.8)', zIndex: 60, display: 'flex', flexDirection: 'column', padding: '16px' }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          gap: '8px',
+          marginBottom: '10px',
+        }}
+      >
+        <button type="button" className="btn-secondary" style={{ padding: '6px 10px' }} onClick={() => aplicarZoom(scale / 1.25)} aria-label="Alejar">
+          <ZoomOut size={16} />
+        </button>
+        <button
+          type="button"
+          className="btn-secondary"
+          style={{ padding: '6px 12px', minWidth: '72px' }}
+          onClick={() => aplicarZoom(1)}
+          aria-label="Tamaño original"
+        >
+          {Math.round(scale * 100)}%
+        </button>
+        <button type="button" className="btn-secondary" style={{ padding: '6px 10px' }} onClick={() => aplicarZoom(scale * 1.25)} aria-label="Acercar">
+          <ZoomIn size={16} />
+        </button>
+        <button type="button" className="modal-close" onClick={onClose} aria-label="Cerrar vista previa" style={{ marginLeft: '8px' }}>
+          <X size={16} />
+        </button>
+      </div>
+      <div
+        ref={viewportRef}
+        onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          aplicarZoom(acercado ? 1 : 2, e.clientX, e.clientY);
+        }}
+        onPointerDown={(e) => {
+          if (scaleRef.current <= 1) return;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          dragRef.current = { px: e.clientX, py: e.clientY, ox: offset.x, oy: offset.y };
+          setArrastrando(true);
+        }}
+        onPointerMove={(e) => {
+          const drag = dragRef.current;
+          if (!drag) return;
+          setOffset({
+            x: drag.ox + (e.clientX - drag.px),
+            y: drag.oy + (e.clientY - drag.py),
+          });
+        }}
+        onPointerUp={() => {
+          dragRef.current = null;
+          setArrastrando(false);
+        }}
+        onPointerCancel={() => {
+          dragRef.current = null;
+          setArrastrando(false);
+        }}
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: acercado ? (arrastrando ? 'grabbing' : 'grab') : 'zoom-in',
+          touchAction: 'none',
+        }}
+      >
+        <img
+          src={src}
+          alt={alt}
+          draggable={false}
+          style={{
+            maxWidth: '92vw',
+            maxHeight: '80vh',
+            objectFit: 'contain',
+            transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+            transformOrigin: 'center center',
+            userSelect: 'none',
+            pointerEvents: 'none',
+          }}
+        />
+      </div>
+    </div>
+  );
 }
 
 interface Props {
@@ -57,11 +222,16 @@ function construirPaginas(
   totalPaginas: number,
   documentos?: AnalisisArchivoUnico['documentos'],
 ): PaginaState[] {
-  const porPagina = new Map<number, { requisito: string; confianza: any; notas: string | null }>();
+  const porPagina = new Map<number, { requisito: string; confianza: any; probabilidad: number | null; notas: string | null }>();
   for (const d of documentos || []) {
     if (d.paginaInicio === null || d.paginaFin === null) continue;
     for (let p = d.paginaInicio; p <= d.paginaFin; p++) {
-      porPagina.set(p, { requisito: d.requisito, confianza: d.confianza, notas: d.notas });
+      porPagina.set(p, {
+        requisito: d.requisito,
+        confianza: d.confianza,
+        probabilidad: d.probabilidad ?? null,
+        notas: d.notas,
+      });
     }
   }
   return Array.from({ length: totalPaginas }, (_, i) => {
@@ -72,6 +242,7 @@ function construirPaginas(
       miniatura: null,
       requisito: asignada?.requisito ?? SIN_ASIGNAR,
       confianza: asignada?.confianza ?? null,
+      probabilidad: asignada?.probabilidad ?? null,
       notas: asignada?.notas ?? null,
     };
   });
@@ -223,7 +394,7 @@ export default function AnalisisArchivoUnicoModal({
     setPaginas((prev) =>
       prev.map((p) =>
         p.numero === numero
-          ? { ...p, requisito, confianza: null, notas: null }
+          ? { ...p, requisito, confianza: null, probabilidad: null, notas: null }
           : p,
       ),
     );
@@ -410,6 +581,7 @@ export default function AnalisisArchivoUnicoModal({
                           }}
                         >
                           {p.confianza}
+                          {p.probabilidad != null ? ` ${p.probabilidad}%` : ''}
                         </span>
                       )}
                     </div>
@@ -466,23 +638,12 @@ export default function AnalisisArchivoUnicoModal({
         </div>
       </div>
 
-      {/* Ampliación: una foto de cédula en miniatura no siempre se puede juzgar.
-          Sin librería de lightbox, es la misma imagen a tamaño completo. */}
       {ampliada !== null && (
-        <div
-          className="modal-overlay"
-          style={{ background: 'rgba(0,0,0,0.8)', zIndex: 60 }}
-          onClick={(e) => {
-            e.stopPropagation();
-            setAmpliada(null);
-          }}
-        >
-          <img
-            src={paginas.find((p) => p.numero === ampliada)?.miniatura || ''}
-            alt={`Página ${ampliada} ampliada`}
-            style={{ maxWidth: '92vw', maxHeight: '92vh', objectFit: 'contain', cursor: 'zoom-out' }}
-          />
-        </div>
+        <VisorPagina
+          src={paginas.find((p) => p.numero === ampliada)?.miniatura || ''}
+          alt={`Página ${ampliada} ampliada`}
+          onClose={() => setAmpliada(null)}
+        />
       )}
 
       {confirmandoReintentar && (

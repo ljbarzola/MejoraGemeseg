@@ -845,7 +845,7 @@ describe('DriveService.syncEntidadesFolder', () => {
     );
   });
 
-  it('no crea un guardia con cédula sintética "ID-..." cuando una carpeta nueva no se puede leer como "Nombre - Cédula"', async () => {
+  it('registra "Apellidos Nombres" en cualquier combinación de mayúsculas aunque todavía no haya cédula', async () => {
     (service as any).listSubFolders = jest
       .fn()
       .mockImplementation((parentId: string) => {
@@ -855,16 +855,212 @@ describe('DriveService.syncEntidadesFolder', () => {
           return Promise.resolve([{ id: 'ent-1', name: 'Banco Pichincha' }]);
         if (parentId === 'ent-1')
           return Promise.resolve([
-            { id: 'g-1', name: 'nombre sin formato valido' },
+            { id: 'g-1', name: 'ORDOÑEZ CHILAN ELIAN DALEMBERG' },
+            { id: 'g-2', name: 'hidalgo zambrano either smith' },
           ]);
         return Promise.resolve([]);
       });
 
     const result = await service.syncEntidadesFolder(1, 1);
 
-    expect(result.guardiasNoReconocidos).toEqual(['nombre sin formato valido']);
+    expect(result.guardiasNoReconocidos).toEqual([]);
+    expect(prisma.employeeDriveFolder.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { companyId_cedula: { companyId: 1, cedula: 'ID-g-1' } },
+        create: expect.objectContaining({
+          employeeName: 'ORDOÑEZ CHILAN ELIAN DALEMBERG',
+        }),
+      }),
+    );
+    expect(prisma.employeeDriveFolder.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { companyId_cedula: { companyId: 1, cedula: 'ID-g-2' } },
+      }),
+    );
+  });
+
+  it('no crea un guardia cuando el nombre tiene guion y no hay cédula', async () => {
+    (service as any).listSubFolders = jest
+      .fn()
+      .mockImplementation((parentId: string) => {
+        if (parentId === 'root-1')
+          return Promise.resolve([{ id: 'pub-1', name: 'Público' }]);
+        if (parentId === 'pub-1')
+          return Promise.resolve([{ id: 'ent-1', name: 'Banco Pichincha' }]);
+        if (parentId === 'ent-1')
+          return Promise.resolve([
+            { id: 'g-1', name: 'nombre - sin formato' },
+          ]);
+        return Promise.resolve([]);
+      });
+
+    const result = await service.syncEntidadesFolder(1, 1);
+
+    expect(result.guardiasNoReconocidos).toEqual(['nombre - sin formato']);
     expect(prisma.employeeDriveFolder.upsert).not.toHaveBeenCalled();
     expect(result.asignacionesAbiertas).toBe(0);
+  });
+
+  it('no vuelve a crear un guardia cuya carpeta está marcada para no mostrarse', async () => {
+    (service as any).listSubFolders = jest
+      .fn()
+      .mockImplementation((parentId: string) => {
+        if (parentId === 'root-1')
+          return Promise.resolve([{ id: 'pub-1', name: 'Público' }]);
+        if (parentId === 'pub-1')
+          return Promise.resolve([{ id: 'ent-1', name: 'Banco Pichincha' }]);
+        if (parentId === 'ent-1')
+          return Promise.resolve([
+            { id: 'g-1', name: 'ORDOÑEZ CHILAN ELIAN DALEMBERG' },
+          ]);
+        return Promise.resolve([]);
+      });
+    (service as any).listFilesInFolder = jest.fn().mockResolvedValue([
+      { id: 'mark-1', name: 'no-mostrar-en-lista.txt', mimeType: 'text/plain' },
+    ]);
+
+    const result = await service.syncEntidadesFolder(1, 1);
+
+    expect(result.guardiasNoReconocidos).toEqual([]);
+    expect(prisma.employeeDriveFolder.upsert).not.toHaveBeenCalled();
+  });
+
+  it('quita de la lista a un guardia fuera y manda la carpeta a la papelera de su dueño', async () => {
+    movimientoPersonalService.isActivo.mockResolvedValue(false);
+    (prisma.employeeDriveFolder as any).findUnique = jest
+      .fn()
+      .mockResolvedValue({ folderId: 'g-1', cedula: '0912345678' });
+    (prisma.employeeDriveFolder as any).deleteMany = jest
+      .fn()
+      .mockResolvedValue({ count: 1 });
+    (prisma.employeeDocument as any).deleteMany = jest
+      .fn()
+      .mockResolvedValue({ count: 0 });
+    const filesGet = jest.fn().mockResolvedValue({
+      data: {
+        trashed: false,
+        driveId: null,
+        owners: [{ emailAddress: 'rrhh@gemeseg.com' }],
+        parents: ['ent-1'],
+      },
+    });
+    (service as any).getDriveClient = jest.fn().mockReturnValue({
+      files: { get: filesGet, update: driveFilesUpdate, create: driveFilesCreate },
+    });
+    const updateComoDueno = jest.fn().mockResolvedValue({});
+    (service as any).getDriveClientComoDueno = jest.fn().mockReturnValue({
+      files: { update: updateComoDueno },
+    });
+
+    await service.quitarGuardiaFueraDeLista('0912345678', 1);
+
+    expect((service as any).getDriveClientComoDueno).toHaveBeenCalledWith(
+      'rrhh@gemeseg.com',
+    );
+    expect(updateComoDueno).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fileId: 'g-1',
+        requestBody: { trashed: true },
+      }),
+    );
+    expect(driveFilesCreate).not.toHaveBeenCalled();
+    expect((prisma.employeeDriveFolder as any).deleteMany).toHaveBeenCalledWith({
+      where: { companyId: 1, cedula: '0912345678' },
+    });
+  });
+
+  it('si la carpeta la creó la cuenta de servicio, se la pasa al dueño de la carpeta padre y va a su papelera', async () => {
+    movimientoPersonalService.isActivo.mockResolvedValue(false);
+    (prisma.employeeDriveFolder as any).findUnique = jest
+      .fn()
+      .mockResolvedValue({ folderId: 'g-1', cedula: '0912345678' });
+    (prisma.employeeDriveFolder as any).deleteMany = jest
+      .fn()
+      .mockResolvedValue({ count: 1 });
+    (prisma.employeeDocument as any).deleteMany = jest
+      .fn()
+      .mockResolvedValue({ count: 0 });
+    const filesGet = jest.fn().mockImplementation(({ fileId }: { fileId: string }) => {
+      if (fileId === 'g-1') {
+        return Promise.resolve({
+          data: {
+            trashed: false,
+            owners: [{ emailAddress: 'drive-sync@agentes-504115.iam.gserviceaccount.com' }],
+            parents: ['ent-1'],
+          },
+        });
+      }
+      return Promise.resolve({
+        data: {
+          owners: [{ emailAddress: 'rrhh@gemeseg.com' }],
+          parents: ['root-1'],
+        },
+      });
+    });
+    const permissionsCreate = jest.fn().mockResolvedValue({});
+    (service as any).getDriveClient = jest.fn().mockReturnValue({
+      files: { get: filesGet },
+      permissions: { create: permissionsCreate },
+    });
+    const updateComoDueno = jest.fn().mockResolvedValue({});
+    (service as any).getDriveClientComoDueno = jest.fn().mockReturnValue({
+      files: { update: updateComoDueno },
+    });
+
+    await service.quitarGuardiaFueraDeLista('0912345678', 1);
+
+    expect(permissionsCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fileId: 'g-1',
+        transferOwnership: true,
+        requestBody: expect.objectContaining({
+          role: 'owner',
+          emailAddress: 'rrhh@gemeseg.com',
+        }),
+      }),
+    );
+    expect(updateComoDueno).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fileId: 'g-1',
+        requestBody: { trashed: true },
+      }),
+    );
+  });
+
+  it('no quita de la lista si Drive no manda la carpeta a la papelera', async () => {
+    movimientoPersonalService.isActivo.mockResolvedValue(false);
+    (prisma.employeeDriveFolder as any).findUnique = jest
+      .fn()
+      .mockResolvedValue({ folderId: 'g-1', cedula: '0912345678' });
+    (prisma.employeeDriveFolder as any).deleteMany = jest.fn();
+    (service as any).getDriveClient = jest.fn().mockReturnValue({
+      files: {
+        get: jest.fn().mockResolvedValue({
+          data: {
+            trashed: false,
+            owners: [{ emailAddress: 'rrhh@gemeseg.com' }],
+            parents: [],
+          },
+        }),
+      },
+    });
+    (service as any).getDriveClientComoDueno = jest.fn().mockReturnValue({
+      files: {
+        update: jest.fn().mockRejectedValue(new Error('unauthorized_client')),
+      },
+    });
+
+    await expect(
+      service.quitarGuardiaFueraDeLista('0912345678', 1),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect((prisma.employeeDriveFolder as any).deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('no quita de la lista a un guardia que sigue activo', async () => {
+    movimientoPersonalService.isActivo.mockResolvedValue(true);
+    await expect(
+      service.quitarGuardiaFueraDeLista('0912345678', 1),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('acepta "Apellidos - Nombres" leyendo la cédula de candidato.json, sin exigirla en el nombre', async () => {

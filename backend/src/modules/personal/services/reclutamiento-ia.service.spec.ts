@@ -250,6 +250,78 @@ describe('ReclutamientoIaService', () => {
       expect(medico!.paginaInicio).toBeNull();
     });
 
+    it('no preselecciona un documento con probabilidad baja aunque el modelo diga alta', async () => {
+      mockVertex({
+        documentos: [
+          {
+            requisito: 'Cédula',
+            paginaInicio: 1,
+            paginaFin: 1,
+            probabilidad: 30,
+            confianza: 'alta',
+            evidencia: null,
+            notas: null,
+          },
+        ],
+      });
+
+      const res = await service.analizar('cand-1', 1);
+      const cedula = res.documentos!.find((d) => d.requisito === 'Cédula');
+      expect(cedula).toEqual(
+        expect.objectContaining({
+          paginaInicio: null,
+          paginaFin: null,
+          confianza: 'baja',
+          probabilidad: 30,
+        }),
+      );
+    });
+
+    it('alta exige probabilidad de 85 o más y una frase visible; si no, queda en media', async () => {
+      mockVertex({
+        documentos: [
+          {
+            requisito: 'Cédula',
+            paginaInicio: 1,
+            paginaFin: 1,
+            probabilidad: 96,
+            confianza: 'baja',
+            evidencia: 'CÉDULA DE CIUDADANÍA',
+            notas: null,
+          },
+          {
+            requisito: 'Papeleta de votación',
+            paginaInicio: 2,
+            paginaFin: 2,
+            probabilidad: 92,
+            confianza: 'alta',
+            evidencia: null,
+            notas: null,
+          },
+          {
+            requisito: 'Certificado médico',
+            paginaInicio: 3,
+            paginaFin: 3,
+            probabilidad: 70,
+            confianza: 'alta',
+            evidencia: 'parece un certificado',
+            notas: null,
+          },
+        ],
+      });
+
+      const res = await service.analizar('cand-1', 1);
+      expect(res.documentos!.find((d) => d.requisito === 'Cédula')).toEqual(
+        expect.objectContaining({ confianza: 'alta', probabilidad: 96, paginaInicio: 1 }),
+      );
+      expect(res.documentos!.find((d) => d.requisito === 'Papeleta de votación')).toEqual(
+        expect.objectContaining({ confianza: 'media', probabilidad: 92 }),
+      );
+      expect(res.documentos!.find((d) => d.requisito === 'Certificado médico')).toEqual(
+        expect.objectContaining({ confianza: 'media', probabilidad: 70 }),
+      );
+    });
+
     it('informa el fallo sin romper cuando Vertex responde con error', async () => {
       mockVertex('quota exceeded', false, 429);
 

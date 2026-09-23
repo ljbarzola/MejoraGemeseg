@@ -9,6 +9,7 @@ import {
   UploadedFile,
   BadRequestException,
   Logger,
+  Query,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -17,6 +18,8 @@ import { SistemasDriveService } from './services/sistemas-drive.service';
 import { SistemasService } from './sistemas.service';
 import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
 import { Section } from '../../common/decorators/section.decorator';
+import { PermissionsService } from '../permissions/permissions.service';
+import { SaveSistemasDriveConfigDto } from './dto/drive-config.dto';
 
 @Controller('sistemas')
 @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
@@ -26,21 +29,52 @@ export class SistemasConfigController {
   constructor(
     private readonly driveService: SistemasDriveService,
     private readonly sistemasService: SistemasService,
+    private readonly permissions: PermissionsService,
   ) {}
 
   @Get('drive-config')
   @Section('SISTEMAS', 'view')
-  getDriveConfig(@Req() req: any) {
-    return this.driveService.getDriveConfig(req.user.companyId);
+  getDriveConfig(@Req() req: any, @Query('companyId') companyId?: string) {
+    return this.driveService.getDriveConfig(
+      this.resolveCompanyId(req.user, companyId),
+    );
   }
 
   @Post('drive-config')
   @Section('SISTEMAS', 'write')
-  saveDriveConfig(@Body() body: { driveFolderId: string }, @Req() req: any) {
-    if (!body.driveFolderId?.trim()) {
-      throw new BadRequestException('El ID de la carpeta de Drive es requerido.');
+  saveDriveConfig(@Body() body: SaveSistemasDriveConfigDto, @Req() req: any) {
+    return this.driveService.saveDriveConfig(
+      this.resolveCompanyId(req.user, body.companyId),
+      body.driveFolderId.trim(),
+    );
+  }
+
+  /**
+   * La carpeta es de una empresa. El admin de esa empresa usa la suya.
+   * El super admin no tiene companyId: si se lo pasamos en null, Prisma
+   * revienta el upsert y el filtro global lo muestra como
+   * "Error interno del servidor".
+   */
+  private resolveCompanyId(
+    user: { role: string; companyId: number | null },
+    requested?: number | string,
+  ): number {
+    const parsed =
+      requested === undefined || requested === null || requested === ''
+        ? undefined
+        : Number(requested);
+    if (this.permissions.isSuperAdmin(user)) {
+      if (!parsed || Number.isNaN(parsed)) {
+        throw new BadRequestException(
+          'Elige la empresa a la que pertenece esta carpeta de capturas.',
+        );
+      }
+      return parsed;
     }
-    return this.driveService.saveDriveConfig(req.user.companyId, body.driveFolderId.trim());
+    if (!user.companyId) {
+      throw new BadRequestException('Tu usuario no tiene empresa asociada.');
+    }
+    return user.companyId;
   }
 
   @Post('drive-config/test')

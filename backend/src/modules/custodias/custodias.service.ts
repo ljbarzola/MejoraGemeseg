@@ -137,12 +137,14 @@ export class CustodiasService {
     // 2026-09-17 por no ser un flujo real) siempre era 'Inscrito' en la
     // práctica — se preserva ese mismo valor fijo para no alterar lo que ya
     // se veía acá.
-    const list = driveCustodios.map((c) => ({
-      name: c.employeeName,
-      cedula: c.cedula,
-      status: 'Inscrito',
-      lastSyncAt: c.lastSyncAt,
-    }));
+    const list = driveCustodios
+      .filter((c) => /^\d{10}$/.test(c.cedula))
+      .map((c) => ({
+        name: c.employeeName,
+        cedula: c.cedula,
+        status: 'Inscrito',
+        lastSyncAt: c.lastSyncAt,
+      }));
 
     return list.sort((a, b) => a.name.localeCompare(b.name));
   }

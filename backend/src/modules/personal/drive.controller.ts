@@ -433,6 +433,18 @@ export class DriveController {
     return this.driveService.deleteEmployeeByCedula(cedula, req.user.companyId);
   }
 
+  // Quita de la lista a un guardia que ya está fuera. La carpeta de Drive
+  // se queda; un archivo marcador evita que el sync lo vuelva a crear.
+  @Delete('drive/guardia/:cedula/lista')
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('RRHH', 'write')
+  quitarGuardiaFueraDeLista(@Param('cedula') cedula: string, @Req() req: any) {
+    return this.driveService.quitarGuardiaFueraDeLista(
+      cedula,
+      req.user.companyId,
+    );
+  }
+
   // Mueve la carpeta de un guardia a la carpeta de archivo (FolderConfig
   // type='GUARDIAS_ARCHIVO') una vez que su salida está completada. No borra
   // documentos — RRHH-write basta, no requiere ser ADMIN.

@@ -17,10 +17,16 @@ export const CANDIDATO_JSON_FILENAME = 'candidato.json';
 export const ANALISIS_IA_FILENAME = 'analisis-ia.json';
 export const ANALISIS_IA_PENDIENTE_FILENAME = 'analisis-ia-pendiente.json';
 
+// Lo escribe "quitar de la lista" en la carpeta de un guardia que ya está
+// fuera. El sync lo ve y no vuelve a crear el registro. No es un documento
+// de la persona.
+export const NO_MOSTRAR_EN_LISTA_FILENAME = 'no-mostrar-en-lista.txt';
+
 export const NON_DOCUMENT_FILENAMES: readonly string[] = [
   FICHA_PERSONAL_FILENAME,
   FICHA_PERSONAL_FILENAME_LEGACY,
   CANDIDATO_JSON_FILENAME,
   ANALISIS_IA_FILENAME,
   ANALISIS_IA_PENDIENTE_FILENAME,
+  NO_MOSTRAR_EN_LISTA_FILENAME,
 ];

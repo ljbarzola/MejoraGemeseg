@@ -23,7 +23,7 @@ import {
 } from '../../services/entidades.service';
 import GuardiasExportModal from '../../components/personal/GuardiasExportModal';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
-import { getDriveConfig, saveDriveConfig, testDriveConnection } from '../../services/personal.service';
+import { getDriveConfig, saveDriveConfig, testDriveConnection, quitarGuardiaFueraDeLista } from '../../services/personal.service';
 import { registrarSalida, getCedulasFuera } from '../../services/movimiento-personal.service';
 import GuardiaFichaModal from '../../components/personal/GuardiaFichaModal';
 import MovimientoDetalleModal from '../../components/personal/MovimientoDetalleModal';
@@ -42,6 +42,10 @@ interface GuardiaRow {
   asignacion: AsignacionGuardia | null;
   entidad: Entidad | null;
   fuera: boolean;
+}
+
+function cedulaVisible(cedula: string): string {
+  return /^\d{10}$/.test(cedula) ? cedula : '';
 }
 
 const TIPO_LABEL: Record<EntidadTipo, string> = { PUBLICA: 'Pública', PRIVADA: 'Privada' };
@@ -100,7 +104,10 @@ export default function GuardiasList() {
   const [fichaGuardia, setFichaGuardia] = useState<{ name: string; cedula: string } | null>(null);
   const [salidaEnCurso, setSalidaEnCurso] = useState<string | null>(null);
   const [confirmandoSalida, setConfirmandoSalida] = useState<GuardiaRow | null>(null);
+  const [confirmandoQuitar, setConfirmandoQuitar] = useState<GuardiaRow | null>(null);
+  const [quitando, setQuitando] = useState(false);
   const [salidaError, setSalidaError] = useState('');
+  const [quitarError, setQuitarError] = useState('');
   const salidaErrorRef = useRef<HTMLDivElement>(null);
 
   // La fila que dispara "Registrar salida" puede estar muy abajo en una
@@ -178,6 +185,22 @@ export default function GuardiasList() {
   const handleRegistrarSalida = (r: GuardiaRow) => {
     setSalidaError('');
     setConfirmandoSalida(r);
+  };
+
+  const confirmarQuitarDeLista = async () => {
+    const r = confirmandoQuitar;
+    if (!r) return;
+    setConfirmandoQuitar(null);
+    setQuitando(true);
+    setQuitarError('');
+    try {
+      await quitarGuardiaFueraDeLista(r.cedula);
+      load();
+    } catch (err: any) {
+      setQuitarError(err.response?.data?.message || 'No se pudo quitar de la lista.');
+    } finally {
+      setQuitando(false);
+    }
   };
 
   const confirmarRegistrarSalida = async () => {
@@ -400,7 +423,7 @@ export default function GuardiasList() {
         const ficha = fichaPorCedula.get(r.cedula);
         const row: Record<string, string | number | null> = {
           name: r.name,
-          cedula: r.cedula || '',
+          cedula: cedulaVisible(r.cedula),
           entidad: r.entidad?.nombre || '',
           tipo: r.entidad ? TIPO_LABEL[r.entidad.tipo] : '',
           estado: r.fuera ? 'Fuera' : 'Activo',
@@ -481,6 +504,9 @@ export default function GuardiasList() {
       {salidaError && (
         <div ref={salidaErrorRef} style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{salidaError}</div>
       )}
+      {quitarError && (
+        <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{quitarError}</div>
+      )}
 
       {syncResult && (
         <div style={{ background: '#f0fff4', border: '1px solid #9ae6b4', color: '#276749', borderRadius: '8px', padding: '12px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>
@@ -511,7 +537,7 @@ export default function GuardiasList() {
           )}
           {syncResult.guardiasNoReconocidos.length > 0 && (
             <p style={{ margin: '8px 0 0', color: '#975a16' }}>
-              ⚠ Carpetas de guardia no reconocidas (deben llamarse "Apellidos Nombres", con la cédula en el formulario de postulación), no se generó ningún registro para estas carpetas: {syncResult.guardiasNoReconocidos.join(', ')}
+              ⚠ Carpetas de guardia no reconocidas (el nombre no es "Apellidos Nombres": tiene guion o está vacío). Mayúsculas y minúsculas valen igual. No se generó ningún registro para: {syncResult.guardiasNoReconocidos.join(', ')}
             </p>
           )}
           {/* Formato viejo: la carpeta SÍ se sincronizó, esto solo marca cuáles
@@ -673,6 +699,17 @@ export default function GuardiasList() {
                             style={{ padding: '6px 8px', display: 'flex', alignItems: 'center', color: '#c53030' }}
                           >
                             <LogOut size={15} />
+                          </button>
+                        )}
+                        {canEdit && r.fuera && (
+                          <button
+                            onClick={() => { setQuitarError(''); setConfirmandoQuitar(r); }}
+                            disabled={quitando}
+                            title="Quitar de la lista"
+                            className="btn-secondary"
+                            style={{ padding: '6px 8px', display: 'flex', alignItems: 'center', color: '#c53030' }}
+                          >
+                            <X size={15} />
                           </button>
                         )}
                       </div>
@@ -896,6 +933,16 @@ export default function GuardiasList() {
           danger
           onConfirm={confirmarRegistrarSalida}
           onCancel={() => setConfirmandoSalida(null)}
+        />
+      )}
+      {confirmandoQuitar && (
+        <ConfirmDialog
+          title="Quitar de la lista"
+          message={`¿Quitar a ${confirmandoQuitar.name} de la lista? Su carpeta se manda a la papelera de Drive de quien es dueño, y no vuelve a aparecer al sincronizar. Desde esa papelera se puede restaurar.`}
+          confirmLabel="Sí, quitar y enviar a la papelera"
+          danger
+          onConfirm={confirmarQuitarDeLista}
+          onCancel={() => setConfirmandoQuitar(null)}
         />
       )}
     </div>
