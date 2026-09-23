@@ -23,8 +23,18 @@ import { validarFormatoEntidad } from '../utils/entidad-folder-format.util';
 import {
   buscarDatoFormulario,
   resolverCamposConPostulacion,
+  valorCampoPostulacion,
   POSTULACION_STASH_KEY,
 } from '../utils/form-data.util';
+import {
+  mismaPersona,
+  validarDatosPostulacion,
+  type CampoPostulacion,
+} from '../utils/postulacion-validacion.util';
+import {
+  resumirExpediente,
+  type SlotExpediente,
+} from '../utils/expediente-completitud.util';
 import { extractDriveFolderId } from '../../../common/utils/drive-link.util';
 import {
   driveFolderPublicUrl,
@@ -1221,6 +1231,33 @@ export class DriveService {
       }
     }
     return best;
+  }
+
+  // El portal deja en candidato.json la lista `archivos` con el nombre real
+  // que subió ("Cédula - cedula.pdf"). Si el rótulo de la vacante no calza
+  // solo con el nombre de Drive, se usa esa lista para encontrarlo.
+  private resolverArchivoDeRequisito(
+    reqNombre: string,
+    driveFiles: any[],
+    jsonArchivos: { nombre?: string }[],
+  ): { file: any | null; nombreEnJson: string | null } {
+    const directo = this.findMatchingFile(driveFiles, reqNombre);
+    const declarado = (jsonArchivos || []).find(
+      (a) => a?.nombre && this.scoreMatch(a.nombre, reqNombre) > 0,
+    );
+    if (directo) {
+      return { file: directo, nombreEnJson: declarado?.nombre || directo.name || null };
+    }
+    if (!declarado?.nombre) return { file: null, nombreEnJson: null };
+    const esperado = this.removeAccents(this.normalizeStr(declarado.nombre));
+    const porNombre =
+      driveFiles.find(
+        (f) => this.removeAccents(this.normalizeStr(f.name || '')) === esperado,
+      ) ||
+      driveFiles.find((f) =>
+        this.removeAccents(this.normalizeStr(f.name || '')).includes(esperado),
+      );
+    return { file: porNombre || null, nombreEnJson: declarado.nombre };
   }
 
   /**
@@ -2560,43 +2597,62 @@ export class DriveService {
             extensiones: string[];
             obligatorio?: boolean;
           }[] = matchedPosition?.archivosRequeridos || [];
+          const camposRequeridos = Array.isArray(matchedPosition?.camposRequeridos)
+            ? matchedPosition.camposRequeridos
+            : [];
+          // El JSON del portal no siempre usa el mismo rótulo que la vacante
+          // ("Celular" en la vacante, "Teléfono" en el archivo). Se copia el
+          // valor al nombre que el expediente va a buscar.
+          for (const campo of camposRequeridos) {
+            const nombre = campo && typeof campo === 'object' ? campo.nombre : '';
+            if (typeof nombre !== 'string' || !nombre.trim()) continue;
+            if (String(datosFormulario[nombre] ?? '').trim()) continue;
+            const valor = valorCampoPostulacion(datosFormulario, nombre);
+            if (valor) datosFormulario[nombre] = valor;
+          }
+          const archivosDeclarados: { nombre?: string }[] = Array.isArray(
+            candidatoJsonData?.archivos,
+          )
+            ? candidatoJsonData.archivos
+            : [];
           // Solo los archivos marcados como obligatorios cuentan para el % de
           // Completitud — uno opcional que falte no debe bloquearlo (mismo
           // criterio que DocumentType.required en Cumplimiento por Entidad).
-          let archivosPresentesCount = 0;
-          const matchedFileIds: string[] = [];
-
-          if (archivosRequeridos.length > 0) {
-            for (const reqDoc of archivosRequeridos) {
-              const match = this.findMatchingFile(files, reqDoc.nombre);
-              if (match) {
-                matchedFileIds.push(match.id);
-                if (reqDoc.obligatorio !== false) archivosPresentesCount++;
-              }
-            }
-          } else {
-            archivosPresentesCount = files.length;
-            matchedFileIds.push(...files.map((f: any) => f.id));
-          }
-
-          const archivosObligatoriosCount = archivosRequeridos.filter(
-            (r) => r.obligatorio !== false,
-          ).length;
-
-          const completitudPercent =
-            archivosRequeridos.length === 0
-              ? files.length > 0
-                ? 100
-                : 0
-              : archivosObligatoriosCount === 0
-                ? 100
-                : Math.min(
-                    100,
-                    Math.round(
-                      (archivosPresentesCount / archivosObligatoriosCount) *
-                        100,
-                    ),
-                  );
+          // candidato.json no es un documento del postulante. Contarlo
+          // inflaba el "4/5" de la tabla cuando el expediente mostraba 3.
+          const archivosPostulante = files.filter(
+            (f: any) => !String(f.name || '').toLowerCase().endsWith('.json'),
+          );
+          const slots: SlotExpediente[] = archivosRequeridos.map((reqDoc) => {
+            const resuelto = this.resolverArchivoDeRequisito(
+              reqDoc.nombre,
+              archivosPostulante,
+              archivosDeclarados,
+            );
+            return {
+              nombre: reqDoc.nombre,
+              obligatorio: reqDoc.obligatorio !== false,
+              driveFileId: resuelto.file?.id ?? null,
+              nombreEnJson: resuelto.nombreEnJson,
+            };
+          });
+          const matchedFileIds = [
+            ...new Set(
+              slots
+                .map((s) => s.driveFileId)
+                .filter((id): id is string => !!id),
+            ),
+          ];
+          const resumenInicial =
+            slots.length > 0
+              ? resumirExpediente(slots)
+              : {
+                  completitudPercent: archivosPostulante.length > 0 ? 100 : 0,
+                  archivosSubidosCount: archivosPostulante.length,
+                  archivosRequeridosCount: 0,
+                  documentosRechazados: 0,
+                  documentosPendientesRevision: 0,
+                };
 
           candidateList.push({
             id: folder.id,
@@ -2617,11 +2673,10 @@ export class DriveService {
               candidatoJsonData?.modoSubida === 'archivo_unico'
                 ? 'archivo_unico'
                 : 'individual',
-            completitudPercent,
-            archivosSubidosCount: files.length,
-            archivosRequeridosCount: archivosRequeridos.length,
+            ...resumenInicial,
+            slots,
             archivosRequeridos,
-            camposRequeridos: matchedPosition?.camposRequeridos || [],
+            camposRequeridos,
             archivosSubidosList: files.map((f: any) => ({
               id: f.id,
               name: f.name,
@@ -2643,6 +2698,7 @@ export class DriveService {
             datosFormulario,
             telefono,
             email,
+            alertaCedula: null as string | null,
             _matchedFileIds: matchedFileIds,
           });
         } catch (err) {
@@ -2682,18 +2738,48 @@ export class DriveService {
       reviewsByCedula.get(r.cedula)!.set(r.driveFileId, r.status);
     }
 
+    let duenosPorCedula = new Map<string, string>();
+    const cedulasReales = cedulas.filter((c) => /^\d{10}$/.test(c));
+    if (cedulasReales.length > 0) {
+      try {
+        const duenos = await this.prisma.employeeDriveFolder.findMany({
+          where: { companyId, cedula: { in: cedulasReales } },
+          select: { cedula: true, employeeName: true },
+        });
+        duenosPorCedula = new Map(
+          duenos.map((d) => [d.cedula, d.employeeName || '']),
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Error cruzando cédulas con guardias: ${err.message}`,
+        );
+      }
+    }
+
     for (const candidate of candidateList) {
       const reviewByFileId = reviewsByCedula.get(candidate.cedula);
-      let rechazados = 0;
-      let pendientesRevision = 0;
-      for (const fileId of candidate._matchedFileIds as string[]) {
-        const status = reviewByFileId?.get(fileId);
-        if (status === 'RECHAZADO') rechazados++;
-        else if (!status || status === 'PENDIENTE') pendientesRevision++;
+      if (Array.isArray(candidate.slots) && candidate.slots.length > 0) {
+        Object.assign(
+          candidate,
+          resumirExpediente(candidate.slots, reviewByFileId),
+        );
+      } else {
+        let rechazados = 0;
+        let pendientesRevision = 0;
+        for (const fileId of candidate._matchedFileIds as string[]) {
+          const status = reviewByFileId?.get(fileId);
+          if (status === 'RECHAZADO') rechazados++;
+          else if (!status || status === 'PENDIENTE') pendientesRevision++;
+        }
+        candidate.documentosRechazados = rechazados;
+        candidate.documentosPendientesRevision = pendientesRevision;
       }
-      candidate.documentosRechazados = rechazados;
-      candidate.documentosPendientesRevision = pendientesRevision;
       delete candidate._matchedFileIds;
+
+      const dueno = duenosPorCedula.get(candidate.cedula);
+      if (dueno && !mismaPersona(dueno, candidate.nombre)) {
+        candidate.alertaCedula = `La cédula ${candidate.cedula} ya está en el listado de guardias como "${dueno}".`;
+      }
     }
 
     candidateList.sort(
@@ -2823,6 +2909,76 @@ export class DriveService {
       ...candidatoJsonData,
       datosFormulario: { ...datosFormularioPrevios, ...datos },
     };
+
+    let camposVacante: CampoPostulacion[] = [];
+    try {
+      const folderMeta = await drive.files.get({
+        fileId: folderId,
+        fields: 'parents',
+        supportsAllDrives: true,
+      });
+      const parentIds: string[] = folderMeta.data?.parents || [];
+      const vacante = parentIds.length
+        ? await this.prisma.jobPosition.findFirst({
+            where: { companyId, driveFolderId: { in: parentIds } },
+          })
+        : null;
+      if (Array.isArray(vacante?.camposRequeridos)) {
+        camposVacante = vacante.camposRequeridos.flatMap((campo) => {
+          if (!campo || typeof campo !== 'object' || Array.isArray(campo)) return [];
+          const nombre = (campo as { nombre?: unknown }).nombre;
+          if (typeof nombre !== 'string' || !nombre.trim()) return [];
+          const tipo = (campo as { tipo?: unknown }).tipo;
+          const obligatorio = (campo as { obligatorio?: unknown }).obligatorio;
+          return [{
+            nombre,
+            tipo: typeof tipo === 'string' ? tipo : undefined,
+            obligatorio: typeof obligatorio === 'boolean' ? obligatorio : undefined,
+          }];
+        });
+      }
+    } catch (err: any) {
+      this.logger.warn(
+        `No se pudo leer la vacante para validar la ficha de ${folderId}: ${err.message}`,
+      );
+    }
+
+    const errores = validarDatosPostulacion(
+      updated.datosFormulario,
+      camposVacante,
+    );
+    if (errores.length > 0) {
+      throw new BadRequestException(errores.join(' '));
+    }
+
+    const cedulaNueva = Object.entries(updated.datosFormulario).find(([k]) =>
+      k
+        .normalize('NFD')
+        .replace(/\p{Mn}/gu, '')
+        .toLowerCase()
+        .includes('cedula'),
+    )?.[1];
+    const cedulaLimpia = String(cedulaNueva ?? '').trim();
+    if (/^\d{10}$/.test(cedulaLimpia)) {
+      const dueno = await this.prisma.employeeDriveFolder.findFirst({
+        where: { companyId, cedula: cedulaLimpia },
+      });
+      const nombrePostulante =
+        formatNombrePersona(
+          buscarDatoFormulario(updated.datosFormulario, ['apellidos']),
+          buscarDatoFormulario(updated.datosFormulario, ['nombres']),
+        ) || '';
+      if (
+        dueno &&
+        nombrePostulante &&
+        !mismaPersona(dueno.employeeName, nombrePostulante)
+      ) {
+        throw new BadRequestException(
+          `La cédula ${cedulaLimpia} ya pertenece a "${dueno.employeeName}" en el listado de guardias.`,
+        );
+      }
+    }
+
     const jsonPayload = JSON.stringify(updated, null, 2);
 
     try {
@@ -2965,6 +3121,18 @@ export class DriveService {
     const tipoContratacion = this.normalizeTipoContratacion(
       vacante?.tipoContratacion,
     );
+
+    const motivosBloqueo = await this.motivosBloqueoContratacion(
+      companyId,
+      cedula,
+      (vacante as { archivosRequeridos?: unknown } | null)?.archivosRequeridos,
+      filesEnCarpeta,
+    );
+    if (motivosBloqueo.length > 0) {
+      throw new BadRequestException(
+        `No se puede contratar mientras haya documentos obligatorios pendientes o rechazados: ${motivosBloqueo.join('; ')}.`,
+      );
+    }
 
     // Traspaso automático de "campos requeridos" (PersonalFieldDefinition,
     // ver 4.2) del formulario de postulación a la Ficha Personal recién
@@ -3113,6 +3281,11 @@ export class DriveService {
         where: { companyId, cedula },
       });
       if (yaExiste) {
+        if (!mismaPersona(yaExiste.employeeName, nombre)) {
+          throw new BadRequestException(
+            `La cédula ${cedula} ya pertenece a "${yaExiste.employeeName}" en el listado de guardias, que no es "${nombre}". Corrige la cédula antes de contratar.`,
+          );
+        }
         const activo = await this.movimientoPersonalService.isActivo(
           companyId,
           cedula,
@@ -3139,63 +3312,31 @@ export class DriveService {
       carpetaDestino = 'Sin Asignar';
     }
 
-    // Marca el estado en su candidato.json antes de mover la carpeta — mismo
-    // patrón create-vs-update que saveCandidatoDatos.
-    try {
-      const updated = {
-        ...candidatoJsonData,
-        estado: 'CONTRATADO',
-        fechaContratacion: new Date().toISOString(),
-        tipoContratacion,
-        // En el bucket de administrativos el nombre de carpeta pierde la
-        // cédula; dejarla acá es lo que evita que se pierda del todo.
-        cedula,
-      };
-      const jsonPayload = JSON.stringify(updated, null, 2);
-      if (jsonFile) {
-        await drive.files.update({
-          fileId: jsonFile.id,
-          media: { mimeType: 'application/json', body: jsonPayload },
-          supportsAllDrives: true,
-        });
-      } else {
-        await drive.files.create({
-          requestBody: {
-            name: 'candidato.json',
-            parents: [folderId],
-            mimeType: 'application/json',
-          },
-          media: { mimeType: 'application/json', body: jsonPayload },
-          fields: 'id',
-          supportsAllDrives: true,
-        });
-      }
-    } catch (err: any) {
-      throw new BadRequestException(
-        `No se pudo guardar el estado de contratación en Drive: ${err.message}`,
-      );
-    }
+    // Primero se mueve. Si Google rechaza el cambio de carpeta, el
+    // candidato.json no queda marcado CONTRATADO dentro de Reclutamiento.
+    // En ADMINISTRATIVO el renombrado va en la misma llamada que el
+    // movimiento, para que la carpeta no llegue a existir bajo esa raíz con
+    // el nombre viejo.
+    const folderEnDestino = await this.moverCarpetaDePostulante(
+      drive,
+      folderId,
+      parentIds.join(','),
+      destinoParentId,
+      nuevoNombreCarpeta,
+      carpetaDestino,
+    );
 
-    // Mueve la carpeta del candidato al destino — sin copiar ni borrar
-    // documentos. En el caso ADMINISTRATIVO el renombrado va en la MISMA
-    // llamada que el movimiento: así la carpeta nunca llega a existir bajo esa
-    // raíz con el nombre "Nombre - Cédula", que ese sync leería mal si corriera
-    // justo entre las dos operaciones.
     try {
-      const previousParents = parentIds.join(',');
-      await drive.files.update({
-        fileId: folderId,
-        addParents: destinoParentId,
-        removeParents: previousParents,
-        ...(nuevoNombreCarpeta
-          ? { requestBody: { name: nuevoNombreCarpeta } }
-          : {}),
-        fields: 'id, parents, name',
-        supportsAllDrives: true,
-      });
+      await this.marcarContratadoEnCarpeta(
+        drive,
+        folderEnDestino,
+        candidatoJsonData,
+        cedula,
+        tipoContratacion,
+      );
     } catch (err: any) {
       throw new BadRequestException(
-        `No se pudo mover la carpeta a ${carpetaDestino}: ${err.message}`,
+        `La carpeta ya está en ${carpetaDestino}, pero no se pudo guardar el estado de contratación: ${err.message}`,
       );
     }
 
@@ -3221,6 +3362,203 @@ export class DriveService {
     }
 
     return { cedula, nombre, carpetaDestino, tipoContratacion };
+  }
+
+  private esErrorPermisoDrive(err: any): boolean {
+    const msg = String(err?.message || err);
+    return /sufficient permissions|insufficientFilePermissions|insufficientParentPermissions/i.test(
+      msg,
+    );
+  }
+
+  private mensajeDrive(err: any): string {
+    if (this.esErrorPermisoDrive(err)) {
+      return 'la cuenta de Drive no tiene permiso para modificar este archivo';
+    }
+    return err?.message || 'error desconocido de Drive';
+  }
+
+  private async motivosBloqueoContratacion(
+    companyId: number,
+    cedula: string,
+    archivosRequeridos: unknown,
+    files: any[],
+  ): Promise<string[]> {
+    const reqs = (
+      Array.isArray(archivosRequeridos) ? archivosRequeridos : []
+    ).filter(
+      (r) => r && r.obligatorio !== false && typeof r.nombre === 'string',
+    );
+    if (reqs.length === 0) return [];
+
+    const postulante = files.filter(
+      (f) => !String(f.name || '').toLowerCase().endsWith('.json'),
+    );
+    let reviews: { driveFileId: string | null; status: string }[] = [];
+    try {
+      reviews = await this.prisma.documentReview.findMany({
+        where: { companyId, cedula },
+        select: { driveFileId: true, status: true },
+      });
+    } catch (err: any) {
+      this.logger.warn(
+        `No se pudieron leer las revisiones de ${cedula}: ${err.message}`,
+      );
+    }
+
+    const motivos: string[] = [];
+    for (const req of reqs) {
+      const match = this.findMatchingFile(postulante, req.nombre);
+      if (!match) {
+        motivos.push(`falta "${req.nombre}"`);
+        continue;
+      }
+      const status = reviews.find((r) => r.driveFileId === match.id)?.status;
+      if (status === 'RECHAZADO') motivos.push(`"${req.nombre}" está rechazado`);
+      else if (status !== 'APROBADO') {
+        motivos.push(`"${req.nombre}" todavía no está aprobado`);
+      }
+    }
+    return motivos;
+  }
+
+  private async marcarContratadoEnCarpeta(
+    drive: any,
+    folderId: string,
+    candidatoJsonData: any,
+    cedula: string,
+    tipoContratacion: string,
+  ) {
+    const files = await this.listFilesInFolder(folderId);
+    const jsonFile = files.find((f: any) =>
+      String(f.name || '').toLowerCase().endsWith('.json'),
+    );
+    const updated = {
+      ...candidatoJsonData,
+      estado: 'CONTRATADO',
+      fechaContratacion: new Date().toISOString(),
+      tipoContratacion,
+      cedula,
+    };
+    const jsonPayload = JSON.stringify(updated, null, 2);
+    if (jsonFile) {
+      await drive.files.update({
+        fileId: jsonFile.id,
+        media: { mimeType: 'application/json', body: jsonPayload },
+        supportsAllDrives: true,
+      });
+    } else {
+      await drive.files.create({
+        requestBody: {
+          name: 'candidato.json',
+          parents: [folderId],
+          mimeType: 'application/json',
+        },
+        media: { mimeType: 'application/json', body: jsonPayload },
+        fields: 'id',
+        supportsAllDrives: true,
+      });
+    }
+  }
+
+  private async copiarCarpetaDrive(
+    origenId: string,
+    destinoParentId: string,
+    nombre: string,
+  ): Promise<string> {
+    const drive = this.getDriveClient();
+    const created = await drive.files.create({
+      requestBody: {
+        name: nombre,
+        parents: [destinoParentId],
+        mimeType: 'application/vnd.google-apps.folder',
+      },
+      fields: 'id',
+      supportsAllDrives: true,
+    });
+    const nuevoId = created.data.id as string;
+    const files = await this.listFilesInFolder(origenId);
+    for (const file of files) {
+      await drive.files.copy({
+        fileId: file.id,
+        requestBody: { name: file.name, parents: [nuevoId] },
+        supportsAllDrives: true,
+      });
+    }
+    const subcarpetas = await this.listSubFolders(origenId);
+    for (const sub of subcarpetas) {
+      await this.copiarCarpetaDrive(sub.id, nuevoId, sub.name);
+    }
+    return nuevoId;
+  }
+
+  // Google no deja mover una carpeta creada por otra cuenta aunque el
+  // service account pueda leerla. Si el movimiento directo falla por
+  // permisos, se copia el contenido a una carpeta nueva (que sí es de esta
+  // cuenta) y la original se manda a la papelera. Si tampoco se puede
+  // tirar la original, se deshace la copia para no dejar dos expedientes.
+  private async moverCarpetaDePostulante(
+    drive: any,
+    folderId: string,
+    previousParents: string,
+    destinoParentId: string,
+    nuevoNombre: string | null,
+    carpetaDestino: string,
+  ): Promise<string> {
+    try {
+      await drive.files.update({
+        fileId: folderId,
+        addParents: destinoParentId,
+        removeParents: previousParents,
+        ...(nuevoNombre ? { requestBody: { name: nuevoNombre } } : {}),
+        fields: 'id, parents, name',
+        supportsAllDrives: true,
+      });
+      return folderId;
+    } catch (err: any) {
+      if (!this.esErrorPermisoDrive(err)) {
+        throw new BadRequestException(
+          `No se pudo mover la carpeta a ${carpetaDestino}: ${this.mensajeDrive(err)}`,
+        );
+      }
+    }
+
+    let copiaId: string | null = null;
+    try {
+      const actual = await drive.files.get({
+        fileId: folderId,
+        fields: 'name',
+        supportsAllDrives: true,
+      });
+      copiaId = await this.copiarCarpetaDrive(
+        folderId,
+        destinoParentId,
+        nuevoNombre || actual.data?.name || 'Postulante',
+      );
+      await drive.files.update({
+        fileId: folderId,
+        requestBody: { trashed: true },
+        supportsAllDrives: true,
+      });
+      return copiaId;
+    } catch {
+      if (copiaId) {
+        try {
+          await drive.files.update({
+            fileId: copiaId,
+            requestBody: { trashed: true },
+            supportsAllDrives: true,
+          });
+        } catch (cleanupErr: any) {
+          this.logger.warn(
+            `No se pudo retirar la copia ${copiaId}: ${cleanupErr.message}`,
+          );
+        }
+      }
+      throw new BadRequestException(
+        `No se pudo mover la carpeta a ${carpetaDestino}. La cuenta de Drive del sistema puede verla, pero Google no permite cambiar de lugar una carpeta que esa cuenta no creó. Hay que compartir la carpeta del postulante, con permiso de editor, con drive-sync@agentes-504115.iam.gserviceaccount.com.`,
+      );
+    }
   }
 
   // Resuelve (o crea si es la primera vez) un bucket de primer nivel bajo la

@@ -276,7 +276,7 @@ export default function AdministrativeStaff() {
                         {(emp.ficha?.activo ?? true) ? 'Activo' : 'Inactivo'}
                       </span>
                     </td>
-                    <td>{emp.documentCount} archivos</td>
+                    <td>{emp.documentCount === 1 ? '1 archivo' : `${emp.documentCount} archivos`}</td>
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                         <button

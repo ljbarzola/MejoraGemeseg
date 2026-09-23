@@ -46,7 +46,7 @@ const FLUJO_PRINCIPAL: Submodulo[] = [
     ],
   },
   {
-    nombre: '5. Documentación',
+    nombre: '5. Contratos',
     ruta: '/rrhh/contracts',
     parrafos: [
       'Generador de contratos y otros documentos a partir de plantillas Word.',
@@ -57,8 +57,8 @@ const FLUJO_PRINCIPAL: Submodulo[] = [
     nombre: '6. Historial',
     ruta: '/rrhh/historial',
     parrafos: [
-      'Línea de tiempo automática: cada vez que un guardia cambia de entidad (paso 2) o sale de la empresa, queda un registro aquí.',
-      'Es el lugar para reconstruir el recorrido completo de una persona, sin tener que ir entidad por entidad.',
+      'Esta pantalla junta las asignaciones de puesto y las entradas o salidas. Cada vez que un guardia cambia de entidad (paso 2) o sale de la empresa, queda un registro aquí.',
+      'Es el lugar para reconstruir el recorrido completo de una persona, sin tener que ir entidad por entidad. Las rutas antiguas de movimientos y asignaciones abren esta misma pantalla.',
     ],
   },
 ];
@@ -76,8 +76,8 @@ const MODULOS_INDEPENDIENTES: Submodulo[] = [
     nombre: 'Capacitaciones',
     ruta: '/rrhh/capacitaciones',
     parrafos: [
-      'Plan anual o capacitaciones puntuales, con cumplimiento general: se marca completada una sola vez, no por guardia.',
-      'Los documentos y evidencias se guardan en una carpeta de Drive fija (no se configura desde aquí). El botón "Ver carpeta" la abre.',
+      'Plan anual o capacitaciones puntuales, con cumplimiento general: se marca completada una sola vez, no por guardia. Se puede registrar la capacitación, la fecha y un enlace aunque todavía no haya carpeta de Drive.',
+      'Subir un archivo sí necesita la carpeta de Drive de Capacitaciones, que está fija en el sistema. Cuando existe, el botón "Ver carpeta" la abre.',
     ],
   },
   {

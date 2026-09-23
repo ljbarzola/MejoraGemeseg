@@ -136,22 +136,30 @@ export class ComplaintStageService {
     });
     if (!stage) throw new NotFoundException('Etapa no encontrada');
 
-    // No se puede borrar la etapa inicial sin que otra ya haya sido marcada
-    // como inicial primero — de lo contrario ComplaintService.create() se
-    // quedaría sin saber con qué status crear una queja nueva.
-    if (stage.isInitial) {
+    const otras = await this.prisma.complaintStage.count({
+      where: { companyId, id: { not: id } },
+    });
+    // Si hay otras etapas, la inicial no se borra hasta marcar otra: si no,
+    // una queja nueva no sabría en qué columna nacer. Si esta es la única,
+    // el tablero puede volver a quedar vacío.
+    if (stage.isInitial && otras > 0) {
       throw new BadRequestException(
         'No se puede eliminar la etapa inicial. Marca otra etapa como inicial antes de eliminar esta.',
       );
     }
 
     // No se auto-reasignan ni se pisa la referencia: si hay quejas en esta
-    // etapa, el borrado queda bloqueado y se listan hasta 20 para que RRHH
-    // decida (mover manualmente cada una) antes de reintentar.
+    // etapa y existen otras columnas, el borrado queda bloqueado y se listan
+    // hasta 20 para que RRHH las mueva. Si es la única etapa, las quejas se
+    // van con ella: si no, el tablero no puede volver a cero.
     const blockingCount = await this.prisma.complaint.count({
       where: { companyId, status: stage.key },
     });
-    if (blockingCount > 0) {
+    if (blockingCount > 0 && otras === 0) {
+      await this.prisma.complaint.deleteMany({
+        where: { companyId, status: stage.key },
+      });
+    } else if (blockingCount > 0) {
       const blocking = await this.prisma.complaint.findMany({
         where: { companyId, status: stage.key },
         take: MAX_BLOCKING_COMPLAINTS_LISTED,

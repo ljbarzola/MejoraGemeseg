@@ -7,7 +7,7 @@ import {
   register as registerService,
   saveAuth,
 } from '../../services/auth.service';
-import { useCompany } from '../../contexts/ThemeContext';
+import { cachedThemeForDomain, useCompany } from '../../contexts/ThemeContext';
 
 const registerSchema = z
   .object({
@@ -31,7 +31,7 @@ type RegisterForm = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { theme, loadThemeByDomain } = useCompany();
+  const { theme, loadThemeByDomain, applyTheme } = useCompany();
   const [serverError, setServerError] = useState('');
   const [loading, setLoading] = useState(false);
   const [detectedCompany, setDetectedCompany] = useState(false);
@@ -39,32 +39,31 @@ export default function RegisterPage() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
   });
+  const emailValue = watch('email');
 
   useEffect(() => {
-    const emailInput = document.getElementById('reg-email') as HTMLInputElement;
-    if (!emailInput) return;
-    let debounceTimer: ReturnType<typeof setTimeout>;
-    const handler = () => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(async () => {
-        const email = emailInput.value;
-        const domain = email.split('@')[1];
-        if (domain && domain.includes('.')) {
-          const found = await loadThemeByDomain(domain);
-          if (found) setDetectedCompany(true);
-        }
-      }, 300);
-    };
-    emailInput.addEventListener('input', handler);
-    return () => {
-      clearTimeout(debounceTimer);
-      emailInput.removeEventListener('input', handler);
-    };
-  }, [loadThemeByDomain]);
+    const domain = (emailValue || '').split('@')[1]?.trim().toLowerCase() || '';
+    const tld = domain.split('.').pop() || '';
+    if (!domain.includes('.') || tld.length < 2) {
+      setDetectedCompany(false);
+      return;
+    }
+    const cached = cachedThemeForDomain(domain);
+    if (cached?.logoUrl) {
+      applyTheme(cached);
+      setDetectedCompany(true);
+    }
+    let cancelled = false;
+    loadThemeByDomain(domain).then((found) => {
+      if (!cancelled) setDetectedCompany(found);
+    });
+    return () => { cancelled = true; };
+  }, [emailValue, loadThemeByDomain, applyTheme]);
 
   const onSubmit = async (data: RegisterForm) => {
     setServerError('');

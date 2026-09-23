@@ -19,6 +19,11 @@ export class ComplaintService {
   // ni siquiera de forma oculta. Valida los campos extra que RRHH haya
   // marcado como obligatorios (ver ComplaintFieldDefinition).
   async create(dto: CreateComplaintDto, companyId: number, userId: number) {
+    if (dto.description.trim().length < 5) {
+      throw new BadRequestException(
+        'Describe la situación con al menos 5 caracteres.',
+      );
+    }
     const fieldDefs = await this.prisma.complaintFieldDefinition.findMany({
       where: { companyId },
     });
@@ -123,5 +128,58 @@ export class ComplaintService {
     ]);
 
     return updated;
+  }
+
+  async responder(
+    id: number,
+    notes: string,
+    companyId: number,
+    userId: number,
+  ) {
+    const texto = notes?.trim() || '';
+    if (texto.length < 2) {
+      throw new BadRequestException('Escribe una respuesta.');
+    }
+    const complaint = await this.prisma.complaint.findFirst({
+      where: { id, companyId },
+    });
+    if (!complaint) {
+      throw new NotFoundException('Queja o sugerencia no encontrada');
+    }
+    await this.prisma.complaintStageChange.create({
+      data: {
+        complaintId: id,
+        fromStatus: complaint.status,
+        toStatus: complaint.status,
+        notes: texto,
+        changedBy: userId,
+        companyId,
+      },
+    });
+    return this.findOne(id, companyId);
+  }
+
+  async delete(id: number, companyId: number) {
+    const complaint = await this.prisma.complaint.findFirst({
+      where: { id, companyId },
+    });
+    if (!complaint) {
+      throw new NotFoundException('Queja o sugerencia no encontrada');
+    }
+    await this.prisma.complaint.delete({ where: { id } });
+    return { id };
+  }
+
+  private async findOne(id: number, companyId: number) {
+    return this.prisma.complaint.findFirst({
+      where: { id, companyId },
+      include: {
+        submitter: { select: { id: true, fullName: true, email: true } },
+        stageChanges: {
+          orderBy: { createdAt: 'asc' },
+          include: { changer: { select: { id: true, fullName: true } } },
+        },
+      },
+    });
   }
 }

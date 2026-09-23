@@ -45,7 +45,8 @@ import {
 } from './dto/document-type.dto';
 
 @Controller('personal')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+@Section('RRHH', 'view')
 export class DriveController {
   constructor(
     private readonly driveService: DriveService,
@@ -60,6 +61,7 @@ export class DriveController {
   }
 
   @Post('drive/config')
+  @Section('RRHH', 'write')
   saveConfig(@Body() body: SaveDriveConfigDto, @Req() req: any) {
     return this.driveService.saveConfig(
       req.user.companyId,
@@ -69,6 +71,7 @@ export class DriveController {
   }
 
   @Post('drive/test')
+  @Section('RRHH', 'write')
   testConnection(@Body() body: TestDriveConnectionDto, @Req() req: any) {
     return this.driveService.testConnection(
       req.user.companyId,
@@ -81,6 +84,7 @@ export class DriveController {
   // Entidades/Cumplimiento) — reemplaza el uso plano Custodios/Personal para
   // esta misma carpeta configurada con type='CUMPLIMIENTO'.
   @Post('drive/sync-entidades')
+  @Section('RRHH', 'write')
   syncEntidadesFolder(@Req() req: any) {
     return this.driveService.syncEntidadesFolder(
       req.user.companyId,
@@ -89,6 +93,7 @@ export class DriveController {
   }
 
   @Post('drive/sync-personal-admin')
+  @Section('RRHH', 'write')
   syncPersonalAdminFolder(@Req() req: any) {
     return this.driveService.syncPersonalAdminFolder(
       req.user.companyId,
@@ -210,11 +215,13 @@ export class DriveController {
   }
 
   @Post('document-types')
+  @Section('RRHH', 'write')
   createDocumentType(@Body() body: CreateDocumentTypeDto, @Req() req: any) {
     return this.driveService.createDocumentType(body, req.user.companyId);
   }
 
   @Patch('document-types/:id')
+  @Section('RRHH', 'write')
   updateDocumentType(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateDocumentTypeDto,
@@ -237,11 +244,13 @@ export class DriveController {
   }
 
   @Post('reclutamiento/puestos')
+  @Section('RRHH', 'write')
   createJobPosition(@Body() body: CreateJobPositionDto, @Req() req: any) {
     return this.driveService.createJobPosition(body, req.user.companyId);
   }
 
   @Patch('reclutamiento/puestos/:id')
+  @Section('RRHH', 'write')
   updateJobPosition(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateJobPositionDto,
@@ -251,16 +260,19 @@ export class DriveController {
   }
 
   @Delete('reclutamiento/puestos/:id')
+  @Section('RRHH', 'write')
   deleteJobPosition(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.driveService.deleteJobPosition(id, req.user.companyId);
   }
 
   @Post('reclutamiento/sync')
+  @Section('RRHH', 'write')
   syncReclutamientoCandidates(@Req() req: any) {
     return this.driveService.syncReclutamientoCandidates(req.user.companyId);
   }
 
   @Post('reclutamiento/sync-puestos')
+  @Section('RRHH', 'write')
   syncJobPositionsFromDrive(@Req() req: any) {
     return this.driveService.syncJobPositionsFromDrive(req.user.companyId);
   }

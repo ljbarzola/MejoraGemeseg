@@ -8,7 +8,9 @@ import {
 
 export class CreateComplaintDto {
   @IsString()
-  @MinLength(5)
+  @MinLength(5, {
+    message: 'Describe la situación con al menos 5 caracteres.',
+  })
   description: string;
 
   @IsOptional()
@@ -32,4 +34,10 @@ export class ChangeComplaintStageDto {
   @IsOptional()
   @IsString()
   notes?: string;
+}
+
+export class ReplyComplaintDto {
+  @IsString()
+  @MinLength(2, { message: 'Escribe una respuesta.' })
+  notes: string;
 }

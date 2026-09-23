@@ -1219,6 +1219,54 @@ describe('DriveService.contratarCandidato', () => {
     );
   });
 
+  it('no trata como recontratación a otra persona que reutiliza la cédula de un guardia inactivo', async () => {
+    prisma.employeeDriveFolder.findFirst.mockResolvedValue({
+      cedula: '0923456789',
+      employeeName: 'JUAN PEREZ',
+    });
+    movimientoPersonalService.isActivo.mockResolvedValue(false);
+
+    await expect(service.contratarCandidato(1, 'cand-1', 2)).rejects.toThrow(
+      /ya pertenece a "JUAN PEREZ"/i,
+    );
+    expect(driveFilesUpdate).not.toHaveBeenCalled();
+  });
+
+  it('si Google no deja mover la carpeta, copia el expediente y manda el original a la papelera', async () => {
+    driveFilesUpdate.mockImplementation((arg: { requestBody?: { trashed?: boolean } }) => {
+      if (arg?.requestBody?.trashed) return Promise.resolve({});
+      return Promise.reject(new Error('The user does not have sufficient permissions for this file'));
+    });
+    const driveFilesCopy = jest.fn().mockResolvedValue({ data: { id: 'copia-archivo' } });
+    (service as any).getDriveClient = jest.fn().mockReturnValue({
+      files: {
+        get: driveFilesGet,
+        update: driveFilesUpdate,
+        create: driveFilesCreate,
+        copy: driveFilesCopy,
+      },
+    });
+
+    const result = await service.contratarCandidato(1, 'cand-1', 2);
+
+    expect(result.cedula).toBe('0923456789');
+    expect(driveFilesCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: expect.objectContaining({
+          name: 'Maria Lopez - 0923456789',
+          parents: ['sa-new'],
+          mimeType: 'application/vnd.google-apps.folder',
+        }),
+      }),
+    );
+    expect(driveFilesUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fileId: 'cand-1',
+        requestBody: { trashed: true },
+      }),
+    );
+  });
+
   // Vacante ADMINISTRATIVO: otro destino y, sobre todo, otro formato de nombre
   // de carpeta ("Nombre - Puesto" en vez de "Nombre - Cédula").
   describe('cuando la vacante es ADMINISTRATIVO', () => {

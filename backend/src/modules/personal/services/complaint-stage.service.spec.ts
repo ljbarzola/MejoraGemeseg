@@ -5,16 +5,16 @@ import { PrismaService } from '../../../prisma/prisma.service';
 describe('ComplaintStageService.delete', () => {
   let service: ComplaintStageService;
   let prisma: {
-    complaintStage: { findFirst: jest.Mock; delete: jest.Mock };
-    complaint: { count: jest.Mock; findMany: jest.Mock };
+    complaintStage: { findFirst: jest.Mock; delete: jest.Mock; count: jest.Mock };
+    complaint: { count: jest.Mock; findMany: jest.Mock; deleteMany: jest.Mock };
   };
 
   const companyId = 1;
 
   beforeEach(() => {
     prisma = {
-      complaintStage: { findFirst: jest.fn(), delete: jest.fn() },
-      complaint: { count: jest.fn(), findMany: jest.fn() },
+      complaintStage: { findFirst: jest.fn(), delete: jest.fn(), count: jest.fn() },
+      complaint: { count: jest.fn(), findMany: jest.fn(), deleteMany: jest.fn() },
     };
     service = new ComplaintStageService(prisma as unknown as PrismaService);
   });
@@ -28,7 +28,7 @@ describe('ComplaintStageService.delete', () => {
     expect(prisma.complaint.count).not.toHaveBeenCalled();
   });
 
-  it('bloquea el borrado si la etapa es la inicial, sin llegar a contar quejas', async () => {
+  it('bloquea el borrado si la etapa es la inicial y hay otras etapas', async () => {
     prisma.complaintStage.findFirst.mockResolvedValue({
       id: 1,
       companyId,
@@ -37,6 +37,7 @@ describe('ComplaintStageService.delete', () => {
       isInitial: true,
       isFinal: false,
     });
+    prisma.complaintStage.count.mockResolvedValue(1);
 
     await expect(service.delete(1, companyId)).rejects.toThrow(
       BadRequestException,
@@ -73,6 +74,50 @@ describe('ComplaintStageService.delete', () => {
     expect(message).toContain('#11');
     expect(message).toContain('En solución');
     expect(prisma.complaintStage.delete).not.toHaveBeenCalled();
+  });
+
+  it('borra la única etapa inicial cuando ya no tiene quejas', async () => {
+    const stage = {
+      id: 1,
+      companyId,
+      key: 'RECIBIDA',
+      label: 'Recibida',
+      isInitial: true,
+      isFinal: false,
+    };
+    prisma.complaintStage.findFirst.mockResolvedValue(stage);
+    prisma.complaintStage.count.mockResolvedValue(0);
+    prisma.complaint.count.mockResolvedValue(0);
+    prisma.complaintStage.delete.mockResolvedValue(stage);
+
+    const result = await service.delete(1, companyId);
+
+    expect(result).toEqual(stage);
+    expect(prisma.complaintStage.delete).toHaveBeenCalledWith({ where: { id: 1 } });
+  });
+
+  it('borra la única etapa y las quejas que todavía están en ella', async () => {
+    const stage = {
+      id: 1,
+      companyId,
+      key: 'RECIBIDA',
+      label: 'Recibida',
+      isInitial: true,
+      isFinal: false,
+    };
+    prisma.complaintStage.findFirst.mockResolvedValue(stage);
+    prisma.complaintStage.count.mockResolvedValue(0);
+    prisma.complaint.count.mockResolvedValue(1);
+    prisma.complaint.deleteMany.mockResolvedValue({ count: 1 });
+    prisma.complaintStage.delete.mockResolvedValue(stage);
+
+    const result = await service.delete(1, companyId);
+
+    expect(result).toEqual(stage);
+    expect(prisma.complaint.deleteMany).toHaveBeenCalledWith({
+      where: { companyId, status: 'RECIBIDA' },
+    });
+    expect(prisma.complaintStage.delete).toHaveBeenCalledWith({ where: { id: 1 } });
   });
 
   it('borra la etapa cuando no es la inicial y no tiene quejas activas', async () => {

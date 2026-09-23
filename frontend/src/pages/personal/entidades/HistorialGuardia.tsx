@@ -245,6 +245,9 @@ export default function HistorialGuardia() {
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS · CUMPLIMIENTO</p>
             <h1>Historial</h1>
+            <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: '#718096' }}>
+              Asignaciones de puesto y entradas o salidas de cada guardia.
+            </p>
           </div>
           <div className="header-actions">
             <button className="btn-secondary" onClick={load} disabled={loading}>

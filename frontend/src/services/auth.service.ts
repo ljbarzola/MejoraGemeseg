@@ -79,6 +79,12 @@ export function getUser(): { id: number; email: string; fullName: string; positi
 export function removeToken() {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
+  const cacheReclutamiento: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith('reclutamiento_')) cacheReclutamiento.push(key);
+  }
+  cacheReclutamiento.forEach((key) => localStorage.removeItem(key));
 }
 
 export function isAuthenticated(): boolean {

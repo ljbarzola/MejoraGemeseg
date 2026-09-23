@@ -1,15 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, X, Settings2, ListOrdered } from 'lucide-react';
+import { ArrowLeft, X, Settings2, ListOrdered, Trash2 } from 'lucide-react';
 import {
   getAllComplaints,
   changeComplaintStage,
+  replyComplaint,
+  deleteComplaint,
   getComplaintFields,
   getComplaintStages,
   type Complaint,
   type ComplaintFieldDefinition,
   type ComplaintStage,
 } from '../../services/personal.service';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { usePerm } from '../../contexts/PermissionsContext';
 import ComplaintFieldsConfigModal from '../../components/personal/ComplaintFieldsConfigModal';
 import ComplaintStagesConfigModal from '../../components/personal/ComplaintStagesConfigModal';
@@ -37,6 +40,10 @@ export default function ComplaintsManagementPage() {
   const moverQuejaErrorRef = useRef<HTMLDivElement>(null);
   const [avanzarEtapaError, setAvanzarEtapaError] = useState('');
   const avanzarEtapaErrorRef = useRef<HTMLDivElement>(null);
+  const [respuesta, setRespuesta] = useState('');
+  const [guardandoRespuesta, setGuardandoRespuesta] = useState(false);
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
+  const [etapaDestino, setEtapaDestino] = useState('');
 
   useEffect(() => {
     if (moverQuejaError) {
@@ -89,11 +96,58 @@ export default function ComplaintsManagementPage() {
   const openDetail = (c: Complaint) => {
     setDetail(c);
     setNotes('');
+    setRespuesta('');
+    setEtapaDestino('');
     setAvanzarEtapaError('');
+    setConfirmandoEliminar(false);
   };
 
   const currentIndex = detail ? stages.findIndex((s) => s.key === detail.status) : -1;
   const nextStage = currentIndex >= 0 ? stages[currentIndex + 1] : undefined;
+
+  const handleReply = async () => {
+    if (!detail) return;
+    setGuardandoRespuesta(true);
+    setAvanzarEtapaError('');
+    try {
+      const updated = await replyComplaint(detail.id, respuesta);
+      setRespuesta('');
+      setDetail(updated);
+      load();
+    } catch (err: any) {
+      setAvanzarEtapaError(err.response?.data?.message || 'No se pudo guardar la respuesta.');
+    } finally {
+      setGuardandoRespuesta(false);
+    }
+  };
+
+  const handleDeleteComplaint = async () => {
+    if (!detail) return;
+    setConfirmandoEliminar(false);
+    setAvanzarEtapaError('');
+    try {
+      await deleteComplaint(detail.id);
+      setDetail(null);
+      load();
+    } catch (err: any) {
+      setAvanzarEtapaError(err.response?.data?.message || 'No se pudo eliminar la queja o sugerencia.');
+    }
+  };
+
+  const handleMoveToStage = async () => {
+    if (!detail || !etapaDestino || etapaDestino === detail.status) return;
+    setSavingStage(true);
+    setAvanzarEtapaError('');
+    try {
+      await changeComplaintStage(detail.id, { toStatus: etapaDestino, notes: notes.trim() || undefined });
+      setDetail(null);
+      load();
+    } catch (err: any) {
+      setAvanzarEtapaError(err.response?.data?.message || 'No se pudo actualizar la etapa.');
+    } finally {
+      setSavingStage(false);
+    }
+  };
 
   const handleAdvanceFromDetail = async () => {
     if (!detail || !nextStage) return;
@@ -201,8 +255,25 @@ export default function ComplaintsManagementPage() {
                     <div style={{ fontSize: '0.78rem', color: '#a0aec0', marginBottom: '4px' }}>
                       {c.isAnonymous ? 'Anónima' : c.submitter?.fullName || 'Empleado'} · {new Date(c.createdAt).toLocaleDateString('es-EC')}
                     </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--azul-oscuro)', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                      {c.description}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--azul-oscuro)', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', flex: 1 }}>
+                        {c.description}
+                      </div>
+                      {canWrite('RRHH') && (
+                        <button
+                          type="button"
+                          title="Eliminar"
+                          aria-label="Eliminar queja o sugerencia"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDetail(c);
+                            setConfirmandoEliminar(true);
+                          }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c53030', padding: 0, flexShrink: 0 }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -240,30 +311,63 @@ export default function ComplaintsManagementPage() {
                 </div>
               )}
 
-              {detail.stageChanges && detail.stageChanges.length > 0 && (
-                <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid #f1f5f9' }}>
-                  <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--azul-oscuro)', margin: '0 0 8px' }}>Historial</p>
-                  {detail.stageChanges.map((sc) => (
-                    <div key={sc.id} style={{ fontSize: '0.78rem', color: '#718096', marginBottom: '4px' }}>
-                      {new Date(sc.createdAt).toLocaleDateString('es-EC')} — {sc.changer?.fullName || 'RRHH'} movió a <strong>{stageLabel(sc.toStatus)}</strong>
-                      {sc.notes && <>: {sc.notes}</>}
-                    </div>
-                  ))}
+              <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid #f1f5f9' }}>
+                <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--azul-oscuro)', margin: '0 0 8px' }}>Historial</p>
+                <div style={{ fontSize: '0.78rem', color: '#718096', marginBottom: '4px' }}>
+                  {new Date(detail.createdAt).toLocaleDateString('es-EC')} — Entró en <strong>{stageLabel(detail.stageChanges?.[0]?.fromStatus || detail.status)}</strong>
                 </div>
-              )}
+                {(detail.stageChanges || []).map((sc) => (
+                  <div key={sc.id} style={{ fontSize: '0.78rem', color: '#718096', marginBottom: '4px' }}>
+                    {new Date(sc.createdAt).toLocaleDateString('es-EC')} — {sc.changer?.fullName || 'RRHH'}{' '}
+                    {sc.fromStatus === sc.toStatus
+                      ? <>respondió{sc.notes ? <>: {sc.notes}</> : null}</>
+                      : <>movió a <strong>{stageLabel(sc.toStatus)}</strong>{sc.notes ? <>: {sc.notes}</> : null}</>}
+                  </div>
+                ))}
+                {(detail.stageChanges || []).length === 0 && (
+                  <div style={{ fontSize: '0.78rem', color: '#a0aec0' }}>Todavía no hay respuestas ni cambios de etapa.</div>
+                )}
+              </div>
 
-              {nextStage && (
+              <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid #f1f5f9' }}>
+                <div className="form-group">
+                  <label>Respuesta</label>
+                  <textarea value={respuesta} onChange={(e) => setRespuesta(e.target.value)} rows={2} placeholder="Escribe la respuesta de RRHH..." />
+                </div>
+                <button className="btn-secondary" type="button" onClick={handleReply} disabled={guardandoRespuesta || respuesta.trim().length < 2}>
+                  {guardandoRespuesta ? 'Guardando...' : 'Guardar respuesta'}
+                </button>
+              </div>
+
+              {stages.filter((s) => s.key !== detail.status).length > 0 && (
                 <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid #f1f5f9' }}>
                   <div className="form-group">
-                    <label>Nota (opcional)</label>
+                    <label>Mover a otra etapa</label>
+                    <select value={etapaDestino} onChange={(e) => setEtapaDestino(e.target.value)}>
+                      <option value="">Elige una etapa</option>
+                      {stages.filter((s) => s.key !== detail.status).map((s) => (
+                        <option key={s.key} value={s.key}>{s.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Nota al mover (opcional)</label>
                     <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
                   </div>
                 </div>
               )}
             </div>
             <div className="modal-actions">
+              <button className="btn-secondary" type="button" onClick={() => setConfirmandoEliminar(true)} style={{ marginRight: 'auto', color: '#c53030' }}>
+                Eliminar
+              </button>
               <button className="btn-secondary" onClick={() => setDetail(null)}>Cerrar</button>
-              {nextStage && (
+              {etapaDestino && (
+                <button className="auth-btn" onClick={handleMoveToStage} disabled={savingStage}>
+                  {savingStage ? 'Guardando...' : 'Mover'}
+                </button>
+              )}
+              {nextStage && !etapaDestino && (
                 <button className="auth-btn" onClick={handleAdvanceFromDetail} disabled={savingStage}>
                   {savingStage ? 'Guardando...' : `Avanzar a "${nextStage.label}"`}
                 </button>
@@ -271,6 +375,17 @@ export default function ComplaintsManagementPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmandoEliminar && detail && (
+        <ConfirmDialog
+          title="Eliminar queja o sugerencia"
+          message="Se borrará esta queja y su historial. Esta acción no se puede deshacer."
+          confirmLabel="Sí, eliminar"
+          danger
+          onConfirm={handleDeleteComplaint}
+          onCancel={() => setConfirmandoEliminar(false)}
+        />
       )}
     </div>
   );

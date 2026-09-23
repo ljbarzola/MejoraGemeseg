@@ -15,6 +15,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
+import { Section } from '../../common/decorators/section.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { PersonalService } from './personal.service';
@@ -36,7 +38,8 @@ import {
 } from './dto/training.dto';
 
 @Controller('personal')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+@Section('RRHH', 'view')
 export class PersonalController {
   constructor(
     private readonly personalService: PersonalService,
@@ -71,6 +74,7 @@ export class PersonalController {
   }
 
   @Post('contracts/templates')
+  @Section('RRHH', 'write')
   createTemplate(@Body() body: CreateContractTemplateDto, @Req() req: any) {
     return this.contractService.createTemplate(
       body,
@@ -80,6 +84,7 @@ export class PersonalController {
   }
 
   @Patch('contracts/templates/:id')
+  @Section('RRHH', 'write')
   updateTemplate(
     @Param('id') id: string,
     @Body() body: UpdateContractTemplateDto,
@@ -89,6 +94,7 @@ export class PersonalController {
   }
 
   @Post('contracts/templates/:id/download-drive')
+  @Section('RRHH', 'write')
   downloadTemplateFromDrive(@Param('id') id: string, @Req() req: any) {
     return this.contractService.downloadFromDrive(+id, req.user.companyId);
   }
@@ -99,6 +105,7 @@ export class PersonalController {
   }
 
   @Post('contracts/templates/:id/fields')
+  @Section('RRHH', 'write')
   saveTemplateFields(
     @Param('id') id: string,
     @Body() body: SaveContractFieldsDto,
@@ -112,6 +119,7 @@ export class PersonalController {
   }
 
   @Delete('contracts/templates/:id')
+  @Section('RRHH', 'write')
   deleteTemplate(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.contractService.deleteTemplate(id, req.user.companyId);
   }
@@ -132,6 +140,7 @@ export class PersonalController {
   }
 
   @Post('contracts/generate')
+  @Section('RRHH', 'write')
   generateContract(@Body() body: GenerateContractDto, @Req() req: any) {
     return this.contractService.generateContract(
       body,
@@ -146,6 +155,7 @@ export class PersonalController {
   }
 
   @Patch('contracts/:id')
+  @Section('RRHH', 'write')
   updateContract(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateContractDto,
@@ -160,6 +170,7 @@ export class PersonalController {
   }
 
   @Post('trainings/upload')
+  @Section('RRHH', 'write')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -172,11 +183,13 @@ export class PersonalController {
   }
 
   @Post('trainings')
+  @Section('RRHH', 'write')
   createTraining(@Body() body: CreateTrainingDto, @Req() req: any) {
     return this.trainingService.create(body, req.user.companyId, req.user.userId);
   }
 
   @Patch('trainings/:id')
+  @Section('RRHH', 'write')
   updateTraining(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateTrainingDto,
@@ -186,11 +199,13 @@ export class PersonalController {
   }
 
   @Delete('trainings/:id')
+  @Section('RRHH', 'write')
   deleteTraining(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.trainingService.delete(id, req.user.companyId);
   }
 
   @Post('trainings/:id/attachments')
+  @Section('RRHH', 'write')
   addTrainingAttachment(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: AddTrainingAttachmentDto,
@@ -200,6 +215,7 @@ export class PersonalController {
   }
 
   @Delete('trainings/:id/attachments/:attachmentId')
+  @Section('RRHH', 'write')
   removeTrainingAttachment(
     @Param('id', ParseIntPipe) id: number,
     @Param('attachmentId', ParseIntPipe) attachmentId: number,
@@ -209,6 +225,7 @@ export class PersonalController {
   }
 
   @Patch('trainings/:id/completed')
+  @Section('RRHH', 'write')
   setTrainingCompleted(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: SetTrainingCompletedDto,

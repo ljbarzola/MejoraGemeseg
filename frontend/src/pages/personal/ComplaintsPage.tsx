@@ -72,7 +72,12 @@ export default function ComplaintsPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div className="form-group">
             <label>Descripción *</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder="Describe la situación..." />
+            <textarea value={description} onChange={(e) => { setDescription(e.target.value); if (error) setError(''); }} rows={4} placeholder="Describe la situación..." />
+            <small style={{ color: description.trim().length >= 5 ? '#718096' : '#c53030' }}>
+              {description.trim().length < 5
+                ? 'Describe la situación con al menos 5 caracteres.'
+                : 'Listo para enviar.'}
+            </small>
           </div>
 
           {fields.map((f) => (
@@ -92,7 +97,13 @@ export default function ComplaintsPage() {
               Enviar de forma anónima
             </label>
           </div>
-          <button className="auth-btn" onClick={handleSubmit} disabled={sending} style={{ display: 'flex', alignItems: 'center', gap: '6px', alignSelf: 'flex-start' }}>
+          <button
+            className="auth-btn"
+            onClick={handleSubmit}
+            disabled={sending || description.trim().length < 5}
+            title={description.trim().length < 5 ? 'Describe la situación con al menos 5 caracteres.' : undefined}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', alignSelf: 'flex-start' }}
+          >
             <Send size={15} /> {sending ? 'Enviando...' : 'Enviar'}
           </button>
         </div>

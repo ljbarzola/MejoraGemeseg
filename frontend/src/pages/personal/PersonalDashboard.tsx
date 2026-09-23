@@ -28,6 +28,20 @@ function KpiCard({
   );
 }
 
+function SyncStaleBanner({ iso, etiqueta }: { iso?: string | null; etiqueta: string }) {
+  if (!iso) return null;
+  const fecha = new Date(iso);
+  if (Number.isNaN(fecha.getTime())) return null;
+  const dias = Math.floor((Date.now() - fecha.getTime()) / 86_400_000);
+  if (dias < 7) return null;
+  const texto = fecha.toLocaleDateString('es-EC', { day: 'numeric', month: 'long', year: 'numeric' });
+  return (
+    <div style={{ background: '#fffaf0', border: '1px solid #fbd38d', color: '#975a16', borderRadius: '8px', padding: '12px 16px', marginBottom: '12px', fontSize: '0.85rem' }}>
+      El listado de {etiqueta} no se sincroniza con Drive desde el {texto} ({dias} días). Abre ese listado y pulsa Sincronizar para actualizarlo.
+    </div>
+  );
+}
+
 export default function PersonalDashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState<any>(null);
@@ -106,6 +120,9 @@ export default function PersonalDashboard() {
       </div>
 
       {showHelp && <RrhhHelpModal onClose={() => setShowHelp(false)} />}
+
+      <SyncStaleBanner iso={data?.ultimaSyncGuardias} etiqueta="guardias" />
+      <SyncStaleBanner iso={data?.ultimaSyncAdministrativo} etiqueta="personal administrativo" />
 
       <h2 style={{ margin: '0 0 12px', fontSize: '0.95rem', color: 'var(--azul-oscuro)' }}>Requiere tu atención</h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: '16px', marginBottom: '28px' }}>

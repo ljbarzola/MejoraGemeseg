@@ -20,6 +20,7 @@ export class PersonalService {
       cedulasFuera,
       movimientosEnProceso,
       complianceOverview,
+      carpetasSync,
     ] = await Promise.all([
       // Antes contaba filas de `Candidate` (el Kanban de Sistema B, que no es
       // el flujo real de contratación — ver .agents/modules/reclutamiento.md
@@ -40,7 +41,23 @@ export class PersonalService {
         where: { companyId, estado: 'EN_PROCESO' },
       }),
       this.cumplimientoEntidadService.getComplianceOverview(companyId),
+      this.prisma.employeeDriveFolder.findMany({
+        where: {
+          companyId,
+          folderType: { in: ['CUSTODIAS', 'PERSONAL_ADMIN'] },
+          lastSyncAt: { not: null },
+        },
+        select: { folderType: true, lastSyncAt: true },
+      }),
     ]);
+
+    const ultimaSync = (tipo: string) => {
+      const fechas = carpetasSync
+        .filter((c) => c.folderType === tipo && c.lastSyncAt)
+        .map((c) => c.lastSyncAt as Date);
+      if (fechas.length === 0) return null;
+      return new Date(Math.max(...fechas.map((f) => f.getTime()))).toISOString();
+    };
 
     // Mismo criterio que GuardiasList.tsx/CustodiasService.getAvailableCustodios
     // para decidir quién cuenta como "guardia activo": carpetas de Drive tipo
@@ -68,6 +85,8 @@ export class PersonalService {
       guardiasSinAsignacion,
       documentosVencidosOPorVencer,
       movimientosEnProceso,
+      ultimaSyncGuardias: ultimaSync('CUSTODIAS'),
+      ultimaSyncAdministrativo: ultimaSync('PERSONAL_ADMIN'),
     };
   }
 }

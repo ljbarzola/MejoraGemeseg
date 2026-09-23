@@ -45,6 +45,7 @@ const AnalisisArchivoUnicoModal = lazy(
   () => import('./reclutamiento/AnalisisArchivoUnicoModal'),
 );
 import { REVIEW_COLORS } from '../../components/personal/reviewStatus';
+import { cedulaVisible, validarDatosPostulacion, valorCampoPostulacion } from '../../utils/postulacionValidacion';
 
 interface CampoRequerido {
   nombre: string;
@@ -71,7 +72,8 @@ const CAMPO_TIPOS: { value: string; label: string }[] = [
 ];
 const campoTipoLabel = (tipo?: string) => CAMPO_TIPOS.find((t) => t.value === tipo)?.label || 'Texto';
 
-const ARCHIVO_EXTENSIONES = ['pdf', 'jpg', 'png', 'doc', 'docx'];
+const ARCHIVO_EXTENSIONES = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'];
+const FORMATOS_POR_DEFECTO_PORTAL = '.pdf, .doc, .docx, .xls, .xlsx, .jpg, .jpeg, .png';
 
 // Apellidos va primero porque es el orden en que se arma el nombre de la
 // carpeta ("Apellidos Nombres", ver nombre-persona.util en el backend).
@@ -147,6 +149,8 @@ interface Candidate {
   email?: string;
   documentosRechazados: number;
   documentosPendientesRevision: number;
+  slots?: { nombre: string; obligatorio: boolean; driveFileId: string | null; nombreEnJson?: string | null }[];
+  alertaCedula?: string | null;
 }
 
 /**
@@ -288,6 +292,90 @@ function leerUltimaSincronizacion(): string | null {
   }
 }
 
+function guardarCandidatos(lista: Candidate[]) {
+  try {
+    localStorage.setItem(cacheKey('candidatos'), JSON.stringify(lista));
+  } catch {
+    /* la sesión sigue; solo no sobrevive a un F5 */
+  }
+}
+
+function aplicarRevisiones(
+  candidato: Candidate,
+  reviews: { driveFileId?: string | null; status: string }[],
+): Candidate {
+  const porArchivo = new Map(
+    reviews.filter((r) => r.driveFileId).map((r) => [r.driveFileId as string, r.status]),
+  );
+  const reqs = candidato.archivosRequeridos || [];
+  const slots = candidato.slots?.length
+    ? candidato.slots
+    : reqs.map((req) => {
+        const file = candidato.archivosSubidosList.find(
+          (f) =>
+            !f.name.toLowerCase().endsWith('.json') &&
+            f.name.toLowerCase().includes(req.nombre.toLowerCase()),
+        );
+        return {
+          nombre: req.nombre,
+          obligatorio: req.obligatorio !== false,
+          driveFileId: file?.id ?? null,
+        };
+      });
+  if (slots.length === 0) return candidato;
+  let rechazados = 0;
+  let pendientes = 0;
+  let aprobadosObligatorios = 0;
+  let presentes = 0;
+  const obligatorios = slots.filter((s) => s.obligatorio);
+  for (const slot of slots) {
+    if (!slot.driveFileId) continue;
+    presentes++;
+    const status = porArchivo.get(slot.driveFileId);
+    if (status === 'RECHAZADO') rechazados++;
+    else if (status === 'APROBADO') {
+      if (slot.obligatorio) aprobadosObligatorios++;
+    } else pendientes++;
+  }
+  return {
+    ...candidato,
+    completitudPercent:
+      obligatorios.length === 0
+        ? 100
+        : Math.min(100, Math.round((aprobadosObligatorios / obligatorios.length) * 100)),
+    archivosSubidosCount: presentes,
+    archivosRequeridosCount: slots.length,
+    documentosRechazados: rechazados,
+    documentosPendientesRevision: pendientes,
+  };
+}
+
+function documentosQueImpidenContratar(
+  candidato: Candidate,
+  reviews: { driveFileId?: string | null; status: string }[],
+): string[] {
+  const reqs = (candidato.archivosRequeridos || []).filter((r) => r.obligatorio !== false);
+  const motivos: string[] = [];
+  for (const req of reqs) {
+    const slot = candidato.slots?.find((s) => s.nombre === req.nombre);
+    const file = slot
+      ? candidato.archivosSubidosList.find((f) => f.id === slot.driveFileId)
+      : candidato.archivosSubidosList.find(
+          (f) =>
+            !f.name.toLowerCase().endsWith('.json') &&
+            f.name.toLowerCase().includes(req.nombre.toLowerCase()),
+        );
+    if (!file) {
+      motivos.push(`falta "${req.nombre}"`);
+      continue;
+    }
+    const status = reviews.find((r) => r.driveFileId === file.id)?.status;
+    if (status === 'RECHAZADO') motivos.push(`"${req.nombre}" está rechazado`);
+    else if (status !== 'APROBADO') motivos.push(`"${req.nombre}" todavía no está aprobado`);
+  }
+  return motivos;
+}
+
 function guardarCacheSincronizacion(candidatos: Candidate[]): string {
   const ahora = new Date().toISOString();
   try {
@@ -384,6 +472,8 @@ export default function ReclutamientoPage() {
   const [nuevoTipoContratacion, setNuevoTipoContratacion] = useState('GUARDIA');
   const [savingPuesto, setSavingPuesto] = useState(false);
   const [puestoError, setPuestoError] = useState('');
+  const [campoAviso, setCampoAviso] = useState('');
+  const [archivoAviso, setArchivoAviso] = useState('');
   const [syncError, setSyncError] = useState('');
 
   // Cambiar estado (Abierta/Cerrada) de una vacante, desde su tarjeta.
@@ -531,10 +621,16 @@ export default function ReclutamientoPage() {
     setNuevoArchivoExts([]);
     setNuevoArchivoObligatorio(true);
     setPuestoError('');
+    setCampoAviso('');
+    setArchivoAviso('');
   };
 
   const addCampo = () => {
-    if (!nuevoCampoNombre.trim()) return;
+    if (!nuevoCampoNombre.trim()) {
+      setCampoAviso('Escribe el nombre del dato antes de agregarlo.');
+      return;
+    }
+    setCampoAviso('');
     setCamposList((prev) => [...prev, { nombre: nuevoCampoNombre.trim(), tipo: nuevoCampoTipo, obligatorio: nuevoCampoObligatorio }]);
     setNuevoCampoNombre('');
     setNuevoCampoTipo('TEXTO');
@@ -550,7 +646,11 @@ export default function ReclutamientoPage() {
   };
 
   const addArchivo = () => {
-    if (!nuevoArchivoNombre.trim()) return;
+    if (!nuevoArchivoNombre.trim()) {
+      setArchivoAviso('Escribe el nombre del documento antes de agregarlo.');
+      return;
+    }
+    setArchivoAviso('');
     setArchivosList((prev) => [...prev, { nombre: nuevoArchivoNombre.trim(), extensiones: nuevoArchivoExts, obligatorio: nuevoArchivoObligatorio }]);
     setNuevoArchivoNombre('');
     setNuevoArchivoExts([]);
@@ -586,6 +686,11 @@ export default function ReclutamientoPage() {
       await deleteJobPosition(vacante.id);
       setConfirmandoEliminarVacante(null);
       loadPositions();
+      setCandidatos((prev) => {
+        const next = prev.filter((c) => c.puestoAplicado !== vacante.puesto);
+        guardarCandidatos(next);
+        return next;
+      });
     } catch (err: any) {
       setConfirmandoEliminarVacante(null);
       setEstadoVacanteError(
@@ -631,6 +736,14 @@ export default function ReclutamientoPage() {
       const reviews = await getDocumentReviews(selectedCandidate.cedula);
       setCandidateReviews(reviews || []);
       setRejectTarget(null);
+      setCandidatos((prev) => {
+        const next = prev.map((c) =>
+          c.id === selectedCandidate.id ? aplicarRevisiones(c, reviews || []) : c,
+        );
+        guardarCandidatos(next);
+        return next;
+      });
+      setSelectedCandidate((prev) => (prev ? aplicarRevisiones(prev, reviews || []) : prev));
     } catch (err: any) {
       setReviewError(err.response?.data?.message || 'No se pudo guardar la revisión.');
     } finally {
@@ -659,7 +772,22 @@ export default function ReclutamientoPage() {
 
   // Mueve la carpeta del postulante a Guardias (Sin Asignar) y sincroniza de
   // inmediato — al terminar, ya no aparece en esta lista.
-  const handleContratar = () => setConfirmandoContratar(true);
+  const handleContratar = () => {
+    if (!selectedCandidate) return;
+    if (loadingReviews) {
+      setContratarError('Espera a que carguen las revisiones de los documentos.');
+      return;
+    }
+    const motivos = documentosQueImpidenContratar(selectedCandidate, candidateReviews);
+    if (motivos.length > 0) {
+      setContratarError(
+        `No se puede contratar mientras haya documentos obligatorios pendientes o rechazados: ${motivos.join('; ')}.`,
+      );
+      return;
+    }
+    setContratarError('');
+    setConfirmandoContratar(true);
+  };
 
   const confirmarContratar = async () => {
     if (!selectedCandidate) return;
@@ -682,8 +810,8 @@ export default function ReclutamientoPage() {
   // datos ya inferidos del candidato (nombre/cédula/teléfono/email) para no
   // hacer retipear a RRHH lo que ya se conoce.
   const getCampoValor = (candidate: Candidate, campo: CampoRequerido): string => {
-    const guardado = candidate.datosFormulario?.[campo.nombre];
-    if (guardado) return String(guardado);
+    const guardado = valorCampoPostulacion(candidate.datosFormulario, campo.nombre);
+    if (guardado) return guardado;
     const key = campo.nombre.toLowerCase();
     if (key.includes('nombre')) return candidate.nombre || '';
     if (key.includes('cédula') || key.includes('cedula')) return candidate.cedula || '';
@@ -705,6 +833,11 @@ export default function ReclutamientoPage() {
 
   const handleSaveDatos = async () => {
     if (!selectedCandidate) return;
+    const errores = validarDatosPostulacion(datosForm, selectedCandidate.camposRequeridos || []);
+    if (errores.length > 0) {
+      setDatosError(errores.join(' '));
+      return;
+    }
     setSavingDatos(true);
     setDatosError('');
     try {
@@ -918,7 +1051,7 @@ export default function ReclutamientoPage() {
       <div className="admin-section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem', fontWeight: 700, color: 'var(--azul-oscuro)', margin: 0 }}>
-            <Users size={16} /> Candidatos Postulados ({candidatos.length})
+            <Users size={16} /> Candidatos Postulados ({search.trim() ? `${filteredCandidates.length} de ${candidatos.length}` : candidatos.length})
           </h2>
           <input
             type="text"
@@ -940,7 +1073,9 @@ export default function ReclutamientoPage() {
           </div>
         ) : filteredCandidates.length === 0 ? (
           <div className="empty-state">
-            No hay candidatos postulados en la carpeta Reclutamiento de Google Drive.
+            {search.trim()
+              ? 'Ningún candidato coincide con la búsqueda.'
+              : 'No hay candidatos postulados en la carpeta Reclutamiento de Google Drive.'}
           </div>
         ) : (
           <div className="tasks-table-wrapper">
@@ -960,8 +1095,11 @@ export default function ReclutamientoPage() {
                   <tr key={c.id || c.cedula}>
                     <td>
                       <div style={{ fontWeight: 700, color: 'var(--azul-oscuro)' }}>{c.nombre}</div>
+                      {c.alertaCedula && (
+                        <div style={{ fontSize: '0.72rem', color: '#c53030', marginTop: '2px' }}>{c.alertaCedula}</div>
+                      )}
                     </td>
-                    <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{c.cedula}</td>
+                    <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{cedulaVisible(c.cedula)}</td>
                     <td>
                       <span style={{ padding: '3px 10px', borderRadius: '6px', border: '1px solid #bfdbfe', color: '#1d4ed8', fontSize: '0.78rem', fontWeight: 700 }}>
                         {c.puestoAplicado}
@@ -1154,7 +1292,10 @@ export default function ReclutamientoPage() {
                       </div>
                       <div>
                         <div style={{ fontSize: '0.7rem', color: '#718096', fontWeight: 700 }}>CÉDULA</div>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 700, fontFamily: 'monospace' }}>{selectedCandidate.cedula}</div>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 700, fontFamily: 'monospace' }}>{cedulaVisible(selectedCandidate.cedula)}</div>
+                        {selectedCandidate.alertaCedula && (
+                          <div style={{ fontSize: '0.78rem', color: '#c53030', marginTop: '4px' }}>{selectedCandidate.alertaCedula}</div>
+                        )}
                       </div>
                     </>
                   )}
@@ -1199,7 +1340,12 @@ export default function ReclutamientoPage() {
                         <span>Revisión</span>
                       </div>
                       {selectedCandidate.archivosRequeridos.map((req) => {
-                        const file = selectedCandidate.archivosSubidosList.find((f) => f.name.toLowerCase().includes(req.nombre.toLowerCase()));
+                        const slot = selectedCandidate.slots?.find((s) => s.nombre === req.nombre);
+                        const file = slot
+                          ? selectedCandidate.archivosSubidosList.find((f) => f.id === slot.driveFileId)
+                          : selectedCandidate.archivosSubidosList.find(
+                              (f) => !f.name.toLowerCase().endsWith('.json') && f.name.toLowerCase().includes(req.nombre.toLowerCase()),
+                            );
                         const review = file ? candidateReviews.find((r) => r.driveFileId === file.id) : null;
                         const reviewColor = REVIEW_COLORS[review?.status || 'PENDIENTE'];
                         const busy = !!file && pendingReviewKey === file.id;
@@ -1220,6 +1366,10 @@ export default function ReclutamientoPage() {
                                     <FileText size={11} style={{ flexShrink: 0 }} />
                                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
                                   </div>
+                                ) : slot?.nombreEnJson ? (
+                                  <div style={{ fontSize: '0.72rem', color: '#975a16', marginTop: '2px' }} title={slot.nombreEnJson}>
+                                    {slot.nombreEnJson}
+                                  </div>
                                 ) : req.extensiones?.length ? (
                                   <div style={{ fontSize: '0.72rem', color: '#a0aec0', marginTop: '2px' }}>
                                     Acepta: {req.extensiones.map((e) => '.' + e).join(', ')}
@@ -1230,6 +1380,10 @@ export default function ReclutamientoPage() {
                                 {file ? (
                                   <span style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#16a34a', fontWeight: 700, fontSize: '0.76rem' }}>
                                     <Check size={13} /> Subido
+                                  </span>
+                                ) : slot?.nombreEnJson ? (
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#975a16', fontWeight: 700, fontSize: '0.76rem' }} title={slot.nombreEnJson}>
+                                    En el JSON
                                   </span>
                                 ) : esObligatorio ? (
                                   <span style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#dc2626', fontWeight: 700, fontSize: '0.76rem' }}>
@@ -1438,7 +1592,7 @@ export default function ReclutamientoPage() {
               </button>
             </div>
 
-            <form onSubmit={editingPosition ? handleEditPosition : handleCreatePosition} className="cacao-form">
+            <form noValidate onSubmit={editingPosition ? handleEditPosition : handleCreatePosition} className="cacao-form">
               <div className="modal-body">
                 {puestoError && <div className="form-error">{puestoError}</div>}
 
@@ -1447,7 +1601,7 @@ export default function ReclutamientoPage() {
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <div className="form-group" style={{ flex: 1 }}>
                     <label>Nombre del puesto *</label>
-                    <input type="text" value={nuevoPuesto} onChange={(e) => setNuevoPuesto(e.target.value)} placeholder="Ej: Guardia de Seguridad" required />
+                    <input type="text" value={nuevoPuesto} onChange={(e) => setNuevoPuesto(e.target.value)} placeholder="Ej: Guardia de Seguridad" aria-label="Nombre del puesto" />
                   </div>
                   <div className="form-group" style={{ width: '160px' }}>
                     <label>Estado</label>
@@ -1509,6 +1663,7 @@ Con "Apellidos" y "Nombres" se arma el nombre de la carpeta de la postulación e
                       <Plus size={16} />
                     </button>
                   </div>
+                  {campoAviso && <small style={{ color: '#c53030', display: 'block', marginTop: '6px' }}>{campoAviso}</small>}
 
                   {camposList.length > 0 ? (
                     <div style={{ marginTop: '10px', border: '1px solid var(--gris-claro)', borderRadius: '10px', overflow: 'hidden' }}>
@@ -1562,7 +1717,7 @@ Con "Apellidos" y "Nombres" se arma el nombre de la carpeta de la postulación e
                 <div className="form-group">
                   <label>Documentos que debe subir</label>
                   <small style={{ display: 'block', color: 'var(--azul-claro)', opacity: 0.75, margin: '-2px 0 8px' }}>
-                    Los formatos son opcionales: si no marcas ninguno, ese documento acepta archivos de cualquier tipo.
+                    Si no marcas ninguno, el portal no acepta cualquier archivo: usa pdf, doc, docx, xls, xlsx, jpg, jpeg y png. Marca formatos solo cuando quieras una lista más corta.
                   </small>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <input
@@ -1579,6 +1734,7 @@ Con "Apellidos" y "Nombres" se arma el nombre de la carpeta de la postulación e
                       <Plus size={16} />
                     </button>
                   </div>
+                  {archivoAviso && <small style={{ color: '#c53030', display: 'block', marginTop: '6px' }}>{archivoAviso}</small>}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', margin: '8px 0 0' }}>
                     <span style={{ fontSize: '0.75rem', color: 'var(--azul-claro)', opacity: 0.7 }}>Formatos que acepta:</span>
                     {ARCHIVO_EXTENSIONES.map((ext) => {
@@ -1613,7 +1769,7 @@ Con "Apellidos" y "Nombres" se arma el nombre de la carpeta de la postulación e
                           >
                             <span style={{ fontWeight: 600, color: 'var(--azul-oscuro)' }}>{a.nombre}</span>
                             <span style={{ color: 'var(--azul-claro)', fontSize: '0.78rem' }}>
-                              {a.extensiones?.length ? a.extensiones.map((e) => '.' + e).join(', ') : 'Cualquier formato'}
+                              {a.extensiones?.length ? a.extensiones.map((e) => '.' + e).join(', ') : `Por defecto (${FORMATOS_POR_DEFECTO_PORTAL})`}
                             </span>
                             <Switch checked={obligatorio} onChange={() => toggleArchivoObligatorio(i)} label={obligatorio ? 'Obligatorio' : 'Opcional'} />
                             <button

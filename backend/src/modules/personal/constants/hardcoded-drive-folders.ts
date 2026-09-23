@@ -36,7 +36,7 @@ export const HARDCODED_DRIVE_FOLDERS: Record<
     name: 'Reclutamiento',
   },
   CAPACITACIONES: {
-    id: '',
+    id: '1KNDUzJR77Emdx1pwlee3b670OY0oaE9w',
     name: 'Capacitaciones',
   },
   VENTAS_CONTRATOS: {

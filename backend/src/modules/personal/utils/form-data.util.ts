@@ -38,6 +38,38 @@ export function buscarDatoFormulario(
   return '';
 }
 
+// El portal guarda los campos fijos con un nombre canónico ("Teléfono",
+// "Email", "Cédula") aunque la vacante los haya llamado distinto ("Celular",
+// "Correo"). Sin este puente, el expediente muestra "Falta" en un dato que
+// sí está en candidato.json.
+const GRUPOS_CAMPO: string[][] = [
+  ['cedula', 'cédula'],
+  ['email', 'correo', 'correo electronico', 'correo electrónico'],
+  ['telefono', 'teléfono', 'celular', 'teléfono celular'],
+  ['nombres'],
+  ['apellidos'],
+  ['nombre completo', 'nombre'],
+];
+
+function claveCampo(valor: string): string {
+  return removeAccents(valor.toLowerCase()).replace(/[^a-z0-9]+/g, '');
+}
+
+export function valorCampoPostulacion(
+  datos: Record<string, any> | null | undefined,
+  nombreCampo: string,
+): string {
+  const directo = buscarDatoFormulario(datos, [nombreCampo]);
+  if (directo) return directo;
+  const clave = claveCampo(nombreCampo);
+  for (const grupo of GRUPOS_CAMPO) {
+    if (!grupo.map(claveCampo).includes(clave)) continue;
+    const hallado = buscarDatoFormulario(datos, grupo);
+    if (hallado) return hallado;
+  }
+  return '';
+}
+
 // Clave reservada dentro de camposPersonalizados donde se guarda, íntegro y
 // para siempre, el datosFormulario que el candidato llenó al postularse (ver
 // DriveService.contratarCandidato). Nunca se expone tal cual al frontend

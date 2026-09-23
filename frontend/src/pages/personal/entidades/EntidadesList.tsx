@@ -21,13 +21,16 @@ import {
   type AnticipacionUnidad,
 } from '../../../services/entidades.service';
 import { usePerm } from '../../../contexts/PermissionsContext';
+import { conUnidad } from '../../../utils/plural';
 
-const DURACION_UNIDAD_LABEL: Record<DuracionUnidad, string> = { DIAS: 'días', MESES: 'meses', ANIOS: 'años' };
-const ANTICIPACION_UNIDAD_LABEL: Record<AnticipacionUnidad, string> = { DIAS: 'días', SEMANAS: 'semanas', MESES: 'meses' };
+const DURACION_SINGULAR: Record<DuracionUnidad, string> = { DIAS: 'día', MESES: 'mes', ANIOS: 'año' };
+const DURACION_PLURAL: Record<DuracionUnidad, string> = { DIAS: 'días', MESES: 'meses', ANIOS: 'años' };
+const ANTICIPACION_SINGULAR: Record<AnticipacionUnidad, string> = { DIAS: 'día', SEMANAS: 'semana', MESES: 'mes' };
+const ANTICIPACION_PLURAL: Record<AnticipacionUnidad, string> = { DIAS: 'días', SEMANAS: 'semanas', MESES: 'meses' };
 
 function formatRequisitoMeta(r: RequisitoDocumento): string {
   if (r.duracionValor && r.duracionUnidad) {
-    return `vence cada ${r.duracionValor} ${DURACION_UNIDAD_LABEL[r.duracionUnidad]} · avisa ${r.anticipacionValor} ${ANTICIPACION_UNIDAD_LABEL[r.anticipacionUnidad]} antes`;
+    return `vence cada ${conUnidad(r.duracionValor, DURACION_SINGULAR[r.duracionUnidad], DURACION_PLURAL[r.duracionUnidad])} · avisa ${conUnidad(r.anticipacionValor, ANTICIPACION_SINGULAR[r.anticipacionUnidad], ANTICIPACION_PLURAL[r.anticipacionUnidad])} antes`;
   }
   return 'no vence · nunca avisa';
 }
