@@ -39,13 +39,14 @@ function isPending(t: Training) {
 // todavía, ej. al crear) como para persistidos de inmediato (al editar) —
 // el padre decide qué hace onAdd/onRemove en cada caso.
 function AttachmentSection({
-  title, items, onAdd, onRemove, canEdit,
+  title, items, onAdd, onRemove, canEdit, uploadFn,
 }: {
   title: string;
   items: { key: string | number; url: string; name?: string | null }[];
   onAdd: (url: string, name?: string) => void;
   onRemove: (key: string | number) => void;
   canEdit: boolean;
+  uploadFn: (file: File) => Promise<{ url: string }>;
 }) {
   const [pendingUrl, setPendingUrl] = useState('');
 
@@ -69,7 +70,7 @@ function AttachmentSection({
       {canEdit && (
         <div style={{ display: 'flex', gap: '8px', marginTop: '8px', alignItems: 'flex-end' }}>
           <div style={{ flex: 1 }}>
-            <FileOrLinkInput value={pendingUrl} onChange={setPendingUrl} uploadFn={uploadTrainingFile} accept="image/*,.pdf,.doc,.docx" />
+            <FileOrLinkInput value={pendingUrl} onChange={setPendingUrl} uploadFn={uploadFn} accept="image/*,.pdf,.doc,.docx" />
           </div>
           <button
             type="button"
@@ -96,6 +97,18 @@ export default function TrainingsPage() {
 
   const [driveConfig, setDriveConfig] = useState<any>(null);
   const [loadingConfig, setLoadingConfig] = useState(true);
+  const subirArchivoCapacitacion = async (file: File) => {
+    if (!driveConfig) {
+      throw {
+        response: {
+          data: {
+            message: 'Subir un archivo necesita la carpeta de Drive de Capacitaciones. Mientras tanto puedes pegar un enlace.',
+          },
+        },
+      };
+    }
+    return uploadTrainingFile(file);
+  };
 
   const [showModal, setShowModal] = useState(false);
   const [editingTraining, setEditingTraining] = useState<Training | null>(null);
@@ -320,7 +333,7 @@ export default function TrainingsPage() {
           </div>
           <div className="header-actions">
             {canEdit && (
-              <button className="auth-btn" onClick={openCreate} disabled={!driveConfig}>
+              <button className="auth-btn" onClick={openCreate}>
                 <Plus size={16} /> Nueva capacitación
               </button>
             )}
@@ -341,7 +354,7 @@ export default function TrainingsPage() {
 
       {canEdit && !loadingConfig && !driveConfig && (
         <div style={{ background: '#fffaf0', border: '1px solid #fbd38d', color: '#975a16', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '0.85rem' }}>
-          Falta definir la carpeta de Drive de Capacitaciones en el sistema. Avísale a Sistemas.
+          Puedes registrar la capacitación, las fechas y los enlaces. Subir un archivo sigue bloqueado hasta que Sistemas defina la carpeta de Drive de Capacitaciones.
         </div>
       )}
 
@@ -484,6 +497,7 @@ export default function TrainingsPage() {
                     onAdd={(url) => handleAddLiveAttachment(editingTraining.id, 'DOCUMENTO', url)}
                     onRemove={(key) => handleRemoveLiveAttachment(editingTraining.id, Number(key))}
                     canEdit={canEdit}
+                    uploadFn={subirArchivoCapacitacion}
                   />
                 ) : (
                   <AttachmentSection
@@ -492,6 +506,7 @@ export default function TrainingsPage() {
                     onAdd={(url) => setStagedDocs((prev) => [...prev, { url }])}
                     onRemove={(key) => setStagedDocs((prev) => prev.filter((_, i) => i !== Number(key)))}
                     canEdit={canEdit}
+                    uploadFn={subirArchivoCapacitacion}
                   />
                 )}
 
@@ -502,6 +517,7 @@ export default function TrainingsPage() {
                     onAdd={(url) => handleAddLiveAttachment(editingTraining.id, 'EVIDENCIA', url)}
                     onRemove={(key) => handleRemoveLiveAttachment(editingTraining.id, Number(key))}
                     canEdit={canEdit}
+                    uploadFn={subirArchivoCapacitacion}
                   />
                 )}
               </div>
@@ -536,6 +552,7 @@ export default function TrainingsPage() {
                 onAdd={(url) => handleAddLiveAttachment(completingTraining.id, 'EVIDENCIA', url)}
                 onRemove={(key) => handleRemoveLiveAttachment(completingTraining.id, Number(key))}
                 canEdit
+                uploadFn={subirArchivoCapacitacion}
               />
             </div>
             <div className="modal-actions">

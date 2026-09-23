@@ -169,6 +169,9 @@ export const createComplaint = (data: { description: string; isAnonymous?: boole
 export const getAllComplaints = (): Promise<Complaint[]> => api.get('/personal/complaints').then(r => r.data);
 export const changeComplaintStage = (id: number, data: { toStatus: ComplaintStatus; notes?: string }): Promise<Complaint> =>
   api.patch(`/personal/complaints/${id}/stage`, data).then(r => r.data);
+export const replyComplaint = (id: number, notes: string): Promise<Complaint> =>
+  api.post(`/personal/complaints/${id}/reply`, { notes }).then(r => r.data);
+export const deleteComplaint = (id: number) => api.delete(`/personal/complaints/${id}`).then(r => r.data);
 
 export const getComplaintFields = (): Promise<ComplaintFieldDefinition[]> =>
   api.get('/personal/complaint-fields').then(r => r.data);

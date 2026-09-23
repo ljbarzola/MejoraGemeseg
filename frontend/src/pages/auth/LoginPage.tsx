@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate, Link } from 'react-router-dom';
 import { login as loginService, saveAuth, requestPasswordReset, confirmPasswordReset } from '../../services/auth.service';
-import { useCompany } from '../../contexts/ThemeContext';
+import { cachedThemeForDomain, useCompany } from '../../contexts/ThemeContext';
 
 const loginSchema = z.object({
   email: z
@@ -20,7 +20,7 @@ type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { theme, loadThemeByDomain } = useCompany();
+  const { theme, loadThemeByDomain, applyTheme } = useCompany();
   const [serverError, setServerError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
@@ -48,32 +48,31 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
   });
+  const emailValue = watch('email');
 
   useEffect(() => {
-    const emailInput = document.getElementById('email') as HTMLInputElement;
-    if (!emailInput) return;
-    let debounceTimer: ReturnType<typeof setTimeout>;
-    const handler = () => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(async () => {
-        const email = emailInput.value;
-        const domain = email.split('@')[1];
-        if (domain && domain.includes('.')) {
-          const found = await loadThemeByDomain(domain);
-          if (found) setDetectedCompany(true);
-        }
-      }, 300);
-    };
-    emailInput.addEventListener('input', handler);
-    return () => {
-      clearTimeout(debounceTimer);
-      emailInput.removeEventListener('input', handler);
-    };
-  }, [loadThemeByDomain]);
+    const domain = (emailValue || '').split('@')[1]?.trim().toLowerCase() || '';
+    const tld = domain.split('.').pop() || '';
+    if (!domain.includes('.') || tld.length < 2) {
+      setDetectedCompany(false);
+      return;
+    }
+    const cached = cachedThemeForDomain(domain);
+    if (cached?.logoUrl) {
+      applyTheme(cached);
+      setDetectedCompany(true);
+    }
+    let cancelled = false;
+    loadThemeByDomain(domain).then((found) => {
+      if (!cancelled) setDetectedCompany(found);
+    });
+    return () => { cancelled = true; };
+  }, [emailValue, loadThemeByDomain, applyTheme]);
 
   const onSubmit = async (data: LoginForm) => {
     setServerError('');

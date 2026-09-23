@@ -29,6 +29,7 @@ import GuardiaFichaModal from '../../components/personal/GuardiaFichaModal';
 import MovimientoDetalleModal from '../../components/personal/MovimientoDetalleModal';
 import PersonalFieldsConfigModal from '../../components/personal/PersonalFieldsConfigModal';
 import { usePerm } from '../../contexts/PermissionsContext';
+import { cedulaVisible } from '../../utils/postulacionValidacion';
 import { extractDriveFolderId, buildDriveFolderLink } from '../../utils/driveLink';
 import { formatFechaHoraSync } from '../../utils/formatFechaHora';
 
@@ -630,7 +631,7 @@ export default function GuardiasList() {
                         {r.nombres || '—'}
                       </span>
                     </td>
-                    <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{r.cedula || '—'}</td>
+                    <td style={{ fontFamily: 'monospace', fontWeight: 600 }} title={cedulaVisible(r.cedula) === 'Sin cédula' ? 'Esta carpeta no tiene una cédula de 10 dígitos. El identificador interno no es una cédula.' : undefined}>{cedulaVisible(r.cedula)}</td>
                     <td><span className="truncate" title={r.entidad?.nombre}>{r.entidad ? r.entidad.nombre : <span style={{ color: '#a0aec0' }}>Sin asignación</span>}</span></td>
                     <td>
                       {r.entidad ? (

@@ -33,6 +33,7 @@ import { ComplaintService } from './services/complaint.service';
 import {
   CreateComplaintDto,
   ChangeComplaintStageDto,
+  ReplyComplaintDto,
 } from './dto/complaint.dto';
 import { ComplaintFieldDefinitionService } from './services/complaint-field-definition.service';
 import {
@@ -411,6 +412,27 @@ export class EntidadController {
       req.user.companyId,
       req.user.userId,
     );
+  }
+
+  @Post('complaints/:id/reply')
+  @Section('RRHH', 'write')
+  replyComplaint(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: ReplyComplaintDto,
+    @Req() req: any,
+  ) {
+    return this.complaintService.responder(
+      id,
+      body.notes,
+      req.user.companyId,
+      req.user.userId,
+    );
+  }
+
+  @Delete('complaints/:id')
+  @Section('RRHH', 'write')
+  deleteComplaint(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.complaintService.delete(id, req.user.companyId);
   }
 
   // CAMPOS EXTRA DEL FORMULARIO DE QUEJAS (configurados por RRHH). El GET no

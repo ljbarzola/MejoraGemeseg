@@ -255,7 +255,11 @@ export default function ComplaintStagesConfigModal({ onClose, onChanged }: Props
     {confirmandoDelete && (
       <ConfirmDialog
         title="Eliminar etapa"
-        message={`¿Eliminar la etapa "${confirmandoDelete.label}"? Esta acción no se puede deshacer.`}
+        message={
+          stages.length === 1
+            ? `¿Eliminar la etapa "${confirmandoDelete.label}"? Si es la única, también se borran las quejas que estén en ella. Esta acción no se puede deshacer.`
+            : `¿Eliminar la etapa "${confirmandoDelete.label}"? Esta acción no se puede deshacer.`
+        }
         confirmLabel="Sí, eliminar"
         danger
         onConfirm={confirmarDelete}

@@ -66,7 +66,7 @@ export default function ContractsList() {
         <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS</p>
-            <h1>Documentación</h1>
+            <h1>Contratos</h1>
           </div>
           <div className="header-actions">
             {carpetaDriveUrl && (
@@ -150,7 +150,14 @@ export default function ContractsList() {
                         backgroundColor: c.status === 'DRAFT' ? '#fefcbf' : '#c6f6d5',
                         color: c.status === 'DRAFT' ? '#975a16' : '#276749',
                       }}>
-                        {c.status}
+                        {{
+                          DRAFT: 'Borrador',
+                          GENERATING: 'Generando',
+                          READY: 'Listo',
+                          SENT: 'Enviado',
+                          SIGNED: 'Firmado',
+                          CANCELLED: 'Cancelado',
+                        }[c.status as string] || c.status}
                       </span>
                     </td>
                     <td>{new Date(c.createdAt).toLocaleDateString('es-EC')}</td>

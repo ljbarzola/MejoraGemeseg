@@ -56,7 +56,9 @@ export class TrainingService {
   }
 
   async create(dto: CreateTrainingDto, companyId: number, userId: number) {
-    await this.requireFolder(companyId);
+    // El registro vive en la base. La carpeta de Drive solo hace falta para
+    // subir un archivo (uploadFile). Sin carpeta, igual se puede dar de alta
+    // la capacitación, ponerle fecha y pegar un enlace.
     return this.prisma.training.create({
       data: {
         name: dto.name,

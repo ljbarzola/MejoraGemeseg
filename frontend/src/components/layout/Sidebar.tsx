@@ -61,7 +61,7 @@ export default function Sidebar() {
 
   const custodiosItems = [
     { label: 'Listado de Guardias', path: '/rrhh/guardias', icon: '👮' },
-    { label: 'Documentación', path: '/rrhh/contracts', icon: '📄' },
+    { label: 'Contratos', path: '/rrhh/contracts', icon: '📄' },
     { label: 'Entidades y Requisitos', path: '/rrhh/entidades', icon: '🏢' },
     { label: 'Cumplimiento', path: '/rrhh/cumplimiento', icon: '📊' },
     { label: 'Historial', path: '/rrhh/historial', icon: '🔄' },

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { getCompanyBySlug, getCompanyByDomain, type Company } from '../services/company.service';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -42,6 +42,31 @@ const ThemeContext = createContext<ThemeContextType>({
   loadThemeByDomain: async () => false,
 });
 
+const THEME_CACHE_KEY = 'company_theme_by_domain';
+
+function domainKey(domain: string): string {
+  return domain.replace(/^@/, '').trim().toLowerCase();
+}
+
+function readThemeCache(): Record<string, CompanyTheme> {
+  try {
+    const raw = localStorage.getItem(THEME_CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function cachedThemeForDomain(domain: string): CompanyTheme | null {
+  return readThemeCache()[domainKey(domain)] || null;
+}
+
+function writeThemeCache(domain: string, theme: CompanyTheme) {
+  const all = readThemeCache();
+  all[domainKey(domain)] = theme;
+  localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(all));
+}
+
 export function CompanyProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<CompanyTheme>(() => {
     const saved = localStorage.getItem('company_theme');
@@ -51,6 +76,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     return DEFAULT_THEME;
   });
   const [loading, setLoading] = useState(false);
+  const domainRequest = useRef('');
 
   const applyTheme = useCallback((t: CompanyTheme) => {
     const root = document.documentElement;
@@ -80,16 +106,20 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   }, [applyTheme]);
 
   const loadThemeByDomain = useCallback(async (domain: string) => {
-    setLoading(true);
+    const key = domainKey(domain);
+    if (!key.includes('.') || (key.split('.').pop() || '').length < 2) return false;
+    domainRequest.current = key;
+    const cached = readThemeCache()[key];
+    if (cached) applyTheme(cached);
     try {
-      const company = await getCompanyByDomain(domain);
-      applyTheme({ ...company, logoUrl: resolveLogoUrl(company.logoUrl, company.slug) });
+      const company = await getCompanyByDomain(key);
+      if (domainRequest.current !== key) return true;
+      const next = { ...company, logoUrl: resolveLogoUrl(company.logoUrl, company.slug) };
+      writeThemeCache(key, next);
+      applyTheme(next);
       return true;
     } catch {
-      // Si el dominio no coincide con ninguna empresa, no cambiar el tema — mantener el actual
-      return false;
-    } finally {
-      setLoading(false);
+      return !!cached && domainRequest.current === key;
     }
   }, [applyTheme]);
 
