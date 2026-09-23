@@ -140,6 +140,9 @@ export class AuthService {
 
   private static readonly CODIGO_VIGENCIA_MIN = 15;
   private static readonly MAX_INTENTOS = 5;
+  // El código de contraseña sale siempre de esta casilla. Los recordatorios
+  // de cumplimiento usan, en cambio, el remitente de Configurar notificaciones.
+  private static readonly REMITENTE_CONTRASENA = 'sistemas@gemeseg.com';
 
   /**
    * Paso 1. Manda un código de 6 dígitos al correo.
@@ -176,20 +179,11 @@ export class AuthService {
       },
     });
 
-    // Sale desde el correo que configuró la empresa de esa persona, igual que
-    // los recordatorios de cumplimiento: recibir el código desde una
-    // dirección distinta a la habitual daría la impresión de ser phishing.
-    const configCorreo = user.companyId
-      ? await this.prisma.notificationConfig.findUnique({
-          where: { companyId: user.companyId },
-        })
-      : null;
-
     try {
       await this.gmailMailService.sendMail({
         to: user.email,
-        from: configCorreo?.senderEmail,
-        fromName: configCorreo?.senderName,
+        from: AuthService.REMITENTE_CONTRASENA,
+        fromName: 'Sistemas',
         subject: 'Código para recuperar tu contraseña',
         bodyText: [
           `Hola ${user.fullName},`,

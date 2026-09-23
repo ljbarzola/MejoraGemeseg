@@ -281,6 +281,8 @@ export const setGuardiaContacto = (cedula: string, email: string): Promise<Guard
 
 export interface GuardiaFichaPersonal {
   cedula: string;
+  // Vacía cuando la persona todavía no tiene cédula de 10 dígitos.
+  cedulaVisible?: string;
   telefono: string | null;
   email: string | null;
   direccion: string | null;
@@ -309,6 +311,7 @@ export interface UpdateGuardiaFichaPersonalInput {
   puestoFormal?: string | null;
   salarioAcordado?: number | null;
   camposPersonalizados?: Record<string, string>;
+  cedulaIngresada?: string | null;
 }
 
 export const getGuardiaFicha = (cedula: string): Promise<GuardiaFichaPersonal> =>

@@ -91,8 +91,11 @@ export default function AdministrativeStaff() {
     setSyncing(true);
     setSyncError('');
     try {
-      await syncPersonalAdminFolder();
+      const result = await syncPersonalAdminFolder();
       loadStaff();
+      if (Array.isArray(result?.errors) && result.errors.length > 0) {
+        setSyncError(result.errors.join(' '));
+      }
     } catch (err: any) {
       setSyncError(err.response?.data?.message || 'No se pudo sincronizar con Drive.');
     } finally {

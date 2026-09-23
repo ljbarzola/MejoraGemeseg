@@ -43,7 +43,13 @@ export const saveContractTemplateFields = (id: number, fields: ContractField[]) 
 export const deleteContractTemplate = (id: number) => api.delete(`/personal/contracts/templates/${id}`);
 export const getContractAutofill = (templateId: number, cedula: string, nombreGuardia: string): Promise<ContractAutofillField[]> =>
   api.get('/personal/contracts/autofill', { params: { templateId, cedula, nombreGuardia } }).then(r => r.data);
-export const generateContract = (data: { templateId: number; cedula: string; nombreGuardia: string; fieldValues: Record<string, string> }) =>
+export const generateContract = (data: {
+  templateId: number;
+  cedula: string;
+  nombreGuardia: string;
+  fieldValues: Record<string, string>;
+  guardarEn?: 'general' | 'guardia';
+}) =>
   api.post('/personal/contracts/generate', data).then(r => r.data);
 export const getContracts = () => api.get('/personal/contracts').then(r => r.data);
 export const updateContract = (id: number, data: { status?: string; generatedUrl?: string }) => api.patch(`/personal/contracts/${id}`, data).then(r => r.data);
@@ -224,6 +230,7 @@ export interface AdministrativeStaffFicha {
   contactoEmergenciaTelefono: string | null;
   salarioAcordado: number | null;
   camposPersonalizados: Record<string, string>;
+  cedulaVisible?: string;
   updatedAt?: string;
 }
 
@@ -238,6 +245,7 @@ export interface UpdateAdministrativeStaffFichaInput {
   contactoEmergenciaTelefono?: string | null;
   salarioAcordado?: number | null;
   camposPersonalizados?: Record<string, string>;
+  cedulaIngresada?: string | null;
 }
 
 export const getAdministrativoFicha = (cedula: string): Promise<AdministrativeStaffFicha> =>

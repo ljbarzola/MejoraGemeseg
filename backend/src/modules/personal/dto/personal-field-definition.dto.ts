@@ -47,7 +47,7 @@ export const DEFAULT_FIELDS_BY_SCOPE: Record<
   ],
   GUARDIA: [
     { key: 'telefono', label: 'Teléfono', type: 'TEXT', category: 'PERSONAL' },
-    { key: 'email', label: 'Email', type: 'TEXT', category: 'PERSONAL' },
+    { key: 'email', label: 'Correo de contacto', type: 'TEXT', category: 'PERSONAL' },
     { key: 'direccion', label: 'Dirección', type: 'TEXT', category: 'PERSONAL' },
     { key: 'fecha_nacimiento', label: 'Fecha de nacimiento', type: 'DATE', category: 'PERSONAL' },
     { key: 'contacto_emergencia_nombre', label: 'Contacto de emergencia — nombre', type: 'TEXT', category: 'PERSONAL' },

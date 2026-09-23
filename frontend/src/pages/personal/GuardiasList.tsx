@@ -719,7 +719,7 @@ export default function GuardiasList() {
         )}
       </div>
 
-      <GuardiaFichaModal guardia={fichaGuardia} onClose={() => setFichaGuardia(null)} />
+      <GuardiaFichaModal guardia={fichaGuardia} onClose={() => setFichaGuardia(null)} onSaved={load} />
       <MovimientoDetalleModal movimientoId={movimientoDetalleId} onClose={() => setMovimientoDetalleId(null)} />
       {showFieldsConfig && (
         <PersonalFieldsConfigModal scope="GUARDIA" onClose={() => setShowFieldsConfig(false)} onChanged={() => {}} />

@@ -25,7 +25,8 @@ const FLUJO_PRINCIPAL: Submodulo[] = [
     nombre: '2. Listado de Guardias',
     ruta: '/rrhh/guardias',
     parrafos: [
-      'Aquí aparecen los guardias que ya pasaron por Reclutamiento (o que ya existían). Cada carpeta de guardia se llama "Apellidos Nombres" (ej. PEREZ GARCIA JUAN CARLOS). Mayúsculas y minúsculas valen igual. "Sincronizar Drive" lee esa estructura y decide en qué entidad está cada guardia, o si sigue en "Sin Asignar", esperando que alguien mueva su carpeta a Público/Privado/<Entidad> a mano. Si el formulario todavía no trae la cédula, igual entra a la lista como "Sin cédula".',
+      'Aquí aparecen los guardias que ya pasaron por Reclutamiento (o que ya existían). Cada carpeta de guardia se llama "Apellidos Nombres" (ej. PEREZ GARCIA JUAN CARLOS). Mayúsculas y minúsculas valen igual. "Sincronizar Drive" lee esa estructura y decide en qué entidad está cada guardia, o si sigue en "Sin Asignar", esperando que alguien mueva su carpeta a Público/Privado/<Entidad> a mano. Si todavía no hay cédula, la lista dice "Sin cédula" y el campo de la ficha queda vacío.',
+      'En Datos personales de la ficha se editan apellidos, nombres, cédula y correo de contacto. Ese correo es el que usa Cumplimiento para el recordatorio. La carpeta de Drive no cambia de nombre al guardar.',
       'También desde aquí se configuran la carpeta de Drive de Guardias, la carpeta de archivo, campos personalizados de cada ficha y se registra la salida cuando alguien deja de trabajar. En "Mostrar fuera", la X pide confirmación, quita a esa persona de la lista y manda su carpeta a la papelera de Drive de quien es dueño. No vuelve a aparecer al sincronizar. Desde esa papelera se puede restaurar.',
     ],
   },
@@ -50,7 +51,8 @@ const FLUJO_PRINCIPAL: Submodulo[] = [
     ruta: '/rrhh/contracts',
     parrafos: [
       'Generador de contratos y otros documentos a partir de plantillas Word.',
-      'Hay dos formas de generar: eligiendo un guardia registrado, y entonces sus datos (nombre, cédula, entidad, horario, salario) se rellenan solos; o "Llenar a mano", para un documento dirigido a alguien que no está en el listado de guardias. En ese segundo caso la cédula no es obligatoria: basta el nombre.',
+      'Hay dos formas de generar: eligiendo un guardia registrado, y entonces sus datos (nombre, cédula, entidad, horario, salario) se rellenan solos; o "Llenar a mano", para un documento dirigido a alguien que no está en el listado de guardias. En ese segundo caso la cédula no es obligatoria: basta el nombre, y el PDF se guarda en la carpeta general de documentos.',
+      'Si elegiste un guardia, al generar se pregunta si el PDF va a la carpeta general o a la carpeta de Drive de esa persona.',
     ],
   },
   {
@@ -69,7 +71,7 @@ const MODULOS_INDEPENDIENTES: Submodulo[] = [
     ruta: '/rrhh/administrativo',
     parrafos: [
       'Igual que Cumplimiento (checklist de documentos con semáforo), pero para personal de oficina en vez de guardias. Vive en una carpeta de Drive separada de la de Guardias (esa sí se configura aquí con la tuerca), así que es independiente de los pasos 1 a 6.',
-      'Se nombra igual que en Guardias: "Apellidos Nombres". El puesto y la cédula se guardan dentro del archivo de datos de la carpeta, no en su nombre.',
+      'Se nombra igual que en Guardias: "Apellidos Nombres". Al sincronizar, una carpeta con ese nombre entra a la lista y se le crea el archivo de datos solo con apellidos y nombres. La cédula queda vacía hasta que se escriba en Datos generales, junto con apellidos, nombres y correo de contacto.',
     ],
   },
   {

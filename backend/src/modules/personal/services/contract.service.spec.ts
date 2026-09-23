@@ -42,6 +42,7 @@ describe('ContractService', () => {
     guardiaFichaPersonal: { findUnique: jest.Mock };
     asignacionGuardia: { findFirst: jest.Mock };
     company: { findUnique: jest.Mock };
+    employeeDriveFolder: { findFirst: jest.Mock };
   };
   const existsSyncMock = fs.existsSync as jest.Mock;
 
@@ -74,6 +75,7 @@ describe('ContractService', () => {
       guardiaFichaPersonal: { findUnique: jest.fn() },
       asignacionGuardia: { findFirst: jest.fn() },
       company: { findUnique: jest.fn() },
+      employeeDriveFolder: { findFirst: jest.fn() },
     };
     // DriveService solo se usa para subir/bajar la copia del PDF en Drive;
     // acá se anula para que los tests no toquen la red.
@@ -474,6 +476,75 @@ describe('ContractService', () => {
         id: 5,
         generatedUrl: '/api/personal/contracts/file/x.pdf',
       });
+    });
+
+    it('guarda el PDF en la carpeta del guardia cuando se elige esa opción', async () => {
+      prisma.contractTemplate.findFirst.mockResolvedValue(makeTemplate({ fields: [] }));
+      (docxMerge.fillDocxTemplate as jest.Mock).mockResolvedValue(Buffer.from('filled-docx'));
+      prisma.employeeDriveFolder.findFirst.mockResolvedValue({ folderId: 'carpeta-guardia' });
+      prisma.contract.create.mockResolvedValue({ id: 8 });
+
+      await service.generateContract(
+        {
+          templateId: 1,
+          cedula: '0912345678',
+          nombreGuardia: 'Perez Ana',
+          guardarEn: 'guardia',
+        },
+        1,
+        7,
+      );
+
+      expect(driveService.uploadFile).toHaveBeenCalledWith(
+        'carpeta-guardia',
+        expect.any(Buffer),
+        expect.stringContaining('Perez Ana'),
+        'application/pdf',
+      );
+    });
+
+    it('sin carpeta del guardia no genera el documento y lo dice', async () => {
+      prisma.contractTemplate.findFirst.mockResolvedValue(makeTemplate({ fields: [] }));
+      prisma.employeeDriveFolder.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.generateContract(
+          {
+            templateId: 1,
+            cedula: '0912345678',
+            nombreGuardia: 'Perez Ana',
+            guardarEn: 'guardia',
+          },
+          1,
+          7,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.contract.create).not.toHaveBeenCalled();
+    });
+
+    it('llenar a mano siempre usa la carpeta general, aunque pidan la del guardia', async () => {
+      prisma.contractTemplate.findFirst.mockResolvedValue(makeTemplate({ fields: [] }));
+      (docxMerge.fillDocxTemplate as jest.Mock).mockResolvedValue(Buffer.from('filled-docx'));
+      prisma.contract.create.mockResolvedValue({ id: 9 });
+
+      await service.generateContract(
+        {
+          templateId: 1,
+          cedula: '',
+          nombreGuardia: 'Tercero',
+          guardarEn: 'guardia',
+        },
+        1,
+        7,
+      );
+
+      expect(prisma.employeeDriveFolder.findFirst).not.toHaveBeenCalled();
+      expect(driveService.uploadFile).toHaveBeenCalledWith(
+        '1LLnPLU7UFSFvIwi-FpMNyIQDkoZI-B8s',
+        expect.any(Buffer),
+        expect.stringContaining('Tercero'),
+        'application/pdf',
+      );
     });
 
     it('sanitizes the cedula before using it in the PDF filename', async () => {

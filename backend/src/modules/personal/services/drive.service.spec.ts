@@ -877,6 +877,13 @@ describe('DriveService.syncEntidadesFolder', () => {
         where: { companyId_cedula: { companyId: 1, cedula: 'ID-g-2' } },
       }),
     );
+    for (const call of driveFilesCreate.mock.calls) {
+      const body = String(call[0]?.media?.body || '');
+      expect(body).toContain('"cedula": ""');
+      expect(body).not.toContain('"cedula": "ID-');
+    }
+    expect((service as any).cedulaDeValor('ID-ab0912345678xyz')).toBe('');
+    expect((service as any).cedulaDeValor('0912345678')).toBe('0912345678');
   });
 
   it('no crea un guardia cuando el nombre tiene guion y no hay cédula', async () => {
@@ -1801,10 +1808,9 @@ describe('DriveService.syncPersonalAdminFolder', () => {
     });
   });
 
-  // Sin cedula en el nombre NI en datos.json no hay a quien atribuir la
-  // carpeta: se reporta y se salta, en vez de inventar una identidad
-  // sintetica "ID-..." que despues fragmenta al mismo empleado en varias.
-  it('reporta y salta la carpeta cuando no puede saber de quien es', async () => {
+  // Sin el formato "Apellidos Nombres" y sin cédula no hay persona que
+  // registrar: se avisa y se salta. No se renombra nada en Drive.
+  it('reporta y salta la carpeta cuando el nombre no es Apellidos Nombres', async () => {
     (service as any).listSubFolders = jest
       .fn()
       .mockResolvedValue([{ id: 'emp-1', name: 'Juan Perez - Contador' }]);
@@ -1812,8 +1818,36 @@ describe('DriveService.syncPersonalAdminFolder', () => {
 
     const result = await service.syncPersonalAdminFolder(1, 1);
 
-    expect(result.errors[0]).toMatch(/no se pudo identificar|No se pudo identificar/);
+    expect(result.errors[0]).toMatch(/Apellidos Nombres/);
     expect(prisma.employeeDriveFolder.upsert).not.toHaveBeenCalled();
+  });
+
+  // Carpeta nueva con el nombre bien puesto, todavía sin datos.json ni
+  // cédula: entra a la lista y se crea el JSON solo con el nombre.
+  it('crea datos.json con el nombre cuando la carpeta nueva ya es Apellidos Nombres', async () => {
+    const create = jest.fn().mockResolvedValue({ data: { id: 'ficha-nueva' } });
+    (service as any).getDriveClient = jest.fn().mockReturnValue({
+      files: { create, update: jest.fn().mockResolvedValue({}) },
+    });
+    (service as any).listSubFolders = jest
+      .fn()
+      .mockResolvedValue([{ id: 'emp-nueva', name: 'PEREZ GOMEZ JUAN' }]);
+    (service as any).listFilesInFolder = jest.fn().mockResolvedValue([]);
+
+    const result = await service.syncPersonalAdminFolder(1, 1);
+
+    expect(prisma.employeeDriveFolder.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { companyId_cedula: { companyId: 1, cedula: 'ID-emp-nueva' } },
+        create: expect.objectContaining({ employeeName: 'PEREZ GOMEZ JUAN' }),
+      }),
+    );
+    const body = String(create.mock.calls[0][0].media.body);
+    expect(body).toContain('"nombreCompleto": "PEREZ GOMEZ JUAN"');
+    expect(body).toContain('"cedula": ""');
+    expect(body).not.toContain('ID-emp-nueva');
+    expect(result.errors).toEqual([]);
+    expect(result.foldersCount).toBe(1);
   });
 
   // El formato nuevo no lleva cedula en el nombre: se lee de datos.json y la

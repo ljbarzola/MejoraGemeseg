@@ -30,6 +30,14 @@ export class PersonalFieldDefinitionService {
       DEFAULT_FIELDS_BY_SCOPE[scope as keyof typeof DEFAULT_FIELDS_BY_SCOPE];
     if (!defaults?.length) return;
 
+    // El campo de correo se creó con la etiqueta "Email". En la ficha se
+    // llama "Correo de contacto" (es el que usa Cumplimiento). Solo se
+    // renombra si nadie le cambió la etiqueta a mano.
+    await this.prisma.personalFieldDefinition.updateMany({
+      where: { companyId, scope, key: 'email', label: 'Email' },
+      data: { label: 'Correo de contacto' },
+    });
+
     const existentes = await this.prisma.personalFieldDefinition.findMany({
       where: { companyId, scope, key: { in: defaults.map((d) => d.key) } },
       select: { key: true },

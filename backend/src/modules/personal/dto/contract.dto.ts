@@ -5,6 +5,7 @@ import {
   IsArray,
   IsBoolean,
   IsNotEmpty,
+  IsIn,
   Matches,
   ValidateNested,
 } from 'class-validator';
@@ -98,4 +99,11 @@ export class GenerateContractDto {
 
   @IsOptional()
   fieldValues?: Record<string, string>;
+
+  // Solo cuando se eligió un guardia del padrón. "general" es la carpeta fija
+  // de Documentación; "guardia" es la carpeta de Drive de esa persona.
+  // En "Llenar a mano" no se pregunta: siempre queda en la carpeta general.
+  @IsOptional()
+  @IsIn(['general', 'guardia'])
+  guardarEn?: 'general' | 'guardia';
 }
