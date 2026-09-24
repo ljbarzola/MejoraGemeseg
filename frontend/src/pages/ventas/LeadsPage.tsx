@@ -5,6 +5,7 @@ import { getLeads, createLead, assignLead, updateLeadStatus, deleteLead, Lead } 
 import { getUsers } from '../../services/user.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import PromptDialog from '../../components/common/PromptDialog';
+import { useToast } from '../../contexts/ToastContext';
 
 const SOURCE_BADGES: Record<string, { label: string; color: string }> = {
   GOOGLE_ADS: { label: 'Google Ads', color: '#319795' },
@@ -24,6 +25,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 
 export default function LeadsPage() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +79,9 @@ export default function LeadsPage() {
         setLeads(lData);
         setUsers(uData);
       })
-      .catch(() => {})
+      .catch((err: any) => {
+        showToast(err?.response?.data?.message || 'No se pudieron cargar los prospectos', 'error');
+      })
       .finally(() => setLoading(false));
   };
 

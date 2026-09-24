@@ -35,11 +35,13 @@ export default function ContratoResult() {
   const [contract, setContract] = useState<SalesContract | null>(null);
   const [documents, setDocuments] = useState<SalesContractDocument[]>([]);
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
   const [uploadingSigned, setUploadingSigned] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [signatureStatus, setSignatureStatus] = useState<SignatureStatus | null>(null);
+  const [signingUrl, setSigningUrl] = useState<string | null>(null);
   const [pendingSentAction, setPendingSentAction] = useState<null | 'generate' | 'edit'>(null);
   const [emailTo, setEmailTo] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
@@ -51,11 +53,19 @@ export default function ContratoResult() {
   // autenticado y se muestra como blob en vez de un <iframe src> directo.
   useEffect(() => {
     let objectUrl: string | null = null;
+    setPdfError(null);
     if (contract?.generatedPdfPath) {
       fetchProtectedFile(contract.generatedPdfPath).then(blob => {
         objectUrl = URL.createObjectURL(blob);
         setPdfObjectUrl(objectUrl);
-      }).catch(() => setPdfObjectUrl(null));
+      }).catch((err: any) => {
+        setPdfObjectUrl(null);
+        setPdfError(
+          err?.response?.status === 404
+            ? 'El archivo del PDF ya no está disponible en el servidor (el servicio se reinicia periódicamente y el disco local no es permanente). Vuelve a generarlo.'
+            : 'No se pudo cargar el PDF. Intenta de nuevo o vuelve a generarlo.',
+        );
+      });
     } else {
       setPdfObjectUrl(null);
     }
@@ -69,8 +79,17 @@ export default function ContratoResult() {
       setEmailTo(c.clientEmail);
       setEmailSubject(c.template?.emailSubject?.replace('{{contractId}}', String(c.id)) || `Contrato #${c.id}`);
       setEmailBody(c.template?.emailBody?.replace('{{clientName}}', c.clientName)?.replace('{{contractId}}', String(c.id)) || `Estimado(a) ${c.clientName},\n\nAdjuntamos el contrato #${c.id} para su revisión y firma.\n\nSaludos cordiales.`);
-      getContractDocuments(cid).then(setDocuments).catch(() => setDocuments([]));
-    } catch { navigate('/ventas/contratos'); }
+      setSigningUrl(null);
+      getContractDocuments(cid)
+        .then(setDocuments)
+        .catch((err: any) => {
+          setDocuments([]);
+          showToast(err?.response?.data?.message || 'No se pudo cargar el historial de documentos', 'error');
+        });
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'No se pudo cargar el contrato', 'error');
+      navigate('/ventas/contratos');
+    }
   };
 
   const handleOpenDocument = async (filePath: string) => {
@@ -88,7 +107,10 @@ export default function ContratoResult() {
     if (!id) return;
     setGenerating(true);
     try {
-      await generateContractPdf(+id);
+      const result = await generateContractPdf(+id);
+      if (result.driveWarning) {
+        showToast(`PDF generado pero no se pudo respaldar en Drive: ${result.driveWarning}`, 'error');
+      }
       loadContract(+id);
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'Error al generar PDF', 'error');
@@ -118,9 +140,14 @@ export default function ContratoResult() {
     try {
       const result = await getContractSignatureStatus(+id);
       setSignatureStatus(result);
+      const url = result.recipients.find((r) => r.signingUrl)?.signingUrl;
+      if (url) setSigningUrl(url);
       if (result.contractStatus === 'SIGNED' && contract?.status !== 'SIGNED') {
         showToast('¡El contrato ya está firmado!', 'success');
         loadContract(+id);
+      }
+      if (result.driveWarning) {
+        showToast(`El contrato firmado no se pudo respaldar en Drive: ${result.driveWarning}`, 'error');
       }
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'Error al consultar el estado', 'error');
@@ -132,8 +159,12 @@ export default function ContratoResult() {
     if (!emailTo.trim()) { showToast('El email del destinatario es requerido', 'error'); return; }
     setSending(true);
     try {
-      await sendContract(+id);
+      const result = await sendContract(+id);
+      setSigningUrl(result.signingUrl);
       showToast('Correo enviado correctamente', 'success');
+      if (result.driveWarning) {
+        showToast(`Enviado a firma pero no se pudo respaldar en Drive: ${result.driveWarning}`, 'error');
+      }
       loadContract(+id);
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'Error al enviar', 'error');
@@ -150,8 +181,11 @@ export default function ContratoResult() {
     if (!file) return;
     setUploadingSigned(true);
     try {
-      await uploadSignedContract(+id, file);
+      const result = await uploadSignedContract(+id, file);
       showToast('PDF firmado subido correctamente', 'success');
+      if (result.driveWarning) {
+        showToast(`Subido pero no se pudo respaldar en Drive: ${result.driveWarning}`, 'error');
+      }
       loadContract(+id);
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'Error al subir el PDF firmado', 'error');
@@ -228,6 +262,16 @@ export default function ContratoResult() {
           {contract.generatedPdfPath ? (
             pdfObjectUrl ? (
               <iframe src={pdfObjectUrl} style={{ width: '100%', height: '100%', border: 'none', background: '#fff', minHeight: 600 }} title="PDF" />
+            ) : pdfError ? (
+              <div style={{ textAlign: 'center', padding: 80, color: '#888', maxWidth: 420 }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
+                <div style={{ fontSize: 14, marginBottom: 16 }}>{pdfError}</div>
+                {isDraft || contract.status === 'READY' ? (
+                  <button className="auth-btn" onClick={handleGenerate} disabled={generating} style={{ padding: '10px 24px', fontSize: 13 }}>
+                    {generating ? 'Generando...' : '🔄 Regenerar PDF'}
+                  </button>
+                ) : null}
+              </div>
             ) : (
               <div style={{ textAlign: 'center', padding: 80, color: '#888' }}>Cargando PDF...</div>
             )
@@ -304,6 +348,15 @@ export default function ContratoResult() {
               <div style={{ fontSize: 12, marginBottom: signatureStatus ? 8 : 0 }}>
                 {signatureStatus ? signwellStatusLabel(signatureStatus.status) : signwellStatusLabel(contract.signwellStatus || 'Sent')}
               </div>
+              {signingUrl && contract.status !== 'SIGNED' && (
+                <button className="btn-secondary" style={{ padding: '4px 12px', fontSize: 11, marginBottom: 8 }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(signingUrl);
+                    showToast('Link de firma copiado al portapapeles', 'success');
+                  }}>
+                  📋 Copiar link de firma del cliente (SignWell)
+                </button>
+              )}
               {signatureStatus && signatureStatus.recipients.length > 0 && (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                   <tbody>

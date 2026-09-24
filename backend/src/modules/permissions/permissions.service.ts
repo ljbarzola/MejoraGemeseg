@@ -45,6 +45,36 @@ export class PermissionsService {
     return user.role === 'ADMIN' && !user.companyId;
   }
 
+  /**
+   * Misma semántica que SectionPermissionGuard, expuesta como método para
+   * rutas cuya sección requerida no se puede fijar con @Section porque
+   * depende de la petición (ver decorador NoSectionCheck).
+   */
+  async hasSectionAccess(
+    user: { userId: number; role: string; companyId: number | null },
+    section: string,
+    access: 'view' | 'write' = 'view',
+  ): Promise<boolean> {
+    if (this.isSuperAdmin(user)) return true;
+    if (!user.companyId) return false;
+
+    const companySections = await this.getCompanySections(user.companyId);
+    const enabled = companySections.some(
+      (s) => s.key === section && s.enabled,
+    );
+    if (!enabled) return false;
+
+    if (esSeccionSiempreVisible(section)) return true;
+    const fijas = await this.getFixedSections(user.companyId);
+    if (fijas.includes(section)) return true;
+
+    const perms = await this.getUserPermissions(user.userId);
+    const perm = perms.find((p) => p.section === section);
+    if (!perm) return true;
+
+    return access === 'write' ? perm.canWrite : perm.canView;
+  }
+
   async getCompanySections(companyId: number) {
     const db = await this.prisma.companySection.findMany({
       where: { companyId },

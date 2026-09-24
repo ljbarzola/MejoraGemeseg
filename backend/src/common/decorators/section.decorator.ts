@@ -18,3 +18,11 @@ export interface SectionRequirement {
  */
 export const Section = (section: string, access: SectionAccess = 'view') =>
   SetMetadata(SECTION_KEY, { section, access });
+
+/**
+ * Anula, a nivel de método, el @Section de la clase que lo contiene, para
+ * rutas donde la sección requerida depende de datos de la petición (ej. un
+ * query param) y por eso no se puede fijar con un decorador estático. El
+ * handler debe validar el permiso a mano (ver PermissionsService.hasSectionAccess).
+ */
+export const NoSectionCheck = () => SetMetadata(SECTION_KEY, null);
