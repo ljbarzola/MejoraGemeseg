@@ -6,10 +6,14 @@ import {
   analizarArchivoUnico,
   obtenerAnalisisPendiente,
   aplicarAnalisisArchivoUnico,
+  detectarConflictosSeparacion,
   getCandidatoPdf,
   type AnalisisArchivoUnico,
 } from '../../../services/personal.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import ResolverConflictosSeparacionModal, {
+  type ConflictoConPreview,
+} from './ResolverConflictosSeparacionModal';
 
 // pdfjs necesita saber dónde está su worker. Vite resuelve el `?url` al archivo
 // servido, así que no hay que copiar nada a /public a mano.
@@ -274,6 +278,10 @@ export default function AnalisisArchivoUnicoModal({
   // para las miniaturas — así el etiquetado manual sigue siendo posible.
   const [totalPaginasDetectado, setTotalPaginasDetectado] = useState<number | null>(null);
   const [confirmandoReintentar, setConfirmandoReintentar] = useState(false);
+  // Documentos que "Confirmar y separar" detectó que ya tienen un archivo
+  // guardado: no es null mientras RRHH está resolviendo, uno por uno, si se
+  // reemplaza o se mantiene el que ya había (ver ResolverConflictosSeparacionModal).
+  const [conflictos, setConflictos] = useState<ConflictoConPreview[] | null>(null);
 
   const aplicarResultado = useCallback((res: AnalisisArchivoUnico) => {
     setAnalisis(res);
@@ -414,13 +422,9 @@ export default function AnalisisArchivoUnicoModal({
 
   const sinAsignar = paginas.filter((p) => p.requisito === SIN_ASIGNAR).length;
 
-  const handleAplicar = async () => {
-    setError('');
-    if (agrupado.size === 0) {
-      setError('Etiqueta al menos una página con su documento antes de confirmar.');
-      return;
-    }
-
+  const ejecutarAplicar = async (
+    resoluciones?: Record<string, 'reemplazar' | 'mantener'>,
+  ) => {
     setAplicando(true);
     try {
       await aplicarAnalisisArchivoUnico(
@@ -430,15 +434,53 @@ export default function AnalisisArchivoUnicoModal({
           paginas: paginasDoc,
         })),
         analisis?.archivo?.id,
+        resoluciones,
       );
+      setConflictos(null);
       onApplied();
     } catch (err: any) {
+      setConflictos(null);
       setError(
         err.response?.data?.message ||
           'No se pudieron separar los documentos. Intenta de nuevo.',
       );
     } finally {
       setAplicando(false);
+    }
+  };
+
+  const handleAplicar = async () => {
+    setError('');
+    if (agrupado.size === 0) {
+      setError('Etiqueta al menos una página con su documento antes de confirmar.');
+      return;
+    }
+
+    setAplicando(true);
+    try {
+      const requisitos = Array.from(agrupado.keys());
+      const resultado = await detectarConflictosSeparacion(folderId, requisitos);
+      const conConflicto = resultado.filter((c) => c.archivoExistente);
+      if (conConflicto.length === 0) {
+        await ejecutarAplicar();
+        return;
+      }
+      setAplicando(false);
+      setConflictos(
+        conConflicto.map((c) => ({
+          requisito: c.requisito,
+          archivoExistente: c.archivoExistente!,
+          miniaturasNuevas: (agrupado.get(c.requisito) || [])
+            .map((numero) => paginas.find((p) => p.numero === numero)?.miniatura)
+            .filter((src): src is string => !!src),
+        })),
+      );
+    } catch (err: any) {
+      setAplicando(false);
+      setError(
+        err.response?.data?.message ||
+          'No se pudieron separar los documentos. Intenta de nuevo.',
+      );
     }
   };
 
@@ -654,6 +696,18 @@ export default function AnalisisArchivoUnicoModal({
           danger
           onConfirm={confirmarReintentar}
           onCancel={() => setConfirmandoReintentar(false)}
+        />
+      )}
+
+      {conflictos && conflictos.length > 0 && (
+        <ResolverConflictosSeparacionModal
+          folderId={folderId}
+          conflictos={conflictos}
+          enviando={aplicando}
+          onCancel={() => setConflictos(null)}
+          onResuelto={(resoluciones) => {
+            void ejecutarAplicar(resoluciones);
+          }}
         />
       )}
     </div>

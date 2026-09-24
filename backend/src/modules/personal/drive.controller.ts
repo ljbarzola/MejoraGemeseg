@@ -36,6 +36,7 @@ import {
   ReassignReclutamientoFileDto,
   SaveCandidatoDatosDto,
   AplicarAnalisisDto,
+  ConflictosSeparacionDto,
   RevisarArchivosDto,
 } from './dto/job-position.dto';
 import { ReviewDocumentDto } from './dto/document-review.dto';
@@ -338,6 +339,35 @@ export class DriveController {
     res.send(buffer);
   }
 
+  // Igual que getCandidatoPdf de arriba, pero sirviendo el mimeType real del
+  // archivo en vez de forzar 'application/pdf'. La usa el modal de "Confirmar
+  // y separar" para mostrar la vista previa del archivo YA existente cuando
+  // hay conflicto con lo que se está por crear — ese archivo puede ser una
+  // imagen (.jpg/.png) si el postulante lo subió suelto, no solo un PDF.
+  @Get('reclutamiento/candidatos/:folderId/archivo/:driveFileId')
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('RRHH', 'view')
+  async getCandidatoArchivo(
+    @Param('folderId') folderId: string,
+    @Param('driveFileId') driveFileId: string,
+    @Res() res: Response,
+  ) {
+    const archivos = await this.driveService.listFilesInFolder(folderId);
+    const archivo = archivos.find((f: any) => f.id === driveFileId);
+    if (!archivo) {
+      throw new BadRequestException(
+        'Ese archivo no pertenece a la carpeta de este postulante.',
+      );
+    }
+    const buffer = await this.driveService.downloadFileBuffer(driveFileId);
+    res.setHeader(
+      'Content-Type',
+      (archivo as any).mimeType || 'application/octet-stream',
+    );
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
+  }
+
   // Devuelve la última propuesta de análisis guardada (si hay una), SIN
   // llamar a Vertex AI. Se consulta al abrir el modal de revisión: si RRHH lo
   // cerró para revisar otra cosa y vuelve, encuentra la misma propuesta en
@@ -410,6 +440,25 @@ export class DriveController {
     );
   }
 
+  // Antes de aplicar: ¿alguno de estos requisitos ya tiene un archivo
+  // guardado en la carpeta? El modal de "Confirmar y separar" lo llama justo
+  // antes de mandar aplicar-analisis, para preguntar reemplazar/mantener
+  // documento por documento en vez de pisar en silencio lo que ya había.
+  @Post('reclutamiento/candidatos/:folderId/conflictos-separacion')
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('RRHH', 'write')
+  detectarConflictosSeparacion(
+    @Param('folderId') folderId: string,
+    @Body() body: ConflictosSeparacionDto,
+    @Req() req: any,
+  ) {
+    return this.reclutamientoIaService.detectarConflictos(
+      folderId,
+      req.user.companyId,
+      body.requisitos || [],
+    );
+  }
+
   // RRHH confirmó/corrigió la propuesta: se parte el PDF en un archivo por
   // documento dentro de la misma carpeta, conservando el original. A partir de
   // aquí el postulante queda igual que uno que subió todo por separado.
@@ -426,6 +475,7 @@ export class DriveController {
       req.user.companyId,
       body.asignaciones,
       body.driveFileId,
+      body.resoluciones,
     );
   }
 
