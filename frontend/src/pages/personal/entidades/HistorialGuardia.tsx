@@ -18,6 +18,7 @@ import {
 } from '../../../services/entidades.service';
 import { getMovimientos, type MovimientoPersonal } from '../../../services/movimiento-personal.service';
 import MovimientoDetalleModal from '../../../components/personal/MovimientoDetalleModal';
+import { cedulaVisible } from '../../../utils/postulacionValidacion';
 import ConfiguracionSistemasModal from '../../../components/personal/ConfiguracionSistemasModal';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { usePerm } from '../../../contexts/PermissionsContext';
@@ -335,7 +336,7 @@ export default function HistorialGuardia() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <strong style={{ color: 'var(--azul-oscuro)', fontSize: '0.92rem' }}>{g.nombre}</strong>
-                        <span style={{ fontSize: '0.75rem', color: '#718096', fontFamily: 'monospace' }}>{g.cedula}</span>
+                        <span style={{ fontSize: '0.75rem', color: '#718096', fontFamily: 'monospace' }}>{cedulaVisible(g.cedula)}</span>
                         {!g.abierto && (
                           <span className="status-badge" style={{ background: '#e2e8f0', color: '#4a5568' }}>Sin movimiento activo</span>
                         )}

@@ -1826,6 +1826,17 @@ export class DriveService {
     await drive.files.delete({ fileId: archivo.id, supportsAllDrives: true });
   }
 
+  // Borra un archivo por id. Usado por ReclutamientoIaService cuando RRHH
+  // elige "Reemplazar" un documento que ya existía al confirmar la
+  // separación del archivo único (ver ReclutamientoIaService.aplicar) — a
+  // diferencia de deleteFileByName, aquí SÍ importa que falle si no se puede
+  // borrar: subir el nuevo sin borrar el viejo dejaría dos archivos para el
+  // mismo documento.
+  async deleteFileById(driveFileId: string): Promise<void> {
+    const drive = this.getDriveClient();
+    await drive.files.delete({ fileId: driveFileId, supportsAllDrives: true });
+  }
+
   async downloadFileBuffer(driveFileId: string): Promise<Buffer> {
     const drive = this.getDriveClient();
     const res = await drive.files.get(
@@ -2997,9 +3008,7 @@ export class DriveService {
           const parsed = this.parseEmployeeFolderName(folder.name, folder.id);
 
           let candidatoJsonData: any = null;
-          const jsonFile = files.find((f: any) =>
-            f.name.toLowerCase().endsWith('.json'),
-          );
+          const jsonFile = this.encontrarCandidatoJsonFile(files);
 
           if (jsonFile) {
             try {
@@ -3356,9 +3365,7 @@ export class DriveService {
       );
     }
 
-    const jsonFile = files.find((f: any) =>
-      f.name.toLowerCase().endsWith('.json'),
-    );
+    const jsonFile = this.encontrarCandidatoJsonFile(files);
 
     let candidatoJsonData: any = {};
     if (jsonFile) {
@@ -3540,9 +3547,7 @@ export class DriveService {
     // nombre), y más abajo este mismo objeto se reescribe con el estado de
     // contratación.
     const filesEnCarpeta = await this.listFilesInFolder(folderId);
-    const jsonFile = filesEnCarpeta.find((f: any) =>
-      f.name.toLowerCase().endsWith('.json'),
-    );
+    const jsonFile = this.encontrarCandidatoJsonFile(filesEnCarpeta);
     let candidatoJsonData: any = {};
     if (jsonFile) {
       try {
@@ -3909,9 +3914,7 @@ export class DriveService {
     tipoContratacion: string,
   ) {
     const files = await this.listFilesInFolder(folderId);
-    const jsonFile = files.find((f: any) =>
-      String(f.name || '').toLowerCase().endsWith('.json'),
-    );
+    const jsonFile = this.encontrarCandidatoJsonFile(files);
     const updated = {
       ...candidatoJsonData,
       estado: 'CONTRATADO',
@@ -4374,6 +4377,35 @@ export class DriveService {
       }
     }
     return '';
+  }
+
+  // Ubica el candidato.json real de una carpeta de postulante entre TODOS
+  // sus .json: aparte de candidato.json, la carpeta puede tener
+  // analisis-ia.json / analisis-pendiente.json / revision-archivos-ia.json
+  // (los deja "Analizar con IA"/"Confirmar y separar"). Un simple
+  // `files.find(f => f.name.endsWith('.json'))` no distingue entre ellos, y
+  // Drive no garantiza el orden de listFilesInFolder — así que según qué .json
+  // cayera primero, un guardado de datos (o el listado del candidato) podía
+  // leer/escribir esos archivos de traza en vez de candidato.json, perdiendo
+  // Celular/Email aunque candidato.json los tuviera bien guardados. Toda
+  // lectura/escritura de la ficha de un postulante debe pasar por aquí.
+  private encontrarCandidatoJsonFile<T extends { id?: string; name?: string }>(
+    files: T[],
+  ): T | undefined {
+    const porNombre = (n: string) => (n || '').toLowerCase();
+    const ignorados = new Set([
+      ANALISIS_IA_FILENAME.toLowerCase(),
+      ANALISIS_IA_PENDIENTE_FILENAME.toLowerCase(),
+      REVISION_ARCHIVOS_IA_FILENAME.toLowerCase(),
+    ]);
+    const candidatos = files.filter((f) => {
+      const n = porNombre(f.name || '');
+      return n.endsWith('.json') && !ignorados.has(n) && !!f.id;
+    });
+    return (
+      candidatos.find((f) => porNombre(f.name || '') === 'candidato.json') ||
+      candidatos[0]
+    );
   }
 
   private async leerCedulaDeJsonEnCarpeta(

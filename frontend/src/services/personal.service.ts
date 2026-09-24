@@ -356,12 +356,33 @@ export const aplicarAnalisisArchivoUnico = (
   folderId: string,
   asignaciones: { requisito: string; paginas: number[] }[],
   driveFileId?: string,
-) => api.post(`/personal/reclutamiento/candidatos/${folderId}/aplicar-analisis`, { asignaciones, driveFileId }).then(r => r.data);
+  resoluciones?: Record<string, 'reemplazar' | 'mantener'>,
+) => api.post(`/personal/reclutamiento/candidatos/${folderId}/aplicar-analisis`, { asignaciones, driveFileId, resoluciones }).then(r => r.data);
+
+export interface ConflictoSeparacion {
+  requisito: string;
+  archivoExistente: { id: string; name: string; mimeType?: string } | null;
+}
+
+// Se llama justo antes de aplicar-analisis: si algún requisito ya tiene un
+// archivo guardado en la carpeta, el modal de "Confirmar y separar" pregunta
+// reemplazar/mantener documento por documento en vez de pisarlo en silencio.
+export const detectarConflictosSeparacion = (
+  folderId: string,
+  requisitos: string[],
+): Promise<ConflictoSeparacion[]> =>
+  api.post(`/personal/reclutamiento/candidatos/${folderId}/conflictos-separacion`, { requisitos }).then(r => r.data);
 
 // El PDF se pide al backend (no a Drive directo): los archivos viven detrás de
 // la service account y además así viaja el JWT del usuario.
 export const getCandidatoPdf = (folderId: string, driveFileId: string): Promise<ArrayBuffer> =>
   api.get(`/personal/reclutamiento/candidatos/${folderId}/pdf/${driveFileId}`, { responseType: 'arraybuffer' }).then(r => r.data);
+
+// Igual que getCandidatoPdf, pero para cualquier archivo (incluye imágenes) —
+// se usa para la vista previa del archivo ya existente en el modal de
+// conflictos de "Confirmar y separar".
+export const getCandidatoArchivo = (folderId: string, driveFileId: string): Promise<ArrayBuffer> =>
+  api.get(`/personal/reclutamiento/candidatos/${folderId}/archivo/${driveFileId}`, { responseType: 'arraybuffer' }).then(r => r.data);
 export const syncReclutamientoCandidates = () => api.post('/personal/reclutamiento/sync').then(r => r.data);
 export const syncJobPositionsFromDrive = () => api.post('/personal/reclutamiento/sync-puestos').then(r => r.data);
 

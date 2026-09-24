@@ -994,6 +994,63 @@ Responde ÚNICAMENTE con un objeto JSON, sin texto antes ni después y sin bloqu
     };
   }
 
+  // Mismo criterio de nombre que usa aplicar() para crear cada documento
+  // separado ("<Requisito> - <original>"): un archivo YA guardado para ese
+  // requisito empieza igual. Se usa tanto para avisarle a RRHH antes de
+  // separar (detectarConflictos) como, dentro de aplicar(), para decidir si
+  // hay que borrar el archivo viejo cuando RRHH elige "Reemplazar".
+  private buscarArchivoDeRequisito(
+    archivosPostulante: { id: string; name?: string; mimeType?: string }[],
+    requisito: string,
+  ) {
+    const prefijo = `${requisito.trim().toLowerCase()} -`;
+    return archivosPostulante.find((f) =>
+      String(f.name || '').toLowerCase().startsWith(prefijo),
+    );
+  }
+
+  // RRHH está por confirmar la separación del "archivo único". Antes de
+  // crear nada, se avisa si algún requisito ya tiene un archivo guardado en
+  // la carpeta (el postulante lo subió suelto además de en el archivo único,
+  // o esta separación ya se corrió antes) — así el modal de "Confirmar y
+  // separar" puede preguntar, documento por documento, si reemplazar o
+  // mantener el que ya había, en vez de pisarlo en silencio.
+  async detectarConflictos(
+    folderId: string,
+    companyId: number,
+    requisitos: string[],
+  ): Promise<
+    {
+      requisito: string;
+      archivoExistente: { id: string; name: string; mimeType?: string } | null;
+    }[]
+  > {
+    if (!companyId)
+      throw new BadRequestException('Usuario sin empresa asociada');
+
+    const files = await this.driveService.listFilesInFolder(folderId);
+    const archivosPostulante = files.filter(
+      (f: any) => !String(f.name || '').toLowerCase().endsWith('.json'),
+    );
+
+    return requisitos.map((requisito) => {
+      const existente = this.buscarArchivoDeRequisito(
+        archivosPostulante,
+        requisito,
+      );
+      return {
+        requisito,
+        archivoExistente: existente
+          ? {
+              id: existente.id,
+              name: existente.name || '',
+              mimeType: (existente as any).mimeType,
+            }
+          : null,
+      };
+    });
+  }
+
   // Aplica lo que RRHH confirmó: parte el PDF en un archivo por documento,
   // dentro de la misma carpeta del postulante y CONSERVANDO el original. A
   // partir de acá el candidato queda igual que uno que subió sus documentos por
@@ -1004,6 +1061,7 @@ Responde ÚNICAMENTE con un objeto JSON, sin texto antes ni después y sin bloqu
     companyId: number,
     asignaciones: AsignacionConfirmada[],
     driveFileId?: string,
+    resoluciones?: Record<string, 'reemplazar' | 'mantener'>,
   ) {
     if (!companyId)
       throw new BadRequestException('Usuario sin empresa asociada');
@@ -1068,12 +1126,58 @@ Responde ÚNICAMENTE con un objeto JSON, sin texto antes ni después y sin bloqu
       }
     }
 
+    // Mismo chequeo que detectarConflictos, pero justo antes de escribir: si
+    // algún requisito ya tiene un archivo guardado y no llegó una resolución
+    // para él, se corta acá — el frontend siempre debe preguntar primero (ver
+    // AnalisisArchivoUnicoModal), así que llegar sin resolver es un bug del
+    // cliente, no una decisión silenciosa que el backend deba tomar por RRHH.
+    const filesActuales = await this.driveService.listFilesInFolder(folderId);
+    const archivosPostulanteActuales = filesActuales.filter(
+      (f: any) => !String(f.name || '').toLowerCase().endsWith('.json'),
+    );
+    const conflictos = new Map<
+      string,
+      { id: string; name?: string }
+    >();
+    for (const asig of asignaciones) {
+      const existente = this.buscarArchivoDeRequisito(
+        archivosPostulanteActuales,
+        asig.requisito,
+      );
+      if (!existente) continue;
+      const resolucion = resoluciones?.[asig.requisito];
+      if (resolucion !== 'reemplazar' && resolucion !== 'mantener') {
+        throw new BadRequestException(
+          `"${asig.requisito}" ya tiene un archivo guardado. Indica si se reemplaza o se mantiene antes de separar.`,
+        );
+      }
+      conflictos.set(asig.requisito, existente);
+    }
+
     const extMatch = archivo.name.match(/\.[^/.]+$/);
     const extension = extMatch ? extMatch[0] : '.pdf';
-    const baseName = archivo.name.slice(0, archivo.name.length - extension.length);
+    let baseName = archivo.name.slice(0, archivo.name.length - extension.length);
+    // El portal de postulación (otro proyecto, ver .agents/modules/reclutamiento.md)
+    // prefija el archivo subido en modo "archivo único" con la etiqueta
+    // genérica del casillero ("Archivo Completo -", "Documentos Adicionales
+    // -") para que se sepa de dónde vino. Esa etiqueta no es el nombre de
+    // ningún documento real: si se arrastra tal cual, cada archivo separado
+    // termina llamándose "<Requisito> - Archivo Completo - <original>".
+    baseName = baseName.replace(
+      /^(Archivo Completo|Documentos Adicionales)\s*-\s*/i,
+      '',
+    );
 
     const creados: { requisito: string; fileName: string; driveFileId: string }[] = [];
+    const mantenidos: string[] = [];
     for (const asig of asignaciones) {
+      // RRHH eligió quedarse con el archivo que ya había: las páginas de esta
+      // asignación dentro del archivo único simplemente no se escriben.
+      if (resoluciones?.[asig.requisito] === 'mantener') {
+        mantenidos.push(asig.requisito);
+        continue;
+      }
+
       const nuevo = await PDFDocument.create();
       // pdf-lib indexa desde 0; RRHH y la IA hablan desde 1. Se ordenan para
       // que el documento resultante respete el orden del original aunque RRHH
@@ -1082,6 +1186,20 @@ Responde ÚNICAMENTE con un objeto JSON, sin texto antes ni después y sin bloqu
       const paginas = await nuevo.copyPages(original, indices);
       paginas.forEach((pagina) => nuevo.addPage(pagina));
       const bytes = await nuevo.save();
+
+      // "Reemplazar" borra el archivo viejo ANTES de subir el nuevo: si no,
+      // quedarían dos archivos con requisito parecido y el checklist del
+      // expediente no sabría cuál es el vigente.
+      const existente = conflictos.get(asig.requisito);
+      if (existente) {
+        try {
+          await this.driveService.deleteFileById(existente.id);
+        } catch (err: any) {
+          throw new BadRequestException(
+            `No se pudo reemplazar el archivo existente de "${asig.requisito}": ${err.message}`,
+          );
+        }
+      }
 
       // Mismo formato de nombre que reassignReclutamientoFile ("<Requisito> -
       // <original>"), que es lo que hace que findMatchingFile lo reconozca
@@ -1102,6 +1220,7 @@ Responde ÚNICAMENTE con un objeto JSON, sin texto antes ni después y sin bloqu
       aplicadoEn: new Date().toISOString(),
       asignaciones,
       creados,
+      mantenidos,
     });
 
     // La propuesta pendiente ya se usó — se borra para que no quede ofrecida
@@ -1115,7 +1234,7 @@ Responde ÚNICAMENTE con un objeto JSON, sin texto antes ni después y sin bloqu
         ),
       );
 
-    return { creados, archivoOriginalConservado: archivo.name };
+    return { creados, mantenidos, archivoOriginalConservado: archivo.name };
   }
 
   // Traza en analisis-ia.json — archivo aparte, NO candidato.json (ver el

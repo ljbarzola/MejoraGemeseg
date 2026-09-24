@@ -9,6 +9,7 @@ import {
 } from '../../../services/entidades.service';
 import GuardiaComplianceModal from '../../../components/personal/GuardiaComplianceModal';
 import NotificationConfigModal from '../../../components/personal/NotificationConfigModal';
+import { cedulaVisible } from '../../../utils/postulacionValidacion';
 
 const TIPO_COLOR: Record<string, { bg: string; fg: string }> = {
   PUBLICA: { bg: '#bfdbfe', fg: '#1d4ed8' },
@@ -192,7 +193,7 @@ export default function CumplimientoEntidades() {
                     <tr key={item.asignacion.id}>
                       <td>
                         <div style={{ fontWeight: 700, color: 'var(--azul-oscuro)' }}>{item.asignacion.nombreGuardia}</div>
-                        <div style={{ fontSize: '0.72rem', color: '#718096', fontFamily: 'monospace' }}>{item.asignacion.cedula}</div>
+                        <div style={{ fontSize: '0.72rem', color: '#718096', fontFamily: 'monospace' }}>{cedulaVisible(item.asignacion.cedula)}</div>
                       </td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>

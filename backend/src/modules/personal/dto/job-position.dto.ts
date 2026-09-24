@@ -140,6 +140,24 @@ export class AplicarAnalisisDto {
   @IsString()
   @IsOptional()
   driveFileId?: string;
+
+  // Decisión de RRHH, por requisito, para los documentos que ya tenían un
+  // archivo guardado (ver ReclutamientoIaService.detectarConflictos): mapa
+  // { [requisito]: 'reemplazar' | 'mantener' }. Solo hace falta traer una
+  // entrada por cada requisito que sí tuvo conflicto — el resto se aplica
+  // normal, sin preguntar nada.
+  @IsObject()
+  @IsOptional()
+  resoluciones?: Record<string, 'reemplazar' | 'mantener'>;
+}
+
+// RRHH está por confirmar la separación del "archivo único": antes de crear
+// nada, se le pregunta si algún requisito ya tiene un archivo guardado en la
+// carpeta (ver ReclutamientoIaService.detectarConflictos).
+export class ConflictosSeparacionDto {
+  @IsArray()
+  @IsString({ each: true })
+  requisitos: string[];
 }
 
 export class UpdateJobPositionDto {

@@ -2072,3 +2072,266 @@ describe('DriveService — estabilidad del matching de archivos duplicados', () 
     expect(resumen.completitudPercent).toBe(100);
   });
 });
+
+// Reproduce el bug real reportado: Celular/Email (o CUALQUIER campo que RRHH
+// defina en camposRequeridos, no solo los de por defecto) se veían "Falta" en
+// el expediente aunque candidato.json los tuviera bien guardados. La causa no
+// era nada específico de esos dos campos: era que la carpeta del postulante
+// también tiene analisis-ia.json / analisis-ia-pendiente.json (los deja
+// "Analizar con IA"), y un `files.find(f => f.name.endsWith('.json'))` sin
+// filtrar podía agarrar cualquiera de esos en vez de candidato.json —
+// dependiendo del orden en que Drive los liste, que no está garantizado. El
+// fix (encontrarCandidatoJsonFile) es agnóstico al nombre del campo: por eso
+// estos tests usan un campo inventado ("Talla de Uniforme") que RRHH no tenía
+// configurado antes, para demostrar que no hace falta ningún caso especial
+// por campo — cualquier dato que se guarde en datosFormulario queda a salvo.
+describe('DriveService — encontrarCandidatoJsonFile no se deja confundir por analisis-ia.json', () => {
+  let service: DriveService;
+
+  beforeEach(() => {
+    service = new DriveService(
+      {} as unknown as PrismaService,
+      noopMovimientoPersonalService,
+      noopPersonalFieldDefinitionService,
+      noopAdministrativeStaffFichaService,
+      noopGuardiaFichaPersonalService,
+    );
+  });
+
+  it('elige candidato.json sin importar en qué orden Drive devuelva los .json de la carpeta', () => {
+    const candidatoJson = { id: 'cj-1', name: 'candidato.json' };
+    const analisisIaJson = { id: 'ia-1', name: 'analisis-ia.json' };
+    const pendienteJson = { id: 'ia-2', name: 'analisis-ia-pendiente.json' };
+
+    const ordenA = (service as any).encontrarCandidatoJsonFile([
+      analisisIaJson,
+      pendienteJson,
+      candidatoJson,
+    ]);
+    const ordenB = (service as any).encontrarCandidatoJsonFile([
+      candidatoJson,
+      analisisIaJson,
+      pendienteJson,
+    ]);
+    const ordenC = (service as any).encontrarCandidatoJsonFile([
+      pendienteJson,
+      candidatoJson,
+      analisisIaJson,
+    ]);
+
+    expect(ordenA?.id).toBe('cj-1');
+    expect(ordenB?.id).toBe('cj-1');
+    expect(ordenC?.id).toBe('cj-1');
+  });
+});
+
+// El reporte original era sobre la LECTURA/visualización (el expediente
+// mostraba "Falta" en Celular/Email aunque candidato.json los tuviera bien
+// guardados), no sobre el guardado — así que además de saveCandidatoDatos
+// (arriba) hace falta probar el mismo camino que arma la lista que ve RRHH:
+// syncReclutamientoCandidates. Aquí también se usa un campo inventado ("Talla
+// de Uniforme") para demostrar que no depende de qué campo sea.
+describe('DriveService.syncReclutamientoCandidates — lee candidato.json aunque haya analisis-ia.json en la carpeta', () => {
+  let service: DriveService;
+  let prisma: {
+    folderConfig: { findFirst: jest.Mock };
+    jobPosition: { findMany: jest.Mock };
+  };
+  let driveFilesGet: jest.Mock;
+
+  beforeEach(() => {
+    prisma = {
+      folderConfig: {
+        findFirst: jest.fn().mockResolvedValue({ driveFolderId: 'rec-root' }),
+      },
+      jobPosition: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 7,
+            puesto: 'Guardia de Seguridad',
+            camposRequeridos: [
+              { nombre: 'Talla de Uniforme', tipo: 'TEXTO', obligatorio: true },
+            ],
+            archivosRequeridos: [],
+            tipoContratacion: 'GUARDIA',
+          },
+        ]),
+      },
+    };
+    service = new DriveService(
+      prisma as unknown as PrismaService,
+      noopMovimientoPersonalService,
+      noopPersonalFieldDefinitionService,
+      noopAdministrativeStaffFichaService,
+      noopGuardiaFichaPersonalService,
+    );
+
+    (service as any).getReclutamientoFolderId = jest
+      .fn()
+      .mockResolvedValue('rec-root');
+    (service as any).listSubFolders = jest
+      .fn()
+      .mockImplementation((parentId: string) => {
+        if (parentId === 'rec-root')
+          return Promise.resolve([{ id: 'puesto-1', name: 'Guardia de Seguridad' }]);
+        if (parentId === 'puesto-1')
+          return Promise.resolve([
+            { id: 'cand-1', name: 'Barzola Rodriguez Leidy Joselyn' },
+          ]);
+        return Promise.resolve([]);
+      });
+
+    driveFilesGet = jest.fn().mockImplementation(({ fileId, alt }: { fileId: string; alt?: string }) => {
+      if (fileId === 'cj-1' && alt === 'media')
+        return Promise.resolve({
+          data: JSON.stringify({
+            datosFormulario: {
+              Apellidos: 'Barzola Rodríguez',
+              Nombres: 'Leidy Joselyn',
+              Cédula: '0999999991',
+              Celular: '0979459793',
+              Email: 'leidybarzola2004@gmail.com',
+              'Talla de Uniforme': 'M',
+            },
+          }),
+        });
+      throw new Error(`unexpected fileId ${fileId} alt=${alt}`);
+    });
+    (service as any).getDriveClient = jest
+      .fn()
+      .mockReturnValue({ files: { get: driveFilesGet } });
+  });
+
+  it('devuelve el campo inventado y Celular/Email cuando candidato.json aparece DESPUÉS de analisis-ia.json en el listado', async () => {
+    (service as any).listFilesInFolder = jest.fn().mockResolvedValue([
+      { id: 'ia-1', name: 'analisis-ia.json', mimeType: 'application/json' },
+      { id: 'cj-1', name: 'candidato.json', mimeType: 'application/json' },
+    ]);
+
+    const result = await service.syncReclutamientoCandidates(1);
+
+    expect(result.candidatos).toHaveLength(1);
+    const candidato = result.candidatos[0] as any;
+    // Nunca se leyó analisis-ia.json como si fuera el candidato.json real.
+    expect(driveFilesGet).not.toHaveBeenCalledWith(
+      expect.objectContaining({ fileId: 'ia-1' }),
+      expect.anything(),
+    );
+    expect(candidato.telefono).toBe('0979459793');
+    expect(candidato.email).toBe('leidybarzola2004@gmail.com');
+    expect(candidato.datosFormulario['Talla de Uniforme']).toBe('M');
+  });
+
+  it('da el mismo resultado si analisis-ia.json aparece ANTES de candidato.json en el listado', async () => {
+    (service as any).listFilesInFolder = jest.fn().mockResolvedValue([
+      { id: 'cj-1', name: 'candidato.json', mimeType: 'application/json' },
+      { id: 'ia-1', name: 'analisis-ia.json', mimeType: 'application/json' },
+    ]);
+
+    const result = await service.syncReclutamientoCandidates(1);
+
+    const candidato = result.candidatos[0] as any;
+    expect(candidato.telefono).toBe('0979459793');
+    expect(candidato.email).toBe('leidybarzola2004@gmail.com');
+    expect(candidato.datosFormulario['Talla de Uniforme']).toBe('M');
+  });
+});
+
+describe('DriveService.saveCandidatoDatos', () => {
+  let service: DriveService;
+  let prisma: {
+    jobPosition: { findFirst: jest.Mock };
+    employeeDriveFolder: { findFirst: jest.Mock };
+  };
+  let driveFilesGet: jest.Mock;
+  let driveFilesUpdate: jest.Mock;
+  let driveFilesCreate: jest.Mock;
+
+  beforeEach(() => {
+    prisma = {
+      jobPosition: { findFirst: jest.fn().mockResolvedValue(null) },
+      employeeDriveFolder: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    service = new DriveService(
+      prisma as unknown as PrismaService,
+      noopMovimientoPersonalService,
+      noopPersonalFieldDefinitionService,
+      noopAdministrativeStaffFichaService,
+      noopGuardiaFichaPersonalService,
+    );
+
+    driveFilesGet = jest.fn().mockImplementation(({ fileId, alt }: { fileId: string; alt?: string }) => {
+      if (fileId === 'folder-1' && !alt)
+        return Promise.resolve({ data: { parents: [] } });
+      if (fileId === 'cj-1' && alt === 'media')
+        return Promise.resolve({
+          data: JSON.stringify({
+            datosFormulario: {
+              Apellidos: 'Barzola Rodríguez',
+              Nombres: 'Leidy Joselyn',
+              Cédula: '0999999991',
+              Celular: '0979459793',
+              Email: 'leidybarzola2004@gmail.com',
+            },
+          }),
+        });
+      throw new Error(`unexpected fileId ${fileId} alt=${alt}`);
+    });
+    driveFilesUpdate = jest.fn().mockResolvedValue({});
+    driveFilesCreate = jest.fn().mockResolvedValue({ data: { id: 'new-json' } });
+    (service as any).getDriveClient = jest.fn().mockReturnValue({
+      files: { get: driveFilesGet, update: driveFilesUpdate, create: driveFilesCreate },
+    });
+  });
+
+  it('guarda un campo inventado por RRHH ("Talla de Uniforme") en candidato.json, no en analisis-ia.json, aunque este último venga primero en el listado', async () => {
+    (service as any).listFilesInFolder = jest.fn().mockResolvedValue([
+      { id: 'ia-1', name: 'analisis-ia.json' },
+      { id: 'cj-1', name: 'candidato.json' },
+    ]);
+
+    const result = await service.saveCandidatoDatos(
+      'folder-1',
+      { 'Talla de Uniforme': 'M' },
+      1,
+    );
+
+    // Se escribió sobre candidato.json (cj-1), nunca sobre analisis-ia.json.
+    expect(driveFilesUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ fileId: 'cj-1' }),
+    );
+    expect(driveFilesCreate).not.toHaveBeenCalled();
+
+    // El campo nuevo se agregó SIN perder lo que ya había — ni Celular ni
+    // Email (los del bug original) ni el resto.
+    expect(result.datosFormulario).toEqual(
+      expect.objectContaining({
+        Apellidos: 'Barzola Rodríguez',
+        Nombres: 'Leidy Joselyn',
+        Cédula: '0999999991',
+        Celular: '0979459793',
+        Email: 'leidybarzola2004@gmail.com',
+        'Talla de Uniforme': 'M',
+      }),
+    );
+  });
+
+  it('da el mismo resultado si analisis-ia.json aparece DESPUÉS de candidato.json en el listado', async () => {
+    (service as any).listFilesInFolder = jest.fn().mockResolvedValue([
+      { id: 'cj-1', name: 'candidato.json' },
+      { id: 'ia-1', name: 'analisis-ia.json' },
+    ]);
+
+    const result = await service.saveCandidatoDatos(
+      'folder-1',
+      { 'Talla de Uniforme': 'M' },
+      1,
+    );
+
+    expect(driveFilesUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ fileId: 'cj-1' }),
+    );
+    expect(result.datosFormulario['Talla de Uniforme']).toBe('M');
+    expect(result.datosFormulario['Celular']).toBe('0979459793');
+  });
+});

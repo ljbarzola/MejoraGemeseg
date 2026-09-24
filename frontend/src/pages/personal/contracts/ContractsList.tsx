@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, FilePlus, FileText, FolderOpen } from 'lucide-react';
 import { getContracts, getContractTemplates, deleteContractTemplate, resolveContractFileUrl, getDriveConfig, type ContractTemplate } from '../../../services/personal.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import { cedulaVisible } from '../../../utils/postulacionValidacion';
 
 export default function ContractsList() {
   const navigate = useNavigate();
@@ -143,7 +144,7 @@ export default function ContractsList() {
                 {contracts.map((c) => (
                   <tr key={c.id}>
                     <td style={{ fontWeight: 600 }}>{c.nombreGuardia}</td>
-                    <td style={{ fontFamily: 'monospace' }}>{c.cedula}</td>
+                    <td style={{ fontFamily: 'monospace' }}>{cedulaVisible(c.cedula)}</td>
                     <td>{c.template?.name}</td>
                     <td>
                       <span className="status-badge" style={{
