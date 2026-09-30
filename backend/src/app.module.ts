@@ -7,6 +7,7 @@ import { UsersModule } from './modules/users/users.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { AiModule } from './modules/ai/ai.module';
+import { KnowledgeBaseModule } from './modules/knowledge-base/knowledge-base.module';
 import { QueueModule } from './modules/queue/queue.module';
 import { ToolsModule } from './modules/tools/tools.module';
 import { AgentsModule } from './modules/agents/agents.module';
@@ -18,6 +19,8 @@ import { CustodiasModule } from './modules/custodias/custodias.module';
 import { PersonalModule } from './modules/personal/personal.module';
 import { VentasModule } from './modules/ventas/ventas.module';
 import { SistemasModule } from './modules/sistemas/sistemas.module';
+import { ContratacionPublicaModule } from './modules/contratacion-publica/contratacion-publica.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -28,6 +31,7 @@ import { SistemasModule } from './modules/sistemas/sistemas.module';
     ProjectsModule,
     TasksModule,
     AiModule,
+    KnowledgeBaseModule,
     QueueModule,
     ToolsModule,
     AgentsModule,
@@ -38,6 +42,8 @@ import { SistemasModule } from './modules/sistemas/sistemas.module';
     PersonalModule,
     VentasModule,
     SistemasModule,
+    ContratacionPublicaModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

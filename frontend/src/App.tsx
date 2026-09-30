@@ -14,6 +14,7 @@ import Sidebar from './components/layout/Sidebar';
 import ChatFloatingButton from './components/chat/ChatFloatingButton';
 import ChatDrawer from './components/chat/ChatDrawer';
 import ReportarProblemaButton from './components/common/ReportarProblemaButton';
+import NotificationsBell from './components/common/NotificationsBell';
 import { CompanyProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { usePerm } from './contexts/PermissionsContext';
@@ -28,6 +29,7 @@ const CompanySettingsPage = lazy(() => import('./pages/admin/CompanySettingsPage
 const ToolsPage = lazy(() => import('./pages/tools/ToolsPage'));
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
 const AgentsPage = lazy(() => import('./pages/admin/AgentsPage'));
+const KnowledgeBasePage = lazy(() => import('./pages/sistemas/KnowledgeBasePage'));
 const SuperAdminPermissions = lazy(() => import('./pages/admin/SuperAdminPermissions'));
 const CompanyAdminPermissions = lazy(() => import('./pages/admin/CompanyAdminPermissions'));
 const CacaoDashboard = lazy(() => import('./pages/cacao/CacaoDashboard'));
@@ -54,6 +56,16 @@ const NominaPage = lazy(() => import('./pages/custodias/NominaPage'));
 const CustodiasDashboard = lazy(() => import('./pages/custodias/CustodiasDashboard'));
 const ConsultaTrabajador = lazy(() => import('./pages/custodias/ConsultaTrabajador'));
 const GemeBotChat = lazy(() => import('./pages/custodias/GemeBotChat'));
+const CPEntidadesPublicasList = lazy(() => import('./pages/contratacion-publica/EntidadesPublicasList'));
+const CPContratosList = lazy(() => import('./pages/contratacion-publica/contratos/ContratosList'));
+const CPContratoForm = lazy(() => import('./pages/contratacion-publica/contratos/ContratoForm'));
+const CPContratoDetail = lazy(() => import('./pages/contratacion-publica/contratos/ContratoDetail'));
+const CPHorarioMensualList = lazy(() => import('./pages/contratacion-publica/horarios/HorarioMensualList'));
+const CPHorarioMensualEditor = lazy(() => import('./pages/contratacion-publica/horarios/HorarioMensualEditor'));
+const CPInformesList = lazy(() => import('./pages/contratacion-publica/informes/InformesList'));
+const CPInformeForm = lazy(() => import('./pages/contratacion-publica/informes/InformeForm'));
+const CPCodigosTurnoConfig = lazy(() => import('./pages/contratacion-publica/config/CodigosTurnoConfig'));
+const CPTextosInstitucionalesConfig = lazy(() => import('./pages/contratacion-publica/config/TextosInstitucionalesConfig'));
 const PersonalDashboard = lazy(() => import('./pages/personal/PersonalDashboard'));
 const ReclutamientoPage = lazy(() => import('./pages/personal/ReclutamientoPage'));
 const GuardiasList = lazy(() => import('./pages/personal/GuardiasList'));
@@ -94,6 +106,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
         {children}
       </div>
       <div className="no-print"><ReportarProblemaButton /></div>
+      <div className="no-print"><NotificationsBell /></div>
     </ProtectedRoute>
   );
 }
@@ -328,6 +341,18 @@ function AppInner() {
         <Route path="/custodias/nomina" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><NominaPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/custodias/trabajador" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><ConsultaTrabajador /></SectionRoute></ProtectedLayout>} />
         <Route path="/custodias/gemebot" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><GemeBotChat /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/entidades" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPEntidadesPublicasList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/contratos" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratosList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/contratos/nuevo" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/contratos/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoDetail /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/contratos/:id/editar" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/horarios" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPHorarioMensualList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/horarios/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPHorarioMensualEditor /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/informes" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformesList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/informes/nuevo" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformeForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/informes/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformeForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/config/codigos-turno" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPCodigosTurnoConfig /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/config/textos-institucionales" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPTextosInstitucionalesConfig /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh" element={<ProtectedLayout><SectionRoute section="RRHH"><PersonalDashboard /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/reclutamiento" element={<ProtectedLayout><SectionRoute section="RRHH"><ReclutamientoPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/guardias" element={<ProtectedLayout><SectionRoute section="RRHH"><GuardiasList /></SectionRoute></ProtectedLayout>} />
@@ -370,6 +395,7 @@ function AppInner() {
         <Route path="/sistemas/dashboard" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><SistemasDashboardPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/sistemas/herramientas" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><ToolsPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/sistemas/agentes" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><AgentsPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/sistemas/base-conocimiento" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><KnowledgeBasePage /></SectionRoute></ProtectedLayout>} />
         <Route path="/sistemas/soporte" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><SoporteTecnicoPage /></SectionRoute></ProtectedLayout>} />
       </Routes>
       </Suspense>

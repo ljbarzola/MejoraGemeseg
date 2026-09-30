@@ -24,7 +24,7 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 - **Auth:** Passport.js (JWT, expira 7 dias) + bcryptjs (salt 10)
 - **Docs:** Swagger en `/docs`
 - **Validacion:** class-validator + class-transformer
-- **IA:** GitHub Models (`gpt-4o-mini`) via `https://models.inference.ai.azure.com/chat/completions`
+- **IA:** Google Vertex AI (Gemini) — chat "Agente Gemeseg" y revisión de documentos de RRHH (ver `.agents/modules/agents-ai.md`). GitHub Models (`gpt-4o-mini`) se retiró del chat el 2026-09-29; seguía en uso (sin migrar todavía) solo por `DocumentExtractionService` en RRHH.
 
 ### Frontend
 - **Framework:** React 18 + Vite
@@ -52,7 +52,7 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 ## Convenciones de Codigo
 
 ### NestJS
-- Un modulo por dominio: `auth`, `projects`, `users`, `tasks`, `ai`, `queue`, `tools`, `agents`, `companies`, `custodias`, `personal`, `ventas`.
+- Un modulo por dominio: `auth`, `projects`, `users`, `tasks`, `ai`, `queue`, `tools`, `agents`, `companies`, `custodias`, `personal`, `ventas`, `notifications`.
 - DTOs con `class-validator` para toda entrada.
 - Guards por rol: `@Roles(UserRole.ADMIN)` + `RolesGuard`.
 - Responses consistentes.
@@ -67,7 +67,7 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 
 ### Prisma
 - Enums en schema: `UserRole`, `ProjectStatus`, `MemberRole`, `TaskStatus`, `Priority`, `CustodiaType`, `CustodiaEstado`.
-- Modelos: `Company`, `User`, `Department`, `Role`, `Project`, `ProjectMember`, `Task`, `TaskAssignee`, `Tool`, `ToolAssignment`, `ToolAuditLog`, `Agent`, `UserAgent`, `Conversation`, `ChatMessage`, `AiLog`, `Custodia`, `SalesGoal`, `ClientVisit`, `Lead`, `SalesApiKey`.
+- Modelos: `Company`, `User`, `Department`, `Role`, `CompanyLocation`, `Project`, `ProjectMember`, `Task`, `TaskAssignee`, `Tool`, `ToolAssignment`, `ToolAuditLog`, `Agent` (con `isDefault`), `UserAgent`, `Conversation`, `ChatMessage`, `AiLog`, `CompanyKnowledgeBase`, `Custodia`, `SalesGoal`, `ClientVisit`, `Lead`, `SalesApiKey`.
 - Migraciones con `prisma migrate dev --name <nombre>`.
 - Seed en `prisma/seed.js`.
 - Prisma v7 usa `prisma.config.js` (JS, no TS) para la URL de conexion.
@@ -137,8 +137,14 @@ npm run seed:minimal   # datos minimos: 1 empresa, 2 usuarios, 1 proyecto/tareas
 ```bash
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gemeseg?schema=public
 JWT_SECRET=gemeseg-jwt-secret-2026
-GITHUB_TOKEN=<token_de_github_models>
 FRONTEND_URL=http://localhost:5173
+# Opcionales — sin ellas, el chat "Agente Gemeseg" y la revisión de documentos de RRHH
+# caen a modo mock / deshabilitado en vez de fallar (ver .agents/modules/agents-ai.md punto 1
+# y la sección de Recursos Humanos más abajo):
+GOOGLE_VERTEX_PROJECT=agentes-504115
+GOOGLE_VERTEX_LOCATION=us-central1
+GOOGLE_VERTEX_CHAT_MODEL=gemini-2.5-flash
+GOOGLE_VERTEX_MODEL=gemini-2.5-flash
 ```
 
 Si alguna vez hace falta inspeccionar datos reales de produccion (solo lectura, para depurar un bug reportado), conectar **solo** via **Cloud SQL Auth Proxy** (nunca `psql` directo a la IP publica `34.9.205.240`; esa instancia tiene `sslMode=ENCRYPTED_ONLY` y no hay Authorized Networks, asi que las conexiones directas sin proxy/conector fallan o deben ir cifradas):
@@ -221,7 +227,7 @@ y apuntar una `DATABASE_URL` alterna a `127.0.0.1:5434` solo para esa sesion pun
 ### Permisos por seccion (`/permissions`)
 Existen **dos capas de autorizacion independientes**, no una sola:
 1. **RolesGuard** (`@Roles(UserRole.ADMIN)`): rol grueso ADMIN/MANAGER/EMPLOYEE, por endpoint.
-2. **Permisos por seccion** (`PermissionsService`, modulo `permissions`): gatea modulos completos (DASHBOARD, PROJECTS, ADMIN, TOOLS, CACAO, COMPANY_SETTINGS, COMPANIES, CUSTODIAS, RRHH, VENTAS, SISTEMAS - ver `ALL_SECTIONS` en `permissions.service.ts`).
+2. **Permisos por seccion** (`PermissionsService`, modulo `permissions`): gatea modulos completos (DASHBOARD, PROJECTS, ADMIN, TOOLS, CACAO, COMPANY_SETTINGS, COMPANIES, CUSTODIAS, RRHH, VENTAS, CONTRATACION_PUBLICA, SISTEMAS - ver `ALL_SECTIONS` en `permissions.service.ts`).
 
 Reglas:
 - Una seccion con `alwaysEnabled: true` (DASHBOARD, PROJECTS, ADMIN, TOOLS, SISTEMAS) esta siempre visible para toda empresa.
@@ -250,6 +256,8 @@ Replica **exactamente** la semantica de `hooks/usePermissions.ts`, en este orden
 4. **No existe fila → se permite** (default permisivo).
 
 El punto 4 es deliberado y esta cubierto por un test: invertirlo dejaria fuera a todos los usuarios que hoy no tienen permisos explicitos cargados. Usar este guard (y no `RolesGuard`) es lo correcto cuando el acceso depende del modulo y no del cargo - p. ej. los usuarios de RRHH estan cargados como `EMPLOYEE` (`nayelli@gemeseg.com`), asi que un `@Roles(ADMIN, MANAGER)` los habria bloqueado.
+
+**Ojo con el punto 4 al crear un usuario nuevo:** ese default permisivo es para usuarios *antiguos* sin filas cargadas — un usuario creado hoy **no** debería depender de él. Hasta 2026-09-29, `UsersService.create()` no creaba ninguna fila `UserPermission`, así que un usuario nuevo heredaba el default permisivo (acceso total) mientras `/admin/user-permissions` lo mostraba como si estuviera bloqueado. Ahora `create()` siembra filas explícitas (denegado para EMPLOYEE/MANAGER, permitido para ADMIN, excepto secciones fijas/siempre visibles) en la misma transacción — ver `.agents/modules/users.md` punto 1, incluido el script de backfill para las cuentas creadas antes de este fix.
 
 ### Empresas (White-labeling)
 - **Super Admin** (`admin@general.com`, `companyId: null`): puede ver y gestionar todas las empresas.
@@ -285,13 +293,16 @@ El punto 4 es deliberado y esta cubierto por un test: invertirlo dejaria fuera a
 - `DELETE /tasks/:id` - Eliminar tarea
 
 ### Users (`/users`)
-- `POST /users` - Crear usuario (solo ADMIN)
+- `POST /users` - Crear usuario (solo ADMIN). Desde 2026-09-29 también crea filas `UserPermission` explícitas para el usuario nuevo (denegado por defecto si es EMPLOYEE/MANAGER, permitido explícito si es ADMIN) — ver `.agents/modules/users.md` punto 1 para el bug que esto corrige
 - `GET /users` - Listar usuarios (cualquier usuario autenticado)
 - `GET /users/me` - Perfil del usuario autenticado (con herramientas asignadas)
 - `GET /users/stats` - Estadisticas (solo ADMIN)
+- `GET /users/locations` / `POST /users/locations` - Catálogo de ubicaciones de la empresa (solo ADMIN, ver `.agents/modules/users.md` punto 2)
 - `GET /users/:id` - Detalle de usuario (solo ADMIN)
-- `PATCH /users/:id` - Actualizar usuario (solo ADMIN)
+- `PATCH /users/:id` - Actualizar usuario (solo ADMIN), incluye `locationId`
 - `DELETE /users/:id` - Eliminar usuario (soft delete, solo ADMIN)
+
+Backfill para usuarios ya existentes sin ninguna fila `UserPermission`: `npm run backfill:permissions` en `backend/` (dry-run por defecto, `--apply` para ejecutar) — ver `.agents/modules/users.md` punto 1.
 
 ### Tools (`/tools`)
 - `GET /tools` - Listar catalogo de herramientas
@@ -306,13 +317,15 @@ El punto 4 es deliberado y esta cubierto por un test: invertirlo dejaria fuera a
 
 **Nota:** Todos los endpoints de Tools requieren rol ADMIN (RolesGuard).
 
-### Chat IA (`/chat`)
+### Chat IA (`/chat`) — "Agente Gemeseg"
 - `POST /chat/message` - Enviar mensaje al asistente IA
 - `GET /chat/conversations` - Listar conversaciones del usuario (filtro por agentId)
 - `GET /chat/conversations/:id/messages` - Obtener mensajes de una conversacion
 - Rate limit: 50 mensajes/dia por usuario
-- GitHub Models (`gpt-4o-mini`) con fallback a mock
-- Predefinidas: `list_projects`, `count_tasks_by_status`, `user_info`, `project_summary`, `list_my_tasks`
+- Motor: Google Vertex AI / Gemini (`GOOGLE_VERTEX_PROJECT`/`GOOGLE_VERTEX_LOCATION`/`GOOGLE_VERTEX_CHAT_MODEL`, este último separado de `GOOGLE_VERTEX_MODEL` que usa RRHH), con fallback a mock si no está configurado. Reemplaza a GitHub Models desde 2026-09-29 (ver `.agents/modules/agents-ai.md` punto 1).
+- Intenciones sin dueño de sección (siempre ejecutables): `list_projects`, `count_tasks_by_status`, `user_info`, `project_summary`, `list_my_tasks`
+- Intenciones con datos en vivo de otros módulos, gateadas por la misma lógica de `SectionPermissionGuard` **antes** de ejecutar la consulta (`AiService.canUseIntent`, ver `.agents/modules/agents-ai.md` punto 1): `cacao_resumen` (CACAO), `custodias_resumen` (CUSTODIAS), `rrhh_resumen_personal` (RRHH), `ventas_resumen` (VENTAS)
+- Base de Conocimiento institucional por empresa (`CompanyKnowledgeBase`, editable por el ADMIN desde `/sistemas/base-conocimiento`) se inyecta como contexto extra, recortada a las secciones que el usuario puede ver — ver `.agents/modules/agents-ai.md` punto 1
 
 ### Agents (`/admin/agents`)
 - `GET /admin/agents` - Listar usuarios con sus agentes asignados
@@ -326,7 +339,13 @@ El punto 4 es deliberado y esta cubierto por un test: invertirlo dejaria fuera a
 - `DELETE /admin/agents/:id/assign/:userId` - Quitar agente de usuario
 - `GET /agents/available` - Agentes disponibles para el usuario actual (global + asignados)
 
-**Nota:** Todos los endpoints de Admin Agents requieren rol ADMIN (RolesGuard). El endpoint `GET /agents/available` es para cualquier usuario autenticado.
+**Nota:** Todos los endpoints de Admin Agents requieren rol ADMIN (RolesGuard). El endpoint `GET /agents/available` es para cualquier usuario autenticado. El agente global por defecto se identifica por `Agent.isDefault = true` (ya no por `name` exacto) — el nombre visible pasó a ser "Agente Gemeseg" (antes "Agente GEMESEG"), ver `.agents/modules/agents-ai.md` punto 1.
+
+### Base de Conocimiento (`/company-knowledge-base`)
+- `GET /company-knowledge-base` - Leer el documento institucional Markdown de la empresa (solo ADMIN)
+- `PUT /company-knowledge-base` - Guardarlo; responde `warnings` con encabezados `##` no reconocidos
+
+Contexto adicional para "Agente Gemeseg", filtrado por sección de permisos antes de llegar al modelo. Pantalla: `/sistemas/base-conocimiento` (gateada como el resto de Sistemas). Detalle completo: `.agents/modules/agents-ai.md` punto 1.
 
 ### Custodias (`/custodias`) - Módulo Operativo
 *Nota de nomenclatura:* "Custodias" es el módulo operativo de rutas, transporte y nómina. El personal de seguridad gestionado en el módulo de Personal se denomina "Guardias" (submenú Personal > Guardias).
@@ -382,7 +401,7 @@ Todo el correo del sistema sale por `GmailMailService` (`backend/src/modules/mai
 **Capacitaciones, Buzón de Quejas y Sugerencias, Encuestas (2026-09-15, ver `.agents/modules/recursos-humanos.md` puntos 8-10 para el detalle completo):**
 - `GET/POST/PATCH/DELETE /personal/trainings`, `PATCH /personal/trainings/:id/completed`, `POST /personal/trainings/upload` (sube a la carpeta de esa capacitación en Drive, no a disco), `POST/DELETE /personal/trainings/:id/attachments` - Capacitaciones, cumplimiento **general** (no por guardia). Cada una crea carpeta: puntual en la raíz de Capacitaciones, anual dentro de `Anual` (se crea si no está). Si el nombre ya existe, 409 y la pantalla pregunta si se usa esa carpeta o se cambia el nombre. Carpeta raíz **fija en código** (`HARDCODED_DRIVE_FOLDERS.CAPACITACIONES`); el listado abre Drive con "Ver carpeta". Guardias / archivo / administrativo siguen configurándose en cada listado (ver `.agents/modules/recursos-humanos.md` punto 12)
 - `POST /personal/complaints` (abierto a cualquier empleado, sin `@Section`), `GET /personal/complaints` (RRHH), `PATCH /personal/complaints/:id/stage`, `GET/POST/PATCH/DELETE /personal/complaint-fields` - Buzón de Quejas y Sugerencias, con campos de formulario configurables por RRHH y gestión tipo Kanban
-- `GET/POST /personal/surveys`, `GET /personal/surveys/:id/results`, `PATCH /personal/surveys/:id/public-link`, `PATCH /personal/surveys/:id/close`, `PATCH /personal/surveys/:id/reopen`, `GET /personal/surveys/pending/mine`, `GET/POST /personal/surveys/:id/respond` - Encuestas. Dos canales combinables: destinatarios con cuenta (respuestas identificadas, una sola vez) y **enlace público**. `reopen` vuelve a abrir una cerrada sin borrar respuestas (ver `.agents/modules/recursos-humanos.md` punto 10).
+- `GET/POST /personal/surveys`, `GET /personal/surveys/:id/results`, `PATCH /personal/surveys/:id/public-link`, `PATCH /personal/surveys/:id/close`, `PATCH /personal/surveys/:id/reopen`, `GET /personal/surveys/pending/mine`, `GET/POST /personal/surveys/:id/respond` - Encuestas. Dos canales combinables: destinatarios con cuenta (respuestas identificadas, una sola vez) y **enlace público**. `reopen` vuelve a abrir una cerrada sin borrar respuestas (ver `.agents/modules/recursos-humanos.md` punto 10). Desde 2026-09-29, publicar una encuesta notifica de verdad a cada destinatario interno (correo + notificación in-app vía el módulo `notifications`) — antes solo se creaba la fila de destinatario sin avisarle a nadie (ver `.agents/modules/recursos-humanos.md` punto 20).
 - `GET /public/surveys/:token`, `POST /public/surveys/:token/responses` - Encuesta por enlace público (`/encuesta/:token` en el frontend). **Únicos endpoints del módulo sin `AuthGuard` ni `SectionPermissionGuard`**, a propósito: los responde gente sin cuenta (proveedores, clientes, postulantes) desde el computador o el celular. El token aleatorio es la única credencial y el service solo devuelve título/descripción/preguntas. No agregarles guards: rompe el caso de uso (ver `.agents/modules/recursos-humanos.md` punto 10)
 
 **Movimientos de Personal — entrada/salida de guardias (2026-09-09, reemplaza a "Verificación asistida" de Sprint 2; ver `.agents/modules/movimientos-personal.md`):**
@@ -411,6 +430,22 @@ Todo el correo del sistema sale por `GmailMailService` (`backend/src/modules/mai
 - `GET/POST /ventas/visitas`, `POST /ventas/visitas/:id/checkin`, `POST /ventas/visitas/:id/complete` - Visitas de campo con check-in geolocalizado
 - `GET /ventas/dashboard`, `POST /ventas/goals` - Metas de venta por vendedor
 - `POST /ventas/webhook/lead` - Ingesta de leads externos por API key (sin sesión)
+
+**Clientes (`/ventas/clientes`):** ficha de cliente con campos personalizables por empresa (`SalesClientField`/`extra` Json) — hasta 2026-09-28 solo texto/número/fecha/booleano; ahora también `SELECT` (lista de opciones `{key,label}[]`, el valor guardado en `extra` es el `key` estable, el `label` se puede renombrar sin corromper datos ya guardados) y `TEXTAREA` (Observaciones, que antes era un `<textarea>` fijo fuera del sistema de campos). `email` es opcional (antes obligatorio): un referido recién llegado puede no tener correo todavía. `ClienteFormModal.tsx` renderiza TODOS los campos (núcleo + personalizados) genéricamente en un solo loop según `fieldType`, salvo Nombre que va fijo arriba — antes los núcleo (`fuente`, `servicio_requerido`) quedaban excluidos del formulario normal por error (el filtro solo pasaba campos no-núcleo).
+- Un campo `SELECT` puede tener `allowOther: true` (2026-09-29, mismo patrón que `SalesTemplateField.allowOther` en Contratos): agrega una opción "Otro (especifique)" que cambia a un `<input>` de texto libre; el valor se guarda literal, sin prefijo — `fuente` lo trae activado por defecto.
+- **Responsable vs. Referido por, dos conceptos distintos:** `assignedUserId`/`assignedUser` ("Responsable") es quién de Ventas atiende la venta — nadie lo asigna por otra persona, cada quien se auto-asigna/desasigna (`POST`/`DELETE /ventas/clientes/:id/asignarme`, `VENTAS` write). `referredByUserId`/`referredBy` ("Referido por") es a quién se le da crédito si la fuente es un referido — nunca editable por nadie, solo lo fija el servidor al crear vía `/referir`. `createdBy`/`creator` sigue siendo un tercer campo, puramente de auditoría (quién creó la fila). Un cliente creado a mano en Ventas se autoasigna como responsable al crearlo; uno creado vía `/referir` queda sin responsable hasta que alguien lo reclama.
+- **Columnas de la tabla, configurables por cada usuario (2026-09-29):** `frontend/src/hooks/useColumnPreferences.ts` guarda en `localStorage` (no en la base de datos) qué columnas ve cada quien y en qué orden — mismo espíritu que el ancho de columnas. Nombre y Acciones siempre van. Se configuran desde el mismo ícono de "Campos y columnas" (ver abajo), no hace falta una pantalla aparte.
+- `GET/POST /ventas/clientes/fields` (`VENTAS` view/write), `PATCH/DELETE /ventas/clientes/fields/:id` (`VENTAS` write) - CRUD de campos. El `GET` no lleva `@Section`: el formulario abierto de "Referir un cliente" necesita leer las opciones de "Servicio requerido" sin tener acceso a Ventas.
+- `GET/POST/PATCH/DELETE /ventas/clientes(/:id)` (`VENTAS` view/write) - CRUD de cliente.
+
+**Referidos y pipeline de seguimiento (2026-09-29):** un referido NO es una entidad aparte — es un `SalesClient` más, distinguido por el campo núcleo `fuente` (`SELECT`, opciones iniciales Referido/Campaña/Otro, editables desde "Configuración de campos"). Se descartó una entidad `Referido` independiente construida un día antes: el pipeline de seguimiento (leído/cotizado/aceptado/rechazado) aplica a **todos** los clientes, vengan de donde vengan, así que vive en el propio `SalesClient` en vez de duplicar el CRM. Reglas: `SalesClientStage` (etapas editables por empresa, mismo patrón que `ComplaintStage` de RRHH — no un enum fijo), `SalesClient.referredByUserId` (solo lo fuerza el servidor en el endpoint abierto de abajo, nunca el body — es lo único que decide si se notifica a alguien en un cambio de etapa, no depende de qué diga "Fuente").
+- `POST /ventas/clientes/referir` - **Sin `@Section`**: cualquier autenticado puede referir un cliente, tenga o no acceso a Ventas. Body `{nombre, celular?, correo?, servicioRequerido?, nota?}`; el servicio fuerza `extra.fuente='REFERIDO'` y `referredByUserId` del usuario autenticado, y usa la etapa `isInitial` de la empresa.
+- `GET /ventas/clientes/mis-referidos` - **Sin `@Section`**: lo que el usuario actual ha referido y en qué etapa va (solo lectura, nunca expone montos ni comisión).
+- `GET /ventas/clientes/stages` (sin `@Section`, para poblar combos), `POST/PATCH/DELETE /ventas/clientes/stages(/:id)` (`VENTAS` write) - CRUD de etapas; mismas reglas de integridad que `ComplaintStage` (una sola `isInitial` por empresa, no se borra la inicial sin reasignar). A diferencia de Quejas, borrar la última etapa restante con clientes en ella NO borra los clientes — los deja con `status: null` ("sin etapa"), porque un Cliente es una entidad de negocio real (puede tener contratos), no un ítem de pipeline descartable.
+- `PATCH /ventas/clientes/:id/stage` (`VENTAS` write) - cambia de etapa y, si el cliente tiene `referredByUserId`, dispara notificación al referidor: correo (remitente fijo `sistemas@gemeseg.com`/"Sistemas" — 2026-09-29, ya NO usa `NotificationConfig` de la empresa, ese es el remitente que RRHH configuró para sus propios avisos de cumplimiento, no para esto — mismo patrón que `AuthService.REMITENTE_CONTRASENA`) + notificación in-app con `link: '/dashboard'` (ver módulo `notifications` abajo). Ningún texto menciona comisión/porcentaje. Un fallo al notificar se registra en el servidor pero nunca revierte ni bloquea el cambio de etapa.
+- **Validación de integridad de etapas (2026-09-29, replicada en `ComplaintStageService` de RRHH — mismo molde de etapas editables):** una etapa no puede ser inicial y final a la vez; la etapa inicial no puede tener `order` igual o mayor al de cualquier etapa final; no se puede quitar la marca de inicial a la única etapa inicial sin marcar otra antes. Corre dentro de una `$transaction` que revierte el cambio completo si no cuadra.
+- Etapas por defecto (`RECIBIDO`/`LEIDO`/`COTIZADO`/`ACEPTADO`/`RECHAZADO`) y campos núcleo (`fuente`, `servicio_requerido`) se siembran de forma **perezosa** (`ensureDefaultStages`/`ensureCoreFields` en `VentasClientesService`) la primera vez que hacen falta — no hay backfill manual para empresas ya existentes.
+- Frontend: tarjeta "¿Conoces a alguien interesado en Gemeseg?" en Inicio, debajo del banner (`ReferirClienteButton.tsx`, separada de "Mis tareas" a pedido del usuario). Un solo botón/modal con dos vistas — no hay página `/mis-referidos` (se quitó 2026-09-29): al abrir se ve la lista de lo que ya referiste, con un botón "+ Referir un cliente" que pasa a un formulario dentro del MISMO modal; al enviar, vuelve a la lista y ahí aparece el nuevo. Todo lo demás vive en la página ya existente `/ventas/clientes` — dos botones `.btn-secondary` con ícono + texto corto ("Etapas", "Campos"; 2026-09-29, revertido desde un primer intento con `.btn-icon-toolbar` sin texto — el usuario pidió que la palabra fuera visible para saber de qué configuración se trata) separados (no hay página `/ventas/referidos` separada).
 
 **Plantillas (`/ventas/templates`):**
 - `GET/POST/PATCH/DELETE /ventas/templates` - CRUD de plantilla (nombre, `driveUrl`, asunto/cuerpo de correo por defecto, numeración — ver abajo)
@@ -444,6 +479,26 @@ Todo el correo del sistema sale por `GmailMailService` (`backend/src/modules/mai
 - Los Anexos A/B/C (Equipos/Servicios/Contactos) que antes estaban hardcodeados en `ContratoForm.tsx`/`generatePdf` (2026-09-16) se eliminaron — el mecanismo genérico de campos `TABLE` los reemplaza para cualquier plantilla nueva.
 - `PersonalModule` exporta `DriveService` y `VentasModule` lo importa (2026-09-16) para reutilizar el mismo cliente de Google Drive que usa RRHH — no crear un segundo cliente de Drive independiente para Ventas.
 - `ContratoForm.tsx` ya no pide teléfono/empresa/RUC/dirección del cliente (2026-09-16) — la sección se renombró "Datos para el envío" y quedó solo con nombre y email, lo mínimo que necesita `sendContract` para mandar a firmar. Si una plantilla necesita esos datos, se configuran como campos normales (`Cliente.Teléfono`, etc.), no como un formulario fijo. Las columnas `SalesContract.clientPhone/clientCompany/clientRuc/clientAddress` siguen en el esquema (nadie las borra por ahora) pero ningún flujo del UI las escribe.
+
+### Notificaciones (`/notifications`) — 2026-09-28
+Bandeja de notificaciones in-app genérica, primera vez que existe algo así en el repo (antes solo había correo). No es exclusiva de Referidos — cualquier módulo puede llamar a `NotificationsService.create()` para avisarle algo a un usuario concreto. Sin campanita/lista no había ningún canal in-app; ahora hay una campanita fija arriba a la derecha en toda pantalla protegida (`NotificationsBell.tsx`) que sondea el contador cada 60s (no hay WebSockets en el repo).
+- `GET /notifications`, `GET /notifications/unread-count`, `PATCH /notifications/:id/read`, `PATCH /notifications/read-all` - Todas sin `@Section`: es una bandeja personal, cada usuario solo ve/marca las suyas.
+
+### Contratación Pública (`/contratacion-publica`)
+Módulo de contratos de seguridad privada con entidades del sector público (SERCOP): entidades, contratos (renovaciones, adendas, adjuntos), puestos de servicio, horarios de guardias con generador automático de patrón de rotación, e informes mensuales generados desde una plantilla `.docx`. Diseño detallado (algoritmo, ejemplos numéricos, casos de uso de verificación): `.agents/modules/contratacion-publica.md`.
+
+- `GET/POST/PATCH/DELETE /contratacion-publica/entidades` - Entidades públicas (nombre, RUC, dirección)
+- `GET/POST/PATCH/DELETE /contratacion-publica/contratos` - Contratos, `POST .../:id/renovar` (enlaza `contratoOrigenId`), `POST/DELETE .../:id/adendas`, `POST/DELETE .../:id/adjuntos`
+- `GET/POST/PATCH/DELETE /contratacion-publica/puestos` - Puestos de servicio (`tipoTurno` 8H/12H/24H, `cantidadGuardias`, `guardiasSimultaneosRequeridos` — mínimo de guardias trabajando a la vez, aplica con o sin patrón de rotación). `POST/DELETE .../:id/guardias` asigna/quita guardias (snapshot cédula+nombre tomado del padrón de RRHH, sin FK — a propósito, para no acoplar el módulo)
+- `GET/PUT /contratacion-publica/puestos/:id/patron-rotacion`, `POST .../preview` - Patrón de rotación cíclico guardado por puesto (tramos `{codigoTurno, dias}`, cobertura simultánea, orden de guardias que define el desfase, fecha de inicio de ciclo). El preview usa la misma función de cálculo que la generación real (`calcularPatronRotacion`, `backend/.../shared/patron-rotacion.util.ts`), para que nunca diverjan
+- `GET/POST/PATCH/DELETE /contratacion-publica/codigos-turno` - Catálogo por empresa (código, nombre, color, `esDescanso` — marca qué códigos NO cuentan como "trabajando" para la cobertura mínima)
+- `GET/POST/DELETE /contratacion-publica/horarios`, `POST .../:id/celdas`, `POST .../:id/celdas/reemplazar-puesto` - Horario por **rango de fechas libre** (`fechaInicio`/`fechaFin`, casi nunca un mes calendario completo — `anio`/`mes` quedan solo como etiqueta derivada para el cruce con Informes). Al crear, se valida que el rango no se solape con otro horario existente del mismo contrato, sin importar su estado
+- `POST /contratacion-publica/horarios/:id/generar-patron` - Calcula el patrón configurado, guarda la configuración en el puesto (si `guardarComoPatronDelPuesto`, default true) y reemplaza las celdas del puesto en una transacción. Solo con el horario en BORRADOR
+- `POST /contratacion-publica/horarios/:id/intercambiar-turno` - Intercambia el código de turno entre dos guardias del **mismo puesto** (`puestoId` obligatorio en el DTO, para que nunca cruce celdas de puestos distintos) en una fecha puntual
+- `PATCH /contratacion-publica/horarios/:id/estado` - Flujo `BORRADOR → ENVIADO → APROBADO/RECHAZADO` (`RECHAZADO → BORRADOR`). Al intentar pasar a `ENVIADO` se valida la **cobertura mínima**: por cada puesto y cada día del rango, cuenta guardias con código no-descanso vs. `guardiasSimultaneosRequeridos`; si algún día incumple, bloquea la transición completa y devuelve **todos** los incumplimientos (no solo el primero). No se valida en cada edición/intercambio individual, solo en este punto de control
+- `GET /contratacion-publica/horarios/:id/pdf`, `GET .../excel` - Exporta el horario a PDF (PDFKit) o Excel (ExcelJS, celdas coloreadas igual que la UI), ambos con el rango real de fechas como columnas
+- `GET/POST/PATCH/DELETE /contratacion-publica/informes` - Informe mensual: datos autogenerados (calculados al vuelo cruzando contrato+puestos+horario `APROBADO`, nunca duplicados) + texto redactado + plantilla `.docx` → PDF vía LibreOffice (mismo patrón que `ventas-contratos.service.ts`)
+- `GET/POST/DELETE /contratacion-publica/textos-institucionales` - Catálogo clave→texto reutilizable en informes
 
 ### Permissions (`/permissions`)
 - `GET /permissions/my` - Secciones y permisos del usuario autenticado (cualquier usuario)
@@ -492,6 +547,7 @@ Todo el correo del sistema sale por `GmailMailService` (`backend/src/modules/mai
 - Hardcodear URLs de API en el frontend (usar `VITE_API_URL`).
 - Usar archivos `.env` en produccion (usar Secret Manager / Firebase Hosting env vars).
 - Crear endpoints sin RolesGuard cuando la accion requiere rol ADMIN.
+- Hardcodear un `z-index` numérico en un botón flotante nuevo — usar la escala compartida `--z-fab`/`--z-report-btn`/`--z-panel` de `styles.css` (o sumar una variable nueva a esa misma escala) para que un panel que se abre encima siempre quede por encima, en vez de descubrirlo por un bug visual (pasó con el botón de "Reportar problema" tapado por el chat, corregido 2026-09-29).
 
 ## Vista movil
 

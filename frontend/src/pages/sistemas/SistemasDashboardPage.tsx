@@ -110,6 +110,9 @@ export default function SistemasDashboardPage() {
             <button className="btn-secondary" onClick={() => navigate('/sistemas/agentes')} style={{ justifyContent: 'flex-start', gap: '8px' }}>
               <Wrench size={16} /> Configurar Agentes
             </button>
+            <button className="btn-secondary" onClick={() => navigate('/sistemas/base-conocimiento')} style={{ justifyContent: 'flex-start', gap: '8px' }}>
+              <Wrench size={16} /> Base de conocimiento de Agente Gemeseg
+            </button>
           </div>
         </div>
       </div>

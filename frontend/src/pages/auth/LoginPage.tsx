@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate, Link } from 'react-router-dom';
-import { login as loginService, saveAuth, requestPasswordReset, confirmPasswordReset } from '../../services/auth.service';
+import { login as loginService, saveAuth, requestPasswordReset, confirmPasswordReset, SESSION_EXPIRED_FLAG } from '../../services/auth.service';
 import { cachedThemeForDomain, useCompany } from '../../contexts/ThemeContext';
 
 const loginSchema = z.object({
@@ -22,6 +22,23 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { theme, loadThemeByDomain, applyTheme } = useCompany();
   const [serverError, setServerError] = useState('');
+  // Aviso de una sola vez cuando se llegó aquí porque la sesión venció.
+  // La marca se borra en un efecto, no en el inicializador: en desarrollo
+  // (StrictMode) el inicializador corre dos veces y la segunda ya no la vería.
+  const [sessionExpired] = useState(() => {
+    try {
+      return sessionStorage.getItem(SESSION_EXPIRED_FLAG) === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem(SESSION_EXPIRED_FLAG);
+    } catch {
+      /* ignore */
+    }
+  }, []);
   const [loading, setLoading] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   // Recuperar contraseña son DOS pasos: primero se pide el código al correo,
@@ -171,6 +188,9 @@ export default function LoginPage() {
         {!showForgot ? (
           <>
             <form onSubmit={handleSubmit(onSubmit)} className="auth-form">
+              {sessionExpired && !serverError && (
+                <div className="auth-info-banner">Tu sesión expiró. Vuelve a iniciar sesión para continuar.</div>
+              )}
               {serverError && (
                 <div className="auth-error-banner">{serverError}</div>
               )}

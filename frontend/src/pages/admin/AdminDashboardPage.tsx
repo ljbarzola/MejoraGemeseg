@@ -7,12 +7,20 @@ import {
   createUser,
   updateUser,
   deleteUser,
+  getCompanyLocations,
+  createCompanyLocation,
 } from '../../services/user.service';
 import { getProjects } from '../../services/project.service';
-import type { AdminUser, UserStats, AdminProjectStats } from '../../services/user.service';
+import type { AdminUser, UserStats, AdminProjectStats, CompanyLocation } from '../../services/user.service';
 import type { Project } from '../../types/project';
 import { getUser } from '../../services/auth.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import RowActionsMenu from '../../components/common/RowActionsMenu';
+import { useResizableColumns } from '../../hooks/useResizableColumns';
+import { useSortableTable } from '../../hooks/useSortableTable';
+
+const NUEVA_UBICACION = '__nueva__';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrador',
@@ -51,9 +59,11 @@ export default function AdminDashboardPage() {
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [projectStats, setProjectStats] = useState<AdminProjectStats | null>(null);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
+  const [locations, setLocations] = useState<CompanyLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+  const [locationFilter, setLocationFilter] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [formData, setFormData] = useState({
@@ -63,10 +73,15 @@ export default function AdminDashboardPage() {
     role: 'EMPLOYEE' as string,
     documentNumber: '',
     position: '',
+    locationId: null as number | null,
   });
   const [formError, setFormError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
   const [confirmandoDesactivar, setConfirmandoDesactivar] = useState<{ id: number; name: string } | null>(null);
+  const [showAddLocation, setShowAddLocation] = useState(false);
+  const [newLocationName, setNewLocationName] = useState('');
+  const [addLocationLoading, setAddLocationLoading] = useState(false);
+  const tablaRef = useResizableColumns('admin-users');
 
   const currentUser = getUser();
 
@@ -81,16 +96,18 @@ export default function AdminDashboardPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [usersData, statsData, projStats, projectsData] = await Promise.all([
+      const [usersData, statsData, projStats, projectsData, locationsData] = await Promise.all([
         getUsers(),
         getUserStats(),
         getProjectStats(),
         getProjects(),
+        getCompanyLocations().catch(() => []),
       ]);
       setUsers(usersData);
       setUserStats(statsData);
       setProjectStats(projStats);
       setAllProjects(projectsData.data);
+      setLocations(locationsData);
     } catch {
       // silent
     } finally {
@@ -106,8 +123,30 @@ export default function AdminDashboardPage() {
       }
     }
     if (roleFilter && u.role !== roleFilter) return false;
+    if (locationFilter && String(u.locationId ?? '') !== locationFilter) return false;
     return true;
   });
+
+  const hayFiltrosUsuarios = !!(search || roleFilter || locationFilter);
+  const limpiarFiltrosUsuarios = () => {
+    setSearch('');
+    setRoleFilter('');
+    setLocationFilter('');
+  };
+
+  const { filas: filasUsuarios, thProps, SortIcon } = useSortableTable(
+    filteredUsers,
+    {
+      fullName: (u) => u.fullName,
+      email: (u) => u.email,
+      role: (u) => ROLE_LABELS[u.role] || u.role,
+      position: (u) => u.position,
+      location: (u) => u.location?.nombre,
+      isActive: (u) => (u.isActive ? 1 : 0),
+      proyectos: (u) => u._count.createdProjects + u._count.projectMemberships,
+    },
+    'fullName',
+  );
 
   const openCreateForm = () => {
     setEditingUser(null);
@@ -118,8 +157,11 @@ export default function AdminDashboardPage() {
       role: 'EMPLOYEE',
       documentNumber: '',
       position: '',
+      locationId: null,
     });
     setFormError('');
+    setShowAddLocation(false);
+    setNewLocationName('');
     setShowForm(true);
   };
 
@@ -132,9 +174,39 @@ export default function AdminDashboardPage() {
       role: user.role,
       documentNumber: user.documentNumber || '',
       position: user.position || '',
+      locationId: user.location?.id ?? null,
     });
     setFormError('');
+    setShowAddLocation(false);
+    setNewLocationName('');
     setShowForm(true);
+  };
+
+  const handleLocationSelectChange = (value: string) => {
+    if (value === NUEVA_UBICACION) {
+      setShowAddLocation(true);
+      return;
+    }
+    setFormData((prev) => ({ ...prev, locationId: value ? Number(value) : null }));
+  };
+
+  const handleAddLocation = async () => {
+    const nombre = newLocationName.trim();
+    if (!nombre) return;
+    setAddLocationLoading(true);
+    setFormError('');
+    try {
+      const created = await createCompanyLocation(nombre);
+      setLocations((prev) => [...prev, created].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')));
+      setFormData((prev) => ({ ...prev, locationId: created.id }));
+      setShowAddLocation(false);
+      setNewLocationName('');
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'No se pudo crear la ubicación';
+      setFormError(Array.isArray(msg) ? msg[0] : msg);
+    } finally {
+      setAddLocationLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -149,6 +221,7 @@ export default function AdminDashboardPage() {
           role: formData.role,
           documentNumber: formData.documentNumber || null,
           position: formData.position || null,
+          locationId: formData.locationId,
         };
         await updateUser(editingUser.id, data);
       } else {
@@ -254,50 +327,66 @@ export default function AdminDashboardPage() {
 
       {tab === 'users' && (
         <div className="admin-section">
-          <div className="admin-toolbar">
-            <input
-              type="text"
-              placeholder="Buscar por nombre o email..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="admin-search"
-            />
-            <select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              className="admin-filter-select"
-            >
-              <option value="">Todos los roles</option>
-              <option value="ADMIN">Administrador</option>
-              <option value="MANAGER">Gerente</option>
-              <option value="EMPLOYEE">Empleado</option>
-            </select>
-            <button className="auth-btn" onClick={openCreateForm}>
-              + Nuevo usuario
-            </button>
+          <div className="filter-bar">
+            <div className="filter-bar-fields">
+              <input
+                type="text"
+                placeholder="Buscar por nombre o email..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="admin-search"
+              />
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                className="filter-select"
+              >
+                <option value="">Todos los roles</option>
+                <option value="ADMIN">Administrador</option>
+                <option value="MANAGER">Gerente</option>
+                <option value="EMPLOYEE">Empleado</option>
+              </select>
+              <select
+                value={locationFilter}
+                onChange={(e) => setLocationFilter(e.target.value)}
+                className="filter-select"
+              >
+                <option value="">Todas las ubicaciones</option>
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>{l.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <div className="filter-bar-actions">
+              <ClearFiltersButton onClear={limpiarFiltrosUsuarios} disabled={!hayFiltrosUsuarios} />
+              <button className="auth-btn" onClick={openCreateForm}>
+                + Nuevo usuario
+              </button>
+            </div>
           </div>
 
           {loading ? (
             <div className="loading-state">Cargando...</div>
           ) : (
             <div className="tasks-table-wrapper">
-              <table className="tasks-table">
+              <table className="tasks-table resizable-table" ref={tablaRef}>
                 <thead>
                   <tr>
-                    <th>Nombre</th>
-                    <th>Email</th>
-                    <th>Rol sistema</th>
-                    <th>Cargo</th>
-                    <th>Estado</th>
-                    <th>Proyectos</th>
-                    <th>Acciones</th>
+                    <th {...thProps('fullName')}>Nombre <SortIcon campo="fullName" /></th>
+                    <th {...thProps('email')}>Email <SortIcon campo="email" /></th>
+                    <th {...thProps('role')}>Rol sistema <SortIcon campo="role" /></th>
+                    <th {...thProps('position')}>Cargo <SortIcon campo="position" /></th>
+                    <th {...thProps('location')}>Ubicación <SortIcon campo="location" /></th>
+                    <th {...thProps('isActive')}>Estado <SortIcon campo="isActive" /></th>
+                    <th {...thProps('proyectos')}>Proyectos <SortIcon campo="proyectos" /></th>
+                    <th style={{ textAlign: 'right' }}>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.map((u) => (
+                  {filasUsuarios.map((u) => (
                     <tr key={u.id} className="tasks-table-row">
                       <td className="tasks-table-title">{u.fullName}</td>
-                      <td>{u.email}</td>
+                      <td><span className="truncate">{u.email}</span></td>
                       <td>
                         <span
                           className="kanban-priority"
@@ -307,6 +396,7 @@ export default function AdminDashboardPage() {
                         </span>
                       </td>
                       <td>{u.position || '—'}</td>
+                      <td>{u.location?.nombre || '—'}</td>
                       <td>
                         <span
                           className="status-badge"
@@ -319,38 +409,25 @@ export default function AdminDashboardPage() {
                         </span>
                       </td>
                       <td>{u._count.createdProjects + u._count.projectMemberships}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button
-                            className="btn-icon"
-                            onClick={() => openEditForm(u)}
-                            title="Editar"
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            className="btn-icon"
-                            onClick={() => handleToggleActive(u)}
-                            title={u.isActive ? 'Desactivar' : 'Activar'}
-                          >
-                            {u.isActive ? '🔒' : '🔓'}
-                          </button>
-                          {u.role !== 'ADMIN' && (
-                            <button
-                              className="btn-icon btn-icon-danger"
-                              onClick={() => handleDelete(u.id, u.fullName)}
-                              title="Eliminar"
-                            >
-                              🗑️
-                            </button>
-                          )}
-                        </div>
+                      <td style={{ textAlign: 'right' }}>
+                        <RowActionsMenu
+                          actions={[
+                            { label: 'Editar', onClick: () => openEditForm(u) },
+                            {
+                              label: u.isActive ? 'Desactivar' : 'Activar',
+                              onClick: () => handleToggleActive(u),
+                            },
+                            ...(u.role !== 'ADMIN'
+                              ? [{ label: 'Eliminar', danger: true, onClick: () => handleDelete(u.id, u.fullName) }]
+                              : []),
+                          ]}
+                        />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {filteredUsers.length === 0 && (
+              {filasUsuarios.length === 0 && (
                 <div className="empty-state">No se encontraron usuarios</div>
               )}
             </div>
@@ -533,6 +610,47 @@ export default function AdminDashboardPage() {
                     onChange={(e) => setFormData({ ...formData, documentNumber: e.target.value })}
                   />
                 </div>
+                {editingUser && (
+                  <div className="form-group">
+                    <label>Ubicación</label>
+                    <select
+                      value={showAddLocation ? NUEVA_UBICACION : (formData.locationId ?? '')}
+                      onChange={(e) => handleLocationSelectChange(e.target.value)}
+                    >
+                      <option value="">Sin ubicación</option>
+                      {locations.map((l) => (
+                        <option key={l.id} value={l.id}>{l.nombre}</option>
+                      ))}
+                      <option value={NUEVA_UBICACION}>+ Agregar nueva ubicación...</option>
+                    </select>
+                    {showAddLocation && (
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                        <input
+                          type="text"
+                          value={newLocationName}
+                          onChange={(e) => setNewLocationName(e.target.value)}
+                          placeholder="Nombre de la ubicación"
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={handleAddLocation}
+                          disabled={addLocationLoading || !newLocationName.trim()}
+                        >
+                          {addLocationLoading ? 'Guardando...' : 'Agregar'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => { setShowAddLocation(false); setNewLocationName(''); }}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="modal-actions" style={{ padding: 0, borderTop: 'none' }}>
                   <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
                     Cancelar

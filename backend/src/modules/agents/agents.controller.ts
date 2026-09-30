@@ -11,19 +11,20 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { UserRole } from '@prisma/client';
 import { AgentsService } from './agents.service';
 import { CreateAgentDto, UpdateAgentDto } from './dto/agent.dto';
 import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
 import { Section } from '../../common/decorators/section.decorator';
 
 // Agentes de IA es una sub-pantalla de Sistemas (/sistemas/agentes), no una
-// sección de permisos propia — por eso se gatea con SISTEMAS.
+// sección de permisos propia — por eso se gatea con SISTEMAS. Antes también
+// exigía el rol ADMIN a secas (@Roles), lo que dejaba fuera a cualquier
+// Employee/Manager con permiso de escritura en SISTEMAS — el mismo criterio
+// que ya alcanza para el resto de las pantallas de Sistemas (Herramientas,
+// Soporte). Se quitó ese requisito extra a propósito (2026-09-29): el control
+// de acceso real es la sección SISTEMAS, no el rol de la cuenta.
 @Controller('admin/agents')
-@UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
-@Roles(UserRole.ADMIN)
+@UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
 export class AgentsController {
   constructor(private readonly agentsService: AgentsService) {}
 

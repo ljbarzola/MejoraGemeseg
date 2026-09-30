@@ -2,6 +2,7 @@ import { PDFDocument } from 'pdf-lib';
 import { ReclutamientoIaService } from './reclutamiento-ia.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { DriveService } from './drive.service';
+import { GoogleAuthService } from '../../../common/services/google-auth.service';
 
 // PDF real de N páginas — pdf-lib se usa de verdad (no se mockea) para que las
 // pruebas de `aplicar` verifiquen el recorte de páginas y no solo las llamadas.
@@ -75,6 +76,7 @@ describe('ReclutamientoIaService', () => {
     service = new ReclutamientoIaService(
       prisma as unknown as PrismaService,
       drive as unknown as DriveService,
+      {} as unknown as GoogleAuthService,
     );
     (service as any).getAccessToken = jest.fn().mockResolvedValue('token-falso');
   });

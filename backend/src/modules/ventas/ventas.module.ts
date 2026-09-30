@@ -11,9 +11,17 @@ import { VentasClientesController } from './ventas-clientes.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { PersonalModule } from '../personal/personal.module';
 import { PermissionsModule } from '../permissions/permissions.module';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
-  imports: [PrismaModule, PersonalModule, PermissionsModule],
+  imports: [
+    PrismaModule,
+    PersonalModule,
+    PermissionsModule,
+    NotificationsModule,
+    MailModule,
+  ],
   controllers: [
     VentasController,
     VentasWebhookController,
@@ -21,7 +29,17 @@ import { PermissionsModule } from '../permissions/permissions.module';
     VentasContratosController,
     VentasClientesController,
   ],
-  providers: [VentasService, VentasTemplatesService, VentasContratosService, VentasClientesService],
-  exports: [VentasService, VentasTemplatesService, VentasContratosService, VentasClientesService],
+  providers: [
+    VentasService,
+    VentasTemplatesService,
+    VentasContratosService,
+    VentasClientesService,
+  ],
+  exports: [
+    VentasService,
+    VentasTemplatesService,
+    VentasContratosService,
+    VentasClientesService,
+  ],
 })
 export class VentasModule {}

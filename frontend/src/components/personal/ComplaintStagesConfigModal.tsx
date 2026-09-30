@@ -170,7 +170,7 @@ export default function ComplaintStagesConfigModal({ onClose, onChanged }: Props
           <button className="modal-close" onClick={onClose}><X size={16} /></button>
         </div>
         <div className="modal-body">
-          <p style={{ fontSize: '0.82rem', color: '#718096', marginBottom: '14px' }}>
+          <p style={{ fontSize: '0.82rem', color: '#718096', margin: '0 0 14px' }}>
             Estas son las columnas del tablero de gestión. La etapa marcada con la estrella es la etapa inicial: toda queja nueva se crea ahí.
           </p>
 

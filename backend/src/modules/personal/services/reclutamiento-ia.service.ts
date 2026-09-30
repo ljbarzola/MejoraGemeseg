@@ -1,10 +1,8 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import { google } from 'googleapis';
 import { PDFDocument } from 'pdf-lib';
-import * as fs from 'fs';
-import * as path from 'path';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { DriveService } from './drive.service';
+import { GoogleAuthService } from '../../../common/services/google-auth.service';
 import {
   ANALISIS_IA_FILENAME,
   ANALISIS_IA_PENDIENTE_FILENAME,
@@ -39,7 +37,7 @@ const MAX_PDF_BYTES = 15 * 1024 * 1024;
 // etc.) desde la pantalla de Agentes, sin depender de un despliegue, y el
 // mismo "revisor de documentos" queda disponible para que otras partes de la
 // app lo reutilicen (basta con leer este Agent por nombre). `createdBy: null`
-// lo marca como agente de sistema, igual que "Agente GEMESEG" en ai.service.ts.
+// lo marca como agente de sistema, igual que "Agente Gemeseg" (Agent.isDefault) en ai.service.ts.
 //
 // Solo la parte de CRITERIO va en el Agent. La lista de documentos requeridos,
 // el total de páginas y el contrato de salida en JSON los agrega el código
@@ -181,6 +179,7 @@ export class ReclutamientoIaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly driveService: DriveService,
+    private readonly googleAuth: GoogleAuthService,
   ) {}
 
   private get project(): string {
@@ -199,39 +198,12 @@ export class ReclutamientoIaService {
   // Run) pero con el scope cloud-platform. Vertex AI no acepta API keys — exige
   // OAuth2 — y esta organización de GCP tiene bloqueada por política la
   // creación de claves de service account, así que reutilizar esta credencial
-  // no es solo cómodo: es la única vía disponible.
-  private loadCredentials(): any {
-    const candidates = [
-      path.join(process.cwd(), 'google-service-account.json'),
-      path.join(__dirname, '..', '..', '..', '..', 'google-service-account.json'),
-    ];
-    for (const candidate of candidates) {
-      if (fs.existsSync(candidate)) {
-        return JSON.parse(fs.readFileSync(candidate, 'utf-8'));
-      }
-    }
-    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-      return JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-    }
-    return null;
-  }
-
+  // no es solo cómodo: es la única vía disponible. La carga de credenciales
+  // vive en GoogleAuthService (compartida con el cliente de chat de
+  // ai/vertex-chat.client.ts) para no tener dos copias del mismo path de
+  // búsqueda del archivo/env var pudiendo divergir con el tiempo.
   private async getAccessToken(): Promise<string> {
-    const credentials = this.loadCredentials();
-    if (!credentials) {
-      throw new Error(
-        'No hay credenciales de Google disponibles (ni google-service-account.json ni GOOGLE_SERVICE_ACCOUNT_JSON).',
-      );
-    }
-    const auth = new google.auth.GoogleAuth({
-      credentials,
-      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-    });
-    const client = await auth.getClient();
-    const token = await client.getAccessToken();
-    const value = typeof token === 'string' ? token : token?.token;
-    if (!value) throw new Error('Vertex AI no devolvió un token de acceso.');
-    return value;
+    return this.googleAuth.getAccessToken();
   }
 
   async analizar(

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Query,
   Param,
@@ -20,7 +21,7 @@ export class AiController {
   @Post('message')
   @UseGuards(AuthGuard('jwt'))
   sendMessage(@Body() dto: SendMessageDto, @Req() req: any) {
-    return this.aiService.sendMessage(dto, req.user.userId);
+    return this.aiService.sendMessage(dto, req.user.userId, req.user.companyId);
   }
 
   @Get('conversations')
@@ -39,5 +40,11 @@ export class AiController {
     @Req() req: any,
   ) {
     return this.aiService.getConversationMessages(id, req.user.userId);
+  }
+
+  @Delete('conversations/:id')
+  @UseGuards(AuthGuard('jwt'))
+  deleteConversation(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.aiService.deleteConversation(id, req.user.userId);
   }
 }

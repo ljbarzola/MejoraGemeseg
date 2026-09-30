@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
@@ -7,6 +8,8 @@ import {
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateSurveyDto, SubmitSurveyResponseDto } from '../dto/survey.dto';
+import { NotificationsService } from '../../notifications/notifications.service';
+import { GmailMailService } from '../../mail/gmail-mail.service';
 
 // Encuesta tipo "Google Forms": se crea y se publica en un solo paso (no
 // hay borrador editable por separado — simplifica el flujo para la primera
@@ -41,7 +44,13 @@ function extraerOpciones(a: {
 
 @Injectable()
 export class SurveyService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(SurveyService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+    private readonly gmailMailService: GmailMailService,
+  ) {}
 
   async create(dto: CreateSurveyDto, companyId: number, userId: number) {
     const publicEnabled = dto.publicEnabled === true;
@@ -69,7 +78,7 @@ export class SurveyService {
       );
     }
 
-    return this.prisma.survey.create({
+    const survey = await this.prisma.survey.create({
       data: {
         title: dto.title.trim(),
         description: dto.description?.trim() || null,
@@ -95,6 +104,74 @@ export class SurveyService {
       },
       include: { questions: { orderBy: { order: 'asc' } }, recipients: true },
     });
+
+    if (!esBorrador && recipients.length > 0) {
+      await this.notifyRecipients(
+        survey.id,
+        survey.title,
+        recipients.map((r) => r.id),
+        companyId,
+      );
+    }
+
+    return survey;
+  }
+
+  // Correo + notificación in-app para cada destinatario interno, una encuesta
+  // recién publicada (desde create() sin guardarComoBorrador, o desde
+  // publish()). Un fallo acá (correo caído, config incompleta) nunca debe
+  // deshacer ni bloquear la publicación que ya se guardó — mismo criterio que
+  // notificarReferidor() en ventas-clientes.service.ts, cada canal con su
+  // propio try/catch para que uno no tumbe al otro.
+  private async notifyRecipients(
+    surveyId: number,
+    surveyTitle: string,
+    recipientUserIds: number[],
+    companyId: number,
+  ) {
+    if (recipientUserIds.length === 0) return;
+
+    const [users, config] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { id: { in: recipientUserIds } },
+        select: { id: true, email: true },
+      }),
+      this.prisma.notificationConfig.findUnique({ where: { companyId } }),
+    ]);
+
+    const mensaje = `Tienes una nueva encuesta pendiente: "${surveyTitle}".`;
+
+    for (const user of users) {
+      try {
+        await this.notificationsService.create({
+          userId: user.id,
+          companyId,
+          title: 'Nueva encuesta pendiente',
+          message: mensaje,
+          link: '/rrhh/encuestas',
+        });
+      } catch (err: any) {
+        this.logger.error(
+          `No se pudo crear la notificación in-app de la encuesta #${surveyId} para el usuario #${user.id}: ${err.message}`,
+          err.stack,
+        );
+      }
+
+      if (!user.email) continue;
+      try {
+        await this.gmailMailService.sendMail({
+          to: user.email,
+          subject: 'Nueva encuesta pendiente',
+          bodyText: `${mensaje}\n\nIngresa a la aplicación, sección "Mis Encuestas", para responderla.`,
+          from: config?.senderEmail,
+          fromName: config?.senderName,
+        });
+      } catch (err: any) {
+        this.logger.error(
+          `No se pudo enviar el correo de la encuesta #${surveyId} al usuario #${user.id}: ${err.message}`,
+        );
+      }
+    }
   }
 
   /**
@@ -105,21 +182,32 @@ export class SurveyService {
   async publish(id: number, companyId: number) {
     const survey = await this.prisma.survey.findFirst({
       where: { id, companyId },
-      include: { _count: { select: { recipients: true } } },
+      include: { recipients: { select: { userId: true } } },
     });
     if (!survey) throw new NotFoundException('Encuesta no encontrada');
     if (survey.status !== 'DRAFT') {
       throw new BadRequestException('Esta encuesta ya fue publicada.');
     }
-    if (survey._count.recipients === 0 && !survey.publicEnabled) {
+    if (survey.recipients.length === 0 && !survey.publicEnabled) {
       throw new BadRequestException(
         'Antes de publicarla, elige destinatarios o activa el enlace público: si no, no le llegaría a nadie.',
       );
     }
-    return this.prisma.survey.update({
+    const updated = await this.prisma.survey.update({
       where: { id },
       data: { status: 'PUBLISHED' },
     });
+
+    if (survey.recipients.length > 0) {
+      await this.notifyRecipients(
+        survey.id,
+        survey.title,
+        survey.recipients.map((r) => r.userId),
+        companyId,
+      );
+    }
+
+    return updated;
   }
 
   // ==================== ENLACE PÚBLICO ====================

@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { getUser } from '../../services/auth.service';
 import { getMyTasks } from '../../services/task.service';
 import { getProjects } from '../../services/project.service';
 import CreateTaskModal from '../../components/tasks/CreateTaskModal';
 import PendingSurveysBanner from '../../components/personal/PendingSurveysBanner';
+import ReferirClienteButton from '../../components/common/ReferirClienteButton';
 import type { Task } from '../../types/task';
 import { STATUS_LABELS, PRIORITY_LABELS, STATUS_COLORS, PRIORITY_COLORS } from '../../types/task';
 
@@ -36,6 +37,7 @@ const STATUS_ORDER: Record<string, number> = {
 export default function DashboardPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const user = getUser();
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -132,6 +134,23 @@ export default function DashboardPage() {
 
       <main className="page-container">
         <PendingSurveysBanner />
+
+        <div className="admin-section" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+          <div>
+            <h3 style={{ margin: '0 0 4px', color: 'var(--azul-oscuro)' }}>¿Conoces a alguien interesado en Gemeseg?</h3>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: '#718096' }}>Refiere un cliente potencial y Ventas se pondrá en contacto.</p>
+          </div>
+          <ReferirClienteButton
+            forceOpen={searchParams.get('abrirReferidos') === '1'}
+            onForceOpenHandled={() => {
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete('abrirReferidos');
+                return next;
+              }, { replace: true });
+            }}
+          />
+        </div>
 
         <div className="page-header-row">
           <div>

@@ -16,6 +16,48 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Sesión vencida o inválida (el JWT dura 7 días). Antes nadie atendía el 401:
+// la app seguía "abierta" con el token viejo guardado, todas las consultas
+// fallaban en silencio y el menú caía a solo Inicio/Buzón/Encuestas/Proyectos
+// — ni Ctrl+F5 lo arreglaba, porque el token sigue en localStorage (reportado
+// por RRHH 2026-09-30; en ventana privada funcionaba porque no hay token).
+// Ahora se cierra la sesión y se manda a iniciar sesión con un aviso.
+// Las rutas /auth/ quedan fuera: ahí un 401 es "contraseña incorrecta".
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const url: string = error.config?.url || '';
+    if (error.response?.status === 401 && !url.includes('/auth/') && getToken()) {
+      expireSession();
+    }
+    return Promise.reject(error);
+  },
+);
+
+export const SESSION_EXPIRED_FLAG = 'session_expired';
+
+function expireSession() {
+  removeToken();
+  try {
+    sessionStorage.setItem(SESSION_EXPIRED_FLAG, '1');
+  } catch {
+    /* sin sessionStorage: se redirige igual, solo sin el aviso */
+  }
+  if (!window.location.pathname.startsWith('/login')) {
+    window.location.assign('/login');
+  }
+}
+
+/** exp del JWT (segundos) ya pasado. Un token que no se puede leer se trata como vencido. */
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof payload.exp === 'number' && payload.exp * 1000 <= Date.now();
+  } catch {
+    return true;
+  }
+}
+
 export async function register(data: {
   email: string;
   password: string;
@@ -88,7 +130,18 @@ export function removeToken() {
 }
 
 export function isAuthenticated(): boolean {
-  return !!getToken();
+  const token = getToken();
+  if (!token) return false;
+  if (isTokenExpired(token)) {
+    removeToken();
+    try {
+      sessionStorage.setItem(SESSION_EXPIRED_FLAG, '1');
+    } catch {
+      /* ignore */
+    }
+    return false;
+  }
+  return true;
 }
 
 export { api };

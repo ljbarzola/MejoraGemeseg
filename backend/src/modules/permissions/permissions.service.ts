@@ -10,8 +10,18 @@ import { PrismaService } from '../../prisma/prisma.service';
 //                     2026-09-22 en .agents/modules/recursos-humanos.md).
 //                     Quejas y Encuestas ya estaban abiertas a nivel de ruta.
 export const ALL_SECTIONS = [
-  { key: 'DASHBOARD', label: 'Inicio', alwaysEnabled: true, siempreVisible: true },
-  { key: 'PROJECTS', label: 'Proyectos', alwaysEnabled: true, siempreVisible: true },
+  {
+    key: 'DASHBOARD',
+    label: 'Inicio',
+    alwaysEnabled: true,
+    siempreVisible: true,
+  },
+  {
+    key: 'PROJECTS',
+    label: 'Proyectos',
+    alwaysEnabled: true,
+    siempreVisible: true,
+  },
   { key: 'ADMIN', label: 'Administración', alwaysEnabled: true },
   { key: 'TOOLS', label: 'Herramientas', alwaysEnabled: true },
   { key: 'CACAO', label: 'Cacao', alwaysEnabled: false },
@@ -20,6 +30,11 @@ export const ALL_SECTIONS = [
   { key: 'CUSTODIAS', label: 'Custodias', alwaysEnabled: false },
   { key: 'RRHH', label: 'Recursos Humanos', alwaysEnabled: false },
   { key: 'VENTAS', label: 'Ventas y CRM', alwaysEnabled: false },
+  {
+    key: 'CONTRATACION_PUBLICA',
+    label: 'Contratación Pública',
+    alwaysEnabled: false,
+  },
   // alwaysEnabled: Herramientas y Agentes vivían sueltas en el menú como
   // secciones siempre activas (TOOLS/AGENTS) hasta que se agruparon dentro de
   // Sistemas. Si Sistemas fuera opt-in, esas dos pantallas quedarían
@@ -104,7 +119,10 @@ export class PermissionsService {
       select: { section: true },
     });
     return [
-      ...new Set([...SECCIONES_SIEMPRE_VISIBLES, ...rows.map((r) => r.section)]),
+      ...new Set([
+        ...SECCIONES_SIEMPRE_VISIBLES,
+        ...rows.map((r) => r.section),
+      ]),
     ];
   }
 

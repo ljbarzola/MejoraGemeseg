@@ -1,6 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { SurveyService } from './survey.service';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { NotificationsService } from '../../notifications/notifications.service';
+import { GmailMailService } from '../../mail/gmail-mail.service';
 
 // Encuestas con dos canales: destinatarios con cuenta en la app y enlace
 // público para gente sin cuenta. Lo que se prueba acá es sobre todo el
@@ -12,7 +14,10 @@ describe('SurveyService', () => {
     user: { findMany: jest.Mock };
     survey: { create: jest.Mock; findFirst: jest.Mock; update: jest.Mock };
     surveyResponse: { create: jest.Mock };
+    notificationConfig: { findUnique: jest.Mock };
   };
+  let notificationsService: { create: jest.Mock };
+  let gmailMailService: { sendMail: jest.Mock };
 
   const preguntas = [
     { label: '¿Qué tal la atención?', type: 'SHORT_TEXT' as const, required: true },
@@ -22,13 +27,20 @@ describe('SurveyService', () => {
     prisma = {
       user: { findMany: jest.fn().mockResolvedValue([]) },
       survey: {
-        create: jest.fn().mockResolvedValue({ id: 1 }),
+        create: jest.fn().mockResolvedValue({ id: 1, title: 'Encuesta' }),
         findFirst: jest.fn(),
         update: jest.fn().mockResolvedValue({ id: 1 }),
       },
       surveyResponse: { create: jest.fn().mockResolvedValue({ id: 10 }) },
+      notificationConfig: { findUnique: jest.fn().mockResolvedValue(null) },
     };
-    service = new SurveyService(prisma as unknown as PrismaService);
+    notificationsService = { create: jest.fn().mockResolvedValue(undefined) };
+    gmailMailService = { sendMail: jest.fn().mockResolvedValue(undefined) };
+    service = new SurveyService(
+      prisma as unknown as PrismaService,
+      notificationsService as unknown as NotificationsService,
+      gmailMailService as unknown as GmailMailService,
+    );
   });
 
   describe('create', () => {
@@ -87,6 +99,125 @@ describe('SurveyService', () => {
           1,
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('notificaciones a destinatarios internos (correo + in-app)', () => {
+    it('al crear una encuesta PUBLICADA con destinatarios, notifica in-app y por correo a cada uno', async () => {
+      prisma.user.findMany.mockResolvedValue([
+        { id: 5, email: 'a@empresa.com' },
+        { id: 6, email: 'b@empresa.com' },
+      ]);
+      prisma.survey.create.mockResolvedValue({ id: 1, title: 'Clima laboral' });
+
+      await service.create(
+        { title: 'Clima laboral', questions: preguntas, recipientUserIds: [5, 6] },
+        1,
+        1,
+      );
+
+      expect(notificationsService.create).toHaveBeenCalledTimes(2);
+      expect(notificationsService.create).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 5, companyId: 1, link: '/rrhh/encuestas' }),
+      );
+      expect(gmailMailService.sendMail).toHaveBeenCalledTimes(2);
+      expect(gmailMailService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'a@empresa.com' }),
+      );
+    });
+
+    it('al crear un BORRADOR no notifica a nadie todavía', async () => {
+      prisma.user.findMany.mockResolvedValue([{ id: 5, email: 'a@empresa.com' }]);
+
+      await service.create(
+        {
+          title: 'Clima laboral',
+          questions: preguntas,
+          recipientUserIds: [5],
+          guardarComoBorrador: true,
+        },
+        1,
+        1,
+      );
+
+      expect(notificationsService.create).not.toHaveBeenCalled();
+      expect(gmailMailService.sendMail).not.toHaveBeenCalled();
+    });
+
+    it('una encuesta SOLO de enlace público (sin destinatarios internos) no genera notificaciones', async () => {
+      await service.create(
+        { title: 'Proveedores', questions: preguntas, recipientUserIds: [], publicEnabled: true },
+        1,
+        1,
+      );
+
+      expect(notificationsService.create).not.toHaveBeenCalled();
+      expect(gmailMailService.sendMail).not.toHaveBeenCalled();
+    });
+
+    it('al publicar un borrador, notifica a los destinatarios ya guardados', async () => {
+      prisma.survey.findFirst.mockResolvedValue({
+        id: 3,
+        title: 'Encuesta de salida',
+        status: 'DRAFT',
+        publicEnabled: false,
+        recipients: [{ userId: 8 }],
+      });
+      prisma.user.findMany.mockResolvedValue([{ id: 8, email: 'c@empresa.com' }]);
+
+      await service.publish(3, 1);
+
+      expect(notificationsService.create).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 8, companyId: 1 }),
+      );
+      expect(gmailMailService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'c@empresa.com' }),
+      );
+    });
+
+    it('un destinatario sin email registrado recibe la notificación in-app pero no se intenta enviar correo', async () => {
+      prisma.user.findMany.mockResolvedValue([{ id: 5, email: null }]);
+
+      await service.create(
+        { title: 'Clima laboral', questions: preguntas, recipientUserIds: [5] },
+        1,
+        1,
+      );
+
+      expect(notificationsService.create).toHaveBeenCalledTimes(1);
+      expect(gmailMailService.sendMail).not.toHaveBeenCalled();
+    });
+
+    it('si falla el correo de un destinatario, igual se le crea la notificación in-app y se sigue con el resto', async () => {
+      prisma.user.findMany.mockResolvedValue([
+        { id: 5, email: 'a@empresa.com' },
+        { id: 6, email: 'b@empresa.com' },
+      ]);
+      gmailMailService.sendMail
+        .mockRejectedValueOnce(new Error('SMTP caído'))
+        .mockResolvedValueOnce(undefined);
+
+      await service.create(
+        { title: 'Clima laboral', questions: preguntas, recipientUserIds: [5, 6] },
+        1,
+        1,
+      );
+
+      expect(notificationsService.create).toHaveBeenCalledTimes(2);
+      expect(gmailMailService.sendMail).toHaveBeenCalledTimes(2);
+    });
+
+    it('si falla la notificación in-app de un destinatario, igual se le intenta enviar el correo', async () => {
+      prisma.user.findMany.mockResolvedValue([{ id: 5, email: 'a@empresa.com' }]);
+      notificationsService.create.mockRejectedValueOnce(new Error('DB caída'));
+
+      await service.create(
+        { title: 'Clima laboral', questions: preguntas, recipientUserIds: [5] },
+        1,
+        1,
+      );
+
+      expect(gmailMailService.sendMail).toHaveBeenCalledTimes(1);
     });
   });
 

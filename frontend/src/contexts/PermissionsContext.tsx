@@ -9,6 +9,7 @@ const PermissionsContext = createContext<PermissionsContextType>({
   permissions: {},
   fixedSections: [],
   loading: true,
+  error: false,
   canView: () => false,
   canWrite: () => false,
   landingRoute: null,

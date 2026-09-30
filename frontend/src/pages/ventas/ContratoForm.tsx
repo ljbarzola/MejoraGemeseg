@@ -1,23 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { getTemplates, getTemplate, getContract, createContract, updateContract, getSalesClients, getSalesClientFields, addSalesClientField, salesClientValue, SalesTemplate, SalesTemplateField, TableColumn, SalesClient, SalesClientField } from '../../services/ventas.service';
+import { getTemplates, getTemplate, getContract, createContract, updateContract, getSalesClients, salesClientValue, SalesTemplate, SalesTemplateField, TableColumn, SalesClient } from '../../services/ventas.service';
 import { useToast } from '../../contexts/ToastContext';
 import DateInput from '../../components/common/DateInput';
-
-// Tipos de campo "del cliente" que, si se dejan vacíos, el backend los
-// convierte en tags de SignWell embebidos en el documento (ver
-// buildSignWellTextTag en ventas-contratos.service.ts) — el cliente los
-// completa dentro de la sesión de firma, no aquí ni por ningún link de esta
-// app. Es genérico por tipo de campo, no depende de ninguna plantilla en
-// particular: aplica igual a cualquier plantilla que use estos tipos.
-const SIGNWELL_TAG_TYPES = ['CHECKBOX', 'SIGNATURE', 'INITIAL', 'DATE'];
-const SIGNWELL_AUTOFILL_HINT: Record<string, string> = {
-  CHECKBOX: 'El cliente lo marca directamente en la sesión de firma (SignWell).',
-  SIGNATURE: 'El cliente firma directamente ahí en la sesión de firma (SignWell).',
-  INITIAL: 'El cliente lo inicializa directamente en la sesión de firma (SignWell).',
-  DATE: 'Se completa automáticamente con la fecha de firma (SignWell).',
-};
 
 export default function ContratoForm() {
   const navigate = useNavigate();
@@ -35,29 +21,12 @@ export default function ContratoForm() {
   const [clientName, setClientName] = useState('');
   const [clientEmail, setClientEmail] = useState('');
   const [clients, setClients] = useState<SalesClient[]>([]);
-  // Solo se escribe (al añadir un campo de cliente desde aquí); la lista que
-  // se muestra vive en la pantalla de Clientes, por eso no hay getter.
-  const [, setClientFieldDefs] = useState<SalesClientField[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number | ''>('');
-  const [newClientFieldLabel, setNewClientFieldLabel] = useState('');
 
   // Field values (from template fields where isClientField = false). Un
   // DROPDOWN de selección múltiple guarda un arreglo de opciones marcadas
   // en vez de un string — de ahí el tipo `any`.
   const [fieldValues, setFieldValues] = useState<Record<string, any>>({});
-
-  // Campos "del cliente" tipo CHECKBOX/SIGNATURE/INITIAL/DATE (sin mapear a
-  // Clientes) se resuelven en SignWell si quedan vacíos — pero un
-  // <input type="checkbox"> no tiene forma nativa de quedar "sin tocar": en
-  // cuanto se hace clic una vez, su valor pasa a ser el string 'true' o
-  // 'false', y ESE valor ya cuenta como "el vendedor lo llenó" (se estampa
-  // literal en el documento en vez de convertirse en el tag interactivo de
-  // SignWell — así se coló el "false" visible en el PDF). Por eso estos
-  // campos no muestran el control editable directamente: hay que activar
-  // "Fijar un valor yo mismo" a propósito para poder tocarlos.
-  const [clientFieldOverride, setClientFieldOverride] = useState<Record<string, boolean>>({});
-  const isSignwellTagField = (f: SalesTemplateField) =>
-    f.isClientField && !f.clientFieldKey && SIGNWELL_TAG_TYPES.includes(f.fieldType);
 
   // Tabla dinámica por cada campo tipo TABLE que llena el vendedor aquí
   // (isClientField = false) — { [variableName]: filas }
@@ -68,10 +37,6 @@ export default function ContratoForm() {
     getSalesClients().then(setClients).catch((err: any) => {
       setClients([]);
       showToast(err?.response?.data?.message || 'No se pudieron cargar los clientes', 'error');
-    });
-    getSalesClientFields().then(setClientFieldDefs).catch((err: any) => {
-      setClientFieldDefs([]);
-      showToast(err?.response?.data?.message || 'No se pudieron cargar los campos de cliente', 'error');
     });
   }, []);
 
@@ -97,35 +62,31 @@ export default function ContratoForm() {
   const initFieldValues = (fields: SalesTemplateField[] | undefined, existingValues: Record<string, any>) => {
     const defaults: Record<string, any> = {};
     const tables: Record<string, Record<string, string>[]> = {};
-    const overrides: Record<string, boolean> = {};
     fields?.forEach((f) => {
       if (f.isClientField && f.fieldType === 'TABLE') return; // esas van en clientTableFields, las llena el cliente por link
       if (f.fieldType === 'TABLE') {
         tables[f.variableName] = Array.isArray(existingValues[f.variableName]) ? existingValues[f.variableName] : [];
       } else if (f.fieldType === 'DROPDOWN' && f.allowMultiple) {
         defaults[f.variableName] = Array.isArray(existingValues[f.variableName]) ? existingValues[f.variableName] : [];
+      } else if (f.isClientField) {
+        // Sin fallback a defaultValue: un campo del cliente solo trae el
+        // valor que ya tenía guardado (contrato en edición) o el que ponga
+        // el autocompletar de cliente — nunca uno tecleado por el asesor.
+        defaults[f.variableName] = existingValues[f.variableName] ?? '';
       } else {
         defaults[f.variableName] = existingValues[f.variableName] ?? (f.defaultValue || '');
       }
-      // Editando un contrato que ya traía un valor guardado para un campo
-      // "de SignWell": respeta esa elección anterior en vez de esconderlo
-      // otra vez detrás de "Fijar un valor yo mismo".
-      if (isSignwellTagField(f)) {
-        const v = existingValues[f.variableName];
-        overrides[f.variableName] = Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && String(v).trim() !== '';
-      }
     });
-    return { defaults, tables, overrides };
+    return { defaults, tables };
   };
 
   const loadTemplate = async (id: number) => {
     try {
       const t = await getTemplate(id);
       setSelectedTemplate(t);
-      const { defaults, tables, overrides } = initFieldValues(t.fields, {});
+      const { defaults, tables } = initFieldValues(t.fields, {});
       setFieldValues(defaults);
       setTableValues(tables);
-      setClientFieldOverride(overrides);
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo cargar la plantilla', 'error');
     }
@@ -138,19 +99,13 @@ export default function ContratoForm() {
       setClientName(c.clientName);
       setClientEmail(c.clientEmail);
       setSelectedClientId(c.salesClientId || '');
-      const { defaults, tables, overrides } = initFieldValues(c.template?.fields, c.fieldValues || {});
+      const { defaults, tables } = initFieldValues(c.template?.fields, c.fieldValues || {});
       setFieldValues(defaults);
       setTableValues(tables);
-      setClientFieldOverride(overrides);
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo cargar el contrato', 'error');
       navigate('/ventas/contratos');
     }
-  };
-
-  const toggleClientFieldOverride = (variableName: string, on: boolean) => {
-    setClientFieldOverride((prev) => ({ ...prev, [variableName]: on }));
-    if (!on) handleFieldChange(variableName, '');
   };
 
   // Al elegir cliente solo se autocompletan los datos de envío (a quién le
@@ -161,7 +116,7 @@ export default function ContratoForm() {
   const applyClientContactInfo = (client: SalesClient | undefined) => {
     if (!client) return;
     setClientName(client.name);
-    setClientEmail(client.email);
+    setClientEmail(client.email || '');
   };
 
   const handleSelectClient = (id: number | '') => {
@@ -188,19 +143,6 @@ export default function ContratoForm() {
       return next;
     });
     showToast('Campos de cliente autocompletados', 'success');
-  };
-
-  const handleAddClientField = async (variableName: string) => {
-    const label = newClientFieldLabel.trim() || selectedTemplate?.fields?.find((f) => f.variableName === variableName)?.label || '';
-    if (!label) { showToast('Escribe el nombre del campo a añadir', 'error'); return; }
-    try {
-      const created = await addSalesClientField({ label });
-      setClientFieldDefs((prev) => [...prev, created]);
-      setNewClientFieldLabel('');
-      showToast(`Campo "${created.label}" añadido. Mapealo en la plantilla o llénalo en Clientes.`, 'success');
-    } catch (err: any) {
-      showToast(err?.response?.data?.message || 'No se pudo añadir el campo', 'error');
-    }
   };
 
   const handleFieldChange = (varName: string, value: string) => {
@@ -260,9 +202,6 @@ export default function ContratoForm() {
   };
 
   const isFieldEmpty = (f: SalesTemplateField) => {
-    // Sin "Fijar un valor yo mismo" activado, este campo se deja a propósito
-    // sin valor — lo completa el cliente en SignWell, no cuenta como faltante.
-    if (isSignwellTagField(f) && !clientFieldOverride[f.variableName]) return false;
     const v = fieldValues[f.variableName];
     if (f.fieldType === 'CHECKBOX') return false; // un checkbox no marcado no cuenta como "vacío"
     if (Array.isArray(v)) return v.length === 0;
@@ -274,7 +213,11 @@ export default function ContratoForm() {
     if (!clientName.trim()) { showToast('El nombre es requerido', 'error'); return; }
     if (!clientEmail.trim()) { showToast('El email es requerido', 'error'); return; }
 
-    const missingField = requiredCheckFields.find((f) => f.isRequired && isFieldEmpty(f));
+    // Los campos del cliente (isClientField) quedan fuera de esta validación:
+    // si el asesor no puede llenarlos, el backend los deja como campo que el
+    // propio cliente completa/firma al momento de firmar — exigirlos acá
+    // bloquearía ese flujo aunque estén marcados como requeridos.
+    const missingField = requiredCheckFields.find((f) => f.isRequired && !f.isClientField && isFieldEmpty(f));
     if (missingField) {
       showToast(`Falta llenar: ${missingField.label}`, 'error');
       focusField(missingField.variableName);
@@ -377,7 +320,7 @@ export default function ContratoForm() {
                 style={{ flex: 1, minWidth: 220, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}>
                 <option value="">— Seleccionar cliente —</option>
                 {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name} ({c.email})</option>
+                  <option key={c.id} value={c.id}>{c.name}{c.email ? ` (${c.email})` : ''}</option>
                 ))}
               </select>
               <button type="button" className="btn-secondary" onClick={() => navigate('/ventas/clientes?nuevo=1')}
@@ -411,64 +354,26 @@ export default function ContratoForm() {
                 ) : undefined}
               >
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  {group.fields.map(f => {
-                    const signwellTag = isSignwellTagField(f);
-                    const overridden = clientFieldOverride[f.variableName];
-                    return (
+                  {group.fields.map(f => (
                     <div key={f.variableName} id={`field-${f.variableName}`}>
-                      {signwellTag && !overridden ? (
-                        <div>
-                          <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>{f.label}</label>
-                          <p style={{ fontSize: 11, color: '#166534', margin: '0 0 6px' }}>{SIGNWELL_AUTOFILL_HINT[f.fieldType]}</p>
-                          <button type="button" className="btn-secondary" style={{ padding: '4px 10px', fontSize: 10 }}
-                            onClick={() => toggleClientFieldOverride(f.variableName, true)}>
-                            Fijar un valor yo mismo
-                          </button>
-                        </div>
+                      {f.isClientField ? (
+                        <ClientField field={f} value={fieldValues[f.variableName]} />
+                      ) : f.fieldType === 'DROPDOWN' && f.allowMultiple ? (
+                        <MultiSelect label={`${f.label} ${f.isRequired ? '*' : ''}`} value={Array.isArray(fieldValues[f.variableName]) ? fieldValues[f.variableName] : []}
+                          onChange={(opt, checked) => handleMultiFieldToggle(f.variableName, opt, checked)}
+                          onOtherChange={text => handleMultiOtherChange(f.variableName, f.dropdownOptions, text)}
+                          options={f.dropdownOptions} allowOther={f.allowOther} />
+                      ) : f.fieldType === 'DROPDOWN' ? (
+                        <Select label={`${f.label} ${f.isRequired ? '*' : ''}`} value={fieldValues[f.variableName] || ''} onChange={v => handleFieldChange(f.variableName, v)}
+                          options={f.dropdownOptions} allowOther={f.allowOther} />
+                      ) : f.fieldType === 'CHECKBOX' ? (
+                        <Checkbox label={f.label} checked={fieldValues[f.variableName] === 'true'} onChange={v => handleFieldChange(f.variableName, v ? 'true' : 'false')} />
                       ) : (
-                        <>
-                          {f.fieldType === 'DROPDOWN' && f.allowMultiple ? (
-                            <MultiSelect label={`${f.label} ${f.isRequired ? '*' : ''}`} value={Array.isArray(fieldValues[f.variableName]) ? fieldValues[f.variableName] : []}
-                              onChange={(opt, checked) => handleMultiFieldToggle(f.variableName, opt, checked)}
-                              onOtherChange={text => handleMultiOtherChange(f.variableName, f.dropdownOptions, text)}
-                              options={f.dropdownOptions} allowOther={f.allowOther} />
-                          ) : f.fieldType === 'DROPDOWN' ? (
-                            <Select label={`${f.label} ${f.isRequired ? '*' : ''}`} value={fieldValues[f.variableName] || ''} onChange={v => handleFieldChange(f.variableName, v)}
-                              options={f.dropdownOptions} allowOther={f.allowOther} />
-                          ) : f.fieldType === 'CHECKBOX' ? (
-                            <Checkbox label={f.label} checked={fieldValues[f.variableName] === 'true'} onChange={v => handleFieldChange(f.variableName, v ? 'true' : 'false')} />
-                          ) : (
-                            <Input label={`${f.label} ${f.isRequired ? '*' : ''}`} value={fieldValues[f.variableName] || ''} onChange={v => handleFieldChange(f.variableName, v)}
-                              type={f.fieldType === 'DATE' ? 'date' : f.fieldType === 'EMAIL' ? 'email' : f.fieldType === 'NUMBER' ? 'number' : 'text'} />
-                          )}
-                          {signwellTag && (
-                            <button type="button" className="btn-secondary" style={{ padding: '3px 8px', fontSize: 10, marginTop: 4 }}
-                              onClick={() => toggleClientFieldOverride(f.variableName, false)}>
-                              Volver a que lo complete el cliente al firmar
-                            </button>
-                          )}
-                        </>
-                      )}
-                      {f.isClientField && !signwellTag && (
-                        f.clientFieldKey ? (
-                          <p style={{ fontSize: 11, color: '#166534', margin: '4px 0 0' }}>Se autocompleta desde el cliente elegido arriba.</p>
-                        ) : (
-                          <div style={{ marginTop: 6 }}>
-                            <p style={{ fontSize: 11, color: '#92400e', margin: '0 0 6px' }}>
-                              Este campo no está mapeado a la ficha de Cliente. Puedes dejarlo vacío para que el cliente lo complete al firmar en SignWell, o mapearlo a un campo de Clientes para autocompletarlo tú:
-                            </p>
-                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                              <input value={newClientFieldLabel} onChange={(e) => setNewClientFieldLabel(e.target.value)} placeholder="Nombre del campo en Clientes"
-                                style={{ flex: 1, minWidth: 140, padding: '5px 7px', borderRadius: 4, border: '1px solid #ddd', fontSize: 11 }} />
-                              <button type="button" className="btn-secondary" onClick={() => handleAddClientField(f.variableName)}
-                                style={{ padding: '5px 8px', fontSize: 10 }}>Añadir a Clientes</button>
-                            </div>
-                          </div>
-                        )
+                        <Input label={`${f.label} ${f.isRequired ? '*' : ''}`} value={fieldValues[f.variableName] || ''} onChange={v => handleFieldChange(f.variableName, v)}
+                          type={f.fieldType === 'DATE' ? 'date' : f.fieldType === 'EMAIL' ? 'email' : f.fieldType === 'NUMBER' ? 'number' : 'text'} />
                       )}
                     </div>
-                    );
-                  })}
+                  ))}
                 </div>
               </Section>
             );
@@ -593,6 +498,38 @@ function Select({ label, value, onChange, options, allowOther }: { label: string
         {options.map(o => <option key={o} value={o}>{o}</option>)}
         {allowOther && <option value={OTHER_SENTINEL}>Otro (especifique)</option>}
       </select>
+    </div>
+  );
+}
+
+const CLIENT_FIELD_ACTION_LABEL: Record<string, string> = {
+  CHECKBOX: 'marcará',
+  SIGNATURE: 'firmará',
+  INITIAL: 'rubricará',
+};
+
+// Campo del contrato marcado como "del cliente" en la plantilla: el asesor
+// nunca lo llena a mano acá — solo se muestra en modo lectura, con el valor
+// que trajo el autocompletar de cliente (si hay), o un aviso de que el
+// cliente lo completa al momento de firmar (backend lo convierte en un
+// text tag de SignWell cuando llega vacío, ver buildSignWellTextTag).
+function ClientField({ field, value }: { field: SalesTemplateField; value: any }) {
+  const action = CLIENT_FIELD_ACTION_LABEL[field.fieldType] || 'completará';
+  const hasValue = Array.isArray(value) ? value.length > 0 : !!String(value ?? '').trim();
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>
+        {field.label} {field.isRequired ? '*' : ''}
+      </label>
+      {hasValue ? (
+        <p style={{ fontSize: 12, margin: 0, padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', background: '#f9fafb' }}>
+          {Array.isArray(value) ? value.join(', ') : value}
+        </p>
+      ) : (
+        <p style={{ fontSize: 11, color: '#166534', margin: 0 }}>
+          {field.clientFieldKey ? 'Se autocompleta desde el cliente elegido arriba.' : `El cliente lo ${action} al momento de firmar.`}
+        </p>
+      )}
     </div>
   );
 }

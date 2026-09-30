@@ -18,6 +18,7 @@ function makeContract(overrides: Partial<any> = {}) {
     clientName: 'Cliente Test',
     clientEmail: 'cliente@test.com',
     template: { fields: [] },
+    contractDocuments: [],
     ...overrides,
   };
 }
@@ -34,6 +35,12 @@ describe('VentasContratosService', () => {
     };
     salesTemplate: { findFirst: jest.Mock };
     salesContractDocument: { create: jest.Mock; findMany: jest.Mock };
+    storedFile: {
+      findUnique: jest.Mock;
+      create: jest.Mock;
+      upsert: jest.Mock;
+      deleteMany: jest.Mock;
+    };
   };
   let driveService: {
     getConfig: jest.Mock;
@@ -62,6 +69,14 @@ describe('VentasContratosService', () => {
       },
       salesTemplate: { findFirst: jest.fn() },
       salesContractDocument: { create: jest.fn(), findMany: jest.fn() },
+      // Copia permanente de los archivos (stored-file.util). Por defecto "ya
+      // respaldado", así las lecturas desde disco no intentan crearla.
+      storedFile: {
+        findUnique: jest.fn().mockResolvedValue({ id: 1 }),
+        create: jest.fn().mockResolvedValue({}),
+        upsert: jest.fn().mockResolvedValue({}),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
     };
     // Drive storage is optional/best-effort (see uploadToDriveIfConfigured) —
     // getConfig resolving to null means "no root folder configured", so
@@ -157,13 +172,87 @@ describe('VentasContratosService', () => {
       );
     });
 
-    it('rejects when the PDF file is missing on disk', async () => {
+    it('rejects when the PDF is neither on disk nor in permanent storage', async () => {
       process.env.SIGNWELL_API_KEY = 'test-key';
       prisma.salesContract.findFirst.mockResolvedValue(makeContract());
       existsSyncMock.mockReturnValue(false);
+      prisma.storedFile.findUnique.mockResolvedValue(null);
 
       await expect(service.sendContract(10, 1)).rejects.toThrow(
-        'PDF no encontrado',
+        'No se encontró el PDF del contrato',
+      );
+      expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    it('restores the PDF from permanent storage when the disk was wiped (Cloud Run restart)', async () => {
+      process.env.SIGNWELL_API_KEY = 'test-key';
+      prisma.salesContract.findFirst.mockResolvedValue(makeContract());
+      existsSyncMock.mockReturnValue(false);
+      prisma.storedFile.findUnique.mockResolvedValue({
+        data: new Uint8Array(Buffer.from('pdf-desde-la-base')),
+      });
+      (axios.post as jest.Mock).mockResolvedValue({ data: { id: 'doc-1' } });
+
+      await service.sendContract(10, 1);
+
+      const body = (axios.post as jest.Mock).mock.calls[0][1];
+      expect(Buffer.from(body.files[0].file_base64, 'base64').toString()).toBe(
+        'pdf-desde-la-base',
+      );
+    });
+
+    it('uses the recipient, subject and message edited in the contract screen', async () => {
+      process.env.SIGNWELL_API_KEY = 'test-key';
+      prisma.salesContract.findFirst.mockResolvedValue(makeContract());
+      (axios.post as jest.Mock).mockResolvedValue({ data: { id: 'doc-2' } });
+
+      await service.sendContract(10, 1, {
+        email: 'otro@cliente.com',
+        subject: 'Asunto editado',
+        message: 'Mensaje editado',
+      });
+
+      expect(axios.post).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          subject: 'Asunto editado',
+          message: 'Mensaje editado',
+          recipients: [expect.objectContaining({ email: 'otro@cliente.com' })],
+        }),
+        expect.any(Object),
+      );
+      // El contrato queda con el email al que realmente se envió.
+      expect(prisma.salesContract.update).toHaveBeenCalledWith({
+        where: { id: 10 },
+        data: { clientEmail: 'otro@cliente.com' },
+      });
+    });
+
+    it('without edits, uses the template subject/body with its variables replaced', async () => {
+      process.env.SIGNWELL_API_KEY = 'test-key';
+      prisma.salesContract.findFirst.mockResolvedValue(
+        makeContract({
+          template: {
+            fields: [],
+            emailSubject: 'Contrato #{{contractId}}',
+            emailBody: 'Hola {{clientName}}',
+          },
+        }),
+      );
+      (axios.post as jest.Mock).mockResolvedValue({ data: { id: 'doc-3' } });
+
+      await service.sendContract(10, 1);
+
+      expect(axios.post).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          subject: 'Contrato #10',
+          message: 'Hola Cliente Test',
+        }),
+        expect.any(Object),
+      );
+      expect(prisma.salesContract.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: { clientEmail: expect.anything() } }),
       );
     });
 
@@ -535,13 +624,26 @@ describe('VentasContratosService', () => {
       expect(fs.unlinkSync).not.toHaveBeenCalled();
     });
 
-    it('deletes the generated PDF from disk before deleting the record', async () => {
-      prisma.salesContract.findFirst.mockResolvedValue(makeContract());
+    it('deletes every PDF of the contract (disk + permanent copy) before deleting the record', async () => {
+      prisma.salesContract.findFirst.mockResolvedValue(
+        makeContract({
+          contractDocuments: [
+            { filePath: '/api/ventas/contratos/file/10_123.pdf' },
+            { filePath: '/api/ventas/contratos/file/10_firmado_999.pdf' },
+          ],
+        }),
+      );
       prisma.salesContract.delete.mockResolvedValue(makeContract());
 
       await service.deleteContract(10, 1);
 
-      expect(fs.unlinkSync).toHaveBeenCalled();
+      expect(fs.unlinkSync).toHaveBeenCalledTimes(2);
+      expect(prisma.storedFile.deleteMany).toHaveBeenCalledWith({
+        where: { key: 'ventas/contracts/10_123.pdf' },
+      });
+      expect(prisma.storedFile.deleteMany).toHaveBeenCalledWith({
+        where: { key: 'ventas/contracts/10_firmado_999.pdf' },
+      });
       expect(prisma.salesContract.delete).toHaveBeenCalledWith({
         where: { id: 10 },
       });

@@ -20,14 +20,16 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { VentasContratosService } from './ventas-contratos.service';
 import type { Response } from 'express';
-import * as fs from 'fs';
-import * as path from 'path';
-
-const CONTRACTS_DIR = path.resolve(process.cwd(), 'uploads', 'contracts');
+import { loadContractPdf } from './ventas-files.util';
+import { SendContractDto } from './dto/send-contract.dto';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Controller('ventas/contratos')
 export class VentasContratosController {
-  constructor(private readonly contratosService: VentasContratosService) {}
+  constructor(
+    private readonly contratosService: VentasContratosService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get('file/:fileName')
   @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
@@ -41,13 +43,14 @@ export class VentasContratosController {
       fileName,
       req.user.companyId,
     );
-    const filePath = path.join(CONTRACTS_DIR, safeName);
-    if (!fs.existsSync(filePath)) {
+    // Disco o, si la instancia se recicló, la copia permanente en la base.
+    const buffer = await loadContractPdf(this.prisma, safeName);
+    if (!buffer) {
       res.status(404).json({ message: 'Archivo no encontrado' });
       return;
     }
     res.setHeader('Content-Type', 'application/pdf');
-    res.sendFile(filePath);
+    res.send(buffer);
   }
 
   // Público, sin sesión — protegido solo por lo impredecible del token.
@@ -118,8 +121,8 @@ export class VentasContratosController {
   @Post(':id/send')
   @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
   @Section('VENTAS', 'write')
-  send(@Param('id') id: string, @Req() req: any) {
-    return this.contratosService.sendContract(+id, req.user.companyId);
+  send(@Param('id') id: string, @Body() dto: SendContractDto, @Req() req: any) {
+    return this.contratosService.sendContract(+id, req.user.companyId, dto);
   }
 
   @Get(':id/signature-status')

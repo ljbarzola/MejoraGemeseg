@@ -1,4 +1,9 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { MovimientoPersonalService } from './movimiento-personal.service';
 import { PersonalFieldDefinitionService } from './personal-field-definition.service';
@@ -240,7 +245,10 @@ export class DriveService {
     return row?.driveFolderId ? this.sanitizeFolderId(row.driveFolderId) : null;
   }
 
-  private async getLockedConfig(companyId: number, type: LockedDriveFolderType) {
+  private async getLockedConfig(
+    companyId: number,
+    type: LockedDriveFolderType,
+  ) {
     const meta = HARDCODED_DRIVE_FOLDERS[type];
     const fromCode = hardcodedFolderId(type);
     if (fromCode) {
@@ -337,7 +345,8 @@ export class DriveService {
       });
       const hit = (res.data.files || []).find(
         (f: { id?: string | null; name?: string | null }) =>
-          (f.name || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('es') === objetivo,
+          (f.name || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('es') ===
+          objetivo,
       );
       if (hit?.id) return { id: hit.id, name: hit.name || name };
       pageToken = res.data.nextPageToken ?? undefined;
@@ -347,7 +356,11 @@ export class DriveService {
 
   // Mueve la carpeta al padre indicado y le pone el nombre pedido. Si ya
   // está en ese padre, solo renombra.
-  async relocateFolder(folderId: string, parentId: string, name: string): Promise<void> {
+  async relocateFolder(
+    folderId: string,
+    parentId: string,
+    name: string,
+  ): Promise<void> {
     const drive = this.getDriveClient();
     const parent = this.sanitizeFolderId(parentId);
     const current = await drive.files.get({
@@ -355,7 +368,9 @@ export class DriveService {
       fields: 'parents',
       supportsAllDrives: true,
     });
-    const parents = (current.data.parents || []).filter((p: string | null): p is string => !!p);
+    const parents = (current.data.parents || []).filter(
+      (p: string | null): p is string => !!p,
+    );
     const sameParent = parents.includes(parent);
     await drive.files.update({
       fileId: folderId,
@@ -368,7 +383,10 @@ export class DriveService {
 
   // Pasa los archivos y subcarpetas de una carpeta a otra. La carpeta de
   // origen se queda vacía (no se borra).
-  async moveFolderContents(fromFolderId: string, toFolderId: string): Promise<void> {
+  async moveFolderContents(
+    fromFolderId: string,
+    toFolderId: string,
+  ): Promise<void> {
     if (fromFolderId === toFolderId) return;
     const drive = this.getDriveClient();
     const from = this.sanitizeFolderId(fromFolderId);
@@ -440,7 +458,11 @@ export class DriveService {
     if (existing) {
       return this.prisma.folderConfig.update({
         where: { id: existing.id },
-        data: { driveFolderId: sanitizedId, driveFolderLink: rawLink, driveFolderName },
+        data: {
+          driveFolderId: sanitizedId,
+          driveFolderLink: rawLink,
+          driveFolderName,
+        },
       });
     }
     return this.prisma.folderConfig.create({
@@ -767,9 +789,7 @@ export class DriveService {
       const cedulaDeJson = parsed.cedulaConfiable
         ? ''
         : await this.leerCedulaDeJsonEnCarpeta(files);
-      const cedulaLeida = parsed.cedulaConfiable
-        ? parsed.cedula
-        : cedulaDeJson;
+      const cedulaLeida = parsed.cedulaConfiable ? parsed.cedula : cedulaDeJson;
       const cedulaConfiable = /^\d{10}$/.test(cedulaLeida);
 
       // Ancla de identidad: la MISMA carpeta de Drive (folderId, estable)
@@ -982,7 +1002,12 @@ export class DriveService {
   private parsePersonalAdminFolderName(
     folderName: string,
     folderId: string,
-  ): { name: string; puesto: string; cedula: string; cedulaConfiable: boolean } {
+  ): {
+    name: string;
+    puesto: string;
+    cedula: string;
+    cedulaConfiable: boolean;
+  } {
     const withPuesto = folderName.match(/^(.+?)\s*-\s*(\d{10})\s*-\s*(.+)$/);
     if (withPuesto) {
       return {
@@ -1102,10 +1127,7 @@ export class DriveService {
           companyId,
           cedula,
         );
-        name = this.nombreDesdeFicha(
-          fichaNombre.camposPersonalizados,
-          name,
-        );
+        name = this.nombreDesdeFicha(fichaNombre.camposPersonalizados, name);
 
         // El puesto dejó de vivir en el nombre de la carpeta: si el parser no
         // lo encuentra ahí (formato nuevo), se conserva el que ya estaba en BD
@@ -1472,7 +1494,10 @@ export class DriveService {
       (a) => a?.nombre && this.scoreMatch(a.nombre, reqNombre) > 0,
     );
     if (directo) {
-      return { file: directo, nombreEnJson: declarado?.nombre || directo.name || null };
+      return {
+        file: directo,
+        nombreEnJson: declarado?.nombre || directo.name || null,
+      };
     }
     if (!declarado?.nombre) return { file: null, nombreEnJson: null };
     const esperado = this.removeAccents(this.normalizeStr(declarado.nombre));
@@ -2029,8 +2054,7 @@ export class DriveService {
       let ownerEmail = meta.data?.owners?.[0]?.emailAddress || '';
       if (!ownerEmail || this.esCuentaDeServicio(ownerEmail)) {
         ownerEmail =
-          (await this.buscarDuenoHumano(drive, meta.data?.parents || [])) ||
-          '';
+          (await this.buscarDuenoHumano(drive, meta.data?.parents || [])) || '';
       }
       return ownerEmail ? this.getDriveClientComoDueno(ownerEmail) : drive;
     } catch {
@@ -2398,7 +2422,21 @@ export class DriveService {
   // La carpeta de Reclutamiento es fija en código (HARDCODED_DRIVE_FOLDERS),
   // independiente de Cumplimiento. Dentro hay una subcarpeta por Puesto.
   private async getReclutamientoFolderId(companyId: number): Promise<string> {
-    const folderId = await this.resolveLockedFolderId(companyId, 'RECLUTAMIENTO');
+    // Override SOLO para pruebas de carga en local: nunca se activa en
+    // producción (NODE_ENV=production ahí, ver cloudbuild.yaml) ni aunque la
+    // variable quede puesta por accidente en un .env local que no sea dev.
+    // Ver backend/.agents (o el plan de la prueba) — se usa una carpeta de
+    // Drive completamente aparte, nunca la real de Reclutamiento.
+    if (
+      process.env.NODE_ENV !== 'production' &&
+      process.env.RECLUTAMIENTO_TEST_FOLDER_ID
+    ) {
+      return this.sanitizeFolderId(process.env.RECLUTAMIENTO_TEST_FOLDER_ID);
+    }
+    const folderId = await this.resolveLockedFolderId(
+      companyId,
+      'RECLUTAMIENTO',
+    );
     if (!folderId) {
       throw new BadRequestException(
         'No hay carpeta de Drive de Reclutamiento definida en código.',
@@ -2526,6 +2564,69 @@ export class DriveService {
       driveSynced,
       driveWarning,
     };
+  }
+
+  // Duplica una vacante existente: mismos campos/archivos requeridos, estado y
+  // tipo de contratación, pero con un nombre visiblemente distinto (nunca un
+  // "puesto" idéntico) porque syncReclutamientoCandidates/
+  // syncJobPositionsFromDrive matchean candidatos por nombre de puesto
+  // case-insensitive — un duplicado exacto los confundiría. Reutiliza
+  // createJobPosition tal cual (no repite la lógica de Drive) y arma un
+  // objeto nuevo desde cero para que driveFileId/driveFolderId del original
+  // nunca puedan colarse en el duplicado.
+  async duplicateJobPosition(id: number, companyId: number) {
+    if (!companyId)
+      throw new BadRequestException('Usuario sin empresa asociada');
+
+    const source = await this.prisma.jobPosition.findFirst({
+      where: { id, companyId },
+    });
+    if (!source) {
+      throw new NotFoundException('Vacante no encontrada.');
+    }
+
+    const nombreUnico = await this.nombrePuestoDuplicadoUnico(
+      source.puesto,
+      companyId,
+    );
+
+    return this.createJobPosition(
+      {
+        puesto: nombreUnico,
+        descripcion: source.descripcion || undefined,
+        camposRequeridos: this.normalizeCamposList(source.camposRequeridos),
+        archivosRequeridos: this.normalizeArchivosList(
+          source.archivosRequeridos,
+        ),
+        estado: source.estado,
+        tipoContratacion: source.tipoContratacion,
+      },
+      companyId,
+    );
+  }
+
+  // "Puesto" -> "Puesto (copia)" -> "Puesto (copia 2)" -> "Puesto (copia 3)"...
+  // hasta encontrar un nombre libre para esta empresa (comparación
+  // case-insensitive, igual que el resto del módulo).
+  private async nombrePuestoDuplicadoUnico(
+    puestoOriginal: string,
+    companyId: number,
+  ): Promise<string> {
+    let intento = 1;
+    while (true) {
+      const candidato =
+        intento === 1
+          ? `${puestoOriginal} (copia)`
+          : `${puestoOriginal} (copia ${intento})`;
+      const existe = await this.prisma.jobPosition.findFirst({
+        where: {
+          companyId,
+          puesto: { equals: candidato, mode: 'insensitive' },
+        },
+      });
+      if (!existe) return candidato;
+      intento++;
+    }
   }
 
   async updateJobPosition(
@@ -3037,9 +3138,7 @@ export class DriveService {
           const apellidos = buscarDatoFormulario(datosFormulario, [
             'apellidos',
           ]);
-          const nombres = buscarDatoFormulario(datosFormulario, [
-            'nombres',
-          ]);
+          const nombres = buscarDatoFormulario(datosFormulario, ['nombres']);
           // Formato estándar "Apellidos Nombres" (ver nombre-persona.util).
           // Los fallbacks siguen ahí solo para postulaciones viejas cuyo JSON
           // guardó un único campo de nombre.
@@ -3058,10 +3157,7 @@ export class DriveService {
             this.extraerCedulaConfiableDeObjeto(candidatoJsonData) ||
             (parsed.cedulaConfiable ? parsed.cedula : '');
           const telefono =
-            buscarDatoFormulario(datosFormulario, [
-              'telefono',
-              'celular',
-            ]) ||
+            buscarDatoFormulario(datosFormulario, ['telefono', 'celular']) ||
             candidatoJsonData?.telefono ||
             '';
           const email =
@@ -3079,14 +3175,17 @@ export class DriveService {
             extensiones: string[];
             obligatorio?: boolean;
           }[] = matchedPosition?.archivosRequeridos || [];
-          const camposRequeridos = Array.isArray(matchedPosition?.camposRequeridos)
+          const camposRequeridos = Array.isArray(
+            matchedPosition?.camposRequeridos,
+          )
             ? matchedPosition.camposRequeridos
             : [];
           // El JSON del portal no siempre usa el mismo rótulo que la vacante
           // ("Celular" en la vacante, "Teléfono" en el archivo). Se copia el
           // valor al nombre que el expediente va a buscar.
           for (const campo of camposRequeridos) {
-            const nombre = campo && typeof campo === 'object' ? campo.nombre : '';
+            const nombre =
+              campo && typeof campo === 'object' ? campo.nombre : '';
             if (typeof nombre !== 'string' || !nombre.trim()) continue;
             if (String(datosFormulario[nombre] ?? '').trim()) continue;
             const valor = valorCampoPostulacion(datosFormulario, nombre);
@@ -3103,7 +3202,10 @@ export class DriveService {
           // candidato.json no es un documento del postulante. Contarlo
           // inflaba el "4/5" de la tabla cuando el expediente mostraba 3.
           const archivosPostulante = files.filter(
-            (f: any) => !String(f.name || '').toLowerCase().endsWith('.json'),
+            (f: any) =>
+              !String(f.name || '')
+                .toLowerCase()
+                .endsWith('.json'),
           );
           const slots: SlotExpediente[] = archivosRequeridos.map((reqDoc) => {
             const resuelto = this.resolverArchivoDeRequisito(
@@ -3238,9 +3340,7 @@ export class DriveService {
           duenos.map((d) => [d.cedula, d.employeeName || '']),
         );
       } catch (err) {
-        this.logger.warn(
-          `Error cruzando cédulas con guardias: ${err.message}`,
-        );
+        this.logger.warn(`Error cruzando cédulas con guardias: ${err.message}`);
       }
     }
 
@@ -3411,16 +3511,20 @@ export class DriveService {
         : null;
       if (Array.isArray(vacante?.camposRequeridos)) {
         camposVacante = vacante.camposRequeridos.flatMap((campo) => {
-          if (!campo || typeof campo !== 'object' || Array.isArray(campo)) return [];
+          if (!campo || typeof campo !== 'object' || Array.isArray(campo))
+            return [];
           const nombre = (campo as { nombre?: unknown }).nombre;
           if (typeof nombre !== 'string' || !nombre.trim()) return [];
           const tipo = (campo as { tipo?: unknown }).tipo;
           const obligatorio = (campo as { obligatorio?: unknown }).obligatorio;
-          return [{
-            nombre,
-            tipo: typeof tipo === 'string' ? tipo : undefined,
-            obligatorio: typeof obligatorio === 'boolean' ? obligatorio : undefined,
-          }];
+          return [
+            {
+              nombre,
+              tipo: typeof tipo === 'string' ? tipo : undefined,
+              obligatorio:
+                typeof obligatorio === 'boolean' ? obligatorio : undefined,
+            },
+          ];
         });
       }
     } catch (err: any) {
@@ -3658,8 +3762,7 @@ export class DriveService {
           });
       const camposActuales: Record<string, any> = {
         ...((fichaActual?.camposPersonalizados as
-          | Record<string, any>
-          | undefined) || {}),
+          Record<string, any> | undefined) || {}),
       };
 
       let huboCambios = false;
@@ -3876,7 +3979,10 @@ export class DriveService {
     if (reqs.length === 0) return [];
 
     const postulante = files.filter(
-      (f) => !String(f.name || '').toLowerCase().endsWith('.json'),
+      (f) =>
+        !String(f.name || '')
+          .toLowerCase()
+          .endsWith('.json'),
     );
     let reviews: { driveFileId: string | null; status: string }[] = [];
     try {
@@ -3898,7 +4004,8 @@ export class DriveService {
         continue;
       }
       const status = reviews.find((r) => r.driveFileId === match.id)?.status;
-      if (status === 'RECHAZADO') motivos.push(`"${req.nombre}" está rechazado`);
+      if (status === 'RECHAZADO')
+        motivos.push(`"${req.nombre}" está rechazado`);
       else if (status !== 'APROBADO') {
         motivos.push(`"${req.nombre}" todavía no está aprobado`);
       }
@@ -4143,10 +4250,7 @@ export class DriveService {
     // abajo salgan ya resueltos: valor cargado a mano > columna legada >
     // dato rescatado de la postulación (ver GuardiaFichaPersonalService.get,
     // resolverCamposConPostulacion).
-    const ficha = await this.guardiaFichaPersonalService.get(
-      companyId,
-      cedula,
-    );
+    const ficha = await this.guardiaFichaPersonalService.get(companyId, cedula);
     const campos = ficha.camposPersonalizados || {};
     const apellidos = String(campos.apellidos || '').trim();
     const nombres = String(campos.nombres || '').trim();

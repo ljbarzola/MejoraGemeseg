@@ -20,8 +20,26 @@ const SIGNWELL_API_BASE = 'https://www.signwell.com/api/v1';
 
 const execFileAsync = promisify(execFile);
 
-const TEMPLATES_DIR = path.resolve(process.cwd(), 'uploads', 'templates');
-const CONTRACTS_DIR = path.resolve(process.cwd(), 'uploads', 'contracts');
+import {
+  CONTRACTS_DIR,
+  loadTemplateDocx,
+  saveContractPdf,
+  loadContractPdf,
+  deleteContractPdf,
+} from './ventas-files.util';
+
+/** Reemplaza las variables del asunto/cuerpo de la plantilla, igual que la vista previa de la ficha. */
+function renderEmailText(text: string, contract: { id: number; clientName: string }): string {
+  return text
+    .replace(/\{\{contractId\}\}/g, String(contract.id))
+    .replace(/\{\{clientName\}\}/g, contract.clientName);
+}
+
+export interface SendContractOverrides {
+  email?: string;
+  subject?: string;
+  message?: string;
+}
 
 @Injectable()
 export class VentasContratosService {
@@ -338,14 +356,13 @@ export class VentasContratosService {
 
     try {
       const template = contract.template;
-      if (!template.docxPath || !fs.existsSync(template.docxPath)) {
+      // 1. Read .docx (disco → copia permanente → enlace de Drive)
+      const docxBuffer = await loadTemplateDocx(this.prisma, template);
+      if (!docxBuffer) {
         throw new BadRequestException(
-          'El documento fuente no está disponible. Descárgalo de Drive primero.',
+          'El documento fuente no está disponible. Vuelve a descargarlo de Drive o súbelo en la plantilla.',
         );
       }
-
-      // 1. Read .docx
-      const docxBuffer = fs.readFileSync(template.docxPath);
       const zip = await JSZip.loadAsync(docxBuffer);
 
       // 2. Read the raw XML so variables can be substituted as text
@@ -486,8 +503,7 @@ export class VentasContratosService {
 
       // 5. Save PDF
       const pdfFileName = `${contractId}_${Date.now()}.pdf`;
-      const pdfPath = path.join(CONTRACTS_DIR, pdfFileName);
-      fs.writeFileSync(pdfPath, pdfBuffer);
+      await saveContractPdf(this.prisma, pdfFileName, pdfBuffer);
 
       // 6. Update contract
       const generatedPdfPath = `/api/ventas/contratos/file/${pdfFileName}`;
@@ -1008,7 +1024,11 @@ export class VentasContratosService {
 
   // ==================== SEND VIA SIGNWELL ====================
 
-  async sendContract(id: number, companyId: number | null) {
+  async sendContract(
+    id: number,
+    companyId: number | null,
+    overrides: SendContractOverrides = {},
+  ) {
     const where: any = { id };
     if (companyId) where.companyId = companyId;
     const contract = await this.prisma.salesContract.findFirst({
@@ -1023,13 +1043,28 @@ export class VentasContratosService {
 
     // Read PDF
     const pdfFileName = path.basename(contract.generatedPdfPath);
-    const pdfPath = path.join(CONTRACTS_DIR, pdfFileName);
-    if (!fs.existsSync(pdfPath))
-      throw new BadRequestException('PDF no encontrado');
-    const pdfBuffer = fs.readFileSync(pdfPath);
+    const pdfBuffer = await loadContractPdf(this.prisma, pdfFileName);
+    if (!pdfBuffer)
+      throw new BadRequestException(
+        'No se encontró el PDF del contrato. Vuelve a generarlo con "Regenerar PDF".',
+      );
+
+    // "Para" editado en la ficha: el contrato queda registrado con el email al
+    // que realmente se envió (el estado de firma y los reenvíos dependen de él).
+    const email = overrides.email?.trim();
+    if (email && email !== contract.clientEmail) {
+      await this.prisma.salesContract.update({
+        where: { id: contract.id },
+        data: { clientEmail: email },
+      });
+      contract.clientEmail = email;
+    }
 
     const { documentId, signingUrl, driveWarning } =
-      await this.sendToSignWellInternal(contract, pdfBuffer);
+      await this.sendToSignWellInternal(contract, pdfBuffer, {
+        subject: overrides.subject,
+        message: overrides.message,
+      });
     // `signingUrl` no se persiste (SignWell no lo repite tal cual en el GET
     // de estado — ver `getSignatureStatus`, que sí expone el suyo propio por
     // firmante) — se devuelve solo para que quien envía pueda copiarlo aquí
@@ -1058,6 +1093,7 @@ export class VentasContratosService {
   private async sendToSignWellInternal(
     contract: any,
     pdfBuffer: Buffer,
+    email: { subject?: string; message?: string } = {},
   ): Promise<{
     documentId: string;
     signingUrl: string | null;
@@ -1086,8 +1122,19 @@ export class VentasContratosService {
           test_mode: testMode,
           text_tags: true,
           ...(hasOwnSignatureTag ? {} : { with_signature_page: true }),
-          subject: contract.template.emailSubject || `Contrato #${contract.contractNumber || contract.id}`,
-          message: contract.template.emailBody || undefined,
+          // Lo escrito en la ficha ("Asunto"/"Mensaje") manda; si no vino
+          // (envío automático al completar el link del cliente), el de la
+          // plantilla con sus variables ya reemplazadas.
+          subject:
+            email.subject?.trim() ||
+            (contract.template.emailSubject
+              ? renderEmailText(contract.template.emailSubject, contract)
+              : `Contrato #${contract.contractNumber || contract.id}`),
+          message:
+            email.message?.trim() ||
+            (contract.template.emailBody
+              ? renderEmailText(contract.template.emailBody, contract)
+              : undefined),
           files: [
             {
               name: `contrato_${contract.contractNumber || contract.id}.pdf`,
@@ -1247,8 +1294,7 @@ export class VentasContratosService {
     pdfBuffer: Buffer,
   ): Promise<string | undefined> {
     const fileName = `${contract.id}_firmado_${Date.now()}.pdf`;
-    const filePath = path.join(CONTRACTS_DIR, fileName);
-    fs.writeFileSync(filePath, pdfBuffer);
+    await saveContractPdf(this.prisma, fileName, pdfBuffer);
     const publicPath = `/api/ventas/contratos/file/${fileName}`;
 
     await this.prisma.salesContractDocument.create({
@@ -1402,8 +1448,7 @@ export class VentasContratosService {
     if (!file) throw new BadRequestException('No se recibió ningún archivo');
 
     const fileName = `${contract.id}_firmado_${Date.now()}.pdf`;
-    const filePath = path.join(CONTRACTS_DIR, fileName);
-    fs.writeFileSync(filePath, file.buffer);
+    await saveContractPdf(this.prisma, fileName, file.buffer);
 
     const publicPath = `/api/ventas/contratos/file/${fileName}`;
     await this.prisma.salesContractDocument.create({
@@ -1458,15 +1503,20 @@ export class VentasContratosService {
   async deleteContract(id: number, companyId: number | null) {
     const where: any = { id };
     if (companyId) where.companyId = companyId;
-    const contract = await this.prisma.salesContract.findFirst({ where });
+    const contract = await this.prisma.salesContract.findFirst({
+      where,
+      include: { contractDocuments: { select: { filePath: true } } },
+    });
     if (!contract) throw new NotFoundException('Contrato no encontrado');
-    // Delete PDF if exists
-    if (contract.generatedPdfPath) {
-      const pdfPath = path.join(
-        CONTRACTS_DIR,
-        path.basename(contract.generatedPdfPath),
-      );
-      if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
+    // Todos sus PDFs (cada regeneración y el firmado), no solo el último:
+    // ahora viven en la base, no conviene dejarlos huérfanos.
+    const fileNames = new Set(
+      [contract.generatedPdfPath, ...contract.contractDocuments.map((d) => d.filePath)]
+        .filter((p): p is string => !!p)
+        .map((p) => path.basename(p)),
+    );
+    for (const fileName of fileNames) {
+      await deleteContractPdf(this.prisma, fileName);
     }
     return this.prisma.salesContract.delete({ where: { id } });
   }

@@ -1,17 +1,19 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { DriveService } from './drive.service';
+import { GoogleAuthService } from '../../../common/services/google-auth.service';
 import pdfParse from 'pdf-parse';
 
-// Mismo modelo/endpoint/auth que backend/src/modules/ai/ai.service.ts
-// (GitHub Models, gpt-4o-mini vía el endpoint de inferencia de Azure OpenAI),
-// reutilizado tal cual por consistencia — no se introduce un segundo proveedor
-// de IA en el backend. `callGitHubModels` de ese servicio no se reutiliza
-// directamente porque su lógica está hecha a medida para el chat del agente
-// (parseo de "[INTENCION: ...]", historial de conversación); aquí el
-// contrato es distinto (una sola llamada, salida JSON estructurada).
-const MODEL = 'gpt-4o-mini';
-const API_URL = 'https://models.inference.ai.azure.com/chat/completions';
+// GitHub Models (gpt-4o-mini) se eliminó de todo el backend (2026-09-29) — este
+// servicio ahora usa Google Vertex AI, mismo proveedor/credenciales que
+// reclutamiento-ia.service.ts (que ya hace exactamente este tipo de llamada:
+// una sola pasada, salida JSON estructurada). Comparte GOOGLE_VERTEX_MODEL con
+// ese servicio a propósito — es la misma categoría de tarea (RRHH, análisis
+// de documentos de un solo disparo), a diferencia del chat de Agente Gemeseg
+// (ai/vertex-chat.client.ts), que es conversacional y tiene su propia
+// variable GOOGLE_VERTEX_CHAT_MODEL para no acoplar ajustes de una tarea con
+// la otra.
+const MODEL = process.env.GOOGLE_VERTEX_MODEL || 'gemini-2.5-flash';
 
 // Un documento con menos de este número de caracteres de texto "real" (sin
 // contar espacios) casi seguro es un PDF escaneado/foto sin capa de texto —
@@ -58,12 +60,20 @@ interface AiDateGuess {
 @Injectable()
 export class DocumentExtractionService {
   private readonly logger = new Logger(DocumentExtractionService.name);
-  private readonly githubToken = process.env.GITHUB_TOKEN || '';
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly driveService: DriveService,
+    private readonly googleAuth: GoogleAuthService,
   ) {}
+
+  private get project(): string {
+    return process.env.GOOGLE_VERTEX_PROJECT || '';
+  }
+
+  private get location(): string {
+    return process.env.GOOGLE_VERTEX_LOCATION || 'us-central1';
+  }
 
   async extractExpiry(
     driveFileId: string,
@@ -117,12 +127,12 @@ export class DocumentExtractionService {
 
     const truncated = rawText.slice(0, MAX_TEXT_LENGTH);
 
-    if (!this.githubToken || this.githubToken === 'YOUR_GITHUB_TOKEN_HERE') {
+    if (!this.project) {
       return {
         success: false,
         reason: 'ERROR_IA',
         message:
-          'El servicio de IA no está configurado en este entorno (falta GITHUB_TOKEN).',
+          'El servicio de IA no está configurado en este entorno (falta GOOGLE_VERTEX_PROJECT).',
       };
     }
 
@@ -181,61 +191,43 @@ ${text}
   private async callAiForDates(text: string): Promise<AiDateGuess | null> {
     const prompt = this.buildPrompt(text);
 
-    // Primer intento: pedir explícitamente salida JSON. Si el endpoint
-    // rechaza el parámetro (algunos despliegues de GitHub Models no lo
-    // soportan para todos los modelos) se reintenta sin él, confiando en la
-    // instrucción del prompt para obtener JSON.
-    let raw: string | null = null;
     try {
-      raw = await this.requestChatCompletion(prompt, true);
-    } catch (err: any) {
-      this.logger.warn(
-        `response_format=json_object rechazado por el endpoint, reintentando sin él: ${err.message}`,
-      );
-    }
+      const token = await this.googleAuth.getAccessToken();
+      const url = `https://${this.location}-aiplatform.googleapis.com/v1/projects/${this.project}/locations/${this.location}/publishers/google/models/${MODEL}:generateContent`;
 
-    let parsed = raw ? this.parseAiJson(raw) : null;
-    if (!parsed) {
-      try {
-        raw = await this.requestChatCompletion(prompt, false);
-        parsed = this.parseAiJson(raw);
-      } catch (err: any) {
-        this.logger.error(`Error llamando al modelo de IA: ${err.message}`);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: 'application/json',
+            maxOutputTokens: 400,
+            // Clasificación de un solo disparo, no razonamiento — igual
+            // criterio que reclutamiento-ia.service.ts.
+            thinkingConfig: { thinkingBudget: 0 },
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        this.logger.error(`Vertex AI ${response.status}: ${errorBody}`);
         return null;
       }
+
+      const data: any = await response.json();
+      const raw: string =
+        data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      return this.parseAiJson(raw);
+    } catch (err: any) {
+      this.logger.error(`Error llamando al modelo de IA: ${err.message}`);
+      return null;
     }
-
-    return parsed;
-  }
-
-  private async requestChatCompletion(
-    prompt: string,
-    useJsonMode: boolean,
-  ): Promise<string> {
-    const body: Record<string, unknown> = {
-      model: MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 400,
-      temperature: 0.1,
-    };
-    if (useJsonMode) body.response_format = { type: 'json_object' };
-
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.githubToken}`,
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`GitHub Models error ${response.status}: ${errorBody}`);
-    }
-
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || '';
   }
 
   /** Parseo defensivo: tolera bloques de código markdown y JSON malformado. */

@@ -16,6 +16,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { CreateLocationDto } from './dto/create-location.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { UserRole } from '@prisma/client';
@@ -57,6 +58,20 @@ export class UsersController {
   @UseGuards(AuthGuard('jwt'))
   setActiveAgent(@Req() req: any, @Body() body: { agentId: number | null }) {
     return this.usersService.setActiveAgent(req.user.userId, body.agentId);
+  }
+
+  @Get('locations')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN)
+  getLocations(@Req() req: any) {
+    return this.usersService.getLocations(req.user.companyId);
+  }
+
+  @Post('locations')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN)
+  createLocation(@Body() dto: CreateLocationDto, @Req() req: any) {
+    return this.usersService.createLocation(req.user.companyId, dto.nombre);
   }
 
   @Get(':id')

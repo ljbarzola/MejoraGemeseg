@@ -159,7 +159,9 @@ export default function ContratoResult() {
     if (!emailTo.trim()) { showToast('El email del destinatario es requerido', 'error'); return; }
     setSending(true);
     try {
-      const result = await sendContract(+id);
+      // Se envía lo que se ve en "Envío de correo" (antes estos campos se
+      // podían editar pero el servidor los ignoraba).
+      const result = await sendContract(+id, { email: emailTo.trim(), subject: emailSubject, message: emailBody });
       setSigningUrl(result.signingUrl);
       showToast('Correo enviado correctamente', 'success');
       if (result.driveWarning) {
@@ -167,7 +169,8 @@ export default function ContratoResult() {
       }
       loadContract(+id);
     } catch (err: any) {
-      showToast(err?.response?.data?.message || 'Error al enviar', 'error');
+      const msg = err?.response?.data?.message;
+      showToast((Array.isArray(msg) ? msg[0] : msg) || 'No se pudo enviar el contrato. Intenta de nuevo.', 'error');
     } finally { setSending(false); }
   };
 

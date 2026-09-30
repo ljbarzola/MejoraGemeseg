@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { DriveService } from './drive.service';
 import { MovimientoPersonalService } from './movimiento-personal.service';
 import { PersonalFieldDefinitionService } from './personal-field-definition.service';
@@ -2333,5 +2333,132 @@ describe('DriveService.saveCandidatoDatos', () => {
     );
     expect(result.datosFormulario['Talla de Uniforme']).toBe('M');
     expect(result.datosFormulario['Celular']).toBe('0979459793');
+  });
+});
+
+describe('DriveService.duplicateJobPosition', () => {
+  let service: DriveService;
+  let prisma: {
+    jobPosition: { findFirst: jest.Mock; create: jest.Mock };
+  };
+
+  const source = {
+    id: 1,
+    companyId: 1,
+    puesto: 'Guardia de Seguridad',
+    descripcion: 'Custodia de valores',
+    camposRequeridos: [{ nombre: 'Cédula', tipo: 'TEXTO', obligatorio: true }],
+    archivosRequeridos: [
+      { nombre: 'Cédula', extensiones: ['pdf'], obligatorio: true },
+    ],
+    estado: 'ABIERTA',
+    tipoContratacion: 'GUARDIA',
+    driveFolderId: 'folder-original',
+    driveFileId: 'file-original',
+    createdAt: new Date('2026-09-01'),
+  };
+
+  beforeEach(() => {
+    prisma = {
+      jobPosition: {
+        // Primer findFirst: busca la vacante origen. Los siguientes (dentro
+        // de nombrePuestoDuplicadoUnico) verifican si el nombre candidato ya
+        // existe — por defecto ninguno existe, cada test lo sobreescribe.
+        findFirst: jest.fn(),
+        create: jest.fn().mockImplementation(({ data }) =>
+          Promise.resolve({
+            id: 99,
+            createdAt: new Date('2026-09-29'),
+            driveFolderId: null,
+            driveFileId: null,
+            ...data,
+          }),
+        ),
+      },
+    };
+    service = new DriveService(
+      prisma as unknown as PrismaService,
+      noopMovimientoPersonalService,
+      noopPersonalFieldDefinitionService,
+      noopAdministrativeStaffFichaService,
+      noopGuardiaFichaPersonalService,
+    );
+    // duplicateJobPosition delega en createJobPosition, que intenta hablar
+    // con Drive de verdad — se mockea para que ese intento falle rápido y
+    // sin ruido (el warning resultante no es lo que estos tests verifican).
+    (service as any).getDriveClient = jest.fn().mockImplementation(() => {
+      throw new Error('Drive no configurado en el test');
+    });
+  });
+
+  it('copia descripcion/camposRequeridos/archivosRequeridos/estado/tipoContratacion de la vacante origen', async () => {
+    prisma.jobPosition.findFirst
+      .mockResolvedValueOnce(source) // busca la vacante origen
+      .mockResolvedValueOnce(null); // "Guardia de Seguridad (copia)" está libre
+
+    await service.duplicateJobPosition(1, 1);
+
+    expect(prisma.jobPosition.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        descripcion: 'Custodia de valores',
+        camposRequeridos: [
+          { nombre: 'Cédula', tipo: 'TEXTO', obligatorio: true },
+        ],
+        archivosRequeridos: [
+          { nombre: 'Cédula', extensiones: ['pdf'], obligatorio: true },
+        ],
+        estado: 'ABIERTA',
+        tipoContratacion: 'GUARDIA',
+      }),
+    });
+  });
+
+  it('el nombre del duplicado nunca es idéntico al de la vacante origen', async () => {
+    prisma.jobPosition.findFirst
+      .mockResolvedValueOnce(source)
+      .mockResolvedValueOnce(null);
+
+    const result = await service.duplicateJobPosition(1, 1);
+
+    expect(result.puesto).not.toBe(source.puesto);
+    expect(result.puesto).toBe('Guardia de Seguridad (copia)');
+  });
+
+  it('si "(copia)" ya está tomado, prueba con "(copia 2)", "(copia 3)"... hasta encontrar uno libre', async () => {
+    prisma.jobPosition.findFirst
+      .mockResolvedValueOnce(source) // vacante origen
+      .mockResolvedValueOnce({ id: 2 }) // "(copia)" ya existe
+      .mockResolvedValueOnce({ id: 3 }) // "(copia 2)" ya existe
+      .mockResolvedValueOnce(null); // "(copia 3)" libre
+
+    const result = await service.duplicateJobPosition(1, 1);
+
+    expect(result.puesto).toBe('Guardia de Seguridad (copia 3)');
+    expect(prisma.jobPosition.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        puesto: 'Guardia de Seguridad (copia 3)',
+      }),
+    });
+  });
+
+  it('nunca copia driveFileId/driveFolderId de la vacante origen al llamado interno de creación', async () => {
+    prisma.jobPosition.findFirst
+      .mockResolvedValueOnce(source)
+      .mockResolvedValueOnce(null);
+
+    await service.duplicateJobPosition(1, 1);
+
+    const dataPasada = prisma.jobPosition.create.mock.calls[0][0].data;
+    expect(dataPasada.driveFileId).toBeUndefined();
+    expect(dataPasada.driveFolderId).toBeUndefined();
+  });
+
+  it('rechaza una vacante que no pertenece a la empresa del usuario, sin crear nada', async () => {
+    prisma.jobPosition.findFirst.mockResolvedValueOnce(null); // no matchea id+companyId
+
+    await expect(service.duplicateJobPosition(1, 2)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(prisma.jobPosition.create).not.toHaveBeenCalled();
   });
 });

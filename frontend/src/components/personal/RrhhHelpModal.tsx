@@ -94,7 +94,7 @@ const MODULOS_INDEPENDIENTES: Submodulo[] = [
     nombre: 'Encuestas',
     ruta: '/rrhh/encuestas',
     parrafos: [
-      'RRHH arma una encuesta con preguntas de distinto tipo (texto, opción única/múltiple, escala) y elige por dónde se responde: enviándola a personas con cuenta en la app, generando un enlace público, o las dos cosas a la vez.',
+      'RRHH arma una encuesta con preguntas de distinto tipo (texto, opción única/múltiple, escala) y elige por dónde se responde: enviándola a personas con cuenta en la app, generando un enlace público, o las dos cosas a la vez. Al publicarla, cada destinatario con cuenta recibe un aviso por correo y una notificación dentro de la app (la campanita).',
       'El enlace público lo puede abrir cualquiera, sin cuenta y sin iniciar sesión, desde el computador o el celular — sirve para proveedores, clientes o postulantes. Si necesitas saber quién respondió, agrégalo como una pregunta más de la encuesta.',
       'Desde "Gestión de Encuestas" se copia o se desactiva ese enlace en cualquier momento, y se ven los resultados agregados. Si se cerró por error, "Volver a abrir" la deja otra vez activa sin perder las respuestas. Quien tiene cuenta responde una sola vez.',
     ],

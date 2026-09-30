@@ -38,9 +38,11 @@ import { NotificationConfigController } from './notification-config.controller';
 import { WhatsAppService } from './services/whatsapp.service';
 import { PermissionsModule } from '../permissions/permissions.module';
 import { MailModule } from '../mail/mail.module';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { GoogleAuthService } from '../../common/services/google-auth.service';
 
 @Module({
-  imports: [PrismaModule, PermissionsModule, MailModule],
+  imports: [PrismaModule, PermissionsModule, MailModule, NotificationsModule],
   controllers: [
     PersonalController,
     ContractFileController,
@@ -80,6 +82,7 @@ import { MailModule } from '../mail/mail.module';
     SurveyService,
     NotificationConfigService,
     WhatsAppService,
+    GoogleAuthService,
   ],
   exports: [PersonalService, DriveService],
 })
