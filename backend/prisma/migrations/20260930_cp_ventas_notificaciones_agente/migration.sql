@@ -1,7 +1,9 @@
 -- Lote 2026-09-30: Contratación Pública, pipeline/referidos/responsable de
 -- clientes de Ventas, notificaciones, sedes (CompanyLocation), Base de
--- Conocimiento del agente, agente por defecto (Agent.isDefault) y permisos
--- por mensaje del chat (ChatMessage.sections).
+-- Conocimiento del agente, agente por defecto (Agent.isDefault), permisos
+-- por mensaje del chat (ChatMessage.sections) y copia permanente de archivos
+-- (StoredFile: plantillas .docx y PDFs de contratos, que antes vivían solo en
+-- el disco efímero de Cloud Run).
 --
 -- Aditiva y sin pérdida de datos: solo agrega tablas, columnas, índices y
 -- FKs; lo único que cambia algo existente es SalesClient.email, que pasa a
@@ -83,6 +85,18 @@ CREATE TABLE IF NOT EXISTS "SalesClientStageChange" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "SalesClientStageChange_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE IF NOT EXISTS "StoredFile" (
+    "id" SERIAL NOT NULL,
+    "key" TEXT NOT NULL,
+    "data" BYTEA NOT NULL,
+    "contentType" TEXT NOT NULL,
+    "size" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "StoredFile_pkey" PRIMARY KEY ("id")
 );
 
 CREATE TABLE IF NOT EXISTS "CPEntidadPublica" (
@@ -277,6 +291,8 @@ CREATE INDEX IF NOT EXISTS "SalesClientStage_companyId_idx" ON "SalesClientStage
 CREATE UNIQUE INDEX IF NOT EXISTS "SalesClientStage_companyId_key_key" ON "SalesClientStage"("companyId", "key");
 
 CREATE INDEX IF NOT EXISTS "SalesClientStageChange_salesClientId_idx" ON "SalesClientStageChange"("salesClientId");
+
+CREATE UNIQUE INDEX IF NOT EXISTS "StoredFile_key_key" ON "StoredFile"("key");
 
 CREATE INDEX IF NOT EXISTS "CPEntidadPublica_companyId_idx" ON "CPEntidadPublica"("companyId");
 

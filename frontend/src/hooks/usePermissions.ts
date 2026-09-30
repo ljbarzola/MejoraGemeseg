@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { getMyPermissions } from '../services/permissions.service';
 import { getUser } from '../services/auth.service';
@@ -33,6 +33,8 @@ interface PermissionsState {
   /** Módulos que esta empresa marcó como visibles para todos. */
   fixedSections: string[];
   loading: boolean;
+  /** No se pudieron cargar los permisos (y no hay una carga buena anterior que mostrar). */
+  error: boolean;
 }
 
 const EMPTY: PermissionsState = {
@@ -41,30 +43,57 @@ const EMPTY: PermissionsState = {
   permissions: {},
   fixedSections: [],
   loading: true,
+  error: false,
 };
+
+const REINTENTOS_MS = [1000, 3000];
+const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function usePermissions() {
   const [state, setState] = useState<PermissionsState>(EMPTY);
   const location = useLocation();
 
+  // Última carga buena: si una recarga falla (arranque en frío de Cloud Run,
+  // red), se conserva en vez de vaciar el menú. Antes cualquier fallo dejaba
+  // solo Inicio/Buzón/Encuestas/Proyectos, sin ningún aviso.
+  const lastGood = useRef<PermissionsState | null>(null);
+
   const load = useCallback(async () => {
     const user = getUser();
-    if (!user) { setState({ ...EMPTY, loading: false }); return; }
-    try {
-      const data = await getMyPermissions();
-      const permMap: Record<string, { canView: boolean; canWrite: boolean }> = {};
-      for (const p of data.permissions) {
-        permMap[p.section] = { canView: p.canView, canWrite: p.canWrite };
-      }
-      setState({
-        isSuperAdmin: data.isSuperAdmin,
-        sections: data.sections,
-        permissions: permMap,
-        fixedSections: data.fixedSections || [],
-        loading: false,
-      });
-    } catch {
+    if (!user) {
+      lastGood.current = null;
       setState({ ...EMPTY, loading: false });
+      return;
+    }
+    for (let intento = 0; ; intento++) {
+      try {
+        const data = await getMyPermissions();
+        const permMap: Record<string, { canView: boolean; canWrite: boolean }> = {};
+        for (const p of data.permissions) {
+          permMap[p.section] = { canView: p.canView, canWrite: p.canWrite };
+        }
+        const next: PermissionsState = {
+          isSuperAdmin: data.isSuperAdmin,
+          sections: data.sections,
+          permissions: permMap,
+          fixedSections: data.fixedSections || [],
+          loading: false,
+          error: false,
+        };
+        lastGood.current = next;
+        setState(next);
+        return;
+      } catch (err: any) {
+        // 401 = sesión vencida: el interceptor de auth.service ya cierra la
+        // sesión y manda al login, no tiene sentido reintentar.
+        const status = err?.response?.status;
+        if (status !== 401 && intento < REINTENTOS_MS.length) {
+          await esperar(REINTENTOS_MS[intento]);
+          continue;
+        }
+        setState(lastGood.current ?? { ...EMPTY, loading: false, error: true });
+        return;
+      }
     }
   }, []);
 

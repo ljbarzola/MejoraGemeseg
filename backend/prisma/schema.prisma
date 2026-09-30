@@ -1679,6 +1679,21 @@ model DocumentReviewHistory {
   @@index([companyId, cedula])
 }
 
+/// Copia permanente de archivos que la app genera o recibe (plantillas .docx,
+/// PDFs de contratos). El disco de Cloud Run se borra al reciclarse la
+/// instancia (min-instances=0); el disco queda solo como caché y el contenido
+/// real vive acá. Ver common/utils/stored-file.util.ts.
+model StoredFile {
+  id          Int      @id @default(autoincrement())
+  /// Ruta lógica única, p. ej. "ventas/contracts/12_1790000000000.pdf".
+  key         String   @unique
+  data        Bytes
+  contentType String
+  size        Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model SalesTemplate {
   id               Int      @id @default(autoincrement())
   name             String

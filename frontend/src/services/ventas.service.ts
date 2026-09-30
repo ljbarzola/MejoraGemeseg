@@ -148,8 +148,10 @@ export const updateContract = (id: number, data: any) =>
 export const generateContractPdf = (contractId: number) =>
   api.post(`/ventas/contratos/${contractId}/generate`).then(r => r.data);
 
-export const sendContract = (contractId: number) =>
-  api.post(`/ventas/contratos/${contractId}/send`).then(r => r.data);
+export const sendContract = (
+  contractId: number,
+  email?: { email?: string; subject?: string; message?: string },
+) => api.post(`/ventas/contratos/${contractId}/send`, email ?? {}).then(r => r.data);
 
 export interface SignatureStatus {
   documentId: string;

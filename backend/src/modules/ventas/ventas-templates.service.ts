@@ -8,9 +8,13 @@ import * as path from 'path';
 import * as fs from 'fs';
 import axios from 'axios';
 import JSZip from 'jszip';
-
-const TEMPLATES_DIR = path.resolve(process.cwd(), 'uploads', 'templates');
-const CONTRACTS_DIR = path.resolve(process.cwd(), 'uploads', 'contracts');
+import {
+  TEMPLATES_DIR,
+  CONTRACTS_DIR,
+  saveTemplateDocx,
+  loadTemplateDocx,
+  deleteTemplateDocx,
+} from './ventas-files.util';
 
 @Injectable()
 export class VentasTemplatesService {
@@ -92,9 +96,7 @@ export class VentasTemplatesService {
       );
     }
 
-    // Delete files
-    if (template.docxPath && fs.existsSync(template.docxPath))
-      fs.unlinkSync(template.docxPath);
+    await deleteTemplateDocx(this.prisma, template.docxPath);
 
     return this.prisma.salesTemplate.delete({ where: { id } });
   }
@@ -201,16 +203,27 @@ export class VentasTemplatesService {
   }
 
   private async saveDocx(templateId: number, buffer: Buffer) {
-    const fileName = `${Date.now()}.docx`;
-    const filePath = path.join(TEMPLATES_DIR, fileName);
-    fs.writeFileSync(filePath, buffer);
+    const previous = await this.prisma.salesTemplate.findUnique({
+      where: { id: templateId },
+      select: { docxPath: true },
+    });
+    const filePath = await saveTemplateDocx(this.prisma, templateId, buffer);
 
     await this.prisma.salesTemplate.update({
       where: { id: templateId },
       data: { docxPath: filePath },
     });
+    // La versión anterior ya no la usa nadie: no dejarla ocupando la base.
+    if (previous?.docxPath && previous.docxPath !== filePath) {
+      await deleteTemplateDocx(this.prisma, previous.docxPath);
+    }
 
-    return { success: true, fileName, filePath, size: buffer.length };
+    return {
+      success: true,
+      fileName: path.basename(filePath),
+      filePath,
+      size: buffer.length,
+    };
   }
 
   private extractDriveFileId(url: string): string | null {
@@ -234,11 +247,12 @@ export class VentasTemplatesService {
     if (companyId) where.companyId = companyId;
     const template = await this.prisma.salesTemplate.findFirst({ where });
     if (!template) throw new NotFoundException('Plantilla no encontrada');
-    if (!template.docxPath || !fs.existsSync(template.docxPath)) {
-      throw new BadRequestException('Primero descarga el documento de Drive');
+    const docxBuffer = await loadTemplateDocx(this.prisma, template);
+    if (!docxBuffer) {
+      throw new BadRequestException(
+        'La plantilla no tiene documento. Descárgalo de Drive o sube el .docx primero.',
+      );
     }
-
-    const docxBuffer = fs.readFileSync(template.docxPath);
     const zip = await JSZip.loadAsync(docxBuffer);
 
     // Extract plain text from all XML files (handles split runs)

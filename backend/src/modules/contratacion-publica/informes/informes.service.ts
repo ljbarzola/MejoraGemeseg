@@ -14,6 +14,15 @@ import { CreateInformeDto } from './dto/create-informe.dto';
 import { UpdateInformeDto } from './dto/update-informe.dto';
 import { UpdatePlantillaDto } from './dto/update-plantilla.dto';
 import { downloadDocxFromDriveLink } from '../../../common/utils/drive-docx.util';
+import {
+  readStoredFile,
+  saveStoredFile,
+} from '../../../common/utils/stored-file.util';
+
+const DOCX_MIME =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const plantillaKey = (companyId: number) =>
+  `cp/plantilla-informe/empresa-${companyId}.docx`;
 
 const execFileAsync = promisify(execFile);
 
@@ -196,19 +205,27 @@ export class CPInformesService {
       CP_INFORMES_DIR,
       `plantilla-empresa-${companyId}.docx`,
     );
-    fs.writeFileSync(docxPath, buffer);
+    // Copia permanente en la base: sobrevive a los reinicios de Cloud Run y
+    // a que después dejen de compartir el enlace de Drive.
+    await saveStoredFile(this.prisma, plantillaKey(companyId), docxPath, buffer, DOCX_MIME);
     return docxPath;
   }
 
   /**
-   * En Cloud Run el disco se pierde cuando la instancia se recicla
-   * (min-instances=0), así que el .docx descargado puede no estar aunque
-   * docxPath esté guardado. En ese caso se vuelve a bajar del enlace.
+   * Disco → copia permanente (StoredFile) → como último recurso, se vuelve a
+   * bajar del enlace (plantillas guardadas antes de existir la copia
+   * permanente, cuyo archivo se perdió en un reinicio de Cloud Run).
    */
   private async getPlantillaDocx(companyId: number): Promise<Buffer> {
     const plantilla = await this.getPlantilla(companyId);
-    if (plantilla?.docxPath && fs.existsSync(plantilla.docxPath)) {
-      return fs.readFileSync(plantilla.docxPath);
+    if (plantilla?.docxPath) {
+      const stored = await readStoredFile(
+        this.prisma,
+        plantillaKey(companyId),
+        plantilla.docxPath,
+        DOCX_MIME,
+      );
+      if (stored) return stored;
     }
     if (!plantilla?.driveUrl) {
       throw new BadRequestException(

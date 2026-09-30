@@ -9,7 +9,7 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme } = useCompany();
-  const { canView, isSuperAdmin } = usePerm();
+  const { canView, isSuperAdmin, error: permError, reload: reloadPerms } = usePerm();
   const user = getUser();
   const isAdmin = user?.role === 'ADMIN';
   const isCompanyAdmin = isAdmin && !!user?.companyId;
@@ -175,6 +175,12 @@ export default function Sidebar() {
       </div>
 
       <nav className="sidebar-nav">
+        {permError && !collapsed && (
+          <div className="sidebar-perm-error" role="alert">
+            No se pudieron cargar todos tus módulos.
+            <button type="button" onClick={() => reloadPerms()}>Reintentar</button>
+          </div>
+        )}
         {navItems.filter(item => item.show).map(item => (
           <button
             key={item.path}

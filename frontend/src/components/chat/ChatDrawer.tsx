@@ -14,6 +14,7 @@ import {
 import { getAvailableAgents, setActiveAgent } from '../../services/agent.service';
 import type { Agent } from '../../types/agent';
 import ConfirmDialog from '../common/ConfirmDialog';
+import ChatMarkdown from './ChatMarkdown';
 
 interface ChatDrawerProps {
   isOpen: boolean;
@@ -285,7 +286,9 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
                     <div className="chat-msg-avatar">{getAgentEmoji(currentAgent)}</div>
                   )}
                   <div className="chat-msg-bubble">
-                    <div className="chat-msg-text">{msg.content}</div>
+                    <div className="chat-msg-text">
+                      {msg.role === 'assistant' ? <ChatMarkdown text={msg.content} /> : msg.content}
+                    </div>
                     <div className="chat-msg-time">
                       {msg.timestamp.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}
                     </div>

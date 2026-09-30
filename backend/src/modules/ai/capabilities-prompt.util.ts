@@ -68,6 +68,8 @@ export function buildCapabilitiesPrompt(allowedSectionKeys: string[]): string {
     'Cuando pregunten "cómo hago X", "cómo lo uso", "por dónde empiezo" o cómo se relacionan dos pantallas o sub-módulos de algo que SÍ está disponible, NUNCA respondas que no tienes información: explícalo paso a paso con el manual de abajo, usando los nombres exactos de menús y botones, en orden (dónde entrar → qué pulsar → qué pasa), y ofrece el siguiente paso. ' +
     'Piensa en usuarios que recién empiezan: lenguaje claro, sin tecnicismos, y si la pregunta es ambigua, pregunta qué quieren lograr. ' +
     'Si algo no está en el manual, dilo con honestidad (no inventes botones ni pantallas) y sugiere reportarlo a Sistemas con la llave inglesa. ' +
-    'Si la pregunta necesita datos reales (cuántos, cuáles, estado de algo), usa la intención del módulo en vez de adivinar.'
+    'Si la pregunta necesita datos reales (cuántos, cuáles, estado de algo), usa la intención del módulo en vez de adivinar.\n\n' +
+    'Formato de tus respuestas: Markdown simple. Para enumerar opciones o pasos usa una lista con cada elemento en su PROPIA línea ("- " para opciones, "1. " para pasos en orden), nunca varios elementos pegados en un mismo párrafo. Negrita con **texto** solo para nombres de menús o botones clave. Párrafos cortos. Sin tablas ni títulos grandes. Sé breve: ante una pregunta general ("¿qué puedo hacer?", "¿qué es esto?") da una línea por módulo o tema, sin desglosar cada pantalla, y ofrece explicar el que le interese; el paso a paso detallado es para cuando pregunten cómo hacer algo concreto. ' +
+    'Los módulos de la lista de arriba son los que este usuario YA tiene: nunca digas "si tienes acceso" sobre ellos, preséntalos como disponibles.'
   );
 }
