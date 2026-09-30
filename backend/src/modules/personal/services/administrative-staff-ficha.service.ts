@@ -80,11 +80,15 @@ export class AdministrativeStaffFichaService {
   ) {}
 
   async get(companyId: number, cedula: string) {
-    const [ficha, fieldDefs] = await Promise.all([
+    const [ficha, fieldDefs, carpeta] = await Promise.all([
       this.prisma.administrativeStaffFicha.findUnique({
         where: { companyId_cedula: { companyId, cedula } },
       }),
       this.personalFieldDefinitionService.findAll(companyId, 'PERSONAL_ADMIN'),
+      this.prisma.employeeDriveFolder.findUnique({
+        where: { companyId_cedula: { companyId, cedula } },
+        select: { puesto: true },
+      }),
     ]);
     const campos = backfillLegacyColumns(
       resolverCamposConPostulacion(
@@ -93,6 +97,12 @@ export class AdministrativeStaffFichaService {
       ),
       ficha,
     );
+    // El puesto que ya muestra el listado (viene del nombre de la carpeta de
+    // Drive) se rescata la primera vez, para que el campo no aparezca vacío
+    // ni como "campo por completar" cuando en realidad sí lo tiene.
+    if (!String(campos.puesto ?? '').trim() && carpeta?.puesto?.trim()) {
+      campos.puesto = carpeta.puesto.trim();
+    }
     const cedulaVisible = cedulaMostrable(cedula);
     if (ficha) return { ...ficha, camposPersonalizados: campos, cedulaVisible };
     return {
@@ -156,6 +166,15 @@ export class AdministrativeStaffFichaService {
       create: { companyId, cedula, ...payload },
       update: payload,
     });
+
+    // La columna "Puesto" del listado lee EmployeeDriveFolder.puesto: se
+    // mantiene en sincronía con el campo de la ficha para que no se desfasen.
+    if (campos.puesto !== undefined) {
+      await this.prisma.employeeDriveFolder.updateMany({
+        where: { companyId, cedula },
+        data: { puesto: String(campos.puesto).trim() || null },
+      });
+    }
 
     if (data.cedulaIngresada === undefined) return ficha;
 

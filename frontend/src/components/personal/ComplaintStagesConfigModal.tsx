@@ -181,7 +181,7 @@ export default function ComplaintStagesConfigModal({ onClose, onChanged }: Props
           ) : (
             <>
               {sortedStages.length === 0 ? (
-                <p style={{ fontSize: '0.82rem', color: '#a0aec0', marginBottom: '16px' }}>Sin etapas configuradas.</p>
+                <p style={{ fontSize: '0.82rem', color: '#a0aec0', marginBottom: '16px' }}>Sin etapas configuradas. La primera que agregues será la etapa inicial.</p>
               ) : (
                 <div style={{ marginBottom: '16px' }}>
                   {sortedStages.map((stage, idx) => (

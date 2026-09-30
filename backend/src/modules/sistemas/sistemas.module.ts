@@ -5,9 +5,10 @@ import { SistemasService } from './sistemas.service';
 import { SistemasDriveService } from './services/sistemas-drive.service';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { PermissionsModule } from '../permissions/permissions.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [PrismaModule, PermissionsModule],
+  imports: [PrismaModule, PermissionsModule, NotificationsModule],
   controllers: [SistemasController, SistemasConfigController],
   providers: [SistemasService, SistemasDriveService],
 })

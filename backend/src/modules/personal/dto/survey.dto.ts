@@ -96,6 +96,20 @@ export class SubmitSurveyResponseDto {
 // la encuesta lo pida como una pregunta mas.
 export class SubmitPublicSurveyResponseDto extends SubmitSurveyResponseDto {}
 
+// Cambios de destinatarios de una encuesta ya creada. Solo afecta a quienes
+// aún no responden (el service rechaza quitar a quien ya respondió).
+export class UpdateSurveyRecipientsDto {
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  add?: number[];
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  remove?: number[];
+}
+
 export class SetSurveyPublicLinkDto {
   @IsBoolean()
   enabled: boolean;

@@ -304,13 +304,14 @@ export default function SurveyManagementPage() {
                         {STATUS_LABEL[s.status]}
                       </span>
                     </td>
-                    {/* Una encuesta solo de enlace público no tiene
-                        destinatarios, así que "3 / 0" no querría decir nada:
-                        en ese caso se muestra el total a secas. */}
-                    <td>
-                      {(s._count?.recipients ?? 0) > 0
-                        ? `${s._count?.responses ?? 0} / ${s._count?.recipients}`
-                        : `${s._count?.responses ?? 0}`}
+                    {/* "App" cuenta solo a los destinatarios asignados (x / y);
+                        el enlace público no tiene total, así que va aparte. */}
+                    <td style={{ fontSize: '0.8rem', lineHeight: 1.5 }}>
+                      {(s._count?.recipients ?? 0) > 0 && (
+                        <div>App: {s.recipientsResponded ?? 0} / {s._count?.recipients}</div>
+                      )}
+                      {s.publicEnabled && <div>Enlace: {s.publicResponses ?? 0}</div>}
+                      {(s._count?.recipients ?? 0) === 0 && !s.publicEnabled && '—'}
                     </td>
                     {/* Solo la acción principal queda a la vista; el resto
                         vive en el menú. Antes había hasta cinco botones
@@ -386,7 +387,7 @@ export default function SurveyManagementPage() {
       </div>
 
       {showBuilder && <SurveyBuilderModal onClose={() => setShowBuilder(false)} onCreated={load} />}
-      {resultsId !== null && <SurveyResultsModal surveyId={resultsId} onClose={() => setResultsId(null)} />}
+      {resultsId !== null && <SurveyResultsModal surveyId={resultsId} onClose={() => setResultsId(null)} onChanged={load} />}
 
       {confirmandoCerrar && (
         <ConfirmDialog

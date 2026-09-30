@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
-import { ArrowLeft, RefreshCw, Settings, FileCog, X, IdCard } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Settings, FileCog, X, IdCard, UserPlus } from 'lucide-react';
+import { usePerm } from '../../contexts/PermissionsContext';
 import { extractDriveFolderId, buildDriveFolderLink } from '../../utils/driveLink';
 import { formatFechaHoraSync } from '../../utils/formatFechaHora';
 import {
@@ -17,6 +18,7 @@ import {
 } from '../../services/personal.service';
 import AdministrativoDetalleModal from '../../components/personal/AdministrativoDetalleModal';
 import AdministrativeStaffConfigModal from '../../components/personal/AdministrativeStaffConfigModal';
+import NuevoPersonalAdministrativoModal from '../../components/personal/NuevoPersonalAdministrativoModal';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import OpenFolderButton from '../../components/common/OpenFolderButton';
 
@@ -32,6 +34,10 @@ interface StaffRow {
 
 export default function AdministrativeStaff() {
   const navigate = useNavigate();
+  const { canWrite } = usePerm();
+  const canEdit = canWrite('RRHH');
+  const [showNuevo, setShowNuevo] = useState(false);
+  const [nuevoOk, setNuevoOk] = useState('');
   const tablaRef = useResizableColumns('personal-administrativo');
   const [staff, setStaff] = useState<StaffRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -205,6 +211,11 @@ export default function AdministrativeStaff() {
 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
             <div className="header-actions">
+              {canEdit && (
+                <button className="auth-btn" onClick={() => { setNuevoOk(''); setShowNuevo(true); }}>
+                  <UserPlus size={16} /> Nuevo
+                </button>
+              )}
               <button className="btn-secondary" onClick={handleSync} disabled={syncing}>
                 <RefreshCw size={16} className={syncing ? 'spin' : undefined} />
                 {syncing ? 'Sincronizando...' : 'Sincronizar'}
@@ -241,6 +252,10 @@ export default function AdministrativeStaff() {
         <div ref={deleteErrorRef} style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginTop: '16px', fontSize: '0.85rem' }}>{deleteError}</div>
       )}
 
+      {nuevoOk && (
+        <div style={{ background: '#f0fff4', border: '1px solid #c6f6d5', color: '#276749', borderRadius: '8px', padding: '10px 14px', marginTop: '16px', fontSize: '0.85rem' }}>{nuevoOk}</div>
+      )}
+
       {syncError && (
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginTop: '16px', fontSize: '0.85rem' }}>{syncError}</div>
       )}
@@ -251,9 +266,9 @@ export default function AdministrativeStaff() {
         ) : staff.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 32px', color: '#a0aec0' }}>
             <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>📂</div>
-            <p>No hay personal administrativo en Drive</p>
+            <p>No hay personal administrativo todavía</p>
             <p style={{ fontSize: '0.8rem', marginTop: '8px' }}>
-              Configura la carpeta (tuerca) y sincroniza para importar
+              {canEdit ? 'Crea a la primera persona con "Nuevo", o configura la carpeta (tuerca) y sincroniza para importar' : 'Configura la carpeta (tuerca) y sincroniza para importar'}
             </p>
           </div>
         ) : (
@@ -315,6 +330,17 @@ export default function AdministrativeStaff() {
           </div>
         )}
       </div>
+
+      {showNuevo && (
+        <NuevoPersonalAdministrativoModal
+          onClose={() => setShowNuevo(false)}
+          onCreated={(nombre) => {
+            setShowNuevo(false);
+            setNuevoOk(`${nombre} se agregó al listado y su carpeta quedó creada en Drive.`);
+            loadStaff();
+          }}
+        />
+      )}
 
       <AdministrativoDetalleModal
         employee={selectedEmployee}

@@ -348,8 +348,14 @@ export class VentasClientesService {
       where: { companyId },
     });
 
+    // La primera etapa de la empresa es siempre la inicial (si no, la
+    // validación la rechazaría por falta de etapa inicial).
+    const esPrimera = count === 0;
+    const isInitial = esPrimera ? true : (data.isInitial ?? false);
+    const isFinal = esPrimera ? false : (data.isFinal ?? false);
+
     return this.prisma.$transaction(async (tx) => {
-      if (data.isInitial) {
+      if (isInitial) {
         await tx.salesClientStage.updateMany({
           where: { companyId, isInitial: true },
           data: { isInitial: false },
@@ -362,8 +368,8 @@ export class VentasClientesService {
           label: data.label.trim(),
           color: data.color || '#718096',
           order: data.order ?? count,
-          isInitial: data.isInitial ?? false,
-          isFinal: data.isFinal ?? false,
+          isInitial,
+          isFinal,
         },
       });
       await this.validarIntegridadEtapas(tx, companyId);

@@ -72,6 +72,7 @@ const MODULOS_INDEPENDIENTES: Submodulo[] = [
     parrafos: [
       'Igual que Cumplimiento (checklist de documentos con semáforo), pero para personal de oficina en vez de guardias. Vive en una carpeta de Drive separada de la de Guardias (esa sí se configura aquí con la tuerca), así que es independiente de los pasos 1 a 6.',
       'Se nombra igual que en Guardias: "Apellidos Nombres". Al sincronizar, una carpeta con ese nombre entra a la lista y se le crea el archivo de datos solo con apellidos y nombres. La cédula queda vacía hasta que se escriba en Datos generales, junto con apellidos, nombres y correo de contacto.',
+      'Para agregar a alguien sin esperar a que exista su carpeta, usa el botón "Nuevo": escribes apellidos, nombres y, si quieres, cédula y puesto, y el sistema crea su carpeta en Drive y lo deja en el listado. El puesto se puede editar después en Datos laborales de su ficha.',
     ],
   },
   {
@@ -88,6 +89,7 @@ const MODULOS_INDEPENDIENTES: Submodulo[] = [
     parrafos: [
       'Cualquier empleado puede enviar una queja o sugerencia, identificado o de forma anónima, sin necesitar acceso a RRHH.',
       'RRHH la gestiona en un tablero arrastrable con 5 etapas (recibida, sensibilización, comunicación, solución, cerrada) desde "Gestión de Quejas y Sugerencias", y puede agregar campos extra al formulario de envío (ej. Departamento).',
+      'En el botón de etapas se pueden cambiar, agregar o quitar las columnas del tablero. La primera etapa que se crea queda como etapa inicial (la de la estrella): ahí entra toda queja nueva.',
     ],
   },
   {
@@ -97,6 +99,7 @@ const MODULOS_INDEPENDIENTES: Submodulo[] = [
       'RRHH arma una encuesta con preguntas de distinto tipo (texto, opción única/múltiple, escala) y elige por dónde se responde: enviándola a personas con cuenta en la app, generando un enlace público, o las dos cosas a la vez. Al publicarla, cada destinatario con cuenta recibe un aviso por correo y una notificación dentro de la app (la campanita).',
       'El enlace público lo puede abrir cualquiera, sin cuenta y sin iniciar sesión, desde el computador o el celular — sirve para proveedores, clientes o postulantes. Si necesitas saber quién respondió, agrégalo como una pregunta más de la encuesta.',
       'Desde "Gestión de Encuestas" se copia o se desactiva ese enlace en cualquier momento, y se ven los resultados agregados. Si se cerró por error, "Volver a abrir" la deja otra vez activa sin perder las respuestas. Quien tiene cuenta responde una sola vez.',
+      'En los resultados se cuenta cada canal por separado: "a través de la app" dice cuántos de los destinatarios ya respondieron (con porcentaje) y "a través del enlace" solo cuántas respuestas llegaron, porque por enlace no hay un total definido. La pestaña "Destinatarios" muestra a quién se le asignó y quién ya respondió; allí se puede quitar a quienes aún no responden y agregar gente nueva (recibe un aviso en la app). Quien ya respondió no se puede quitar y su respuesta se conserva.',
     ],
   },
 ];

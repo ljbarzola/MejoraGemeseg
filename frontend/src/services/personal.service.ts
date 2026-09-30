@@ -213,6 +213,8 @@ export const saveDriveConfig = (data: { driveFolderId: string; type?: string }) 
 export const testDriveConnection = (data?: { driveFolderId?: string; type?: string }) => api.post('/personal/drive/test', data || {}).then(r => r.data);
 export const syncDriveFolder = () => api.post('/personal/drive/sync').then(r => r.data);
 export const syncPersonalAdminFolder = () => api.post('/personal/drive/sync-personal-admin').then(r => r.data);
+export const crearPersonalAdministrativo = (data: { apellidos: string; nombres: string; cedula?: string; puesto?: string }) =>
+  api.post('/personal/drive/personal-admin', data).then(r => r.data);
 export const getDriveCompliance = (cedula: string) => api.get(`/personal/drive/compliance/${cedula}`).then(r => r.data);
 export const getDriveTree = () => api.get('/personal/drive/tree').then(r => r.data);
 export const deleteDriveEmployee = (cedula: string) => api.delete(`/personal/drive/employee/${cedula}`).then(r => r.data);
@@ -449,6 +451,10 @@ export interface Survey {
   createdAt: string;
   creator?: { id: number; fullName: string };
   _count?: { recipients: number; responses: number };
+  // Solo en el listado: de los destinatarios asignados, cuántos respondieron
+  // por la app, y cuántas respuestas llegaron aparte por el enlace público.
+  recipientsResponded?: number;
+  publicResponses?: number;
   questions?: SurveyQuestion[];
   recipients?: { id: number; user: { id: number; fullName: string; email: string }; respondedAt: string | null }[];
 }
@@ -469,6 +475,10 @@ export interface SurveyResults {
   title: string;
   status: SurveyStatus;
   totalRecipients: number;
+  /** De los destinatarios asignados, cuántos ya respondieron por la app. */
+  recipientsResponded: number;
+  /** Respuestas por el enlace público (sin total definido). */
+  publicResponses: number;
   totalResponses: number;
   questions: SurveyResultQuestion[];
 }
@@ -489,6 +499,8 @@ export const publishSurvey = (id: number): Promise<Survey> =>
 
 export const setSurveyPublicLink = (id: number, enabled: boolean): Promise<Survey> =>
   api.patch(`/personal/surveys/${id}/public-link`, { enabled }).then(r => r.data);
+export const updateSurveyRecipients = (id: number, data: { add?: number[]; remove?: number[] }): Promise<Survey> =>
+  api.patch(`/personal/surveys/${id}/recipients`, data).then(r => r.data);
 export const closeSurvey = (id: number): Promise<Survey> => api.patch(`/personal/surveys/${id}/close`).then(r => r.data);
 export const reopenSurvey = (id: number): Promise<Survey> => api.patch(`/personal/surveys/${id}/reopen`).then(r => r.data);
 export const deleteSurvey = (id: number) => api.delete(`/personal/surveys/${id}`);

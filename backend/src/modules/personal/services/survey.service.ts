@@ -128,6 +128,7 @@ export class SurveyService {
     surveyTitle: string,
     recipientUserIds: number[],
     companyId: number,
+    enviarCorreo = true,
   ) {
     if (recipientUserIds.length === 0) return;
 
@@ -157,7 +158,7 @@ export class SurveyService {
         );
       }
 
-      if (!user.email) continue;
+      if (!enviarCorreo || !user.email) continue;
       try {
         await this.gmailMailService.sendMail({
           to: user.email,
@@ -328,11 +329,114 @@ export class SurveyService {
       where: { companyId },
       include: {
         _count: { select: { recipients: true, responses: true } },
+        // Solo respondedAt: para contar cuántos destinatarios ya respondieron
+        // sin traer la lista completa al listado.
+        recipients: { select: { respondedAt: true } },
         creator: { select: { id: true, fullName: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
-    return surveys;
+
+    // Las respuestas por enlace público (respondentId null) no pertenecen a
+    // ningún destinatario: se cuentan aparte para no inflar el porcentaje de
+    // "quién respondió de los asignados".
+    const porEnlace = surveys.length
+      ? await this.prisma.surveyResponse.groupBy({
+          by: ['surveyId'],
+          where: { surveyId: { in: surveys.map((s) => s.id) }, respondentId: null },
+          _count: { _all: true },
+        })
+      : [];
+    const porEnlaceMap = new Map(porEnlace.map((g) => [g.surveyId, g._count._all]));
+
+    return surveys.map(({ recipients, ...s }) => ({
+      ...s,
+      recipientsResponded: recipients.filter((r) => r.respondedAt).length,
+      publicResponses: porEnlaceMap.get(s.id) ?? 0,
+    }));
+  }
+
+  /**
+   * Agrega o quita destinatarios de una encuesta ya creada. Solo toca a quienes
+   * aún no responden: quien ya respondió no se puede quitar, porque su
+   * respuesta queda guardada y desaparecería del conteo de "asignados".
+   */
+  async updateRecipients(
+    id: number,
+    companyId: number,
+    dto: { add?: number[]; remove?: number[] },
+  ) {
+    const survey = await this.prisma.survey.findFirst({
+      where: { id, companyId },
+      include: {
+        recipients: {
+          include: { user: { select: { id: true, fullName: true } } },
+        },
+      },
+    });
+    if (!survey) throw new NotFoundException('Encuesta no encontrada');
+    if (survey.status === 'CLOSED') {
+      throw new BadRequestException(
+        'La encuesta está cerrada. Vuelve a abrirla para cambiar sus destinatarios.',
+      );
+    }
+
+    const actuales = new Map(survey.recipients.map((r) => [r.userId, r]));
+    const remove = [...new Set(dto.remove ?? [])].filter((uid) => actuales.has(uid));
+    const yaResponden = remove
+      .map((uid) => actuales.get(uid)!)
+      .filter((r) => r.respondedAt);
+    if (yaResponden.length > 0) {
+      throw new BadRequestException(
+        `No se puede quitar a ${yaResponden
+          .map((r) => r.user.fullName)
+          .join(', ')}: ya respondió y su respuesta se conserva.`,
+      );
+    }
+
+    const addIds = [...new Set(dto.add ?? [])].filter((uid) => !actuales.has(uid));
+    const nuevos = addIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: addIds }, companyId },
+          select: { id: true },
+        })
+      : [];
+    if (addIds.length > 0 && nuevos.length === 0) {
+      throw new BadRequestException(
+        'Ninguno de los usuarios seleccionados pertenece a tu empresa.',
+      );
+    }
+
+    const quedan = survey.recipients.length - remove.length + nuevos.length;
+    if (survey.status === 'PUBLISHED' && quedan === 0 && !survey.publicEnabled) {
+      throw new BadRequestException(
+        'La encuesta quedaría sin destinatarios y sin enlace público: no le llegaría a nadie. Deja al menos un destinatario o activa el enlace público.',
+      );
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.surveyRecipient.deleteMany({
+        where: { surveyId: id, userId: { in: remove }, respondedAt: null },
+      }),
+      this.prisma.surveyRecipient.createMany({
+        data: nuevos.map((u) => ({ surveyId: id, userId: u.id })),
+        skipDuplicates: true,
+      }),
+    ]);
+
+    // En borrador nadie la ve todavía: se les avisa al publicarla. Solo aviso
+    // dentro de la app, sin correo: el resto de los destinatarios ya la tiene.
+    if (survey.status === 'PUBLISHED' && nuevos.length > 0) {
+      await this.notifyRecipients(
+        survey.id,
+        survey.title,
+        nuevos.map((u) => u.id),
+        companyId,
+        false,
+      );
+    }
+
+    return this.findOne(id, companyId);
   }
 
   async findOne(id: number, companyId: number) {
@@ -558,6 +662,11 @@ export class SurveyService {
       title: survey.title,
       status: survey.status,
       totalRecipients: survey.recipients.length,
+      // De los asignados, cuántos ya respondieron por la app.
+      recipientsResponded: survey.recipients.filter((r) => r.respondedAt).length,
+      // Por el enlace público no hay total definido: solo se cuenta lo recibido.
+      publicResponses: survey.responses.filter((r) => r.respondentId === null)
+        .length,
       totalResponses: survey.responses.length,
       questions: questionResults,
     };
@@ -597,6 +706,9 @@ export class SurveyService {
       title: survey.title,
       status: survey.status,
       totalRecipients: survey.recipients.length,
+      recipientsResponded: survey.recipients.filter((r) => r.respondedAt).length,
+      publicResponses: survey.responses.filter((r) => r.respondentId === null)
+        .length,
       totalResponses: survey.responses.length,
       questions: survey.questions.map((q) => ({
         questionId: q.id,
