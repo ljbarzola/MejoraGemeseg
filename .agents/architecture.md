@@ -11,7 +11,7 @@ MejoraGemeseg es una plataforma web multi-tenant para gestionar procesos interno
 - **Base de datos:** PostgreSQL 17
 - **Auth:** Passport.js (JWT, expira 7 dias) + bcryptjs (salt 10)
 - **Validacion:** class-validator + class-transformer
-- **IA:** GitHub Models (`gpt-4o-mini`)
+- **IA:** Google Vertex AI (Gemini) — chat "Agente Gemeseg" (`GOOGLE_VERTEX_CHAT_MODEL`) y revisión de documentos de RRHH (`GOOGLE_VERTEX_MODEL`), ver `.agents/modules/agents-ai.md`. GitHub Models se retiró del chat el 2026-09-29 (seguía en uso solo por `DocumentExtractionService` de RRHH, pendiente de migrar).
 - **PDF:** PDFKit (custodias: orden, nomina, rol de pago)
 
 ### Frontend

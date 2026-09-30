@@ -44,6 +44,16 @@ model Company {
   salesClientFields         SalesClientField[]
   entidades                 Entidad[]
   requisitosDocumento       RequisitoDocumento[]
+  cpEntidadesPublicas       CPEntidadPublica[]
+  cpContratos               CPContrato[]
+  cpPuestosServicio         CPPuestoServicio[]
+  cpCodigosTurno            CPCodigoTurno[]
+  cpHorariosMensuales       CPHorarioMensual[]
+  cpInformesMensuales       CPInformeMensual[]
+  cpTextosInstitucionales   CPTextoInstitucional[]
+  cpPlantillaInforme        CPPlantillaInforme?
+  locations                 CompanyLocation[]
+  knowledgeBase             CompanyKnowledgeBase?
   asignacionesGuardia       AsignacionGuardia[]
   alertasVencimiento        AlertaVencimiento[]
   guardiaContactos          GuardiaContacto[]
@@ -60,6 +70,9 @@ model Company {
   notificationConfigs       NotificationConfig[]
   ticketsSoporte            TicketSoporte[]
   sistemasDriveConfig       SistemasDriveConfig?
+  salesClientStages         SalesClientStage[]
+  salesClientStageChanges   SalesClientStageChange[]
+  notifications             Notification[]
 }
 
 model Department {
@@ -95,6 +108,7 @@ model User {
   role                               UserRole                 @default(EMPLOYEE)
   activeAgentId                      Int?
   companyId                          Int?
+  locationId                         Int?
   aiLogs                             AiLog[]
   conversations                      Conversation[]
   createdProjects                    Project[]
@@ -104,6 +118,7 @@ model User {
   toolAudits                         ToolAuditLog[]
   activeAgent                        Agent?                   @relation("UserActiveAgent", fields: [activeAgentId], references: [id])
   company                            Company?                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  location                           CompanyLocation?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
   department                         Department?              @relation(fields: [departmentId], references: [id])
   roleRelation                       Role?                    @relation(fields: [roleId], references: [id])
   agentLinks                         UserAgent[]
@@ -133,6 +148,13 @@ model User {
   surveyRecipientOf                  SurveyRecipient[]
   surveyResponses                    SurveyResponse[]         @relation("SurveyRespondent")
   ticketsSoporteCreados              TicketSoporte[]
+  cpContratosCreados                 CPContrato[]
+  cpHorariosCreados                  CPHorarioMensual[]
+  cpInformesCreados                  CPInformeMensual[]
+  referredSalesClients               SalesClient[]            @relation("SalesClientReferrer")
+  assignedSalesClients               SalesClient[]            @relation("SalesClientAssignee")
+  salesClientStageChanges            SalesClientStageChange[]
+  notifications                      Notification[]
 }
 
 model Project {
@@ -195,6 +217,13 @@ model Agent {
   createdBy     Int?
   instructions  String
   scope         String         @default("GLOBAL")
+  // Agente que ChatDrawer usa por defecto cuando el usuario no eligió otro
+  // ("Agente Gemeseg"). Antes se buscaba por name === 'Agente GEMESEG', que se
+  // rompía en cuanto alguien renombraba el agente — este flag lo desacopla del
+  // texto visible. Solo debería haber un Agent con isDefault: true a la vez
+  // (se hace cumplir en el servicio, no acá, como ya se hace con
+  // CompanySection.fixedForAll en PermissionsService.setFixedSections).
+  isDefault     Boolean        @default(false)
   updatedAt     DateTime       @updatedAt
   conversations Conversation[]
   activeUsers   User[]         @relation("UserActiveAgent")
@@ -236,6 +265,8 @@ model ChatMessage {
   content        String
   tokensUsed     Int?
   model          String?
+  /// Secciones que el usuario podía ver cuando se generó el mensaje (ordenadas, por coma). null = mensaje anterior a 2026-09-30.
+  sections       String?
   createdAt      DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -592,18 +623,48 @@ model PasswordResetCode {
   @@index([userId])
 }
 
-model CompanySection {
+// Catálogo de ubicaciones (oficinas/sedes) propio de cada empresa, editable
+// desde el modal "Editar usuario" en Administración → Gestionar usuarios.
+// Mismo patrón que PersonalFieldDefinition/JobPosition: tabla chica,
+// administrable por el ADMIN de cada empresa, sin mezclarse entre empresas.
+model CompanyLocation {
   id        Int      @id @default(autoincrement())
   companyId Int
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  section   String
+  nombre    String
+  createdAt DateTime @default(now())
+  users     User[]
+
+  @@unique([companyId, nombre])
+  @@index([companyId])
+}
+
+// Documento único por empresa con información institucional (políticas,
+// procesos) que Agente Gemeseg usa como contexto. Se escribe en Markdown con
+// encabezados `## SECCION` para que el backend pueda mostrar cada bloque solo
+// a quien tiene acceso a esa sección de permisos (ver knowledge-base.util.ts)
+// — `## GENERAL` y el texto antes del primer encabezado se muestran siempre.
+model CompanyKnowledgeBase {
+  id              Int      @id @default(autoincrement())
+  companyId       Int      @unique
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  content         String
+  updatedAt       DateTime @updatedAt
+  updatedByUserId Int?
+}
+
+model CompanySection {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  section     String
   // true = esta sección la ven TODOS los usuarios de la empresa y no se puede
   // negar uno por uno. Lo decide el administrador de cada empresa desde
   // Administración → Permisos → ⚙ Módulos fijos. Es distinto de
   // `siempreVisible` en ALL_SECTIONS, que es una decisión de producto fija en
   // código (Inicio, Proyectos) e igual para todas las empresas.
-  fixedForAll Boolean @default(false)
-  createdAt DateTime @default(now())
+  fixedForAll Boolean  @default(false)
+  createdAt   DateTime @default(now())
 
   @@unique([companyId, section])
 }
@@ -736,28 +797,28 @@ model Contract {
 // completada una sola vez (completed/completedAt/completedBy), no hay
 // seguimiento de qué guardia específico asistió — ver TrainingService.
 model Training {
-  id           Int                  @id @default(autoincrement())
-  name         String
+  id            Int                  @id @default(autoincrement())
+  name          String
   // Categoría de la capacitación (ej. "INDUCCION", "SEGURIDAD_FISICA",
   // "OTRO" + texto libre) — se maneja como catálogo en el frontend, no como
   // enum de Prisma, para poder agregar tipos nuevos sin migración.
-  type         String               @default("OTRO")
-  description  String?
-  dueDate      DateTime?
-  isAnnualPlan Boolean              @default(false)
+  type          String               @default("OTRO")
+  description   String?
+  dueDate       DateTime?
+  isAnnualPlan  Boolean              @default(false)
   // Carpeta de Drive de esta capacitación (dentro de Anual, o directo en
   // Capacitaciones). Null si todavía no hay carpeta raíz configurada.
   driveFolderId String?
-  completed    Boolean              @default(false)
-  completedAt  DateTime?
-  completedBy  Int?
-  verifier     User?                @relation("TrainingVerifier", fields: [completedBy], references: [id])
-  companyId    Int
-  company      Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy    Int
-  creator      User                 @relation("TrainingCreator", fields: [createdBy], references: [id])
-  createdAt    DateTime             @default(now())
-  attachments  TrainingAttachment[]
+  completed     Boolean              @default(false)
+  completedAt   DateTime?
+  completedBy   Int?
+  verifier      User?                @relation("TrainingVerifier", fields: [completedBy], references: [id])
+  companyId     Int
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy     Int
+  creator       User                 @relation("TrainingCreator", fields: [createdBy], references: [id])
+  createdAt     DateTime             @default(now())
+  attachments   TrainingAttachment[]
 
   @@index([companyId])
 }
@@ -887,24 +948,24 @@ enum SurveyStatus {
 // como máximo una respuesta (SurveyResponse, identificada — ver
 // SurveyService). No llega a guardias sin cuenta en la app.
 model Survey {
-  id          Int               @id @default(autoincrement())
-  title       String
-  description String?
-  status      SurveyStatus      @default(DRAFT)
+  id            Int               @id @default(autoincrement())
+  title         String
+  description   String?
+  status        SurveyStatus      @default(DRAFT)
   // Enlace público: cuando publicEnabled es true, cualquiera con la URL
   // /encuesta/<publicToken> puede responder SIN cuenta ni login (proveedores,
   // clientes, postulantes). Las preguntas son las mismas; si RRHH quiere
   // saber quién respondió, lo pide como una pregunta más de la encuesta.
-  publicToken   String?         @unique
-  publicEnabled Boolean         @default(false)
-  companyId   Int
-  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy   Int
-  creator     User              @relation("SurveyCreator", fields: [createdBy], references: [id])
-  createdAt   DateTime          @default(now())
-  questions   SurveyQuestion[]
-  recipients  SurveyRecipient[]
-  responses   SurveyResponse[]
+  publicToken   String?           @unique
+  publicEnabled Boolean           @default(false)
+  companyId     Int
+  company       Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy     Int
+  creator       User              @relation("SurveyCreator", fields: [createdBy], references: [id])
+  createdAt     DateTime          @default(now())
+  questions     SurveyQuestion[]
+  recipients    SurveyRecipient[]
+  responses     SurveyResponse[]
 
   @@index([companyId])
 }
@@ -1131,6 +1192,25 @@ model NotificationConfig {
   updatedAt        DateTime @updatedAt
 
   @@unique([companyId])
+}
+
+// Bandeja de notificaciones in-app, genérica (no exclusiva de Referidos) —
+// primera vez que existe algo así en el repo, antes solo había correo. Cada
+// usuario ve solo las suyas (ver NotificationsController: sin @Section, es
+// una bandeja personal que no depende de permisos de módulo).
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId Int
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  link      String?
+  leida     Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, leida])
 }
 
 // Ficha personal editable desde la app (no desde Drive). Es la fuente de la
@@ -1383,6 +1463,51 @@ model Lead {
   updatedAt      DateTime   @updatedAt
 
   @@index([companyId, assignedUserId])
+}
+
+// Etapas editables del proceso de seguimiento de Clientes (leído/cotizado/
+// aceptado/rechazado/...), mismo patrón que ComplaintStage: Ventas define sus
+// propias etapas por empresa en vez de un enum fijo. Aplica a TODO SalesClient
+// sin importar su fuente (referido, campaña, etc.) — es un pipeline
+// independiente del Lead de marketing de arriba (que sigue con el enum
+// LeadStatus, webhook y asignación round-robin) — no se toca ese pipeline
+// para no arriesgar lo que ya está en producción.
+model SalesClientStage {
+  id        Int           @id @default(autoincrement())
+  companyId Int
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  key       String
+  label     String
+  color     String        @default("#718096")
+  order     Int           @default(0)
+  isInitial Boolean       @default(false)
+  isFinal   Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  clients   SalesClient[] @relation("SalesClientToStage")
+
+  @@unique([companyId, key])
+  @@index([companyId])
+}
+
+// Historial append-only de cambios de etapa de un SalesClient — mismo patrón
+// que ComplaintStageChange. Aquí se dispara la notificación al referidor
+// (correo + campanita), pero SOLO si el cliente tiene `referredByUserId` —
+// un cliente que no vino de un referido no tiene a quién notificar. Ningún
+// texto de notificación menciona comisión ni porcentaje.
+model SalesClientStageChange {
+  id            Int         @id @default(autoincrement())
+  salesClientId Int
+  salesClient   SalesClient @relation(fields: [salesClientId], references: [id], onDelete: Cascade)
+  fromStatus    String?
+  toStatus      String
+  notes         String?
+  changedBy     Int
+  changer       User        @relation(fields: [changedBy], references: [id])
+  companyId     Int
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+
+  @@index([salesClientId])
 }
 
 model SalesApiKey {
@@ -1653,14 +1778,23 @@ model SalesContractDocument {
 }
 
 model SalesClientField {
-  id        Int      @id @default(autoincrement())
-  companyId Int
-  key       String
-  label     String
-  fieldType String   @default("TEXT")
-  isCore    Boolean  @default(false)
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  companyId  Int
+  key        String
+  label      String
+  fieldType  String   @default("TEXT")
+  // Solo relevante cuando fieldType = 'SELECT'. Forma {key,label}[] — nunca
+  // un string[] plano: el valor guardado en SalesClient.extra es el `key`
+  // estable de la opción, así renombrar una opción (ej. "Referido" ->
+  // "Recomendación") no corrompe los clientes ya guardados con esa fuente.
+  options    Json     @default("[]")
+  // Solo relevante cuando fieldType = 'SELECT': agrega una opción "Otro" que
+  // deja escribir texto libre en vez de elegir de la lista — mismo patrón
+  // que SalesTemplateField.allowOther (ventas-templates, contratos).
+  allowOther Boolean  @default(false)
+  isCore     Boolean  @default(false)
+  order      Int      @default(0)
+  createdAt  DateTime @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -1669,24 +1803,49 @@ model SalesClientField {
 }
 
 model SalesClient {
-  id        Int      @id @default(autoincrement())
-  companyId Int
-  name      String
-  email     String
-  phone     String?
-  ruc       String?
-  address   String?
-  observaciones String?
-  extra     Json     @default("{}")
-  createdBy Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               Int                      @id @default(autoincrement())
+  companyId        Int
+  name             String
+  // Un referido recién llegado puede no tener correo todavía (RUC ya era
+  // opcional) — solo hace falta un email real al momento de enviar un
+  // contrato a firma, no al crear el registro.
+  email            String?
+  phone            String?
+  ruc              String?
+  address          String?
+  observaciones    String?
+  extra            Json                     @default("{}")
+  // Quién refirió a este cliente (lo fuerza el servidor en POST
+  // /ventas/clientes/referir, nunca viene del body) — es lo único que
+  // decide si se notifica a alguien en un cambio de etapa; no depende de
+  // qué diga el campo "Fuente" (editable/renombrable por Ventas).
+  referredByUserId Int?
+  referredBy       User?                    @relation("SalesClientReferrer", fields: [referredByUserId], references: [id], onDelete: SetNull)
+  // Etapa del pipeline de seguimiento (leído/cotizado/aceptado/rechazado/...).
+  // Nullable: los clientes que ya existían antes de este pipeline quedan
+  // "sin etapa" hasta que alguien les asigne una.
+  status           String?
+  stage            SalesClientStage?        @relation("SalesClientToStage", fields: [companyId, status], references: [companyId, key])
+  stageChanges     SalesClientStageChange[]
+  createdBy        Int
+  // Quién de Ventas está atendiendo la venta — distinto de `createdBy`
+  // (quién creó el registro, puede ser un empleado cualquiera que refirió)
+  // y de `referredByUserId` (a quién se le da crédito/se notifica). Nadie
+  // lo asigna por otra persona: cada quien se auto-asigna/desasigna
+  // ("Asignarme este cliente"), ver VentasClientesService.asignarme.
+  assignedUserId   Int?
+  assignedUser     User?                    @relation("SalesClientAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
 
   company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   creator   User            @relation(fields: [createdBy], references: [id])
   contracts SalesContract[]
 
   @@index([companyId])
+  @@index([companyId, status])
+  @@index([referredByUserId])
+  @@index([assignedUserId])
 }
 
 enum TicketSoporteTipo {
@@ -1721,8 +1880,8 @@ model TicketSoporte {
   createdAt   DateTime            @default(now())
   resueltoAt  DateTime?
 
-  company     Company?                @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy   User                    @relation(fields: [createdById], references: [id])
+  company     Company?                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy   User                      @relation(fields: [createdById], references: [id])
   attachments TicketSoporteAttachment[]
 
   @@index([estado])
@@ -1735,6 +1894,7 @@ model TicketSoporteAttachment {
   nombre    String?
   createdAt DateTime      @default(now())
   ticket    TicketSoporte @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
   @@index([ticketId])
 }
 
@@ -1747,4 +1907,278 @@ model SistemasDriveConfig {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ==================== CONTRATACIÓN PÚBLICA ====================
+// Módulo nuevo e independiente (prefijo CP): contratos de seguridad con
+// entidades públicas (SERCOP u otro proceso de adjudicación), sus puestos
+// de servicio, el horario mensual de guardias por puesto (aprobado por la
+// entidad) y el informe de entrega mensual del servicio. No reemplaza ni
+// toca RRHH/Custodias/Ventas — el padrón de guardias de RRHH se consulta
+// desde el frontend (GET /personal/guardias); aquí solo se guarda un
+// snapshot (cédula + nombre) de a quién se asignó a cada puesto, nunca se
+// duplica ni se modifica ese catálogo.
+model CPEntidadPublica {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  ruc       String?
+  direccion String?
+  companyId Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contratos CPContrato[]
+
+  @@index([companyId])
+}
+
+model CPContrato {
+  id                Int      @id @default(autoincrement())
+  companyId         Int
+  entidadId         Int
+  numero            String // Número de contrato / orden de compra
+  objeto            String // Objeto del servicio
+  referenciaProceso String? // Ej. código de catálogo electrónico SERCOP
+  fechaInicio       DateTime
+  fechaFin          DateTime
+  valorTotal        Float?
+  estado            String   @default("ACTIVO") // ACTIVO, FINALIZADO
+  // Si este contrato nació de una renovación de otro (en vez de una adenda
+  // sobre el mismo) — ambos caminos quedan disponibles, ver plan.
+  contratoOrigenId  Int?
+  createdBy         Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  company        Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  entidad        CPEntidadPublica    @relation(fields: [entidadId], references: [id])
+  creator        User                @relation(fields: [createdBy], references: [id])
+  contratoOrigen CPContrato?         @relation("CPContratoRenovacion", fields: [contratoOrigenId], references: [id])
+  renovaciones   CPContrato[]        @relation("CPContratoRenovacion")
+  adendas        CPContratoAdenda[]
+  adjuntos       CPContratoAdjunto[]
+  puestos        CPPuestoServicio[]
+  horarios       CPHorarioMensual[]
+  informes       CPInformeMensual[]
+
+  @@index([companyId])
+  @@index([entidadId])
+}
+
+model CPContratoAdenda {
+  id          Int       @id @default(autoincrement())
+  contratoId  Int
+  numero      String
+  descripcion String?
+  fechaInicio DateTime?
+  fechaFin    DateTime?
+  archivoUrl  String?
+  createdAt   DateTime  @default(now())
+
+  contrato CPContrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+
+  @@index([contratoId])
+}
+
+model CPContratoAdjunto {
+  id         Int      @id @default(autoincrement())
+  contratoId Int
+  nombre     String
+  tipo       String? // ej. CONTRATO, POLIZA, OTRO
+  filePath   String
+  createdAt  DateTime @default(now())
+
+  contrato CPContrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+
+  @@index([contratoId])
+}
+
+model CPPuestoServicio {
+  id                            Int      @id @default(autoincrement())
+  companyId                     Int
+  contratoId                    Int
+  nombre                        String // Ej. "Garita norte"
+  tipoTurno                     String // 8H, 12H, 24H
+  cantidadGuardias              Int      @default(1)
+  guardiasSimultaneosRequeridos Int      @default(1) // mínimo de guardias "trabajando" (no descanso) que debe haber cada día
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  company        Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contrato       CPContrato        @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  guardias       CPPuestoGuardia[]
+  celdas         CPHorarioCelda[]
+  patronRotacion CPPatronRotacion?
+
+  @@index([companyId])
+  @@index([contratoId])
+}
+
+// Patrón de rotación cíclico guardado por puesto — permite generar
+// automáticamente todas las celdas de un período en vez de llenarlas una
+// por una. tramos y ordenGuardias van como Json embebido (no tabla hija)
+// porque siempre se leen/escriben como un bloque completo, igual que otras
+// listas de este mismo módulo (ver CPCumplimientoRequisito.camposRequeridos).
+model CPPatronRotacion {
+  id                  Int      @id @default(autoincrement())
+  puestoId            Int      @unique
+  tramos              Json // [{codigoTurno: string, dias: number}, ...] en orden cíclico
+  coberturaSimultanea Int      @default(1)
+  ordenGuardias       Json // [{cedula: string, nombreGuardia: string}, ...] orden de desfase
+  fechaInicioCiclo    DateTime
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  puesto CPPuestoServicio @relation(fields: [puestoId], references: [id], onDelete: Cascade)
+}
+
+// Asignación de un guardia (tomado del padrón de RRHH, /personal/guardias)
+// a un puesto. Guarda solo un snapshot cédula+nombre — no hay FK al modelo
+// de personal, para no acoplar este módulo a RRHH.
+model CPPuestoGuardia {
+  id            Int      @id @default(autoincrement())
+  puestoId      Int
+  cedula        String
+  nombreGuardia String
+  createdAt     DateTime @default(now())
+
+  puesto CPPuestoServicio @relation(fields: [puestoId], references: [id], onDelete: Cascade)
+
+  @@unique([puestoId, cedula])
+  @@index([puestoId])
+}
+
+// Catálogo de códigos de turno por empresa (D/N/L u otros, configurable).
+model CPCodigoTurno {
+  id         Int      @id @default(autoincrement())
+  companyId  Int
+  codigo     String // Ej. "D", "N", "L"
+  nombre     String // Ej. "Día", "Noche", "Libre"
+  color      String?
+  esDescanso Boolean  @default(false) // true = no cuenta como "trabajando" para la cobertura mínima del puesto
+  activo     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, codigo])
+  @@index([companyId])
+}
+
+// anio/mes se derivan de fechaInicio y solo sirven de etiqueta para el
+// cruce con Informes (que busca el horario APROBADO de un contrato por
+// anio/mes) — el rango real que se llena y exporta es fechaInicio..fechaFin,
+// que casi nunca coincide con un mes calendario completo (ver plan).
+model CPHorarioMensual {
+  id            Int       @id @default(autoincrement())
+  companyId     Int
+  contratoId    Int
+  anio          Int
+  mes           Int // 1-12, derivado de fechaInicio
+  fechaInicio   DateTime
+  fechaFin      DateTime
+  estado        String    @default("BORRADOR") // BORRADOR, ENVIADO, APROBADO, RECHAZADO
+  motivoRechazo String?
+  enviadoAt     DateTime?
+  aprobadoAt    DateTime?
+  createdBy     Int
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company  Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contrato CPContrato        @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  creator  User              @relation(fields: [createdBy], references: [id])
+  celdas   CPHorarioCelda[]
+  informe  CPInformeMensual?
+
+  @@index([companyId])
+  @@index([contratoId])
+}
+
+// Una fila = una celda guardia×día (NO columnas físicas por día): trivial
+// hacer upsert de una celda puntual o reemplazar el lote entero de un
+// puesto. codigoTurno es un string libre, no una FK dura al catálogo, para
+// que un código pueda desactivarse/renombrarse sin romper horarios ya
+// guardados.
+model CPHorarioCelda {
+  id            Int      @id @default(autoincrement())
+  horarioId     Int
+  puestoId      Int
+  cedula        String
+  nombreGuardia String
+  fecha         DateTime // Solo se usa la parte de fecha (un día del mes)
+  codigoTurno   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  horario CPHorarioMensual @relation(fields: [horarioId], references: [id], onDelete: Cascade)
+  puesto  CPPuestoServicio @relation(fields: [puestoId], references: [id], onDelete: Cascade)
+
+  @@unique([horarioId, puestoId, cedula, fecha])
+  @@index([horarioId])
+  @@index([puestoId])
+}
+
+// El informe separa datos autogenerados (no se guardan, se calculan al
+// generar cruzando Contrato/Puestos/horario aprobado), texto redactado
+// cada mes (retroalimentacion/conclusiones, columnas propias) y texto
+// institucional fijo (CPTextoInstitucional, reutilizable y editable aparte).
+model CPInformeMensual {
+  id                Int      @id @default(autoincrement())
+  companyId         Int
+  contratoId        Int
+  // Horario aprobado del que se saca el listado de personal del mes.
+  horarioMensualId  Int?     @unique
+  anio              Int
+  mes               Int
+  retroalimentacion String?
+  conclusiones      String?
+  estado            String   @default("BORRADOR") // BORRADOR, GENERADO
+  generatedPdfPath  String?
+  createdBy         Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  company        Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contrato       CPContrato        @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  horarioMensual CPHorarioMensual? @relation(fields: [horarioMensualId], references: [id])
+  creator        User              @relation(fields: [createdBy], references: [id])
+
+  @@unique([contratoId, anio, mes])
+  @@index([companyId])
+}
+
+// Texto institucional fijo, reutilizado en todos los informes (objetivo,
+// condiciones generales, uniforme, supervisión, equipamiento, materiales,
+// etc). Clave libre (no enum) para poder agregar secciones nuevas al
+// informe en el futuro sin migración.
+model CPTextoInstitucional {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  clave     String
+  contenido String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, clave])
+  @@index([companyId])
+}
+
+// Plantilla .docx real de la empresa para el informe mensual (mismo patrón
+// que SalesTemplate.driveUrl/docxPath). Una por empresa. No necesita
+// existir físicamente para que el código compile — la generación del PDF
+// falla con un error claro si no está configurada.
+model CPPlantillaInforme {
+  id        Int      @id @default(autoincrement())
+  companyId Int      @unique
+  driveUrl  String?
+  docxPath  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }

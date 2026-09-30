@@ -271,6 +271,10 @@ export const getJobPositions = () => api.get('/personal/reclutamiento/puestos').
 export const createJobPosition = (data: { puesto: string; descripcion?: string; camposRequeridos?: CampoRequerido[]; archivosRequeridos?: ArchivoRequerido[]; estado?: string; tipoContratacion?: string }) => api.post('/personal/reclutamiento/puestos', data).then(r => r.data);
 export const updateJobPosition = (id: number, data: { puesto?: string; descripcion?: string; camposRequeridos?: CampoRequerido[]; archivosRequeridos?: ArchivoRequerido[]; estado?: string; tipoContratacion?: string }) => api.patch(`/personal/reclutamiento/puestos/${id}`, data).then(r => r.data);
 export const deleteJobPosition = (id: number) => api.delete(`/personal/reclutamiento/puestos/${id}`);
+// Duplica una vacante (mismo formulario/documentos requeridos, estado y tipo
+// de contratación); el backend le pone un nombre distinto ("... (copia)") y
+// crea una carpeta de Drive nueva y separada — nunca reutiliza la del original.
+export const duplicateJobPosition = (id: number) => api.post(`/personal/reclutamiento/puestos/${id}/duplicate`).then(r => r.data);
 
 // --- Análisis con IA del "archivo único" de un postulante ---
 // La IA solo PROPONE; nada se escribe en Drive hasta que RRHH confirma con

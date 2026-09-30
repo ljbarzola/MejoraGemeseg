@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 export interface CreateComplaintStageInput {
@@ -40,6 +41,45 @@ export class ComplaintStageService {
     });
   }
 
+  // Reglas de integridad del pipeline, mismo chequeo que
+  // VentasClientesService.validarIntegridadEtapas: una etapa no puede ser
+  // inicial y final a la vez, y la inicial nunca puede quedar en el mismo
+  // lugar o después de una final. Corre DENTRO de la transacción que hizo
+  // el cambio: si algo no cuadra, lanza y el `$transaction` revierte todo.
+  private async validarIntegridadEtapas(
+    tx: Prisma.TransactionClient,
+    companyId: number,
+  ) {
+    const stages = await tx.complaintStage.findMany({ where: { companyId } });
+    if (stages.length === 0) return;
+
+    const iniciales = stages.filter((s) => s.isInitial);
+    const finales = stages.filter((s) => s.isFinal);
+
+    const ambas = iniciales.find((s) => s.isFinal);
+    if (ambas) {
+      throw new BadRequestException(
+        `La etapa "${ambas.label}" no puede ser inicial y final al mismo tiempo.`,
+      );
+    }
+
+    if (iniciales.length === 0) {
+      throw new BadRequestException(
+        'Debe existir una etapa inicial. Marca alguna etapa como inicial.',
+      );
+    }
+
+    if (finales.length > 0) {
+      const ordenInicial = iniciales[0].order;
+      const ordenMinimoFinal = Math.min(...finales.map((s) => s.order));
+      if (ordenInicial >= ordenMinimoFinal) {
+        throw new BadRequestException(
+          'La etapa inicial no puede ir después (ni en el mismo lugar) de una etapa final.',
+        );
+      }
+    }
+  }
+
   async create(companyId: number, data: CreateComplaintStageInput) {
     const existing = await this.prisma.complaintStage.findFirst({
       where: { companyId, key: data.key },
@@ -49,6 +89,11 @@ export class ComplaintStageService {
         `Ya existe una etapa con la clave "${data.key}"`,
       );
     }
+    if (data.isInitial && data.isFinal) {
+      throw new BadRequestException(
+        'Una etapa no puede ser inicial y final al mismo tiempo.',
+      );
+    }
 
     const count = await this.prisma.complaintStage.count({
       where: { companyId },
@@ -56,36 +101,26 @@ export class ComplaintStageService {
 
     // Si esta va a ser la etapa inicial, desmarca la anterior en la misma
     // transacción — solo puede haber una etapa inicial por empresa.
-    if (data.isInitial) {
-      return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
+      if (data.isInitial) {
         await tx.complaintStage.updateMany({
           where: { companyId, isInitial: true },
           data: { isInitial: false },
         });
-        return tx.complaintStage.create({
-          data: {
-            companyId,
-            key: data.key,
-            label: data.label.trim(),
-            color: data.color || '#718096',
-            order: data.order ?? count,
-            isInitial: true,
-            isFinal: data.isFinal ?? false,
-          },
-        });
+      }
+      const created = await tx.complaintStage.create({
+        data: {
+          companyId,
+          key: data.key,
+          label: data.label.trim(),
+          color: data.color || '#718096',
+          order: data.order ?? count,
+          isInitial: data.isInitial ?? false,
+          isFinal: data.isFinal ?? false,
+        },
       });
-    }
-
-    return this.prisma.complaintStage.create({
-      data: {
-        companyId,
-        key: data.key,
-        label: data.label.trim(),
-        color: data.color || '#718096',
-        order: data.order ?? count,
-        isInitial: false,
-        isFinal: data.isFinal ?? false,
-      },
+      await this.validarIntegridadEtapas(tx, companyId);
+      return created;
     });
   }
 
@@ -94,39 +129,45 @@ export class ComplaintStageService {
       where: { id, companyId },
     });
     if (!stage) throw new NotFoundException('Etapa no encontrada');
+    if (
+      (data.isInitial ?? stage.isInitial) &&
+      (data.isFinal ?? stage.isFinal)
+    ) {
+      throw new BadRequestException(
+        'Una etapa no puede ser inicial y final al mismo tiempo.',
+      );
+    }
+    if (data.isInitial === false && stage.isInitial) {
+      throw new BadRequestException(
+        'No se puede quitar la etapa inicial. Marca otra etapa como inicial en su lugar.',
+      );
+    }
 
     // Marcar esta como inicial desmarca automáticamente la que lo era antes
     // — solo una etapa inicial por empresa en todo momento. isFinal es
     // puramente informativo (puede haber más de una etapa final), no se
     // fuerza unicidad ahí.
-    if (data.isInitial) {
-      return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
+      if (data.isInitial) {
         await tx.complaintStage.updateMany({
           where: { companyId, isInitial: true, id: { not: id } },
           data: { isInitial: false },
         });
-        return tx.complaintStage.update({
-          where: { id },
-          data: {
-            ...(data.label !== undefined ? { label: data.label.trim() } : {}),
-            ...(data.color !== undefined ? { color: data.color } : {}),
-            ...(data.order !== undefined ? { order: data.order } : {}),
-            ...(data.isFinal !== undefined ? { isFinal: data.isFinal } : {}),
-            isInitial: true,
-          },
-        });
+      }
+      const updated = await tx.complaintStage.update({
+        where: { id },
+        data: {
+          ...(data.label !== undefined ? { label: data.label.trim() } : {}),
+          ...(data.color !== undefined ? { color: data.color } : {}),
+          ...(data.order !== undefined ? { order: data.order } : {}),
+          ...(data.isFinal !== undefined ? { isFinal: data.isFinal } : {}),
+          ...(data.isInitial !== undefined
+            ? { isInitial: data.isInitial }
+            : {}),
+        },
       });
-    }
-
-    return this.prisma.complaintStage.update({
-      where: { id },
-      data: {
-        ...(data.label !== undefined ? { label: data.label.trim() } : {}),
-        ...(data.color !== undefined ? { color: data.color } : {}),
-        ...(data.order !== undefined ? { order: data.order } : {}),
-        ...(data.isInitial !== undefined ? { isInitial: data.isInitial } : {}),
-        ...(data.isFinal !== undefined ? { isFinal: data.isFinal } : {}),
-      },
+      await this.validarIntegridadEtapas(tx, companyId);
+      return updated;
     });
   }
 

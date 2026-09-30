@@ -13,6 +13,18 @@ const ANCHO_MINIMO = 60;
  *   const tablaRef = useResizableColumns('guardias');
  *   <table className="tasks-table resizable-table" ref={tablaRef}>
  *
+ * Si las columnas de la tabla pueden cambiar en runtime (se agregan/quitan/
+ * reordenan sin desmontar la tabla, ej. un picker de columnas visibles),
+ * pasa además la lista de keys estables en su orden actual:
+ *   const tablaRef = useResizableColumns('clientes', visibleColumns.map(c => c.key));
+ * Sin este segundo argumento, los anchos se guardan por POSICIÓN (índice de
+ * columna), que es más simple pero solo es correcto si el set de columnas
+ * nunca cambia después del montaje — con columnas dinámicas, la instalación
+ * de tiradores no se refresca cuando cambia el número de `<th>` (el efecto
+ * solo depende de `[tabla, storageKey]`, no del contenido del `<thead>`), y
+ * un ancho guardado bajo el índice 2 quedaría aplicado a la columna que hoy
+ * ocupa esa posición, no a la que lo tenía cuando se guardó.
+ *
  * Detalles que importan:
  *  - El ref es un CALLBACK, no un useRef. Con useRef el efecto corría al
  *    montar, cuando la tabla todavía no estaba en el DOM (la pantalla mostraba
@@ -29,12 +41,17 @@ const ANCHO_MINIMO = 60;
  *    espacio, y arrastrarla solo desbordaba la tabla.
  *  - Doble clic en el tirador devuelve esa columna a su ancho automático.
  */
-export function useResizableColumns(storageKey: string) {
+export function useResizableColumns(storageKey: string, columnKeys?: string[]) {
   const [tabla, setTabla] = useState<HTMLTableElement | null>(null);
 
   const ref = useCallback((node: HTMLTableElement | null) => {
     setTabla(node);
   }, []);
+
+  // Con columnKeys, la identidad de cada columna es su key estable; sin él,
+  // es su posición — igual que siempre.
+  const idDeColumna = (index: number): string =>
+    columnKeys && columnKeys[index] !== undefined ? columnKeys[index] : String(index);
 
   useEffect(() => {
     if (!tabla) return;
@@ -44,7 +61,7 @@ export function useResizableColumns(storageKey: string) {
 
     const clave = `colwidths:${storageKey}`;
 
-    const leerGuardado = (): Record<number, number> => {
+    const leerGuardado = (): Record<string, number> => {
       try {
         return JSON.parse(localStorage.getItem(clave) || '{}');
       } catch {
@@ -52,7 +69,7 @@ export function useResizableColumns(storageKey: string) {
       }
     };
 
-    const guardar = (anchos: Record<number, number>) => {
+    const guardar = (anchos: Record<string, number>) => {
       try {
         localStorage.setItem(clave, JSON.stringify(anchos));
       } catch {
@@ -61,9 +78,9 @@ export function useResizableColumns(storageKey: string) {
     };
 
     const anchos = leerGuardado();
-    Object.entries(anchos).forEach(([i, w]) => {
-      const th = headers[Number(i)] as HTMLElement | undefined;
-      if (th && w >= ANCHO_MINIMO) th.style.width = `${w}px`;
+    headers.forEach((th, index) => {
+      const w = anchos[idDeColumna(index)];
+      if (w && w >= ANCHO_MINIMO) (th as HTMLElement).style.width = `${w}px`;
     });
 
     const limpiadores: (() => void)[] = [];
@@ -98,7 +115,7 @@ export function useResizableColumns(storageKey: string) {
         tabla.classList.remove('resizing');
         if (arrastro) {
           const actuales = leerGuardado();
-          actuales[index] = el.getBoundingClientRect().width;
+          actuales[idDeColumna(index)] = el.getBoundingClientRect().width;
           guardar(actuales);
         }
       };
@@ -134,7 +151,7 @@ export function useResizableColumns(storageKey: string) {
         ev.stopPropagation();
         el.style.width = '';
         const actuales = leerGuardado();
-        delete actuales[index];
+        delete actuales[idDeColumna(index)];
         guardar(actuales);
       };
 
@@ -150,7 +167,8 @@ export function useResizableColumns(storageKey: string) {
     });
 
     return () => limpiadores.forEach((fn) => fn());
-  }, [tabla, storageKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- idDeColumna se reconstruye cada render a propósito; lo que importa para reinstalar es la firma de columnas.
+  }, [tabla, storageKey, columnKeys ? columnKeys.join(',') : '']);
 
   return ref;
 }

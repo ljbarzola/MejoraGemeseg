@@ -308,22 +308,21 @@ async function main() {
 
   console.log('Creando agente global por defecto...');
   const existingAgent = await prisma.agent.findFirst({
-    where: { createdBy: null, name: 'Agente GEMESEG' },
+    where: { createdBy: null, isDefault: true },
   });
   if (!existingAgent) {
     await prisma.agent.create({
       data: {
-        name: 'Agente GEMESEG',
-        instructions: `Eres el agente de GEMESEG, un sistema de gestión de proyectos y tareas.
-Puedes responder preguntas sobre los datos del usuario: proyectos, tareas, miembros, estadísticas.
-Cuando el usuario pregunte algo, responde de forma concisa y útil en español.
-Si necesitas datos específicos, indica la intención con el formato [INTENCION: nombre_intencion].
-Intenciones disponibles:
-- list_projects: listar proyectos del usuario
-- count_tasks_by_status: contar tareas por estado
-- user_info: información del usuario actual
-- project_summary: resumen de un proyecto
-- list_my_tasks: listar tareas asignadas al usuario
+        name: 'Agente Gemeseg',
+        isDefault: true,
+        // Sin nombrar módulos acá a propósito: cuáles existen para cada
+        // usuario lo arma buildCapabilitiesPrompt en cada request, según sus
+        // permisos reales (ver backend/src/modules/ai/capabilities-prompt.util.ts
+        // y ai.service.ts BASE_SYSTEM_PROMPT) — nunca un texto fijo igual
+        // para todos.
+        instructions: `Eres Agente Gemeseg, el asistente de inteligencia artificial de la empresa.
+Responde de forma concisa y útil, en español.
+Cuando necesites datos específicos del sistema, indica la intención con el formato [INTENCION: nombre_intencion], usando ÚNICAMENTE los nombres de intención listados en "Lo que puedes hacer" — nunca inventes uno que no esté ahí.
 Si no necesitas datos, responde directamente.`,
         scope: 'GLOBAL',
       },

@@ -8,6 +8,16 @@
      un modal blanco (RECOMENDACIONES_UX_UI.md §17). Usar esta variable en vez
      de --gris-claro para cualquier borde que deba notarse. */
   --borde-input: #A0AEC0;
+  /* Escala compartida de z-index para los botones flotantes (chat, reportar
+     un problema, campanita de notificaciones) y el panel que el chat abre
+     encima de ellos. El panel debe quedar siempre por encima de los tres
+     botones — cualquier botón flotante nuevo debe sumarse a esta escala en
+     vez de ponerse un z-index suelto (eso fue justo el bug: la campanita
+     nunca se migró acá y se quedó en 950, por encima de --z-panel). */
+  --z-fab: 200;
+  --z-report-btn: 250;
+  --z-notif-btn: 260;
+  --z-panel: 900;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -1995,7 +2005,7 @@ body {
   border: none;
   cursor: pointer;
   box-shadow: 0 6px 24px rgba(16, 15, 49, 0.35);
-  z-index: 200;
+  z-index: var(--z-fab);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2011,11 +2021,29 @@ body {
   font-size: 1.6rem;
 }
 
+.report-problem-fab {
+  position: fixed;
+  bottom: 32px;
+  right: 104px;
+  z-index: var(--z-report-btn);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: var(--azul-oscuro);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
 .chat-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.3);
-  z-index: 300;
+  z-index: var(--z-panel);
   display: flex;
   justify-content: flex-end;
   animation: chatFadeIn 0.2s ease;
@@ -3052,18 +3080,39 @@ body {
   flex-direction: column;
 }
 
+.chat-conv-item-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--gris-claro);
+}
+
+.chat-conv-item-delete {
+  border: none;
+  background: white;
+  cursor: pointer;
+  padding: 0 14px;
+  font-size: 0.9rem;
+  opacity: 0.55;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.chat-conv-item-delete:hover {
+  opacity: 1;
+  background: #fff5f5;
+}
+
 .chat-conv-item {
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 14px 20px;
   border: none;
-  border-bottom: 1px solid var(--gris-claro);
   background: white;
   cursor: pointer;
   text-align: left;
   transition: background 0.15s;
   width: 100%;
+  flex: 1;
 }
 
 .chat-conv-item:hover {
@@ -3187,6 +3236,13 @@ body {
     width: 52px;
     height: 52px;
   }
+
+  .report-problem-fab {
+    bottom: 24px;
+    right: 96px;
+    width: 40px;
+    height: 40px;
+  }
 }
 
 /* Cacao forms */
@@ -3278,164 +3334,6 @@ body {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
-}
-
-/* Cacao Help Menu */
-.cacao-help-fab {
-  position: fixed;
-  bottom: 28px;
-  right: 28px;
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #5b4a2e, #6b8e23);
-  color: white;
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 6px 24px rgba(91, 74, 46, 0.4);
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.cacao-help-fab:hover {
-  transform: scale(1.08);
-  box-shadow: 0 8px 32px rgba(91, 74, 46, 0.55);
-}
-
-.cacao-help-fab-icon {
-  font-size: 1.6rem;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.cacao-help-panel {
-  position: fixed;
-  bottom: 100px;
-  right: 28px;
-  width: 380px;
-  max-height: 70vh;
-  background: white;
-  border-radius: 14px;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.18);
-  z-index: 210;
-  display: flex;
-  flex-direction: column;
-  animation: cacaoHelpSlideIn 0.25s ease;
-  overflow: hidden;
-}
-
-@keyframes cacaoHelpSlideIn {
-  from { opacity: 0; transform: translateY(12px) scale(0.97); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.cacao-help-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px;
-  background: linear-gradient(135deg, #5b4a2e, #6b8e23);
-  color: white;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.cacao-help-close {
-  background: none;
-  border: none;
-  color: white;
-  font-size: 20px;
-  cursor: pointer;
-  line-height: 1;
-  padding: 0;
-  opacity: 0.8;
-  transition: opacity 0.15s;
-}
-
-.cacao-help-close:hover {
-  opacity: 1;
-}
-
-.cacao-help-body {
-  overflow-y: auto;
-  flex: 1;
-}
-
-.cacao-help-item {
-  border-bottom: 1px solid #f0ece4;
-}
-
-.cacao-help-item:last-child {
-  border-bottom: none;
-}
-
-.cacao-help-question {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 12px 18px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  color: #5b4a2e;
-  text-align: left;
-  font-family: inherit;
-  transition: background 0.15s;
-}
-
-.cacao-help-question:hover {
-  background: #faf6ef;
-}
-
-.cacao-help-chevron {
-  flex-shrink: 0;
-  transition: transform 0.2s ease;
-  color: #a0aec0;
-}
-
-.cacao-help-chevron.rotated {
-  transform: rotate(180deg);
-}
-
-.cacao-help-answer {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.25s ease, padding 0.25s ease;
-}
-
-.cacao-help-answer.open {
-  max-height: 200px;
-  padding: 0 18px 12px;
-}
-
-.cacao-help-answer p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #718096;
-}
-
-@media (max-width: 480px) {
-  .cacao-help-fab {
-    bottom: 20px;
-    right: 20px;
-    width: 52px;
-    height: 52px;
-  }
-
-  .cacao-help-panel {
-    right: 12px;
-    left: 12px;
-    width: auto;
-    bottom: 84px;
-  }
 }
 
 /* ── Sidebar izquierdo colapsable ── */

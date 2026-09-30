@@ -187,7 +187,7 @@ export class AgentsService {
     });
 
     const defaultAgent = await this.prisma.agent.findFirst({
-      where: { createdBy: null, name: 'Agente GEMESEG' },
+      where: { createdBy: null, isDefault: true },
       select: {
         id: true,
         name: true,

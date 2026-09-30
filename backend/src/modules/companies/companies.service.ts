@@ -147,6 +147,11 @@ export class CompaniesService {
         ],
       });
 
+      // Las etapas por defecto del pipeline de Clientes (ver
+      // VentasClientesService.ensureDefaultStages) se siembran de forma
+      // perezosa la primera vez que hacen falta, no acá — mismo patrón que
+      // ensureCoreFields, para no duplicar la lista en dos sitios.
+
       return company;
     });
   }

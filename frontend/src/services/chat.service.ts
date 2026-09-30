@@ -57,6 +57,10 @@ export async function getConversations(agentId?: number): Promise<Conversation[]
   return res.data;
 }
 
+export async function deleteConversation(conversationId: number): Promise<void> {
+  await api.delete(`/chat/conversations/${conversationId}`);
+}
+
 export async function getConversationMessages(conversationId: number): Promise<ChatMessage[]> {
   const res = await api.get(`/chat/conversations/${conversationId}/messages`);
   return res.data.map((m: any) => ({

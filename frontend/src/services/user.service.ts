@@ -10,12 +10,21 @@ export interface AdminUser {
   isActive: boolean;
   department: { id: number; name: string } | null;
   roleRelation: { id: number; name: string } | null;
+  locationId: number | null;
+  location: { id: number; nombre: string } | null;
   createdAt: string;
   _count: {
     createdProjects: number;
     projectMemberships: number;
     assignedTasks: number;
   };
+}
+
+export interface CompanyLocation {
+  id: number;
+  companyId: number;
+  nombre: string;
+  createdAt: string;
 }
 
 export interface UserStats {
@@ -79,6 +88,7 @@ export async function updateUser(
     position?: string;
     departmentId?: number | null;
     roleId?: number | null;
+    locationId?: number | null;
     isActive?: boolean;
   },
 ): Promise<AdminUser> {
@@ -88,6 +98,16 @@ export async function updateUser(
 
 export async function deleteUser(id: number): Promise<void> {
   await api.delete(`/users/${id}`);
+}
+
+export async function getCompanyLocations(): Promise<CompanyLocation[]> {
+  const res = await api.get('/users/locations');
+  return res.data;
+}
+
+export async function createCompanyLocation(nombre: string): Promise<CompanyLocation> {
+  const res = await api.post('/users/locations', { nombre });
+  return res.data;
 }
 
 export async function getAllDepartments(): Promise<{ id: number; name: string }[]> {

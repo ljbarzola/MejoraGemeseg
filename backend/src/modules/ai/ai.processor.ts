@@ -1,6 +1,25 @@
 ﻿import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
+// Qué sección de permisos es dueña de cada intención — AiService la consulta
+// antes de ejecutar cualquier intención aquí abajo (ver canUseIntent en
+// ai.service.ts). `null` = sin dueño de sección, se ejecuta igual que hoy sin
+// verificar nada (las 5 intenciones originales de Proyectos/Tareas/Usuario:
+// PROJECTS es siempre visible para cualquier usuario de todos modos, y esto
+// es una continuación deliberada del comportamiento previo, no un hueco
+// nuevo introducido por este cambio).
+export const INTENT_SECTION: Record<string, string | null> = {
+  list_projects: null,
+  count_tasks_by_status: null,
+  user_info: null,
+  project_summary: null,
+  list_my_tasks: null,
+  cacao_resumen: 'CACAO',
+  custodias_resumen: 'CUSTODIAS',
+  rrhh_resumen_personal: 'RRHH',
+  ventas_resumen: 'VENTAS',
+};
+
 @Injectable()
 export class AiProcessor {
   constructor(private prisma: PrismaService) {}
@@ -9,6 +28,7 @@ export class AiProcessor {
     intent: string,
     params: any,
     userId: number,
+    companyId?: number | null,
   ): Promise<string> {
     switch (intent) {
       case 'list_projects':
@@ -21,9 +41,80 @@ export class AiProcessor {
         return this.projectSummary(params.projectId);
       case 'list_my_tasks':
         return this.listMyTasks(userId);
+      case 'cacao_resumen':
+        return this.cacaoResumen(companyId);
+      case 'custodias_resumen':
+        return this.custodiasResumen(companyId);
+      case 'rrhh_resumen_personal':
+        return this.rrhhResumenPersonal(companyId);
+      case 'ventas_resumen':
+        return this.ventasResumen(companyId);
       default:
         return '';
     }
+  }
+
+  private async cacaoResumen(companyId?: number | null): Promise<string> {
+    if (!companyId) return 'No hay empresa asociada para consultar Cacao.';
+    const [recepciones30d, lotesAbiertos, lotesCerrados] = await Promise.all([
+      this.prisma.cacaoReception.count({
+        where: {
+          companyId,
+          createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+        },
+      }),
+      this.prisma.cacaoLot.count({ where: { companyId, status: 'OPEN' } }),
+      this.prisma.cacaoLot.count({ where: { companyId, status: 'CLOSED' } }),
+    ]);
+    return [
+      `Recepciones de cacao (últimos 30 días): ${recepciones30d}`,
+      `Lotes abiertos: ${lotesAbiertos}`,
+      `Lotes cerrados: ${lotesCerrados}`,
+    ].join('\n');
+  }
+
+  private async custodiasResumen(companyId?: number | null): Promise<string> {
+    if (!companyId) return 'No hay empresa asociada para consultar Custodias.';
+    const porEstado = await this.prisma.custodia.groupBy({
+      by: ['estado'],
+      where: { companyId },
+      _count: { id: true },
+    });
+    if (porEstado.length === 0) return 'No hay custodias registradas.';
+    const lista = porEstado.map((c) => `${c.estado}: ${c._count.id}`).join(', ');
+    return `Custodias por estado: ${lista}`;
+  }
+
+  private async rrhhResumenPersonal(companyId?: number | null): Promise<string> {
+    if (!companyId) return 'No hay empresa asociada para consultar RRHH.';
+    const [totalPersonal, vacantesAbiertas] = await Promise.all([
+      this.prisma.guardiaFichaPersonal.count({ where: { companyId } }),
+      this.prisma.jobPosition.count({
+        where: { companyId, estado: 'ABIERTA' },
+      }),
+    ]);
+    return [
+      `Personal con ficha registrada: ${totalPersonal}`,
+      `Vacantes abiertas: ${vacantesAbiertas}`,
+    ].join('\n');
+  }
+
+  private async ventasResumen(companyId?: number | null): Promise<string> {
+    if (!companyId) return 'No hay empresa asociada para consultar Ventas.';
+    const porEstado = await this.prisma.lead.groupBy({
+      by: ['status'],
+      where: { companyId },
+      _count: { id: true },
+      _sum: { estimatedValue: true },
+    });
+    if (porEstado.length === 0) return 'No hay leads registrados.';
+    const lista = porEstado
+      .map(
+        (l) =>
+          `${l.status}: ${l._count.id} (valor estimado $${(l._sum.estimatedValue || 0).toFixed(2)})`,
+      )
+      .join(', ');
+    return `Leads por estado: ${lista}`;
   }
 
   private async listProjects(userId: number): Promise<string> {

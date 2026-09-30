@@ -2,11 +2,17 @@
   Injectable,
   NotFoundException,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
+import {
+  ALL_SECTIONS,
+  SECCIONES_SIEMPRE_VISIBLES,
+} from '../permissions/permissions.service';
 
 @Injectable()
 export class UsersService {
@@ -21,23 +27,62 @@ export class UsersService {
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const role = dto.role || 'EMPLOYEE';
+    const resolvedCompanyId = companyId || null;
 
-    return this.prisma.user.create({
-      data: {
-        fullName: dto.fullName,
-        email: dto.email,
-        password: hashedPassword,
-        role: dto.role || 'EMPLOYEE',
-        documentNumber: dto.documentNumber,
-        position: dto.position,
-        departmentId: dto.departmentId || null,
-        roleId: dto.roleId || null,
-        companyId: companyId || null,
-      },
-      include: {
-        department: true,
-        roleRelation: true,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          fullName: dto.fullName,
+          email: dto.email,
+          password: hashedPassword,
+          role,
+          documentNumber: dto.documentNumber,
+          position: dto.position,
+          departmentId: dto.departmentId || null,
+          roleId: dto.roleId || null,
+          companyId: resolvedCompanyId,
+        },
+        include: {
+          department: true,
+          roleRelation: true,
+        },
+      });
+
+      // Sin esto, un usuario nuevo hereda el "permitido por defecto" que el
+      // sistema de permisos aplica cuando no existe fila UserPermission (ver
+      // section-permission.guard.ts) — quedaría con acceso total pese a que
+      // /admin/user-permissions lo muestra sin nada marcado. Employee/Manager
+      // arrancan denegados en todo lo que no sea fijo; Admin arranca con todo
+      // permitido explícitamente (antes quedaba sin filas = mismo resultado,
+      // pero ahora también se ve reflejado correctamente en esa pantalla).
+      if (resolvedCompanyId) {
+        const fixedRows = await tx.companySection.findMany({
+          where: { companyId: resolvedCompanyId, fixedForAll: true },
+          select: { section: true },
+        });
+        const fixedSections = new Set([
+          ...SECCIONES_SIEMPRE_VISIBLES,
+          ...fixedRows.map((r) => r.section),
+        ]);
+        const applicableSections = ALL_SECTIONS.filter(
+          (s) => !fixedSections.has(s.key),
+        );
+        if (applicableSections.length > 0) {
+          const allow = role === 'ADMIN';
+          await tx.userPermission.createMany({
+            data: applicableSections.map((s) => ({
+              userId: user.id,
+              section: s.key,
+              canView: allow,
+              canWrite: allow,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      return user;
     });
   }
 
@@ -71,6 +116,7 @@ export class UsersService {
       include: {
         department: true,
         roleRelation: true,
+        location: true,
         _count: {
           select: {
             createdProjects: true,
@@ -91,6 +137,7 @@ export class UsersService {
       include: {
         department: true,
         roleRelation: true,
+        location: true,
         _count: {
           select: {
             createdProjects: true,
@@ -134,6 +181,21 @@ export class UsersService {
     if (dto.roleId !== undefined) data.roleId = dto.roleId;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
 
+    if (dto.locationId !== undefined) {
+      if (dto.locationId !== null) {
+        // Punto real de aislamiento entre empresas: nunca confiar en un
+        // locationId enviado por el cliente sin verificar que pertenece a
+        // la misma empresa del usuario que se está editando.
+        const location = await this.prisma.companyLocation.findUnique({
+          where: { id: dto.locationId },
+        });
+        if (!location || location.companyId !== user.companyId) {
+          throw new ForbiddenException('Ubicación inválida para esta empresa');
+        }
+      }
+      data.locationId = dto.locationId;
+    }
+
     if (dto.password) {
       data.password = await bcrypt.hash(dto.password, 10);
     }
@@ -144,6 +206,7 @@ export class UsersService {
       include: {
         department: true,
         roleRelation: true,
+        location: true,
       },
     });
   }
@@ -233,5 +296,43 @@ export class UsersService {
       inactive: total - active,
       byRole: byRole.map((r) => ({ role: r.role, count: r._count.id })),
     };
+  }
+
+  async getLocations(companyId: number | null) {
+    if (!companyId) {
+      throw new ForbiddenException('Requiere una empresa asociada');
+    }
+    return this.prisma.companyLocation.findMany({
+      where: { companyId },
+      orderBy: { nombre: 'asc' },
+    });
+  }
+
+  async createLocation(companyId: number | null, nombre: string) {
+    if (!companyId) {
+      throw new ForbiddenException('Requiere una empresa asociada');
+    }
+    const trimmed = nombre.trim();
+
+    const existing = await this.prisma.companyLocation.findFirst({
+      where: { companyId, nombre: { equals: trimmed, mode: 'insensitive' } },
+    });
+    if (existing) {
+      throw new ConflictException('Ya existe una ubicación con ese nombre');
+    }
+
+    try {
+      return await this.prisma.companyLocation.create({
+        data: { companyId, nombre: trimmed },
+      });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new ConflictException('Ya existe una ubicación con ese nombre');
+      }
+      throw err;
+    }
   }
 }

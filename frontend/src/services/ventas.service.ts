@@ -259,46 +259,114 @@ export const getSalesApiKeys = () => api.get('/ventas/api-keys').then(r => r.dat
 export const createSalesApiKey = (data: any) => api.post('/ventas/api-keys', data).then(r => r.data);
 export const deleteSalesApiKey = (id: number) => api.delete(`/ventas/api-keys/${id}`).then(r => r.data);
 
+export interface SalesClientFieldOption {
+  key: string;
+  label: string;
+}
+
 export interface SalesClientField {
   id: number;
   companyId: number;
   key: string;
   label: string;
   fieldType: string;
+  // Solo relevante si fieldType === 'SELECT'.
+  options: SalesClientFieldOption[];
+  // Solo relevante si fieldType === 'SELECT': agrega una opción "Otro" con
+  // texto libre (mismo patrón que SalesTemplateField.allowOther).
+  allowOther: boolean;
   isCore: boolean;
   order: number;
+}
+
+export interface SalesClientStage {
+  id: number;
+  key: string;
+  label: string;
+  color: string;
+  order: number;
+  isInitial: boolean;
+  isFinal: boolean;
+}
+
+export interface MiReferidoCliente {
+  id: number;
+  name: string;
+  status: string | null;
+  createdAt: string;
+  updatedAt: string;
+  stage: SalesClientStage | null;
 }
 
 export interface SalesClient {
   id: number;
   companyId: number;
   name: string;
-  email: string;
+  email?: string | null;
   phone?: string | null;
   ruc?: string | null;
   address?: string | null;
   observaciones?: string | null;
   extra?: Record<string, string>;
+  // A quién se le da crédito/se notifica si vino de un referido — nunca
+  // editable desde el formulario normal, solo lo fija el servidor al crear
+  // el registro vía /referir.
+  referredByUserId?: number | null;
+  referredBy?: { id: number; fullName: string } | null;
+  // Quién de Ventas atiende la venta — distinto de `creator` (quién creó el
+  // registro) y de `referredBy` (quién lo refirió). Se asigna/desasigna con
+  // asignarSalesClienteAMi/quitarSalesClienteAMi, nunca por PATCH normal.
+  assignedUserId?: number | null;
+  assignedUser?: { id: number; fullName: string } | null;
+  status?: string | null;
+  stage?: SalesClientStage | null;
   createdAt: string;
   creator?: { id: number; fullName: string } | null;
 }
 
 export const getSalesClientFields = () =>
   api.get('/ventas/clientes/fields').then(r => r.data as SalesClientField[]);
-export const addSalesClientField = (data: { label: string; key?: string; fieldType?: string }) =>
+export const addSalesClientField = (data: { label: string; key?: string; fieldType?: string; options?: SalesClientFieldOption[]; allowOther?: boolean }) =>
   api.post('/ventas/clientes/fields', data).then(r => r.data as SalesClientField);
+export const updateSalesClientField = (id: number, data: Partial<{ label: string; options: SalesClientFieldOption[]; allowOther: boolean; order: number }>) =>
+  api.patch(`/ventas/clientes/fields/${id}`, data).then(r => r.data as SalesClientField);
 export const deleteSalesClientField = (id: number) =>
   api.delete(`/ventas/clientes/fields/${id}`).then(r => r.data);
+
+export const getSalesClientStages = () =>
+  api.get('/ventas/clientes/stages').then(r => r.data as SalesClientStage[]);
+export const createSalesClientStage = (data: { key: string; label: string; color?: string; order?: number; isInitial?: boolean; isFinal?: boolean }) =>
+  api.post('/ventas/clientes/stages', data).then(r => r.data as SalesClientStage);
+export const updateSalesClientStage = (id: number, data: Partial<{ label: string; color: string; order: number; isInitial: boolean; isFinal: boolean }>) =>
+  api.patch(`/ventas/clientes/stages/${id}`, data).then(r => r.data as SalesClientStage);
+export const deleteSalesClientStage = (id: number) =>
+  api.delete(`/ventas/clientes/stages/${id}`);
+export const changeSalesClientStage = (id: number, toStatus: string, notes?: string) =>
+  api.patch(`/ventas/clientes/${id}/stage`, { toStatus, notes }).then(r => r.data as SalesClient);
+
+// Formulario abierto "Referir un cliente" — cualquier autenticado.
+export const referirCliente = (data: { nombre: string; celular?: string; correo?: string; servicioRequerido?: string; nota?: string }) =>
+  api.post('/ventas/clientes/referir', data).then(r => r.data as SalesClient);
+export const misReferidosClientes = () =>
+  api.get('/ventas/clientes/mis-referidos').then(r => r.data as MiReferidoCliente[]);
+
 export const getSalesClients = () =>
   api.get('/ventas/clientes').then(r => r.data as SalesClient[]);
 export const getSalesClient = (id: number) =>
   api.get(`/ventas/clientes/${id}`).then(r => r.data as SalesClient);
-export const createSalesClient = (data: Partial<SalesClient> & { name: string; email: string }) =>
+export const createSalesClient = (data: Partial<SalesClient> & { name: string }) =>
   api.post('/ventas/clientes', data).then(r => r.data as SalesClient);
 export const updateSalesClient = (id: number, data: Partial<SalesClient>) =>
   api.patch(`/ventas/clientes/${id}`, data).then(r => r.data as SalesClient);
 export const deleteSalesClient = (id: number) =>
   api.delete(`/ventas/clientes/${id}`).then(r => r.data);
+
+// "Responsable" — autoasignación simple, nadie asigna el cliente de otra
+// persona (ver VentasClientesService.asignarme/quitarme).
+export const asignarmeSalesClient = (id: number) =>
+  api.post(`/ventas/clientes/${id}/asignarme`).then(r => r.data as SalesClient);
+export const quitarmeSalesClient = (id: number) =>
+  api.delete(`/ventas/clientes/${id}/asignarme`).then(r => r.data as SalesClient);
 
 export function salesClientValue(client: SalesClient | null | undefined, key: string): string {
   if (!client || !key) return '';
@@ -307,6 +375,17 @@ export function salesClientValue(client: SalesClient | null | undefined, key: st
   if (key === 'phone') return client.phone || '';
   if (key === 'ruc') return client.ruc || '';
   if (key === 'address') return client.address || '';
+  if (key === 'observaciones') return client.observaciones || '';
   return client.extra?.[key] != null ? String(client.extra[key]) : '';
+}
+
+// Igual que salesClientValue, pero para un campo SELECT: traduce el `key`
+// guardado en extra al `label` actual de esa opción (que se puede renombrar
+// sin romper el dato guardado).
+export function salesClientSelectLabel(client: SalesClient | null | undefined, field: SalesClientField): string {
+  const raw = salesClientValue(client, field.key);
+  if (!raw) return '';
+  const option = field.options?.find((o) => o.key === raw);
+  return option?.label || raw;
 }
 

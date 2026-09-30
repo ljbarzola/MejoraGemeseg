@@ -42,6 +42,10 @@ export class UpdateUserDto {
   @IsOptional()
   roleId?: number | null;
 
+  @IsInt()
+  @IsOptional()
+  locationId?: number | null;
+
   @IsOptional()
   isActive?: boolean;
 }

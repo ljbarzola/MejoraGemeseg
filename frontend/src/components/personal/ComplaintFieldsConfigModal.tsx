@@ -96,7 +96,7 @@ export default function ComplaintFieldsConfigModal({ onClose }: Props) {
           <button className="modal-close" onClick={onClose}><X size={16} /></button>
         </div>
         <div className="modal-body">
-          <p style={{ fontSize: '0.82rem', color: '#718096', marginBottom: '14px' }}>
+          <p style={{ fontSize: '0.82rem', color: '#718096', margin: '0 0 14px' }}>
             La descripción y la opción de anónimo siempre están presentes. Aquí puedes agregar campos extra (ej. Departamento, Cargo) y marcar cuáles son obligatorios.
           </p>
 

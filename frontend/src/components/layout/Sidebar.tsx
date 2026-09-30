@@ -22,6 +22,7 @@ export default function Sidebar() {
   const [ventasOpen, setVentasOpen] = useState(false);
   const [custodiasOpen, setCustodiasOpen] = useState(false);
   const [sistemasOpen, setSistemasOpen] = useState(false);
+  const [contratacionPublicaOpen, setContratacionPublicaOpen] = useState(false);
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
@@ -36,6 +37,7 @@ export default function Sidebar() {
   const isVentasActive = location.pathname.startsWith('/ventas');
   const isCustodiasActive = location.pathname.startsWith('/custodias');
   const isSistemasActive = location.pathname.startsWith('/sistemas');
+  const isContratacionPublicaActive = location.pathname.startsWith('/contratacion-publica');
 
   const navItems = [
     { label: 'Inicio', path: '/dashboard', icon: '⌂', show: true },
@@ -94,6 +96,15 @@ export default function Sidebar() {
     { label: 'Nómina y Liquidación', path: '/custodias/nomina', icon: '💰' },
     { label: 'Consulta por Cédula', path: '/custodias/trabajador', icon: '🔍' },
     { label: 'Asistente GEME-BOT', path: '/custodias/gemebot', icon: '🤖' },
+  ];
+
+  const contratacionPublicaItems = [
+    { label: 'Contratos', path: '/contratacion-publica/contratos', icon: '📄' },
+    { label: 'Entidades Públicas', path: '/contratacion-publica/entidades', icon: '🏛️' },
+    { label: 'Horarios', path: '/contratacion-publica/horarios', icon: '🗓️' },
+    { label: 'Informes', path: '/contratacion-publica/informes', icon: '📊' },
+    { label: 'Códigos de Turno', path: '/contratacion-publica/config/codigos-turno', icon: '🎨' },
+    { label: 'Textos Institucionales', path: '/contratacion-publica/config/textos-institucionales', icon: '📝' },
   ];
 
   const sistemasSubItems = [
@@ -287,6 +298,40 @@ export default function Sidebar() {
             {!collapsed && ventasOpen && (
               <div style={{ marginLeft: '12px', borderLeft: '2px solid #e2e8f0', paddingLeft: '0' }}>
                 {renderSubItems(ventasItems)}
+              </div>
+            )}
+          </>
+        )}
+
+        {canView('CONTRATACION_PUBLICA') && (
+          <>
+            <button
+              className={`sidebar-link ${isContratacionPublicaActive ? 'sidebar-link-active' : ''}`}
+              onClick={() => {
+                if (collapsed) {
+                  navigate('/contratacion-publica/contratos');
+                } else {
+                  setContratacionPublicaOpen(!contratacionPublicaOpen);
+                  if (!contratacionPublicaOpen) navigate('/contratacion-publica/contratos');
+                }
+              }}
+              title={collapsed ? 'Contratación Pública' : undefined}
+              style={{ justifyContent: 'space-between' }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span className="sidebar-icon">🏛️</span>
+                {!collapsed && <span className="sidebar-label">Contratación Pública</span>}
+              </span>
+              {!collapsed && (
+                <span style={{ fontSize: '0.7rem', transition: 'transform 0.2s', transform: contratacionPublicaOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▶
+                </span>
+              )}
+            </button>
+
+            {!collapsed && contratacionPublicaOpen && (
+              <div style={{ marginLeft: '12px', borderLeft: '2px solid #e2e8f0', paddingLeft: '0' }}>
+                {renderSubItems(contratacionPublicaItems)}
               </div>
             )}
           </>

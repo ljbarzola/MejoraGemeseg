@@ -267,6 +267,15 @@ export class DriveController {
     return this.driveService.deleteJobPosition(id, req.user.companyId);
   }
 
+  @Post('reclutamiento/puestos/:id/duplicate')
+  @Section('RRHH', 'write')
+  duplicateJobPosition(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+  ) {
+    return this.driveService.duplicateJobPosition(id, req.user.companyId);
+  }
+
   @Post('reclutamiento/sync')
   @Section('RRHH', 'write')
   syncReclutamientoCandidates(@Req() req: any) {

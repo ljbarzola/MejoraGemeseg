@@ -60,10 +60,11 @@ Gemeseg Mejora es una plataforma web de gestion interna para GEMESEG (Ecuador), 
 - **Herramientas**: Lista de herramientas asignadas al usuario.
 - **Estadisticas**: Proyectos creados, asignados, tareas asignadas.
 
-### Asistente de IA
+### Asistente de IA — "Agente Gemeseg"
 - **Chat flotante**: Boton FAB + drawer lateral.
-- **GitHub Models**: Integra con `gpt-4o-mini` via GitHub Models API.
-- **Fallback mock**: Respuestas predefinidas cuando no hay token configurado.
+- **Google Vertex AI (Gemini)**: motor conversacional desde 2026-09-29 (reemplaza a GitHub Models, retirado por el proveedor). Ver `.agents/modules/agents-ai.md`.
+- **Fallback mock**: Respuestas predefinidas cuando Vertex no esta configurado.
+- **Base de Conocimiento institucional**: documento Markdown por empresa, editable por el ADMIN desde Sistemas, usado como contexto extra y filtrado segun los permisos del usuario.
 - **Rate limit**: 50 mensajes/dia por usuario.
 - **Contexto**: Detecta la pagina actual para respuestas contextualizadas.
 - **Conversaciones**: Cada combinacion agente+usuario tiene sus propias conversaciones guardadas en BD.
@@ -132,7 +133,7 @@ Gemeseg Mejora es una plataforma web de gestion interna para GEMESEG (Ecuador), 
 ```bash
 cd backend
 npm install
-# Configurar .env con DATABASE_URL, JWT_SECRET, GITHUB_TOKEN (opcional)
+# Configurar .env con DATABASE_URL, JWT_SECRET (GOOGLE_VERTEX_PROJECT/LOCATION/CHAT_MODEL opcionales, ver AGENTS.md)
 npx prisma migrate dev
 node prisma/seed.js        # Crea usuarios y proyectos de prueba
 npm run start:dev          # http://localhost:3000
@@ -218,7 +219,7 @@ MejoraGemeseg/
 │       │   ├── users/          # Gestion de usuarios (admin) + perfil
 │       │   ├── tasks/          # CRUD tareas individuales
 │       │   ├── tools/          # Inventario de herramientas
-│       │   ├── ai/             # Asistente IA (GitHub Models)
+│       │   ├── ai/             # Asistente IA "Agente Gemeseg" (Google Vertex AI)
 │       │   ├── agents/         # Agentes de IA
 │       │   └── companies/      # Gestion de empresas (white-labeling)
 │       └── prisma/             # PrismaService
@@ -320,7 +321,7 @@ MejoraGemeseg/
 - **Base de datos**: PostgreSQL 16 (Cloud SQL `gemeseg-db` en produccion)
 - **Autenticacion**: JWT (Passport.js)
 - **Validacion**: class-validator (backend) + Zod (frontend)
-- **IA**: GitHub Models (gpt-4o-mini)
+- **IA**: Google Vertex AI (Gemini) — ver `AGENTS.md` y `.agents/modules/agents-ai.md`
 - **Estilos**: CSS custom con paleta corporativa GEMESEG
 - **Deploy**: Cloud Run (backend) + Firebase Hosting (frontend) + Cloud SQL (DB), todo desde `cloudbuild.yaml`
 

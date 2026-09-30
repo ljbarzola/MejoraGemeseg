@@ -21,12 +21,14 @@ import {
   Sparkles,
   Lock,
   Trash2,
+  Copy,
 } from 'lucide-react';
 import {
   getJobPositions,
   deleteJobPosition,
   createJobPosition,
   updateJobPosition,
+  duplicateJobPosition,
   syncReclutamientoCandidates,
   syncJobPositionsFromDrive,
   getDriveConfig,
@@ -679,6 +681,25 @@ export default function ReclutamientoPage() {
     }
   };
 
+  // Duplicar una vacante: el backend copia formulario/documentos requeridos,
+  // estado y tipo de contratación, le pone un nombre distinto ("... (copia)")
+  // y crea una carpeta de Drive nueva y separada.
+  const [duplicandoVacanteId, setDuplicandoVacanteId] = useState<number | null>(null);
+  const handleDuplicarVacante = async (p: JobPosition) => {
+    setEstadoVacanteError('');
+    setDuplicandoVacanteId(p.id);
+    try {
+      await duplicateJobPosition(p.id);
+      loadPositions();
+    } catch (err: any) {
+      setEstadoVacanteError(
+        err.response?.data?.message || 'No se pudo duplicar la vacante. Inténtalo de nuevo.',
+      );
+    } finally {
+      setDuplicandoVacanteId(null);
+    }
+  };
+
   // Eliminar una vacante. El backend manda su carpeta de Drive a la PAPELERA
   // (no la borra definitivamente), justamente porque ahí adentro pueden vivir
   // las carpetas de candidatos que ya se postularon: si se elimina por error,
@@ -1030,6 +1051,14 @@ export default function ReclutamientoPage() {
                         title="Editar vacante"
                       >
                         <Pencil size={15} />
+                      </button>
+                      <button
+                        onClick={() => handleDuplicarVacante(p)}
+                        disabled={duplicandoVacanteId === p.id}
+                        style={{ background: 'none', border: 'none', color: duplicandoVacanteId === p.id ? '#a0aec0' : '#718096', cursor: duplicandoVacanteId === p.id ? 'default' : 'pointer', display: 'flex', padding: '4px' }}
+                        title="Duplicar vacante"
+                      >
+                        <Copy size={15} />
                       </button>
                       <button
                         onClick={() => { setEstadoVacanteError(''); setConfirmandoEliminarVacante(p); }}

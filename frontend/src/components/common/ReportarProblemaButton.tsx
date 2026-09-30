@@ -87,13 +87,7 @@ export default function ReportarProblemaButton() {
       <button
         onClick={() => setOpen(true)}
         title="Reportar un problema a Sistemas"
-        style={{
-          position: 'fixed', bottom: '32px', right: '104px', zIndex: 900,
-          width: '48px', height: '48px', borderRadius: '50%', border: 'none',
-          background: 'var(--azul-oscuro)', color: 'white', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
-        }}
+        className="report-problem-fab"
       >
         <Wrench size={22} />
       </button>

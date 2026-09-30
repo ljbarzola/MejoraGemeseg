@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import {
   getConversations,
   getConversationMessages,
+  deleteConversation,
   sendMessage,
   getActiveAgentId,
   setActiveAgentId,
@@ -12,6 +13,7 @@ import {
 } from '../../services/chat.service';
 import { getAvailableAgents, setActiveAgent } from '../../services/agent.service';
 import type { Agent } from '../../types/agent';
+import ConfirmDialog from '../common/ConfirmDialog';
 
 interface ChatDrawerProps {
   isOpen: boolean;
@@ -50,6 +52,7 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
 
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [confirmandoEliminarConv, setConfirmandoEliminarConv] = useState<Conversation | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -63,10 +66,13 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
         setDefaultAgent(data.defaultAgent);
         setAgentsLoaded(true);
         const saved = getActiveAgentId();
-        if (saved) {
-          setActiveAgentIdState(saved);
-          loadConversations(saved);
-        }
+        setActiveAgentIdState(saved);
+        // Antes solo se pedía el historial si el usuario ya había elegido un
+        // agente a mano alguna vez (localStorage). Con el agente por defecto
+        // (el flujo normal, sin tocar el selector) esa condición nunca se
+        // cumplía y el historial nunca se pedía al servidor — parecía que
+        // las conversaciones no se guardaban, cuando sí se guardaban.
+        loadConversations(saved);
       }).catch(() => {});
     }
   }, [isOpen, agentsLoaded]);
@@ -127,6 +133,21 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
     setIsNewConversation(true);
     setMessages([]);
     setTimeout(() => inputRef.current?.focus(), 100);
+  }
+
+  async function confirmarEliminarConversacion() {
+    if (!confirmandoEliminarConv) return;
+    const conv = confirmandoEliminarConv;
+    setConfirmandoEliminarConv(null);
+    try {
+      await deleteConversation(conv.id);
+      if (activeConversationId === conv.id) {
+        setActiveConversationId(null);
+        setIsNewConversation(false);
+        setMessages([]);
+      }
+      loadConversations(activeAgentId);
+    } catch {}
   }
 
   function handleBackToList() {
@@ -200,7 +221,7 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
             <div className="chat-bot-icon">{getAgentEmoji(currentAgent)}</div>
             <div className="chat-header-title-wrapper">
               <button className="chat-header-title-btn" onClick={() => setShowAgentMenu(!showAgentMenu)}>
-                <span className="chat-header-title">{currentAgent?.name || 'Agente GEMESEG'}</span>
+                <span className="chat-header-title">{currentAgent?.name || 'Agente Gemeseg'}</span>
                 <span className="chat-agent-arrow">{showAgentMenu ? '▲' : '▼'}</span>
               </button>
               <div className="chat-header-context">
@@ -302,25 +323,34 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
             ) : (
               <div className="chat-conversations-list">
                 {conversations.map((conv) => (
-                  <button
-                    key={conv.id}
-                    className="chat-conv-item"
-                    onClick={() => handleSelectConversation(conv)}
-                  >
-                    <div className="chat-conv-item-header">
-                      <span className="chat-conv-item-icon">💬</span>
-                      <span className="chat-conv-item-context">{conv.context}</span>
-                      <span className="chat-conv-item-count">{conv._count.messages}</span>
-                    </div>
-                    <div className="chat-conv-item-date">
-                      {new Date(conv.updatedAt).toLocaleDateString('es-EC', {
-                        day: 'numeric',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </div>
-                  </button>
+                  <div key={conv.id} className="chat-conv-item-row">
+                    <button
+                      className="chat-conv-item"
+                      onClick={() => handleSelectConversation(conv)}
+                    >
+                      <div className="chat-conv-item-header">
+                        <span className="chat-conv-item-icon">💬</span>
+                        <span className="chat-conv-item-context">{conv.context}</span>
+                        <span className="chat-conv-item-count">{conv._count.messages}</span>
+                      </div>
+                      <div className="chat-conv-item-date">
+                        {new Date(conv.updatedAt).toLocaleDateString('es-EC', {
+                          day: 'numeric',
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className="chat-conv-item-delete"
+                      title="Eliminar conversación"
+                      onClick={(e) => { e.stopPropagation(); setConfirmandoEliminarConv(conv); }}
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -349,6 +379,17 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
           </div>
         )}
       </div>
+
+      {confirmandoEliminarConv && (
+        <ConfirmDialog
+          title="Eliminar conversación"
+          message="¿Eliminar esta conversación? Esta acción no se puede deshacer."
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={confirmarEliminarConversacion}
+          onCancel={() => setConfirmandoEliminarConv(null)}
+        />
+      )}
     </div>
   );
 }
