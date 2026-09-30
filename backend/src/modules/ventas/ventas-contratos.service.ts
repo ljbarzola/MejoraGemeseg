@@ -246,7 +246,11 @@ export class VentasContratosService {
   async submitPublicFill(
     token: string,
     values: Record<string, any>,
-  ): Promise<{ success: true; redirectToSign?: string | null }> {
+  ): Promise<{
+    success: true;
+    redirectToSign?: string | null;
+    driveWarning?: string;
+  }> {
     const contract = await this.prisma.salesContract.findFirst({
       where: { clientFillToken: token },
       include: { template: { include: { fields: true } } },
@@ -283,10 +287,15 @@ export class VentasContratosService {
     }
 
     try {
-      const { pdfBuffer, pdfUrl } = await this.generatePdfInternal(updatedContract);
+      const { pdfBuffer, pdfUrl, driveWarning: genWarning } = await this.generatePdfInternal(updatedContract);
       (updatedContract as any).generatedPdfPath = pdfUrl;
-      const { signingUrl } = await this.sendToSignWellInternal(updatedContract, pdfBuffer);
-      return { success: true, redirectToSign: signingUrl };
+      const { signingUrl, driveWarning: sendWarning } = await this.sendToSignWellInternal(updatedContract, pdfBuffer);
+      // No se muestra al cliente en CompletarContrato.tsx a propósito — un
+      // aviso de "no se pudo respaldar en Drive" es un asunto interno del
+      // vendedor, no algo que el firmante externo necesite ver en esta
+      // página pública. Queda igual en la respuesta por si en el futuro se
+      // arma una vista interna que dé seguimiento a estos envíos públicos.
+      return { success: true, redirectToSign: signingUrl, driveWarning: genWarning || sendWarning };
     } catch (err: any) {
       this.logger.warn(
         `Auto-envío a SignWell falló tras completar el link público del contrato ${contract.id}: ${err.message}`,
@@ -324,8 +333,8 @@ export class VentasContratosService {
       );
     }
 
-    const { pdfUrl } = await this.generatePdfInternal(contract);
-    return { success: true, pdfUrl };
+    const { pdfUrl, driveWarning } = await this.generatePdfInternal(contract);
+    return { success: true, pdfUrl, driveWarning };
   }
 
   /**
@@ -336,7 +345,7 @@ export class VentasContratosService {
    */
   private async generatePdfInternal(
     contract: any,
-  ): Promise<{ pdfBuffer: Buffer; pdfUrl: string }> {
+  ): Promise<{ pdfBuffer: Buffer; pdfUrl: string; driveWarning?: string }> {
     const contractId = contract.id;
 
     // Set status to GENERATING
@@ -509,14 +518,14 @@ export class VentasContratosService {
         data: { contractId, type: 'GENERADO', filePath: generatedPdfPath },
       });
 
-      await this.uploadToDriveIfConfigured(
+      const driveWarning = await this.uploadToDriveIfConfigured(
         template,
         contract.companyId,
         pdfBuffer,
         this.driveFileName(contract, 'generado'),
       );
 
-      return { pdfBuffer, pdfUrl: generatedPdfPath };
+      return { pdfBuffer, pdfUrl: generatedPdfPath, driveWarning };
     } catch (err: any) {
       // Revert to DRAFT on error
       await this.prisma.salesContract.update({
@@ -740,31 +749,36 @@ export class VentasContratosService {
    * Best-effort upload of a generated/sent/signed PDF into this template's
    * Drive folder. Drive storage is optional — if the company hasn't
    * hardcoded Drive root (VENTAS_CONTRATOS in HARDCODED_DRIVE_FOLDERS), this
-   * is a no-op. Any Drive failure is logged and swallowed: generating/sending
-   * a contract must never fail because of a Drive problem.
+   * is a no-op. Any Drive failure is logged and swallowed here (generating/
+   * sending a contract must never fail because of a Drive problem) but the
+   * message is returned so callers can pass it up to the UI as a
+   * non-blocking warning — otherwise this failure was 100% invisible to
+   * whoever was waiting for a "backed up to Drive" contract.
    */
   private async uploadToDriveIfConfigured(
     template: { id: number; name: string; driveFolderId: string | null },
     companyId: number,
     pdfBuffer: Buffer,
     fileName: string,
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     try {
       const folderId = await this.getOrCreateTemplateDriveFolder(
         template,
         companyId,
       );
-      if (!folderId) return;
+      if (!folderId) return undefined;
       await this.driveService.uploadFile(
         folderId,
         pdfBuffer,
         fileName,
         'application/pdf',
       );
+      return undefined;
     } catch (err: any) {
       this.logger.warn(
         `No se pudo subir "${fileName}" a Drive para la plantilla ${template.id}: ${err.message}`,
       );
+      return err.message || 'Error desconocido al subir a Drive';
     }
   }
 
@@ -1046,11 +1060,17 @@ export class VentasContratosService {
       contract.clientEmail = email;
     }
 
-    const { documentId } = await this.sendToSignWellInternal(contract, pdfBuffer, {
-      subject: overrides.subject,
-      message: overrides.message,
-    });
-    return { success: true, documentId };
+    const { documentId, signingUrl, driveWarning } =
+      await this.sendToSignWellInternal(contract, pdfBuffer, {
+        subject: overrides.subject,
+        message: overrides.message,
+      });
+    // `signingUrl` no se persiste (SignWell no lo repite tal cual en el GET
+    // de estado — ver `getSignatureStatus`, que sí expone el suyo propio por
+    // firmante) — se devuelve solo para que quien envía pueda copiarlo aquí
+    // mismo en vez de depender de que el correo le llegue al destinatario
+    // (útil sobre todo en pruebas, con SIGNWELL_TEST_MODE).
+    return { success: true, documentId, signingUrl, driveWarning };
   }
 
   /**
@@ -1074,7 +1094,11 @@ export class VentasContratosService {
     contract: any,
     pdfBuffer: Buffer,
     email: { subject?: string; message?: string } = {},
-  ): Promise<{ documentId: string; signingUrl: string | null }> {
+  ): Promise<{
+    documentId: string;
+    signingUrl: string | null;
+    driveWarning?: string;
+  }> {
     const apiKey = this.getSignWellKey();
     if (!apiKey)
       throw new BadRequestException('SIGNWELL_API_KEY no configurada');
@@ -1150,14 +1174,14 @@ export class VentasContratosService {
         },
       });
 
-      await this.uploadToDriveIfConfigured(
+      const driveWarning = await this.uploadToDriveIfConfigured(
         contract.template,
         contract.companyId,
         pdfBuffer,
         this.driveFileName(contract, 'enviado'),
       );
 
-      return { documentId, signingUrl };
+      return { documentId, signingUrl, driveWarning };
     } catch (err: any) {
       const providerMessage = err.response?.data?.errors || err.response?.data?.message;
       // Log the full SignWell response — the generic "unknown error processing
@@ -1186,6 +1210,19 @@ export class VentasContratosService {
    * own id (returned once, when the webhook was registered via
    * `POST /api/v1/hooks` — see CONTRATOS-PLAN.md). No raw-body middleware
    * needed, unlike some other providers' signature schemes.
+   *
+   * Every failure path here (missing webhook id, bad hash, unknown
+   * document, failed PDF download) only logs and returns — there is no
+   * browser session to toast. That's an accepted tradeoff, not an
+   * oversight: this is the only way a contract reaches SIGNED
+   * automatically, so if the webhook silently fails, the contract is stuck
+   * showing SENT with no error anywhere in the UI. The mitigation is the
+   * "🔄 Actualizar" button in ContratoResult.tsx (`getSignatureStatus`
+   * below), which polls SignWell directly on demand and reaches the same
+   * `markContractSigned` end state — so a human who notices a contract is
+   * stuck can always unstick it by hand. Building a dedicated "webhook
+   * failures" admin surface was judged out of scope until that manual
+   * button proves insufficient in practice.
    */
   async handleSignWellWebhook(payload: any): Promise<{ received: boolean }> {
     const webhookId = process.env.SIGNWELL_WEBHOOK_ID;
@@ -1255,7 +1292,7 @@ export class VentasContratosService {
       template: any;
     },
     pdfBuffer: Buffer,
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     const fileName = `${contract.id}_firmado_${Date.now()}.pdf`;
     await saveContractPdf(this.prisma, fileName, pdfBuffer);
     const publicPath = `/api/ventas/contratos/file/${fileName}`;
@@ -1267,7 +1304,7 @@ export class VentasContratosService {
       where: { id: contract.id },
       data: { status: 'SIGNED', signedAt: new Date(), signwellStatus: 'Completed' },
     });
-    await this.uploadToDriveIfConfigured(
+    return this.uploadToDriveIfConfigured(
       contract.template,
       contract.companyId,
       pdfBuffer,
@@ -1321,14 +1358,19 @@ export class VentasContratosService {
       status: r.status || null,
       bounced: !!r.bounced,
       bouncedDetails: r.bounced_details || null,
+      // Mismo link que se devuelve al enviar (sendContract) — SignWell lo
+      // sigue exponiendo aquí mientras el documento no esté firmado, así que
+      // esto sirve para recuperarlo si se perdió el de la pantalla de envío.
+      signingUrl: r.signing_url || null,
     }));
 
     let contractStatus = contract.status;
+    let driveWarning: string | undefined;
     const isCompleted = remoteStatus === 'Completed' || remoteStatus === 'Manually completed';
     if (isCompleted && contract.status !== 'SIGNED') {
       const pdfBuffer = await this.downloadSignWellCompletedPdf(contract.signwellDocumentId);
       if (pdfBuffer) {
-        await this.markContractSigned(contract, pdfBuffer);
+        driveWarning = await this.markContractSigned(contract, pdfBuffer);
         contractStatus = 'SIGNED';
       }
     } else if (!isCompleted) {
@@ -1343,6 +1385,7 @@ export class VentasContratosService {
       status: remoteStatus,
       contractStatus,
       recipients,
+      driveWarning,
     };
   }
 
@@ -1416,14 +1459,14 @@ export class VentasContratosService {
       data: { status: 'SIGNED', signedAt: new Date() },
     });
 
-    await this.uploadToDriveIfConfigured(
+    const driveWarning = await this.uploadToDriveIfConfigured(
       contract.template,
       contract.companyId,
       file.buffer,
       this.driveFileName(contract, 'firmado'),
     );
 
-    return { success: true, filePath: publicPath };
+    return { success: true, filePath: publicPath, driveWarning };
   }
 
   // ==================== FILE ACCESS / DOCUMENT HISTORY ====================

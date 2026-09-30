@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { getSalesApiKeys, createSalesApiKey, deleteSalesApiKey, SalesApiKey } from '../../services/ventas.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import { useToast } from '../../contexts/ToastContext';
 
 export default function WebhookConfig() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [keys, setKeys] = useState<SalesApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [keyName, setKeyName] = useState('');
@@ -29,7 +31,9 @@ export default function WebhookConfig() {
     setLoading(true);
     getSalesApiKeys()
       .then(setKeys)
-      .catch(() => {})
+      .catch((err: any) => {
+        showToast(err?.response?.data?.message || 'No se pudieron cargar las API Keys', 'error');
+      })
       .finally(() => setLoading(false));
   };
 

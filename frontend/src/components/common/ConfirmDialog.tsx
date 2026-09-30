@@ -12,6 +12,8 @@ interface ConfirmDialogProps {
   danger?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  // true para un aviso informativo de un solo botón (sin opción de "Cancelar")
+  hideCancel?: boolean;
 }
 
 // Reemplazo de window.confirm: en el navegador esos diálogos nativos quedan
@@ -26,6 +28,7 @@ export default function ConfirmDialog({
   danger = false,
   onConfirm,
   onCancel,
+  hideCancel = false,
 }: ConfirmDialogProps) {
   return (
     <div className="modal-overlay" style={{ zIndex: 1100 }} onClick={onCancel}>
@@ -40,9 +43,11 @@ export default function ConfirmDialog({
           <p style={{ margin: 0, color: '#2d3748', lineHeight: 1.5 }}>{message}</p>
         </div>
         <div className="modal-actions">
-          <button onClick={onCancel} className="btn-secondary">
-            {cancelLabel}
-          </button>
+          {!hideCancel && (
+            <button onClick={onCancel} className="btn-secondary">
+              {cancelLabel}
+            </button>
+          )}
           <button
             onClick={onConfirm}
             className="auth-btn"

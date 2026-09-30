@@ -79,6 +79,8 @@ export default function VentasClientesPage() {
       setClients(c);
       setFields(f);
       setStages(s);
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'No se pudieron cargar los clientes', 'error');
     } finally {
       setLoading(false);
     }

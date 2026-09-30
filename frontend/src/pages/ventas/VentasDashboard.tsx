@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getVentasDashboard, setGoal, SalesGoalSeller } from '../../services/ventas.service';
+import { useToast } from '../../contexts/ToastContext';
 
 export default function VentasDashboard() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [editingGoal, setEditingGoal] = useState<SalesGoalSeller | null>(null);
@@ -20,7 +22,9 @@ export default function VentasDashboard() {
     setLoading(true);
     getVentasDashboard()
       .then(setData)
-      .catch(() => {})
+      .catch((err: any) => {
+        showToast(err?.response?.data?.message || 'No se pudo cargar el dashboard comercial', 'error');
+      })
       .finally(() => setLoading(false));
   };
 

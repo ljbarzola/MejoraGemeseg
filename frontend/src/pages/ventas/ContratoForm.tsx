@@ -34,7 +34,10 @@ export default function ContratoForm() {
 
   useEffect(() => { if (!isEditMode) loadTemplates(); }, [isEditMode]);
   useEffect(() => {
-    getSalesClients().then(setClients).catch(() => setClients([]));
+    getSalesClients().then(setClients).catch((err: any) => {
+      setClients([]);
+      showToast(err?.response?.data?.message || 'No se pudieron cargar los clientes', 'error');
+    });
   }, []);
 
   useEffect(() => {
@@ -51,7 +54,9 @@ export default function ContratoForm() {
     try {
       const data = await getTemplates();
       setTemplates(data);
-    } catch { /* */ }
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'No se pudieron cargar las plantillas', 'error');
+    }
   };
 
   const initFieldValues = (fields: SalesTemplateField[] | undefined, existingValues: Record<string, any>) => {
@@ -82,7 +87,9 @@ export default function ContratoForm() {
       const { defaults, tables } = initFieldValues(t.fields, {});
       setFieldValues(defaults);
       setTableValues(tables);
-    } catch { /* */ }
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'No se pudo cargar la plantilla', 'error');
+    }
   };
 
   const loadContractForEdit = async (cid: number) => {
@@ -95,7 +102,10 @@ export default function ContratoForm() {
       const { defaults, tables } = initFieldValues(c.template?.fields, c.fieldValues || {});
       setFieldValues(defaults);
       setTableValues(tables);
-    } catch { navigate('/ventas/contratos'); }
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'No se pudo cargar el contrato', 'error');
+      navigate('/ventas/contratos');
+    }
   };
 
   // Al elegir cliente solo se autocompletan los datos de envío (a quién le
