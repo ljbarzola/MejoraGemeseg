@@ -27,6 +27,7 @@ import {
   SaveDriveConfigDto,
   TestDriveConnectionDto,
   MoverGuardiaEntidadDto,
+  CrearPersonalAdministrativoDto,
 } from './dto/drive.dto';
 import {
   CreateDocumentTypeDto,
@@ -117,6 +118,20 @@ export class DriveController {
     return this.driveService.syncPersonalAdminFolder(
       req.user.companyId,
       req.user.userId,
+    );
+  }
+
+  // Alta manual de personal administrativo: crea su carpeta en Drive, su fila
+  // en el listado y su ficha.
+  @Post('drive/personal-admin')
+  @Section('RRHH', 'write')
+  crearPersonalAdministrativo(
+    @Body() body: CrearPersonalAdministrativoDto,
+    @Req() req: any,
+  ) {
+    return this.driveService.crearPersonalAdministrativo(
+      req.user.companyId,
+      body,
     );
   }
 

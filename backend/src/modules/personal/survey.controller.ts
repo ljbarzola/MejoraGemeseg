@@ -18,6 +18,7 @@ import {
   CreateSurveyDto,
   SetSurveyPublicLinkDto,
   SubmitSurveyResponseDto,
+  UpdateSurveyRecipientsDto,
 } from './dto/survey.dto';
 
 @Controller('personal/surveys')
@@ -70,6 +71,17 @@ export class SurveyController {
       req.user.companyId,
       body.enabled,
     );
+  }
+
+  // Agrega/quita destinatarios (solo de los que aún no responden).
+  @Patch(':id/recipients')
+  @Section('RRHH', 'write')
+  updateRecipients(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateSurveyRecipientsDto,
+    @Req() req: any,
+  ) {
+    return this.surveyService.updateRecipients(id, req.user.companyId, body);
   }
 
   // Publica un borrador (ver SurveyService.publish).

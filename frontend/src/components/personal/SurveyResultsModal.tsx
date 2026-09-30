@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, ChevronDown, ChevronRight } from 'lucide-react';
+import SurveyRecipientsPanel from './SurveyRecipientsPanel';
 import {
   getSurveyResults,
   getSurveyIndividualResults,
@@ -11,6 +12,8 @@ import {
 interface Props {
   surveyId: number;
   onClose: () => void;
+  /** Se llama cuando cambian los destinatarios, para refrescar el listado. */
+  onChanged?: () => void;
 }
 
 function formatAnswerValue(answer: { valueText: string | null; valueJson: unknown; questionId: number }, questionType: string): string {
@@ -124,11 +127,11 @@ function IndividualResponseCard({ response, questions }: { response: SurveyIndiv
   );
 }
 
-export default function SurveyResultsModal({ surveyId, onClose }: Props) {
+export default function SurveyResultsModal({ surveyId, onClose, onChanged }: Props) {
   const [results, setResults] = useState<SurveyResults | null>(null);
   const [individualResults, setIndividualResults] = useState<SurveyIndividualResults | null>(null);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'aggregated' | 'individual'>('aggregated');
+  const [viewMode, setViewMode] = useState<'aggregated' | 'individual' | 'recipients'>('aggregated');
 
   useEffect(() => {
     setLoading(true);
@@ -140,7 +143,7 @@ export default function SurveyResultsModal({ surveyId, onClose }: Props) {
     getSurveyIndividualResults(surveyId).then(setIndividualResults).catch(() => {});
   };
 
-  const handleViewModeChange = (mode: 'aggregated' | 'individual') => {
+  const handleViewModeChange = (mode: 'aggregated' | 'individual' | 'recipients') => {
     setViewMode(mode);
     if (mode === 'individual') loadIndividual();
   };
@@ -157,10 +160,22 @@ export default function SurveyResultsModal({ surveyId, onClose }: Props) {
             <div className="loading-state">Cargando resultados...</div>
           ) : (
             <>
-              <p style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '12px' }}>
-                <strong>{results.totalResponses}</strong> de <strong>{results.totalRecipients}</strong> destinatario(s) respondieron
-                {results.totalRecipients > 0 && ` (${Math.round((results.totalResponses / results.totalRecipients) * 100)}%)`}.
-              </p>
+              {/* Dos canales, dos conteos: la app tiene total (los asignados) y
+                  saca porcentaje; el enlace público no tiene total, así que solo
+                  se cuenta lo recibido. */}
+              <div style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '12px', lineHeight: 1.6 }}>
+                {results.totalRecipients > 0 && (
+                  <div>
+                    <strong>A través de la app:</strong> respondieron <strong>{results.recipientsResponded}</strong> de{' '}
+                    <strong>{results.totalRecipients}</strong> ({Math.round((results.recipientsResponded / results.totalRecipients) * 100)}%).
+                  </div>
+                )}
+                {(results.publicResponses > 0 || results.totalRecipients === 0) && (
+                  <div>
+                    <strong>A través del enlace:</strong> <strong>{results.publicResponses}</strong> respuesta{results.publicResponses === 1 ? '' : 's'} recibida{results.publicResponses === 1 ? '' : 's'}.
+                  </div>
+                )}
+              </div>
 
               {/* Toggle de vista */}
               <div style={{ display: 'flex', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', marginBottom: '18px' }}>
@@ -188,7 +203,32 @@ export default function SurveyResultsModal({ surveyId, onClose }: Props) {
                 >
                   Por persona
                 </button>
+                <button
+                  type="button"
+                  onClick={() => handleViewModeChange('recipients')}
+                  style={{
+                    flex: 1, padding: '8px 12px', border: 'none', borderLeft: '1px solid #e2e8f0',
+                    cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600,
+                    background: viewMode === 'recipients' ? 'var(--azul-oscuro)' : '#fff',
+                    color: viewMode === 'recipients' ? '#fff' : '#4a5568',
+                  }}
+                >
+                  Destinatarios
+                </button>
               </div>
+
+              {viewMode === 'recipients' && (
+                <SurveyRecipientsPanel
+                  surveyId={surveyId}
+                  status={results.status}
+                  onChanged={() => {
+                    // Los conteos de arriba y el detalle por persona quedaron viejos.
+                    getSurveyResults(surveyId).then(setResults).catch(() => {});
+                    setIndividualResults(null);
+                    onChanged?.();
+                  }}
+                />
+              )}
 
               {/* Vista agregada */}
               {viewMode === 'aggregated' && results.questions.map((q) => (

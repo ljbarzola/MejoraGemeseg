@@ -19,15 +19,15 @@ const TYPE_LABEL: Record<PersonalFieldType, string> = {
   BOOLEAN: 'Sí/No',
 };
 
-// Nombres, apellidos, cédula y (para Personal Administrativo) puesto nunca
-// son PersonalFieldDefinition — vienen del nombre de la carpeta de Drive del
-// empleado (ver parseEmployeeFolderName/parsePersonalAdminFolderName) y no
-// son editables desde ningún lado de la app. Se listan igual acá, fijos y
-// sin acciones, para que quede claro que existen y por qué no aparecen como
-// campo configurable.
+// Nombres, apellidos y cédula nunca son PersonalFieldDefinition — son la
+// identidad de la persona (se editan en la parte de arriba de la ficha, ver
+// CamposIdentidad) y definen su carpeta de Drive. Se listan igual acá, fijos
+// y sin acciones, para que quede claro que existen y por qué no aparecen
+// como campo configurable. El "Puesto" del personal administrativo sí es un
+// campo normal (ver DEFAULT_FIELDS_BY_SCOPE en el backend).
 const CAMPOS_FIJOS: Record<PersonalFieldScope, string[]> = {
   GUARDIA: ['Nombres', 'Apellidos', 'Cédula'],
-  PERSONAL_ADMIN: ['Nombres', 'Apellidos', 'Cédula', 'Puesto'],
+  PERSONAL_ADMIN: ['Nombres', 'Apellidos', 'Cédula'],
 };
 
 const CATEGORY_LABEL: Record<PersonalFieldCategory, string> = {

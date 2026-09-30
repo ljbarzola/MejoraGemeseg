@@ -99,10 +99,17 @@ export class ComplaintStageService {
       where: { companyId },
     });
 
+    // La primera etapa de la empresa es siempre la inicial: si no, la
+    // validación de integridad la rechazaría (0 iniciales) y el usuario
+    // quedaría sin forma de crear la primera desde el modal.
+    const esPrimera = count === 0;
+    const isInitial = esPrimera ? true : (data.isInitial ?? false);
+    const isFinal = esPrimera ? false : (data.isFinal ?? false);
+
     // Si esta va a ser la etapa inicial, desmarca la anterior en la misma
     // transacción — solo puede haber una etapa inicial por empresa.
     return this.prisma.$transaction(async (tx) => {
-      if (data.isInitial) {
+      if (isInitial) {
         await tx.complaintStage.updateMany({
           where: { companyId, isInitial: true },
           data: { isInitial: false },
@@ -115,8 +122,8 @@ export class ComplaintStageService {
           label: data.label.trim(),
           color: data.color || '#718096',
           order: data.order ?? count,
-          isInitial: data.isInitial ?? false,
-          isFinal: data.isFinal ?? false,
+          isInitial,
+          isFinal,
         },
       });
       await this.validarIntegridadEtapas(tx, companyId);

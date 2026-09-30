@@ -42,6 +42,7 @@ export const DEFAULT_FIELDS_BY_SCOPE: Record<
     { key: 'direccion', label: 'Dirección', type: 'TEXT', category: 'PERSONAL' },
     { key: 'contacto_emergencia_nombre', label: 'Contacto de emergencia — nombre', type: 'TEXT', category: 'PERSONAL' },
     { key: 'contacto_emergencia_telefono', label: 'Contacto de emergencia — teléfono', type: 'TEXT', category: 'PERSONAL' },
+    { key: 'puesto', label: 'Puesto', type: 'TEXT', category: 'LABORAL' },
     { key: 'tipo_contrato', label: 'Tipo de contrato', type: 'TEXT', category: 'LABORAL' },
     { key: 'salario_acordado', label: 'Salario acordado', type: 'NUMBER', category: 'LABORAL' },
   ],

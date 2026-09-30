@@ -16,6 +16,7 @@ import { Readable } from 'stream';
 import {
   cedulaEsDigitosDeCarpeta,
   reasignarCedulaPersona,
+  validarCedulaIngresada,
 } from '../utils/identidad-persona.util';
 import {
   advertenciaNombreCarpeta,
@@ -1213,6 +1214,144 @@ export class DriveService {
     }
 
     return result;
+  }
+
+  // Alta manual de una persona de Personal Administrativo desde la app (sin
+  // pasar por Reclutamiento ni esperar a que alguien cree la carpeta en
+  // Drive). Hace lo mismo que el sync hubiera hecho con una carpeta nueva:
+  // crea la carpeta "Apellidos Nombres" bajo la raíz configurada, la fila del
+  // listado y la ficha (con el puesto), y deja datos.json escrito para que el
+  // próximo sync reconozca a la persona por su cédula.
+  //
+  // Todo lo que puede fallar por validación o por falta de configuración se
+  // revisa ANTES de crear la carpeta, para no dejar una carpeta huérfana en
+  // Drive. Sin cédula se usa la clave interna ID-<folderId>, igual que el sync.
+  async crearPersonalAdministrativo(
+    companyId: number,
+    input: {
+      apellidos: string;
+      nombres: string;
+      cedula?: string | null;
+      puesto?: string | null;
+    },
+  ) {
+    if (!companyId)
+      throw new BadRequestException('Usuario sin empresa asociada');
+
+    const apellidos = normalizarNombrePersona(input.apellidos);
+    const nombres = normalizarNombrePersona(input.nombres);
+    if (!apellidos || !nombres) {
+      throw new BadRequestException('Escribe los apellidos y los nombres.');
+    }
+    const nombre = formatNombrePersona(apellidos, nombres);
+    if (!validarNombrePersona(nombre).valido) {
+      throw new BadRequestException(
+        'El nombre no puede llevar guiones ni una cédula. Escribe solo apellidos y nombres (ej. "Torres Vega" y "María José").',
+      );
+    }
+    const cedulaIngresada = validarCedulaIngresada(input.cedula || '');
+    const puesto = (input.puesto || '').trim();
+
+    // Lanza con su propio mensaje indicando en qué pantalla configurarla.
+    const raizAdmin = await this.getPersonalAdminFolderId(companyId);
+
+    if (cedulaIngresada) {
+      const conEsaCedula = await this.prisma.employeeDriveFolder.findUnique({
+        where: { companyId_cedula: { companyId, cedula: cedulaIngresada } },
+      });
+      if (conEsaCedula) {
+        throw new BadRequestException(
+          `Ya hay una persona registrada con la cédula ${cedulaIngresada} ("${conEsaCedula.employeeName}").`,
+        );
+      }
+    }
+    const nombreNormalizado = this.normalizeFolderName(nombre);
+    const adminExistentes = await this.prisma.employeeDriveFolder.findMany({
+      where: { companyId, folderType: 'PERSONAL_ADMIN' },
+      select: { employeeName: true },
+    });
+    const duplicado = adminExistentes.find(
+      (e) => this.normalizeFolderName(e.employeeName || '') === nombreNormalizado,
+    );
+    if (duplicado) {
+      throw new BadRequestException(
+        `Ya existe una persona llamada "${duplicado.employeeName}" en Personal Administrativo. Si son personas distintas, diferencia los nombres.`,
+      );
+    }
+
+    const drive = this.getDriveClient();
+    let folderId: string;
+    try {
+      const cliente = await this.resolverClienteParaCrear(drive, raizAdmin);
+      const created = await cliente.files.create({
+        requestBody: {
+          name: nombre,
+          parents: [raizAdmin],
+          mimeType: 'application/vnd.google-apps.folder',
+        },
+        fields: 'id',
+        supportsAllDrives: true,
+      });
+      folderId = created.data.id as string;
+    } catch (err: any) {
+      this.logger.error(
+        `No se pudo crear la carpeta de "${nombre}" en Drive: ${err.message}`,
+        err.stack,
+      );
+      throw new BadRequestException(
+        'No se pudo crear la carpeta en Google Drive. Revisa que la carpeta de Personal Administrativo siga compartida con la app e inténtalo de nuevo.',
+      );
+    }
+
+    const cedula = cedulaIngresada || `ID-${folderId}`;
+    const campos: Record<string, string> = {
+      apellidos,
+      nombres,
+      activo: 'true',
+    };
+    if (puesto) campos.puesto = puesto;
+
+    await this.prisma.employeeDriveFolder.create({
+      data: {
+        employeeName: nombre,
+        cedula,
+        puesto: puesto || null,
+        folderId,
+        folderUrl: `https://drive.google.com/drive/folders/${folderId}`,
+        folderType: 'PERSONAL_ADMIN',
+        lastSyncAt: new Date(),
+        companyId,
+      },
+    });
+    await this.prisma.administrativeStaffFicha.upsert({
+      where: { companyId_cedula: { companyId, cedula } },
+      create: { companyId, cedula, camposPersonalizados: campos },
+      update: { camposPersonalizados: campos },
+    });
+
+    // datos.json es un espejo: si falla no se pierde nada (la persona ya está
+    // en la app) y el próximo "Sincronizar" lo vuelve a escribir.
+    try {
+      await this.syncFichaAdministrativo(
+        companyId,
+        cedula,
+        nombre,
+        folderId,
+        undefined,
+      );
+    } catch (err: any) {
+      this.logger.warn(
+        `No se pudo escribir datos.json de "${nombre}" tras el alta manual: ${err.message}`,
+      );
+    }
+
+    return {
+      cedula,
+      employeeName: nombre,
+      puesto: puesto || null,
+      folderId,
+      folderUrl: `https://drive.google.com/drive/folders/${folderId}`,
+    };
   }
 
   async getCompliance(cedula: string, companyId: number) {

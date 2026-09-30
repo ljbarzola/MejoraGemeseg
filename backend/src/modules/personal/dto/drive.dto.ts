@@ -1,4 +1,12 @@
-import { IsString, IsOptional, IsIn, IsInt, IsBoolean } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsIn,
+  IsInt,
+  IsBoolean,
+  IsNotEmpty,
+  MaxLength,
+} from 'class-validator';
 import { Transform } from 'class-transformer';
 import {
   CONFIGURABLE_DRIVE_FOLDER_TYPES,
@@ -29,6 +37,31 @@ export class TestDriveConnectionDto {
   @IsIn([...FOLDER_CONFIG_TYPES])
   @IsOptional()
   type?: string;
+}
+
+// Alta manual de una persona de Personal Administrativo
+// (DriveService.crearPersonalAdministrativo). La cédula es opcional: sin ella
+// la persona entra con una clave interna y se completa después en su ficha.
+export class CrearPersonalAdministrativoDto {
+  @IsString()
+  @IsNotEmpty({ message: 'Escribe los apellidos.' })
+  @MaxLength(80)
+  apellidos: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Escribe los nombres.' })
+  @MaxLength(80)
+  nombres: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(20)
+  cedula?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(120)
+  puesto?: string;
 }
 
 export class MoverGuardiaEntidadDto {
