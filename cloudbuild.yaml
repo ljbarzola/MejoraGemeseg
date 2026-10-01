@@ -30,6 +30,10 @@ steps:
       - '--platform=managed'
       - '--memory=512Mi'
       - '--cpu=1'
+      # CPU extra solo mientras arranca el contenedor (y 10 s después); acorta
+      # el arranque en frío. Ya estaba activo en el servicio; se deja explícito
+      # para que no se pierda en un redeploy. Se factura solo ese tramo.
+      - '--cpu-boost'
       - '--min-instances=0'
       - '--max-instances=10'
       - '--port=8080'

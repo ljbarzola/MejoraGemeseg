@@ -1,4 +1,4 @@
-import { useState, Suspense, lazy } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
@@ -145,12 +145,62 @@ function SinSeccionesDisponibles() {
   );
 }
 
+// Cuando el backend lleva un rato sin tráfico, Cloud Run lo apaga y la primera
+// petición del día espera su arranque en frío (en producción: ~15-20 s, con
+// picos de más de un minuto). Antes la pantalla se quedaba en un "Cargando..."
+// mudo y parecía que la app se había roto. La espera se explica por etapas; la
+// petición en curso NO se toca (no hay timeout: operaciones como la
+// sincronización con Drive tardan legítimamente más de 30 s).
+const ESPERA_AVISO_MS = 4_000;
+const ESPERA_LARGA_MS = 15_000;
+const ESPERA_SIN_RESPUESTA_MS = 45_000;
+
 function LoadingFallback() {
+  const [etapa, setEtapa] = useState(0);
+
+  useEffect(() => {
+    const timers = [
+      setTimeout(() => setEtapa(1), ESPERA_AVISO_MS),
+      setTimeout(() => setEtapa(2), ESPERA_LARGA_MS),
+      setTimeout(() => setEtapa(3), ESPERA_SIN_RESPUESTA_MS),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  const textos = [
+    { titulo: 'Cargando...', detalle: null },
+    {
+      titulo: 'Preparando tu espacio de trabajo…',
+      detalle: 'La primera vez del día toma unos segundos.',
+    },
+    {
+      titulo: 'Esto está tardando más de lo normal.',
+      detalle: 'Sigue en marcha, no cierres esta ventana.',
+    },
+    {
+      titulo: 'Todavía no logramos conectar.',
+      detalle: 'Revisa tu conexión e inténtalo de nuevo. Si el problema continúa, escribe a Sistemas.',
+    },
+  ][etapa];
+
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#718096' }}>
-      <div style={{ textAlign: 'center' }}>
+      <div role="status" aria-live="polite" style={{ textAlign: 'center', maxWidth: 360, padding: '0 16px' }}>
         <div style={{ fontSize: '24px', marginBottom: '8px', animation: 'spin 1s linear infinite' }}>&#8635;</div>
-        <div>Cargando...</div>
+        <div>{textos.titulo}</div>
+        {textos.detalle && (
+          <div style={{ fontSize: '0.85rem', marginTop: 6, color: '#a0aec0' }}>{textos.detalle}</div>
+        )}
+        {etapa === 3 && (
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ marginTop: 16, padding: '10px 20px', fontSize: '0.9rem', border: '1px solid #cbd5e0' }}
+            onClick={() => window.location.reload()}
+          >
+            Reintentar
+          </button>
+        )}
       </div>
     </div>
   );
