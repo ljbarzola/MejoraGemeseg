@@ -98,13 +98,13 @@ export default function Sidebar() {
     { label: 'Asistente GEME-BOT', path: '/custodias/gemebot', icon: '🤖' },
   ];
 
+  // Contratación Pública: por ahora solo "Entidades Públicas" (ver la bandera
+  // CP_MOSTRAR_SUBMODULOS_OCULTOS en App.tsx). Al reactivar, volver a poner
+  // Contratos, Horarios, Informes, Códigos de Turno y Textos Institucionales
+  // (rutas /contratacion-publica/contratos, /horarios, /informes,
+  // /config/codigos-turno y /config/textos-institucionales).
   const contratacionPublicaItems = [
-    { label: 'Contratos', path: '/contratacion-publica/contratos', icon: '📄' },
     { label: 'Entidades Públicas', path: '/contratacion-publica/entidades', icon: '🏛️' },
-    { label: 'Horarios', path: '/contratacion-publica/horarios', icon: '🗓️' },
-    { label: 'Informes', path: '/contratacion-publica/informes', icon: '📊' },
-    { label: 'Códigos de Turno', path: '/contratacion-publica/config/codigos-turno', icon: '🎨' },
-    { label: 'Textos Institucionales', path: '/contratacion-publica/config/textos-institucionales', icon: '📝' },
   ];
 
   const sistemasSubItems = [
@@ -315,10 +315,10 @@ export default function Sidebar() {
               className={`sidebar-link ${isContratacionPublicaActive ? 'sidebar-link-active' : ''}`}
               onClick={() => {
                 if (collapsed) {
-                  navigate('/contratacion-publica/contratos');
+                  navigate('/contratacion-publica/entidades');
                 } else {
                   setContratacionPublicaOpen(!contratacionPublicaOpen);
-                  if (!contratacionPublicaOpen) navigate('/contratacion-publica/contratos');
+                  if (!contratacionPublicaOpen) navigate('/contratacion-publica/entidades');
                 }
               }}
               title={collapsed ? 'Contratación Pública' : undefined}

@@ -130,7 +130,7 @@ export default function EntidadesPublicasList() {
   return (
     <div className="page-container">
       <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/contratacion-publica/contratos')} style={{ alignSelf: 'flex-start' }}>
+        <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
         <div className="page-title-row">
@@ -190,7 +190,7 @@ export default function EntidadesPublicasList() {
               </thead>
               <tbody>
                 {filas.map((e) => (
-                  <tr key={e.id}>
+                  <tr key={e.id} onClick={() => navigate(`/contratacion-publica/entidades/${e.id}`)} style={{ cursor: 'pointer' }}>
                     <td style={{ fontWeight: 700, color: 'var(--azul-oscuro)' }}>
                       <span className="truncate">
                         <Building2 size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
@@ -199,7 +199,7 @@ export default function EntidadesPublicasList() {
                     </td>
                     <td><span className="truncate">{e.ruc || '—'}</span></td>
                     <td><span className="truncate">{e.direccion || '—'}</span></td>
-                    <td style={{ textAlign: 'right' }}>
+                    <td style={{ textAlign: 'right' }} onClick={(ev) => ev.stopPropagation()}>
                       {canEdit && (
                         <RowActionsMenu
                           actions={[

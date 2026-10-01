@@ -35,10 +35,26 @@ describe('buildSystemGuide', () => {
     );
   });
 
-  it('Contratación Pública explica cómo usarlo de cero', () => {
-    expect(buildSystemGuide(['CONTRATACION_PUBLICA'])).toContain(
-      'De cero a un informe mensual',
-    );
+  it('Contratación Pública explica Entidades Públicas y la entrega mensual de documentos', () => {
+    const guide = buildSystemGuide(['CONTRATACION_PUBLICA']);
+    expect(guide).toContain('Entidades Públicas');
+    expect(guide).toContain('Solicitud mensual de documentos');
+    expect(guide).toContain('Entregar un documento');
+  });
+
+  it('Contratación Pública no enseña lo que está oculto (contratos, puestos, horarios, informes, códigos de turno, textos institucionales)', () => {
+    const guide = buildSystemGuide(['CONTRATACION_PUBLICA']);
+    for (const oculto of [
+      /contratos?\b/i,
+      /puestos? de servicio/i,
+      /horarios?/i,
+      /códigos? de turno/i,
+      /textos institucionales/i,
+      /generar pdf/i,
+      /patrón de rotación/i,
+    ]) {
+      expect(guide).not.toMatch(oculto);
+    }
   });
 
   it('RRHH trae la gestión detallada de quejas y encuestas', () => {

@@ -17,6 +17,9 @@ import type {
   TramoPatron,
   GuardiaOrdenPatron,
   PreviewPatronResultado,
+  CPSolicitudesDeEntidad,
+  CPSolicitudMensual,
+  CPCarpetaEntregas,
 } from '../types/contratacion-publica';
 
 const BASE = '/contratacion-publica';
@@ -311,3 +314,71 @@ export const upsertTextoInstitucional = (data: {
 
 export const deleteTextoInstitucional = (clave: string) =>
   api.delete(`${BASE}/textos-institucionales/${clave}`);
+
+// ==================== ENTREGAS DE DOCUMENTOS (otras áreas) ====================
+
+const ENTREGAS = `${BASE}/entregas`;
+
+export const getCarpetaEntregas = (): Promise<CPCarpetaEntregas | null> =>
+  api.get(`${ENTREGAS}/carpeta`).then((r) => r.data || null);
+
+export const saveCarpetaEntregas = (driveFolderId: string): Promise<CPCarpetaEntregas> =>
+  api.put(`${ENTREGAS}/carpeta`, { driveFolderId }).then((r) => r.data);
+
+export const getSolicitudesDeEntidad = (entidadId: number): Promise<CPSolicitudesDeEntidad> =>
+  api.get(`${ENTREGAS}/entidades/${entidadId}/solicitudes`).then((r) => r.data);
+
+export const createSolicitud = (
+  entidadId: number,
+  data: { anio: number; mes: number; copiarMesAnterior: boolean },
+): Promise<CPSolicitudMensual> =>
+  api.post(`${ENTREGAS}/entidades/${entidadId}/solicitudes`, data).then((r) => r.data);
+
+export const getSolicitud = (id: number): Promise<CPSolicitudMensual> =>
+  api.get(`${ENTREGAS}/solicitudes/${id}`).then((r) => r.data);
+
+export const deleteSolicitud = (id: number) => api.delete(`${ENTREGAS}/solicitudes/${id}`);
+
+export const enviarSolicitud = (id: number): Promise<CPSolicitudMensual> =>
+  api.post(`${ENTREGAS}/solicitudes/${id}/enviar`).then((r) => r.data);
+
+export interface EntregaPayload {
+  nombre: string;
+  descripcion?: string;
+  departmentId?: number | null;
+  fechaLimite: string;
+  responsableIds: number[];
+}
+
+export const addDocumentoSolicitud = (
+  solicitudId: number,
+  data: EntregaPayload,
+): Promise<CPSolicitudMensual> =>
+  api.post(`${ENTREGAS}/solicitudes/${solicitudId}/documentos`, data).then((r) => r.data);
+
+export const updateDocumentoSolicitud = (
+  id: number,
+  data: Partial<EntregaPayload>,
+): Promise<CPSolicitudMensual> => api.patch(`${ENTREGAS}/documentos/${id}`, data).then((r) => r.data);
+
+export const deleteDocumentoSolicitud = (id: number): Promise<CPSolicitudMensual> =>
+  api.delete(`${ENTREGAS}/documentos/${id}`).then((r) => r.data);
+
+export const subirArchivoEntrega = (id: number, file: File): Promise<{ url: string }> => {
+  const form = new FormData();
+  form.append('file', file);
+  return api
+    .post(`${ENTREGAS}/documentos/${id}/archivo`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
+    .then((r) => r.data);
+};
+
+export const entregarDocumento = (
+  id: number,
+  data: { origen: 'ARCHIVO' | 'ENLACE'; url: string },
+): Promise<CPSolicitudMensual> => api.post(`${ENTREGAS}/documentos/${id}/entregar`, data).then((r) => r.data);
+
+export const aprobarDocumento = (id: number): Promise<CPSolicitudMensual> =>
+  api.post(`${ENTREGAS}/documentos/${id}/aprobar`).then((r) => r.data);
+
+export const rechazarDocumento = (id: number, motivo: string): Promise<CPSolicitudMensual> =>
+  api.post(`${ENTREGAS}/documentos/${id}/rechazar`, { motivo }).then((r) => r.data);

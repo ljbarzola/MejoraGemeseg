@@ -57,6 +57,7 @@ const CustodiasDashboard = lazy(() => import('./pages/custodias/CustodiasDashboa
 const ConsultaTrabajador = lazy(() => import('./pages/custodias/ConsultaTrabajador'));
 const GemeBotChat = lazy(() => import('./pages/custodias/GemeBotChat'));
 const CPEntidadesPublicasList = lazy(() => import('./pages/contratacion-publica/EntidadesPublicasList'));
+const CPEntidadDetail = lazy(() => import('./pages/contratacion-publica/entidades/EntidadDetail'));
 const CPContratosList = lazy(() => import('./pages/contratacion-publica/contratos/ContratosList'));
 const CPContratoForm = lazy(() => import('./pages/contratacion-publica/contratos/ContratoForm'));
 const CPContratoDetail = lazy(() => import('./pages/contratacion-publica/contratos/ContratoDetail'));
@@ -66,6 +67,14 @@ const CPInformesList = lazy(() => import('./pages/contratacion-publica/informes/
 const CPInformeForm = lazy(() => import('./pages/contratacion-publica/informes/InformeForm'));
 const CPCodigosTurnoConfig = lazy(() => import('./pages/contratacion-publica/config/CodigosTurnoConfig'));
 const CPTextosInstitucionalesConfig = lazy(() => import('./pages/contratacion-publica/config/TextosInstitucionalesConfig'));
+
+// Contratación Pública: desde 2026-10-01 solo está visible "Entidades Públicas"
+// (con el seguimiento de entregas de documentos). Contratos, Horarios, Informes,
+// Códigos de Turno y Textos Institucionales siguen en el código pero están
+// ocultos, y sus rutas redirigen a Entidades Públicas. Para reactivarlos: poner
+// esta bandera en true y devolver los ítems en Sidebar.tsx (contratacionPublicaItems).
+// Ver "Submódulos ocultos" en .agents/modules/contratacion-publica.md.
+const CP_MOSTRAR_SUBMODULOS_OCULTOS = false;
 const PersonalDashboard = lazy(() => import('./pages/personal/PersonalDashboard'));
 const ReclutamientoPage = lazy(() => import('./pages/personal/ReclutamientoPage'));
 const GuardiasList = lazy(() => import('./pages/personal/GuardiasList'));
@@ -392,17 +401,25 @@ function AppInner() {
         <Route path="/custodias/trabajador" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><ConsultaTrabajador /></SectionRoute></ProtectedLayout>} />
         <Route path="/custodias/gemebot" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><GemeBotChat /></SectionRoute></ProtectedLayout>} />
         <Route path="/contratacion-publica/entidades" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPEntidadesPublicasList /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/contratos" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratosList /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/contratos/nuevo" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoForm /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/contratos/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoDetail /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/contratos/:id/editar" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoForm /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/horarios" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPHorarioMensualList /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/horarios/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPHorarioMensualEditor /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/informes" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformesList /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/informes/nuevo" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformeForm /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/informes/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformeForm /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/config/codigos-turno" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPCodigosTurnoConfig /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/config/textos-institucionales" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPTextosInstitucionalesConfig /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/entidades/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPEntidadDetail /></SectionRoute></ProtectedLayout>} />
+        {CP_MOSTRAR_SUBMODULOS_OCULTOS && (
+          <>
+            <Route path="/contratacion-publica/contratos" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratosList /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/contratos/nuevo" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoForm /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/contratos/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoDetail /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/contratos/:id/editar" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoForm /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/horarios" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPHorarioMensualList /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/horarios/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPHorarioMensualEditor /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/informes" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformesList /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/informes/nuevo" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformeForm /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/informes/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformeForm /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/config/codigos-turno" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPCodigosTurnoConfig /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/config/textos-institucionales" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPTextosInstitucionalesConfig /></SectionRoute></ProtectedLayout>} />
+          </>
+        )}
+        {!CP_MOSTRAR_SUBMODULOS_OCULTOS && (
+          <Route path="/contratacion-publica/*" element={<Navigate to="/contratacion-publica/entidades" replace />} />
+        )}
         <Route path="/rrhh" element={<ProtectedLayout><SectionRoute section="RRHH"><PersonalDashboard /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/reclutamiento" element={<ProtectedLayout><SectionRoute section="RRHH"><ReclutamientoPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/guardias" element={<ProtectedLayout><SectionRoute section="RRHH"><GuardiasList /></SectionRoute></ProtectedLayout>} />

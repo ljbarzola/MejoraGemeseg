@@ -128,3 +128,47 @@ Valida que, dia por dia, cada puesto tenga al menos `guardiasSimultaneosRequerid
 
 ## Plantilla del informe mensual: descarga real (2026-09-30)
 Hasta esta fecha "Guardar" en Textos Institucionales solo guardaba el enlace; `docxPath` nunca se llenaba y "Generar PDF" del informe fallaba siempre con "La plantilla del informe mensual no está configurada". Ahora `upsertPlantilla` descarga el `.docx` al guardar (vía `common/utils/drive-docx.util.ts`, que prueba export de Google Docs y descarga directa) y, si el enlace no es público o no es un Word, rechaza el guardado con el motivo. Como el disco de Cloud Run se pierde al reciclarse la instancia, `generarPdf` vuelve a bajar la plantilla del enlace si el archivo ya no está. El enlace debe estar compartido como "Cualquier persona con el enlace".
+
+## Submódulos ocultos (2026-10-01)
+Desde esta fecha **solo "Entidades Públicas" está visible** en el menú. Contratos, Horarios, Informes, Códigos de Turno y Textos Institucionales siguen en el código y en la base, pero ocultos (decisión explícita del usuario: no se borran, se muestran más adelante; los informes pasarán a vivir dentro de la entidad).
+- **Frontend**: la bandera `CP_MOSTRAR_SUBMODULOS_OCULTOS` de `App.tsx` (hoy `false`) apaga las rutas `/contratacion-publica/contratos*`, `/horarios*`, `/informes*` y `/config/*`; cualquier `/contratacion-publica/...` que no exista redirige a `/contratacion-publica/entidades`. `Sidebar.tsx` (`contratacionPublicaItems`) deja solo "Entidades Públicas".
+- **Backend**: no se tocó nada de esos submódulos (endpoints, tablas, datos). Solo dejan de ser alcanzables desde la interfaz.
+- **Agente Gemeseg**: el bloque `CONTRATACION_PUBLICA` de `backend/src/modules/ai/system-guide.util.ts` se reescribió para describir solo Entidades Públicas y las entregas; `system-guide.util.spec.ts` verifica que no mencione lo oculto. La guía completa anterior se recupera del historial de git (commit previo a este cambio).
+- **Para reactivar**: bandera en `true`, devolver los ítems en `Sidebar.tsx`, restaurar la guía del agente y volver a apuntar el botón "Volver" de `EntidadesPublicasList.tsx`.
+- Las secciones de arriba (patrón de rotación, cobertura mínima, intercambio, exportes, plantilla del informe) describen código que existe pero hoy no se usa desde la interfaz.
+
+## Entregas de documentos de otras áreas (2026-10-01)
+Para el informe mensual a cada entidad hacen falta documentos que producen otras áreas (RRHH, Financiero, Operaciones, Legal). Antes se pedían y se esperaban sin saber qué faltaba ni de quién. Este submódulo pide y sigue esas entregas **dentro de la entidad** (`/contratacion-publica/entidades/:id`). Alcance actual: solicitar y seguir; armar el paquete y enviarlo a la entidad quedan para después (ver "Backlog").
+
+**Decisiones del usuario** (no re-proponer lo contrario):
+- Los documentos se asocian a la **entidad**, no al contrato (una entidad puede pedir varios documentos, no solo contratos).
+- **Cada mes es una solicitud independiente** (`CPSolicitudMensual`, única por entidad+año+mes): lo que se pide, las fechas (una por documento) y las personas cambian cada mes y se editan siempre, también ya enviada. No hay plantilla fija; "Copiar la solicitud anterior" duplica documentos, fechas (mismo día del mes, o el último si es más corto) y personas (solo las activas).
+- Cada documento tiene **uno o más responsables** y su propia fecha límite. Contratación Pública **aprueba o rechaza** (el rechazo exige motivo).
+- Entrega por **archivo o enlace**. Los archivos van a **Google Drive** (`<carpeta raíz>/<Entidad>/<AAAA-MM>/`), no al disco de Cloud Run (se borra al reciclar) ni a la base (costo y tamaño de `db-f1-micro`).
+- Avisos por notificación **y** correo. Acceso por sección: las personas de otras áreas reciben **"ver"** en Contratación Pública (un usuario nuevo nace sin ningún permiso, hay que darle "ver" a mano); con solo "ver" únicamente ven y entregan lo que les asignaron.
+
+**Modelos**: `CPSolicitudMensual` (BORRADOR/ENVIADA), `CPEntregaDocumento` (estado PENDIENTE/ENTREGADO/APROBADO/RECHAZADO, `fechaLimite` `@db.Date`, `origen` ARCHIVO/ENLACE, instantáneas de quién entregó/revisó sin FK, `ultimoRecordatorioAt`), `CPEntregaResponsable`. Migración idempotente `20261001_cp_entregas_documentos`.
+
+**Reglas**:
+- BORRADOR: nadie recibe avisos ni lo ve si solo tiene "ver". "Enviar" exige al menos un documento y responsable en todos; manda **un aviso por persona** con todos sus documentos.
+- Con la solicitud ENVIADA: agregar a alguien -> aviso "Nuevo documento"; cambiar la fecha -> aviso a quienes se quedan y se reinicia el recordatorio; quitar a alguien -> pierde el acceso (sin aviso).
+- Entregar: lo hace el responsable o el personal de CP; no se puede en BORRADOR ni sobre un APROBADO. Re-entregar limpia motivo y revisión. Aprobar solo desde ENTREGADO; rechazar desde ENTREGADO o APROBADO (así se reabre).
+- Todos los avisos (`EntregasService.avisar`) son a prueba de fallos: un error al notificar o al mandar el correo se registra y no interrumpe la acción. Sin `NotificationConfig.senderEmail` solo hay aviso dentro del sistema.
+- Fechas en zona horaria de Ecuador (`entregas.util.ts`).
+
+**Recordatorios**: `POST /contratacion-publica/entregas-cron/recordatorios` con header `x-cron-secret` = variable `CRON_SECRET` (sin esa variable el endpoint responde 404; secreto mal -> 401). Lo llama **Cloud Scheduler** una vez al día: el servidor se apaga (`min-instances=0`), así que un `@Cron` interno no es confiable y el repo no usa ninguno. Recuerda PENDIENTE/RECHAZADO a 3 días del límite y el mismo día, una vez por día por documento.
+- **Falta, a propósito, `CRON_SECRET` en `cloudbuild.yaml`**: si se agrega a `--set-secrets` sin que el secreto exista en Secret Manager, falla el despliegue del backend completo. Pasos: crear el secreto `CRON_SECRET`, darle acceso a la cuenta de servicio de Cloud Run, agregarlo a `--set-secrets`, y crear el trabajo de Cloud Scheduler (POST diario, ej. 07:00 `America/Guayaquil`, header `x-cron-secret`) contra `/api/contratacion-publica/entregas-cron/recordatorios`.
+
+**Carpeta de Drive**: `FolderConfig` tipo `CP_ENTREGAS` (configurable, no fijada en código), editable desde el detalle de la entidad (`PUT .../entregas/carpeta`, usa `DriveService.saveConfig` que valida leyendo la carpeta). Debe estar compartida con la cuenta de servicio. Sin carpeta solo se pueden entregar enlaces.
+
+**Endpoints** (`/contratacion-publica/entregas`): `GET|PUT carpeta`; `GET|POST entidades/:entidadId/solicitudes`; `GET|DELETE solicitudes/:id`; `POST solicitudes/:id/enviar`; `POST solicitudes/:id/documentos`; `PATCH|DELETE documentos/:id`; `POST documentos/:id/archivo` (sube a Drive, devuelve `{ url }`), `POST documentos/:id/entregar`, `.../aprobar`, `.../rechazar`. Escribir (armar, enviar, aprobar, rechazar, carpeta) = sección en `write`; listar, abrir, subir y entregar = `view` + comprobación en el servicio de que sea responsable (o tenga `write`).
+
+**Frontend**: `pages/contratacion-publica/entidades/EntidadDetail.tsx` (lista de meses con avance + tabla de documentos con aprobar/rechazar/entregar/editar, copiar mes anterior, banner de la carpeta de Drive); `EntidadesPublicasList.tsx` abre el detalle al hacer clic en la fila. Reutiliza `FileOrLinkInput`, `PromptDialog`, `ConfirmDialog`, `RowActionsMenu`, `useResizableColumns`, `useSortableTable`. Los avisos enlazan a `/contratacion-publica/entidades/:id?solicitud=:sid`.
+
+**Verificación local (2026-10-01)**: recorrido completo por API y por interfaz con un usuario de CP y otro de otra área con solo "ver" (nueva solicitud, duplicada, copia, agregar, enviar, entregar, rechazar, re-entregar, aprobar, cambio de personas y fechas, recordatorios sin repetir el mismo día, rutas ocultas redirigen). No se envió ningún correo real. Los specs (`entregas.util.spec.ts`, `entregas.service.spec.ts`) están escritos pero **no se han ejecutado todavía**.
+
+### Backlog (anotado, no construido)
+- Armar el paquete del mes (ZIP o PDF unido) y enviarlo a la entidad por correo desde el sistema.
+- Abrir las solicitudes solas el día 1 de cada mes.
+- Reactivar los submódulos ocultos (ver arriba).
+- Los usuarios antiguos sin filas de `UserPermission` tienen "escribir" por defecto en toda sección (comportamiento del guard); para que una persona de otra área quede solo en "ver" hay que guardarle sus permisos.
