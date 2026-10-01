@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -20,7 +21,10 @@ import {
   UpdateSalesClientFieldDto,
   CreateReferralDto,
   ChangeSalesClientStageDto,
+  CreateSalesClientActivityDto,
   CreateSalesClientStageDto,
+  MarkSalesClientDoneDto,
+  UpdateSalesClientActivityDto,
   UpdateSalesClientStageDto,
 } from './dto/client.dto';
 
@@ -122,6 +126,88 @@ export class VentasClientesController {
       dto,
       req.user.companyId,
       req.user.userId,
+    );
+  }
+
+  // Dashboard de Ventas basado en Clientes. Va antes de `@Get(':id')` para
+  // que "dashboard" no se lea como un id.
+  @Get('dashboard')
+  @Section('VENTAS', 'view')
+  dashboard(
+    @Req() req: any,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+    @Query('responsable') responsable?: string,
+    @Query('hoy') hoy?: string,
+  ) {
+    return this.clientesService.getDashboard(
+      req.user.companyId,
+      { userId: req.user.userId, role: req.user.role },
+      { desde, hasta, responsable, hoy },
+    );
+  }
+
+  // Ficha del cliente: línea de tiempo y actividades (notas, llamadas...).
+  @Get(':id/timeline')
+  @Section('VENTAS', 'view')
+  timeline(@Req() req: any, @Param('id') id: string) {
+    return this.clientesService.getTimeline(req.user.companyId, +id);
+  }
+
+  @Post(':id/activities')
+  @Section('VENTAS', 'write')
+  addActivity(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: CreateSalesClientActivityDto,
+  ) {
+    return this.clientesService.addActivity(
+      req.user.companyId,
+      +id,
+      req.user.userId,
+      dto,
+    );
+  }
+
+  // Editar/borrar: solo quien la escribió o un ADMIN (lo valida el servicio).
+  @Patch('activities/:activityId')
+  @Section('VENTAS', 'write')
+  updateActivity(
+    @Req() req: any,
+    @Param('activityId') activityId: string,
+    @Body() dto: UpdateSalesClientActivityDto,
+  ) {
+    return this.clientesService.updateActivity(
+      req.user.companyId,
+      +activityId,
+      { userId: req.user.userId, role: req.user.role },
+      dto,
+    );
+  }
+
+  @Delete('activities/:activityId')
+  @Section('VENTAS', 'write')
+  deleteActivity(@Req() req: any, @Param('activityId') activityId: string) {
+    return this.clientesService.deleteActivity(
+      req.user.companyId,
+      +activityId,
+      { userId: req.user.userId, role: req.user.role },
+    );
+  }
+
+  // "Hecho" de la vista Hoy: lo que se hizo + el nuevo siguiente paso.
+  @Post(':id/hecho')
+  @Section('VENTAS', 'write')
+  markDone(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: MarkSalesClientDoneDto,
+  ) {
+    return this.clientesService.markDone(
+      req.user.companyId,
+      +id,
+      req.user.userId,
+      dto,
     );
   }
 

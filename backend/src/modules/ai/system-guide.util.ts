@@ -235,8 +235,14 @@ Los guardias de este padrón son los mismos que se eligen como personal en otros
 const VENTAS = `# Ventas y CRM — guía detallada
 
 ## Acceso y pantallas
-- Menú → "Ventas y CRM". Activas: "Clientes" y "Contratos". "Dashboard", "Planificación y Campo", "Prospectos CRM", "Reportes" y "Config Webhook" aparecen en gris con "Próximamente" (todavía no se usan).
-- Permiso "ver": listar y consultar. "Escribir": crear, editar, borrar, cambiar etapa, asignarse, configurar y generar/enviar contratos.
+- Menú → "Ventas y CRM": "Dashboard", "Clientes" y "Contratos".
+- Permiso "ver": listar y consultar. "Escribir": crear, editar, borrar, cambiar etapa, asignarse, registrar actividades, configurar y generar/enviar contratos.
+
+## Dashboard
+- Menú → "Ventas y CRM" → "Dashboard": cómo van los clientes. Arriba, un selector "Mis clientes" / "Toda la empresa" (ADMIN y MANAGER también pueden elegir a un vendedor) y un rango de fechas (Esta semana, Este mes, Mes pasado, Últimos 90 días). El rango solo afecta a "Nuevos clientes" y "Referidos"; todo lo demás es cómo están las cosas hoy.
+- Contadores: "Seguimientos vencidos", "Para hoy", "Sin siguiente paso" (los tres abren Clientes ya filtrado) y "Aceptación" (aceptados frente a rechazados).
+- Bloques: "Clientes por etapa" (cada barra abre Clientes en esa etapa), "Clientes estancados" (más de 7 días en la misma etapa; el clic abre su ficha), "Nuevos clientes" (por semana), "Referidos", "Contratos de estos clientes" y, al mirar a más de una persona, "Clientes por responsable" (con "Sin responsable" arriba: clientes que nadie atiende).
+- No muestra dinero.
 
 ## Relación entre los sub-módulos Clientes y Contratos
 - Clientes es la ficha de cada cliente (sus datos, su etapa en el pipeline, quién lo atiende y quién lo refirió).
@@ -248,10 +254,14 @@ const VENTAS = `# Ventas y CRM — guía detallada
 
 ## Clientes
 - Barra: "Etapas" (pipeline) y "Campos" (ficha). Filtros: "Buscar por nombre, email, RUC, teléfono o responsable...", "Todos los responsables", limpiar filtros, "+ Nuevo cliente".
-- Tabla: Nombre, Email, Teléfono, Etapa, Responsable, Referido por, Acciones (se pueden mostrar Fecha y otros campos; columnas ordenables y redimensionables).
-  - Etapa: desplegable en la misma fila (incluye "— Sin etapa —"). Al cambiarla: "Etapa actualizada." y, si vino por referido, "Se notificó a quien lo refirió." (campana + correo al empleado que lo refirió).
-  - Responsable: quien atiende al cliente. Si no tiene, botón "Asignarme"; si eres tú, "Quitarme". Nadie asigna a otra persona ni quita a otro.
-  - Acciones: Editar y Eliminar ("Los contratos ya creados no se borran").
+- Dos pestañas: "Todos" y "Hoy (N)". Filtros extra: "Todas las etapas", "Sin responsable" y los que llegan desde el Dashboard (seguimiento vencido/para hoy/sin definir, solo referidos), que aparecen como "Mostrando: … ✕".
+- Tabla "Todos": Nombre, Email, Teléfono, Etapa, Siguiente paso, Para cuándo, Responsable, Referido por, Acciones (se pueden mostrar Fecha y otros campos; columnas ordenables y redimensionables).
+  - Etapa: desplegable en la misma fila (incluye "— Sin etapa —"). Al elegir otra se abre "Cambiar de etapa": muestra "pasará de [etapa actual] → [etapa nueva]" y pregunta el siguiente paso y para cuándo (se puede dejar vacío); botón "Cambiar de etapa". Si la etapa nueva es final (Aceptado/Rechazado) solo pide "Confirmar cambio" y se borra el siguiente paso. Al terminar: "Etapa actualizada." y, si vino por referido, "Se notificó a quien lo refirió." (campana + correo al empleado que lo refirió).
+  - Siguiente paso / Para cuándo: clic para editarlos. La fecha sale en rojo si está vencida ("Vencido · fecha") y en ámbar si es hoy.
+  - Responsable: quien atiende al cliente (solo se muestra el nombre o "Sin asignar").
+  - Acciones (botón "⋯"): "Ver ficha", "Editar cliente", "Asignarme este cliente" (si no tiene responsable) o "Quitarme este cliente" (si eres tú), y "Eliminar" ("Los contratos ya creados no se borran"). Nadie asigna a otra persona ni quita a otro.
+- Pestaña "Hoy": a quién atender hoy. Cada quien ve sus clientes asignados que no están en etapa final, en este orden: seguimiento vencido (el más atrasado primero), para hoy y sin fecha; los de fecha futura no aparecen. Columnas: Siguiente paso, Para cuándo, Etapa, Teléfono. ADMIN y MANAGER tienen un selector "Mis clientes" / "Todos los clientes" / un vendedor. En cada fila, "Hecho": pide "¿Qué hiciste?" (tipo y texto, opcional; queda en el historial del cliente) y el nuevo siguiente paso (vacío = el cliente queda sin siguiente paso); botón "Marcar hecho".
+- Ficha del cliente ("⋯" → "Ver ficha"): panel a la derecha con sus datos, su siguiente paso (botón "Editar") y el "Historial", la línea de tiempo: registro del cliente, cambios de etapa, contratos vinculados (creado, enviado a firma, firmado) y las notas. "Agregar a la línea de tiempo": Tipo (Nota, Llamada, Reunión, Correo u Otro, que pide "¿Cuál?") y el texto → "Agregar". "Correo" es solo un registro a mano: no envía ni lee correos. Cada nota se puede editar o borrar solo por quien la escribió o por un administrador. Los cambios de etapa solo aparecen desde que se empezaron a guardar (30/09/2026) y los contratos solo si se vincularon al cliente al crearlos.
 - "+ Nuevo cliente": Nombre / Razón social (obligatorio), Email (opcional), Teléfono, Cédula / RUC, Dirección, Fuente (Referido / Campaña / Otro con texto), Servicio requerido (Monitoreo / Soluciones Tecnológicas / Seguridad Física), Observaciones, y los campos personalizados → "Guardar".
 - Reglas automáticas: todo cliente nuevo entra en la etapa inicial ("Recibido" por defecto); quien lo crea a mano queda como Responsable; los referidos llegan SIN responsable hasta que alguien pulse "Asignarme" (no llega aviso a Ventas de un referido nuevo: hay que revisar la lista, por ejemplo filtrando los que no tienen responsable).
 - Tres datos distintos: Responsable (quién lo atiende, autoasignado), Referido por (empleado que lo refirió, fijo, no editable), Creado por (solo registro).
@@ -283,7 +293,10 @@ const VENTAS = `# Ventas y CRM — guía detallada
 
 ## Preguntas frecuentes de Ventas
 - "¿Qué relación hay entre Clientes y Contratos?": ver arriba; el contrato toma nombre, email y (si la plantilla lo mapea) otros datos de la ficha del cliente.
-- "¿Cómo atiendo un referido?": Clientes → buscar los que no tienen Responsable → "Asignarme" → ir cambiando la Etapa (el empleado que lo refirió recibe aviso en cada cambio).
+- "¿Cómo atiendo un referido?": Clientes → filtro "Sin responsable" → "⋯" → "Asignarme este cliente" → ir cambiando la Etapa (el empleado que lo refirió recibe aviso en cada cambio).
+- "¿A quién tengo que atender hoy?": Clientes → pestaña "Hoy". Al terminar con uno, "Hecho" y dejar su siguiente paso.
+- "¿Dónde veo lo que se ha hecho con un cliente?": Clientes → "⋯" → "Ver ficha" → "Historial".
+- "¿Qué clientes se están quedando atrás?": Dashboard → "Seguimientos vencidos" y "Clientes estancados".
 - "¿Cómo agrego un dato nuevo al cliente, por ejemplo Representante legal?": Clientes → "Campos" → "Agregar campo nuevo"; luego en la plantilla mapear la variable a ese campo.
 - "El PDF no se genera / sale 'Falta llenar'": completar los campos obligatorios; si la plantilla dice que falta el documento, volver a "Descargar" o subir el Word.
 - "El cliente no recibió el correo de firma": revisar el "Email para el envío" y el "Estado de la firma" ("No entregado" = rebotó); corregir con "Editar campos", regenerar y volver a enviar.`;

@@ -357,6 +357,11 @@ export interface SalesClient {
   assignedUser?: { id: number; fullName: string } | null;
   status?: string | null;
   stage?: SalesClientStage | null;
+  // Siguiente paso con este cliente (vista "Hoy"). La fecha llega como ISO a
+  // medianoche UTC: para compararla con "hoy" usar solo los primeros 10
+  // caracteres ('YYYY-MM-DD'), nunca new Date(), que la correría de día.
+  nextActionText?: string | null;
+  nextActionDate?: string | null;
   createdAt: string;
   creator?: { id: number; fullName: string } | null;
 }
@@ -378,8 +383,85 @@ export const updateSalesClientStage = (id: number, data: Partial<{ label: string
   api.patch(`/ventas/clientes/stages/${id}`, data).then(r => r.data as SalesClientStage);
 export const deleteSalesClientStage = (id: number) =>
   api.delete(`/ventas/clientes/stages/${id}`);
-export const changeSalesClientStage = (id: number, toStatus: string, notes?: string) =>
-  api.patch(`/ventas/clientes/${id}/stage`, { toStatus, notes }).then(r => r.data as SalesClient);
+export const changeSalesClientStage = (
+  id: number,
+  toStatus: string,
+  notes?: string,
+  siguientePaso?: { text: string; date: string },
+) =>
+  api.patch(`/ventas/clientes/${id}/stage`, {
+    toStatus,
+    notes,
+    ...(siguientePaso ? { nextActionText: siguientePaso.text, nextActionDate: siguientePaso.date } : {}),
+  }).then(r => r.data as SalesClient);
+// ---------- Dashboard de Ventas (a partir de Clientes) ----------
+
+export interface DashboardClientes {
+  alcance: { responsable: string; desde: string; hasta: string; hoy: string; esManager: boolean };
+  responsables: { id: number; nombre: string }[];
+  seguimientos: { vencidos: number; hoy: number; sinFecha: number; activos: number };
+  embudo: { key: string | null; label: string; color: string; isFinal: boolean; count: number }[];
+  porResponsable: { userId: number | null; nombre: string; activos: number; vencidos: number; aceptados: number }[];
+  nuevos: { total: number; referidos: number; porSemana: { inicio: string; total: number }[] };
+  referidos: {
+    recibidos: number; sinAtender: number; aceptados: number; rechazados: number;
+    top: { userId: number; nombre: string; total: number }[];
+  };
+  estancados: {
+    dias: number; total: number;
+    lista: { id: number; name: string; etapa: string; color: string; dias: number; responsable: string | null }[];
+  };
+  aceptacion: { aceptados: number; rechazados: number; tasa: number | null };
+  contratos: { borrador: number; enFirma: number; firmados: number; aceptadosSinContrato: number; sinClienteVinculado: number };
+}
+
+// `hoy` es el día local de quien mira (nextActionDate es solo-día).
+export const getDashboardClientes = (params: { desde?: string; hasta?: string; responsable?: string; hoy: string }) =>
+  api.get('/ventas/clientes/dashboard', { params }).then(r => r.data as DashboardClientes);
+
+// ---------- Ficha del cliente: línea de tiempo y actividades ----------
+
+export type SalesActivityType = 'NOTA' | 'LLAMADA' | 'REUNION' | 'CORREO' | 'OTRO';
+
+export const SALES_ACTIVITY_TYPES: { value: SalesActivityType; label: string }[] = [
+  { value: 'NOTA', label: 'Nota' },
+  { value: 'LLAMADA', label: 'Llamada' },
+  { value: 'REUNION', label: 'Reunión' },
+  { value: 'CORREO', label: 'Correo' },
+  { value: 'OTRO', label: 'Otro' },
+];
+
+export interface TimelineStageInfo { label: string; color: string }
+
+export type TimelineEvent =
+  | { kind: 'creado'; id: string; at: string; authorName: string | null; referredByName: string | null }
+  | { kind: 'etapa'; id: string; at: string; authorName: string | null; from: TimelineStageInfo | null; to: TimelineStageInfo | null; notes: string | null }
+  | {
+      kind: 'actividad'; id: string; activityId: number; at: string; authorId: number | null; authorName: string | null;
+      type: SalesActivityType; otherLabel: string | null; text: string; edited: boolean;
+    }
+  | {
+      kind: 'contrato'; id: string; at: string; contractId: number; contractNumber: string | null;
+      templateName: string | null; step: 'creado' | 'enviado' | 'firmado'; authorName?: string | null;
+    };
+
+export const getSalesClientTimeline = (id: number) =>
+  api.get(`/ventas/clientes/${id}/timeline`).then(r => r.data as TimelineEvent[]);
+export const addSalesClientActivity = (id: number, data: { type: SalesActivityType; otherLabel?: string; text: string }) =>
+  api.post(`/ventas/clientes/${id}/activities`, data).then(r => r.data);
+export const updateSalesClientActivity = (activityId: number, data: Partial<{ type: SalesActivityType; otherLabel: string; text: string }>) =>
+  api.patch(`/ventas/clientes/activities/${activityId}`, data).then(r => r.data);
+export const deleteSalesClientActivity = (activityId: number) =>
+  api.delete(`/ventas/clientes/activities/${activityId}`).then(r => r.data);
+// "Hecho" de la vista Hoy: lo que se hizo (opcional) + el nuevo siguiente paso.
+export const markSalesClientDone = (
+  id: number,
+  data: { text?: string; type?: SalesActivityType; otherLabel?: string; nextActionText: string; nextActionDate: string },
+) => api.post(`/ventas/clientes/${id}/hecho`, data).then(r => r.data as SalesClient);
+
+// Texto y fecha vacíos ('') quitan el siguiente paso.
+export const setSalesClientNextAction = (id: number, text: string, date: string) =>
+  api.patch(`/ventas/clientes/${id}`, { nextActionText: text, nextActionDate: date }).then(r => r.data as SalesClient);
 
 // Formulario abierto "Referir un cliente" — cualquier autenticado.
 export const referirCliente = (data: { nombre: string; celular?: string; correo?: string; servicioRequerido?: string; nota?: string }) =>

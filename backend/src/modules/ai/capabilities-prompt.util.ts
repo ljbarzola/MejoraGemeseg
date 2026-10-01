@@ -22,7 +22,31 @@ export interface CapabilityModule {
   titulo: string;
   /** Nombres de intención válidos para este módulo — deben existir en INTENT_SECTION (ai.processor.ts). */
   intents: string[];
+  /**
+   * Cuándo usar cada intención y qué parámetros acepta (parte del contrato
+   * técnico, igual que los nombres: si estuviera en la Base de Conocimiento
+   * editable, un error de tipeo dejaría al modelo sin saber qué pedir). Solo
+   * para módulos con varias intenciones.
+   */
+  ayuda?: string;
 }
+
+// Ventas: qué consulta usar según la pregunta. Los parámetros van entre
+// paréntesis como clave:valor separados por coma (el modelo los escribe y
+// AiService los lee con un split por "," y ":", así que los valores no pueden
+// llevar comas ni dos puntos). Ver ai-ventas.queries.ts.
+const VENTAS_AYUDA = [
+  'Elige UNA intención por respuesta. Si lleva parámetros, van entre paréntesis como clave:valor separados por coma, por ejemplo [INTENCION: ventas_cliente(nombre:Hotel Sol)].',
+  '- ventas_resumen: panorama general (clientes por etapa, seguimientos tuyos y de la empresa, estancados, sin responsable, aceptación y contratos). Úsala para "¿cómo van las ventas?" o "dame un resumen".',
+  '- ventas_clientes_hoy: a qué clientes debe dar seguimiento HOY quien pregunta (vencidos, de hoy y sin fecha). Úsala para "¿a quién tengo que llamar hoy?" o "¿qué tengo pendiente?".',
+  '- ventas_cliente(nombre:X): ficha de UN cliente (datos, etapa, responsable, siguiente paso, historial reciente). X es parte del nombre o el RUC.',
+  '- ventas_clientes_lista(etapa:X, responsable:X, seguimiento:X): lista de clientes; los tres parámetros son opcionales y combinables. etapa = nombre de la etapa; responsable = yo, sin, o parte del nombre de una persona; seguimiento = vencido, hoy o sin.',
+  '- ventas_estancados: clientes con muchos días en la misma etapa.',
+  '- ventas_por_responsable: cuántos clientes activos, atrasados y aceptados tiene cada responsable.',
+  '- ventas_periodo(rango:X): clientes nuevos y referidos de un periodo; rango = semana, mes, mes_pasado o 90 (por defecto, mes).',
+  '- ventas_contratos(estado:X): contratos de Ventas; estado = borrador, firma o firmados (opcional).',
+  'El sistema no registra montos de venta de los clientes: si piden dinero, dilo con honestidad. Si la pregunta no encaja en ninguna, responde con el manual o di que no tienes ese dato.',
+].join('\n');
 
 const PROYECTOS_TAREAS: CapabilityModule = {
   section: null,
@@ -40,7 +64,21 @@ export const CAPABILITY_MODULES: CapabilityModule[] = [
   { section: 'CACAO', titulo: 'Cacao', intents: ['cacao_resumen'] },
   { section: 'CUSTODIAS', titulo: 'Custodias', intents: ['custodias_resumen'] },
   { section: 'RRHH', titulo: 'Recursos Humanos', intents: ['rrhh_resumen_personal'] },
-  { section: 'VENTAS', titulo: 'Ventas y CRM', intents: ['ventas_resumen'] },
+  {
+    section: 'VENTAS',
+    titulo: 'Ventas y CRM',
+    intents: [
+      'ventas_resumen',
+      'ventas_clientes_hoy',
+      'ventas_cliente',
+      'ventas_clientes_lista',
+      'ventas_estancados',
+      'ventas_por_responsable',
+      'ventas_periodo',
+      'ventas_contratos',
+    ],
+    ayuda: VENTAS_AYUDA,
+  },
   { section: 'CONTRATACION_PUBLICA', titulo: 'Contratación Pública', intents: [] },
 ];
 
@@ -54,7 +92,7 @@ export function buildCapabilitiesPrompt(allowedSectionKeys: string[]): string {
   const cuerpo = modules
     .map((m) =>
       m.intents.length > 0
-        ? `## ${m.titulo}\nPara datos reales de este módulo, usa la(s) intención(es): ${m.intents.join(', ')}.`
+        ? `## ${m.titulo}\nPara datos reales de este módulo, usa la(s) intención(es): ${m.intents.join(', ')}.${m.ayuda ? `\n${m.ayuda}` : ''}`
         : `## ${m.titulo}\nNo tienes consulta de datos en vivo para este módulo, pero SÍ conoces cómo se usa: explícalo con el manual de abajo.`,
     )
     .join('\n\n');

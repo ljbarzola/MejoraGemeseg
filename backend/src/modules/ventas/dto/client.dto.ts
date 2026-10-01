@@ -64,6 +64,16 @@ export class UpdateSalesClientDto {
 
   @IsOptional()
   extra?: Record<string, string>;
+
+  // null o '' borran el siguiente paso; sin enviar, no se toca.
+  @IsOptional()
+  @IsString()
+  nextActionText?: string | null;
+
+  // 'YYYY-MM-DD' (solo día). null o '' la borran.
+  @IsOptional()
+  @IsString()
+  nextActionDate?: string | null;
 }
 
 // {key,label}[] — el key es lo que se guarda en SalesClient.extra, el label
@@ -157,6 +167,73 @@ export class ChangeSalesClientStageDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Siguiente paso opcional que se deja al mover de etapa (ver
+  // UpdateSalesClientDto). Si la etapa destino es final se borran siempre.
+  @IsOptional()
+  @IsString()
+  nextActionText?: string | null;
+
+  @IsOptional()
+  @IsString()
+  nextActionDate?: string | null;
+}
+
+// Tipos de actividad de la ficha del cliente. OTRO lleva una etiqueta libre
+// (`otherLabel`) que la persona escribe. Se validan en el servicio para dar un
+// mensaje claro en español en vez del genérico de class-validator.
+export const ACTIVITY_TYPES = ['NOTA', 'LLAMADA', 'REUNION', 'CORREO', 'OTRO'] as const;
+export type ActivityType = (typeof ACTIVITY_TYPES)[number];
+
+export class CreateSalesClientActivityDto {
+  @IsString()
+  type: string;
+
+  @IsOptional()
+  @IsString()
+  otherLabel?: string;
+
+  @IsString()
+  text: string;
+}
+
+export class UpdateSalesClientActivityDto {
+  @IsOptional()
+  @IsString()
+  type?: string;
+
+  @IsOptional()
+  @IsString()
+  otherLabel?: string;
+
+  @IsOptional()
+  @IsString()
+  text?: string;
+}
+
+// "Hecho" de la vista Hoy: deja constancia de lo que se hizo (opcional) y el
+// nuevo siguiente paso, todo en una sola operación.
+export class MarkSalesClientDoneDto {
+  // ¿Qué hiciste? Vacío = no se registra actividad.
+  @IsOptional()
+  @IsString()
+  text?: string;
+
+  @IsOptional()
+  @IsString()
+  type?: string;
+
+  @IsOptional()
+  @IsString()
+  otherLabel?: string;
+
+  @IsOptional()
+  @IsString()
+  nextActionText?: string | null;
+
+  @IsOptional()
+  @IsString()
+  nextActionDate?: string | null;
 }
 
 export class CreateSalesClientStageDto {

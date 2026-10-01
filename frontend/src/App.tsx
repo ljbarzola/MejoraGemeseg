@@ -83,11 +83,7 @@ const SurveysPage = lazy(() => import('./pages/personal/SurveysPage'));
 const PublicSurveyPage = lazy(() => import('./pages/personal/PublicSurveyPage'));
 const SurveyManagementPage = lazy(() => import('./pages/personal/SurveyManagementPage'));
 const VentasDashboard = lazy(() => import('./pages/ventas/VentasDashboard'));
-const VisitasPage = lazy(() => import('./pages/ventas/VisitasPage'));
-const LeadsPage = lazy(() => import('./pages/ventas/LeadsPage'));
 const VentasClientesPage = lazy(() => import('./pages/ventas/VentasClientesPage'));
-const VentasReportes = lazy(() => import('./pages/ventas/VentasReportes'));
-const WebhookConfig = lazy(() => import('./pages/ventas/WebhookConfig'));
 const TemplateList = lazy(() => import('./pages/ventas/TemplateList'));
 const TemplateConfig = lazy(() => import('./pages/ventas/TemplateConfig'));
 const ContratosList = lazy(() => import('./pages/ventas/ContratosList'));
@@ -429,11 +425,14 @@ function AppInner() {
         <Route path="/rrhh/asignaciones" element={<Navigate to="/rrhh/historial" replace />} />
         <Route path="/rrhh/movimientos" element={<Navigate to="/rrhh/historial" replace />} />
         <Route path="/ventas" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasDashboard /></SectionRoute></ProtectedLayout>} />
-        <Route path="/ventas/visitas" element={<ProtectedLayout><SectionRoute section="VENTAS"><VisitasPage /></SectionRoute></ProtectedLayout>} />
-        <Route path="/ventas/leads" element={<ProtectedLayout><SectionRoute section="VENTAS"><LeadsPage /></SectionRoute></ProtectedLayout>} />
+        {/* Planificación y Campo (Visitas), Prospectos CRM (Leads), Reportes y Config Webhook están "Próximamente":
+            sus pantallas siguen en el código (pages/ventas/VisitasPage, LeadsPage, VentasReportes, WebhookConfig) pero
+            ya no tienen ruta — quien llegue por un enlace guardado o escribiendo la URL vuelve al Dashboard. Para
+            reactivarlas: volver a importarlas arriba, registrar su ruta aquí y quitar `disabled` en Sidebar.tsx. */}
+        {['visitas', 'leads', 'reportes', 'webhook-config'].map((p) => (
+          <Route key={p} path={`/ventas/${p}`} element={<Navigate to="/ventas" replace />} />
+        ))}
         <Route path="/ventas/clientes" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasClientesPage /></SectionRoute></ProtectedLayout>} />
-        <Route path="/ventas/reportes" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasReportes /></SectionRoute></ProtectedLayout>} />
-        <Route path="/ventas/webhook-config" element={<ProtectedLayout><SectionRoute section="VENTAS"><WebhookConfig /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/contratos" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratosList /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/contratos/nuevo" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoForm /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/contratos/nuevo/:templateId" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoForm /></SectionRoute></ProtectedLayout>} />
