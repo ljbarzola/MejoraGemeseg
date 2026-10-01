@@ -75,12 +75,15 @@ export default function Sidebar() {
   // usando. El código y la data quedan intactos (por si se retoma más
   // adelante), solo se dejó de mostrar aquí y en el Dashboard de Personal.
 
-  // Ventas/CRM está en construcción: solo Clientes y Contratos están
-  // terminados, el resto se deja visible pero bloqueado (gris, sin clic)
-  // hasta que se completen. No hace falta proteger las rutas porque nadie
-  // llega a ellas por URL directa.
+  // Ventas/CRM: Dashboard, Clientes y Contratos están activos. El resto
+  // (Planificación y Campo, Prospectos CRM, Reportes, Config Webhook) se deja
+  // visible como "Próximamente" (gris, sin clic) y NO tiene ruta: App.tsx
+  // redirige esas URLs al Dashboard. Tampoco las conoce el asistente de IA
+  // (system-guide.util.ts / ai.processor.ts). Al reactivar uno, hay que
+  // devolverle la ruta en App.tsx, quitar `disabled` aquí y volver a
+  // explicarlo en la guía del asistente.
   const ventasItems = [
-    { label: 'Dashboard', path: '/ventas', icon: '📊', disabled: true },
+    { label: 'Dashboard', path: '/ventas', icon: '📊' },
     { label: 'Planificación y Campo', path: '/ventas/visitas', icon: '📍', disabled: true },
     { label: 'Prospectos CRM', path: '/ventas/leads', icon: '🎯', disabled: true },
     { label: 'Clientes', path: '/ventas/clientes', icon: '👤' },
