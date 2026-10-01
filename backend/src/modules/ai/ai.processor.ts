@@ -1,5 +1,6 @@
-﻿import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AiVentasQueries, textoParam } from './ai-ventas.queries';
 
 // Qué sección de permisos es dueña de cada intención — AiService la consulta
 // antes de ejecutar cualquier intención aquí abajo (ver canUseIntent en
@@ -17,12 +18,24 @@ export const INTENT_SECTION: Record<string, string | null> = {
   cacao_resumen: 'CACAO',
   custodias_resumen: 'CUSTODIAS',
   rrhh_resumen_personal: 'RRHH',
+  // Ventas: todas leen Clientes/Contratos (ver ai-ventas.queries.ts). Los
+  // nombres deben coincidir con los de capabilities-prompt.util.ts.
   ventas_resumen: 'VENTAS',
+  ventas_clientes_hoy: 'VENTAS',
+  ventas_cliente: 'VENTAS',
+  ventas_clientes_lista: 'VENTAS',
+  ventas_estancados: 'VENTAS',
+  ventas_por_responsable: 'VENTAS',
+  ventas_periodo: 'VENTAS',
+  ventas_contratos: 'VENTAS',
 };
 
 @Injectable()
 export class AiProcessor {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private ventas: AiVentasQueries,
+  ) {}
 
   async executeQuery(
     intent: string,
@@ -48,7 +61,14 @@ export class AiProcessor {
       case 'rrhh_resumen_personal':
         return this.rrhhResumenPersonal(companyId);
       case 'ventas_resumen':
-        return this.ventasResumen(companyId);
+      case 'ventas_clientes_hoy':
+      case 'ventas_cliente':
+      case 'ventas_clientes_lista':
+      case 'ventas_estancados':
+      case 'ventas_por_responsable':
+      case 'ventas_periodo':
+      case 'ventas_contratos':
+        return this.ventasQuery(intent, params, userId, companyId);
       default:
         return '';
     }
@@ -99,22 +119,38 @@ export class AiProcessor {
     ].join('\n');
   }
 
-  private async ventasResumen(companyId?: number | null): Promise<string> {
+  // Ventas: todas las consultas leen Clientes y Contratos (ver
+  // ai-ventas.queries.ts). A propósito NO leen Leads/Visitas: esos submódulos
+  // están "Próximamente" y el asistente no debe saber que existen.
+  private async ventasQuery(
+    intent: string,
+    params: any,
+    userId: number,
+    companyId?: number | null,
+  ): Promise<string> {
     if (!companyId) return 'No hay empresa asociada para consultar Ventas.';
-    const porEstado = await this.prisma.lead.groupBy({
-      by: ['status'],
-      where: { companyId },
-      _count: { id: true },
-      _sum: { estimatedValue: true },
-    });
-    if (porEstado.length === 0) return 'No hay leads registrados.';
-    const lista = porEstado
-      .map(
-        (l) =>
-          `${l.status}: ${l._count.id} (valor estimado $${(l._sum.estimatedValue || 0).toFixed(2)})`,
-      )
-      .join(', ');
-    return `Leads por estado: ${lista}`;
+    switch (intent) {
+      case 'ventas_clientes_hoy':
+        return this.ventas.clientesHoy(companyId, userId);
+      case 'ventas_cliente':
+        return this.ventas.cliente(companyId, textoParam(params?.nombre));
+      case 'ventas_clientes_lista':
+        return this.ventas.lista(companyId, userId, {
+          etapa: textoParam(params?.etapa),
+          responsable: textoParam(params?.responsable),
+          seguimiento: textoParam(params?.seguimiento),
+        });
+      case 'ventas_estancados':
+        return this.ventas.estancados(companyId, userId);
+      case 'ventas_por_responsable':
+        return this.ventas.porResponsable(companyId, userId);
+      case 'ventas_periodo':
+        return this.ventas.periodo(companyId, userId, textoParam(params?.rango));
+      case 'ventas_contratos':
+        return this.ventas.contratos(companyId, textoParam(params?.estado));
+      default:
+        return this.ventas.resumen(companyId, userId);
+    }
   }
 
   private async listProjects(userId: number): Promise<string> {

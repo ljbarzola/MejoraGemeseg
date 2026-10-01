@@ -75,12 +75,15 @@ export default function Sidebar() {
   // usando. El código y la data quedan intactos (por si se retoma más
   // adelante), solo se dejó de mostrar aquí y en el Dashboard de Personal.
 
-  // Ventas/CRM está en construcción: solo Clientes y Contratos están
-  // terminados, el resto se deja visible pero bloqueado (gris, sin clic)
-  // hasta que se completen. No hace falta proteger las rutas porque nadie
-  // llega a ellas por URL directa.
+  // Ventas/CRM: Dashboard, Clientes y Contratos están activos. El resto
+  // (Planificación y Campo, Prospectos CRM, Reportes, Config Webhook) se deja
+  // visible como "Próximamente" (gris, sin clic) y NO tiene ruta: App.tsx
+  // redirige esas URLs al Dashboard. Tampoco las conoce el asistente de IA
+  // (system-guide.util.ts / ai.processor.ts). Al reactivar uno, hay que
+  // devolverle la ruta en App.tsx, quitar `disabled` aquí y volver a
+  // explicarlo en la guía del asistente.
   const ventasItems = [
-    { label: 'Dashboard', path: '/ventas', icon: '📊', disabled: true },
+    { label: 'Dashboard', path: '/ventas', icon: '📊' },
     { label: 'Planificación y Campo', path: '/ventas/visitas', icon: '📍', disabled: true },
     { label: 'Prospectos CRM', path: '/ventas/leads', icon: '🎯', disabled: true },
     { label: 'Clientes', path: '/ventas/clientes', icon: '👤' },
@@ -98,13 +101,13 @@ export default function Sidebar() {
     { label: 'Asistente GEME-BOT', path: '/custodias/gemebot', icon: '🤖' },
   ];
 
+  // Contratación Pública: por ahora solo "Entidades Públicas" (ver la bandera
+  // CP_MOSTRAR_SUBMODULOS_OCULTOS en App.tsx). Al reactivar, volver a poner
+  // Contratos, Horarios, Informes, Códigos de Turno y Textos Institucionales
+  // (rutas /contratacion-publica/contratos, /horarios, /informes,
+  // /config/codigos-turno y /config/textos-institucionales).
   const contratacionPublicaItems = [
-    { label: 'Contratos', path: '/contratacion-publica/contratos', icon: '📄' },
     { label: 'Entidades Públicas', path: '/contratacion-publica/entidades', icon: '🏛️' },
-    { label: 'Horarios', path: '/contratacion-publica/horarios', icon: '🗓️' },
-    { label: 'Informes', path: '/contratacion-publica/informes', icon: '📊' },
-    { label: 'Códigos de Turno', path: '/contratacion-publica/config/codigos-turno', icon: '🎨' },
-    { label: 'Textos Institucionales', path: '/contratacion-publica/config/textos-institucionales', icon: '📝' },
   ];
 
   const sistemasSubItems = [
@@ -315,10 +318,10 @@ export default function Sidebar() {
               className={`sidebar-link ${isContratacionPublicaActive ? 'sidebar-link-active' : ''}`}
               onClick={() => {
                 if (collapsed) {
-                  navigate('/contratacion-publica/contratos');
+                  navigate('/contratacion-publica/entidades');
                 } else {
                   setContratacionPublicaOpen(!contratacionPublicaOpen);
-                  if (!contratacionPublicaOpen) navigate('/contratacion-publica/contratos');
+                  if (!contratacionPublicaOpen) navigate('/contratacion-publica/entidades');
                 }
               }}
               title={collapsed ? 'Contratación Pública' : undefined}

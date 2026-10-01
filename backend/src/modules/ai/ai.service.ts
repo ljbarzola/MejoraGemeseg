@@ -286,7 +286,9 @@ export class AiService {
 
     try {
       const finalResult = await this.vertexChat.sendChat(
-        'Responde de forma concisa basándote en los datos proporcionados.',
+        // "Concisa" a secas hacía que el modelo resumiera listas y omitiera
+        // clientes (p. ej. "¿a quién atiendo hoy?" respondía solo uno de tres).
+        'Responde de forma clara y breve, en español, basándote en los datos proporcionados. Si los datos traen una lista, menciona TODOS sus elementos (no resumas ni omitas ninguno) y respeta cualquier aviso que incluyan.',
         [],
         `Datos del sistema:\n${dataResult}\n\nPregunta original: ${message}`,
       );

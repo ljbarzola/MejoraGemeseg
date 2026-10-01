@@ -215,3 +215,69 @@ export const CLAVES_SUGERIDAS_INFORME = [
   'EQUIPAMIENTO',
   'MATERIALES',
 ] as const;
+
+// ==================== ENTREGAS DE DOCUMENTOS (otras áreas) ====================
+
+export type CPEstadoEntrega = 'PENDIENTE' | 'ENTREGADO' | 'APROBADO' | 'RECHAZADO';
+
+export interface CPSolicitudResumen {
+  id: number;
+  anio: number;
+  mes: number;
+  estado: 'BORRADOR' | 'ENVIADA';
+  total: number;
+  pendientes: number;
+  entregadas: number;
+  aprobadas: number;
+  rechazadas: number;
+  vencidas: number;
+}
+
+export interface CPSolicitudesDeEntidad {
+  entidad: { id: number; nombre: string };
+  solicitudes: CPSolicitudResumen[];
+}
+
+export interface CPEntregaDocumento {
+  id: number;
+  nombre: string;
+  descripcion: string | null;
+  departmentId: number | null;
+  departmentName: string | null;
+  /** AAAA-MM-DD */
+  fechaLimite: string;
+  estado: CPEstadoEntrega;
+  vencida: boolean;
+  origen: 'ARCHIVO' | 'ENLACE' | null;
+  url: string | null;
+  motivoRechazo: string | null;
+  entregadoPorNombre: string | null;
+  entregadoAt: string | null;
+  revisadoPorNombre: string | null;
+  revisadoAt: string | null;
+  responsables: { id: number; nombre: string }[];
+  esMia: boolean;
+  puedeEntregar: boolean;
+}
+
+export interface CPSolicitudMensual {
+  id: number;
+  entidadId: number;
+  entidadNombre: string;
+  anio: number;
+  mes: number;
+  estado: 'BORRADOR' | 'ENVIADA';
+  enviadaAt: string | null;
+  entregas: CPEntregaDocumento[];
+}
+
+export interface CPCarpetaEntregas {
+  driveFolderId: string;
+  driveFolderName: string;
+  driveFolderLink: string | null;
+}
+
+export const MESES_ES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+];

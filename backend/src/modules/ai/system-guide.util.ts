@@ -34,7 +34,7 @@ const GENERAL = `# Uso general del sistema (lo que ve todo usuario)
 - Abajo está el avatar con el nombre y el cargo; al hacer clic abre "Mi perfil". El botón "Salir" cierra la sesión.
 
 ## Botones que están en todas las pantallas
-- Campana (Notificaciones): el globo rojo indica cuántas hay sin leer. Al hacer clic en una, se marca como leída y lleva a donde corresponde. "Marcar todas como leídas" limpia el contador. Hoy llegan notificaciones cuando te asignan una encuesta ("Nueva encuesta pendiente") y cuando un cliente que referiste cambia de etapa ("Actualización de tu referido"). Ambas llegan también por correo. No hay notificaciones de tareas ni de proyectos.
+- Campana (Notificaciones): el globo rojo indica cuántas hay sin leer. Al hacer clic en una, se marca como leída y lleva a donde corresponde. "Marcar todas como leídas" limpia el contador. Hoy llegan notificaciones cuando te asignan una encuesta ("Nueva encuesta pendiente") y cuando un cliente que referiste cambia de etapa ("Actualización de tu referido"). También llegan avisos cuando te asignan un documento para entregar y cuando te lo aprueban o rechazan. Las que dicen que tienes algo pendiente llegan también por correo. No hay notificaciones de tareas ni de proyectos.
 - Llave inglesa ("Reportar un problema a Sistemas"): abre "Reportar a Sistemas". Se elige el Tipo ("Reportar un error", "Sugerir una mejora", "Pedir un permiso" u "Otro"), se escribe Título y Descripción (obligatorios), y opcionalmente se adjuntan enlaces o archivos (hasta 10 MB) con "+ Agregar". Se envía con "Enviar reporte". Es la forma oficial de reportar fallas y pedir permisos.
 - Burbuja 💬 ("Abrir agente"): abre este chat con Agente Gemeseg. "+ Nueva" inicia otra conversación; el 🗑️ la elimina. Arriba (▼) se puede cambiar a otro agente si hay agentes personalizados.
 
@@ -235,8 +235,14 @@ Los guardias de este padrón son los mismos que se eligen como personal en otros
 const VENTAS = `# Ventas y CRM — guía detallada
 
 ## Acceso y pantallas
-- Menú → "Ventas y CRM". Activas: "Clientes" y "Contratos". "Dashboard", "Planificación y Campo", "Prospectos CRM", "Reportes" y "Config Webhook" aparecen en gris con "Próximamente" (todavía no se usan).
-- Permiso "ver": listar y consultar. "Escribir": crear, editar, borrar, cambiar etapa, asignarse, configurar y generar/enviar contratos.
+- Menú → "Ventas y CRM": "Dashboard", "Clientes" y "Contratos".
+- Permiso "ver": listar y consultar. "Escribir": crear, editar, borrar, cambiar etapa, asignarse, registrar actividades, configurar y generar/enviar contratos.
+
+## Dashboard
+- Menú → "Ventas y CRM" → "Dashboard": cómo van los clientes. Arriba, un selector "Mis clientes" / "Toda la empresa" (ADMIN y MANAGER también pueden elegir a un vendedor) y un rango de fechas (Esta semana, Este mes, Mes pasado, Últimos 90 días). El rango solo afecta a "Nuevos clientes" y "Referidos"; todo lo demás es cómo están las cosas hoy.
+- Contadores: "Seguimientos vencidos", "Para hoy", "Sin siguiente paso" (los tres abren Clientes ya filtrado) y "Aceptación" (aceptados frente a rechazados).
+- Bloques: "Clientes por etapa" (cada barra abre Clientes en esa etapa), "Clientes estancados" (más de 7 días en la misma etapa; el clic abre su ficha), "Nuevos clientes" (por semana), "Referidos", "Contratos de estos clientes" y, al mirar a más de una persona, "Clientes por responsable" (con "Sin responsable" arriba: clientes que nadie atiende).
+- No muestra dinero.
 
 ## Relación entre los sub-módulos Clientes y Contratos
 - Clientes es la ficha de cada cliente (sus datos, su etapa en el pipeline, quién lo atiende y quién lo refirió).
@@ -248,10 +254,14 @@ const VENTAS = `# Ventas y CRM — guía detallada
 
 ## Clientes
 - Barra: "Etapas" (pipeline) y "Campos" (ficha). Filtros: "Buscar por nombre, email, RUC, teléfono o responsable...", "Todos los responsables", limpiar filtros, "+ Nuevo cliente".
-- Tabla: Nombre, Email, Teléfono, Etapa, Responsable, Referido por, Acciones (se pueden mostrar Fecha y otros campos; columnas ordenables y redimensionables).
-  - Etapa: desplegable en la misma fila (incluye "— Sin etapa —"). Al cambiarla: "Etapa actualizada." y, si vino por referido, "Se notificó a quien lo refirió." (campana + correo al empleado que lo refirió).
-  - Responsable: quien atiende al cliente. Si no tiene, botón "Asignarme"; si eres tú, "Quitarme". Nadie asigna a otra persona ni quita a otro.
-  - Acciones: Editar y Eliminar ("Los contratos ya creados no se borran").
+- Dos pestañas: "Todos" y "Hoy (N)". Filtros extra: "Todas las etapas", "Sin responsable" y los que llegan desde el Dashboard (seguimiento vencido/para hoy/sin definir, solo referidos), que aparecen como "Mostrando: … ✕".
+- Tabla "Todos": Nombre, Email, Teléfono, Etapa, Siguiente paso, Para cuándo, Responsable, Referido por, Acciones (se pueden mostrar Fecha y otros campos; columnas ordenables y redimensionables).
+  - Etapa: desplegable en la misma fila (incluye "— Sin etapa —"). Al elegir otra se abre "Cambiar de etapa": muestra "pasará de [etapa actual] → [etapa nueva]" y pregunta el siguiente paso y para cuándo (se puede dejar vacío); botón "Cambiar de etapa". Si la etapa nueva es final (Aceptado/Rechazado) solo pide "Confirmar cambio" y se borra el siguiente paso. Al terminar: "Etapa actualizada." y, si vino por referido, "Se notificó a quien lo refirió." (campana + correo al empleado que lo refirió).
+  - Siguiente paso / Para cuándo: clic para editarlos. La fecha sale en rojo si está vencida ("Vencido · fecha") y en ámbar si es hoy.
+  - Responsable: quien atiende al cliente (solo se muestra el nombre o "Sin asignar").
+  - Acciones (botón "⋯"): "Ver ficha", "Editar cliente", "Asignarme este cliente" (si no tiene responsable) o "Quitarme este cliente" (si eres tú), y "Eliminar" ("Los contratos ya creados no se borran"). Nadie asigna a otra persona ni quita a otro.
+- Pestaña "Hoy": a quién atender hoy. Cada quien ve sus clientes asignados que no están en etapa final, en este orden: seguimiento vencido (el más atrasado primero), para hoy y sin fecha; los de fecha futura no aparecen. Columnas: Siguiente paso, Para cuándo, Etapa, Teléfono. ADMIN y MANAGER tienen un selector "Mis clientes" / "Todos los clientes" / un vendedor. En cada fila, "Hecho": pide "¿Qué hiciste?" (tipo y texto, opcional; queda en el historial del cliente) y el nuevo siguiente paso (vacío = el cliente queda sin siguiente paso); botón "Marcar hecho".
+- Ficha del cliente ("⋯" → "Ver ficha"): panel a la derecha con sus datos, su siguiente paso (botón "Editar") y el "Historial", la línea de tiempo: registro del cliente, cambios de etapa, contratos vinculados (creado, enviado a firma, firmado) y las notas. "Agregar a la línea de tiempo": Tipo (Nota, Llamada, Reunión, Correo u Otro, que pide "¿Cuál?") y el texto → "Agregar". "Correo" es solo un registro a mano: no envía ni lee correos. Cada nota se puede editar o borrar solo por quien la escribió o por un administrador. Los cambios de etapa solo aparecen desde que se empezaron a guardar (30/09/2026) y los contratos solo si se vincularon al cliente al crearlos.
 - "+ Nuevo cliente": Nombre / Razón social (obligatorio), Email (opcional), Teléfono, Cédula / RUC, Dirección, Fuente (Referido / Campaña / Otro con texto), Servicio requerido (Monitoreo / Soluciones Tecnológicas / Seguridad Física), Observaciones, y los campos personalizados → "Guardar".
 - Reglas automáticas: todo cliente nuevo entra en la etapa inicial ("Recibido" por defecto); quien lo crea a mano queda como Responsable; los referidos llegan SIN responsable hasta que alguien pulse "Asignarme" (no llega aviso a Ventas de un referido nuevo: hay que revisar la lista, por ejemplo filtrando los que no tienen responsable).
 - Tres datos distintos: Responsable (quién lo atiende, autoasignado), Referido por (empleado que lo refirió, fijo, no editable), Creado por (solo registro).
@@ -283,75 +293,59 @@ const VENTAS = `# Ventas y CRM — guía detallada
 
 ## Preguntas frecuentes de Ventas
 - "¿Qué relación hay entre Clientes y Contratos?": ver arriba; el contrato toma nombre, email y (si la plantilla lo mapea) otros datos de la ficha del cliente.
-- "¿Cómo atiendo un referido?": Clientes → buscar los que no tienen Responsable → "Asignarme" → ir cambiando la Etapa (el empleado que lo refirió recibe aviso en cada cambio).
+- "¿Cómo atiendo un referido?": Clientes → filtro "Sin responsable" → "⋯" → "Asignarme este cliente" → ir cambiando la Etapa (el empleado que lo refirió recibe aviso en cada cambio).
+- "¿A quién tengo que atender hoy?": Clientes → pestaña "Hoy". Al terminar con uno, "Hecho" y dejar su siguiente paso.
+- "¿Dónde veo lo que se ha hecho con un cliente?": Clientes → "⋯" → "Ver ficha" → "Historial".
+- "¿Qué clientes se están quedando atrás?": Dashboard → "Seguimientos vencidos" y "Clientes estancados".
 - "¿Cómo agrego un dato nuevo al cliente, por ejemplo Representante legal?": Clientes → "Campos" → "Agregar campo nuevo"; luego en la plantilla mapear la variable a ese campo.
 - "El PDF no se genera / sale 'Falta llenar'": completar los campos obligatorios; si la plantilla dice que falta el documento, volver a "Descargar" o subir el Word.
 - "El cliente no recibió el correo de firma": revisar el "Email para el envío" y el "Estado de la firma" ("No entregado" = rebotó); corregir con "Editar campos", regenerar y volver a enviar.`;
 
+// Contratación Pública: desde 2026-10-01 solo está visible "Entidades Públicas"
+// con el seguimiento de entregas de documentos. Contratos, Puestos, Horarios,
+// Informes, Códigos de Turno y Textos Institucionales siguen en el código pero
+// están ocultos, así que este manual NO los menciona (el agente no debe
+// explicar pantallas que la persona no puede abrir). La guía completa anterior
+// se recupera del historial de git (commit anterior a este cambio) y vuelve acá
+// cuando se reactiven; ver "Submódulos ocultos" en .agents/modules/contratacion-publica.md.
 const CONTRATACION_PUBLICA = `# Contratación Pública — guía detallada
 
 ## Para qué sirve
-Gestiona los contratos de seguridad con entidades públicas: los puestos de servicio de cada contrato, los guardias asignados, los horarios del periodo (turnos por día) y el informe mensual que se entrega a la entidad.
+Sirve para pedir y seguir, mes a mes, los documentos que otras áreas (RRHH, Financiero, Operaciones, Legal) deben entregar para el informe que se envía a cada entidad pública: qué se pidió, a quién, para cuándo y en qué estado está cada documento.
 
 ## Acceso y pantallas
-- Menú → "Contratación Pública": "Contratos", "Entidades Públicas", "Horarios", "Informes", "Códigos de Turno", "Textos Institucionales".
-- "Horarios" e "Informes" se trabajan SIEMPRE desde el detalle de un contrato (desde el menú solo piden elegir un contrato).
-- Con permiso "ver" se consulta y exporta; con "escribir" se hace todo lo demás, incluido Aprobar o Rechazar horarios (no hay un rol aprobador aparte).
-
-## Cómo se relaciona todo
-Entidad Pública → Contrato (con adendas, adjuntos y renovaciones) → Puestos de servicio → Guardias asignados (tomados del padrón de guardias de la empresa) → Horario del periodo (una celda por guardia y día, con Códigos de Turno; se puede llenar con el Patrón de rotación del puesto) → Borrador → Enviado → Aprobado → Informe Mensual (toma el horario Aprobado de ese mes + los Textos Institucionales + la plantilla Word) → PDF.
-No tiene relación con los clientes ni contratos comerciales de otros módulos: son procesos separados.
-
-## De cero a un informe mensual (paso a paso)
-1. "Códigos de Turno": crear al menos D (Día), N (Noche) y L (Libre, marcando "Es descanso/libre").
-2. "Textos Institucionales": pegar el enlace de Drive de la plantilla Word del informe → "Guardar" (se descarga y muestra "✓ Documento descargado y listo para usarse"), y cargar los textos fijos (OBJETIVO, CONDICIONES GENERALES, UNIFORME, SUPERVISION, EQUIPAMIENTO, MATERIALES…).
-3. "Entidades Públicas" → "+ Nueva Entidad".
-4. "Contratos" → "+ Nuevo Contrato" → elegir la entidad y llenar los datos.
-5. Detalle del contrato → pestaña "Puestos" → "+ Nuevo Puesto" → asignar los guardias.
-6. Pestaña "Horarios" → "+ Gestionar Horarios" → "+ Nuevo Horario" (rango de fechas) → en cada puesto "Generar patrón" → "Generar y aplicar" → ajustar a mano o con "Intercambiar turno".
-7. "Enviar" (valida la cobertura mínima) → "Aprobar". Opcional: "Exportar PDF" / "Exportar Excel".
-8. Pestaña "Informes" → "Nuevo Informe" con el mes que coincide con la fecha de INICIO del horario, y DESPUÉS de que el horario esté Aprobado.
-9. Escribir "Retroalimentación / inducción" y "Conclusiones" → "Guardar" → "Generar PDF".
-10. El mes siguiente: nuevo horario con un rango que no se cruce con el anterior; el generador precarga el patrón (dejar la misma fecha de inicio del ciclo para que continúe sin cortes).
+- Menú → "Contratación Pública" → "Entidades Públicas". Es la única pantalla del módulo por ahora.
+- Con permiso "ver" una persona entra y entrega solo los documentos que le asignaron. Con "escribir" (el personal de Contratación Pública) arma las solicitudes, las envía, y aprueba o rechaza lo entregado.
 
 ## Entidades Públicas
-- Buscar por nombre o RUC; "+ Nueva Entidad": Nombre * (ej. "Municipio de Guayaquil"), RUC, Dirección. No se puede eliminar una entidad con contratos.
+- Buscar por nombre o RUC. "+ Nueva Entidad": Nombre * (ej. "Municipio de Guayaquil"), RUC, Dirección. Al hacer clic en una entidad se abre su detalle.
 
-## Contratos
-- Lista: filtros por texto (número, objeto, entidad), entidad y estado (Activo/Finalizado); columnas Número, Entidad, Objeto, Puestos, Vigencia, Estado; menú: Ver detalle / Editar / Eliminar.
-- "Nuevo Contrato": "Entidad Pública *", "Número de contrato / orden de compra *" (ej. CO-2026-045), "Objeto del servicio *", "Referencia del proceso" (código de catálogo electrónico SERCOP), "Fecha de inicio *", "Fecha de fin *" (no anterior al inicio), "Valor total (opcional)" → "Crear Contrato". Todo contrato nace Activo.
-- Detalle: resumen (objeto, referencia, vigencia, valor, estado), botones "Editar" y "Renovar", y pestañas "Puestos", "Adendas", "Adjuntos", "Horarios", "Informes".
-  - Adendas: "+ Nueva Adenda" (Número *, Descripción, fechas) → "Guardar Adenda". Queda registrada; no cambia sola la vigencia del contrato (si cambió, editar las fechas del contrato).
-  - Adjuntos: elegir tipo (Contrato / Póliza / Otro) → "Subir Adjunto"; descargar o eliminar.
-  - "Renovar": "Número del nuevo contrato *", fechas → "Renovar Contrato". Crea un contrato NUEVO con la misma entidad, objeto y referencia (el original queda intacto). Los puestos, guardias y patrones NO se copian: hay que crearlos de nuevo. Si solo se extiende el mismo contrato, usar "Nueva Adenda".
+## Solicitud mensual de documentos (en el detalle de la entidad)
+- Cada mes es una solicitud independiente: lo que se pide, las fechas y las personas pueden cambiar de un mes a otro y se pueden editar en cualquier momento, también después de enviada.
+- "+ Nueva solicitud": se elige Año y Mes, y si empieza "En blanco" o "Copiando la solicitud anterior" (trae documentos, fechas y personas del mes anterior para no rehacerlos). Solo puede haber una solicitud por entidad y mes.
+- "+ Agregar documento": Nombre *, Descripción, Área, Fecha límite * y una o más personas Responsables *. Cada documento tiene su propia fecha límite.
+- "Enviar solicitud": avisa a cada responsable dentro del sistema (campana) y por correo. Todos los documentos deben tener al menos un responsable. Mientras esté en Borrador nadie recibe avisos.
+- Si después se agrega un documento, se cambia una fecha o se asigna a otra persona, esa persona recibe el aviso. A quien se quita ya no le aparece el documento.
+- El avance de cada mes se ve en la lista (por ejemplo "3 de 5 aprobados") con los documentos vencidos marcados.
 
-## Puestos de servicio
-- "+ Nuevo Puesto": "Nombre del puesto *" (ej. "Garita norte"), "Tipo de turno *" (8, 12 o 24 horas), "Cantidad de guardias", "Guardias simultáneos requeridos" (mínimo de guardias trabajando a la vez cada día) → "Crear Puesto".
-- Luego "Guardias asignados": elegir en "Guardia (padrón RRHH)" → "Asignar"; papelera para quitar. No se repite un guardia en el mismo puesto. Se guarda la cédula y el nombre del momento (si luego cambia el nombre en el padrón, el puesto no se actualiza solo).
+## Entregar un documento (quien es responsable)
+- Al abrir el aviso de la campana se llega a la solicitud, donde solo se ven los documentos asignados a esa persona.
+- "Entregar": se sube un archivo (PDF, Word, Excel, imagen o ZIP, hasta 15 MB) o se pega un enlace (por ejemplo de Google Drive; el enlace debe estar compartido para que quien revisa pueda abrirlo). Queda en "Entregado" a la espera de revisión.
+- Si fue "Rechazado", se ve el motivo y se vuelve a entregar. Un documento "Aprobado" ya no se puede cambiar.
+- Estados: Pendiente → Entregado → Aprobado, o Rechazado (vuelve a Entregado cuando se entrega de nuevo).
 
-## Códigos de Turno
-- Código * (hasta 4 caracteres, ej. D), Nombre * (ej. Día), Color, "Activo", "Es descanso/libre (no cuenta para la cobertura mínima de un puesto)". Son de la empresa (sirven para todos los contratos) y no se repiten. Solo los activos se pueden elegir en los horarios.
+## Revisar (personal de Contratación Pública)
+- En cada documento entregado: abrir el archivo o enlace, "Aprobar" o "Rechazar" (el motivo es obligatorio y le llega al responsable por la campana y por correo).
+- "Carpeta de Drive para los archivos": se pega una vez el enlace de la carpeta de Drive donde se guardan los archivos subidos (dentro se crea una carpeta por entidad y mes). Debe estar compartida con la cuenta de servicio del sistema. Sin esa carpeta solo se pueden entregar enlaces.
 
-## Horarios
-- "+ Nuevo Horario": "Fecha inicio" y "Fecha fin" (rango libre, ej. 30 de julio al 29 de agosto) → "Crear Horario". El rango no puede cruzarse con otro horario del mismo contrato. El mes del horario se toma de la fecha de inicio.
-- Editor: una fila por guardia agrupada por puesto, una columna por día; cada celda es un desplegable con los códigos activos (se guarda al instante). "Exportar PDF", "Exportar Excel", "Intercambiar turno" (Puesto, Día, Guardia A, Guardia B; solo en el mismo puesto) y "Generar patrón" por puesto.
-- Estados: BORRADOR ("Enviar") → ENVIADO ("Aprobar" o "Rechazar" con motivo opcional) → APROBADO (final). RECHAZADO → "Volver a Borrador". Solo se edita en Borrador; solo se elimina en Borrador.
-- Cobertura mínima: al pulsar "Enviar", por cada puesto y día cuenta los guardias con turno de trabajo (no descanso) y los compara con "Guardias simultáneos requeridos"; si falta en algún día, no deja enviar y lista todos los días/puestos con problema.
-- "Generar patrón de rotación": "Tramos del ciclo" (código + días, ej. 2 D, 2 N, 2 L), "Cobertura simultánea", "Fecha de inicio del ciclo", "Orden de guardias (define el desfase)"; vista previa → "Generar y aplicar" (o "Sobrescribir" si ya había días). La cantidad de guardias debe ser múltiplo de la cobertura y el ciclo divisible entre los grupos; si no, explica el error. El patrón queda guardado en el puesto.
-
-## Informes mensuales
-- Pestaña "Informes" → "Nuevo Informe" → Año y Mes → "Crear Informe". Uno por contrato y mes.
-- Al crearlo busca el horario APROBADO de ese contrato y mes. Si el horario se aprobó después de crear el informe, el informe queda sin personal: eliminar el informe y crearlo de nuevo.
-- Pantalla del informe: "Datos autogenerados" (entidad, contrato, referencia, periodo, puestos y personal del mes); "Redactado este mes": "Retroalimentación / inducción" y "Conclusiones" → "Guardar"; "Generar PDF" (guarda, genera y abre el PDF; estado Generado) y "Ver último PDF".
-- La plantilla Word puede usar [Entidad], [NumeroContrato], [ReferenciaProceso], [Periodo], [Retroalimentacion], [Conclusiones], cada clave de texto institucional (ej. [OBJETIVO]) y [TablaPuestos] / [TablaPersonal] (se reemplazan por tablas; deben ir solas en su párrafo).
-- Si "Generar PDF" dice que la plantilla no está configurada: ir a "Textos Institucionales" y guardar el enlace de Drive del Word (compartido como "Cualquier persona con el enlace").
+## Recordatorios
+- Cada día el sistema recuerda a los responsables los documentos Pendientes o Rechazados cuya fecha límite es dentro de 3 días y los que vencen ese mismo día, dentro del sistema y por correo.
 
 ## Preguntas frecuentes
-- "¿Cómo lo uso?" / "¿Por dónde empiezo?": seguir "De cero a un informe mensual".
-- "No me deja enviar el horario": falta cobertura mínima en los días que lista el mensaje; agregar turnos de trabajo o revisar "Guardias simultáneos requeridos" del puesto.
-- "No puedo editar el horario": solo se edita en Borrador; si fue rechazado, "Volver a Borrador".
-- "El informe sale sin personal": el horario de ese mes no estaba Aprobado al crear el informe, o su fecha de inicio cae en otro mes; aprobarlo, eliminar el informe y crearlo de nuevo.
-- "¿Renovar o adenda?": renovar = contrato nuevo (hay que recrear puestos); adenda = modificación registrada del mismo contrato.`;
+- "No veo Contratación Pública": pedir el permiso a un administrador (Administración → Permisos de usuario) o por "Reportar un problema a Sistemas".
+- "No puedo subir un archivo": revisar que sea PDF, Word, Excel, imagen o ZIP de hasta 15 MB; si dice que falta configurar la carpeta de Drive, pegar un enlace o avisar al personal de Contratación Pública.
+- "No me deja enviar la solicitud": falta agregar al menos un documento, o algún documento no tiene responsable.
+- "Ya no recibo el recordatorio de un documento": solo se recuerdan los Pendientes o Rechazados; uno Entregado o Aprobado ya no genera recordatorios.`;
 
 const CACAO = `# Cacao — guía
 

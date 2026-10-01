@@ -1,6 +1,7 @@
 import {
   Injectable,
   BadRequestException,
+  ForbiddenException,
   NotFoundException,
   Logger,
 } from '@nestjs/common';
@@ -9,12 +10,73 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GmailMailService } from '../mail/gmail-mail.service';
 import {
+  ACTIVITY_TYPES,
   CreateReferralDto,
   ChangeSalesClientStageDto,
+  CreateSalesClientActivityDto,
   CreateSalesClientStageDto,
+  MarkSalesClientDoneDto,
+  UpdateSalesClientActivityDto,
   UpdateSalesClientStageDto,
   SalesClientFieldOptionDto,
 } from './dto/client.dto';
+
+// Dashboard: etapas "ganada"/"perdida" por clave (decisión de Ventas: en
+// producción siempre existen ACEPTADO y RECHAZADO como etapas finales) y
+// cuántos días en la misma etapa hacen a un cliente "estancado".
+const ETAPA_GANADA = 'ACEPTADO';
+const ETAPA_PERDIDA = 'RECHAZADO';
+const DIAS_ESTANCADO = 7;
+const MAX_ESTANCADOS_LISTADOS = 10;
+const MAX_SEMANAS_SERIE = 12;
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+const esDiaValido = (s?: string): s is string =>
+  !!s && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00.000Z`));
+const diaUtc = (s: string) => new Date(`${s}T00:00:00.000Z`);
+const aDia = (d: Date) => d.toISOString().slice(0, 10);
+// Lunes (UTC) de la semana de un día 'YYYY-MM-DD'.
+function lunesDe(dia: string): Date {
+  const d = diaUtc(dia);
+  return new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * DIA_MS);
+}
+
+const MAX_ACTIVITY_TEXT = 2000;
+const MAX_ACTIVITY_OTHER_LABEL = 40;
+
+// Valida y normaliza el tipo de una actividad. `OTRO` exige una etiqueta; en
+// cualquier otro tipo la etiqueta se descarta.
+function normalizarTipoActividad(
+  type: string | undefined,
+  otherLabel: string | undefined,
+): { type: string; otherLabel: string | null } {
+  const tipo = (type || '').trim().toUpperCase();
+  if (!(ACTIVITY_TYPES as readonly string[]).includes(tipo)) {
+    throw new BadRequestException('Elige un tipo de actividad válido.');
+  }
+  if (tipo !== 'OTRO') return { type: tipo, otherLabel: null };
+  const etiqueta = (otherLabel || '').trim();
+  if (!etiqueta) {
+    throw new BadRequestException('Escribe cómo quieres llamar a esta actividad.');
+  }
+  if (etiqueta.length > MAX_ACTIVITY_OTHER_LABEL) {
+    throw new BadRequestException(
+      `El nombre de la actividad no puede pasar de ${MAX_ACTIVITY_OTHER_LABEL} caracteres.`,
+    );
+  }
+  return { type: tipo, otherLabel: etiqueta };
+}
+
+function normalizarTextoActividad(text: string | undefined): string {
+  const limpio = (text || '').trim();
+  if (!limpio) throw new BadRequestException('Escribe qué se hizo.');
+  if (limpio.length > MAX_ACTIVITY_TEXT) {
+    throw new BadRequestException(
+      `El texto no puede pasar de ${MAX_ACTIVITY_TEXT} caracteres.`,
+    );
+  }
+  return limpio;
+}
 
 export const CORE_CLIENT_FIELDS = [
   { key: 'name', label: 'Nombre / Razón social', fieldType: 'TEXT' },
@@ -96,6 +158,37 @@ const DEFAULT_STAGES = [
 ] as const;
 
 const MAX_BLOCKING_CLIENTS_LISTED = 20;
+
+// Convierte el "siguiente paso" que llega del body a lo que se guarda.
+// `undefined` = no se envió (no tocar); `null`/'' = borrar. La fecha es solo
+// día ('YYYY-MM-DD'), guardada a medianoche UTC para que no se corra de día
+// por zona horaria (la columna es @db.Date).
+export function parseSiguientePaso(dto: {
+  nextActionText?: string | null;
+  nextActionDate?: string | null;
+}): { nextActionText?: string | null; nextActionDate?: Date | null } {
+  const data: { nextActionText?: string | null; nextActionDate?: Date | null } =
+    {};
+  if (dto.nextActionText !== undefined) {
+    data.nextActionText = dto.nextActionText?.trim() || null;
+  }
+  if (dto.nextActionDate !== undefined) {
+    const raw = dto.nextActionDate?.trim();
+    if (!raw) {
+      data.nextActionDate = null;
+    } else {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        throw new BadRequestException('La fecha del siguiente paso no es válida.');
+      }
+      const fecha = new Date(`${raw}T00:00:00.000Z`);
+      if (Number.isNaN(fecha.getTime())) {
+        throw new BadRequestException('La fecha del siguiente paso no es válida.');
+      }
+      data.nextActionDate = fecha;
+    }
+  }
+  return data;
+}
 
 // `creator` = quién creó el registro (auditoría, puede ser un empleado
 // cualquiera que refirió). `assignedUser` = "Responsable", quién de Ventas
@@ -489,6 +582,12 @@ export class VentasClientesService {
       );
     }
 
+    // En una etapa final (aceptado/rechazado) ya no hay nada que dar
+    // seguimiento: se borra el siguiente paso aunque venga uno en el body.
+    const siguientePaso = targetStage.isFinal
+      ? { nextActionText: null, nextActionDate: null }
+      : parseSiguientePaso(dto);
+
     const [, updated] = await this.prisma.$transaction([
       this.prisma.salesClientStageChange.create({
         data: {
@@ -502,7 +601,7 @@ export class VentasClientesService {
       }),
       this.prisma.salesClient.update({
         where: { id },
-        data: { status: dto.toStatus },
+        data: { status: dto.toStatus, ...siguientePaso },
       }),
     ]);
 
@@ -733,6 +832,7 @@ export class VentasClientesService {
         ? String(dto.observaciones).trim()
         : null;
     if (dto.extra !== undefined) data.extra = dto.extra;
+    Object.assign(data, parseSiguientePaso(dto));
     return this.prisma.salesClient.update({
       where: { id },
       data,
@@ -744,6 +844,489 @@ export class VentasClientesService {
     await this.getClient(companyId, id);
     await this.prisma.salesClient.delete({ where: { id } });
     return { success: true };
+  }
+
+  // ---------- Ficha del cliente: línea de tiempo y actividades ----------
+
+  // Une en una sola lista, lo más reciente primero: la creación del cliente,
+  // sus cambios de etapa, las notas/actividades registradas a mano y los
+  // hitos de sus contratos (creado, enviado a firma, firmado). Los cambios de
+  // etapa solo existen desde que se empezó a guardarlos, y los contratos solo
+  // aparecen si fueron vinculados al cliente al crearlos.
+  async getTimeline(companyId: number | null, clientId: number) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    const client = await this.getClient(companyId, clientId);
+
+    const [stages, changes, activities, contracts] = await Promise.all([
+      this.prisma.salesClientStage.findMany({ where: { companyId } }),
+      this.prisma.salesClientStageChange.findMany({
+        where: { salesClientId: clientId, companyId },
+        include: { changer: { select: { id: true, fullName: true } } },
+      }),
+      this.prisma.salesClientActivity.findMany({
+        where: { salesClientId: clientId, companyId },
+        include: { author: { select: { id: true, fullName: true } } },
+      }),
+      this.prisma.salesContract.findMany({
+        where: { salesClientId: clientId, companyId },
+        select: {
+          id: true,
+          contractNumber: true,
+          createdAt: true,
+          sentAt: true,
+          signedAt: true,
+          template: { select: { name: true } },
+          creator: { select: { fullName: true } },
+        },
+      }),
+    ]);
+
+    const etapaPorClave = new Map(stages.map((s) => [s.key, s]));
+    // Una etapa borrada (ya sin fila) se muestra con su clave tal cual.
+    const infoEtapa = (key: string | null) => {
+      if (!key) return null;
+      const s = etapaPorClave.get(key);
+      return { label: s?.label ?? key, color: s?.color ?? '#718096' };
+    };
+
+    type Evento = { kind: string; at: Date; [k: string]: unknown };
+    const eventos: Evento[] = [];
+
+    eventos.push({
+      kind: 'creado',
+      id: `creado-${client.id}`,
+      at: client.createdAt,
+      authorName: client.creator?.fullName ?? null,
+      referredByName: client.referredBy?.fullName ?? null,
+    });
+
+    for (const c of changes) {
+      eventos.push({
+        kind: 'etapa',
+        id: `etapa-${c.id}`,
+        at: c.createdAt,
+        authorName: c.changer?.fullName ?? null,
+        from: infoEtapa(c.fromStatus),
+        to: infoEtapa(c.toStatus),
+        notes: c.notes,
+      });
+    }
+
+    for (const a of activities) {
+      eventos.push({
+        kind: 'actividad',
+        id: `actividad-${a.id}`,
+        activityId: a.id,
+        at: a.createdAt,
+        authorId: a.author?.id ?? null,
+        authorName: a.author?.fullName ?? null,
+        type: a.type,
+        otherLabel: a.otherLabel,
+        text: a.text,
+        // Editada si se tocó después de crearla (margen para el propio insert).
+        edited: a.updatedAt.getTime() - a.createdAt.getTime() > 2000,
+      });
+    }
+
+    for (const k of contracts) {
+      const base = {
+        kind: 'contrato',
+        contractId: k.id,
+        contractNumber: k.contractNumber,
+        templateName: k.template?.name ?? null,
+      };
+      eventos.push({
+        ...base,
+        id: `contrato-${k.id}-creado`,
+        step: 'creado',
+        at: k.createdAt,
+        authorName: k.creator?.fullName ?? null,
+      });
+      if (k.sentAt) {
+        eventos.push({ ...base, id: `contrato-${k.id}-enviado`, step: 'enviado', at: k.sentAt });
+      }
+      if (k.signedAt) {
+        eventos.push({ ...base, id: `contrato-${k.id}-firmado`, step: 'firmado', at: k.signedAt });
+      }
+    }
+
+    return eventos.sort((a, b) => b.at.getTime() - a.at.getTime());
+  }
+
+  async addActivity(
+    companyId: number | null,
+    clientId: number,
+    userId: number,
+    dto: CreateSalesClientActivityDto,
+  ) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    await this.getClient(companyId, clientId);
+    const { type, otherLabel } = normalizarTipoActividad(dto.type, dto.otherLabel);
+    return this.prisma.salesClientActivity.create({
+      data: {
+        companyId,
+        salesClientId: clientId,
+        createdBy: userId,
+        type,
+        otherLabel,
+        text: normalizarTextoActividad(dto.text),
+      },
+    });
+  }
+
+  // Solo quien la escribió o un administrador puede corregir o borrar una
+  // actividad (decisión de Ventas). El resto del equipo la ve pero no la toca.
+  private async actividadEditable(
+    companyId: number | null,
+    activityId: number,
+    user: { userId: number; role: string },
+  ) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    const actividad = await this.prisma.salesClientActivity.findFirst({
+      where: { id: activityId, companyId },
+    });
+    if (!actividad) throw new NotFoundException('Actividad no encontrada');
+    if (actividad.createdBy !== user.userId && user.role !== 'ADMIN') {
+      throw new ForbiddenException(
+        'Solo quien la escribió o un administrador puede cambiar esta actividad.',
+      );
+    }
+    return actividad;
+  }
+
+  async updateActivity(
+    companyId: number | null,
+    activityId: number,
+    user: { userId: number; role: string },
+    dto: UpdateSalesClientActivityDto,
+  ) {
+    const actual = await this.actividadEditable(companyId, activityId, user);
+    const data: { type?: string; otherLabel?: string | null; text?: string } = {};
+    if (dto.type !== undefined || dto.otherLabel !== undefined) {
+      Object.assign(
+        data,
+        normalizarTipoActividad(
+          dto.type ?? actual.type,
+          dto.otherLabel ?? actual.otherLabel ?? undefined,
+        ),
+      );
+    }
+    if (dto.text !== undefined) data.text = normalizarTextoActividad(dto.text);
+    return this.prisma.salesClientActivity.update({
+      where: { id: activityId },
+      data,
+    });
+  }
+
+  async deleteActivity(
+    companyId: number | null,
+    activityId: number,
+    user: { userId: number; role: string },
+  ) {
+    await this.actividadEditable(companyId, activityId, user);
+    await this.prisma.salesClientActivity.delete({ where: { id: activityId } });
+    return { success: true };
+  }
+
+  // ---------- Dashboard de Ventas (a partir de Clientes) ----------
+
+  // Todo sale de SalesClient (más sus contratos y cambios de etapa), no del
+  // módulo antiguo de Leads/Visitas. `responsable`: 'mine' (por defecto),
+  // 'all' o el id de un vendedor — este último solo lo respeta si quien
+  // consulta es ADMIN/MANAGER; para el resto equivale a 'mine'. `hoy` es el
+  // día local de quien consulta ('YYYY-MM-DD'): nextActionDate es solo-día y
+  // compararlo contra el "hoy" del servidor (UTC) correría los vencimientos.
+  // El rango desde/hasta solo afecta a "nuevos" y "referidos"; el resto es
+  // una foto de cómo está todo ahora.
+  async getDashboard(
+    companyId: number | null,
+    user: { userId: number; role: string },
+    query: { desde?: string; hasta?: string; responsable?: string; hoy?: string },
+  ) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    await this.ensureDefaultStages(companyId);
+
+    const esManager = user.role === 'ADMIN' || user.role === 'MANAGER';
+    const hoy = esDiaValido(query.hoy) ? query.hoy : aDia(new Date());
+    const hoyFecha = diaUtc(hoy);
+    const hasta = esDiaValido(query.hasta) ? query.hasta : hoy;
+    const desde = esDiaValido(query.desde)
+      ? query.desde
+      : `${hoy.slice(0, 8)}01`; // por defecto, desde el 1 del mes
+    if (desde > hasta) {
+      throw new BadRequestException('La fecha "desde" no puede ser posterior a "hasta".');
+    }
+    const desdeFecha = diaUtc(desde);
+    const hastaExclusivo = new Date(diaUtc(hasta).getTime() + DIA_MS);
+
+    // Alcance
+    let responsable: string = 'mine';
+    const where: Prisma.SalesClientWhereInput = { companyId };
+    if (query.responsable === 'all') {
+      responsable = 'all';
+    } else if (esManager && query.responsable && /^\d+$/.test(query.responsable)) {
+      responsable = query.responsable;
+      where.assignedUserId = Number(query.responsable);
+    } else {
+      where.assignedUserId = user.userId;
+    }
+
+    const stages = await this.prisma.salesClientStage.findMany({
+      where: { companyId },
+      orderBy: { order: 'asc' },
+    });
+    const finales = new Set(stages.filter((s) => s.isFinal).map((s) => s.key));
+    const ganada = stages.find((s) => s.key === ETAPA_GANADA && s.isFinal)?.key ?? null;
+    const perdida = stages.find((s) => s.key === ETAPA_PERDIDA && s.isFinal)?.key ?? null;
+    const esActivo = (status: string | null) => !status || !finales.has(status);
+
+    const clientes = await this.prisma.salesClient.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        assignedUserId: true,
+        assignedUser: { select: { fullName: true } },
+        nextActionDate: true,
+        createdAt: true,
+        referredByUserId: true,
+        referredBy: { select: { fullName: true } },
+      },
+    });
+
+    // Seguimientos (solo clientes activos)
+    let vencidos = 0;
+    let paraHoy = 0;
+    let sinFecha = 0;
+    let activos = 0;
+    for (const c of clientes) {
+      if (!esActivo(c.status)) continue;
+      activos++;
+      if (!c.nextActionDate) sinFecha++;
+      else if (c.nextActionDate < hoyFecha) vencidos++;
+      else if (c.nextActionDate.getTime() === hoyFecha.getTime()) paraHoy++;
+    }
+
+    // Embudo por etapa (en el orden y color que definió la empresa)
+    const porEtapa = new Map<string | null, number>();
+    for (const c of clientes) {
+      const k = c.status && stages.some((s) => s.key === c.status) ? c.status : null;
+      porEtapa.set(k, (porEtapa.get(k) ?? 0) + 1);
+    }
+    const embudo = [
+      ...stages.map((s) => ({
+        key: s.key as string | null,
+        label: s.label,
+        color: s.color,
+        isFinal: s.isFinal,
+        count: porEtapa.get(s.key) ?? 0,
+      })),
+      ...(porEtapa.get(null)
+        ? [{ key: null, label: 'Sin etapa', color: '#a0aec0', isFinal: false, count: porEtapa.get(null)! }]
+        : []),
+    ];
+
+    // Por responsable
+    const resp = new Map<number | null, { nombre: string; activos: number; vencidos: number; aceptados: number }>();
+    for (const c of clientes) {
+      const k = c.assignedUserId ?? null;
+      const fila = resp.get(k) ?? {
+        nombre: c.assignedUser?.fullName ?? 'Sin responsable',
+        activos: 0,
+        vencidos: 0,
+        aceptados: 0,
+      };
+      if (esActivo(c.status)) {
+        fila.activos++;
+        if (c.nextActionDate && c.nextActionDate < hoyFecha) fila.vencidos++;
+      }
+      if (ganada && c.status === ganada) fila.aceptados++;
+      resp.set(k, fila);
+    }
+    const porResponsable = [...resp.entries()]
+      .map(([userId, v]) => ({ userId, ...v }))
+      .sort((a, b) => {
+        if (a.userId === null) return -1; // "Sin responsable" arriba: es una cola sin dueño
+        if (b.userId === null) return 1;
+        return b.activos - a.activos || a.nombre.localeCompare(b.nombre, 'es');
+      });
+
+    // Nuevos clientes y referidos (dentro del rango). Se compara el
+    // instante de creación en UTC contra el día pedido: un cliente creado de
+    // noche en Ecuador puede caer en el día siguiente.
+    const enRango = clientes.filter((c) => c.createdAt >= desdeFecha && c.createdAt < hastaExclusivo);
+    const semanas = new Map<string, number>();
+    for (let d = lunesDe(desde); d < hastaExclusivo; d = new Date(d.getTime() + 7 * DIA_MS)) {
+      semanas.set(aDia(d), 0);
+    }
+    for (const c of enRango) {
+      const k = aDia(lunesDe(aDia(c.createdAt)));
+      semanas.set(k, (semanas.get(k) ?? 0) + 1);
+    }
+    const porSemana = [...semanas.entries()]
+      .map(([inicio, total]) => ({ inicio, total }))
+      .slice(-MAX_SEMANAS_SERIE);
+
+    const referidosRango = enRango.filter((c) => c.referredByUserId);
+    const topReferidores = new Map<number, { nombre: string; total: number }>();
+    for (const c of referidosRango) {
+      const id = c.referredByUserId!;
+      const fila = topReferidores.get(id) ?? { nombre: c.referredBy?.fullName ?? 'Sin nombre', total: 0 };
+      fila.total++;
+      topReferidores.set(id, fila);
+    }
+    const referidos = {
+      recibidos: referidosRango.length,
+      sinAtender: referidosRango.filter((c) => !c.assignedUserId && esActivo(c.status)).length,
+      aceptados: ganada ? referidosRango.filter((c) => c.status === ganada).length : 0,
+      rechazados: perdida ? referidosRango.filter((c) => c.status === perdida).length : 0,
+      top: [...topReferidores.entries()]
+        .map(([userId, v]) => ({ userId, ...v }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5),
+    };
+
+    // Estancados: clientes activos que llevan más de DIAS_ESTANCADO días en
+    // su etapa. Desde cuándo está en ella sale de su último cambio de etapa
+    // (esa tabla solo existe desde que se empezó a guardar); sin cambios, se
+    // usa la fecha de creación. Es una aproximación honesta, no un dato exacto.
+    const activosRows = clientes.filter((c) => esActivo(c.status));
+    const ultimoCambio = activosRows.length
+      ? await this.prisma.salesClientStageChange.findMany({
+          where: { companyId, salesClientId: { in: activosRows.map((c) => c.id) } },
+          orderBy: { createdAt: 'desc' },
+          distinct: ['salesClientId'],
+          select: { salesClientId: true, createdAt: true },
+        })
+      : [];
+    const desdeCuando = new Map(ultimoCambio.map((u) => [u.salesClientId, u.createdAt]));
+    const etapaPorClave = new Map(stages.map((s) => [s.key, s]));
+    const estancadosTodos = activosRows
+      .map((c) => {
+        const entro = desdeCuando.get(c.id) ?? c.createdAt;
+        // Días calendario entre el día en que entró a la etapa y hoy.
+        const dias = Math.max(0, Math.round((hoyFecha.getTime() - diaUtc(aDia(entro)).getTime()) / DIA_MS));
+        const etapa = c.status ? etapaPorClave.get(c.status) : undefined;
+        return {
+          id: c.id,
+          name: c.name,
+          etapa: etapa?.label ?? 'Sin etapa',
+          color: etapa?.color ?? '#a0aec0',
+          dias,
+          responsable: c.assignedUser?.fullName ?? null,
+        };
+      })
+      .filter((c) => c.dias >= DIAS_ESTANCADO)
+      .sort((a, b) => b.dias - a.dias);
+
+    // Aceptación (foto actual, no por rango: sin historial confiable)
+    const nGanados = ganada ? clientes.filter((c) => c.status === ganada).length : 0;
+    const nPerdidos = perdida ? clientes.filter((c) => c.status === perdida).length : 0;
+
+    // Contratos de estos clientes
+    const clientesFiltro: Prisma.SalesContractWhereInput =
+      where.assignedUserId !== undefined
+        ? { salesClient: { is: { assignedUserId: where.assignedUserId as number } } }
+        : { salesClientId: { not: null } };
+    const [contratosPorEstado, aceptadosSinContrato, sinClienteVinculado] = await Promise.all([
+      this.prisma.salesContract.groupBy({
+        by: ['status'],
+        where: { companyId, ...clientesFiltro },
+        _count: { _all: true },
+      }),
+      ganada
+        ? this.prisma.salesClient.count({ where: { ...where, status: ganada, contracts: { none: {} } } })
+        : Promise.resolve(0),
+      this.prisma.salesContract.count({
+        where: { companyId, salesClientId: null, status: { not: 'CANCELLED' } },
+      }),
+    ]);
+    const nContratos = (...estados: string[]) =>
+      contratosPorEstado.filter((e) => estados.includes(e.status)).reduce((s, e) => s + e._count._all, 0);
+
+    // Vendedores entre los que un gerente puede elegir (quienes ya tienen
+    // clientes asignados). Los demás usuarios no ven ese selector.
+    let responsables: { id: number; nombre: string }[] = [];
+    if (esManager) {
+      const asignados = await this.prisma.salesClient.groupBy({
+        by: ['assignedUserId'],
+        where: { companyId, assignedUserId: { not: null } },
+      });
+      const usuarios = await this.prisma.user.findMany({
+        where: { id: { in: asignados.map((a) => a.assignedUserId!) } },
+        select: { id: true, fullName: true },
+        orderBy: { fullName: 'asc' },
+      });
+      responsables = usuarios.map((u) => ({ id: u.id, nombre: u.fullName }));
+    }
+
+    return {
+      alcance: { responsable, desde, hasta, hoy, esManager },
+      responsables,
+      seguimientos: { vencidos, hoy: paraHoy, sinFecha, activos },
+      embudo,
+      porResponsable,
+      nuevos: { total: enRango.length, referidos: referidosRango.length, porSemana },
+      referidos,
+      estancados: {
+        dias: DIAS_ESTANCADO,
+        total: estancadosTodos.length,
+        lista: estancadosTodos.slice(0, MAX_ESTANCADOS_LISTADOS),
+      },
+      aceptacion: {
+        aceptados: nGanados,
+        rechazados: nPerdidos,
+        tasa: ganada && perdida && nGanados + nPerdidos > 0
+          ? Math.round((nGanados / (nGanados + nPerdidos)) * 100)
+          : null,
+      },
+      contratos: {
+        borrador: nContratos('DRAFT', 'GENERATING', 'READY'),
+        enFirma: nContratos('SENT'),
+        firmados: nContratos('SIGNED'),
+        aceptadosSinContrato,
+        sinClienteVinculado,
+      },
+    };
+  }
+
+  // "Hecho" de la vista Hoy: guarda lo que se hizo (si se escribió algo) en la
+  // línea de tiempo y deja el nuevo siguiente paso, en una sola transacción.
+  async markDone(
+    companyId: number | null,
+    clientId: number,
+    userId: number,
+    dto: MarkSalesClientDoneDto,
+  ) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    await this.getClient(companyId, clientId);
+    const siguiente = parseSiguientePaso(dto);
+    const queHizo = dto.text?.trim();
+    const actividad = queHizo
+      ? {
+          ...normalizarTipoActividad(dto.type || 'NOTA', dto.otherLabel),
+          text: normalizarTextoActividad(queHizo),
+        }
+      : null;
+
+    return this.prisma.$transaction(async (tx) => {
+      if (actividad) {
+        await tx.salesClientActivity.create({
+          data: {
+            companyId,
+            salesClientId: clientId,
+            createdBy: userId,
+            ...actividad,
+          },
+        });
+      }
+      return tx.salesClient.update({
+        where: { id: clientId },
+        data: siguiente,
+        include: CLIENT_INCLUDE,
+      });
+    });
   }
 
   static valueOf(

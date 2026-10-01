@@ -50,6 +50,7 @@ model Company {
   cpCodigosTurno            CPCodigoTurno[]
   cpHorariosMensuales       CPHorarioMensual[]
   cpInformesMensuales       CPInformeMensual[]
+  cpSolicitudesMensuales    CPSolicitudMensual[]
   cpTextosInstitucionales   CPTextoInstitucional[]
   cpPlantillaInforme        CPPlantillaInforme?
   locations                 CompanyLocation[]
@@ -72,16 +73,18 @@ model Company {
   sistemasDriveConfig       SistemasDriveConfig?
   salesClientStages         SalesClientStage[]
   salesClientStageChanges   SalesClientStageChange[]
+  salesClientActivities     SalesClientActivity[]
   notifications             Notification[]
 }
 
 model Department {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
+  id          Int                  @id @default(autoincrement())
+  name        String               @unique
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
   users       User[]
+  cpEntregas  CPEntregaDocumento[]
 }
 
 model Role {
@@ -151,9 +154,11 @@ model User {
   cpContratosCreados                 CPContrato[]
   cpHorariosCreados                  CPHorarioMensual[]
   cpInformesCreados                  CPInformeMensual[]
+  cpEntregaResponsabilidades         CPEntregaResponsable[]
   referredSalesClients               SalesClient[]            @relation("SalesClientReferrer")
   assignedSalesClients               SalesClient[]            @relation("SalesClientAssignee")
   salesClientStageChanges            SalesClientStageChange[]
+  salesClientActivities              SalesClientActivity[]
   notifications                      Notification[]
 }
 
@@ -1510,6 +1515,28 @@ model SalesClientStageChange {
   @@index([salesClientId])
 }
 
+// Notas y actividades que el equipo registra a mano en la ficha de un
+// cliente (llamada, reunión, correo, nota, otro). Junto con los cambios de
+// etapa y los contratos forman la línea de tiempo del cliente.
+model SalesClientActivity {
+  id            Int         @id @default(autoincrement())
+  salesClientId Int
+  salesClient   SalesClient @relation(fields: [salesClientId], references: [id], onDelete: Cascade)
+  // NOTA | LLAMADA | REUNION | CORREO | OTRO
+  type          String
+  // Solo cuando type = OTRO: cómo la persona quiere llamarla ("Visita", ...).
+  otherLabel    String?
+  text          String
+  createdBy     Int
+  author        User        @relation(fields: [createdBy], references: [id])
+  companyId     Int
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([salesClientId, createdAt])
+}
+
 model SalesApiKey {
   id        Int      @id @default(autoincrement())
   name      String
@@ -1842,6 +1869,7 @@ model SalesClient {
   status           String?
   stage            SalesClientStage?        @relation("SalesClientToStage", fields: [companyId, status], references: [companyId, key])
   stageChanges     SalesClientStageChange[]
+  activities       SalesClientActivity[]
   createdBy        Int
   // Quién de Ventas está atendiendo la venta — distinto de `createdBy`
   // (quién creó el registro, puede ser un empleado cualquiera que refirió)
@@ -1850,6 +1878,10 @@ model SalesClient {
   // ("Asignarme este cliente"), ver VentasClientesService.asignarme.
   assignedUserId   Int?
   assignedUser     User?                    @relation("SalesClientAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  // Siguiente paso a dar con este cliente y para cuándo (vista "Hoy" de
+  // Clientes). La fecha es solo día, sin hora ni zona horaria.
+  nextActionText   String?
+  nextActionDate   DateTime?                @db.Date
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
 
@@ -1861,6 +1893,7 @@ model SalesClient {
   @@index([companyId, status])
   @@index([referredByUserId])
   @@index([assignedUserId])
+  @@index([companyId, assignedUserId, nextActionDate])
 }
 
 enum TicketSoporteTipo {
@@ -1942,10 +1975,87 @@ model CPEntidadPublica {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  company   Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  contratos CPContrato[]
+  company              Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contratos            CPContrato[]
+  solicitudesMensuales CPSolicitudMensual[]
 
   @@index([companyId])
+}
+
+// Documentos que otras áreas (RRHH, Financiero, Operaciones, Legal) deben
+// entregar a Contratación Pública para el informe mensual de una entidad.
+// Cada mes es una solicitud independiente: lo que se pide, las fechas y las
+// personas cambian de un mes a otro y se pueden editar también después de
+// enviada. "Copiar el mes anterior" duplica las filas de la solicitud previa;
+// no existe una plantilla fija por entidad.
+model CPSolicitudMensual {
+  id        Int       @id @default(autoincrement())
+  entidadId Int
+  anio      Int
+  mes       Int
+  // BORRADOR | ENVIADA. En BORRADOR nadie recibe avisos todavía.
+  estado    String    @default("BORRADOR")
+  enviadaAt DateTime?
+  companyId Int
+  createdBy Int
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  entidad  CPEntidadPublica     @relation(fields: [entidadId], references: [id], onDelete: Cascade)
+  company  Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  entregas CPEntregaDocumento[]
+
+  @@unique([entidadId, anio, mes])
+  @@index([companyId])
+}
+
+model CPEntregaDocumento {
+  id                   Int       @id @default(autoincrement())
+  solicitudId          Int
+  nombre               String
+  descripcion          String?
+  // Área que produce el documento; solo una etiqueta para filtrar.
+  departmentId         Int?
+  // Fecha límite propia de este documento (solo la fecha, sin hora).
+  fechaLimite          DateTime  @db.Date
+  orden                Int       @default(0)
+  // PENDIENTE | ENTREGADO | APROBADO | RECHAZADO
+  estado               String    @default("PENDIENTE")
+  // ARCHIVO (subido a Drive) | ENLACE (pegado por la persona)
+  origen               String?
+  url                  String?
+  motivoRechazo        String?
+  // Quién entregó y quién revisó: instantánea de id y nombre, sin FK, para
+  // que el historial no dependa de que el usuario siga existiendo.
+  entregadoPorId       Int?
+  entregadoPorNombre   String?
+  entregadoAt          DateTime?
+  revisadoPorId        Int?
+  revisadoPorNombre    String?
+  revisadoAt           DateTime?
+  // Evita repetir el mismo recordatorio el mismo día (ver EntregasRecordatoriosService).
+  ultimoRecordatorioAt DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  solicitud    CPSolicitudMensual     @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  department   Department?            @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  responsables CPEntregaResponsable[]
+
+  @@index([solicitudId])
+  @@index([estado, fechaLimite])
+}
+
+model CPEntregaResponsable {
+  id        Int @id @default(autoincrement())
+  entregaId Int
+  userId    Int
+
+  entrega CPEntregaDocumento @relation(fields: [entregaId], references: [id], onDelete: Cascade)
+  user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([entregaId, userId])
+  @@index([userId])
 }
 
 model CPContrato {

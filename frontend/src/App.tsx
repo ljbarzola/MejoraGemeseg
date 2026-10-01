@@ -57,6 +57,7 @@ const CustodiasDashboard = lazy(() => import('./pages/custodias/CustodiasDashboa
 const ConsultaTrabajador = lazy(() => import('./pages/custodias/ConsultaTrabajador'));
 const GemeBotChat = lazy(() => import('./pages/custodias/GemeBotChat'));
 const CPEntidadesPublicasList = lazy(() => import('./pages/contratacion-publica/EntidadesPublicasList'));
+const CPEntidadDetail = lazy(() => import('./pages/contratacion-publica/entidades/EntidadDetail'));
 const CPContratosList = lazy(() => import('./pages/contratacion-publica/contratos/ContratosList'));
 const CPContratoForm = lazy(() => import('./pages/contratacion-publica/contratos/ContratoForm'));
 const CPContratoDetail = lazy(() => import('./pages/contratacion-publica/contratos/ContratoDetail'));
@@ -66,6 +67,14 @@ const CPInformesList = lazy(() => import('./pages/contratacion-publica/informes/
 const CPInformeForm = lazy(() => import('./pages/contratacion-publica/informes/InformeForm'));
 const CPCodigosTurnoConfig = lazy(() => import('./pages/contratacion-publica/config/CodigosTurnoConfig'));
 const CPTextosInstitucionalesConfig = lazy(() => import('./pages/contratacion-publica/config/TextosInstitucionalesConfig'));
+
+// Contratación Pública: desde 2026-10-01 solo está visible "Entidades Públicas"
+// (con el seguimiento de entregas de documentos). Contratos, Horarios, Informes,
+// Códigos de Turno y Textos Institucionales siguen en el código pero están
+// ocultos, y sus rutas redirigen a Entidades Públicas. Para reactivarlos: poner
+// esta bandera en true y devolver los ítems en Sidebar.tsx (contratacionPublicaItems).
+// Ver "Submódulos ocultos" en .agents/modules/contratacion-publica.md.
+const CP_MOSTRAR_SUBMODULOS_OCULTOS = false;
 const PersonalDashboard = lazy(() => import('./pages/personal/PersonalDashboard'));
 const ReclutamientoPage = lazy(() => import('./pages/personal/ReclutamientoPage'));
 const GuardiasList = lazy(() => import('./pages/personal/GuardiasList'));
@@ -83,11 +92,7 @@ const SurveysPage = lazy(() => import('./pages/personal/SurveysPage'));
 const PublicSurveyPage = lazy(() => import('./pages/personal/PublicSurveyPage'));
 const SurveyManagementPage = lazy(() => import('./pages/personal/SurveyManagementPage'));
 const VentasDashboard = lazy(() => import('./pages/ventas/VentasDashboard'));
-const VisitasPage = lazy(() => import('./pages/ventas/VisitasPage'));
-const LeadsPage = lazy(() => import('./pages/ventas/LeadsPage'));
 const VentasClientesPage = lazy(() => import('./pages/ventas/VentasClientesPage'));
-const VentasReportes = lazy(() => import('./pages/ventas/VentasReportes'));
-const WebhookConfig = lazy(() => import('./pages/ventas/WebhookConfig'));
 const TemplateList = lazy(() => import('./pages/ventas/TemplateList'));
 const TemplateConfig = lazy(() => import('./pages/ventas/TemplateConfig'));
 const ContratosList = lazy(() => import('./pages/ventas/ContratosList'));
@@ -392,17 +397,25 @@ function AppInner() {
         <Route path="/custodias/trabajador" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><ConsultaTrabajador /></SectionRoute></ProtectedLayout>} />
         <Route path="/custodias/gemebot" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><GemeBotChat /></SectionRoute></ProtectedLayout>} />
         <Route path="/contratacion-publica/entidades" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPEntidadesPublicasList /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/contratos" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratosList /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/contratos/nuevo" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoForm /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/contratos/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoDetail /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/contratos/:id/editar" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoForm /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/horarios" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPHorarioMensualList /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/horarios/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPHorarioMensualEditor /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/informes" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformesList /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/informes/nuevo" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformeForm /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/informes/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformeForm /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/config/codigos-turno" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPCodigosTurnoConfig /></SectionRoute></ProtectedLayout>} />
-        <Route path="/contratacion-publica/config/textos-institucionales" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPTextosInstitucionalesConfig /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/entidades/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPEntidadDetail /></SectionRoute></ProtectedLayout>} />
+        {CP_MOSTRAR_SUBMODULOS_OCULTOS && (
+          <>
+            <Route path="/contratacion-publica/contratos" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratosList /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/contratos/nuevo" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoForm /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/contratos/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoDetail /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/contratos/:id/editar" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoForm /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/horarios" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPHorarioMensualList /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/horarios/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPHorarioMensualEditor /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/informes" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformesList /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/informes/nuevo" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformeForm /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/informes/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformeForm /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/config/codigos-turno" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPCodigosTurnoConfig /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/config/textos-institucionales" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPTextosInstitucionalesConfig /></SectionRoute></ProtectedLayout>} />
+          </>
+        )}
+        {!CP_MOSTRAR_SUBMODULOS_OCULTOS && (
+          <Route path="/contratacion-publica/*" element={<Navigate to="/contratacion-publica/entidades" replace />} />
+        )}
         <Route path="/rrhh" element={<ProtectedLayout><SectionRoute section="RRHH"><PersonalDashboard /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/reclutamiento" element={<ProtectedLayout><SectionRoute section="RRHH"><ReclutamientoPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/guardias" element={<ProtectedLayout><SectionRoute section="RRHH"><GuardiasList /></SectionRoute></ProtectedLayout>} />
@@ -429,11 +442,14 @@ function AppInner() {
         <Route path="/rrhh/asignaciones" element={<Navigate to="/rrhh/historial" replace />} />
         <Route path="/rrhh/movimientos" element={<Navigate to="/rrhh/historial" replace />} />
         <Route path="/ventas" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasDashboard /></SectionRoute></ProtectedLayout>} />
-        <Route path="/ventas/visitas" element={<ProtectedLayout><SectionRoute section="VENTAS"><VisitasPage /></SectionRoute></ProtectedLayout>} />
-        <Route path="/ventas/leads" element={<ProtectedLayout><SectionRoute section="VENTAS"><LeadsPage /></SectionRoute></ProtectedLayout>} />
+        {/* Planificación y Campo (Visitas), Prospectos CRM (Leads), Reportes y Config Webhook están "Próximamente":
+            sus pantallas siguen en el código (pages/ventas/VisitasPage, LeadsPage, VentasReportes, WebhookConfig) pero
+            ya no tienen ruta — quien llegue por un enlace guardado o escribiendo la URL vuelve al Dashboard. Para
+            reactivarlas: volver a importarlas arriba, registrar su ruta aquí y quitar `disabled` en Sidebar.tsx. */}
+        {['visitas', 'leads', 'reportes', 'webhook-config'].map((p) => (
+          <Route key={p} path={`/ventas/${p}`} element={<Navigate to="/ventas" replace />} />
+        ))}
         <Route path="/ventas/clientes" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasClientesPage /></SectionRoute></ProtectedLayout>} />
-        <Route path="/ventas/reportes" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasReportes /></SectionRoute></ProtectedLayout>} />
-        <Route path="/ventas/webhook-config" element={<ProtectedLayout><SectionRoute section="VENTAS"><WebhookConfig /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/contratos" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratosList /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/contratos/nuevo" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoForm /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/contratos/nuevo/:templateId" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoForm /></SectionRoute></ProtectedLayout>} />
