@@ -146,3 +146,13 @@ export async function getMe(): Promise<ProfileData> {
   const res = await api.get('/users/me');
   return res.data;
 }
+
+/** Preferencia personal guardada en la cuenta (null si nunca se guardó). */
+export async function getUserPreference(key: string): Promise<string[] | null> {
+  const res = await api.get<{ value: string[] | null }>(`/users/me/preferences/${encodeURIComponent(key)}`);
+  return res.data.value;
+}
+
+export async function setUserPreference(key: string, value: string[]): Promise<void> {
+  await api.put(`/users/me/preferences/${encodeURIComponent(key)}`, { value });
+}

@@ -202,3 +202,60 @@ describe('UsersService — catálogo de ubicaciones (aislamiento por empresa)', 
     );
   });
 });
+
+describe('UsersService — preferencias personales', () => {
+  let service: UsersService;
+  let prisma: { userPreference: { findUnique: jest.Mock; upsert: jest.Mock } };
+
+  beforeEach(() => {
+    prisma = {
+      userPreference: {
+        findUnique: jest.fn(),
+        upsert: jest.fn(),
+      },
+    };
+    service = new UsersService(prisma as unknown as PrismaService);
+  });
+
+  it('devuelve null cuando la persona nunca guardó la preferencia', async () => {
+    prisma.userPreference.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.getPreference(7, 'columnas:ventas-clientes'),
+    ).resolves.toEqual({ value: null });
+    expect(prisma.userPreference.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId_key: { userId: 7, key: 'columnas:ventas-clientes' } },
+      }),
+    );
+  });
+
+  it('guarda siempre bajo el userId recibido (upsert por usuario + clave)', async () => {
+    prisma.userPreference.upsert.mockResolvedValue({ value: ['phone'] });
+
+    await expect(
+      service.setPreference(7, 'columnas:ventas-clientes', ['phone']),
+    ).resolves.toEqual({ value: ['phone'] });
+    expect(prisma.userPreference.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId_key: { userId: 7, key: 'columnas:ventas-clientes' } },
+        create: {
+          userId: 7,
+          key: 'columnas:ventas-clientes',
+          value: ['phone'],
+        },
+        update: { value: ['phone'] },
+      }),
+    );
+  });
+
+  it('rechaza claves que no son de columnas', async () => {
+    await expect(service.getPreference(7, 'otra:cosa')).rejects.toThrow(
+      'Preferencia no válida',
+    );
+    await expect(service.setPreference(7, 'columnas:', [])).rejects.toThrow(
+      'Preferencia no válida',
+    );
+    expect(prisma.userPreference.upsert).not.toHaveBeenCalled();
+  });
+});

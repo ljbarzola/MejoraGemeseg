@@ -1,16 +1,23 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { getUserPreference, setUserPreference } from '../services/user.service';
 
 /**
  * Qué columnas de una tabla ve cada persona, y en qué orden — preferencia
- * personal guardada en el navegador (localStorage), no en la base de datos.
- * Mismo espíritu que useResizableColumns (ancho de columnas): cada quien
- * ajusta su propia vista, si el almacenamiento falla simplemente no se
- * recuerda.
+ * personal guardada en SU CUENTA (tabla UserPreference), así la conserva en
+ * cualquier navegador o computador. Mismo espíritu que useResizableColumns
+ * (ancho de columnas), pero ese sí es por navegador.
+ *
+ * localStorage se usa solo como caché: la tabla arranca con el último valor
+ * conocido sin esperar al servidor (sin parpadeo) y sigue funcionando si el
+ * servidor no responde. Cuando llega el valor de la cuenta, manda ese.
  *
  * Las columnas que SIEMPRE deben verse (ej. Nombre, Acciones) no pasan por
  * este hook: el llamador las renderiza fijas al principio/final de la tabla
  * y solo le pasa a este hook las columnas que sí son elegibles para
  * mostrar/ocultar/reordenar.
+ *
+ * `set` reemplaza la lista completa de una vez: lo usa el botón "Aplicar" de
+ * ColumnPickerMenu, que edita un borrador y recién ahí cambia la tabla.
  */
 export function useColumnPreferences(
   storageKey: string,
@@ -37,30 +44,46 @@ export function useColumnPreferences(
     return defaultVisibleKeys;
   });
 
-  const persist = (next: string[]) => {
-    setVisible(next);
+  // Si la persona aplica un cambio antes de que llegue la respuesta del
+  // servidor, esa respuesta (vieja) no debe pisar lo que acaba de elegir.
+  const cambioLocal = useRef(false);
+
+  const guardarCache = (next: string[]) => {
     try {
       localStorage.setItem(clave, JSON.stringify(next));
     } catch {
-      /* no se recuerda, y ya */
+      /* no se recuerda en este navegador, y ya */
     }
   };
 
-  const toggle = (key: string) => {
-    persist(visible.includes(key) ? visible.filter((k) => k !== key) : [...visible, key]);
-  };
+  useEffect(() => {
+    let vigente = true;
+    getUserPreference(clave)
+      .then((valor) => {
+        if (!vigente || cambioLocal.current || !Array.isArray(valor)) return;
+        setVisible(valor);
+        guardarCache(valor);
+      })
+      .catch(() => {
+        /* sin respuesta del servidor: se queda con el caché local o el default */
+      });
+    return () => { vigente = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clave]);
 
-  const move = (key: string, direction: -1 | 1) => {
-    const idx = visible.indexOf(key);
-    if (idx === -1) return;
-    const swapIdx = idx + direction;
-    if (swapIdx < 0 || swapIdx >= visible.length) return;
-    const next = [...visible];
-    [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
-    persist(next);
-  };
+  /** Aplica la lista completa. Devuelve false si no se pudo guardar en la cuenta. */
+  const set = useCallback(async (next: string[]): Promise<boolean> => {
+    cambioLocal.current = true;
+    setVisible(next);
+    guardarCache(next);
+    try {
+      await setUserPreference(clave, next);
+      return true;
+    } catch {
+      return false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clave]);
 
-  const reset = () => persist(defaultVisibleKeys);
-
-  return { visible, toggle, move, reset };
+  return { visible, set };
 }

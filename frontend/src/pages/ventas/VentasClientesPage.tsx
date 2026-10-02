@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Plus, Settings2, Workflow, Pencil, Trash2, Check, UserPlus, UserMinus, ClipboardList } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import SiguientePasoModal, { type ActividadHecha } from '../../components/ventas/SiguientePasoModal';
 import ClienteFichaPanel from '../../components/ventas/ClienteFichaPanel';
@@ -41,10 +42,10 @@ const SIGUIENTE_COL = '__siguiente';
 const PARA_COL = '__para';
 
 // Se ven por defecto hasta que la persona ajuste su propia preferencia
-// (guardada en el navegador, ver useColumnPreferences). El resto de los
-// campos existe igual, solo queda oculto hasta que alguien lo prenda desde
-// la tuerquita de "Campos y columnas".
-const DEFAULT_VISIBLE = ['email', 'phone', ETAPA_COL, SIGUIENTE_COL, PARA_COL, RESPONSABLE_COL, REFERIDO_POR_COL];
+// (guardada en su cuenta, ver useColumnPreferences). El resto de los campos
+// existe igual, solo queda oculto hasta que alguien lo prenda desde el botón
+// "Columnas" de la barra de filtros (Referido por, Fecha, Fuente...).
+const DEFAULT_VISIBLE = ['email', 'phone', ETAPA_COL, SIGUIENTE_COL, PARA_COL, RESPONSABLE_COL];
 
 // ---------- Seguimiento ("Hoy") ----------
 
@@ -101,7 +102,7 @@ export default function VentasClientesPage() {
   const esManager = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
 
   // Columnas elegibles para mostrar/ocultar/reordenar: todos los campos de
-  // la empresa salvo Nombre (que siempre va primera y fija) + las 4
+  // la empresa salvo Nombre (que siempre va primera y fija) + las
   // calculadas. Nombre y Acciones son las únicas "sí o sí" — ni siquiera
   // pasan por este listado, se renderizan fijas al principio/final.
   const pickableColumns = [
@@ -409,7 +410,7 @@ export default function VentasClientesPage() {
             <Workflow size={15} /> Etapas
           </button>
           <button type="button" className="btn-secondary" onClick={() => setShowFieldsConfig(true)}
-            title="Configurar campos de la ficha y columnas de la tabla" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            title="Configurar los campos de la ficha del cliente" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Settings2 size={15} /> Campos
           </button>
         </div>
@@ -462,6 +463,16 @@ export default function VentasClientesPage() {
           ) : null}
         </div>
         <div className="filter-bar-actions">
+          <ColumnPickerMenu
+            columns={pickableColumns}
+            visible={columnPrefs.visible}
+            onApply={async (keys) => {
+              const guardado = await columnPrefs.set(keys);
+              if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
+            }}
+            disabled={vista === 'hoy'}
+            disabledTitle="La pestaña Hoy tiene columnas fijas; cambia a Todos para elegir las tuyas"
+          />
           <ClearFiltersButton
             onClear={() => {
               setSearch(''); setFilterResponsable(''); setHoyResponsable('mine');
@@ -599,8 +610,6 @@ export default function VentasClientesPage() {
           fields={fields}
           onClose={() => setShowFieldsConfig(false)}
           onChanged={load}
-          columns={pickableColumns}
-          columnPrefs={columnPrefs}
         />
       )}
 

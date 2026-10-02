@@ -7,6 +7,7 @@ Gestion de usuarios del sistema con permisos por seccion.
 - `POST /users` - Crear usuario (solo ADMIN)
 - `GET /users` - Listar usuarios (cualquier autenticado)
 - `GET /users/me` - Perfil del usuario (con herramientas asignadas)
+- `GET /users/me/preferences/:key` / `PUT /users/me/preferences/:key` - Preferencia personal del usuario autenticado (ver punto 3)
 - `GET /users/stats` - Estadisticas (solo ADMIN)
 - `GET /users/locations` - Catálogo de ubicaciones de la empresa (solo ADMIN, ver punto 2)
 - `POST /users/locations` - Crear ubicación (solo ADMIN, ver punto 2)
@@ -47,3 +48,11 @@ Nueva columna "Ubicación" en Administración → Gestionar usuarios (`AdminDash
 - **Alta desde el propio formulario de edición**: el modal "Editar usuario" tiene un select de ubicaciones de la empresa más una opción "+ Agregar nueva ubicación..." que abre un campo inline, crea la ubicación (`POST /users/locations`) y la deja auto-seleccionada — no hace falta salir a una pantalla de catálogo aparte.
 - **Duplicados**: `POST /users/locations` compara sin distinguir mayúsculas/minúsculas y responde 409 con un mensaje entendible en vez de un error crudo de Prisma.
 - **Aislamiento entre empresas**: `PATCH /users/:id` con un `locationId` verifica en el servidor que esa ubicación pertenezca a la misma empresa del usuario que se está editando antes de guardar (`ForbiddenException` si no) — nunca confía en el `locationId` que manda el cliente a ciegas.
+
+## 3. Preferencias personales por usuario: `UserPreference` (2026-10-02)
+
+Nació para las columnas de la tabla de Clientes de Ventas (`useColumnPreferences` + `ColumnPickerMenu`), que antes vivían solo en `localStorage` y no seguían a la persona a otro navegador o computador. **Decisión explícita del usuario:** guardarlas en la cuenta.
+
+- **`UserPreference`** (nuevo modelo): `userId` (cascade), `key`, `value Json`, `@@unique([userId, key])`. Genérico, para otras preferencias de interfaz a futuro. Migración `20261002_user_preferences` (aditiva, idempotente).
+- **Endpoints** `GET|PUT /users/me/preferences/:key`: usan siempre `req.user.userId`; no hay forma de leer o escribir las de otro. Sin sección de permiso (dato personal). Declarados antes de `:id`. El servicio solo acepta claves `columnas:[a-z0-9-]+` y el DTO valida un arreglo de máx. 50 strings de máx. 64 caracteres — si se agrega otro tipo de preferencia, ampliar `PREFERENCE_KEY_PATTERN` y el DTO, no abrirlo a cualquier JSON.
+- **Frontend**: el hook arranca con el caché local, adopta el valor del servidor al llegar (salvo que la persona ya haya aplicado un cambio) y `set()` guarda en ambos; si el servidor falla, el cambio queda en el navegador y se avisa con un mensaje claro.

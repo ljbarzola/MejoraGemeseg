@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -17,6 +18,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateLocationDto } from './dto/create-location.dto';
+import { SetPreferenceDto } from './dto/set-preference.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { UserRole } from '@prisma/client';
@@ -58,6 +60,25 @@ export class UsersController {
   @UseGuards(AuthGuard('jwt'))
   setActiveAgent(@Req() req: any, @Body() body: { agentId: number | null }) {
     return this.usersService.setActiveAgent(req.user.userId, body.agentId);
+  }
+
+  // Preferencias personales (ej. columnas de una tabla). Siempre las del
+  // usuario autenticado: no existe forma de pedir las de otra persona. Van
+  // antes de `:id` para que esa ruta no las capture.
+  @Get('me/preferences/:key')
+  @UseGuards(AuthGuard('jwt'))
+  getPreference(@Req() req: any, @Param('key') key: string) {
+    return this.usersService.getPreference(req.user.userId, key);
+  }
+
+  @Put('me/preferences/:key')
+  @UseGuards(AuthGuard('jwt'))
+  setPreference(
+    @Req() req: any,
+    @Param('key') key: string,
+    @Body() dto: SetPreferenceDto,
+  ) {
+    return this.usersService.setPreference(req.user.userId, key, dto.value);
   }
 
   @Get('locations')

@@ -91,6 +91,15 @@ export default function ClienteFormModal({ client, fields, onClose, onSaved }: P
                 />
               </div>
             ))}
+            {/* Solo lectura: el vínculo lo crea el flujo "Referir un cliente", no este formulario. */}
+            {client?.referredBy && (
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>Referido por</label>
+                <div style={{ padding: '6px 8px', borderRadius: 4, border: '1px solid #e2e8f0', background: '#f7fafc', fontSize: 12, color: '#2d3748' }}>
+                  {client.referredBy.fullName}
+                </div>
+              </div>
+            )}
           </div>
         </div>
         <div className="modal-actions">
