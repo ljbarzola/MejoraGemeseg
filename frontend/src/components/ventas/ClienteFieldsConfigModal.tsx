@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Settings2, Plus, Trash2, ArrowUp, ArrowDown, Lock } from 'lucide-react';
+import { X, Settings2, Plus, Trash2 } from 'lucide-react';
 import {
   addSalesClientField,
   updateSalesClientField,
@@ -7,7 +7,6 @@ import {
   SalesClientField,
   SalesClientFieldOption,
 } from '../../services/ventas.service';
-import type { useColumnPreferences } from '../../hooks/useColumnPreferences';
 
 const TYPE_LABEL: Record<string, string> = {
   TEXT: 'Texto',
@@ -33,14 +32,9 @@ interface Props {
   fields: SalesClientField[];
   onClose: () => void;
   onChanged: () => void;
-  // Columnas elegibles (todas menos Nombre/Acciones, que siempre van) y la
-  // preferencia de cuáles se ven y en qué orden — instanciada en la página,
-  // para que un cambio acá se refleje en la tabla sin recargar nada.
-  columns: { key: string; label: string }[];
-  columnPrefs: ReturnType<typeof useColumnPreferences>;
 }
 
-export default function ClienteFieldsConfigModal({ fields, onClose, onChanged, columns, columnPrefs }: Props) {
+export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }: Props) {
   const [newFieldLabel, setNewFieldLabel] = useState('');
   const [newFieldType, setNewFieldType] = useState('TEXT');
   const [newOptions, setNewOptions] = useState<SalesClientFieldOption[]>([]);
@@ -261,86 +255,11 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged, c
               </div>
             )}
           </div>
-
-          <div style={{ paddingTop: 14, marginTop: 14, borderTop: '1px solid #e2e8f0' }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--azul-oscuro)', margin: '0 0 4px' }}>Columnas de tu tabla</p>
-            <p style={{ fontSize: 12, color: '#666', margin: '0 0 10px' }}>
-              Elige qué columnas ves en el listado de Clientes y en qué orden — es una preferencia tuya, solo cambia lo
-              que ves en este navegador.
-            </p>
-
-            <ColumnRow label="Nombre" locked />
-
-            {columnPrefs.visible.map((key, idx) => {
-              const col = columns.find((c) => c.key === key);
-              if (!col) return null;
-              return (
-                <ColumnRow
-                  key={key}
-                  label={col.label}
-                  checked
-                  onToggle={() => columnPrefs.toggle(key)}
-                  onMoveUp={idx > 0 ? () => columnPrefs.move(key, -1) : undefined}
-                  onMoveDown={idx < columnPrefs.visible.length - 1 ? () => columnPrefs.move(key, 1) : undefined}
-                />
-              );
-            })}
-
-            <ColumnRow label="Acciones" locked />
-
-            {columns.filter((c) => !columnPrefs.visible.includes(c.key)).length > 0 && (
-              <>
-                <p style={{ fontSize: 11, color: '#a0aec0', margin: '10px 0 4px' }}>Ocultas — márcalas para agregarlas:</p>
-                {columns.filter((c) => !columnPrefs.visible.includes(c.key)).map((col) => (
-                  <ColumnRow key={col.key} label={col.label} checked={false} onToggle={() => columnPrefs.toggle(col.key)} />
-                ))}
-              </>
-            )}
-          </div>
         </div>
         <div className="modal-actions">
           <button className="btn-secondary" onClick={onClose}>Cerrar</button>
         </div>
       </div>
-    </div>
-  );
-}
-
-function ColumnRow({
-  label,
-  checked,
-  locked,
-  onToggle,
-  onMoveUp,
-  onMoveDown,
-}: {
-  label: string;
-  checked?: boolean;
-  locked?: boolean;
-  onToggle?: () => void;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-}) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
-      <input type="checkbox" checked={locked ? true : checked} disabled={locked} onChange={onToggle} />
-      <span style={{ flex: 1, fontSize: 12.5, color: locked ? '#a0aec0' : '#2d3748' }}>{label}</span>
-      {locked ? (
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: '#a0aec0' }}>
-          <Lock size={11} /> siempre visible
-        </span>
-      ) : (
-        <>
-          <button type="button" onClick={onMoveUp} disabled={!onMoveUp}
-            style={{ background: 'none', border: 'none', cursor: onMoveUp ? 'pointer' : 'default', color: onMoveUp ? '#a0aec0' : '#e2e8f0' }}>
-            <ArrowUp size={13} />
-          </button>
-          <button type="button" onClick={onMoveDown} disabled={!onMoveDown}
-            style={{ background: 'none', border: 'none', cursor: onMoveDown ? 'pointer' : 'default', color: onMoveDown ? '#a0aec0' : '#e2e8f0' }}>
-            <ArrowDown size={13} />
-          </button>
-        </>
-      )}
     </div>
   );
 }

@@ -3,10 +3,12 @@
   NotFoundException,
   ConflictException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { PREFERENCE_KEY_PATTERN } from './dto/set-preference.dto';
 import * as bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import {
@@ -333,6 +335,33 @@ export class UsersService {
         throw new ConflictException('Ya existe una ubicación con ese nombre');
       }
       throw err;
+    }
+  }
+
+  /** Preferencia personal (null si la persona nunca la guardó). */
+  async getPreference(userId: number, key: string) {
+    this.assertPreferenceKey(key);
+    const row = await this.prisma.userPreference.findUnique({
+      where: { userId_key: { userId, key } },
+      select: { value: true },
+    });
+    return { value: row ? (row.value as string[]) : null };
+  }
+
+  async setPreference(userId: number, key: string, value: string[]) {
+    this.assertPreferenceKey(key);
+    const row = await this.prisma.userPreference.upsert({
+      where: { userId_key: { userId, key } },
+      create: { userId, key, value },
+      update: { value },
+      select: { value: true },
+    });
+    return { value: row.value as string[] };
+  }
+
+  private assertPreferenceKey(key: string) {
+    if (!PREFERENCE_KEY_PATTERN.test(key)) {
+      throw new BadRequestException('Preferencia no válida');
     }
   }
 }

@@ -1736,6 +1736,9 @@ body {
   background: #fecaca;
 }
 
+/* Cerrar al hacer clic en el fondo: el guard de utils/overlayClickGuard.ts (main.tsx)
+   descarta los clics que empezaron dentro del modal (arrastrar para seleccionar texto).
+   No lo reimplementes modal por modal. */
 .modal-overlay {
   position: fixed;
   inset: 0;
