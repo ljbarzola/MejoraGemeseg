@@ -6,6 +6,7 @@ import {
   deleteSalesClientField,
   SalesClientField,
   SalesClientFieldOption,
+  SERVICIO_KEY,
 } from '../../services/ventas.service';
 
 const TYPE_LABEL: Record<string, string> = {
@@ -15,6 +16,7 @@ const TYPE_LABEL: Record<string, string> = {
   DATE: 'Fecha',
   BOOLEAN: 'Sí/No',
   SELECT: 'Lista de opciones',
+  SUBSERVICIOS: 'Casillas según el servicio',
 };
 
 // Convierte un label libre en un key estable — mismo criterio que
@@ -121,6 +123,46 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
     }
   };
 
+  // Sub-servicios de una opción de "Servicio requerido": se guardan dentro de
+  // la propia opción (`children`), así que se reenvía la lista completa de
+  // opciones con los hijos de esa opción cambiados.
+  const saveChildren = async (
+    field: SalesClientField,
+    optionKey: string,
+    children: { key: string; label: string }[],
+    errorMessage: string,
+  ) => {
+    setError('');
+    try {
+      const options = (field.options || []).map((o) => (o.key === optionKey ? { ...o, children } : o));
+      await updateSalesClientField(field.id, { options });
+      onChanged();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || errorMessage);
+    }
+  };
+
+  const handleAddChild = (field: SalesClientField, option: SalesClientFieldOption, label: string) => {
+    const key = slugifyKey(label);
+    const children = option.children || [];
+    if (!key || children.some((c) => c.key === key)) return;
+    return saveChildren(field, option.key, [...children, { key, label: label.trim() }], 'No se pudo agregar el sub-servicio');
+  };
+
+  const handleRenameChild = (field: SalesClientField, option: SalesClientFieldOption, childKey: string, label: string) => {
+    if (!label.trim()) return;
+    const children = (option.children || []).map((c) => (c.key === childKey ? { ...c, label: label.trim() } : c));
+    return saveChildren(field, option.key, children, 'No se pudo renombrar el sub-servicio');
+  };
+
+  const handleRemoveChild = (field: SalesClientField, option: SalesClientFieldOption, childKey: string) =>
+    saveChildren(
+      field,
+      option.key,
+      (option.children || []).filter((c) => c.key !== childKey),
+      'No se pudo quitar el sub-servicio',
+    );
+
   const handleToggleAllowOther = async (field: SalesClientField) => {
     setError('');
     try {
@@ -156,7 +198,7 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
         <div className="modal-body">
           <p style={{ fontSize: 12, color: '#666', margin: '0 0 12px' }}>
             Estos campos se pueden mapear a las variables de un contrato. Nombre y email son fijos; puedes añadir más,
-            y renombrar o editar las opciones de "Fuente" y "Servicio requerido".
+            y renombrar o editar las opciones de "Fuente" y "Servicio requerido" (en "Servicio requerido" también los sub-servicios de cada opción).
           </p>
 
           {error && <div className="form-error" style={{ marginBottom: 12 }}>{error}</div>}
@@ -188,16 +230,37 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
                 {f.fieldType === 'SELECT' && editingId === f.id && (
                   <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed #e2e8f0' }}>
                     {(f.options || []).map((o) => (
-                      <div key={o.key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                        <input
-                          defaultValue={o.label}
-                          onBlur={(e) => handleRenameOption(f, o.key, e.target.value)}
-                          style={{ flex: 1, padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 12 }}
-                        />
-                        <button type="button" onClick={() => handleRemoveOption(f, o.key)}
-                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#c33' }}>
-                          <Trash2 size={12} />
-                        </button>
+                      <div key={o.key} style={{ marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <input
+                            defaultValue={o.label}
+                            onBlur={(e) => handleRenameOption(f, o.key, e.target.value)}
+                            style={{ flex: 1, padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 12 }}
+                          />
+                          <button type="button" onClick={() => handleRemoveOption(f, o.key)}
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#c33' }}>
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                        {f.key === SERVICIO_KEY && (
+                          <div style={{ marginLeft: 18, paddingLeft: 8, borderLeft: '2px solid #e2e8f0' }}>
+                            <div style={{ fontSize: 10.5, color: '#888', marginBottom: 2 }}>Sub-servicios de "{o.label}"</div>
+                            {(o.children || []).map((c) => (
+                              <div key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                                <input
+                                  defaultValue={c.label}
+                                  onBlur={(e) => handleRenameChild(f, o, c.key, e.target.value)}
+                                  style={{ flex: 1, padding: '3px 6px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 11.5 }}
+                                />
+                                <button type="button" onClick={() => handleRemoveChild(f, o, c.key)}
+                                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#c33' }}>
+                                  <Trash2 size={11} />
+                                </button>
+                              </div>
+                            ))}
+                            <AddOptionRow placeholder="Nuevo sub-servicio" onAdd={(label) => handleAddChild(f, o, label)} />
+                          </div>
+                        )}
                       </div>
                     ))}
                     <AddOptionRow onAdd={(label) => handleAddOptionToField(f, label)} />
@@ -264,11 +327,11 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
   );
 }
 
-function AddOptionRow({ onAdd }: { onAdd: (label: string) => void }) {
+function AddOptionRow({ onAdd, placeholder = 'Nueva opción' }: { onAdd: (label: string) => void; placeholder?: string }) {
   const [label, setLabel] = useState('');
   return (
     <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-      <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Nueva opción"
+      <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={placeholder}
         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onAdd(label); setLabel(''); } }}
         style={{ flex: 1, padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 12 }} />
       <button type="button" className="btn-secondary" onClick={() => { onAdd(label); setLabel(''); }} style={{ padding: '4px 8px', fontSize: 11 }}>

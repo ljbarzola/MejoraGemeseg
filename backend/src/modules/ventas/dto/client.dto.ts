@@ -35,6 +35,12 @@ export class CreateSalesClientDto {
 
   @IsOptional()
   extra?: Record<string, string>;
+
+  // 'YYYY-MM-DD'. Permite registrar prospectos de meses anteriores; sin
+  // enviar, queda la fecha de hoy. No puede ser futura.
+  @IsString()
+  @IsOptional()
+  fechaIngreso?: string;
 }
 
 export class UpdateSalesClientDto {
@@ -65,6 +71,11 @@ export class UpdateSalesClientDto {
   @IsOptional()
   extra?: Record<string, string>;
 
+  // 'YYYY-MM-DD'. Solo se reescribe la fecha de creación si el día cambió.
+  @IsString()
+  @IsOptional()
+  fechaIngreso?: string;
+
   // null o '' borran el siguiente paso; sin enviar, no se toca.
   @IsOptional()
   @IsString()
@@ -79,12 +90,29 @@ export class UpdateSalesClientDto {
 // {key,label}[] — el key es lo que se guarda en SalesClient.extra, el label
 // se puede renombrar después sin corromper datos ya guardados (ver
 // SalesClientField.options en schema.prisma).
+export class SalesClientFieldSubOptionDto {
+  @IsString()
+  key: string;
+
+  @IsString()
+  label: string;
+}
+
 export class SalesClientFieldOptionDto {
   @IsString()
   key: string;
 
   @IsString()
   label: string;
+
+  // Solo se usa en las opciones del campo núcleo `servicio_requerido`: los
+  // sub-servicios que se pueden elegir cuando se escoge ese servicio. Sin
+  // `children` declarado (undefined) = nunca se sembró; [] = sin sub-servicios.
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SalesClientFieldSubOptionDto)
+  children?: SalesClientFieldSubOptionDto[];
 }
 
 export class CreateSalesClientFieldDto {
@@ -152,6 +180,12 @@ export class CreateReferralDto {
   @IsString()
   @IsOptional()
   servicioRequerido?: string;
+
+  // keys de `children` de esa opción del servicio. Opcional.
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  subserviciosRequeridos?: string[];
 
   @IsString()
   @IsOptional()

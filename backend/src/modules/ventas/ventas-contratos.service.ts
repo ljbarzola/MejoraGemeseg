@@ -236,7 +236,7 @@ export class VentasContratosService {
    *
    * This link only ever exists because of a client TABLE field (dynamic
    * rows are the one thing SignWell genuinely can't collect on its own —
-   * see CONTRATOS-PLAN.md sección 8), so as soon as the client submits,
+   * see ventas-contratos.md sección 8), so as soon as the client submits,
    * the contract is generated and sent to SignWell right away, and the
    * client is bounced in the same session straight into the signing page
    * (`redirectToSign`) instead of waiting for a second email. If that
@@ -380,7 +380,7 @@ export class VentasContratosService {
       // directly in the document — the client fills/signs these inside the
       // SignWell session itself (checkbox, signature, initials, a plain
       // text/date field), instead of a value stored in fieldValues. See
-      // CONTRATOS-PLAN.md sección 8 for why (SignWell, like BoldSign,
+      // ventas-contratos.md sección 8 for why (SignWell, like BoldSign,
       // requires page/coordinate data for positioned form fields, which
       // this app never captured — text tags sidestep that entirely).
       const fieldHasValue = (v: unknown) => {
@@ -1081,7 +1081,7 @@ export class VentasContratosService {
    * send `SalesField`s the client is supposed to fill in as provider-side
    * *positioned* form fields (BoldSign, and SignWell's own `fields` array,
    * both require page/coordinate data this app never captured — see
-   * CONTRATOS-PLAN.md sección 8/11 for the full history). Instead, any
+   * ventas-contratos.md sección 8/11 for the full history). Instead, any
    * client field that isn't a TABLE was already turned into a SignWell
    * "text tag" (`{{...}}`) embedded in the document itself, back in
    * `generatePdfInternal`/`buildSignWellTextTag` — `text_tags: true` here
@@ -1208,7 +1208,7 @@ export class VentasContratosService {
    * Verification follows SignWell's documented scheme: `event.hash` is
    * HMAC-SHA256 of `"{event.type}@{event.time}"`, keyed with the webhook's
    * own id (returned once, when the webhook was registered via
-   * `POST /api/v1/hooks` — see CONTRATOS-PLAN.md). No raw-body middleware
+   * `POST /api/v1/hooks` — see ventas-contratos.md). No raw-body middleware
    * needed, unlike some other providers' signature schemes.
    *
    * Every failure path here (missing webhook id, bad hash, unknown

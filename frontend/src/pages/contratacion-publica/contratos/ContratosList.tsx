@@ -153,7 +153,7 @@ export default function ContratosList() {
                   <th>Puestos</th>
                   <th {...thProps('fechaFin')}>Vigencia <SortIcon campo="fechaFin" /></th>
                   <th {...thProps('estado')}>Estado <SortIcon campo="estado" /></th>
-                  <th style={{ textAlign: 'right' }}>Acciones</th>
+                  <th className="col-acciones" title="Acciones"><span className="visually-hidden">Acciones</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -169,7 +169,7 @@ export default function ContratosList() {
                         {ESTADO_LABEL[c.estado] || c.estado}
                       </span>
                     </td>
-                    <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                    <td className="col-acciones" onClick={(e) => e.stopPropagation()}>
                       {canEdit && (
                         <RowActionsMenu
                           actions={[

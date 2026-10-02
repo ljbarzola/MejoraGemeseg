@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Wrench, AlertCircle, Clock, CheckCircle, BarChart3 } from 'lucide-react';
+import { ArrowLeft, Wrench, Megaphone } from 'lucide-react';
+import DonutChart from '../../components/common/DonutChart';
 import {
   getSistemasDashboardStats,
   getTicketsSoporte,
@@ -20,6 +21,25 @@ const TIPO_LABEL: Record<string, string> = {
   PERMISO: 'Permiso',
   OTRO: 'Otro',
 };
+
+// Colores categóricos en orden fijo (validados con el skill dataviz). El color
+// va con su nombre y cantidad en la leyenda: nunca es la única señal.
+const TIPOS: { tipo: 'ERROR' | 'MEJORA' | 'PERMISO' | 'OTRO'; label: string; color: string }[] = [
+  { tipo: 'ERROR', label: 'Errores', color: '#2a78d6' },
+  { tipo: 'MEJORA', label: 'Mejoras', color: '#eb6834' },
+  { tipo: 'PERMISO', label: 'Permisos', color: '#1baf7a' },
+  { tipo: 'OTRO', label: 'Otros', color: '#eda100' },
+];
+
+// "—" mientras no haya tickets resueltos; si no, minutos, horas o días + horas.
+function formatearHoras(horas: number | null): string {
+  if (horas === null) return '—';
+  if (horas < 1) return `${Math.max(1, Math.round(horas * 60))} min`;
+  if (horas < 24) return `${Math.round(horas * 10) / 10} h`;
+  const dias = Math.floor(horas / 24);
+  const resto = Math.round(horas - dias * 24);
+  return resto ? `${dias} d ${resto} h` : `${dias} d`;
+}
 
 export default function SistemasDashboardPage() {
   const navigate = useNavigate();
@@ -57,12 +77,36 @@ export default function SistemasDashboardPage() {
       {error && <div className="form-error" style={{ marginBottom: '14px' }}>{error}</div>}
 
       {stats && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginBottom: '28px' }}>
-          <StatCard icon={<AlertCircle size={20} />} label="Abiertos" value={stats.abiertos} color="#c53030" bg="#fed7d7" onClick={() => navigate('/sistemas/soporte')} />
-          <StatCard icon={<Clock size={20} />} label="En revision" value={stats.enRevision} color="#c05621" bg="#feebc8" onClick={() => navigate('/sistemas/soporte')} />
-          <StatCard icon={<CheckCircle size={20} />} label="Resueltos" value={stats.resueltos} color="#276749" bg="#c6f6d5" onClick={() => navigate('/sistemas/soporte')} />
-          <StatCard icon={<BarChart3 size={20} />} label="Este mes" value={stats.totalMes} color="var(--azul-oscuro)" bg="#ebf4ff" onClick={() => navigate('/sistemas/soporte')} />
-        </div>
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+            <StatCard label="Abiertos" value={stats.abiertos} color="#c53030" onClick={() => navigate('/sistemas/soporte')} />
+            <StatCard label="En revisión" value={stats.enRevision} color="#c05621" onClick={() => navigate('/sistemas/soporte')} />
+            <StatCard label="Resueltos" value={stats.resueltos} color="#276749" onClick={() => navigate('/sistemas/soporte')} />
+            <StatCard label="Este mes" value={stats.totalMes} color="var(--azul-oscuro)" onClick={() => navigate('/sistemas/soporte')} />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px', marginBottom: '28px' }}>
+            <div className="admin-section" style={{ margin: 0 }}>
+              <h3 style={{ fontSize: '0.95rem', marginBottom: '14px', color: 'var(--azul-oscuro)' }}>Tickets por tipo</h3>
+              <DonutChart
+                centerLabel="tickets"
+                segments={TIPOS.map((t) => ({ key: t.tipo, label: t.label, color: t.color, value: stats.porTipo?.[t.tipo] ?? 0 }))}
+              />
+            </div>
+
+            <div className="admin-section" style={{ margin: 0 }}>
+              <h3 style={{ fontSize: '0.95rem', marginBottom: '14px', color: 'var(--azul-oscuro)' }}>Tiempo promedio de resolución</h3>
+              <div style={{ fontSize: '2.4rem', fontWeight: 700, color: 'var(--azul-oscuro)', lineHeight: 1.1 }}>
+                {formatearHoras(stats.tiempoPromedioResolucionHoras)}
+              </div>
+              <p style={{ margin: '8px 0 0', fontSize: '0.82rem', color: '#718096' }}>
+                {stats.ticketsConResolucion
+                  ? `Promedio de ${stats.ticketsConResolucion} ${stats.ticketsConResolucion === 1 ? 'ticket resuelto' : 'tickets resueltos'}, desde que se reporta hasta que queda resuelto.`
+                  : 'Aún no hay tickets resueltos.'}
+              </p>
+            </div>
+          </div>
+        </>
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
@@ -104,6 +148,9 @@ export default function SistemasDashboardPage() {
             <button className="btn-secondary" onClick={() => navigate('/sistemas/soporte')} style={{ justifyContent: 'flex-start', gap: '8px' }}>
               <Wrench size={16} /> Ver Soporte Tecnico
             </button>
+            <button className="btn-secondary" onClick={() => navigate('/sistemas/novedades')} style={{ justifyContent: 'flex-start', gap: '8px' }}>
+              <Megaphone size={16} /> Publicar novedad de la app
+            </button>
             <button className="btn-secondary" onClick={() => navigate('/sistemas/herramientas')} style={{ justifyContent: 'flex-start', gap: '8px' }}>
               <Wrench size={16} /> Gestionar Herramientas
             </button>
@@ -120,30 +167,24 @@ export default function SistemasDashboardPage() {
   );
 }
 
-function StatCard({ icon, label, value, color, bg, onClick }: {
-  icon: React.ReactNode;
+function StatCard({ label, value, color, onClick }: {
   label: string;
-  value: number;
+  value: number | string;
   color: string;
-  bg: string;
   onClick: () => void;
 }) {
   return (
     <div
       onClick={onClick}
       style={{
-        background: bg, borderRadius: '12px', padding: '18px 16px',
-        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '14px',
-        transition: 'transform 0.15s',
+        background: '#fff', border: '1px solid #e2e8f0', borderTop: `3px solid ${color}`,
+        borderRadius: '10px', padding: '14px 16px', cursor: 'pointer', transition: 'transform 0.15s',
       }}
       onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1.02)'; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)'; }}
     >
-      <div style={{ color }}>{icon}</div>
-      <div>
-        <div style={{ fontSize: '1.6rem', fontWeight: 700, color }}>{value}</div>
-        <div style={{ fontSize: '0.78rem', color: '#718096' }}>{label}</div>
-      </div>
+      <div style={{ fontSize: '1.6rem', fontWeight: 700, color }}>{value}</div>
+      <div style={{ fontSize: '0.78rem', color: '#718096' }}>{label}</div>
     </div>
   );
 }

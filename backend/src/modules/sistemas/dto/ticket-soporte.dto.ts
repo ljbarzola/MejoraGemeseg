@@ -1,4 +1,4 @@
-import { IsArray, IsEnum, IsNotEmpty, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TicketSoporteEstado, TicketSoporteTipo } from '@prisma/client';
 
@@ -38,4 +38,22 @@ export class CreateTicketSoporteDto {
 export class UpdateTicketSoporteEstadoDto {
   @IsEnum(TicketSoporteEstado)
   estado: TicketSoporteEstado;
+}
+
+
+export class CreateNovedadAppDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(150)
+  titulo: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(1000)
+  descripcion: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  secciones: string[];
 }

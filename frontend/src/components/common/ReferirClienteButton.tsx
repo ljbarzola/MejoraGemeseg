@@ -4,10 +4,14 @@ import {
   referirCliente,
   misReferidosClientes,
   getSalesClientFields,
+  parseSubservicios,
+  subserviciosDe,
+  SERVICIO_KEY,
   type SalesClientField,
   type MiReferidoCliente,
 } from '../../services/ventas.service';
 import { useToast } from '../../contexts/ToastContext';
+import SubserviciosCheckboxes from './SubserviciosCheckboxes';
 
 // Botón visible para cualquier usuario autenticado (no depende de permisos
 // de sección): cualquier empleado puede referir un cliente potencial a
@@ -151,6 +155,7 @@ function FormularioReferido({
   const [servicioRequerido, setServicioRequerido] = useState('');
   const [nota, setNota] = useState('');
   const [servicioOptions, setServicioOptions] = useState<SalesClientField['options']>([]);
+  const [subservicios, setSubservicios] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const errorRef = useRef<HTMLDivElement>(null);
@@ -158,7 +163,7 @@ function FormularioReferido({
   useEffect(() => {
     getSalesClientFields()
       .then((fields) => {
-        const servicio = fields.find((f) => f.key === 'servicio_requerido');
+        const servicio = fields.find((f) => f.key === SERVICIO_KEY);
         setServicioOptions(servicio?.options || []);
       })
       .catch(() => setServicioOptions([]));
@@ -179,6 +184,7 @@ function FormularioReferido({
         celular: celular.trim() || undefined,
         correo: correo.trim() || undefined,
         servicioRequerido: servicioRequerido || undefined,
+        subserviciosRequeridos: subservicios ? parseSubservicios(subservicios) : undefined,
         nota: nota.trim() || undefined,
       });
       showToast('Referido enviado. Ventas se pondrá en contacto.', 'success');
@@ -224,13 +230,27 @@ function FormularioReferido({
           </div>
           <div className="form-group">
             <label>Servicio requerido</label>
-            <select value={servicioRequerido} onChange={(e) => setServicioRequerido(e.target.value)}>
+            <select
+              value={servicioRequerido}
+              onChange={(e) => { setServicioRequerido(e.target.value); setSubservicios(''); }}
+            >
               <option value="">— Seleccionar —</option>
               {(servicioOptions || []).map((o) => (
                 <option key={o.key} value={o.key}>{o.label}</option>
               ))}
             </select>
           </div>
+          {/* Opcional, y solo si el servicio elegido tiene sub-servicios. */}
+          {subserviciosDe(servicioOptions, servicioRequerido).length > 0 && (
+            <div className="form-group">
+              <label>Sub-servicios <span style={{ fontWeight: 400 }}>(opcional)</span></label>
+              <SubserviciosCheckboxes
+                options={subserviciosDe(servicioOptions, servicioRequerido)}
+                value={subservicios}
+                onChange={setSubservicios}
+              />
+            </div>
+          )}
           <div className="form-group">
             <label>Nota</label>
             <textarea

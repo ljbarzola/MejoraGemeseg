@@ -10,6 +10,7 @@ import {
 } from '../../services/company.service';
 import { getUser } from '../../services/auth.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import { resolveLogoUrl } from '../../contexts/ThemeContext';
 
 const EMPTY_FORM = {
   name: '',
@@ -85,7 +86,7 @@ export default function CompaniesPage() {
       adminPassword: '',
     });
     setLogoFile(null);
-    setLogoPreview(c.logoUrl);
+    setLogoPreview(c.logoUrl ? resolveLogoUrl(c.logoUrl, c.slug) : null);
     setError('');
     setShowModal(true);
   };
@@ -181,7 +182,7 @@ export default function CompaniesPage() {
                 <tr key={c.id}>
                   <td>
                     <img
-                      src={c.logoUrl || `/resources/logo-${c.slug}.png`}
+                      src={resolveLogoUrl(c.logoUrl, c.slug) ?? ''}
                       alt={c.name}
                       style={{ height: 32, borderRadius: 4, objectFit: 'contain' }}
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}

@@ -12,12 +12,19 @@ import {
   deleteSalesClientActivity,
   SALES_ACTIVITY_TYPES,
   SalesClient,
+  SalesClientField,
   SalesActivityType,
   TimelineEvent,
+  SERVICIO_KEY,
+  salesClientSelectLabel,
+  salesClientSubserviciosLabel,
 } from '../../services/ventas.service';
 
 interface Props {
   client: SalesClient;
+  // Campos de la empresa: sirven para mostrar el label actual del servicio y
+  // de los sub-servicios (en extra solo se guardan las keys).
+  fields: SalesClientField[];
   onClose: () => void;
   // Abre el cuadro de "siguiente paso" de la página de Clientes.
   onEditNextStep: (client: SalesClient) => void;
@@ -51,7 +58,8 @@ function Etapa({ info }: { info: { label: string; color: string } | null }) {
 
 // Ficha del cliente: datos de contacto, siguiente paso y línea de tiempo
 // (creación, cambios de etapa, notas/llamadas/reuniones y contratos).
-export default function ClienteFichaPanel({ client, onClose, onEditNextStep }: Props) {
+export default function ClienteFichaPanel({ client, fields, onClose, onEditNextStep }: Props) {
+  const servicioField = fields.find((f) => f.key === SERVICIO_KEY);
   const { showToast } = useToast();
   const currentUser = getUser();
   const [eventos, setEventos] = useState<TimelineEvent[]>([]);
@@ -282,6 +290,8 @@ export default function ClienteFichaPanel({ client, onClose, onEditNextStep }: P
             {dato('Correo', client.email)}
             {dato('RUC', client.ruc)}
             {dato('Dirección', client.address)}
+            {servicioField && dato('Servicio requerido', salesClientSelectLabel(client, servicioField))}
+            {dato('Sub-servicios', salesClientSubserviciosLabel(client, fields))}
             {dato('Referido por', client.referredBy?.fullName)}
           </div>
 

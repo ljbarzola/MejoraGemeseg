@@ -1,16 +1,34 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TicketSoporteEstado, TicketSoporteTipo } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ALL_SECTIONS, PermissionsService } from '../permissions/permissions.service';
+import { NOVEDAD_APP_DDL } from './novedad-app.schema';
 
 @Injectable()
-export class SistemasService {
+export class SistemasService implements OnModuleInit {
   private readonly logger = new Logger(SistemasService.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly permissionsService: PermissionsService,
   ) {}
+
+  // El despliegue no corre migraciones: se asegura aquí la tabla de novedades
+  // (ver novedad-app.schema.ts). Si falla, el servicio arranca igual — solo
+  // se pierden las novedades, no los tickets.
+  async onModuleInit() {
+    try {
+      for (const sql of NOVEDAD_APP_DDL) {
+        await this.prisma.$executeRawUnsafe(sql);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo asegurar la tabla NovedadApp: ${(err as Error).message}`,
+      );
+    }
+  }
 
   // Avisa a quien reportó, SOLO dentro de la app (campana de notificaciones):
   // nunca por correo. Un fallo acá nunca debe deshacer ni bloquear el cambio
@@ -133,17 +151,131 @@ export class SistemasService {
   }
 
   async getStats(companyId: number) {
-    const [abiertos, enRevision, resueltos, totalMes] = await Promise.all([
-      this.prisma.ticketSoporte.count({ where: { companyId, estado: 'ABIERTO' } }),
-      this.prisma.ticketSoporte.count({ where: { companyId, estado: 'EN_REVISION' } }),
-      this.prisma.ticketSoporte.count({ where: { companyId, estado: 'RESUELTO' } }),
-      this.prisma.ticketSoporte.count({
-        where: {
-          companyId,
-          createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
-        },
-      }),
-    ]);
-    return { abiertos, enRevision, resueltos, totalMes };
+    const [abiertos, enRevision, resueltos, totalMes, porTipoRows, resueltosRows] =
+      await Promise.all([
+        this.prisma.ticketSoporte.count({ where: { companyId, estado: 'ABIERTO' } }),
+        this.prisma.ticketSoporte.count({ where: { companyId, estado: 'EN_REVISION' } }),
+        this.prisma.ticketSoporte.count({ where: { companyId, estado: 'RESUELTO' } }),
+        this.prisma.ticketSoporte.count({
+          where: {
+            companyId,
+            createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
+          },
+        }),
+        this.prisma.ticketSoporte.groupBy({
+          by: ['tipo'],
+          where: { companyId },
+          _count: { _all: true },
+        }),
+        // Solo estado RESUELTO: un ticket reabierto pierde resueltoAt y vuelve
+        // a entrar al promedio cuando se resuelva de nuevo.
+        this.prisma.ticketSoporte.findMany({
+          where: { companyId, estado: 'RESUELTO', resueltoAt: { not: null } },
+          select: { createdAt: true, resueltoAt: true },
+        }),
+      ]);
+
+    const porTipo: Record<TicketSoporteTipo, number> = { ERROR: 0, MEJORA: 0, PERMISO: 0, OTRO: 0 };
+    for (const r of porTipoRows) porTipo[r.tipo] = r._count._all;
+
+    const horas = (t: { createdAt: Date; resueltoAt: Date | null }) =>
+      Math.max(0, (t.resueltoAt!.getTime() - t.createdAt.getTime()) / 3_600_000);
+    const promedio = (xs: number[]) =>
+      xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null;
+
+    return {
+      abiertos,
+      enRevision,
+      resueltos,
+      totalMes,
+      porTipo,
+      tiempoPromedioResolucionHoras: promedio(resueltosRows.map(horas)),
+      ticketsConResolucion: resueltosRows.length,
+    };
+  }
+
+  // ==================== NOVEDADES DE LA APP ====================
+
+  /** Secciones que se pueden marcar como afectadas por una novedad. */
+  getSeccionesNovedad() {
+    return ALL_SECTIONS.map((s) => ({ key: s.key, label: s.label }));
+  }
+
+  /** Quiénes recibirían una novedad y quiénes no (con el motivo). */
+  async contarDestinatarios(secciones: string[], publicadorId: number) {
+    const { destinatarios, excluidos } =
+      await this.permissionsService.evaluarAccesoSecciones(secciones, publicadorId);
+    const porEmpresaYNombre = <T extends { empresa: string | null; nombre: string }>(a: T, b: T) =>
+      (a.empresa || '').localeCompare(b.empresa || '', 'es') ||
+      a.nombre.localeCompare(b.nombre, 'es');
+    const personas = destinatarios
+      .map((u) => ({ id: u.id, nombre: u.fullName, email: u.email, empresa: u.companyName }))
+      .sort(porEmpresaYNombre);
+    const noRecibiran = excluidos
+      .map((u) => ({ id: u.id, nombre: u.fullName, email: u.email, empresa: u.companyName, motivo: u.motivo }))
+      .sort(porEmpresaYNombre);
+    return { destinatarios: personas.length, personas, noRecibiran };
+  }
+
+  async listarNovedades() {
+    return this.prisma.novedadApp.findMany({ orderBy: { createdAt: 'desc' }, take: 200 });
+  }
+
+  // Igual que los avisos de tickets: SOLO campana, nunca correo, y un fallo
+  // al avisar a una persona no cancela la publicación ni a las demás.
+  async publicarNovedad(
+    publicadorId: number,
+    data: { titulo: string; descripcion: string; secciones: string[] },
+  ) {
+    const validas = [...new Set(data.secciones)].filter((s) =>
+      ALL_SECTIONS.some((a) => a.key === s),
+    );
+    if (validas.length === 0) {
+      throw new BadRequestException('Elige al menos un módulo afectado.');
+    }
+
+    const publicador = await this.prisma.user.findUnique({
+      where: { id: publicadorId },
+      select: { fullName: true },
+    });
+    const titulo = data.titulo.trim();
+    const descripcion = data.descripcion.trim();
+    const destinatarios = await this.permissionsService.getUsersWithSectionAccess(
+      validas,
+      publicadorId,
+    );
+
+    const novedad = await this.prisma.novedadApp.create({
+      data: {
+        titulo,
+        descripcion,
+        secciones: validas,
+        createdById: publicadorId,
+        createdByNombre: publicador?.fullName || 'Sistemas',
+        destinatarios: destinatarios.length,
+      },
+    });
+
+    let fallidos = 0;
+    for (const d of destinatarios) {
+      try {
+        await this.notificationsService.create({
+          userId: d.id,
+          companyId: d.companyId,
+          title: `Novedad: ${titulo}`,
+          message: descripcion,
+          link: '/dashboard',
+        });
+      } catch (err: any) {
+        fallidos++;
+        this.logger.error(
+          `No se pudo notificar la novedad #${novedad.id} al usuario ${d.id}: ${err.message}`,
+        );
+      }
+    }
+    this.logger.log(
+      `Novedad #${novedad.id} publicada: ${destinatarios.length - fallidos}/${destinatarios.length} avisos`,
+    );
+    return novedad;
   }
 }

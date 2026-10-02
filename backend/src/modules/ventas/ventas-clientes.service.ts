@@ -78,6 +78,112 @@ function normalizarTextoActividad(text: string | undefined): string {
   return limpio;
 }
 
+export const SERVICIO_KEY = 'servicio_requerido';
+export const SUBSERVICIOS_KEY = 'subservicios_requeridos';
+
+type OpcionConHijos = {
+  key: string;
+  label: string;
+  children?: { key: string; label: string }[];
+};
+
+// Sub-servicios de fábrica de cada servicio. Se siembran en
+// `servicio_requerido.options[].children` solo cuando la opción todavía no
+// tiene `children` definido (ver conSubserviciosPorDefecto) — así Ventas
+// puede renombrar/quitar/agregar después sin que se los vuelvan a pisar.
+export const DEFAULT_SUBSERVICIOS: Record<string, { key: string; label: string }[]> = {
+  SEGURIDAD_FISICA: [
+    { key: 'AGENTES_DE_SEGURIDAD', label: 'Agentes de Seguridad' },
+    { key: 'CUSTODIA_DE_MERCADERIA_EN_MOVIMIENTO', label: 'Custodia de Mercadería en Movimiento' },
+    { key: 'SEGURIDAD_VIP', label: 'Seguridad VIP' },
+    { key: 'SEGURIDAD_PARA_EVENTOS', label: 'Seguridad para Eventos' },
+  ],
+  MONITOREO: [
+    { key: 'MONITOREO_DE_CAMARAS', label: 'Monitoreo de Cámaras' },
+    { key: 'MONITOREO_DE_VEHICULOS', label: 'Monitoreo de Vehículos' },
+    { key: 'MONITOREO_DE_ALARMAS', label: 'Monitoreo de Alarmas' },
+    { key: 'MONITOREO_DE_PERSONAL', label: 'Monitoreo de Personal' },
+  ],
+  SOLUCIONES_TECNOLOGICAS: [
+    { key: 'CABLEADO_ESTRUCTURADO', label: 'Cableado Estructurado' },
+    { key: 'CAMARAS_DE_SEGURIDAD_CON_IA', label: 'Cámaras de Seguridad con IA' },
+    { key: 'CONTROL_DE_ACCESOS', label: 'Control de Accesos' },
+    { key: 'DETECCION_DE_INCENDIOS', label: 'Detección de Incendios' },
+    { key: 'CERCO_ELECTRICO', label: 'Cerco Eléctrico' },
+  ],
+};
+
+// Devuelve las opciones con los sub-servicios por defecto en las que aún no
+// tienen `children`, y si algo cambió (para no escribir en BD sin necesidad).
+export function conSubserviciosPorDefecto(options: OpcionConHijos[]): {
+  options: OpcionConHijos[];
+  changed: boolean;
+} {
+  let changed = false;
+  const result = options.map((o) => {
+    if (o.children === undefined && DEFAULT_SUBSERVICIOS[o.key]) {
+      changed = true;
+      return { ...o, children: DEFAULT_SUBSERVICIOS[o.key].map((c) => ({ ...c })) };
+    }
+    return o;
+  });
+  return { options: result, changed };
+}
+
+// Valida la elección de sub-servicios contra el servicio elegido. Siempre
+// opcional: vacío es válido y devuelve ''. Devuelve las keys unidas por coma
+// (formato de extra.subservicios_requeridos). Mensajes pensados para el
+// usuario, nunca texto crudo de error.
+export function normalizarSubservicios(
+  servicioOptions: OpcionConHijos[],
+  servicio: string | undefined,
+  raw: string[] | string | undefined | null,
+): string {
+  const keys = (Array.isArray(raw) ? raw : (raw || '').split(','))
+    .map((k) => k.trim())
+    .filter(Boolean);
+  if (keys.length === 0) return '';
+  const permitidas = new Set(
+    (servicioOptions.find((o) => o.key === servicio)?.children || []).map((c) => c.key),
+  );
+  if (permitidas.size === 0 || keys.some((k) => !permitidas.has(k))) {
+    throw new BadRequestException(
+      'Los sub-servicios elegidos no corresponden al servicio requerido. Vuelve a seleccionarlos.',
+    );
+  }
+  return [...new Set(keys)].join(',');
+}
+
+// Fecha de ingreso ('YYYY-MM-DD') -> instante a guardar en createdAt.
+// Mediodía UTC = 07:00 en Ecuador, el mismo día en ambos husos (misma idea
+// que parseSiguientePaso: que el día no se corra por zona horaria).
+const ECUADOR_OFFSET_MS = 5 * 60 * 60 * 1000;
+const diaEcuador = (d: Date) => new Date(d.getTime() - ECUADOR_OFFSET_MS).toISOString().slice(0, 10);
+
+export function parseFechaIngreso(raw: string | undefined | null, ahora: Date = new Date()): Date | undefined {
+  const dia = (raw || '').trim();
+  if (!dia) return undefined;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dia) || Number.isNaN(Date.parse(`${dia}T12:00:00.000Z`))) {
+    throw new BadRequestException('La fecha de ingreso no es válida.');
+  }
+  if (dia > diaEcuador(ahora)) {
+    throw new BadRequestException('La fecha de ingreso no puede ser futura.');
+  }
+  return new Date(`${dia}T12:00:00.000Z`);
+}
+
+// En edición solo se reescribe si el DÍA cambió respecto al guardado, para
+// no perder la hora original al guardar otros cambios.
+export function fechaIngresoParaEditar(
+  raw: string | undefined | null,
+  actual: Date,
+  ahora: Date = new Date(),
+): Date | undefined {
+  const nueva = parseFechaIngreso(raw, ahora);
+  if (!nueva) return undefined;
+  return diaEcuador(nueva) === diaEcuador(actual) ? undefined : nueva;
+}
+
 export const CORE_CLIENT_FIELDS = [
   { key: 'name', label: 'Nombre / Razón social', fieldType: 'TEXT' },
   { key: 'email', label: 'Email', fieldType: 'EMAIL' },
@@ -107,6 +213,15 @@ export const CORE_CLIENT_FIELDS = [
       { key: 'SOLUCIONES_TECNOLOGICAS', label: 'Soluciones Tecnológicas' },
       { key: 'SEGURIDAD_FISICA', label: 'Seguridad Física' },
     ],
+  },
+  // Casillas que dependen del servicio elegido: las opciones salen de
+  // `children` de la opción de `servicio_requerido` (no de este campo), y la
+  // elección se guarda en extra.subservicios_requeridos como keys separadas
+  // por coma. Siempre opcional.
+  {
+    key: SUBSERVICIOS_KEY,
+    label: 'Sub-servicios',
+    fieldType: 'SUBSERVICIOS',
   },
   // Antes era un <textarea> aparte, fuera del sistema de campos — ahora es
   // un campo núcleo más, para que el formulario y el picker de columnas lo
@@ -214,14 +329,16 @@ export class VentasClientesService {
   // ---------- Campos personalizables ----------
 
   // Idempotente: además de crear los campos núcleo que falten, corrige
-  // `order`/`fieldType`/`allowOther` de los que ya existen para que siempre
-  // respeten CORE_CLIENT_FIELDS (Nombre, Email, Teléfono, RUC, Dirección,
-  // Fuente, Servicio requerido, Observaciones) — así un campo nuevo que
+  // `order`/`fieldType` de los que ya existen para que siempre respeten
+  // CORE_CLIENT_FIELDS (Nombre, Email, Teléfono, RUC, Dirección, Fuente,
+  // Servicio requerido, Sub-servicios, Observaciones) — así un campo nuevo que
   // Ventas agregue siempre queda después de Observaciones (order = max + 1),
   // sin importar en qué momento se sembró cada campo núcleo para esta
-  // empresa. OJO: `label` y `options` NO se resincronizan nunca — esos sí
-  // son contenido que Ventas edita (renombrar el campo, agregar/quitar
-  // opciones), y machacarlos acá borraría esa personalización.
+  // empresa. OJO: `label`, `options` y `allowOther` NO se resincronizan
+  // nunca — son contenido que Ventas edita (renombrar el campo, agregar/quitar
+  // opciones, el checkbox "Permitir Otro"), y machacarlos acá borraría esa
+  // personalización (así el checkbox dejó de funcionar en Fuente y Servicio
+  // requerido hasta 2026-10-02). `allowOther` de fábrica solo se usa al crear.
   async ensureCoreFields(companyId: number) {
     const existing = await this.prisma.salesClientField.findMany({
       where: { companyId, isCore: true },
@@ -231,6 +348,7 @@ export class VentasClientesService {
       const core = CORE_CLIENT_FIELDS[i];
       const current = byKey.get(core.key);
       const allowOther = 'allowOther' in core ? core.allowOther : false;
+      const baseOptions = 'options' in core ? [...core.options] : [];
       if (!current) {
         await this.prisma.salesClientField.create({
           data: {
@@ -238,21 +356,37 @@ export class VentasClientesService {
             key: core.key,
             label: core.label,
             fieldType: core.fieldType,
-            options: 'options' in core ? [...core.options] : [],
+            options: (core.key === SERVICIO_KEY
+              ? conSubserviciosPorDefecto(baseOptions).options
+              : baseOptions) as any,
             allowOther,
             isCore: true,
             order: i,
           },
         });
-      } else if (
-        current.order !== i ||
-        current.fieldType !== core.fieldType ||
-        current.allowOther !== allowOther
-      ) {
-        await this.prisma.salesClientField.update({
-          where: { id: current.id },
-          data: { order: i, fieldType: core.fieldType, allowOther },
-        });
+      } else {
+        // Empresas que ya tenían "Servicio requerido": se les siembran los
+        // sub-servicios solo en las opciones que aún no tienen `children`.
+        const sembrado =
+          core.key === SERVICIO_KEY
+            ? conSubserviciosPorDefecto(
+                (Array.isArray(current.options) ? current.options : []) as OpcionConHijos[],
+              )
+            : null;
+        if (
+          current.order !== i ||
+          current.fieldType !== core.fieldType ||
+          sembrado?.changed
+        ) {
+          await this.prisma.salesClientField.update({
+            where: { id: current.id },
+            data: {
+              order: i,
+              fieldType: core.fieldType,
+              ...(sembrado?.changed ? { options: sembrado.options as any } : {}),
+            },
+          });
+        }
       }
     }
   }
@@ -688,7 +822,11 @@ export class VentasClientesService {
     });
 
     const extra: Record<string, string> = { fuente: 'REFERIDO' };
-    if (dto.servicioRequerido) extra.servicio_requerido = dto.servicioRequerido;
+    if (dto.servicioRequerido) extra[SERVICIO_KEY] = dto.servicioRequerido;
+    if (dto.subserviciosRequeridos?.length) {
+      extra[SUBSERVICIOS_KEY] = dto.subserviciosRequeridos.join(',');
+      await this.validarSubserviciosDeExtra(companyId, extra);
+    }
 
     return this.prisma.salesClient.create({
       data: {
@@ -758,6 +896,26 @@ export class VentasClientesService {
     return client;
   }
 
+  // Los sub-servicios guardados deben pertenecer al servicio guardado en el
+  // mismo `extra`. Siempre opcional: sin sub-servicios no hace nada. Reescribe
+  // `extra[SUBSERVICIOS_KEY]` ya normalizado (sin duplicados).
+  private async validarSubserviciosDeExtra(
+    companyId: number,
+    extra: Record<string, string>,
+  ) {
+    if (!extra[SUBSERVICIOS_KEY]) return;
+    await this.ensureCoreFields(companyId);
+    const campo = await this.prisma.salesClientField.findFirst({
+      where: { companyId, key: SERVICIO_KEY },
+    });
+    const opciones = (Array.isArray(campo?.options) ? campo.options : []) as OpcionConHijos[];
+    extra[SUBSERVICIOS_KEY] = normalizarSubservicios(
+      opciones,
+      extra[SERVICIO_KEY],
+      extra[SUBSERVICIOS_KEY],
+    );
+  }
+
   async createClient(companyId: number | null, createdBy: number, dto: any) {
     if (!companyId) throw new BadRequestException('Se requiere una empresa');
     if (!dto?.name?.trim())
@@ -767,10 +925,14 @@ export class VentasClientesService {
     const initialStage = await this.prisma.salesClientStage.findFirst({
       where: { companyId, isInitial: true },
     });
+    const extra: Record<string, string> = { ...(dto.extra || {}) };
+    await this.validarSubserviciosDeExtra(companyId, extra);
+    const fechaIngreso = parseFechaIngreso(dto.fechaIngreso);
     return this.prisma.salesClient.create({
       data: {
         companyId,
         createdBy,
+        ...(fechaIngreso ? { createdAt: fechaIngreso } : {}),
         // Quien crea un cliente a mano en Ventas es, por defecto, quien lo
         // atiende — a diferencia de un referido (creado por cualquier
         // empleado vía /referir), que queda sin responsable hasta que
@@ -782,7 +944,7 @@ export class VentasClientesService {
         ruc: dto.ruc?.trim() || null,
         address: dto.address?.trim() || null,
         observaciones: dto.observaciones?.trim() || null,
-        extra: dto.extra || {},
+        extra,
         status: initialStage?.key ?? null,
       },
       include: CLIENT_INCLUDE,
@@ -816,8 +978,10 @@ export class VentasClientesService {
   }
 
   async updateClient(companyId: number | null, id: number, dto: any) {
-    await this.getClient(companyId, id);
+    const actual = await this.getClient(companyId, id);
     const data: any = {};
+    const fechaIngreso = fechaIngresoParaEditar(dto.fechaIngreso, actual.createdAt);
+    if (fechaIngreso) data.createdAt = fechaIngreso;
     if (dto.name !== undefined) data.name = String(dto.name).trim();
     if (dto.email !== undefined)
       data.email = dto.email ? String(dto.email).trim() : null;
@@ -831,7 +995,11 @@ export class VentasClientesService {
       data.observaciones = dto.observaciones
         ? String(dto.observaciones).trim()
         : null;
-    if (dto.extra !== undefined) data.extra = dto.extra;
+    if (dto.extra !== undefined) {
+      const extra: Record<string, string> = { ...dto.extra };
+      await this.validarSubserviciosDeExtra(companyId as number, extra);
+      data.extra = extra;
+    }
     Object.assign(data, parseSiguientePaso(dto));
     return this.prisma.salesClient.update({
       where: { id },

@@ -12,6 +12,7 @@ import {
   UploadedFile,
   Req,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -36,7 +37,11 @@ const logoFilter = (
   cb: FileFilterCallback,
 ) => {
   if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|svg\+xml)$/)) {
-    cb(new Error('Solo se permiten imágenes (jpg, png, gif, svg)'));
+    cb(
+      new BadRequestException(
+        'Solo se permiten imágenes (jpg, png, gif, svg)',
+      ) as unknown as Error,
+    );
   } else {
     cb(null, true);
   }

@@ -58,6 +58,8 @@ const ConsultaTrabajador = lazy(() => import('./pages/custodias/ConsultaTrabajad
 const GemeBotChat = lazy(() => import('./pages/custodias/GemeBotChat'));
 const CPEntidadesPublicasList = lazy(() => import('./pages/contratacion-publica/EntidadesPublicasList'));
 const CPEntidadDetail = lazy(() => import('./pages/contratacion-publica/entidades/EntidadDetail'));
+const CPMisDocumentos = lazy(() => import('./pages/contratacion-publica/MisDocumentosPage'));
+const CPPorRevisar = lazy(() => import('./pages/contratacion-publica/PorRevisarPage'));
 const CPContratosList = lazy(() => import('./pages/contratacion-publica/contratos/ContratosList'));
 const CPContratoForm = lazy(() => import('./pages/contratacion-publica/contratos/ContratoForm'));
 const CPContratoDetail = lazy(() => import('./pages/contratacion-publica/contratos/ContratoDetail'));
@@ -101,6 +103,7 @@ const ContratoResult = lazy(() => import('./pages/ventas/ContratoResult'));
 const CompletarContrato = lazy(() => import('./pages/ventas/CompletarContrato'));
 const SoporteTecnicoPage = lazy(() => import('./pages/sistemas/SoporteTecnicoPage'));
 const SistemasDashboardPage = lazy(() => import('./pages/sistemas/SistemasDashboardPage'));
+const NovedadesPage = lazy(() => import('./pages/sistemas/NovedadesPage'));
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { collapsed } = useSidebar();
@@ -398,6 +401,8 @@ function AppInner() {
         <Route path="/custodias/gemebot" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><GemeBotChat /></SectionRoute></ProtectedLayout>} />
         <Route path="/contratacion-publica/entidades" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPEntidadesPublicasList /></SectionRoute></ProtectedLayout>} />
         <Route path="/contratacion-publica/entidades/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPEntidadDetail /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/mis-documentos" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPMisDocumentos /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/por-revisar" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPPorRevisar /></SectionRoute></ProtectedLayout>} />
         {CP_MOSTRAR_SUBMODULOS_OCULTOS && (
           <>
             <Route path="/contratacion-publica/contratos" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratosList /></SectionRoute></ProtectedLayout>} />
@@ -463,6 +468,7 @@ function AppInner() {
         <Route path="/sistemas/agentes" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><AgentsPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/sistemas/base-conocimiento" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><KnowledgeBasePage /></SectionRoute></ProtectedLayout>} />
         <Route path="/sistemas/soporte" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><SoporteTecnicoPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/sistemas/novedades" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><NovedadesPage /></SectionRoute></ProtectedLayout>} />
       </Routes>
       </Suspense>
 

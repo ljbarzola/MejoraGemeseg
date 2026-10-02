@@ -206,7 +206,7 @@ export const getPublicContractFill = (token: string): Promise<PublicContractFill
 // `redirectToSign`: si el contrato tiene una tabla para el cliente, el
 // backend genera el PDF y lo manda a SignWell de inmediato tras este
 // submit — este link es a dónde redirigir al cliente para que firme en la
-// misma sesión, sin esperar un segundo correo (ver CONTRATOS-PLAN.md).
+// misma sesión, sin esperar un segundo correo (ver ventas-contratos.md).
 export interface PublicContractFillResult {
   success: true;
   redirectToSign?: string | null;
@@ -227,7 +227,7 @@ export interface UploadSignedContractResult {
 }
 
 // Sube a mano el PDF ya firmado — respaldo para cuando el webhook de
-// SignWell no está configurado en este entorno (ver CONTRATOS-PLAN.md).
+// SignWell no está configurado en este entorno (ver ventas-contratos.md).
 export const uploadSignedContract = (contractId: number, file: File): Promise<UploadSignedContractResult> => {
   const formData = new FormData();
   formData.append('file', file);
@@ -299,7 +299,15 @@ export const deleteSalesApiKey = (id: number) => api.delete(`/ventas/api-keys/${
 export interface SalesClientFieldOption {
   key: string;
   label: string;
+  // Solo en las opciones de `servicio_requerido`: sub-servicios que se pueden
+  // elegir al escoger ese servicio.
+  children?: { key: string; label: string }[];
 }
+
+// Keys de los campos núcleo "Servicio requerido" y "Sub-servicios" (este
+// último guarda en extra las keys marcadas, separadas por coma).
+export const SERVICIO_KEY = 'servicio_requerido';
+export const SUBSERVICIOS_KEY = 'subservicios_requeridos';
 
 export interface SalesClientField {
   id: number;
@@ -464,7 +472,7 @@ export const setSalesClientNextAction = (id: number, text: string, date: string)
   api.patch(`/ventas/clientes/${id}`, { nextActionText: text, nextActionDate: date }).then(r => r.data as SalesClient);
 
 // Formulario abierto "Referir un cliente" — cualquier autenticado.
-export const referirCliente = (data: { nombre: string; celular?: string; correo?: string; servicioRequerido?: string; nota?: string }) =>
+export const referirCliente = (data: { nombre: string; celular?: string; correo?: string; servicioRequerido?: string; subserviciosRequeridos?: string[]; nota?: string }) =>
   api.post('/ventas/clientes/referir', data).then(r => r.data as SalesClient);
 export const misReferidosClientes = () =>
   api.get('/ventas/clientes/mis-referidos').then(r => r.data as MiReferidoCliente[]);
@@ -473,9 +481,11 @@ export const getSalesClients = () =>
   api.get('/ventas/clientes').then(r => r.data as SalesClient[]);
 export const getSalesClient = (id: number) =>
   api.get(`/ventas/clientes/${id}`).then(r => r.data as SalesClient);
-export const createSalesClient = (data: Partial<SalesClient> & { name: string }) =>
+// `fechaIngreso` ('YYYY-MM-DD') es la fecha de creación editable: permite
+// registrar prospectos de meses anteriores. No puede ser futura.
+export const createSalesClient = (data: Partial<SalesClient> & { name: string; fechaIngreso?: string }) =>
   api.post('/ventas/clientes', data).then(r => r.data as SalesClient);
-export const updateSalesClient = (id: number, data: Partial<SalesClient>) =>
+export const updateSalesClient = (id: number, data: Partial<SalesClient> & { fechaIngreso?: string }) =>
   api.patch(`/ventas/clientes/${id}`, data).then(r => r.data as SalesClient);
 export const deleteSalesClient = (id: number) =>
   api.delete(`/ventas/clientes/${id}`).then(r => r.data);
@@ -506,5 +516,27 @@ export function salesClientSelectLabel(client: SalesClient | null | undefined, f
   if (!raw) return '';
   const option = field.options?.find((o) => o.key === raw);
   return option?.label || raw;
+}
+
+// Sub-servicios disponibles para un servicio ya elegido (vacío si es "Otro",
+// no está en la lista o esa opción no tiene sub-servicios).
+export function subserviciosDe(servicioOptions: SalesClientFieldOption[] | undefined, servicio: string) {
+  return servicioOptions?.find((o) => o.key === servicio)?.children || [];
+}
+
+// Keys guardadas ('A,B') -> lista. Tolera vacío.
+export const parseSubservicios = (raw: string | undefined | null): string[] =>
+  (raw || '').split(',').map((k) => k.trim()).filter(Boolean);
+
+// Labels actuales de los sub-servicios marcados, separados por coma. Si una
+// key ya no existe en la lista (Ventas la quitó), se muestra tal cual.
+export function salesClientSubserviciosLabel(client: SalesClient | null | undefined, fields: SalesClientField[]): string {
+  const keys = parseSubservicios(salesClientValue(client, SUBSERVICIOS_KEY));
+  if (keys.length === 0) return '';
+  const disponibles = subserviciosDe(
+    fields.find((f) => f.key === SERVICIO_KEY)?.options,
+    salesClientValue(client, SERVICIO_KEY),
+  );
+  return keys.map((k) => disponibles.find((c) => c.key === k)?.label || k).join(', ');
 }
 

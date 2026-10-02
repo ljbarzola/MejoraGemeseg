@@ -9,7 +9,7 @@
 // app). Completar el id aquí ignora la BD del todo — así quedó fijado
 // VENTAS_CONTRATOS el 2026-09-23 (antes estaba vacío y los PDFs generados
 // no tenían ningún respaldo, solo el disco local no persistente de Cloud
-// Run — ver backend/.agents/VENTAS-CLIENTES-QA-2026-09-23.md).
+// Run — ver AGENTS.md, "Carpeta de Drive de contratos").
 
 export const LOCKED_DRIVE_FOLDER_TYPES = [
   'RECLUTAMIENTO',
