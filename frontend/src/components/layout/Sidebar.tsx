@@ -5,6 +5,21 @@ import { useCompany } from '../../contexts/ThemeContext';
 import { usePerm } from '../../contexts/PermissionsContext';
 import { useSidebar } from '../../contexts/SidebarContext';
 
+// Mismo corte que el @media (max-width: 768px) de styles.css.
+const MOBILE_QUERY = '(max-width: 768px)';
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia(MOBILE_QUERY).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(MOBILE_QUERY);
+    const onChange = () => setIsMobile(mq.matches);
+    onChange();
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return isMobile;
+}
+
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -13,7 +28,12 @@ export default function Sidebar() {
   const user = getUser();
   const isAdmin = user?.role === 'ADMIN';
   const isCompanyAdmin = isAdmin && !!user?.companyId;
-  const { collapsed, setCollapsed } = useSidebar();
+  const { collapsed: collapsedPref, setCollapsed } = useSidebar();
+  // Colapsar a iconos es una preferencia de escritorio (se guarda en
+  // localStorage). En movil el cajon siempre va expandido: si se respetara,
+  // quedaria solo con iconos y sin boton para volver a expandirlo.
+  const isMobile = useIsMobile();
+  const collapsed = collapsedPref && !isMobile;
   // En movil el sidebar es un cajon deslizante: arranca cerrado para no
   // tapar el contenido, y se cierra solo al navegar.
   const [mobileOpen, setMobileOpen] = useState(false);
