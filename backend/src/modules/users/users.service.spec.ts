@@ -259,3 +259,26 @@ describe('UsersService — preferencias personales', () => {
     expect(prisma.userPreference.upsert).not.toHaveBeenCalled();
   });
 });
+
+describe('UsersService.onModuleInit — tabla UserPreference', () => {
+  it('ejecuta cada sentencia del DDL idempotente, una por llamada', async () => {
+    const prisma = { $executeRawUnsafe: jest.fn().mockResolvedValue(0) };
+    const service = new UsersService(prisma as unknown as PrismaService);
+
+    await service.onModuleInit();
+
+    expect(prisma.$executeRawUnsafe).toHaveBeenCalledTimes(3);
+    expect(prisma.$executeRawUnsafe.mock.calls[0][0]).toContain(
+      'CREATE TABLE IF NOT EXISTS "UserPreference"',
+    );
+  });
+
+  it('si la base rechaza el DDL, el servicio arranca igual (no lanza)', async () => {
+    const prisma = {
+      $executeRawUnsafe: jest.fn().mockRejectedValue(new Error('sin permiso')),
+    };
+    const service = new UsersService(prisma as unknown as PrismaService);
+
+    await expect(service.onModuleInit()).resolves.toBeUndefined();
+  });
+});

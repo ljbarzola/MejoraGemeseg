@@ -1,5 +1,7 @@
 ﻿import {
   Injectable,
+  Logger,
+  OnModuleInit,
   NotFoundException,
   ConflictException,
   ForbiddenException,
@@ -9,6 +11,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PREFERENCE_KEY_PATTERN } from './dto/set-preference.dto';
+import { USER_PREFERENCE_DDL } from './user-preference.schema';
 import * as bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import {
@@ -17,8 +20,26 @@ import {
 } from '../permissions/permissions.service';
 
 @Injectable()
-export class UsersService {
+export class UsersService implements OnModuleInit {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(private prisma: PrismaService) {}
+
+  // El despliegue no corre migraciones: se asegura aquí la tabla de
+  // preferencias (ver user-preference.schema.ts). Si falla, el servicio arranca
+  // igual — solo se pierde guardar las preferencias en la cuenta, y el
+  // frontend sigue con su caché local.
+  async onModuleInit() {
+    try {
+      for (const sql of USER_PREFERENCE_DDL) {
+        await this.prisma.$executeRawUnsafe(sql);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo asegurar la tabla UserPreference: ${(err as Error).message}`,
+      );
+    }
+  }
 
   async create(dto: CreateUserDto, companyId?: number | null) {
     const existing = await this.prisma.user.findUnique({
