@@ -127,6 +127,7 @@ model User {
   agentLinks                         UserAgent[]
   permissions                        UserPermission[]
   passwordResetCodes                 PasswordResetCode[]
+  preferences                        UserPreference[]
   createdCustodias                   Custodia[]
   contractTemplates                  ContractTemplate[]
   contracts                          Contract[]
@@ -626,6 +627,20 @@ model PasswordResetCode {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+}
+
+/// Preferencias personales de interfaz (ej. qué columnas ve cada persona en una
+/// tabla). Una fila por (usuario, clave); `value` es JSON libre que valida quien
+/// escribe. Es dato personal: solo el propio usuario lo lee o lo cambia.
+model UserPreference {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, key])
 }
 
 // Catálogo de ubicaciones (oficinas/sedes) propio de cada empresa, editable
