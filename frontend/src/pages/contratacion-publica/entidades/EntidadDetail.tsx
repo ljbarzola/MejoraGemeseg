@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft, Plus, Pencil, Trash2, X, Send, CheckCircle2, XCircle, Upload, ExternalLink, FolderOpen,
+  ArrowLeft, Plus, Pencil, Trash2, X, Send, Upload, FolderOpen, Search,
 } from 'lucide-react';
 import {
   getSolicitudesDeEntidad,
@@ -12,12 +12,8 @@ import {
   addDocumentoSolicitud,
   updateDocumentoSolicitud,
   deleteDocumentoSolicitud,
-  subirArchivoEntrega,
-  entregarDocumento,
   aprobarDocumento,
   rechazarDocumento,
-  getCarpetaEntregas,
-  saveCarpetaEntregas,
 } from '../../../services/contratacion-publica.service';
 import { getUsers, type AdminUser } from '../../../services/user.service';
 import type {
@@ -25,58 +21,27 @@ import type {
   CPSolicitudResumen,
   CPSolicitudMensual,
   CPEntregaDocumento,
-  CPEstadoEntrega,
-  CPCarpetaEntregas,
 } from '../../../types/contratacion-publica';
 import { MESES_ES } from '../../../types/contratacion-publica';
 import { usePerm } from '../../../contexts/PermissionsContext';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
-import PromptDialog from '../../../components/common/PromptDialog';
-import FileOrLinkInput from '../../../components/common/FileOrLinkInput';
+import ErrorBanner from '../../../components/common/ErrorBanner';
+import EntregarModal from '../../../components/contratacion-publica/EntregarModal';
+import RevisionPanel, { type DocumentoRevisable } from '../../../components/contratacion-publica/RevisionPanel';
+import { formatFechaHoraSync } from '../../../utils/formatFechaHora';
+import {
+  ESTADO_COLOR,
+  ESTADO_LABEL,
+  formatoFecha,
+  mensajeError,
+  tituloMes,
+} from '../../../utils/entregasCp';
 import RowActionsMenu from '../../../components/common/RowActionsMenu';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
 import { useSortableTable } from '../../../hooks/useSortableTable';
 
-const ESTADO_LABEL: Record<CPEstadoEntrega, string> = {
-  PENDIENTE: 'Pendiente',
-  ENTREGADO: 'Entregado',
-  APROBADO: 'Aprobado',
-  RECHAZADO: 'Rechazado',
-};
-const ESTADO_COLOR: Record<CPEstadoEntrega, { bg: string; fg: string }> = {
-  PENDIENTE: { bg: '#fefcbf', fg: '#744210' },
-  ENTREGADO: { bg: '#bee3f8', fg: '#2a4365' },
-  APROBADO: { bg: '#c6f6d5', fg: '#276749' },
-  RECHAZADO: { bg: '#fed7d7', fg: '#c53030' },
-};
-const ARCHIVOS_ACEPTADOS = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip';
-
-const mensajeError = (err: any, fallback: string): string => {
-  const m = err?.response?.data?.message;
-  if (Array.isArray(m)) return m.join(' ');
-  return typeof m === 'string' && m ? m : fallback;
-};
-
-const formatoFecha = (iso: string | null | undefined) => {
-  if (!iso) return '—';
-  const [y, m, d] = iso.slice(0, 10).split('-');
-  return `${d}/${m}/${y}`;
-};
-
 const ultimoDiaDelMes = (anio: number, mes: number) =>
   `${anio}-${String(mes).padStart(2, '0')}-${String(new Date(anio, mes, 0).getDate()).padStart(2, '0')}`;
-
-const tituloMes = (anio: number, mes: number) => `${MESES_ES[mes - 1]} de ${anio}`;
-
-/** Muestra un error de un modal y lo trae a la vista (el modal puede estar desplazado). */
-function ErrorBanner({ mensaje }: { mensaje: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (mensaje) ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [mensaje]);
-  if (!mensaje) return null;
-  return <div ref={ref} className="form-error">{mensaje}</div>;
-}
 
 export default function EntidadDetail() {
   const { id } = useParams();
@@ -94,8 +59,6 @@ export default function EntidadDetail() {
   const [loadingSolicitud, setLoadingSolicitud] = useState(false);
   const [error, setError] = useState('');
   const [usuarios, setUsuarios] = useState<AdminUser[]>([]);
-  const [carpeta, setCarpeta] = useState<CPCarpetaEntregas | null>(null);
-  const [carpetaCargada, setCarpetaCargada] = useState(false);
 
   const solicitudId = Number(searchParams.get('solicitud')) || null;
 
@@ -126,10 +89,6 @@ export default function EntidadDetail() {
   }, [solicitudId, cargarSolicitud]);
 
   useEffect(() => {
-    getCarpetaEntregas()
-      .then(setCarpeta)
-      .catch(() => setCarpeta(null))
-      .finally(() => setCarpetaCargada(true));
     if (canEdit) {
       getUsers({ isActive: 'true' }).then(setUsuarios).catch(() => setUsuarios([]));
     }
@@ -193,11 +152,10 @@ export default function EntidadDetail() {
   const [mostrarNueva, setMostrarNueva] = useState(false);
   const [docModal, setDocModal] = useState<{ editando: CPEntregaDocumento | null } | null>(null);
   const [entregando, setEntregando] = useState<CPEntregaDocumento | null>(null);
-  const [rechazando, setRechazando] = useState<CPEntregaDocumento | null>(null);
+  const [panel, setPanel] = useState<{ items: DocumentoRevisable[]; inicioId: number } | null>(null);
   const [confirmarEnviar, setConfirmarEnviar] = useState(false);
   const [confirmarEliminarSolicitud, setConfirmarEliminarSolicitud] = useState(false);
   const [confirmarQuitar, setConfirmarQuitar] = useState<CPEntregaDocumento | null>(null);
-  const [editandoCarpeta, setEditandoCarpeta] = useState(false);
 
   const ejecutar = async (accion: () => Promise<CPSolicitudMensual | void>, fallback: string) => {
     setError('');
@@ -215,6 +173,31 @@ export default function EntidadDetail() {
     return { total: e.length, aprobadas: e.filter((x) => x.estado === 'APROBADO').length };
   }, [solicitud]);
 
+  /** Abre el panel de revisión con los documentos entregados de este mes, en el orden de la tabla. */
+  const abrirPanel = (e: CPEntregaDocumento) => {
+    if (!solicitud) return;
+    const items: DocumentoRevisable[] = filasDocs
+      .filter((d) => d.url)
+      .map((d) => ({
+        id: d.id,
+        nombre: d.nombre,
+        descripcion: d.descripcion,
+        entidadNombre: lista?.entidad.nombre ?? solicitud.entidadNombre,
+        periodo: tituloMes(solicitud.anio, solicitud.mes),
+        estado: d.estado,
+        fechaLimite: d.fechaLimite,
+        vencida: d.vencida,
+        origen: d.origen,
+        url: d.url,
+        motivoRechazo: d.motivoRechazo,
+        entregadoPorNombre: d.entregadoPorNombre,
+        entregadoAt: d.entregadoAt,
+        revisadoPorNombre: d.revisadoPorNombre,
+        revisadoAt: d.revisadoAt,
+      }));
+    setPanel({ items, inicioId: e.id });
+  };
+
   const accionesDocumento = (e: CPEntregaDocumento) => {
     const acciones: { label: string; icon?: React.ReactNode; onClick: () => void; danger?: boolean }[] = [];
     if (e.puedeEntregar) {
@@ -224,11 +207,8 @@ export default function EntidadDetail() {
         onClick: () => setEntregando(e),
       });
     }
-    if (canEdit && e.estado === 'ENTREGADO') {
-      acciones.push({ label: 'Aprobar', icon: <CheckCircle2 size={14} />, onClick: () => ejecutar(() => aprobarDocumento(e.id), 'No se pudo aprobar el documento.') });
-    }
-    if (canEdit && (e.estado === 'ENTREGADO' || e.estado === 'APROBADO')) {
-      acciones.push({ label: 'Rechazar', icon: <XCircle size={14} />, onClick: () => setRechazando(e) });
+    if (canEdit && (e.estado === 'ENTREGADO' || e.estado === 'APROBADO') && e.url) {
+      acciones.push({ label: 'Revisar (ver, aprobar o rechazar)', icon: <Search size={14} />, onClick: () => abrirPanel(e) });
     }
     if (canEdit) {
       acciones.push({ label: 'Editar', icon: <Pencil size={14} />, onClick: () => setDocModal({ editando: e }) });
@@ -264,26 +244,20 @@ export default function EntidadDetail() {
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{error}</div>
       )}
 
-      {canEdit && carpetaCargada && (
+      {canEdit && lista && (
         <div className="admin-section" style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <FolderOpen size={16} />
-            {carpeta && !editandoCarpeta ? (
-              <>
-                <span style={{ fontSize: '0.88rem' }}>
-                  Los archivos subidos se guardan en la carpeta de Drive <strong>{carpeta.driveFolderName}</strong>
-                  {carpeta.driveFolderLink && (
-                    <> · <a href={carpeta.driveFolderLink} target="_blank" rel="noopener noreferrer">abrir</a></>
-                  )}
-                </span>
-                <button className="btn-secondary" style={{ padding: '4px 10px', fontSize: '0.78rem' }} onClick={() => setEditandoCarpeta(true)}>Cambiar</button>
-              </>
+            {lista.entidad.driveFolderId ? (
+              <span style={{ fontSize: '0.88rem' }}>
+                Los archivos de esta entidad se guardan en su carpeta de Drive ·{' '}
+                <a href={`https://drive.google.com/drive/folders/${lista.entidad.driveFolderId}`} target="_blank" rel="noopener noreferrer">abrir</a>
+              </span>
             ) : (
-              <CarpetaForm
-                inicial={!carpeta}
-                onCancel={carpeta ? () => setEditandoCarpeta(false) : undefined}
-                onGuardada={(c) => { setCarpeta(c); setEditandoCarpeta(false); }}
-              />
+              <span style={{ fontSize: '0.88rem' }}>
+                Esta entidad todavía no tiene carpeta en Drive. Se crea sola al sincronizar o al subir el primer archivo; la carpeta general se elige en{' '}
+                <a href="/contratacion-publica/entidades" onClick={(e) => { e.preventDefault(); navigate('/contratacion-publica/entidades'); }}>Entidades Públicas</a>.
+              </span>
             )}
           </div>
         </div>
@@ -376,13 +350,13 @@ export default function EntidadDetail() {
                   <table className="tasks-table resizable-table" ref={tablaDocsRef}>
                     <thead>
                       <tr>
-                        <th {...thDocs('nombre')} style={{ width: '19%' }}>Documento <SortDocs campo="nombre" /></th>
-                        <th {...thDocs('area')} style={{ width: '11%' }}>Área <SortDocs campo="area" /></th>
-                        <th {...thDocs('responsables')} style={{ width: '15%' }}>Responsables <SortDocs campo="responsables" /></th>
-                        <th {...thDocs('fechaLimite')} style={{ width: '13%' }}>Fecha límite <SortDocs campo="fechaLimite" /></th>
-                        <th {...thDocs('estado')} style={{ width: '14%' }}>Estado <SortDocs campo="estado" /></th>
-                        <th style={{ width: '19%' }}>Entrega</th>
-                        <th style={{ textAlign: 'right', width: '9%' }}>Acciones</th>
+                        <th {...thDocs('nombre')} style={{ width: '18%' }}>Documento <SortDocs campo="nombre" /></th>
+                        <th {...thDocs('area')} style={{ width: '10%' }}>Área <SortDocs campo="area" /></th>
+                        <th {...thDocs('responsables')} style={{ width: '14%' }}>Responsables <SortDocs campo="responsables" /></th>
+                        <th {...thDocs('fechaLimite')} style={{ width: '12%' }}>Fecha límite <SortDocs campo="fechaLimite" /></th>
+                        <th {...thDocs('estado')} style={{ width: '16%' }}>Estado <SortDocs campo="estado" /></th>
+                        <th style={{ width: '20%' }}>Entrega</th>
+                        <th style={{ textAlign: 'right', width: '10%' }}>Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -411,12 +385,21 @@ export default function EntidadDetail() {
                             <td>
                               {e.url ? (
                                 <>
-                                  <a href={e.url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                    <ExternalLink size={13} /> {e.origen === 'ARCHIVO' ? 'Ver archivo' : 'Ver enlace'}
-                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => abrirPanel(e)}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--azul-medio, #2b6cb0)', fontWeight: 700, fontSize: 'inherit' }}
+                                  >
+                                    <Search size={13} /> {canEdit && e.estado === 'ENTREGADO' ? 'Revisar' : e.origen === 'ARCHIVO' ? 'Ver archivo' : 'Ver enlace'}
+                                  </button>
                                   <div style={{ fontSize: '0.72rem', color: '#718096' }}>
                                     {e.entregadoPorNombre ?? ''}{e.entregadoAt ? ` · ${formatoFecha(e.entregadoAt)}` : ''}
                                   </div>
+                                  {e.revisadoAt && e.estado !== 'ENTREGADO' && (
+                                    <div style={{ fontSize: '0.72rem', color: '#718096' }} title={formatFechaHoraSync(e.revisadoAt)}>
+                                      Revisó {e.revisadoPorNombre ?? ''} · {formatoFecha(e.revisadoAt)}
+                                    </div>
+                                  )}
                                 </>
                               ) : '—'}
                             </td>
@@ -468,19 +451,14 @@ export default function EntidadDetail() {
         />
       )}
 
-      {rechazando && (
-        <PromptDialog
-          title="Rechazar documento"
-          message={`Escribe el motivo del rechazo de "${rechazando.nombre}". Se lo enviaremos a quien debe entregarlo.`}
-          placeholder="Ej: El documento está vencido o es de otro mes"
-          confirmLabel="Rechazar"
-          required
-          onCancel={() => setRechazando(null)}
-          onConfirm={(motivo) => {
-            const e = rechazando;
-            setRechazando(null);
-            ejecutar(() => rechazarDocumento(e.id, motivo.trim()), 'No se pudo rechazar el documento.');
-          }}
+      {panel && (
+        <RevisionPanel
+          items={panel.items}
+          inicioId={panel.inicioId}
+          puedeRevisar={canEdit}
+          onClose={() => setPanel(null)}
+          onAprobar={async (docId) => { aplicarSolicitud(await aprobarDocumento(docId)); }}
+          onRechazar={async (docId, motivo) => { aplicarSolicitud(await rechazarDocumento(docId, motivo)); }}
         />
       )}
 
@@ -535,56 +513,6 @@ export default function EntidadDetail() {
           }}
         />
       )}
-    </div>
-  );
-}
-
-// ============================================================ carpeta de Drive
-
-function CarpetaForm({
-  inicial,
-  onCancel,
-  onGuardada,
-}: {
-  inicial: boolean;
-  onCancel?: () => void;
-  onGuardada: (c: CPCarpetaEntregas) => void;
-}) {
-  const [valor, setValor] = useState('');
-  const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState('');
-
-  const guardar = async () => {
-    if (!valor.trim()) return;
-    setGuardando(true);
-    setError('');
-    try {
-      onGuardada(await saveCarpetaEntregas(valor.trim()));
-    } catch (err) {
-      setError(mensajeError(err, 'No se pudo guardar la carpeta. Revisa el enlace y que esté compartida con el sistema.'));
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  return (
-    <div style={{ flex: 1, minWidth: 260 }}>
-      <div style={{ fontSize: '0.85rem', marginBottom: 6 }}>
-        {inicial
-          ? <>Falta elegir la <strong>carpeta de Google Drive</strong> donde se guardarán los archivos que suban las otras áreas. Mientras tanto solo se podrán entregar enlaces.</>
-          : 'Pega el enlace de la nueva carpeta de Drive.'}
-      </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <input
-          value={valor}
-          onChange={(e) => setValor(e.target.value)}
-          placeholder="https://drive.google.com/drive/folders/..."
-          style={{ flex: '1 1 280px', minWidth: 0, padding: '8px 12px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.85rem' }}
-        />
-        <button className="auth-btn" disabled={guardando || !valor.trim()} onClick={guardar}>{guardando ? 'Guardando...' : 'Guardar'}</button>
-        {onCancel && <button className="btn-secondary" onClick={onCancel}>Cancelar</button>}
-      </div>
-      {error && <div style={{ color: '#c53030', fontSize: '0.8rem', marginTop: 6 }}>{error}</div>}
     </div>
   );
 }
@@ -789,88 +717,6 @@ function DocumentoModal({
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onCancel}>Cancelar</button>
             <button type="submit" className="auth-btn" disabled={guardando}>{guardando ? 'Guardando...' : editando ? 'Guardar cambios' : 'Agregar documento'}</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================ entregar
-
-function EntregarModal({
-  entrega,
-  onCancel,
-  onEntregada,
-}: {
-  entrega: CPEntregaDocumento;
-  onCancel: () => void;
-  onEntregada: (s: CPSolicitudMensual) => void;
-}) {
-  const [url, setUrl] = useState('');
-  const [origen, setOrigen] = useState<'ARCHIVO' | 'ENLACE'>('ENLACE');
-  const subioArchivo = useRef(false);
-  const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState('');
-
-  const entregar = async (ev: React.FormEvent) => {
-    ev.preventDefault();
-    if (!url.trim()) { setError('Sube un archivo o pega un enlace.'); return; }
-    setGuardando(true);
-    setError('');
-    try {
-      onEntregada(await entregarDocumento(entrega.id, { origen, url: url.trim() }));
-    } catch (err) {
-      setError(mensajeError(err, 'No se pudo registrar la entrega.'));
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>Entregar documento</h3>
-          <button className="modal-close" onClick={onCancel}><X size={16} /></button>
-        </div>
-        <form onSubmit={entregar}>
-          <div className="modal-body">
-            <ErrorBanner mensaje={error} />
-            <p style={{ margin: '0 0 4px', fontWeight: 700 }}>{entrega.nombre}</p>
-            {entrega.descripcion && <p style={{ margin: '0 0 8px', fontSize: '0.85rem', color: '#4a5568' }}>{entrega.descripcion}</p>}
-            <p style={{ margin: '0 0 12px', fontSize: '0.82rem', color: '#718096' }}>Fecha límite: {formatoFecha(entrega.fechaLimite)}</p>
-            {entrega.estado === 'RECHAZADO' && entrega.motivoRechazo && (
-              <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: 8, padding: '8px 12px', fontSize: '0.82rem', marginBottom: 12 }}>
-                Fue rechazado: {entrega.motivoRechazo}
-              </div>
-            )}
-            <div className="form-group">
-              <label>Archivo o enlace *</label>
-              <FileOrLinkInput
-                value={url}
-                accept={ARCHIVOS_ACEPTADOS}
-                onChange={(valor) => {
-                  setUrl(valor);
-                  if (subioArchivo.current) { subioArchivo.current = false; setOrigen('ARCHIVO'); }
-                  else setOrigen('ENLACE');
-                }}
-                uploadFn={(file) => {
-                  subioArchivo.current = true;
-                  return subirArchivoEntrega(entrega.id, file).catch((err) => {
-                    subioArchivo.current = false;
-                    throw err;
-                  });
-                }}
-              />
-              <p style={{ fontSize: '0.75rem', color: '#718096', margin: '6px 0 0' }}>
-                Si pegas un enlace (por ejemplo de Google Drive), compártelo para que quien revisa pueda abrirlo.
-              </p>
-            </div>
-          </div>
-          <div className="modal-actions">
-            <button type="button" className="btn-secondary" onClick={onCancel}>Cancelar</button>
-            <button type="submit" className="auth-btn" disabled={guardando}>{guardando ? 'Guardando...' : 'Entregar'}</button>
           </div>
         </form>
       </div>

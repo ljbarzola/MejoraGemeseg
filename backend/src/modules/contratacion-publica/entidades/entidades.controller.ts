@@ -28,6 +28,35 @@ export class CPEntidadesController {
     return this.service.findAll(req.user.companyId);
   }
 
+  // Pone la lista de entidades y la carpeta de Drive de acuerdo. Escribe en la
+  // base (crea entidades y enlaza carpetas), por eso pide "write".
+  @Post('sincronizar-drive')
+  @Section('CONTRATACION_PUBLICA', 'write')
+  sincronizarDrive(@Req() req: any) {
+    return this.service.sincronizarConDrive(req.user.companyId);
+  }
+
+  @Post(':id/drive/usar-nombre-de-drive')
+  @Section('CONTRATACION_PUBLICA', 'write')
+  usarNombreDeDrive(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.service.usarNombreDeDrive(id, req.user.companyId);
+  }
+
+  @Post(':id/drive/usar-nombre-del-sistema')
+  @Section('CONTRATACION_PUBLICA', 'write')
+  usarNombreDelSistema(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+  ) {
+    return this.service.usarNombreDelSistema(id, req.user.companyId);
+  }
+
+  @Post(':id/drive/recrear-carpeta')
+  @Section('CONTRATACION_PUBLICA', 'write')
+  recrearCarpeta(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.service.recrearCarpeta(id, req.user.companyId);
+  }
+
   @Get(':id')
   @Section('CONTRATACION_PUBLICA', 'view')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req: any) {

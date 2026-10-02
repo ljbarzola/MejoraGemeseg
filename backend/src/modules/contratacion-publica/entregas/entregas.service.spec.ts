@@ -2,10 +2,13 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { DriveService } from '../../personal/services/drive.service';
+import { CPEntidadesService } from '../entidades/entidades.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { GmailMailService } from '../../mail/gmail-mail.service';
+import { PermissionsService } from '../../permissions/permissions.service';
 import { Actor, EntregasService } from './entregas.service';
 
 const fecha = (t: string) => new Date(`${t}T00:00:00Z`);
@@ -82,7 +85,13 @@ describe('EntregasService', () => {
   let prisma: any;
   let notifications: { create: jest.Mock };
   let mail: { sendMail: jest.Mock };
-  let drive: { getConfig: jest.Mock };
+  let drive: {
+    getConfig: jest.Mock;
+    findChildFolderByName: jest.Mock;
+    getFileMetadata: jest.Mock;
+    downloadFileBuffer: jest.Mock;
+  };
+  let permissions: { getCompanyUserIdsWithWriteAccess: jest.Mock };
   let service: EntregasService;
 
   const admin: Actor = { userId: 1, companyId: 1, puedeEscribir: true };
@@ -101,9 +110,11 @@ describe('EntregasService', () => {
       },
       cPEntregaDocumento: {
         findFirst: jest.fn(),
+        findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
       },
+      cPEntregaHistorial: { create: jest.fn(), findMany: jest.fn() },
       cPEntregaResponsable: { deleteMany: jest.fn(), createMany: jest.fn() },
       user: {
         findMany: jest.fn(),
@@ -113,16 +124,27 @@ describe('EntregasService', () => {
       },
       department: { findUnique: jest.fn() },
       notificationConfig: { findUnique: jest.fn().mockResolvedValue(null) },
-      $transaction: jest.fn(),
+      $transaction: jest.fn().mockResolvedValue([]),
     };
     notifications = { create: jest.fn().mockResolvedValue({}) };
     mail = { sendMail: jest.fn().mockResolvedValue(undefined) };
-    drive = { getConfig: jest.fn() };
+    drive = {
+      getConfig: jest.fn(),
+      findChildFolderByName: jest.fn(),
+      getFileMetadata: jest.fn(),
+      downloadFileBuffer: jest.fn(),
+    };
+    // Personal de CP con permiso de escribir (1 = quien armó la solicitud).
+    permissions = {
+      getCompanyUserIdsWithWriteAccess: jest.fn().mockResolvedValue([1, 2]),
+    };
     service = new EntregasService(
       prisma,
       drive as unknown as DriveService,
+      { carpetaDeEntidad: jest.fn() } as unknown as CPEntidadesService,
       notifications as unknown as NotificationsService,
       mail as unknown as GmailMailService,
+      permissions as unknown as PermissionsService,
     );
   });
 
@@ -283,11 +305,43 @@ describe('EntregasService', () => {
       );
     });
 
-    it('avisa a quien armó la solicitud (no al que entrega)', async () => {
+    it('avisa a todo el personal de CP que revisa (no al que entrega)', async () => {
+      await service.entregar(11, dto, ana);
+      const avisados = notifications.create.mock.calls.map((c) => c[0].userId);
+      expect(avisados.sort()).toEqual([1, 2]);
+      expect(avisados).not.toContain(4);
+    });
+
+    it('si quien entrega es de CP, no se avisa a sí mismo', async () => {
+      await service.entregar(11, dto, admin);
+      const avisados = notifications.create.mock.calls.map((c) => c[0].userId);
+      expect(avisados).toEqual([2]);
+    });
+
+    it('el aviso al equipo es solo por campana: no manda correos', async () => {
+      await service.entregar(11, dto, ana);
+      expect(mail.sendMail).not.toHaveBeenCalled();
+    });
+
+    it('si no se puede consultar al equipo, igual avisa a quien armó la solicitud', async () => {
+      permissions.getCompanyUserIdsWithWriteAccess.mockRejectedValue(new Error('x'));
       await service.entregar(11, dto, ana);
       expect(notifications.create).toHaveBeenCalledWith(
         expect.objectContaining({ userId: 1 }),
       );
+    });
+
+    it('anota la entrega en el historial junto con el cambio de estado', async () => {
+      await service.entregar(11, dto, ana);
+      expect(prisma.cPEntregaHistorial.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          entregaId: 11,
+          accion: 'ENTREGADO',
+          origen: 'ENLACE',
+          usuarioId: 4,
+        }),
+      });
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     });
 
     it('lo rechaza si la persona no es responsable y no es de Contratación Pública', async () => {
@@ -382,6 +436,20 @@ describe('EntregasService', () => {
       const aviso = notifications.create.mock.calls[0][0];
       expect(aviso.userId).toBe(4);
       expect(aviso.message).toContain('Es del mes pasado');
+    });
+
+    it('aprobar y rechazar quedan en el historial (el rechazo con su motivo)', async () => {
+      prisma.cPEntregaDocumento.findFirst.mockResolvedValue(
+        entrega({ estado: 'ENTREGADO' }),
+      );
+      await service.aprobar(11, admin);
+      expect(prisma.cPEntregaHistorial.create).toHaveBeenLastCalledWith({
+        data: expect.objectContaining({ accion: 'APROBADO', motivo: null, usuarioId: 1 }),
+      });
+      await service.rechazar(11, { motivo: ' Ilegible ' }, admin);
+      expect(prisma.cPEntregaHistorial.create).toHaveBeenLastCalledWith({
+        data: expect.objectContaining({ accion: 'RECHAZADO', motivo: 'Ilegible' }),
+      });
     });
 
     it('un documento aprobado todavía se puede rechazar (para reabrirlo)', async () => {
@@ -576,6 +644,190 @@ describe('EntregasService', () => {
         correo: false,
       });
       expect(notifications.create).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe('EntregasService: historial, vista previa y bandejas', () => {
+  let prisma: any;
+  let drive: any;
+  let service: EntregasService;
+
+  const admin: Actor = { userId: 1, companyId: 1, puedeEscribir: true };
+  const ana: Actor = { userId: 4, companyId: 1, puedeEscribir: false };
+  const otra: Actor = { userId: 99, companyId: 1, puedeEscribir: false };
+
+  const subida = (over: Record<string, unknown> = {}) =>
+    entrega({
+      estado: 'ENTREGADO',
+      origen: 'ARCHIVO',
+      url: 'https://drive.google.com/file/d/ARCH1/view',
+      ...over,
+    });
+
+  beforeEach(() => {
+    prisma = {
+      cPEntidadPublica: {
+        findFirst: jest.fn().mockResolvedValue({ ...entidad, driveFolderId: 'ENT' }),
+      },
+      cPEntregaDocumento: { findFirst: jest.fn(), findMany: jest.fn() },
+      cPEntregaHistorial: { findMany: jest.fn() },
+    };
+    drive = {
+      findChildFolderByName: jest.fn().mockResolvedValue({ id: 'MES', name: '2026-09' }),
+      getFileMetadata: jest.fn().mockResolvedValue({
+        id: 'ARCH1',
+        name: 'Planilla.pdf',
+        mimeType: 'application/pdf',
+        size: 1000,
+        parents: ['MES'],
+        trashed: false,
+      }),
+      downloadFileBuffer: jest.fn().mockResolvedValue(Buffer.from('PDF')),
+    };
+    service = new EntregasService(
+      prisma,
+      drive as unknown as DriveService,
+      {} as unknown as CPEntidadesService,
+      { create: jest.fn() } as unknown as NotificationsService,
+      { sendMail: jest.fn() } as unknown as GmailMailService,
+      { getCompanyUserIdsWithWriteAccess: jest.fn() } as unknown as PermissionsService,
+    );
+  });
+
+  describe('obtenerArchivo', () => {
+    it('sirve el archivo subido con su tipo real', async () => {
+      prisma.cPEntregaDocumento.findFirst.mockResolvedValue(subida());
+      const r = await service.obtenerArchivo(11, admin);
+      expect(r.mimeType).toBe('application/pdf');
+      expect(r.nombre).toBe('Planilla.pdf');
+      expect(r.buffer.toString()).toBe('PDF');
+      expect(drive.findChildFolderByName).toHaveBeenCalledWith('ENT', '2026-09');
+    });
+
+    it('lo puede ver quien es responsable del documento', async () => {
+      prisma.cPEntregaDocumento.findFirst.mockResolvedValue(subida());
+      await expect(service.obtenerArchivo(11, ana)).resolves.toBeDefined();
+    });
+
+    it('no lo ve quien no es responsable ni es de CP', async () => {
+      prisma.cPEntregaDocumento.findFirst.mockResolvedValue(subida());
+      await expect(service.obtenerArchivo(11, otra)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(drive.downloadFileBuffer).not.toHaveBeenCalled();
+    });
+
+    it('un enlace externo no se sirve por el servidor', async () => {
+      prisma.cPEntregaDocumento.findFirst.mockResolvedValue(
+        subida({ origen: 'ENLACE', url: 'https://drive.google.com/file/d/ARCH1/view' }),
+      );
+      await expect(service.obtenerArchivo(11, admin)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(drive.downloadFileBuffer).not.toHaveBeenCalled();
+    });
+
+    it('un archivo que no está en la carpeta del mes no se sirve (no es lector universal de Drive)', async () => {
+      prisma.cPEntregaDocumento.findFirst.mockResolvedValue(subida());
+      drive.getFileMetadata.mockResolvedValue({
+        id: 'ARCH1',
+        name: 'Ajeno.pdf',
+        mimeType: 'application/pdf',
+        size: 10,
+        parents: ['OTRA-CARPETA'],
+        trashed: false,
+      });
+      await expect(service.obtenerArchivo(11, admin)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(drive.downloadFileBuffer).not.toHaveBeenCalled();
+    });
+
+    it('un archivo en la papelera no se sirve', async () => {
+      prisma.cPEntregaDocumento.findFirst.mockResolvedValue(subida());
+      drive.getFileMetadata.mockResolvedValue({
+        id: 'ARCH1', name: 'x.pdf', mimeType: 'application/pdf',
+        size: 10, parents: ['MES'], trashed: true,
+      });
+      await expect(service.obtenerArchivo(11, admin)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('si la entidad todavía no tiene carpeta en Drive, no se sirve', async () => {
+      prisma.cPEntregaDocumento.findFirst.mockResolvedValue(subida());
+      prisma.cPEntidadPublica.findFirst.mockResolvedValue({ ...entidad, driveFolderId: null });
+      await expect(service.obtenerArchivo(11, admin)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('historial', () => {
+    it('devuelve la línea de tiempo en orden y solo a quien corresponde', async () => {
+      prisma.cPEntregaDocumento.findFirst.mockResolvedValue(subida());
+      prisma.cPEntregaHistorial.findMany.mockResolvedValue([
+        { id: 1, accion: 'ENTREGADO', motivo: null, origen: 'ARCHIVO', usuarioNombre: 'Ana', createdAt: new Date() },
+      ]);
+      const h = await service.historial(11, ana);
+      expect(h).toHaveLength(1);
+      expect(prisma.cPEntregaHistorial.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { entregaId: 11 } }),
+      );
+      await expect(service.historial(11, otra)).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('bandejas', () => {
+    const fila = (id: number, estado: string, limite: string) => ({
+      id,
+      nombre: `Doc ${id}`,
+      descripcion: null,
+      estado,
+      fechaLimite: new Date(`${limite}T00:00:00Z`),
+      motivoRechazo: estado === 'RECHAZADO' ? 'Ilegible' : null,
+      origen: null,
+      url: null,
+      entregadoPorNombre: null,
+      entregadoAt: null,
+      revisadoPorNombre: null,
+      revisadoAt: null,
+      department: null,
+      solicitud: { id: 3, anio: 2026, mes: 9, entidad: { id: 7, nombre: 'Municipio de Prueba' } },
+    });
+
+    it('mis documentos: rechazados primero, luego vencidos, luego por fecha', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-09-20T15:00:00Z'));
+      prisma.cPEntregaDocumento.findMany.mockResolvedValue([
+        fila(1, 'PENDIENTE', '2026-09-30'),
+        fila(2, 'PENDIENTE', '2026-09-10'), // vencido
+        fila(3, 'RECHAZADO', '2026-09-28'),
+        fila(4, 'PENDIENTE', '2026-09-22'),
+      ]);
+      const r = await service.misDocumentos(ana);
+      jest.useRealTimers();
+      expect(r.map((x: { id: number }) => x.id)).toEqual([3, 2, 4, 1]);
+      expect(prisma.cPEntregaDocumento.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            responsables: { some: { userId: 4 } },
+            estado: { in: ['PENDIENTE', 'RECHAZADO'] },
+          }),
+        }),
+      );
+    });
+
+    it('por revisar: solo lo entregado, de la empresa, lo más antiguo primero', async () => {
+      prisma.cPEntregaDocumento.findMany.mockResolvedValue([fila(1, 'ENTREGADO', '2026-09-30')]);
+      const r = await service.porRevisar(admin);
+      expect(r[0]).toEqual(expect.objectContaining({ id: 1, entidadNombre: 'Municipio de Prueba' }));
+      expect(prisma.cPEntregaDocumento.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { estado: 'ENTREGADO', solicitud: { companyId: 1, estado: 'ENVIADA' } },
+          orderBy: [{ entregadoAt: 'asc' }, { id: 'asc' }],
+        }),
+      );
     });
   });
 });

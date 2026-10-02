@@ -6,14 +6,16 @@ interface Props {
   onChange: (url: string) => void;
   uploadFn: (file: File) => Promise<{ url: string }>;
   accept?: string;
+  /** Cómo abre el control; por defecto "Enlace". */
+  defaultMode?: 'file' | 'link';
 }
 
 // Control para adjuntar un documento de dos formas: subir un archivo (que se
 // guarda en el servidor y devuelve una URL) o pegar directamente un enlace
 // (ej. a un Drive ya compartido) — el campo destino guarda una URL en
 // cualquiera de los dos casos, sin distinguir de dónde vino.
-export default function FileOrLinkInput({ value, onChange, uploadFn, accept }: Props) {
-  const [mode, setMode] = useState<'file' | 'link'>('link');
+export default function FileOrLinkInput({ value, onChange, uploadFn, accept, defaultMode = 'link' }: Props) {
+  const [mode, setMode] = useState<'file' | 'link'>(defaultMode);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);

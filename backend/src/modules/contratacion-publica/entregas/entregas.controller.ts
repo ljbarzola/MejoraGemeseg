@@ -9,13 +9,16 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Req,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
+import type { Response } from 'express';
 import { memoryStorage } from 'multer';
 import { SectionPermissionGuard } from '../../../common/guards/section-permission.guard';
 import { Section } from '../../../common/decorators/section.decorator';
@@ -77,6 +80,22 @@ export class EntregasController {
     @Req() req: AuthedRequest,
   ) {
     return this.service.guardarCarpeta(req.user.companyId, dto.driveFolderId);
+  }
+
+  // --- bandejas (todas las entidades juntas) ---
+  // Van antes de las rutas con :id para que "mis-documentos" y "por-revisar"
+  // no se lean como un id.
+
+  @Get('mis-documentos')
+  @Section(SECCION, 'view')
+  async misDocumentos(@Req() req: AuthedRequest) {
+    return this.service.misDocumentos(await this.actor(req));
+  }
+
+  @Get('por-revisar')
+  @Section(SECCION, 'write')
+  async porRevisar(@Req() req: AuthedRequest) {
+    return this.service.porRevisar(await this.actor(req));
   }
 
   // --- solicitudes mensuales ---
@@ -173,6 +192,37 @@ export class EntregasController {
   ) {
     if (!file) throw new BadRequestException('No se recibió ningún archivo.');
     return this.service.subirArchivo(id, file, await this.actor(req));
+  }
+
+  // Vista previa o descarga del archivo entregado (ver EntregasService.obtenerArchivo).
+  @Get('documentos/:id/archivo')
+  @Section(SECCION, 'view')
+  async verArchivo(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('descargar') descargar: string | undefined,
+    @Req() req: AuthedRequest,
+    @Res() res: Response,
+  ) {
+    const { buffer, mimeType, nombre } = await this.service.obtenerArchivo(
+      id,
+      await this.actor(req),
+    );
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Length', buffer.length);
+    res.setHeader(
+      'Content-Disposition',
+      `${descargar ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(nombre)}`,
+    );
+    res.send(buffer);
+  }
+
+  @Get('documentos/:id/historial')
+  @Section(SECCION, 'view')
+  async historial(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.service.historial(id, await this.actor(req));
   }
 
   @Post('documentos/:id/entregar')

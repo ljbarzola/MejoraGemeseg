@@ -1,6 +1,8 @@
 import { api } from './auth.service';
 import type {
   CPEntidadPublica,
+  CPEntidadGuardada,
+  CPSyncEntidadesDrive,
   CPContrato,
   CPContratoAdenda,
   CPContratoAdjunto,
@@ -20,6 +22,8 @@ import type {
   CPSolicitudesDeEntidad,
   CPSolicitudMensual,
   CPCarpetaEntregas,
+  CPHistorialEntrega,
+  CPDocumentoBandeja,
 } from '../types/contratacion-publica';
 
 const BASE = '/contratacion-publica';
@@ -36,14 +40,29 @@ export const createEntidadPublica = (data: {
   nombre: string;
   ruc?: string;
   direccion?: string;
-}): Promise<CPEntidadPublica> => api.post(`${BASE}/entidades`, data).then((r) => r.data);
+}): Promise<CPEntidadGuardada> => api.post(`${BASE}/entidades`, data).then((r) => r.data);
 
 export const updateEntidadPublica = (
   id: number,
   data: Partial<{ nombre: string; ruc: string; direccion: string }>,
-): Promise<CPEntidadPublica> => api.patch(`${BASE}/entidades/${id}`, data).then((r) => r.data);
+): Promise<CPEntidadGuardada> => api.patch(`${BASE}/entidades/${id}`, data).then((r) => r.data);
 
 export const deleteEntidadPublica = (id: number) => api.delete(`${BASE}/entidades/${id}`);
+
+// Sincronización con la carpeta raíz de Drive de Contratación Pública.
+export const sincronizarEntidadesDrive = (): Promise<CPSyncEntidadesDrive> =>
+  api.post(`${BASE}/entidades/sincronizar-drive`).then((r) => r.data);
+
+/** La entidad toma el nombre que tiene su carpeta en Drive. */
+export const usarNombreDeDrive = (id: number): Promise<CPEntidadPublica> =>
+  api.post(`${BASE}/entidades/${id}/drive/usar-nombre-de-drive`).then((r) => r.data);
+
+/** La carpeta de Drive vuelve a llamarse como la entidad. */
+export const usarNombreDelSistema = (id: number): Promise<CPEntidadPublica> =>
+  api.post(`${BASE}/entidades/${id}/drive/usar-nombre-del-sistema`).then((r) => r.data);
+
+export const recrearCarpetaEntidad = (id: number): Promise<CPEntidadPublica> =>
+  api.post(`${BASE}/entidades/${id}/drive/recrear-carpeta`).then((r) => r.data);
 
 // ==================== CONTRATOS ====================
 
@@ -382,3 +401,20 @@ export const aprobarDocumento = (id: number): Promise<CPSolicitudMensual> =>
 
 export const rechazarDocumento = (id: number, motivo: string): Promise<CPSolicitudMensual> =>
   api.post(`${ENTREGAS}/documentos/${id}/rechazar`, { motivo }).then((r) => r.data);
+
+// ---- revisión: historial, vista previa y bandejas ----
+
+export const getHistorialEntrega = (documentoId: number): Promise<CPHistorialEntrega[]> =>
+  api.get(`${ENTREGAS}/documentos/${documentoId}/historial`).then((r) => r.data);
+
+/** El archivo entregado (pasa por el servidor con la sesión de quien lo pide). */
+export const fetchArchivoEntrega = (documentoId: number): Promise<Blob> =>
+  api.get(`${ENTREGAS}/documentos/${documentoId}/archivo`, { responseType: 'blob' }).then((r) => r.data);
+
+/** Lo que le asignaron a quien entrega, de todas las entidades. */
+export const getMisDocumentos = (): Promise<CPDocumentoBandeja[]> =>
+  api.get(`${ENTREGAS}/mis-documentos`).then((r) => r.data);
+
+/** Lo entregado y sin revisar, de todas las entidades (solo personal de Contratación Pública). */
+export const getPorRevisar = (): Promise<CPDocumentoBandeja[]> =>
+  api.get(`${ENTREGAS}/por-revisar`).then((r) => r.data);

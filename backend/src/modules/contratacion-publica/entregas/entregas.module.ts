@@ -4,6 +4,7 @@ import { PermissionsModule } from '../../permissions/permissions.module';
 import { PersonalModule } from '../../personal/personal.module';
 import { NotificationsModule } from '../../notifications/notifications.module';
 import { MailModule } from '../../mail/mail.module';
+import { CPEntidadesModule } from '../entidades/entidades.module';
 import { EntregasController } from './entregas.controller';
 import { EntregasCronController } from './entregas-cron.controller';
 import { EntregasService } from './entregas.service';
@@ -14,6 +15,7 @@ import { EntregasRecordatoriosService } from './entregas-recordatorios.service';
     PrismaModule,
     PermissionsModule,
     PersonalModule,
+    CPEntidadesModule,
     NotificationsModule,
     MailModule,
   ],

@@ -115,3 +115,14 @@ export function formatoFecha(fecha: Date): string {
   const [y, m, d] = textoDesdeFecha(fecha).split('-');
   return `${d}/${m}/${y}`;
 }
+
+/**
+ * Id del archivo de Drive dentro de un enlace de Drive (`/file/d/<id>/...` o
+ * `?id=<id>`). Devuelve null si no es un enlace de archivo de Drive.
+ */
+export function extraerIdArchivoDrive(url: string): string | null {
+  const m =
+    /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/.exec(url) ??
+    /[?&]id=([A-Za-z0-9_-]+)/.exec(url);
+  return m ? m[1] : null;
+}
