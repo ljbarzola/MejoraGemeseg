@@ -8,9 +8,25 @@ export interface CPEntidadPublica {
   nombre: string;
   ruc: string | null;
   direccion: string | null;
+  /** Subcarpeta de la entidad en la carpeta raíz de Drive de Contratación Pública. */
+  driveFolderId: string | null;
   companyId: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Al crear/editar una entidad: si la carpeta de Drive no se pudo crear o renombrar, viene el motivo. */
+export type CPEntidadGuardada = CPEntidadPublica & { advertenciaDrive: string | null };
+
+export interface CPSyncEntidadesDrive {
+  configurada: boolean;
+  warning?: string;
+  sincronizadoAt: string;
+  entidadesCreadas: string[];
+  carpetasCreadas: string[];
+  renombradas: { entidadId: number; nombreSistema: string; nombreDrive: string }[];
+  ausentes: { entidadId: number; nombre: string }[];
+  avisos: string[];
 }
 
 export const ESTADOS_CONTRATO = ['ACTIVO', 'FINALIZADO'] as const;
@@ -234,7 +250,7 @@ export interface CPSolicitudResumen {
 }
 
 export interface CPSolicitudesDeEntidad {
-  entidad: { id: number; nombre: string };
+  entidad: { id: number; nombre: string; driveFolderId: string | null };
   solicitudes: CPSolicitudResumen[];
 }
 
@@ -281,3 +297,37 @@ export const MESES_ES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
+
+export interface CPHistorialEntrega {
+  id: number;
+  accion: 'ENTREGADO' | 'RECHAZADO' | 'APROBADO';
+  motivo: string | null;
+  origen: 'ARCHIVO' | 'ENLACE' | null;
+  usuarioNombre: string | null;
+  createdAt: string;
+}
+
+/** Fila de las bandejas "Mis documentos" y "Por revisar" (todas las entidades juntas). */
+export interface CPDocumentoBandeja {
+  id: number;
+  nombre: string;
+  descripcion: string | null;
+  estado: CPEstadoEntrega;
+  /** AAAA-MM-DD */
+  fechaLimite: string;
+  vencida: boolean;
+  motivoRechazo: string | null;
+  solicitudId: number;
+  anio: number;
+  mes: number;
+  entidadId: number;
+  entidadNombre: string;
+  // Solo en "Por revisar":
+  departmentName?: string | null;
+  origen?: 'ARCHIVO' | 'ENLACE' | null;
+  url?: string | null;
+  entregadoPorNombre?: string | null;
+  entregadoAt?: string | null;
+  revisadoPorNombre?: string | null;
+  revisadoAt?: string | null;
+}

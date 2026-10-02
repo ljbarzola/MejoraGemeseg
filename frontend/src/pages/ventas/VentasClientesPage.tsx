@@ -30,6 +30,7 @@ import {
   SalesClientStage,
   salesClientValue,
   salesClientSelectLabel,
+  salesClientSubserviciosLabel,
 } from '../../services/ventas.service';
 
 // Columnas "calculadas": no vienen de un SalesClientField, se arman a partir
@@ -112,7 +113,7 @@ export default function VentasClientesPage() {
     { key: PARA_COL, label: 'Para cuándo' },
     { key: RESPONSABLE_COL, label: 'Responsable' },
     { key: REFERIDO_POR_COL, label: 'Referido por' },
-    { key: FECHA_COL, label: 'Fecha' },
+    { key: FECHA_COL, label: 'Fecha de ingreso' },
   ];
   const columnPrefs = useColumnPreferences('ventas-clientes', DEFAULT_VISIBLE);
   const preferidas = columnPrefs.visible
@@ -307,6 +308,7 @@ export default function VentasClientesPage() {
     if (key === FECHA_COL) return client.createdAt;
     const field = fields.find((f) => f.key === key);
     if (field?.fieldType === 'SELECT') return salesClientSelectLabel(client, field);
+    if (field?.fieldType === 'SUBSERVICIOS') return salesClientSubserviciosLabel(client, fields);
     return salesClientValue(client, key);
   };
 
@@ -534,7 +536,9 @@ export default function VentasClientesPage() {
                       <th key={col.key} {...thProps(col.key)}>{col.label} <SortIcon campo={col.key} /></th>
                     ),
                   )}
-                  <th style={{ textAlign: 'right' }}>Acciones</th>
+                  <th className={vista === 'hoy' ? 'col-acciones col-acciones--ancha' : 'col-acciones'} title="Acciones">
+                    <span className="visually-hidden">Acciones</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -572,7 +576,7 @@ export default function VentasClientesPage() {
                         ) : renderCell(c, col.key)}
                       </td>
                     ))}
-                    <td style={{ textAlign: 'right' }}>
+                    <td className={vista === 'hoy' ? 'col-acciones col-acciones--ancha' : 'col-acciones'}>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
                         {vista === 'hoy' && (
                           <button type="button" onClick={() => setNextModal({ client: c, modo: 'hecho' })}
@@ -623,6 +627,7 @@ export default function VentasClientesPage() {
       {fichaId !== null && clients.find((c) => c.id === fichaId) && (
         <ClienteFichaPanel
           client={clients.find((c) => c.id === fichaId)!}
+          fields={fields}
           onClose={() => setFichaId(null)}
           onEditNextStep={(client) => setNextModal({ client, modo: 'editar' })}
         />

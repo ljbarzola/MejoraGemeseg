@@ -48,6 +48,16 @@ export const SECCIONES_SIEMPRE_VISIBLES: string[] = ALL_SECTIONS.filter(
   (s) => (s as { siempreVisible?: boolean }).siempreVisible,
 ).map((s) => s.key);
 
+export interface UsuarioAcceso {
+  id: number;
+  companyId: number;
+  fullName: string;
+  email: string;
+  companyName: string | null;
+}
+
+export type UsuarioExcluido = Omit<UsuarioAcceso, 'companyId'> & { motivo: string };
+
 export function esSeccionSiempreVisible(section: string): boolean {
   return SECCIONES_SIEMPRE_VISIBLES.includes(section);
 }
@@ -88,6 +98,133 @@ export class PermissionsService {
     if (!perm) return true;
 
     return access === 'write' ? perm.canWrite : perm.canView;
+  }
+
+  /**
+   * Quién puede VER al menos una de las secciones dadas, y quién queda fuera
+   * con su motivo. Misma regla que `hasSectionAccess`, pero en lote para no
+   * consultar usuario por usuario: la empresa tiene la sección habilitada y el
+   * usuario no la tiene negada (sin fila en UserPermission = tiene acceso; una
+   * sección fija para todos no se puede negar). Los super admin quedan fuera
+   * porque no tienen empresa y las notificaciones la exigen.
+   */
+  async evaluarAccesoSecciones(
+    sections: string[],
+    excludeUserId?: number,
+  ): Promise<{ destinatarios: UsuarioAcceso[]; excluidos: UsuarioExcluido[] }> {
+    const validas = sections.filter((s) => ALL_SECTIONS.some((a) => a.key === s));
+    if (validas.length === 0) return { destinatarios: [], excluidos: [] };
+
+    const [users, companySections] = await Promise.all([
+      this.prisma.user.findMany({
+        select: {
+          id: true,
+          companyId: true,
+          isActive: true,
+          fullName: true,
+          email: true,
+          company: { select: { name: true } },
+          permissions: {
+            where: { section: { in: validas } },
+            select: { section: true, canView: true },
+          },
+        },
+      }),
+      this.prisma.companySection.findMany({
+        select: { companyId: true, section: true, fixedForAll: true },
+      }),
+    ]);
+
+    const habilitadas = new Map<number, Set<string>>();
+    const fijas = new Map<number, Set<string>>();
+    for (const cs of companySections) {
+      if (!habilitadas.has(cs.companyId)) habilitadas.set(cs.companyId, new Set());
+      habilitadas.get(cs.companyId)!.add(cs.section);
+      if (cs.fixedForAll) {
+        if (!fijas.has(cs.companyId)) fijas.set(cs.companyId, new Set());
+        fijas.get(cs.companyId)!.add(cs.section);
+      }
+    }
+
+    const destinatarios: UsuarioAcceso[] = [];
+    const excluidos: UsuarioExcluido[] = [];
+    for (const u of users) {
+      const base = {
+        id: u.id,
+        fullName: u.fullName,
+        email: u.email,
+        companyName: u.company?.name ?? null,
+      };
+      const excluir = (motivo: string) => excluidos.push({ ...base, motivo });
+
+      if (u.id === excludeUserId) { excluir('Eres tú: quien publica no recibe el aviso'); continue; }
+      if (u.companyId === null) { excluir('Super administrador: no tiene empresa y los avisos la necesitan'); continue; }
+      if (!u.isActive) { excluir('Cuenta inactiva'); continue; }
+
+      const companyId = u.companyId;
+      let negada = false;
+      const tieneAcceso = validas.some((section) => {
+        const alwaysEnabled = ALL_SECTIONS.find((a) => a.key === section)?.alwaysEnabled;
+        if (!alwaysEnabled && !habilitadas.get(companyId)?.has(section)) return false;
+        if (esSeccionSiempreVisible(section) || fijas.get(companyId)?.has(section)) return true;
+        const perm = u.permissions.find((p) => p.section === section);
+        if (perm && !perm.canView) negada = true;
+        return perm ? perm.canView : true;
+      });
+      if (tieneAcceso) {
+        destinatarios.push({ ...base, companyId });
+      } else {
+        excluir(
+          negada
+            ? 'Tiene negado ese módulo en sus permisos de usuario'
+            : 'Su empresa no tiene activo ese módulo',
+        );
+      }
+    }
+    return { destinatarios, excluidos };
+  }
+
+  /** Solo quienes reciben (ver `evaluarAccesoSecciones`). */
+  async getUsersWithSectionAccess(
+    sections: string[],
+    excludeUserId?: number,
+  ): Promise<UsuarioAcceso[]> {
+    return (await this.evaluarAccesoSecciones(sections, excludeUserId)).destinatarios;
+  }
+
+  /**
+   * Ids de las personas ACTIVAS de la empresa que pueden ESCRIBIR en la sección
+   * (p. ej. el personal de Contratación Pública que revisa documentos). Misma
+   * regla que `hasSectionAccess(…, 'write')`: la empresa tiene la sección
+   * activa y el usuario no la tiene en solo lectura (sin fila en
+   * UserPermission = puede escribir; una sección fija para todos no se puede
+   * restringir). Sirve para avisar al equipo y no solo a una persona.
+   */
+  async getCompanyUserIdsWithWriteAccess(
+    companyId: number,
+    section: string,
+  ): Promise<number[]> {
+    const habilitada = (await this.getCompanySections(companyId)).some(
+      (s) => s.key === section && s.enabled,
+    );
+    if (!habilitada) return [];
+    const sinRestriccion =
+      esSeccionSiempreVisible(section) ||
+      (await this.getFixedSections(companyId)).includes(section);
+
+    const users = await this.prisma.user.findMany({
+      where: { companyId, isActive: true },
+      select: {
+        id: true,
+        permissions: { where: { section }, select: { canWrite: true } },
+      },
+    });
+    return users
+      .filter(
+        (u) =>
+          sinRestriccion || u.permissions.length === 0 || u.permissions[0].canWrite,
+      )
+      .map((u) => u.id);
   }
 
   async getCompanySections(companyId: number) {

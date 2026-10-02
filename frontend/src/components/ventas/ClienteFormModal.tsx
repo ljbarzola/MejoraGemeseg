@@ -5,9 +5,13 @@ import {
   updateSalesClient,
   SalesClient,
   SalesClientField,
+  SERVICIO_KEY,
+  SUBSERVICIOS_KEY,
+  subserviciosDe,
 } from '../../services/ventas.service';
 import { useToast } from '../../contexts/ToastContext';
 import DateInput from '../common/DateInput';
+import SubserviciosCheckboxes from '../common/SubserviciosCheckboxes';
 
 interface Props {
   client: SalesClient | null;
@@ -24,11 +28,18 @@ interface Props {
 // campo que Ventas agregue) se guarda en `extra`.
 const NATIVE_KEYS = ['email', 'phone', 'ruc', 'address', 'observaciones'];
 
+// 'YYYY-MM-DD' en hora local (el usuario está en Ecuador), no en UTC.
+const aDiaLocal = (d: Date) => d.toLocaleDateString('en-CA');
+
 export default function ClienteFormModal({ client, fields, onClose, onSaved }: Props) {
   const { showToast } = useToast();
   const otherFields = fields.filter((f) => f.key !== 'name').sort((a, b) => a.order - b.order);
+  const servicioField = fields.find((f) => f.key === SERVICIO_KEY);
+  const hoy = aDiaLocal(new Date());
 
   const [name, setName] = useState(client?.name || '');
+  // Fecha de ingreso editable: permite registrar prospectos de meses anteriores.
+  const [fechaIngreso, setFechaIngreso] = useState(client ? aDiaLocal(new Date(client.createdAt)) : hoy);
   const [values, setValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = { ...(client?.extra || {}) };
     for (const key of NATIVE_KEYS) {
@@ -44,10 +55,18 @@ export default function ClienteFormModal({ client, fields, onClose, onSaved }: P
       showToast('El nombre es requerido', 'error');
       return;
     }
+    if (!fechaIngreso) {
+      showToast('La fecha de ingreso es requerida', 'error');
+      return;
+    }
+    if (fechaIngreso > hoy) {
+      showToast('La fecha de ingreso no puede ser futura', 'error');
+      return;
+    }
     setSaving(true);
     try {
       const extra: Record<string, string> = {};
-      const payload: any = { name: name.trim() };
+      const payload: any = { name: name.trim(), fechaIngreso };
       for (const field of otherFields) {
         const value = (values[field.key] || '').trim();
         if (NATIVE_KEYS.includes(field.key)) {
@@ -55,6 +74,10 @@ export default function ClienteFormModal({ client, fields, onClose, onSaved }: P
         } else {
           extra[field.key] = values[field.key] || '';
         }
+      }
+      // Sub-servicios solo valen mientras el servicio elegido los tenga.
+      if (subserviciosDe(servicioField?.options, values[SERVICIO_KEY] || '').length === 0) {
+        extra[SUBSERVICIOS_KEY] = '';
       }
       payload.extra = extra;
       if (client) await updateSalesClient(client.id, payload);
@@ -82,15 +105,46 @@ export default function ClienteFormModal({ client, fields, onClose, onSaved }: P
             <div style={{ gridColumn: '1 / -1' }}>
               <Field label="Nombre / Razón social *" value={name} onChange={setName} />
             </div>
-            {otherFields.map((f) => (
-              <div key={f.key} style={f.fieldType === 'TEXTAREA' ? { gridColumn: '1 / -1' } : undefined}>
-                <ExtraField
-                  field={f}
-                  value={values[f.key] || ''}
-                  onChange={(v) => setValues({ ...values, [f.key]: v })}
-                />
-              </div>
-            ))}
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>Fecha de ingreso *</label>
+              <DateInput value={fechaIngreso} onChange={setFechaIngreso} max={hoy}
+                style={{ padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }} />
+            </div>
+            {otherFields.map((f) => {
+              if (f.fieldType === 'SUBSERVICIOS') {
+                // Solo aparece cuando el servicio elegido tiene sub-servicios.
+                const opciones = subserviciosDe(servicioField?.options, values[SERVICIO_KEY] || '');
+                if (opciones.length === 0) return null;
+                return (
+                  <div key={f.key} style={{ gridColumn: '1 / -1' }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>
+                      {f.label} <span style={{ fontWeight: 400 }}>(opcional)</span>
+                    </label>
+                    <SubserviciosCheckboxes
+                      options={opciones}
+                      value={values[f.key] || ''}
+                      onChange={(v) => setValues({ ...values, [f.key]: v })}
+                    />
+                  </div>
+                );
+              }
+              return (
+                <div key={f.key} style={f.fieldType === 'TEXTAREA' ? { gridColumn: '1 / -1' } : undefined}>
+                  <ExtraField
+                    field={f}
+                    value={values[f.key] || ''}
+                    // Cambiar de servicio limpia los sub-servicios: ya no aplican.
+                    onChange={(v) =>
+                      setValues(
+                        f.key === SERVICIO_KEY
+                          ? { ...values, [f.key]: v, [SUBSERVICIOS_KEY]: '' }
+                          : { ...values, [f.key]: v },
+                      )
+                    }
+                  />
+                </div>
+              );
+            })}
             {/* Solo lectura: el vínculo lo crea el flujo "Referir un cliente", no este formulario. */}
             {client?.referredBy && (
               <div style={{ gridColumn: '1 / -1' }}>

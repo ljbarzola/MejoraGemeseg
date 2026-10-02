@@ -1375,6 +1375,8 @@ model AlertaVencimiento {
 // Editables desde la app: CUMPLIMIENTO, PERSONAL_ADMIN, GUARDIAS_ARCHIVO.
 // Fijas en código (HARDCODED_DRIVE_FOLDERS): RECLUTAMIENTO, CAPACITACIONES,
 // VENTAS_CONTRATOS — POST /personal/drive/config las rechaza.
+// CP_ENTREGAS (carpeta raíz única de Contratación Pública, una subcarpeta por
+// entidad) se edita solo desde Entidades Públicas, por su propia ruta.
 model FolderConfig {
   id              Int      @id @default(autoincrement())
   driveFolderId   String
@@ -1961,6 +1963,24 @@ model TicketSoporteAttachment {
   @@index([ticketId])
 }
 
+// Módulo Sistemas → Novedades: aviso manual de un cambio en la app. Al
+// publicarla llega a la campana (Notification, nunca por correo) de quienes
+// tienen acceso a alguna de las secciones afectadas. Es global (no por
+// empresa): Sistemas atiende a todas. Sin FK a User a propósito: el historial
+// conserva el nombre de quien publicó aunque la cuenta se borre.
+model NovedadApp {
+  id              Int      @id @default(autoincrement())
+  titulo          String
+  descripcion     String
+  secciones       String[]
+  createdById     Int
+  createdByNombre String
+  destinatarios   Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 model SistemasDriveConfig {
   id              Int      @id @default(autoincrement())
   companyId       Int      @unique
@@ -1986,6 +2006,10 @@ model CPEntidadPublica {
   nombre    String
   ruc       String?
   direccion String?
+  // Subcarpeta de esta entidad dentro de la carpeta raíz de Contratación
+  // Pública (FolderConfig tipo CP_ENTREGAS). Es el ancla: así un cambio de
+  // nombre no crea otra carpeta ni deja la anterior huérfana.
+  driveFolderId String?
   companyId Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2056,9 +2080,31 @@ model CPEntregaDocumento {
   solicitud    CPSolicitudMensual     @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
   department   Department?            @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   responsables CPEntregaResponsable[]
+  historial    CPEntregaHistorial[]
 
   @@index([solicitudId])
   @@index([estado, fechaLimite])
+}
+
+// Línea de tiempo de cada documento (entregó → rechazó → volvió a entregar →
+// aprobó). Solo se agregan filas, nunca se editan. Molde: DocumentReviewHistory.
+// El nombre de quien actuó es una instantánea sin FK, igual que en
+// CPEntregaDocumento, para no depender de que el usuario siga existiendo.
+model CPEntregaHistorial {
+  id            Int      @id @default(autoincrement())
+  entregaId     Int
+  // ENTREGADO | RECHAZADO | APROBADO
+  accion        String
+  motivo        String?
+  // ARCHIVO | ENLACE (solo en ENTREGADO)
+  origen        String?
+  usuarioId     Int?
+  usuarioNombre String?
+  createdAt     DateTime @default(now())
+
+  entrega CPEntregaDocumento @relation(fields: [entregaId], references: [id], onDelete: Cascade)
+
+  @@index([entregaId])
 }
 
 model CPEntregaResponsable {

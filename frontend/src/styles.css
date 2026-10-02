@@ -793,6 +793,40 @@ body {
   background: var(--azul-claro, #12375f);
 }
 
+/* Columna de acciones compacta (2026-10-02). Con `table-layout: fixed` toda
+   columna sin ancho propio recibe una parte IGUAL del espacio, así que una
+   columna "Acciones" sin ancho ocupaba ~200px para un botón "⋯" de ~34px.
+   Pon `col-acciones` en el <th> y en el <td>; el ancho se fija en el <th>.
+   Usa `col-acciones--ancha` solo si la celda lleva además un botón con texto
+   (ej. "Hecho" en Clientes → Hoy). Si la celda lleva varios botones con texto,
+   esta clase no sirve: pásalos a RowActionsMenu. El texto del encabezado va en
+   `.visually-hidden`: en 64px no cabe "ACCIONES" y saldría cortado con "…". */
+.resizable-table th.col-acciones,
+.resizable-table td.col-acciones {
+  width: 64px;
+  padding-left: 8px;
+  padding-right: 8px;
+  text-align: right;
+}
+
+.resizable-table th.col-acciones--ancha,
+.resizable-table td.col-acciones--ancha {
+  width: 160px;
+}
+
+/* Texto solo para lectores de pantalla (y para quien navega con teclado). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Fila de título + acciones de una pantalla.
    El bloque de texto de la izquierda encoge (`min-width: 0`) en vez de
    empujar; las acciones llevan `margin-left: auto`, así que aunque bajen a
@@ -3904,4 +3938,108 @@ body {
   font-weight: 700;
   color: #718096;
   white-space: nowrap;
+}
+
+/* ===== Revisión de documentos (Contratación Pública) =====
+   Panel dividido: vista previa del archivo a la izquierda, datos / historial /
+   decisión a la derecha. En pantallas angostas se apila (archivo arriba). */
+.revision-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.revision-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1280px;
+  height: 100%;
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+
+.revision-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.revision-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr);
+}
+
+.revision-preview {
+  display: flex;
+  min-height: 0;
+  background: #edf2f7;
+}
+
+.revision-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 18px;
+  border-left: 1px solid #e2e8f0;
+}
+
+@media (max-width: 900px) {
+  .revision-overlay { padding: 0; }
+  .revision-panel { max-height: 100vh; border-radius: 0; }
+  .revision-body { grid-template-columns: 1fr; grid-template-rows: minmax(240px, 42%) 1fr; }
+  .revision-side { border-left: none; border-top: 1px solid #e2e8f0; }
+}
+
+.file-preview-frame {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+}
+
+.file-preview-image {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 12px;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.file-preview-image img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.file-preview-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 380px;
+  margin: auto;
+  padding: 24px;
+  text-align: center;
+  color: #4a5568;
 }

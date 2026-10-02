@@ -167,7 +167,7 @@ export default function ContratosList() {
                   <th {...thProps('template')}>Plantilla <SortIcon campo="template" /></th>
                   <th {...thProps('status')}>Estado <SortIcon campo="status" /></th>
                   <th {...thProps('createdAt')}>Fecha <SortIcon campo="createdAt" /></th>
-                  <th style={{ textAlign: 'right' }}>Acciones</th>
+                  <th className="col-acciones" title="Acciones"><span className="visually-hidden">Acciones</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -185,7 +185,7 @@ export default function ContratosList() {
                       </span>
                     </td>
                     <td>{new Date(c.createdAt).toLocaleDateString('es-EC')}</td>
-                    <td style={{ textAlign: 'right' }}>
+                    <td className="col-acciones">
                       <button onClick={e => { e.stopPropagation(); setPendingDeleteId(c.id); }}
                         style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #e55', background: '#fff', color: '#c33', cursor: 'pointer', fontSize: 11 }}>✕</button>
                     </td>

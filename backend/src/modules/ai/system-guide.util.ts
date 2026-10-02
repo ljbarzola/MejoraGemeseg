@@ -51,7 +51,7 @@ En este orden:
 ## Referir un cliente (referidos) — cualquier usuario puede hacerlo
 - Dónde: en "Inicio", tarjeta "¿Conoces a alguien interesado en Gemeseg?" → botón "Referir un cliente".
 - Se abre "Mis Referidos": la lista de las personas que ya referiste, con la fecha y la etapa en que va cada una (con su color). Si está vacía dice "Todavía no has referido a nadie."
-- Para referir: "+ Referir un cliente" → llenar "Nombre completo *" (mínimo 3 letras), "Celular", "Correo", "Servicio requerido" y "Nota" (cualquier detalle útil: qué necesita, cuándo llamarlo, cómo lo conoces) → "Enviar referido". Aparece "Referido enviado. Ventas se pondrá en contacto."
+- Para referir: "+ Referir un cliente" → llenar "Nombre completo *" (mínimo 3 letras), "Celular", "Correo", "Servicio requerido" (si el servicio tiene sub-servicios aparecen casillas opcionales de "Sub-servicios" para marcar uno o varios) y "Nota" (cualquier detalle útil: qué necesita, cuándo llamarlo, cómo lo conoces) → "Enviar referido". Aparece "Referido enviado. Ventas se pondrá en contacto."
 - Qué pasa después: el equipo comercial recibe al cliente en su lista y alguien lo toma para atenderlo. Cada vez que ese cliente avanza de etapa, te llega una notificación en la campana ("Tu referido X pasó a la etapa Y") y un correo; al abrirla se abre directo "Mis Referidos".
 - Consejos: pon al menos celular o correo para que puedan contactarlo; revisa "Mis Referidos" para ver en qué va. Quien refiere no ve montos ni datos comerciales del cliente.
 
@@ -262,7 +262,7 @@ const VENTAS = `# Ventas y CRM — guía detallada
   - Acciones (botón "⋯"): "Ver ficha", "Editar cliente", "Asignarme este cliente" (si no tiene responsable) o "Quitarme este cliente" (si eres tú), y "Eliminar" ("Los contratos ya creados no se borran"). Nadie asigna a otra persona ni quita a otro.
 - Pestaña "Hoy": a quién atender hoy. Cada quien ve sus clientes asignados que no están en etapa final, en este orden: seguimiento vencido (el más atrasado primero), para hoy y sin fecha; los de fecha futura no aparecen. Columnas: Siguiente paso, Para cuándo, Etapa, Teléfono. ADMIN y MANAGER tienen un selector "Mis clientes" / "Todos los clientes" / un vendedor. En cada fila, "Hecho": pide "¿Qué hiciste?" (tipo y texto, opcional; queda en el historial del cliente) y el nuevo siguiente paso (vacío = el cliente queda sin siguiente paso); botón "Marcar hecho".
 - Ficha del cliente ("⋯" → "Ver ficha"): panel a la derecha con sus datos, su siguiente paso (botón "Editar") y el "Historial", la línea de tiempo: registro del cliente, cambios de etapa, contratos vinculados (creado, enviado a firma, firmado) y las notas. "Agregar a la línea de tiempo": Tipo (Nota, Llamada, Reunión, Correo u Otro, que pide "¿Cuál?") y el texto → "Agregar". "Correo" es solo un registro a mano: no envía ni lee correos. Cada nota se puede editar o borrar solo por quien la escribió o por un administrador. Los cambios de etapa solo aparecen desde que se empezaron a guardar (30/09/2026) y los contratos solo si se vincularon al cliente al crearlos.
-- "+ Nuevo cliente": Nombre / Razón social (obligatorio), Email (opcional), Teléfono, Cédula / RUC, Dirección, Fuente (Referido / Campaña / Otro con texto), Servicio requerido (Monitoreo / Soluciones Tecnológicas / Seguridad Física), Observaciones, y los campos personalizados → "Guardar".
+- "+ Nuevo cliente": Nombre / Razón social (obligatorio), Fecha de ingreso (por defecto hoy; se puede cambiar a una fecha pasada para registrar prospectos de meses anteriores, nunca futura), Email (opcional), Teléfono, Cédula / RUC, Dirección, Fuente (Referido / Campaña / Otro con texto), Servicio requerido (Monitoreo / Soluciones Tecnológicas / Seguridad Física), Sub-servicios (opcional: casillas que dependen del servicio elegido, p. ej. Seguridad Física → Agentes de Seguridad, Custodia de Mercadería en Movimiento, Seguridad VIP, Seguridad para Eventos), Observaciones, y los campos personalizados → "Guardar".
 - Reglas automáticas: todo cliente nuevo entra en la etapa inicial ("Recibido" por defecto); quien lo crea a mano queda como Responsable; los referidos llegan SIN responsable hasta que alguien pulse "Asignarme" (no llega aviso a Ventas de un referido nuevo: hay que revisar la lista, por ejemplo filtrando los que no tienen responsable).
 - Tres datos distintos: Responsable (quién lo atiende, autoasignado), Referido por (empleado que lo refirió, fijo, no editable), Creado por (solo registro).
 - "Campos" ("Configurar campos de la ficha"): renombrar campos, en listas "Opciones" (agregar/quitar, "Permitir Otro con texto libre"), "Agregar campo nuevo" (Texto, Número, Fecha, Sí/No, Lista de opciones) → "Añadir campo". Los campos base no se borran; los personalizados sí. "Columnas de tu tabla": mostrar/ocultar/ordenar columnas (preferencia personal de ese navegador). Estos campos son los que se mapean a variables de contratos.
@@ -314,11 +314,14 @@ const CONTRATACION_PUBLICA = `# Contratación Pública — guía detallada
 Sirve para pedir y seguir, mes a mes, los documentos que otras áreas (RRHH, Financiero, Operaciones, Legal) deben entregar para el informe que se envía a cada entidad pública: qué se pidió, a quién, para cuándo y en qué estado está cada documento.
 
 ## Acceso y pantallas
-- Menú → "Contratación Pública" → "Entidades Públicas". Es la única pantalla del módulo por ahora.
+- Menú → "Contratación Pública" tiene tres pantallas: "Entidades Públicas", "Por revisar" (solo el personal de Contratación Pública) y "Mis documentos".
 - Con permiso "ver" una persona entra y entrega solo los documentos que le asignaron. Con "escribir" (el personal de Contratación Pública) arma las solicitudes, las envía, y aprueba o rechaza lo entregado.
 
 ## Entidades Públicas
-- Buscar por nombre o RUC. "+ Nueva Entidad": Nombre * (ej. "Municipio de Guayaquil"), RUC, Dirección. Al hacer clic en una entidad se abre su detalle.
+- Buscar por nombre o RUC. "+ Nueva Entidad": Nombre * (ej. "Municipio de Guayaquil"), RUC, Dirección. Al hacer clic en una entidad se abre su detalle. El nombre no se puede repetir.
+- Hay una sola carpeta de Google Drive para toda Contratación Pública y, dentro, cada entidad tiene su propia subcarpeta (la columna "Drive" de la tabla la abre). Al crear una entidad se crea su subcarpeta; al cambiarle el nombre se renombra la subcarpeta. Eliminar una entidad no borra su carpeta ni sus archivos en Drive.
+- "Carpeta de Drive" (botón de arriba, solo personal de Contratación Pública): se pega una vez el enlace de la carpeta general. Debe estar compartida como Editor con la cuenta del sistema (se muestra en esa ventana).
+- "Sincronizar": revisa la carpeta de Drive y deja la lista igual. También se hace sola al abrir la pantalla (como mucho una vez cada 2 minutos) y se muestra "Última sincronización con Drive". Si alguien crea una carpeta nueva en Drive, aparece la entidad sola con un aviso verde. Si alguien le cambia el nombre a una carpeta en Drive, sale un aviso amarillo con "Actualizar nombre" (la entidad toma el nombre de Drive) o "Mantener el del sistema" (la carpeta vuelve al nombre del sistema). Si una carpeta desaparece de Drive, el aviso ofrece "Volver a crearla"; la entidad nunca se borra sola.
 
 ## Solicitud mensual de documentos (en el detalle de la entidad)
 - Cada mes es una solicitud independiente: lo que se pide, las fechas y las personas pueden cambiar de un mes a otro y se pueden editar en cualquier momento, también después de enviada.
@@ -330,13 +333,18 @@ Sirve para pedir y seguir, mes a mes, los documentos que otras áreas (RRHH, Fin
 
 ## Entregar un documento (quien es responsable)
 - Al abrir el aviso de la campana se llega a la solicitud, donde solo se ven los documentos asignados a esa persona.
-- "Entregar": se sube un archivo (PDF, Word, Excel, imagen o ZIP, hasta 15 MB) o se pega un enlace (por ejemplo de Google Drive; el enlace debe estar compartido para que quien revisa pueda abrirlo). Queda en "Entregado" a la espera de revisión.
-- Si fue "Rechazado", se ve el motivo y se vuelve a entregar. Un documento "Aprobado" ya no se puede cambiar.
+- Menú → "Contratación Pública" → "Mis documentos": una lista única con todo lo que le asignaron a la persona, de cualquier entidad. Arriba van los rechazados (con su motivo), luego los vencidos y luego los demás por fecha límite. El botón "Entregar" de cada fila abre la ventana de entrega.
+- "Entregar": se sube un archivo (PDF, Word, Excel, imagen o ZIP, hasta 15 MB) o se pega un enlace. La ventana abre en "Subir archivo": es lo más fácil, porque quien revisa ve el archivo dentro del sistema sin pedir permisos. Si se pega un enlace (por ejemplo de Google Drive), debe estar compartido para que se pueda abrir. Queda en "Entregado" a la espera de revisión.
+- Si fue "Rechazado", en la ventana de entrega se ve el motivo y el historial del documento (qué se entregó antes y por qué se rechazó); se vuelve a entregar. Un documento "Aprobado" ya no se puede cambiar.
 - Estados: Pendiente → Entregado → Aprobado, o Rechazado (vuelve a Entregado cuando se entrega de nuevo).
 
 ## Revisar (personal de Contratación Pública)
-- En cada documento entregado: abrir el archivo o enlace, "Aprobar" o "Rechazar" (el motivo es obligatorio y le llega al responsable por la campana y por correo).
-- "Carpeta de Drive para los archivos": se pega una vez el enlace de la carpeta de Drive donde se guardan los archivos subidos (dentro se crea una carpeta por entidad y mes). Debe estar compartida con la cuenta de servicio del sistema. Sin esa carpeta solo se pueden entregar enlaces.
+- Menú → "Contratación Pública" → "Por revisar": todo lo entregado y sin revisar de todas las entidades, lo más antiguo primero. "Revisar uno tras otro" (o el botón "Revisar" de una fila) abre la pantalla de revisión. En el detalle de una entidad, el botón "Revisar" de un documento entregado abre la misma pantalla.
+- Pantalla de revisión: a la izquierda se ve el archivo (PDF o imagen) dentro del sistema; a la derecha están los datos del documento, su historial (entregó, rechazó con motivo, volvió a entregar, aprobó) y la decisión. Las flechas "Documento anterior / siguiente" recorren la lista, y al aprobar o rechazar pasa sola al siguiente que falta revisar. Esc cierra la pantalla.
+- "Aprobar", o "Rechazar" con el motivo: se puede tocar un motivo rápido (Documento ilegible, Documento caducado, No corresponde al tipo solicitado, Falta firma o sello) y editarlo; el motivo es obligatorio (mínimo 5 letras) y le llega al responsable por la campana y por correo. Un documento ya aprobado se puede rechazar para reabrirlo.
+- Los enlaces externos y los archivos Word, Excel o ZIP no se pueden mostrar dentro del sistema: aparece "Abrir enlace" o "Descargar", y aprobar o rechazar funcionan igual.
+- Cuando alguien entrega un documento, el aviso por la campana le llega a todo el personal de Contratación Pública que revisa (no por correo).
+- Los archivos subidos se guardan en la subcarpeta de la entidad en Drive, dentro de una carpeta por mes. Sin la carpeta general de Contratación Pública (ver Entidades Públicas) solo se pueden entregar enlaces.
 
 ## Recordatorios
 - Cada día el sistema recuerda a los responsables los documentos Pendientes o Rechazados cuya fecha límite es dentro de 3 días y los que vencen ese mismo día, dentro del sistema y por correo.
@@ -404,7 +412,8 @@ const ADMIN = `# Administración — guía
 
 const SISTEMAS = `# Sistemas — guía
 
-- Dashboard: tickets Abiertos, En revisión, Resueltos, Este mes y "Últimos tickets"; accesos a Soporte Técnico, Herramientas, Agentes y "Base de conocimiento de Agente Gemeseg".
+- Dashboard: tickets Abiertos, En revisión, Resueltos y Este mes; una dona "Tickets por tipo" (Errores, Mejoras, Permisos y Otros, con cantidad y porcentaje; al pasar el cursor por un tipo el centro muestra su cantidad); "Tiempo promedio de resolución" general (promedio de lo que tardan en quedar Resueltos los tickets; muestra "—" si aún no hay ninguno resuelto); y "Últimos tickets". Accesos a Soporte Técnico, "Publicar novedad de la app", Herramientas, Agentes y "Base de conocimiento de Agente Gemeseg".
+- Novedades: menú Sistemas → Novedades. "Nueva novedad": se escribe Título y "Qué cambió", se marcan los módulos afectados y la pantalla muestra a cuántas personas llegará y la lista de quiénes son (nombre, correo y empresa), más "No la recibirán" con el motivo de cada persona que queda fuera (cuenta inactiva, módulo negado, etc.); "Publicar" pide confirmar. El aviso le sale en la campanita (nunca por correo) solo a quienes tienen acceso a alguno de esos módulos, sin contar a quien publica. No se puede deshacer; la tabla guarda el historial.
 - Soporte Técnico: los reportes que llegan por la llave inglesa; se cambian de estado (Abierto, En revisión, Resuelto). Ahí también se configura la carpeta de Drive para capturas ("Probar conexión").
 - Herramientas: catálogo (Nombre, Categoría, Versión, Licencia) y asignación a usuarios con auditoría; lo asignado aparece en "Mi perfil".
 - Agentes: crear agentes de IA con nombre, instrucciones y alcance, y asignarlos a usuarios.

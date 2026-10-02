@@ -20,6 +20,7 @@ import { SectionPermissionGuard } from '../../common/guards/section-permission.g
 import { Section } from '../../common/decorators/section.decorator';
 import { PermissionsService } from '../permissions/permissions.service';
 import { SaveSistemasDriveConfigDto } from './dto/drive-config.dto';
+import { CreateNovedadAppDto } from './dto/ticket-soporte.dto';
 
 @Controller('sistemas')
 @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
@@ -109,5 +110,48 @@ export class SistemasConfigController {
   @Section('SISTEMAS', 'view')
   getDashboardStats(@Req() req: any) {
     return this.sistemasService.getStats(req.user.companyId);
+  }
+
+  // Novedades de la app: aviso manual por la campana (nunca por correo) a
+  // quienes tienen acceso a los módulos afectados.
+  @Get('novedades/secciones')
+  @Section('SISTEMAS', 'view')
+  getSeccionesNovedad() {
+    return this.sistemasService.getSeccionesNovedad();
+  }
+
+  @Get('novedades/preview')
+  @Section('SISTEMAS', 'write')
+  async previewNovedad(@Query('secciones') secciones: string | undefined, @Req() req: any) {
+    try {
+      const lista = (secciones || '').split(',').map((s) => s.trim()).filter(Boolean);
+      return await this.sistemasService.contarDestinatarios(lista, req.user.userId);
+    } catch (err: any) {
+      this.logger.error(`Error al calcular destinatarios: ${err.message}`, err.stack);
+      throw new BadRequestException('No se pudo calcular a cuántas personas llegará.');
+    }
+  }
+
+  @Get('novedades')
+  @Section('SISTEMAS', 'view')
+  async listarNovedades() {
+    try {
+      return await this.sistemasService.listarNovedades();
+    } catch (err: any) {
+      this.logger.error(`Error al listar novedades: ${err.message}`, err.stack);
+      throw new BadRequestException('No se pudieron cargar las novedades.');
+    }
+  }
+
+  @Post('novedades')
+  @Section('SISTEMAS', 'write')
+  async publicarNovedad(@Body() dto: CreateNovedadAppDto, @Req() req: any) {
+    try {
+      return await this.sistemasService.publicarNovedad(req.user.userId, dto);
+    } catch (err: any) {
+      this.logger.error(`Error al publicar novedad: ${err.message}`, err.stack);
+      if (err instanceof BadRequestException) throw err;
+      throw new BadRequestException('No se pudo publicar la novedad. Intenta de nuevo.');
+    }
   }
 }

@@ -24,7 +24,7 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme } = useCompany();
-  const { canView, isSuperAdmin, error: permError, reload: reloadPerms } = usePerm();
+  const { canView, canWrite, isSuperAdmin, error: permError, reload: reloadPerms } = usePerm();
   const user = getUser();
   const isAdmin = user?.role === 'ADMIN';
   const isCompanyAdmin = isAdmin && !!user?.companyId;
@@ -128,6 +128,11 @@ export default function Sidebar() {
   // /config/codigos-turno y /config/textos-institucionales).
   const contratacionPublicaItems = [
     { label: 'Entidades Públicas', path: '/contratacion-publica/entidades', icon: '🏛️' },
+    // Solo el personal de Contratación Pública revisa; el resto tiene "Mis documentos".
+    ...(canWrite('CONTRATACION_PUBLICA')
+      ? [{ label: 'Por revisar', path: '/contratacion-publica/por-revisar', icon: '🔎' }]
+      : []),
+    { label: 'Mis documentos', path: '/contratacion-publica/mis-documentos', icon: '📥' },
   ];
 
   const sistemasSubItems = [
@@ -135,6 +140,7 @@ export default function Sidebar() {
     { label: 'Herramientas', path: '/sistemas/herramientas', icon: '🔧' },
     { label: 'Agentes', path: '/sistemas/agentes', icon: '🤖' },
     { label: 'Soporte Técnico', path: '/sistemas/soporte', icon: '🛠️' },
+    { label: 'Novedades', path: '/sistemas/novedades', icon: '📣' },
   ];
 
   const renderSubItems = (items: { label: string; path: string; icon: string; disabled?: boolean }[], depth: number = 0) => (

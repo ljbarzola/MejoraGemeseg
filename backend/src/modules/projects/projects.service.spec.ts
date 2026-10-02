@@ -21,7 +21,7 @@ describe('ProjectsService.findAll', () => {
   // Bug real: un EMPLOYEE con companyId (el caso normal) veía todos los
   // proyectos creados por cualquiera en su empresa, sin importar si era
   // miembro — el chequeo de companyId iba antes que el de rol y capturaba
-  // también a los no-admin. Ver AGENTS.md/.agents/modules/projects.md:
+  // también a los no-admin. Ver AGENTS.md, "Projects":
   // "Listar proyectos (filtrado por membresia)".
   it('EMPLOYEE con companyId solo ve proyectos propios o donde es miembro, scoped a su empresa', async () => {
     await service.findAll(42, UserRole.EMPLOYEE, 1, {});

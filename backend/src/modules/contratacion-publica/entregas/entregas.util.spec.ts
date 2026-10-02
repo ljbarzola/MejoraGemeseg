@@ -1,6 +1,7 @@
 import {
   diasEntre,
   estaVencida,
+  extraerIdArchivoDrive,
   fechaDesdeTexto,
   formatoFecha,
   hoyEcuador,
@@ -153,5 +154,24 @@ describe('entregas.util', () => {
     it('muestra día/mes/año', () => {
       expect(formatoFecha(f('2026-09-05'))).toBe('05/09/2026');
     });
+  });
+});
+
+describe('extraerIdArchivoDrive', () => {
+  it('saca el id de un enlace de archivo de Drive', () => {
+    expect(
+      extraerIdArchivoDrive('https://drive.google.com/file/d/1AbC_d-9/view?usp=sharing'),
+    ).toBe('1AbC_d-9');
+  });
+
+  it('saca el id de un enlace con ?id=', () => {
+    expect(
+      extraerIdArchivoDrive('https://drive.google.com/open?id=1AbC_d-9'),
+    ).toBe('1AbC_d-9');
+  });
+
+  it('devuelve null si no es un enlace de archivo de Drive', () => {
+    expect(extraerIdArchivoDrive('https://ejemplo.com/documento.pdf')).toBeNull();
+    expect(extraerIdArchivoDrive('')).toBeNull();
   });
 });

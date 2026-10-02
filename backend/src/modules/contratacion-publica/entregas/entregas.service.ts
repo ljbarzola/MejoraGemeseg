@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
   Injectable,
   Logger,
   NotFoundException,
@@ -10,8 +11,14 @@ import {
 import * as path from 'path';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { DriveService } from '../../personal/services/drive.service';
+import { CPEntidadesService } from '../entidades/entidades.service';
+import {
+  DRIVE_FOLDER_TYPE_ENTREGAS,
+  nombreCarpeta,
+} from '../entidades/entidad-folder.util';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { GmailMailService } from '../../mail/gmail-mail.service';
+import { PermissionsService } from '../../permissions/permissions.service';
 import {
   CreateEntregaDto,
   CreateSolicitudDto,
@@ -21,6 +28,7 @@ import {
 } from './dto/entregas.dto';
 import {
   estaVencida,
+  extraerIdArchivoDrive,
   fechaDesdeTexto,
   formatoFecha,
   hoyEcuador,
@@ -28,8 +36,8 @@ import {
   trasladarFechaAMes,
 } from './entregas.util';
 
-/** Tipo de carpeta de Drive (FolderConfig.type) donde se guardan las entregas. */
-export const DRIVE_FOLDER_TYPE_ENTREGAS = 'CP_ENTREGAS';
+/** Igual al límite de subida del controlador (15 MB). */
+const TAMANO_MAXIMO_ARCHIVO = 15 * 1024 * 1024;
 
 const EXTENSIONES_PERMITIDAS = [
   '.pdf',
@@ -57,8 +65,10 @@ export class EntregasService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly driveService: DriveService,
+    private readonly entidades: CPEntidadesService,
     private readonly notifications: NotificationsService,
     private readonly mail: GmailMailService,
+    private readonly permissions: PermissionsService,
   ) {}
 
   // ---------------------------------------------------------------- consulta
@@ -109,7 +119,11 @@ export class EntregasService {
       .filter((s) => actor.puedeEscribir || s.total > 0);
 
     return {
-      entidad: { id: entidad.id, nombre: entidad.nombre },
+      entidad: {
+        id: entidad.id,
+        nombre: entidad.nombre,
+        driveFolderId: entidad.driveFolderId,
+      },
       solicitudes: filas,
     };
   }
@@ -419,26 +433,19 @@ export class EntregasService {
       );
     }
 
-    const raiz = await this.driveService.getConfig(
-      actor.companyId,
-      DRIVE_FOLDER_TYPE_ENTREGAS,
-    );
-    if (!raiz?.driveFolderId) {
-      throw new BadRequestException(
-        'Aún no se configuró la carpeta de Google Drive para las entregas. Pídele a Contratación Pública que la configure, o pega un enlace.',
-      );
-    }
-
     try {
-      const entidadFolder = await this.asegurarSubcarpeta(
-        raiz.driveFolderId,
-        this.nombreCarpeta(e.solicitud.entidad.nombre),
+      // Carpeta de la entidad: la enlazada por id (no se busca por nombre, así
+      // un cambio de nombre no crea otra). Si falta la carpeta raíz, avisa con
+      // un mensaje claro en vez de fallar con el error genérico de Drive.
+      const entidadFolder = await this.entidades.carpetaDeEntidad(
+        e.solicitud.entidadId,
+        actor.companyId,
       );
       const mesFolder = await this.asegurarSubcarpeta(
         entidadFolder,
         `${e.solicitud.anio}-${String(e.solicitud.mes).padStart(2, '0')}`,
       );
-      const nombreArchivo = `${this.nombreCarpeta(e.nombre)} - ${file.originalname}`;
+      const nombreArchivo = `${nombreCarpeta(e.nombre)} - ${file.originalname}`;
       const { url } = await this.driveService.uploadFile(
         mesFolder,
         file.buffer,
@@ -447,6 +454,8 @@ export class EntregasService {
       );
       return { url };
     } catch (err) {
+      // Mensajes ya pensados para la persona (p. ej. falta la carpeta raíz).
+      if (err instanceof BadRequestException) throw err;
       this.logger.error(
         `No se pudo subir la entrega ${id} a Drive: ${(err as Error).message}`,
       );
@@ -470,23 +479,40 @@ export class EntregasService {
       where: { id: actor.userId },
       select: { fullName: true },
     });
-    await this.prisma.cPEntregaDocumento.update({
-      where: { id },
-      data: {
-        estado: 'ENTREGADO',
-        origen: dto.origen,
-        url,
-        motivoRechazo: null,
-        entregadoPorId: actor.userId,
-        entregadoPorNombre: persona?.fullName ?? null,
-        entregadoAt: new Date(),
-        revisadoPorId: null,
-        revisadoPorNombre: null,
-        revisadoAt: null,
-      },
-    });
+    await this.prisma.$transaction([
+      this.prisma.cPEntregaDocumento.update({
+        where: { id },
+        data: {
+          estado: 'ENTREGADO',
+          origen: dto.origen,
+          url,
+          motivoRechazo: null,
+          entregadoPorId: actor.userId,
+          entregadoPorNombre: persona?.fullName ?? null,
+          entregadoAt: new Date(),
+          revisadoPorId: null,
+          revisadoPorNombre: null,
+          revisadoAt: null,
+        },
+      }),
+      this.prisma.cPEntregaHistorial.create({
+        data: {
+          entregaId: id,
+          accion: 'ENTREGADO',
+          origen: dto.origen,
+          usuarioId: actor.userId,
+          usuarioNombre: persona?.fullName ?? null,
+        },
+      }),
+    ]);
     const s = e.solicitud;
-    await this.avisar([s.createdBy], actor.companyId, {
+    // A todo el personal de Contratación Pública que revisa (no solo a quien
+    // creó la solicitud, que podía estar ausente) y solo por campana.
+    const equipo = await this.equipoQueRevisa(actor.companyId);
+    const destinatarios = [...new Set([s.createdBy, ...equipo])].filter(
+      (u) => u !== actor.userId,
+    );
+    await this.avisar(destinatarios, actor.companyId, {
       titulo: 'Documento entregado',
       mensaje: `${persona?.fullName ?? 'Alguien'} entregó "${e.nombre}" para ${s.entidad.nombre} (${nombreMes(s.mes)} de ${s.anio}). Falta revisarlo.`,
       link: this.link(s.entidadId, s.id),
@@ -542,6 +568,166 @@ export class EntregasService {
       },
     );
     return this.obtenerSolicitud(e.solicitud.id, actor);
+  }
+
+  // ------------------------------------------- historial, vista previa, bandejas
+
+  /** Línea de tiempo del documento. La ve el personal de CP y los responsables de ese documento. */
+  async historial(id: number, actor: Actor) {
+    const e = await this.cargarEntrega(id, actor.companyId);
+    this.assertPuedeVer(e, actor);
+    const filas = await this.prisma.cPEntregaHistorial.findMany({
+      where: { entregaId: id },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return filas.map((h) => ({
+      id: h.id,
+      accion: h.accion,
+      motivo: h.motivo,
+      origen: h.origen,
+      usuarioNombre: h.usuarioNombre,
+      createdAt: h.createdAt,
+    }));
+  }
+
+  /**
+   * El archivo entregado, listo para mostrarlo en pantalla. Pasa por el
+   * servidor porque los archivos subidos son de la cuenta de servicio de Drive
+   * y el visor de Drive pediría iniciar sesión. Solo sirve archivos que el
+   * sistema mismo subió (`origen = ARCHIVO`) y que de verdad están en la
+   * carpeta del mes de esa entidad: el enlace lo manda el navegador, así que
+   * sin esa comprobación este endpoint leería cualquier archivo de Drive.
+   */
+  async obtenerArchivo(
+    id: number,
+    actor: Actor,
+  ): Promise<{ buffer: Buffer; mimeType: string; nombre: string }> {
+    const e = await this.cargarEntrega(id, actor.companyId);
+    this.assertPuedeVer(e, actor);
+    const noDisponible = new NotFoundException(
+      'Este documento no tiene un archivo que se pueda mostrar aquí. Usa "Abrir enlace".',
+    );
+    const fileId =
+      e.origen === 'ARCHIVO' && e.url ? extraerIdArchivoDrive(e.url) : null;
+    if (!fileId) throw noDisponible;
+
+    try {
+      const entidad = await this.getEntidad(e.solicitud.entidadId, actor.companyId);
+      if (!entidad.driveFolderId) throw noDisponible;
+      const periodo = `${e.solicitud.anio}-${String(e.solicitud.mes).padStart(2, '0')}`;
+      const mes = await this.driveService.findChildFolderByName(
+        entidad.driveFolderId,
+        periodo,
+      );
+      const meta = await this.driveService.getFileMetadata(fileId);
+      if (!mes || meta.trashed || !meta.parents.includes(mes.id)) throw noDisponible;
+      if (meta.size !== null && meta.size > TAMANO_MAXIMO_ARCHIVO) {
+        throw new BadRequestException('El archivo es demasiado grande para mostrarlo aquí.');
+      }
+      const buffer = await this.driveService.downloadFileBuffer(fileId);
+      return {
+        buffer,
+        mimeType: meta.mimeType || 'application/octet-stream',
+        nombre: meta.name || `documento-${id}`,
+      };
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
+      this.logger.error(
+        `No se pudo leer el archivo de la entrega ${id} desde Drive: ${(err as Error).message}`,
+      );
+      throw new ServiceUnavailableException(
+        'No se pudo abrir el archivo desde Google Drive. Intenta de nuevo.',
+      );
+    }
+  }
+
+  /** Bandeja de quien entrega: sus documentos pendientes o rechazados, de todas las entidades. */
+  async misDocumentos(actor: Actor) {
+    const hoy = hoyEcuador();
+    const filas = await this.prisma.cPEntregaDocumento.findMany({
+      where: {
+        estado: { in: ['PENDIENTE', 'RECHAZADO'] },
+        solicitud: { companyId: actor.companyId, estado: 'ENVIADA' },
+        responsables: { some: { userId: actor.userId } },
+      },
+      include: {
+        solicitud: {
+          select: {
+            id: true,
+            anio: true,
+            mes: true,
+            entidad: { select: { id: true, nombre: true } },
+          },
+        },
+      },
+    });
+    const orden = (f: (typeof filas)[number]) =>
+      f.estado === 'RECHAZADO' ? 0 : estaVencida(f.estado, f.fechaLimite, hoy) ? 1 : 2;
+    return filas
+      .sort(
+        (a, b) =>
+          orden(a) - orden(b) ||
+          a.fechaLimite.getTime() - b.fechaLimite.getTime() ||
+          a.id - b.id,
+      )
+      .map((f) => ({
+        id: f.id,
+        nombre: f.nombre,
+        descripcion: f.descripcion,
+        estado: f.estado,
+        fechaLimite: f.fechaLimite.toISOString().slice(0, 10),
+        vencida: estaVencida(f.estado, f.fechaLimite, hoy),
+        motivoRechazo: f.motivoRechazo,
+        solicitudId: f.solicitud.id,
+        anio: f.solicitud.anio,
+        mes: f.solicitud.mes,
+        entidadId: f.solicitud.entidad.id,
+        entidadNombre: f.solicitud.entidad.nombre,
+      }));
+  }
+
+  /** Bandeja de Contratación Pública: lo entregado y sin revisar, de todas las entidades (lo más antiguo primero). */
+  async porRevisar(actor: Actor) {
+    const hoy = hoyEcuador();
+    const filas = await this.prisma.cPEntregaDocumento.findMany({
+      where: {
+        estado: 'ENTREGADO',
+        solicitud: { companyId: actor.companyId, estado: 'ENVIADA' },
+      },
+      orderBy: [{ entregadoAt: 'asc' }, { id: 'asc' }],
+      include: {
+        department: { select: { name: true } },
+        solicitud: {
+          select: {
+            id: true,
+            anio: true,
+            mes: true,
+            entidad: { select: { id: true, nombre: true } },
+          },
+        },
+      },
+    });
+    return filas.map((f) => ({
+      id: f.id,
+      nombre: f.nombre,
+      descripcion: f.descripcion,
+      departmentName: f.department?.name ?? null,
+      estado: f.estado,
+      fechaLimite: f.fechaLimite.toISOString().slice(0, 10),
+      vencida: estaVencida(f.estado, f.fechaLimite, hoy),
+      origen: f.origen,
+      url: f.url,
+      motivoRechazo: f.motivoRechazo,
+      entregadoPorNombre: f.entregadoPorNombre,
+      entregadoAt: f.entregadoAt,
+      revisadoPorNombre: f.revisadoPorNombre,
+      revisadoAt: f.revisadoAt,
+      solicitudId: f.solicitud.id,
+      anio: f.solicitud.anio,
+      mes: f.solicitud.mes,
+      entidadId: f.solicitud.entidad.id,
+      entidadNombre: f.solicitud.entidad.nombre,
+    }));
   }
 
   // ------------------------------------------------------------------ carpeta
@@ -651,8 +837,34 @@ export class EntregasService {
     }
   }
 
+  /** Personal de CP con permiso de escribir; si no se puede consultar, no se avisa a nadie más (no se interrumpe la entrega). */
+  private async equipoQueRevisa(companyId: number): Promise<number[]> {
+    try {
+      return await this.permissions.getCompanyUserIdsWithWriteAccess(
+        companyId,
+        'CONTRATACION_PUBLICA',
+      );
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo consultar al equipo de Contratación Pública: ${(err as Error).message}`,
+      );
+      return [];
+    }
+  }
+
   private link(entidadId: number, solicitudId: number): string {
     return `/contratacion-publica/entidades/${entidadId}?solicitud=${solicitudId}`;
+  }
+
+  /** Ver el historial o el archivo: personal de CP, o quien es responsable de ese documento. */
+  private assertPuedeVer(
+    e: Awaited<ReturnType<EntregasService['cargarEntrega']>>,
+    actor: Actor,
+  ) {
+    const esResponsable = e.responsables.some((r) => r.userId === actor.userId);
+    if (!esResponsable && !actor.puedeEscribir) {
+      throw new ForbiddenException('Este documento no te fue asignado.');
+    }
   }
 
   private assertPuedeEntregar(
@@ -680,17 +892,28 @@ export class EntregasService {
       where: { id: actor.userId },
       select: { fullName: true },
     });
-    await this.prisma.cPEntregaDocumento.update({
-      where: { id },
-      data: {
-        ...data,
-        revisadoPorId: actor.userId,
-        revisadoPorNombre: persona?.fullName ?? null,
-        revisadoAt: new Date(),
-        // Tras un rechazo vuelve a recordarse desde cero.
-        ...(data.estado === 'RECHAZADO' ? { ultimoRecordatorioAt: null } : {}),
-      },
-    });
+    await this.prisma.$transaction([
+      this.prisma.cPEntregaDocumento.update({
+        where: { id },
+        data: {
+          ...data,
+          revisadoPorId: actor.userId,
+          revisadoPorNombre: persona?.fullName ?? null,
+          revisadoAt: new Date(),
+          // Tras un rechazo vuelve a recordarse desde cero.
+          ...(data.estado === 'RECHAZADO' ? { ultimoRecordatorioAt: null } : {}),
+        },
+      }),
+      this.prisma.cPEntregaHistorial.create({
+        data: {
+          entregaId: id,
+          accion: data.estado,
+          motivo: data.motivoRechazo,
+          usuarioId: actor.userId,
+          usuarioNombre: persona?.fullName ?? null,
+        },
+      }),
+    ]);
     return persona?.fullName ?? null;
   }
 
@@ -794,16 +1017,5 @@ export class EntregasService {
       nombre,
     );
     return existente?.id ?? this.driveService.createSubfolder(parentId, nombre);
-  }
-
-  /** Nombre apto para una carpeta o archivo de Drive. */
-  private nombreCarpeta(texto: string): string {
-    return (
-      texto
-        .replace(/[\\/:*?"<>|]+/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 120) || 'Sin nombre'
-    );
   }
 }

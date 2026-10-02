@@ -1,13 +1,8 @@
 import { useState, useEffect } from 'react';
+import { MOTIVOS_RECHAZO_RAPIDOS, MIN_MOTIVO_RECHAZO } from '../../utils/motivosRechazo';
 
-const MIN_REASON = 5;
-
-const SUGERENCIAS = [
-  'Documento ilegible',
-  'Documento caducado',
-  'No corresponde al tipo solicitado',
-  'Falta firma o sello',
-];
+const MIN_REASON = MIN_MOTIVO_RECHAZO;
+const SUGERENCIAS = MOTIVOS_RECHAZO_RAPIDOS;
 
 interface Props {
   open: boolean;

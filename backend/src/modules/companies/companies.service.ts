@@ -2,13 +2,24 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
+  InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
-import { extname } from 'path';
+import { basename } from 'path';
 import * as bcrypt from 'bcryptjs';
+
+const LOGO_KEY_PREFIX = 'companies/logos/';
+const LOGO_EXTENSIONS: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/svg+xml': 'svg',
+};
 
 @Injectable()
 export class CompaniesService {
@@ -179,40 +190,72 @@ export class CompaniesService {
     return this.prisma.company.delete({ where: { id } });
   }
 
+  /**
+   * El logo se guarda en la tabla StoredFile (no en disco ni en un bucket): el
+   * disco de Cloud Run se borra al reciclar la instancia. El nombre lleva la
+   * hora para que un logo nuevo no se confunda con el anterior en la caché del
+   * navegador. `logoUrl` queda como '/uploads/logos/<archivo>', el formato que
+   * el frontend (resolveLogoUrl) ya sabe completar con la URL de la API.
+   */
   async uploadLogo(id: number, file: Express.Multer.File) {
-    await this.findOne(id);
-
-    const bucketName = process.env.GCS_BUCKET;
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const fileName = `logos/company-${uniqueSuffix}${extname(file.originalname)}`;
-
-    if (bucketName) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { Storage } = require('@google-cloud/storage');
-        const storage = new Storage();
-        const bucket = storage.bucket(bucketName);
-        const blob = bucket.file(fileName);
-
-        await blob.save(file.buffer, {
-          metadata: { contentType: file.mimetype },
-          public: true,
-        });
-
-        const publicUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
-        return this.prisma.company.update({
-          where: { id },
-          data: { logoUrl: publicUrl },
-        });
-      } catch (error) {
-        this.logger.error(`Error subiendo logo a GCS: ${error.message}`);
-      }
+    const company = await this.findOne(id);
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Selecciona una imagen para el logo');
     }
 
-    this.logger.warn('GCS no configurado, logo no persistido');
-    return this.prisma.company.update({
+    const extension = LOGO_EXTENSIONS[file.mimetype];
+    if (!extension) {
+      throw new BadRequestException(
+        'Solo se permiten imágenes (jpg, png, gif, svg)',
+      );
+    }
+
+    const fileName = `company-${id}-${Date.now()}.${extension}`;
+    const data = new Uint8Array(file.buffer);
+    try {
+      await this.prisma.storedFile.create({
+        data: {
+          key: `${LOGO_KEY_PREFIX}${fileName}`,
+          data,
+          contentType: file.mimetype,
+          size: file.buffer.length,
+        },
+      });
+    } catch (error) {
+      this.logger.error(`No se pudo guardar el logo: ${error.message}`);
+      throw new InternalServerErrorException(
+        'No se pudo guardar el logo. Intenta de nuevo en unos minutos.',
+      );
+    }
+
+    const updated = await this.prisma.company.update({
       where: { id },
-      data: { logoUrl: '/resources/logo.jpg' },
+      data: { logoUrl: `/uploads/logos/${fileName}` },
     });
+
+    // El logo anterior ya no se usa: se borra para no acumular imágenes.
+    // Es opcional, así que un fallo aquí no debe deshacer el cambio.
+    const previous = company.logoUrl?.startsWith('/uploads/logos/')
+      ? basename(company.logoUrl)
+      : null;
+    if (previous) {
+      await this.prisma.storedFile
+        .deleteMany({ where: { key: `${LOGO_KEY_PREFIX}${previous}` } })
+        .catch((error) =>
+          this.logger.warn(`No se pudo borrar el logo anterior: ${error.message}`),
+        );
+    }
+
+    return updated;
+  }
+
+  /** Logo guardado por uploadLogo, para servirlo sin sesión (lo ve el login). */
+  async getStoredLogo(fileName: string) {
+    const file = await this.prisma.storedFile.findUnique({
+      where: { key: `${LOGO_KEY_PREFIX}${basename(fileName)}` },
+      select: { data: true, contentType: true },
+    });
+    if (!file) throw new NotFoundException('Logo no encontrado');
+    return { data: Buffer.from(file.data), contentType: file.contentType };
   }
 }

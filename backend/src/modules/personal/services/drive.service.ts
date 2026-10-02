@@ -1805,7 +1805,9 @@ export class DriveService {
     return this.prisma.documentType.delete({ where: { id } });
   }
 
-  private async listSubFolders(
+  // Público desde que Contratación Pública sincroniza sus entidades con las
+  // subcarpetas de su carpeta raíz.
+  async listSubFolders(
     parentId: string,
   ): Promise<{ id: string; name: string }[]> {
     const drive = this.getDriveClient();
@@ -1901,6 +1903,35 @@ export class DriveService {
       supportsAllDrives: true,
     });
     return res.data;
+  }
+
+  // Datos de un archivo (no de una carpeta): tipo real, nombre, tamaño y
+  // carpetas donde está. Contratación Pública lo usa para comprobar que un
+  // archivo entregado de verdad está en la carpeta del mes antes de mostrarlo.
+  async getFileMetadata(fileId: string): Promise<{
+    id: string;
+    name: string | null;
+    mimeType: string | null;
+    size: number | null;
+    parents: string[];
+    trashed: boolean;
+  }> {
+    const drive = this.getDriveClient();
+    const res = await drive.files.get({
+      fileId,
+      fields: 'id, name, mimeType, size, parents, trashed',
+      supportsAllDrives: true,
+    });
+    return {
+      id: res.data.id as string,
+      name: res.data.name ?? null,
+      mimeType: res.data.mimeType ?? null,
+      size: res.data.size ? Number(res.data.size) : null,
+      parents: (res.data.parents ?? []).filter(
+        (p: string | null): p is string => !!p,
+      ),
+      trashed: !!res.data.trashed,
+    };
   }
 
   // Sube un archivo nuevo a una carpeta desde un Buffer en memoria y devuelve
@@ -2564,8 +2595,8 @@ export class DriveService {
     // Override SOLO para pruebas de carga en local: nunca se activa en
     // producción (NODE_ENV=production ahí, ver cloudbuild.yaml) ni aunque la
     // variable quede puesta por accidente en un .env local que no sea dev.
-    // Ver backend/.agents (o el plan de la prueba) — se usa una carpeta de
-    // Drive completamente aparte, nunca la real de Reclutamiento.
+    // Se usa una carpeta de Drive completamente aparte, nunca la real de
+    // Reclutamiento.
     if (
       process.env.NODE_ENV !== 'production' &&
       process.env.RECLUTAMIENTO_TEST_FOLDER_ID

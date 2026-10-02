@@ -379,7 +379,7 @@ export default function AdminDashboardPage() {
                     <th {...thProps('location')}>Ubicación <SortIcon campo="location" /></th>
                     <th {...thProps('isActive')}>Estado <SortIcon campo="isActive" /></th>
                     <th {...thProps('proyectos')}>Proyectos <SortIcon campo="proyectos" /></th>
-                    <th style={{ textAlign: 'right' }}>Acciones</th>
+                    <th className="col-acciones" title="Acciones"><span className="visually-hidden">Acciones</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -409,7 +409,7 @@ export default function AdminDashboardPage() {
                         </span>
                       </td>
                       <td>{u._count.createdProjects + u._count.projectMemberships}</td>
-                      <td style={{ textAlign: 'right' }}>
+                      <td className="col-acciones">
                         <RowActionsMenu
                           actions={[
                             { label: 'Editar', onClick: () => openEditForm(u) },

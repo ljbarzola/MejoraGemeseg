@@ -68,7 +68,48 @@ export interface SistemasDashboardStats {
   enRevision: number;
   resueltos: number;
   totalMes: number;
+  porTipo: Record<TicketSoporteTipo, number>;
+  /** null si todavía no hay tickets resueltos. */
+  tiempoPromedioResolucionHoras: number | null;
+  ticketsConResolucion: number;
 }
 
 export const getSistemasDashboardStats = (): Promise<SistemasDashboardStats> =>
   api.get('/sistemas/dashboard/stats').then((r) => r.data);
+
+export interface NovedadApp {
+  id: number;
+  titulo: string;
+  descripcion: string;
+  secciones: string[];
+  createdByNombre: string;
+  destinatarios: number;
+  createdAt: string;
+}
+
+export const getSeccionesNovedad = (): Promise<{ key: string; label: string }[]> =>
+  api.get('/sistemas/novedades/secciones').then((r) => r.data);
+
+export const getNovedades = (): Promise<NovedadApp[]> =>
+  api.get('/sistemas/novedades').then((r) => r.data);
+
+export interface DestinatarioNovedad {
+  id: number;
+  nombre: string;
+  email: string;
+  empresa: string | null;
+}
+
+export interface ExcluidoNovedad extends DestinatarioNovedad {
+  motivo: string;
+}
+
+export const previewNovedad = (secciones: string[]): Promise<{
+  destinatarios: number;
+  personas: DestinatarioNovedad[];
+  noRecibiran: ExcluidoNovedad[];
+}> =>
+  api.get('/sistemas/novedades/preview', { params: { secciones: secciones.join(',') } }).then((r) => r.data);
+
+export const publicarNovedad = (data: { titulo: string; descripcion: string; secciones: string[] }): Promise<NovedadApp> =>
+  api.post('/sistemas/novedades', data).then((r) => r.data);
