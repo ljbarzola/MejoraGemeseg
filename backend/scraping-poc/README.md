@@ -48,11 +48,10 @@ El obstáculo no es capacidad técnica, son tres barreras que no dependen de nos
 
 ## Solución adoptada (ya implementada)
 
-Modelo **"alerta + verificación asistida"**, no scraping:
-1. Estado por cédula y plataforma: `PENDIENTE` / `VERIFICADO` / `NO_ENCONTRADO` (alerta, no bloqueo) — modelo `VerificationCheck`.
-2. Deep-links oficiales + guía corta para que RRHH complete la consulta manual (captcha incluido) — `frontend/src/pages/personal/VerificacionPage.tsx`.
-3. Se registra resultado + fecha + responsable: la consulta la hace una persona en 30 segundos, pero **la trazabilidad —que es lo que pedía la auditoría— queda en el sistema**.
-4. Reevaluar si el gobierno publica una API o se firma un convenio de interoperabilidad. Esa gestión es administrativa, no de desarrollo.
+Modelo **"verificación asistida"**, no scraping. La primera versión (`VerificationCheck` + `VerificacionPage.tsx`) se reemplazó el 2026-09-09 por **Movimientos de Personal**: un caso de entrada o salida por guardia, con un checklist por sistema externo (IsyPlus, IESS, SUT, SICOSEP). Ver `.agents/modules/movimientos-personal.md`.
+1. Una persona de RRHH hace la acción en cada portal (captcha incluido); el sistema solo guarda la traza de qué falta y qué ya se hizo.
+2. Se registra resultado + fecha + responsable: la consulta tarda 30 segundos, pero **la trazabilidad —que es lo que pedía la auditoría— queda en el sistema**.
+3. Reevaluar si el gobierno publica una API o se firma un convenio de interoperabilidad. Esa gestión es administrativa, no de desarrollo.
 
 ## Aislamiento
 

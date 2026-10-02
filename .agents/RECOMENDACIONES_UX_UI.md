@@ -158,7 +158,7 @@ Cuando el usuario presione "Crear" o "Guardar" y haya campos requeridos vacíos:
 ### Regla: Busqueda con Empleados de Drive
 
 - El formulario de custodias usa un componente de busqueda (EmpleadoSelect).
-- Muestra empleados del folder "Custodios" de Google Drive + candidatos con puesto "Custodio".
+- Muestra empleados del folder "Custodios" de Google Drive. (Hasta 2026-09-17 también unía candidatos del Kanban con puesto "Custodio"; ese Kanban se eliminó, ver `.agents/modules/recursos-humanos.md` punto 2.)
 - Permite busqueda por nombre o cedula.
 - Exclusion automatica: chofer y custodios deben ser personas distintas.
 - Opcion "+ Manual" para ingreso directo si el empleado no esta en la lista.
@@ -168,6 +168,8 @@ Cuando el usuario presione "Crear" o "Guardar" y haya campos requeridos vacíos:
 ## 15. Encabezado de Página con Botones de Acción
 
 ### Regla: Volver Aparte, Título a la Izquierda, Acciones a la Derecha
+
+> **Complemento (2026-09-22):** `CLAUDE.md`, sección "Frontend layout rules", define `.page-title-row` para la fila título + acciones (las acciones quedan a la derecha aunque se partan en varias líneas). Pantallas nuevas: usar `.page-title-row` para esa fila y mantener de este punto lo del botón "← Volver" en su propia fila, el orden de los botones y los íconos de `lucide-react`.
 
 Patrón de referencia: `ReclutamientoPage.tsx`, replicado en `AdministrativeStaff.tsx`, `EntidadesList.tsx`, `GuardiasList.tsx` y, desde 2026-09-10, en el módulo de Documentación (`ContractsList.tsx`, `ContractTemplateConfig.tsx`, `GenerarDocumento.tsx`) — estos tres partieron con un header de una sola fila (Volver + título mezclados a la izquierda) y se corrigieron a este patrón tras revisión del usuario. Usar esta misma estructura en cualquier pantalla nueva que tenga botón "Volver" + acciones de cabecera (sincronizar, configurar, etc.), en vez de mezclarlos todos en una sola fila.
 

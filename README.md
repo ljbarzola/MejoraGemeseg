@@ -1,98 +1,90 @@
 # Gemeseg Mejora
 
 ## Que es este proyecto
-Gemeseg Mejora es una plataforma web de gestion interna para GEMESEG (Ecuador), disenada para centralizar proyectos, tareas y usuarios. Cubre autenticacion, gestion de proyectos con roles, tablero Kanban, panel de administracion, inventario de herramientas, y un asistente de IA.
+Gemeseg Mejora es la plataforma web de gestion interna de GEMESEG (Ecuador). Empezo como gestor de proyectos y tareas y hoy es un sistema multiempresa con modulos operativos: Cacao, Custodias, Recursos Humanos, Ventas y CRM, Contratacion Publica y Sistemas, cada uno detras de permisos por seccion, mas un asistente de IA ("Agente Gemeseg") y branding propio por empresa.
+
+> Este archivo es la portada para personas. Las reglas de negocio y los endpoints de cada modulo estan en `AGENTS.md`; los comandos y la arquitectura transversal en `CLAUDE.md`; el detalle y los porques de cada decision en `.agents/modules/`.
 
 ## Contexto
-- Empresa: GEMESEG (Ecuador)
+- Empresa: GEMESEG (Ecuador). Otras empresas conviven en la misma plataforma (por ejemplo Mikacao S.A.).
 - Objetivo: centralizar operaciones internas en un espacio digital unico.
 - Metodologia: Scrum con sprints de 1-2 semanas.
-- Plataforma: **Web** (no movil).
-- Estado actual: Fase 1 - Desplegado en produccion.
+- Plataforma: **Web** (escritorio y celular; el menu lateral pasa a cajon en pantallas pequenas).
+- Estado actual: en produccion.
 
 ### URLs de Produccion
-- **Frontend (Vercel):** https://mejora-gemeseg.vercel.app
-- **Backend (Railway):** https://mejoragemeseg-production.up.railway.app
-- **API Docs (Swagger):** https://mejoragemeseg-production.up.railway.app/docs
+- **Aplicacion:** https://app.gemeseg.com (dominio propio sobre Firebase Hosting)
+- **Frontend (Firebase Hosting):** https://mejora-gemeseg.web.app
+- **Backend (Cloud Run):** https://mejora-gemeseg-backend-141953681725.us-central1.run.app
+- **API Docs (Swagger):** https://mejora-gemeseg-backend-141953681725.us-central1.run.app/docs
 
 ## Funcionalidades implementadas
 
 ### Autenticacion
 - **Login y Registro**: JWT con 7 dias de expiracion, registro solo con correos `@gemeseg.com`.
+- **Recuperar contrasena**: se pide el correo, llega un codigo de 6 digitos y con el se define la nueva contrasena.
 - **Roles**: ADMIN, MANAGER, EMPLOYEE con guards en endpoints protegidos.
 - **Password**: bcrypt con salt 10.
 
-### Gestion de Proyectos
-- **Crear proyectos**: Cualquier usuario autenticado puede crear proyectos.
-- **Admin es OWNER automatico**: Se agrega como OWNER a todo proyecto nuevo.
-- **Listar proyectos**: Filtrado por membresia, filtro por estado, paginacion de 10.
-- **Detalle de proyecto**: Info, miembros, tareas con tabla.
+### Permisos por seccion
+Ademas del rol, cada modulo es una "seccion" con su propio control de acceso:
+- Una seccion solo aparece si la empresa la tiene habilitada (la activa el super admin) o si es siempre visible.
+- Dentro de una seccion habilitada, el administrador de la empresa decide por usuario quien puede ver y quien puede editar, y puede dejar modulos fijos para todo su personal.
+- Inicio y Proyectos no se pueden negar a nadie; Buzon de Quejas y Encuestas estan abiertos a todo empleado.
+- El backend aplica las mismas reglas que el menu, no solo el frontend.
+- Secciones: Inicio, Proyectos, Administracion, Cacao, Custodias, Recursos Humanos, Ventas y CRM, Contratacion Publica, Sistemas, Mi Empresa y Empresas.
 
-### Gestion de Miembros
-- **Agregar miembro**: OWNER o ADMIN pueden agregar miembros con rol.
-- **Quitar miembro**: OWNER o ADMIN pueden eliminar miembros (no al ultimo OWNER).
-- **Cambiar rol**: Solo ADMIN puede cambiar roles incluyendo OWNER.
-- **Viewer**: Botones deshabilitados (no ocultos).
+### Inicio, Proyectos y Tareas
+- **Inicio**: bienvenida, mis tareas y la tarjeta "¿Conoces a alguien interesado en Gemeseg?" para referir clientes.
+- **Proyectos**: cualquier usuario autenticado crea proyectos; el admin es OWNER automatico; listado filtrado por membresia, por estado y paginado; detalle con miembros y tareas.
+- **Miembros**: OWNER o ADMIN agregan y quitan (nunca al ultimo OWNER); solo ADMIN cambia roles. Los VIEWER ven los botones deshabilitados.
+- **Tareas y Kanban**: 4 columnas (Por hacer, En progreso, En revision, Completado), varios asignados, prioridad y fechas de inicio y fin.
+- **Perfil**: datos del usuario, herramientas asignadas y estadisticas.
 
-### Gestion de Tareas (Kanban)
-- **Crear tarea**: Miembros no-viewer pueden crear.
-- **Tablero Kanban**: 4 columnas (Por hacer, En progreso, En revision, Completado).
-- **Detalle de tarea**: Cambiar estado, asignar, prioridad, fecha inicio/fin.
-- **Asignados multiples**: Varias personas pueden estar asignadas a una tarea.
-- **Viewer**: Acceso de solo lectura con botones deshabilitados.
+### Administracion y Empresas (white-label)
+- **Usuarios**: CRUD, activar/desactivar, estadisticas por rol y ubicacion de cada persona.
+- **Permisos**: pantalla del super admin (secciones por empresa) y del admin de empresa (permisos por usuario y modulos fijos).
+- **Multiempresa**: cada empresa tiene su logo, colores corporativos y dominio de correo. `admin@general.com` es el super admin (sin empresa); cada empresa tiene su propio administrador.
+- **Mi Empresa**: pagina de ajustes de marca para el administrador de cada empresa.
 
-### Panel de Administracion
-- **Gestion de usuarios**: CRUD completo, crear/editar/activar/desactivar.
-- **Stats de usuarios**: Conteo por rol.
-- **Panel de proyectos**: Estadisticas de salud, tareas por estado, indicadores.
-- **Listado de proyectos**: Tabla con navegacion a detalle de cada proyecto.
+### Cacao
+Back-office de comercio de cacao que replica el proceso fisico: proveedores y clientes, recepciones, lotes, liquidaciones, embarques, cuentas por pagar y por cobrar, precios fijados, calidades y kardex. Incluye una guia de uso dentro de la app (`/cacao/guia`).
 
-### Herramientas (Inventario)
-- **Catalogo de herramientas**: Crear, listar y eliminar herramientas.
-- **Asignacion multiple**: Asignar una herramienta a varios usuarios a la vez.
-- **Edicion y auditoria**: Actualizar version/licencia, historial de cambios.
-- **Perfil de usuario**: Cada usuario ve sus herramientas asignadas en su perfil.
-- **Acceso**: Pestana visible solo para usuario de Sistemas (`sistemas@gemeseg.com`).
+### Custodias
+Rutas, traslados y nomina de escoltas de seguridad. Estados `LISTO_PARA_CUSTODIAR → EN_CAMINO → LLEGO` (la nomina solo liquida lo que llego), tarifas por tipo (hacienda, puerto, VIP), PDFs de orden de custodia y de nomina, consulta por cedula y el asistente GEME-BOT.
 
-### Perfil de Usuario
-- **Ver perfil**: Desde el navbar, nombre de usuario clickeable.
-- **Info completa**: Nombre, email, documento, cargo, departamento, rol, fecha de ingreso.
-- **Herramientas**: Lista de herramientas asignadas al usuario.
-- **Estadisticas**: Proyectos creados, asignados, tareas asignadas.
+### Recursos Humanos
+- **Reclutamiento**: postulantes sincronizados desde Google Drive, revision de documentos con apoyo de IA (la persona de RRHH siempre confirma) y contratacion que mueve la carpeta a su destino.
+- **Guardias y personal administrativo**: listados, fichas, alta manual, salidas y movimientos de personal (historial).
+- **Cumplimiento**: checklist de documentos por cedula con semaforo y revision (aprobar/rechazar con motivo), recordatorios por correo.
+- **Entidades y requisitos**, **Contratos** del personal a partir de plantillas, **Capacitaciones** con alertas de vencimiento.
+- **Buzon de Quejas y Sugerencias** (abierto a todo empleado, con gestion por etapas para RRHH) y **Encuestas** (por la app o por un enlace publico para quienes no tienen cuenta).
+
+### Ventas y CRM
+- **Clientes**: ficha con campos configurables por empresa, etapas de seguimiento editables, responsable, "referido por" y columnas de la tabla elegidas por cada usuario.
+- **Referidos**: cualquier empleado puede referir un cliente desde Inicio y ver en que etapa va; se le avisa cuando avanza.
+- **Contratos**: plantillas `.docx` desde Google Drive con variables, generacion de PDF, numeracion automatica y firma electronica con SignWell.
+
+### Contratacion Publica
+Contratos de seguridad privada con entidades del sector publico. Hoy esta visible **Entidades Publicas**, con una carpeta de Google Drive para todo el modulo y una subcarpeta por entidad que se mantiene sincronizada con la lista; contratos, puestos, horarios con generador de rotacion e informes mensuales estan construidos pero ocultos hasta reactivarlos (ver `.agents/modules/contratacion-publica.md`).
+
+### Sistemas
+Agrupa lo tecnico: dashboard, **Herramientas** (inventario y asignacion con auditoria), **Agentes** de IA, **Base de Conocimiento** de la empresa y **Soporte Tecnico** (reportes de errores, mejoras y permisos enviados con el boton de la llave inglesa; quien reporta recibe aviso del avance). El dashboard muestra tickets por tipo y el tiempo promedio de resolucion. **Novedades** permite publicar un aviso de cambio en la app que llega por la campanita (no por correo) a quienes tienen acceso a los modulos afectados.
 
 ### Asistente de IA — "Agente Gemeseg"
-- **Chat flotante**: Boton FAB + drawer lateral.
-- **Google Vertex AI (Gemini)**: motor conversacional desde 2026-09-29 (reemplaza a GitHub Models, retirado por el proveedor). Ver `.agents/modules/agents-ai.md`.
-- **Fallback mock**: Respuestas predefinidas cuando Vertex no esta configurado.
-- **Base de Conocimiento institucional**: documento Markdown por empresa, editable por el ADMIN desde Sistemas, usado como contexto extra y filtrado segun los permisos del usuario.
-- **Rate limit**: 50 mensajes/dia por usuario.
-- **Contexto**: Detecta la pagina actual para respuestas contextualizadas.
-- **Conversaciones**: Cada combinacion agente+usuario tiene sus propias conversaciones guardadas en BD.
-- **Cambio de agente**: Dropdown para seleccionar agente, con lista de conversaciones por agente.
+- **Chat flotante**: boton + panel lateral, con conversaciones guardadas por agente y por usuario.
+- **Motor**: Google Vertex AI (Gemini); sin configurar responde en modo mock. Ver `.agents/modules/agents-ai.md`.
+- **Agentes**: catalogo con instrucciones y alcance, asignables a varios usuarios.
+- **Manual de uso integrado**: el agente conoce las pantallas del sistema, pero solo las de los modulos que el usuario puede ver.
+- **Base de Conocimiento**: documento por empresa (politicas, contactos, procesos) que el agente usa como contexto, filtrado por permisos.
+- **Datos en vivo** de Cacao, Custodias, RRHH y Ventas, solo si el usuario tiene acceso a ese modulo.
+- **Limite**: 50 mensajes por dia por usuario.
 
-### Agentes de IA
-- **Catalogo de agentes**: Crear, editar y eliminar agentes con nombre, instrucciones (system prompt) y alcance.
-- **Alcances**: GLOBAL, PROJECTS, TASKS, ADMIN.
-- **Asignacion**: Asignar agentes a multiples usuarios. Un usuario puede tener multiples agentes.
-- **Agentes por usuario**: Cada usuario ve los agentes que le estan asignados en el chat.
-- **Acceso**: Pestana visible para admin y usuario de Sistemas.
-
-### Empresas (White-labeling)
-- **Multi-empresa**: Soporte para multiples empresas con branding independiente.
-- **Colores corporativos**: Cada empresa configura sus colores (principal, secundario, acento, fondo, texto).
-- **Logo personalizado**: Upload de logo por empresa.
-- **Dominio de email**: Asociacion de dominio de correo electronico por empresa.
-- **Super Admin**: `admin@general.com` gestiona todas las empresas (companyId: null).
-- **Admin de empresa**: Cada empresa tiene su propio administrador.
-- **Configuracion de marca**: Pagina de ajustes para personalizar la identidad visual de la empresa.
-
-### Navbar
-- Logo GEMESEG en la barra de navegacion.
-- Navegacion rapida: Inicio, Proyectos, Administracion (solo admin), Herramientas (solo sistemas), Agentes (admin/sistemas).
-- Nombre del usuario clickeable (va a perfil).
-- Boton de cerrar sesion.
+### Notificaciones
+Campanita en toda pantalla con aviso de lo no leido. La usan Referidos, Encuestas, Soporte Tecnico y las Novedades de la app. El correo saliente (recuperacion de contrasena, recordatorios) sale por Gmail con delegacion de dominio.
 
 ## Credenciales de prueba
+Solo para el entorno local: las crean los seeds (`npm run seed:minimal` deja solo `admin@gemeseg.com`, `sistemas@gemeseg.com` y el super admin; `npm run seed` crea todos los de abajo). Las cuentas de produccion tienen sus propias contrasenas.
 
 ### Super Admin (todas las empresas)
 | Usuario | Email | Contrasena | Rol | Empresa |
@@ -113,215 +105,151 @@ Gemeseg Mejora es una plataforma web de gestion interna para GEMESEG (Ecuador), 
 |---------|-------|------------|-----|-------|
 | Administracion Mikacao | admin@mikacao.com | mikacao2026 | ADMIN | Administrador del Sistema |
 
-## Proyectos de prueba
-
-| Proyecto | Estado | Miembros |
-|----------|--------|----------|
-| Landings | ACTIVE | David (OWNER), Admin (OWNER) |
-| Mejora GEMESEG | ACTIVE | Admin (OWNER), Hugo (MEMBER), David (MEMBER) |
-| Cotizador | ACTIVE | Admin (OWNER), Hugo (MEMBER), David (VIEWER) |
-| Plataforma GEMESEG v2 | ACTIVE | Admin (OWNER), David (MEMBER) |
-| Migracion a Google Cloud | ON_HOLD | Admin (OWNER), Hugo (MANAGER) |
+El seed completo tambien crea proyectos de ejemplo (Landings, Mejora GEMESEG, Cotizador, Plataforma GEMESEG, Migracion a Google Cloud), agentes de IA y datos de Cacao y Personal; el minimo crea un solo "Proyecto de Prueba".
 
 ## Como empezar
 
 ### Requisitos previos
-- Node.js 18+
-- PostgreSQL 17 (instalado localmente o via Docker)
+- Node.js 20+ (la imagen de produccion y Cloud Build usan Node 20)
+- Docker, para el PostgreSQL y el Redis locales
+
+### Infraestructura local
+El desarrollo usa un Postgres y un Redis **locales**, totalmente separados de la base de produccion: crear, editar o borrar en local nunca toca datos reales.
+```bash
+docker compose up -d db redis     # Postgres 16 (5432) + Redis (6379)
+```
 
 ### Backend
 ```bash
 cd backend
 npm install
-# Configurar .env con DATABASE_URL, JWT_SECRET (GOOGLE_VERTEX_PROJECT/LOCATION/CHAT_MODEL opcionales, ver AGENTS.md)
-npx prisma migrate dev
-node prisma/seed.js        # Crea usuarios y proyectos de prueba
-npm run start:dev          # http://localhost:3000
+cp ../.env.example .env           # DATABASE_URL, JWT_SECRET, FRONTEND_URL; lo demas es opcional
+npx prisma generate
+npx prisma db push                # crea el esquema completo (la carpeta migrations no esta al dia: no usar migrate deploy)
+npm run seed:minimal              # datos minimos (o `npm run seed` para el set completo)
+npm run start:dev                 # http://localhost:3000
 ```
+Sin `GOOGLE_VERTEX_*`, SignWell o la cuenta de servicio de Google, la app arranca igual: el chat cae a modo mock y las funciones de Drive, firma y correo quedan deshabilitadas. Detalle de cada variable en `.env.example` y `AGENTS.md`.
 
 ### Frontend
 ```bash
 cd frontend
 npm install
-npm run dev                # http://localhost:5173
+npm run dev                       # http://localhost:5173
 ```
 
-### Seed de prueba
+### Pruebas
 ```bash
-cd backend
-node prisma/seed.js
+cd backend && npm test            # pruebas unitarias (jest)
 ```
+El frontend no tiene pruebas automatizadas; se verifica con `npm run build` (compila TypeScript) y `npm run lint`.
 
 ## Despliegue en Produccion
 
-### Arquitectura Monorepo
-El proyecto usa un repositorio unico que se despliega automaticamente en dos plataformas:
+### Arquitectura
+Un solo repositorio y **un solo pipeline** (`cloudbuild.yaml`) que se dispara con cada push a `main` y despliega, en pasos seguidos:
+1. **Backend** → imagen Docker en Artifact Registry → **Cloud Run** (`mejora-gemeseg-backend`, solo API).
+2. **Frontend** → `npm run build` → **Firebase Hosting**.
+
+El dominio `app.gemeseg.com` apunta a Firebase Hosting, que es el unico origen que ve el usuario y reenvia `/api/**`, `/health` y `/docs/**` a Cloud Run (`firebase.json`).
 
 ```
-GitHub (repo: MejoraGemeseg/)
-  ├── backend/  → Railway (Root Dir: /backend)
-  ├── frontend/ → Vercel  (Root Dir: /frontend)
-  └── .env      → ignorado por .gitignore
+Google Cloud Platform (proyecto: mejora-gemeseg)
+  ├── Cloud SQL (PostgreSQL 16)   → gemeseg-db
+  ├── Cloud Run                   → mejora-gemeseg-backend (API)
+  ├── Firebase Hosting            → app.gemeseg.com / mejora-gemeseg.web.app (React)
+  ├── Artifact Registry           → imagenes del backend
+  ├── Secret Manager              → DATABASE_URL, JWT_SECRET, FRONTEND_URL, claves de SignWell y cuentas de servicio de Google
+  └── Cloud Scheduler + Cloud Build → copia semanal de la base (cloudbuild.weekly-backup.yaml)
 ```
 
-### Plataformas
-| Servicio | Proveedor | URL |
-|----------|-----------|-----|
-| Base de datos | Google Cloud SQL (`gemeseg-db`) | https://console.cloud.google.com/sql |
-| Backend | Railway | https://mejoragemeseg-production.up.railway.app |
-| Frontend | Vercel | https://mejora-gemeseg.vercel.app |
+### Variables de entorno
+En produccion no se usan archivos `.env`: las variables planas van en `cloudbuild.yaml` (`--set-env-vars`) y los secretos en Secret Manager (`--set-secrets`). Lista completa y razones en `AGENTS.md`, seccion "Despliegue en Produccion". El frontend usa `VITE_API_URL`, fijada en el paso de build del frontend.
 
-### Variables de Entorno
+### Base de datos
+La base vive en la instancia `gemeseg-db` (proyecto `mejora-gemeseg`, region us-central1). Detalle, backups y como conectarse en solo lectura con Cloud SQL Auth Proxy: `AGENTS.md`, seccion "Despliegue en Produccion". Los modelos y enums se leen directo en `backend/prisma/schema.prisma`.
 
-**Backend (Railway):**
-| Key | Value |
-|-----|-------|
-| `DATABASE_URL` | `postgresql://...@/gemeseg?host=/cloudsql/mejora-gemeseg:us-central1:gemeseg-db` (produccion, socket Unix) |
-| `JWT_SECRET` | *(configurar en panel de Railway)* |
-| `FRONTEND_URL` | `https://mejora-gemeseg.vercel.app` |
-| `PORT` | `3000` |
+**Aviso:** los cambios de esquema NO se aplican solos al publicar (`cloudbuild.yaml` no corre migraciones). Hay que ejecutarlos a mano contra la base de produccion antes o junto con el deploy.
 
-**Frontend (Vercel):**
-| Key | Value |
-|-----|-------|
-| `VITE_API_URL` | `https://mejoragemeseg-production.up.railway.app` |
-
-### Flujo de Deploy
-1. Push a `main` en GitHub
-2. Railway detecta cambios en `/backend` y despliega automaticamente
-3. Vercel detecta cambios en `/frontend` y despliega automaticamente
-4. No usar archivos `.env` en produccion - usar paneles de Railway/Vercel
+### Flujo de entrega
+1. Trabajar en una rama (`feature/...` o `fix/...`) creada desde un `main` actualizado.
+2. Verificar localmente.
+3. Push de la rama y Pull Request hacia `main`.
+4. Al fusionarse en `main`, Cloud Build despliega backend y frontend.
 
 ## Estructura del repositorio
 ```
 MejoraGemeseg/
-├── AGENTS.md                   # Guia para agentes de IA
+├── AGENTS.md                   # Guia para agentes: reglas de negocio y endpoints por modulo
+├── CLAUDE.md                   # Comandos y arquitectura transversal
 ├── README.md                   # Este archivo
-├── .env.example                # Template de variables de entorno
-├── docker-compose.yml          # PostgreSQL + Redis (produccion local)
-├── docker-compose.dev.yml      # Desarrollo local
+├── .agents/                    # Detalle y decisiones por modulo (modules/*.md) y reglas de UX/UI
+├── .env.example                # Plantilla de variables de entorno
+├── cloudbuild.yaml             # Pipeline de despliegue (backend + frontend)
+├── cloudbuild.weekly-backup.yaml # Copia semanal de Cloud SQL
+├── firebase.json               # Hosting + reenvio de /api al backend
+├── docker-compose.yml          # PostgreSQL + Redis locales
+├── docker-compose.dev.yml      # Override opcional para correr el backend en Docker
 ├── backend/
-│   ├── Dockerfile              # Multi-stage build para Railway
-│   ├── railway.json            # Config de deploy en Railway
-│   ├── package.json
+│   ├── Dockerfile              # Imagen del backend para Cloud Run
 │   ├── prisma/
-│   │   ├── schema.prisma       # Schema completo
-│   │   ├── seed.js             # Datos de prueba
-│   │   └── migrations/
+│   │   ├── schema.prisma       # Esquema (sin URL: va en prisma.config.js)
+│   │   ├── seed.js             # Datos de ejemplo completos
+│   │   └── seed.minimal.js     # Datos minimos
+│   ├── prisma.config.js        # URL de conexion de Prisma v7
 │   └── src/
 │       ├── main.ts             # Bootstrap, CORS, Swagger
-│       ├── common/
-│       │   ├── decorators/     # Roles decorator
-│       │   └── guards/         # RolesGuard
-│       ├── modules/
-│       │   ├── auth/           # Login, register, JWT
-│       │   ├── projects/       # CRUD proyectos + miembros + tareas
-│       │   ├── users/          # Gestion de usuarios (admin) + perfil
-│       │   ├── tasks/          # CRUD tareas individuales
-│       │   ├── tools/          # Inventario de herramientas
-│       │   ├── ai/             # Asistente IA "Agente Gemeseg" (Google Vertex AI)
-│       │   ├── agents/         # Agentes de IA
-│       │   └── companies/      # Gestion de empresas (white-labeling)
-│       └── prisma/             # PrismaService
+│       ├── common/             # Guards (roles, permisos por seccion) y decoradores
+│       └── modules/
+│           ├── auth/ users/ projects/ tasks/       # Nucleo: sesion, usuarios, proyectos, tareas
+│           ├── companies/ permissions/             # Empresas (marca) y permisos por seccion
+│           ├── ai/ agents/ knowledge-base/         # Agente Gemeseg, agentes y base de conocimiento
+│           ├── notifications/ mail/                # Campanita y correo saliente
+│           ├── cacao/ custodias/                   # Modulos operativos
+│           ├── personal/                           # Recursos Humanos (Drive, cumplimiento, encuestas...)
+│           ├── ventas/                             # CRM y contratos con firma electronica
+│           ├── contratacion-publica/               # Contratos con el sector publico
+│           ├── sistemas/ tools/                    # Soporte tecnico e inventario de herramientas
+│           └── cache/ queue/                       # Redis (opcional) y colas
 ├── frontend/
-│   ├── vercel.json             # Config SPA en Vercel
-│   ├── vite.config.ts          # Config de Vite
-│   ├── package.json
+│   ├── vite.config.ts
 │   └── src/
-│       ├── components/
-│       │   ├── chat/           # ChatDrawer, ChatFloatingButton
-│       │   ├── layout/         # Navbar
-│       │   └── ProtectedRoute
-│       ├── pages/
-│       │   ├── auth/           # Login, Register
-│       │   ├── dashboard/      # Dashboard principal
-│       │   ├── projects/       # Lista, Crear, Detalle
-│       │   ├── tasks/          # Kanban, Crear, Detalle
-│       │   ├── admin/          # Panel de administracion + empresas
-│       │   ├── tools/          # Inventario de herramientas
-│       │   └── profile/        # Perfil de usuario
-│       ├── services/           # API calls (Axios)
-│       ├── types/              # TypeScript types
+│       ├── App.tsx             # Rutas, cada modulo envuelto en SectionRoute
+│       ├── components/         # chat, layout (Sidebar), common y uno por modulo
+│       ├── contexts/ hooks/    # Tema por empresa, permisos, tablas ordenables/redimensionables
+│       ├── pages/              # Una carpeta por modulo (admin, cacao, custodias, personal, ventas, sistemas...)
+│       ├── services/           # Llamadas a la API (Axios con JWT)
+│       ├── types/              # Tipos TypeScript
 │       └── styles.css          # Estilos globales
-└── scripts/
+└── scripts/                    # deploy-preview.sh (vista previa en el celular) y utilidades
 ```
 
-## Endpoints disponibles
+## Endpoints
+La API completa se explora en Swagger (`/docs`). El detalle por modulo, con sus reglas, esta en `AGENTS.md`, seccion "Modulos Backend". Resumen de los prefijos:
 
-### Auth
-- `POST /auth/register` - Registro (solo @gemeseg.com)
-- `POST /auth/login` - Login, retorna JWT
-- `GET /auth/profile` - Perfil del usuario autenticado
-
-### Projects
-- `POST /projects` - Crear proyecto (cualquier usuario autenticado)
-- `GET /projects` - Listar proyectos (filtrado por membresia)
-- `GET /projects/:id` - Detalle de proyecto
-- `GET /projects/admin/stats` - Estadisticas admin
-- `GET /projects/:id/tasks` - Tareas del proyecto
-- `POST /projects/:id/tasks` - Crear tarea
-- `GET /projects/:id/members` - Miembros del proyecto
-- `POST /projects/:id/members` - Agregar miembro
-- `DELETE /projects/:id/members/:userId` - Quitar miembro
-- `PATCH /projects/:id/members/:userId/role` - Cambiar rol
-
-### Tasks
-- `GET /tasks/:id` - Detalle de tarea
-- `PATCH /tasks/:id` - Actualizar tarea
-- `DELETE /tasks/:id` - Eliminar tarea
-
-### Users
-- `POST /users` - Crear usuario (solo ADMIN)
-- `GET /users` - Listar usuarios (cualquier usuario autenticado)
-- `GET /users/me` - Perfil del usuario autenticado (con herramientas)
-- `GET /users/stats` - Estadisticas (solo ADMIN)
-- `PATCH /users/:id` - Actualizar (solo ADMIN)
-- `DELETE /users/:id` - Eliminar (solo ADMIN)
-
-### Tools
-- `GET /tools` - Catalogo de herramientas
-- `POST /tools` - Crear herramienta
-- `DELETE /tools/:id` - Eliminar herramienta
-- `GET /tools/assignments` - Asignaciones (filtros)
-- `GET /tools/users` - Usuarios con herramientas
-- `POST /tools/assign` - Asignar herramienta
-- `PATCH /tools/assign/:id` - Actualizar asignacion
-- `DELETE /tools/assign/:id` - Eliminar asignacion
-- `GET /tools/assign/:id/audit` - Auditoria
-
-### Chat IA
-- `POST /chat/message` - Enviar mensaje al asistente
-- `GET /chat/conversations` - Listar conversaciones (filtro por agentId)
-- `GET /chat/conversations/:id/messages` - Mensajes de una conversacion
-
-### Agents
-- `GET /admin/agents` - Listar usuarios con sus agentes
-- `GET /admin/agents/catalog` - Listar todos los agentes (catalogo)
-- `GET /admin/agents/assignments` - Listar todas las asignaciones
-- `POST /admin/agents` - Crear agente
-- `PATCH /admin/agents/:id` - Actualizar agente
-- `DELETE /admin/agents/:id` - Eliminar agente
-- `POST /admin/agents/:id/assign/:userId` - Asignar agente a usuario
-- `DELETE /admin/agents/:id/assign/:userId` - Quitar agente de usuario
-- `GET /agents/available` - Agentes disponibles para el usuario actual
-
-### Companies
-- `GET /companies` - Listar empresas (solo ADMIN)
-- `GET /companies/mine` - Empresa del usuario autenticado
-- `GET /companies/slug/:slug` - Buscar empresa por slug (publico)
-- `GET /companies/:id` - Detalle de empresa (solo ADMIN)
-- `POST /companies` - Crear empresa (solo super admin)
-- `PATCH /companies/:id` - Actualizar empresa
-- `DELETE /companies/:id` - Eliminar empresa (solo super admin)
-- `POST /companies/:id/logo` - Subir logo de empresa
+| Prefijo | Modulo |
+|---------|--------|
+| `/auth` | Registro, login, perfil y recuperacion de contrasena |
+| `/users` | Usuarios, perfil propio, ubicaciones y preferencias personales |
+| `/projects`, `/tasks` | Proyectos, miembros y tareas |
+| `/companies`, `/permissions`, `/admin/...` | Empresas, branding y permisos por seccion |
+| `/chat`, `/admin/agents`, `/agents`, `/company-knowledge-base` | Agente Gemeseg, agentes y base de conocimiento |
+| `/notifications` | Bandeja de notificaciones |
+| `/cacao/...` | Proveedores, recepciones, lotes, liquidaciones, embarques, cuentas, kardex |
+| `/custodias` | Custodias, nomina, PDFs y GEME-BOT |
+| `/personal/...`, `/public/surveys/:token` | Recursos Humanos (reclutamiento, cumplimiento, capacitaciones, quejas, encuestas) |
+| `/ventas/...` | Clientes, referidos, plantillas, contratos y firma |
+| `/contratacion-publica/...` | Entidades, contratos, puestos, horarios, informes, entregas (revisión con vista previa, historial y bandejas) |
+| `/sistemas/...`, `/tools` | Soporte tecnico e inventario de herramientas |
 
 ## Tecnologia
-- **Frontend**: React 18 + Vite + TypeScript
-- **Backend**: NestJS + TypeScript + Prisma ORM v7
+- **Frontend**: React 18 + Vite + TypeScript, react-router, React Hook Form + Zod
+- **Backend**: NestJS 11 + TypeScript + Prisma ORM v7
 - **Base de datos**: PostgreSQL 16 (Cloud SQL `gemeseg-db` en produccion)
 - **Autenticacion**: JWT (Passport.js)
 - **Validacion**: class-validator (backend) + Zod (frontend)
 - **IA**: Google Vertex AI (Gemini) — ver `AGENTS.md` y `.agents/modules/agents-ai.md`
+- **Integraciones**: Google Drive y Gmail (cuenta de servicio), SignWell (firma electronica), LibreOffice (DOCX a PDF), PDFKit
 - **Estilos**: CSS custom con paleta corporativa GEMESEG
 - **Deploy**: Cloud Run (backend) + Firebase Hosting (frontend) + Cloud SQL (DB), todo desde `cloudbuild.yaml`
 
@@ -332,23 +260,11 @@ MejoraGemeseg/
 - Gris claro: `#E6E6E6`
 
 ## Ramas del repositorio
-- `main` - Produccion, codigo estable
-- `feature/COMP-01-02-white-labeling` - Gestion de empresas y white-labeling
-- `feature/CHAT-01-chat-flotante` - Chat con GitHub Models
-- `feature/DASH-02-DASH-03-admin-dashboard` - Panel de administracion
-- `feature/tasks-T01-T02` - CRUD de tareas y Kanban
-- `feature/user-01-profile` - Perfil de usuario
-- `fix/T01-T02-task-corrections` - Correcciones a tareas
+- `main` — produccion; todo entra por Pull Request.
+- `feature/<nombre>` — funcionalidades nuevas.
+- `fix/<nombre>` — correcciones.
 
-## Base de datos en produccion (Cloud SQL)
-La base vive en la instancia `gemeseg-db` (proyecto `mejora-gemeseg`, region
-us-central1). El esquema se aplica con Prisma; ver `AGENTS.md` y
-`.agents/database.md` para el detalle, incluidos los pasos para conectarse en
-local con el Cloud SQL Auth Proxy.
-
-**Aviso:** los cambios de esquema NO se aplican solos al publicar
-(`cloudbuild.yaml` no corre migraciones). Hay que ejecutarlos a mano contra la
-base de produccion.
+Siempre se crea la rama desde un `main` recien actualizado (`git pull origin main`).
 
 ## Historias de usuario completadas
 - [x] HU-ADM-01: Registro e inicio de sesion
@@ -357,7 +273,7 @@ base de produccion.
 - [x] T-01: CRUD de tareas
 - [x] T-02: Tablero Kanban
 - [x] CHT-01: Chat flotante
-- [x] CHT-02: Chat con GitHub Models
+- [x] CHT-02: Chat con IA (hoy Google Vertex AI; antes GitHub Models)
 - [x] DASH-02: Gestion de usuarios (Admin)
 - [x] DASH-03: Panel de proyectos (Admin)
 - [x] SIS-01: Acceso a Herramientas
@@ -365,3 +281,5 @@ base de produccion.
 - [x] USER-01: Visualizacion de perfil de usuario
 - [x] COMP-01: Gestion de empresas (CRUD, branding, logo)
 - [x] COMP-02: Datos por empresa (asociacion usuario-empresa, super admin)
+
+Desde entonces se sumaron, sin codigo de historia asignado: permisos por seccion, Cacao, Custodias, Recursos Humanos, Ventas y CRM, Contratacion Publica, Sistemas, notificaciones y la base de conocimiento del agente.
