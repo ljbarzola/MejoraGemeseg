@@ -3684,7 +3684,7 @@ body {
 
 @media (max-width: 768px) {
   .main-content,
-  .main-content.sidebar-collapsed {
+  .main-content.content-expanded {
     margin-left: 0;
     padding-top: 56px; /* deja sitio al boton hamburguesa fijo */
   }
@@ -3704,9 +3704,8 @@ body {
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35);
   }
 
-  /* En movil el cajon siempre va expandido: colapsarlo a 64px no aporta */
-  .sidebar.sidebar-collapsed .sidebar-label,
-  .sidebar.sidebar-collapsed .sidebar-brand { display: initial; }
+  /* En movil el cajon siempre va expandido: Sidebar.tsx ignora la preferencia
+     "colapsado" de escritorio cuando la pantalla es <=768px. */
 
   .sidebar-fab {
     display: flex;
