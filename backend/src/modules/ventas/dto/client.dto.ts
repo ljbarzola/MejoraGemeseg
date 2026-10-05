@@ -105,9 +105,9 @@ export class SalesClientFieldOptionDto {
   @IsString()
   label: string;
 
-  // Solo se usa en las opciones del campo núcleo `servicio_requerido`: los
-  // sub-servicios que se pueden elegir cuando se escoge ese servicio. Sin
-  // `children` declarado (undefined) = nunca se sembró; [] = sin sub-servicios.
+  // Hijos de esta opción. En `servicio_requerido` son los sub-servicios.
+  // En un campo `LISTA_SUBOPCIONES` son las casillas de esa opción. Sin
+  // `children` declarado (undefined) = nunca se sembró; [] = sin hijos.
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

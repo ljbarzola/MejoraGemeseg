@@ -1842,14 +1842,17 @@ model SalesClientField {
   key        String
   label      String
   fieldType  String   @default("TEXT")
-  // Solo relevante cuando fieldType = 'SELECT'. Forma {key,label}[] — nunca
-  // un string[] plano: el valor guardado en SalesClient.extra es el `key`
-  // estable de la opción, así renombrar una opción (ej. "Referido" ->
-  // "Recomendación") no corrompe los clientes ya guardados con esa fuente.
+  // Relevante cuando fieldType = 'SELECT' o 'LISTA_SUBOPCIONES'. Forma
+  // {key,label,children?}[] — nunca un string[] plano: el valor guardado en
+  // SalesClient.extra[key] es el `key` estable de la opción, así renombrar
+  // una opción (ej. "Referido" -> "Recomendación") no corrompe los clientes
+  // ya guardados. En LISTA_SUBOPCIONES, children son las casillas de esa
+  // opción; las marcadas se guardan en extra[key__sub], separadas por coma.
   options    Json     @default("[]")
-  // Solo relevante cuando fieldType = 'SELECT': agrega una opción "Otro" que
-  // deja escribir texto libre en vez de elegir de la lista — mismo patrón
-  // que SalesTemplateField.allowOther (ventas-templates, contratos).
+  // Relevante cuando fieldType = 'SELECT' o 'LISTA_SUBOPCIONES': agrega una
+  // opción "Otro" que deja escribir texto libre en vez de elegir de la lista
+  // — mismo patrón que SalesTemplateField.allowOther (ventas-templates, contratos).
+  // Un "Otro" de texto libre no tiene casillas.
   allowOther Boolean  @default(false)
   isCore     Boolean  @default(false)
   order      Int      @default(0)

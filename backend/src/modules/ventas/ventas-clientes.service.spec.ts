@@ -2,8 +2,10 @@ import { BadRequestException } from '@nestjs/common';
 import {
   conSubserviciosPorDefecto,
   fechaIngresoParaEditar,
+  normalizarSubopciones,
   normalizarSubservicios,
   parseFechaIngreso,
+  trasladarSubserviciosLegado,
 } from './ventas-clientes.service';
 
 describe('fecha de ingreso', () => {
@@ -83,5 +85,60 @@ describe('sub-servicios', () => {
   it('si Ventas vació la lista ([]) no se vuelve a sembrar', () => {
     const { changed } = conSubserviciosPorDefecto([{ key: 'SEGURIDAD_FISICA', label: 'Seguridad Física', children: [] }]);
     expect(changed).toBe(false);
+  });
+});
+
+describe('subservicios legado', () => {
+  it('copia la clave vieja a servicio_requerido__sub y la quita', () => {
+    expect(
+      trasladarSubserviciosLegado({
+        servicio_requerido: 'MONITOREO',
+        subservicios_requeridos: 'MONITOREO_DE_CAMARAS',
+      }),
+    ).toEqual({
+      servicio_requerido: 'MONITOREO',
+      servicio_requerido__sub: 'MONITOREO_DE_CAMARAS',
+    });
+  });
+
+  it('no pisa casillas que ya están en la clave nueva', () => {
+    expect(
+      trasladarSubserviciosLegado({
+        subservicios_requeridos: 'VIEJO',
+        servicio_requerido__sub: 'NUEVO',
+      }),
+    ).toEqual({ servicio_requerido__sub: 'NUEVO' });
+  });
+});
+
+describe('subopciones', () => {
+  const opciones = [
+    {
+      key: 'CAMPANA',
+      label: 'Campaña',
+      children: [
+        { key: 'FACEBOOK', label: 'Facebook' },
+        { key: 'INSTAGRAM', label: 'Instagram' },
+      ],
+    },
+    { key: 'REFERIDO', label: 'Referido', children: [] },
+  ];
+
+  it('vacío siempre es válido (casillas opcionales)', () => {
+    expect(normalizarSubopciones(opciones, 'CAMPANA', '')).toBe('');
+    expect(normalizarSubopciones(opciones, undefined, [])).toBe('');
+  });
+
+  it('acepta varias de la opción elegida, sin duplicados', () => {
+    expect(normalizarSubopciones(opciones, 'CAMPANA', ['FACEBOOK', 'FACEBOOK', 'INSTAGRAM'])).toBe(
+      'FACEBOOK,INSTAGRAM',
+    );
+    expect(normalizarSubopciones(opciones, 'CAMPANA', 'INSTAGRAM')).toBe('INSTAGRAM');
+  });
+
+  it('rechaza las de otra opción, o si la opción no tiene subopciones / es texto libre', () => {
+    expect(() => normalizarSubopciones(opciones, 'CAMPANA', 'TIKTOK')).toThrow(BadRequestException);
+    expect(() => normalizarSubopciones(opciones, 'REFERIDO', 'FACEBOOK')).toThrow(BadRequestException);
+    expect(() => normalizarSubopciones(opciones, 'Feria del barrio', 'FACEBOOK')).toThrow(BadRequestException);
   });
 });

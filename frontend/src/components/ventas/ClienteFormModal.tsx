@@ -7,6 +7,8 @@ import {
   SalesClientField,
   SERVICIO_KEY,
   SUBSERVICIOS_KEY,
+  LISTA_SUBOPCIONES,
+  subopcionesKey,
   subserviciosDe,
 } from '../../services/ventas.service';
 import { useToast } from '../../contexts/ToastContext';
@@ -33,8 +35,9 @@ const aDiaLocal = (d: Date) => d.toLocaleDateString('en-CA');
 
 export default function ClienteFormModal({ client, fields, onClose, onSaved }: Props) {
   const { showToast } = useToast();
-  const otherFields = fields.filter((f) => f.key !== 'name').sort((a, b) => a.order - b.order);
-  const servicioField = fields.find((f) => f.key === SERVICIO_KEY);
+  const otherFields = fields
+    .filter((f) => f.key !== 'name' && f.key !== SUBSERVICIOS_KEY)
+    .sort((a, b) => a.order - b.order);
   const hoy = aDiaLocal(new Date());
 
   const [name, setName] = useState(client?.name || '');
@@ -45,6 +48,10 @@ export default function ClienteFormModal({ client, fields, onClose, onSaved }: P
     for (const key of NATIVE_KEYS) {
       const nativeValue = client ? (client as unknown as Record<string, string | null>)[key] : null;
       initial[key] = nativeValue || initial[key] || '';
+    }
+    const subServicio = subopcionesKey(SERVICIO_KEY);
+    if (!initial[subServicio] && initial[SUBSERVICIOS_KEY]) {
+      initial[subServicio] = initial[SUBSERVICIOS_KEY];
     }
     return initial;
   });
@@ -75,9 +82,12 @@ export default function ClienteFormModal({ client, fields, onClose, onSaved }: P
           extra[field.key] = values[field.key] || '';
         }
       }
-      // Sub-servicios solo valen mientras el servicio elegido los tenga.
-      if (subserviciosDe(servicioField?.options, values[SERVICIO_KEY] || '').length === 0) {
-        extra[SUBSERVICIOS_KEY] = '';
+      // Casillas de una lista con subopciones: van en extra[clave__sub], no en un campo aparte.
+      for (const field of otherFields) {
+        if (field.fieldType !== LISTA_SUBOPCIONES) continue;
+        const subKey = subopcionesKey(field.key);
+        const opciones = subserviciosDe(field.options, values[field.key] || '');
+        extra[subKey] = opciones.length === 0 ? '' : (values[subKey] || '');
       }
       payload.extra = extra;
       if (client) await updateSalesClient(client.id, payload);
@@ -111,20 +121,28 @@ export default function ClienteFormModal({ client, fields, onClose, onSaved }: P
                 style={{ padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }} />
             </div>
             {otherFields.map((f) => {
-              if (f.fieldType === 'SUBSERVICIOS') {
-                // Solo aparece cuando el servicio elegido tiene sub-servicios.
-                const opciones = subserviciosDe(servicioField?.options, values[SERVICIO_KEY] || '');
-                if (opciones.length === 0) return null;
+              if (f.fieldType === LISTA_SUBOPCIONES) {
+                const subKey = subopcionesKey(f.key);
+                const opciones = subserviciosDe(f.options, values[f.key] || '');
                 return (
-                  <div key={f.key} style={{ gridColumn: '1 / -1' }}>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>
-                      {f.label} <span style={{ fontWeight: 400 }}>(opcional)</span>
-                    </label>
-                    <SubserviciosCheckboxes
-                      options={opciones}
+                  <div key={f.key} style={opciones.length > 0 ? { gridColumn: '1 / -1' } : undefined}>
+                    <ExtraField
+                      field={{ ...f, fieldType: 'SELECT' }}
                       value={values[f.key] || ''}
-                      onChange={(v) => setValues({ ...values, [f.key]: v })}
+                      onChange={(v) => setValues({ ...values, [f.key]: v, [subKey]: '' })}
                     />
+                    {opciones.length > 0 && (
+                      <div style={{ marginTop: 6 }}>
+                        <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>
+                          Subopciones <span style={{ fontWeight: 400 }}>(opcional)</span>
+                        </label>
+                        <SubserviciosCheckboxes
+                          options={opciones}
+                          value={values[subKey] || ''}
+                          onChange={(v) => setValues({ ...values, [subKey]: v })}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               }
@@ -133,14 +151,7 @@ export default function ClienteFormModal({ client, fields, onClose, onSaved }: P
                   <ExtraField
                     field={f}
                     value={values[f.key] || ''}
-                    // Cambiar de servicio limpia los sub-servicios: ya no aplican.
-                    onChange={(v) =>
-                      setValues(
-                        f.key === SERVICIO_KEY
-                          ? { ...values, [f.key]: v, [SUBSERVICIOS_KEY]: '' }
-                          : { ...values, [f.key]: v },
-                      )
-                    }
+                    onChange={(v) => setValues({ ...values, [f.key]: v })}
                   />
                 </div>
               );

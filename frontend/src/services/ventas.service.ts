@@ -299,8 +299,8 @@ export const deleteSalesApiKey = (id: number) => api.delete(`/ventas/api-keys/${
 export interface SalesClientFieldOption {
   key: string;
   label: string;
-  // Solo en las opciones de `servicio_requerido`: sub-servicios que se pueden
-  // elegir al escoger ese servicio.
+  // Hijos de la opción: sub-servicios de `servicio_requerido`, o casillas de
+  // un campo LISTA_SUBOPCIONES.
   children?: { key: string; label: string }[];
 }
 
@@ -308,6 +308,13 @@ export interface SalesClientFieldOption {
 // último guarda en extra las keys marcadas, separadas por coma).
 export const SERVICIO_KEY = 'servicio_requerido';
 export const SUBSERVICIOS_KEY = 'subservicios_requeridos';
+export const FUENTE_KEY = 'fuente';
+// Lista con casillas por opción. La opción va en extra[key]; las casillas, en extra[key__sub].
+export const LISTA_SUBOPCIONES = 'LISTA_SUBOPCIONES';
+
+export function subopcionesKey(fieldKey: string): string {
+  return `${fieldKey}__sub`;
+}
 
 export interface SalesClientField {
   id: number;
@@ -315,10 +322,10 @@ export interface SalesClientField {
   key: string;
   label: string;
   fieldType: string;
-  // Solo relevante si fieldType === 'SELECT'.
+  // Relevante si fieldType === 'SELECT' o 'LISTA_SUBOPCIONES'.
   options: SalesClientFieldOption[];
-  // Solo relevante si fieldType === 'SELECT': agrega una opción "Otro" con
-  // texto libre (mismo patrón que SalesTemplateField.allowOther).
+  // Relevante si fieldType === 'SELECT' o 'LISTA_SUBOPCIONES': agrega una
+  // opción "Otro" con texto libre (mismo patrón que SalesTemplateField.allowOther).
   allowOther: boolean;
   isCore: boolean;
   order: number;
@@ -528,15 +535,18 @@ export function subserviciosDe(servicioOptions: SalesClientFieldOption[] | undef
 export const parseSubservicios = (raw: string | undefined | null): string[] =>
   (raw || '').split(',').map((k) => k.trim()).filter(Boolean);
 
-// Labels actuales de los sub-servicios marcados, separados por coma. Si una
-// key ya no existe en la lista (Ventas la quitó), se muestra tal cual.
-export function salesClientSubserviciosLabel(client: SalesClient | null | undefined, fields: SalesClientField[]): string {
-  const keys = parseSubservicios(salesClientValue(client, SUBSERVICIOS_KEY));
-  if (keys.length === 0) return '';
-  const disponibles = subserviciosDe(
-    fields.find((f) => f.key === SERVICIO_KEY)?.options,
-    salesClientValue(client, SERVICIO_KEY),
+// "Campaña · Facebook, Instagram", o solo el nombre de la opción si no hay casillas.
+// Servicio requerido antes guardaba las casillas en extra.subservicios_requeridos.
+export function salesClientListaSubopcionesLabel(client: SalesClient | null | undefined, field: SalesClientField): string {
+  const parent = salesClientSelectLabel(client, field);
+  if (!parent) return '';
+  const guardadas = salesClientValue(client, subopcionesKey(field.key));
+  const keys = parseSubservicios(
+    guardadas || (field.key === SERVICIO_KEY ? salesClientValue(client, SUBSERVICIOS_KEY) : ''),
   );
-  return keys.map((k) => disponibles.find((c) => c.key === k)?.label || k).join(', ');
+  if (keys.length === 0) return parent;
+  const disponibles = subserviciosDe(field.options, salesClientValue(client, field.key));
+  const hijos = keys.map((k) => disponibles.find((c) => c.key === k)?.label || k).join(', ');
+  return hijos ? `${parent} · ${hijos}` : parent;
 }
 

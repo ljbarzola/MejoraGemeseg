@@ -6,7 +6,8 @@ import {
   deleteSalesClientField,
   SalesClientField,
   SalesClientFieldOption,
-  SERVICIO_KEY,
+  LISTA_SUBOPCIONES,
+  SUBSERVICIOS_KEY,
 } from '../../services/ventas.service';
 
 const TYPE_LABEL: Record<string, string> = {
@@ -16,8 +17,10 @@ const TYPE_LABEL: Record<string, string> = {
   DATE: 'Fecha',
   BOOLEAN: 'Sí/No',
   SELECT: 'Lista de opciones',
-  SUBSERVICIOS: 'Casillas según el servicio',
+  LISTA_SUBOPCIONES: 'Lista con subopciones',
 };
+
+const esLista = (fieldType: string) => fieldType === 'SELECT' || fieldType === LISTA_SUBOPCIONES;
 
 // Convierte un label libre en un key estable — mismo criterio que
 // ComplaintStagesConfigModal.tsx / SalesClientStagesConfigModal.tsx.
@@ -54,8 +57,8 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
       await addSalesClientField({
         label: newFieldLabel.trim(),
         fieldType: newFieldType,
-        options: newFieldType === 'SELECT' ? newOptions : undefined,
-        allowOther: newFieldType === 'SELECT' ? newAllowOther : undefined,
+        options: esLista(newFieldType) ? newOptions : undefined,
+        allowOther: esLista(newFieldType) ? newAllowOther : undefined,
       });
       setNewFieldLabel('');
       setNewFieldType('TEXT');
@@ -142,17 +145,19 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
     }
   };
 
+  const nombreHijo = () => 'la subopción';
+
   const handleAddChild = (field: SalesClientField, option: SalesClientFieldOption, label: string) => {
     const key = slugifyKey(label);
     const children = option.children || [];
     if (!key || children.some((c) => c.key === key)) return;
-    return saveChildren(field, option.key, [...children, { key, label: label.trim() }], 'No se pudo agregar el sub-servicio');
+    return saveChildren(field, option.key, [...children, { key, label: label.trim() }], `No se pudo agregar ${nombreHijo()}`);
   };
 
   const handleRenameChild = (field: SalesClientField, option: SalesClientFieldOption, childKey: string, label: string) => {
     if (!label.trim()) return;
     const children = (option.children || []).map((c) => (c.key === childKey ? { ...c, label: label.trim() } : c));
-    return saveChildren(field, option.key, children, 'No se pudo renombrar el sub-servicio');
+    return saveChildren(field, option.key, children, `No se pudo renombrar ${nombreHijo()}`);
   };
 
   const handleRemoveChild = (field: SalesClientField, option: SalesClientFieldOption, childKey: string) =>
@@ -160,7 +165,7 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
       field,
       option.key,
       (option.children || []).filter((c) => c.key !== childKey),
-      'No se pudo quitar el sub-servicio',
+      `No se pudo quitar ${nombreHijo()}`,
     );
 
   const handleToggleAllowOther = async (field: SalesClientField) => {
@@ -198,13 +203,13 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
         <div className="modal-body">
           <p style={{ fontSize: 12, color: '#666', margin: '0 0 12px' }}>
             Estos campos se pueden mapear a las variables de un contrato. Nombre y email son fijos; puedes añadir más,
-            y renombrar o editar las opciones de "Fuente" y "Servicio requerido" (en "Servicio requerido" también los sub-servicios de cada opción).
+            y renombrar o editar las opciones de "Fuente" y "Servicio requerido". En cada opción puedes cargar subopciones.
           </p>
 
           {error && <div className="form-error" style={{ marginBottom: 12 }}>{error}</div>}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-            {fields.map((f) => (
+            {fields.filter((f) => f.key !== SUBSERVICIOS_KEY).map((f) => (
               <div key={f.id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 10px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <input
@@ -213,7 +218,7 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
                     style={{ flex: 1, padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 12, fontWeight: 600 }}
                   />
                   <span style={{ fontSize: 10, color: '#888', whiteSpace: 'nowrap' }}>({TYPE_LABEL[f.fieldType] || f.fieldType})</span>
-                  {f.fieldType === 'SELECT' && (
+                  {esLista(f.fieldType) && (
                     <button type="button" onClick={() => setEditingId(editingId === f.id ? null : f.id)}
                       className="btn-secondary" style={{ padding: '2px 8px', fontSize: 11 }}>
                       {editingId === f.id ? 'Cerrar' : 'Opciones'}
@@ -227,7 +232,7 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
                   )}
                 </div>
 
-                {f.fieldType === 'SELECT' && editingId === f.id && (
+                {esLista(f.fieldType) && editingId === f.id && (
                   <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed #e2e8f0' }}>
                     {(f.options || []).map((o) => (
                       <div key={o.key} style={{ marginBottom: 6 }}>
@@ -242,24 +247,15 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
                             <Trash2 size={12} />
                           </button>
                         </div>
-                        {f.key === SERVICIO_KEY && (
-                          <div style={{ marginLeft: 18, paddingLeft: 8, borderLeft: '2px solid #e2e8f0' }}>
-                            <div style={{ fontSize: 10.5, color: '#888', marginBottom: 2 }}>Sub-servicios de "{o.label}"</div>
-                            {(o.children || []).map((c) => (
-                              <div key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                                <input
-                                  defaultValue={c.label}
-                                  onBlur={(e) => handleRenameChild(f, o, c.key, e.target.value)}
-                                  style={{ flex: 1, padding: '3px 6px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 11.5 }}
-                                />
-                                <button type="button" onClick={() => handleRemoveChild(f, o, c.key)}
-                                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#c33' }}>
-                                  <Trash2 size={11} />
-                                </button>
-                              </div>
-                            ))}
-                            <AddOptionRow placeholder="Nuevo sub-servicio" onAdd={(label) => handleAddChild(f, o, label)} />
-                          </div>
+                        {f.fieldType === LISTA_SUBOPCIONES && (
+                          <HijosDeOpcion
+                            titulo={`Subopciones de "${o.label}"`}
+                            option={o}
+                            placeholder="Nueva subopción"
+                            onRename={(childKey, label) => handleRenameChild(f, o, childKey, label)}
+                            onRemove={(childKey) => handleRemoveChild(f, o, childKey)}
+                            onAdd={(label) => handleAddChild(f, o, label)}
+                          />
                         )}
                       </div>
                     ))}
@@ -287,12 +283,13 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
                 <option value="DATE">Fecha</option>
                 <option value="BOOLEAN">Sí/No</option>
                 <option value="SELECT">Lista de opciones</option>
+                <option value={LISTA_SUBOPCIONES}>Lista con subopciones</option>
               </select>
               <button className="btn-secondary" onClick={handleAddField} disabled={addingField || !newFieldLabel.trim()}
                 style={{ padding: '8px 14px', fontSize: 12 }}>Añadir campo</button>
             </div>
 
-            {newFieldType === 'SELECT' && (
+            {esLista(newFieldType) && (
               <div style={{ marginTop: 8 }}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
                   {newOptions.map((o) => (
@@ -323,6 +320,42 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
           <button className="btn-secondary" onClick={onClose}>Cerrar</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function HijosDeOpcion({
+  titulo,
+  option,
+  placeholder,
+  onRename,
+  onRemove,
+  onAdd,
+}: {
+  titulo: string;
+  option: SalesClientFieldOption;
+  placeholder: string;
+  onRename: (childKey: string, label: string) => void;
+  onRemove: (childKey: string) => void;
+  onAdd: (label: string) => void;
+}) {
+  return (
+    <div style={{ marginLeft: 18, paddingLeft: 8, borderLeft: '2px solid #e2e8f0' }}>
+      <div style={{ fontSize: 10.5, color: '#888', marginBottom: 2 }}>{titulo}</div>
+      {(option.children || []).map((c) => (
+        <div key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+          <input
+            defaultValue={c.label}
+            onBlur={(e) => onRename(c.key, e.target.value)}
+            style={{ flex: 1, padding: '3px 6px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 11.5 }}
+          />
+          <button type="button" onClick={() => onRemove(c.key)}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#c33' }}>
+            <Trash2 size={11} />
+          </button>
+        </div>
+      ))}
+      <AddOptionRow placeholder={placeholder} onAdd={onAdd} />
     </div>
   );
 }

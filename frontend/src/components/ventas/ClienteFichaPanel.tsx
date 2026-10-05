@@ -16,8 +16,8 @@ import {
   SalesActivityType,
   TimelineEvent,
   SERVICIO_KEY,
-  salesClientSelectLabel,
-  salesClientSubserviciosLabel,
+  FUENTE_KEY,
+  salesClientListaSubopcionesLabel,
 } from '../../services/ventas.service';
 
 interface Props {
@@ -59,6 +59,7 @@ function Etapa({ info }: { info: { label: string; color: string } | null }) {
 // Ficha del cliente: datos de contacto, siguiente paso y línea de tiempo
 // (creación, cambios de etapa, notas/llamadas/reuniones y contratos).
 export default function ClienteFichaPanel({ client, fields, onClose, onEditNextStep }: Props) {
+  const fuenteField = fields.find((f) => f.key === FUENTE_KEY);
   const servicioField = fields.find((f) => f.key === SERVICIO_KEY);
   const { showToast } = useToast();
   const currentUser = getUser();
@@ -290,8 +291,8 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEditNextS
             {dato('Correo', client.email)}
             {dato('RUC', client.ruc)}
             {dato('Dirección', client.address)}
-            {servicioField && dato('Servicio requerido', salesClientSelectLabel(client, servicioField))}
-            {dato('Sub-servicios', salesClientSubserviciosLabel(client, fields))}
+            {fuenteField && dato(fuenteField.label, salesClientListaSubopcionesLabel(client, fuenteField))}
+            {servicioField && dato(servicioField.label, salesClientListaSubopcionesLabel(client, servicioField))}
             {dato('Referido por', client.referredBy?.fullName)}
           </div>
 
