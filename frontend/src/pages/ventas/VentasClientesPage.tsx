@@ -30,7 +30,9 @@ import {
   SalesClientStage,
   salesClientValue,
   salesClientSelectLabel,
-  salesClientSubserviciosLabel,
+  salesClientListaSubopcionesLabel,
+  SUBSERVICIOS_KEY,
+  LISTA_SUBOPCIONES,
 } from '../../services/ventas.service';
 
 // Columnas "calculadas": no vienen de un SalesClientField, se arman a partir
@@ -107,7 +109,7 @@ export default function VentasClientesPage() {
   // calculadas. Nombre y Acciones son las únicas "sí o sí" — ni siquiera
   // pasan por este listado, se renderizan fijas al principio/final.
   const pickableColumns = [
-    ...fields.filter((f) => f.key !== 'name').map((f) => ({ key: f.key, label: f.label })),
+    ...fields.filter((f) => f.key !== 'name' && f.key !== SUBSERVICIOS_KEY).map((f) => ({ key: f.key, label: f.label })),
     { key: ETAPA_COL, label: 'Etapa' },
     { key: SIGUIENTE_COL, label: 'Siguiente paso' },
     { key: PARA_COL, label: 'Para cuándo' },
@@ -308,7 +310,7 @@ export default function VentasClientesPage() {
     if (key === FECHA_COL) return client.createdAt;
     const field = fields.find((f) => f.key === key);
     if (field?.fieldType === 'SELECT') return salesClientSelectLabel(client, field);
-    if (field?.fieldType === 'SUBSERVICIOS') return salesClientSubserviciosLabel(client, fields);
+    if (field?.fieldType === LISTA_SUBOPCIONES) return salesClientListaSubopcionesLabel(client, field);
     return salesClientValue(client, key);
   };
 

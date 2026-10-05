@@ -80,6 +80,13 @@ function normalizarTextoActividad(text: string | undefined): string {
 
 export const SERVICIO_KEY = 'servicio_requerido';
 export const SUBSERVICIOS_KEY = 'subservicios_requeridos';
+// Lista desplegable cuyas opciones pueden traer casillas (children).
+// La opción elegida vive en extra[key]; las casillas, en extra[key__sub].
+export const LISTA_SUBOPCIONES = 'LISTA_SUBOPCIONES';
+
+export function subopcionesKey(fieldKey: string): string {
+  return `${fieldKey}__sub`;
+}
 
 type OpcionConHijos = {
   key: string;
@@ -130,28 +137,69 @@ export function conSubserviciosPorDefecto(options: OpcionConHijos[]): {
   return { options: result, changed };
 }
 
-// Valida la elección de sub-servicios contra el servicio elegido. Siempre
-// opcional: vacío es válido y devuelve ''. Devuelve las keys unidas por coma
-// (formato de extra.subservicios_requeridos). Mensajes pensados para el
-// usuario, nunca texto crudo de error.
-export function normalizarSubservicios(
-  servicioOptions: OpcionConHijos[],
-  servicio: string | undefined,
+// Valida casillas hijas contra la opción padre elegida. Siempre opcional:
+// vacío es válido y devuelve ''. Devuelve las keys unidas por coma.
+function normalizarHijos(
+  options: OpcionConHijos[],
+  padre: string | undefined,
   raw: string[] | string | undefined | null,
+  mensaje: string,
 ): string {
   const keys = (Array.isArray(raw) ? raw : (raw || '').split(','))
     .map((k) => k.trim())
     .filter(Boolean);
   if (keys.length === 0) return '';
   const permitidas = new Set(
-    (servicioOptions.find((o) => o.key === servicio)?.children || []).map((c) => c.key),
+    (options.find((o) => o.key === padre)?.children || []).map((c) => c.key),
   );
   if (permitidas.size === 0 || keys.some((k) => !permitidas.has(k))) {
-    throw new BadRequestException(
-      'Los sub-servicios elegidos no corresponden al servicio requerido. Vuelve a seleccionarlos.',
-    );
+    throw new BadRequestException(mensaje);
   }
   return [...new Set(keys)].join(',');
+}
+
+// Formato histórico de extra.subservicios_requeridos. Las casillas de Servicio
+// requerido ahora viven en extra.servicio_requerido__sub (LISTA_SUBOPCIONES).
+export function normalizarSubservicios(
+  servicioOptions: OpcionConHijos[],
+  servicio: string | undefined,
+  raw: string[] | string | undefined | null,
+): string {
+  return normalizarHijos(
+    servicioOptions,
+    servicio,
+    raw,
+    'Los sub-servicios elegidos no corresponden al servicio requerido. Vuelve a seleccionarlos.',
+  );
+}
+
+// Formato de extra[clave__sub] en un campo LISTA_SUBOPCIONES.
+export function normalizarSubopciones(
+  options: OpcionConHijos[],
+  opcion: string | undefined,
+  raw: string[] | string | undefined | null,
+): string {
+  return normalizarHijos(
+    options,
+    opcion,
+    raw,
+    'Las subopciones elegidas no corresponden a la opción seleccionada. Vuelve a seleccionarlas.',
+  );
+}
+
+// El campo aparte "Sub-servicios" se retiró: sus casillas son las subopciones
+// de Servicio requerido. Copia el valor viejo a extra.servicio_requerido__sub
+// si todavía no hay uno, y quita la clave vieja.
+export function trasladarSubserviciosLegado(
+  extra: Record<string, string>,
+): Record<string, string> {
+  if (!(SUBSERVICIOS_KEY in extra)) return extra;
+  const next = { ...extra };
+  const viejo = (next[SUBSERVICIOS_KEY] || '').trim();
+  const subKey = subopcionesKey(SERVICIO_KEY);
+  if (viejo && !next[subKey]) next[subKey] = viejo;
+  delete next[SUBSERVICIOS_KEY];
+  return next;
 }
 
 // Fecha de ingreso ('YYYY-MM-DD') -> instante a guardar en createdAt.
@@ -193,7 +241,7 @@ export const CORE_CLIENT_FIELDS = [
   {
     key: 'fuente',
     label: 'Fuente',
-    fieldType: 'SELECT',
+    fieldType: LISTA_SUBOPCIONES,
     options: [
       { key: 'REFERIDO', label: 'Referido' },
       { key: 'CAMPANA', label: 'Campaña' },
@@ -207,21 +255,12 @@ export const CORE_CLIENT_FIELDS = [
   {
     key: 'servicio_requerido',
     label: 'Servicio requerido',
-    fieldType: 'SELECT',
+    fieldType: LISTA_SUBOPCIONES,
     options: [
       { key: 'MONITOREO', label: 'Monitoreo' },
       { key: 'SOLUCIONES_TECNOLOGICAS', label: 'Soluciones Tecnológicas' },
       { key: 'SEGURIDAD_FISICA', label: 'Seguridad Física' },
     ],
-  },
-  // Casillas que dependen del servicio elegido: las opciones salen de
-  // `children` de la opción de `servicio_requerido` (no de este campo), y la
-  // elección se guarda en extra.subservicios_requeridos como keys separadas
-  // por coma. Siempre opcional.
-  {
-    key: SUBSERVICIOS_KEY,
-    label: 'Sub-servicios',
-    fieldType: 'SUBSERVICIOS',
   },
   // Antes era un <textarea> aparte, fuera del sistema de campos — ahora es
   // un campo núcleo más, para que el formulario y el picker de columnas lo
@@ -331,7 +370,7 @@ export class VentasClientesService {
   // Idempotente: además de crear los campos núcleo que falten, corrige
   // `order`/`fieldType` de los que ya existen para que siempre respeten
   // CORE_CLIENT_FIELDS (Nombre, Email, Teléfono, RUC, Dirección, Fuente,
-  // Servicio requerido, Sub-servicios, Observaciones) — así un campo nuevo que
+  // Servicio requerido, Observaciones) — así un campo nuevo que
   // Ventas agregue siempre queda después de Observaciones (order = max + 1),
   // sin importar en qué momento se sembró cada campo núcleo para esta
   // empresa. OJO: `label`, `options` y `allowOther` NO se resincronizan
@@ -389,6 +428,34 @@ export class VentasClientesService {
         }
       }
     }
+    await this.retirarCampoSubservicios(companyId);
+  }
+
+  // "Sub-servicios" era un campo núcleo aparte. Sus casillas ya viven dentro
+  // de cada opción de Servicio requerido, así que el campo se borra y el
+  // valor guardado en los clientes pasa a extra.servicio_requerido__sub.
+  // Corre una sola vez por empresa: cuando la fila ya no existe, no hace nada.
+  private async retirarCampoSubservicios(companyId: number) {
+    const campo = await this.prisma.salesClientField.findFirst({
+      where: { companyId, key: SUBSERVICIOS_KEY },
+    });
+    if (!campo) return;
+    const clientes = await this.prisma.salesClient.findMany({
+      where: { companyId },
+      select: { id: true, extra: true },
+    });
+    for (const cliente of clientes) {
+      const actual =
+        cliente.extra && typeof cliente.extra === 'object' && !Array.isArray(cliente.extra)
+          ? (cliente.extra as Record<string, string>)
+          : {};
+      if (!(SUBSERVICIOS_KEY in actual)) continue;
+      await this.prisma.salesClient.update({
+        where: { id: cliente.id },
+        data: { extra: trasladarSubserviciosLegado(actual) },
+      });
+    }
+    await this.prisma.salesClientField.deleteMany({ where: { id: campo.id } });
   }
 
   // Etapas por defecto del pipeline de Clientes — misma idea que
@@ -824,9 +891,9 @@ export class VentasClientesService {
     const extra: Record<string, string> = { fuente: 'REFERIDO' };
     if (dto.servicioRequerido) extra[SERVICIO_KEY] = dto.servicioRequerido;
     if (dto.subserviciosRequeridos?.length) {
-      extra[SUBSERVICIOS_KEY] = dto.subserviciosRequeridos.join(',');
-      await this.validarSubserviciosDeExtra(companyId, extra);
+      extra[subopcionesKey(SERVICIO_KEY)] = dto.subserviciosRequeridos.join(',');
     }
+    await this.validarSubopcionesDeExtra(companyId, extra);
 
     return this.prisma.salesClient.create({
       data: {
@@ -896,24 +963,22 @@ export class VentasClientesService {
     return client;
   }
 
-  // Los sub-servicios guardados deben pertenecer al servicio guardado en el
-  // mismo `extra`. Siempre opcional: sin sub-servicios no hace nada. Reescribe
-  // `extra[SUBSERVICIOS_KEY]` ya normalizado (sin duplicados).
-  private async validarSubserviciosDeExtra(
+  // Cada campo LISTA_SUBOPCIONES guarda las casillas en extra[clave__sub].
+  // Siempre opcionales. Reescribe el valor ya normalizado (sin duplicados).
+  private async validarSubopcionesDeExtra(
     companyId: number,
     extra: Record<string, string>,
   ) {
-    if (!extra[SUBSERVICIOS_KEY]) return;
     await this.ensureCoreFields(companyId);
-    const campo = await this.prisma.salesClientField.findFirst({
-      where: { companyId, key: SERVICIO_KEY },
+    const campos = await this.prisma.salesClientField.findMany({
+      where: { companyId, fieldType: LISTA_SUBOPCIONES },
     });
-    const opciones = (Array.isArray(campo?.options) ? campo.options : []) as OpcionConHijos[];
-    extra[SUBSERVICIOS_KEY] = normalizarSubservicios(
-      opciones,
-      extra[SERVICIO_KEY],
-      extra[SUBSERVICIOS_KEY],
-    );
+    for (const campo of campos) {
+      const subKey = subopcionesKey(campo.key);
+      if (!extra[subKey]) continue;
+      const opciones = (Array.isArray(campo.options) ? campo.options : []) as OpcionConHijos[];
+      extra[subKey] = normalizarSubopciones(opciones, extra[campo.key], extra[subKey]);
+    }
   }
 
   async createClient(companyId: number | null, createdBy: number, dto: any) {
@@ -925,8 +990,8 @@ export class VentasClientesService {
     const initialStage = await this.prisma.salesClientStage.findFirst({
       where: { companyId, isInitial: true },
     });
-    const extra: Record<string, string> = { ...(dto.extra || {}) };
-    await this.validarSubserviciosDeExtra(companyId, extra);
+    const extra = trasladarSubserviciosLegado({ ...(dto.extra || {}) });
+    await this.validarSubopcionesDeExtra(companyId, extra);
     const fechaIngreso = parseFechaIngreso(dto.fechaIngreso);
     return this.prisma.salesClient.create({
       data: {
@@ -996,8 +1061,8 @@ export class VentasClientesService {
         ? String(dto.observaciones).trim()
         : null;
     if (dto.extra !== undefined) {
-      const extra: Record<string, string> = { ...dto.extra };
-      await this.validarSubserviciosDeExtra(companyId as number, extra);
+      const extra = trasladarSubserviciosLegado({ ...dto.extra });
+      await this.validarSubopcionesDeExtra(companyId as number, extra);
       data.extra = extra;
     }
     Object.assign(data, parseSiguientePaso(dto));
