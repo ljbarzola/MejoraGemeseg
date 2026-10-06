@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, BookOpen } from 'lucide-react';
 import { getKnowledgeBase, updateKnowledgeBase } from '../../services/knowledge-base.service';
 
-const SECCIONES_EJEMPLO = ['CACAO', 'CUSTODIAS', 'RRHH', 'VENTAS', 'CONTRATACION_PUBLICA'];
+const SECCIONES_EJEMPLO = ['CACAO', 'CUSTODIAS', 'RRHH', 'VENTAS', 'CONTRATACION_PUBLICA', 'SISTEMAS'];
 
 export default function KnowledgeBasePage() {
   const navigate = useNavigate();

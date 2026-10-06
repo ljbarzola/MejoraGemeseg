@@ -5,6 +5,13 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { ALL_SECTIONS, PermissionsService } from '../permissions/permissions.service';
 import { NOVEDAD_APP_DDL } from './novedad-app.schema';
 
+const TIPO_TICKET_LABEL: Record<string, string> = {
+  ERROR: 'Error',
+  MEJORA: 'Mejora',
+  PERMISO: 'Permiso',
+  OTRO: 'Otro',
+};
+
 @Injectable()
 export class SistemasService implements OnModuleInit {
   private readonly logger = new Logger(SistemasService.name);
@@ -68,6 +75,52 @@ export class SistemasService implements OnModuleInit {
     }
   }
 
+  // Avisa al equipo de Sistemas (quien tiene SISTEMAS con "Escribir" marcado
+  // explícitamente en Permisos usuarios, de cualquier empresa) de que alguien
+  // reportó algo. Solo campana, nunca correo. No se avisa a quien reporta (ya recibe el suyo). Un
+  // fallo acá nunca debe deshacer ni bloquear el ticket ya guardado.
+  private async notificarEquipoSistemas(ticket: {
+    id: number;
+    tipo: TicketSoporteTipo;
+    titulo: string;
+    createdById: number;
+    createdBy: { fullName: string };
+  }) {
+    try {
+      const equipo = await this.permissionsService.getUsersWithExplicitSectionWrite(
+        'SISTEMAS',
+        ticket.createdById,
+      );
+      const tipo = TIPO_TICKET_LABEL[ticket.tipo] ?? 'Reporte';
+      let avisados = 0;
+      for (const persona of equipo) {
+        try {
+          await this.notificationsService.create({
+            userId: persona.id,
+            companyId: persona.companyId,
+            title: 'Nuevo reporte para Sistemas',
+            message: `${ticket.createdBy.fullName} reportó (${tipo}): "${ticket.titulo}"`,
+            // Quien recibe esto tiene Sistemas, así que sí puede abrir Soporte.
+            link: '/sistemas/soporte',
+          });
+          avisados++;
+        } catch (err: any) {
+          this.logger.error(
+            `No se pudo avisar al usuario ${persona.id} del ticket #${ticket.id}: ${err.message}`,
+          );
+        }
+      }
+      this.logger.log(
+        `Ticket #${ticket.id}: avisados ${avisados} de ${equipo.length} del equipo de Sistemas`,
+      );
+    } catch (err: any) {
+      this.logger.error(
+        `No se pudo avisar al equipo de Sistemas del ticket #${ticket.id}: ${err.message}`,
+        err.stack,
+      );
+    }
+  }
+
   async createTicket(
     companyId: number | null,
     createdById: number,
@@ -103,6 +156,7 @@ export class SistemasService implements OnModuleInit {
       'Recibimos tu reporte',
       `Tu reporte "${ticket.titulo}" llegó a Sistemas. Te avisaremos cuando esté en revisión y cuando quede resuelto.`,
     );
+    await this.notificarEquipoSistemas(ticket);
     return ticket;
   }
 

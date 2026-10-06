@@ -8,11 +8,22 @@ import {
   type Company,
 } from '../../services/company.service';
 import { useCompany, resolveLogoUrl } from '../../contexts/ThemeContext';
+import SoloAdminDialog from '../../components/common/SoloAdminDialog';
 
 export default function CompanySettingsPage() {
   const navigate = useNavigate();
   const { applyTheme } = useCompany();
   const user = getUser();
+  // El Gerente ve la identidad de su empresa en SOLO LECTURA; guardar es solo
+  // del administrador (el backend lo exige igual con @Roles(ADMIN)).
+  const soloLectura = user?.role !== 'ADMIN';
+  const [avisoSoloAdmin, setAvisoSoloAdmin] = useState('');
+  // Si el Gerente intenta tocar algo, se le explica por qué no puede.
+  const bloquear = (accion: string) => (e: React.SyntheticEvent) => {
+    if (!soloLectura) return;
+    e.preventDefault();
+    setAvisoSoloAdmin(accion);
+  };
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -100,7 +111,11 @@ export default function CompanySettingsPage() {
           <div>
             <p className="page-eyebrow">CONFIGURACIÓN</p>
             <h1 className="page-title">Identidad de {company.name}</h1>
-            <p className="page-subtitle">Personaliza la apariencia de tu empresa</p>
+            <p className="page-subtitle">
+              {soloLectura
+                ? 'Así se ve la identidad de tu empresa. Solo un administrador puede cambiarla: contacta a uno de tu empresa si necesitas un cambio.'
+                : 'Personaliza la apariencia de tu empresa'}
+            </p>
           </div>
         </div>
 
@@ -131,7 +146,7 @@ export default function CompanySettingsPage() {
                 background: logoPreview ? 'transparent' : '#f8fafc',
                 overflow: 'hidden',
               }}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={(e) => { if (soloLectura) { bloquear('cambie el logo de la empresa')(e); return; } fileInputRef.current?.click(); }}
             >
               {logoPreview ? (
                 <img src={logoPreview} alt="Logo" style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain', padding: 8 }} />
@@ -154,6 +169,7 @@ export default function CompanySettingsPage() {
               <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <input
                   type="color"
+                  onClick={bloquear('cambie los colores de la empresa')}
                   value={(form as any)[key]}
                   onChange={(e) => setForm({ ...form, [key]: e.target.value })}
                   style={{ width: 40, height: 32, border: 'none', cursor: 'pointer', borderRadius: 6 }}
@@ -161,6 +177,8 @@ export default function CompanySettingsPage() {
                 <label style={{ fontSize: '0.85rem', color: '#64748b', flex: 1 }}>{label}</label>
                 <input
                   type="text"
+                  readOnly={soloLectura}
+                  onClick={bloquear('cambie los colores de la empresa')}
                   value={(form as any)[key]}
                   onChange={(e) => setForm({ ...form, [key]: e.target.value })}
                   style={{ width: 90, padding: '6px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: '0.8rem', fontFamily: 'monospace' }}
@@ -208,12 +226,21 @@ export default function CompanySettingsPage() {
         </div>
 
         <div style={{ marginTop: 32, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="btn-secondary" onClick={() => navigate('/dashboard')}>Cancelar</button>
-          <button className="auth-btn" onClick={handleSave} disabled={saving}>
+          <button className="btn-secondary" onClick={() => navigate('/dashboard')}>
+            {soloLectura ? 'Volver' : 'Cancelar'}
+          </button>
+          <button
+            className="auth-btn"
+            onClick={soloLectura ? bloquear('guarde los cambios de la empresa') : handleSave}
+            disabled={saving}
+          >
             {saving ? 'Guardando...' : 'Guardar cambios'}
           </button>
         </div>
       </div>
+      {avisoSoloAdmin && (
+        <SoloAdminDialog accion={avisoSoloAdmin} onClose={() => setAvisoSoloAdmin('')} />
+      )}
     </div>
   );
 }

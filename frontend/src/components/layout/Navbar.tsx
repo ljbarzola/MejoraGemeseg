@@ -46,12 +46,6 @@ export default function Navbar() {
         {isCompanyAdmin && canView('COMPANY_SETTINGS') && (
           <button className="navbar-link navbar-link-admin" onClick={() => navigate('/admin/company-settings')}>Mi Empresa</button>
         )}
-        {canView('TOOLS') && (
-          <button className="navbar-link" onClick={() => navigate('/tools')}>Herramientas</button>
-        )}
-        {canView('AGENTS') && (
-          <button className="navbar-link" onClick={() => navigate('/admin/agents')}>Agentes</button>
-        )}
         {canView('CACAO') && (
           <button className="navbar-link navbar-link-cacao" onClick={() => navigate('/cacao')}>Cacao</button>
         )}

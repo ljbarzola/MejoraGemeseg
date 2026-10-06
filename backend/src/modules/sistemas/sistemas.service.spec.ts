@@ -74,3 +74,76 @@ describe('SistemasService.getStats — KPIs', () => {
     expect(stats.ticketsConResolucion).toBe(0);
   });
 });
+
+describe('SistemasService.createTicket — aviso al equipo de Sistemas', () => {
+  const ticket = {
+    id: 7,
+    companyId: 1,
+    createdById: 10,
+    tipo: 'ERROR',
+    titulo: 'No carga el reporte',
+    createdBy: { id: 10, fullName: 'Ana Pérez', email: 'ana@x.com' },
+  };
+
+  function armar(equipo: { id: number; companyId: number }[]) {
+    const prisma = {
+      ticketSoporte: { create: jest.fn().mockResolvedValue(ticket) },
+    };
+    const notifications = { create: jest.fn().mockResolvedValue({}) };
+    const permissions = {
+      getUsersWithExplicitSectionWrite: jest.fn().mockResolvedValue(equipo),
+    };
+    const service = new SistemasService(
+      prisma as unknown as PrismaService,
+      notifications as unknown as NotificationsService,
+      permissions as unknown as PermissionsService,
+    );
+    return { service, notifications, permissions };
+  }
+
+  const datos = { tipo: 'ERROR' as const, titulo: 'x', descripcion: 'y' };
+
+  it('avisa por campana a cada persona con SISTEMAS marcado para escribir, sin incluir a quien reporta', async () => {
+    const { service, notifications, permissions } = armar([
+      { id: 2, companyId: 1 },
+      { id: 3, companyId: 5 },
+    ]);
+
+    await service.createTicket(1, 10, datos);
+
+    expect(permissions.getUsersWithExplicitSectionWrite).toHaveBeenCalledWith('SISTEMAS', 10);
+    const paraEquipo = notifications.create.mock.calls
+      .map((c) => c[0])
+      .filter((n) => n.title === 'Nuevo reporte para Sistemas');
+    expect(paraEquipo.map((n) => [n.userId, n.companyId])).toEqual([
+      [2, 1],
+      [3, 5],
+    ]);
+    expect(paraEquipo[0].link).toBe('/sistemas/soporte');
+    expect(paraEquipo[0].message).toContain('Ana Pérez');
+    expect(paraEquipo[0].message).toContain('No carga el reporte');
+  });
+
+  it('si no se puede avisar al equipo, el ticket igual se crea (no lanza)', async () => {
+    const { service, permissions } = armar([]);
+    permissions.getUsersWithExplicitSectionWrite.mockRejectedValue(new Error('bd caída'));
+
+    await expect(service.createTicket(1, 10, datos)).resolves.toMatchObject({ id: 7 });
+  });
+
+  it('si falla el aviso a una persona, los demás lo reciben igual', async () => {
+    const { service, notifications } = armar([
+      { id: 2, companyId: 1 },
+      { id: 3, companyId: 1 },
+    ]);
+    notifications.create.mockImplementation((n: { userId: number }) =>
+      n.userId === 2 ? Promise.reject(new Error('x')) : Promise.resolve({}),
+    );
+
+    await service.createTicket(1, 10, datos);
+
+    expect(
+      notifications.create.mock.calls.some((c) => c[0].userId === 3 && c[0].title === 'Nuevo reporte para Sistemas'),
+    ).toBe(true);
+  });
+});
