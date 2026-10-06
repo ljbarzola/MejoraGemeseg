@@ -74,7 +74,10 @@ function valorValido(campo: CampoDefinicion, v: unknown): ValorCampo {
     }
     case 'FECHA': {
       const s = String(v).trim();
-      if (!FECHA_ISO.test(s) || Number.isNaN(new Date(`${s}T00:00:00Z`).getTime())) {
+      // Además de leerse, el día tiene que existir: con Node 24 "2026-02-31" se lee
+      // como válida y se corre a marzo. Si al volver a escribirla no da lo mismo, no es real.
+      const d = new Date(`${s}T00:00:00Z`);
+      if (!FECHA_ISO.test(s) || Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s) {
         throw mal('debe ser una fecha válida.');
       }
       return s;

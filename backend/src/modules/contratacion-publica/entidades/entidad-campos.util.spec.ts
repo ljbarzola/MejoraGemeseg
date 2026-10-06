@@ -43,6 +43,9 @@ describe('normalizarCamposExtra', () => {
     expect(() => normalizarCamposExtra({ '2': 'abc' }, [campo(2, 'NUMERO')], null, true)).toThrow(
       /«Campo 2» debe ser un número/,
     );
+    expect(() => normalizarCamposExtra({ '3': '2026-02-31' }, [campo(3, 'FECHA')], null, true)).toThrow(
+      /fecha válida/,
+    );
     expect(() => normalizarCamposExtra({ '3': '05/10/2026' }, [campo(3, 'FECHA')], null, true)).toThrow(
       BadRequestException,
     );
