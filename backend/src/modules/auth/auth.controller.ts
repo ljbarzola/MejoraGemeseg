@@ -3,6 +3,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import {
   ConfirmPasswordResetDto,
   RequestPasswordResetDto,
@@ -32,6 +33,14 @@ export class AuthController {
   @Post('forgot-password/confirm')
   confirmPasswordReset(@Body() dto: ConfirmPasswordResetDto) {
     return this.authService.confirmPasswordReset(dto);
+  }
+
+  // Bajo /auth/ a propósito: el interceptor 401 del frontend ignora esas URLs,
+  // así que un error aquí nunca cierra la sesión por accidente.
+  @UseGuards(AuthGuard('jwt'))
+  @Post('change-password')
+  changePassword(@Req() req: any, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(req.user.userId, dto);
   }
 
   @UseGuards(AuthGuard('jwt'))

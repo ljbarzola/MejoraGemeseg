@@ -1,4 +1,5 @@
 ﻿import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -16,6 +17,8 @@ import {
   ConfirmPasswordResetDto,
   RequestPasswordResetDto,
 } from './dto/forgot-password.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { SessionCutoffService } from './session-cutoff.service';
 import { UserRole } from '@prisma/client';
 
 @Injectable()
@@ -28,6 +31,7 @@ export class AuthService {
     // Misma cuenta de servicio con la que se envían los recordatorios a los
     // guardias: hay un solo canal de correo en el sistema (MailModule).
     private readonly gmailMailService: GmailMailService,
+    private readonly sessionCutoff: SessionCutoffService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -256,8 +260,75 @@ export class AuthService {
       }),
     ]);
 
+    // Quien restablece la contraseña suele hacerlo porque alguien más pudo
+    // tenerla: se cierran las sesiones que ya estuvieran abiertas.
+    await this.sessionCutoff.markAllSessionsClosed(user.id);
+
     this.logger.log(`Contraseña restablecida para ${user.email}`);
-    return { message: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.' };
+    return {
+      message:
+        'Contraseña actualizada correctamente. Se cerraron las sesiones abiertas en otros dispositivos. Ya puedes iniciar sesión.',
+    };
+  }
+
+  // ==================== CAMBIAR CONTRASEÑA (CON SESIÓN) ====================
+
+  /**
+   * Cambio desde el perfil. Pide la contraseña actual (un token robado no
+   * basta para quedarse con la cuenta) y cierra las demás sesiones. Devuelve un
+   * token nuevo para que ESTA sesión siga abierta: el viejo quedó anterior al
+   * corte.
+   *
+   * Los errores de validación son 400, no 401: el frontend cierra la sesión ante
+   * cualquier 401 fuera de /auth/, y equivocarse de contraseña no debe sacar a
+   * nadie.
+   */
+  async changePassword(userId: number, dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Tu sesión expiró. Inicia sesión de nuevo.');
+    }
+    if (!user.password) {
+      throw new BadRequestException(
+        'Tu cuenta entra con Google y todavía no tiene contraseña. Usa "¿Olvidaste tu contraseña?" en el inicio de sesión para crear una.',
+      );
+    }
+
+    const actualValida = await bcrypt.compare(dto.currentPassword, user.password);
+    if (!actualValida) {
+      throw new BadRequestException('La contraseña actual no es correcta.');
+    }
+    if (dto.newPassword === dto.currentPassword) {
+      throw new BadRequestException(
+        'La contraseña nueva debe ser distinta a la actual.',
+      );
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { password: await bcrypt.hash(dto.newPassword, 10) },
+    });
+
+    // Primero el corte, después el token: así el token nuevo (iat >= corte)
+    // sobrevive y todos los anteriores no.
+    const sesionesCerradas = await this.sessionCutoff.markAllSessionsClosed(
+      user.id,
+    );
+    const token = this.generateToken(
+      user.id,
+      user.email,
+      user.role,
+      user.companyId,
+    );
+
+    this.logger.log(`Contraseña cambiada desde el perfil por ${user.email}`);
+    return {
+      token,
+      sesionesCerradas,
+      message: sesionesCerradas
+        ? 'Contraseña actualizada. Se cerró tu sesión en los demás dispositivos.'
+        : 'Contraseña actualizada.',
+    };
   }
 
   private generateToken(

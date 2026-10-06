@@ -129,6 +129,7 @@ model User {
   passwordResetCodes                 PasswordResetCode[]
   preferences                        UserPreference[]
   createdCustodias                   Custodia[]
+  sessionCutoff                      UserSessionCutoff?
   contractTemplates                  ContractTemplate[]
   contracts                          Contract[]
   salesGoals                         SalesGoal[]
@@ -644,6 +645,16 @@ model UserPreference {
 }
 
 // Catálogo de ubicaciones (oficinas/sedes) propio de cada empresa, editable
+// Desde cuándo valen las sesiones de un usuario: un token emitido antes de
+// `validAfter` deja de servir. Solo se escribe al cambiar/restablecer la
+// contraseña. Tabla aparte (no columna en User) porque el despliegue no corre
+// migraciones; se crea sola al arrancar (auth/session-cutoff.schema.ts).
+model UserSessionCutoff {
+  userId     Int      @id
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  validAfter DateTime
+}
+
 // desde el modal "Editar usuario" en Administración → Gestionar usuarios.
 // Mismo patrón que PersonalFieldDefinition/JobPosition: tabla chica,
 // administrable por el ADMIN de cada empresa, sin mezclarse entre empresas.

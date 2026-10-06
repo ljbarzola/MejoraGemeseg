@@ -126,6 +126,8 @@ export interface ProfileData {
   role: string;
   position: string | null;
   documentNumber: string | null;
+  /** false en cuentas que entran solo con Google: no tienen contraseña que cambiar. */
+  hasPassword: boolean;
   department: { id: number; name: string } | null;
   roleRelation: { id: number; name: string } | null;
   createdAt: string;
