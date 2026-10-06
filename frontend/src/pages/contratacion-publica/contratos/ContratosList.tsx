@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building2 } from 'lucide-react';
+import { Plus, Building2, Eye, Pencil, Trash2 } from 'lucide-react';
 import { getContratos, deleteContrato, getEntidadesPublicas } from '../../../services/contratacion-publica.service';
 import type { CPContrato, CPEntidadPublica } from '../../../types/contratacion-publica';
 import { usePerm } from '../../../contexts/PermissionsContext';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
-import RowActionsMenu from '../../../components/common/RowActionsMenu';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
 import { useSortableTable } from '../../../hooks/useSortableTable';
 
@@ -153,7 +152,7 @@ export default function ContratosList() {
                   <th>Puestos</th>
                   <th {...thProps('fechaFin')}>Vigencia <SortIcon campo="fechaFin" /></th>
                   <th {...thProps('estado')}>Estado <SortIcon campo="estado" /></th>
-                  <th className="col-acciones" title="Acciones"><span className="visually-hidden">Acciones</span></th>
+                  <th className="col-acciones col-acciones--ancha" title="Acciones"><span className="visually-hidden">Acciones</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -169,16 +168,22 @@ export default function ContratosList() {
                         {ESTADO_LABEL[c.estado] || c.estado}
                       </span>
                     </td>
-                    <td className="col-acciones" onClick={(e) => e.stopPropagation()}>
-                      {canEdit && (
-                        <RowActionsMenu
-                          actions={[
-                            { label: 'Ver detalle', onClick: () => navigate(`/contratacion-publica/contratos/${c.id}`) },
-                            { label: 'Editar', onClick: () => navigate(`/contratacion-publica/contratos/${c.id}/editar`) },
-                            { label: 'Eliminar', danger: true, onClick: () => setPendingDeleteId(c.id) },
-                          ]}
-                        />
-                      )}
+                    <td className="col-acciones col-acciones--ancha" onClick={(e) => e.stopPropagation()}>
+                      <div className="acciones-iconos">
+                        <button type="button" className="btn-secondary icon-btn" title="Ver detalle" aria-label="Ver detalle" onClick={() => navigate(`/contratacion-publica/contratos/${c.id}`)}>
+                          <Eye size={16} />
+                        </button>
+                        {canEdit && (
+                          <>
+                            <button type="button" className="btn-secondary icon-btn" title="Editar" aria-label="Editar" onClick={() => navigate(`/contratacion-publica/contratos/${c.id}/editar`)}>
+                              <Pencil size={16} />
+                            </button>
+                            <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Eliminar" aria-label="Eliminar" onClick={() => setPendingDeleteId(c.id)}>
+                              <Trash2 size={16} />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

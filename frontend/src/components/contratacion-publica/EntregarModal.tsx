@@ -7,7 +7,7 @@ import { entregarDocumento, subirArchivoEntrega } from '../../services/contratac
 import type { CPEstadoEntrega, CPSolicitudMensual } from '../../types/contratacion-publica';
 import { ARCHIVOS_ACEPTADOS, formatoFecha, mensajeError } from '../../utils/entregasCp';
 
-/** Lo mínimo que hace falta para entregar un documento (sirve para el detalle de la entidad y para "Mis documentos"). */
+/** Lo mínimo que hace falta para entregar un documento (sirve para el detalle de la entidad y para "Por entregar"). */
 export interface DocumentoPorEntregar {
   id: number;
   nombre: string;
@@ -15,6 +15,8 @@ export interface DocumentoPorEntregar {
   fechaLimite: string;
   estado: CPEstadoEntrega;
   motivoRechazo: string | null;
+  /** 'ARCHIVO' = ya hay un archivo entregado antes en Drive (se pregunta si se reemplaza). */
+  origen?: 'ARCHIVO' | 'ENLACE' | null;
 }
 
 export default function EntregarModal({
@@ -31,14 +33,26 @@ export default function EntregarModal({
   const subioArchivo = useRef(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
+  // Con un archivo anterior en Drive hay que decidir qué hacer con él. Sin opción
+  // marcada de entrada: una de ellas borra un archivo, así que se elige a propósito.
+  const hayAnterior = entrega.origen === 'ARCHIVO';
+  const [queHacerConAnterior, setQueHacerConAnterior] = useState<'reemplazar' | 'conservar' | null>(null);
 
   const entregar = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!url.trim()) { setError('Sube un archivo o pega un enlace.'); return; }
+    if (hayAnterior && !queHacerConAnterior) {
+      setError('Elige qué hacer con el archivo anterior: reemplazarlo o conservar ambos.');
+      return;
+    }
     setGuardando(true);
     setError('');
     try {
-      onEntregada(await entregarDocumento(entrega.id, { origen, url: url.trim() }));
+      onEntregada(await entregarDocumento(entrega.id, {
+        origen,
+        url: url.trim(),
+        ...(hayAnterior ? { reemplazarAnterior: queHacerConAnterior === 'reemplazar' } : {}),
+      }));
     } catch (err) {
       setError(mensajeError(err, 'No se pudo registrar la entrega.'));
     } finally {
@@ -90,6 +104,31 @@ export default function EntregarModal({
                 Lo más fácil es subir el archivo: quien lo revisa lo ve en el sistema sin pedir permisos. Si pegas un enlace (por ejemplo de Google Drive), compártelo para que se pueda abrir.
               </p>
             </div>
+            {hayAnterior && (
+              <fieldset style={{ border: '2px solid var(--borde-input, #e2e8f0)', borderRadius: 10, padding: '10px 14px', margin: 0 }}>
+                <legend style={{ fontSize: '0.85rem', fontWeight: 700, padding: '0 6px' }}>
+                  {entrega.estado === 'RECHAZADO' ? 'El archivo rechazado, ¿qué hacemos con él? *' : 'Ya hay un archivo entregado, ¿qué hacemos con él? *'}
+                </legend>
+                {([
+                  { valor: 'reemplazar', titulo: 'Reemplazar el anterior', detalle: 'Se borra de Drive el archivo anterior y queda solo el nuevo.' },
+                  { valor: 'conservar', titulo: 'Conservar ambos', detalle: 'El archivo anterior se queda en la carpeta de Drive junto al nuevo.' },
+                ] as const).map((o) => (
+                  <label key={o.valor} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '6px 0', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="que-hacer-con-anterior"
+                      checked={queHacerConAnterior === o.valor}
+                      onChange={() => { setQueHacerConAnterior(o.valor); setError(''); }}
+                      style={{ marginTop: 3 }}
+                    />
+                    <span>
+                      <strong style={{ fontSize: '0.88rem' }}>{o.titulo}</strong>
+                      <span style={{ display: 'block', fontSize: '0.78rem', color: '#718096' }}>{o.detalle}</span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
           </div>
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onCancel}>Cancelar</button>

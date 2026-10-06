@@ -137,24 +137,25 @@ export default function RevisionPanel({ items, inicioId, puedeRevisar, onAprobar
   return (
     <div className="revision-overlay" onClick={onClose}>
       <div className="revision-panel" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Revisar documento">
+        {/* Mismo encabezado que el resto de los modales (.modal-header / .modal-close). */}
         <div className="revision-header">
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 800, color: 'var(--azul-oscuro)', overflowWrap: 'anywhere' }}>{actual.nombre}</div>
-            <div style={{ fontSize: '0.78rem', color: '#718096' }}>{actual.entidadNombre} · {actual.periodo}</div>
+            <h3 className="revision-title">{actual.nombre}</h3>
+            <div className="revision-subtitle">{actual.entidadNombre} · {actual.periodo}</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="revision-header-actions">
             {total > 1 && (
-              <>
-                <button type="button" className="icon-btn" title="Documento anterior" onClick={() => irA(idx - 1)} disabled={idx === 0}>
+              <div className="revision-nav" role="group" aria-label="Cambiar de documento">
+                <button type="button" className="revision-nav-btn" title="Documento anterior" aria-label="Documento anterior" onClick={() => irA(idx - 1)} disabled={idx === 0}>
                   <ChevronLeft size={16} />
                 </button>
-                <span style={{ fontSize: '0.8rem', color: '#4a5568', whiteSpace: 'nowrap' }}>{idx + 1} de {total}</span>
-                <button type="button" className="icon-btn" title="Documento siguiente" onClick={() => irA(idx + 1)} disabled={idx === total - 1}>
+                <span className="revision-nav-count">{idx + 1} de {total}</span>
+                <button type="button" className="revision-nav-btn" title="Documento siguiente" aria-label="Documento siguiente" onClick={() => irA(idx + 1)} disabled={idx === total - 1}>
                   <ChevronRight size={16} />
                 </button>
-              </>
+              </div>
             )}
-            <button type="button" className="icon-btn" title="Cerrar (Esc)" onClick={onClose}><X size={16} /></button>
+            <button type="button" className="modal-close" title="Cerrar (Esc)" aria-label="Cerrar" onClick={onClose}><X size={16} /></button>
           </div>
         </div>
 
@@ -162,7 +163,8 @@ export default function RevisionPanel({ items, inicioId, puedeRevisar, onAprobar
           <div className="revision-preview">
             <FilePreview
               clave={actual.id}
-              cargar={actual.origen === 'ARCHIVO' ? () => fetchArchivoEntrega(actual.id) : null}
+              cargar={actual.origen === 'ARCHIVO' ? (opciones) => fetchArchivoEntrega(actual.id, false, opciones?.pdf) : null}
+              cargarOriginal={actual.origen === 'ARCHIVO' ? () => fetchArchivoEntrega(actual.id, true) : undefined}
               urlExterna={actual.url}
               nombreArchivo={actual.nombre}
               mensajeSinVista={
@@ -197,9 +199,11 @@ export default function RevisionPanel({ items, inicioId, puedeRevisar, onAprobar
                 <div style={{ color: '#c53030' }}>Motivo del rechazo: {actual.motivoRechazo}</div>
               )}
               {actual.url && (
-                <a href={actual.url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                  <ExternalLink size={13} /> {actual.origen === 'ARCHIVO' ? 'Abrir en Drive' : 'Abrir enlace'}
-                </a>
+                <div style={{ marginTop: 4 }}>
+                  <a className="btn-secondary" href={actual.url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', padding: '6px 12px', fontSize: '0.82rem' }}>
+                    <ExternalLink size={14} /> {actual.origen === 'ARCHIVO' ? 'Abrir en Drive' : 'Abrir enlace'}
+                  </a>
+                </div>
               )}
             </div>
 
@@ -237,8 +241,8 @@ export default function RevisionPanel({ items, inicioId, puedeRevisar, onAprobar
                     rows={3}
                     placeholder="Explica qué hay que corregir, para que la persona lo entregue bien a la primera."
                     style={{
-                      width: '100%', padding: '8px 10px', borderRadius: 6, boxSizing: 'border-box', resize: 'vertical',
-                      border: `1px solid ${tocado && motivoCorto ? '#feb2b2' : '#cbd5e0'}`, fontSize: '0.85rem', fontFamily: 'inherit',
+                      width: '100%', padding: '10px 12px', borderRadius: 12, boxSizing: 'border-box', resize: 'vertical', outline: 'none',
+                      border: `2px solid ${tocado && motivoCorto ? '#e53e3e' : 'var(--borde-input)'}`, fontSize: '0.88rem', fontFamily: 'inherit',
                     }}
                   />
                   {tocado && motivoCorto && (
@@ -260,13 +264,10 @@ export default function RevisionPanel({ items, inicioId, puedeRevisar, onAprobar
                   </div>
                   <button
                     type="button"
+                    className="btn-danger"
                     onClick={rechazar}
                     disabled={guardando}
-                    style={{
-                      marginTop: 10, width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 700,
-                      background: '#c53030', color: '#fff', opacity: guardando ? 0.6 : 1,
-                    }}
+                    style={{ marginTop: 10, width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: guardando ? 0.6 : 1 }}
                   >
                     <XCircle size={15} /> {guardando ? 'Guardando...' : 'Rechazar'}
                   </button>

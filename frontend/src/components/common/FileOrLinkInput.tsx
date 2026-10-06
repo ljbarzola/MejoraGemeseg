@@ -73,8 +73,17 @@ export default function FileOrLinkInput({ value, onChange, uploadFn, accept, def
           <input ref={fileInputRef} type="file" accept={accept} onChange={handleFileChange} disabled={uploading} />
           {uploading && <p style={{ fontSize: '0.78rem', color: '#718096', margin: '6px 0 0' }}>Subiendo...</p>}
           {!uploading && value && (
-            <p style={{ fontSize: '0.78rem', color: '#276749', margin: '6px 0 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <CheckCircle2 size={13} /> Archivo listo: <a href={value} target="_blank" rel="noopener noreferrer">verlo</a>
+            <p style={{ fontSize: '0.78rem', color: '#276749', margin: '6px 0 0', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              <CheckCircle2 size={13} /> Archivo listo
+              <a
+                className="btn-secondary"
+                href={value}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', padding: '4px 10px', fontSize: '0.78rem' }}
+              >
+                Ver archivo
+              </a>
             </p>
           )}
         </div>

@@ -10,6 +10,10 @@ export interface CPEntidadPublica {
   direccion: string | null;
   /** Subcarpeta de la entidad en la carpeta raíz de Drive de Contratación Pública. */
   driveFolderId: string | null;
+  /** Oculta de la lista (se ve con "Mostrar archivadas"); no borra nada. */
+  archivada: boolean;
+  /** Valores de los campos configurables: { "<idCampo>": valor }. */
+  camposExtra: Record<string, string | number> | null;
   companyId: number;
   createdAt: string;
   updatedAt: string;
@@ -18,12 +22,36 @@ export interface CPEntidadPublica {
 /** Al crear/editar una entidad: si la carpeta de Drive no se pudo crear o renombrar, viene el motivo. */
 export type CPEntidadGuardada = CPEntidadPublica & { advertenciaDrive: string | null };
 
+export const TIPOS_CAMPO_ENTIDAD = ['TEXTO', 'LISTA', 'NUMERO', 'FECHA'] as const;
+export type TipoCampoEntidad = (typeof TIPOS_CAMPO_ENTIDAD)[number];
+
+export const TIPO_CAMPO_LABEL: Record<TipoCampoEntidad, string> = {
+  TEXTO: 'Texto',
+  LISTA: 'Lista de opciones',
+  NUMERO: 'Número',
+  FECHA: 'Fecha',
+};
+
+/** Campo extra que la empresa define para sus entidades (tipo de entidad, contacto, provincia...). */
+export interface CPEntidadCampo {
+  id: number;
+  nombre: string;
+  tipo: TipoCampoEntidad;
+  /** Solo en LISTA. */
+  opciones: string[] | null;
+  obligatorio: boolean;
+  orden: number;
+  activo: boolean;
+}
+
 export interface CPSyncEntidadesDrive {
   configurada: boolean;
   warning?: string;
   sincronizadoAt: string;
-  entidadesCreadas: string[];
-  carpetasCreadas: string[];
+  /** Carpetas de Drive que no son ninguna entidad: se ofrece "Crear entidad". */
+  carpetasSinEntidad: { carpetaId: string; nombre: string }[];
+  /** Entidades sin carpeta en Drive: se ofrece "Crear carpeta". */
+  entidadesSinCarpeta: { entidadId: number; nombre: string }[];
   renombradas: { entidadId: number; nombreSistema: string; nombreDrive: string }[];
   ausentes: { entidadId: number; nombre: string }[];
   avisos: string[];
@@ -307,7 +335,7 @@ export interface CPHistorialEntrega {
   createdAt: string;
 }
 
-/** Fila de las bandejas "Mis documentos" y "Por revisar" (todas las entidades juntas). */
+/** Fila de las bandejas "Por entregar" y "Por aprobar" (todas las entidades juntas). */
 export interface CPDocumentoBandeja {
   id: number;
   nombre: string;
@@ -322,7 +350,7 @@ export interface CPDocumentoBandeja {
   mes: number;
   entidadId: number;
   entidadNombre: string;
-  // Solo en "Por revisar":
+  // Solo en "Por aprobar":
   departmentName?: string | null;
   origen?: 'ARCHIVO' | 'ENLACE' | null;
   url?: string | null;

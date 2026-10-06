@@ -1,12 +1,12 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
   Param,
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -14,7 +14,10 @@ import { AuthGuard } from '@nestjs/passport';
 import { SectionPermissionGuard } from '../../../common/guards/section-permission.guard';
 import { Section } from '../../../common/decorators/section.decorator';
 import { CPEntidadesService } from './entidades.service';
-import { CreateEntidadDto } from './dto/create-entidad.dto';
+import {
+  CreateEntidadDto,
+  CrearEntidadDesdeCarpetaDto,
+} from './dto/create-entidad.dto';
 import { UpdateEntidadDto } from './dto/update-entidad.dto';
 
 @Controller('contratacion-publica/entidades')
@@ -22,18 +25,44 @@ import { UpdateEntidadDto } from './dto/update-entidad.dto';
 export class CPEntidadesController {
   constructor(private readonly service: CPEntidadesService) {}
 
+  // `?archivadas=true` incluye las archivadas (checkbox "Mostrar archivadas").
   @Get()
   @Section('CONTRATACION_PUBLICA', 'view')
-  findAll(@Req() req: any) {
-    return this.service.findAll(req.user.companyId);
+  findAll(@Req() req: any, @Query('archivadas') archivadas?: string) {
+    return this.service.findAll(req.user.companyId, archivadas === 'true');
   }
 
-  // Pone la lista de entidades y la carpeta de Drive de acuerdo. Escribe en la
-  // base (crea entidades y enlaza carpetas), por eso pide "write".
+  // Compara la lista de entidades con la carpeta de Drive y devuelve las
+  // diferencias; no crea nada (solo enlaza por nombre exacto), pero escribe en
+  // la base, por eso pide "write".
   @Post('sincronizar-drive')
   @Section('CONTRATACION_PUBLICA', 'write')
   sincronizarDrive(@Req() req: any) {
     return this.service.sincronizarConDrive(req.user.companyId);
+  }
+
+  @Post('desde-carpeta')
+  @Section('CONTRATACION_PUBLICA', 'write')
+  crearDesdeCarpeta(@Body() dto: CrearEntidadDesdeCarpetaDto, @Req() req: any) {
+    return this.service.crearEntidadDesdeCarpeta(dto.folderId, req.user.companyId);
+  }
+
+  @Post(':id/drive/crear-carpeta')
+  @Section('CONTRATACION_PUBLICA', 'write')
+  crearCarpeta(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.service.crearCarpeta(id, req.user.companyId);
+  }
+
+  @Post(':id/archivar')
+  @Section('CONTRATACION_PUBLICA', 'write')
+  archivar(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.service.archivar(id, req.user.companyId);
+  }
+
+  @Post(':id/reactivar')
+  @Section('CONTRATACION_PUBLICA', 'write')
+  reactivar(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.service.reactivar(id, req.user.companyId);
   }
 
   @Post(':id/drive/usar-nombre-de-drive')
@@ -77,11 +106,5 @@ export class CPEntidadesController {
     @Req() req: any,
   ) {
     return this.service.update(id, dto, req.user.companyId);
-  }
-
-  @Delete(':id')
-  @Section('CONTRATACION_PUBLICA', 'write')
-  remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
-    return this.service.remove(id, req.user.companyId);
   }
 }

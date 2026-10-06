@@ -207,9 +207,9 @@ export default function GeneradorPatronModal({
                       style={{ width: '70px' }}
                       title="Días"
                     />
-                    <button type="button" className="icon-btn" onClick={() => moveTramo(i, -1)} disabled={i === 0}><ChevronUp size={14} /></button>
-                    <button type="button" className="icon-btn" onClick={() => moveTramo(i, 1)} disabled={i === tramos.length - 1}><ChevronDown size={14} /></button>
-                    <button type="button" className="icon-btn" onClick={() => removeTramo(i)} disabled={tramos.length === 1}><Trash2 size={14} /></button>
+                    <button type="button" className="btn-secondary icon-btn" title="Subir tramo" aria-label="Subir tramo" onClick={() => moveTramo(i, -1)} disabled={i === 0}><ChevronUp size={16} /></button>
+                    <button type="button" className="btn-secondary icon-btn" title="Bajar tramo" aria-label="Bajar tramo" onClick={() => moveTramo(i, 1)} disabled={i === tramos.length - 1}><ChevronDown size={16} /></button>
+                    <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Quitar tramo" aria-label="Quitar tramo" onClick={() => removeTramo(i)} disabled={tramos.length === 1}><Trash2 size={16} /></button>
                   </div>
                 ))}
                 <button type="button" className="btn-secondary" onClick={addTramo} style={{ fontSize: '0.78rem' }}>
@@ -243,8 +243,8 @@ export default function GeneradorPatronModal({
                 {ordenGuardias.map((g, i) => (
                   <div key={g.cedula} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
                     <div style={{ flex: 1, fontSize: '0.8rem' }}>{g.nombreGuardia} <span style={{ color: '#a0aec0' }}>({g.cedula})</span></div>
-                    <button type="button" className="icon-btn" onClick={() => moveGuardia(i, -1)} disabled={i === 0}><ChevronUp size={14} /></button>
-                    <button type="button" className="icon-btn" onClick={() => moveGuardia(i, 1)} disabled={i === ordenGuardias.length - 1}><ChevronDown size={14} /></button>
+                    <button type="button" className="btn-secondary icon-btn" title="Subir" aria-label="Subir" onClick={() => moveGuardia(i, -1)} disabled={i === 0}><ChevronUp size={16} /></button>
+                    <button type="button" className="btn-secondary icon-btn" title="Bajar" aria-label="Bajar" onClick={() => moveGuardia(i, 1)} disabled={i === ordenGuardias.length - 1}><ChevronDown size={16} /></button>
                   </div>
                 ))}
                 {ordenGuardias.length === 0 && (

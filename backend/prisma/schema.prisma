@@ -45,6 +45,7 @@ model Company {
   entidades                 Entidad[]
   requisitosDocumento       RequisitoDocumento[]
   cpEntidadesPublicas       CPEntidadPublica[]
+  cpEntidadCampos           CPEntidadCampo[]
   cpContratos               CPContrato[]
   cpPuestosServicio         CPPuestoServicio[]
   cpCodigosTurno            CPCodigoTurno[]
@@ -128,8 +129,8 @@ model User {
   permissions                        UserPermission[]
   passwordResetCodes                 PasswordResetCode[]
   preferences                        UserPreference[]
-  createdCustodias                   Custodia[]
   sessionCutoff                      UserSessionCutoff?
+  createdCustodias                   Custodia[]
   contractTemplates                  ContractTemplate[]
   contracts                          Contract[]
   salesGoals                         SalesGoal[]
@@ -644,7 +645,6 @@ model UserPreference {
   @@unique([userId, key])
 }
 
-// Catálogo de ubicaciones (oficinas/sedes) propio de cada empresa, editable
 // Desde cuándo valen las sesiones de un usuario: un token emitido antes de
 // `validAfter` deja de servir. Solo se escribe al cambiar/restablecer la
 // contraseña. Tabla aparte (no columna en User) porque el despliegue no corre
@@ -655,6 +655,7 @@ model UserSessionCutoff {
   validAfter DateTime
 }
 
+// Catálogo de ubicaciones (oficinas/sedes) propio de cada empresa, editable
 // desde el modal "Editar usuario" en Administración → Gestionar usuarios.
 // Mismo patrón que PersonalFieldDefinition/JobPosition: tabla chica,
 // administrable por el ADMIN de cada empresa, sin mezclarse entre empresas.
@@ -2024,6 +2025,11 @@ model CPEntidadPublica {
   // Pública (FolderConfig tipo CP_ENTREGAS). Es el ancla: así un cambio de
   // nombre no crea otra carpeta ni deja la anterior huérfana.
   driveFolderId String?
+  // Archivada = oculta de la lista (con "Mostrar archivadas" se ve), sin borrar
+  // nada: conserva sus solicitudes, su carpeta de Drive y sus datos.
+  archivada Boolean @default(false)
+  // Valores de los campos configurables (CPEntidadCampo): { "<idCampo>": valor }.
+  camposExtra Json?
   companyId Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2032,6 +2038,28 @@ model CPEntidadPublica {
   contratos            CPContrato[]
   solicitudesMensuales CPSolicitudMensual[]
 
+  @@index([companyId])
+}
+
+// Campo extra que la empresa define para sus entidades públicas (tipo de
+// entidad, contacto, provincia...). La definición vive aquí; el valor de cada
+// entidad vive en CPEntidadPublica.camposExtra. Nunca se borran, solo se
+// desactivan, para no dejar valores guardados sin definición.
+model CPEntidadCampo {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  nombre      String
+  tipo        String // TEXTO | LISTA | NUMERO | FECHA
+  opciones    Json? // string[] (solo para LISTA)
+  obligatorio Boolean  @default(false)
+  orden       Int      @default(0)
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, nombre])
   @@index([companyId])
 }
 

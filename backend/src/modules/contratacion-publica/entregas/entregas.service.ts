@@ -11,6 +11,14 @@ import {
 import * as path from 'path';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { DriveService } from '../../personal/services/drive.service';
+import {
+  convertirOfficeAPdf,
+  extensionOffice,
+} from '../../../common/utils/office-to-pdf.util';
+import {
+  leerLibroExcel,
+  type LibroVista,
+} from '../../../common/utils/excel-hojas.util';
 import { CPEntidadesService } from '../entidades/entidades.service';
 import {
   DRIVE_FOLDER_TYPE_ENTREGAS,
@@ -27,6 +35,7 @@ import {
   UpdateEntregaDto,
 } from './dto/entregas.dto';
 import {
+  diasEntre,
   estaVencida,
   extraerIdArchivoDrive,
   fechaDesdeTexto,
@@ -35,6 +44,17 @@ import {
   nombreMes,
   trasladarFechaAMes,
 } from './entregas.util';
+
+/**
+ * Remitente propio de los correos de Contratación Pública. NO se usa
+ * `NotificationConfig` de la empresa: esa configuración es de RRHH (recordatorios
+ * de cumplimiento a guardias) y hacía que estos avisos salieran como
+ * "Recursos Humanos". Mismo patrón que Referidos y la recuperación de
+ * contraseña: la casilla de Sistemas, que ya tiene delegación de dominio.
+ * Cambiar estas constantes no afecta a RRHH.
+ */
+export const CORREO_REMITENTE_CP = 'sistemas@gemeseg.com';
+export const NOMBRE_REMITENTE_CP = 'Contratación Pública GEMESEG';
 
 /** Igual al límite de subida del controlador (15 MB). */
 const TAMANO_MAXIMO_ARCHIVO = 15 * 1024 * 1024;
@@ -415,6 +435,47 @@ export class EntregasService {
     return this.obtenerSolicitud(e.solicitudId, actor);
   }
 
+  /**
+   * "Recordar al responsable": el personal de CP vuelve a avisar, a mano, de un
+   * documento que sigue pendiente o rechazado. Sale por campana y por correo a
+   * quienes lo deben. No toca `ultimoRecordatorioAt`: el recordatorio diario
+   * automático sigue su propio calendario.
+   */
+  async recordarEntrega(id: number, actor: Actor) {
+    const e = await this.cargarEntrega(id, actor.companyId);
+    if (e.solicitud.estado !== 'ENVIADA') {
+      throw new BadRequestException(
+        'La solicitud todavía es un borrador: envíala primero y los responsables recibirán el aviso.',
+      );
+    }
+    if (e.estado !== 'PENDIENTE' && e.estado !== 'RECHAZADO') {
+      throw new BadRequestException(
+        'Este documento ya fue entregado: no hace falta recordarlo.',
+      );
+    }
+    const destinatarios = e.responsables.map((r) => r.userId);
+    if (destinatarios.length === 0) {
+      throw new BadRequestException('Este documento no tiene responsables a quienes avisar.');
+    }
+
+    const dias = diasEntre(hoyEcuador(), e.fechaLimite);
+    const cuando =
+      dias < 0
+        ? `venció el ${formatoFecha(e.fechaLimite)}`
+        : dias === 0
+          ? 'vence HOY'
+          : `vence el ${formatoFecha(e.fechaLimite)}`;
+    const rechazado =
+      e.estado === 'RECHAZADO' ? ' Fue rechazado: hay que entregarlo de nuevo.' : '';
+    await this.avisar(destinatarios, actor.companyId, {
+      titulo: 'Recordatorio de documento',
+      mensaje: `Recuerda entregar "${e.nombre}" para ${e.solicitud.entidad.nombre} (${nombreMes(e.solicitud.mes)} de ${e.solicitud.anio}): ${cuando}.${rechazado}`,
+      link: this.link(e.solicitud.entidadId, e.solicitudId),
+      correo: true,
+    });
+    return { avisados: destinatarios.length };
+  }
+
   // ----------------------------------------------------------------- entrega
 
   /** Sube el archivo a Drive y devuelve su enlace; la entrega se registra aparte con `entregar`. */
@@ -475,6 +536,12 @@ export class EntregasService {
       );
     }
 
+    // "Reemplazar el anterior": se borra ANTES de registrar. Si Drive falla, no se
+    // registra nada y la persona puede reintentar (o elegir conservar ambos).
+    if (dto.reemplazarAnterior) {
+      await this.borrarArchivoAnterior(e, url, actor.companyId);
+    }
+
     const persona = await this.prisma.user.findUnique({
       where: { id: actor.userId },
       select: { fullName: true },
@@ -519,6 +586,57 @@ export class EntregasService {
       correo: false,
     });
     return this.obtenerSolicitud(s.id, actor);
+  }
+
+  /**
+   * Borra de Drive el archivo que se había entregado antes (la persona eligió
+   * "reemplazar" al entregar de nuevo), para no dejar dos copias del mismo documento.
+   *
+   * La URL guardada la mandó el navegador al entregar, así que solo se borra si el
+   * archivo cuelga de la carpeta del mes de ESTA entidad y no está en la papelera
+   * (misma comprobación que la vista previa). Tampoco se borra si es el mismo
+   * archivo que se está entregando ahora, ni si otra entrega usa el mismo enlace.
+   * Un archivo que ya no existe en Drive no es un error: no hay nada que borrar.
+   */
+  private async borrarArchivoAnterior(
+    e: Awaited<ReturnType<EntregasService['cargarEntrega']>>,
+    nuevaUrl: string,
+    companyId: number,
+  ): Promise<void> {
+    if (e.origen !== 'ARCHIVO' || !e.url) return;
+    const fileId = extraerIdArchivoDrive(e.url);
+    if (!fileId || fileId === extraerIdArchivoDrive(nuevaUrl)) return;
+
+    const compartido = await this.prisma.cPEntregaDocumento.count({
+      where: { url: e.url, id: { not: e.id } },
+    });
+    if (compartido > 0) return;
+
+    try {
+      const entidad = await this.getEntidad(e.solicitud.entidadId, companyId);
+      if (!entidad.driveFolderId) return;
+      const periodo = `${e.solicitud.anio}-${String(e.solicitud.mes).padStart(2, '0')}`;
+      const mes = await this.driveService.findChildFolderByName(
+        entidad.driveFolderId,
+        periodo,
+      );
+      if (!mes) return;
+      const meta = await this.driveService.getFileMetadata(fileId);
+      if (meta.trashed || !meta.parents.includes(mes.id)) return;
+      await this.driveService.deleteFileById(fileId);
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
+      const status =
+        (err as { code?: number; response?: { status?: number } })?.code ??
+        (err as { response?: { status?: number } })?.response?.status;
+      if (status === 404) return;
+      this.logger.error(
+        `No se pudo borrar el archivo anterior de la entrega ${e.id} en Drive: ${(err as Error).message}`,
+      );
+      throw new ServiceUnavailableException(
+        'No se pudo borrar el archivo anterior de Google Drive, así que la entrega no se registró. Intenta de nuevo, o elige conservar ambos.',
+      );
+    }
   }
 
   async aprobar(id: number, actor: Actor) {
@@ -601,7 +719,28 @@ export class EntregasService {
   async obtenerArchivo(
     id: number,
     actor: Actor,
+    paraVistaPrevia = false,
+    forzarPdf = false,
   ): Promise<{ buffer: Buffer; mimeType: string; nombre: string }> {
+    // Tiempo de cada paso, en una sola línea de registro: "Preparando vista previa..."
+    // tarda según el paso (Drive, descarga o LibreOffice) y así se ve cuál es.
+    const inicio = Date.now();
+    let marca = inicio;
+    const tiempos: string[] = [];
+    const lap = (paso: string) => {
+      const ahora = Date.now();
+      tiempos.push(`${paso} ${ahora - marca} ms`);
+      marca = ahora;
+    };
+    const terminar = <T>(resultado: T): T => {
+      if (paraVistaPrevia) {
+        this.logger.log(
+          `Vista previa de la entrega ${id}: ${tiempos.join(' · ')} · total ${Date.now() - inicio} ms`,
+        );
+      }
+      return resultado;
+    };
+
     const e = await this.cargarEntrega(id, actor.companyId);
     this.assertPuedeVer(e, actor);
     const noDisponible = new NotFoundException(
@@ -614,22 +753,65 @@ export class EntregasService {
     try {
       const entidad = await this.getEntidad(e.solicitud.entidadId, actor.companyId);
       if (!entidad.driveFolderId) throw noDisponible;
+      lap('base de datos');
       const periodo = `${e.solicitud.anio}-${String(e.solicitud.mes).padStart(2, '0')}`;
-      const mes = await this.driveService.findChildFolderByName(
-        entidad.driveFolderId,
-        periodo,
-      );
-      const meta = await this.driveService.getFileMetadata(fileId);
+      // Las dos comprobaciones a Drive no dependen una de otra: van a la vez.
+      const [mes, meta] = await Promise.all([
+        this.carpetaDelMes(entidad.driveFolderId, periodo),
+        this.driveService.getFileMetadata(fileId),
+      ]);
+      lap('Drive (carpeta y datos del archivo)');
       if (!mes || meta.trashed || !meta.parents.includes(mes.id)) throw noDisponible;
       if (meta.size !== null && meta.size > TAMANO_MAXIMO_ARCHIVO) {
         throw new BadRequestException('El archivo es demasiado grande para mostrarlo aquí.');
       }
+      const nombre = meta.name || `documento-${id}`;
+      const ext = extensionOffice(nombre);
+      const comoCuadricula = paraVistaPrevia && ext === '.xlsx' && !forzarPdf;
+
+      // Si el PDF de este archivo ya se convirtió antes, no hace falta ni descargarlo.
+      if (paraVistaPrevia && ext && !comoCuadricula) {
+        const guardado = this.pdfsConvertidos.get(fileId);
+        if (guardado) {
+          lap('PDF en memoria');
+          return terminar({
+            buffer: guardado,
+            mimeType: 'application/pdf',
+            nombre: nombre.slice(0, -ext.length) + '.pdf',
+          });
+        }
+      }
+
       const buffer = await this.driveService.downloadFileBuffer(fileId);
-      return {
+      lap('descarga de Drive');
+      // Un .xlsx se muestra como cuadrícula de hojas (como la vista de Drive), no
+      // como PDF: al imprimirlo, una hoja ancha se parte en páginas. Si no se puede
+      // leer (dañado, con contraseña) o se pide el PDF, sigue la conversión de siempre.
+      if (comoCuadricula) {
+        const libro = await this.leerLibroParaVista(buffer, id);
+        if (libro) {
+          lap('lectura de hojas');
+          return terminar({
+            buffer: Buffer.from(JSON.stringify(libro), 'utf-8'),
+            mimeType: 'application/json',
+            nombre,
+          });
+        }
+      }
+      if (paraVistaPrevia && ext) {
+        const pdf = await this.convertirParaVistaPrevia(buffer, ext, id, fileId);
+        lap('conversión a PDF');
+        return terminar({
+          buffer: pdf,
+          mimeType: 'application/pdf',
+          nombre: nombre.slice(0, -ext.length) + '.pdf',
+        });
+      }
+      return terminar({
         buffer,
         mimeType: meta.mimeType || 'application/octet-stream',
-        nombre: meta.name || `documento-${id}`,
-      };
+        nombre,
+      });
     } catch (err) {
       if (err instanceof HttpException) throw err;
       this.logger.error(
@@ -637,6 +819,82 @@ export class EntregasService {
       );
       throw new ServiceUnavailableException(
         'No se pudo abrir el archivo desde Google Drive. Intenta de nuevo.',
+      );
+    }
+  }
+
+  // Carpeta del mes de una entidad: su id no cambia, pero buscarla es una consulta a
+  // Drive en cada vista previa. Se recuerda 5 minutos (solo si existe; en memoria,
+  // se pierde al reciclarse la instancia). Solo la vista previa la usa: el borrado
+  // de archivos sigue buscándola de nuevo.
+  private readonly carpetasDelMes = new Map<string, { id: string; hasta: number }>();
+  private static readonly CACHE_CARPETA_MS = 5 * 60 * 1000;
+
+  private async carpetaDelMes(entidadFolderId: string, periodo: string) {
+    const clave = `${entidadFolderId}|${periodo}`;
+    const guardada = this.carpetasDelMes.get(clave);
+    if (guardada && guardada.hasta > Date.now()) return { id: guardada.id };
+    const mes = await this.driveService.findChildFolderByName(entidadFolderId, periodo);
+    if (mes) {
+      this.carpetasDelMes.set(clave, {
+        id: mes.id,
+        hasta: Date.now() + EntregasService.CACHE_CARPETA_MS,
+      });
+    }
+    return mes;
+  }
+
+  /** El libro de Excel como datos para dibujarlo, o null si no se puede leer (entonces se usa el PDF). */
+  private async leerLibroParaVista(buffer: Buffer, entregaId: number): Promise<LibroVista | null> {
+    try {
+      return await leerLibroExcel(buffer);
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo leer como cuadrícula el Excel de la entrega ${entregaId}; se muestra como PDF: ${(err as Error).message}`,
+      );
+      return null;
+    }
+  }
+
+  // PDFs ya convertidos de esta instancia, para que ir y volver entre documentos
+  // con "Anterior/Siguiente" no vuelva a esperar a LibreOffice (varios segundos).
+  // En memoria y acotado: se pierde al reciclarse la instancia, y no escribe nada
+  // en Drive. La clave es el id del archivo de Drive (re-entregar sube otro archivo).
+  private readonly pdfsConvertidos = new Map<string, Buffer>();
+  private static readonly CACHE_PDF_MAX_BYTES = 40 * 1024 * 1024;
+
+  private recordarPdf(clave: string, pdf: Buffer) {
+    if (pdf.length > EntregasService.CACHE_PDF_MAX_BYTES) return;
+    this.pdfsConvertidos.set(clave, pdf);
+    let total = 0;
+    for (const p of this.pdfsConvertidos.values()) total += p.length;
+    // Se descartan los más antiguos (orden de inserción del Map) hasta entrar en el tope.
+    for (const k of this.pdfsConvertidos.keys()) {
+      if (total <= EntregasService.CACHE_PDF_MAX_BYTES) break;
+      total -= this.pdfsConvertidos.get(k)?.length ?? 0;
+      this.pdfsConvertidos.delete(k);
+    }
+  }
+
+  /** Word/Excel → PDF solo para mostrarlo; la descarga sigue entregando el original. */
+  private async convertirParaVistaPrevia(
+    buffer: Buffer,
+    extension: string,
+    entregaId: number,
+    fileId: string,
+  ): Promise<Buffer> {
+    const guardado = this.pdfsConvertidos.get(fileId);
+    if (guardado) return guardado;
+    try {
+      const pdf = await convertirOfficeAPdf(buffer, extension);
+      this.recordarPdf(fileId, pdf);
+      return pdf;
+    } catch (err) {
+      this.logger.error(
+        `No se pudo convertir a PDF el archivo de la entrega ${entregaId}: ${(err as Error).message}`,
+      );
+      throw new ServiceUnavailableException(
+        'No se pudo preparar la vista previa de este archivo. Puedes descargarlo para verlo.',
       );
     }
   }
@@ -678,6 +936,9 @@ export class EntregasService {
         fechaLimite: f.fechaLimite.toISOString().slice(0, 10),
         vencida: estaVencida(f.estado, f.fechaLimite, hoy),
         motivoRechazo: f.motivoRechazo,
+        // Para que "Entregar de nuevo" sepa si hay un archivo anterior en Drive
+        // y pregunte si se reemplaza o se conservan ambos.
+        origen: f.origen,
         solicitudId: f.solicitud.id,
         anio: f.solicitud.anio,
         mes: f.solicitud.mes,
@@ -801,15 +1062,6 @@ export class EntregasService {
     link: string,
   ) {
     try {
-      const config = await this.prisma.notificationConfig.findUnique({
-        where: { companyId },
-      });
-      if (!config?.senderEmail) {
-        this.logger.warn(
-          'No hay correo de envío configurado: se avisó solo dentro del sistema.',
-        );
-        return;
-      }
       const usuarios = await this.prisma.user.findMany({
         where: { id: { in: userIds }, companyId, isActive: true },
         select: { email: true, fullName: true },
@@ -821,8 +1073,8 @@ export class EntregasService {
             to: u.email,
             subject: `${asunto} — Contratación Pública`,
             bodyText: `Hola ${u.fullName},\n\n${mensaje}\n\nPuedes verlo aquí: ${base}${link}\n\nEste es un aviso automático del sistema de Gemeseg.`,
-            from: config.senderEmail,
-            fromName: config.senderName,
+            from: CORREO_REMITENTE_CP,
+            fromName: NOMBRE_REMITENTE_CP,
           });
         } catch (err) {
           this.logger.warn(

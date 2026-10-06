@@ -181,9 +181,11 @@ export default function TextosInstitucionalesConfig() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <strong style={{ fontSize: '0.85rem', color: 'var(--azul-oscuro)' }}>{t.clave.replace(/_/g, ' ')}</strong>
                     {canEdit && t.id > 0 && (
-                      <button onClick={() => setConfirmandoEliminar(t)} style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex' }} title="Eliminar">
-                        <Trash2 size={15} />
-                      </button>
+                      <div className="acciones-iconos">
+                        <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Eliminar" aria-label="Eliminar" onClick={() => setConfirmandoEliminar(t)}>
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     )}
                   </div>
                   <textarea

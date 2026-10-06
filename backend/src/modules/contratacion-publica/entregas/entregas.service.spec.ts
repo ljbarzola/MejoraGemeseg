@@ -3,13 +3,26 @@ import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
+import { convertirOfficeAPdf } from '../../../common/utils/office-to-pdf.util';
 import { DriveService } from '../../personal/services/drive.service';
 import { CPEntidadesService } from '../entidades/entidades.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { GmailMailService } from '../../mail/gmail-mail.service';
 import { PermissionsService } from '../../permissions/permissions.service';
-import { Actor, EntregasService } from './entregas.service';
+import {
+  Actor,
+  CORREO_REMITENTE_CP,
+  EntregasService,
+  NOMBRE_REMITENTE_CP,
+} from './entregas.service';
+
+// LibreOffice no corre en las pruebas: solo se verifica cuándo se llama.
+jest.mock('../../../common/utils/office-to-pdf.util', () => ({
+  ...jest.requireActual('../../../common/utils/office-to-pdf.util'),
+  convertirOfficeAPdf: jest.fn(),
+}));
 
 const fecha = (t: string) => new Date(`${t}T00:00:00Z`);
 
@@ -590,6 +603,64 @@ describe('EntregasService', () => {
     });
   });
 
+  describe('recordarEntrega (recordatorio manual por documento)', () => {
+    beforeEach(() => {
+      prisma.user.findMany.mockResolvedValue([{ email: 'ana@x.com', fullName: 'Ana' }]);
+    });
+
+    it('avisa por campana y correo a los responsables de un documento pendiente', async () => {
+      prisma.cPEntregaDocumento.findFirst.mockResolvedValue(entrega());
+      const r = await service.recordarEntrega(11, admin);
+      expect(r).toEqual({ avisados: 1 });
+      expect(notifications.create).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 4, title: 'Recordatorio de documento' }),
+      );
+      expect(mail.sendMail).toHaveBeenCalledTimes(1);
+    });
+
+    it('un documento vencido se avisa como vencido', async () => {
+      // El límite del helper (2026-09-25) ya pasó respecto de hoy.
+      prisma.cPEntregaDocumento.findFirst.mockResolvedValue(entrega());
+      await service.recordarEntrega(11, admin);
+      expect(notifications.create.mock.calls[0][0].message).toMatch(/venció el/);
+    });
+
+    it('un rechazado avisa que hay que entregarlo de nuevo', async () => {
+      prisma.cPEntregaDocumento.findFirst.mockResolvedValue(entrega({ estado: 'RECHAZADO' }));
+      await service.recordarEntrega(11, admin);
+      expect(notifications.create.mock.calls[0][0].message).toMatch(/entregarlo de nuevo/);
+    });
+
+    it('no recuerda un borrador (nadie ha sido avisado aún)', async () => {
+      prisma.cPEntregaDocumento.findFirst.mockResolvedValue(
+        entrega({ solicitud: { ...entrega().solicitud, estado: 'BORRADOR' } }),
+      );
+      await expect(service.recordarEntrega(11, admin)).rejects.toThrow(/borrador/i);
+      expect(notifications.create).not.toHaveBeenCalled();
+    });
+
+    it('no recuerda un documento ya entregado o aprobado', async () => {
+      for (const estado of ['ENTREGADO', 'APROBADO']) {
+        prisma.cPEntregaDocumento.findFirst.mockResolvedValue(entrega({ estado }));
+        await expect(service.recordarEntrega(11, admin)).rejects.toBeInstanceOf(
+          BadRequestException,
+        );
+      }
+      expect(notifications.create).not.toHaveBeenCalled();
+    });
+
+    it('sin responsables no hay a quién avisar', async () => {
+      prisma.cPEntregaDocumento.findFirst.mockResolvedValue(entrega({ responsables: [] }));
+      await expect(service.recordarEntrega(11, admin)).rejects.toThrow(/responsables/i);
+    });
+
+    it('no toca el calendario del recordatorio diario automático', async () => {
+      prisma.cPEntregaDocumento.findFirst.mockResolvedValue(entrega());
+      await service.recordarEntrega(11, admin);
+      expect(prisma.cPEntregaDocumento.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('avisar', () => {
     it('un fallo al notificar no interrumpe la acción principal', async () => {
       notifications.create.mockRejectedValue(new Error('base caída'));
@@ -603,19 +674,25 @@ describe('EntregasService', () => {
       ).resolves.toBeUndefined();
     });
 
-    it('sin correo de envío configurado avisa solo dentro del sistema y no envía nada', async () => {
-      prisma.notificationConfig.findUnique.mockResolvedValue(null);
-      await service.avisar([4], 1, {
-        titulo: 't',
-        mensaje: 'm',
-        link: '/x',
-        correo: true,
+    it('los correos salen con el remitente propio de Contratación Pública, sin mirar la configuración de RRHH', async () => {
+      prisma.notificationConfig.findUnique.mockResolvedValue({
+        senderEmail: 'rrhh@x.com',
+        senderName: 'Recursos Humanos',
       });
-      expect(notifications.create).toHaveBeenCalledTimes(1);
-      expect(mail.sendMail).not.toHaveBeenCalled();
+      prisma.user.findMany.mockResolvedValue([{ email: 'a@x.com', fullName: 'A' }]);
+      await service.avisar([4], 1, { titulo: 't', mensaje: 'm', link: '/x', correo: true });
+      expect(mail.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'a@x.com',
+          from: CORREO_REMITENTE_CP,
+          fromName: NOMBRE_REMITENTE_CP,
+        }),
+      );
+      expect(mail.sendMail.mock.calls[0][0].fromName).not.toMatch(/recursos humanos/i);
+      expect(prisma.notificationConfig.findUnique).not.toHaveBeenCalled();
     });
 
-    it('con correo configurado, un destinatario que falla no impide los demás', async () => {
+    it('un destinatario que falla no impide los demás', async () => {
       prisma.notificationConfig.findUnique.mockResolvedValue({
         senderEmail: 'rrhh@x.com',
         senderName: 'RRHH',
@@ -762,6 +839,95 @@ describe('EntregasService: historial, vista previa y bandejas', () => {
         NotFoundException,
       );
     });
+
+    describe('vista previa de Word y Excel', () => {
+      const excel = () =>
+        drive.getFileMetadata.mockResolvedValue({
+          id: 'ARCH1',
+          name: 'Planilla.xlsx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          size: 1000,
+          parents: ['MES'],
+          trashed: false,
+        });
+      const convertir = convertirOfficeAPdf as jest.Mock;
+
+      beforeEach(() => {
+        convertir.mockReset();
+        convertir.mockResolvedValue(Buffer.from('%PDF-convertido'));
+        prisma.cPEntregaDocumento.findFirst.mockResolvedValue(subida());
+        excel();
+      });
+
+      it('un Excel o Word se convierte a PDF solo para la vista previa', async () => {
+        const r = await service.obtenerArchivo(11, admin, true);
+        expect(convertir).toHaveBeenCalledWith(expect.any(Buffer), '.xlsx');
+        expect(r.mimeType).toBe('application/pdf');
+        expect(r.nombre).toBe('Planilla.pdf');
+        expect(r.buffer.toString()).toBe('%PDF-convertido');
+      });
+
+      it('al descargar se entrega el original, sin convertir', async () => {
+        const r = await service.obtenerArchivo(11, admin, false);
+        expect(convertir).not.toHaveBeenCalled();
+        expect(r.nombre).toBe('Planilla.xlsx');
+        expect(r.mimeType).toMatch(/spreadsheetml/);
+      });
+
+      it('un PDF no pasa por LibreOffice', async () => {
+        drive.getFileMetadata.mockResolvedValue({
+          id: 'ARCH1', name: 'Planilla.pdf', mimeType: 'application/pdf',
+          size: 1000, parents: ['MES'], trashed: false,
+        });
+        await service.obtenerArchivo(11, admin, true);
+        expect(convertir).not.toHaveBeenCalled();
+      });
+
+      it('volver a abrir el mismo archivo no vuelve a convertir (caché en memoria)', async () => {
+        await service.obtenerArchivo(11, admin, true);
+        await service.obtenerArchivo(11, admin, true);
+        expect(convertir).toHaveBeenCalledTimes(1);
+      });
+
+      it('un Word ya convertido no se vuelve a descargar de Drive', async () => {
+        drive.getFileMetadata.mockResolvedValue({
+          id: 'ARCH1', name: 'Oficio.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          size: 1000, parents: ['MES'], trashed: false,
+        });
+        await service.obtenerArchivo(11, admin, true);
+        await service.obtenerArchivo(11, admin, true);
+        expect(convertir).toHaveBeenCalledTimes(1);
+        expect(drive.downloadFileBuffer).toHaveBeenCalledTimes(1);
+      });
+
+      it('aunque el PDF esté en memoria, se sigue comprobando que el archivo cuelga de la carpeta del mes', async () => {
+        drive.getFileMetadata.mockResolvedValue({
+          id: 'ARCH1', name: 'Oficio.docx', mimeType: 'application/msword',
+          size: 1000, parents: ['MES'], trashed: false,
+        });
+        await service.obtenerArchivo(11, admin, true);
+        drive.getFileMetadata.mockResolvedValue({
+          id: 'ARCH1', name: 'Oficio.docx', mimeType: 'application/msword',
+          size: 1000, parents: ['OTRA-CARPETA'], trashed: false,
+        });
+        await expect(service.obtenerArchivo(11, admin, true)).rejects.toBeInstanceOf(
+          NotFoundException,
+        );
+      });
+
+      it('la carpeta del mes se busca una sola vez en vistas seguidas', async () => {
+        await service.obtenerArchivo(11, admin, true);
+        await service.obtenerArchivo(11, admin, true);
+        expect(drive.findChildFolderByName).toHaveBeenCalledTimes(1);
+      });
+
+      it('si LibreOffice falla, responde un mensaje amable (503) y no el error crudo', async () => {
+        convertir.mockRejectedValue(new Error('spawn soffice ENOENT'));
+        const promesa = service.obtenerArchivo(11, admin, true);
+        await expect(promesa).rejects.toBeInstanceOf(ServiceUnavailableException);
+        await expect(promesa).rejects.toThrow(/vista previa/i);
+      });
+    });
   });
 
   describe('historial', () => {
@@ -829,5 +995,148 @@ describe('EntregasService: historial, vista previa y bandejas', () => {
         }),
       );
     });
+  });
+});
+
+describe('EntregasService: entregar de nuevo (reemplazar o conservar el archivo anterior)', () => {
+  let prisma: any;
+  let drive: any;
+  let service: EntregasService;
+
+  const ana: Actor = { userId: 4, companyId: 1, puedeEscribir: false };
+
+  // Entrega ya rechazada, con un archivo subido antes (ANTERIOR) en la carpeta del mes.
+  const rechazada = (over: Record<string, unknown> = {}) =>
+    entrega({
+      estado: 'RECHAZADO',
+      origen: 'ARCHIVO',
+      url: 'https://drive.google.com/file/d/ANTERIOR/view',
+      ...over,
+    });
+  const nueva = {
+    origen: 'ARCHIVO' as const,
+    url: 'https://drive.google.com/file/d/NUEVO/view',
+  };
+
+  beforeEach(() => {
+    prisma = {
+      cPEntidadPublica: {
+        findFirst: jest.fn().mockResolvedValue({ ...entidad, driveFolderId: 'ENT' }),
+      },
+      cPSolicitudMensual: {
+        findFirst: jest.fn().mockResolvedValue(
+          solicitud({
+            estado: 'ENVIADA',
+            entregas: [entregaDeSolicitud(11, 'Planilla IESS', [4])],
+          }),
+        ),
+      },
+      cPEntregaDocumento: {
+        findFirst: jest.fn().mockResolvedValue(rechazada()),
+        update: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+      },
+      cPEntregaHistorial: { create: jest.fn() },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ fullName: 'Ana Responsable' }),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      notificationConfig: { findUnique: jest.fn().mockResolvedValue(null) },
+      $transaction: jest.fn().mockResolvedValue([]),
+    };
+    drive = {
+      findChildFolderByName: jest.fn().mockResolvedValue({ id: 'MES', name: '2026-09' }),
+      getFileMetadata: jest.fn().mockResolvedValue({
+        id: 'ANTERIOR',
+        name: 'viejo.pdf',
+        mimeType: 'application/pdf',
+        size: 10,
+        parents: ['MES'],
+        trashed: false,
+      }),
+      deleteFileById: jest.fn().mockResolvedValue(undefined),
+    };
+    service = new EntregasService(
+      prisma,
+      drive as unknown as DriveService,
+      {} as unknown as CPEntidadesService,
+      { create: jest.fn().mockResolvedValue({}) } as unknown as NotificationsService,
+      { sendMail: jest.fn() } as unknown as GmailMailService,
+      {
+        getCompanyUserIdsWithWriteAccess: jest.fn().mockResolvedValue([1]),
+      } as unknown as PermissionsService,
+    );
+  });
+
+  it('reemplazar: borra de Drive el archivo anterior y registra la entrega', async () => {
+    await service.entregar(11, { ...nueva, reemplazarAnterior: true }, ana);
+    expect(drive.deleteFileById).toHaveBeenCalledWith('ANTERIOR');
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('conservar (o sin elegir): no borra nada', async () => {
+    await service.entregar(11, { ...nueva, reemplazarAnterior: false }, ana);
+    await service.entregar(11, nueva, ana);
+    expect(drive.deleteFileById).not.toHaveBeenCalled();
+  });
+
+  it('si el anterior era un enlace externo, no toca Drive', async () => {
+    prisma.cPEntregaDocumento.findFirst.mockResolvedValue(
+      rechazada({ origen: 'ENLACE' }),
+    );
+    await service.entregar(11, { ...nueva, reemplazarAnterior: true }, ana);
+    expect(drive.deleteFileById).not.toHaveBeenCalled();
+    expect(drive.getFileMetadata).not.toHaveBeenCalled();
+  });
+
+  it('no borra un archivo que no cuelga de la carpeta del mes (la URL la manda el navegador)', async () => {
+    drive.getFileMetadata.mockResolvedValue({
+      id: 'ANTERIOR', name: 'ajeno.pdf', mimeType: 'application/pdf',
+      size: 10, parents: ['OTRA-CARPETA'], trashed: false,
+    });
+    await service.entregar(11, { ...nueva, reemplazarAnterior: true }, ana);
+    expect(drive.deleteFileById).not.toHaveBeenCalled();
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('no borra un archivo que ya está en la papelera', async () => {
+    drive.getFileMetadata.mockResolvedValue({
+      id: 'ANTERIOR', name: 'x.pdf', mimeType: 'application/pdf',
+      size: 10, parents: ['MES'], trashed: true,
+    });
+    await service.entregar(11, { ...nueva, reemplazarAnterior: true }, ana);
+    expect(drive.deleteFileById).not.toHaveBeenCalled();
+  });
+
+  it('no borra si es el mismo archivo que se está entregando', async () => {
+    await service.entregar(
+      11,
+      { origen: 'ARCHIVO', url: 'https://drive.google.com/file/d/ANTERIOR/view', reemplazarAnterior: true },
+      ana,
+    );
+    expect(drive.deleteFileById).not.toHaveBeenCalled();
+  });
+
+  it('no borra si otra entrega usa el mismo enlace', async () => {
+    prisma.cPEntregaDocumento.count.mockResolvedValue(1);
+    await service.entregar(11, { ...nueva, reemplazarAnterior: true }, ana);
+    expect(drive.deleteFileById).not.toHaveBeenCalled();
+  });
+
+  it('si el archivo anterior ya no existe en Drive (404), sigue y registra la entrega', async () => {
+    drive.getFileMetadata.mockRejectedValue(Object.assign(new Error('File not found'), { code: 404 }));
+    await expect(
+      service.entregar(11, { ...nueva, reemplazarAnterior: true }, ana),
+    ).resolves.toBeDefined();
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('si Drive falla al borrar, avisa y NO registra la entrega (no deja un duplicado sin avisar)', async () => {
+    drive.deleteFileById.mockRejectedValue(new Error('Drive caído'));
+    await expect(
+      service.entregar(11, { ...nueva, reemplazarAnterior: true }, ana),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.cPEntregaDocumento.update).not.toHaveBeenCalled();
   });
 });

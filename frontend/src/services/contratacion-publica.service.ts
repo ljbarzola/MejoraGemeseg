@@ -2,6 +2,8 @@ import { api } from './auth.service';
 import type {
   CPEntidadPublica,
   CPEntidadGuardada,
+  CPEntidadCampo,
+  TipoCampoEntidad,
   CPSyncEntidadesDrive,
   CPContrato,
   CPContratoAdenda,
@@ -30,24 +32,63 @@ const BASE = '/contratacion-publica';
 
 // ==================== ENTIDADES PÚBLICAS ====================
 
-export const getEntidadesPublicas = (): Promise<CPEntidadPublica[]> =>
-  api.get(`${BASE}/entidades`).then((r) => r.data);
+export const getEntidadesPublicas = (incluirArchivadas = false): Promise<CPEntidadPublica[]> =>
+  api
+    .get(`${BASE}/entidades`, { params: incluirArchivadas ? { archivadas: 'true' } : undefined })
+    .then((r) => r.data);
 
 export const getEntidadPublica = (id: number): Promise<CPEntidadPublica> =>
   api.get(`${BASE}/entidades/${id}`).then((r) => r.data);
 
-export const createEntidadPublica = (data: {
+export interface CPEntidadPayload {
   nombre: string;
   ruc?: string;
   direccion?: string;
-}): Promise<CPEntidadGuardada> => api.post(`${BASE}/entidades`, data).then((r) => r.data);
+  camposExtra?: Record<string, string | number | null>;
+}
+
+export const createEntidadPublica = (data: CPEntidadPayload): Promise<CPEntidadGuardada> =>
+  api.post(`${BASE}/entidades`, data).then((r) => r.data);
 
 export const updateEntidadPublica = (
   id: number,
-  data: Partial<{ nombre: string; ruc: string; direccion: string }>,
+  data: Partial<CPEntidadPayload>,
 ): Promise<CPEntidadGuardada> => api.patch(`${BASE}/entidades/${id}`, data).then((r) => r.data);
 
-export const deleteEntidadPublica = (id: number) => api.delete(`${BASE}/entidades/${id}`);
+// No hay "eliminar entidad": desde 2026-10-05 solo se archiva (decisión explícita).
+export const archivarEntidadPublica = (id: number): Promise<CPEntidadPublica> =>
+  api.post(`${BASE}/entidades/${id}/archivar`).then((r) => r.data);
+
+export const reactivarEntidadPublica = (id: number): Promise<CPEntidadPublica> =>
+  api.post(`${BASE}/entidades/${id}/reactivar`).then((r) => r.data);
+
+/** Aviso de la sincronización "carpeta sin entidad" → crear la entidad con el nombre de la carpeta. */
+export const crearEntidadDesdeCarpeta = (folderId: string): Promise<CPEntidadPublica> =>
+  api.post(`${BASE}/entidades/desde-carpeta`, { folderId }).then((r) => r.data);
+
+/** Aviso de la sincronización "entidad sin carpeta" → crear su carpeta en Drive. */
+export const crearCarpetaEntidad = (id: number): Promise<CPEntidadPublica> =>
+  api.post(`${BASE}/entidades/${id}/drive/crear-carpeta`).then((r) => r.data);
+
+// ---- campos configurables de la entidad ----
+
+export const getCamposEntidad = (): Promise<CPEntidadCampo[]> =>
+  api.get(`${BASE}/entidad-campos`).then((r) => r.data);
+
+export const createCampoEntidad = (data: {
+  nombre: string;
+  tipo: TipoCampoEntidad;
+  opciones?: string[];
+  obligatorio?: boolean;
+}): Promise<CPEntidadCampo> => api.post(`${BASE}/entidad-campos`, data).then((r) => r.data);
+
+export const updateCampoEntidad = (
+  id: number,
+  data: Partial<{ nombre: string; opciones: string[]; obligatorio: boolean; activo: boolean }>,
+): Promise<CPEntidadCampo> => api.patch(`${BASE}/entidad-campos/${id}`, data).then((r) => r.data);
+
+export const reordenarCamposEntidad = (ids: number[]): Promise<CPEntidadCampo[]> =>
+  api.post(`${BASE}/entidad-campos/reordenar`, { ids }).then((r) => r.data);
 
 // Sincronización con la carpeta raíz de Drive de Contratación Pública.
 export const sincronizarEntidadesDrive = (): Promise<CPSyncEntidadesDrive> =>
@@ -393,10 +434,19 @@ export const subirArchivoEntrega = (id: number, file: File): Promise<{ url: stri
 
 export const entregarDocumento = (
   id: number,
-  data: { origen: 'ARCHIVO' | 'ENLACE'; url: string },
+  data: {
+    origen: 'ARCHIVO' | 'ENLACE';
+    url: string;
+    /** Solo si ya había un archivo en Drive: true lo borra, false lo conserva junto al nuevo. */
+    reemplazarAnterior?: boolean;
+  },
 ): Promise<CPSolicitudMensual> => api.post(`${ENTREGAS}/documentos/${id}/entregar`, data).then((r) => r.data);
 
-export const aprobarDocumento = (id: number): Promise<CPSolicitudMensual> =>
+/** Vuelve a avisar (campana y correo) a los responsables de un documento pendiente o rechazado. */
+export const recordarDocumento = (id: number): Promise<{ avisados: number }> =>
+  api.post(`${ENTREGAS}/documentos/${id}/recordar`).then((r) => r.data);
+
+export const aprobarDocumento =(id: number): Promise<CPSolicitudMensual> =>
   api.post(`${ENTREGAS}/documentos/${id}/aprobar`).then((r) => r.data);
 
 export const rechazarDocumento = (id: number, motivo: string): Promise<CPSolicitudMensual> =>
@@ -408,8 +458,15 @@ export const getHistorialEntrega = (documentoId: number): Promise<CPHistorialEnt
   api.get(`${ENTREGAS}/documentos/${documentoId}/historial`).then((r) => r.data);
 
 /** El archivo entregado (pasa por el servidor con la sesión de quien lo pide). */
-export const fetchArchivoEntrega = (documentoId: number): Promise<Blob> =>
-  api.get(`${ENTREGAS}/documentos/${documentoId}/archivo`, { responseType: 'blob' }).then((r) => r.data);
+export const fetchArchivoEntrega = (documentoId: number, original = false, comoPdf = false): Promise<Blob> =>
+  api
+    .get(`${ENTREGAS}/documentos/${documentoId}/archivo`, {
+      responseType: 'blob',
+      // Word llega convertido a PDF y un Excel (.xlsx) como JSON con sus hojas (ExcelViewer);
+      // `descargar` trae el original y `formato=pdf` fuerza el PDF también para Excel.
+      params: original ? { descargar: 1 } : comoPdf ? { formato: 'pdf' } : undefined,
+    })
+    .then((r) => r.data);
 
 /** Lo que le asignaron a quien entrega, de todas las entidades. */
 export const getMisDocumentos = (): Promise<CPDocumentoBandeja[]> =>

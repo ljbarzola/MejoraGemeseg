@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft, Plus, Pencil, Trash2, X, Send, Upload, FolderOpen, Search,
+  ArrowLeft, Plus, Pencil, Trash2, X, Send, Upload, FolderOpen, Search, BellRing,
 } from 'lucide-react';
 import {
   getSolicitudesDeEntidad,
@@ -9,6 +9,7 @@ import {
   createSolicitud,
   deleteSolicitud,
   enviarSolicitud,
+  recordarDocumento,
   addDocumentoSolicitud,
   updateDocumentoSolicitud,
   deleteDocumentoSolicitud,
@@ -36,9 +37,29 @@ import {
   mensajeError,
   tituloMes,
 } from '../../../utils/entregasCp';
-import RowActionsMenu from '../../../components/common/RowActionsMenu';
+import ColumnPickerMenu from '../../../components/common/ColumnPickerMenu';
+import { useColumnPreferences } from '../../../hooks/useColumnPreferences';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
 import { useSortableTable } from '../../../hooks/useSortableTable';
+
+// Columnas de la tabla de documentos que cada persona puede mostrar u ocultar.
+// "Documento" y "Acciones" son fijas. Área arranca oculta: casi nunca se llena
+// y le quitaba lugar a "Entrega" (el botón de revisar salía cortado).
+const COLUMNAS_DOCUMENTO = [
+  { key: 'area', label: 'Área' },
+  { key: 'responsables', label: 'Responsables' },
+  { key: 'fechaLimite', label: 'Fecha límite' },
+  { key: 'estado', label: 'Estado' },
+  { key: 'entrega', label: 'Entrega' },
+];
+const COLUMNAS_DOCUMENTO_VISIBLES = ['responsables', 'fechaLimite', 'estado', 'entrega'];
+const ANCHO_COLUMNA_DOCUMENTO: Record<string, string> = {
+  area: '10%',
+  responsables: '16%',
+  fechaLimite: '12%',
+  estado: '14%',
+  entrega: '22%',
+};
 
 const ultimoDiaDelMes = (anio: number, mes: number) =>
   `${anio}-${String(mes).padStart(2, '0')}-${String(new Date(anio, mes, 0).getDate()).padStart(2, '0')}`;
@@ -148,6 +169,9 @@ export default function EntidadDetail() {
     'fechaLimite',
   );
 
+  const columnPrefs = useColumnPreferences('cp-entregas-docs', COLUMNAS_DOCUMENTO_VISIBLES);
+  const columnasDoc = columnPrefs.visible.filter((k) => COLUMNAS_DOCUMENTO.some((c) => c.key === k));
+
   // ---- diálogos ----
   const [mostrarNueva, setMostrarNueva] = useState(false);
   const [docModal, setDocModal] = useState<{ editando: CPEntregaDocumento | null } | null>(null);
@@ -156,6 +180,15 @@ export default function EntidadDetail() {
   const [confirmarEnviar, setConfirmarEnviar] = useState(false);
   const [confirmarEliminarSolicitud, setConfirmarEliminarSolicitud] = useState(false);
   const [confirmarQuitar, setConfirmarQuitar] = useState<CPEntregaDocumento | null>(null);
+  const [confirmarRecordar, setConfirmarRecordar] = useState<CPEntregaDocumento | null>(null);
+  const [avisoEnviado, setAvisoEnviado] = useState('');
+
+  // El aviso de "recordatorio enviado" se quita solo.
+  useEffect(() => {
+    if (!avisoEnviado) return;
+    const t = setTimeout(() => setAvisoEnviado(''), 8000);
+    return () => clearTimeout(t);
+  }, [avisoEnviado]);
 
   const ejecutar = async (accion: () => Promise<CPSolicitudMensual | void>, fallback: string) => {
     setError('');
@@ -198,23 +231,86 @@ export default function EntidadDetail() {
     setPanel({ items, inicioId: e.id });
   };
 
-  const accionesDocumento = (e: CPEntregaDocumento) => {
-    const acciones: { label: string; icon?: React.ReactNode; onClick: () => void; danger?: boolean }[] = [];
-    if (e.puedeEntregar) {
-      acciones.push({
-        label: e.estado === 'PENDIENTE' ? 'Entregar' : 'Entregar de nuevo',
-        icon: <Upload size={14} />,
-        onClick: () => setEntregando(e),
-      });
+  type AccionDocumento = { label: string; icon: React.ReactNode; onClick: () => void; danger?: boolean };
+
+  /**
+   * Los 4 botones de icono de cada fila (Revisar vive en la columna "Entrega").
+   * Cada uno tiene SU lugar fijo: si no aplica queda un hueco (null) en vez de
+   * correr los demás, así los iconos quedan alineados de una fila a otra.
+   */
+  const accionesDocumento = (e: CPEntregaDocumento): (AccionDocumento | null)[] => [
+    e.puedeEntregar
+      ? {
+          label: e.estado === 'PENDIENTE' ? 'Entregar' : 'Entregar de nuevo',
+          icon: <Upload size={16} />,
+          onClick: () => setEntregando(e),
+        }
+      : null,
+    // Solo con la solicitud ya enviada: en borrador nadie ha sido avisado todavía.
+    canEdit && solicitud?.estado === 'ENVIADA' && (e.estado === 'PENDIENTE' || e.estado === 'RECHAZADO') && e.responsables.length > 0
+      ? { label: 'Recordar al responsable', icon: <BellRing size={16} />, onClick: () => setConfirmarRecordar(e) }
+      : null,
+    canEdit ? { label: 'Editar', icon: <Pencil size={16} />, onClick: () => setDocModal({ editando: e }) } : null,
+    canEdit ? { label: 'Quitar', icon: <Trash2 size={16} />, danger: true, onClick: () => setConfirmarQuitar(e) } : null,
+  ];
+
+  /** Celda de una columna opcional de la tabla de documentos. */
+  const celdaDocumento = (key: string, e: CPEntregaDocumento) => {
+    switch (key) {
+      case 'area':
+        return <td key={key}><span className="truncate" title={e.departmentName ?? undefined}>{e.departmentName ?? '—'}</span></td>;
+      case 'responsables':
+        return (
+          <td key={key}>
+            <span className="truncate" title={e.responsables.map((r) => r.nombre).join(', ')}>{e.responsables.map((r) => r.nombre).join(', ') || '—'}</span>
+          </td>
+        );
+      case 'fechaLimite':
+        return (
+          <td key={key}>
+            {formatoFecha(e.fechaLimite)}
+            {e.vencida && <div style={{ color: '#c53030', fontWeight: 700, fontSize: '0.72rem' }}>Vencido</div>}
+          </td>
+        );
+      case 'estado':
+        return (
+          <td key={key}>
+            <span className="status-badge" style={{ background: ESTADO_COLOR[e.estado].bg, color: ESTADO_COLOR[e.estado].fg }}>
+              {ESTADO_LABEL[e.estado]}
+            </span>
+            {e.estado === 'RECHAZADO' && e.motivoRechazo && (
+              <div style={{ fontSize: '0.72rem', color: '#c53030', marginTop: 2 }}>{e.motivoRechazo}</div>
+            )}
+          </td>
+        );
+      case 'entrega':
+        return (
+          <td key={key}>
+            {e.url ? (
+              <>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => abrirPanel(e)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                >
+                  <Search size={13} /> {canEdit && e.estado === 'ENTREGADO' ? 'Revisar' : e.origen === 'ARCHIVO' ? 'Ver archivo' : 'Ver enlace'}
+                </button>
+                <div style={{ fontSize: '0.72rem', color: '#718096' }}>
+                  {e.entregadoPorNombre ?? ''}{e.entregadoAt ? ` · ${formatoFecha(e.entregadoAt)}` : ''}
+                </div>
+                {e.revisadoAt && e.estado !== 'ENTREGADO' && (
+                  <div style={{ fontSize: '0.72rem', color: '#718096' }} title={formatFechaHoraSync(e.revisadoAt)}>
+                    Revisó {e.revisadoPorNombre ?? ''} · {formatoFecha(e.revisadoAt)}
+                  </div>
+                )}
+              </>
+            ) : '—'}
+          </td>
+        );
+      default:
+        return null;
     }
-    if (canEdit && (e.estado === 'ENTREGADO' || e.estado === 'APROBADO') && e.url) {
-      acciones.push({ label: 'Revisar (ver, aprobar o rechazar)', icon: <Search size={14} />, onClick: () => abrirPanel(e) });
-    }
-    if (canEdit) {
-      acciones.push({ label: 'Editar', icon: <Pencil size={14} />, onClick: () => setDocModal({ editando: e }) });
-      acciones.push({ label: 'Quitar', icon: <Trash2 size={14} />, danger: true, onClick: () => setConfirmarQuitar(e) });
-    }
-    return acciones;
   };
 
   if (loading) return <div className="page-container"><div className="loading-state">Cargando entidad...</div></div>;
@@ -232,6 +328,23 @@ export default function EntidadDetail() {
           </div>
           <div className="header-actions">
             {canEdit && lista && (
+              lista.entidad.driveFolderId ? (
+                <a
+                  className="btn-secondary"
+                  href={`https://drive.google.com/drive/folders/${lista.entidad.driveFolderId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ textDecoration: 'none' }}
+                >
+                  <FolderOpen size={16} /> Carpeta en Drive
+                </a>
+              ) : (
+                <button className="btn-secondary" disabled title="Esta entidad todavía no tiene carpeta. Créala desde Entidades Públicas → Sincronizar.">
+                  <FolderOpen size={16} /> Sin carpeta en Drive
+                </button>
+              )
+            )}
+            {canEdit && lista && (
               <button className="auth-btn" onClick={() => setMostrarNueva(true)}>
                 <Plus size={16} /> Nueva solicitud
               </button>
@@ -242,25 +355,6 @@ export default function EntidadDetail() {
 
       {error && (
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{error}</div>
-      )}
-
-      {canEdit && lista && (
-        <div className="admin-section" style={{ marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            <FolderOpen size={16} />
-            {lista.entidad.driveFolderId ? (
-              <span style={{ fontSize: '0.88rem' }}>
-                Los archivos de esta entidad se guardan en su carpeta de Drive ·{' '}
-                <a href={`https://drive.google.com/drive/folders/${lista.entidad.driveFolderId}`} target="_blank" rel="noopener noreferrer">abrir</a>
-              </span>
-            ) : (
-              <span style={{ fontSize: '0.88rem' }}>
-                Esta entidad todavía no tiene carpeta en Drive. Se crea sola al sincronizar o al subir el primer archivo; la carpeta general se elige en{' '}
-                <a href="/contratacion-publica/entidades" onClick={(e) => { e.preventDefault(); navigate('/contratacion-publica/entidades'); }}>Entidades Públicas</a>.
-              </span>
-            )}
-          </div>
-        </div>
       )}
 
       {/* ---------------- meses ---------------- */}
@@ -318,26 +412,51 @@ export default function EntidadDetail() {
                   <h3 style={{ margin: 0 }}>{tituloMes(solicitud.anio, solicitud.mes)}</h3>
                   <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: '#718096' }}>
                     {solicitud.estado === 'BORRADOR'
-                      ? 'Borrador: nadie recibe avisos hasta que la envíes.'
+                      ? 'Estado: Borrador'
                       : `${avance.aprobadas} de ${avance.total} aprobados`}
                   </p>
                 </div>
-                {canEdit && (
-                  <div className="header-actions">
-                    <button className="btn-secondary" onClick={() => setDocModal({ editando: null })}>
-                      <Plus size={14} /> Agregar documento
-                    </button>
-                    {solicitud.estado === 'BORRADOR' && (
-                      <button className="auth-btn" onClick={() => setConfirmarEnviar(true)}>
-                        <Send size={14} /> Enviar solicitud
+                <div className="header-actions">
+                  {solicitud.entregas.length > 0 && (
+                    <ColumnPickerMenu
+                      columns={COLUMNAS_DOCUMENTO}
+                      visible={columnPrefs.visible}
+                      fixedLabel="Documento"
+                      onApply={async (keys) => {
+                        const guardado = await columnPrefs.set(keys);
+                        if (!guardado) setError('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.');
+                      }}
+                    />
+                  )}
+                  {canEdit && (
+                    <>
+                      <button className="btn-secondary" onClick={() => setDocModal({ editando: null })}>
+                        <Plus size={14} /> Agregar documento
                       </button>
-                    )}
-                    <button className="icon-btn" title="Eliminar solicitud" onClick={() => setConfirmarEliminarSolicitud(true)}>
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                )}
+                      {solicitud.estado === 'BORRADOR' && (
+                        <button className="auth-btn" onClick={() => setConfirmarEnviar(true)}>
+                          <Send size={14} /> Enviar solicitud
+                        </button>
+                      )}
+                      <button type="button" className="btn-icon-toolbar" style={{ color: '#c53030' }} title="Eliminar solicitud" aria-label="Eliminar solicitud" onClick={() => setConfirmarEliminarSolicitud(true)}>
+                        <Trash2 size={16} />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
+
+              {canEdit && solicitud.estado === 'BORRADOR' && (
+                <div style={{ background: '#fffbeb', border: '1px solid #f6e05e', color: '#744210', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: '0.85rem', lineHeight: 1.5 }}>
+                  <strong>Esta solicitud es un borrador.</strong> Los responsables aún no la ven ni recibieron ningún aviso. Cuando los documentos estén listos, pulsa <strong>«Enviar solicitud»</strong> para avisarles.
+                </div>
+              )}
+
+              {avisoEnviado && (
+                <div style={{ background: '#f0fff4', border: '1px solid #9ae6b4', color: '#276749', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: '0.85rem' }}>
+                  {avisoEnviado}
+                </div>
+              )}
 
               {solicitud.entregas.length === 0 ? (
                 <div className="empty-state">
@@ -350,13 +469,17 @@ export default function EntidadDetail() {
                   <table className="tasks-table resizable-table" ref={tablaDocsRef}>
                     <thead>
                       <tr>
-                        <th {...thDocs('nombre')} style={{ width: '18%' }}>Documento <SortDocs campo="nombre" /></th>
-                        <th {...thDocs('area')} style={{ width: '10%' }}>Área <SortDocs campo="area" /></th>
-                        <th {...thDocs('responsables')} style={{ width: '14%' }}>Responsables <SortDocs campo="responsables" /></th>
-                        <th {...thDocs('fechaLimite')} style={{ width: '12%' }}>Fecha límite <SortDocs campo="fechaLimite" /></th>
-                        <th {...thDocs('estado')} style={{ width: '16%' }}>Estado <SortDocs campo="estado" /></th>
-                        <th style={{ width: '20%' }}>Entrega</th>
-                        <th style={{ textAlign: 'right', width: '10%' }}>Acciones</th>
+                        <th {...thDocs('nombre')} style={{ width: '22%' }}>Documento <SortDocs campo="nombre" /></th>
+                        {columnasDoc.map((key) => {
+                          const etiqueta = COLUMNAS_DOCUMENTO.find((c) => c.key === key)?.label ?? key;
+                          // "Entrega" no se ordena: es un botón con datos de quién y cuándo.
+                          return key === 'entrega' ? (
+                            <th key={key} style={{ width: ANCHO_COLUMNA_DOCUMENTO[key] }}>{etiqueta}</th>
+                          ) : (
+                            <th key={key} {...thDocs(key)} style={{ width: ANCHO_COLUMNA_DOCUMENTO[key] }}>{etiqueta} <SortDocs campo={key} /></th>
+                          );
+                        })}
+                        <th className="col-acciones col-acciones--iconos"><span className="visually-hidden">Acciones</span></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -368,43 +491,27 @@ export default function EntidadDetail() {
                               <span className="truncate" title={e.nombre} style={{ fontWeight: 700, color: 'var(--azul-oscuro)' }}>{e.nombre}</span>
                               {e.descripcion && <div style={{ fontSize: '0.75rem', color: '#718096' }}>{e.descripcion}</div>}
                             </td>
-                            <td><span className="truncate" title={e.departmentName ?? undefined}>{e.departmentName ?? '—'}</span></td>
-                            <td><span className="truncate" title={e.responsables.map((r) => r.nombre).join(', ')}>{e.responsables.map((r) => r.nombre).join(', ') || '—'}</span></td>
-                            <td>
-                              {formatoFecha(e.fechaLimite)}
-                              {e.vencida && <div style={{ color: '#c53030', fontWeight: 700, fontSize: '0.72rem' }}>Vencido</div>}
-                            </td>
-                            <td>
-                              <span className="status-badge" style={{ background: ESTADO_COLOR[e.estado].bg, color: ESTADO_COLOR[e.estado].fg }}>
-                                {ESTADO_LABEL[e.estado]}
-                              </span>
-                              {e.estado === 'RECHAZADO' && e.motivoRechazo && (
-                                <div style={{ fontSize: '0.72rem', color: '#c53030', marginTop: 2 }}>{e.motivoRechazo}</div>
-                              )}
-                            </td>
-                            <td>
-                              {e.url ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => abrirPanel(e)}
-                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--azul-medio, #2b6cb0)', fontWeight: 700, fontSize: 'inherit' }}
-                                  >
-                                    <Search size={13} /> {canEdit && e.estado === 'ENTREGADO' ? 'Revisar' : e.origen === 'ARCHIVO' ? 'Ver archivo' : 'Ver enlace'}
-                                  </button>
-                                  <div style={{ fontSize: '0.72rem', color: '#718096' }}>
-                                    {e.entregadoPorNombre ?? ''}{e.entregadoAt ? ` · ${formatoFecha(e.entregadoAt)}` : ''}
-                                  </div>
-                                  {e.revisadoAt && e.estado !== 'ENTREGADO' && (
-                                    <div style={{ fontSize: '0.72rem', color: '#718096' }} title={formatFechaHoraSync(e.revisadoAt)}>
-                                      Revisó {e.revisadoPorNombre ?? ''} · {formatoFecha(e.revisadoAt)}
-                                    </div>
-                                  )}
-                                </>
-                              ) : '—'}
-                            </td>
-                            <td style={{ textAlign: 'right' }}>
-                              {acciones.length > 0 ? <RowActionsMenu actions={acciones} /> : null}
+                            {columnasDoc.map((key) => celdaDocumento(key, e))}
+                            <td className="col-acciones col-acciones--iconos">
+                              <div className="acciones-iconos">
+                                {acciones.map((a, i) =>
+                                  a ? (
+                                    <button
+                                      key={a.label}
+                                      type="button"
+                                      className="btn-secondary icon-btn"
+                                      style={a.danger ? { color: '#c53030' } : undefined}
+                                      title={a.label}
+                                      aria-label={a.label}
+                                      onClick={a.onClick}
+                                    >
+                                      {a.icon}
+                                    </button>
+                                  ) : (
+                                    <span key={`hueco-${i}`} className="icon-btn" aria-hidden="true" />
+                                  ),
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -471,6 +578,26 @@ export default function EntidadDetail() {
           onConfirm={() => {
             setConfirmarEnviar(false);
             ejecutar(() => enviarSolicitud(solicitud.id), 'No se pudo enviar la solicitud.');
+          }}
+        />
+      )}
+
+      {confirmarRecordar && (
+        <ConfirmDialog
+          title="Recordar al responsable"
+          message={`Se enviará un recordatorio de "${confirmarRecordar.nombre}", dentro del sistema y por correo, a: ${confirmarRecordar.responsables.map((r) => r.nombre).join(', ')}. ¿Enviar?`}
+          confirmLabel="Enviar recordatorio"
+          onCancel={() => setConfirmarRecordar(null)}
+          onConfirm={async () => {
+            const doc = confirmarRecordar;
+            setConfirmarRecordar(null);
+            setError('');
+            try {
+              await recordarDocumento(doc.id);
+              setAvisoEnviado(`Recordatorio enviado a ${doc.responsables.map((r) => r.nombre).join(', ')}.`);
+            } catch (err) {
+              setError(mensajeError(err, 'No se pudo enviar el recordatorio. Intenta de nuevo.'));
+            }
           }}
         />
       )}

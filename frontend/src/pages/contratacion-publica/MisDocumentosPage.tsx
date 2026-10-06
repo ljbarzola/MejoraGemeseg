@@ -14,7 +14,7 @@ const prioridad = (f: CPDocumentoBandeja) =>
   (f.estado === 'RECHAZADO' ? 0 : f.vencida ? 1 : 2) * 1e13 + Date.parse(f.fechaLimite);
 
 /**
- * "Mis documentos": todo lo que le asignaron a quien entrega, de cualquier
+ * "Por entregar" (ruta /mis-documentos): todo lo que le asignaron a quien entrega, de cualquier
  * entidad, en un solo lugar. Evita tener que adivinar en qué entidad y mes está
  * cada cosa que falta.
  */
@@ -69,7 +69,7 @@ export default function MisDocumentosPage() {
         <div className="page-title-row">
           <div>
             <p className="page-eyebrow">CONTRATACIÓN PÚBLICA</p>
-            <h1>Mis documentos</h1>
+            <h1>Por entregar</h1>
           </div>
         </div>
         {!loading && filas.length > 0 && (
@@ -129,6 +129,7 @@ export default function MisDocumentosPage() {
                     <td>
                       <span className="truncate" title={f.entidadNombre}>
                         <a
+                          className="enlace-tabla"
                           href={`/contratacion-publica/entidades/${f.entidadId}?solicitud=${f.solicitudId}`}
                           onClick={(e) => { e.preventDefault(); navigate(`/contratacion-publica/entidades/${f.entidadId}?solicitud=${f.solicitudId}`); }}
                         >
