@@ -23,7 +23,7 @@ Gemeseg Mejora es la plataforma web de gestion interna de GEMESEG (Ecuador). Emp
 ### Autenticacion
 - **Login y Registro**: JWT con 7 dias de expiracion, registro solo con correos `@gemeseg.com`.
 - **Recuperar contrasena**: se pide el correo, llega un codigo de 6 digitos y con el se define la nueva contrasena.
-- **Roles**: ADMIN, MANAGER, EMPLOYEE con guards en endpoints protegidos.
+- **Roles**: ADMIN, MANAGER, EMPLOYEE con guards en endpoints protegidos. El Gerente (MANAGER) ve Administracion, Mi Empresa y Permisos usuarios en solo lectura; si intenta cambiar algo se le explica que es solo para administradores.
 - **Password**: bcrypt con salt 10.
 
 ### Permisos por seccion
@@ -39,7 +39,7 @@ Ademas del rol, cada modulo es una "seccion" con su propio control de acceso:
 - **Proyectos**: cualquier usuario autenticado crea proyectos; el admin es OWNER automatico; listado filtrado por membresia, por estado y paginado; detalle con miembros y tareas.
 - **Miembros**: OWNER o ADMIN agregan y quitan (nunca al ultimo OWNER); solo ADMIN cambia roles. Los VIEWER ven los botones deshabilitados.
 - **Tareas y Kanban**: 4 columnas (Por hacer, En progreso, En revision, Completado), varios asignados, prioridad y fechas de inicio y fin.
-- **Perfil**: datos del usuario, herramientas asignadas y estadisticas.
+- **Perfil**: datos del usuario, herramientas asignadas, estadisticas y cambio de contrasena (cierra la sesion en los demas dispositivos).
 
 ### Administracion y Empresas (white-label)
 - **Usuarios**: CRUD, activar/desactivar, estadisticas por rol y ubicacion de cada persona.
@@ -57,7 +57,7 @@ Rutas, traslados y nomina de escoltas de seguridad. Estados `LISTO_PARA_CUSTODIA
 - **Reclutamiento**: postulantes sincronizados desde Google Drive, revision de documentos con apoyo de IA (la persona de RRHH siempre confirma) y contratacion que mueve la carpeta a su destino.
 - **Guardias y personal administrativo**: listados, fichas, alta manual, salidas y movimientos de personal (historial).
 - **Cumplimiento**: checklist de documentos por cedula con semaforo y revision (aprobar/rechazar con motivo), recordatorios por correo.
-- **Entidades y requisitos**, **Contratos** del personal a partir de plantillas, **Capacitaciones** con alertas de vencimiento.
+- **Entidades y requisitos**, **Contratos** del personal a partir de plantillas (el Word se trae de un enlace de Drive o se sube como archivo), **Capacitaciones** con alertas de vencimiento.
 - **Buzon de Quejas y Sugerencias** (abierto a todo empleado, con gestion por etapas para RRHH) y **Encuestas** (por la app o por un enlace publico para quienes no tienen cuenta).
 
 ### Ventas y CRM
@@ -66,10 +66,10 @@ Rutas, traslados y nomina de escoltas de seguridad. Estados `LISTO_PARA_CUSTODIA
 - **Contratos**: plantillas `.docx` desde Google Drive con variables, generacion de PDF, numeracion automatica y firma electronica con SignWell.
 
 ### Contratacion Publica
-Contratos de seguridad privada con entidades del sector publico. Hoy esta visible **Entidades Publicas**, con una carpeta de Google Drive para todo el modulo y una subcarpeta por entidad que se mantiene sincronizada con la lista; contratos, puestos, horarios con generador de rotacion e informes mensuales estan construidos pero ocultos hasta reactivarlos (ver `.agents/modules/contratacion-publica.md`).
+Contratos de seguridad privada con entidades del sector publico. Hoy esta visible **Entidades Publicas**, con una carpeta de Google Drive para todo el modulo y una subcarpeta por entidad (la sincronización avisa de lo que falta en cada lado y deja decidir), entidades que se pueden archivar, campos extra configurables por empresa y vista previa de PDF, imágenes, Word (convertido a PDF) y Excel (como hoja de cálculo con pestañas, parecida a la de Drive) en la revisión de entregas, donde al volver a entregar un documento se pregunta si se reemplaza el archivo anterior o se conservan ambos; contratos, puestos, horarios con generador de rotacion e informes mensuales estan construidos pero ocultos hasta reactivarlos (ver `.agents/modules/contratacion-publica.md`).
 
 ### Sistemas
-Agrupa lo tecnico: dashboard, **Herramientas** (inventario y asignacion con auditoria), **Agentes** de IA, **Base de Conocimiento** de la empresa y **Soporte Tecnico** (reportes de errores, mejoras y permisos enviados con el boton de la llave inglesa; quien reporta recibe aviso del avance). El dashboard muestra tickets por tipo y el tiempo promedio de resolucion. **Novedades** permite publicar un aviso de cambio en la app que llega por la campanita (no por correo) a quienes tienen acceso a los modulos afectados.
+Agrupa lo tecnico: dashboard, **Herramientas** (inventario y asignacion con auditoria), **Agentes** de IA, **Base de Conocimiento** de la empresa (en el menu de Sistemas) y **Soporte Tecnico** (reportes de errores, mejoras y permisos enviados con el boton de la llave inglesa; quien reporta recibe aviso del avance y el equipo de Sistemas, el de cada reporte nuevo en la campanita). El dashboard muestra tickets por tipo y el tiempo promedio de resolucion. **Novedades** permite publicar un aviso de cambio en la app que llega por la campanita (no por correo) a quienes tienen acceso a los modulos afectados.
 
 ### Asistente de IA — "Agente Gemeseg"
 - **Chat flotante**: boton + panel lateral, con conversaciones guardadas por agente y por usuario.
@@ -229,7 +229,7 @@ La API completa se explora en Swagger (`/docs`). El detalle por modulo, con sus 
 
 | Prefijo | Modulo |
 |---------|--------|
-| `/auth` | Registro, login, perfil y recuperacion de contrasena |
+| `/auth` | Registro, login, perfil, recuperacion y cambio de contrasena |
 | `/users` | Usuarios, perfil propio, ubicaciones y preferencias personales |
 | `/projects`, `/tasks` | Proyectos, miembros y tareas |
 | `/companies`, `/permissions`, `/admin/...` | Empresas, branding y permisos por seccion |

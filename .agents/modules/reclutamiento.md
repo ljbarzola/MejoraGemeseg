@@ -71,7 +71,7 @@ Se evaluaron dos caminos y **el usuario eligió partir el PDF** (2026-09-15): al
 
 ### Proveedor: Vertex AI + Gemini multimodal (no GitHub Models, no Document AI)
 
-- **Por qué no `gpt-4o-mini` vía GitHub Models** (lo que ya usa `DocumentExtractionService` para fechas): es solo texto. El usuario confirmó que los PDFs son **casi siempre fotos/escaneos** de cédulas y papeletas, donde `pdf-parse` no devuelve nada — exactamente el caso que ese servicio declara fuera de alcance.
+- **Por qué no `gpt-4o-mini` vía GitHub Models** (lo que usaba `DocumentExtractionService` para fechas hasta su migración a Vertex el 2026-09-29): es solo texto. El usuario confirmó que los PDFs son **casi siempre fotos/escaneos** de cédulas y papeletas, donde `pdf-parse` no devuelve nada — exactamente el caso que ese servicio declara fuera de alcance.
 - **Por qué no Document AI Custom Splitter/Classifier:** $5 por 1.000 páginas **más $36/mes fijos** por procesador desplegado, y exige entrenarlo con muestras etiquetadas. Para el volumen de GEMESEG es caro y lento sin dar mejor resultado que un modelo multimodal.
 - **Autenticación — el punto no obvio:** Vertex AI **NO acepta API keys**, exige OAuth2. Y esta organización de GCP tiene bloqueada por política `iam.serviceAccountKeys.create`, así que **no se puede crear una credencial nueva**. Se reutiliza la misma service account que ya usa Drive (`drive-sync@agentes-504115`, archivo en local / `GOOGLE_SERVICE_ACCOUNT_JSON` en Cloud Run) con el scope `cloud-platform`. Falta, del lado de GCP: habilitar `aiplatform.googleapis.com` y otorgar `roles/aiplatform.user` a esa cuenta.
 - Variables: `GOOGLE_VERTEX_PROJECT` (si está vacía, la función queda **deshabilitada** y Reclutamiento sigue funcionando a mano — mismo criterio que `CacheService` con `REDIS_HOST` vacío), `GOOGLE_VERTEX_LOCATION` (ya existía en `backend/.env` pero **ningún código la leía**), `GOOGLE_VERTEX_MODEL`.
@@ -254,9 +254,9 @@ Antes nada en la app escribía `candidato.json` (solo se leía si alguien lo cre
 - `syncReclutamientoCandidates` deriva `nombre`/`cedula`/`telefono`/`email` buscando esas claves dentro de `datosFormulario` por coincidencia case/acento-insensible (`buscarDatoFormulario`), con el nombre de la carpeta como respaldo.
 - Reclasificación de archivos "adicionales" propia de Reclutamiento (candidatos de Drive, no `EmployeeDocument`): `DriveService.reassignReclutamientoFile(driveFileId, archivoNombre, companyId)` renombra el archivo en Drive incluyendo el nombre del requisito, vía `PATCH /personal/reclutamiento/documentos/:driveFileId/reassign`. `syncReclutamientoCandidates` expone `archivosAdicionales` (excluye `.json`, son metadata del expediente, no documentos).
 
-### Vacante: sin botón de eliminar, self-heal del JSON en Drive
+### Vacante: eliminar (botón reintroducido), self-heal del JSON en Drive
 
-- Se quitó el botón de eliminar vacante de la UI (borrar de verdad trashea la carpeta de Drive completa, con todas las carpetas/documentos de sus candidatos dentro — pérdida real reportada por el usuario). El endpoint `DELETE /personal/reclutamiento/puestos/:id` sigue existiendo por si hace falta desde fuera de la UI. La única vía en la UI para "retirar" una vacante es marcarla `CERRADA`.
+- ~~Se quitó el botón de eliminar vacante de la UI~~ — **superado:** el botón se reintrodujo (ver `.agents/modules/recursos-humanos.md` punto 15f). Hoy `ReclutamientoPage.tsx` tiene "Eliminar vacante" con diálogo de confirmación que indica cuántos postulantes sincronizados hay dentro, y el backend manda la carpeta de Drive a la **papelera** (recuperable), no la borra. El motivo original de quitarlo (pérdida real de carpetas de candidatos) es el que la confirmación y la papelera ahora cubren. Marcar la vacante `CERRADA` sigue siendo la forma de retirarla sin eliminar nada.
 - `updateJobPosition` ya no confía en el `driveFileId` guardado en BD para saber qué archivo de Drive sobrescribir: antes de escribir, lista la carpeta del puesto y usa el `.json` que realmente existe hoy ahí (autorreparando el id en BD si estaba desincronizado). Sin esto, una edición podía "tener éxito" escribiendo sobre un archivo huérfano mientras el JSON real en Drive nunca cambiaba.
 - **Ojo con procesos de backend viejos**: como el repo vive bajo `Documents` (típicamente sincronizado con OneDrive en Windows), `nest start --watch` puede no recargar con cambios de archivo — si un fix "no aparece" reiniciar el proceso del backend antes de sospechar del código.
 
@@ -293,7 +293,7 @@ RRHH puede aprobar o rechazar cada documento del checklist de cumplimiento, con 
 
 - **Modelos:** `DocumentReview` (estado actual) + `DocumentReviewHistory` (traza append-only). Migracion `20260907_add_document_reviews`.
 - **Por que tabla aparte y no columnas en `EmployeeDocument`:** `deleteEmployeeByCedula` hace `deleteMany` de los documentos, y una re-subida tras un rechazo genera un `driveFileId` nuevo (fila nueva). La traza no puede vivir en una tabla que se vacia y se repuebla.
-- **Backend:** `services/document-review.service.ts`, `dto/document-review.dto.ts`, 3 endpoints en `drive.controller.ts` protegidos por `SectionPermissionGuard` + `@Section('PERSONAL', ...)`.
+- **Backend:** `services/document-review.service.ts`, `dto/document-review.dto.ts`, 3 endpoints en `drive.controller.ts` protegidos por `SectionPermissionGuard` + `@Section('RRHH', ...)` (en este Sprint se llamaba `PERSONAL`; renombrada el 2026-09-08).
 - **`getCompliance` ahora devuelve** `documentTypeId`, `driveFileId`, `review` (con `stale`) por documento, `review` en cada `unmatchedFile`, y `reviewSummary`.
 - **Frontend:** `components/personal/ComplianceChecklist.tsx` (compartido), `DocumentReviewModal.tsx`, `DocumentReviewHistory.tsx`, `reviewStatus.ts`. Consumido por `CompliancePanel`, `AdministrativeStaff` y `GuardiaDetailModal` (este ultimo en modo solo lectura).
 - **Tests:** `document-review.service.spec.ts`, `drive.service.spec.ts`, `section-permission.guard.spec.ts`.
@@ -384,12 +384,16 @@ El modulo de Reclutamiento es parte del modulo `Personal`. Los candidatos vienen
 | `GET` | `/personal/reclutamiento/puestos` | JWT | Listar todos los puestos de la empresa |
 | `POST` | `/personal/reclutamiento/puestos` | JWT | Crear puesto (guarda en BD + JSON en Drive) |
 | `PATCH` | `/personal/reclutamiento/puestos/:id` | JWT | Actualizar puesto (actualiza BD + JSON en Drive) |
-| `DELETE` | `/personal/reclutamiento/puestos/:id` | JWT | Eliminar puesto (elimina BD + JSON de Drive) |
+| `POST` | `/personal/reclutamiento/puestos/:id/duplicate` | JWT+RRHH(write) | Duplicar una vacante (botón "Duplicar vacante") |
+| `DELETE` | `/personal/reclutamiento/puestos/:id` | JWT+RRHH(write) | Eliminar puesto (borra la fila de BD y manda la carpeta de la vacante a la **papelera** de Drive, recuperable; el botón de la UI pide confirmación) |
 | `POST` | `/personal/reclutamiento/sync` | JWT | Sincronizar candidatos desde carpetas de Drive |
 | `POST` | `/personal/reclutamiento/candidatos/:folderId/contratar` | JWT+RRHH(write) | Contratar: mueve la carpeta a Guardias/Sin Asignar (o Personal Administrativo), marca `candidato.json` y sincroniza (Sprint 6-7) |
 | `POST` | `/personal/reclutamiento/candidatos/:folderId/analizar` | JWT+RRHH(write) | IA propone qué documento está en qué páginas (Sprint 8) |
 | `GET` | `/personal/reclutamiento/candidatos/:folderId/analisis-pendiente` | JWT+RRHH(view) | Última propuesta guardada, sin llamar a la IA (Sprint 8.1) |
 | `POST` | `/personal/reclutamiento/candidatos/:folderId/aplicar-analisis` | JWT+RRHH(write) | RRHH confirma: separa el PDF en archivos (Sprint 8) |
+| `POST` | `/personal/reclutamiento/candidatos/:folderId/conflictos-separacion` | JWT+RRHH(write) | Antes de aplicar: avisa qué requisitos ya tienen archivo, para preguntar reemplazar/mantener |
+| `POST` | `/personal/reclutamiento/candidatos/:folderId/revisar-archivos` | JWT+RRHH(write) | "Revisar con IA" de archivos subidos por separado (¿es una cédula?, qué documento es el adicional); no parte ni renombra nada |
+| `GET` | `/personal/reclutamiento/candidatos/:folderId/revision-archivos` | JWT+RRHH(view) | Última revisión guardada, sin llamar a la IA |
 | `GET` | `/personal/reclutamiento/candidatos/:folderId/pdf/:driveFileId` | JWT+RRHH(view) | Proxy del PDF para el visor (Sprint 8) |
 
 ### Drive
@@ -399,7 +403,7 @@ El modulo de Reclutamiento es parte del modulo `Personal`. Los candidatos vienen
 | `GET` | `/personal/drive/config` | JWT | Obtener configuracion Drive |
 | `POST` | `/personal/drive/config` | JWT+ADMIN | Guardar configuracion Drive |
 | `POST` | `/personal/drive/test` | JWT | Probar conexion con Google Drive |
-| `POST` | `/personal/drive/sync` | JWT | Sincronizar carpetas de Drive |
+| `POST` | `/personal/drive/sync-entidades`, `/personal/drive/sync-personal-admin` | JWT+RRHH(write) | Sincronizar carpetas de Drive (el `POST /personal/drive/sync` plano se eliminó el 2026-09-17; ver `recursos-humanos.md`) |
 | `GET` | `/personal/drive/compliance/:cedula` | JWT | Checklist de cumplimiento por cedula |
 | `GET` | `/personal/drive/tree` | JWT | Arbol de carpetas |
 | `DELETE` | `/personal/drive/employee/:cedula` | JWT+ADMIN | Eliminar empleado de Drive |

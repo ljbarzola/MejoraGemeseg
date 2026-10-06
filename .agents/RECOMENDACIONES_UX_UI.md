@@ -250,7 +250,36 @@ Agregado en `PersonalDashboard.tsx` (2026-09-10) a pedido del usuario, como prim
 
 ---
 
+## 20. Enlaces y Acciones de Fila — Botones, no Texto Subrayado ni Menú ⋯
+
+### Regla: Ningún enlace de texto subrayado, ningún ícono "pelado" y, en Contratación Pública, ningún botón dentro de un menú de tres puntos
+
+Pedido de la usuaria (2026-10-06) al revisar Contratación Pública; el detalle técnico y las clases están en `CLAUDE.md` ("Actions column") y `.agents/modules/contratacion-publica.md`:
+
+- **Nada de `<a>` pelado** con el subrayado azul del navegador. Si abre Drive u otra pestaña: `OpenFolderButton` (carpetas) o `<a className="btn-secondary">` con ícono y texto. Si solo navega dentro de la app y va en una tabla: `a.enlace-tabla` (sin subrayado) o un botón.
+- **Nada de íconos sin fondo** (`border:none; background:none`, azul o rojo): siempre `btn-secondary icon-btn`, con `title` y `aria-label`; el de eliminar con color `#c53030`. Un `icon-btn` solo, sin `btn-secondary`, se ve como botón nativo gris.
+- **Acciones de fila en Contratación Pública**: botones de ícono visibles dentro de `<div className="acciones-iconos">`, cada uno en su lugar fijo (un hueco `<span className="icon-btn">` cuando no aplica), con `col-acciones` + `col-acciones--ancha` o `--iconos` según cuántos caben. **No se usa `RowActionsMenu` en ese módulo**; los demás (Dashboard admin, Ventas Clientes, Encuestas) lo conservan.
+- **Cerrar un modal o panel**: `modal-close` (círculo gris), no un `icon-btn` suelto.
+- **Tabla con columnas opcionales** (ej. los documentos de cada mes): botón "Columnas" (`ColumnPickerMenu` + `useColumnPreferences`), siempre visible junto a las acciones del encabezado; lo poco útil arranca oculto.
+
+---
+
+## 21. Pantalla en Solo Lectura para un Rol: Mostrar el Botón y Explicar, No Esconderlo
+
+### Regla: Si Alguien No Puede Hacer Algo, el Sistema Debe Decirle Por Qué y a Quién Acudir
+
+Agregado el 2026-10-06 con el Gerente (MANAGER), que ve Administración, Mi Empresa y Permisos usuarios pero no puede cambiar nada:
+
+- Los botones y casillas de cambio **no se esconden ni se deshabilitan en silencio**. Al intentarlos se abre `SoloAdminDialog` (`components/common/SoloAdminDialog.tsx`, sobre `ConfirmDialog` con `hideCancel`): «No tienes permiso para esto. Esta acción es solo para administradores… Contacta a un administrador de tu empresa para que {acción}».
+- Además, un aviso fijo arriba de la pantalla («Estás viendo esta pantalla en modo solo lectura…») para que se entienda antes de intentar.
+- El permiso real lo impone siempre el backend (`@Roles`); la interfaz solo explica. Una pantalla nueva en solo lectura para algún rol debe reutilizar este diálogo en vez de inventar otro.
+- Campos de contraseña: `components/common/PasswordInput.tsx` (ojito mostrar/ocultar) en cualquier formulario nuevo de contraseña.
+
+---
+
 ## Versión
+- v1.8 - Octubre 2026 (pantallas en solo lectura por rol: botón visible + aviso de «solo administradores»)
+- v1.7 - Octubre 2026 (enlaces como botones, íconos con fondo y acciones de fila visibles en Contratación Pública)
 - v1.6 - Septiembre 2026 (tarjetas de KPI sin línea dedicada al ícono + botón de Ayuda en dashboards de módulo)
 - v1.5 - Septiembre 2026 (bordes de input visibles + tarjetas de sección en modales)
 - v1.4 - Septiembre 2026 (añadida regla de inputs sueltos en modales)

@@ -37,7 +37,7 @@ Agentes de IA con instrucciones personalizadas y conversaciones. El motor conver
 ### Por qué se cambió de proveedor
 El chat (`ai.service.ts`) usaba GitHub Models (`gpt-4o-mini`, endpoint `https://models.inference.ai.azure.com/chat/completions`). GitHub Models está en proceso de retiro (ver hallazgo en `.agents/modules/recursos-humanos.md` punto "Fase B" de Reclutamiento — `410 github_models_retirement_brownout` y el endpoint viejo ya ni resuelve por DNS). El proyecto ya paga por Google Vertex AI para RRHH (`reclutamiento-ia.service.ts`, revisión de documentos), así que en vez de buscar un tercer proveedor o parchar GitHub Models, el chat se movió al mismo Vertex AI — un solo proveedor de IA en todo el repo. **`GitHub Models`/`GITHUB_TOKEN`/`gpt-4o-mini` ya no existen en `ai.service.ts` ni en ningún archivo de `backend/src/modules/ai/`.**
 
-⚠️ `backend/src/modules/personal/services/document-extraction.service.ts` (extracción de fecha de vencimiento por IA en RRHH, "Leer con IA") **sigue usando GitHub Models/`gpt-4o-mini` sin cambios** — quedó fuera del alcance de esta tarea. Con el retiro de GitHub Models ya confirmado, esa función seguramente está devolviendo `RESPUESTA_INVALIDA` o un error de red en producción. Migrarla a Vertex (mismo patrón que este documento) queda pendiente — no asumir que ya se resolvió solo porque el chat se migró.
+✅ `backend/src/modules/personal/services/document-extraction.service.ts` (extracción de fecha de vencimiento por IA en RRHH, "Leer con IA") **también se migró a Vertex AI** (2026-09-29, mismo día): usa `GoogleAuthService` y `GOOGLE_VERTEX_MODEL`, igual que `reclutamiento-ia.service.ts`. Al escribirse este punto se había dejado pendiente; ya no lo está. Con esto no queda ningún uso de GitHub Models en el backend.
 
 ### Arquitectura nueva
 - **`vertex-chat.client.ts`** (nuevo): motor conversacional, `POST :generateContent` contra `https://{location}-aiplatform.googleapis.com/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent`. No streaming — una sola llamada por turno (out of scope por ahora, ver "Pendiente" abajo).
@@ -70,7 +70,8 @@ Un documento Markdown por empresa (`CompanyKnowledgeBase.content`, único por `c
 
 ### Pendiente / fuera de alcance de esta migración
 - **Streaming de respuestas**: no implementado, `vertexChat.sendChat` es un solo request/response por turno. Mejora futura si la latencia de Vertex lo justifica.
-- **`document-extraction.service.ts` (RRHH, "Leer con IA") sigue en GitHub Models** — ver aviso arriba, es la pieza que de verdad hay que migrar pronto dado el retiro ya confirmado del proveedor.
+- ~~`document-extraction.service.ts` (RRHH, "Leer con IA") sigue en GitHub Models~~ — resuelto: ya corre en Vertex AI, ver el aviso ✅ de arriba.
+- **Retiro de Gemini 2.5 el 16-oct-2026:** el chat (`GOOGLE_VERTEX_CHAT_MODEL`) y RRHH (`GOOGLE_VERTEX_MODEL`) dependen del mismo modelo; hay que mover ambas variables (y el yaml de `cloudbuild.yaml`) antes de esa fecha.
 
 ## Modelos de Prisma relevantes
 - `Agent` (`isDefault: Boolean @default(false)`, nuevo) — catálogo de agentes, ver arriba.
