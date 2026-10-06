@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Upload, Link as LinkIcon, CheckCircle2 } from 'lucide-react';
 import {
   getContractTemplate,
   createContractTemplate,
   updateContractTemplate,
   downloadContractTemplateFromDrive,
+  uploadContractTemplateDocx,
   detectContractTemplateVariables,
   saveContractTemplateFields,
   getContractSystemFields,
@@ -15,6 +16,7 @@ import {
 } from '../../../services/personal.service';
 
 const NEW_TYPE_OPTION = '__new__';
+const MAX_DOCX_MB = 10;
 
 export default function ContractTemplateConfig() {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +28,12 @@ export default function ContractTemplateConfig() {
   const [addingNewType, setAddingNewType] = useState(false);
   const [existingTypes, setExistingTypes] = useState<string[]>([]);
   const [driveUrl, setDriveUrl] = useState('');
+  // El documento se puede traer de dos formas: enlace de Drive o archivo .docx subido.
+  const [origen, setOrigen] = useState<'enlace' | 'archivo'>('enlace');
+  const [docxCargado, setDocxCargado] = useState(false);
+  const [nombreArchivo, setNombreArchivo] = useState('');
+  const [subiendo, setSubiendo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [fields, setFields] = useState<ContractField[]>([]);
   const [systemFields, setSystemFields] = useState<ContractSystemField[]>([]);
   const [detectedVars, setDetectedVars] = useState<string[]>([]);
@@ -57,7 +65,10 @@ export default function ContractTemplateConfig() {
       setType(t.type);
       setDriveUrl(t.driveUrl || '');
       setFields(t.fields || []);
-      if (t.driveUrl) setStep(2);
+      if (t.docxPath) setDocxCargado(true);
+      // Una plantilla sin enlace pero con documento es de las que se subieron como archivo.
+      if (t.docxPath && !t.driveUrl) setOrigen('archivo');
+      if (t.driveUrl || t.docxPath) setStep(2);
       if (t.fields?.length) setStep(3);
     } catch {
       navigate('/rrhh/contracts');
@@ -91,6 +102,44 @@ export default function ContractTemplateConfig() {
       );
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (!file) return;
+    setError('');
+    if (!name.trim()) { setError('Ponle un nombre a la plantilla.'); return; }
+    if (!type.trim()) { setError('Elige o escribe el tipo de documento.'); return; }
+    if (!file.name.toLowerCase().endsWith('.docx')) {
+      setError('El archivo debe ser un documento de Word (.docx). Si es un .doc antiguo, ábrelo en Word y guárdalo como .docx.');
+      return;
+    }
+    if (file.size > MAX_DOCX_MB * 1024 * 1024) {
+      setError(`El archivo pesa más de ${MAX_DOCX_MB} MB. Reduce su tamaño (por ejemplo, comprime las imágenes) e inténtalo de nuevo.`);
+      return;
+    }
+    setSubiendo(true);
+    try {
+      let tid = isEdit ? +id! : null;
+      if (!isEdit) {
+        const created = await createContractTemplate({ name, type });
+        tid = created.id;
+        navigate(`/rrhh/contracts/plantillas/${tid}`, { replace: true });
+      } else {
+        await updateContractTemplate(+id!, { name, type });
+      }
+      if (tid) await uploadContractTemplateDocx(tid, file);
+      // El servidor quita el enlace de Drive al subir un archivo propio.
+      setDriveUrl('');
+      setDocxCargado(true);
+      setNombreArchivo(file.name);
+      setStep((s) => Math.max(s, 2));
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'No se pudo subir el archivo. Revisa tu conexión e inténtalo de nuevo.');
+    } finally {
+      setSubiendo(false);
     }
   };
 
@@ -218,13 +267,52 @@ export default function ContractTemplateConfig() {
           </p>
         </div>
         <div className="form-group">
-          <label>Link de Google Drive del Word (.docx)</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input value={driveUrl} onChange={(e) => setDriveUrl(e.target.value)} placeholder="https://drive.google.com/file/d/..." style={{ flex: 1 }} />
-            <button className="auth-btn" onClick={handleDownload} disabled={downloading || !driveUrl.trim()}>
-              {downloading ? 'Descargando...' : isEdit ? 'Volver a descargar' : 'Descargar'}
+          <label>Documento Word (.docx)</label>
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+            <button
+              type="button"
+              onClick={() => setOrigen('enlace')}
+              className={origen === 'enlace' ? 'auth-btn' : 'btn-secondary'}
+              style={{ padding: '4px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              <LinkIcon size={12} /> Enlace de Drive
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrigen('archivo')}
+              className={origen === 'archivo' ? 'auth-btn' : 'btn-secondary'}
+              style={{ padding: '4px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              <Upload size={12} /> Subir archivo
             </button>
           </div>
+          {origen === 'enlace' ? (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={driveUrl} onChange={(e) => setDriveUrl(e.target.value)} placeholder="https://drive.google.com/file/d/..." style={{ flex: 1 }} />
+              <button className="auth-btn" onClick={handleDownload} disabled={downloading || !driveUrl.trim()}>
+                {downloading ? 'Descargando...' : isEdit ? 'Volver a descargar' : 'Descargar'}
+              </button>
+            </div>
+          ) : (
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={handleUpload}
+                disabled={subiendo}
+              />
+              <p style={{ fontSize: '0.75rem', color: '#718096', margin: '6px 0 0' }}>
+                Solo Word (.docx), máximo {MAX_DOCX_MB} MB. Al elegirlo se sube de inmediato.
+              </p>
+              {subiendo && <p style={{ fontSize: '0.78rem', color: '#718096', margin: '6px 0 0' }}>Subiendo...</p>}
+              {!subiendo && docxCargado && !driveUrl && (
+                <p style={{ fontSize: '0.78rem', color: '#276749', margin: '6px 0 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <CheckCircle2 size={13} /> {nombreArchivo ? `Archivo cargado: ${nombreArchivo}` : 'Archivo cargado'}. Para reemplazarlo, elige otro.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

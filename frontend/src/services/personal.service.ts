@@ -30,6 +30,14 @@ export const getContractTemplate = (id: number): Promise<ContractTemplate> => ap
 export const createContractTemplate = (data: { name: string; type: string; driveUrl?: string }) => api.post('/personal/contracts/templates', data).then(r => r.data);
 export const updateContractTemplate = (id: number, data: { name?: string; type?: string; driveUrl?: string }) => api.patch(`/personal/contracts/templates/${id}`, data).then(r => r.data);
 export const downloadContractTemplateFromDrive = (id: number) => api.post(`/personal/contracts/templates/${id}/download-drive`).then(r => r.data);
+// Alternativa al enlace de Drive: sube el .docx directamente (máx. 10 MB).
+export const uploadContractTemplateDocx = (id: number, file: File) => {
+  const form = new FormData();
+  form.append('file', file);
+  return api.post(`/personal/contracts/templates/${id}/upload-docx`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then(r => r.data);
+};
 export const detectContractTemplateVariables = (id: number): Promise<string[]> => api.get(`/personal/contracts/templates/${id}/detect-variables`).then(r => r.data);
 // El backend rechaza propiedades fuera de lo esperado (whitelist estricto), y
 // `fields` suele venir de un GET previo con `id`/`templateId` de la BD ya

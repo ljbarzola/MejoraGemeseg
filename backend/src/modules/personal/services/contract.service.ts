@@ -18,6 +18,11 @@ import {
   fillDocxTemplate,
 } from '../../../common/docx-templating/docx-merge.util';
 import { esCedulaSintetica } from '../utils/postulacion-validacion.util';
+import {
+  saveStoredFile,
+  readStoredFile,
+  deleteStoredFile,
+} from '../../../common/utils/stored-file.util';
 
 const execFileAsync = promisify(execFile);
 
@@ -39,6 +44,10 @@ function sanitizeForFilename(value: string): string {
 //   - El PDF generado se vuelve a armar solo (ensureContractFile), porque
 //     plantilla + fieldValues guardados en BD bastan para reproducirlo.
 const TEMPLATES_DIR = path.resolve(process.cwd(), 'uploads', 'hr-templates');
+const DOCX_MIME =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+// Tope del archivo que se sube a mano (igual que las plantillas de Ventas).
+export const MAX_TEMPLATE_DOCX_BYTES = 10 * 1024 * 1024;
 const CONTRACTS_DIR = path.resolve(process.cwd(), 'uploads', 'hr-contracts');
 
 // Datos del guardia que el sistema ya conoce y puede ofrecer para
@@ -193,7 +202,9 @@ export class ContractService {
       );
     }
 
-    if (t.docxPath && fs.existsSync(t.docxPath)) fs.unlinkSync(t.docxPath);
+    if (t.docxPath) {
+      await deleteStoredFile(this.prisma, this.templateKey(t.docxPath), t.docxPath);
+    }
     return this.prisma.contractTemplate.delete({ where: { id } });
   }
 
@@ -216,16 +227,79 @@ export class ContractService {
       );
     }
 
-    const fileName = `${Date.now()}.docx`;
-    const filePath = path.join(TEMPLATES_DIR, fileName);
-    fs.writeFileSync(filePath, buffer);
+    const filePath = await this.saveTemplateDocx(buffer);
+    const previous = template.docxPath;
 
     await this.prisma.contractTemplate.update({
       where: { id: templateId },
       data: { docxPath: filePath },
     });
+    if (previous && previous !== filePath) {
+      await deleteStoredFile(this.prisma, this.templateKey(previous), previous);
+    }
 
-    return { success: true, fileName, size: buffer.length };
+    return { success: true, fileName: path.basename(filePath), size: buffer.length };
+  }
+
+  /**
+   * Alternativa a pegar un enlace de Drive: la persona sube el .docx desde su
+   * computadora. Se guarda en StoredFile (el disco de Cloud Run se borra al
+   * reciclarse la instancia). El enlace de Drive, si lo había, se quita: si se
+   * conservara, tras un reinicio la plantilla podría volver a bajarse de Drive
+   * y pisar justo el archivo que se acaba de subir.
+   */
+  async uploadDocx(
+    templateId: number,
+    companyId: number,
+    file: { buffer?: Buffer } | undefined,
+  ) {
+    if (!file) throw new BadRequestException('No se recibió ningún archivo');
+    const template = await this.prisma.contractTemplate.findFirst({
+      where: { id: templateId, companyId },
+    });
+    if (!template) throw new NotFoundException('Plantilla no encontrada');
+
+    const buffer = file.buffer;
+    if (!buffer || buffer.length < 100) {
+      throw new BadRequestException('El archivo subido es demasiado pequeño');
+    }
+    // Un .docx es un ZIP: empieza por "PK".
+    if (buffer[0] !== 0x50 || buffer[1] !== 0x4b) {
+      throw new BadRequestException(
+        'El archivo no es un documento Word (.docx) válido',
+      );
+    }
+
+    const filePath = await this.saveTemplateDocx(buffer);
+    const previous = template.docxPath;
+    await this.prisma.contractTemplate.update({
+      where: { id: templateId },
+      data: { docxPath: filePath, driveUrl: null },
+    });
+    if (previous && previous !== filePath) {
+      await deleteStoredFile(this.prisma, this.templateKey(previous), previous);
+    }
+
+    return { success: true, fileName: path.basename(filePath), size: buffer.length };
+  }
+
+  // Clave lógica y permanente (en la tabla StoredFile) del .docx de una
+  // plantilla; docxPath es solo la caché en disco de esta instancia.
+  private templateKey(docxPath: string): string {
+    return `rrhh/templates/${path.basename(docxPath)}`;
+  }
+
+  /** Guarda el .docx en disco + StoredFile y devuelve la ruta de disco (docxPath). */
+  private async saveTemplateDocx(buffer: Buffer): Promise<string> {
+    const filePath = path.join(TEMPLATES_DIR, `${Date.now()}.docx`);
+    await saveStoredFile(
+      this.prisma,
+      this.templateKey(filePath),
+      filePath,
+      buffer,
+      DOCX_MIME,
+    );
+    return filePath;
   }
 
   async detectVariables(templateId: number, companyId: number) {
@@ -511,12 +585,19 @@ export class ContractService {
     docxPath: string | null;
     driveUrl: string | null;
   }): Promise<Buffer> {
-    if (template.docxPath && fs.existsSync(template.docxPath)) {
-      return fs.readFileSync(template.docxPath);
+    // Disco primero y, si la instancia se reciclo, la copia permanente.
+    if (template.docxPath) {
+      const guardado = await readStoredFile(
+        this.prisma,
+        this.templateKey(template.docxPath),
+        template.docxPath,
+        DOCX_MIME,
+      );
+      if (guardado) return guardado;
     }
     if (!template.driveUrl) {
       throw new BadRequestException(
-        'Esta plantilla no tiene un enlace de Drive configurado, y su documento ya no esta en el servidor. Agrega el enlace en la plantilla y vuelve a intentar.',
+        'Esta plantilla no tiene un documento cargado en el servidor. Edita la plantilla y sube el archivo .docx o pega el enlace de Drive.',
       );
     }
 
@@ -529,8 +610,7 @@ export class ContractService {
       );
     }
 
-    const filePath = path.join(TEMPLATES_DIR, `${Date.now()}.docx`);
-    fs.writeFileSync(filePath, buffer);
+    const filePath = await this.saveTemplateDocx(buffer);
     await this.prisma.contractTemplate.update({
       where: { id: template.id },
       data: { docxPath: filePath },

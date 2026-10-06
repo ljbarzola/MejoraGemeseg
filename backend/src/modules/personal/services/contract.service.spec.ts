@@ -43,6 +43,12 @@ describe('ContractService', () => {
     asignacionGuardia: { findFirst: jest.Mock };
     company: { findUnique: jest.Mock };
     employeeDriveFolder: { findFirst: jest.Mock };
+    storedFile: {
+      upsert: jest.Mock;
+      findUnique: jest.Mock;
+      create: jest.Mock;
+      deleteMany: jest.Mock;
+    };
   };
   const existsSyncMock = fs.existsSync as jest.Mock;
 
@@ -76,6 +82,13 @@ describe('ContractService', () => {
       asignacionGuardia: { findFirst: jest.fn() },
       company: { findUnique: jest.fn() },
       employeeDriveFolder: { findFirst: jest.fn() },
+      // La plantilla .docx vive en StoredFile (el disco de Cloud Run se borra).
+      storedFile: {
+        upsert: jest.fn().mockResolvedValue({}),
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
     };
     // DriveService solo se usa para subir/bajar la copia del PDF en Drive;
     // acá se anula para que los tests no toquen la red.
@@ -116,8 +129,63 @@ describe('ContractService', () => {
       await service.deleteTemplate(1, 1);
 
       expect(fs.unlinkSync).toHaveBeenCalledWith(makeTemplate().docxPath);
+      expect(prisma.storedFile.deleteMany).toHaveBeenCalledWith({
+        where: { key: 'rrhh/templates/1.docx' },
+      });
       expect(prisma.contractTemplate.delete).toHaveBeenCalledWith({
         where: { id: 1 },
+      });
+    });
+  });
+
+  describe('uploadDocx', () => {
+    const docx = (len = 200) => {
+      const b = Buffer.alloc(len, 1);
+      b[0] = 0x50;
+      b[1] = 0x4b;
+      return b;
+    };
+
+    it('rejects when no file arrives', async () => {
+      await expect(service.uploadDocx(1, 1, undefined)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('rejects a template from another company', async () => {
+      prisma.contractTemplate.findFirst.mockResolvedValue(null);
+      await expect(
+        service.uploadDocx(1, 1, { buffer: docx() }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('rejects a file that is too small or is not a .docx (zip)', async () => {
+      prisma.contractTemplate.findFirst.mockResolvedValue(makeTemplate());
+      await expect(
+        service.uploadDocx(1, 1, { buffer: docx(10) }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.uploadDocx(1, 1, { buffer: Buffer.alloc(200, 7) }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.storedFile.upsert).not.toHaveBeenCalled();
+    });
+
+    it('stores the file in StoredFile, clears the Drive link and drops the previous copy', async () => {
+      prisma.contractTemplate.findFirst.mockResolvedValue(
+        makeTemplate({ driveUrl: 'https://docs.google.com/document/d/x' }),
+      );
+      prisma.contractTemplate.update.mockResolvedValue({});
+
+      const res = await service.uploadDocx(1, 1, { buffer: docx() });
+
+      expect(res.success).toBe(true);
+      const key = prisma.storedFile.upsert.mock.calls[0][0].where.key as string;
+      expect(key).toMatch(/^rrhh\/templates\/\d+\.docx$/);
+      const data = prisma.contractTemplate.update.mock.calls[0][0].data;
+      expect(data.driveUrl).toBeNull();
+      expect(path.basename(data.docxPath)).toMatch(/^\d+\.docx$/);
+      expect(prisma.storedFile.deleteMany).toHaveBeenCalledWith({
+        where: { key: 'rrhh/templates/1.docx' },
       });
     });
   });
