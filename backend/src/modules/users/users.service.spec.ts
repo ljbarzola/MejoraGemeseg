@@ -88,7 +88,7 @@ describe('UsersService.create — permisos por defecto', () => {
 
   it('excluye las secciones que la empresa marcó como fijas para todos', async () => {
     tx.companySection.findMany.mockResolvedValue([
-      { section: 'TOOLS' },
+      { section: 'SISTEMAS' },
       { section: 'CACAO' },
     ]);
 
@@ -96,7 +96,7 @@ describe('UsersService.create — permisos por defecto', () => {
 
     const { data } = tx.userPermission.createMany.mock.calls[0][0];
     const sections = data.map((row: any) => row.section);
-    expect(sections).not.toContain('TOOLS');
+    expect(sections).not.toContain('SISTEMAS');
     expect(sections).not.toContain('CACAO');
     expect(sections).toContain('RRHH'); // esta sí sigue denegada
   });

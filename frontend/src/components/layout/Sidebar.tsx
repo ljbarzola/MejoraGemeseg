@@ -28,6 +28,8 @@ export default function Sidebar() {
   const user = getUser();
   const isAdmin = user?.role === 'ADMIN';
   const isCompanyAdmin = isAdmin && !!user?.companyId;
+  // El Gerente ve en solo lectura las pantallas administrativas de su empresa.
+  const isManager = user?.role === 'MANAGER';
   const { collapsed: collapsedPref, setCollapsed } = useSidebar();
   // Colapsar a iconos es una preferencia de escritorio (se guarda en
   // localStorage). En movil el cajon siempre va expandido: si se respetara,
@@ -64,12 +66,12 @@ export default function Sidebar() {
     { label: 'Buzón de Quejas y Sugerencias', path: '/rrhh/quejas', icon: '📮', show: true },
     { label: 'Encuestas', path: '/rrhh/encuestas', icon: '📝', show: true },
     { label: 'Proyectos', path: '/projects', icon: '📁', show: canView('PROJECTS') },
-    { label: 'Administración', path: '/admin', icon: '👥', show: canView('ADMIN') },
+    { label: 'Administración', path: '/admin', icon: '👥', show: canView('ADMIN') && (isAdmin || isManager) },
     { label: 'Empresas', path: '/admin/companies', icon: '🏢', show: isSuperAdmin && canView('COMPANIES') },
-    { label: 'Mi Empresa', path: '/admin/company-settings', icon: '🎨', show: isCompanyAdmin && canView('COMPANY_SETTINGS') },
+    { label: 'Mi Empresa', path: '/admin/company-settings', icon: '🎨', show: (isCompanyAdmin || isManager) && canView('COMPANY_SETTINGS') },
     { label: 'Cacao', path: '/cacao', icon: '🫘', show: canView('CACAO') },
     { label: 'Permisos', path: '/admin/permissions', icon: '🔐', show: isSuperAdmin },
-    { label: 'Permisos Usuarios', path: '/admin/user-permissions', icon: '🔑', show: isCompanyAdmin },
+    { label: 'Permisos Usuarios', path: '/admin/user-permissions', icon: '🔑', show: isCompanyAdmin || isManager },
   ];
 
   const personalMainItems = [
@@ -90,10 +92,10 @@ export default function Sidebar() {
   ];
 
   // "Bitácoras" (plantillas de texto libre para dejar constancia de permisos,
-  // novedades y respuestas administrativas por guardia — /rrhh/logs,
-  // LogEntries.tsx) se quitó del menú a pedido del cliente: no se estaba
-  // usando. El código y la data quedan intactos (por si se retoma más
-  // adelante), solo se dejó de mostrar aquí y en el Dashboard de Personal.
+  // novedades y respuestas administrativas por guardia) se quitaron del menú
+  // a pedido del cliente: no se estaban usando. Se eliminaron por completo el
+  // 2026-09-22 (código y tablas, ver .agents/modules/recursos-humanos.md
+  // punto 16a).
 
   // Ventas/CRM: Dashboard, Clientes y Contratos están activos. El resto
   // (Planificación y Campo, Prospectos CRM, Reportes, Config Webhook) se deja
@@ -128,17 +130,18 @@ export default function Sidebar() {
   // /config/codigos-turno y /config/textos-institucionales).
   const contratacionPublicaItems = [
     { label: 'Entidades Públicas', path: '/contratacion-publica/entidades', icon: '🏛️' },
-    // Solo el personal de Contratación Pública revisa; el resto tiene "Mis documentos".
+    // Solo el personal de Contratación Pública aprueba; el resto tiene "Por entregar".
     ...(canWrite('CONTRATACION_PUBLICA')
-      ? [{ label: 'Por revisar', path: '/contratacion-publica/por-revisar', icon: '🔎' }]
+      ? [{ label: 'Por aprobar', path: '/contratacion-publica/por-revisar', icon: '🔎' }]
       : []),
-    { label: 'Mis documentos', path: '/contratacion-publica/mis-documentos', icon: '📥' },
+    { label: 'Por entregar', path: '/contratacion-publica/mis-documentos', icon: '📥' },
   ];
 
   const sistemasSubItems = [
     { label: 'Dashboard', path: '/sistemas/dashboard', icon: '📊' },
     { label: 'Herramientas', path: '/sistemas/herramientas', icon: '🔧' },
     { label: 'Agentes', path: '/sistemas/agentes', icon: '🤖' },
+    { label: 'Base de Conocimiento', path: '/sistemas/base-conocimiento', icon: '📚' },
     { label: 'Soporte Técnico', path: '/sistemas/soporte', icon: '🛠️' },
     { label: 'Novedades', path: '/sistemas/novedades', icon: '📣' },
   ];

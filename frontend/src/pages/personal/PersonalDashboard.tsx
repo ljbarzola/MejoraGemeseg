@@ -141,9 +141,9 @@ export default function PersonalDashboard() {
           Documentación, Cumplimiento e Historial ya se llega desde las tarjetas
           de KPI) ni está a un clic en el sidebar de todas formas — Guardias,
           Reclutamiento y Personal Administrativo ya tienen su propio grupo ahí.
-          "Bitácoras" (/rrhh/logs, LogEntries.tsx) se quitó de aquí y del sidebar
-          a pedido del cliente: no se estaba usando. El código y los datos ya
-          guardados quedan intactos por si se retoma más adelante.
+          "Bitácoras" se quitó de aquí y del sidebar a pedido del cliente: no se
+          estaba usando. Se eliminaron por completo el 2026-09-22 (código y
+          tablas, ver .agents/modules/recursos-humanos.md punto 16a).
         */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: '16px' }}>
           {[

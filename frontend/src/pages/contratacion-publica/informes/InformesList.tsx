@@ -96,15 +96,17 @@ export default function InformesList() {
                     <td><span className="status-badge">{inf.estado === 'GENERADO' ? 'Generado' : 'Borrador'}</span></td>
                     <td>
                       {inf.generatedPdfPath ? (
-                        <a href={resolveInformeFileUrl(inf.generatedPdfPath)} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', color: '#3b82f6' }}>
-                          <Download size={16} />
-                        </a>
+                        <div className="acciones-iconos" style={{ justifyContent: 'flex-start' }}>
+                          <a className="btn-secondary icon-btn" href={resolveInformeFileUrl(inf.generatedPdfPath)} target="_blank" rel="noopener noreferrer" title="Descargar PDF" aria-label="Descargar PDF">
+                            <Download size={16} />
+                          </a>
+                        </div>
                       ) : '—'}
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                        <button className="btn-secondary" onClick={() => navigate(`/contratacion-publica/informes/${inf.id}`)}>Abrir</button>
-                        <button onClick={() => setConfirmandoEliminar(inf)} style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex' }} title="Eliminar informe">
+                      <div className="acciones-iconos" style={{ alignItems: 'center' }}>
+                        <button type="button" className="btn-secondary" onClick={() => navigate(`/contratacion-publica/informes/${inf.id}`)}>Abrir</button>
+                        <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Eliminar informe" aria-label="Eliminar informe" onClick={() => setConfirmandoEliminar(inf)}>
                           <Trash2 size={16} />
                         </button>
                       </div>

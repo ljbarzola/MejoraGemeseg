@@ -20,7 +20,7 @@ import { Section } from '../../common/decorators/section.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { PersonalService } from './personal.service';
-import { ContractService } from './services/contract.service';
+import { ContractService, MAX_TEMPLATE_DOCX_BYTES } from './services/contract.service';
 import { TrainingService } from './services/training.service';
 import { PersonalAlertsService } from './services/personal-alerts.service';
 import {
@@ -97,6 +97,23 @@ export class PersonalController {
   @Section('RRHH', 'write')
   downloadTemplateFromDrive(@Param('id') id: string, @Req() req: any) {
     return this.contractService.downloadFromDrive(+id, req.user.companyId);
+  }
+
+  // Alternativa al enlace de Drive: sube el .docx directamente.
+  @Post('contracts/templates/:id/upload-docx')
+  @Section('RRHH', 'write')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_TEMPLATE_DOCX_BYTES },
+    }),
+  )
+  uploadTemplateDocx(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: any,
+  ) {
+    return this.contractService.uploadDocx(id, req.user.companyId, file);
   }
 
   @Get('contracts/templates/:id/detect-variables')

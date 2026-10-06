@@ -10,12 +10,11 @@ const SECTION_META: Record<string, { icon: string; desc: string }> = {
   DASHBOARD: { icon: '🏠', desc: 'Pantalla de inicio. Siempre visible para todos.' },
   PROJECTS: { icon: '📁', desc: 'Gestión de proyectos y tablero Kanban' },
   ADMIN: { icon: '👥', desc: 'Administración de usuarios del sistema' },
-  TOOLS: { icon: '🔧', desc: 'Catálogo y asignación de herramientas' },
   CACAO: { icon: '🫘', desc: 'Módulo completo de inventario de cacao' },
   COMPANY_SETTINGS: { icon: '🎨', desc: 'Configuración de marca y colores' },
   COMPANIES: { icon: '🏢', desc: 'Gestión de empresas del plataforma' },
   CUSTODIAS: { icon: '🛡️', desc: 'Gestión de custodias y nómina de seguridad' },
-  RRHH: { icon: '👤', desc: 'Reclutamiento, contratos, capacitaciones y bitácoras' },
+  RRHH: { icon: '👤', desc: 'Reclutamiento, contratos, capacitaciones, quejas y encuestas' },
   VENTAS: { icon: '💼', desc: 'Leads, visitas, metas y contratos de venta' },
   SISTEMAS: { icon: '🖥️', desc: 'Dashboard, herramientas, agentes de IA y soporte técnico interno' },
 };

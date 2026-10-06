@@ -92,6 +92,14 @@ export class EntregarDto {
   @IsString()
   @MaxLength(2000)
   url: string;
+
+  /**
+   * Solo si ya había un archivo entregado antes (p. ej. uno rechazado): `true` borra
+   * ese archivo de Drive al entregar el nuevo; `false` u omitido conserva ambos.
+   */
+  @IsOptional()
+  @IsBoolean()
+  reemplazarAnterior?: boolean;
 }
 
 export class RechazarEntregaDto {

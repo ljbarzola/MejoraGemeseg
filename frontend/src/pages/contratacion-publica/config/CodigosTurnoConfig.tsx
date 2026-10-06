@@ -161,9 +161,9 @@ export default function CodigosTurnoConfig() {
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       {canEdit && (
-                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                          <button onClick={() => openEdit(c)} style={{ border: 'none', background: 'none', color: '#3b82f6', cursor: 'pointer', display: 'flex' }} title="Editar"><Pencil size={15} /></button>
-                          <button onClick={() => setConfirmandoEliminar(c)} style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex' }} title="Eliminar"><Trash2 size={15} /></button>
+                        <div className="acciones-iconos">
+                          <button type="button" className="btn-secondary icon-btn" title="Editar" aria-label="Editar" onClick={() => openEdit(c)}><Pencil size={16} /></button>
+                          <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Eliminar" aria-label="Eliminar" onClick={() => setConfirmandoEliminar(c)}><Trash2 size={16} /></button>
                         </div>
                       )}
                     </td>

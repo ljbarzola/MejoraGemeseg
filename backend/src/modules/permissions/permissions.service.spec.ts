@@ -127,4 +127,52 @@ describe('PermissionsService', () => {
       ]);
     });
   });
+  describe('getUsersWithExplicitSectionWrite', () => {
+    const usuario = (id: number, companyId: number | null, permissions: { canWrite: boolean }[] = []) => ({
+      id,
+      companyId,
+      fullName: `U${id}`,
+      email: `u${id}@x.com`,
+      company: companyId ? { name: `Empresa ${companyId}` } : null,
+      permissions,
+    });
+
+    it('solo incluye a quien tiene fila con Escribir marcado: sin fila, solo lectura, el reportante y el super admin quedan fuera', async () => {
+      prisma.user.findMany.mockResolvedValue([
+        usuario(1, 1), // sin fila -> NO (nadie lo marcó)
+        usuario(2, 1, [{ canWrite: true }]), // escritura explícita -> sí
+        usuario(3, 1, [{ canWrite: false }]), // solo lectura -> no
+        usuario(4, 2, [{ canWrite: true }]), // otra empresa -> sí (Sistemas atiende a todas)
+        usuario(5, 1, [{ canWrite: true }]), // el reportante -> excluido
+        usuario(6, null, [{ canWrite: true }]), // super admin (sin empresa) -> excluido
+      ]);
+      prisma.companySection.findMany.mockResolvedValue([]);
+
+      const res = await service.getUsersWithExplicitSectionWrite('SISTEMAS', 5);
+
+      expect(res.map((u) => u.id)).toEqual([2, 4]);
+      expect(res.find((u) => u.id === 4)?.companyId).toBe(2);
+    });
+
+    it('una sección que no es alwaysEnabled exige que la empresa la tenga activa', async () => {
+      prisma.user.findMany.mockResolvedValue([
+        usuario(1, 1, [{ canWrite: true }]),
+        usuario(2, 2, [{ canWrite: true }]),
+      ]);
+      prisma.companySection.findMany.mockResolvedValue([{ companyId: 2 }]);
+
+      const res = await service.getUsersWithExplicitSectionWrite('CACAO');
+
+      expect(res.map((u) => u.id)).toEqual([2]);
+    });
+
+    it('una sección desconocida no avisa a nadie', async () => {
+      await expect(service.getUsersWithExplicitSectionWrite('TOOLS')).resolves.toEqual([]);
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  it('Herramientas ya no es una sección de permisos propia', () => {
+    expect(ALL_SECTIONS.map((s) => s.key)).not.toContain('TOOLS');
+  });
 });

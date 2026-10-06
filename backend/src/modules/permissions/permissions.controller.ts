@@ -30,9 +30,11 @@ export class PermissionsController {
     return this.service.getMyPermissions(req.user.userId, req.user.companyId);
   }
 
+  // Las dos lecturas (secciones y permisos por usuario) las ve también el
+  // Gerente, en modo solo lectura. Todo lo que escribe sigue siendo solo ADMIN.
   @Get('sections/:companyId')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   getCompanySections(
     @Param('companyId', ParseIntPipe) companyId: number,
     @Req() req: any,
@@ -41,7 +43,7 @@ export class PermissionsController {
       return this.service.getCompanySections(companyId);
     }
     if (req.user.companyId !== companyId) {
-      throw new Error('No tienes acceso a esta empresa');
+      throw new ForbiddenException('No tienes acceso a esta empresa');
     }
     return this.service.getCompanySections(companyId);
   }
@@ -84,7 +86,7 @@ export class PermissionsController {
 
   @Get('users/:companyId')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   getUserPermissionsForCompany(
     @Param('companyId', ParseIntPipe) companyId: number,
     @Req() req: any,
@@ -93,7 +95,7 @@ export class PermissionsController {
       return this.service.getUserPermissionsForCompany(companyId);
     }
     if (req.user.companyId !== companyId) {
-      throw new Error('No tienes acceso a esta empresa');
+      throw new ForbiddenException('No tienes acceso a esta empresa');
     }
     return this.service.getUserPermissionsForCompany(companyId);
   }

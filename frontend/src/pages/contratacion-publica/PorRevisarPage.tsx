@@ -34,7 +34,7 @@ const aRevisable = (f: CPDocumentoBandeja): DocumentoRevisable => ({
 });
 
 /**
- * "Por revisar": todo lo que otras áreas entregaron y todavía no se revisó, de
+ * "Por aprobar" (ruta /por-revisar): todo lo que otras áreas entregaron y todavía no se revisó, de
  * todas las entidades juntas (lo más antiguo primero). Desde aquí se revisa uno
  * tras otro con el panel dividido, sin entrar entidad por entidad.
  */
@@ -56,7 +56,7 @@ export default function PorRevisarPage() {
     setError('');
     getPorRevisar()
       .then(setFilas)
-      .catch((err) => setError(mensajeError(err, 'No se pudo cargar lo que falta revisar.')))
+      .catch((err) => setError(mensajeError(err, 'No se pudo cargar lo que falta aprobar.')))
       .finally(() => setLoading(false));
   };
   useEffect(() => { if (canEdit) load(); }, [canEdit]);
@@ -106,7 +106,7 @@ export default function PorRevisarPage() {
         <div className="page-title-row">
           <div>
             <p className="page-eyebrow">CONTRATACIÓN PÚBLICA</p>
-            <h1>Por revisar</h1>
+            <h1>Por aprobar</h1>
           </div>
           <div className="header-actions">
             <button className="auth-btn" disabled={ordenadas.length === 0} onClick={() => ordenadas[0] && abrirPanel(ordenadas[0].id)}>
@@ -116,7 +116,7 @@ export default function PorRevisarPage() {
         </div>
         {!loading && filas.length > 0 && (
           <p style={{ margin: 0, fontSize: '0.85rem', color: '#4a5568' }}>
-            {filas.length} documento(s) esperando revisión
+            {filas.length} documento(s) esperando tu aprobación
             {filas.some((f) => f.vencida) && <> · <strong style={{ color: '#c53030' }}>{filas.filter((f) => f.vencida).length} vencido(s)</strong></>}
           </p>
         )}
@@ -142,10 +142,10 @@ export default function PorRevisarPage() {
 
       <div className="admin-section">
         {loading ? (
-          <div className="loading-state">Cargando lo que falta revisar...</div>
+          <div className="loading-state">Cargando lo que falta aprobar...</div>
         ) : ordenadas.length === 0 ? (
           <div className="empty-state">
-            {filas.length === 0 ? 'No hay documentos por revisar. Todo lo entregado ya fue revisado.' : 'No hay documentos que coincidan con la búsqueda.'}
+            {filas.length === 0 ? 'No hay documentos por aprobar. Todo lo entregado ya fue revisado.' : 'No hay documentos que coincidan con la búsqueda.'}
           </div>
         ) : (
           <div className="tasks-table-wrapper">

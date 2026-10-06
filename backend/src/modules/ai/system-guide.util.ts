@@ -23,7 +23,7 @@ const GENERAL = `# Uso general del sistema (lo que ve todo usuario)
 
 ## Entrar al sistema
 - En la pantalla "Iniciar sesión" se escribe el "Correo electrónico" y la "Contraseña". Al escribir el correo aparecen el logo y los colores de la empresa.
-- ¿Olvidaste tu contraseña?: en "¿Olvidaste tu contraseña?" se escribe el correo, llega un "Código de 6 dígitos" al correo, y con ese código se pone la "Nueva contraseña" (mínimo 8 caracteres).
+- ¿Olvidaste tu contraseña?: en "¿Olvidaste tu contraseña?" se escribe el correo, llega un "Código de 6 dígitos" al correo, y con ese código se pone la "Nueva contraseña" (mínimo 8 caracteres). Al terminar se cierran las sesiones que hubiera abiertas en otros dispositivos.
 - Al entrar, el sistema abre la primera pantalla que la persona tiene habilitada (normalmente "Inicio").
 - Si aparece "Tu usuario todavía no tiene ningún módulo habilitado", hay que pedirle al administrador de la empresa que active secciones desde Administración → Permisos de usuario.
 
@@ -40,7 +40,7 @@ const GENERAL = `# Uso general del sistema (lo que ve todo usuario)
 
 ## Mi perfil
 - Es solo de consulta: nombre, rol (Administrador, Gerente o Empleado), correo corporativo, documento de identidad, cargo, departamento, fecha de ingreso, contadores de proyectos y tareas, y "Herramientas asignadas".
-- Desde el perfil no se editan datos ni se cambia la contraseña. Para cambiar datos se le pide al administrador; para cambiar la contraseña se usa "¿Olvidaste tu contraseña?" en la pantalla de inicio de sesión.
+- Desde el perfil no se editan los datos personales (para cambiarlos se le pide al administrador), pero sí se cambia la contraseña: al final de la tarjeta, en "Seguridad", el botón "Cambiar contraseña" abre un cuadro con Contraseña actual, Contraseña nueva (mínimo 8 caracteres) y repetirla; cada campo tiene un ojito para ver lo escrito. Al guardar se cierra la sesión en todos los demás dispositivos; en el que se está usando sigue abierta. Las cuentas que entran solo con Google no tienen contraseña: ahí el perfil indica usar "¿Olvidaste tu contraseña?" para crear una.
 
 ## Inicio
 En este orden:
@@ -118,7 +118,7 @@ En este orden:
 - "¿Por qué no puedo crear tareas en un proyecto?": probablemente eres Observador; pide al Propietario que te cambie a Miembro (el cambio de rol lo hace un Administrador).
 - "¿Mi queja anónima es de verdad anónima?": sí, con la casilla marcada no se guarda el autor.
 - "¿Cómo sé en qué va mi referido?": Inicio → "Referir un cliente" abre "Mis Referidos" con la etapa actual; además te llega notificación en cada cambio.
-- "¿Dónde cambio mi contraseña?": en la pantalla de inicio de sesión, "¿Olvidaste tu contraseña?".
+- "¿Dónde cambio mi contraseña?": con la sesión iniciada, en el Perfil (abajo, en "Seguridad", botón "Cambiar contraseña"). Si no la recuerdas, en la pantalla de inicio de sesión, "¿Olvidaste tu contraseña?". En ambos casos se cierran las sesiones abiertas en otros dispositivos.
 - "No veo una opción que usa mi compañero": es un tema de permisos; pídelo por la llave inglesa ("Pedir un permiso") o al administrador.`;
 
 const RRHH = `# Recursos Humanos (gestión) — guía detallada
@@ -192,7 +192,7 @@ Los guardias de este padrón son los mismos que se eligen como personal en otros
 
 ## Contratos (documentos de guardias)
 - Cabecera: "Ver carpeta" (carpeta de Drive de documentos generados), "Generar documento", "Nueva plantilla".
-- Plantilla ("Configurar"): "Nombre", "Tipo de documento" (o "+ Agregar nuevo tipo..."), "Link de Google Drive del Word (.docx)" compartido como "Cualquier persona con el link" → "Descargar"; "Detectar variables del documento" (formato [VARIABLE]); en "Variables detectadas" se define la etiqueta, "Autocompletar con" un dato del guardia o "Manual (se llena al generar)", y si es requerida → "Guardar plantilla". "⚠ Falta cargar el documento" indica que falta descargar el Word.
+- Plantilla ("Configurar"): "Nombre", "Tipo de documento" (o "+ Agregar nuevo tipo..."), "Documento Word (.docx)" con dos opciones: "Enlace de Drive" (link compartido como "Cualquier persona con el link" → "Descargar") o "Subir archivo" (se elige el .docx desde el computador, máximo 10 MB, y se sube al elegirlo); "Detectar variables del documento" (formato [VARIABLE]); en "Variables detectadas" se define la etiqueta, "Autocompletar con" un dato del guardia o "Manual (se llena al generar)", y si es requerida → "Guardar plantilla". "⚠ Falta cargar el documento" indica que falta descargar o subir el Word.
 - "Generar Documento": paso 1 "Para quién y tipo de documento": "Elegir un guardia registrado" (autocompleta cédula, entidad, horario, salario… editables) o "Llenar a mano" ("A nombre de *"); "Tipo de documento *". Paso 2 "Datos del documento" → "Generar PDF". Si es de un guardia pregunta dónde guardarlo: carpeta general o carpeta del guardia en Drive.
 - "Documentos Generados": Guardia, Cédula, Plantilla, Fecha, Estado, "Ver PDF". La firma es física (se imprime y se firma a mano). Por ahora aplica solo a Guardias.
 
@@ -314,35 +314,39 @@ const CONTRATACION_PUBLICA = `# Contratación Pública — guía detallada
 Sirve para pedir y seguir, mes a mes, los documentos que otras áreas (RRHH, Financiero, Operaciones, Legal) deben entregar para el informe que se envía a cada entidad pública: qué se pidió, a quién, para cuándo y en qué estado está cada documento.
 
 ## Acceso y pantallas
-- Menú → "Contratación Pública" tiene tres pantallas: "Entidades Públicas", "Por revisar" (solo el personal de Contratación Pública) y "Mis documentos".
+- Menú → "Contratación Pública" tiene tres pantallas: "Entidades Públicas", "Por aprobar" (solo el personal de Contratación Pública) y "Por entregar".
 - Con permiso "ver" una persona entra y entrega solo los documentos que le asignaron. Con "escribir" (el personal de Contratación Pública) arma las solicitudes, las envía, y aprueba o rechaza lo entregado.
 
 ## Entidades Públicas
-- Buscar por nombre o RUC. "+ Nueva Entidad": Nombre * (ej. "Municipio de Guayaquil"), RUC, Dirección. Al hacer clic en una entidad se abre su detalle. El nombre no se puede repetir.
-- Hay una sola carpeta de Google Drive para toda Contratación Pública y, dentro, cada entidad tiene su propia subcarpeta (la columna "Drive" de la tabla la abre). Al crear una entidad se crea su subcarpeta; al cambiarle el nombre se renombra la subcarpeta. Eliminar una entidad no borra su carpeta ni sus archivos en Drive.
+- Buscar por nombre o RUC. "+ Nueva Entidad": Nombre * (ej. "Municipio de Guayaquil"), RUC, Dirección y los "Datos adicionales" que la empresa haya configurado (por defecto: Tipo de entidad, Contacto, Teléfono de contacto y Correo de contacto). Al hacer clic en una entidad se abre su detalle. El nombre no se puede repetir.
+- "Campos de la entidad" (botón de arriba, solo personal de Contratación Pública): se crean, renombran, reordenan, marcan como obligatorios o desactivan los datos extra de cada entidad. Los tipos son Texto, Lista de opciones (una opción por línea), Número y Fecha. Un campo no se borra, se desactiva: deja de pedirse pero los datos ya guardados se conservan. Con el botón "Columnas" cada persona elige cuáles ver en la tabla.
+- Cada fila tiene botones de icono: abrir la carpeta de la entidad en Drive, editar y archivar (en una entidad archivada es "Reactivar"). Las entidades no se pueden borrar desde el sistema: "Archivar" la oculta pero conserva sus datos, solicitudes y carpeta; se ve marcando "Mostrar archivadas" y se vuelve a mostrar con "Reactivar".
+- Hay una sola carpeta de Google Drive para toda Contratación Pública y, dentro, cada entidad tiene su propia subcarpeta. Al crear una entidad se crea su subcarpeta; al cambiarle el nombre se renombra la subcarpeta. Archivar una entidad no toca su carpeta ni sus archivos en Drive.
 - "Carpeta de Drive" (botón de arriba, solo personal de Contratación Pública): se pega una vez el enlace de la carpeta general. Debe estar compartida como Editor con la cuenta del sistema (se muestra en esa ventana).
-- "Sincronizar": revisa la carpeta de Drive y deja la lista igual. También se hace sola al abrir la pantalla (como mucho una vez cada 2 minutos) y se muestra "Última sincronización con Drive". Si alguien crea una carpeta nueva en Drive, aparece la entidad sola con un aviso verde. Si alguien le cambia el nombre a una carpeta en Drive, sale un aviso amarillo con "Actualizar nombre" (la entidad toma el nombre de Drive) o "Mantener el del sistema" (la carpeta vuelve al nombre del sistema). Si una carpeta desaparece de Drive, el aviso ofrece "Volver a crearla"; la entidad nunca se borra sola.
+- "Sincronizar": revisa la carpeta de Drive y muestra qué falta en cada lado, sin crear nada solo. También se revisa sola al abrir la pantalla (como mucho una vez cada 2 minutos) y se muestra "Última sincronización con Drive". Si hay una carpeta en Drive sin entidad, el aviso ofrece "Crear entidad". Si una entidad no tiene carpeta, ofrece "Crear carpeta". Cuando hay varias, aparece "Crear todas". Si alguien le cambia el nombre a una carpeta en Drive, sale "Actualizar nombre" (la entidad toma el nombre de Drive) o "Mantener el del sistema" (la carpeta vuelve al nombre del sistema). Si una carpeta desaparece de Drive, el aviso ofrece "Volver a crearla"; la entidad nunca se borra sola. Las entidades archivadas no generan avisos.
 
 ## Solicitud mensual de documentos (en el detalle de la entidad)
 - Cada mes es una solicitud independiente: lo que se pide, las fechas y las personas pueden cambiar de un mes a otro y se pueden editar en cualquier momento, también después de enviada.
 - "+ Nueva solicitud": se elige Año y Mes, y si empieza "En blanco" o "Copiando la solicitud anterior" (trae documentos, fechas y personas del mes anterior para no rehacerlos). Solo puede haber una solicitud por entidad y mes.
 - "+ Agregar documento": Nombre *, Descripción, Área, Fecha límite * y una o más personas Responsables *. Cada documento tiene su propia fecha límite.
-- "Enviar solicitud": avisa a cada responsable dentro del sistema (campana) y por correo. Todos los documentos deben tener al menos un responsable. Mientras esté en Borrador nadie recibe avisos.
+- "Enviar solicitud": avisa a cada responsable dentro del sistema (campana) y por correo; los correos salen como "Contratación Pública GEMESEG". Todos los documentos deben tener al menos un responsable. Una solicitud nueva queda en **Borrador**: mientras lo sea, los responsables no la ven en "Por entregar" ni reciben ningún aviso (en pantalla se muestra un aviso amarillo que lo recuerda). Solo al pulsar "Enviar solicitud" se les avisa.
+- "Recordar al responsable": botón de campana en la fila de un documento pendiente o rechazado de una solicitud ya enviada; pide confirmación y manda un recordatorio por campana y correo a quienes lo deben.
+- En la tabla de documentos de cada mes, las acciones de cada fila son botones de icono (pasa el mouse para ver su nombre): Entregar, Recordar, Editar y Quitar; los que no aplican a ese documento dejan su lugar vacío. Con el botón "Columnas" cada persona elige qué columnas ve y en qué orden (el Área viene oculta; se vuelve a mostrar desde ahí).
 - Si después se agrega un documento, se cambia una fecha o se asigna a otra persona, esa persona recibe el aviso. A quien se quita ya no le aparece el documento.
 - El avance de cada mes se ve en la lista (por ejemplo "3 de 5 aprobados") con los documentos vencidos marcados.
 
 ## Entregar un documento (quien es responsable)
 - Al abrir el aviso de la campana se llega a la solicitud, donde solo se ven los documentos asignados a esa persona.
-- Menú → "Contratación Pública" → "Mis documentos": una lista única con todo lo que le asignaron a la persona, de cualquier entidad. Arriba van los rechazados (con su motivo), luego los vencidos y luego los demás por fecha límite. El botón "Entregar" de cada fila abre la ventana de entrega.
+- Menú → "Contratación Pública" → "Por entregar": una lista única con todo lo que le asignaron a la persona, de cualquier entidad. Arriba van los rechazados (con su motivo), luego los vencidos y luego los demás por fecha límite. El botón "Entregar" de cada fila abre la ventana de entrega. Si el documento ya tenía un archivo entregado antes (por ejemplo uno rechazado), la ventana pregunta qué hacer con él: "Reemplazar el anterior" (se borra de Drive y queda solo el nuevo) o "Conservar ambos" (el anterior se queda en la carpeta de Drive); hay que elegir una para poder entregar.
 - "Entregar": se sube un archivo (PDF, Word, Excel, imagen o ZIP, hasta 15 MB) o se pega un enlace. La ventana abre en "Subir archivo": es lo más fácil, porque quien revisa ve el archivo dentro del sistema sin pedir permisos. Si se pega un enlace (por ejemplo de Google Drive), debe estar compartido para que se pueda abrir. Queda en "Entregado" a la espera de revisión.
 - Si fue "Rechazado", en la ventana de entrega se ve el motivo y el historial del documento (qué se entregó antes y por qué se rechazó); se vuelve a entregar. Un documento "Aprobado" ya no se puede cambiar.
 - Estados: Pendiente → Entregado → Aprobado, o Rechazado (vuelve a Entregado cuando se entrega de nuevo).
 
 ## Revisar (personal de Contratación Pública)
-- Menú → "Contratación Pública" → "Por revisar": todo lo entregado y sin revisar de todas las entidades, lo más antiguo primero. "Revisar uno tras otro" (o el botón "Revisar" de una fila) abre la pantalla de revisión. En el detalle de una entidad, el botón "Revisar" de un documento entregado abre la misma pantalla.
-- Pantalla de revisión: a la izquierda se ve el archivo (PDF o imagen) dentro del sistema; a la derecha están los datos del documento, su historial (entregó, rechazó con motivo, volvió a entregar, aprobó) y la decisión. Las flechas "Documento anterior / siguiente" recorren la lista, y al aprobar o rechazar pasa sola al siguiente que falta revisar. Esc cierra la pantalla.
+- Menú → "Contratación Pública" → "Por aprobar": todo lo entregado y sin revisar de todas las entidades, lo más antiguo primero. "Revisar uno tras otro" (o el botón "Revisar" de una fila) abre la pantalla de revisión. En el detalle de una entidad, el botón "Revisar" de un documento entregado abre la misma pantalla.
+- Pantalla de revisión: a la izquierda se ve el archivo (PDF, imagen, Word o Excel) dentro del sistema. Word tarda unos segundos porque se convierte a PDF para mostrarlo. Un Excel (.xlsx) se ve como una hoja de cálculo, parecida a la de Google Drive: pestañas por hoja abajo, letras de columna y números de fila que no se mueven, zoom con + y −, y al hacer clic en una celda se ve su contenido completo arriba (las flechas del teclado mueven la selección y Ctrl+F busca). Si se prefiere, "Ver como PDF" lo muestra como PDF y "Descargar" baja el archivo original; una hoja muy grande muestra solo las primeras 1000 filas y avisa. A la derecha están los datos del documento, su historial (entregó, rechazó con motivo, volvió a entregar, aprobó) y la decisión. Las flechas "Documento anterior / siguiente" recorren la lista, y al aprobar o rechazar pasa sola al siguiente que falta revisar. Esc cierra la pantalla.
 - "Aprobar", o "Rechazar" con el motivo: se puede tocar un motivo rápido (Documento ilegible, Documento caducado, No corresponde al tipo solicitado, Falta firma o sello) y editarlo; el motivo es obligatorio (mínimo 5 letras) y le llega al responsable por la campana y por correo. Un documento ya aprobado se puede rechazar para reabrirlo.
-- Los enlaces externos y los archivos Word, Excel o ZIP no se pueden mostrar dentro del sistema: aparece "Abrir enlace" o "Descargar", y aprobar o rechazar funcionan igual.
+- Los enlaces externos y los archivos ZIP no se pueden mostrar dentro del sistema: aparece "Abrir enlace" o "Descargar", y aprobar o rechazar funcionan igual.
 - Cuando alguien entrega un documento, el aviso por la campana le llega a todo el personal de Contratación Pública que revisa (no por correo).
 - Los archivos subidos se guardan en la subcarpeta de la entidad en Drive, dentro de una carpeta por mes. Sin la carpeta general de Contratación Pública (ver Entidades Públicas) solo se pueden entregar enlaces.
 
@@ -408,16 +412,17 @@ const ADMIN = `# Administración — guía
 - Usuarios: buscar por nombre o email, filtros por rol y ubicación. "Nuevo usuario": Nombre completo *, Email *, Contraseña *, Documento de identidad, Cargo, Rol * (Administrador, Gerente o Empleado) y Ubicación ("+ Agregar nueva ubicación..." crea una sede ahí mismo). Editar y activar/desactivar usuarios (requiere rol Administrador).
 - "Permisos Usuarios": elegir el usuario y marcar por sección "Ver" y "Escribir" (Escribir requiere Ver) → "Guardar Permisos". Un usuario nuevo Empleado o Gerente arranca sin secciones (solo lo común); un Administrador arranca con todo.
 - "Módulos visibles para todos" (ícono de tuerca en permisos): marca secciones que ve todo el personal sin permiso individual.
-- "Mi Empresa" (si está habilitada): logo y colores de la empresa, con vista previa.`;
+- "Mi Empresa" (si está habilitada): logo y colores de la empresa, con vista previa.
+- Gerente: ve "Administración", "Mi Empresa" y "Permisos Usuarios" de su empresa en solo lectura. Si intenta crear, editar, guardar o marcar algo, aparece "No tienes permiso para esto": es solo para administradores y debe contactar a un administrador de su empresa para que lo haga.`;
 
 const SISTEMAS = `# Sistemas — guía
 
 - Dashboard: tickets Abiertos, En revisión, Resueltos y Este mes; una dona "Tickets por tipo" (Errores, Mejoras, Permisos y Otros, con cantidad y porcentaje; al pasar el cursor por un tipo el centro muestra su cantidad); "Tiempo promedio de resolución" general (promedio de lo que tardan en quedar Resueltos los tickets; muestra "—" si aún no hay ninguno resuelto); y "Últimos tickets". Accesos a Soporte Técnico, "Publicar novedad de la app", Herramientas, Agentes y "Base de conocimiento de Agente Gemeseg".
 - Novedades: menú Sistemas → Novedades. "Nueva novedad": se escribe Título y "Qué cambió", se marcan los módulos afectados y la pantalla muestra a cuántas personas llegará y la lista de quiénes son (nombre, correo y empresa), más "No la recibirán" con el motivo de cada persona que queda fuera (cuenta inactiva, módulo negado, etc.); "Publicar" pide confirmar. El aviso le sale en la campanita (nunca por correo) solo a quienes tienen acceso a alguno de esos módulos, sin contar a quien publica. No se puede deshacer; la tabla guarda el historial.
-- Soporte Técnico: los reportes que llegan por la llave inglesa; se cambian de estado (Abierto, En revisión, Resuelto). Ahí también se configura la carpeta de Drive para capturas ("Probar conexión").
-- Herramientas: catálogo (Nombre, Categoría, Versión, Licencia) y asignación a usuarios con auditoría; lo asignado aparece en "Mi perfil".
+- Soporte Técnico: los reportes que llegan por la llave inglesa; se cambian de estado (Abierto, En revisión, Resuelto). Cuando alguien reporta algo, la campanita avisa ("Nuevo reporte para Sistemas") solo a quienes tienen Sistemas con "Escribir" marcado en Permisos Usuarios; nunca por correo. Ahí también se configura la carpeta de Drive para capturas ("Probar conexión").
+- Herramientas: catálogo (Nombre, Categoría, Versión, Licencia) y asignación a usuarios con auditoría; lo asignado aparece en "Mi perfil". Es parte de Sistemas (no es un módulo aparte en Permisos Usuarios): la ve quien tiene Sistemas.
 - Agentes: crear agentes de IA con nombre, instrucciones y alcance, y asignarlos a usuarios.
-- Base de conocimiento: texto en Markdown que Agente Gemeseg usa además de este manual, para lo propio de la empresa (políticas, contactos, procesos internos). Se divide con encabezados "## CLAVE" exactos en mayúsculas (## GENERAL, ## RRHH, ## VENTAS, ## CACAO, ## CUSTODIAS, ## CONTRATACION_PUBLICA…). Lo de ## GENERAL o antes del primer encabezado lo recibe cualquier usuario; cada otra sección solo quien tiene acceso a ella. Un encabezado mal escrito no abre sección nueva (se pega a la anterior) y la pantalla avisa al guardar.`;
+- Base de conocimiento (menú Sistemas → "Base de Conocimiento"): texto en Markdown que Agente Gemeseg usa además de este manual, para lo propio de la empresa (políticas, contactos, procesos internos). Se divide con encabezados "## CLAVE" exactos en mayúsculas (## GENERAL, ## RRHH, ## VENTAS, ## CACAO, ## CUSTODIAS, ## CONTRATACION_PUBLICA, ## SISTEMAS…). Lo de ## GENERAL o antes del primer encabezado lo recibe cualquier usuario; cada otra sección solo quien tiene acceso a ella. Un encabezado mal escrito no abre sección nueva (se pega a la anterior) y la pantalla avisa al guardar.`;
 
 /** Bloques por clave de ALL_SECTIONS. GENERAL no está acá: va siempre. */
 export const SECTION_GUIDES: Record<string, string> = {

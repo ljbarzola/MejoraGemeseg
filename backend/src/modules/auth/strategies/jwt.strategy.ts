@@ -1,11 +1,12 @@
-﻿import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { UserRole } from '@prisma/client';
+import { SessionCutoffService } from '../session-cutoff.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(private readonly sessionCutoff: SessionCutoffService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -22,7 +23,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     email: string;
     role: UserRole;
     companyId: number | null;
+    iat?: number;
   }) {
+    // Sesión anterior a un cambio/restablecimiento de contraseña. El frontend
+    // trata cualquier 401 como "Tu sesión expiró" y manda al login.
+    if (await this.sessionCutoff.isTokenRevoked(payload.sub, payload.iat)) {
+      throw new UnauthorizedException(
+        'Tu contraseña cambió: vuelve a iniciar sesión.',
+      );
+    }
     return {
       userId: payload.sub,
       email: payload.email,

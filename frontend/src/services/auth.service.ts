@@ -99,6 +99,20 @@ export async function confirmPasswordReset(data: {
   return res.data;
 }
 
+/**
+ * Cambia la contraseña con la sesión iniciada. El servidor cierra las demás
+ * sesiones y entrega un token nuevo para esta: se guarda aquí mismo, o el
+ * siguiente clic ya daría "Tu sesión expiró".
+ */
+export async function changePassword(data: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<{ message: string }> {
+  const res = await api.post<{ message: string; token: string }>('/auth/change-password', data);
+  localStorage.setItem('token', res.data.token);
+  return { message: res.data.message };
+}
+
 export function saveAuth(auth: AuthResponse) {
   localStorage.setItem('token', auth.token);
   localStorage.setItem('user', JSON.stringify(auth.user));

@@ -262,6 +262,8 @@ export class UsersService implements OnModuleInit {
         department: true,
         roleRelation: true,
         createdAt: true,
+        // Solo para saber si tiene contraseña; el hash se quita abajo y nunca sale.
+        password: true,
         toolAssignments: {
           include: {
             tool: { select: { id: true, name: true, category: true } },
@@ -279,7 +281,10 @@ export class UsersService implements OnModuleInit {
     });
 
     if (!user) throw new NotFoundException('Usuario no encontrado');
-    return user;
+    // Las cuentas que entran solo con Google no tienen contraseña: el perfil
+    // usa esto para no ofrecerles "Cambiar contraseña".
+    const { password, ...resto } = user;
+    return { ...resto, hasPassword: !!password };
   }
 
   async setActiveAgent(userId: number, agentId: number | null) {

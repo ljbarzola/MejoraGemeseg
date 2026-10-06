@@ -4,6 +4,7 @@ import { Settings2 } from 'lucide-react';
 import ModulosFijosModal from '../../components/admin/ModulosFijosModal';
 import { getCompanySections, getUsersWithPermissions, setUserPermissions, type SectionConfig, type UserWithPermissions, type UserPerm } from '../../services/permissions.service';
 import { getUser } from '../../services/auth.service';
+import SoloAdminDialog from '../../components/common/SoloAdminDialog';
 
 // Secciones que no se pueden negar a un usuario: son la pantalla de inicio y
 // los canales abiertos a cualquier empleado. Espejo de
@@ -14,7 +15,7 @@ import { getUser } from '../../services/auth.service';
 const SECCIONES_SIEMPRE_VISIBLES = ['DASHBOARD', 'PROJECTS'];
 
 const SECTION_ICONS: Record<string, string> = {
-  DASHBOARD: '📊', PROJECTS: '📁', ADMIN: '👥', TOOLS: '🔧',
+  DASHBOARD: '📊', PROJECTS: '📁', ADMIN: '👥',
   CACAO: '🫘', COMPANY_SETTINGS: '🎨', COMPANIES: '🏢', CUSTODIAS: '🛡️', RRHH: '👤',
   VENTAS: '💼', SISTEMAS: '🖥️',
 };
@@ -22,6 +23,15 @@ const SECTION_ICONS: Record<string, string> = {
 export default function CompanyAdminPermissions() {
   const navigate = useNavigate();
   const user = getUser();
+  // El Gerente ve los permisos de su empresa en SOLO LECTURA: sin marcar, sin
+  // guardar y sin tocar los módulos fijos (el backend exige ADMIN para escribir).
+  const soloLectura = user?.role !== 'ADMIN';
+  const [avisoSoloAdmin, setAvisoSoloAdmin] = useState('');
+  // Si el Gerente intenta cambiar algo, se le explica por qué no puede.
+  const bloquear = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    setAvisoSoloAdmin('cambie los permisos de este usuario');
+  };
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [sections, setSections] = useState<SectionConfig[]>([]);
   const [users, setUsers] = useState<UserWithPermissions[]>([]);
@@ -34,7 +44,11 @@ export default function CompanyAdminPermissions() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    if (!user) return;
+    // Esta ruta no tiene SectionRoute: solo Administrador y Gerente la usan.
+    if (!user || (user.role !== 'ADMIN' && user.role !== 'MANAGER')) {
+      navigate('/dashboard');
+      return;
+    }
     const slug = user.email?.split('@')[1]?.split('.')[0] || 'gemeseg';
     import('../../services/company.service').then(({ getCompanyBySlug }) =>
       getCompanyBySlug(slug)
@@ -144,7 +158,9 @@ export default function CompanyAdminPermissions() {
           <button
             type="button"
             className="btn-icon-toolbar"
-            onClick={() => setShowModulosFijos(true)}
+            onClick={soloLectura
+              ? (e) => { e.preventDefault(); setAvisoSoloAdmin('cambie los módulos visibles para todos'); }
+              : () => setShowModulosFijos(true)}
             disabled={!selectedCompanyId}
             title="Módulos visibles para todos"
             aria-label="Módulos visibles para todos"
@@ -153,6 +169,13 @@ export default function CompanyAdminPermissions() {
           </button>
         </div>
       </div>
+
+      {soloLectura && (
+        <div className="auth-info-banner" style={{ marginBottom: 16 }}>
+          Estás viendo los permisos en modo solo lectura. Para cambiarlos, contacta a un
+          administrador de tu empresa.
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '20px', alignItems: 'start' }}>
         {/* Left: User list */}
@@ -265,6 +288,7 @@ export default function CompanyAdminPermissions() {
                             type="checkbox"
                             checked={allView}
                             onChange={() => toggleAll('canView')}
+                            onClick={soloLectura ? bloquear : undefined}
                             style={{ width: '14px', height: '14px', cursor: 'pointer' }}
                           />
                         </div>
@@ -276,6 +300,7 @@ export default function CompanyAdminPermissions() {
                             type="checkbox"
                             checked={allWrite}
                             onChange={() => toggleAll('canWrite')}
+                            onClick={soloLectura ? bloquear : undefined}
                             style={{ width: '14px', height: '14px', cursor: 'pointer' }}
                           />
                         </div>
@@ -308,6 +333,7 @@ export default function CompanyAdminPermissions() {
                               type="checkbox"
                               checked={fija ? true : perm?.canView || false}
                               onChange={() => togglePerm(s.key, 'canView')}
+                              onClick={soloLectura && !fija ? bloquear : undefined}
                               disabled={fija}
                               title={fija ? 'Esta sección la ve siempre todo usuario' : undefined}
                               style={{ width: '18px', height: '18px', cursor: fija ? 'not-allowed' : 'pointer', accentColor: '#48bb78' }}
@@ -318,8 +344,9 @@ export default function CompanyAdminPermissions() {
                               type="checkbox"
                               checked={perm?.canWrite || false}
                               onChange={() => togglePerm(s.key, 'canWrite')}
-                              disabled={!fija && !perm?.canView}
-                              style={{ width: '18px', height: '18px', cursor: fija || perm?.canView ? 'pointer' : 'not-allowed', accentColor: '#48bb78' }}
+                              onClick={soloLectura ? bloquear : undefined}
+                              disabled={!soloLectura && !fija && !perm?.canView}
+                              style={{ width: '18px', height: '18px', cursor: soloLectura || fija || perm?.canView ? 'pointer' : 'not-allowed', accentColor: '#48bb78' }}
                             />
                           </td>
                         </tr>
@@ -331,8 +358,10 @@ export default function CompanyAdminPermissions() {
 
               {/* Save */}
               <div style={{ marginTop: '24px', display: 'flex', gap: '10px', justifyContent: 'flex-end', paddingTop: '20px', borderTop: '1px solid #e2e8f0' }}>
-                <button className="btn-secondary" onClick={() => { setSelectedUser(null); setUserPerms({}); }}>Cancelar</button>
-                <button className="auth-btn" onClick={handleSave} disabled={saving}>
+                <button className="btn-secondary" onClick={() => { setSelectedUser(null); setUserPerms({}); }}>
+                  {soloLectura ? 'Cerrar' : 'Cancelar'}
+                </button>
+                <button className="auth-btn" onClick={soloLectura ? bloquear : handleSave} disabled={saving}>
                   {saving ? 'Guardando...' : 'Guardar Permisos'}
                 </button>
               </div>
@@ -340,6 +369,10 @@ export default function CompanyAdminPermissions() {
           )}
         </div>
       </div>
+
+      {avisoSoloAdmin && (
+        <SoloAdminDialog accion={avisoSoloAdmin} onClose={() => setAvisoSoloAdmin('')} />
+      )}
 
       {showModulosFijos && selectedCompanyId && (
         <ModulosFijosModal

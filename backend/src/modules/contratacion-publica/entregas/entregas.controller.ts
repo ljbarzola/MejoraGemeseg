@@ -200,12 +200,15 @@ export class EntregasController {
   async verArchivo(
     @Param('id', ParseIntPipe) id: number,
     @Query('descargar') descargar: string | undefined,
+    @Query('formato') formato: string | undefined,
     @Req() req: AuthedRequest,
     @Res() res: Response,
   ) {
     const { buffer, mimeType, nombre } = await this.service.obtenerArchivo(
       id,
       await this.actor(req),
+      !descargar, // vista previa: Word sale convertido a PDF y Excel (.xlsx) como cuadrícula de hojas (JSON)
+      formato === 'pdf', // ?formato=pdf: Excel también como PDF
     );
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Length', buffer.length);
@@ -233,6 +236,16 @@ export class EntregasController {
     @Req() req: AuthedRequest,
   ) {
     return this.service.entregar(id, dto, await this.actor(req));
+  }
+
+  // Vuelve a avisar, a mano, a los responsables de un documento pendiente o rechazado.
+  @Post('documentos/:id/recordar')
+  @Section(SECCION, 'write')
+  async recordar(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.service.recordarEntrega(id, await this.actor(req));
   }
 
   @Post('documentos/:id/aprobar')

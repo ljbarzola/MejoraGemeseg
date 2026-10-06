@@ -316,12 +316,12 @@ export default function ContratoDetail() {
                         <td>{p.cantidadGuardias}</td>
                         <td>{p.guardias?.length || 0}</td>
                         <td style={{ textAlign: 'right' }}>
-                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                            <button onClick={() => { setEditingPuesto(p); setShowPuestoModal(true); }} style={{ border: 'none', background: 'none', color: '#3b82f6', cursor: 'pointer', display: 'flex' }} title="Editar / asignar guardias">
-                              <Pencil size={15} />
+                          <div className="acciones-iconos">
+                            <button type="button" className="btn-secondary icon-btn" title="Editar / asignar guardias" aria-label="Editar / asignar guardias" onClick={() => { setEditingPuesto(p); setShowPuestoModal(true); }}>
+                              <Pencil size={16} />
                             </button>
-                            <button onClick={() => setConfirmandoEliminarPuesto(p)} style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex' }} title="Eliminar puesto">
-                              <Trash2 size={15} />
+                            <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Eliminar puesto" aria-label="Eliminar puesto" onClick={() => setConfirmandoEliminarPuesto(p)}>
+                              <Trash2 size={16} />
                             </button>
                           </div>
                         </td>
@@ -384,9 +384,11 @@ export default function ContratoDetail() {
                         <td><span className="truncate">{a.descripcion || '—'}</span></td>
                         <td style={{ fontSize: '0.82rem' }}>{a.fechaInicio ? `${formatFecha(a.fechaInicio)} — ${formatFecha(a.fechaFin || '')}` : '—'}</td>
                         <td style={{ textAlign: 'right' }}>
-                          <button onClick={() => setConfirmandoEliminarAdenda(a.id)} style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', marginLeft: 'auto' }} title="Eliminar adenda">
-                            <Trash2 size={15} />
-                          </button>
+                          <div className="acciones-iconos">
+                            <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Eliminar adenda" aria-label="Eliminar adenda" onClick={() => setConfirmandoEliminarAdenda(a.id)}>
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -421,11 +423,11 @@ export default function ContratoDetail() {
                       <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{a.nombre}</div>
                       <div style={{ fontSize: '0.72rem', color: '#718096' }}>{a.tipo || 'Sin tipo'} · {formatFecha(a.createdAt)}</div>
                     </div>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <a href={resolveContratoFileUrl(a.filePath)} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', color: '#3b82f6' }} title="Descargar">
+                    <div className="acciones-iconos">
+                      <a className="btn-secondary icon-btn" href={resolveContratoFileUrl(a.filePath)} target="_blank" rel="noopener noreferrer" title="Descargar" aria-label="Descargar">
                         <Download size={16} />
                       </a>
-                      <button onClick={() => setConfirmandoEliminarAdjunto(a.id)} style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex' }} title="Eliminar">
+                      <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Eliminar" aria-label="Eliminar" onClick={() => setConfirmandoEliminarAdjunto(a.id)}>
                         <Trash2 size={16} />
                       </button>
                     </div>

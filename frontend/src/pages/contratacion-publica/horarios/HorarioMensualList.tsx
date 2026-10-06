@@ -144,12 +144,15 @@ export default function HorarioMensualList() {
                       </span>
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                        <button className="btn-secondary" onClick={() => navigate(`/contratacion-publica/horarios/${h.id}`)}>Abrir</button>
-                        {h.estado === 'BORRADOR' && (
-                          <button onClick={() => setConfirmandoEliminar(h)} style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex' }} title="Eliminar horario">
+                      <div className="acciones-iconos" style={{ alignItems: 'center' }}>
+                        <button type="button" className="btn-secondary" onClick={() => navigate(`/contratacion-publica/horarios/${h.id}`)}>Abrir</button>
+                        {h.estado === 'BORRADOR' ? (
+                          <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Eliminar horario" aria-label="Eliminar horario" onClick={() => setConfirmandoEliminar(h)}>
                             <Trash2 size={16} />
                           </button>
+                        ) : (
+                          // Hueco: el botón "Abrir" queda en el mismo lugar con o sin papelera.
+                          <span className="icon-btn" aria-hidden="true" />
                         )}
                       </div>
                     </td>

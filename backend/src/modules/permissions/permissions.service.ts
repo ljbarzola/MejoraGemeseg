@@ -23,7 +23,6 @@ export const ALL_SECTIONS = [
     siempreVisible: true,
   },
   { key: 'ADMIN', label: 'Administración', alwaysEnabled: true },
-  { key: 'TOOLS', label: 'Herramientas', alwaysEnabled: true },
   { key: 'CACAO', label: 'Cacao', alwaysEnabled: false },
   { key: 'COMPANY_SETTINGS', label: 'Mi Empresa', alwaysEnabled: false },
   { key: 'COMPANIES', label: 'Empresas', alwaysEnabled: false },
@@ -35,6 +34,10 @@ export const ALL_SECTIONS = [
     label: 'Contratación Pública',
     alwaysEnabled: false,
   },
+  // Herramientas ya NO es una sección (2026-10-06): quedó huérfana al fusionarse
+  // en Sistemas y seguía apareciendo en Permisos usuarios sin gobernar nada. Las
+  // filas UserPermission 'TOOLS' que ya existan en la base se ignoran.
+  //
   // alwaysEnabled: Herramientas y Agentes vivían sueltas en el menú como
   // secciones siempre activas (TOOLS/AGENTS) hasta que se agruparon dentro de
   // Sistemas. Si Sistemas fuera opt-in, esas dos pantallas quedarían
@@ -190,6 +193,60 @@ export class PermissionsService {
     excludeUserId?: number,
   ): Promise<UsuarioAcceso[]> {
     return (await this.evaluarAccesoSecciones(sections, excludeUserId)).destinatarios;
+  }
+
+  /**
+   * Personas ACTIVAS, de TODAS las empresas, que tienen la sección marcada
+   * EXPLÍCITAMENTE con "Escribir" en Permisos usuarios (p. ej. el equipo que
+   * gestiona los tickets de Sistemas, que atiende a todas las empresas).
+   *
+   * A propósito NO usa la regla permisiva del guard (sin fila = acceso): quien no
+   * tiene fila no aparece marcado en esa pantalla, y avisarle sería avisar a
+   * gente que nadie eligió. Por eso hace falta una fila con `canWrite` (y la
+   * empresa debe tener la sección activa). Los super admin quedan fuera porque no
+   * tienen empresa y las notificaciones la exigen.
+   */
+  async getUsersWithExplicitSectionWrite(
+    section: string,
+    excludeUserId?: number,
+  ): Promise<UsuarioAcceso[]> {
+    const def = ALL_SECTIONS.find((a) => a.key === section);
+    if (!def) return [];
+
+    const [users, companySections] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { isActive: true, companyId: { not: null } },
+        select: {
+          id: true,
+          companyId: true,
+          fullName: true,
+          email: true,
+          company: { select: { name: true } },
+          permissions: { where: { section }, select: { canWrite: true } },
+        },
+      }),
+      this.prisma.companySection.findMany({
+        where: { section },
+        select: { companyId: true },
+      }),
+    ]);
+    const habilitadas = new Set(companySections.map((c) => c.companyId));
+
+    const resultado: UsuarioAcceso[] = [];
+    for (const u of users) {
+      if (u.id === excludeUserId || u.companyId === null) continue;
+      if (!def.alwaysEnabled && !habilitadas.has(u.companyId)) continue;
+      // Solo con fila explícita y "Escribir" marcado.
+      if (!u.permissions[0]?.canWrite) continue;
+      resultado.push({
+        id: u.id,
+        companyId: u.companyId,
+        fullName: u.fullName,
+        email: u.email,
+        companyName: u.company?.name ?? null,
+      });
+    }
+    return resultado;
   }
 
   /**

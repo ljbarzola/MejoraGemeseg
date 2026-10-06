@@ -24,6 +24,7 @@ describe('CPEntidadesService', () => {
       update: jest.Mock;
       delete: jest.Mock;
     };
+    cPEntidadCampo: { findMany: jest.Mock };
   };
   let drive: {
     getConfig: jest.Mock;
@@ -41,6 +42,8 @@ describe('CPEntidadesService', () => {
     ruc: null,
     direccion: null,
     driveFolderId,
+    archivada: false,
+    camposExtra: null,
     companyId: 1,
   });
 
@@ -53,6 +56,7 @@ describe('CPEntidadesService', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
+      cPEntidadCampo: { findMany: jest.fn().mockResolvedValue([]) },
     };
     drive = {
       getConfig: jest.fn().mockResolvedValue({ driveFolderId: 'RAIZ' }),
@@ -127,14 +131,12 @@ describe('CPEntidadesService', () => {
       expect(prisma.cPEntidadPublica.findMany).not.toHaveBeenCalled();
     });
 
-    it('una carpeta nueva de Drive se vuelve entidad', async () => {
+    it('una carpeta de Drive sin entidad se ofrece, no se crea sola', async () => {
       drive.listSubFolders.mockResolvedValue([{ id: 'F9', name: 'Gobierno de Manabí' }]);
       prisma.cPEntidadPublica.findMany.mockResolvedValue([]);
       const r = await service.sincronizarConDrive(1);
-      expect(prisma.cPEntidadPublica.create).toHaveBeenCalledWith({
-        data: { nombre: 'Gobierno de Manabí', companyId: 1, driveFolderId: 'F9' },
-      });
-      expect(r.entidadesCreadas).toEqual(['Gobierno de Manabí']);
+      expect(prisma.cPEntidadPublica.create).not.toHaveBeenCalled();
+      expect(r.carpetasSinEntidad).toEqual([{ carpetaId: 'F9', nombre: 'Gobierno de Manabí' }]);
     });
 
     it('una entidad sin carpeta se enlaza con la carpeta del mismo nombre', async () => {
@@ -146,16 +148,30 @@ describe('CPEntidadesService', () => {
         data: { driveFolderId: 'F1' },
       });
       expect(prisma.cPEntidadPublica.create).not.toHaveBeenCalled();
-      expect(r.entidadesCreadas).toEqual([]);
-      expect(r.carpetasCreadas).toEqual([]);
+      expect(r.carpetasSinEntidad).toEqual([]);
+      expect(r.entidadesSinCarpeta).toEqual([]);
     });
 
-    it('a una entidad sin carpeta y sin coincidencia se le crea la carpeta', async () => {
+    it('una entidad sin carpeta y sin coincidencia se ofrece, no se le crea la carpeta sola', async () => {
       drive.listSubFolders.mockResolvedValue([]);
       prisma.cPEntidadPublica.findMany.mockResolvedValue([entidad(1, 'Municipio de Quito')]);
       const r = await service.sincronizarConDrive(1);
-      expect(drive.createSubfolder).toHaveBeenCalledWith('RAIZ', 'Municipio de Quito');
-      expect(r.carpetasCreadas).toEqual(['Municipio de Quito']);
+      expect(drive.createSubfolder).not.toHaveBeenCalled();
+      expect(r.entidadesSinCarpeta).toEqual([{ entidadId: 1, nombre: 'Municipio de Quito' }]);
+    });
+
+    it('una entidad archivada no genera avisos (ni sin carpeta, ni carpeta ausente, ni renombrada)', async () => {
+      drive.listSubFolders.mockResolvedValue([{ id: 'F2', name: 'Otro nombre' }]);
+      prisma.cPEntidadPublica.findMany.mockResolvedValue([
+        { ...entidad(1, 'Sin carpeta'), archivada: true },
+        { ...entidad(2, 'Con carpeta', 'F2'), archivada: true },
+        { ...entidad(3, 'Perdida', 'F3'), archivada: true },
+      ]);
+      const r = await service.sincronizarConDrive(1);
+      expect(r.entidadesSinCarpeta).toEqual([]);
+      expect(r.renombradas).toEqual([]);
+      expect(r.ausentes).toEqual([]);
+      expect(r.carpetasSinEntidad).toEqual([]); // la carpeta F2 ya es de una entidad archivada
     });
 
     it('carpeta renombrada en Drive: lo informa y no cambia nada solo', async () => {
@@ -178,15 +194,142 @@ describe('CPEntidadesService', () => {
       expect(drive.createSubfolder).not.toHaveBeenCalled();
     });
 
-    it('dos carpetas con el mismo nombre: solo una entidad y un aviso', async () => {
+    it('dos carpetas con el mismo nombre: solo se ofrece una y sale un aviso', async () => {
       drive.listSubFolders.mockResolvedValue([
         { id: 'A', name: 'Repetida' },
         { id: 'B', name: 'Repetida' },
       ]);
       prisma.cPEntidadPublica.findMany.mockResolvedValue([]);
       const r = await service.sincronizarConDrive(1);
-      expect(prisma.cPEntidadPublica.create).toHaveBeenCalledTimes(1);
+      expect(r.carpetasSinEntidad).toHaveLength(1);
       expect(r.avisos.join(' ')).toMatch(/repetida/i);
+    });
+  });
+
+  describe('crearEntidadDesdeCarpeta', () => {
+    it('crea la entidad con el nombre de la carpeta y la enlaza', async () => {
+      drive.listSubFolders.mockResolvedValue([{ id: 'F9', name: ' Gobierno de Manabí ' }]);
+      prisma.cPEntidadPublica.findFirst.mockResolvedValue(null);
+      prisma.cPEntidadPublica.findMany.mockResolvedValue([]);
+      await service.crearEntidadDesdeCarpeta('F9', 1);
+      expect(prisma.cPEntidadPublica.create).toHaveBeenCalledWith({
+        data: { nombre: 'Gobierno de Manabí', companyId: 1, driveFolderId: 'F9' },
+      });
+    });
+
+    it('rechaza una carpeta que no cuelga de la raíz (el id lo manda el navegador)', async () => {
+      drive.listSubFolders.mockResolvedValue([{ id: 'F9', name: 'Otra' }]);
+      await expect(service.crearEntidadDesdeCarpeta('AJENA', 1)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(prisma.cPEntidadPublica.create).not.toHaveBeenCalled();
+    });
+
+    it('rechaza una carpeta que ya pertenece a una entidad', async () => {
+      drive.listSubFolders.mockResolvedValue([{ id: 'F9', name: 'Otra' }]);
+      prisma.cPEntidadPublica.findFirst.mockResolvedValue(entidad(1, 'Otra', 'F9'));
+      await expect(service.crearEntidadDesdeCarpeta('F9', 1)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+  });
+
+  describe('crearCarpeta', () => {
+    it('crea la carpeta de una entidad que no la tiene', async () => {
+      prisma.cPEntidadPublica.findFirst.mockResolvedValue(entidad(1, 'Municipio de Quito'));
+      await service.crearCarpeta(1, 1);
+      expect(drive.createSubfolder).toHaveBeenCalledWith('RAIZ', 'Municipio de Quito');
+      expect(prisma.cPEntidadPublica.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { driveFolderId: 'NUEVA' },
+      });
+    });
+
+    it('si Drive falla devuelve un mensaje claro, no el error crudo', async () => {
+      prisma.cPEntidadPublica.findFirst.mockResolvedValue(entidad(1, 'Municipio de Quito'));
+      drive.createSubfolder.mockRejectedValue(new Error('socket hang up'));
+      await expect(service.crearCarpeta(1, 1)).rejects.toThrow(/No se pudo crear la carpeta/);
+    });
+  });
+
+  describe('findAll', () => {
+    it('por defecto oculta las archivadas', async () => {
+      prisma.cPEntidadPublica.findMany.mockResolvedValue([]);
+      await service.findAll(1);
+      expect(prisma.cPEntidadPublica.findMany).toHaveBeenCalledWith({
+        where: { companyId: 1, archivada: false },
+        orderBy: { nombre: 'asc' },
+      });
+    });
+
+    it('con "mostrar archivadas" las incluye', async () => {
+      prisma.cPEntidadPublica.findMany.mockResolvedValue([]);
+      await service.findAll(1, true);
+      expect(prisma.cPEntidadPublica.findMany).toHaveBeenCalledWith({
+        where: { companyId: 1 },
+        orderBy: { nombre: 'asc' },
+      });
+    });
+  });
+
+  describe('archivar / reactivar (no existe eliminar)', () => {
+    it('archivar solo marca la entidad: no borra nada ni toca Drive', async () => {
+      prisma.cPEntidadPublica.findFirst.mockResolvedValue(entidad(1, 'd', 'F1'));
+      await service.archivar(1, 1);
+      expect(prisma.cPEntidadPublica.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { archivada: true },
+      });
+      expect(prisma.cPEntidadPublica.delete).not.toHaveBeenCalled();
+      expect(drive.relocateFolder).not.toHaveBeenCalled();
+    });
+
+    it('reactivar la vuelve a mostrar', async () => {
+      prisma.cPEntidadPublica.findFirst.mockResolvedValue({ ...entidad(1, 'd'), archivada: true });
+      await service.reactivar(1, 1);
+      expect(prisma.cPEntidadPublica.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { archivada: false },
+      });
+    });
+  });
+
+  describe('campos configurables', () => {
+    const campo = (id: number, tipo: string, extra: object = {}) => ({
+      id,
+      nombre: `Campo ${id}`,
+      tipo,
+      opciones: null,
+      obligatorio: false,
+      activo: true,
+      ...extra,
+    });
+
+    it('al crear guarda los valores validados', async () => {
+      prisma.cPEntidadCampo.findMany.mockResolvedValue([campo(7, 'TEXTO')]);
+      prisma.cPEntidadPublica.findMany.mockResolvedValue([]);
+      prisma.cPEntidadPublica.create.mockResolvedValue(entidad(5, 'Nueva'));
+      prisma.cPEntidadPublica.findFirst.mockResolvedValue(entidad(5, 'Nueva'));
+      await service.create({ nombre: 'Nueva', camposExtra: { '7': '  Ana  ' } }, 1);
+      expect(prisma.cPEntidadPublica.create).toHaveBeenCalledWith({
+        data: { nombre: 'Nueva', camposExtra: { '7': 'Ana' }, companyId: 1 },
+      });
+    });
+
+    it('un campo obligatorio vacío impide guardar y nombra el campo', async () => {
+      prisma.cPEntidadCampo.findMany.mockResolvedValue([campo(7, 'TEXTO', { obligatorio: true })]);
+      prisma.cPEntidadPublica.findMany.mockResolvedValue([]);
+      await expect(service.create({ nombre: 'Nueva' }, 1)).rejects.toThrow(/«Campo 7» es obligatorio/);
+      expect(prisma.cPEntidadPublica.create).not.toHaveBeenCalled();
+    });
+
+    it('al editar sin camposExtra no se tocan los valores guardados', async () => {
+      prisma.cPEntidadPublica.findFirst.mockResolvedValue(entidad(5, 'Nueva'));
+      await service.update(5, { ruc: '123' }, 1);
+      expect(prisma.cPEntidadPublica.update).toHaveBeenCalledWith({
+        where: { id: 5 },
+        data: { ruc: '123' },
+      });
     });
   });
 });

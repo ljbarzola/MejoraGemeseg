@@ -192,9 +192,11 @@ export default function PuestoFormModal({
                       <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{g.nombreGuardia}</div>
                       <div style={{ fontSize: '0.72rem', color: '#718096' }}>Cédula: {g.cedula}</div>
                     </div>
-                    <button type="button" onClick={() => setConfirmandoQuitar(g.id)} style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex' }} title="Quitar guardia">
-                      <Trash2 size={15} />
-                    </button>
+                    <div className="acciones-iconos">
+                      <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Quitar guardia" aria-label="Quitar guardia" onClick={() => setConfirmandoQuitar(g.id)}>
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

@@ -101,3 +101,27 @@ describe('findUnknownHeadings', () => {
     expect(warnings).toEqual([]);
   });
 });
+
+describe('encabezados antiguos (Herramientas y Agentes pasaron a Sistemas)', () => {
+  const KEYS = [...KNOWN_KEYS, 'SISTEMAS'];
+
+  it('`## TOOLS` y `## AGENTS` se tratan como `## SISTEMAS`: solo lo ve quien tiene Sistemas', () => {
+    const sections = parseKnowledgeBase(
+      '## RRHH\ntexto rrhh\n## TOOLS\nclaves internas\n## AGENTS\nagentes',
+      KEYS,
+    );
+    const sinSistemas = filterKnowledgeBase(sections, ['RRHH']);
+    expect(sinSistemas).toContain('texto rrhh');
+    expect(sinSistemas).not.toContain('claves internas');
+    expect(sinSistemas).not.toContain('agentes');
+
+    const conSistemas = filterKnowledgeBase(sections, ['SISTEMAS']);
+    expect(conSistemas).toContain('claves internas');
+    expect(conSistemas).toContain('agentes');
+    expect(conSistemas).not.toContain('texto rrhh');
+  });
+
+  it('no se avisa como desconocido al guardar', () => {
+    expect(findUnknownHeadings('## TOOLS\ntexto\n## AGENTS\notro', KEYS)).toEqual([]);
+  });
+});

@@ -20,6 +20,21 @@
 
 const HEADING_RE = /^##\s+([A-Za-z0-9_]+)\s*$/;
 
+// Módulos que ya no existen como sección propia porque pasaron a ser parte de
+// Sistemas (Herramientas y Agentes, 2026-10-06). Un documento que aún tenga
+// `## TOOLS` o `## AGENTS` sigue valiendo: ese texto se trata como `## SISTEMAS`
+// y lo ve quien tiene Sistemas. Sin esto, el encabezado dejaría de reconocerse
+// y su contenido se pegaría a la sección anterior (o a la general, visible para
+// todos).
+const LEGACY_HEADINGS: Record<string, string> = {
+  TOOLS: 'SISTEMAS',
+  AGENTS: 'SISTEMAS',
+};
+
+function canonicalHeading(raw: string): string {
+  return LEGACY_HEADINGS[raw] ?? raw;
+}
+
 export interface KbSection {
   /** null = texto antes del primer encabezado reconocido (se trata como GENERAL). */
   heading: string | null;
@@ -46,9 +61,9 @@ export function parseKnowledgeBase(markdown: string, knownKeys: string[]): KbSec
 
   for (const line of lines) {
     const match = line.match(HEADING_RE);
-    if (match && known.has(match[1])) {
+    if (match && known.has(canonicalHeading(match[1]))) {
       sections.push(current);
-      current = { heading: match[1], body: '' };
+      current = { heading: canonicalHeading(match[1]), body: '' };
     } else {
       current.body += (current.body ? '\n' : '') + line;
     }
@@ -67,7 +82,7 @@ export function findUnknownHeadings(
   const unknown: string[] = [];
   for (const line of (markdown || '').split('\n')) {
     const match = line.match(HEADING_RE);
-    if (match && !known.has(match[1])) unknown.push(match[1]);
+    if (match && !known.has(canonicalHeading(match[1]))) unknown.push(match[1]);
   }
   return unknown;
 }

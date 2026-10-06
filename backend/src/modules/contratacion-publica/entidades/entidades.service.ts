@@ -13,6 +13,7 @@ import {
   claveNombre,
   nombreCarpeta,
 } from './entidad-folder.util';
+import { normalizarCamposExtra } from './entidad-campos.util';
 
 export interface SyncEntidadesDriveResult {
   /** false = todavía no hay carpeta raíz elegida. */
@@ -20,10 +21,10 @@ export interface SyncEntidadesDriveResult {
   /** Si Drive no se pudo leer o falta configurar: mensaje para mostrar (no es una excepción). */
   warning?: string;
   sincronizadoAt: string;
-  /** Carpetas nuevas de Drive que no eran entidad: ya se crearon como entidad. */
-  entidadesCreadas: string[];
-  /** Entidades que no tenían carpeta: ya se les creó o se enlazó la que tenían. */
-  carpetasCreadas: string[];
+  /** Carpetas de Drive que no son ninguna entidad: la persona decide si crea la entidad. */
+  carpetasSinEntidad: { carpetaId: string; nombre: string }[];
+  /** Entidades (no archivadas) sin carpeta en Drive: la persona decide si se crea. */
+  entidadesSinCarpeta: { entidadId: number; nombre: string }[];
   /** El nombre de la carpeta en Drive ya no coincide con el de la entidad: lo decide la persona. */
   renombradas: { entidadId: number; nombreSistema: string; nombreDrive: string }[];
   /** La carpeta de la entidad ya no está en la carpeta raíz: lo decide la persona. */
@@ -41,9 +42,10 @@ export class CPEntidadesService {
     private readonly driveService: DriveService,
   ) {}
 
-  async findAll(companyId: number) {
+  /** Las archivadas solo salen si se piden (checkbox "Mostrar archivadas"). */
+  async findAll(companyId: number, incluirArchivadas = false) {
     return this.prisma.cPEntidadPublica.findMany({
-      where: { companyId },
+      where: incluirArchivadas ? { companyId } : { companyId, archivada: false },
       orderBy: { nombre: 'asc' },
     });
   }
@@ -58,8 +60,10 @@ export class CPEntidadesService {
 
   async create(dto: CreateEntidadDto, companyId: number) {
     await this.assertNombreLibre(dto.nombre, companyId);
+    const { camposExtra, ...resto } = dto;
+    const extra = await this.valoresDeCampos(camposExtra, companyId, null);
     const entidad = await this.prisma.cPEntidadPublica.create({
-      data: { ...dto, companyId },
+      data: { ...resto, camposExtra: extra, companyId },
     });
     const advertenciaDrive = await this.asegurarCarpeta(entidad, companyId);
     const actual = await this.findOne(entidad.id, companyId);
@@ -71,7 +75,16 @@ export class CPEntidadesService {
     if (dto.nombre !== undefined) {
       await this.assertNombreLibre(dto.nombre, companyId, id);
     }
-    await this.prisma.cPEntidadPublica.update({ where: { id }, data: dto });
+    const { camposExtra, ...resto } = dto;
+    const data: Record<string, unknown> = { ...resto };
+    if (camposExtra !== undefined) {
+      data.camposExtra = await this.valoresDeCampos(
+        camposExtra,
+        companyId,
+        antes.camposExtra as Record<string, unknown> | null,
+      );
+    }
+    await this.prisma.cPEntidadPublica.update({ where: { id }, data });
 
     // Si cambió el nombre, la carpeta de Drive sigue a la entidad (misma
     // carpeta, otro nombre): nada de carpetas duplicadas ni huérfanas.
@@ -80,18 +93,45 @@ export class CPEntidadesService {
       dto.nombre !== undefined &&
       claveNombre(dto.nombre) !== claveNombre(antes.nombre);
     const actual = await this.findOne(id, companyId);
+    // Una entidad sin carpeta NO la recibe al editarla: la sincronización con
+    // Drive le ofrece "Crear carpeta" y la persona decide.
     if (nombreCambio && antes.driveFolderId) {
       advertenciaDrive = await this.renombrarCarpeta(actual, companyId);
-    } else if (!antes.driveFolderId) {
-      advertenciaDrive = await this.asegurarCarpeta(actual, companyId);
     }
     return { ...(await this.findOne(id, companyId)), advertenciaDrive };
   }
 
-  /** Solo borra el registro: la carpeta y sus archivos se quedan en Drive. */
-  async remove(id: number, companyId: number) {
+  /** Valida y deja listos los valores de los campos configurables. */
+  private async valoresDeCampos(
+    enviados: Record<string, unknown> | undefined,
+    companyId: number,
+    existentes: Record<string, unknown> | null,
+  ) {
+    const campos = await this.prisma.cPEntidadCampo.findMany({
+      where: { companyId },
+    });
+    return normalizarCamposExtra(enviados, campos, existentes, true);
+  }
+
+  // No existe "eliminar entidad" a propósito (decisión 2026-10-05): borrarla dejaba
+  // su carpeta en Drive, que la sincronización volvía a ofrecer como "carpeta sin
+  // entidad". Solo se archiva, y la entidad archivada conserva el ancla a su carpeta.
+
+  /** Oculta la entidad de la lista sin borrar nada (ni sus datos ni su carpeta). */
+  async archivar(id: number, companyId: number) {
     await this.findOne(id, companyId);
-    return this.prisma.cPEntidadPublica.delete({ where: { id } });
+    return this.prisma.cPEntidadPublica.update({
+      where: { id },
+      data: { archivada: true },
+    });
+  }
+
+  async reactivar(id: number, companyId: number) {
+    await this.findOne(id, companyId);
+    return this.prisma.cPEntidadPublica.update({
+      where: { id },
+      data: { archivada: false },
+    });
   }
 
   // -------------------------------------------------------------- Drive: ayudas
@@ -202,18 +242,20 @@ export class CPEntidadesService {
   // ------------------------------------------------------------- Drive: sync
 
   /**
-   * Pone la lista de entidades y las subcarpetas de la carpeta raíz de
-   * Contratación Pública de acuerdo. Solo escribe en la base de datos, salvo
-   * crear la carpeta de una entidad que no la tenía: NUNCA renombra ni borra
-   * nada en Drive por su cuenta (eso lo decide la persona en los avisos).
+   * Compara la lista de entidades con las subcarpetas de la carpeta raíz de
+   * Contratación Pública y devuelve las diferencias. NO crea ni borra nada,
+   * ni en la base ni en Drive: la persona decide en cada aviso (crear la
+   * entidad, crear la carpeta, renombrar...). Lo único que hace solo es
+   * enlazar una entidad sin carpeta con la carpeta que ya se llama igual,
+   * porque no crea nada nuevo. Las entidades archivadas no generan avisos.
    * Un fallo de Drive no lanza: se devuelve como `warning`.
    */
   async sincronizarConDrive(companyId: number): Promise<SyncEntidadesDriveResult> {
     const resultado: SyncEntidadesDriveResult = {
       configurada: false,
       sincronizadoAt: new Date().toISOString(),
-      entidadesCreadas: [],
-      carpetasCreadas: [],
+      carpetasSinEntidad: [],
+      entidadesSinCarpeta: [],
       renombradas: [],
       ausentes: [],
       avisos: [],
@@ -255,14 +297,14 @@ export class CPEntidadesService {
     const ancladas = new Map(
       entidades.filter((e) => e.driveFolderId).map((e) => [e.driveFolderId as string, e]),
     );
-    // Nombres ya ocupados (para no crear dos entidades con el mismo nombre).
+    // Nombres ya ocupados (para no proponer dos entidades con el mismo nombre).
     const clavesUsadas = new Set(entidades.map((e) => claveNombre(e.nombre)));
     const sinCarpeta = entidades.filter((e) => !e.driveFolderId);
 
     for (const carpeta of carpetas) {
       const duena = ancladas.get(carpeta.id);
       if (duena) {
-        if (claveNombre(duena.nombre) !== claveNombre(carpeta.name)) {
+        if (!duena.archivada && claveNombre(duena.nombre) !== claveNombre(carpeta.name)) {
           resultado.renombradas.push({
             entidadId: duena.id,
             nombreSistema: duena.nombre,
@@ -291,41 +333,93 @@ export class CPEntidadesService {
         continue;
       }
 
-      // Carpeta sin entidad: se crea la entidad.
+      // Carpeta sin entidad: se ofrece crearla (no se crea sola).
       if (clavesUsadas.has(clave)) {
         resultado.avisos.push(
           `La carpeta "${carpeta.name}" está repetida en Drive; solo se tomó en cuenta una.`,
         );
         continue;
       }
-      await this.prisma.cPEntidadPublica.create({
-        data: { nombre: carpeta.name.trim(), companyId, driveFolderId: carpeta.id },
-      });
       clavesUsadas.add(clave);
-      resultado.entidadesCreadas.push(carpeta.name.trim());
+      resultado.carpetasSinEntidad.push({
+        carpetaId: carpeta.id,
+        nombre: carpeta.name.trim(),
+      });
     }
 
     // Entidades con carpeta anclada que ya no está en la carpeta raíz.
     for (const e of entidades) {
-      if (e.driveFolderId && !idsEnDrive.has(e.driveFolderId)) {
+      if (!e.archivada && e.driveFolderId && !idsEnDrive.has(e.driveFolderId)) {
         resultado.ausentes.push({ entidadId: e.id, nombre: e.nombre });
       }
     }
 
-    // Entidades que siguen sin carpeta: se les crea en Drive.
+    // Entidades que siguen sin carpeta: se ofrece crearla (no se crea sola).
     for (const e of sinCarpeta) {
-      try {
-        await this.crearOEnlazarCarpeta(e, raizId);
-        resultado.carpetasCreadas.push(e.nombre);
-      } catch (err) {
-        this.logger.error(
-          `Sync CP: no se pudo crear la carpeta de la entidad ${e.id}: ${(err as Error).message}`,
-        );
-        resultado.avisos.push(`No se pudo crear la carpeta de "${e.nombre}" en Drive.`);
+      if (!e.archivada) {
+        resultado.entidadesSinCarpeta.push({ entidadId: e.id, nombre: e.nombre });
       }
     }
 
     return resultado;
+  }
+
+  /** Aviso "carpeta sin entidad" → "Crear entidad": la entidad toma el nombre de la carpeta y queda enlazada a ella. */
+  async crearEntidadDesdeCarpeta(folderId: string, companyId: number) {
+    const raiz = await this.driveService.getConfig(
+      companyId,
+      DRIVE_FOLDER_TYPE_ENTREGAS,
+    );
+    if (!raiz?.driveFolderId) {
+      throw new BadRequestException(
+        'Falta elegir la carpeta de Google Drive de Contratación Pública.',
+      );
+    }
+    let carpetas: { id: string; name: string }[];
+    try {
+      carpetas = await this.driveService.listSubFolders(raiz.driveFolderId);
+    } catch (err) {
+      this.logger.error(`No se pudo leer la carpeta de Drive: ${(err as Error).message}`);
+      throw new BadRequestException(
+        'No se pudo leer la carpeta de Google Drive. Intenta de nuevo.',
+      );
+    }
+    // El id lo manda el navegador: solo vale si de verdad es una subcarpeta de la raíz.
+    const carpeta = carpetas.find((c) => c.id === folderId);
+    if (!carpeta) {
+      throw new BadRequestException(
+        'Esa carpeta ya no está en Drive. Sincroniza de nuevo para ver el estado actual.',
+      );
+    }
+    const yaEnlazada = await this.prisma.cPEntidadPublica.findFirst({
+      where: { companyId, driveFolderId: folderId },
+    });
+    if (yaEnlazada) {
+      throw new BadRequestException('Esa carpeta ya pertenece a una entidad.');
+    }
+    const nombre = carpeta.name.trim();
+    await this.assertNombreLibre(nombre, companyId);
+    return this.prisma.cPEntidadPublica.create({
+      data: { nombre, companyId, driveFolderId: folderId },
+    });
+  }
+
+  /** Aviso "entidad sin carpeta" → "Crear carpeta". */
+  async crearCarpeta(id: number, companyId: number) {
+    const entidad = await this.findOne(id, companyId);
+    if (entidad.driveFolderId) return entidad;
+    try {
+      await this.carpetaDeEntidad(id, companyId);
+    } catch (err) {
+      if (err instanceof BadRequestException) throw err;
+      this.logger.error(
+        `No se pudo crear la carpeta de la entidad ${id}: ${(err as Error).message}`,
+      );
+      throw new BadRequestException(
+        'No se pudo crear la carpeta en Google Drive. Intenta de nuevo.',
+      );
+    }
+    return this.findOne(id, companyId);
   }
 
   /** "Actualizar nombre": la entidad toma el nombre que tiene su carpeta en Drive. */

@@ -15,6 +15,7 @@ import type { AdminUser, UserStats, AdminProjectStats, CompanyLocation } from '.
 import type { Project } from '../../types/project';
 import { getUser } from '../../services/auth.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import SoloAdminDialog from '../../components/common/SoloAdminDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import RowActionsMenu from '../../components/common/RowActionsMenu';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
@@ -84,9 +85,19 @@ export default function AdminDashboardPage() {
   const tablaRef = useResizableColumns('admin-users');
 
   const currentUser = getUser();
+  // El Gerente entra en SOLO LECTURA: ve la lista de usuarios y sus cifras, sin
+  // crear/editar/borrar (el backend lo impone igual con @Roles(ADMIN)) y sin el
+  // panel de proyectos, cuyos datos son solo de administradores.
+  const esAdmin = currentUser?.role === 'ADMIN';
+  const esGerente = currentUser?.role === 'MANAGER';
+  // Si el Gerente intenta cambiar algo, se le explica por qué no puede y a
+  // quién acudir (en vez de esconderle los botones).
+  const [avisoSoloAdmin, setAvisoSoloAdmin] = useState('');
+  const soloAdmin = (accion: string, fn: () => void) =>
+    esAdmin ? fn : () => setAvisoSoloAdmin(accion);
 
   useEffect(() => {
-    if (currentUser?.role !== 'ADMIN') {
+    if (!esAdmin && !esGerente) {
       navigate('/dashboard');
       return;
     }
@@ -99,14 +110,14 @@ export default function AdminDashboardPage() {
       const [usersData, statsData, projStats, projectsData, locationsData] = await Promise.all([
         getUsers(),
         getUserStats(),
-        getProjectStats(),
-        getProjects(),
+        esAdmin ? getProjectStats() : Promise.resolve(null),
+        esAdmin ? getProjects() : Promise.resolve(null),
         getCompanyLocations().catch(() => []),
       ]);
       setUsers(usersData);
       setUserStats(statsData);
-      setProjectStats(projStats);
-      setAllProjects(projectsData.data);
+      if (projStats) setProjectStats(projStats);
+      if (projectsData) setAllProjects(projectsData.data);
       setLocations(locationsData);
     } catch {
       // silent
@@ -274,7 +285,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  if (currentUser?.role !== 'ADMIN') return null;
+  if (!esAdmin && !esGerente) return null;
 
   return (
     <div className="page-container">
@@ -289,7 +300,14 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {userStats && projectStats && (
+      {esGerente && (
+        <div className="auth-info-banner" style={{ marginBottom: 16 }}>
+          Estás viendo esta pantalla en modo solo lectura. Para crear o cambiar usuarios, contacta
+          a un administrador de tu empresa.
+        </div>
+      )}
+
+      {userStats && (esGerente || projectStats) && (
         <div className="admin-stats-grid">
           <div className="admin-stat-card">
             <span className="admin-stat-number">{userStats.active}</span>
@@ -299,6 +317,7 @@ export default function AdminDashboardPage() {
             <span className="admin-stat-number">{userStats.inactive}</span>
             <span className="admin-stat-label">Usuarios inactivos</span>
           </div>
+          {projectStats && (<>
           <div className="admin-stat-card">
             <span className="admin-stat-number">{projectStats.totalProjects}</span>
             <span className="admin-stat-label">Proyectos totales</span>
@@ -307,6 +326,7 @@ export default function AdminDashboardPage() {
             <span className="admin-stat-number">{projectStats.tasks.completionRate}%</span>
             <span className="admin-stat-label">Tareas completadas</span>
           </div>
+          </>)}
         </div>
       )}
 
@@ -315,14 +335,16 @@ export default function AdminDashboardPage() {
           className={`admin-tab ${tab === 'users' ? 'active' : ''}`}
           onClick={() => setTab('users')}
         >
-          Gestionar usuarios
+          {esGerente ? 'Usuarios' : 'Gestionar usuarios'}
         </button>
-        <button
-          className={`admin-tab ${tab === 'projects' ? 'active' : ''}`}
-          onClick={() => setTab('projects')}
-        >
-          Panel de proyectos
-        </button>
+        {esAdmin && (
+          <button
+            className={`admin-tab ${tab === 'projects' ? 'active' : ''}`}
+            onClick={() => setTab('projects')}
+          >
+            Panel de proyectos
+          </button>
+        )}
       </div>
 
       {tab === 'users' && (
@@ -359,7 +381,10 @@ export default function AdminDashboardPage() {
             </div>
             <div className="filter-bar-actions">
               <ClearFiltersButton onClear={limpiarFiltrosUsuarios} disabled={!hayFiltrosUsuarios} />
-              <button className="auth-btn" onClick={openCreateForm}>
+              <button
+                className="auth-btn"
+                onClick={soloAdmin('cree el usuario nuevo', openCreateForm)}
+              >
                 + Nuevo usuario
               </button>
             </div>
@@ -412,13 +437,13 @@ export default function AdminDashboardPage() {
                       <td className="col-acciones">
                         <RowActionsMenu
                           actions={[
-                            { label: 'Editar', onClick: () => openEditForm(u) },
+                            { label: 'Editar', onClick: soloAdmin('edite este usuario', () => openEditForm(u)) },
                             {
                               label: u.isActive ? 'Desactivar' : 'Activar',
-                              onClick: () => handleToggleActive(u),
+                              onClick: soloAdmin(u.isActive ? 'desactive este usuario' : 'active este usuario', () => handleToggleActive(u)),
                             },
                             ...(u.role !== 'ADMIN'
-                              ? [{ label: 'Eliminar', danger: true, onClick: () => handleDelete(u.id, u.fullName) }]
+                              ? [{ label: 'Eliminar', danger: true, onClick: soloAdmin('elimine este usuario', () => handleDelete(u.id, u.fullName)) }]
                               : []),
                           ]}
                         />
@@ -435,7 +460,7 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {tab === 'projects' && projectStats && (
+      {esAdmin && tab === 'projects' && projectStats && (
         <div className="admin-section">
           <div className="admin-project-health">
             <h3>Salud global de proyectos</h3>
@@ -663,6 +688,10 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {avisoSoloAdmin && (
+        <SoloAdminDialog accion={avisoSoloAdmin} onClose={() => setAvisoSoloAdmin('')} />
       )}
 
       {confirmandoDesactivar && (

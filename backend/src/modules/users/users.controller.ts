@@ -43,9 +43,11 @@ export class UsersController {
     return this.usersService.findAll(req.user.companyId, query);
   }
 
+  // Lecturas de la pantalla Administración: el Gerente también las ve (solo
+  // lectura). Crear/editar/borrar siguen siendo solo ADMIN.
   @Get('stats')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   getStats(@Req() req: any) {
     return this.usersService.getStats(req.user.companyId);
   }
@@ -83,7 +85,7 @@ export class UsersController {
 
   @Get('locations')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   getLocations(@Req() req: any) {
     return this.usersService.getLocations(req.user.companyId);
   }

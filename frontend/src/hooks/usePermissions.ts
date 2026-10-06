@@ -14,6 +14,13 @@ import { getUser } from '../services/auth.service';
 // y allá dejan de coincidir, el menú mostraría cosas que la API rechaza.
 const SECCIONES_SIEMPRE_VISIBLES = ['DASHBOARD', 'PROJECTS'];
 
+// Pantallas administrativas que el Gerente (rol MANAGER) ve SIEMPRE, en solo
+// lectura, sin depender de lo marcado en Permisos usuarios (decisión
+// 2026-10-06: «quienes tienen este rol» las ven). La empresa sí tiene que tener
+// el módulo habilitado, igual que para el administrador. Escribir sigue siendo
+// solo ADMIN: el backend lo impone con @Roles(ADMIN) en cada endpoint de cambio.
+const SECCIONES_VISTA_GERENTE = ['ADMIN', 'COMPANY_SETTINGS'];
+
 const LANDING_ROUTES: { section: string; path: string }[] = [
   { section: 'DASHBOARD', path: '/dashboard' },
   { section: 'RRHH', path: '/rrhh' },
@@ -109,6 +116,7 @@ export function usePermissions() {
     // Módulo marcado como fijo por la empresa: lo ve todo el mundo, sin mirar
     // el permiso individual.
     if (state.fixedSections.includes(section)) return true;
+    if (SECCIONES_VISTA_GERENTE.includes(section) && getUser()?.role === 'MANAGER') return true;
     const perm = state.permissions[section];
     return perm ? perm.canView : true;
   }, [state]);

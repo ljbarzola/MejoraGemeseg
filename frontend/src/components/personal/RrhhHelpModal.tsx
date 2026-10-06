@@ -51,6 +51,7 @@ const FLUJO_PRINCIPAL: Submodulo[] = [
     ruta: '/rrhh/contracts',
     parrafos: [
       'Generador de contratos y otros documentos a partir de plantillas Word.',
+      'Al crear una plantilla nueva el documento Word (.docx) se puede traer de dos formas: pegando el enlace de Google Drive o subiendo el archivo desde tu computador (máximo 10 MB).',
       'Hay dos formas de generar: eligiendo un guardia registrado, y entonces sus datos (nombre, cédula, entidad, horario, salario) se rellenan solos; o "Llenar a mano", para un documento dirigido a alguien que no está en el listado de guardias. En ese segundo caso la cédula no es obligatoria: basta el nombre, y el PDF se guarda en la carpeta general de documentos.',
       'Si elegiste un guardia, al generar se pregunta si el PDF va a la carpeta general o a la carpeta de Drive de esa persona.',
     ],

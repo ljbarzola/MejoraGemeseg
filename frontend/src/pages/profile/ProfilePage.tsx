@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getMe } from '../../services/user.service';
 import type { ProfileData } from '../../services/user.service';
+import ChangePasswordModal from './ChangePasswordModal';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrador',
@@ -13,6 +14,7 @@ export default function ProfilePage() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   useEffect(() => {
     getMe()
@@ -124,7 +126,25 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
+
+        <div className="profile-password-section">
+          <h2 className="profile-tools-title">Seguridad</h2>
+          {profile.hasPassword ? (
+            <div>
+              <button className="btn-secondary" onClick={() => setShowPasswordModal(true)}>
+                Cambiar contraseña
+              </button>
+            </div>
+          ) : (
+            <div className="auth-info-banner">
+              Tu cuenta entra con Google y todavía no tiene contraseña. Si quieres crear una, usa
+              «¿Olvidaste tu contraseña?» en la pantalla de inicio de sesión.
+            </div>
+          )}
+        </div>
       </div>
+
+      {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
     </div>
   );
 }
