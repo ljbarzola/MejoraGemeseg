@@ -211,7 +211,15 @@ const diaEcuador = (d: Date) => new Date(d.getTime() - ECUADOR_OFFSET_MS).toISOS
 export function parseFechaIngreso(raw: string | undefined | null, ahora: Date = new Date()): Date | undefined {
   const dia = (raw || '').trim();
   if (!dia) return undefined;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dia) || Number.isNaN(Date.parse(`${dia}T12:00:00.000Z`))) {
+  const fecha = new Date(`${dia}T12:00:00.000Z`);
+  // Además de leerse, el día tiene que existir: según la versión de Node,
+  // "2026-02-31" se lee como una fecha válida y se corre a marzo en silencio.
+  // Si al volver a escribirla no da el mismo día, no es una fecha real.
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(dia) ||
+    Number.isNaN(fecha.getTime()) ||
+    fecha.toISOString().slice(0, 10) !== dia
+  ) {
     throw new BadRequestException('La fecha de ingreso no es válida.');
   }
   if (dia > diaEcuador(ahora)) {
