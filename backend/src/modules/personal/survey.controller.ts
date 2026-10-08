@@ -18,6 +18,7 @@ import {
   CreateSurveyDto,
   SetSurveyPublicLinkDto,
   SubmitSurveyResponseDto,
+  UpdateSurveyDto,
   UpdateSurveyRecipientsDto,
 } from './dto/survey.dto';
 
@@ -38,6 +39,17 @@ export class SurveyController {
   @Section('RRHH', 'write')
   create(@Body() body: CreateSurveyDto, @Req() req: any) {
     return this.surveyService.create(body, req.user.companyId, req.user.userId);
+  }
+
+  // Edita título, descripción y preguntas en cualquier estado (ver SurveyService.update).
+  @Patch(':id')
+  @Section('RRHH', 'write')
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateSurveyDto,
+    @Req() req: any,
+  ) {
+    return this.surveyService.update(id, body, req.user.companyId);
   }
 
   @Get(':id')
