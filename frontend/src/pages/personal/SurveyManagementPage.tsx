@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, BarChart3, Link2, LinkIcon, Copy, Lock, Unlock, Trash2, Send } from 'lucide-react';
+import { ArrowLeft, Plus, BarChart3, Link2, LinkIcon, Copy, Lock, Unlock, Trash2, Send, Pencil } from 'lucide-react';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
@@ -32,6 +32,7 @@ export default function SurveyManagementPage() {
   const [loading, setLoading] = useState(true);
   const [showBuilder, setShowBuilder] = useState(false);
   const [resultsId, setResultsId] = useState<number | null>(null);
+  const [editId, setEditId] = useState<number | null>(null);
 
   const [confirmandoCerrar, setConfirmandoCerrar] = useState<Survey | null>(null);
   const [confirmandoReabrir, setConfirmandoReabrir] = useState<Survey | null>(null);
@@ -324,6 +325,14 @@ export default function SurveyManagementPage() {
                         <RowActionsMenu
                           label={`Más acciones de "${s.title}"`}
                           actions={[
+                            {
+                              label: 'Editar encuesta',
+                              icon: <Pencil size={14} />,
+                              hint: s.status === 'DRAFT'
+                                ? 'Cambia preguntas, destinatarios o enlace'
+                                : 'Los cambios aplican a quien responda desde ahora',
+                              onClick: () => setEditId(s.id),
+                            },
                             ...(s.status === 'DRAFT'
                               ? [{
                                   label: 'Publicar encuesta',
@@ -387,6 +396,7 @@ export default function SurveyManagementPage() {
       </div>
 
       {showBuilder && <SurveyBuilderModal onClose={() => setShowBuilder(false)} onCreated={load} />}
+      {editId !== null && <SurveyBuilderModal surveyId={editId} onClose={() => setEditId(null)} onCreated={load} />}
       {resultsId !== null && <SurveyResultsModal surveyId={resultsId} onClose={() => setResultsId(null)} onChanged={load} />}
 
       {confirmandoCerrar && (

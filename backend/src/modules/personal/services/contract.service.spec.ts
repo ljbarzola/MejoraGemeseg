@@ -1,6 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ContractService } from './contract.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { DriveService } from './drive.service';
@@ -23,7 +27,11 @@ function makeTemplate(overrides: Partial<any> = {}) {
 
 describe('ContractService', () => {
   let service: ContractService;
-  let driveService: { uploadFile: jest.Mock; downloadFileBuffer: jest.Mock };
+  let driveService: {
+    uploadFile: jest.Mock;
+    downloadFileBuffer: jest.Mock;
+    deleteFileById: jest.Mock;
+  };
   let prisma: {
     contractTemplate: {
       findFirst: jest.Mock;
@@ -37,6 +45,7 @@ describe('ContractService', () => {
       findMany: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
+      delete: jest.Mock;
       count: jest.Mock;
     };
     guardiaFichaPersonal: { findUnique: jest.Mock };
@@ -76,6 +85,7 @@ describe('ContractService', () => {
         findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
         count: jest.fn(),
       },
       guardiaFichaPersonal: { findUnique: jest.fn() },
@@ -95,11 +105,74 @@ describe('ContractService', () => {
     driveService = {
       uploadFile: jest.fn().mockResolvedValue({ id: 'drive-1', url: 'https://drive.google.com/file/d/drive-1/view' }),
       downloadFileBuffer: jest.fn(),
+      deleteFileById: jest.fn().mockResolvedValue(undefined),
     };
     service = new ContractService(
       prisma as unknown as PrismaService,
       driveService as unknown as DriveService,
     );
+  });
+
+  describe('deleteContract', () => {
+    const contrato = {
+      id: 7,
+      companyId: 1,
+      generatedUrl: '/api/personal/contracts/file/0912345678_1700000000.pdf',
+      driveFileId: 'drive-1',
+    };
+
+    it('throws when the contract belongs to another company', async () => {
+      prisma.contract.findFirst.mockResolvedValue(null);
+
+      await expect(service.deleteContract(7, 2)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(prisma.contract.findFirst).toHaveBeenCalledWith({
+        where: { id: 7, companyId: 2 },
+      });
+      expect(prisma.contract.delete).not.toHaveBeenCalled();
+    });
+
+    it('deletes the Drive copy, the local PDF and the row', async () => {
+      prisma.contract.findFirst.mockResolvedValue(contrato);
+      prisma.contract.delete.mockResolvedValue(contrato);
+
+      await service.deleteContract(7, 1);
+
+      expect(driveService.deleteFileById).toHaveBeenCalledWith('drive-1');
+      expect((fs.rmSync as jest.Mock).mock.calls[0][0]).toContain(
+        '0912345678_1700000000.pdf',
+      );
+      expect(prisma.contract.delete).toHaveBeenCalledWith({ where: { id: 7 } });
+    });
+
+    it('still deletes the row when the Drive file no longer exists (404)', async () => {
+      prisma.contract.findFirst.mockResolvedValue(contrato);
+      driveService.deleteFileById.mockRejectedValue({ code: 404 });
+
+      await service.deleteContract(7, 1);
+
+      expect(prisma.contract.delete).toHaveBeenCalledWith({ where: { id: 7 } });
+    });
+
+    it('keeps the row when Drive fails for another reason', async () => {
+      prisma.contract.findFirst.mockResolvedValue(contrato);
+      driveService.deleteFileById.mockRejectedValue(new Error('boom'));
+
+      await expect(service.deleteContract(7, 1)).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
+      expect(prisma.contract.delete).not.toHaveBeenCalled();
+    });
+
+    it('skips Drive for documents that were never uploaded', async () => {
+      prisma.contract.findFirst.mockResolvedValue({ ...contrato, driveFileId: null });
+
+      await service.deleteContract(7, 1);
+
+      expect(driveService.deleteFileById).not.toHaveBeenCalled();
+      expect(prisma.contract.delete).toHaveBeenCalled();
+    });
   });
 
   describe('deleteTemplate', () => {

@@ -1,18 +1,24 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, FilePlus, FileText, FolderOpen } from 'lucide-react';
-import { getContracts, getContractTemplates, deleteContractTemplate, resolveContractFileUrl, getDriveConfig, type ContractTemplate } from '../../../services/personal.service';
+import { ArrowLeft, FilePlus, FileText, FolderOpen, Trash2 } from 'lucide-react';
+import { getContracts, getContractTemplates, deleteContractTemplate, deleteContract, resolveContractFileUrl, getDriveConfig, type ContractTemplate } from '../../../services/personal.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { cedulaVisible } from '../../../utils/postulacionValidacion';
+import { usePerm } from '../../../contexts/PermissionsContext';
 
 export default function ContractsList() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { canWrite } = usePerm();
+  const puedeEscribir = canWrite('RRHH');
   const [contracts, setContracts] = useState<any[]>([]);
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [confirmandoEliminarPlantilla, setConfirmandoEliminarPlantilla] = useState<number | null>(null);
+  const [confirmandoEliminarDocumento, setConfirmandoEliminarDocumento] = useState<{ id: number; nombre: string } | null>(null);
+  const [eliminandoDocumento, setEliminandoDocumento] = useState(false);
+  // Sirve para los errores de plantilla y de documento: ambos salen en el mismo banner.
   const [deleteTemplateError, setDeleteTemplateError] = useState('');
   // Carpeta de Drive donde quedan los documentos generados. Está fija en
   // código (RRHH_DOCUMENTOS), no se configura desde la app — pero sí se ofrece
@@ -55,6 +61,22 @@ export default function ContractsList() {
       load();
     } catch (err: any) {
       setDeleteTemplateError(err.response?.data?.message || 'No se pudo eliminar la plantilla.');
+    }
+  };
+
+  const confirmarEliminarDocumento = async () => {
+    const doc = confirmandoEliminarDocumento;
+    if (!doc) return;
+    setEliminandoDocumento(true);
+    try {
+      await deleteContract(doc.id);
+      setConfirmandoEliminarDocumento(null);
+      load();
+    } catch (err: any) {
+      setConfirmandoEliminarDocumento(null);
+      setDeleteTemplateError(err.response?.data?.message || 'No se pudo eliminar el documento. Inténtalo de nuevo.');
+    } finally {
+      setEliminandoDocumento(false);
     }
   };
 
@@ -163,9 +185,26 @@ export default function ContractsList() {
                     </td>
                     <td>{new Date(c.createdAt).toLocaleDateString('es-EC')}</td>
                     <td>
-                      {c.generatedUrl && (
-                        <a href={resolveContractFileUrl(c.generatedUrl)} target="_blank" rel="noopener noreferrer">Ver PDF</a>
-                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        {c.generatedUrl && (
+                          <a href={resolveContractFileUrl(c.generatedUrl)} target="_blank" rel="noopener noreferrer">Ver PDF</a>
+                        )}
+                        {puedeEscribir && (
+                          <button
+                            type="button"
+                            className="btn-secondary icon-btn"
+                            style={{ color: '#c53030' }}
+                            title="Eliminar documento"
+                            aria-label={`Eliminar documento de ${c.nombreGuardia}`}
+                            onClick={() => {
+                              setDeleteTemplateError('');
+                              setConfirmandoEliminarDocumento({ id: c.id, nombre: c.nombreGuardia });
+                            }}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -178,11 +217,22 @@ export default function ContractsList() {
       {confirmandoEliminarPlantilla !== null && (
         <ConfirmDialog
           title="Eliminar plantilla"
-          message="¿Eliminar esta plantilla? Solo se puede si no tiene contratos generados."
+          message="¿Eliminar esta plantilla? Solo se puede si no tiene documentos generados; si los tiene, elimínalos primero desde la tabla de Documentos Generados."
           confirmLabel="Sí, eliminar"
           danger
           onConfirm={confirmarEliminarPlantilla}
           onCancel={() => setConfirmandoEliminarPlantilla(null)}
+        />
+      )}
+
+      {confirmandoEliminarDocumento && (
+        <ConfirmDialog
+          title="Eliminar documento"
+          message={`¿Eliminar el documento de ${confirmandoEliminarDocumento.nombre}? Se borra de la lista y también el PDF guardado en Google Drive. No se puede deshacer.`}
+          confirmLabel={eliminandoDocumento ? 'Eliminando...' : 'Sí, eliminar'}
+          danger
+          onConfirm={confirmarEliminarDocumento}
+          onCancel={() => { if (!eliminandoDocumento) setConfirmandoEliminarDocumento(null); }}
         />
       )}
     </div>

@@ -61,6 +61,8 @@ export const generateContract = (data: {
   api.post('/personal/contracts/generate', data).then(r => r.data);
 export const getContracts = () => api.get('/personal/contracts').then(r => r.data);
 export const updateContract = (id: number, data: { status?: string; generatedUrl?: string }) => api.patch(`/personal/contracts/${id}`, data).then(r => r.data);
+// Borra el documento generado: la fila, el PDF del servidor y su copia en Drive.
+export const deleteContract = (id: number) => api.delete(`/personal/contracts/${id}`).then(r => r.data);
 
 // generatedUrl ya viene como "/api/personal/contracts/file/..." — el origen
 // se resuelve quitando el sufijo /api de VITE_API_URL, mismo patrón que
@@ -437,9 +439,13 @@ export interface SurveyQuestion {
   options: string[] | null;
   required: boolean;
   order: number;
+  // Solo al abrir una encuesta para editarla: cuántas respuestas tiene la pregunta.
+  _count?: { answers: number };
 }
 
 export interface SurveyQuestionInput {
+  // Con id es una pregunta que ya existía; sin id, una nueva (solo al editar).
+  id?: number;
   label: string;
   type: SurveyQuestionType;
   options?: string[];
@@ -501,6 +507,14 @@ export const createSurvey = (data: {
   publicEnabled?: boolean;
   guardarComoBorrador?: boolean;
 }): Promise<Survey> => api.post('/personal/surveys', data).then(r => r.data);
+
+// Edita título, descripción y preguntas en cualquier estado. Las preguntas que ya
+// existían y no se mandan se eliminan con sus respuestas.
+export const updateSurvey = (id: number, data: {
+  title: string;
+  description?: string;
+  questions: SurveyQuestionInput[];
+}): Promise<Survey> => api.patch(`/personal/surveys/${id}`, data).then(r => r.data);
 
 export const publishSurvey = (id: number): Promise<Survey> =>
   api.patch(`/personal/surveys/${id}/publish`).then(r => r.data);

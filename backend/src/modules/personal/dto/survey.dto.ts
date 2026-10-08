@@ -70,6 +70,32 @@ export class CreateSurveyDto {
   guardarComoBorrador?: boolean;
 }
 
+// Pregunta al editar una encuesta: con `id` es una pregunta que ya existía (se
+// actualiza); sin `id` es nueva. Las que existían y no llegan se eliminan.
+export class UpdateSurveyQuestionInput extends SurveyQuestionInput {
+  @IsOptional()
+  @IsInt()
+  id?: number;
+}
+
+// Edición de una encuesta en cualquier estado. Destinatarios y enlace público
+// se cambian por sus propios endpoints (updateRecipients / setPublicLink).
+export class UpdateSurveyDto {
+  @IsString()
+  @IsNotEmpty()
+  title: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsArray()
+  @ArrayNotEmpty()
+  @ValidateNested({ each: true })
+  @Type(() => UpdateSurveyQuestionInput)
+  questions: UpdateSurveyQuestionInput[];
+}
+
 export class SubmitSurveyAnswerDto {
   @IsInt()
   questionId: number;

@@ -5,6 +5,9 @@ import {
   IsNumber,
   IsDateString,
   IsArray,
+  IsInt,
+  Min,
+  Max,
 } from 'class-validator';
 
 export class CreateTaskDto {
@@ -39,4 +42,12 @@ export class CreateTaskDto {
   @IsOptional()
   @IsEnum(['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE', 'CANCELLED'])
   status?: string;
+
+  /** Días respecto a la fecha fin en que se avisa a los asignados (0 = el mismo día; positivo = antes; negativo = avisar una vez, esos días después, si sigue sin terminar). */
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(-365, { each: true })
+  @Max(365, { each: true })
+  reminderDays?: number[];
 }

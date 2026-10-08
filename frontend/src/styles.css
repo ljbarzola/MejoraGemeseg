@@ -1640,6 +1640,11 @@ a.enlace-tabla:hover {
   border-color: var(--azul-oscuro);
 }
 
+.assignee-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .assignee-chip-avatar {
   width: 22px;
   height: 22px;
@@ -1662,6 +1667,47 @@ a.enlace-tabla:hover {
   font-size: 0.82rem;
   color: #aaa;
   font-style: italic;
+}
+
+/* Recordatorios de tarea: fila "Otro: [n] [unidad] antes" y bloque de aviso de atraso */
+.reminder-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: var(--azul-oscuro);
+}
+
+.form-group .reminder-custom input[type='number'] {
+  width: 84px;
+  padding: 8px 12px;
+}
+
+.form-group .reminder-custom select {
+  padding: 8px 12px;
+}
+
+.reminder-custom .btn-secondary {
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  width: auto;
+}
+
+.reminder-late {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 14px;
+}
+
+.reminder-late-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  cursor: pointer;
 }
 
 .kanban-assignees {

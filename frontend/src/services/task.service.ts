@@ -35,6 +35,7 @@ export async function createTask(
     endDate?: string;
     estimatedHours?: number;
     assigneeIds?: number[];
+    reminderDays?: number[];
   },
 ): Promise<Task> {
   const res = await api.post(`/projects/${projectId}/tasks`, data);
@@ -53,6 +54,7 @@ export async function updateTask(
     endDate?: string;
     estimatedHours?: number;
     assigneeIds?: number[];
+    reminderDays?: number[];
   },
 ): Promise<Task> {
   const res = await api.patch(`/tasks/${id}`, data);

@@ -205,6 +205,7 @@ model Task {
   startDate      DateTime?
   project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignees      TaskAssignee[]
+  reminders      TaskReminder[]
 }
 
 model TaskAssignee {
@@ -215,6 +216,22 @@ model TaskAssignee {
   user   User @relation(fields: [userId], references: [id])
 
   @@unique([taskId, userId])
+}
+
+// Recordatorios de una tarea (2026-10-07): cuántos días antes de `endDate` se
+// avisa a los asignados. daysBefore 0 = el mismo día; negativo = aviso único
+// de atraso, -N días después de `endDate` si sigue sin terminar (-1 = al día
+// siguiente; 2026-10-08 se pueden elegir plazos libres). `sentAt` evita repetir el aviso; se vacía
+// cuando cambia la fecha fin. Tabla aparte a propósito: el despliegue no corre
+// migraciones, así que se crea sola al arrancar (task-reminder.schema.ts).
+model TaskReminder {
+  id         Int       @id @default(autoincrement())
+  taskId     Int
+  daysBefore Int
+  sentAt     DateTime?
+  task       Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, daysBefore])
 }
 
 model Agent {
