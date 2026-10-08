@@ -8,6 +8,7 @@ import { getProjects } from '../../services/project.service';
 import { STATUS_LABELS, STATUS_COLORS } from '../../types/task';
 import type { ProjectMember } from '../../types/task';
 import DateInput from '../common/DateInput';
+import ReminderPicker, { RECORDATORIOS_POR_DEFECTO } from './ReminderPicker';
 
 const taskSchema = z.object({
   title: z.string().min(1, 'El título es requerido'),
@@ -48,6 +49,7 @@ export default function CreateTaskModal({ projectId, onClose, onCreated }: Props
   const [loading, setLoading] = useState(false);
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [selectedAssignees, setSelectedAssignees] = useState<number[]>([]);
+  const [reminderDays, setReminderDays] = useState<number[]>(RECORDATORIOS_POR_DEFECTO);
   const [hoursFocused, setHoursFocused] = useState(false);
   const [projects, setProjects] = useState<{ id: number; name: string }[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projectId ? String(projectId) : '');
@@ -96,6 +98,7 @@ export default function CreateTaskModal({ projectId, onClose, onCreated }: Props
       const payload: any = { ...data, assigneeIds: selectedAssignees };
       if (!payload.startDate) delete payload.startDate;
       if (!payload.endDate) delete payload.endDate;
+      else payload.reminderDays = reminderDays;
       await createTask(Number(effectiveProjectId), payload);
       onCreated?.();
       onClose();
@@ -212,6 +215,8 @@ export default function CreateTaskModal({ projectId, onClose, onCreated }: Props
                 <DateInput id="endDate" value={watch('endDate') || ''} onChange={(v) => setValue('endDate', v)} />
               </div>
             </div>
+
+            <ReminderPicker value={reminderDays} onChange={setReminderDays} hasDate={!!watch('endDate')} />
 
             <div className="form-group">
               <label>Asignar a</label>

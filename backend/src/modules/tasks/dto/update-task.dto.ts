@@ -5,6 +5,9 @@ import {
   IsNumber,
   IsDateString,
   IsArray,
+  IsInt,
+  Min,
+  Max,
 } from 'class-validator';
 
 export class UpdateTaskDto {
@@ -40,4 +43,12 @@ export class UpdateTaskDto {
   @IsArray()
   @IsNumber({}, { each: true })
   assigneeIds?: number[];
+
+  /** Días respecto a la fecha fin en que se avisa a los asignados (0 = el mismo día; positivo = antes; negativo = avisar una vez, esos días después, si sigue sin terminar). */
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(-365, { each: true })
+  @Max(365, { each: true })
+  reminderDays?: number[];
 }
