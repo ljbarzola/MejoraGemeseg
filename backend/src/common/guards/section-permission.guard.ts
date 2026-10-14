@@ -8,6 +8,7 @@ import { Reflector } from '@nestjs/core';
 import {
   PermissionsService,
   esSeccionSiempreVisible,
+  permiteSinFila,
 } from '../../modules/permissions/permissions.service';
 import {
   SECTION_KEY,
@@ -22,7 +23,8 @@ import {
  *   1. Super admin (companyId null) → pasa siempre.
  *   2. Sección no habilitada para la empresa → 403.
  *   3. Existe fila UserPermission para la sección → manda su canView/canWrite.
- *   4. No existe fila → se permite (el default es permisivo).
+ *   4. No existe fila → se permite (el default es permisivo), salvo en las
+ *      secciones cerradas por defecto (SISTEMAS; ver permiteSinFila).
  *
  * El punto 4 es deliberado: invertirlo dejaría fuera a todos los usuarios que
  * hoy no tienen permisos explícitos cargados.
@@ -79,7 +81,10 @@ export class SectionPermissionGuard implements CanActivate {
 
     const perms = await this.permissionsService.getUserPermissions(user.userId);
     const perm = perms.find((p) => p.section === requirement.section);
-    if (!perm) return true;
+    if (!perm) {
+      if (permiteSinFila(requirement.section)) return true;
+      throw new ForbiddenException(`No tienes acceso a ${requirement.section}`);
+    }
 
     const allowed =
       requirement.access === 'write' ? perm.canWrite : perm.canView;

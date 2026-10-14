@@ -12,6 +12,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PREFERENCE_KEY_PATTERN } from './dto/set-preference.dto';
 import { USER_PREFERENCE_DDL } from './user-preference.schema';
+import { CLAVE_CAMBIO_CONTRASENA } from '../auth/password-rotation.service';
 import * as bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import {
@@ -112,11 +113,16 @@ export class UsersService implements OnModuleInit {
   async findAll(
     companyId?: number | null,
     query?: { role?: string; isActive?: string; search?: string },
+    viewerRole?: string,
   ) {
     const where: any = {};
 
     if (companyId) {
       where.companyId = companyId;
+    } else if (viewerRole !== 'ADMIN') {
+      // Sin empresa y sin ser super administrador (ADMIN sin empresa): antes
+      // no se filtraba nada y se devolvían los usuarios de TODAS las empresas.
+      return [];
     }
 
     if (query?.role) {
@@ -132,6 +138,25 @@ export class UsersService implements OnModuleInit {
         { fullName: { contains: query.search, mode: 'insensitive' } },
         { email: { contains: query.search, mode: 'insensitive' } },
       ];
+    }
+
+    // Un empleado solo necesita elegir personas (responsables, destinatarios,
+    // miembros): no ve cédula, rol del sistema, ubicación ni conteos de sus
+    // compañeros. Administrador y Gerente ven la ficha completa.
+    if (viewerRole === 'EMPLOYEE') {
+      return this.prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          role: true,
+          position: true,
+          isActive: true,
+          department: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
     }
 
     const users = await this.prisma.user.findMany({
@@ -284,7 +309,25 @@ export class UsersService implements OnModuleInit {
     // Las cuentas que entran solo con Google no tienen contraseña: el perfil
     // usa esto para no ofrecerles "Cambiar contraseña".
     const { password, ...resto } = user;
-    return { ...resto, hasPassword: !!password };
+    return {
+      ...resto,
+      hasPassword: !!password,
+      debeCambiarContrasena: !!password && (await this.cambioContrasenaPendiente(userId)),
+    };
+  }
+
+  // Bandera que pone PasswordRotationService al arrancar (ver ese archivo).
+  // Falla "cerrado": si no se puede leer, no se obliga a nadie.
+  private async cambioContrasenaPendiente(userId: number): Promise<boolean> {
+    try {
+      const fila = await this.prisma.userPreference.findUnique({
+        where: { userId_key: { userId, key: CLAVE_CAMBIO_CONTRASENA } },
+        select: { value: true },
+      });
+      return Array.isArray(fila?.value) && fila.value[0] === 'pendiente';
+    } catch {
+      return false;
+    }
   }
 
   async setActiveAgent(userId: number, agentId: number | null) {

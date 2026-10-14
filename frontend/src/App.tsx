@@ -1,7 +1,6 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/auth/LoginPage';
-import RegisterPage from './pages/auth/RegisterPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import ProjectsListPage from './pages/projects/ProjectsListPage';
 import CreateProjectPage from './pages/projects/CreateProjectPage';
@@ -14,6 +13,7 @@ import Sidebar from './components/layout/Sidebar';
 import ChatFloatingButton from './components/chat/ChatFloatingButton';
 import ChatDrawer from './components/chat/ChatDrawer';
 import ReportarProblemaButton from './components/common/ReportarProblemaButton';
+import CambioContrasenaObligatorio from './components/security/CambioContrasenaObligatorio';
 import NotificationsBell from './components/common/NotificationsBell';
 import { CompanyProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
@@ -115,6 +115,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
       </div>
       <div className="no-print"><ReportarProblemaButton /></div>
       <div className="no-print"><NotificationsBell /></div>
+      <CambioContrasenaObligatorio />
     </ProtectedRoute>
   );
 }
@@ -241,7 +242,9 @@ function AppInner() {
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        {/* El registro público se eliminó (2026-10-14): las cuentas las crea un
+            administrador. La ruta vieja lleva al login en vez de quedar en blanco. */}
+        <Route path="/register" element={<Navigate to="/login" replace />} />
         <Route path="/ventas/contratos/completar/:token" element={<CompletarContrato />} />
         {/* Encuesta por enlace público: la responde gente SIN cuenta (incluido
             desde el celular), por eso va fuera de ProtectedLayout y sin

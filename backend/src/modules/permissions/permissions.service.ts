@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 // `alwaysEnabled`  = la EMPRESA la tiene activa siempre (no hace falta que un
@@ -65,6 +69,23 @@ export function esSeccionSiempreVisible(section: string): boolean {
   return SECCIONES_SIEMPRE_VISIBLES.includes(section);
 }
 
+/**
+ * Secciones cerradas por defecto: una persona SIN fila de UserPermission no
+ * tiene acceso (en el resto, sin fila = permitido, para no dejar fuera a los
+ * usuarios antiguos que nunca tuvieron permisos cargados).
+ *
+ * Sistemas expone claves de licencia (Herramientas), agentes de IA, base de
+ * conocimiento y tickets de todas las empresas: no debe abrirse por omisión.
+ * Herramientas es una pantalla de Sistemas, no una sección aparte. Crear un
+ * ticket sigue abierto a cualquiera (ese endpoint no usa guard de sección).
+ */
+export const SECCIONES_CERRADAS_POR_DEFECTO: string[] = ['SISTEMAS'];
+
+/** ¿Qué pasa con una sección cuando la persona no tiene fila de permiso? */
+export function permiteSinFila(section: string): boolean {
+  return !SECCIONES_CERRADAS_POR_DEFECTO.includes(section);
+}
+
 @Injectable()
 export class PermissionsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -98,7 +119,7 @@ export class PermissionsService {
 
     const perms = await this.getUserPermissions(user.userId);
     const perm = perms.find((p) => p.section === section);
-    if (!perm) return true;
+    if (!perm) return permiteSinFila(section);
 
     return access === 'write' ? perm.canWrite : perm.canView;
   }
@@ -172,7 +193,7 @@ export class PermissionsService {
         if (esSeccionSiempreVisible(section) || fijas.get(companyId)?.has(section)) return true;
         const perm = u.permissions.find((p) => p.section === section);
         if (perm && !perm.canView) negada = true;
-        return perm ? perm.canView : true;
+        return perm ? perm.canView : permiteSinFila(section);
       });
       if (tieneAcceso) {
         destinatarios.push({ ...base, companyId });
@@ -391,6 +412,27 @@ export class PermissionsService {
     return users;
   }
 
+  /**
+   * Quien edita los permisos de una persona debe ser de su misma empresa (el
+   * super administrador, de cualquiera). Antes solo se verificaba el rol: un
+   * ADMIN de la empresa A que conociera el id de un usuario de la B le
+   * cambiaba los permisos.
+   */
+  async assertPuedeGestionarUsuario(
+    userId: number,
+    actor: { role: string; companyId: number | null },
+  ): Promise<void> {
+    const objetivo = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { companyId: true },
+    });
+    if (!objetivo) throw new NotFoundException('Usuario no encontrado');
+    if (this.isSuperAdmin(actor)) return;
+    if (!actor.companyId || objetivo.companyId !== actor.companyId) {
+      throw new ForbiddenException('No tienes acceso a este usuario');
+    }
+  }
+
   async setUserPermissions(
     userId: number,
     permissions: { section: string; canView: boolean; canWrite: boolean }[],
@@ -423,6 +465,14 @@ export class PermissionsService {
       .filter((s) => s.enabled)
       .map((s) => s.key);
     const userPerms = await this.getUserPermissions(userId);
+    // En las secciones cerradas por defecto, "sin fila" significa SIN acceso.
+    // El frontend ya trata una fila como la palabra final, así que se la damos
+    // explícita en vez de enseñarle esta regla a `usePermissions`.
+    for (const section of SECCIONES_CERRADAS_POR_DEFECTO) {
+      if (!userPerms.some((p) => p.section === section)) {
+        userPerms.push({ section, canView: false, canWrite: false });
+      }
+    }
     return {
       isSuperAdmin: false,
       sections: enabledSections,

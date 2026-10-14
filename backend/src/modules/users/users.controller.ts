@@ -40,7 +40,7 @@ export class UsersController {
     @Req() req: any,
     @Query() query: { role?: string; isActive?: string; search?: string },
   ) {
-    return this.usersService.findAll(req.user.companyId, query);
+    return this.usersService.findAll(req.user.companyId, query, req.user.role);
   }
 
   // Lecturas de la pantalla Administración: el Gerente también las ve (solo
