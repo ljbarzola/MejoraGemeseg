@@ -1,4 +1,9 @@
-import { normalizarRecordatorios, tocaEnviar } from './task-reminders.util';
+import {
+  normalizarRecordatorios,
+  quiereCorreo,
+  SOLO_NOTIFICACIONES,
+  tocaEnviar,
+} from './task-reminders.util';
 
 // La fecha fin se guarda a mediodía UTC; "hoy" es medianoche UTC (hoyEcuador()).
 const fin = new Date('2026-10-20T12:00:00.000Z');
@@ -49,5 +54,23 @@ describe('tocaEnviar', () => {
     expect(tocaEnviar({ daysBefore: -3, sentAt: new Date() }, abierta, hoy)).toBe(false);
     expect(tocaEnviar({ daysBefore: -3, sentAt: null }, { ...abierta, status: 'DONE' }, hoy)).toBe(false);
     expect(tocaEnviar({ daysBefore: -3, sentAt: null }, { ...abierta, status: 'CANCELLED' }, hoy)).toBe(false);
+  });
+});
+
+describe('quiereCorreo', () => {
+  it('sin preferencia guardada sigue enviando correo (como antes de la opción)', () => {
+    expect(quiereCorreo(null)).toBe(true);
+    expect(quiereCorreo(undefined)).toBe(true);
+  });
+
+  it('solo un «solo notificaciones en la app» explícito apaga el correo', () => {
+    expect(quiereCorreo([SOLO_NOTIFICACIONES])).toBe(false);
+    expect(quiereCorreo(['correo'])).toBe(true);
+  });
+
+  it('un valor que no se entiende no deja a nadie sin aviso', () => {
+    expect(quiereCorreo('solo-notificaciones')).toBe(true);
+    expect(quiereCorreo({})).toBe(true);
+    expect(quiereCorreo([])).toBe(true);
   });
 });

@@ -258,6 +258,16 @@ describe('UsersService — preferencias personales', () => {
     );
     expect(prisma.userPreference.upsert).not.toHaveBeenCalled();
   });
+
+  it('acepta las claves de avisos (notificaciones:) pero no otros prefijos', async () => {
+    prisma.userPreference.upsert.mockResolvedValue({ value: ['solo-notificaciones'] });
+    await expect(
+      service.setPreference(7, 'notificaciones:recordatorios-tareas', ['solo-notificaciones']),
+    ).resolves.toEqual({ value: ['solo-notificaciones'] });
+    await expect(service.setPreference(7, 'permisos:admin', ['x'])).rejects.toThrow(
+      'Preferencia no válida',
+    );
+  });
 });
 
 describe('UsersService.onModuleInit — tabla UserPreference', () => {

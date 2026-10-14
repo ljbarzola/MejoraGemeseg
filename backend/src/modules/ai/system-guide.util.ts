@@ -39,7 +39,8 @@ const GENERAL = `# Uso general del sistema (lo que ve todo usuario)
 - Burbuja 💬 ("Abrir agente"): abre este chat con Agente Gemeseg. "+ Nueva" inicia otra conversación; el 🗑️ la elimina. Arriba (▼) se puede cambiar a otro agente si hay agentes personalizados.
 
 ## Mi perfil
-- Es solo de consulta: nombre, rol (Administrador, Gerente o Empleado), correo corporativo, documento de identidad, cargo, departamento, fecha de ingreso, contadores de proyectos y tareas, y "Herramientas asignadas".
+- Los datos que muestra son solo de consulta: nombre, rol (Administrador, Gerente o Empleado), correo corporativo, documento de identidad, cargo, departamento, fecha de ingreso, contadores de proyectos y tareas, y "Herramientas asignadas".
+- En "Recordatorios de tareas" eliges cómo te avisamos antes de que venza una tarea: "Notificaciones en la app y correo" (por defecto) o "Solo notificaciones en la app" (sin correo); se guarda al elegir. Las notificaciones en la app son las del ícono de campana, arriba a la derecha, y siempre funcionan aunque pidas no recibir correo. Si varias tareas coinciden el mismo día, el correo las reúne todas y nunca llega más de uno al día; el asunto empieza con "[Tareas GEMESEG]" por si quieres crear un filtro en tu correo.
 - Desde el perfil no se editan los datos personales (para cambiarlos se le pide al administrador), pero sí se cambia la contraseña: al final de la tarjeta, en "Seguridad", el botón "Cambiar contraseña" abre un cuadro con Contraseña actual, Contraseña nueva (mínimo 8 caracteres) y repetirla; cada campo tiene un ojito para ver lo escrito. Al guardar se cierra la sesión en todos los demás dispositivos; en el que se está usando sigue abierta. Las cuentas que entran solo con Google no tienen contraseña: ahí el perfil indica usar "¿Olvidaste tu contraseña?" para crear una.
 
 ## Inicio
@@ -86,7 +87,7 @@ En este orden:
   - Miembro: puede editar el proyecto y crear/editar tareas.
   - Observador: solo mira; no puede crear ni modificar tareas.
   Se quita un miembro con la ✕. No se puede quitar al último Propietario. Cambiar el rol de alguien ya agregado lo puede hacer solo un Administrador.
-- "Tareas (N)": tabla con #, Título, Estado, Prioridad, Asignado y fechas. Botones "Ver tablero Kanban" y "+ Nueva tarea".
+- "Tareas (N)": tabla con #, Título, Estado, Prioridad, Asignado, Fecha inicio y Fecha fin. Botones "Columnas" (elige qué columnas ver), "Ver tablero Kanban" y "+ Nueva tarea". Un clic en el encabezado de una columna ordena la tabla (la flechita ⇅ indica que se puede; otro clic invierte el orden) y arrastrando el borde entre dos encabezados se cambia el ancho.
 
 ### Crear una tarea
 - Desde "Inicio" ("+ Nueva tarea") o desde el proyecto ("+ Nueva tarea").
@@ -100,9 +101,10 @@ En este orden:
 - Las tareas no tienen comentarios; para dejar notas se usa la Descripción. La fecha que se muestra como vencimiento es la "Fecha fin".
 
 ### "Mis tareas" en Inicio
-- Botones de estado: Todos, Por hacer, En progreso (filtro por defecto), En revisión, Completado. Casilla "Asignadas a mí" y selector "Todos los proyectos". El sistema recuerda tus filtros.
-- Sin "Asignadas a mí" se listan las tareas de todos los proyectos donde eres miembro. Se ordena con clic en los encabezados. Clic en la fila abre la tarea; clic en el proyecto abre el proyecto.
-- Si "no ves tus tareas": revisa que el filtro de estado no esté en "En progreso" (es el que viene por defecto) y que seas miembro del proyecto.
+- Botones de estado: Todos, Por hacer, En progreso (filtro por defecto), En revisión, Completado. Casilla "Asignadas a mí" y selector "Todos los proyectos" (lista todos tus proyectos). El sistema recuerda tus filtros; si el proyecto que tenías elegido ya no está en tu lista, ese filtro se quita solo.
+- "Asignadas a mí" es un botón que se enciende y se apaga. Junto a los filtros está el botón "Columnas" (elige qué columnas ver: Estado, Prioridad, Proyecto, Asignados, Inicio, Fin, Horas est.; por defecto salen Estado, Prioridad, Proyecto, Asignados y Fin). La fecha de la columna "Fin" se pone roja con "Vencida" si ya pasó y naranja con "Vence hoy" o "Vence mañana" en las tareas abiertas.
+- Sin "Asignadas a mí" se listan las tareas de todos los proyectos donde eres miembro. Se ordena con clic en los encabezados y se cambia el ancho arrastrando el borde de una columna. Clic en la fila abre la tarea; clic en el proyecto abre el proyecto.
+- Si "no ves tus tareas": pasa a "Todos" (el estado que viene por defecto es "En progreso", que oculta las de "Por hacer"), apaga "Asignadas a mí", deja "Todos los proyectos" y comprueba que seas miembro del proyecto.
 
 ### Quién puede qué en Proyectos
 - Administrador: todo en todos los proyectos de la empresa.
@@ -418,8 +420,8 @@ const ADMIN = `# Administración — guía
 const SISTEMAS = `# Sistemas — guía
 
 - Dashboard: tickets Abiertos, En revisión, Resueltos y Este mes; una dona "Tickets por tipo" (Errores, Mejoras, Permisos y Otros, con cantidad y porcentaje; al pasar el cursor por un tipo el centro muestra su cantidad); "Tiempo promedio de resolución" general (promedio de lo que tardan en quedar Resueltos los tickets; muestra "—" si aún no hay ninguno resuelto); y "Últimos tickets". Accesos a Soporte Técnico, "Publicar novedad de la app", Herramientas, Agentes y "Base de conocimiento de Agente Gemeseg".
-- Novedades: menú Sistemas → Novedades. "Nueva novedad": se escribe Título y "Qué cambió", se marcan los módulos afectados y la pantalla muestra a cuántas personas llegará y la lista de quiénes son (nombre, correo y empresa), más "No la recibirán" con el motivo de cada persona que queda fuera (cuenta inactiva, módulo negado, etc.); "Publicar" pide confirmar. El aviso le sale en la campanita (nunca por correo) solo a quienes tienen acceso a alguno de esos módulos, sin contar a quien publica. No se puede deshacer; la tabla guarda el historial.
-- Soporte Técnico: los reportes que llegan por la llave inglesa; se cambian de estado (Abierto, En revisión, Resuelto). Cuando alguien reporta algo, la campanita avisa ("Nuevo reporte para Sistemas") solo a quienes tienen Sistemas con "Escribir" marcado en Permisos Usuarios; nunca por correo. Ahí también se configura la carpeta de Drive para capturas ("Probar conexión").
+- Novedades: menú Sistemas → Novedades. "Nueva novedad": se escribe Título y "Qué cambió", se marcan los módulos afectados y la pantalla muestra a cuántas personas llegará y la lista de quiénes son (nombre, correo y empresa), más "No la recibirán" con el motivo de cada persona que queda fuera (cuenta inactiva, módulo negado, etc.); "Publicar" pide confirmar. El aviso le sale en las notificaciones (ícono de campana, nunca por correo) solo a quienes tienen acceso a alguno de esos módulos, sin contar a quien publica. No se puede deshacer; la tabla guarda el historial.
+- Soporte Técnico: los reportes que llegan por la llave inglesa, en una tabla (Título, Tipo, Estado, Descripción, Reportado por, Empresa, Fecha, Adjuntos; el botón "Columnas" elige cuáles ver y un clic en el encabezado ordena). Arriba hay una búsqueda (título, descripción, quién reportó o empresa), filtros de Estado, Tipo y Empresa, y la escoba para limpiarlos. El estado se cambia directamente en la columna Estado (Abierto, En revisión, Resuelto); un clic en la fila abre el detalle con la descripción completa y los adjuntos. Cuando alguien reporta algo, las notificaciones (ícono de campana) avisan ("Nuevo reporte para Sistemas") solo a quienes tienen Sistemas con "Escribir" marcado en Permisos Usuarios; nunca por correo. Ahí también se configura la carpeta de Drive para capturas ("Probar conexión").
 - Herramientas: catálogo (Nombre, Categoría, Versión, Licencia) y asignación a usuarios con auditoría; lo asignado aparece en "Mi perfil". Es parte de Sistemas (no es un módulo aparte en Permisos Usuarios): la ve quien tiene Sistemas.
 - Agentes: crear agentes de IA con nombre, instrucciones y alcance, y asignarlos a usuarios.
 - Base de conocimiento (menú Sistemas → "Base de Conocimiento"): texto en Markdown que Agente Gemeseg usa además de este manual, para lo propio de la empresa (políticas, contactos, procesos internos). Se divide con encabezados "## CLAVE" exactos en mayúsculas (## GENERAL, ## RRHH, ## VENTAS, ## CACAO, ## CUSTODIAS, ## CONTRATACION_PUBLICA, ## SISTEMAS…). Lo de ## GENERAL o antes del primer encabezado lo recibe cualquier usuario; cada otra sección solo quien tiene acceso a ella. Un encabezado mal escrito no abre sección nueva (se pega a la anterior) y la pantalla avisa al guardar.`;

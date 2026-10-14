@@ -1,5 +1,5 @@
 // Recordatorios de una tarea: en qué días respecto a la fecha fin se avisa por
-// correo y campanita a los asignados. Se usa en crear (página y modal) y en el
+// correo y notificación a los asignados. Se usa en crear (página y modal) y en el
 // detalle de la tarea.
 //
 // El valor es una lista de días respecto a la fecha fin: 0 = el mismo día,
@@ -266,7 +266,7 @@ export default function ReminderPicker({ value, onChange, hasDate, disabled }: P
         {hasDate
           ? value.length === 0
             ? 'Sin recordatorios: no se avisará a los asignados.'
-            : 'Se avisa por correo y campanita a las personas asignadas, a las 9:00 a. m.'
+            : 'Se avisa por correo y en las notificaciones de la app a las personas asignadas, a las 9:00 a. m.'
           : 'Pon una fecha fin para poder elegir recordatorios.'}
       </small>
     </div>

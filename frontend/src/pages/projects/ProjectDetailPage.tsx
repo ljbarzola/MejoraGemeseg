@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, type ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getProject, addMember, removeMember, updateMemberRole, updateProject, deleteProject } from '../../services/project.service';
 import { getTasksByProject } from '../../services/task.service';
@@ -6,9 +6,24 @@ import { getUsers } from '../../services/user.service';
 import { getUser } from '../../services/auth.service';
 import type { Task } from '../../types/task';
 import type { AdminUser } from '../../services/user.service';
-import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_COLORS, STATUS_COLORS } from '../../types/task';
+import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_COLORS, STATUS_COLORS, STATUS_ORDER, PRIORITY_ORDER } from '../../types/task';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import DateInput from '../../components/common/DateInput';
+import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
+import { useResizableColumns } from '../../hooks/useResizableColumns';
+import { useColumnPreferences } from '../../hooks/useColumnPreferences';
+import { useSortableTable } from '../../hooks/useSortableTable';
+import { useToast } from '../../contexts/ToastContext';
+
+// Columnas elegibles de la tabla de tareas (además de «#» y «Título», que van siempre).
+const COLUMNAS_TAREAS = [
+  { key: 'status', label: 'Estado' },
+  { key: 'priority', label: 'Prioridad' },
+  { key: 'assignee', label: 'Asignado' },
+  { key: 'startDate', label: 'Fecha inicio' },
+  { key: 'endDate', label: 'Fecha fin' },
+];
+const COLUMNAS_TAREAS_POR_DEFECTO = ['status', 'priority', 'assignee', 'startDate', 'endDate'];
 
 const PROJECT_STATUS_COLORS: Record<string, string> = {
   ACTIVE: '#22c55e',
@@ -71,6 +86,28 @@ export default function ProjectDetailPage() {
   const isViewer = userMembership?.role === 'VIEWER';
   const isOwner = userMembership?.role === 'OWNER' || currentUser?.role === 'ADMIN';
   const canEditStatus = isOwner || userMembership?.role === 'MEMBER';
+
+  // Tabla de tareas: orden por columna, ancho ajustable y columnas elegibles.
+  // Van aquí arriba porque los hooks no pueden quedar detrás de los `return`
+  // tempranos de más abajo.
+  const { showToast } = useToast();
+  const columnPrefs = useColumnPreferences('proyecto-tareas', COLUMNAS_TAREAS_POR_DEFECTO);
+  const columnasVisibles = columnPrefs.visible.filter((k) => COLUMNAS_TAREAS.some((c) => c.key === k));
+  const tablaRef = useResizableColumns('proyecto-tareas', ['id', 'title', ...columnasVisibles]);
+  const { filas: tareasOrdenadas, thProps, SortIcon } = useSortableTable(
+    tasks,
+    {
+      id: (t) => t.id,
+      title: (t) => t.title,
+      status: (t) => STATUS_ORDER[t.status] ?? 99,
+      priority: (t) => PRIORITY_ORDER[t.priority] ?? 99,
+      assignee: (t) => t.assignees.map((a) => a.user.fullName).sort((a, b) => a.localeCompare(b, 'es'))[0],
+      startDate: (t) => (t.startDate ? new Date(t.startDate).getTime() : null),
+      endDate: (t) => (t.endDate ? new Date(t.endDate).getTime() : null),
+    },
+    'id',
+    'desc',
+  );
 
   const loadData = () => {
     if (!id) return;
@@ -211,6 +248,51 @@ export default function ProjectDetailPage() {
       setActionError(err.response?.data?.message || 'Error al eliminar proyecto');
     }
   }
+
+  const celdaTarea = (key: string, task: Task): ReactNode => {
+    switch (key) {
+      case 'status':
+        return (
+          <span
+            className="status-badge"
+            style={{
+              backgroundColor: STATUS_COLORS[task.status] + '20',
+              color: STATUS_COLORS[task.status],
+            }}
+          >
+            {STATUS_LABELS[task.status]}
+          </span>
+        );
+      case 'priority':
+        return (
+          <span
+            className="kanban-priority"
+            style={{ backgroundColor: PRIORITY_COLORS[task.priority] }}
+          >
+            {PRIORITY_LABELS[task.priority]}
+          </span>
+        );
+      case 'assignee':
+        return task.assignees.length > 0 ? (
+          <div className="tasks-table-assignees">
+            {task.assignees.map((a) => (
+              <span key={a.user.id} className="tasks-table-assignee-item">
+                <span className="kanban-avatar">{a.user.fullName.charAt(0)}</span>
+                {a.user.fullName}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span className="kanban-unassigned">Sin asignar</span>
+        );
+      case 'startDate':
+        return task.startDate ? new Date(task.startDate).toLocaleDateString('es-EC') : '—';
+      case 'endDate':
+        return task.endDate ? new Date(task.endDate).toLocaleDateString('es-EC') : '—';
+      default:
+        return null;
+    }
+  };
 
   if (loading) return <div className="loading-state">Cargando proyecto...</div>;
   if (!project) return null;
@@ -363,6 +445,15 @@ export default function ProjectDetailPage() {
           <div className="tasks-section-header">
             <h2>Tareas ({tasks.length})</h2>
             <div className="tasks-section-actions">
+              <ColumnPickerMenu
+                columns={COLUMNAS_TAREAS}
+                visible={columnPrefs.visible}
+                fixedLabel="Título"
+                onApply={async (keys) => {
+                  const guardado = await columnPrefs.set(keys);
+                  if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
+                }}
+              />
               <button
                 className="btn-secondary"
                 onClick={() => navigate(`/projects/${project.id}/tasks`)}
@@ -388,20 +479,27 @@ export default function ProjectDetailPage() {
             </div>
           ) : (
             <div className="tasks-table-wrapper">
-              <table className="tasks-table">
+              <table className="tasks-table resizable-table" ref={tablaRef}>
                 <thead>
                   <tr>
-                    <th>#</th>
-                    <th>Título</th>
-                    <th>Estado</th>
-                    <th>Prioridad</th>
-                    <th>Asignado</th>
-                    <th>Fecha inicio</th>
-                    <th>Fecha fin</th>
+                    <th {...thProps('id')} className="sortable-th tasks-table-id">
+                      # <SortIcon campo="id" />
+                    </th>
+                    <th {...thProps('title')}>
+                      Título <SortIcon campo="title" />
+                    </th>
+                    {columnasVisibles.map((k) => {
+                      const col = COLUMNAS_TAREAS.find((c) => c.key === k)!;
+                      return (
+                        <th key={k} {...thProps(k)}>
+                          {col.label} <SortIcon campo={k} />
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody>
-                  {tasks.map((task) => (
+                  {tareasOrdenadas.map((task) => (
                     <tr
                       key={task.id}
                       className="tasks-table-row"
@@ -409,51 +507,20 @@ export default function ProjectDetailPage() {
                     >
                       <td className="tasks-table-id">{task.id}</td>
                       <td className="tasks-table-title">{task.title}</td>
-                      <td>
-                        <span
-                          className="status-badge"
-                          style={{
-                            backgroundColor: STATUS_COLORS[task.status] + '20',
-                            color: STATUS_COLORS[task.status],
-                          }}
+                      {columnasVisibles.map((k) => (
+                        <td
+                          key={k}
+                          className={
+                            k === 'assignee'
+                              ? 'tasks-table-assignee'
+                              : k === 'startDate' || k === 'endDate'
+                                ? 'tasks-table-date'
+                                : undefined
+                          }
                         >
-                          {STATUS_LABELS[task.status]}
-                        </span>
-                      </td>
-                      <td>
-                        <span
-                          className="kanban-priority"
-                          style={{ backgroundColor: PRIORITY_COLORS[task.priority] }}
-                        >
-                          {PRIORITY_LABELS[task.priority]}
-                        </span>
-                      </td>
-                      <td className="tasks-table-assignee">
-                        {task.assignees.length > 0 ? (
-                          <div className="tasks-table-assignees">
-                            {task.assignees.map((a) => (
-                              <span key={a.user.id} className="tasks-table-assignee-item">
-                                <span className="kanban-avatar">
-                                  {a.user.fullName.charAt(0)}
-                                </span>
-                                {a.user.fullName}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="kanban-unassigned">Sin asignar</span>
-                        )}
-                      </td>
-                      <td className="tasks-table-date">
-                        {task.startDate
-                          ? new Date(task.startDate).toLocaleDateString('es-EC')
-                          : '—'}
-                      </td>
-                      <td className="tasks-table-date">
-                        {task.endDate
-                          ? new Date(task.endDate).toLocaleDateString('es-EC')
-                          : '—'}
-                      </td>
+                          {celdaTarea(k, task)}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>

@@ -63,3 +63,20 @@ export const STATUS_COLORS: Record<string, string> = {
   DONE: '#22c55e',
   CANCELLED: '#ef4444',
 };
+
+/** Orden lógico para ordenar tablas por Estado (no alfabético). */
+export const STATUS_ORDER: Record<string, number> = {
+  TODO: 0,
+  IN_PROGRESS: 1,
+  IN_REVIEW: 2,
+  DONE: 3,
+  CANCELLED: 4,
+};
+
+/** Orden lógico para ordenar tablas por Prioridad: la más urgente primero. */
+export const PRIORITY_ORDER: Record<string, number> = {
+  URGENT: 0,
+  HIGH: 1,
+  MEDIUM: 2,
+  LOW: 3,
+};

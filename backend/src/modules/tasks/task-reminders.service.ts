@@ -7,10 +7,22 @@ import {
   formatoFecha,
   hoyEcuador,
 } from '../contratacion-publica/entregas/entregas.util';
-import { cuandoVence, diaDeVencimiento, tocaEnviar } from './task-reminders.util';
+import {
+  cuandoVence,
+  diaDeVencimiento,
+  PREFERENCIA_RECORDATORIOS_TAREAS,
+  quiereCorreo,
+  tocaEnviar,
+} from './task-reminders.util';
 
 const CORREO_REMITENTE_TAREAS = 'sistemas@gemeseg.com';
 const NOMBRE_REMITENTE_TAREAS = 'Tareas GEMESEG';
+/**
+ * Prefijo fijo del asunto: permite que cada persona cree en su Gmail un filtro
+ * («asunto: [Tareas GEMESEG]» → etiqueta y sin pasar por la bandeja de entrada).
+ * No cambiarlo sin avisar: rompería esos filtros.
+ */
+const PREFIJO_ASUNTO_TAREAS = '[Tareas GEMESEG]';
 
 export interface AvisoTarea {
   taskId: number;
@@ -23,7 +35,7 @@ export interface ResultadoRecordatoriosTareas {
   recordatorios: number;
   personas: number;
   /** Solo con dryRun: a quién se avisaría y de qué (no se envía nada). */
-  destinatarios?: { email: string; tareas: AvisoTarea[] }[];
+  destinatarios?: { email: string; correo: boolean; tareas: AvisoTarea[] }[];
 }
 
 /**
@@ -120,23 +132,32 @@ export class TaskRemindersService {
       }
     }
 
+    // Quien eligió «solo notificaciones en la app» en su Perfil no recibe correo.
+    const sinCorreo = await this.personasSinCorreo([...porPersona.keys()]);
+
     if (opciones.dryRun) {
       return {
         recordatorios: tocan.length,
         personas: porPersona.size,
-        destinatarios: [...porPersona.values()].map((p) => ({
+        destinatarios: [...porPersona.entries()].map(([userId, p]) => ({
           email: p.usuario.email,
+          correo: !sinCorreo.has(userId),
           tareas: [...p.tareas.values()],
         })),
       };
     }
 
-    // Un recordatorio se da por enviado si le llegó (correo o campanita) a al
+    // Un recordatorio se da por enviado si le llegó (correo o notificación) a al
     // menos un asignado; si no le llegó a nadie, se reintenta en la próxima corrida.
     const entregados = new Set<number>();
     for (const [userId, p] of porPersona) {
       const tareas = [...p.tareas.values()];
-      const llego = await this.avisar(userId, p.usuario, tareas);
+      const llego = await this.avisar(
+        userId,
+        p.usuario,
+        tareas,
+        !sinCorreo.has(userId),
+      );
       if (llego) p.reminderIds.forEach((id) => entregados.add(id));
     }
 
@@ -152,11 +173,41 @@ export class TaskRemindersService {
     return { recordatorios: entregados.size, personas: porPersona.size };
   }
 
-  /** Campanita + correo para una persona. Devuelve true si llegó por algún canal. */
+  /**
+   * Personas, de entre `userIds`, que pidieron los recordatorios solo en la
+   * notificaciones (sin correo). Si la consulta falla se asume que todas quieren correo: es peor
+   * quedarse sin avisar que mandar un correo de más.
+   */
+  private async personasSinCorreo(userIds: number[]): Promise<Set<number>> {
+    try {
+      const filas = await this.prisma.userPreference.findMany({
+        where: {
+          key: PREFERENCIA_RECORDATORIOS_TAREAS,
+          userId: { in: userIds },
+        },
+        select: { userId: true, value: true },
+      });
+      return new Set(
+        filas.filter((f) => !quiereCorreo(f.value)).map((f) => f.userId),
+      );
+    } catch (err) {
+      this.logger.warn(
+        `No se pudieron leer las preferencias de aviso: ${(err as Error).message}`,
+      );
+      return new Set();
+    }
+  }
+
+  /**
+   * Notificación (y correo, si la persona no pidió lo contrario) para una persona.
+   * Devuelve true si el aviso quedó resuelto: llegó por algún canal, o la
+   * persona eligió no recibirlo por el único canal que tenía.
+   */
   private async avisar(
     userId: number,
     usuario: { email: string; fullName: string; companyId: number | null },
     tareas: AvisoTarea[],
+    porCorreo: boolean,
   ): Promise<boolean> {
     const lineas = tareas.map(
       (t) => `• "${t.titulo}" — ${t.proyecto}: ${t.texto}`,
@@ -171,7 +222,7 @@ export class TaskRemindersService {
     const link = unica ? `/tasks/${tareas[0].taskId}` : '/';
     let llego = false;
 
-    // Sin empresa (super administrador) no hay campanita: solo correo.
+    // Sin empresa (super administrador) no hay notificación en la plataforma: solo correo.
     if (usuario.companyId != null) {
       try {
         await this.notifications.create({
@@ -189,14 +240,21 @@ export class TaskRemindersService {
       }
     }
 
+    // Sin notificación posible (super administrador) y sin correo por decisión de
+    // la persona, no hay nada que enviar: se da por resuelto para no reintentar
+    // todos los días.
+    if (!porCorreo) return usuario.companyId == null ? true : llego;
+
     try {
       const base = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
       await this.mail.sendMail({
         to: usuario.email,
-        subject: `${titulo} — GEMESEG`,
+        subject: `${PREFIJO_ASUNTO_TAREAS} ${titulo}`,
         bodyText: `Hola ${usuario.fullName},\n\n${
-          unica ? mensaje : `Tienes ${tareas.length} tareas con recordatorio:\n\n${lineas.join('\n')}`
-        }\n\nPuedes verlo aquí: ${base}${link}\n\nEste es un aviso automático del sistema de Gemeseg.`,
+          unica
+            ? mensaje
+            : `Tienes ${tareas.length} tareas con recordatorio:\n\n${lineas.join('\n')}`
+        }\n\nPuedes verlo aquí: ${base}${link}\n\nEste es un aviso automático del sistema de Gemeseg. Si prefieres recibir estos recordatorios solo en las notificaciones de la app (sin correo), cámbialo en tu Perfil: ${base}/profile`,
         from: CORREO_REMITENTE_TAREAS,
         fromName: NOMBRE_REMITENTE_TAREAS,
       });
