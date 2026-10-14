@@ -83,6 +83,7 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
   `git config user.name "Leidy Barzola" && git config user.email "sistemas@gemeseg.com"`
 - **El repositorio de GitHub es PUBLICO** (`ljbarzola/MejoraGemeseg`). Nunca subir claves, `.env`, archivos de service account ni datos reales de personas o clientes, y revisar la visibilidad antes de subir una rama con trabajo que no deba verse.
 - **Higiene de ramas (2026-10-14):** una rama ya fusionada se borra despues del merge (se conservan las 5 remotas mas recientes). No dejar trabajo en `git stash` a largo plazo: el 2026-10-05 un dia entero de cambios quedo olvidado en un stash. Las ramas viejas sin fusionar se archivan como etiqueta `archive/<nombre>` antes de borrarlas.
+- **Limpieza despues de probar (2026-10-14):** las carpetas de trabajo extra (`git worktree`), las bases de datos de prueba (copias como `gemeseg_unificada`), los scripts y capturas temporales se **borran al terminar la prueba**. Solo se conservan los importantes o los de una funcion que **todavia tenga problemas** (y se anota cual y por que). **Cuidado en Windows:** una carpeta de trabajo puede tener `node_modules` como enlace (junction) hacia el proyecto principal; antes de borrarla quitar ese enlace con `rmdir` (no con borrado recursivo) y comprobar que las dependencias reales siguen completas.
 - **No agregar trailers de atribucion de IA** (`Co-Authored-By: Claude...`, `Generated with...`) en mensajes de commit ni en descripciones de PR.
 
 ### Proceso de entrega (siempre, al terminar un bloque de trabajo)
