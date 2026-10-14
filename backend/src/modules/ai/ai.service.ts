@@ -234,7 +234,7 @@ export class AiService implements OnModuleInit {
         role: 'assistant',
         content: reply,
         tokensUsed,
-        model: configured ? this.vertexModelForLog() : 'mock',
+        model: configured ? this.vertexModelForLog(agente.perfil) : 'mock',
         sections,
       },
     });
@@ -252,8 +252,13 @@ export class AiService implements OnModuleInit {
     };
   }
 
-  private vertexModelForLog(): string {
-    return process.env.GOOGLE_VERTEX_CHAT_MODEL || 'gemini-2.5-flash';
+  // El Agente de Ventas usa el modelo 'fuerte' y el resto 'ligero'.
+  private nivelDePerfil(perfil?: string | null): 'fuerte' | 'ligero' {
+    return perfil === 'VENTAS' ? 'fuerte' : 'ligero';
+  }
+
+  private vertexModelForLog(perfil?: string | null): string {
+    return this.vertexChat.modeloPara(this.nivelDePerfil(perfil));
   }
 
   /**
@@ -385,7 +390,9 @@ export class AiService implements OnModuleInit {
       systemPrompt,
       chatHistory,
       `[Contexto: ${context}] ${message}`,
-      esVentas ? { maxOutputTokens: 4096 } : undefined,
+      esVentas
+        ? { maxOutputTokens: 4096, nivel: 'fuerte' }
+        : { nivel: 'ligero' },
     );
 
     const intentMatch = result.reply.match(
@@ -450,7 +457,9 @@ export class AiService implements OnModuleInit {
             'Responde de forma clara y breve, en español, basándote en los datos proporcionados. Si los datos traen una lista, menciona TODOS sus elementos (no resumas ni omitas ninguno) y respeta cualquier aviso que incluyan.',
         [],
         `Datos del sistema:\n${dataResult}\n\nPregunta original: ${message}`,
-        esVentas ? { maxOutputTokens: 4096 } : undefined,
+        esVentas
+          ? { maxOutputTokens: 4096, nivel: 'fuerte' }
+          : { nivel: 'ligero' },
       );
       let reply = finalResult.reply || dataResult;
       let extra: Record<string, unknown> = {};
@@ -724,7 +733,7 @@ export class AiService implements OnModuleInit {
         userId,
         action,
         model: this.vertexChat.estaConfigurado()
-          ? this.vertexModelForLog()
+          ? this.vertexModelForLog(metadata?.perfil as string | undefined)
           : 'mock',
         tokensUsed,
         success,

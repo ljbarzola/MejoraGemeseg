@@ -1,5 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GoogleAuthService } from '../../common/services/google-auth.service';
+import {
+  modeloVertex,
+  NivelModelo,
+  vertexLocation,
+  vertexUrl,
+} from '../../common/utils/vertex-endpoint.util';
 
 export interface ChatTurn {
   role: 'user' | 'assistant';
@@ -11,11 +17,9 @@ export interface ChatTurn {
 // (reclutamiento-ia.service.ts), así que el chat se mueve al mismo proveedor
 // en vez de mantener dos integraciones de IA distintas.
 //
-// GOOGLE_VERTEX_CHAT_MODEL es una variable propia, separada de
-// GOOGLE_VERTEX_MODEL (que usa RRHH para revisar documentos escaneados) —
-// son tareas muy distintas (conversación de texto vs. clasificación de
-// imágenes) con necesidades de modelo/tuning independientes; acoplarlas
-// significaría que ajustar una rompe silenciosamente la otra.
+// El modelo sale de dos niveles (ver common/utils/vertex-endpoint.util.ts):
+// el Agente de Ventas pide 'fuerte' y el Agente Gemeseg 'ligero'. Si el nivel
+// no está configurado cae a GOOGLE_VERTEX_CHAT_MODEL, la variable de antes.
 @Injectable()
 export class VertexChatClient {
   private readonly logger = new Logger(VertexChatClient.name);
@@ -27,25 +31,30 @@ export class VertexChatClient {
   }
 
   private get location(): string {
-    return process.env.GOOGLE_VERTEX_LOCATION || 'us-central1';
-  }
-
-  private get model(): string {
-    return process.env.GOOGLE_VERTEX_CHAT_MODEL || 'gemini-2.5-flash';
+    return vertexLocation();
   }
 
   estaConfigurado(): boolean {
     return !!this.project;
   }
 
+  // Modelo que atiende un nivel; lo usa también el registro de uso (AiLog).
+  modeloPara(nivel: NivelModelo): string {
+    return modeloVertex(nivel, 'chat');
+  }
+
   async sendChat(
     systemPrompt: string,
     history: ChatTurn[],
     newMessage: string,
-    opciones?: { maxOutputTokens?: number },
+    opciones?: { maxOutputTokens?: number; nivel?: NivelModelo },
   ): Promise<{ reply: string; tokensUsed: number }> {
     const token = await this.googleAuth.getAccessToken();
-    const url = `https://${this.location}-aiplatform.googleapis.com/v1/projects/${this.project}/locations/${this.location}/publishers/google/models/${this.model}:generateContent`;
+    const url = vertexUrl(
+      this.project,
+      this.location,
+      this.modeloPara(opciones?.nivel ?? 'ligero'),
+    );
 
     const contents = [
       ...history.map((turn) => ({

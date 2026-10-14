@@ -116,7 +116,7 @@ export class VentasLeadsService {
         createdBy: input.createdBy ?? null,
       },
     });
-    // Aviso en la campanita; un fallo acá nunca debe perder el lead ya guardado.
+    // Aviso en las notificaciones; un fallo acá nunca debe perder el lead ya guardado.
     await this.avisarLeadNuevo(lead);
     return { lead, nuevo: true };
   }

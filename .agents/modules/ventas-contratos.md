@@ -257,7 +257,7 @@ De las tres opciones que se habían planteado en su momento — (a) capturar pos
 - Se crea **"Contratos"** como pantalla nueva y lo que existía pasa a **"Documentación"** (descartado: solo renombrar, y dejar "Contratos" mejorado sin separar).
 - **Servicios: catálogo editable por empresa** + varios por contrato (descartado: los 3 fijos de hoy y texto libre). El campo del cliente `servicio_requerido` **se queda** como "servicio de interés inicial" del prospecto; no se toca.
 - **Datos viejos:** vincular por coincidencia y dejar el resto en una lista "Sin cliente asignado" para revisar a mano (descartado: crear clientes automáticos, no tocar nada).
-- **Alcance de la primera entrega:** cliente + servicios + **vigencia y renovación**. **No hay alertas de vencimiento** (ni correo ni campanita): se calcula el estado y se muestra; avisar por correo se valida aparte porque envía correos.
+- **Alcance de la primera entrega:** cliente + servicios + **vigencia y renovación**. **No hay alertas de vencimiento** (ni correo ni notificaciones en la app): se calcula el estado y se muestra; avisar por correo se valida aparte porque envía correos.
 
 **Modelo (nombres a propósito distintos de `SalesContract`, que es el documento):**
 - `SalesAgreement` = el contrato comercial: `salesClientId` (obligatorio, `onDelete: Cascade`), `title?`, `startDate`, `endDate?` (columnas `DATE`; sin fin = indefinido), `status` guardado (`ACTIVO`/`RENOVADO`/`CANCELADO`), `renewedFromId?` (autorreferencia: la cadena de renovaciones), `notes?`, `createdBy`.
@@ -284,7 +284,7 @@ De las tres opciones que se habían planteado en su momento — (a) capturar pos
 - La ficha del cliente (`ClienteFichaPanel`) muestra sus contratos, con "Nuevo contrato".
 
 **Pendiente / fuera de esta entrega:**
-- Alertas de vencimiento (correo o campanita): no hechas.
+- Alertas de vencimiento (correo o notificaciones en la app): no hechas.
 - ~~Agente Gemeseg llama «contratos» a los documentos~~: resuelto en la sección 13 (`ventas_contratos` ahora lee los contratos comerciales y `ventas_documentos` los documentos; los datos en vivo de Ventas pasaron al Agente de Ventas).
 - ~~El monto del contrato no se guarda~~: resuelto en la sección 13 (`monthlyValue`).
 
@@ -302,7 +302,7 @@ De las tres opciones que se habían planteado en su momento — (a) capturar pos
 - **Dinero:** `monthlyValue` en el contrato y `quotedAmount` en la oportunidad. Lo ve todo el que tenga VENTAS (ver). «Mis referidos» y las notificaciones al referidor **nunca** muestran montos (verificado por API).
 - **Motivos obligatorios** al descartar un lead, rechazar una oportunidad, cancelar un contrato, renovar con menos servicios **o con menor valor mensual** (en seguridad lo común es bajar guardias u horas sin quitar el servicio) o dejar vencer sin renovar. Lista editable por empresa con «Sin información» (no obliga a inventar), «Otro» (exige comentario) y «quién lo dijo» (CLIENTE / VENDEDOR = suposición).
 - **Referidos de empleados** siguen entrando directo como cliente + oportunidad; el ingreso manual de un cliente se conserva.
-- **Aviso de lead nuevo:** campanita a todos los de Ventas con «Escribir» marcado explícitamente. No hay reparto automático (el round-robin del módulo viejo iba a todos los usuarios de la empresa y no se reutiliza).
+- **Aviso de lead nuevo:** notificación en la app a todos los de Ventas con «Escribir» marcado explícitamente. No hay reparto automático (el round-robin del módulo viejo iba a todos los usuarios de la empresa y no se reutiliza).
 - **Agente de Ventas aparte** (ver `agents-ai.md` punto 3); **Agente Gemeseg** vuelve a lo base: cómo usar la plataforma y preguntas de la empresa.
 
 **Modelo** (tablas nuevas creadas al arrancar por `VentasSchemaService`, bajo un candado de Postgres y en una sola transacción; SQL en `prisma/migrations/20261007_sales_pipeline/`). Ninguna columna nueva en tablas que producción ya tenía; solo `SalesAgreement` (aún no estaba en producción) ganó `monthlyValue`, `graceDays`, `cancelledAt` y `opportunityId`:
@@ -329,8 +329,8 @@ De las tres opciones que se habían planteado en su momento — (a) capturar pos
 3. **Meta Ads (Facebook e Instagram).** Conexión directa (app de Meta, revisión de permisos `leads_retrieval` / `pages_manage_metadata` / `pages_show_list` / `pages_read_engagement` / `ads_management`, token de Página en Secret Manager, firma `X-Hub-Signature-256`) o el atajo con Make/Zapier hacia `POST /ventas/webhook/entrante`. Conviene iniciar ya la verificación del negocio en Meta, que no depende del código. Mientras tanto, «Nuevo lead» con canal Meta Ads.
 4. **Texto de los agentes compartido entre empresas.** `Agent` no tiene `companyId`: un admin de Sistemas de otra empresa podría editar por error el texto base del Agente de Ventas. Aceptado; los datos siguen aislados por `companyId` del token.
 5. **El motivo del vendedor no es confiable** (los estudios de win/loss muestran que casi nunca coincide con el real): solución parcial con «quién lo dijo», «Sin información», el agente lo trata como hipótesis y el dashboard muestra el % de cada origen. Falta de proceso: la conversación de salida (tipo de actividad «Conversación de salida») hecha por alguien que no sea el vendedor.
-6. Fases posteriores: preguntas de cartera encadenadas y alertas del agente (solo campanita; correos solo con autorización), y registrar los **cambios de responsable** (hoy el expediente dice «no consta»).
-7. Alcance del correo: ningún flujo nuevo envía correos (los avisos son solo campanita; el aviso al referidor sigue como estaba).
+6. Fases posteriores: preguntas de cartera encadenadas y alertas del agente (solo notificaciones en la app; correos solo con autorización), y registrar los **cambios de responsable** (hoy el expediente dice «no consta»).
+7. Alcance del correo: ningún flujo nuevo envía correos (los avisos son solo notificaciones en la app; el aviso al referidor sigue como estaba).
 
 **Verificación hecha en local** (scripts de API contra la base local y navegador con Playwright; los specs nuevos están escritos pero **no se han corrido**): arranque desde cero y repetido, relleno de oportunidades (9 clientes → 9 oportunidades, 10 cambios de etapa copiados), 23+28+27+23+34 comprobaciones de API (contratos, oportunidades, dinero y motivos, analítica, leads y webhooks), y una conversación real con el Agente de Ventas contra Vertex.
 

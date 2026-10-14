@@ -1548,7 +1548,7 @@ model SalesClientStage {
 
 // Historial append-only de cambios de etapa de un SalesClient — mismo patrón
 // que ComplaintStageChange. Aquí se dispara la notificación al referidor
-// (correo + campanita), pero SOLO si el cliente tiene `referredByUserId` —
+// (correo + notificación en la app), pero SOLO si el cliente tiene `referredByUserId` —
 // un cliente que no vino de un referido no tiene a quién notificar. Ningún
 // texto de notificación menciona comisión ni porcentaje.
 model SalesClientStageChange {

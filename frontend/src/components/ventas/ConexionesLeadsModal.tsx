@@ -133,7 +133,7 @@ export default function ConexionesLeadsModal({ onClose }: { onClose: () => void 
         </div>
         <div className="modal-body">
           <p style={{ fontSize: 13, color: '#666', marginTop: 0 }}>
-            Los contactos que llegan por estas conexiones aparecen solos en la bandeja de Leads, sin asignar a nadie, y se avisa en la campanita a quienes pueden escribir en Ventas.
+            Los contactos que llegan por estas conexiones aparecen solos en la bandeja de Leads, sin asignar a nadie, y se avisa en las notificaciones (el ícono de campana) a quienes pueden escribir en Ventas.
           </p>
           <ErrorBanner mensaje={error} />
 
