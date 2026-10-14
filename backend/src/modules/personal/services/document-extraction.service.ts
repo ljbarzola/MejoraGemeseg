@@ -2,18 +2,21 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { DriveService } from './drive.service';
 import { GoogleAuthService } from '../../../common/services/google-auth.service';
+import {
+  modeloVertex,
+  vertexLocation,
+  vertexUrl,
+} from '../../../common/utils/vertex-endpoint.util';
 import pdfParse from 'pdf-parse';
 
 // GitHub Models (gpt-4o-mini) se eliminó de todo el backend (2026-09-29) — este
 // servicio ahora usa Google Vertex AI, mismo proveedor/credenciales que
 // reclutamiento-ia.service.ts (que ya hace exactamente este tipo de llamada:
-// una sola pasada, salida JSON estructurada). Comparte GOOGLE_VERTEX_MODEL con
-// ese servicio a propósito — es la misma categoría de tarea (RRHH, análisis
-// de documentos de un solo disparo), a diferencia del chat de Agente Gemeseg
-// (ai/vertex-chat.client.ts), que es conversacional y tiene su propia
-// variable GOOGLE_VERTEX_CHAT_MODEL para no acoplar ajustes de una tarea con
-// la otra.
-const MODEL = process.env.GOOGLE_VERTEX_MODEL || 'gemini-2.5-flash';
+// una sola pasada, salida JSON estructurada). A diferencia de ese servicio, aquí
+// NO se manda el PDF sino su texto ya extraído (pdf-parse; los escaneos sin
+// texto se descartan antes de llamar), así que alcanza el nivel 'ligero' (ver
+// common/utils/vertex-endpoint.util.ts). Se lee en cada llamada.
+const modelo = () => modeloVertex('ligero');
 
 // Un documento con menos de este número de caracteres de texto "real" (sin
 // contar espacios) casi seguro es un PDF escaneado/foto sin capa de texto —
@@ -72,7 +75,7 @@ export class DocumentExtractionService {
   }
 
   private get location(): string {
-    return process.env.GOOGLE_VERTEX_LOCATION || 'us-central1';
+    return vertexLocation();
   }
 
   async extractExpiry(
@@ -193,7 +196,7 @@ ${text}
 
     try {
       const token = await this.googleAuth.getAccessToken();
-      const url = `https://${this.location}-aiplatform.googleapis.com/v1/projects/${this.project}/locations/${this.location}/publishers/google/models/${MODEL}:generateContent`;
+      const url = vertexUrl(this.project, this.location, modelo());
 
       const response = await fetch(url, {
         method: 'POST',

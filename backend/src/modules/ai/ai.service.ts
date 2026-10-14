@@ -133,7 +133,7 @@ export class AiService {
   }
 
   private vertexModelForLog(): string {
-    return process.env.GOOGLE_VERTEX_CHAT_MODEL || 'gemini-2.5-flash';
+    return this.vertexChat.modeloPara('ligero');
   }
 
   /**

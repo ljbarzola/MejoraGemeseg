@@ -15,6 +15,7 @@ import { getAvailableAgents, setActiveAgent } from '../../services/agent.service
 import type { Agent } from '../../types/agent';
 import ConfirmDialog from '../common/ConfirmDialog';
 import ChatMarkdown from './ChatMarkdown';
+import ChatEsperando from './ChatEsperando';
 
 interface ChatDrawerProps {
   isOpen: boolean;
@@ -300,11 +301,7 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
               <div className="chat-msg chat-msg-assistant">
                 <div className="chat-msg-avatar">{getAgentEmoji(currentAgent)}</div>
                 <div className="chat-msg-bubble">
-                  <div className="chat-typing">
-                    <span className="chat-typing-dot" />
-                    <span className="chat-typing-dot" />
-                    <span className="chat-typing-dot" />
-                  </div>
+                  <ChatEsperando />
                 </div>
               </div>
             )}

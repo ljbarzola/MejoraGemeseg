@@ -93,7 +93,11 @@ describe('AiService.callVertexChat — la consulta nunca se ejecuta si el intent
     getFixedSections: jest.Mock;
     getUserPermissions: jest.Mock;
   };
-  let prisma: { agent: { findUnique: jest.Mock }; companyKnowledgeBase: { findUnique: jest.Mock } };
+  let prisma: {
+    agent: { findUnique: jest.Mock };
+    companyKnowledgeBase: { findUnique: jest.Mock };
+    userAgent: { count: jest.Mock };
+  };
 
   beforeEach(() => {
     processor = { executeQuery: jest.fn().mockResolvedValue('datos reales') };
@@ -106,6 +110,7 @@ describe('AiService.callVertexChat — la consulta nunca se ejecuta si el intent
     prisma = {
       agent: { findUnique: jest.fn().mockResolvedValue({ instructions: 'system', isActive: true }) },
       companyKnowledgeBase: { findUnique: jest.fn().mockResolvedValue(null) },
+      userAgent: { count: jest.fn().mockResolvedValue(0) },
     };
 
     service = new AiService(
@@ -171,6 +176,22 @@ describe('AiService.callVertexChat — la consulta nunca se ejecuta si el intent
 
     expect(permissions.getCompanySections).not.toHaveBeenCalled();
     expect(processor.executeQuery).toHaveBeenCalled();
+  });
+
+  describe('modelo del Agente Gemeseg', () => {
+    it('usa el nivel ligero (el de por defecto) en la pregunta y en la redacción con datos', async () => {
+      vertexChat.sendChat
+        .mockResolvedValueOnce({ reply: '[INTENCION: rrhh_resumen_personal]', tokensUsed: 1 })
+        .mockResolvedValueOnce({ reply: 'ok', tokensUsed: 1 });
+
+      await (service as any).callVertexChat('hola', 'dashboard', [], 1, 1, null, undefined);
+
+      expect(vertexChat.sendChat.mock.calls.length).toBeGreaterThan(0);
+      for (const llamada of vertexChat.sendChat.mock.calls) {
+        // Sin opciones = nivel ligero; nunca debe pedir el fuerte.
+        expect(llamada[3]?.nivel ?? 'ligero').toBe('ligero');
+      }
+    });
   });
 });
 
