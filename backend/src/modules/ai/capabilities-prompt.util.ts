@@ -31,22 +31,11 @@ export interface CapabilityModule {
   ayuda?: string;
 }
 
-// Ventas: qué consulta usar según la pregunta. Los parámetros van entre
-// paréntesis como clave:valor separados por coma (el modelo los escribe y
-// AiService los lee con un split por "," y ":", así que los valores no pueden
-// llevar comas ni dos puntos). Ver ai-ventas.queries.ts.
-const VENTAS_AYUDA = [
-  'Elige UNA intención por respuesta. Si lleva parámetros, van entre paréntesis como clave:valor separados por coma, por ejemplo [INTENCION: ventas_cliente(nombre:Hotel Sol)].',
-  '- ventas_resumen: panorama general (clientes por etapa, seguimientos tuyos y de la empresa, estancados, sin responsable, aceptación y contratos). Úsala para "¿cómo van las ventas?" o "dame un resumen".',
-  '- ventas_clientes_hoy: a qué clientes debe dar seguimiento HOY quien pregunta (vencidos, de hoy y sin fecha). Úsala para "¿a quién tengo que llamar hoy?" o "¿qué tengo pendiente?".',
-  '- ventas_cliente(nombre:X): ficha de UN cliente (datos, etapa, responsable, siguiente paso, historial reciente). X es parte del nombre o el RUC.',
-  '- ventas_clientes_lista(etapa:X, responsable:X, seguimiento:X): lista de clientes; los tres parámetros son opcionales y combinables. etapa = nombre de la etapa; responsable = yo, sin, o parte del nombre de una persona; seguimiento = vencido, hoy o sin.',
-  '- ventas_estancados: clientes con muchos días en la misma etapa.',
-  '- ventas_por_responsable: cuántos clientes activos, atrasados y aceptados tiene cada responsable.',
-  '- ventas_periodo(rango:X): clientes nuevos y referidos de un periodo; rango = semana, mes, mes_pasado o 90 (por defecto, mes).',
-  '- ventas_contratos(estado:X): contratos de Ventas; estado = borrador, firma o firmados (opcional).',
-  'El sistema no registra montos de venta de los clientes: si piden dinero, dilo con honestidad. Si la pregunta no encaja en ninguna, responde con el manual o di que no tienes ese dato.',
-].join('\n');
+// Ventas: desde 2026-10-07 los datos en vivo y la investigación de clientes los
+// hace el Agente de Ventas (agente aparte, se asigna en Sistemas → Agentes; sus
+// consultas y reglas están en ventas-agent-prompt.util.ts). Agente Gemeseg se
+// queda en explicar cómo se usa la plataforma y en lo base de la empresa, así
+// que el módulo VENTAS queda aquí SIN intenciones.
 
 const PROYECTOS_TAREAS: CapabilityModule = {
   section: null,
@@ -67,22 +56,24 @@ export const CAPABILITY_MODULES: CapabilityModule[] = [
   {
     section: 'VENTAS',
     titulo: 'Ventas y CRM',
-    intents: [
-      'ventas_resumen',
-      'ventas_clientes_hoy',
-      'ventas_cliente',
-      'ventas_clientes_lista',
-      'ventas_estancados',
-      'ventas_por_responsable',
-      'ventas_periodo',
-      'ventas_contratos',
-    ],
-    ayuda: VENTAS_AYUDA,
+    intents: [],
   },
   { section: 'CONTRATACION_PUBLICA', titulo: 'Contratación Pública', intents: [] },
 ];
 
-export function buildCapabilitiesPrompt(allowedSectionKeys: string[]): string {
+export interface OpcionesCapacidades {
+  /**
+   * El usuario tiene asignado el Agente de Ventas y permiso de Ventas: Agente
+   * Gemeseg puede decirle que use ese agente para datos en vivo. Si es false no
+   * se menciona nada más allá de que sabe cómo se usa el módulo.
+   */
+  ventasAgenteDisponible?: boolean;
+}
+
+export function buildCapabilitiesPrompt(
+  allowedSectionKeys: string[],
+  opciones: OpcionesCapacidades = {},
+): string {
   const allowed = new Set(allowedSectionKeys);
   const modules = [
     PROYECTOS_TAREAS,
@@ -93,7 +84,11 @@ export function buildCapabilitiesPrompt(allowedSectionKeys: string[]): string {
     .map((m) =>
       m.intents.length > 0
         ? `## ${m.titulo}\nPara datos reales de este módulo, usa la(s) intención(es): ${m.intents.join(', ')}.${m.ayuda ? `\n${m.ayuda}` : ''}`
-        : `## ${m.titulo}\nNo tienes consulta de datos en vivo para este módulo, pero SÍ conoces cómo se usa: explícalo con el manual de abajo.`,
+        : `## ${m.titulo}\nNo tienes consulta de datos en vivo para este módulo, pero SÍ conoces cómo se usa: explícalo con el manual de abajo.${
+            m.section === 'VENTAS' && opciones.ventasAgenteDisponible
+              ? ' Si la persona quiere datos en vivo de Ventas (cartera, clientes, por qué se perdió un cliente), dile que use el Agente de Ventas desde el selector de agentes del chat.'
+              : ''
+          }`,
     )
     .join('\n\n');
 

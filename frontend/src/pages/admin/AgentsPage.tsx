@@ -16,6 +16,9 @@ const SCOPE_OPTIONS = [
   { value: 'PROJECTS', label: 'Proyectos', desc: 'Enfocado en gestion de proyectos' },
   { value: 'TASKS', label: 'Tareas', desc: 'Enfocado en tareas y Kanban' },
   { value: 'ADMIN', label: 'Administracion', desc: 'Panel de administracion' },
+  // Agente especializado (2026-10-07): solo consulta datos de Ventas y no aparece
+  // para nadie hasta que se le asigne a una persona (botón de asignar).
+  { value: 'VENTAS', label: 'Ventas', desc: 'Investiga clientes y cartera de Ventas; solo lo ve quien lo tenga asignado' },
 ];
 
 const SCOPE_PREVIEW: Record<string, string[]> = {
@@ -23,6 +26,7 @@ const SCOPE_PREVIEW: Record<string, string[]> = {
   PROJECTS: ['Proyectos activos', 'Estados de proyectos', 'Miembros por proyecto', 'Estadisticas'],
   TASKS: ['Tareas asignadas', 'Estados Kanban', 'Prioridades', 'Fechas de entrega'],
   ADMIN: ['Todos los usuarios', 'Estadisticas globales', 'Roles y permisos', 'Metricas del sistema'],
+  VENTAS: ['Expediente de un cliente', 'Cartera y contratos', 'Perdidos y sus motivos', 'Embudo y velocidad'],
 };
 
 export default function AgentsPage() {
@@ -306,8 +310,8 @@ export default function AgentsPage() {
                 </select>
               </div>
               <div className="form-group">
-                <label>System Prompt * ({createForm.systemMsg.length}/2000)</label>
-                <textarea className="form-textarea" value={createForm.systemMsg} onChange={(e) => setCreateForm({ ...createForm, systemMsg: e.target.value })} placeholder="Instruccion del sistema para el agente de IA..." rows={6} maxLength={2000} />
+                <label>System Prompt * ({createForm.systemMsg.length}/6000)</label>
+                <textarea className="form-textarea" value={createForm.systemMsg} onChange={(e) => setCreateForm({ ...createForm, systemMsg: e.target.value })} placeholder="Instruccion del sistema para el agente de IA..." rows={6} maxLength={6000} />
               </div>
             </div>
             <div className="modal-actions">
@@ -340,8 +344,8 @@ export default function AgentsPage() {
                 </select>
               </div>
               <div className="form-group">
-                <label>System Prompt * ({editForm.systemMsg.length}/2000)</label>
-                <textarea className="form-textarea" value={editForm.systemMsg} onChange={(e) => setEditForm({ ...editForm, systemMsg: e.target.value })} rows={6} maxLength={2000} />
+                <label>System Prompt * ({editForm.systemMsg.length}/6000)</label>
+                <textarea className="form-textarea" value={editForm.systemMsg} onChange={(e) => setEditForm({ ...editForm, systemMsg: e.target.value })} rows={6} maxLength={6000} />
               </div>
               <div className="agent-preview">
                 <h4 className="agent-preview-title">Vista previa — Datos incluidos en el prompt</h4>

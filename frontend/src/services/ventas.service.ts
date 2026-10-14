@@ -82,6 +82,7 @@ export interface SalesContract {
   clientFillToken?: string | null;
   clientFilledAt?: string | null;
   salesClientId?: number | null;
+  salesClient?: { id: number; name: string } | null;
   companyId: number;
   createdBy: number;
   createdAt: string;
@@ -133,7 +134,7 @@ export const saveTemplateFields = (templateId: number, fields: any[]) =>
   api.post(`/ventas/templates/${templateId}/fields`, { fields }).then(r => r.data);
 
 // ==================== CONTRACTS ====================
-export const getContracts = (params?: { status?: string; templateId?: number }) =>
+export const getContracts = (params?: { status?: string; templateId?: number; sinCliente?: boolean }) =>
   api.get('/ventas/contratos', { params }).then(r => r.data);
 
 export const getContract = (id: number) =>
@@ -372,6 +373,14 @@ export interface SalesClient {
   assignedUser?: { id: number; fullName: string } | null;
   status?: string | null;
   stage?: SalesClientStage | null;
+  // Ciclo de vida CALCULADO (nunca se teclea): lo da el listado de clientes.
+  ciclo?: CicloVida | null;
+  cicloRazones?: string[];
+  // Aceptó (oportunidad ganada) pero todavía no tiene contrato: «Por contratar».
+  contratoPendiente?: boolean;
+  // Negociaciones abiertas (un cliente con una abierta sigue siendo un
+  // prospecto en el sentido de que su seguimiento se hace en Oportunidades).
+  oportunidadesAbiertas?: number;
   // Siguiente paso con este cliente (vista "Hoy"). La fecha llega como ISO a
   // medianoche UTC: para compararla con "hoy" usar solo los primeros 10
   // caracteres ('YYYY-MM-DD'), nunca new Date(), que la correría de día.
@@ -398,16 +407,21 @@ export const updateSalesClientStage = (id: number, data: Partial<{ label: string
   api.patch(`/ventas/clientes/stages/${id}`, data).then(r => r.data as SalesClientStage);
 export const deleteSalesClientStage = (id: number) =>
   api.delete(`/ventas/clientes/stages/${id}`);
+// Cambia la etapa de la oportunidad PRINCIPAL del cliente. Pasar a una etapa de
+// pérdida exige `extra.motivo`; al cotizar se puede mandar `extra.quotedAmount`.
 export const changeSalesClientStage = (
   id: number,
   toStatus: string,
   notes?: string,
   siguientePaso?: { text: string; date: string },
+  extra?: { motivo?: MotivoInput; quotedAmount?: number | null },
 ) =>
   api.patch(`/ventas/clientes/${id}/stage`, {
     toStatus,
     notes,
     ...(siguientePaso ? { nextActionText: siguientePaso.text, nextActionDate: siguientePaso.date } : {}),
+    ...(extra?.motivo ? { motivo: extra.motivo } : {}),
+    ...(extra?.quotedAmount !== undefined ? { quotedAmount: extra.quotedAmount } : {}),
   }).then(r => r.data as SalesClient);
 // ---------- Dashboard de Ventas (a partir de Clientes) ----------
 
@@ -436,21 +450,44 @@ export const getDashboardClientes = (params: { desde?: string; hasta?: string; r
 
 // ---------- Ficha del cliente: línea de tiempo y actividades ----------
 
-export type SalesActivityType = 'NOTA' | 'LLAMADA' | 'REUNION' | 'CORREO' | 'OTRO';
+export type SalesActivityType =
+  | 'NOTA' | 'LLAMADA' | 'REUNION' | 'CORREO'
+  | 'COTIZACION_ENVIADA' | 'QUEJA' | 'INCIDENTE_SERVICIO' | 'CONVERSACION_SALIDA'
+  | 'OTRO';
 
 export const SALES_ACTIVITY_TYPES: { value: SalesActivityType; label: string }[] = [
   { value: 'NOTA', label: 'Nota' },
   { value: 'LLAMADA', label: 'Llamada' },
   { value: 'REUNION', label: 'Reunión' },
   { value: 'CORREO', label: 'Correo' },
+  { value: 'COTIZACION_ENVIADA', label: 'Cotización enviada' },
+  { value: 'QUEJA', label: 'Queja' },
+  { value: 'INCIDENTE_SERVICIO', label: 'Incidente del servicio' },
+  { value: 'CONVERSACION_SALIDA', label: 'Conversación de salida' },
   { value: 'OTRO', label: 'Otro' },
 ];
 
 export interface TimelineStageInfo { label: string; color: string }
 
 export type TimelineEvent =
-  | { kind: 'creado'; id: string; at: string; authorName: string | null; referredByName: string | null }
-  | { kind: 'etapa'; id: string; at: string; authorName: string | null; from: TimelineStageInfo | null; to: TimelineStageInfo | null; notes: string | null }
+  | {
+      kind: 'creado'; id: string; at: string; authorName: string | null; referredByName: string | null;
+      // Servicio por el que llegó (lo elegido en la ficha/formulario o los de su primera oportunidad) y la fuente.
+      servicios?: string[]; fuente?: string | null;
+    }
+  | {
+      kind: 'etapa'; id: string; at: string; authorName: string | null; from: TimelineStageInfo | null; to: TimelineStageInfo | null; notes: string | null;
+      // De qué negociación es el cambio (no viene en los registros viejos del cliente).
+      opportunityId?: number; opportunityName?: string;
+    }
+  | {
+      kind: 'oportunidad'; id: string; at: string; authorName: string | null; opportunityId: number; nombre: string;
+      servicios: string[]; originType: string; source: string | null;
+    }
+  | {
+      kind: 'acuerdo'; id: string; at: string; agreementId: number; title: string | null; servicios: string[];
+      step: 'creado' | 'renovado' | 'cancelado'; authorName?: string | null; startDate?: string; endDate?: string | null;
+    }
   | {
       kind: 'actividad'; id: string; activityId: number; at: string; authorId: number | null; authorName: string | null;
       type: SalesActivityType; otherLabel: string | null; text: string; edited: boolean;
@@ -490,7 +527,8 @@ export const getSalesClient = (id: number) =>
   api.get(`/ventas/clientes/${id}`).then(r => r.data as SalesClient);
 // `fechaIngreso` ('YYYY-MM-DD') es la fecha de creación editable: permite
 // registrar prospectos de meses anteriores. No puede ser futura.
-export const createSalesClient = (data: Partial<SalesClient> & { name: string; fechaIngreso?: string }) =>
+// `yaEsCliente`: ya venía contratando antes de usar el sistema (queda como Cliente, «Por contratar»).
+export const createSalesClient = (data: Partial<SalesClient> & { name: string; fechaIngreso?: string; yaEsCliente?: boolean }) =>
   api.post('/ventas/clientes', data).then(r => r.data as SalesClient);
 export const updateSalesClient = (id: number, data: Partial<SalesClient> & { fechaIngreso?: string }) =>
   api.patch(`/ventas/clientes/${id}`, data).then(r => r.data as SalesClient);
@@ -550,3 +588,472 @@ export function salesClientListaSubopcionesLabel(client: SalesClient | null | un
   return hijos ? `${parent} · ${hijos}` : parent;
 }
 
+
+// ==================== CONTRATOS COMERCIALES Y SERVICIOS ====================
+// "Contrato" en la pantalla de Ventas = el acuerdo comercial de un cliente
+// (servicios, vigencia, renovaciones). El documento que se genera y firma es
+// `SalesContract` (pantalla "Documentación"). En la API los contratos
+// comerciales viven bajo /ventas/acuerdos para no chocar con /ventas/contratos.
+export type EstadoContrato =
+  | 'POR_INICIAR'
+  | 'VIGENTE'
+  | 'POR_VENCER'
+  | 'VENCIDO'
+  | 'RENOVADO'
+  | 'CANCELADO';
+
+export interface SalesServicio {
+  id: number;
+  name: string;
+  description?: string | null;
+  isActive: boolean;
+  order: number;
+  contratos?: number;
+}
+
+export interface ContratoComercialRef {
+  id: number;
+  title?: string | null;
+  startDate: string;
+  endDate?: string | null;
+}
+
+export interface ContratoComercialDocumento {
+  contractId: number;
+  agreementId: number;
+  createdAt: string;
+  contract: {
+    id: number;
+    contractNumber?: string | null;
+    status: string;
+    createdAt: string;
+    signedAt?: string | null;
+    template?: { name: string } | null;
+  };
+}
+
+export interface ContratoComercial {
+  id: number;
+  salesClientId: number;
+  salesClient: { id: number; name: string };
+  title?: string | null;
+  startDate: string;
+  endDate?: string | null;
+  status: 'ACTIVO' | 'RENOVADO' | 'CANCELADO';
+  estado: EstadoContrato;
+  notes?: string | null;
+  renewedFromId?: number | null;
+  // Valor mensual (null = no registrado) y días de gracia tras el vencimiento.
+  monthlyValue?: number | null;
+  graceDays: number;
+  cancelledAt?: string | null;
+  opportunityId?: number | null;
+  // Motivo del último cierre registrado (cancelación o vencido sin renovar).
+  motivoCierre?: string | null;
+  services: { id: number; name: string }[];
+  documentos: number;
+  createdAt: string;
+  // Solo en el detalle:
+  motivos?: MotivoRegistrado[];
+  renewedFrom?: ContratoComercialRef | null;
+  renewals?: ContratoComercialRef[];
+  documents?: ContratoComercialDocumento[];
+}
+
+export interface ContratoComercialInput {
+  salesClientId?: number;
+  title?: string;
+  startDate?: string;
+  endDate?: string;
+  serviceIds?: number[];
+  notes?: string;
+  // Solo se puede pedir ACTIVO (reactivar). Cancelar tiene su propia llamada, con motivo.
+  status?: 'ACTIVO';
+  monthlyValue?: number | null;
+  graceDays?: number;
+  opportunityId?: number;
+  // Obligatorio si el contrato baja servicios o valor frente al anterior.
+  motivo?: MotivoInput;
+}
+
+export const getServicios = (incluirInactivos = false): Promise<SalesServicio[]> =>
+  api.get('/ventas/servicios', { params: incluirInactivos ? { incluirInactivos: true } : undefined }).then(r => r.data);
+
+export const createServicio = (data: { name: string; description?: string }): Promise<SalesServicio> =>
+  api.post('/ventas/servicios', data).then(r => r.data);
+
+export const updateServicio = (id: number, data: { name?: string; description?: string; isActive?: boolean }): Promise<SalesServicio> =>
+  api.patch(`/ventas/servicios/${id}`, data).then(r => r.data);
+
+export const deleteServicio = (id: number) =>
+  api.delete(`/ventas/servicios/${id}`).then(r => r.data);
+
+export const getContratosComerciales = (params?: { clienteId?: number; estado?: string; servicioId?: number; q?: string }): Promise<ContratoComercial[]> =>
+  api.get('/ventas/acuerdos', { params }).then(r => r.data);
+
+export const getContratoComercial = (id: number): Promise<ContratoComercial> =>
+  api.get(`/ventas/acuerdos/${id}`).then(r => r.data);
+
+export const createContratoComercial = (data: ContratoComercialInput): Promise<ContratoComercial> =>
+  api.post('/ventas/acuerdos', data).then(r => r.data);
+
+export const updateContratoComercial = (id: number, data: ContratoComercialInput): Promise<ContratoComercial> =>
+  api.patch(`/ventas/acuerdos/${id}`, data).then(r => r.data);
+
+export const deleteContratoComercial = (id: number) =>
+  api.delete(`/ventas/acuerdos/${id}`).then(r => r.data);
+
+export const renovarContratoComercial = (id: number, data: ContratoComercialInput): Promise<ContratoComercial> =>
+  api.post(`/ventas/acuerdos/${id}/renovar`, data).then(r => r.data);
+
+export const vincularDocumentoAContrato = (id: number, contractId: number): Promise<ContratoComercial> =>
+  api.post(`/ventas/acuerdos/${id}/documentos`, { contractId }).then(r => r.data);
+
+export const desvincularDocumentoDeContrato = (id: number, contractId: number): Promise<ContratoComercial> =>
+  api.delete(`/ventas/acuerdos/${id}/documentos/${contractId}`).then(r => r.data);
+
+export const vincularDocumentosSinCliente = (): Promise<{ revisados: number; vinculados: number; ambiguos: number; sinCoincidencia: number }> =>
+  api.post('/ventas/acuerdos/documentos/vincular-clientes').then(r => r.data);
+
+export const ESTADO_CONTRATO_LABEL: Record<EstadoContrato, string> = {
+  POR_INICIAR: 'Por iniciar',
+  VIGENTE: 'Vigente',
+  POR_VENCER: 'Por vencer',
+  VENCIDO: 'Vencido',
+  RENOVADO: 'Renovado',
+  CANCELADO: 'Cancelado',
+};
+
+export const ESTADO_CONTRATO_COLOR: Record<EstadoContrato, string> = {
+  POR_INICIAR: '#3b82f6',
+  VIGENTE: '#059669',
+  POR_VENCER: '#d97706',
+  VENCIDO: '#dc2626',
+  RENOVADO: '#6b7280',
+  CANCELADO: '#9ca3af',
+};
+
+// ==================== CICLO DE VIDA, MOTIVOS, OPORTUNIDADES, LEADS Y ANALÍTICA ====================
+// (2026-10-07) Un LEAD es un contacto entrante sin calificar; solo uno de servicio
+// se convierte en cliente + oportunidad. Una OPORTUNIDAD es cada negociación de un
+// servicio de un cliente (su embudo, monto cotizado y motivo de pérdida). El
+// cliente tiene un ciclo de vida CALCULADO (nunca se teclea) y un cliente nunca
+// vuelve a ser lead. En la API los leads viven bajo /ventas/entrantes porque
+// /ventas/leads lo usa el módulo viejo de prospectos.
+
+export type CicloVida = 'PROSPECTO' | 'CLIENTE' | 'EN_RIESGO' | 'EX_CLIENTE' | 'PERDIDO';
+
+export const CICLO_LABEL: Record<CicloVida, string> = {
+  PROSPECTO: 'Prospecto',
+  CLIENTE: 'Cliente',
+  EN_RIESGO: 'En riesgo',
+  EX_CLIENTE: 'Ex-cliente',
+  PERDIDO: 'Perdido',
+};
+
+export const CICLO_COLOR: Record<CicloVida, string> = {
+  PROSPECTO: '#718096',
+  CLIENTE: '#2f855a',
+  EN_RIESGO: '#d97706',
+  EX_CLIENTE: '#c53030',
+  PERDIDO: '#a0aec0',
+};
+
+// ---------- Motivos de cierre ----------
+export type MotivoKind =
+  | 'LEAD_DESCARTE'
+  | 'OPP_PERDIDA'
+  | 'CONTRATO_CANCELADO'
+  | 'CONTRATO_REDUCCION'
+  | 'CONTRATO_NO_RENOVADO';
+
+export const MOTIVO_KIND_LABEL: Record<MotivoKind, string> = {
+  LEAD_DESCARTE: 'Lead descartado',
+  OPP_PERDIDA: 'Oportunidad perdida',
+  CONTRATO_CANCELADO: 'Contrato cancelado',
+  CONTRATO_REDUCCION: 'Contrato renovado con menos',
+  CONTRATO_NO_RENOVADO: 'Contrato vencido sin renovar',
+};
+
+export interface SalesMotivo {
+  id: number;
+  label: string;
+  kinds: MotivoKind[];
+  isActive: boolean;
+  order: number;
+  requiresComment: boolean;
+  isNoInfo: boolean;
+  isSystem: boolean;
+}
+
+// Lo que se manda al cerrar algo: qué motivo, quién lo dijo y un comentario.
+export interface MotivoInput {
+  reasonId?: number;
+  source?: 'CLIENTE' | 'VENDEDOR';
+  comment?: string;
+}
+
+export interface MotivoRegistrado {
+  id: number;
+  kind: MotivoKind;
+  reasonLabel: string;
+  comment?: string | null;
+  source?: 'CLIENTE' | 'VENDEDOR' | null;
+  detail?: any;
+  createdAt: string;
+}
+
+export const getMotivos = (kind?: MotivoKind, incluirInactivos = false): Promise<SalesMotivo[]> =>
+  api.get('/ventas/motivos', { params: { ...(kind ? { kind } : {}), ...(incluirInactivos ? { incluirInactivos: true } : {}) } }).then(r => r.data);
+export const createMotivo = (data: { label: string; kinds: MotivoKind[]; requiresComment?: boolean }): Promise<SalesMotivo> =>
+  api.post('/ventas/motivos', data).then(r => r.data);
+export const updateMotivo = (id: number, data: Partial<{ label: string; kinds: MotivoKind[]; requiresComment: boolean; isActive: boolean }>): Promise<SalesMotivo> =>
+  api.patch(`/ventas/motivos/${id}`, data).then(r => r.data);
+export const deleteMotivo = (id: number) =>
+  api.delete(`/ventas/motivos/${id}`).then(r => r.data);
+
+// ---------- Oportunidades ----------
+export interface Oportunidad {
+  id: number;
+  salesClientId: number;
+  salesClient: { id: number; name: string; email?: string | null; phone?: string | null };
+  title?: string | null;
+  status?: string | null;
+  stage?: { key: string; label: string; color: string; isFinal: boolean; order: number } | null;
+  outcome?: 'GANADA' | 'PERDIDA' | null;
+  abierta: boolean;
+  receivedAt: string;
+  closedAt?: string | null;
+  quotedAt?: string | null;
+  quotedAmount?: number | null;
+  assignedUserId?: number | null;
+  assignedUserName?: string | null;
+  source?: string | null;
+  referredByUserId?: number | null;
+  leadId?: number | null;
+  originType: string;
+  notes?: string | null;
+  services: { id: number; name: string }[];
+  // Solo en el detalle:
+  stageChanges?: { id: number; fromStatus?: string | null; toStatus: string; notes?: string | null; createdAt: string }[];
+  motivos?: MotivoRegistrado[];
+}
+
+export interface OportunidadInput {
+  salesClientId?: number;
+  title?: string;
+  serviceIds?: number[];
+  quotedAmount?: number | null;
+  quotedAt?: string | null;
+  notes?: string;
+  assignedUserId?: number | null;
+}
+
+export interface CambioEtapaInput {
+  toStatus: string;
+  notes?: string;
+  motivo?: MotivoInput;
+  quotedAmount?: number | null;
+  quotedAt?: string | null;
+  nextActionText?: string | null;
+  nextActionDate?: string | null;
+}
+
+export const ORIGEN_OPORTUNIDAD_LABEL: Record<string, string> = {
+  LEAD: 'Lead',
+  MANUAL: 'Ingreso manual',
+  REFERIDO: 'Referido',
+  MIGRADA: 'Sistema anterior',
+  CLIENTE_EXISTENTE: 'Nuevo servicio de un cliente',
+  HISTORICO: 'Ya era cliente',
+};
+
+export const getOportunidades = (params?: { etapa?: string; responsableId?: number; clienteId?: number; servicioId?: number; estado?: string; q?: string }): Promise<Oportunidad[]> =>
+  api.get('/ventas/oportunidades', { params }).then(r => r.data);
+export const getOportunidad = (id: number): Promise<Oportunidad> =>
+  api.get(`/ventas/oportunidades/${id}`).then(r => r.data);
+export const createOportunidad = (data: OportunidadInput): Promise<Oportunidad> =>
+  api.post('/ventas/oportunidades', data).then(r => r.data);
+export const updateOportunidad = (id: number, data: OportunidadInput): Promise<Oportunidad> =>
+  api.patch(`/ventas/oportunidades/${id}`, data).then(r => r.data);
+export const cambiarEtapaOportunidad = (id: number, data: CambioEtapaInput): Promise<Oportunidad> =>
+  api.patch(`/ventas/oportunidades/${id}/etapa`, data).then(r => r.data);
+export const deleteOportunidad = (id: number) =>
+  api.delete(`/ventas/oportunidades/${id}`).then(r => r.data);
+
+// ---------- Leads (bandeja de contactos entrantes) ----------
+export type MotivoContacto = 'SERVICIO' | 'EMPLEO' | 'PROVEEDOR' | 'OTRO' | 'SPAM';
+
+export const MOTIVO_CONTACTO_LABEL: Record<MotivoContacto, string> = {
+  SERVICIO: 'Servicio',
+  EMPLEO: 'Empleo',
+  PROVEEDOR: 'Proveedor',
+  OTRO: 'Otro',
+  SPAM: 'Spam',
+};
+
+export const CANAL_LEAD_LABEL: Record<string, string> = {
+  WEB_FORM: 'Formulario web',
+  GOOGLE_ADS: 'Google Ads',
+  META_ADS: 'Meta Ads',
+  LINKEDIN_ADS: 'LinkedIn Ads',
+  EMAIL: 'Correo',
+  MANUAL: 'Ingreso manual',
+};
+
+export interface LeadEntrante {
+  id: number;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  companyName?: string | null;
+  message?: string | null;
+  channel: string;
+  campaign?: string | null;
+  contactReason?: MotivoContacto | null;
+  sugerenciaMotivo?: MotivoContacto | null;
+  status: 'NUEVO' | 'EN_SEGUIMIENTO' | 'CONVERTIDO' | 'DESCARTADO';
+  assignedUserId?: number | null;
+  assignedUserName?: string | null;
+  convertedClientId?: number | null;
+  convertedOpportunityId?: number | null;
+  // Lo que mandó la landing: servicio, landing, UTM, gclid, fbclid...
+  extra?: Record<string, unknown> | null;
+  // Servicios del catálogo que el contacto pidió en la landing (solo preselección).
+  serviciosSugeridos?: number[];
+  createdAt: string;
+  // Parecido a un cliente que ya existe (mismo correo o teléfono).
+  clienteExistente?: { id: number; name: string } | null;
+  // Solo en el detalle:
+  coincidencias?: { id: number; name: string; email?: string | null; phone?: string | null }[];
+  motivos?: MotivoRegistrado[];
+}
+
+export interface ConvertirLeadInput {
+  salesClientId?: number;
+  confirmarNuevo?: boolean;
+  name?: string;
+  email?: string;
+  phone?: string;
+  ruc?: string;
+  serviceIds?: number[];
+  title?: string;
+}
+
+export const getLeadsEntrantes = (params?: { estado?: string; canal?: string; motivo?: string; q?: string }): Promise<LeadEntrante[]> =>
+  api.get('/ventas/entrantes', { params }).then(r => r.data);
+export const getLeadEntrante = (id: number): Promise<LeadEntrante> =>
+  api.get(`/ventas/entrantes/${id}`).then(r => r.data);
+export const createLeadEntrante = (data: { name?: string; email?: string; phone?: string; companyName?: string; message?: string; channel?: string; campaign?: string }): Promise<LeadEntrante> =>
+  api.post('/ventas/entrantes', data).then(r => r.data);
+export const updateLeadEntrante = (id: number, data: Partial<{ name: string; email: string | null; phone: string | null; companyName: string | null; message: string | null; contactReason: MotivoContacto | null }>): Promise<LeadEntrante> =>
+  api.patch(`/ventas/entrantes/${id}`, data).then(r => r.data);
+export const tomarLeadEntrante = (id: number): Promise<LeadEntrante> =>
+  api.post(`/ventas/entrantes/${id}/tomar`).then(r => r.data);
+export const soltarLeadEntrante = (id: number): Promise<LeadEntrante> =>
+  api.post(`/ventas/entrantes/${id}/soltar`).then(r => r.data);
+export const descartarLeadEntrante = (id: number, motivo: MotivoInput): Promise<LeadEntrante> =>
+  api.post(`/ventas/entrantes/${id}/descartar`, { motivo }).then(r => r.data);
+export const convertirLeadEntrante = (id: number, data: ConvertirLeadInput): Promise<{ clienteId: number; oportunidadId: number; sumadaAClienteExistente: boolean }> =>
+  api.post(`/ventas/entrantes/${id}/convertir`, data).then(r => r.data);
+
+// Claves de las conexiones (formulario web, Google Ads): reutiliza las
+// api-keys que ya existían para los webhooks de Ventas.
+export interface ClaveConexion { id: number; name: string; apiKey: string; isActive: boolean; createdAt: string }
+export const getClavesConexion = (): Promise<ClaveConexion[]> =>
+  api.get('/ventas/api-keys').then(r => r.data);
+export const createClaveConexion = (name: string): Promise<ClaveConexion> =>
+  api.post('/ventas/api-keys', { name }).then(r => r.data);
+export const deleteClaveConexion = (id: number) =>
+  api.delete(`/ventas/api-keys/${id}`).then(r => r.data);
+
+// ---------- Analítica del tablero (cartera, retención, embudo, motivos, equipo) ----------
+export interface ResumenMuestra { n: number; mediana: number | null; p75: number | null; pocasMuestras: boolean }
+
+export interface AnaliticaCartera {
+  hoy: string;
+  ciclo: Record<CicloVida, number> & { total: number };
+  contratos: { vigentes: number; porVencer: number; vencidosSinRenovar: number; cancelados: number; valorMensualVigente: number; sinValor: number };
+  renovaciones: { d30: number; d60: number; d90: number; proximas: { id: number; clienteId: number; cliente: string; titulo?: string | null; fin: string; dias: number; valorMensual: number | null }[] };
+  vencidos: { id: number; clienteId: number; cliente: string; titulo?: string | null; fin: string; diasVencido: number; enGracia: boolean; valorMensual: number | null; motivoCierre: string | null }[];
+  servicios: { masContratados: { servicio: string; contratos: number; clientes: number }[]; clientesConUnServicio: number; clientesConVarios: number };
+  reducciones: { ultimos90Dias: number; recientes: { id: number; cliente: string; motivo: string; source?: string | null; detail?: any; fecha: string }[] };
+  bajasDelMes: { total: number; clientes: { id: number; cliente: string; fin: string }[] };
+}
+
+export interface AnaliticaRetencion {
+  periodo: { desde: string; hasta: string };
+  clientes: { cohorte: number; retenidos: number; tasa: number | null };
+  dinero: { mrrInicial: number; mrrFinal: number; retencionBruta: number | null; retencionNeta: number | null; clientesSinValor: number };
+  renovacion: { contratosQueTerminan: number; renovados: number; cancelados: number; vencidosSinRenovar: number; tasa: number | null; tasaEnDinero: number | null };
+}
+
+export interface AnaliticaEmbudo {
+  periodo: { desde: string; hasta: string };
+  oportunidades: number;
+  conversion: { etapa: string; etiqueta: string; alcanzaron: number; convirtieron: number | null; tasa: number | null }[];
+  tiempoPorEtapa: ({ etapa: string; etiqueta: string } & ResumenMuestra)[];
+  velocidad: { respuestaDias: ResumenMuestra; cotizacionDias: ResumenMuestra; cicloDias: ResumenMuestra };
+  cobertura: { medidas: number; de: number; historialDesde: string };
+}
+
+export interface GrupoAceptacion { nombre: string; ganadas: number; perdidas: number; n: number; tasa: number; pocasMuestras: boolean }
+export interface AnaliticaAceptacion {
+  periodo: { desde: string; hasta: string };
+  cerradas: number;
+  porFuente: GrupoAceptacion[];
+  porServicio: GrupoAceptacion[];
+  porResponsable: GrupoAceptacion[];
+  porReferidor: GrupoAceptacion[];
+}
+
+export interface AnaliticaMotivos {
+  periodo: { desde: string; hasta: string };
+  porCierre: { kind: MotivoKind; etiqueta: string; total: number; items: { label: string; count: number; pct: number }[]; sinInformacionPct: number; segunVendedorPct: number; segunClientePct: number }[];
+}
+
+export interface AnaliticaActividad {
+  periodo: { desde: string; hasta: string };
+  semanas: string[];
+  vendedores: { id: number; nombre: string; actividades: number; cambios: number; total: number; porSemana: Record<string, number> }[];
+}
+
+type RangoParams = { desde?: string; hasta?: string; alcance?: string };
+export const getAnaliticaCartera = (alcance?: string): Promise<AnaliticaCartera> =>
+  api.get('/ventas/analitica/cartera', { params: { alcance } }).then(r => r.data);
+export const getAnaliticaRetencion = (p?: RangoParams): Promise<AnaliticaRetencion> =>
+  api.get('/ventas/analitica/retencion', { params: p }).then(r => r.data);
+export const getAnaliticaEmbudo = (p?: RangoParams): Promise<AnaliticaEmbudo> =>
+  api.get('/ventas/analitica/embudo', { params: p }).then(r => r.data);
+export const getAnaliticaAceptacion = (p?: RangoParams): Promise<AnaliticaAceptacion> =>
+  api.get('/ventas/analitica/aceptacion', { params: p }).then(r => r.data);
+export const getAnaliticaMotivos = (p?: RangoParams): Promise<AnaliticaMotivos> =>
+  api.get('/ventas/analitica/motivos', { params: p }).then(r => r.data);
+export const getAnaliticaActividad = (p?: RangoParams): Promise<AnaliticaActividad> =>
+  api.get('/ventas/analitica/actividad', { params: p }).then(r => r.data);
+
+// Cancelar un contrato y explicar cierres (exigen motivo).
+export const cancelarContratoComercial = (id: number, data: { date?: string; motivo: MotivoInput }): Promise<ContratoComercial> =>
+  api.post(`/ventas/acuerdos/${id}/cancelar`, data).then(r => r.data);
+export const registrarCierreContrato = (id: number, motivo: MotivoInput): Promise<ContratoComercial> =>
+  api.post(`/ventas/acuerdos/${id}/cierre`, { motivo }).then(r => r.data);
+
+// ---------- Embudo de marketing (Leads -> Cotizaron -> Contrataron) ----------
+// Mismos pasos que el panel «Embudo de conversión de clientes potenciales» de
+// Google Ads. «Interacciones» (visitas a la página) solo las ve Google.
+export interface FilaEmbudoMarketing {
+  clave: string;
+  leads: number;
+  cualificados: number;
+  convertidos: number;
+  pctCualificados: number | null;
+  pctConvertidos: number | null;
+}
+export interface AnaliticaMarketing {
+  periodo: { desde: string; hasta: string };
+  agrupadoPor: 'channel' | 'campana' | 'landing';
+  total: FilaEmbudoMarketing;
+  filas: FilaEmbudoMarketing[];
+}
+export const getAnaliticaMarketing = (p?: RangoParams & { agrupar?: 'channel' | 'campana' | 'landing'; canal?: string }): Promise<AnaliticaMarketing> =>
+  api.get('/ventas/analitica/marketing', { params: p }).then(r => r.data);

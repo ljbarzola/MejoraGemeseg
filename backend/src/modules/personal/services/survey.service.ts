@@ -6,14 +6,18 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { CreateSurveyDto, SubmitSurveyResponseDto } from '../dto/survey.dto';
+import {
+  CreateSurveyDto,
+  SubmitSurveyResponseDto,
+  UpdateSurveyDto,
+} from '../dto/survey.dto';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { GmailMailService } from '../../mail/gmail-mail.service';
 
-// Encuesta tipo "Google Forms": se crea y se publica en un solo paso (no
-// hay borrador editable por separado — simplifica el flujo para la primera
-// versión).
+// Encuesta tipo "Google Forms": se crea como borrador o ya publicada, y se
+// puede editar en cualquier estado (update()).
 //
 // Dos canales, combinables en la misma encuesta:
 //  1. Destinatarios internos: usuarios con cuenta en la empresa. La reciben
@@ -439,11 +443,117 @@ export class SurveyService {
     return this.findOne(id, companyId);
   }
 
+  /**
+   * Edita título, descripción y preguntas, sea cual sea el estado de la
+   * encuesta. Lo que ya se respondió no se toca: los cambios valen para quien
+   * responda desde ahora. Reglas:
+   * - Las preguntas que llegan con `id` se actualizan; las que no traen `id`
+   *   se crean; las que existían y no llegan se eliminan junto con sus
+   *   respuestas (la pantalla avisa cuántas son antes de confirmar).
+   * - Una pregunta que ya tiene respuestas no puede cambiar de tipo (las
+   *   respuestas guardadas ya no encajarían). Solo se permite pasar entre
+   *   texto corto y texto largo, que guardan lo mismo.
+   */
+  async update(id: number, dto: UpdateSurveyDto, companyId: number) {
+    const survey = await this.prisma.survey.findFirst({
+      where: { id, companyId },
+      include: {
+        questions: { include: { _count: { select: { answers: true } } } },
+      },
+    });
+    if (!survey) throw new NotFoundException('Encuesta no encontrada');
+
+    const title = dto.title.trim();
+    if (!title) throw new BadRequestException('Ponle un título a la encuesta.');
+
+    const preguntas = dto.questions.map((q, i) => ({
+      ...q,
+      label: q.label.trim(),
+      order: i,
+    }));
+    if (preguntas.some((q) => !q.label)) {
+      throw new BadRequestException('Todas las preguntas necesitan un texto.');
+    }
+
+    const existentes = new Map(survey.questions.map((q) => [q.id, q]));
+    const idsRecibidos = preguntas
+      .map((q) => q.id)
+      .filter((qid): qid is number => qid !== undefined);
+    if (new Set(idsRecibidos).size !== idsRecibidos.length) {
+      throw new BadRequestException('Hay una pregunta repetida.');
+    }
+    if (idsRecibidos.some((qid) => !existentes.has(qid))) {
+      throw new BadRequestException(
+        'Una de las preguntas ya no existe en esta encuesta. Cierra la edición y vuelve a abrirla.',
+      );
+    }
+
+    const conOpciones = (t: string) => t === 'SINGLE_CHOICE' || t === 'MULTIPLE_CHOICE';
+    const textos = ['SHORT_TEXT', 'LONG_TEXT'];
+    for (const q of preguntas) {
+      if (conOpciones(q.type)) {
+        const opciones = (q.options ?? []).map((o) => o.trim()).filter(Boolean);
+        if (opciones.length < 2) {
+          throw new BadRequestException(
+            `La pregunta "${q.label}" necesita al menos 2 opciones.`,
+          );
+        }
+      }
+      const previa = q.id !== undefined ? existentes.get(q.id) : undefined;
+      if (
+        previa &&
+        previa.type !== q.type &&
+        previa._count.answers > 0 &&
+        !(textos.includes(previa.type) && textos.includes(q.type))
+      ) {
+        throw new BadRequestException(
+          `La pregunta "${previa.label}" ya tiene respuestas y no puede cambiar de tipo. Elimínala y crea una nueva si lo necesitas.`,
+        );
+      }
+    }
+
+    const quitar = survey.questions
+      .filter((q) => !idsRecibidos.includes(q.id))
+      .map((q) => q.id);
+
+    await this.prisma.$transaction([
+      this.prisma.survey.update({
+        where: { id },
+        data: { title, description: dto.description?.trim() || null },
+      }),
+      // Las respuestas a una pregunta eliminada se borran con ella (cascade).
+      this.prisma.surveyQuestion.deleteMany({
+        where: { surveyId: id, id: { in: quitar } },
+      }),
+      ...preguntas.map((q) => {
+        const data = {
+          label: q.label,
+          type: q.type,
+          options: conOpciones(q.type)
+            ? (q.options ?? []).map((o) => o.trim()).filter(Boolean)
+            : Prisma.DbNull,
+          required: q.required ?? true,
+          order: q.order,
+        };
+        return q.id !== undefined
+          ? this.prisma.surveyQuestion.update({ where: { id: q.id }, data })
+          : this.prisma.surveyQuestion.create({ data: { ...data, surveyId: id } });
+      }),
+    ]);
+
+    return this.findOne(id, companyId);
+  }
+
   async findOne(id: number, companyId: number) {
     const survey = await this.prisma.survey.findFirst({
       where: { id, companyId },
       include: {
-        questions: { orderBy: { order: 'asc' } },
+        // _count.answers: cuántas respuestas tiene cada pregunta (la pantalla de
+        // edición avisa antes de borrar una que ya se respondió).
+        questions: {
+          orderBy: { order: 'asc' },
+          include: { _count: { select: { answers: true } } },
+        },
         recipients: {
           include: {
             user: { select: { id: true, fullName: true, email: true } },

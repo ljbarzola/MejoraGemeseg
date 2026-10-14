@@ -3,6 +3,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { DriveService } from './drive.service';
@@ -718,5 +719,48 @@ export class ContractService {
     });
     if (!c) throw new NotFoundException('Contrato no encontrado');
     return this.prisma.contract.update({ where: { id }, data });
+  }
+
+  // Elimina un documento generado: la copia de Drive, el PDF en disco (solo
+  // es caché) y la fila. Si Drive falla por algo distinto a "ya no existe",
+  // NO se borra nada — así no queda un PDF huérfano en la carpeta del guardia
+  // sin rastro en el sistema.
+  async deleteContract(id: number, companyId: number) {
+    const c = await this.prisma.contract.findFirst({
+      where: { id, companyId },
+    });
+    if (!c) throw new NotFoundException('Contrato no encontrado');
+
+    if (c.driveFileId) {
+      try {
+        await this.driveService.deleteFileById(c.driveFileId);
+      } catch (err) {
+        const status =
+          (err as { code?: number; response?: { status?: number } })?.code ??
+          (err as { response?: { status?: number } })?.response?.status;
+        if (status !== 404) {
+          this.logger.error(
+            `No se pudo borrar de Drive el documento ${id}: ${(err as Error).message}`,
+          );
+          throw new ServiceUnavailableException(
+            'No se pudo borrar el documento de Google Drive, así que no se eliminó. Inténtalo de nuevo en unos minutos.',
+          );
+        }
+      }
+    }
+
+    const fileName = c.generatedUrl ? path.basename(c.generatedUrl) : '';
+    if (/^[A-Za-z0-9_-]+\.pdf$/.test(fileName)) {
+      try {
+        fs.rmSync(path.join(CONTRACTS_DIR, fileName), { force: true });
+      } catch (err) {
+        this.logger.warn(
+          `No se pudo borrar el PDF local ${fileName}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    await this.prisma.contract.delete({ where: { id } });
+    return { success: true };
   }
 }

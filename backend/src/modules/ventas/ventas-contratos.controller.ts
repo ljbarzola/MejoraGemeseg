@@ -72,10 +72,12 @@ export class VentasContratosController {
     @Req() req: any,
     @Query('status') status?: string,
     @Query('templateId') templateId?: string,
+    @Query('sinCliente') sinCliente?: string,
   ) {
     return this.contratosService.listContracts(req.user.companyId, {
       status,
       templateId: templateId ? +templateId : undefined,
+      sinCliente: sinCliente === 'true',
     });
   }
 

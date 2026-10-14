@@ -10,6 +10,7 @@ import {
   type ContractAutofillField,
 } from '../../../services/personal.service';
 import EmpleadoSelect from '../../../components/custodias/EmpleadoSelect';
+import { agruparCamposDocumento } from '../../../utils/agruparCamposDocumento';
 
 export default function GenerarDocumento() {
   const navigate = useNavigate();
@@ -32,6 +33,9 @@ export default function GenerarDocumento() {
   const [preguntarDestino, setPreguntarDestino] = useState(false);
   const [error, setError] = useState('');
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+  // Qué pasó con la copia en Drive: el PDF siempre se genera, pero la subida
+  // puede fallar sin que el servidor lo diga; aquí se le dice a quien generó.
+  const [resultDrive, setResultDrive] = useState<{ ok: boolean; url: string | null; destino: 'general' | 'guardia' } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Set<string>>(new Set());
   const [templateError, setTemplateError] = useState(false);
 
@@ -80,6 +84,7 @@ export default function GenerarDocumento() {
     setFields([]);
     setValues({});
     setResultUrl(null);
+    setResultDrive(null);
     setError('');
     setFieldErrors(new Set());
     setTemplateError(false);
@@ -107,12 +112,43 @@ export default function GenerarDocumento() {
         guardarEn,
       });
       setResultUrl(contract.generatedUrl);
+      setResultDrive({ ok: Boolean(contract.driveFileId), url: contract.driveUrl || null, destino: guardarEn });
     } catch (err: any) {
       setError(err.response?.data?.message || 'No se pudo generar el documento.');
     } finally {
       setGenerating(false);
     }
   };
+
+  const gruposCampos = agruparCamposDocumento(fields);
+
+  const renderCampo = (f: ContractAutofillField) => (
+    <div className="form-group" key={f.variableName}>
+      <label>
+        {f.label}{f.isRequired && <span style={{ color: '#c53030' }}> *</span>}
+        {f.systemField && <span style={{ color: '#718096', fontWeight: 400 }}> (autocompletado)</span>}
+      </label>
+      <input
+        ref={(el) => { fieldInputRefs.current[f.variableName] = el; }}
+        type="text"
+        value={values[f.variableName] || ''}
+        onChange={(e) => {
+          setValues({ ...values, [f.variableName]: e.target.value });
+          if (fieldErrors.has(f.variableName)) {
+            setFieldErrors((prev) => {
+              const next = new Set(prev);
+              next.delete(f.variableName);
+              return next;
+            });
+          }
+        }}
+        style={fieldErrors.has(f.variableName) ? { borderColor: '#c53030' } : undefined}
+      />
+      {fieldErrors.has(f.variableName) && (
+        <p style={{ fontSize: '0.75rem', color: '#c53030', margin: '4px 0 0' }}>Este campo es requerido.</p>
+      )}
+    </div>
+  );
 
   const handleGenerate = async () => {
     if (modo === 'GUARDIA' && !guardia.cedula) {
@@ -167,7 +203,17 @@ export default function GenerarDocumento() {
 
       {resultUrl ? (
         <div className="admin-section" style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <p style={{ color: '#276749', fontWeight: 700, fontSize: '1.05rem', marginBottom: 20 }}>✓ Documento generado correctamente para {nombreDocumento}.</p>
+          <p style={{ color: '#276749', fontWeight: 700, fontSize: '1.05rem', marginBottom: 12 }}>✓ Documento generado correctamente para {nombreDocumento}.</p>
+          {resultDrive && (resultDrive.ok ? (
+            <p style={{ fontSize: '0.85rem', color: '#276749', margin: '0 0 20px' }}>
+              Guardado también en Google Drive ({resultDrive.destino === 'guardia' ? `carpeta de ${nombreDocumento}` : 'carpeta general de documentos'}).{' '}
+              {resultDrive.url && <a href={resultDrive.url} target="_blank" rel="noopener noreferrer">Ver en Drive</a>}
+            </p>
+          ) : (
+            <div style={{ background: '#fffbeb', border: '1px solid #f6e05e', color: '#744210', borderRadius: 8, padding: '10px 14px', margin: '0 auto 20px', maxWidth: 560, fontSize: '0.85rem', textAlign: 'left' }}>
+              <strong>El PDF NO se guardó en Google Drive.</strong> El documento sí quedó generado y lo encuentras aquí y en "Documentos Generados", pero no está en la carpeta {resultDrive.destino === 'guardia' ? `de ${nombreDocumento}` : 'general'}. Avisa a Sistemas para revisarlo.
+            </div>
+          ))}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
             <a
               href={resolveContractFileUrl(resultUrl)}
@@ -283,38 +329,31 @@ export default function GenerarDocumento() {
               <h3 style={{ marginBottom: 12 }}>2. Datos del documento</h3>
               <p style={{ fontSize: '0.8rem', color: '#718096', margin: '0 0 12px' }}>
                 {modo === 'GUARDIA'
-                  ? 'Revisados y editables antes de generar — la cédula del guardia, por ejemplo, es la que aparecerá en el documento salvo que la corrijas aquí.'
+                  ? 'Los campos marcados "(autocompletado)" se llenaron desde la ficha del guardia por el parecido con los datos de la plantilla. Revísalos y corrígelos si hace falta: la cédula, por ejemplo, es la que aparecerá en el documento salvo que la cambies aquí.'
                   : 'Escribe aquí todo lo que debe aparecer en el documento. Nada se autocompleta en este modo.'}
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
-                {fields.map((f) => (
-                  <div className="form-group" key={f.variableName}>
-                    <label>
-                      {f.label}{f.isRequired && <span style={{ color: '#c53030' }}> *</span>}
-                      {f.systemField && <span style={{ color: '#718096', fontWeight: 400 }}> (autocompletado)</span>}
-                    </label>
-                    <input
-                      ref={(el) => { fieldInputRefs.current[f.variableName] = el; }}
-                      type="text"
-                      value={values[f.variableName] || ''}
-                      onChange={(e) => {
-                        setValues({ ...values, [f.variableName]: e.target.value });
-                        if (fieldErrors.has(f.variableName)) {
-                          setFieldErrors((prev) => {
-                            const next = new Set(prev);
-                            next.delete(f.variableName);
-                            return next;
-                          });
-                        }
-                      }}
-                      style={fieldErrors.has(f.variableName) ? { borderColor: '#c53030' } : undefined}
-                    />
-                    {fieldErrors.has(f.variableName) && (
-                      <p style={{ fontSize: '0.75rem', color: '#c53030', margin: '4px 0 0' }}>Este campo es requerido.</p>
-                    )}
+              {gruposCampos.map((g) => (
+                <div key={g.clave} style={{ marginBottom: 14 }}>
+                  {gruposCampos.length > 1 && (
+                    <h4 style={{ fontSize: '0.78rem', color: '#718096', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 8px' }}>
+                      {g.titulo}
+                    </h4>
+                  )}
+                  {/* Máximo 3 por fila; baja a 2 y a 1 si la pantalla es estrecha. */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(max(220px, calc((100% - 28px) / 3)), 1fr))', gap: '14px' }}>
+                    {g.campos.map(renderCampo)}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!loadingAutofill && listoParaCargarCampos && selectedTemplate && fields.length > 0 && (
+            <div style={{ background: '#fffbeb', border: '1px solid #f6e05e', color: '#744210', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: '0.82rem' }}>
+              <strong>Revisa los datos antes de generar.</strong>{' '}
+              {modo === 'GUARDIA'
+                ? 'Lo autocompletado sale de la ficha del guardia y puede estar desactualizado o incompleto; el PDF saldrá exactamente con lo que ves arriba.'
+                : 'El PDF saldrá exactamente con lo que escribiste arriba.'}
             </div>
           )}
 
@@ -340,6 +379,9 @@ export default function GenerarDocumento() {
             <div className="modal-body">
               <p style={{ margin: 0, color: '#2d3748', lineHeight: 1.5 }}>
                 Puedes dejarlo en la carpeta general de documentos, o en la carpeta de Drive de {guardia.nombre}.
+              </p>
+              <p style={{ margin: '10px 0 0', color: '#744210', fontSize: '0.82rem', lineHeight: 1.5 }}>
+                ⚠ Antes de continuar, confirma que revisaste los datos: cédula, nombre, fechas y salario salen tal cual están en el formulario.
               </p>
             </div>
             <div className="modal-actions" style={{ flexWrap: 'wrap' }}>

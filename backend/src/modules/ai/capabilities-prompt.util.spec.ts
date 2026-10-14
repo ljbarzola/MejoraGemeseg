@@ -28,10 +28,21 @@ describe('buildCapabilitiesPrompt', () => {
     expect(prompt).toContain('## Cacao');
     expect(prompt).toContain('cacao_resumen');
     expect(prompt).toContain('## Ventas y CRM');
-    expect(prompt).toContain('ventas_resumen');
+    // Los datos en vivo de Ventas los hace el Agente de Ventas, no Agente Gemeseg.
+    expect(prompt).not.toContain('ventas_resumen');
+    expect(prompt).not.toContain('ventas_expediente');
     expect(prompt).not.toContain('## Custodias');
     expect(prompt).not.toContain('## Recursos Humanos');
     expect(prompt).not.toContain('## Contratación Pública');
+  });
+
+  it('Agente Gemeseg manda a Ventas al Agente de Ventas solo si la persona lo tiene asignado', () => {
+    const con = buildCapabilitiesPrompt(['VENTAS'], { ventasAgenteDisponible: true });
+    const sin = buildCapabilitiesPrompt(['VENTAS'], { ventasAgenteDisponible: false });
+    expect(con).toContain('Agente de Ventas');
+    expect(sin).not.toContain('Agente de Ventas');
+    // Sin permiso de Ventas nunca se nombra, aunque el indicador venga en true.
+    expect(buildCapabilitiesPrompt(['CACAO'], { ventasAgenteDisponible: true })).not.toMatch(/ventas/i);
   });
 
   it('Proyectos y Tareas aparece siempre, sin importar qué secciones se permitan', () => {

@@ -173,7 +173,12 @@ export class AgentsService {
     const agents = await this.prisma.agent.findMany({
       where: {
         isActive: true,
-        OR: [{ createdBy: null }, { id: { in: assignedAgentIds } }],
+        // Un agente especializado (Ventas) no se muestra a todos: solo a quien
+        // lo tiene asignado, aunque no tenga dueño.
+        OR: [
+          { createdBy: null, NOT: { scope: 'VENTAS' } },
+          { id: { in: assignedAgentIds } },
+        ],
       },
       select: {
         id: true,

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import ResultadosVisitas from './VentasReportes';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus } from 'lucide-react';
 import { getVisits, createVisit, checkInVisit, completeVisit, cancelVisit, deleteVisit, ClientVisit } from '../../services/ventas.service';
@@ -20,6 +21,7 @@ export default function VisitasPage() {
   const { showToast } = useToast();
   const [visits, setVisits] = useState<ClientVisit[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pestana, setPestana] = useState<'visitas' | 'resultados'>('visitas');
   const [showNewModal, setShowNewModal] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState<ClientVisit | null>(null);
   const [saving, setSaving] = useState(false);
@@ -225,6 +227,19 @@ export default function VisitasPage() {
         </div>
       </div>
 
+      <div className="admin-tabs" style={{ display: 'inline-flex', marginTop: 16 }}>
+        {([['visitas', 'Visitas'], ['resultados', 'Resultados']] as const).map(([valor, etiqueta]) => (
+          <button key={valor} type="button" className={`admin-tab ${pestana === valor ? 'active' : ''}`}
+            style={{ flex: '0 0 auto' }} onClick={() => setPestana(valor)}>
+            {etiqueta}
+          </button>
+        ))}
+      </div>
+
+      {pestana === 'resultados' ? (
+        <ResultadosVisitas />
+      ) : (
+        <>
       {checkInInfo && (
         <div ref={checkInInfoRef} style={{ background: '#ebf8ff', border: '1px solid #90cdf4', color: '#2b6cb0', borderRadius: '10px', padding: '10px 14px', marginTop: '16px', fontSize: '0.85rem' }}>{checkInInfo}</div>
       )}
@@ -369,6 +384,8 @@ export default function VisitasPage() {
           </div>
         )}
       </div>
+        </>
+      )}
 
       {/* PLAN NEW VISIT MODAL */}
       {showNewModal && (

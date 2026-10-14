@@ -277,7 +277,21 @@ Agregado el 2026-10-06 con el Gerente (MANAGER), que ve Administración, Mi Empr
 
 ---
 
+## 22. Todo Cierre se Explica: `MotivoCierreModal`
+
+### Regla: Rechazar, Descartar, Cancelar o Dejar de Renovar Siempre Pide el Motivo, con el Mismo Diálogo
+
+Agregado el 2026-10-07 con Leads, Oportunidades y Contratos:
+
+- **Un solo componente** (`components/ventas/MotivoCierreModal.tsx`, parametrizado por `kind`) para los cinco cierres: descartar un lead, rechazar una oportunidad, cancelar un contrato, renovarlo con menos y dejarlo vencer sin renovar. No hay que armar otro diálogo para un cierre nuevo: se agrega el `kind` y su lista de motivos.
+- **Siempre tres cosas:** el motivo (lista editable por empresa), **quién lo dijo** (el cliente, o es una suposición del vendedor) y un comentario. «Sin información» existe para no obligar a inventar un motivo; «Otro» exige comentario.
+- El diálogo **no cierra el flujo por su cuenta**: recibe `onConfirm`, y si ese lanza, muestra el mensaje con `ErrorBanner` (que se trae a la vista) y se queda abierto.
+- Las gráficas que usan estos motivos deben decir cuánto es «sin información» y cuánto es suposición del vendedor: un pareto sin eso parece más seguro de lo que es.
+
+---
+
 ## Versión
+- v1.9 - Octubre 2026 (todo cierre se explica con `MotivoCierreModal`)
 - v1.8 - Octubre 2026 (pantallas en solo lectura por rol: botón visible + aviso de «solo administradores»)
 - v1.7 - Octubre 2026 (enlaces como botones, íconos con fondo y acciones de fila visibles en Contratación Pública)
 - v1.6 - Septiembre 2026 (tarjetas de KPI sin línea dedicada al ícono + botón de Ayuda en dashboards de módulo)

@@ -42,6 +42,7 @@ export class VertexChatClient {
     systemPrompt: string,
     history: ChatTurn[],
     newMessage: string,
+    opciones?: { maxOutputTokens?: number },
   ): Promise<{ reply: string; tokensUsed: number }> {
     const token = await this.googleAuth.getAccessToken();
     const url = `https://${this.location}-aiplatform.googleapis.com/v1/projects/${this.project}/locations/${this.location}/publishers/google/models/${this.model}:generateContent`;
@@ -70,7 +71,7 @@ export class VertexChatClient {
           // [INTENCION: ...], que entonces nunca se reconocía). El costo
           // extra de subir el tope es mínimo frente a romper la detección de
           // intención.
-          maxOutputTokens: 2048,
+          maxOutputTokens: opciones?.maxOutputTokens ?? 2048,
           // Chat de preguntas y respuestas, no razonamiento encadenado — igual
           // que en reclutamiento-ia.service.ts, desactivarlo evita que el
           // "thinking" se coma el cupo de salida de forma impredecible.

@@ -42,6 +42,12 @@ model Company {
   salesContracts            SalesContract[]
   salesClients              SalesClient[]
   salesClientFields         SalesClientField[]
+  salesServices             SalesService[]
+  salesAgreements           SalesAgreement[]
+  salesLeads                SalesLead[]
+  salesOpportunities        SalesOpportunity[]
+  salesReasons              SalesReason[]
+  salesReasonEntries        SalesReasonEntry[]
   entidades                 Entidad[]
   requisitosDocumento       RequisitoDocumento[]
   cpEntidadesPublicas       CPEntidadPublica[]
@@ -205,6 +211,7 @@ model Task {
   startDate      DateTime?
   project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignees      TaskAssignee[]
+  reminders      TaskReminder[]
 }
 
 model TaskAssignee {
@@ -215,6 +222,22 @@ model TaskAssignee {
   user   User @relation(fields: [userId], references: [id])
 
   @@unique([taskId, userId])
+}
+
+// Recordatorios de una tarea (2026-10-07): cuántos días antes de `endDate` se
+// avisa a los asignados. daysBefore 0 = el mismo día; negativo = aviso único
+// de atraso, -N días después de `endDate` si sigue sin terminar (-1 = al día
+// siguiente; 2026-10-08 se pueden elegir plazos libres). `sentAt` evita repetir el aviso; se vacía
+// cuando cambia la fecha fin. Tabla aparte a propósito: el despliegue no corre
+// migraciones, así que se crea sola al arrancar (task-reminder.schema.ts).
+model TaskReminder {
+  id         Int       @id @default(autoincrement())
+  taskId     Int
+  daysBefore Int
+  sentAt     DateTime?
+  task       Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, daysBefore])
 }
 
 model Agent {
@@ -1831,6 +1854,7 @@ model SalesContract {
   template          SalesTemplate           @relation(fields: [templateId], references: [id])
   salesClient       SalesClient?            @relation(fields: [salesClientId], references: [id], onDelete: SetNull)
   contractDocuments SalesContractDocument[]
+  agreementLink     SalesAgreementDocument?
 
   @@index([companyId, status])
   @@index([salesClientId])
@@ -1917,15 +1941,106 @@ model SalesClient {
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
 
-  company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  creator   User            @relation(fields: [createdBy], references: [id])
-  contracts SalesContract[]
+  company       Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator       User               @relation(fields: [createdBy], references: [id])
+  contracts     SalesContract[]
+  agreements    SalesAgreement[]
+  opportunities SalesOpportunity[]
 
   @@index([companyId])
   @@index([companyId, status])
   @@index([referredByUserId])
   @@index([assignedUserId])
   @@index([companyId, assignedUserId, nextActionDate])
+}
+
+// ---------------------------------------------------------------------------
+// Contrato comercial (pantalla "Contratos" de Ventas, 2026-10-07).
+//
+// OJO con el nombre: `SalesContract` es el DOCUMENTO que se genera desde una
+// plantilla y se firma (pantalla "Documentación"). `SalesAgreement` es el
+// ACUERDO comercial con un cliente: qué servicios contrató, desde cuándo hasta
+// cuándo y si renueva a otro. Un cliente tiene varios acuerdos (renovaciones) y
+// cada acuerdo cubre varios servicios; los documentos firmados cuelgan del
+// acuerdo a través de SalesAgreementDocument (tabla aparte a propósito: el
+// despliegue no corre migraciones y una columna nueva en SalesContract
+// rompería sus consultas hasta aplicar el SQL). Las tablas se crean solas al
+// arrancar (sales-agreement.schema.ts).
+// ---------------------------------------------------------------------------
+model SalesService {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  company       Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agreements    SalesAgreementService[]
+  opportunities SalesOpportunityService[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model SalesAgreement {
+  id            Int       @id @default(autoincrement())
+  companyId     Int
+  salesClientId Int
+  title         String?
+  startDate     DateTime  @db.Date
+  endDate       DateTime? @db.Date // null = sin fecha de fin (indefinido)
+  // ACTIVO, RENOVADO (ya existe otro que lo sigue) o CANCELADO. Vigente / por
+  // vencer / vencido NO se guardan: se calculan con endDate (agreement-status.util.ts).
+  status        String    @default("ACTIVO")
+  renewedFromId Int?
+  notes         String?
+  // Valor mensual del contrato (null = no registrado). Con el se calcula la
+  // retencion en dinero y se detecta que una renovacion baja de valor.
+  monthlyValue  Decimal?  @db.Decimal(12, 2)
+  // Dias despues del fin en los que el cliente sigue siendo En riesgo y todavia
+  // no Ex-cliente. Lo fija cada contrato al crearse.
+  graceDays     Int       @default(30)
+  cancelledAt   DateTime?
+  // Oportunidad comercial que origino este contrato (sin FK a proposito).
+  opportunityId Int?
+  createdBy     Int
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company     Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  salesClient SalesClient              @relation(fields: [salesClientId], references: [id], onDelete: Cascade)
+  renewedFrom SalesAgreement?          @relation("SalesAgreementRenewal", fields: [renewedFromId], references: [id], onDelete: SetNull)
+  renewals    SalesAgreement[]         @relation("SalesAgreementRenewal")
+  services    SalesAgreementService[]
+  documents   SalesAgreementDocument[]
+
+  @@index([companyId, status])
+  @@index([salesClientId])
+  @@index([companyId, endDate])
+}
+
+model SalesAgreementService {
+  agreementId Int
+  serviceId   Int
+
+  agreement SalesAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  service   SalesService   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([agreementId, serviceId])
+  @@index([serviceId])
+}
+
+model SalesAgreementDocument {
+  contractId  Int      @id // un documento pertenece a un solo contrato comercial
+  agreementId Int
+  createdAt   DateTime @default(now())
+
+  contract  SalesContract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  agreement SalesAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+
+  @@index([agreementId])
 }
 
 enum TicketSoporteTipo {
@@ -2017,22 +2132,22 @@ model SistemasDriveConfig {
 // snapshot (cédula + nombre) de a quién se asignó a cada puesto, nunca se
 // duplica ni se modifica ese catálogo.
 model CPEntidadPublica {
-  id        Int      @id @default(autoincrement())
-  nombre    String
-  ruc       String?
-  direccion String?
+  id            Int      @id @default(autoincrement())
+  nombre        String
+  ruc           String?
+  direccion     String?
   // Subcarpeta de esta entidad dentro de la carpeta raíz de Contratación
   // Pública (FolderConfig tipo CP_ENTREGAS). Es el ancla: así un cambio de
   // nombre no crea otra carpeta ni deja la anterior huérfana.
   driveFolderId String?
   // Archivada = oculta de la lista (con "Mostrar archivadas" se ve), sin borrar
   // nada: conserva sus solicitudes, su carpeta de Drive y sus datos.
-  archivada Boolean @default(false)
+  archivada     Boolean  @default(false)
   // Valores de los campos configurables (CPEntidadCampo): { "<idCampo>": valor }.
-  camposExtra Json?
-  companyId Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  camposExtra   Json?
+  companyId     Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   company              Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   contratos            CPContrato[]
@@ -2409,4 +2524,172 @@ model CPPlantillaInforme {
   updatedAt DateTime @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Leads, oportunidades y motivos (2026-10-07).
+//
+// Un LEAD es un contacto entrante sin calificar (web, campañas, correo): puede
+// ser un prospecto de servicio, un postulante a empleo, un proveedor o spam. Solo
+// uno de servicio, calificado, se convierte en cliente + oportunidad; un cliente
+// NUNCA vuelve a ser lead (si uno que ya es cliente pide otro servicio entra como
+// lead nuevo y, al convertirlo, se le suma una oportunidad al mismo cliente).
+//
+// Una OPORTUNIDAD es cada negociación de un servicio de un cliente: tiene su
+// propio embudo (las etapas de SalesClientStage por empresa), monto cotizado y
+// motivo de pérdida. `SalesClient.status` queda como ESPEJO de la etapa de la
+// oportunidad principal para los lectores que todavía miran al cliente
+// (dashboard, "Mis referidos"); nunca se borra esa columna.
+//
+// El despliegue no corre migraciones: estas tablas se crean solas al arrancar
+// (sales-pipeline.schema.ts). Los usuarios van como Int sin relación para no
+// tocar el modelo User.
+// ---------------------------------------------------------------------------
+model SalesLead {
+  id                     Int       @id @default(autoincrement())
+  companyId              Int
+  name                   String
+  email                  String?
+  phone                  String?
+  companyName            String?
+  message                String?
+  // WEB_FORM, GOOGLE_ADS, META_ADS, EMAIL, MANUAL
+  channel                String    @default("MANUAL")
+  campaign               String?
+  // Id del lead en la plataforma de origen (Google/Meta): evita duplicados.
+  externalId             String?
+  // SERVICIO, EMPLEO, PROVEEDOR, OTRO, SPAM; null = sin clasificar.
+  contactReason          String?
+  // NUEVO, EN_SEGUIMIENTO, CONVERTIDO, DESCARTADO
+  status                 String    @default("NUEVO")
+  assignedUserId         Int?
+  extra                  Json      @default("{}")
+  convertedClientId      Int?
+  convertedOpportunityId Int?
+  triagedAt              DateTime?
+  createdBy              Int?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, channel, externalId])
+  @@index([companyId, status])
+}
+
+model SalesOpportunity {
+  id               Int       @id @default(autoincrement())
+  companyId        Int
+  salesClientId    Int
+  title            String?
+  // Clave de etapa (SalesClientStage.key). Sin FK: las claves no cambian y un
+  // ON DELETE SET NULL sobre [companyId, key] intentaría anular companyId.
+  status           String?
+  // GANADA, PERDIDA o null (abierta). Una oportunidad está abierta mientras
+  // closedAt sea null.
+  outcome          String?
+  receivedAt       DateTime  @default(now())
+  closedAt         DateTime?
+  quotedAt         DateTime? @db.Date
+  quotedAmount     Decimal?  @db.Decimal(12, 2)
+  assignedUserId   Int?
+  // Fuente copiada del cliente/lead (REFERIDO, CAMPANA, WEB_FORM…).
+  source           String?
+  // Quién refirió: solo la primera oportunidad lo trae, para no avisarle otra
+  // vez cuando el mismo cliente tiene una segunda negociación.
+  referredByUserId Int?
+  leadId           Int?
+  // LEAD, MANUAL, REFERIDO, MIGRADA, CLIENTE_EXISTENTE
+  originType       String    @default("MANUAL")
+  notes            String?
+  createdBy        Int
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  company      Company                       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  salesClient  SalesClient                   @relation(fields: [salesClientId], references: [id], onDelete: Cascade)
+  services     SalesOpportunityService[]
+  stageChanges SalesOpportunityStageChange[]
+
+  @@index([companyId, status])
+  @@index([salesClientId])
+  @@index([companyId, assignedUserId])
+}
+
+model SalesOpportunityService {
+  opportunityId Int
+  serviceId     Int
+
+  opportunity SalesOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  service     SalesService     @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([opportunityId, serviceId])
+  @@index([serviceId])
+}
+
+model SalesOpportunityStageChange {
+  id             Int      @id @default(autoincrement())
+  opportunityId  Int
+  salesClientId  Int
+  companyId      Int
+  fromStatus     String?
+  toStatus       String
+  notes          String?
+  changedBy      Int
+  createdAt      DateTime @default(now())
+  // Id del cambio original en SalesClientStageChange (relleno inicial idempotente).
+  legacyChangeId Int?     @unique
+
+  opportunity SalesOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId, createdAt])
+  @@index([companyId, toStatus, createdAt])
+}
+
+// Catálogo de motivos por empresa. `kinds` dice en qué cierres aparece:
+// LEAD_DESCARTE, OPP_PERDIDA, CONTRATO_CANCELADO, CONTRATO_REDUCCION,
+// CONTRATO_NO_RENOVADO. Los de sistema (isSystem) no se borran.
+model SalesReason {
+  id              Int      @id @default(autoincrement())
+  companyId       Int
+  label           String
+  kinds           String[]
+  isActive        Boolean  @default(true)
+  order           Int      @default(0)
+  requiresComment Boolean  @default(false)
+  isNoInfo        Boolean  @default(false)
+  isSystem        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, label])
+  @@index([companyId])
+}
+
+// Cada vez que alguien explica un cierre. `reasonLabel` es una foto del nombre
+// (renombrar el motivo después no cambia lo ya registrado). `source` dice quién
+// lo dijo: CLIENTE (textual) o VENDEDOR (suposición del vendedor).
+model SalesReasonEntry {
+  id            Int      @id @default(autoincrement())
+  companyId     Int
+  kind          String
+  reasonId      Int?
+  reasonLabel   String
+  comment       String?
+  source        String?
+  leadId        Int?
+  opportunityId Int?
+  agreementId   Int?
+  salesClientId Int?
+  detail        Json?
+  createdBy     Int
+  createdAt     DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, kind, createdAt])
+  @@index([salesClientId])
+  @@index([opportunityId])
+  @@index([agreementId])
 }

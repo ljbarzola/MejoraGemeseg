@@ -5,9 +5,11 @@ import {
   IsInt,
   IsBoolean,
   IsArray,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { MotivoInputDto } from './opportunity.dto';
 
 export class CreateSalesClientDto {
   @IsString()
@@ -41,6 +43,13 @@ export class CreateSalesClientDto {
   @IsString()
   @IsOptional()
   fechaIngreso?: string;
+
+  // true = «ya es cliente»: un cliente que venía contratando antes de usar el
+  // sistema. Se registra con una oportunidad histórica ya Aceptada (queda como
+  // Cliente, «Por contratar», sin entrar a las cifras de ventas nuevas).
+  @IsBoolean()
+  @IsOptional()
+  yaEsCliente?: boolean;
 }
 
 export class UpdateSalesClientDto {
@@ -211,13 +220,56 @@ export class ChangeSalesClientStageDto {
   @IsOptional()
   @IsString()
   nextActionDate?: string | null;
+
+  // Desde 2026-10-07 la etapa vive en la oportunidad: esta ruta cambia la de
+  // la oportunidad principal del cliente, y pasar a una etapa de pérdida exige
+  // motivo (ver VentasOportunidadesService.cambiarEtapa).
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => MotivoInputDto)
+  motivo?: MotivoInputDto;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  quotedAmount?: number | null;
+
+  @IsOptional()
+  @IsString()
+  quotedAt?: string | null;
 }
 
 // Tipos de actividad de la ficha del cliente. OTRO lleva una etiqueta libre
 // (`otherLabel`) que la persona escribe. Se validan en el servicio para dar un
 // mensaje claro en español en vez del genérico de class-validator.
-export const ACTIVITY_TYPES = ['NOTA', 'LLAMADA', 'REUNION', 'CORREO', 'OTRO'] as const;
+// 2026-10-07: se sumaron COTIZACION_ENVIADA, QUEJA, INCIDENTE_SERVICIO y
+// CONVERSACION_SALIDA. Sirven para que, cuando un cliente se pierde, quede
+// escrito qué pasó con el servicio (lo operativo suele ser la causa real) y no
+// solo lo comercial. `type` es un String en la base: no hace falta migración.
+export const ACTIVITY_TYPES = [
+  'NOTA',
+  'LLAMADA',
+  'REUNION',
+  'CORREO',
+  'COTIZACION_ENVIADA',
+  'QUEJA',
+  'INCIDENTE_SERVICIO',
+  'CONVERSACION_SALIDA',
+  'OTRO',
+] as const;
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
+
+export const ETIQUETA_ACTIVIDAD: Record<string, string> = {
+  NOTA: 'Nota',
+  LLAMADA: 'Llamada',
+  REUNION: 'Reunión',
+  CORREO: 'Correo',
+  COTIZACION_ENVIADA: 'Cotización enviada',
+  QUEJA: 'Queja',
+  INCIDENTE_SERVICIO: 'Incidente del servicio',
+  CONVERSACION_SALIDA: 'Conversación de salida',
+  OTRO: 'Otro',
+};
 
 export class CreateSalesClientActivityDto {
   @IsString()

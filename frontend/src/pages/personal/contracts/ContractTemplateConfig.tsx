@@ -14,6 +14,7 @@ import {
   type ContractField,
   type ContractSystemField,
 } from '../../../services/personal.service';
+import { sugerirCampoSistema } from '../../../utils/sugerirCampoSistema';
 
 const NEW_TYPE_OPTION = '__new__';
 const MAX_DOCX_MB = 10;
@@ -42,6 +43,9 @@ export default function ContractTemplateConfig() {
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState(1);
   const [error, setError] = useState('');
+  // Variables cuyo "Autocompletar con" fue sugerido por el sistema (no elegido a mano).
+  const [sugeridos, setSugeridos] = useState<Set<string>>(new Set());
+  const [avisoSugerencia, setAvisoSugerencia] = useState('');
 
   useEffect(() => {
     getContractSystemFields().then(setSystemFields).catch(() => setSystemFields([]));
@@ -156,15 +160,25 @@ export default function ContractTemplateConfig() {
         setError('No se encontraron variables. Asegúrate de que el documento tenga placeholders como [NOMBRE].');
         return;
       }
+      // Lo que el usuario ya eligió se respeta; solo las variables sin vínculo
+      // reciben una sugerencia por parecido de nombre (revisable en la tabla).
+      const sugeridosAhora = new Set<string>();
       const newFields: ContractField[] = vars.map((v) => {
         const existing = fields.find((f) => f.variableName === v);
+        const label = existing?.label || v.replace(/_/g, ' ');
+        let systemField = existing?.systemField ?? null;
+        if (!systemField) {
+          systemField = sugerirCampoSistema(v, label);
+          if (systemField) sugeridosAhora.add(v);
+        }
         return {
           variableName: v,
-          label: existing?.label || v.replace(/_/g, ' '),
+          label,
           isRequired: existing?.isRequired ?? true,
-          systemField: existing?.systemField ?? null,
+          systemField,
         };
       });
+      setSugeridos(sugeridosAhora);
       setFields(newFields);
       setStep(3);
     } catch (err: any) {
@@ -176,6 +190,36 @@ export default function ContractTemplateConfig() {
 
   const updateField = (idx: number, partial: Partial<ContractField>) => {
     setFields((prev) => prev.map((f, i) => (i === idx ? { ...f, ...partial } : f)));
+    // Si el usuario cambia el vínculo a mano, ya no es una sugerencia automática.
+    if ('systemField' in partial) {
+      const variable = fields[idx]?.variableName;
+      setSugeridos((prev) => {
+        if (!variable || !prev.has(variable)) return prev;
+        const next = new Set(prev);
+        next.delete(variable);
+        return next;
+      });
+    }
+  };
+
+  // Para plantillas ya guardadas con todo en "Manual": completa solo los
+  // campos sin vínculo; nada se guarda hasta pulsar "Guardar plantilla".
+  const handleSugerir = () => {
+    const sugeridosAhora = new Set<string>();
+    const nuevos = fields.map((f) => {
+      if (f.systemField) return f;
+      const sugerido = sugerirCampoSistema(f.variableName, f.label);
+      if (!sugerido) return f;
+      sugeridosAhora.add(f.variableName);
+      return { ...f, systemField: sugerido };
+    });
+    setFields(nuevos);
+    setSugeridos((prev) => new Set([...prev, ...sugeridosAhora]));
+    setAvisoSugerencia(
+      sugeridosAhora.size > 0
+        ? ''
+        : 'No encontré campos que se parezcan a datos del guardia; quedan en manual.',
+    );
   };
 
   const handleSave = async () => {
@@ -342,6 +386,22 @@ export default function ContractTemplateConfig() {
           <p style={{ fontSize: '0.8rem', color: '#718096', margin: '0 0 12px' }}>
             Si un campo corresponde a un dato que el sistema ya conoce del guardia, elígelo en "Autocompletar con" para que no haya que escribirlo a mano cada vez.
           </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 12px' }}>
+            <button type="button" className="btn-secondary" onClick={handleSugerir}>
+              Sugerir autocompletado
+            </button>
+            <span style={{ fontSize: '0.78rem', color: '#718096' }}>
+              Busca nombres parecidos entre las variables y los datos del guardia. Solo completa los que están en "Manual".
+            </span>
+          </div>
+          {avisoSugerencia && (
+            <p style={{ fontSize: '0.8rem', color: '#975a16', margin: '0 0 12px' }}>{avisoSugerencia}</p>
+          )}
+          {sugeridos.size > 0 && (
+            <div style={{ background: '#fffbeb', border: '1px solid #f6e05e', color: '#744210', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: '0.82rem' }}>
+              Se sugirió automáticamente el autocompletado de {sugeridos.size} campo(s) por el parecido de su nombre. <strong>Revisa que cada uno sea el dato correcto</strong> antes de guardar; puedes cambiarlos o dejarlos en "Manual".
+            </div>
+          )}
           <div className="tasks-table-wrapper">
             <table className="tasks-table">
               <thead>
@@ -364,6 +424,9 @@ export default function ContractTemplateConfig() {
                         <option value="">Manual (se llena al generar)</option>
                         {systemFields.map((sf) => <option key={sf.code} value={sf.code}>{sf.label}</option>)}
                       </select>
+                      {sugeridos.has(f.variableName) && (
+                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#975a16', marginTop: 2 }}>Sugerido — revísalo</span>
+                      )}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <input type="checkbox" checked={f.isRequired !== false} onChange={(e) => updateField(i, { isRequired: e.target.checked })} />

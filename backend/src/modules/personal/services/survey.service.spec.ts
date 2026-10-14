@@ -15,6 +15,8 @@ describe('SurveyService', () => {
     survey: { create: jest.Mock; findFirst: jest.Mock; update: jest.Mock };
     surveyResponse: { create: jest.Mock };
     notificationConfig: { findUnique: jest.Mock };
+    surveyQuestion: { deleteMany: jest.Mock; update: jest.Mock; create: jest.Mock };
+    $transaction: jest.Mock;
   };
   let notificationsService: { create: jest.Mock };
   let gmailMailService: { sendMail: jest.Mock };
@@ -33,6 +35,12 @@ describe('SurveyService', () => {
       },
       surveyResponse: { create: jest.fn().mockResolvedValue({ id: 10 }) },
       notificationConfig: { findUnique: jest.fn().mockResolvedValue(null) },
+      surveyQuestion: {
+        deleteMany: jest.fn().mockReturnValue('delete'),
+        update: jest.fn().mockReturnValue('update'),
+        create: jest.fn().mockReturnValue('create'),
+      },
+      $transaction: jest.fn().mockResolvedValue([]),
     };
     notificationsService = { create: jest.fn().mockResolvedValue(undefined) };
     gmailMailService = { sendMail: jest.fn().mockResolvedValue(undefined) };
@@ -448,6 +456,92 @@ describe('SurveyService', () => {
 
       await expect(service.reopen(3, 1)).rejects.toBeInstanceOf(BadRequestException);
       expect(prisma.survey.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('update', () => {
+    const encuesta = (estado: string, respuestasQ1 = 0) => ({
+      id: 7,
+      status: estado,
+      questions: [
+        { id: 1, label: 'Q1', type: 'SHORT_TEXT', _count: { answers: respuestasQ1 } },
+        { id: 2, label: 'Q2', type: 'RATING', _count: { answers: 3 } },
+      ],
+    });
+
+    it('actualiza las existentes, crea las nuevas y elimina las que ya no llegan, en cualquier estado', async () => {
+      prisma.survey.findFirst.mockResolvedValue(encuesta('PUBLISHED'));
+
+      await service.update(
+        7,
+        {
+          title: '  Clima  ',
+          questions: [
+            { id: 1, label: ' Q1 editada ', type: 'LONG_TEXT' },
+            { label: 'Nueva', type: 'SHORT_TEXT' },
+          ],
+        },
+        1,
+      );
+
+      expect(prisma.surveyQuestion.deleteMany).toHaveBeenCalledWith({
+        where: { surveyId: 7, id: { in: [2] } },
+      });
+      expect(prisma.surveyQuestion.update.mock.calls[0][0].where).toEqual({ id: 1 });
+      expect(prisma.surveyQuestion.update.mock.calls[0][0].data.label).toBe('Q1 editada');
+      expect(prisma.surveyQuestion.create.mock.calls[0][0].data).toMatchObject({
+        surveyId: 7,
+        label: 'Nueva',
+        order: 1,
+        required: true,
+      });
+      expect(prisma.survey.update.mock.calls[0][0].data.title).toBe('Clima');
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('no deja cambiar el tipo de una pregunta que ya tiene respuestas', async () => {
+      prisma.survey.findFirst.mockResolvedValue(encuesta('PUBLISHED'));
+
+      await expect(
+        service.update(7, { title: 'X', questions: [{ id: 2, label: 'Q2', type: 'SHORT_TEXT' }] }, 1),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('sí deja pasar de texto corto a texto largo aunque tenga respuestas', async () => {
+      prisma.survey.findFirst.mockResolvedValue(encuesta('PUBLISHED', 5));
+
+      await service.update(7, { title: 'X', questions: [{ id: 1, label: 'Q1', type: 'LONG_TEXT' }] }, 1);
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('exige al menos 2 opciones en las preguntas de opción', async () => {
+      prisma.survey.findFirst.mockResolvedValue(encuesta('DRAFT'));
+
+      await expect(
+        service.update(
+          7,
+          { title: 'X', questions: [{ label: 'Elige', type: 'SINGLE_CHOICE', options: ['Solo una'] }] },
+          1,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rechaza una pregunta que no pertenece a la encuesta', async () => {
+      prisma.survey.findFirst.mockResolvedValue(encuesta('DRAFT'));
+
+      await expect(
+        service.update(7, { title: 'X', questions: [{ id: 99, label: 'Ajena', type: 'SHORT_TEXT' }] }, 1),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('no encuentra una encuesta de otra empresa', async () => {
+      prisma.survey.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.update(7, { title: 'X', questions: [{ label: 'Q', type: 'SHORT_TEXT' }] }, 1),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

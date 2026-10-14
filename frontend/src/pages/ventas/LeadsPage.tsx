@@ -1,435 +1,496 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Settings } from 'lucide-react';
-import { getLeads, createLead, assignLead, updateLeadStatus, deleteLead, Lead } from '../../services/ventas.service';
-import { getUsers } from '../../services/user.service';
-import ConfirmDialog from '../../components/common/ConfirmDialog';
-import PromptDialog from '../../components/common/PromptDialog';
+import { Plus, Plug, UserPlus, UserMinus, XCircle, ClipboardList, ArrowRightCircle } from 'lucide-react';
+import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
+import ErrorBanner from '../../components/common/ErrorBanner';
+import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
+import MotivoCierreModal from '../../components/ventas/MotivoCierreModal';
+import ConvertirLeadModal from '../../components/ventas/ConvertirLeadModal';
+import ConexionesLeadsModal from '../../components/ventas/ConexionesLeadsModal';
+import { useResizableColumns } from '../../hooks/useResizableColumns';
+import { useColumnPreferences } from '../../hooks/useColumnPreferences';
+import { useSortableTable } from '../../hooks/useSortableTable';
 import { useToast } from '../../contexts/ToastContext';
+import { getUser } from '../../services/auth.service';
+import {
+  getLeadsEntrantes,
+  createLeadEntrante,
+  updateLeadEntrante,
+  tomarLeadEntrante,
+  soltarLeadEntrante,
+  descartarLeadEntrante,
+  getServicios,
+  CANAL_LEAD_LABEL,
+  MOTIVO_CONTACTO_LABEL,
+  type LeadEntrante,
+  type MotivoContacto,
+  type SalesServicio,
+} from '../../services/ventas.service';
+import { diaCorto } from '../../utils/contratoComercial';
 
-const SOURCE_BADGES: Record<string, { label: string; color: string }> = {
-  GOOGLE_ADS: { label: 'Google Ads', color: '#319795' },
-  WEB_FORM: { label: 'Web Form', color: '#3182ce' },
-  EMAIL: { label: 'Correo', color: '#805ad5' },
-  MANUAL: { label: 'Manual', color: '#718096' },
+// Columnas elegibles (además de Contacto y Acciones, que son fijas).
+const COLUMNAS_LEAD = [
+  { key: 'mensaje', label: 'Mensaje' },
+  { key: 'canal', label: 'Canal' },
+  { key: 'motivo', label: 'Motivo del contacto' },
+  { key: 'estado', label: 'Estado' },
+  { key: 'responsable', label: 'Responsable' },
+  { key: 'llego', label: 'Llegó' },
+  { key: 'campana', label: 'Campaña' },
+  { key: 'servicio', label: 'Servicio pedido' },
+];
+const COLUMNAS_LEAD_POR_DEFECTO = ['mensaje', 'canal', 'motivo', 'estado', 'responsable', 'llego'];
+const ANCHO_COLUMNA_LEAD: Record<string, number> = {
+  mensaje: 220, canal: 130, motivo: 170, estado: 150, responsable: 140, llego: 110, campana: 150, servicio: 150,
 };
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  NEW: { label: 'Nuevo', color: '#3182ce' },
-  CONTACTED: { label: 'Contactado', color: '#d69e2e' },
-  QUALIFIED: { label: 'Calificado', color: '#805ad5' },
-  QUOTED: { label: 'Cotizado', color: '#dd6b20' },
-  WON: { label: 'Ganado (Venta)', color: '#38a169' },
-  LOST: { label: 'Perdido', color: '#e53e3e' },
+const ESTADO_LABEL: Record<LeadEntrante['status'], string> = {
+  NUEVO: 'Sin procesar',
+  EN_SEGUIMIENTO: 'Contactado',
+  // «Convertido» queda para Google Ads (cuando la oportunidad se acepta); aquí
+  // solo significa que el lead ya pasó a una oportunidad.
+  CONVERTIDO: 'Pasó a oportunidad',
+  DESCARTADO: 'Descartado',
+};
+// Días desde que llegó sin que nadie lo atienda (solo marca, no descarta nada).
+const DIAS_SIN_ATENDER = 2;
+const diasDesde = (iso: string) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+
+const ESTADO_COLOR: Record<LeadEntrante['status'], string> = {
+  NUEVO: '#2b6cb0',
+  EN_SEGUIMIENTO: '#d97706',
+  CONVERTIDO: '#2f855a',
+  DESCARTADO: '#a0aec0',
 };
 
+// Bandeja de Leads: contactos entrantes sin calificar (formulario web, Google
+// Ads, correo, ingreso manual). A la web también escriben postulantes,
+// proveedores y spam: cada contacto se clasifica, y solo uno de servicio se
+// pasa a oportunidad (la persona queda como prospecto hasta que acepte). Un
+// cliente nunca vuelve a ser lead.
 export default function LeadsPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showNewModal, setShowNewModal] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [search, setSearch] = useState('');
+  const usuario = getUser();
+  const [leads, setLeads] = useState<LeadEntrante[]>([]);
+  const [servicios, setServicios] = useState<SalesServicio[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [busqueda, setBusqueda] = useState('');
+  const [estado, setEstado] = useState('pendientes');
+  const [motivo, setMotivo] = useState('');
+  const [canal, setCanal] = useState('');
+  const [conexiones, setConexiones] = useState(false);
+  const [nuevo, setNuevo] = useState(false);
+  const [convirtiendo, setConvirtiendo] = useState<LeadEntrante | null>(null);
+  const [descartando, setDescartando] = useState<LeadEntrante | null>(null);
+  // Columnas que cada persona elige ver (preferencia en su cuenta).
+  const columnPrefs = useColumnPreferences('ventas-leads', COLUMNAS_LEAD_POR_DEFECTO);
+  const tablaRef = useResizableColumns('ventas-leads', ['contacto', ...columnPrefs.visible, 'acciones']);
 
-  const [createError, setCreateError] = useState('');
-  const createErrorRef = useRef<HTMLDivElement>(null);
-  const [assignError, setAssignError] = useState('');
-  const assignErrorRef = useRef<HTMLDivElement>(null);
-  const [statusError, setStatusError] = useState('');
-  const statusErrorRef = useRef<HTMLDivElement>(null);
-  const [deleteError, setDeleteError] = useState('');
-  const deleteErrorRef = useRef<HTMLDivElement>(null);
-  const [confirmDeleteLead, setConfirmDeleteLead] = useState<Lead | null>(null);
-  const [promptWonLead, setPromptWonLead] = useState<Lead | null>(null);
-
-  useEffect(() => {
-    if (createError) createErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [createError]);
-
-  useEffect(() => {
-    if (assignError) assignErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [assignError]);
-
-  useEffect(() => {
-    if (statusError) statusErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [statusError]);
-
-  useEffect(() => {
-    if (deleteError) deleteErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [deleteError]);
-
-  // Form for manual lead
-  const [form, setForm] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
-    companyName: '',
-    source: 'MANUAL',
-    campaignName: '',
-    estimatedValue: 0,
-    notes: '',
-  });
-
-  const loadData = () => {
-    setLoading(true);
-    Promise.all([getLeads(), getUsers()])
-      .then(([lData, uData]) => {
-        setLeads(lData);
-        setUsers(uData);
-      })
-      .catch((err: any) => {
-        showToast(err?.response?.data?.message || 'No se pudieron cargar los prospectos', 'error');
-      })
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { loadData(); }, []);
-
-  const handleCreateLead = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCreateError('');
-    if (!form.fullName.trim()) { setCreateError('El nombre es obligatorio'); return; }
-    setSaving(true);
+  const cargar = async () => {
     try {
-      await createLead(form);
-      setShowNewModal(false);
-      setForm({ fullName: '', email: '', phone: '', companyName: '', source: 'MANUAL', campaignName: '', estimatedValue: 0, notes: '' });
-      loadData();
+      const [ls, ss] = await Promise.all([getLeadsEntrantes(), getServicios()]);
+      setLeads(ls);
+      setServicios(ss);
     } catch (err: any) {
-      setCreateError(err.response?.data?.message || 'Error al crear prospecto');
+      showToast(err?.response?.data?.message || 'No se pudieron cargar los leads', 'error');
     } finally {
-      setSaving(false);
+      setCargando(false);
     }
   };
+  useEffect(() => { cargar(); }, []);
 
-  const handleAssignUser = async (leadId: number, userIdStr: string) => {
-    const userId = Number(userIdStr);
-    if (!userId) return;
-    setAssignError('');
-    try {
-      await assignLead(leadId, userId);
-      setLeads((prev) =>
-        prev.map((l) => (l.id === leadId ? { ...l, assignedUserId: userId, assignedUser: users.find((u) => u.id === userId) } : l)),
+  const filtrados = useMemo(() => {
+    const q = busqueda.toLowerCase().trim();
+    return leads.filter((l) => {
+      if (estado === 'pendientes' && (l.status === 'CONVERTIDO' || l.status === 'DESCARTADO')) return false;
+      if (estado && estado !== 'pendientes' && l.status !== estado) return false;
+      if (motivo === 'SIN_CLASIFICAR' ? !!l.contactReason : motivo && l.contactReason !== motivo) return false;
+      if (canal && l.channel !== canal) return false;
+      if (!q) return true;
+      return (
+        l.name.toLowerCase().includes(q) ||
+        (l.email || '').toLowerCase().includes(q) ||
+        (l.phone || '').includes(q) ||
+        (l.companyName || '').toLowerCase().includes(q) ||
+        (l.message || '').toLowerCase().includes(q)
       );
-    } catch {
-      setAssignError('Error al reasignar prospecto');
-    }
-  };
+    });
+  }, [leads, busqueda, estado, motivo, canal]);
 
-  const handleStatusChange = async (lead: Lead, newStatus: string) => {
-    if (newStatus === 'WON') {
-      setStatusError('');
-      setPromptWonLead(lead);
-      return;
-    }
-    setStatusError('');
-    try {
-      await updateLeadStatus(lead.id, newStatus, lead.closedValue);
-      setLeads((prev) =>
-        prev.map((l) => (l.id === lead.id ? { ...l, status: newStatus as any } : l)),
-      );
-    } catch {
-      setStatusError('Error al actualizar estado del prospecto');
-    }
-  };
-
-  const confirmarValorVenta = async (valStr: string) => {
-    const lead = promptWonLead;
-    if (!lead) return;
-    setPromptWonLead(null);
-    const closedVal = Number(valStr) || 0;
-    setStatusError('');
-    try {
-      await updateLeadStatus(lead.id, 'WON', closedVal);
-      setLeads((prev) =>
-        prev.map((l) => (l.id === lead.id ? { ...l, status: 'WON' as any, closedValue: closedVal } : l)),
-      );
-    } catch {
-      setStatusError('Error al actualizar estado del prospecto');
-    }
-  };
-
-  const handleDeleteLead = (lead: Lead) => {
-    setDeleteError('');
-    setConfirmDeleteLead(lead);
-  };
-
-  const confirmarEliminarLead = async () => {
-    if (!confirmDeleteLead) return;
-    const lead = confirmDeleteLead;
-    setConfirmDeleteLead(null);
-    try {
-      await deleteLead(lead.id);
-      loadData();
-    } catch {
-      setDeleteError('Error al eliminar prospecto');
-    }
-  };
-
-  const filtered = leads.filter(
-    (l) =>
-      l.fullName?.toLowerCase().includes(search.toLowerCase()) ||
-      l.email?.toLowerCase().includes(search.toLowerCase()) ||
-      l.companyName?.toLowerCase().includes(search.toLowerCase()) ||
-      l.campaignName?.toLowerCase().includes(search.toLowerCase()),
+  const { filas, thProps, SortIcon } = useSortableTable(
+    filtrados,
+    {
+      contacto: (l) => l.name,
+      canal: (l) => CANAL_LEAD_LABEL[l.channel] ?? l.channel,
+      motivo: (l) => (l.contactReason ? MOTIVO_CONTACTO_LABEL[l.contactReason] : ''),
+      estado: (l) => ESTADO_LABEL[l.status],
+      responsable: (l) => l.assignedUserName,
+      llego: (l) => l.createdAt,
+      mensaje: (l) => l.message,
+      campana: (l) => l.campaign,
+      servicio: (l) => String((l.extra as Record<string, unknown> | null | undefined)?.servicio ?? ''),
+    },
+    'llego',
+    'desc',
   );
+
+  const celdaLead = (key: string, l: LeadEntrante): ReactNode => {
+    switch (key) {
+      case 'mensaje':
+        return (
+          <div style={{ fontSize: 12, color: '#4a5568', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }} title={l.message || ''}>
+            {l.message || <span style={{ color: '#a0aec0' }}>Sin mensaje</span>}
+          </div>
+        );
+      case 'canal':
+        return (
+          <>
+            {CANAL_LEAD_LABEL[l.channel] ?? l.channel}
+            {l.campaign && <div style={{ fontSize: 11, color: '#888' }}>{l.campaign}</div>}
+            {origenLanding(l) && <div style={{ fontSize: 11, color: '#a0aec0' }}>{origenLanding(l)}</div>}
+          </>
+        );
+      case 'motivo':
+        return abiertos(l) ? (
+          <>
+            <select
+              value={l.contactReason ?? ''}
+              aria-label={`Motivo del contacto de ${l.name}`}
+              onChange={(e) => clasificar(l, e.target.value)}
+              style={{ padding: '4px 6px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }}
+            >
+              <option value="">Sin clasificar</option>
+              {(Object.keys(MOTIVO_CONTACTO_LABEL) as MotivoContacto[]).map((k) => <option key={k} value={k}>{MOTIVO_CONTACTO_LABEL[k]}</option>)}
+            </select>
+            {!l.contactReason && l.sugerenciaMotivo && (
+              <div style={{ fontSize: 11, marginTop: 3 }}>
+                Parece de <strong>{MOTIVO_CONTACTO_LABEL[l.sugerenciaMotivo]}</strong>{' '}
+                <button type="button" onClick={() => clasificar(l, l.sugerenciaMotivo!)}
+                  style={{ background: 'none', border: 'none', color: '#2b6cb0', cursor: 'pointer', padding: 0, font: 'inherit', textDecoration: 'underline' }}>
+                  aceptar
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          l.contactReason ? MOTIVO_CONTACTO_LABEL[l.contactReason] : '—'
+        );
+      case 'estado':
+        return (
+          <>
+            <span className="status-badge" style={{ backgroundColor: ESTADO_COLOR[l.status] + '22', color: ESTADO_COLOR[l.status], whiteSpace: 'nowrap' }}>
+              {ESTADO_LABEL[l.status]}
+            </span>
+            {abiertos(l) && diasDesde(l.createdAt) >= DIAS_SIN_ATENDER && (
+              <div>
+                <span className="status-badge" style={{ backgroundColor: '#fef3c7', color: '#92400e', whiteSpace: 'nowrap', marginTop: 4, display: 'inline-block', fontSize: 11 }}
+                  title="Solo es un aviso: el lead sigue en la bandeja hasta que lo atiendas.">
+                  Sin atender hace {diasDesde(l.createdAt)} días
+                </span>
+              </div>
+            )}
+          </>
+        );
+      case 'responsable':
+        return l.assignedUserName || <span style={{ color: '#a0aec0' }}>Sin asignar</span>;
+      case 'llego':
+        return diaCorto(l.createdAt);
+      case 'campana':
+        return l.campaign || '—';
+      case 'servicio':
+        return String((l.extra as Record<string, unknown> | null | undefined)?.servicio ?? '') || '—';
+      default:
+        return null;
+    }
+  };
+  const columnasVisiblesLead = columnPrefs.visible.filter((k) => COLUMNAS_LEAD.some((c) => c.key === k));
+
+  const correr = async (fn: () => Promise<unknown>, ok: string, falla: string) => {
+    try {
+      await fn();
+      if (ok) showToast(ok, 'success');
+      cargar();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message;
+      showToast((Array.isArray(msg) ? msg[0] : msg) || falla, 'error');
+    }
+  };
+
+  const clasificar = (l: LeadEntrante, valor: string) =>
+    correr(
+      () => updateLeadEntrante(l.id, { contactReason: (valor || null) as MotivoContacto | null }),
+      '',
+      'No se pudo clasificar el contacto',
+    );
+
+  const abiertos = (l: LeadEntrante) => l.status === 'NUEVO' || l.status === 'EN_SEGUIMIENTO';
+
+  const acciones = (l: LeadEntrante): RowAction[] => {
+    const lista: RowAction[] = [];
+    if (l.status === 'CONVERTIDO' && (l.convertedOpportunityId || l.convertedClientId)) {
+      lista.push({ label: 'Ver la oportunidad', icon: <ClipboardList size={14} />, onClick: () => navigate('/ventas/oportunidades') });
+    }
+    if (abiertos(l)) {
+      if (!l.assignedUserId) {
+        lista.push({ label: 'Tomar este lead', icon: <UserPlus size={14} />, onClick: () => correr(() => tomarLeadEntrante(l.id), 'Lead tomado', 'No se pudo tomar el lead') });
+      } else if (l.assignedUserId === usuario?.id) {
+        lista.push({ label: 'Soltar este lead', icon: <UserMinus size={14} />, onClick: () => correr(() => soltarLeadEntrante(l.id), 'Lead liberado', 'No se pudo soltar el lead') });
+      }
+      lista.push({ label: 'Descartar', icon: <XCircle size={14} />, danger: true, onClick: () => setDescartando(l) });
+    }
+    return lista;
+  };
+
+  const hayFiltros = !!busqueda || estado !== 'pendientes' || !!motivo || !!canal;
+  const sinClasificar = leads.filter((l) => abiertos(l) && !l.contactReason).length;
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate('/ventas')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-        </button>
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">Ventas y CRM</p>
-            <h1>Prospectos</h1>
-          </div>
-          <div className="header-actions">
-            <button className="auth-btn" onClick={() => setShowNewModal(true)}>
-              <Plus size={16} /> Nuevo prospecto
-            </button>
-            <button
-              type="button"
-              className="btn-icon-toolbar"
-              onClick={() => navigate('/ventas/webhook-config')}
-              title="API de ingreso de prospectos"
-              aria-label="API de ingreso de prospectos"
-            >
-              <Settings size={18} />
-            </button>
-          </div>
+      <div className="page-title-row">
+        <div>
+          <p className="page-eyebrow">Ventas y CRM</p>
+          <h1>Leads</h1>
+        </div>
+        <div className="header-actions">
+          <button className="btn-secondary" onClick={() => setConexiones(true)}>
+            <Plug size={16} /> Conexiones
+          </button>
+          <button className="auth-btn" onClick={() => setNuevo(true)}>
+            <Plus size={16} /> Nuevo lead
+          </button>
         </div>
       </div>
 
-      {assignError && <div ref={assignErrorRef} className="form-error" style={{ marginTop: '16px' }}>{assignError}</div>}
-      {statusError && <div ref={statusErrorRef} className="form-error" style={{ marginTop: '16px' }}>{statusError}</div>}
-      {deleteError && <div ref={deleteErrorRef} className="form-error" style={{ marginTop: '16px' }}>{deleteError}</div>}
+      <p style={{ fontSize: 13, color: '#666', margin: '-6px 0 14px' }}>
+        Contactos que llegan por la web, los anuncios o a mano. Clasifícalos: solo uno de servicio pasa a oportunidad. {sinClasificar > 0 && <strong>{sinClasificar} sin clasificar.</strong>}
+      </p>
 
-      <div className="admin-section" style={{ marginTop: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+      <div className="filter-bar">
+        <div className="filter-bar-fields filter-bar-fields--una-linea">
           <input
-            type="text"
-            placeholder="Buscar por nombre, correo, empresa o campaña..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ padding: '8px 14px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.88rem', width: '320px' }}
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por nombre, correo, teléfono o mensaje..."
+            style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
-          <span style={{ fontSize: '0.85rem', color: '#718096' }}>Total: {filtered.length} prospectos</span>
+          <select className="filter-select" value={estado} onChange={(e) => setEstado(e.target.value)} aria-label="Estado">
+            <option value="pendientes">Pendientes</option>
+            <option value="">Todos</option>
+            <option value="NUEVO">Sin procesar</option>
+            <option value="EN_SEGUIMIENTO">Contactados</option>
+            <option value="CONVERTIDO">Pasaron a oportunidad</option>
+            <option value="DESCARTADO">Descartados</option>
+          </select>
+          <select className="filter-select" value={motivo} onChange={(e) => setMotivo(e.target.value)} aria-label="Motivo del contacto">
+            <option value="">Todos los motivos</option>
+            <option value="SIN_CLASIFICAR">Sin clasificar</option>
+            {(Object.keys(MOTIVO_CONTACTO_LABEL) as MotivoContacto[]).map((k) => <option key={k} value={k}>{MOTIVO_CONTACTO_LABEL[k]}</option>)}
+          </select>
+          <select className="filter-select" value={canal} onChange={(e) => setCanal(e.target.value)} aria-label="Canal">
+            <option value="">Todos los canales</option>
+            {Object.entries(CANAL_LEAD_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
         </div>
+        <div className="filter-bar-actions">
+          <ColumnPickerMenu
+            columns={COLUMNAS_LEAD}
+            visible={columnPrefs.visible}
+            fixedLabel="Contacto"
+            onApply={async (keys) => {
+              const guardado = await columnPrefs.set(keys);
+              if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
+            }}
+          />
+          <ClearFiltersButton
+            onClear={() => { setBusqueda(''); setEstado('pendientes'); setMotivo(''); setCanal(''); }}
+            disabled={!hayFiltros}
+          />
+        </div>
+      </div>
 
-        {loading ? (
-          <div className="loading-state">Cargando prospectos CRM...</div>
-        ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '48px', color: '#a0aec0' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🎯</div>
-            <h3>No hay prospectos registrados</h3>
-            <p style={{ fontSize: '0.9rem', marginTop: '4px' }}>
-              Los leads que ingresen vía Webhook (Google Ads, Web) aparecerán aquí automáticamente en distribución Round-Robin.
-            </p>
+      <div className="admin-section">
+        {cargando ? (
+          <p style={{ color: '#888', fontSize: 13 }}>Cargando...</p>
+        ) : leads.length === 0 ? (
+          <div className="empty-state">
+            <div style={{ fontSize: 36, marginBottom: 8 }}>📥</div>
+            <div>Aún no hay leads. Llegan solos desde la web o Google Ads (ver «Conexiones») o se ingresan a mano.</div>
           </div>
+        ) : filas.length === 0 ? (
+          <p style={{ color: '#888', fontSize: 13 }}>No hay leads que coincidan con los filtros.</p>
         ) : (
           <div className="tasks-table-wrapper">
-            <table className="tasks-table">
+            <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th>Nombre y Contacto</th>
-                  <th>Origen Canal</th>
-                  <th>Vendedor Asignado (Round-Robin)</th>
-                  <th>Etapa CRM</th>
-                  <th>Valor Est. / Cierre ($)</th>
-                  <th>Fecha Ingesta</th>
-                  <th className="no-print">Acciones</th>
+                  <th {...thProps('contacto')} style={{ width: 240 }}>Contacto <SortIcon campo="contacto" /></th>
+                  {columnasVisiblesLead.map((k) => {
+                    const col = COLUMNAS_LEAD.find((c) => c.key === k)!;
+                    return (
+                      <th key={k} {...thProps(k)} style={{ width: ANCHO_COLUMNA_LEAD[k] }}>
+                        {col.label} <SortIcon campo={k} />
+                      </th>
+                    );
+                  })}
+                  <th className="col-acciones col-acciones--ancha" style={{ width: 190 }}><span className="visually-hidden">Acciones</span></th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((l) => {
-                  const srcBadge = SOURCE_BADGES[l.source as keyof typeof SOURCE_BADGES] || SOURCE_BADGES.MANUAL;
-                  const stBadge = STATUS_LABELS[l.status] || STATUS_LABELS.NEW;
-
-                  return (
-                    <tr key={l.id}>
-                      <td>
-                        <div style={{ fontWeight: 600, color: 'var(--azul-oscuro)' }}>{l.fullName}</div>
-                        {l.companyName && <div style={{ fontSize: '0.78rem', color: '#4a5568' }}>🏢 {l.companyName}</div>}
-                        {l.email && <div style={{ fontSize: '0.75rem', color: '#718096' }}>✉️ {l.email}</div>}
-                        {l.phone && <div style={{ fontSize: '0.75rem', color: '#718096' }}>📞 {l.phone}</div>}
+                {filas.map((l) => (
+                  <tr key={l.id}>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{l.name}</div>
+                      {l.companyName && <div style={{ fontSize: 11, color: '#888' }}>{l.companyName}</div>}
+                      <div style={{ fontSize: 11, color: '#888' }}>{[l.email, l.phone].filter(Boolean).join(' · ')}</div>
+                      {abiertos(l) && l.clienteExistente && (
+                        <div style={{ fontSize: 11, color: '#b45309', marginTop: 2 }}>
+                          Parece ser el cliente{' '}
+                          <a className="enlace-tabla" href={`/ventas/clientes?ficha=${l.clienteExistente.id}`}
+                            onClick={(e) => { e.preventDefault(); navigate(`/ventas/clientes?ficha=${l.clienteExistente!.id}`); }}>
+                            {l.clienteExistente.name}
+                          </a>
+                        </div>
+                      )}
+                    </td>
+                    {columnasVisiblesLead.map((k) => (
+                      <td key={k} style={k === 'llego' ? { whiteSpace: 'nowrap' } : k === 'canal' ? { fontSize: 12 } : undefined}>
+                        {celdaLead(k, l)}
                       </td>
-                      <td>
-                        <span
-                          style={{
-                            padding: '3px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600,
-                            background: srcBadge.color + '20', color: srcBadge.color,
-                          }}
-                        >
-                          {srcBadge.label}
-                        </span>
-                        {l.campaignName && <div style={{ fontSize: '0.72rem', color: '#a0aec0', marginTop: '2px' }}>{l.campaignName}</div>}
-                      </td>
-                      <td>
-                        <select
-                          value={l.assignedUserId || ''}
-                          onChange={(e) => handleAssignUser(l.id, e.target.value)}
-                          style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #cbd5e0', fontSize: '0.8rem', fontWeight: 500 }}
-                        >
-                          <option value="">Sin asignar</option>
-                          {users.map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.fullName}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td>
-                        <select
-                          value={l.status}
-                          onChange={(e) => handleStatusChange(l, e.target.value)}
-                          style={{
-                            padding: '4px 8px', borderRadius: '12px', border: 'none',
-                            fontSize: '0.78rem', fontWeight: 700,
-                            background: stBadge.color + '20', color: stBadge.color, cursor: 'pointer',
-                          }}
-                        >
-                          <option value="NEW">1. Nuevo</option>
-                          <option value="CONTACTED">2. Contactado</option>
-                          <option value="QUALIFIED">3. Calificado</option>
-                          <option value="QUOTED">4. Cotizado</option>
-                          <option value="WON">5. Ganado (Venta)</option>
-                          <option value="LOST">Descartado</option>
-                        </select>
-                      </td>
-                      <td>
-                        {l.status === 'WON' ? (
-                          <div style={{ fontWeight: 800, color: '#276749', fontSize: '0.88rem' }}>
-                            ${(l.closedValue || 0).toFixed(2)}
-                            <div style={{ fontSize: '0.7rem', color: '#a0aec0' }}>Cierre ($MD)</div>
-                          </div>
-                        ) : (
-                          <div style={{ fontWeight: 600, color: '#4a5568', fontSize: '0.82rem' }}>
-                            ${(l.estimatedValue || 0).toFixed(2)}
-                            <div style={{ fontSize: '0.7rem', color: '#a0aec0' }}>Estimado</div>
-                          </div>
+                    ))}
+                    <td className="col-acciones col-acciones--ancha">
+                      <div className="acciones-iconos" style={{ justifyContent: 'flex-end' }}>
+                        {abiertos(l) && (!l.contactReason || l.contactReason === 'SERVICIO') && (
+                          <button className="btn-secondary" onClick={() => setConvirtiendo(l)} style={{ padding: '4px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <ArrowRightCircle size={14} /> Pasar a oportunidad
+                          </button>
                         )}
-                      </td>
-                      <td>{new Date(l.createdAt).toLocaleDateString('es-EC')}</td>
-                      <td className="no-print">
-                        <button
-                          style={{ background: 'none', border: 'none', color: '#e53e3e', cursor: 'pointer', fontSize: '0.85rem' }}
-                          onClick={() => handleDeleteLead(l)}
-                          title="Eliminar prospecto"
-                        >
-                          🗑️
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        {l.status === 'CONVERTIDO' && (l.convertedOpportunityId || l.convertedClientId) && (
+                          <button className="btn-secondary" onClick={() => navigate('/ventas/oportunidades')} style={{ padding: '4px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <ArrowRightCircle size={14} /> Ver oportunidad
+                          </button>
+                        )}
+                        <RowActionsMenu actions={acciones(l)} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      {/* NEW LEAD MODAL */}
-      {showNewModal && (
-        <div className="modal-backdrop">
-          <div className="modal-card" style={{ maxWidth: 500 }}>
-            <h3>Registrar Prospecto Manual</h3>
-            {createError && <div ref={createErrorRef} className="form-error" style={{ marginTop: '10px' }}>{createError}</div>}
-            <form onSubmit={handleCreateLead} style={{ marginTop: '12px' }}>
-              <div className="form-group">
-                <label>Nombre Completo del Prospecto *</label>
-                <input
-                  value={form.fullName}
-                  onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                  placeholder="Ej: Juan Carlos Pérez"
-                  required
-                />
-              </div>
+      {nuevo && (
+        <NuevoLeadModal
+          onClose={() => setNuevo(false)}
+          onSaved={() => { setNuevo(false); showToast('Lead creado', 'success'); cargar(); }}
+        />
+      )}
+      {conexiones && <ConexionesLeadsModal onClose={() => setConexiones(false)} />}
+      {convirtiendo && (
+        <ConvertirLeadModal
+          lead={convirtiendo}
+          servicios={servicios}
+          onClose={() => setConvirtiendo(null)}
+          onDone={(r) => {
+            setConvirtiendo(null);
+            showToast(r.sumadaAClienteExistente ? 'Oportunidad sumada al cliente' : 'Oportunidad creada: queda como prospecto hasta que acepte', 'success');
+            cargar();
+            navigate('/ventas/oportunidades');
+          }}
+        />
+      )}
+      {descartando && (
+        <MotivoCierreModal
+          kind="LEAD_DESCARTE"
+          titulo="Descartar lead"
+          descripcion={descartando.name}
+          contexto="Un lead descartado sale de la bandeja pero no se borra. Elige por qué: no contestó, postulante, proveedor, spam, no es un servicio nuestro…"
+          confirmLabel="Descartar"
+          onConfirm={async (m) => {
+            await descartarLeadEntrante(descartando.id, m);
+            setDescartando(null);
+            showToast('Lead descartado', 'success');
+            cargar();
+          }}
+          onCancel={() => setDescartando(null)}
+        />
+      )}
+    </div>
+  );
+}
 
-              <div className="form-row" style={{ marginTop: '8px' }}>
-                <div className="form-group">
-                  <label>Correo Electrónico</label>
-                  <input
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    placeholder="ejemplo@cliente.com"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Teléfono</label>
-                  <input
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    placeholder="0991234567"
-                  />
-                </div>
-              </div>
+// «Landing: monitoreo · Servicio pedido: Alarmas», si la landing los mandó.
+function origenLanding(l: LeadEntrante): string {
+  const e = l.extra || {};
+  const landing = typeof e.landing === 'string' ? e.landing.trim() : '';
+  const servicio = typeof e.servicio === 'string' ? e.servicio.trim() : '';
+  return [landing && `Landing: ${landing}`, servicio && `Servicio pedido: ${servicio}`].filter(Boolean).join(' · ');
+}
 
-              <div className="form-row" style={{ marginTop: '8px' }}>
-                <div className="form-group">
-                  <label>Empresa</label>
-                  <input
-                    value={form.companyName}
-                    onChange={(e) => setForm({ ...form, companyName: e.target.value })}
-                    placeholder="Ej: Exportadora del Sur"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Monto Estimado ($ USD)</label>
-                  <input
-                    type="number"
-                    value={form.estimatedValue}
-                    onChange={(e) => setForm({ ...form, estimatedValue: Number(e.target.value) })}
-                  />
-                </div>
-              </div>
+// Ingreso manual de un lead (una llamada, un correo, un lead de Meta que aún no
+// entra solo).
+function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [datos, setDatos] = useState({ name: '', email: '', phone: '', companyName: '', message: '', channel: 'MANUAL', campaign: '' });
+  const [error, setError] = useState('');
+  const [guardando, setGuardando] = useState(false);
+  const set = (k: keyof typeof datos, v: string) => setDatos((d) => ({ ...d, [k]: v }));
 
-              <div className="form-group" style={{ marginTop: '8px' }}>
-                <label>Campaña de Origen</label>
-                <input
-                  value={form.campaignName}
-                  onChange={(e) => setForm({ ...form, campaignName: e.target.value })}
-                  placeholder="Ej: Google Ads - Cacao Fino Agosto"
-                />
-              </div>
+  const guardar = async () => {
+    setError('');
+    if (!datos.name.trim() && !datos.email.trim() && !datos.phone.trim()) {
+      return setError('Escribe al menos un nombre, un correo o un teléfono.');
+    }
+    setGuardando(true);
+    try {
+      await createLeadEntrante(datos);
+      onSaved();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message;
+      setError((Array.isArray(msg) ? msg[0] : msg) || 'No se pudo guardar el lead. Intenta de nuevo.');
+    } finally {
+      setGuardando(false);
+    }
+  };
 
-              <div className="modal-actions" style={{ marginTop: '16px' }}>
-                <button type="button" className="btn-secondary" onClick={() => setShowNewModal(false)}>Cancelar</button>
-                <button type="submit" className="auth-btn" disabled={saving}>
-                  {saving ? 'Guardando...' : 'Crear Prospecto'}
-                </button>
-              </div>
-            </form>
-          </div>
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Nuevo lead</h3>
+          <button className="modal-close" onClick={onClose} aria-label="Cerrar">✕</button>
         </div>
-      )}
-
-      {confirmDeleteLead && (
-        <ConfirmDialog
-          title="Eliminar prospecto"
-          message={`¿Eliminar al prospecto ${confirmDeleteLead.fullName}?`}
-          confirmLabel="Eliminar"
-          danger
-          onConfirm={confirmarEliminarLead}
-          onCancel={() => setConfirmDeleteLead(null)}
-        />
-      )}
-
-      {promptWonLead && (
-        <PromptDialog
-          title="Venta cerrada"
-          message="Ingresa el valor real de la venta cerrada ($ USD):"
-          defaultValue={String(promptWonLead.estimatedValue || 0)}
-          inputType="number"
-          confirmLabel="Guardar"
-          onConfirm={confirmarValorVenta}
-          onCancel={() => setPromptWonLead(null)}
-        />
-      )}
+        <div className="modal-body">
+          <ErrorBanner mensaje={error} />
+          <div className="form-group"><label>Nombre</label><input type="text" value={datos.name} maxLength={150} onChange={(e) => set('name', e.target.value)} /></div>
+          <div className="form-row">
+            <div className="form-group"><label>Correo</label><input type="email" value={datos.email} onChange={(e) => set('email', e.target.value)} /></div>
+            <div className="form-group"><label>Teléfono</label><input type="text" value={datos.phone} onChange={(e) => set('phone', e.target.value)} /></div>
+          </div>
+          <div className="form-group"><label>Empresa</label><input type="text" value={datos.companyName} maxLength={150} onChange={(e) => set('companyName', e.target.value)} /></div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Cómo llegó</label>
+              <select value={datos.channel} onChange={(e) => set('channel', e.target.value)}>
+                <option value="MANUAL">Ingreso manual</option>
+                <option value="EMAIL">Correo</option>
+                <option value="META_ADS">Meta Ads</option>
+                <option value="GOOGLE_ADS">Google Ads</option>
+                <option value="LINKEDIN_ADS">LinkedIn Ads</option>
+                <option value="WEB_FORM">Formulario web</option>
+              </select>
+            </div>
+            <div className="form-group"><label>Campaña (opcional)</label><input type="text" value={datos.campaign} maxLength={150} onChange={(e) => set('campaign', e.target.value)} /></div>
+          </div>
+          <div className="form-group"><label>Qué pidió o escribió</label><textarea className="form-textarea" rows={3} maxLength={2000} value={datos.message} onChange={(e) => set('message', e.target.value)} /></div>
+        </div>
+        <div className="modal-actions">
+          <button className="btn-secondary" onClick={onClose}>Cancelar</button>
+          <button className="auth-btn" onClick={guardar} disabled={guardando}>{guardando ? 'Guardando...' : 'Guardar'}</button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { normalizar, rangoDesdeParam, textoParam, formatoDia } from './ai-ventas.queries';
 import { INTENT_SECTION } from './ai.processor';
 import { CAPABILITY_MODULES } from './capabilities-prompt.util';
+import { VENTAS_AYUDA } from './ventas-agent-prompt.util';
 
 describe('ai-ventas.queries: helpers', () => {
   it('normalizar quita tildes y pasa a minúsculas, para comparar "Clínica" con "clinica"', () => {
@@ -61,9 +62,7 @@ describe('contrato entre capacidades del asistente y permisos', () => {
     }
   });
 
-  it('las intenciones de Ventas nunca mencionan Leads, Visitas ni otros submódulos "Próximamente"', () => {
-    const ventas = CAPABILITY_MODULES.find((m) => m.section === 'VENTAS')!;
-    const texto = `${ventas.intents.join(' ')} ${ventas.ayuda ?? ''}`;
-    expect(texto).not.toMatch(/lead|visita|prospecto|webhook|planificaci[oó]n/i);
+  it('las consultas de Ventas nunca mencionan Visitas, Webhook ni Planificación (submódulos todavía apagados)', () => {
+    expect(VENTAS_AYUDA).not.toMatch(/visita|webhook|planificaci[oó]n/i);
   });
 });

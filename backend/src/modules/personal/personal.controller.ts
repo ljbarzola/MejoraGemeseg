@@ -181,6 +181,12 @@ export class PersonalController {
     return this.contractService.updateContract(id, body, req.user.companyId);
   }
 
+  @Delete('contracts/:id')
+  @Section('RRHH', 'write')
+  deleteContract(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.contractService.deleteContract(id, req.user.companyId);
+  }
+
   @Get('trainings')
   getTrainings(@Req() req: any) {
     return this.trainingService.findAll(req.user.companyId);

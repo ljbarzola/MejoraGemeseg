@@ -4,6 +4,7 @@ import {
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 
 function getISOWeekNumber(d: Date): { year: number; weekNumber: number } {
@@ -467,7 +468,9 @@ export class VentasService {
   }
 
   async createApiKey(companyId: number, name: string) {
-    const rawKey = `sk_ventas_${Math.random().toString(36).substring(2)}${Date.now()}`;
+    // Aleatoria de verdad: esta clave es la que protege los webhooks de
+    // leads (web, Google Ads); con Math.random sería predecible.
+    const rawKey = `sk_ventas_${randomBytes(24).toString('hex')}`;
     return this.prisma.salesApiKey.create({
       data: {
         name: name.trim(),

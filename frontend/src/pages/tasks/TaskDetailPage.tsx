@@ -10,6 +10,7 @@ import { getUser } from '../../services/auth.service';
 import type { Task, ProjectMember } from '../../types/task';
 import { STATUS_LABELS, STATUS_COLORS } from '../../types/task';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import ReminderPicker, { RECORDATORIOS_POR_DEFECTO } from '../../components/tasks/ReminderPicker';
 import DateInput from '../../components/common/DateInput';
 
 export default function TaskDetailPage() {
@@ -44,6 +45,8 @@ export default function TaskDetailPage() {
   });
 
   const [initialAssignees, setInitialAssignees] = useState<number[]>([]);
+  const [reminderDays, setReminderDays] = useState<number[]>([]);
+  const [initialReminders, setInitialReminders] = useState<number[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -64,6 +67,8 @@ export default function TaskDetailPage() {
         const assigneeIds = t.assignees.map((a) => a.user.id);
         setSelectedAssignees(assigneeIds);
         setInitialAssignees(assigneeIds);
+        setReminderDays(t.reminderDays ?? []);
+        setInitialReminders(t.reminderDays ?? []);
         return getProjectMembers(t.projectId);
       })
       .then(setMembers)
@@ -75,8 +80,10 @@ export default function TaskDetailPage() {
     if (!initialFormRef.current) return;
     const formChanged = JSON.stringify(form) !== JSON.stringify(initialFormRef.current);
     const assigneesChanged = JSON.stringify(selectedAssignees) !== JSON.stringify(initialAssignees);
-    setIsDirty(formChanged || assigneesChanged);
-  }, [form, selectedAssignees, initialAssignees]);
+    const remindersChanged =
+      JSON.stringify([...reminderDays].sort()) !== JSON.stringify([...initialReminders].sort());
+    setIsDirty(formChanged || assigneesChanged || remindersChanged);
+  }, [form, selectedAssignees, initialAssignees, reminderDays, initialReminders]);
 
   useEffect(() => {
     if (!isDirty) return;
@@ -88,6 +95,10 @@ export default function TaskDetailPage() {
   }, [isDirty]);
 
   const handleChange = (field: string, value: any) => {
+    // Al ponerle fecha fin por primera vez a una tarea sin recordatorios, queda el de 1 día antes.
+    if (field === 'endDate' && value && !form.endDate && reminderDays.length === 0) {
+      setReminderDays(RECORDATORIOS_POR_DEFECTO);
+    }
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -111,10 +122,12 @@ export default function TaskDetailPage() {
         estimatedHours: form.estimatedHours,
         assigneeIds: selectedAssignees,
         status: form.status,
+        reminderDays: form.endDate ? reminderDays : undefined,
       });
       setIsDirty(false);
       initialFormRef.current = form;
       setInitialAssignees(selectedAssignees);
+      setInitialReminders(reminderDays);
       navigate(-1);
     } catch {
       // silent
@@ -307,6 +320,13 @@ export default function TaskDetailPage() {
               />
             </div>
           </div>
+
+          <ReminderPicker
+            value={reminderDays}
+            onChange={setReminderDays}
+            hasDate={!!form.endDate}
+            disabled={isViewer}
+          />
 
           <div className="form-group">
             <label>Asignar a</label>

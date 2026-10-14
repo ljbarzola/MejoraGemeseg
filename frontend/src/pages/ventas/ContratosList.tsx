@@ -1,27 +1,48 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Plus, FolderOpen, HelpCircle } from 'lucide-react';
-import { getContracts, deleteContract, getVentasDriveConfig, SalesContract } from '../../services/ventas.service';
+import { FileText, Plus, FolderOpen, HelpCircle, Link2 } from 'lucide-react';
+import { getContracts, deleteContract, getVentasDriveConfig, vincularDocumentosSinCliente, SalesContract } from '../../services/ventas.service';
 import { buildDriveFolderLink } from '../../utils/driveLink';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import TemplateHelpModal from '../../components/ventas/TemplateHelpModal';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
+import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import { useToast } from '../../contexts/ToastContext';
 
+// Columnas elegibles de la tabla (además de Número y Acciones, que son fijas).
+const COLUMNAS_DOCS = [
+  { key: 'clientName', label: 'Cliente' },
+  { key: 'template', label: 'Plantilla' },
+  { key: 'status', label: 'Estado' },
+  { key: 'createdAt', label: 'Fecha' },
+  { key: 'sentAt', label: 'Enviado' },
+  { key: 'signedAt', label: 'Firmado' },
+];
+const COLUMNAS_DOCS_POR_DEFECTO = ['clientName', 'template', 'status', 'createdAt'];
+
+// "Documentación": los documentos que se generan desde una plantilla y se
+// firman (antes se llamaba "Contratos"). Cada documento es de un cliente y
+// puede colgar de un contrato comercial (pantalla "Contratos").
 export default function ContratosList() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [contracts, setContracts] = useState<SalesContract[]>([]);
   const [filter, setFilter] = useState('');
+  const [soloSinCliente, setSoloSinCliente] = useState(false);
+  const [confirmarVincular, setConfirmarVincular] = useState(false);
   const [search, setSearch] = useState('');
   const [driveFolderUrl, setDriveFolderUrl] = useState('');
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [showHelp, setShowHelp] = useState(false);
-  const tablaRef = useResizableColumns('ventas-contratos');
+  // Columnas que cada persona elige ver (preferencia en su cuenta). «Número» y
+  // las acciones van siempre.
+  const columnPrefs = useColumnPreferences('ventas-documentacion', COLUMNAS_DOCS_POR_DEFECTO);
+  const tablaRef = useResizableColumns('ventas-contratos', ['contractNumber', ...columnPrefs.visible, 'acciones']);
 
-  useEffect(() => { loadContracts(); }, [filter]);
+  useEffect(() => { loadContracts(); }, [filter, soloSinCliente]);
 
   useEffect(() => {
     getVentasDriveConfig()
@@ -31,16 +52,16 @@ export default function ContratosList() {
         }
       })
       .catch((err: any) => {
-        showToast(err?.response?.data?.message || 'No se pudo cargar la carpeta de Drive de contratos', 'error');
+        showToast(err?.response?.data?.message || 'No se pudo cargar la carpeta de Drive de documentos', 'error');
       });
   }, []);
 
   const loadContracts = async () => {
     try {
-      const data = await getContracts(filter ? { status: filter } : undefined);
+      const data = await getContracts({ ...(filter ? { status: filter } : {}), ...(soloSinCliente ? { sinCliente: true } : {}) });
       setContracts(data);
     } catch (err: any) {
-      showToast(err?.response?.data?.message || 'No se pudieron cargar los contratos', 'error');
+      showToast(err?.response?.data?.message || 'No se pudieron cargar los documentos', 'error');
     }
   };
 
@@ -52,7 +73,7 @@ export default function ContratosList() {
       await deleteContract(id);
       loadContracts();
     } catch (err: any) {
-      showToast(err?.response?.data?.message || 'No se pudo eliminar el contrato', 'error');
+      showToast(err?.response?.data?.message || 'No se pudo eliminar el documento', 'error');
     }
   };
 
@@ -85,23 +106,55 @@ export default function ContratosList() {
       template: (c) => c.template?.name,
       status: (c) => statusLabels[c.status] || c.status,
       createdAt: (c) => c.createdAt,
+      sentAt: (c) => c.sentAt,
+      signedAt: (c) => c.signedAt,
     },
     'createdAt',
     'desc',
   );
+
+  const celdaDoc = (key: string, c: SalesContract): ReactNode => {
+    switch (key) {
+      case 'clientName':
+        return (
+          <>
+            <div>{c.salesClient?.name || c.clientName}</div>
+            <div style={{ fontSize: 11, color: '#888' }}>{c.clientEmail}</div>
+            {!c.salesClientId && <div style={{ fontSize: 11, color: '#b45309' }}>Sin cliente asignado</div>}
+          </>
+        );
+      case 'template':
+        return c.template?.name || '—';
+      case 'status':
+        return (
+          <span style={{ padding: '3px 10px', borderRadius: 12, background: statusColors[c.status] || '#888', color: '#fff', fontSize: 10, fontWeight: 600 }}>
+            {statusLabels[c.status] || c.status}
+          </span>
+        );
+      case 'createdAt':
+        return new Date(c.createdAt).toLocaleDateString('es-EC');
+      case 'sentAt':
+        return c.sentAt ? new Date(c.sentAt).toLocaleDateString('es-EC') : '—';
+      case 'signedAt':
+        return c.signedAt ? new Date(c.signedAt).toLocaleDateString('es-EC') : '—';
+      default:
+        return null;
+    }
+  };
+  const columnasVisibles = columnPrefs.visible.filter((k) => COLUMNAS_DOCS.some((c) => c.key === k));
 
   return (
     <div className="page-container">
       <div className="page-header-row">
         <div>
           <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Contratos</h1>
+          <h1>Documentación</h1>
         </div>
         <div className="header-actions">
           <button
             type="button"
             onClick={() => setShowHelp(true)}
-            title="Cómo funciona Contratos"
+            title="Cómo funciona Documentación"
             aria-label="Ayuda"
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 6, border: 'none', background: 'var(--naranja)', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
           >
@@ -113,29 +166,29 @@ export default function ContratosList() {
               href={driveFolderUrl}
               target="_blank"
               rel="noopener noreferrer"
-              title="Abrir la carpeta de contratos en Google Drive"
+              title="Abrir la carpeta de documentos en Google Drive"
               aria-label="Ver carpeta en Google Drive"
               style={{ display: 'inline-flex', alignItems: 'center', padding: '8px 10px' }}
             >
               <FolderOpen size={16} />
             </a>
           )}
-          <button className="btn-secondary" onClick={() => navigate('/ventas/contratos/plantillas')}>
+          <button className="btn-secondary" onClick={() => navigate('/ventas/documentacion/plantillas')}>
             <FileText size={16} /> Plantillas
           </button>
-          <button className="auth-btn" onClick={() => navigate('/ventas/contratos/nuevo')}>
-            <Plus size={16} /> Nuevo contrato
+          <button className="auth-btn" onClick={() => navigate('/ventas/documentacion/nuevo')}>
+            <Plus size={16} /> Nuevo documento
           </button>
         </div>
       </div>
 
       <div className="filter-bar">
-        <div className="filter-bar-fields">
+        <div className="filter-bar-fields filter-bar-fields--una-linea">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por número, cliente, email o plantilla..."
-            style={{ flex: '1 1 280px', minWidth: 0, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
+            style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
           <select className="filter-select" value={filter} onChange={(e) => setFilter(e.target.value)}>
             <option value="">Todos los estados</option>
@@ -143,9 +196,30 @@ export default function ContratosList() {
               <option key={s} value={s}>{statusLabels[s]}</option>
             ))}
           </select>
+          <select className="filter-select" value={soloSinCliente ? 'sin' : ''} onChange={(e) => setSoloSinCliente(e.target.value === 'sin')}>
+            <option value="">Todos los clientes</option>
+            <option value="sin">Sin cliente asignado</option>
+          </select>
         </div>
         <div className="filter-bar-actions">
-          <ClearFiltersButton onClear={() => { setSearch(''); setFilter(''); }} disabled={!search && !filter} />
+          <ColumnPickerMenu
+            columns={COLUMNAS_DOCS}
+            visible={columnPrefs.visible}
+            fixedLabel="Número"
+            onApply={async (keys) => {
+              const guardado = await columnPrefs.set(keys);
+              if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
+            }}
+          />
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setConfirmarVincular(true)}
+            title="Enlaza solos los documentos sin cliente cuyo correo o nombre coincide con un cliente"
+          >
+            <Link2 size={16} /> Vincular clientes
+          </button>
+          <ClearFiltersButton onClear={() => { setSearch(''); setFilter(''); setSoloSinCliente(false); }} disabled={!search && !filter && !soloSinCliente} />
         </div>
       </div>
 
@@ -153,38 +227,34 @@ export default function ContratosList() {
         {contracts.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36, marginBottom: 8 }}>📄</div>
-            <div>No hay contratos aún</div>
+            <div>No hay documentos aún</div>
           </div>
         ) : filasOrdenadas.length === 0 ? (
-          <p style={{ color: '#888', fontSize: 13 }}>No hay contratos que coincidan con la búsqueda.</p>
+          <p style={{ color: '#888', fontSize: 13 }}>No hay documentos que coincidan con la búsqueda.</p>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
                   <th {...thProps('contractNumber')}>Número <SortIcon campo="contractNumber" /></th>
-                  <th {...thProps('clientName')}>Cliente <SortIcon campo="clientName" /></th>
-                  <th {...thProps('template')}>Plantilla <SortIcon campo="template" /></th>
-                  <th {...thProps('status')}>Estado <SortIcon campo="status" /></th>
-                  <th {...thProps('createdAt')}>Fecha <SortIcon campo="createdAt" /></th>
+                  {columnasVisibles.map((k) => {
+                    const col = COLUMNAS_DOCS.find((c) => c.key === k)!;
+                    return (
+                      <th key={k} {...thProps(k)}>
+                        {col.label} <SortIcon campo={k} />
+                      </th>
+                    );
+                  })}
                   <th className="col-acciones" title="Acciones"><span className="visually-hidden">Acciones</span></th>
                 </tr>
               </thead>
               <tbody>
                 {filasOrdenadas.map((c) => (
-                  <tr key={c.id} onClick={() => navigate(`/ventas/contratos/${c.id}`)} style={{ cursor: 'pointer' }}>
+                  <tr key={c.id} onClick={() => navigate(`/ventas/documentacion/${c.id}`)} style={{ cursor: 'pointer' }}>
                     <td style={{ fontWeight: 600 }}>{c.contractNumber || `#${c.id}`}</td>
-                    <td>
-                      <div>{c.clientName}</div>
-                      <div style={{ fontSize: 11, color: '#888' }}>{c.clientEmail}</div>
-                    </td>
-                    <td>{c.template?.name || '—'}</td>
-                    <td>
-                      <span style={{ padding: '3px 10px', borderRadius: 12, background: statusColors[c.status] || '#888', color: '#fff', fontSize: 10, fontWeight: 600 }}>
-                        {statusLabels[c.status] || c.status}
-                      </span>
-                    </td>
-                    <td>{new Date(c.createdAt).toLocaleDateString('es-EC')}</td>
+                    {columnasVisibles.map((k) => (
+                      <td key={k}>{celdaDoc(k, c)}</td>
+                    ))}
                     <td className="col-acciones">
                       <button onClick={e => { e.stopPropagation(); setPendingDeleteId(c.id); }}
                         style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #e55', background: '#fff', color: '#c33', cursor: 'pointer', fontSize: 11 }}>✕</button>
@@ -199,12 +269,37 @@ export default function ContratosList() {
 
       {pendingDeleteId != null && (
         <ConfirmDialog
-          title="Eliminar contrato"
-          message="¿Eliminar este contrato? Esta acción no se puede deshacer."
+          title="Eliminar documento"
+          message="¿Eliminar este documento? Esta acción no se puede deshacer."
           confirmLabel="Eliminar"
           danger
           onConfirm={handleConfirmDelete}
           onCancel={() => setPendingDeleteId(null)}
+        />
+      )}
+
+      {confirmarVincular && (
+        <ConfirmDialog
+          title="Vincular documentos a clientes"
+          message="Se revisan los documentos que no tienen cliente y se enlazan solos cuando su correo (o, si no, su nombre exacto) coincide con UN solo cliente. Los que no coinciden, o coinciden con varios, no se tocan: quedan en «Sin cliente asignado» para revisarlos a mano."
+          confirmLabel="Vincular"
+          onConfirm={async () => {
+            setConfirmarVincular(false);
+            try {
+              const r = await vincularDocumentosSinCliente();
+              const resto = r.ambiguos + r.sinCoincidencia;
+              showToast(
+                r.revisados === 0
+                  ? 'Todos los documentos ya tienen cliente.'
+                  : `${r.vinculados} documento(s) vinculados${resto ? `; ${resto} quedan sin cliente para revisar a mano` : ''}.`,
+                'success',
+              );
+              loadContracts();
+            } catch (err: any) {
+              showToast(err?.response?.data?.message || 'No se pudieron vincular los documentos', 'error');
+            }
+          }}
+          onCancel={() => setConfirmarVincular(false)}
         />
       )}
 

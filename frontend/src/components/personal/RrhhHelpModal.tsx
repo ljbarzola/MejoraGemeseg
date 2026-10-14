@@ -53,7 +53,9 @@ const FLUJO_PRINCIPAL: Submodulo[] = [
       'Generador de contratos y otros documentos a partir de plantillas Word.',
       'Al crear una plantilla nueva el documento Word (.docx) se puede traer de dos formas: pegando el enlace de Google Drive o subiendo el archivo desde tu computador (máximo 10 MB).',
       'Hay dos formas de generar: eligiendo un guardia registrado, y entonces sus datos (nombre, cédula, entidad, horario, salario) se rellenan solos; o "Llenar a mano", para un documento dirigido a alguien que no está en el listado de guardias. En ese segundo caso la cédula no es obligatoria: basta el nombre, y el PDF se guarda en la carpeta general de documentos.',
-      'Si elegiste un guardia, al generar se pregunta si el PDF va a la carpeta general o a la carpeta de Drive de esa persona.',
+      'Si elegiste un guardia, al generar se pregunta si el PDF va a la carpeta general o a la carpeta de Drive de esa persona. Revisa siempre los datos antes de generar: lo autocompletado sale de la ficha y puede estar desactualizado.',
+      'Al configurar una plantilla, el sistema sugiere solo con qué dato del guardia autocompletar cada variable según el parecido del nombre (por ejemplo [Cedula] o [Nombre_del_trabajador]); revisa las sugeridas y cámbialas si hace falta. En plantillas ya guardadas está el botón "Sugerir autocompletado".',
+      'Un documento generado se puede eliminar con el ícono de papelera en "Documentos Generados": se borra también su copia en Google Drive y no se puede deshacer. Una plantilla solo se elimina cuando ya no tiene documentos generados.',
     ],
   },
   {

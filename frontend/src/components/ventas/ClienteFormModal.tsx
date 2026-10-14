@@ -21,6 +21,9 @@ interface Props {
   // pasaban los no-núcleo, lo que dejaba "Fuente"/"Servicio requerido" sin
   // poder editarse desde este formulario — ver hallazgo en el plan).
   fields: SalesClientField[];
+  // Registrar a alguien que YA contrata con ustedes (se creó antes de usar el
+  // sistema): queda como Cliente «Por contratar» en lugar de una negociación nueva.
+  yaEsCliente?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -33,7 +36,7 @@ const NATIVE_KEYS = ['email', 'phone', 'ruc', 'address', 'observaciones'];
 // 'YYYY-MM-DD' en hora local (el usuario está en Ecuador), no en UTC.
 const aDiaLocal = (d: Date) => d.toLocaleDateString('en-CA');
 
-export default function ClienteFormModal({ client, fields, onClose, onSaved }: Props) {
+export default function ClienteFormModal({ client, fields, yaEsCliente = false, onClose, onSaved }: Props) {
   const { showToast } = useToast();
   const otherFields = fields
     .filter((f) => f.key !== 'name' && f.key !== SUBSERVICIOS_KEY)
@@ -91,8 +94,11 @@ export default function ClienteFormModal({ client, fields, onClose, onSaved }: P
       }
       payload.extra = extra;
       if (client) await updateSalesClient(client.id, payload);
-      else await createSalesClient(payload);
-      showToast(client ? 'Cliente actualizado' : 'Cliente creado', 'success');
+      else await createSalesClient(yaEsCliente ? { ...payload, yaEsCliente: true } : payload);
+      // Una persona nueva en negociación la avisa quien abrió el formulario
+      // (dice a dónde quedó); aquí solo la edición y el cliente que ya contrata.
+      if (client) showToast('Cliente actualizado', 'success');
+      else if (yaEsCliente) showToast('Cliente registrado: quedó «Por contratar»', 'success');
       onSaved();
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo guardar', 'error');
@@ -105,12 +111,22 @@ export default function ClienteFormModal({ client, fields, onClose, onSaved }: P
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>{client ? 'Editar cliente' : 'Nuevo cliente'}</h3>
+          <h3>{client ? 'Editar cliente' : yaEsCliente ? 'Nuevo cliente (ya contrata)' : 'Nuevo contacto en negociación'}</h3>
           <button className="modal-close" onClick={onClose}>
             <X size={16} />
           </button>
         </div>
         <div className="modal-body">
+          {!client && yaEsCliente && (
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#744210', background: '#fffaf0', border: '1px solid #fbd38d', borderRadius: 6, padding: '8px 10px' }}>
+              Queda como Cliente «Por contratar» hasta que cargues su contrato y no cuenta en las cifras de ventas nuevas.
+            </p>
+          )}
+          {!client && !yaEsCliente && (
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#666' }}>
+              Queda en Oportunidades como una negociación nueva. Pasa a Clientes cuando acepte.
+            </p>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <Field label="Nombre / Razón social *" value={name} onChange={setName} />

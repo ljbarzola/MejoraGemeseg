@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight } from 'lucide-react';
-import { SALES_ACTIVITY_TYPES, type SalesActivityType, type SalesClientStage } from '../../services/ventas.service';
+import { SALES_ACTIVITY_TYPES, type SalesActivityType } from '../../services/ventas.service';
 
 // Lo que se hizo con el cliente, para dejar en su línea de tiempo ("Hecho").
 export interface ActividadHecha {
@@ -24,10 +23,6 @@ interface SiguientePasoModalProps {
   saveLabel?: string;
   // Cerrar con Cancelar o fuera del cuadro no hace nada.
   onCancel: () => void;
-  // Cuando se está cambiando de etapa: muestra "pasará de X a Y".
-  cambioEtapa?: { from: SalesClientStage | null; to: SalesClientStage };
-  // Etapa final: no hay siguiente paso que pedir, solo se confirma el cambio.
-  soloConfirmar?: boolean;
 }
 
 const inputStyle = {
@@ -44,18 +39,9 @@ const inputStyle = {
 const botonCompacto = { padding: '10px 18px', fontSize: '0.9rem', whiteSpace: 'nowrap' as const };
 const labelStyle = { display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 };
 
-function EtapaBadge({ stage }: { stage: SalesClientStage | null }) {
-  const color = stage?.color || '#718096';
-  return (
-    <span className="status-badge" style={{ backgroundColor: color + '22', color, whiteSpace: 'nowrap' }}>
-      {stage?.label || 'Sin etapa'}
-    </span>
-  );
-}
-
-// Ventanita "¿Cuál es el siguiente paso y cuándo?" — se usa al mover un
-// cliente de etapa, al marcar "Hecho" en la vista Hoy y al editar el
-// siguiente paso desde la tabla.
+// Ventanita "¿Cuál es el siguiente paso y cuándo?" — se usa al marcar "Hecho"
+// en la vista Hoy y al editar el siguiente paso desde las tablas. La etapa ya
+// no se cambia aquí: solo en Oportunidades.
 export default function SiguientePasoModal({
   title,
   clientName,
@@ -64,8 +50,6 @@ export default function SiguientePasoModal({
   onSave,
   saveLabel = 'Guardar',
   onCancel,
-  cambioEtapa,
-  soloConfirmar = false,
   conActividad = false,
 }: SiguientePasoModalProps) {
   const [text, setText] = useState(initialText || '');
@@ -84,8 +68,8 @@ export default function SiguientePasoModal({
     setErrorLocal('');
     return run(() =>
       onSave(
-        soloConfirmar ? '' : text,
-        soloConfirmar ? '' : date,
+        text,
+        date,
         conActividad ? { type: actType, otherLabel: actOther, text: actText } : undefined,
       ),
     );
@@ -142,50 +126,30 @@ export default function SiguientePasoModal({
             </div>
           )}
 
-          {cambioEtapa ? (
-            <div style={{ color: '#2d3748', lineHeight: 1.6 }}>
-              <strong>{clientName}</strong> pasará de etapa:
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-                <EtapaBadge stage={cambioEtapa.from} />
-                <ArrowRight size={16} color="#718096" />
-                <EtapaBadge stage={cambioEtapa.to} />
-              </div>
-            </div>
-          ) : conActividad ? null : (
+          {conActividad ? null : (
             <p style={{ margin: 0, color: '#2d3748', lineHeight: 1.5 }}>
               <strong>{clientName}</strong> — ¿cuál es el siguiente paso y cuándo?
             </p>
           )}
 
-          {soloConfirmar ? (
-            <p style={{ margin: 0, color: '#718096', fontSize: 13, lineHeight: 1.5 }}>
-              Es una etapa final: se cierra el seguimiento y se borra el siguiente paso de este cliente.
-            </p>
-          ) : (
-            <>
-              {cambioEtapa && (
-                <p style={{ margin: 0, color: '#4a5568', fontSize: 13 }}>¿Cuál es el siguiente paso y cuándo?</p>
-              )}
-              <div>
-                <label style={labelStyle}>Siguiente paso</label>
-                <input
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="Ej: Enviar cotización"
-                  maxLength={200}
-                  autoFocus={!conActividad}
-                  style={inputStyle}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>Para cuándo</label>
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={inputStyle} />
-              </div>
-              <p style={{ margin: 0, color: '#a0aec0', fontSize: 12 }}>
-                Si los dejas vacíos, el cliente queda sin siguiente paso.
-              </p>
-            </>
-          )}
+          <div>
+            <label style={labelStyle}>Siguiente paso</label>
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Ej: Enviar cotización"
+              maxLength={200}
+              autoFocus={!conActividad}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Para cuándo</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={inputStyle} />
+          </div>
+          <p style={{ margin: 0, color: '#a0aec0', fontSize: 12 }}>
+            Si los dejas vacíos, el cliente queda sin siguiente paso.
+          </p>
           {errorLocal && <p style={{ margin: 0, color: '#c53030', fontSize: 13 }}>{errorLocal}</p>}
         </div>
         <div className="modal-actions" style={{ alignItems: 'center', flexWrap: 'nowrap' }}>

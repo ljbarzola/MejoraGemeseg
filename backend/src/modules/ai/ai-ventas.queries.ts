@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VentasClientesService } from '../ventas/ventas-clientes.service';
+import { ETIQUETA_ACTIVIDAD } from '../ventas/dto/client.dto';
 
 // Consultas de Ventas del asistente de IA. Todas leen Clientes y Contratos,
 // nunca Leads/Visitas (esos submódulos están "Próximamente" y el asistente no
@@ -253,7 +254,7 @@ export class AiVentasQueries {
       const cuando = formatoDia(ev.at);
       const quien = ev.authorName ? ` — ${ev.authorName}` : '';
       if (ev.kind === 'actividad') {
-        const tipo = ev.type === 'OTRO' ? ev.otherLabel || 'Otro' : String(ev.type).charAt(0) + String(ev.type).slice(1).toLowerCase();
+        const tipo = ev.type === 'OTRO' ? ev.otherLabel || 'Otro' : ETIQUETA_ACTIVIDAD[String(ev.type)] || String(ev.type);
         return `- ${cuando} ${tipo}${quien}: ${recortar(ev.text)}`;
       }
       if (ev.kind === 'etapa') return `- ${cuando} Cambió de etapa: ${ev.from?.label ?? 'inicio'} → ${ev.to?.label ?? '?'}${quien}`;
@@ -357,8 +358,10 @@ export class AiVentasQueries {
     return `${encabezado}: ${filas.length}.\n${lineas.join('\n')}${masLineas(filas.length, MAX_LINEAS)}`;
   }
 
-  // Contratos de Ventas. estado = borrador | firma | firmados (opcional).
-  async contratos(companyId: number, estadoParam?: string): Promise<string> {
+  // Documentos de Documentación (antes llamados "contratos"): los que se
+  // generan desde una plantilla y se firman. estado = borrador | firma | firmados
+  // (opcional). Los contratos comerciales los consulta AiVentasInvestigacionQueries.
+  async documentos(companyId: number, estadoParam?: string): Promise<string> {
     const e = normalizar(estadoParam || '');
     const grupo =
       e.startsWith('borr') ? { etiqueta: 'en borrador', estados: ['DRAFT', 'GENERATING', 'READY'] }
@@ -392,7 +395,7 @@ export class AiVentasQueries {
         : this.prisma.salesContract.groupBy({ by: ['status'], where: { companyId }, _count: { id: true } }),
     ]);
 
-    if (total === 0) return grupo ? `No hay contratos ${grupo.etiqueta}.` : 'No hay contratos registrados.';
+    if (total === 0) return grupo ? `No hay documentos ${grupo.etiqueta}.` : 'No hay documentos registrados.';
     const lineas = filas.map((c) => {
       const cuando =
         c.status === 'SIGNED' && c.signedAt ? `firmado el ${formatoDia(c.signedAt)}`
@@ -403,6 +406,6 @@ export class AiVentasQueries {
     const resumen = grupo
       ? ''
       : `Por estado: ${porEstado.map((g) => `${ESTADOS_CONTRATO[g.status] || g.status}: ${g._count.id}`).join(', ')}.\n`;
-    return `Contratos ${grupo ? grupo.etiqueta : '(sin contar los cancelados)'}: ${total}.\n${resumen}Más recientes:\n${lineas.join('\n')}${masLineas(total, filas.length)}`;
+    return `Documentos ${grupo ? grupo.etiqueta : '(sin contar los cancelados)'}: ${total}.\n${resumen}Más recientes:\n${lineas.join('\n')}${masLineas(total, filas.length)}`;
   }
 }
