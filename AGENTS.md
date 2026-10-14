@@ -81,6 +81,8 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 - No hacer push sin confirmacion del usuario.
 - **Autoria de commits:** todos los commits van a nombre del duenio del repo (`Leidy Barzola <sistemas@gemeseg.com>`), nunca a nombre del asistente de IA. Configurar antes de commitear:
   `git config user.name "Leidy Barzola" && git config user.email "sistemas@gemeseg.com"`
+- **El repositorio de GitHub es PUBLICO** (`ljbarzola/MejoraGemeseg`). Nunca subir claves, `.env`, archivos de service account ni datos reales de personas o clientes, y revisar la visibilidad antes de subir una rama con trabajo que no deba verse.
+- **Higiene de ramas (2026-10-14):** una rama ya fusionada se borra despues del merge (se conservan las 5 remotas mas recientes). No dejar trabajo en `git stash` a largo plazo: el 2026-10-05 un dia entero de cambios quedo olvidado en un stash. Las ramas viejas sin fusionar se archivan como etiqueta `archive/<nombre>` antes de borrarlas.
 - **No agregar trailers de atribucion de IA** (`Co-Authored-By: Claude...`, `Generated with...`) en mensajes de commit ni en descripciones de PR.
 
 ### Proceso de entrega (siempre, al terminar un bloque de trabajo)
@@ -137,15 +139,15 @@ npm run seed:minimal   # datos minimos: 1 empresa, 2 usuarios, 1 proyecto/tareas
 ```
 ```bash
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gemeseg?schema=public
-JWT_SECRET=gemeseg-jwt-secret-2026
+JWT_SECRET=<un-secreto-largo-y-aleatorio>   # el de producción vive en Secret Manager y NO debe parecerse a ningún ejemplo
 FRONTEND_URL=http://localhost:5173
 # Opcionales — sin ellas, el chat "Agente Gemeseg" y la revisión de documentos de RRHH
 # caen a modo mock / deshabilitado en vez de fallar (ver .agents/modules/agents-ai.md punto 1
 # y la sección de Recursos Humanos más abajo):
 GOOGLE_VERTEX_PROJECT=agentes-504115
-GOOGLE_VERTEX_LOCATION=us-central1
-GOOGLE_VERTEX_CHAT_MODEL=gemini-2.5-flash
-GOOGLE_VERTEX_MODEL=gemini-2.5-flash
+GOOGLE_VERTEX_LOCATION=global          # los Gemini 3.x solo existen en `global`
+GOOGLE_VERTEX_MODEL_FUERTE=gemini-3.8-flash       # documentos escaneados de RRHH (y el Agente de Ventas cuando se una a main)
+GOOGLE_VERTEX_MODEL_LIGERO=gemini-3.5-flash-lite  # Agente Gemeseg + extracción de fechas (texto)
 ```
 
 Si alguna vez hace falta inspeccionar datos reales de produccion (solo lectura, para depurar un bug reportado), conectar **solo** via **Cloud SQL Auth Proxy** (nunca `psql` directo a la IP publica `34.9.205.240`; esa instancia tiene `sslMode=ENCRYPTED_ONLY` y no hay Authorized Networks, asi que las conexiones directas sin proxy/conector fallan o deben ir cifradas):
@@ -181,7 +183,7 @@ y apuntar una `DATABASE_URL` alterna a `127.0.0.1:5434` solo para esa sesion pun
 
 ## Autenticacion
 
-- `POST /auth/register` - solo correos `@gemeseg.com` (domain guard)
+- ~~`POST /auth/register`~~ - **eliminado el 2026-10-14** (ver "Endurecimiento de seguridad" abajo): las cuentas las crea un administrador (`POST /users`).
 - `POST /auth/login` - retorna JWT con `{ sub, email, role }`
 - JWT expira en 7 dias
 - Password hasheada con bcrypt (salt 10)
@@ -255,7 +257,7 @@ Replica **exactamente** la semantica de `hooks/usePermissions.ts`, en este orden
 1. Super admin → pasa siempre.
 2. Seccion no habilitada para la empresa → 403.
 3. Existe fila `UserPermission` para la seccion → manda su `canView`/`canWrite`.
-4. **No existe fila → se permite** (default permisivo).
+4. **No existe fila → se permite** (default permisivo), **salvo en las secciones cerradas por defecto** (`SECCIONES_CERRADAS_POR_DEFECTO` en `permissions.service.ts`, hoy solo `SISTEMAS`): ahí sin fila NO hay acceso (2026-10-14). Herramientas es una pantalla de Sistemas, no una sección aparte. Crear un ticket sigue abierto a cualquier usuario.
 
 El punto 4 es deliberado y esta cubierto por un test: invertirlo dejaria fuera a todos los usuarios que hoy no tienen permisos explicitos cargados. Usar este guard (y no `RolesGuard`) es lo correcto cuando el acceso depende del modulo y no del cargo - p. ej. los usuarios de RRHH estan cargados como `EMPLOYEE` (`nayelli@gemeseg.com`), asi que un `@Roles(ADMIN, MANAGER)` los habria bloqueado.
 
@@ -274,9 +276,10 @@ El punto 4 es deliberado y esta cubierto por un test: invertirlo dejaria fuera a
 ## Modulos Backend
 
 ### Auth (`/auth`)
-- `POST /auth/register` - Registro (solo @gemeseg.com)
-- `POST /auth/login` - Login, retorna JWT
+- ~~`POST /auth/register`~~ - eliminado el 2026-10-14 (la ruta `/register` del frontend redirige al login)
+- `POST /auth/login` - Login, retorna JWT. **Límite de intentos (2026-10-14):** 5 fallos por correo en 15 min bloquean ese correo 15 min (HTTP 429 con los minutos que faltan); un login correcto reinicia el contador. Lo mismo para `forgot-password/request` (cada solicitud cuenta, exista o no el correo, para no delatar cuentas y frenar el envío masivo de correos) y `change-password` (clave por usuario). Tabla `AuthAttempt` creada al arrancar (`auth-throttle.schema.ts`), falla abierto. Se usa el correo y no la IP porque no hay `trust proxy`; costo aceptado: alguien puede bloquear 15 min a otra persona.
 - `GET /auth/profile` - Perfil del usuario autenticado
+- **Endurecimiento de seguridad (2026-10-14).** (1) `PrismaService` oculta `User.password` en TODA consulta (`omit` global); solo `auth.service.ts` lo pide (`omit: { password: false }`). Antes `GET /users` devolvía los hashes de la empresa a cualquier empleado. (2) Se eliminó el registro público: bastaba un correo `@dominio` inventado para recibir sesión (y esos usuarios nacían con `companyId` nulo, que `GET /users` trataba como "todas las empresas"). (3) `GET /users` para EMPLOYEE devuelve solo `id, fullName, email, role, position, isActive, department`; ADMIN y Gerente ven la ficha completa; sin empresa y sin ser super admin → lista vacía. (4) `POST /permissions/users/:id` valida la misma empresa (403/404; antes 500). (5) `/tools` filtra por la empresa de quien llama (las asignaciones pertenecen a la empresa por la persona; `Tool` es catálogo compartido sin `companyId`, por eso borrar una herramienta que usan otras empresas da 409). (6) **Cambio de contraseña obligatorio para administradores** (`password-rotation.service.ts`): al arrancar se marca a los ADMIN activos, con contraseña y creados antes del 2026-10-15 con una fila de `UserPreference` (`seguridad:cambio-contrasena-2026-10`, clave que la API de preferencias del cliente no acepta) y se les cierran las sesiones; `GET /users/me` devuelve `debeCambiarContrasena` y el frontend muestra `ChangePasswordModal obligatorio` (sin X, Esc ni Cancelar) hasta que cambian la contraseña (`changePassword`/`confirmPasswordReset` la pasan a "hecha"). Para volver a probarlo en local: borrar esa fila y reiniciar el backend. (7) `SISTEMAS` cerrada por defecto (ver Permisos).
 - `POST /auth/forgot-password/request` / `POST /auth/forgot-password/confirm` - Recuperar contraseña en dos pasos (código de 6 dígitos por correo)
 - `POST /auth/change-password` - Cambiar contraseña con la sesión iniciada (JWT). Pide `currentPassword` + `newPassword` (mín. 8). Errores de validación = **400** (no 401: el frontend cierra la sesión ante cualquier 401 fuera de `/auth/`). Devuelve un token nuevo que el frontend guarda.
 - **Cierre de sesiones (2026-10-06):** cambiar la contraseña desde el perfil o restablecerla con el código cierra las sesiones abiertas en otros dispositivos. Tabla `UserSessionCutoff (userId, validAfter)` (tabla aparte, no columna en `User`, porque el despliegue no corre migraciones; se crea sola al arrancar en `SessionCutoffService.onModuleInit`, SQL en `auth/session-cutoff.schema.ts`). `JwtStrategy.validate` rechaza con 401 un token cuyo `iat` sea anterior a `validAfter`. **Falla abierto** (sin tabla, sin fila o con error de BD el token se acepta) y nadie escribe el corte salvo esos dos flujos: mientras no cambien la contraseña, la sesión sigue abierta. Caché en memoria de 30 s por usuario (otra instancia de Cloud Run puede tardar hasta 30 s en enterarse). La duración del JWT (7 días) no cambió.
@@ -294,17 +297,18 @@ El punto 4 es deliberado y esta cubierto por un test: invertirlo dejaria fuera a
 - `PATCH /projects/:id/members/:userId/role` - Cambiar rol (solo ADMIN)
 
 ### Tasks (`/tasks`)
+- `GET /tasks/my-tasks` - Tareas de "Mis tareas" en Inicio (`status`, `assignedToMe`, `projectId`). Solo trae tareas de proyectos donde la persona es **miembro** (`ProjectMember`); la tabla del proyecto (`GET /projects/:id/tasks`) no mira membresía.
 - `GET /tasks/:id` - Detalle de tarea
 - `PATCH /tasks/:id` - Actualizar tarea
 - `DELETE /tasks/:id` - Eliminar tarea
-- `POST /tasks` y `PATCH /tasks/:id` aceptan `reminderDays?: number[]` (recordatorios, enteros entre -365 y 365): positivo = días **antes** de la fecha fin, 0 = el mismo día, negativo = un único aviso de atraso esos días **después** si la tarea sigue sin terminar. Sin fecha fin no hay recordatorios; al ponerle fecha fin a una tarea sin lista queda el aviso por defecto de 1 día antes; si cambia la fecha fin, los avisos ya enviados vuelven a quedar pendientes. En el formulario de crear/editar tarea se elige con el selector "Recordatorios".
-- **Recordatorios de tareas (2026-10-07/08):** tabla `TaskReminder` (`daysBefore`, `sentAt`; única por tarea y días), creada sola al arrancar (`task-reminder.schema.ts`, `TasksService.onModuleInit`: el despliegue no corre migraciones). `POST /tasks/reminders-cron/run` (sin sesión, header `x-cron-secret`; `?dryRun=true` lista a quién se avisaría sin enviar ni marcar nada) está pensado para un Cloud Scheduler diario a las 9:00 hora de Ecuador. Cada persona asignada recibe UN correo (remitente "Tareas GEMESEG") y UNA notificación con todas sus tareas del día; una tarea terminada o cancelada no avisa. **Sin `CRON_SECRET` el endpoint no existe (404) y `cloudbuild.yaml` no lo define a propósito (mismo patrón que las entregas de Contratación Pública, ver `.agents/modules/contratacion-publica.md`): ningún aviso sale hasta que se cree el secreto y el job de Cloud Scheduler.**
+- **Inicio — filtros guardados (2026-10-14).** Estado, "Asignadas a mí" y proyecto se recuerdan en `localStorage` (`dashboard_*`). Una tarea asignada "no aparecía" en ninguna pestaña porque el proyecto recordado seguía en la consulta aunque el desplegable (solo 10 proyectos, primera página) mostrara "Todos los proyectos". Ahora el desplegable carga **todas** las páginas de `GET /projects`, un proyecto recordado que ya no existe en la lista se descarta antes de pedir las tareas, y "Todos" se recuerda de verdad (antes volvía a "En progreso" al recargar). **Sin escoba de limpiar en Inicio (decisión del usuario, 2026-10-14):** los filtros son botones/selector siempre visibles y el filtro pegado ya se corrige solo; la escoba solo ensuciaba la barra. Inicio y la tabla "Tareas" del proyecto usan `useSortableTable` + `useResizableColumns` + "Columnas" (`mis-tareas`, `proyecto-tareas`). Inicio: columnas por defecto Estado, Prioridad, Proyecto, Asignados y Fin; "Inicio" y "Horas est." son opcionales (con las 8 no cabe); anchos fijos por columna (`.dashboard-tasks-table`), "Asignadas a mí" es un botón de activar y la fecha fin de una tarea abierta sale roja si venció y naranja si vence hoy o mañana (`fecha-vencida`/`fecha-pronto`). `STATUS_ORDER`/`PRIORITY_ORDER` viven en `frontend/src/types/task.ts`. `.status-badge` ya no parte «EN PROGRESO» en dos líneas (`white-space: nowrap`).
+- **Recordatorios de vencimiento (código en `main` desde el PR #43; infraestructura de producción creada 2026-10-14).** Cada tarea con `endDate` crea por defecto un `TaskReminder` a 1 día antes (`daysBefore`: positivo = antes, 0 = mismo día, negativo = aviso único de atraso); se eligen en `ReminderPicker`. `POST /tasks/reminders-cron/run` (header `x-cron-secret` = `CRON_SECRET`; sin la variable responde 404; `?dryRun=true` solo lista) envía a cada asignado **un** correo (texto plano, desde `sistemas@gemeseg.com`, asunto con el prefijo fijo `[Tareas GEMESEG]` para que cada persona pueda filtrarlo en su Gmail; no cambiarlo sin avisar) y **una** notificación en la campana con todas sus tareas del día (máximo un correo al día por persona, decisión del usuario; si hay varias tareas van juntas), y **no manda correo a quien eligió "Solo notificaciones en la app" en su Perfil** (`notificaciones:recordatorios-tareas`, ver `.agents/modules/users.md` punto 3; `?dryRun=true` muestra `correo: true/false` por persona), ignora `DONE`/`CANCELLED` y reintenta si el envío falló. Mismo patrón que Entregas de Contratación Pública: Cloud Run con `min-instances=0` no sirve para `@Cron`, así que lo llama **Cloud Scheduler** una vez al día (~9:00 `America/Guayaquil`). **Ya creados en `mejora-gemeseg` (2026-10-14):** el secreto `CRON_SECRET` en Secret Manager (versión 2 activa; la 1 se desactivó porque `gcloud` imprimió la clave al crear el trabajo — al crear o actualizar un trabajo de Scheduler **no mostrar la salida**, trae el encabezado en claro) y el trabajo de Cloud Scheduler `tareas-recordatorios-diarios` (`0 9 * * *`, `America/Guayaquil`, POST a `https://mejora-gemeseg-backend-141953681725.us-central1.run.app/api/tasks/reminders-cron/run` con `x-cron-secret`, reintentos 2, plazo 180 s). `CRON_SECRET=CRON_SECRET:latest` ya está en `--set-secrets` de `cloudbuild.yaml`. La cuenta de Cloud Run (`141953681725-compute@developer.gserviceaccount.com`) ya tenía `secretAccessor` a nivel de proyecto: no hizo falta permiso por secreto. **El trabajo está PAUSADO** (decisión del usuario, 2026-10-14) hasta que se despliegue esta rama: sin `CRON_SECRET` en la revisión de Cloud Run el endpoint responde 404, y con él pero sin el código nuevo saldrían correos con el formato viejo y sin la opción del Perfil. Reanudar con `gcloud scheduler jobs resume tareas-recordatorios-diarios --project=mejora-gemeseg --location=us-central1`. Ese mismo secreto activa también el endpoint de Contratación Pública, que sigue sin su propio trabajo de Scheduler. Para pausar: `gcloud scheduler jobs pause tareas-recordatorios-diarios --project=mejora-gemeseg --location=us-central1` (ojo: el `gcloud` local apunta por defecto a otro proyecto, `capacitaciongemeseg`; pasar siempre `--project`). **Probado en local el 2026-10-14 con correo real solo a `test@gemeseg.com`:** dos tareas el mismo día → un correo resumen; una tarea → correo individual; con "Solo notificaciones en la app" → sin correo y con notificación. La tabla `TaskReminder` se crea al arrancar (`task-reminder.schema.ts`, el despliegue no corre migraciones). No hay opción para que una persona desactive estos avisos.
 
 ### Users (`/users`)
 - `POST /users` - Crear usuario (solo ADMIN). Desde 2026-09-29 también crea filas `UserPermission` explícitas para el usuario nuevo (denegado por defecto si es EMPLOYEE/MANAGER, permitido explícito si es ADMIN) — ver `.agents/modules/users.md` punto 1 para el bug que esto corrige
 - `GET /users` - Listar usuarios (cualquier usuario autenticado)
 - `GET /users/me` - Perfil del usuario autenticado (con herramientas asignadas)
-- `GET /users/me/preferences/:key` / `PUT /users/me/preferences/:key` - Preferencia personal del propio usuario (hoy solo claves `columnas:<tabla>`, valor = lista de keys). Nunca la de otra persona (ver `.agents/modules/users.md` punto 3)
+- `GET /users/me/preferences/:key` / `PUT /users/me/preferences/:key` - Preferencia personal del propio usuario (claves `columnas:<tabla>` = lista de keys, y `notificaciones:<aviso>`, hoy solo `notificaciones:recordatorios-tareas`). Nunca la de otra persona (ver `.agents/modules/users.md` punto 3)
 - `GET /users/stats` - Estadisticas (solo ADMIN)
 - `GET /users/locations` / `POST /users/locations` - Catálogo de ubicaciones de la empresa (solo ADMIN, ver `.agents/modules/users.md` punto 2)
 - `GET /users/:id` - Detalle de usuario (solo ADMIN)
@@ -331,7 +335,7 @@ Backfill para usuarios ya existentes sin ninguna fila `UserPermission`: `npm run
 - `GET /chat/conversations` - Listar conversaciones del usuario (filtro por agentId)
 - `GET /chat/conversations/:id/messages` - Obtener mensajes de una conversacion
 - Rate limit: 50 mensajes/dia por usuario
-- Motor: Google Vertex AI / Gemini (`GOOGLE_VERTEX_PROJECT`/`GOOGLE_VERTEX_LOCATION`/`GOOGLE_VERTEX_CHAT_MODEL`, este último separado de `GOOGLE_VERTEX_MODEL` que usa RRHH), con fallback a mock si no está configurado. Reemplaza a GitHub Models desde 2026-09-29 (ver `.agents/modules/agents-ai.md` punto 1).
+- Motor: Google Vertex AI / Gemini (`GOOGLE_VERTEX_PROJECT`/`GOOGLE_VERTEX_LOCATION`/`GOOGLE_VERTEX_MODEL_FUERTE`/`GOOGLE_VERTEX_MODEL_LIGERO`: dos niveles de modelo compartidos con RRHH, ver `agents-ai.md` punto 4), con fallback a mock si no está configurado. Reemplaza a GitHub Models desde 2026-09-29 (ver `.agents/modules/agents-ai.md` punto 1).
 - Intenciones sin dueño de sección (siempre ejecutables): `list_projects`, `count_tasks_by_status`, `user_info`, `project_summary`, `list_my_tasks`
 - Intenciones con datos en vivo de otros módulos, gateadas por la misma lógica de `SectionPermissionGuard` **antes** de ejecutar la consulta (`AiService.canUseIntent`, ver `.agents/modules/agents-ai.md` punto 1): `cacao_resumen` (CACAO), `custodias_resumen` (CUSTODIAS), `rrhh_resumen_personal` (RRHH), `ventas_resumen` (VENTAS)
 - Base de Conocimiento institucional por empresa (`CompanyKnowledgeBase`, editable por el ADMIN desde `/sistemas/base-conocimiento`) se inyecta como contexto extra, recortada a las secciones que el usuario puede ver — ver `.agents/modules/agents-ai.md` punto 1
@@ -495,9 +499,9 @@ Todo el correo del sistema sale por `GmailMailService` (`backend/src/modules/mai
 - `ContratoForm.tsx` ya no pide teléfono/empresa/RUC/dirección del cliente (2026-09-16) — la sección se renombró "Datos para el envío" y quedó solo con nombre y email, lo mínimo que necesita `sendContract` para mandar a firmar. Si una plantilla necesita esos datos, se configuran como campos normales (`Cliente.Teléfono`, etc.), no como un formulario fijo. Las columnas `SalesContract.clientPhone/clientCompany/clientRuc/clientAddress` siguen en el esquema (nadie las borra por ahora) pero ningún flujo del UI las escribe.
 
 ### Notificaciones (`/notifications`) — 2026-09-28
-Bandeja de notificaciones in-app genérica, primera vez que existe algo así en el repo (antes solo había correo). No es exclusiva de Referidos — cualquier módulo puede llamar a `NotificationsService.create()` para avisarle algo a un usuario concreto. Sin campanita/lista no había ningún canal in-app; ahora hay una campanita fija arriba a la derecha en toda pantalla protegida (`NotificationsBell.tsx`) que sondea el contador cada 60s (no hay WebSockets en el repo).
+Bandeja de notificaciones in-app genérica, primera vez que existe algo así en el repo (antes solo había correo). No es exclusiva de Referidos — cualquier módulo puede llamar a `NotificationsService.create()` para avisarle algo a un usuario concreto. Sin bandeja de notificaciones no había ningún canal in-app; ahora hay un ícono de notificaciones (campana) fijo arriba a la derecha en toda pantalla protegida (`NotificationsBell.tsx`) que sondea el contador cada 60s (no hay WebSockets en el repo).
 - `GET /notifications`, `GET /notifications/unread-count`, `PATCH /notifications/:id/read`, `PATCH /notifications/read-all` - Todas sin `@Section`: es una bandeja personal, cada usuario solo ve/marca las suyas.
-- Consumidores actuales: Referidos (ventas), Encuestas (publicar y agregar destinatarios) y **Reportar a Sistemas** (2026-09-30): el reportante recibe aviso en la campanita al enviar su reporte y cuando pasa a En revisión y a Resuelto — solo in-app, nunca correo. Ver `.agents/modules/recursos-humanos.md` punto 21f.
+- Consumidores actuales: Referidos (ventas), Encuestas (publicar y agregar destinatarios) y **Reportar a Sistemas** (2026-09-30): el reportante recibe aviso en las notificaciones de la app al enviar su reporte y cuando pasa a En revisión y a Resuelto — solo in-app, nunca correo. Ver `.agents/modules/recursos-humanos.md` punto 21f.
 - **Novedades de la app** (2026-10-02): `SistemasService.publicarNovedad` crea una notificación por destinatario — solo in-app, nunca correo. Ver sección Sistemas.
 
 ### Sistemas (`/sistemas/*`) — 2026-10-02
@@ -508,6 +512,7 @@ Sección `SISTEMAS` (`alwaysEnabled`, se puede negar por usuario). Soporte Técn
   - Destinatarios: `PermissionsService.getUsersWithSectionAccess(secciones, excluirUserId)` — misma regla que `hasSectionAccess` pero en lote: la empresa tiene la sección habilitada (`alwaysEnabled` o fila en `CompanySection`) y el usuario no la tiene negada (sin fila en `UserPermission` = tiene acceso; sección fija para todos no se puede negar). Se excluye a quien publica y a usuarios inactivos. **Los super admin (`companyId` null) no reciben nada**: `Notification.companyId` es obligatorio.
   - Cada aviso lleva `title: "Novedad: <título>"`, `message` = descripción completa y `link: '/dashboard'`. Un fallo con un destinatario se registra y no frena a los demás ni la publicación. `NovedadApp.destinatarios` guarda cuántos eran. Sin FK a `User` a propósito (el historial conserva `createdByNombre`).
   - Publicar no se puede deshacer (las notificaciones ya salieron); la pantalla pide confirmación y muestra el conteo antes.
+- **Soporte Técnico como tabla con búsqueda y filtros (2026-10-14)** — `SoporteTecnicoPage.tsx` pasó de tarjetas a tabla (pedido del usuario: "búsqueda y filtros igual que otras tablas"). Búsqueda por título, descripción, persona o empresa; filtros Estado/Tipo/Empresa; "Columnas" (`columnas:soporte-tecnico`), orden y ancho. **Todo se filtra en el navegador**: `GET /sistemas/tickets` sigue devolviendo todos los tickets sin paginar ni parámetros (sin cambios de backend); si el volumen crece habrá que filtrar en servidor. El estado se cambia con el selector de la propia columna Estado y el detalle completo (descripción larga, adjuntos) se abre al hacer clic en la fila.
 
 ### Contratación Pública (`/contratacion-publica`)
 **Desde 2026-10-01 solo está visible "Entidades Públicas"; el resto (contratos, puestos, horarios, informes, códigos de turno, textos institucionales) está oculto con redirecciones y se reactiva con la bandera `CP_MOSTRAR_SUBMODULOS_OCULTOS` en `App.tsx` (ver `.agents/modules/contratacion-publica.md`, "Submódulos ocultos").** Módulo de contratos de seguridad privada con entidades del sector público (SERCOP): entidades, contratos (renovaciones, adendas, adjuntos), puestos de servicio, horarios de guardias con generador automático de patrón de rotación, e informes mensuales generados desde una plantilla `.docx`. Diseño detallado (algoritmo, ejemplos numéricos, casos de uso de verificación): `.agents/modules/contratacion-publica.md`.
@@ -546,6 +551,8 @@ Sección `SISTEMAS` (`alwaysEnabled`, se puede negar por usuario). Soporte Técn
 - `POST /companies/:id/logo` - Subir logo de empresa (solo admin de esa empresa)
 
 ## Credenciales de prueba
+
+> ⚠️ Solo para la base **local** (las crea `seed.js`). El repositorio es **público**: estas contraseñas no deben existir en producción. Antes de cada despliegue, comprobar que las cuentas reales (sobre todo `admin@general.com`) tienen otra contraseña y que `JWT_SECRET` de Secret Manager no coincide con ningún ejemplo de la documentación.
 
 ### Super Admin (todas las empresas)
 - Contrasena: `admin2026`
