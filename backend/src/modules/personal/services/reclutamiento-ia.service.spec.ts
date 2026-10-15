@@ -368,6 +368,36 @@ describe('ReclutamientoIaService', () => {
       expect(body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 });
     });
 
+    it('llama al endpoint global con el modelo fuerte (los 3.x no existen en us-central1)', async () => {
+      const antes = {
+        loc: process.env.GOOGLE_VERTEX_LOCATION,
+        fuerte: process.env.GOOGLE_VERTEX_MODEL_FUERTE,
+        viejo: process.env.GOOGLE_VERTEX_MODEL,
+      };
+      delete process.env.GOOGLE_VERTEX_LOCATION;
+      delete process.env.GOOGLE_VERTEX_MODEL_FUERTE;
+      delete process.env.GOOGLE_VERTEX_MODEL;
+      try {
+        mockVertex({ documentos: [] });
+
+        await service.analizar('cand-1', 1);
+
+        const url = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+        expect(url).toBe(
+          'https://aiplatform.googleapis.com/v1/projects/proyecto-de-prueba/locations/global/publishers/google/models/gemini-3.8-flash:generateContent',
+        );
+      } finally {
+        for (const [k, v] of [
+          ['GOOGLE_VERTEX_LOCATION', antes.loc],
+          ['GOOGLE_VERTEX_MODEL_FUERTE', antes.fuerte],
+          ['GOOGLE_VERTEX_MODEL', antes.viejo],
+        ] as const) {
+          if (v === undefined) delete process.env[k];
+          else process.env[k] = v;
+        }
+      }
+    });
+
     it('distingue "sin espacio de respuesta" (MAX_TOKENS + texto vacío) de una respuesta genuinamente ilegible', async () => {
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,

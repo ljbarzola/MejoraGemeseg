@@ -13,6 +13,22 @@ export const MAX_DIAS_RECORDATORIO = 365;
 /** Si un día de ejecución se pierde, el aviso se recupera hasta un día después. */
 const DIAS_DE_GRACIA = 1;
 
+/** Preferencia personal (tabla UserPreference) sobre cómo llegan los recordatorios de tareas. */
+export const PREFERENCIA_RECORDATORIOS_TAREAS = 'notificaciones:recordatorios-tareas';
+
+/** Valor guardado cuando la persona pide recibirlos solo en las notificaciones de la app (sin correo). */
+export const SOLO_NOTIFICACIONES = 'solo-notificaciones';
+
+/**
+ * ¿Esta persona quiere el recordatorio también por correo? Sí por defecto: sin
+ * preferencia guardada (o con un valor que no entendemos) se sigue enviando,
+ * que es como funcionaba antes de que existiera la opción. Solo un
+ * `solo-notificaciones` explícito lo apaga.
+ */
+export function quiereCorreo(valorGuardado: unknown): boolean {
+  return !(Array.isArray(valorGuardado) && valorGuardado.includes(SOLO_NOTIFICACIONES));
+}
+
 /** Recordatorios que se crean cuando la tarea tiene fecha fin y no se eligió ninguno. */
 export const RECORDATORIOS_POR_DEFECTO = [1];
 
@@ -66,7 +82,7 @@ export function tocaEnviar(
   );
 }
 
-/** Texto corto de cuándo vence, para el correo y la campanita. */
+/** Texto corto de cuándo vence, para el correo y la notificación. */
 export function cuandoVence(faltan: number, fechaTexto: string): string {
   if (faltan === 0) return 'vence HOY';
   if (faltan === 1) return `vence mañana (${fechaTexto})`;

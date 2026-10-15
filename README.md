@@ -1,4 +1,4 @@
-# Gemeseg Mejora
+﻿# Gemeseg Mejora
 
 ## Que es este proyecto
 Gemeseg Mejora es la plataforma web de gestion interna de GEMESEG (Ecuador). Empezo como gestor de proyectos y tareas y hoy es un sistema multiempresa con modulos operativos: Cacao, Custodias, Recursos Humanos, Ventas y CRM, Contratacion Publica y Sistemas, cada uno detras de permisos por seccion, mas un asistente de IA ("Agente Gemeseg") y branding propio por empresa.
@@ -35,7 +35,7 @@ Ademas del rol, cada modulo es una "seccion" con su propio control de acceso:
 - Secciones: Inicio, Proyectos, Administracion, Cacao, Custodias, Recursos Humanos, Ventas y CRM, Contratacion Publica, Sistemas, Mi Empresa y Empresas.
 
 ### Inicio, Proyectos y Tareas
-- **Inicio**: bienvenida, mis tareas y la tarjeta "¿Conoces a alguien interesado en Gemeseg?" para referir clientes.
+- **Inicio**: bienvenida, mis tareas (filtros que se recuerdan, fecha de vencimiento resaltada, columnas elegibles y orden por encabezado) y la tarjeta "¿Conoces a alguien interesado en Gemeseg?" para referir clientes.
 - **Proyectos**: cualquier usuario autenticado crea proyectos; el admin es OWNER automatico; listado filtrado por membresia, por estado y paginado; detalle con miembros y tareas.
 - **Miembros**: OWNER o ADMIN agregan y quitan (nunca al ultimo OWNER); solo ADMIN cambia roles. Los VIEWER ven los botones deshabilitados.
 - **Tareas y Kanban**: 4 columnas (Por hacer, En progreso, En revision, Completado), varios asignados, prioridad y fechas de inicio y fin.
@@ -69,7 +69,7 @@ Rutas, traslados y nomina de escoltas de seguridad. Estados `LISTO_PARA_CUSTODIA
 Contratos de seguridad privada con entidades del sector publico. Hoy esta visible **Entidades Publicas**, con una carpeta de Google Drive para todo el modulo y una subcarpeta por entidad (la sincronización avisa de lo que falta en cada lado y deja decidir), entidades que se pueden archivar, campos extra configurables por empresa y vista previa de PDF, imágenes, Word (convertido a PDF) y Excel (como hoja de cálculo con pestañas, parecida a la de Drive) en la revisión de entregas, donde al volver a entregar un documento se pregunta si se reemplaza el archivo anterior o se conservan ambos; contratos, puestos, horarios con generador de rotacion e informes mensuales estan construidos pero ocultos hasta reactivarlos (ver `.agents/modules/contratacion-publica.md`).
 
 ### Sistemas
-Agrupa lo tecnico: dashboard, **Herramientas** (inventario y asignacion con auditoria), **Agentes** de IA, **Base de Conocimiento** de la empresa (en el menu de Sistemas) y **Soporte Tecnico** (reportes de errores, mejoras y permisos enviados con el boton de la llave inglesa; quien reporta recibe aviso del avance y el equipo de Sistemas, el de cada reporte nuevo en la campanita). El dashboard muestra tickets por tipo y el tiempo promedio de resolucion. **Novedades** permite publicar un aviso de cambio en la app que llega por la campanita (no por correo) a quienes tienen acceso a los modulos afectados.
+Agrupa lo tecnico: dashboard, **Herramientas** (inventario y asignacion con auditoria), **Agentes** de IA, **Base de Conocimiento** de la empresa (en el menu de Sistemas) y **Soporte Tecnico** (tabla con busqueda y filtros de reportes de errores, mejoras y permisos enviados con el boton de la llave inglesa; quien reporta recibe aviso del avance y el equipo de Sistemas, el de cada reporte nuevo en las notificaciones de la app). El dashboard muestra tickets por tipo y el tiempo promedio de resolucion. **Novedades** permite publicar un aviso de cambio en la app que llega por las notificaciones de la app (no por correo) a quienes tienen acceso a los modulos afectados.
 
 ### Asistente de IA — "Agente Gemeseg"
 - **Chat flotante**: boton + panel lateral, con conversaciones guardadas por agente y por usuario.
@@ -81,7 +81,7 @@ Agrupa lo tecnico: dashboard, **Herramientas** (inventario y asignacion con audi
 - **Limite**: 50 mensajes por dia por usuario.
 
 ### Notificaciones
-Campanita en toda pantalla con aviso de lo no leido. La usan Referidos, Encuestas, Soporte Tecnico y las Novedades de la app. El correo saliente (recuperacion de contrasena, recordatorios) sale por Gmail con delegacion de dominio.
+Ícono de notificaciones (campana) en toda pantalla con aviso de lo no leido. En su Perfil, cada persona elige si los recordatorios de tareas le llegan en las notificaciones de la app y por correo o solo en las notificaciones de la app (los correos llevan el prefijo `[Tareas GEMESEG]` en el asunto). La usan Referidos, Encuestas, Soporte Tecnico y las Novedades de la app. El correo saliente (recuperacion de contrasena, recordatorios) sale por Gmail con delegacion de dominio.
 
 ## Credenciales de prueba
 Solo para el entorno local: las crean los seeds (`npm run seed:minimal` deja solo `admin@gemeseg.com`, `sistemas@gemeseg.com` y el super admin; `npm run seed` crea todos los de abajo). Las cuentas de produccion tienen sus propias contrasenas.
@@ -204,7 +204,7 @@ MejoraGemeseg/
 │           ├── auth/ users/ projects/ tasks/       # Nucleo: sesion, usuarios, proyectos, tareas
 │           ├── companies/ permissions/             # Empresas (marca) y permisos por seccion
 │           ├── ai/ agents/ knowledge-base/         # Agente Gemeseg, agentes y base de conocimiento
-│           ├── notifications/ mail/                # Campanita y correo saliente
+│           ├── notifications/ mail/                # Notificaciones en la app y correo saliente
 │           ├── cacao/ custodias/                   # Modulos operativos
 │           ├── personal/                           # Recursos Humanos (Drive, cumplimiento, encuestas...)
 │           ├── ventas/                             # CRM y contratos con firma electronica

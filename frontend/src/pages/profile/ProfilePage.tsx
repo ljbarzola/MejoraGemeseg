@@ -1,8 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getMe } from '../../services/user.service';
+import { getMe, getUserPreference, setUserPreference } from '../../services/user.service';
 import type { ProfileData } from '../../services/user.service';
+import { useToast } from '../../contexts/ToastContext';
 import ChangePasswordModal from './ChangePasswordModal';
+
+// Cómo llegan los recordatorios de tareas. Sin nada guardado se envía correo
+// (es lo que ya pasaba); solo «solo-notificaciones» lo apaga. Misma clave y valor que
+// usa el backend (tasks/task-reminders.util.ts).
+const CLAVE_AVISOS_TAREAS = 'notificaciones:recordatorios-tareas';
+const SOLO_NOTIFICACIONES = 'solo-notificaciones';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrador',
@@ -15,12 +22,35 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const { showToast } = useToast();
+  // null = todavía cargando o no se pudo leer (no se muestra una opción que podría ser falsa).
+  const [soloNotificaciones, setSoloNotificaciones] = useState<boolean | null>(null);
+  const [guardandoAvisos, setGuardandoAvisos] = useState(false);
 
   useEffect(() => {
     getMe()
       .then(setProfile)
       .finally(() => setLoading(false));
+    getUserPreference(CLAVE_AVISOS_TAREAS)
+      .then((valor) => setSoloNotificaciones(Array.isArray(valor) && valor.includes(SOLO_NOTIFICACIONES)))
+      .catch(() => { /* la sección avisa que no se pudo cargar */ });
   }, []);
+
+  const cambiarAvisos = async (solo: boolean) => {
+    if (guardandoAvisos || solo === soloNotificaciones) return;
+    const anterior = soloNotificaciones;
+    setSoloNotificaciones(solo);
+    setGuardandoAvisos(true);
+    try {
+      await setUserPreference(CLAVE_AVISOS_TAREAS, [solo ? SOLO_NOTIFICACIONES : 'correo']);
+      showToast(solo ? 'Listo: los recordatorios te llegarán solo en las notificaciones de la app, sin correo.' : 'Listo: los recordatorios te llegarán en las notificaciones de la app y por correo.', 'success');
+    } catch {
+      setSoloNotificaciones(anterior);
+      showToast('No pudimos guardar tu elección. Inténtalo de nuevo en unos segundos.', 'error');
+    } finally {
+      setGuardandoAvisos(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -123,6 +153,46 @@ export default function ProfilePage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        <div className="profile-password-section">
+          <h2 className="profile-tools-title">Recordatorios de tareas</h2>
+          <p className="profile-option-hint">
+            Te avisamos antes de que venza la fecha fin de las tareas que tienes asignadas. Si tienes varias el mismo día, te llegan juntas en un solo mensaje, y
+            nunca recibes más de un correo al día.
+          </p>
+          {soloNotificaciones === null ? (
+            <p className="profile-option-hint">No se pudo cargar esta opción. Recarga la página para intentarlo de nuevo.</p>
+          ) : (
+            <div className="profile-option-group" role="radiogroup" aria-label="Cómo recibir los recordatorios de tareas">
+              <label className={`profile-option ${!soloNotificaciones ? 'selected' : ''}`}>
+                <input
+                  type="radio"
+                  name="avisos-tareas"
+                  checked={!soloNotificaciones}
+                  disabled={guardandoAvisos}
+                  onChange={() => cambiarAvisos(false)}
+                />
+                <span>
+                  <strong>Notificaciones en la app y correo</strong>
+                  <small>Te avisamos en las notificaciones de la app (el ícono de campana, arriba a la derecha) y también por correo a {profile.email}.</small>
+                </span>
+              </label>
+              <label className={`profile-option ${soloNotificaciones ? 'selected' : ''}`}>
+                <input
+                  type="radio"
+                  name="avisos-tareas"
+                  checked={soloNotificaciones}
+                  disabled={guardandoAvisos}
+                  onChange={() => cambiarAvisos(true)}
+                />
+                <span>
+                  <strong>Solo notificaciones en la app</strong>
+                  <small>Te avisamos solo dentro de la app, en el ícono de campana. No te enviamos correo.</small>
+                </span>
+              </label>
             </div>
           )}
         </div>

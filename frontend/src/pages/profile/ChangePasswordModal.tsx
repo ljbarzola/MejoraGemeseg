@@ -11,7 +11,14 @@ const MIN_LARGO = 8;
  * guardar, el servidor cierra las demás sesiones y esta sigue abierta (el
  * token nuevo lo guarda `changePassword`).
  */
-export default function ChangePasswordModal({ onClose }: { onClose: () => void }) {
+export default function ChangePasswordModal({
+  onClose,
+  obligatorio = false,
+}: {
+  onClose: () => void;
+  /** Cambio exigido por seguridad: no se puede cerrar hasta guardar la contraseña nueva. */
+  obligatorio?: boolean;
+}) {
   const [actual, setActual] = useState('');
   const [nueva, setNueva] = useState('');
   const [repetida, setRepetida] = useState('');
@@ -22,11 +29,11 @@ export default function ChangePasswordModal({ onClose }: { onClose: () => void }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !guardando) onClose();
+      if (e.key === 'Escape' && !guardando && !obligatorio) onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [guardando, onClose]);
+  }, [guardando, onClose, obligatorio]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,7 +71,7 @@ export default function ChangePasswordModal({ onClose }: { onClose: () => void }
   };
 
   return (
-    <div className="modal-overlay" onClick={guardando ? undefined : onClose}>
+    <div className="modal-overlay" onClick={guardando || obligatorio ? undefined : onClose}>
       <div
         className="modal"
         style={{ maxWidth: '460px' }}
@@ -75,11 +82,13 @@ export default function ChangePasswordModal({ onClose }: { onClose: () => void }
       >
         <div className="modal-header">
           <h3 id="pwd-modal-titulo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <KeyRound size={17} /> Cambiar contraseña
+            <KeyRound size={17} /> {obligatorio ? 'Cambia tu contraseña para continuar' : 'Cambiar contraseña'}
           </h3>
-          <button className="modal-close" onClick={onClose} disabled={guardando} aria-label="Cerrar">
-            <X size={16} />
-          </button>
+          {!obligatorio && (
+            <button className="modal-close" onClick={onClose} disabled={guardando} aria-label="Cerrar">
+              <X size={16} />
+            </button>
+          )}
         </div>
 
         {exito ? (
@@ -94,6 +103,12 @@ export default function ChangePasswordModal({ onClose }: { onClose: () => void }
         ) : (
           <form onSubmit={handleSubmit} noValidate>
             <div className="modal-body profile-password-form">
+              {obligatorio && (
+                <p className="profile-password-hint" role="alert" style={{ marginTop: 0 }}>
+                  Por seguridad, las cuentas de administrador deben renovar su contraseña. No podrás
+                  usar la aplicación hasta que lo hagas.
+                </p>
+              )}
               <div className="form-group">
                 <label htmlFor="pwd-actual">Contraseña actual</label>
                 <PasswordInput
@@ -143,9 +158,11 @@ export default function ChangePasswordModal({ onClose }: { onClose: () => void }
               <ErrorBanner mensaje={errorServidor} />
             </div>
             <div className="modal-actions">
-              <button type="button" className="btn-secondary" onClick={onClose} disabled={guardando}>
-                Cancelar
-              </button>
+              {!obligatorio && (
+                <button type="button" className="btn-secondary" onClick={onClose} disabled={guardando}>
+                  Cancelar
+                </button>
+              )}
               <button type="submit" className="auth-btn" disabled={guardando}>
                 {guardando ? 'Guardando...' : 'Cambiar contraseña'}
               </button>

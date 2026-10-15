@@ -4,26 +4,25 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { DriveService } from './drive.service';
 import { GoogleAuthService } from '../../../common/services/google-auth.service';
 import {
+  modeloVertex,
+  vertexLocation,
+  vertexUrl,
+} from '../../../common/utils/vertex-endpoint.util';
+import {
   ANALISIS_IA_FILENAME,
   ANALISIS_IA_PENDIENTE_FILENAME,
   REVISION_ARCHIVOS_IA_FILENAME,
 } from '../constants/employee-document-exclusions';
 
-// Modelo de Vertex AI. Se elige un Flash (no Flash-Lite) a propósito: el caso
-// real de este módulo son PDFs ESCANEADOS (fotos de cédula/papeleta tomadas con
-// el celular), donde la calidad de lectura de imagen importa más que el ahorro.
+// Modelo de Vertex AI: nivel 'fuerte' (ver common/utils/vertex-endpoint.util.ts),
+// a propósito y no el ligero: el caso real de este módulo son PDFs ESCANEADOS
+// (fotos de cédula/papeleta tomadas con el celular), donde la calidad de lectura
+// de imagen importa más que el ahorro, y un error mueve carpetas reales.
 //
-// gemini-2.5-flash es el más nuevo que este proyecto de GCP puede usar hoy:
-// verificado el 2026-09-16 contra `agentes-504115`/us-central1, donde toda la
-// serie Gemini 3.x (3-flash, 3.7, 3.8, 3.1-flash-lite, 3-pro) responde 404
-// NOT_FOUND — el proyecto no tiene acceso a esos modelos todavía.
-//
-// ⚠️ ATENCIÓN: Google anunció la retirada de los modelos Gemini 2.5 para el
-// 16 de octubre de 2026. Cuando llegue esa fecha, esto deja de responder. Hay
-// que conseguir acceso a la serie 3.x en el proyecto y mover la variable
-// GOOGLE_VERTEX_MODEL — por eso es configurable por entorno y no una constante
-// a secas: el cambio no debería requerir un despliegue de código.
-const MODEL = process.env.GOOGLE_VERTEX_MODEL || 'gemini-2.5-flash';
+// Los modelos 3.x solo responden por el endpoint `global` (en `us-central1`
+// dan 404); Gemini 2.5 se retira el 2026-10-20. Se lee en cada llamada, no al
+// cargar el módulo, para que un cambio de variable de entorno se note.
+const modelo = () => modeloVertex('fuerte');
 
 // Tope de tamaño del PDF que se manda al modelo. Un expediente de postulante
 // razonable pesa muy por debajo de esto; más que esto casi siempre es un PDF
@@ -187,7 +186,7 @@ export class ReclutamientoIaService {
   }
 
   private get location(): string {
-    return process.env.GOOGLE_VERTEX_LOCATION || 'us-central1';
+    return vertexLocation();
   }
 
   estaConfigurado(): boolean {
@@ -622,7 +621,7 @@ Responde ÚNICAMENTE con un objeto JSON: {"descripcion": "<una frase>"}`,
     prompt: string,
   ): Promise<any | null> {
     const token = await this.getAccessToken();
-    const url = `https://${this.location}-aiplatform.googleapis.com/v1/projects/${this.project}/locations/${this.location}/publishers/google/models/${MODEL}:generateContent`;
+    const url = vertexUrl(this.project, this.location, modelo());
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -794,7 +793,7 @@ Responde ÚNICAMENTE con un objeto JSON, sin texto antes ni después y sin bloqu
   ): Promise<{ documentos: DocumentoDetectado[] | null; finishReason?: string }> {
     const token = await this.getAccessToken();
     const prompt = await this.buildPrompt(requisitos, totalPaginas);
-    const url = `https://${this.location}-aiplatform.googleapis.com/v1/projects/${this.project}/locations/${this.location}/publishers/google/models/${MODEL}:generateContent`;
+    const url = vertexUrl(this.project, this.location, modelo());
 
     const response = await fetch(url, {
       method: 'POST',

@@ -57,7 +57,7 @@ export class PermissionsController {
     @Req() req: any,
   ) {
     if (!this.service.isSuperAdmin(req.user)) {
-      throw new Error(
+      throw new ForbiddenException(
         'Solo el super administrador puede gestionar secciones de empresa',
       );
     }
@@ -103,14 +103,12 @@ export class PermissionsController {
   @Post('users/:userId')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN)
-  setUserPermissions(
+  async setUserPermissions(
     @Param('userId', ParseIntPipe) userId: number,
     @Body() dto: SetUserPermissionsDto,
     @Req() req: any,
   ) {
-    if (!this.service.isSuperAdmin(req.user) && !req.user.companyId) {
-      throw new Error('Sin permisos');
-    }
+    await this.service.assertPuedeGestionarUsuario(userId, req.user);
     return this.service.setUserPermissions(userId, dto.permissions);
   }
 }

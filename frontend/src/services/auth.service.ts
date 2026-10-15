@@ -58,16 +58,6 @@ function isTokenExpired(token: string): boolean {
   }
 }
 
-export async function register(data: {
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-}): Promise<AuthResponse> {
-  const res = await api.post<AuthResponse>('/auth/register', data);
-  return res.data;
-}
-
 export async function login(data: {
   email: string;
   password: string;

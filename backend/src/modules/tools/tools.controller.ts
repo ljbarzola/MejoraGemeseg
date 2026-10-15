@@ -30,8 +30,8 @@ export class ToolsController {
 
   @Get()
   @Section('SISTEMAS', 'view')
-  findAllTools() {
-    return this.toolsService.findAllTools();
+  findAllTools(@Req() req: any) {
+    return this.toolsService.findAllTools(req.user);
   }
 
   @Post()
@@ -42,29 +42,34 @@ export class ToolsController {
 
   @Delete(':id')
   @Section('SISTEMAS', 'write')
-  removeTool(@Param('id', ParseIntPipe) id: number) {
-    return this.toolsService.removeTool(id);
+  removeTool(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.toolsService.removeTool(id, req.user);
   }
 
   @Get('assignments')
   @Section('SISTEMAS', 'view')
   findAllAssignments(
+    @Req() req: any,
     @Query('tool') toolFilter?: string,
     @Query('user') userFilter?: string,
   ) {
-    return this.toolsService.findAllAssignments(toolFilter, userFilter);
+    return this.toolsService.findAllAssignments(
+      req.user,
+      toolFilter,
+      userFilter,
+    );
   }
 
   @Get('users')
   @Section('SISTEMAS', 'view')
-  getUsersWithTools() {
-    return this.toolsService.getUsersWithTools();
+  getUsersWithTools(@Req() req: any) {
+    return this.toolsService.getUsersWithTools(req.user);
   }
 
   @Post('assign')
   @Section('SISTEMAS', 'write')
   assignTool(@Body() dto: AssignToolDto, @Req() req: any) {
-    return this.toolsService.assignTool(dto, req.user.userId);
+    return this.toolsService.assignTool(dto, req.user, req.user.userId);
   }
 
   @Patch('assign/:id')
@@ -74,18 +79,23 @@ export class ToolsController {
     @Body() dto: UpdateAssignmentDto,
     @Req() req: any,
   ) {
-    return this.toolsService.updateAssignment(id, dto, req.user.userId);
+    return this.toolsService.updateAssignment(
+      id,
+      dto,
+      req.user,
+      req.user.userId,
+    );
   }
 
   @Delete('assign/:id')
   @Section('SISTEMAS', 'write')
   removeAssignment(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
-    return this.toolsService.removeAssignment(id, req.user.userId);
+    return this.toolsService.removeAssignment(id, req.user, req.user.userId);
   }
 
   @Get('assign/:id/audit')
   @Section('SISTEMAS', 'view')
-  getAuditLog(@Param('id', ParseIntPipe) id: number) {
-    return this.toolsService.getAuditLog(id);
+  getAuditLog(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.toolsService.getAuditLog(id, req.user);
   }
 }

@@ -2,7 +2,11 @@ import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiProcessor, INTENT_SECTION } from './ai.processor';
 import { VertexChatClient, ChatTurn } from './vertex-chat.client';
-import { ALL_SECTIONS, PermissionsService } from '../permissions/permissions.service';
+import {
+  ALL_SECTIONS,
+  PermissionsService,
+  permiteSinFila,
+} from '../permissions/permissions.service';
 import { parseKnowledgeBase, filterKnowledgeBase } from './knowledge-base.util';
 import { buildCapabilitiesPrompt } from './capabilities-prompt.util';
 import { buildSystemGuide } from './system-guide.util';
@@ -133,7 +137,7 @@ export class AiService {
   }
 
   private vertexModelForLog(): string {
-    return process.env.GOOGLE_VERTEX_CHAT_MODEL || 'gemini-2.5-flash';
+    return this.vertexChat.modeloPara('ligero');
   }
 
   /**
@@ -166,7 +170,7 @@ export class AiService {
 
     const perms = await this.permissionsService.getUserPermissions(userId);
     const perm = perms.find((p) => p.section === section);
-    if (!perm) return true;
+    if (!perm) return permiteSinFila(section);
     return perm.canView;
   }
 
@@ -193,7 +197,7 @@ export class AiService {
         if (!s.enabled) return false;
         if (fijas.includes(s.key)) return true;
         const perm = perms.find((p) => p.section === s.key);
-        return !perm || perm.canView;
+        return perm ? perm.canView : permiteSinFila(s.key);
       })
       .map((s) => s.key);
   }

@@ -1,7 +1,5 @@
 ﻿import {
   BadRequestException,
-  ConflictException,
-  ForbiddenException,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -11,7 +9,6 @@ import * as bcrypt from 'bcryptjs';
 import { randomInt } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GmailMailService } from '../mail/gmail-mail.service';
-import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import {
   ConfirmPasswordResetDto,
@@ -19,6 +16,8 @@ import {
 } from './dto/forgot-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { SessionCutoffService } from './session-cutoff.service';
+import { AuthThrottleService } from './auth-throttle.service';
+import { PasswordRotationService } from './password-rotation.service';
 import { UserRole } from '@prisma/client';
 
 @Injectable()
@@ -32,86 +31,37 @@ export class AuthService {
     // guardias: hay un solo canal de correo en el sistema (MailModule).
     private readonly gmailMailService: GmailMailService,
     private readonly sessionCutoff: SessionCutoffService,
+    private readonly throttle: AuthThrottleService,
+    private readonly rotation: PasswordRotationService,
   ) {}
 
-  async register(dto: RegisterDto) {
-    const company = await this.prisma.company.findFirst({
-      where: { domain: { not: null } },
-    });
-
-    if (company?.domain && !dto.email.endsWith(company.domain)) {
-      const allowedDomains = await this.prisma.company.findMany({
-        where: { domain: { not: null } },
-        select: { domain: true },
-      });
-      const domains = allowedDomains.map((c) => c.domain).join(', ');
-      throw new ForbiddenException(
-        `Solo se permiten correos corporativos (${domains})`,
-      );
-    }
-
-    const existing = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-    });
-
-    if (existing) {
-      throw new ConflictException('Ya existe un usuario con ese correo');
-    }
-
-    const userCompany = company?.domain
-      ? await this.prisma.company.findFirst({
-          where: { domain: dto.email.split('@')[1] },
-        })
-      : null;
-
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
-
-    const user = await this.prisma.user.create({
-      data: {
-        email: dto.email,
-        password: hashedPassword,
-        fullName: `${dto.firstName} ${dto.lastName}`,
-        companyId: userCompany?.id || null,
-      },
-    });
-
-    const token = this.generateToken(
-      user.id,
-      user.email,
-      user.role,
-      user.companyId,
-    );
-
-    return {
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        // Cargo real de la persona ("Jefa de RRHH"). La barra lateral lo
-        // muestra en vez del rol del sistema (ADMIN/EMPLOYEE), que a la gente
-        // no le dice nada y solo generaba ruido.
-        position: user.position,
-        role: user.role,
-        companyId: user.companyId,
-      },
-      token,
-    };
-  }
+  // El registro público (POST /auth/register) se eliminó el 2026-10-14: bastaba
+  // un correo con el dominio de la empresa, sin verificar que fuera tuyo, para
+  // recibir una sesión. Las cuentas las crea un administrador (POST /users).
 
   async login(dto: LoginDto) {
+    const clave = AuthThrottleService.claveCorreo('login', dto.email);
+    await this.throttle.asegurarNoBloqueado(clave);
+
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
+      // El hash no sale por defecto de ninguna consulta (ver PrismaService).
+      omit: { password: false },
     });
 
     if (!user || !user.password) {
+      await this.throttle.registrarIntento(clave);
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
     const passwordValid = await bcrypt.compare(dto.password, user.password);
 
     if (!passwordValid) {
+      await this.throttle.registrarIntento(clave);
       throw new UnauthorizedException('Credenciales inválidas');
     }
+
+    await this.throttle.reiniciar(clave);
 
     const token = this.generateToken(
       user.id,
@@ -159,6 +109,12 @@ export class AuthService {
       message:
         'Si ese correo tiene una cuenta, le enviamos un código para recuperar la contraseña. Revisa tu bandeja y la carpeta de spam.',
     };
+
+    // Cada solicitud cuenta, exista o no el correo (así el 429 no delata qué
+    // cuentas existen) y de paso frena el envío masivo de correos.
+    const clave = AuthThrottleService.claveCorreo('reset', dto.email);
+    await this.throttle.asegurarNoBloqueado(clave);
+    await this.throttle.registrarIntento(clave);
 
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
@@ -263,6 +219,7 @@ export class AuthService {
     // Quien restablece la contraseña suele hacerlo porque alguien más pudo
     // tenerla: se cierran las sesiones que ya estuvieran abiertas.
     await this.sessionCutoff.markAllSessionsClosed(user.id);
+    await this.rotation.marcarHecha(user.id);
 
     this.logger.log(`Contraseña restablecida para ${user.email}`);
     return {
@@ -284,10 +241,15 @@ export class AuthService {
    * nadie.
    */
   async changePassword(userId: number, dto: ChangePasswordDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      omit: { password: false },
+    });
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Tu sesión expiró. Inicia sesión de nuevo.');
     }
+    const clave = `cambio:${user.id}`;
+    await this.throttle.asegurarNoBloqueado(clave);
     if (!user.password) {
       throw new BadRequestException(
         'Tu cuenta entra con Google y todavía no tiene contraseña. Usa "¿Olvidaste tu contraseña?" en el inicio de sesión para crear una.',
@@ -296,8 +258,10 @@ export class AuthService {
 
     const actualValida = await bcrypt.compare(dto.currentPassword, user.password);
     if (!actualValida) {
+      await this.throttle.registrarIntento(clave);
       throw new BadRequestException('La contraseña actual no es correcta.');
     }
+    await this.throttle.reiniciar(clave);
     if (dto.newPassword === dto.currentPassword) {
       throw new BadRequestException(
         'La contraseña nueva debe ser distinta a la actual.',
@@ -314,6 +278,7 @@ export class AuthService {
     const sesionesCerradas = await this.sessionCutoff.markAllSessionsClosed(
       user.id,
     );
+    await this.rotation.marcarHecha(user.id);
     const token = this.generateToken(
       user.id,
       user.email,
