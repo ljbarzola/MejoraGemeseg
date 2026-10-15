@@ -61,7 +61,7 @@ export default function TemplateConfig() {
     } catch (err: unknown) {
       const ax = err as { response?: { data?: { message?: string } } };
       showToast(ax?.response?.data?.message || 'No se pudo cargar la plantilla', 'error');
-      navigate('/ventas/contratos');
+      navigate('/ventas/documentacion');
     }
   };
 
@@ -77,7 +77,7 @@ export default function TemplateConfig() {
       if (!isEdit) {
         const created = await createTemplate({ name: name || 'Plantilla sin nombre', driveUrl });
         tid = created.id;
-        navigate(`/ventas/contratos/configuracion/${tid}`, { replace: true });
+        navigate(`/ventas/documentacion/configuracion/${tid}`, { replace: true });
       } else {
         await updateTemplate(+id!, { driveUrl });
       }
@@ -105,7 +105,7 @@ export default function TemplateConfig() {
       if (!isEdit) {
         const created = await createTemplate({ name: name || 'Plantilla sin nombre' });
         tid = created.id;
-        navigate(`/ventas/contratos/configuracion/${tid}`, { replace: true });
+        navigate(`/ventas/documentacion/configuracion/${tid}`, { replace: true });
       }
       if (tid) {
         const result = await uploadTemplateDocx(tid, file);
@@ -233,7 +233,7 @@ export default function TemplateConfig() {
       });
       await saveTemplateFields(+id, fields.map((f, i) => ({ ...f, order: i })));
       showToast('Plantilla guardada', 'success');
-      navigate('/ventas/contratos');
+      navigate('/ventas/documentacion');
     } catch (err: unknown) {
       const ax = err as { response?: { data?: { message?: string } } };
       showToast(ax?.response?.data?.message || 'Error al guardar', 'error');
@@ -274,7 +274,7 @@ export default function TemplateConfig() {
 
   return (
     <div className="page-container">
-      <button className="cacao-back-btn" onClick={() => navigate('/ventas/contratos')} style={{ marginBottom: 16 }}>
+      <button className="cacao-back-btn" onClick={() => navigate('/ventas/documentacion')} style={{ marginBottom: 16 }}>
         <ArrowLeft size={16} strokeWidth={2.4} /> Volver
       </button>
 
@@ -287,7 +287,7 @@ export default function TemplateConfig() {
           <button
             type="button"
             onClick={() => setShowHelp(true)}
-            title="Cómo funciona Contratos"
+            title="Cómo funciona Documentación"
             aria-label="Ayuda"
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 6, border: 'none', background: 'var(--naranja)', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
           >
@@ -617,7 +617,7 @@ export default function TemplateConfig() {
       )}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-        <button className="btn-secondary" onClick={() => navigate('/ventas/contratos')} style={{ padding: '10px 20px' }}>Cancelar</button>
+        <button className="btn-secondary" onClick={() => navigate('/ventas/documentacion')} style={{ padding: '10px 20px' }}>Cancelar</button>
         <button className="auth-btn" onClick={handleSave} disabled={saving || !name.trim()} style={{ padding: '10px 20px' }}>
           {saving ? 'Guardando...' : 'Guardar plantilla'}
         </button>

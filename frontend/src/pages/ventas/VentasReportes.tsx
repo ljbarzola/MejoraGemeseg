@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Download, Printer } from 'lucide-react';
+import { Download, Printer } from 'lucide-react';
 import { getVisits, getLeads, ClientVisit, Lead } from '../../services/ventas.service';
 import DateInput from '../../components/common/DateInput';
 import { useToast } from '../../contexts/ToastContext';
 
-export default function VentasReportes() {
-  const navigate = useNavigate();
+// Pestaña «Resultados» de VisitasPage (antes era la pantalla «Reportes»): resumen
+// de visitas, monto cotizado y detalle exportable a CSV.
+export default function ResultadosVisitas() {
   const { showToast } = useToast();
   const [visits, setVisits] = useState<ClientVisit[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -64,25 +64,14 @@ export default function VentasReportes() {
   };
 
   return (
-    <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn no-print" onClick={() => navigate('/ventas')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
+    <div>
+      <div className="header-actions no-print" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
+        <button className="btn-secondary" onClick={exportCSV}>
+          <Download size={16} /> Exportar CSV
         </button>
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">Ventas y CRM</p>
-            <h1>Reportes</h1>
-          </div>
-          <div className="header-actions no-print">
-            <button className="btn-secondary" onClick={exportCSV}>
-              <Download size={16} /> Exportar CSV
-            </button>
-            <button className="auth-btn" onClick={() => window.print()}>
-              <Printer size={16} /> Imprimir
-            </button>
-          </div>
-        </div>
+        <button className="auth-btn" onClick={() => window.print()}>
+          <Printer size={16} /> Imprimir
+        </button>
       </div>
 
       {/* FILTER BAR */}

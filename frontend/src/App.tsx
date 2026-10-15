@@ -1,5 +1,5 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import LoginPage from './pages/auth/LoginPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import ProjectsListPage from './pages/projects/ProjectsListPage';
@@ -95,15 +95,29 @@ const PublicSurveyPage = lazy(() => import('./pages/personal/PublicSurveyPage'))
 const SurveyManagementPage = lazy(() => import('./pages/personal/SurveyManagementPage'));
 const VentasDashboard = lazy(() => import('./pages/ventas/VentasDashboard'));
 const VentasClientesPage = lazy(() => import('./pages/ventas/VentasClientesPage'));
+const LeadsPage = lazy(() => import('./pages/ventas/LeadsPage'));
+const OportunidadesPage = lazy(() => import('./pages/ventas/OportunidadesPage'));
+const ConfiguracionVentasPage = lazy(() => import('./pages/ventas/ConfiguracionVentasPage'));
 const TemplateList = lazy(() => import('./pages/ventas/TemplateList'));
 const TemplateConfig = lazy(() => import('./pages/ventas/TemplateConfig'));
+// "Documentación" = generar y firmar documentos desde plantillas (antes se
+// llamaba "Contratos"). "Contratos" ahora es el acuerdo comercial del cliente.
 const ContratosList = lazy(() => import('./pages/ventas/ContratosList'));
+const ContratosComercialesList = lazy(() => import('./pages/ventas/ContratosComercialesList'));
+const ContratoComercialDetalle = lazy(() => import('./pages/ventas/ContratoComercialDetalle'));
 const ContratoForm = lazy(() => import('./pages/ventas/ContratoForm'));
 const ContratoResult = lazy(() => import('./pages/ventas/ContratoResult'));
 const CompletarContrato = lazy(() => import('./pages/ventas/CompletarContrato'));
 const SoporteTecnicoPage = lazy(() => import('./pages/sistemas/SoporteTecnicoPage'));
 const SistemasDashboardPage = lazy(() => import('./pages/sistemas/SistemasDashboardPage'));
 const NovedadesPage = lazy(() => import('./pages/sistemas/NovedadesPage'));
+
+// Redirección que conserva los parámetros de la ruta (":id" del destino se
+// llena con el ":id" de la URL vieja).
+function RedirectTo({ to }: { to: string }) {
+  const params = useParams();
+  return <Navigate to={to.replace(/:(\w+)/g, (_, k: string) => params[k] ?? '')} replace />;
+}
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { collapsed } = useSidebar();
@@ -450,22 +464,38 @@ function AppInner() {
         <Route path="/rrhh/asignaciones" element={<Navigate to="/rrhh/historial" replace />} />
         <Route path="/rrhh/movimientos" element={<Navigate to="/rrhh/historial" replace />} />
         <Route path="/ventas" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasDashboard /></SectionRoute></ProtectedLayout>} />
-        {/* Planificación y Campo (Visitas), Prospectos CRM (Leads), Reportes y Config Webhook están "Próximamente":
-            sus pantallas siguen en el código (pages/ventas/VisitasPage, LeadsPage, VentasReportes, WebhookConfig) pero
+        {/* Planificación y Campo (Visitas), Reportes y Config Webhook están "Próximamente":
+            sus pantallas siguen en el código (pages/ventas/VisitasPage, VentasReportes, WebhookConfig) pero
             ya no tienen ruta — quien llegue por un enlace guardado o escribiendo la URL vuelve al Dashboard. Para
             reactivarlas: volver a importarlas arriba, registrar su ruta aquí y quitar `disabled` en Sidebar.tsx. */}
-        {['visitas', 'leads', 'reportes', 'webhook-config'].map((p) => (
+        {['visitas', 'reportes', 'webhook-config'].map((p) => (
           <Route key={p} path={`/ventas/${p}`} element={<Navigate to="/ventas" replace />} />
         ))}
+        {/* Leads (2026-10-07): bandeja de contactos entrantes. Reemplaza al viejo "Prospectos CRM" apagado. */}
+        <Route path="/ventas/leads" element={<ProtectedLayout><SectionRoute section="VENTAS"><LeadsPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/oportunidades" element={<ProtectedLayout><SectionRoute section="VENTAS"><OportunidadesPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/configuracion" element={<ProtectedLayout><SectionRoute section="VENTAS"><ConfiguracionVentasPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/clientes" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasClientesPage /></SectionRoute></ProtectedLayout>} />
-        <Route path="/ventas/contratos" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratosList /></SectionRoute></ProtectedLayout>} />
-        <Route path="/ventas/contratos/nuevo" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoForm /></SectionRoute></ProtectedLayout>} />
-        <Route path="/ventas/contratos/nuevo/:templateId" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoForm /></SectionRoute></ProtectedLayout>} />
-        <Route path="/ventas/contratos/:contractId/editar" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoForm /></SectionRoute></ProtectedLayout>} />
-        <Route path="/ventas/contratos/:id" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoResult /></SectionRoute></ProtectedLayout>} />
-        <Route path="/ventas/contratos/configuracion" element={<ProtectedLayout><SectionRoute section="VENTAS"><TemplateConfig /></SectionRoute></ProtectedLayout>} />
-        <Route path="/ventas/contratos/configuracion/:id" element={<ProtectedLayout><SectionRoute section="VENTAS"><TemplateConfig /></SectionRoute></ProtectedLayout>} />
-        <Route path="/ventas/contratos/plantillas" element={<ProtectedLayout><SectionRoute section="VENTAS"><TemplateList /></SectionRoute></ProtectedLayout>} />
+        {/* Contratos: el acuerdo comercial de cada cliente (servicios, vigencia, renovaciones). */}
+        <Route path="/ventas/contratos" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratosComercialesList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/contratos/:id" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoComercialDetalle /></SectionRoute></ProtectedLayout>} />
+        {/* Documentación: generar y firmar documentos desde plantillas (antes "Contratos"). */}
+        <Route path="/ventas/documentacion" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratosList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/documentacion/nuevo" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/documentacion/nuevo/:templateId" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/documentacion/:contractId/editar" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoForm /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/documentacion/:id" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoResult /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/documentacion/configuracion" element={<ProtectedLayout><SectionRoute section="VENTAS"><TemplateConfig /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/documentacion/configuracion/:id" element={<ProtectedLayout><SectionRoute section="VENTAS"><TemplateConfig /></SectionRoute></ProtectedLayout>} />
+        <Route path="/ventas/documentacion/plantillas" element={<ProtectedLayout><SectionRoute section="VENTAS"><TemplateList /></SectionRoute></ProtectedLayout>} />
+        {/* Direcciones viejas (favoritos) de lo que antes se llamaba "Contratos". /ventas/contratos/:id ya
+            es el detalle del contrato nuevo, así que esa no se puede redirigir. */}
+        <Route path="/ventas/contratos/nuevo" element={<RedirectTo to="/ventas/documentacion/nuevo" />} />
+        <Route path="/ventas/contratos/nuevo/:templateId" element={<RedirectTo to="/ventas/documentacion/nuevo/:templateId" />} />
+        <Route path="/ventas/contratos/:contractId/editar" element={<RedirectTo to="/ventas/documentacion/:contractId/editar" />} />
+        <Route path="/ventas/contratos/configuracion" element={<RedirectTo to="/ventas/documentacion/configuracion" />} />
+        <Route path="/ventas/contratos/configuracion/:id" element={<RedirectTo to="/ventas/documentacion/configuracion/:id" />} />
+        <Route path="/ventas/contratos/plantillas" element={<RedirectTo to="/ventas/documentacion/plantillas" />} />
         <Route path="/sistemas/dashboard" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><SistemasDashboardPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/sistemas/herramientas" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><ToolsPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/sistemas/agentes" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><AgentsPage /></SectionRoute></ProtectedLayout>} />

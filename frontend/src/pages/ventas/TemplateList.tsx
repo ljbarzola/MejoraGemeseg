@@ -51,17 +51,17 @@ export default function TemplateList() {
 
   return (
     <div className="page-container">
-      <button className="cacao-back-btn" onClick={() => navigate('/ventas/contratos')} style={{ marginBottom: 16 }}>
+      <button className="cacao-back-btn" onClick={() => navigate('/ventas/documentacion')} style={{ marginBottom: 16 }}>
         <ArrowLeft size={16} strokeWidth={2.4} /> Volver
       </button>
 
       <div className="page-header-row">
         <div>
           <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Plantillas de Contrato</h1>
+          <h1>Plantillas de documentos</h1>
         </div>
         <div className="header-actions">
-          <button className="auth-btn" onClick={() => navigate('/ventas/contratos/configuracion')}>
+          <button className="auth-btn" onClick={() => navigate('/ventas/documentacion/configuracion')}>
             <Plus size={16} /> Nueva plantilla
           </button>
         </div>
@@ -74,7 +74,7 @@ export default function TemplateList() {
           <div className="empty-state">
             <div style={{ fontSize: '2rem', marginBottom: '8px' }}>📋</div>
             <div>No hay plantillas creadas</div>
-            <button className="auth-btn" onClick={() => navigate('/ventas/contratos/configuracion')} style={{ marginTop: '16px', padding: '10px 24px' }}>Crear plantilla</button>
+            <button className="auth-btn" onClick={() => navigate('/ventas/documentacion/configuracion')} style={{ marginTop: '16px', padding: '10px 24px' }}>Crear plantilla</button>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
@@ -91,10 +91,10 @@ export default function TemplateList() {
                   </div>
                   <div style={{ display: 'flex', gap: '12px', marginTop: '8px', fontSize: '0.8rem', color: '#64748b' }}>
                     <span>🔲 {t._count?.fields || 0} campos</span>
-                    <span>📝 {t._count?.contracts || 0} contratos</span>
+                    <span>📝 {t._count?.contracts || 0} documentos</span>
                   </div>
                   <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-                    <button className="btn-secondary" onClick={() => navigate(`/ventas/contratos/configuracion/${t.id}`)}
+                    <button className="btn-secondary" onClick={() => navigate(`/ventas/documentacion/configuracion/${t.id}`)}
                       style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px', fontSize: '0.8rem' }}>
                       <Pencil size={14} /> Editar
                     </button>

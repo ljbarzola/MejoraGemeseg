@@ -18,7 +18,7 @@ export class CreateAgentDto {
 
   @IsString()
   @IsNotEmpty()
-  @MaxLength(2000)
+  @MaxLength(6000)
   systemMsg: string;
 
   @IsString()
@@ -34,7 +34,7 @@ export class UpdateAgentDto {
 
   @IsString()
   @IsOptional()
-  @MaxLength(2000)
+  @MaxLength(6000)
   systemMsg?: string;
 
   @IsString()

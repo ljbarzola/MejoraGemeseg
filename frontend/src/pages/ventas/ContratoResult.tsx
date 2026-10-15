@@ -88,7 +88,7 @@ export default function ContratoResult() {
         });
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo cargar el contrato', 'error');
-      navigate('/ventas/contratos');
+      navigate('/ventas/documentacion');
     }
   };
 
@@ -124,14 +124,14 @@ export default function ContratoResult() {
 
   const handleEditFieldsClick = () => {
     if (contract?.status === 'SENT') { setPendingSentAction('edit'); return; }
-    navigate(`/ventas/contratos/${contract!.id}/editar`);
+    navigate(`/ventas/documentacion/${contract!.id}/editar`);
   };
 
   const handleConfirmSentAction = () => {
     const action = pendingSentAction;
     setPendingSentAction(null);
     if (action === 'generate') handleGenerate();
-    else if (action === 'edit') navigate(`/ventas/contratos/${contract!.id}/editar`);
+    else if (action === 'edit') navigate(`/ventas/documentacion/${contract!.id}/editar`);
   };
 
   const handleCheckStatus = async () => {
@@ -210,10 +210,10 @@ export default function ContratoResult() {
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', padding: '16px 24px', background: '#fff', borderBottom: '1px solid #e2e8f0', gap: 14, flexShrink: 0 }}>
-        <button className="cacao-back-btn" onClick={() => navigate('/ventas/contratos')}>
+        <button className="cacao-back-btn" onClick={() => navigate('/ventas/documentacion')}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <h2 style={subPageTitle}>Contrato {contract.contractNumber || `#${contract.id}`} — {contract.clientName}</h2>
+        <h2 style={subPageTitle}>Documento {contract.contractNumber || `#${contract.id}`} — {contract.clientName}</h2>
         <span style={{ padding: '3px 10px', borderRadius: 12, background: statusColors[contract.status] || '#888', color: '#fff', fontSize: 11, fontWeight: 600 }}>{contract.status}</span>
         <div style={{ flex: 1 }} />
         {contract.status !== 'SIGNED' && (

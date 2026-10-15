@@ -208,18 +208,34 @@ describe('AiService.callVertexChat — la consulta nunca se ejecuta si el intent
     expect(processor.executeQuery).toHaveBeenCalled();
   });
 
-  describe('modelo del Agente Gemeseg', () => {
-    it('usa el nivel ligero (el de por defecto) en la pregunta y en la redacción con datos', async () => {
+  describe('nivel de modelo según el perfil del agente', () => {
+    const conPerfil = (perfil: string) =>
+      (service as any).callVertexChat('hola', 'dashboard', [], 1, 1, null, undefined, perfil);
+
+    it('Agente Gemeseg pide el modelo ligero en la pregunta y en la redacción con datos', async () => {
       vertexChat.sendChat
         .mockResolvedValueOnce({ reply: '[INTENCION: rrhh_resumen_personal]', tokensUsed: 1 })
         .mockResolvedValueOnce({ reply: 'ok', tokensUsed: 1 });
 
-      await (service as any).callVertexChat('hola', 'dashboard', [], 1, 1, null, undefined);
+      await conPerfil('GENERAL');
+
+      for (const llamada of vertexChat.sendChat.mock.calls) {
+        expect(llamada[3]).toEqual(expect.objectContaining({ nivel: 'ligero' }));
+      }
+    });
+
+    it('Agente de Ventas pide el modelo fuerte en las dos llamadas', async () => {
+      vertexChat.sendChat
+        .mockResolvedValueOnce({ reply: '[INTENCION: ventas_cartera]', tokensUsed: 1 })
+        .mockResolvedValueOnce({ reply: 'ok', tokensUsed: 1 });
+
+      await conPerfil('VENTAS');
 
       expect(vertexChat.sendChat.mock.calls.length).toBeGreaterThan(0);
       for (const llamada of vertexChat.sendChat.mock.calls) {
-        // Sin opciones = nivel ligero; nunca debe pedir el fuerte.
-        expect(llamada[3]?.nivel ?? 'ligero').toBe('ligero');
+        expect(llamada[3]).toEqual(
+          expect.objectContaining({ nivel: 'fuerte', maxOutputTokens: 4096 }),
+        );
       }
     });
   });

@@ -97,21 +97,24 @@ export default function Sidebar() {
   // 2026-09-22 (código y tablas, ver .agents/modules/recursos-humanos.md
   // punto 16a).
 
-  // Ventas/CRM: Dashboard, Clientes y Contratos están activos. El resto
-  // (Planificación y Campo, Prospectos CRM, Reportes, Config Webhook) se deja
-  // visible como "Próximamente" (gris, sin clic) y NO tiene ruta: App.tsx
-  // redirige esas URLs al Dashboard. Tampoco las conoce el asistente de IA
+  // Ventas/CRM: Dashboard, Leads, Oportunidades, Clientes, Contratos, Documentación y Configuración están activos.
+  // Planificación y Campo se deja visible como "Próximamente" (gris, sin clic)
+  // y NO tiene ruta: App.tsx redirige esa URL al Dashboard. «Reportes» se
+  // quitó del menú (2026-10-08): sus cifras de visitas viven en la pestaña
+  // «Resultados» de VisitasPage y el embudo de marketing, en el Dashboard. Tampoco las conoce el asistente de IA
   // (system-guide.util.ts / ai.processor.ts). Al reactivar uno, hay que
   // devolverle la ruta en App.tsx, quitar `disabled` aquí y volver a
   // explicarlo en la guía del asistente.
   const ventasItems = [
     { label: 'Dashboard', path: '/ventas', icon: '📊' },
-    { label: 'Planificación y Campo', path: '/ventas/visitas', icon: '📍', disabled: true },
-    { label: 'Prospectos CRM', path: '/ventas/leads', icon: '🎯', disabled: true },
+    // El orden sigue el recorrido de una persona: lead -> oportunidad -> cliente (2026-10-15).
+    { label: 'Leads', path: '/ventas/leads', icon: '📥' },
+    { label: 'Oportunidades', path: '/ventas/oportunidades', icon: '🎯' },
     { label: 'Clientes', path: '/ventas/clientes', icon: '👤' },
-    { label: 'Contratos', path: '/ventas/contratos', icon: '📄' },
-    { label: 'Reportes', path: '/ventas/reportes', icon: '📈', disabled: true },
-    { label: 'Config Webhook', path: '/ventas/webhook-config', icon: '🔗', disabled: true },
+    { label: 'Contratos', path: '/ventas/contratos', icon: '📑' },
+    { label: 'Documentación', path: '/ventas/documentacion', icon: '📄' },
+    { label: 'Configuración', path: '/ventas/configuracion', icon: '⚙️' },
+    { label: 'Planificación y Campo', path: '/ventas/visitas', icon: '📍', disabled: true },
   ];
 
   const custodiasSubItems = [

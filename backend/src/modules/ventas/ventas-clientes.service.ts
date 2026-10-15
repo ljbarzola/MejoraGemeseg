@@ -7,8 +7,16 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { DEFAULT_SUBSERVICIOS } from './ventas-subservicios.const';
+import { ETAPA_GANADA, ETAPA_PERDIDA } from './stage-outcome.util';
+import { parseSiguientePaso } from './siguiente-paso.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GmailMailService } from '../mail/gmail-mail.service';
+import { VentasOportunidadesService } from './ventas-oportunidades.service';
+import { VentasSchemaService } from './ventas-schema.service';
+import { VentasCicloService } from './ventas-ciclo.service';
+import { DEFAULT_STAGES } from './ventas-etapas.const';
+import { ETIQUETA_SUBSERVICIO } from './ventas-servicios.util';
 import {
   ACTIVITY_TYPES,
   CreateReferralDto,
@@ -24,8 +32,6 @@ import {
 // Dashboard: etapas "ganada"/"perdida" por clave (decisión de Ventas: en
 // producción siempre existen ACEPTADO y RECHAZADO como etapas finales) y
 // cuántos días en la misma etapa hacen a un cliente "estancado".
-const ETAPA_GANADA = 'ACEPTADO';
-const ETAPA_PERDIDA = 'RECHAZADO';
 const DIAS_ESTANCADO = 7;
 const MAX_ESTANCADOS_LISTADOS = 10;
 const MAX_SEMANAS_SERIE = 12;
@@ -94,31 +100,7 @@ type OpcionConHijos = {
   children?: { key: string; label: string }[];
 };
 
-// Sub-servicios de fábrica de cada servicio. Se siembran en
-// `servicio_requerido.options[].children` solo cuando la opción todavía no
-// tiene `children` definido (ver conSubserviciosPorDefecto) — así Ventas
-// puede renombrar/quitar/agregar después sin que se los vuelvan a pisar.
-export const DEFAULT_SUBSERVICIOS: Record<string, { key: string; label: string }[]> = {
-  SEGURIDAD_FISICA: [
-    { key: 'AGENTES_DE_SEGURIDAD', label: 'Agentes de Seguridad' },
-    { key: 'CUSTODIA_DE_MERCADERIA_EN_MOVIMIENTO', label: 'Custodia de Mercadería en Movimiento' },
-    { key: 'SEGURIDAD_VIP', label: 'Seguridad VIP' },
-    { key: 'SEGURIDAD_PARA_EVENTOS', label: 'Seguridad para Eventos' },
-  ],
-  MONITOREO: [
-    { key: 'MONITOREO_DE_CAMARAS', label: 'Monitoreo de Cámaras' },
-    { key: 'MONITOREO_DE_VEHICULOS', label: 'Monitoreo de Vehículos' },
-    { key: 'MONITOREO_DE_ALARMAS', label: 'Monitoreo de Alarmas' },
-    { key: 'MONITOREO_DE_PERSONAL', label: 'Monitoreo de Personal' },
-  ],
-  SOLUCIONES_TECNOLOGICAS: [
-    { key: 'CABLEADO_ESTRUCTURADO', label: 'Cableado Estructurado' },
-    { key: 'CAMARAS_DE_SEGURIDAD_CON_IA', label: 'Cámaras de Seguridad con IA' },
-    { key: 'CONTROL_DE_ACCESOS', label: 'Control de Accesos' },
-    { key: 'DETECCION_DE_INCENDIOS', label: 'Detección de Incendios' },
-    { key: 'CERCO_ELECTRICO', label: 'Cerco Eléctrico' },
-  ],
-};
+export { DEFAULT_SUBSERVICIOS };
 
 // Devuelve las opciones con los sub-servicios por defecto en las que aún no
 // tienen `children`, y si algo cambió (para no escribir en BD sin necesidad).
@@ -276,81 +258,11 @@ export const CORE_CLIENT_FIELDS = [
   { key: 'observaciones', label: 'Observaciones', fieldType: 'TEXTAREA' },
 ] as const;
 
-const DEFAULT_STAGES = [
-  {
-    key: 'RECIBIDO',
-    label: 'Recibido',
-    color: '#718096',
-    order: 0,
-    isInitial: true,
-    isFinal: false,
-  },
-  {
-    key: 'LEIDO',
-    label: 'Leído',
-    color: '#1d4ed8',
-    order: 1,
-    isInitial: false,
-    isFinal: false,
-  },
-  {
-    key: 'COTIZADO',
-    label: 'Cotizado',
-    color: '#6b46c1',
-    order: 2,
-    isInitial: false,
-    isFinal: false,
-  },
-  {
-    key: 'ACEPTADO',
-    label: 'Aceptado',
-    color: '#276749',
-    order: 3,
-    isInitial: false,
-    isFinal: true,
-  },
-  {
-    key: 'RECHAZADO',
-    label: 'Rechazado',
-    color: '#c53030',
-    order: 4,
-    isInitial: false,
-    isFinal: true,
-  },
-] as const;
-
 const MAX_BLOCKING_CLIENTS_LISTED = 20;
 
-// Convierte el "siguiente paso" que llega del body a lo que se guarda.
-// `undefined` = no se envió (no tocar); `null`/'' = borrar. La fecha es solo
-// día ('YYYY-MM-DD'), guardada a medianoche UTC para que no se corra de día
-// por zona horaria (la columna es @db.Date).
-export function parseSiguientePaso(dto: {
-  nextActionText?: string | null;
-  nextActionDate?: string | null;
-}): { nextActionText?: string | null; nextActionDate?: Date | null } {
-  const data: { nextActionText?: string | null; nextActionDate?: Date | null } =
-    {};
-  if (dto.nextActionText !== undefined) {
-    data.nextActionText = dto.nextActionText?.trim() || null;
-  }
-  if (dto.nextActionDate !== undefined) {
-    const raw = dto.nextActionDate?.trim();
-    if (!raw) {
-      data.nextActionDate = null;
-    } else {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-        throw new BadRequestException('La fecha del siguiente paso no es válida.');
-      }
-      const fecha = new Date(`${raw}T00:00:00.000Z`);
-      if (Number.isNaN(fecha.getTime())) {
-        throw new BadRequestException('La fecha del siguiente paso no es válida.');
-      }
-      data.nextActionDate = fecha;
-    }
-  }
-  return data;
-}
+// parseSiguientePaso vive en siguiente-paso.util.ts (lo comparten clientes y
+// oportunidades); se re-exporta para no romper a quien lo importaba de aquí.
+export { parseSiguientePaso };
 
 // `creator` = quién creó el registro (auditoría, puede ser un empleado
 // cualquiera que refirió). `assignedUser` = "Responsable", quién de Ventas
@@ -371,6 +283,9 @@ export class VentasClientesService {
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
     private readonly gmailMailService: GmailMailService,
+    private readonly oportunidades: VentasOportunidadesService,
+    private readonly esquema: VentasSchemaService,
+    private readonly ciclos: VentasCicloService,
   ) {}
 
   // ---------- Campos personalizables ----------
@@ -744,6 +659,24 @@ export class VentasClientesService {
     const blockingCount = await this.prisma.salesClient.count({
       where: { companyId, status: stage.key },
     });
+    // Las oportunidades también guardan su etapa por clave (sin FK): una que
+    // quede apuntando a una etapa borrada se vería «sin etapa» sin explicación.
+    const oppsEnEtapa = this.esquema.isReady()
+      ? await this.prisma.salesOpportunity.count({
+          where: { companyId, status: stage.key },
+        })
+      : 0;
+    if (oppsEnEtapa > 0 && blockingCount === 0 && otras > 0) {
+      throw new BadRequestException(
+        `No se puede eliminar la etapa "${stage.label}": hay ${oppsEnEtapa} oportunidad(es) en ella. Muévelas a otra etapa antes de eliminarla.`,
+      );
+    }
+    if (oppsEnEtapa > 0 && otras === 0) {
+      await this.prisma.salesOpportunity.updateMany({
+        where: { companyId, status: stage.key },
+        data: { status: null },
+      });
+    }
     if (blockingCount > 0 && otras === 0) {
       await this.prisma.salesClient.updateMany({
         where: { companyId, status: stage.key },
@@ -768,7 +701,23 @@ export class VentasClientesService {
     return this.prisma.salesClientStage.delete({ where: { id } });
   }
 
+  // Desde 2026-10-07 la etapa vive en la oportunidad: esta ruta (que sigue
+  // existiendo para no romper pestañas abiertas ni enlaces) cambia la etapa de
+  // la oportunidad principal del cliente. Si por alguna razón las tablas nuevas
+  // no están listas, se conserva el comportamiento de antes.
   async changeStage(
+    id: number,
+    dto: ChangeSalesClientStageDto,
+    companyId: number,
+    userId: number,
+  ) {
+    if (this.esquema.isReady()) {
+      return this.oportunidades.cambiarEtapaDeCliente(id, dto, companyId, userId);
+    }
+    return this.changeStageSinOportunidades(id, dto, companyId, userId);
+  }
+
+  private async changeStageSinOportunidades(
     id: number,
     dto: ChangeSalesClientStageDto,
     companyId: number,
@@ -815,7 +764,7 @@ export class VentasClientesService {
     ]);
 
     if (client.referredByUserId) {
-      await this.notificarReferidor(
+      await this.oportunidades.notificarReferidor(
         client.id,
         client.name,
         client.referredByUserId,
@@ -825,58 +774,6 @@ export class VentasClientesService {
     }
 
     return updated;
-  }
-
-  // Se ejecuta después de confirmado el cambio de etapa. Un fallo acá
-  // (correo caído, config incompleta) nunca debe deshacer ni bloquear el
-  // cambio de etapa que ya se guardó — solo se registra en el servidor.
-  private async notificarReferidor(
-    clientId: number,
-    clientNombre: string,
-    referredByUserId: number,
-    companyId: number,
-    etapaLabel: string,
-  ) {
-    const mensaje = `Tu referido "${clientNombre}" pasó a la etapa "${etapaLabel}".`;
-
-    try {
-      await this.notificationsService.create({
-        userId: referredByUserId,
-        companyId,
-        title: 'Actualización de tu referido',
-        message: mensaje,
-        link: '/dashboard?abrirReferidos=1',
-      });
-    } catch (err: any) {
-      this.logger.error(
-        `No se pudo crear la notificación in-app del cliente #${clientId}: ${err.message}`,
-        err.stack,
-      );
-    }
-
-    try {
-      const referrer = await this.prisma.user.findUnique({
-        where: { id: referredByUserId },
-        select: { email: true },
-      });
-      if (!referrer?.email) return;
-
-      // Este aviso lo manda Sistemas, no el remitente que RRHH configuró
-      // para sus propios recordatorios (`NotificationConfig`, pensado para
-      // avisos de cumplimiento) — mismo remitente fijo que ya usa la
-      // recuperación de contraseña (ver AuthService.REMITENTE_CONTRASENA).
-      await this.gmailMailService.sendMail({
-        to: referrer.email,
-        subject: 'Actualización de tu referido',
-        bodyText: `${mensaje}\n\nPuedes ver el estado de tus referidos ingresando a la app, en "Mis Referidos".`,
-        from: 'sistemas@gemeseg.com',
-        fromName: 'Sistemas',
-      });
-    } catch (err: any) {
-      this.logger.error(
-        `No se pudo enviar el correo de notificación del cliente #${clientId}: ${err.message}`,
-      );
-    }
   }
 
   // ---------- Referidos (formulario abierto) ----------
@@ -903,18 +800,38 @@ export class VentasClientesService {
     }
     await this.validarSubopcionesDeExtra(companyId, extra);
 
-    return this.prisma.salesClient.create({
-      data: {
-        companyId,
-        createdBy: userId,
-        name: dto.nombre.trim(),
-        phone: dto.celular?.trim() || null,
-        email: dto.correo?.trim() || null,
-        observaciones: dto.nota?.trim() || null,
-        extra,
-        referredByUserId: userId,
-        status: initialStage?.key ?? null,
-      },
+    const serviceIds = this.esquema.isReady()
+      ? await this.oportunidades.idsServiciosDesdeExtra(companyId, extra)
+      : [];
+    return this.prisma.$transaction(async (tx) => {
+      const cliente = await tx.salesClient.create({
+        data: {
+          companyId,
+          createdBy: userId,
+          name: dto.nombre.trim(),
+          phone: dto.celular?.trim() || null,
+          email: dto.correo?.trim() || null,
+          observaciones: dto.nota?.trim() || null,
+          extra,
+          referredByUserId: userId,
+          status: initialStage?.key ?? null,
+        },
+      });
+      // Un referido entra directo como cliente + oportunidad (ya viene
+      // recomendado por alguien de la empresa, no necesita pasar por Leads).
+      if (this.esquema.isReady()) {
+        await this.oportunidades.crearInicial(tx, {
+          companyId,
+          salesClientId: cliente.id,
+          status: cliente.status,
+          createdBy: userId,
+          referredByUserId: userId,
+          source: 'REFERIDO',
+          originType: 'REFERIDO',
+          serviceIds,
+        });
+      }
+      return cliente;
     });
   }
 
@@ -955,9 +872,19 @@ export class VentasClientesService {
       where: { companyId },
     });
     const stageByKey = new Map(stages.map((s) => [s.key, s]));
+    // Ciclo de vida calculado (Prospecto / Cliente / En riesgo / Ex-cliente /
+    // Perdido). Si las tablas nuevas no están listas, se omite y la pantalla no
+    // lo muestra, en vez de fallar.
+    const ciclos = this.esquema.isReady()
+      ? await this.ciclos.calcular(companyId)
+      : null;
     return clients.map((c) => ({
       ...c,
       stage: c.status ? (stageByKey.get(c.status) ?? null) : null,
+      ciclo: ciclos?.get(c.id)?.ciclo ?? null,
+      cicloRazones: ciclos?.get(c.id)?.razones ?? [],
+      contratoPendiente: ciclos?.get(c.id)?.contratoPendiente ?? false,
+      oportunidadesAbiertas: ciclos?.get(c.id)?.oportunidadesAbiertas ?? 0,
     }));
   }
 
@@ -995,13 +922,26 @@ export class VentasClientesService {
       throw new BadRequestException('El nombre es requerido');
     await this.ensureCoreFields(companyId);
     await this.ensureDefaultStages(companyId);
-    const initialStage = await this.prisma.salesClientStage.findFirst({
-      where: { companyId, isInitial: true },
-    });
+    const yaEsCliente = dto.yaEsCliente === true;
+    // Un cliente que ya contrataba nace en la etapa ganada; uno nuevo, en la inicial.
+    const initialStage = yaEsCliente
+      ? ((await this.prisma.salesClientStage.findFirst({
+          where: { companyId, key: ETAPA_GANADA },
+        })) ??
+        (await this.prisma.salesClientStage.findFirst({
+          where: { companyId, isInitial: true },
+        })))
+      : await this.prisma.salesClientStage.findFirst({
+          where: { companyId, isInitial: true },
+        });
     const extra = trasladarSubserviciosLegado({ ...(dto.extra || {}) });
     await this.validarSubopcionesDeExtra(companyId, extra);
     const fechaIngreso = parseFechaIngreso(dto.fechaIngreso);
-    return this.prisma.salesClient.create({
+    const serviceIds = this.esquema.isReady()
+      ? await this.oportunidades.idsServiciosDesdeExtra(companyId, extra)
+      : [];
+    return this.prisma.$transaction(async (tx) => {
+      const cliente = await tx.salesClient.create({
       data: {
         companyId,
         createdBy,
@@ -1021,6 +961,26 @@ export class VentasClientesService {
         status: initialStage?.key ?? null,
       },
       include: CLIENT_INCLUDE,
+      });
+      // El cliente nace con su primera oportunidad (misma fecha de ingreso,
+      // mismo responsable y mismos servicios que eligió en la ficha).
+      if (this.esquema.isReady()) {
+        await this.oportunidades.crearInicial(tx, {
+          companyId,
+          salesClientId: cliente.id,
+          status: cliente.status,
+          createdBy,
+          assignedUserId: createdBy,
+          source: (extra as Record<string, string>)['fuente'] ?? null,
+          originType: yaEsCliente ? 'HISTORICO' : 'MANUAL',
+          receivedAt: fechaIngreso ?? undefined,
+          serviceIds,
+          ...(yaEsCliente
+            ? { outcome: 'GANADA' as const, closedAt: fechaIngreso ?? new Date() }
+            : {}),
+        });
+      }
+      return cliente;
     });
   }
 
@@ -1083,7 +1043,21 @@ export class VentasClientesService {
 
   async deleteClient(companyId: number | null, id: number) {
     await this.getClient(companyId, id);
-    await this.prisma.salesClient.delete({ where: { id } });
+    // Los contratos comerciales cuelgan del cliente (se borrarían en cascada):
+    // mejor pedir que se eliminen a propósito que perder el historial sin querer.
+    const contratos = await this.prisma.salesAgreement.count({
+      where: { salesClientId: id },
+    });
+    if (contratos > 0) {
+      throw new BadRequestException(
+        `Este cliente tiene ${contratos} contrato(s). Elimínalos primero en Ventas → Contratos si de verdad quieres borrar al cliente.`,
+      );
+    }
+    // Los motivos de cierre del cliente (sin FK) se van con él.
+    await this.prisma.$transaction([
+      this.prisma.salesReasonEntry.deleteMany({ where: { salesClientId: id } }),
+      this.prisma.salesClient.delete({ where: { id } }),
+    ]);
     return { success: true };
   }
 
@@ -1094,16 +1068,17 @@ export class VentasClientesService {
   // hitos de sus contratos (creado, enviado a firma, firmado). Los cambios de
   // etapa solo existen desde que se empezó a guardarlos, y los contratos solo
   // aparecen si fueron vinculados al cliente al crearlos.
+  // Línea de tiempo de la ficha. Desde 2026-10-08 los cambios de etapa se leen de
+  // las OPORTUNIDADES (cada uno dice de cuál negociación y de qué servicio es);
+  // la tabla vieja de cambios de etapa del cliente solo se usa si las tablas
+  // nuevas no están listas. Así dejan de mezclarse dos cadenas de etapas.
   async getTimeline(companyId: number | null, clientId: number) {
     if (!companyId) throw new BadRequestException('Se requiere una empresa');
     const client = await this.getClient(companyId, clientId);
+    const nuevo = this.esquema.isReady();
 
-    const [stages, changes, activities, contracts] = await Promise.all([
+    const [stages, activities, contracts, campos] = await Promise.all([
       this.prisma.salesClientStage.findMany({ where: { companyId } }),
-      this.prisma.salesClientStageChange.findMany({
-        where: { salesClientId: clientId, companyId },
-        include: { changer: { select: { id: true, fullName: true } } },
-      }),
       this.prisma.salesClientActivity.findMany({
         where: { salesClientId: clientId, companyId },
         include: { author: { select: { id: true, fullName: true } } },
@@ -1120,7 +1095,48 @@ export class VentasClientesService {
           creator: { select: { fullName: true } },
         },
       }),
+      this.prisma.salesClientField.findMany({
+        where: { companyId, key: { in: ['servicio_requerido', 'fuente'] } },
+      }),
     ]);
+
+    const changes = nuevo
+      ? []
+      : await this.prisma.salesClientStageChange.findMany({
+          where: { salesClientId: clientId, companyId },
+          include: { changer: { select: { id: true, fullName: true } } },
+        });
+    const oportunidades = nuevo
+      ? await this.prisma.salesOpportunity.findMany({
+          where: { salesClientId: clientId, companyId },
+          include: {
+            services: { include: { service: { select: { name: true } } } },
+            stageChanges: true,
+          },
+        })
+      : [];
+    const acuerdos = nuevo
+      ? await this.prisma.salesAgreement.findMany({
+          where: { salesClientId: clientId, companyId },
+          include: { services: { include: { service: { select: { name: true } } } } },
+        })
+      : [];
+
+    // Quién hizo cada cambio de etapa de una oportunidad (solo se guarda el id).
+    const idsUsuario = [
+      ...new Set([
+        ...oportunidades.flatMap((o) => o.stageChanges.map((c) => c.changedBy)),
+        ...oportunidades.map((o) => o.createdBy),
+        ...acuerdos.map((x) => x.createdBy),
+      ]),
+    ];
+    const usuarios = idsUsuario.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: idsUsuario } },
+          select: { id: true, fullName: true },
+        })
+      : [];
+    const nombreUsuario = new Map(usuarios.map((u) => [u.id, u.fullName]));
 
     const etapaPorClave = new Map(stages.map((s) => [s.key, s]));
     // Una etapa borrada (ya sin fila) se muestra con su clave tal cual.
@@ -1129,6 +1145,41 @@ export class VentasClientesService {
       const s = etapaPorClave.get(key);
       return { label: s?.label ?? key, color: s?.color ?? '#718096' };
     };
+
+    // Servicio por el que llegó el cliente: lo que eligió en la ficha (o en el
+    // formulario de referidos) y, si no hay, los servicios de su primera
+    // oportunidad.
+    const extra = (client.extra ?? {}) as Record<string, string>;
+    const etiquetaDeLista = (key: string) => {
+      const campo = campos.find((c) => c.key === key);
+      const opciones = (campo?.options ?? []) as {
+        key: string;
+        label: string;
+        children?: { key: string; label: string }[];
+      }[];
+      const valor = extra[key];
+      if (!valor) return { principal: null as string | null, subs: [] as string[] };
+      const opcion = opciones.find((o) => o.key === valor);
+      const principal = opcion?.label ?? valor;
+      const subs = (extra[`${key}__sub`] ?? '')
+        .split(',')
+        .map((k) => k.trim())
+        .filter(Boolean)
+        .map((k) => opcion?.children?.find((c) => c.key === k)?.label ?? ETIQUETA_SUBSERVICIO[k] ?? k);
+      return { principal, subs };
+    };
+    const servicioElegido = etiquetaDeLista('servicio_requerido');
+    const primera = [...oportunidades].sort((x, y) => x.createdAt.getTime() - y.createdAt.getTime())[0];
+    const serviciosDeEntrada =
+      servicioElegido.subs.length > 0
+        ? servicioElegido.subs
+        : servicioElegido.principal
+          ? [servicioElegido.principal]
+          : (primera?.services.map((x) => x.service.name) ?? []);
+    const fuenteElegida = etiquetaDeLista('fuente').principal;
+
+    const nombreOportunidad = (o: { id: number; title: string | null; services: { service: { name: string } }[] }) =>
+      o.title || o.services.map((x) => x.service.name).join(', ') || `Oportunidad #${o.id}`;
 
     type Evento = { kind: string; at: Date; [k: string]: unknown };
     const eventos: Evento[] = [];
@@ -1139,6 +1190,8 @@ export class VentasClientesService {
       at: client.createdAt,
       authorName: client.creator?.fullName ?? null,
       referredByName: client.referredBy?.fullName ?? null,
+      servicios: serviciosDeEntrada,
+      fuente: fuenteElegida,
     });
 
     for (const c of changes) {
@@ -1151,6 +1204,55 @@ export class VentasClientesService {
         to: infoEtapa(c.toStatus),
         notes: c.notes,
       });
+    }
+
+    for (const o of oportunidades) {
+      const nombre = nombreOportunidad(o);
+      eventos.push({
+        kind: 'oportunidad',
+        id: `oportunidad-${o.id}`,
+        opportunityId: o.id,
+        at: o.receivedAt,
+        authorName: nombreUsuario.get(o.createdBy) ?? null,
+        nombre,
+        servicios: o.services.map((x) => x.service.name),
+        originType: o.originType,
+        source: o.source,
+      });
+      for (const c of o.stageChanges) {
+        eventos.push({
+          kind: 'etapa',
+          id: `etapa-opp-${c.id}`,
+          at: c.createdAt,
+          authorName: nombreUsuario.get(c.changedBy) ?? null,
+          from: infoEtapa(c.fromStatus),
+          to: infoEtapa(c.toStatus),
+          notes: c.notes,
+          opportunityId: o.id,
+          opportunityName: nombre,
+        });
+      }
+    }
+
+    for (const x of acuerdos) {
+      const base = {
+        kind: 'acuerdo',
+        agreementId: x.id,
+        title: x.title,
+        servicios: x.services.map((s) => s.service.name),
+      };
+      eventos.push({
+        ...base,
+        id: `acuerdo-${x.id}-creado`,
+        step: x.renewedFromId ? 'renovado' : 'creado',
+        at: x.createdAt,
+        authorName: nombreUsuario.get(x.createdBy) ?? null,
+        startDate: x.startDate.toISOString().slice(0, 10),
+        endDate: x.endDate ? x.endDate.toISOString().slice(0, 10) : null,
+      });
+      if (x.cancelledAt) {
+        eventos.push({ ...base, id: `acuerdo-${x.id}-cancelado`, step: 'cancelado', at: x.cancelledAt });
+      }
     }
 
     for (const a of activities) {

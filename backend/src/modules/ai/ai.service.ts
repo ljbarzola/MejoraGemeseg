@@ -1,4 +1,11 @@
-import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  HttpException,
+  HttpStatus,
+  ForbiddenException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiProcessor, INTENT_SECTION } from './ai.processor';
 import { VertexChatClient, ChatTurn } from './vertex-chat.client';
@@ -11,8 +18,30 @@ import { parseKnowledgeBase, filterKnowledgeBase } from './knowledge-base.util';
 import { buildCapabilitiesPrompt } from './capabilities-prompt.util';
 import { buildSystemGuide } from './system-guide.util';
 import { SendMessageDto } from './dto/send-message.dto';
+import {
+  SCOPE_VENTAS,
+  intencionPermitida,
+  perfilDeAgente,
+  type PerfilAgente,
+} from './agent-profiles.util';
+import {
+  SYSTEM_REDACCION_VENTAS,
+  VENTAS_AYUDA,
+  buildSalesAgentPrompt,
+  verificarCitas,
+} from './ventas-agent-prompt.util';
 
 const RATE_LIMIT = 50;
+// El Agente de Ventas investiga (consultas más pesadas y respuestas más largas):
+// tiene su propio tope diario, además del general de 50.
+const RATE_LIMIT_VENTAS = 30;
+
+// Texto inicial EDITABLE del Agente de Ventas (Sistemas → Agentes). Solo pone
+// tono y prioridades; las reglas para investigar sin inventar van en código
+// (ventas-agent-prompt.util.ts) y no se pueden borrar desde ahí.
+export const INSTRUCCIONES_VENTAS_POR_DEFECTO = `Tono profesional y cercano, directo y sin rodeos. Prioriza lo accionable: qué hacer con el cliente y para cuándo.
+Cuando investigues por qué se perdió un cliente, no te quedes en el precio: revisa también la rapidez de la atención, el seguimiento y la calidad del servicio.
+Tutea a la persona y usa los nombres de menús y botones tal como se ven en pantalla.`;
 
 /** Secciones visibles al generar un mensaje, ordenadas y separadas por coma ('' = solo lo común). */
 export function sectionsSnapshot(allowedKeys: string[]): string {
@@ -31,7 +60,7 @@ Cuando necesites datos específicos del sistema, indica la intención con el for
 Si no necesitas datos, responde directamente.`;
 
 @Injectable()
-export class AiService {
+export class AiService implements OnModuleInit {
   private readonly logger = new Logger(AiService.name);
 
   constructor(
@@ -49,21 +78,81 @@ export class AiService {
     }
   }
 
+  // Siembra el Agente de Ventas si no existe (nunca pisa uno que ya exista: su
+  // texto se edita desde Sistemas → Agentes). Un fallo acá no impide arrancar.
+  async onModuleInit() {
+    try {
+      await this.ensureSalesAgent();
+    } catch (err: any) {
+      this.logger.warn(`No se pudo sembrar el Agente de Ventas: ${err.message}`);
+    }
+  }
+
+  private async ensureSalesAgent() {
+    const existe = await this.prisma.agent.findFirst({
+      where: { createdBy: null, scope: SCOPE_VENTAS },
+      select: { id: true },
+    });
+    if (existe) return;
+    await this.prisma.agent.create({
+      data: {
+        name: 'Agente de Ventas',
+        instructions: INSTRUCCIONES_VENTAS_POR_DEFECTO,
+        scope: SCOPE_VENTAS,
+        isDefault: false,
+      },
+    });
+  }
+
+  // Quién puede usar qué agente. Antes `agentId` llegaba del cliente y no se
+  // validaba: cualquiera podía usar un agente que no tenía asignado. Los agentes
+  // generales del sistema (sin dueño) los usa cualquiera, como en el selector;
+  // un agente propio o uno especializado (Ventas) exige que esté asignado a la
+  // persona. El de Ventas además exige tener acceso a Ventas.
+  private async assertAgentUsable(
+    userId: number,
+    agentId: number,
+    allowedKeys: string[],
+  ): Promise<{ id: number; scope: string | null; perfil: PerfilAgente }> {
+    const agent = await this.prisma.agent.findUnique({
+      where: { id: agentId },
+      select: { id: true, scope: true, isActive: true, createdBy: true },
+    });
+    // Un agente inexistente o desactivado cae al comportamiento de siempre
+    // (prompt base), salvo el de Ventas, que no tiene "prompt base" que lo cubra.
+    if (!agent || (!agent.isActive && agent.scope !== SCOPE_VENTAS)) {
+      // La conversación se crea con el agente que se devuelva aquí: uno que no
+      // existe rompería la clave foránea, así que se usa el predeterminado.
+      return {
+        id: agent ? agentId : await this.getDefaultAgentId(),
+        scope: null,
+        perfil: 'GENERAL',
+      };
+    }
+    if (agent.scope === SCOPE_VENTAS && !agent.isActive) {
+      throw new ForbiddenException('El Agente de Ventas no está disponible ahora.');
+    }
+    const esDelSistemaGeneral = agent.createdBy === null && agent.scope !== SCOPE_VENTAS;
+    if (!esDelSistemaGeneral && agent.createdBy !== userId) {
+      const asignado = await this.prisma.userAgent.findUnique({
+        where: { userId_agentId: { userId, agentId } },
+        select: { agentId: true },
+      });
+      if (!asignado) {
+        throw new ForbiddenException('No tienes asignado ese agente.');
+      }
+    }
+    if (agent.scope === SCOPE_VENTAS && !allowedKeys.includes('VENTAS')) {
+      throw new ForbiddenException('No tienes acceso a Ventas con tu usuario actual.');
+    }
+    return { id: agent.id, scope: agent.scope, perfil: perfilDeAgente(agent.scope) };
+  }
+
   async sendMessage(
     dto: SendMessageDto,
     userId: number,
     companyId: number | null,
   ) {
-    await this.checkRateLimit(userId);
-
-    const agentId = dto.agentId || (await this.getDefaultAgentId());
-    const conversation = await this.getOrCreateConversation(
-      dto.conversationId,
-      userId,
-      dto.context,
-      agentId,
-    );
-
     // Permisos de AHORA, no los de cuando se creó la conversación: cada
     // mensaje guarda con qué secciones se generó, y el historial que se le
     // manda al modelo descarta los turnos generados con una sección que el
@@ -71,6 +160,27 @@ export class AiService {
     // viejas y sigue hablando de un módulo que le quitaron (pasó 2026-09-30).
     const allowedKeys = await this.getAllowedSectionKeys(companyId, userId);
     const sections = sectionsSnapshot(allowedKeys);
+
+    // El agente de una conversación existente manda sobre el que venga en el
+    // body, y se vuelve a validar en CADA mensaje (si lo desasignaron, ya no).
+    let pedido = dto.agentId || (await this.getDefaultAgentId());
+    if (dto.conversationId) {
+      const previa = await this.prisma.conversation.findUnique({
+        where: { id: dto.conversationId },
+        select: { userId: true, agentId: true },
+      });
+      if (previa && previa.userId === userId) pedido = previa.agentId;
+    }
+    const agente = await this.assertAgentUsable(userId, pedido, allowedKeys);
+    const agentId = agente.id;
+    await this.checkRateLimit(userId, agente.perfil);
+
+    const conversation = await this.getOrCreateConversation(
+      dto.conversationId,
+      userId,
+      dto.context,
+      agentId,
+    );
 
     // Se lee ANTES de guardar el mensaje nuevo: el mensaje actual va aparte
     // como newMessage, así no llega duplicado al modelo.
@@ -92,6 +202,7 @@ export class AiService {
 
     let reply: string;
     let tokensUsed = 0;
+    let auditoria: Record<string, unknown> | undefined;
 
     try {
       if (configured) {
@@ -103,15 +214,20 @@ export class AiService {
           userId,
           companyId,
           allowedKeys,
+          agente.perfil,
         );
         reply = result.reply;
         tokensUsed = result.tokensUsed;
+        auditoria = result.auditoria;
       } else {
         reply = await this.mockResponse(dto.message, dto.context);
       }
     } catch (error) {
       this.logger.error(`Error en chat: ${error.message}`);
-      await this.logAi(userId, 'chat_message', 0, false, error.message);
+      await this.logAi(userId, this.accionLog(agente.perfil), 0, false, error.message, {
+        agentId,
+        perfil: agente.perfil,
+      });
       this.logger.warn('Error en IA, usando modo mock como fallback');
       reply = await this.mockResponse(dto.message, dto.context);
     }
@@ -122,12 +238,16 @@ export class AiService {
         role: 'assistant',
         content: reply,
         tokensUsed,
-        model: configured ? this.vertexModelForLog() : 'mock',
+        model: configured ? this.vertexModelForLog(agente.perfil) : 'mock',
         sections,
       },
     });
 
-    await this.logAi(userId, 'chat_message', tokensUsed, true);
+    await this.logAi(userId, this.accionLog(agente.perfil), tokensUsed, true, undefined, {
+      agentId,
+      perfil: agente.perfil,
+      ...(auditoria ?? {}),
+    });
 
     return {
       reply,
@@ -136,8 +256,13 @@ export class AiService {
     };
   }
 
-  private vertexModelForLog(): string {
-    return this.vertexChat.modeloPara('ligero');
+  // El Agente de Ventas usa el modelo 'fuerte' y el resto 'ligero'.
+  private nivelDePerfil(perfil?: string | null): 'fuerte' | 'ligero' {
+    return perfil === 'VENTAS' ? 'fuerte' : 'ligero';
+  }
+
+  private vertexModelForLog(perfil?: string | null): string {
+    return this.vertexChat.modeloPara(this.nivelDePerfil(perfil));
   }
 
   /**
@@ -228,20 +353,37 @@ export class AiService {
     userId: number,
     companyId: number | null,
     allowedKeysParam?: string[],
-  ) {
+    perfil: PerfilAgente = 'GENERAL',
+  ): Promise<{
+    reply: string;
+    tokensUsed: number;
+    auditoria?: Record<string, unknown>;
+  }> {
     const basePrompt = await this.getSystemPromptForAgent(agentId);
     const allowedKeys =
       allowedKeysParam ?? (await this.getAllowedSectionKeys(companyId, userId));
-    const capabilities = buildCapabilitiesPrompt(allowedKeys);
+    const esVentas = perfil === 'VENTAS';
+    // El Agente de Ventas solo conoce Ventas: ni el manual ni la base de
+    // conocimiento de otros módulos le llegan.
+    const clavesVisibles = esVentas
+      ? allowedKeys.filter((k) => k === 'VENTAS')
+      : allowedKeys;
+
+    const capabilities = esVentas
+      ? `Consultas disponibles (datos reales de Ventas de la empresa):\n${VENTAS_AYUDA}`
+      : buildCapabilitiesPrompt(clavesVisibles, {
+          ventasAgenteDisponible: await this.tieneAgenteVentas(userId, allowedKeys),
+        });
     const kbContext = await this.getFilteredKnowledgeBase(
       companyId,
       userId,
-      allowedKeys,
+      clavesVisibles,
     );
     const systemPrompt = [
       basePrompt,
+      esVentas ? buildSalesAgentPrompt() : '',
       capabilities,
-      `Manual de uso del sistema (lo que este usuario puede usar):\n\n${buildSystemGuide(allowedKeys)}`,
+      `Manual de uso del sistema (lo que este usuario puede usar):\n\n${buildSystemGuide(clavesVisibles)}`,
       kbContext &&
         `Contexto adicional de la empresa (políticas, procesos internos; complementa el manual):\n${kbContext}`,
     ]
@@ -252,6 +394,9 @@ export class AiService {
       systemPrompt,
       chatHistory,
       `[Contexto: ${context}] ${message}`,
+      esVentas
+        ? { maxOutputTokens: 4096, nivel: 'fuerte' }
+        : { nivel: 'ligero' },
     );
 
     const intentMatch = result.reply.match(
@@ -271,6 +416,18 @@ export class AiService {
     }
     if (params.projectId) params.projectId = Number(params.projectId);
 
+    // Cada perfil ejecuta solo lo suyo: Agente Gemeseg ya no consulta Ventas y
+    // el Agente de Ventas no consulta nada fuera de Ventas, aunque el modelo
+    // escriba el nombre de otra intención.
+    if (!intencionPermitida(perfil, intent)) {
+      return {
+        reply: esVentas
+          ? 'Esa consulta no es de este asistente: aquí solo respondo sobre Ventas.'
+          : 'No tengo esa consulta en este asistente.',
+        tokensUsed: result.tokensUsed,
+      };
+    }
+
     const section = INTENT_SECTION[intent] ?? null;
     const allowed = await this.canUseIntent(userId, companyId, section);
 
@@ -281,28 +438,63 @@ export class AiService {
       };
     }
 
+    const inicio = Date.now();
     const dataResult = await this.processor.executeQuery(
       intent,
       params,
       userId,
       companyId,
     );
+    const auditoria = {
+      intent,
+      params,
+      ms: Date.now() - inicio,
+      caracteresDeDatos: dataResult.length,
+    };
 
     try {
       const finalResult = await this.vertexChat.sendChat(
-        // "Concisa" a secas hacía que el modelo resumiera listas y omitiera
-        // clientes (p. ej. "¿a quién atiendo hoy?" respondía solo uno de tres).
-        'Responde de forma clara y breve, en español, basándote en los datos proporcionados. Si los datos traen una lista, menciona TODOS sus elementos (no resumas ni omitas ninguno) y respeta cualquier aviso que incluyan.',
+        esVentas
+          ? SYSTEM_REDACCION_VENTAS
+          : // "Concisa" a secas hacía que el modelo resumiera listas y omitiera
+            // clientes (p. ej. "¿a quién atiendo hoy?" respondía solo uno de tres).
+            'Responde de forma clara y breve, en español, basándote en los datos proporcionados. Si los datos traen una lista, menciona TODOS sus elementos (no resumas ni omitas ninguno) y respeta cualquier aviso que incluyan.',
         [],
         `Datos del sistema:\n${dataResult}\n\nPregunta original: ${message}`,
+        esVentas
+          ? { maxOutputTokens: 4096, nivel: 'fuerte' }
+          : { nivel: 'ligero' },
       );
+      let reply = finalResult.reply || dataResult;
+      let extra: Record<string, unknown> = {};
+      // Las marcas de evidencia que el modelo cite se comprueban contra los
+      // datos que se le dieron: una inventada se quita y se avisa.
+      if (esVentas) {
+        const v = verificarCitas(reply, dataResult);
+        reply = v.respuesta;
+        extra = { citas: v.citadas, citasNoVerificadas: v.noVerificadas };
+      }
       return {
-        reply: finalResult.reply || dataResult,
+        reply,
         tokensUsed: result.tokensUsed + finalResult.tokensUsed,
+        auditoria: { ...auditoria, ...extra },
       };
     } catch {
-      return { reply: dataResult, tokensUsed: result.tokensUsed };
+      return { reply: dataResult, tokensUsed: result.tokensUsed, auditoria };
     }
+  }
+
+  // ¿Tiene esta persona asignado el Agente de Ventas (y acceso a Ventas)? Si sí,
+  // Agente Gemeseg puede mandarla allá para datos en vivo.
+  private async tieneAgenteVentas(
+    userId: number,
+    allowedKeys: string[],
+  ): Promise<boolean> {
+    if (!allowedKeys.includes('VENTAS')) return false;
+    const n = await this.prisma.userAgent.count({
+      where: { userId, agent: { scope: SCOPE_VENTAS, isActive: true } },
+    });
+    return n > 0;
   }
 
   private async mockResponse(
@@ -343,14 +535,19 @@ export class AiService {
     return `Estoy en modo respaldo (IA no disponible temporalmente). Pregúntame sobre proyectos, tareas o tu información. Contexto: ${context}.`;
   }
 
-  private async checkRateLimit(userId: number) {
+  // El Agente de Ventas registra su uso con otra acción para poder contarlo aparte.
+  private accionLog(perfil: PerfilAgente): string {
+    return perfil === 'VENTAS' ? 'chat_message_ventas' : 'chat_message';
+  }
+
+  private async checkRateLimit(userId: number, perfil: PerfilAgente = 'GENERAL') {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const count = await this.prisma.aiLog.count({
       where: {
         userId,
-        action: 'chat_message',
+        action: { in: ['chat_message', 'chat_message_ventas'] },
         createdAt: { gte: today },
         success: true,
       },
@@ -361,6 +558,23 @@ export class AiService {
         `Has alcanzado el límite de ${RATE_LIMIT} mensajes hoy. Intenta mañana.`,
         HttpStatus.TOO_MANY_REQUESTS,
       );
+    }
+
+    if (perfil === 'VENTAS') {
+      const deVentas = await this.prisma.aiLog.count({
+        where: {
+          userId,
+          action: 'chat_message_ventas',
+          createdAt: { gte: today },
+          success: true,
+        },
+      });
+      if (deVentas >= RATE_LIMIT_VENTAS) {
+        throw new HttpException(
+          `Has alcanzado el límite de ${RATE_LIMIT_VENTAS} mensajes al Agente de Ventas hoy. Intenta mañana.`,
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
     }
   }
 
@@ -516,17 +730,21 @@ export class AiService {
     tokensUsed: number,
     success: boolean,
     errorMessage?: string,
+    metadata?: Record<string, unknown>,
   ) {
     await this.prisma.aiLog.create({
       data: {
         userId,
         action,
         model: this.vertexChat.estaConfigurado()
-          ? this.vertexModelForLog()
+          ? this.vertexModelForLog(metadata?.perfil as string | undefined)
           : 'mock',
         tokensUsed,
         success,
         errorMessage,
+        // Qué agente respondió, qué consulta usó y cuántas citas de evidencia
+        // se verificaron: para poder auditar una respuesta del Agente de Ventas.
+        ...(metadata ? { metadata: metadata as object } : {}),
       },
     });
   }

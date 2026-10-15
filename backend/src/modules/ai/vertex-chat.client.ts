@@ -18,9 +18,8 @@ export interface ChatTurn {
 // en vez de mantener dos integraciones de IA distintas.
 //
 // El modelo sale de dos niveles (ver common/utils/vertex-endpoint.util.ts):
-// el Agente Gemeseg usa 'ligero' (el valor por defecto). El nivel 'fuerte' queda
-// disponible para quien lo pida. Si el nivel no está configurado cae a
-// GOOGLE_VERTEX_CHAT_MODEL, la variable de antes.
+// el Agente de Ventas pide 'fuerte' y el Agente Gemeseg 'ligero'. Si el nivel
+// no está configurado cae a GOOGLE_VERTEX_CHAT_MODEL, la variable de antes.
 @Injectable()
 export class VertexChatClient {
   private readonly logger = new Logger(VertexChatClient.name);
@@ -48,7 +47,7 @@ export class VertexChatClient {
     systemPrompt: string,
     history: ChatTurn[],
     newMessage: string,
-    opciones?: { nivel?: NivelModelo },
+    opciones?: { maxOutputTokens?: number; nivel?: NivelModelo },
   ): Promise<{ reply: string; tokensUsed: number }> {
     const token = await this.googleAuth.getAccessToken();
     const url = vertexUrl(
@@ -81,7 +80,7 @@ export class VertexChatClient {
           // [INTENCION: ...], que entonces nunca se reconocía). El costo
           // extra de subir el tope es mínimo frente a romper la detección de
           // intención.
-          maxOutputTokens: 2048,
+          maxOutputTokens: opciones?.maxOutputTokens ?? 2048,
           // Chat de preguntas y respuestas, no razonamiento encadenado — igual
           // que en reclutamiento-ia.service.ts, desactivarlo evita que el
           // "thinking" se coma el cupo de salida de forma impredecible.

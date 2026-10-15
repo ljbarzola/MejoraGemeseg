@@ -703,6 +703,9 @@ body {
   align-items: center;
   margin-left: auto;
   flex: 0 0 auto;
+  /* Si los filtros bajan a una segunda línea, las acciones se quedan arriba
+     junto a la primera (centradas respecto a las dos líneas se veían sueltas). */
+  align-self: flex-start;
 }
 
 /* Un select no debe ensancharse porque una de sus opciones sea larga. */
@@ -710,12 +713,25 @@ body {
   padding: 10px 12px;
   border-radius: 10px;
   border: 2px solid #e2e8f0;
-  max-width: 220px;
+  max-width: 200px;
   min-width: 0;
   text-overflow: ellipsis;
   font-family: inherit;
   font-size: 0.88rem;
   background: #fff;
+}
+
+/* Variante «una sola línea» (2026-10-08): los selects se encogen (con "…") en
+   vez de saltar solos a la línea de abajo cuando el ancho no alcanza. Solo en
+   pantallas anchas; en móvil vuelve a envolver. */
+@media (min-width: 901px) {
+  .filter-bar-fields--una-linea {
+    flex-wrap: nowrap;
+  }
+  .filter-bar-fields--una-linea .filter-select {
+    flex: 0 1 auto;
+    min-width: 110px;
+  }
 }
 
 /* Botón cuadrado solo-ícono: ocupa siempre lo mismo, con o sin contenido. */

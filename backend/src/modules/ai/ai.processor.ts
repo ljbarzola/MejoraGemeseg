@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiVentasQueries, textoParam } from './ai-ventas.queries';
+import { AiVentasInvestigacionQueries } from './ai-ventas-investigacion.queries';
 
 // Qué sección de permisos es dueña de cada intención — AiService la consulta
 // antes de ejecutar cualquier intención aquí abajo (ver canUseIntent en
@@ -28,6 +29,11 @@ export const INTENT_SECTION: Record<string, string | null> = {
   ventas_por_responsable: 'VENTAS',
   ventas_periodo: 'VENTAS',
   ventas_contratos: 'VENTAS',
+  ventas_documentos: 'VENTAS',
+  ventas_expediente: 'VENTAS',
+  ventas_cartera: 'VENTAS',
+  ventas_perdidos: 'VENTAS',
+  ventas_embudo: 'VENTAS',
 };
 
 @Injectable()
@@ -35,6 +41,7 @@ export class AiProcessor {
   constructor(
     private prisma: PrismaService,
     private ventas: AiVentasQueries,
+    private investigacion: AiVentasInvestigacionQueries,
   ) {}
 
   async executeQuery(
@@ -68,6 +75,11 @@ export class AiProcessor {
       case 'ventas_por_responsable':
       case 'ventas_periodo':
       case 'ventas_contratos':
+      case 'ventas_documentos':
+      case 'ventas_expediente':
+      case 'ventas_cartera':
+      case 'ventas_perdidos':
+      case 'ventas_embudo':
         return this.ventasQuery(intent, params, userId, companyId);
       default:
         return '';
@@ -147,7 +159,17 @@ export class AiProcessor {
       case 'ventas_periodo':
         return this.ventas.periodo(companyId, userId, textoParam(params?.rango));
       case 'ventas_contratos':
-        return this.ventas.contratos(companyId, textoParam(params?.estado));
+        return this.investigacion.contratos(companyId, textoParam(params?.estado));
+      case 'ventas_documentos':
+        return this.ventas.documentos(companyId, textoParam(params?.estado));
+      case 'ventas_expediente':
+        return this.investigacion.expediente(companyId, textoParam(params?.cliente));
+      case 'ventas_cartera':
+        return this.investigacion.cartera(companyId, userId);
+      case 'ventas_perdidos':
+        return this.investigacion.perdidos(companyId, userId, textoParam(params?.rango));
+      case 'ventas_embudo':
+        return this.investigacion.embudo(companyId, userId, textoParam(params?.rango));
       default:
         return this.ventas.resumen(companyId, userId);
     }

@@ -4,6 +4,22 @@ import { getDashboardClientes, DashboardClientes } from '../../services/ventas.s
 import { getUser } from '../../services/auth.service';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
+import DashboardCartera from '../../components/ventas/dashboard/DashboardCartera';
+import DashboardEmbudo from '../../components/ventas/dashboard/DashboardEmbudo';
+import DashboardMotivos from '../../components/ventas/dashboard/DashboardMotivos';
+import DashboardEquipo from '../../components/ventas/dashboard/DashboardEquipo';
+
+// Pestañas del dashboard (2026-10-07). «Resumen» es el tablero de siempre (se
+// mira por clientes); las demás salen de las oportunidades, los contratos y los
+// motivos de cierre.
+type Pestana = 'resumen' | 'cartera' | 'embudo' | 'motivos' | 'equipo';
+const PESTANAS: { value: Pestana; label: string }[] = [
+  { value: 'resumen', label: 'Resumen' },
+  { value: 'cartera', label: 'Cartera y contratos' },
+  { value: 'embudo', label: 'Embudo y velocidad' },
+  { value: 'motivos', label: 'Por qué se pierde' },
+  { value: 'equipo', label: 'Equipo' },
+];
 
 // ---------- Fechas (siempre en hora local de quien mira) ----------
 
@@ -108,6 +124,17 @@ export default function VentasDashboard() {
     navigate(`/ventas/clientes?${params.toString()}`);
   };
 
+  const [pestana, setPestana] = useState<Pestana>('resumen');
+  // Si la persona nunca tocó el alcance, al pasar a una pestaña nueva un gerente ve
+  // a toda la empresa (la cartera «solo mía» casi nunca es lo que busca).
+  const [alcanceTocado, setAlcanceTocado] = useState(false);
+  const cambiarPestana = (p: Pestana) => {
+    setPestana(p);
+    if (p !== 'resumen' && !alcanceTocado && (currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER')) {
+      setResponsable('all');
+    }
+  };
+
   const filasResp = data?.porResponsable ?? [];
   const { filas: respOrdenadas, thProps, SortIcon } = useSortableTable(
     filasResp,
@@ -137,25 +164,52 @@ export default function VentasDashboard() {
         </div>
       </div>
 
+      <div className="admin-tabs" style={{ display: 'inline-flex', flexWrap: 'wrap', marginBottom: 16 }}>
+        {PESTANAS.map((p) => (
+          <button key={p.value} type="button" className={`admin-tab ${pestana === p.value ? 'active' : ''}`}
+            style={{ flex: '0 0 auto' }} onClick={() => cambiarPestana(p.value)}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+
       <div className="filter-bar">
         <div className="filter-bar-fields">
-          <select className="filter-select" value={responsable} onChange={(e) => setResponsable(e.target.value)} aria-label="Alcance">
+          <select className="filter-select" value={responsable} onChange={(e) => { setAlcanceTocado(true); setResponsable(e.target.value); }} aria-label="Alcance">
             <option value="mine">Mis clientes</option>
             <option value="all">Toda la empresa</option>
             {esManager && (data?.responsables ?? [])
               .filter((r) => r.id !== currentUser?.id)
               .map((r) => <option key={r.id} value={String(r.id)}>{r.nombre}</option>)}
           </select>
-          <select className="filter-select" value={rango} onChange={(e) => setRango(e.target.value as Rango)} aria-label="Rango de fechas">
-            {RANGOS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-          </select>
-          <span style={{ fontSize: '0.75rem', color: '#a0aec0', alignSelf: 'center' }}>
-            El rango solo afecta a "Nuevos clientes" y "Referidos"; lo demás es cómo está todo hoy.
-          </span>
+          {pestana === 'resumen' ? (
+            <>
+              <select className="filter-select" value={rango} onChange={(e) => setRango(e.target.value as Rango)} aria-label="Rango de fechas">
+                {RANGOS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select>
+              <span style={{ fontSize: '0.75rem', color: '#a0aec0', alignSelf: 'center' }}>
+                El rango solo afecta a "Nuevos clientes" y "Referidos"; lo demás es cómo está todo hoy.
+              </span>
+            </>
+          ) : (
+            <span style={{ fontSize: '0.75rem', color: '#a0aec0', alignSelf: 'center' }}>
+              {esManager
+                ? 'El alcance elige de quién se miran las cifras.'
+                : 'Aquí ves las cifras de tus propios clientes y oportunidades.'}
+            </span>
+          )}
         </div>
       </div>
 
-      {error ? (
+      {pestana === 'cartera' ? (
+        <DashboardCartera alcance={responsable} />
+      ) : pestana === 'embudo' ? (
+        <DashboardEmbudo alcance={responsable} />
+      ) : pestana === 'motivos' ? (
+        <DashboardMotivos alcance={responsable} />
+      ) : pestana === 'equipo' ? (
+        <DashboardEquipo alcance={responsable} />
+      ) : error ? (
         <div className="admin-section" style={{ marginTop: 16 }}>
           <p style={{ margin: 0, color: '#718096' }}>No se pudo cargar el dashboard.</p>
           <button type="button" className="btn-secondary" onClick={cargar} style={{ marginTop: 10, padding: '8px 16px', fontSize: '0.9rem' }}>Reintentar</button>
@@ -177,8 +231,8 @@ export default function VentasDashboard() {
               onClick={data.seguimientos.sinFecha ? () => irAClientes({ seguimiento: 'sin' }) : undefined} />
             <Contador titulo="Aceptación" valor={data.aceptacion.tasa === null ? '—' : `${data.aceptacion.tasa}%`} color="#2f855a"
               detalle={data.aceptacion.tasa === null
-                ? 'Aún no hay clientes aceptados ni rechazados'
-                : `${data.aceptacion.aceptados} aceptados · ${data.aceptacion.rechazados} rechazados`} />
+                ? 'Aún no hay clientes aceptados ni perdidos'
+                : `${data.aceptacion.aceptados} aceptados · ${data.aceptacion.rechazados} perdidos`} />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20, marginTop: 20 }}>
@@ -265,7 +319,7 @@ export default function VentasDashboard() {
             {/* Referidos */}
             <Tarjeta
               titulo="Referidos"
-              hint={`Recibidos entre el ${formatDia(data.alcance.desde)} y el ${formatDia(data.alcance.hasta)}`}
+              hint={`Nuevos entre el ${formatDia(data.alcance.desde)} y el ${formatDia(data.alcance.hasta)}`}
               accion={
                 <button type="button" className="btn-secondary" onClick={() => irAClientes({ referido: '1' })} style={{ padding: '4px 10px', fontSize: '0.78rem' }}>
                   Ver →
@@ -274,10 +328,10 @@ export default function VentasDashboard() {
             >
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, textAlign: 'center' }}>
                 {[
-                  { n: data.referidos.recibidos, t: 'Recibidos', c: '#2b6cb0' },
+                  { n: data.referidos.recibidos, t: 'Nuevos', c: '#2b6cb0' },
                   { n: data.referidos.sinAtender, t: 'Sin atender', c: data.referidos.sinAtender ? COLOR_HOY : '#718096' },
                   { n: data.referidos.aceptados, t: 'Aceptados', c: '#2f855a' },
-                  { n: data.referidos.rechazados, t: 'Rechazados', c: '#718096' },
+                  { n: data.referidos.rechazados, t: 'Perdidos', c: '#718096' },
                 ].map((x) => (
                   <div key={x.t}>
                     <div style={{ fontSize: '1.4rem', fontWeight: 800, color: x.c }}>{x.n}</div>
@@ -297,8 +351,8 @@ export default function VentasDashboard() {
               )}
             </Tarjeta>
 
-            {/* Contratos */}
-            <Tarjeta titulo="Contratos de estos clientes" hint="Cómo están ahora">
+            {/* Documentos (Documentación) */}
+            <Tarjeta titulo="Documentos de estos clientes" hint="Cómo están ahora">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, textAlign: 'center' }}>
                 {[
                   { n: data.contratos.borrador, t: 'En borrador', c: '#718096' },
@@ -313,12 +367,12 @@ export default function VentasDashboard() {
               </div>
               {data.contratos.aceptadosSinContrato > 0 && (
                 <p style={{ margin: '12px 0 0', fontSize: '0.82rem', color: COLOR_HOY }}>
-                  {data.contratos.aceptadosSinContrato} {data.contratos.aceptadosSinContrato === 1 ? 'cliente aceptado' : 'clientes aceptados'} aún sin contrato.
+                  {data.contratos.aceptadosSinContrato} {data.contratos.aceptadosSinContrato === 1 ? 'cliente aceptado' : 'clientes aceptados'} aún sin documento.
                 </p>
               )}
               {alcanceTodos && data.contratos.sinClienteVinculado > 0 && (
                 <p style={{ margin: '8px 0 0', fontSize: '0.78rem', color: '#a0aec0' }}>
-                  Además hay {data.contratos.sinClienteVinculado} contratos que no están vinculados a ningún cliente y no se cuentan arriba.
+                  Además hay {data.contratos.sinClienteVinculado} documentos que no están vinculados a ningún cliente y no se cuentan arriba.
                 </p>
               )}
             </Tarjeta>

@@ -1,0 +1,173 @@
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { SALES_AGREEMENT_DDL } from './sales-agreement.schema';
+import {
+  SALES_PIPELINE_BACKFILL,
+  SALES_PIPELINE_DDL,
+} from './sales-pipeline.schema';
+import {
+  DEFAULT_STAGES,
+  ETAPAS_FABRICA_ANTERIORES,
+} from './ventas-etapas.const';
+import {
+  ETIQUETA_SUBSERVICIO,
+  ensureDefaultServices,
+} from './ventas-servicios.util';
+
+// Número arbitrario y fijo: solo tiene que ser el mismo en todas las instancias
+// para que, al arrancar varias de Cloud Run a la vez, una sola cree las tablas
+// y las demás esperen.
+const LOCK_ID = 7_190_207;
+
+/**
+ * Arranque ordenado del esquema de Ventas.
+ *
+ * El despliegue no corre migraciones, así que las tablas de contratos
+ * comerciales y del embudo (leads, oportunidades, motivos) se crean aquí, en
+ * este orden y dentro de UNA transacción con un candado de Postgres. Si algo
+ * falla se deshace todo y el servicio arranca igual (`ready` queda en false);
+ * los flujos que dependen de las tablas nuevas caen entonces a su comportamiento
+ * de antes.
+ *
+ * PENDIENTE anotado (2026-10-07): una pantalla/chequeo de salud que avise
+ * cuando `ready` es false. Por ahora solo queda un error en el log de Cloud Run:
+ * hay que mirarlo después de cada despliegue.
+ */
+@Injectable()
+export class VentasSchemaService implements OnModuleInit {
+  private readonly logger = new Logger(VentasSchemaService.name);
+  private listo = false;
+
+  constructor(private readonly prisma: PrismaService) {}
+
+  isReady(): boolean {
+    return this.listo;
+  }
+
+  async onModuleInit() {
+    try {
+      await this.prisma.$transaction(
+        async (tx) => {
+          // El candado devuelve `void`, que Prisma no sabe leer: se envuelve para devolver un número.
+          await tx.$queryRawUnsafe(
+            `SELECT 1 AS ok FROM (SELECT pg_advisory_xact_lock(${LOCK_ID})) AS candado`,
+          );
+          for (const sql of [
+            ...SALES_AGREEMENT_DDL,
+            ...SALES_PIPELINE_DDL,
+            ...SALES_PIPELINE_BACKFILL,
+          ]) {
+            await tx.$executeRawUnsafe(sql);
+          }
+        },
+        { timeout: 120_000, maxWait: 60_000 },
+      );
+      await this.mapearServiciosMigrados();
+      await this.actualizarEtapasDeFabrica();
+      this.listo = true;
+    } catch (err) {
+      this.logger.error(
+        `No se pudo preparar el esquema de Ventas (contratos y embudo): ${(err as Error).message}`,
+      );
+    }
+  }
+
+  // 2026-10-08: las etapas de fábrica cambiaron de nombre (Recibido -> Nueva,
+  // Leído -> En evaluación, Cotizado -> Cotizada, Aceptado -> Aceptada,
+  // Rechazado -> Perdida) y se sumó «En negociación». Solo se actualiza una
+  // empresa que todavía tiene EXACTAMENTE las cinco etapas de fábrica con sus
+  // nombres originales: si alguien ya las renombró o agregó otras, se respeta.
+  // Idempotente: con NEGOCIACION ya creada no hace nada.
+  private async actualizarEtapasDeFabrica() {
+    try {
+      const etapas = await this.prisma.salesClientStage.findMany({
+        select: { companyId: true, key: true, label: true },
+      });
+      const porEmpresa = new Map<number, { key: string; label: string }[]>();
+      for (const e of etapas) {
+        porEmpresa.set(e.companyId, [...(porEmpresa.get(e.companyId) ?? []), e]);
+      }
+      const claves = Object.keys(ETAPAS_FABRICA_ANTERIORES);
+      for (const [companyId, lista] of porEmpresa) {
+        const intacta =
+          lista.length === claves.length &&
+          lista.every((e) => ETAPAS_FABRICA_ANTERIORES[e.key] === e.label);
+        if (!intacta) continue;
+        await this.prisma.$transaction(async (tx) => {
+          for (const d of DEFAULT_STAGES) {
+            if (d.key === 'NEGOCIACION') {
+              await tx.salesClientStage.create({
+                data: { companyId, ...d },
+              });
+            } else {
+              await tx.salesClientStage.update({
+                where: { companyId_key: { companyId, key: d.key } },
+                data: { label: d.label, order: d.order },
+              });
+            }
+          }
+        });
+      }
+    } catch (err) {
+      this.logger.warn(
+        `No se pudieron actualizar las etapas de fábrica de Ventas: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  // Las oportunidades migradas nacen sin servicios: se deducen de las
+  // casillas "Sub-servicios" que el cliente ya tenía guardadas en `extra`
+  // (clave `servicio_requerido__sub`, valores separados por coma). Idempotente:
+  // solo toca oportunidades sin ningún servicio. Un fallo aquí no impide
+  // arrancar, solo deja esas oportunidades sin servicio.
+  private async mapearServiciosMigrados() {
+    try {
+      const pendientes = await this.prisma.salesOpportunity.findMany({
+        where: { originType: 'MIGRADA', services: { none: {} } },
+        select: {
+          id: true,
+          companyId: true,
+          salesClient: { select: { extra: true } },
+        },
+      });
+      const conSubs = pendientes.filter((o) => {
+        const extra = (o.salesClient.extra ?? {}) as Record<string, string>;
+        return !!extra['servicio_requerido__sub'];
+      });
+      const porEmpresa = new Map<number, typeof conSubs>();
+      for (const o of conSubs) {
+        porEmpresa.set(o.companyId, [...(porEmpresa.get(o.companyId) ?? []), o]);
+      }
+      for (const [companyId, opps] of porEmpresa) {
+        await ensureDefaultServices(this.prisma, companyId);
+        const servicios = await this.prisma.salesService.findMany({
+          where: { companyId },
+          select: { id: true, name: true },
+        });
+        const idPorNombre = new Map(servicios.map((s) => [s.name, s.id]));
+        const filas: { opportunityId: number; serviceId: number }[] = [];
+        for (const o of opps) {
+          const extra = (o.salesClient.extra ?? {}) as Record<string, string>;
+          const claves = extra['servicio_requerido__sub']
+            .split(',')
+            .map((k) => k.trim())
+            .filter(Boolean);
+          for (const clave of claves) {
+            const id = idPorNombre.get(ETIQUETA_SUBSERVICIO[clave] ?? '');
+            if (id) filas.push({ opportunityId: o.id, serviceId: id });
+          }
+        }
+        if (filas.length) {
+          await this.prisma.salesOpportunityService.createMany({
+            data: filas,
+            skipDuplicates: true,
+          });
+        }
+      }
+    } catch (err) {
+      this.logger.warn(
+        `No se pudieron mapear los servicios de las oportunidades migradas: ${(err as Error).message}`,
+      );
+    }
+  }
+}

@@ -1,28 +1,29 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Plus, Settings2, Workflow, Pencil, Trash2, Check, UserPlus, UserMinus, ClipboardList } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Plus, Settings2, Pencil, Trash2, UserPlus, UserMinus, ClipboardList, FilePlus2, X } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
-import SiguientePasoModal, { type ActividadHecha } from '../../components/ventas/SiguientePasoModal';
+import SeguimientoHoyTable from '../../components/ventas/SeguimientoHoyTable';
 import ClienteFichaPanel from '../../components/ventas/ClienteFichaPanel';
+import CicloVidaBadge from '../../components/ventas/CicloVidaBadge';
 import ClienteFormModal from '../../components/ventas/ClienteFormModal';
 import ClienteFieldsConfigModal from '../../components/ventas/ClienteFieldsConfigModal';
-import SalesClientStagesConfigModal from '../../components/ventas/SalesClientStagesConfigModal';
 import { useToast } from '../../contexts/ToastContext';
 import { getUser } from '../../services/auth.service';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
+import { useSiguientePasoCliente } from '../../hooks/useSiguientePasoCliente';
+import { diaDe, formatDia, hoyISO, urgenciaDe, COLOR_HOY, COLOR_VENCIDO } from '../../utils/seguimientoVentas';
 import {
   getSalesClients,
   deleteSalesClient,
   getSalesClientFields,
   getSalesClientStages,
-  changeSalesClientStage,
-  setSalesClientNextAction,
-  markSalesClientDone,
+  CICLO_LABEL,
+  type CicloVida,
   asignarmeSalesClient,
   quitarmeSalesClient,
   SalesClient,
@@ -38,6 +39,7 @@ import {
 // Columnas "calculadas": no vienen de un SalesClientField, se arman a partir
 // de otras relaciones/valores del cliente.
 const ETAPA_COL = '__etapa';
+const CICLO_COL = '__ciclo';
 const RESPONSABLE_COL = '__responsable';
 const REFERIDO_POR_COL = '__referidoPor';
 const FECHA_COL = '__fecha';
@@ -48,36 +50,20 @@ const PARA_COL = '__para';
 // (guardada en su cuenta, ver useColumnPreferences). El resto de los campos
 // existe igual, solo queda oculto hasta que alguien lo prenda desde el botón
 // "Columnas" de la barra de filtros (Referido por, Fecha, Fuente...).
-const DEFAULT_VISIBLE = ['email', 'phone', ETAPA_COL, SIGUIENTE_COL, PARA_COL, RESPONSABLE_COL];
+const DEFAULT_VISIBLE = ['email', 'phone', CICLO_COL, ETAPA_COL, SIGUIENTE_COL, PARA_COL, RESPONSABLE_COL];
 
-// ---------- Seguimiento ("Hoy") ----------
+// Un cliente se oculta de la lista cuando su ciclo es PERDIDO o cuando es un
+// prospecto con una negociación abierta: eso se trabaja en Oportunidades.
+// Sin ciclo (las tablas aún no existen) se muestra todo.
+const visibleEnClientes = (c: SalesClient) =>
+  !(c.ciclo === 'PERDIDO' || (c.ciclo === 'PROSPECTO' && (c.oportunidadesAbiertas ?? 0) > 0));
 
-type Urgencia = 'vencido' | 'hoy' | 'futuro' | 'sin';
-const URGENCIA_ORDEN: Record<Urgencia, number> = { vencido: 0, hoy: 1, sin: 2, futuro: 3 };
-const COLOR_VENCIDO = '#c53030';
-const COLOR_HOY = '#b7791f';
-
-// Hoy en hora local como 'YYYY-MM-DD' (nextActionDate es solo día, ver
-// SalesClient en ventas.service.ts: se compara como texto, no como Date).
-function hoyISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-const diaDe = (c: SalesClient): string | null => (c.nextActionDate ? c.nextActionDate.slice(0, 10) : null);
-const formatDia = (iso: string) => iso.split('-').reverse().join('/');
-
-function urgenciaDe(c: SalesClient, hoy: string): Urgencia {
-  const dia = diaDe(c);
-  if (!dia) return 'sin';
-  if (dia < hoy) return 'vencido';
-  if (dia === hoy) return 'hoy';
-  return 'futuro';
-}
-
-type NextModal = { client: SalesClient; modo: 'editar' | 'hecho' | 'etapa'; toStatus?: string };
+// El filtro de ciclo solo ofrece los ciclos que se ven en esta pantalla.
+const CICLOS_FILTRO: CicloVida[] = ['CLIENTE', 'EN_RIESGO', 'EX_CLIENTE'];
 
 export default function VentasClientesPage() {
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const currentUser = getUser();
   const [clients, setClients] = useState<SalesClient[]>([]);
@@ -89,12 +75,13 @@ export default function VentasClientesPage() {
   const [editingClient, setEditingClient] = useState<SalesClient | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showFieldsConfig, setShowFieldsConfig] = useState(false);
-  const [showStagesConfig, setShowStagesConfig] = useState(false);
+  // «Nuevo cliente» pregunta primero si ya contrata: 'pregunta' → 'ya' | 'negociando'.
+  const [nuevoPaso, setNuevoPaso] = useState<'pregunta' | 'ya' | 'negociando' | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<SalesClient | null>(null);
   const [vista, setVista] = useState<'todos' | 'hoy'>('todos');
   // Solo Admin/Manager pueden mirar la vista Hoy de otros: 'mine', 'all' o el id de un vendedor.
   const [hoyResponsable, setHoyResponsable] = useState('mine');
-  const [nextModal, setNextModal] = useState<NextModal | null>(null);
+  const [filtroCiclo, setFiltroCiclo] = useState<CicloVida | ''>('');
   // Ficha abierta (id, no el objeto: se vuelve a leer de la lista cada vez que
   // esta se recarga, así muestra siempre los datos al día).
   const [fichaId, setFichaId] = useState<number | null>(null);
@@ -110,6 +97,7 @@ export default function VentasClientesPage() {
   // pasan por este listado, se renderizan fijas al principio/final.
   const pickableColumns = [
     ...fields.filter((f) => f.key !== 'name' && f.key !== SUBSERVICIOS_KEY).map((f) => ({ key: f.key, label: f.label })),
+    { key: CICLO_COL, label: 'Ciclo de vida' },
     { key: ETAPA_COL, label: 'Etapa' },
     { key: SIGUIENTE_COL, label: 'Siguiente paso' },
     { key: PARA_COL, label: 'Para cuándo' },
@@ -121,26 +109,8 @@ export default function VentasClientesPage() {
   const preferidas = columnPrefs.visible
     .map((key) => pickableColumns.find((c) => c.key === key))
     .filter((c): c is { key: string; label: string } => !!c);
-  // "Hoy" es una lista de trabajo, no el listado completo: columnas fijas y
-  // pocas (qué hacer, para cuándo, en qué etapa va y a qué teléfono llamar),
-  // sin importar las que la persona haya prendido en "Todos". El responsable
-  // solo aparece cuando se miran clientes de otras personas.
-  const columnasHoy = [
-    SIGUIENTE_COL,
-    PARA_COL,
-    ETAPA_COL,
-    'phone',
-    ...(esManager && hoyResponsable !== 'mine' ? [RESPONSABLE_COL] : []),
-  ];
-  const visibleColumns =
-    vista === 'hoy'
-      ? columnasHoy
-          .map((key) => pickableColumns.find((c) => c.key === key))
-          .filter((c): c is { key: string; label: string } => !!c)
-      : preferidas;
-  // Una clave de almacenamiento por pestaña: tienen columnas distintas y los
-  // anchos guardados de una no sirven en la otra.
-  const tablaRef = useResizableColumns(`ventas-clientes-${vista}`, ['name', ...visibleColumns.map((c) => c.key), 'acciones']);
+  const visibleColumns = preferidas;
+  const tablaRef = useResizableColumns('ventas-clientes-todos', ['name', ...visibleColumns.map((c) => c.key), 'acciones']);
 
   const load = async () => {
     setLoading(true);
@@ -156,74 +126,11 @@ export default function VentasClientesPage() {
     }
   };
 
-  const cambiarEtapa = async (client: SalesClient, toStatus: string, siguientePaso?: { text: string; date: string }) => {
-    try {
-      await changeSalesClientStage(client.id, toStatus, undefined, siguientePaso);
-      showToast('Etapa actualizada.' + (client.referredByUserId ? ' Se notificó a quien lo refirió.' : ''), 'success');
-      setNextModal(null);
-      load();
-    } catch (err: any) {
-      showToast(err?.response?.data?.message || 'No se pudo actualizar la etapa.', 'error');
-    }
-  };
-
-  const handleChangeStage = (client: SalesClient, toStatus: string) => {
-    if (toStatus === client.status) return;
-    // Siempre se confirma antes de mover: muestra "de X a Y". En una etapa
-    // final solo se confirma (no hay siguiente paso que pedir). Sin etapa
-    // destino (la opción "Sin etapa") se deja pasar al servidor, que responde
-    // con su propio mensaje.
-    if (!stages.some((s) => s.key === toStatus)) {
-      cambiarEtapa(client, toStatus);
-      return;
-    }
-    setNextModal({ client, modo: 'etapa', toStatus });
-  };
-
-  const guardarSiguientePaso = async (text: string, date: string, actividad?: ActividadHecha) => {
-    if (!nextModal) return;
-    const { client, modo, toStatus } = nextModal;
-    if (modo === 'etapa' && toStatus) {
-      await cambiarEtapa(client, toStatus, { text, date });
-      return;
-    }
-    if (modo === 'hecho') {
-      // Lo que se hizo queda en la línea de tiempo y el siguiente paso se
-      // actualiza en una sola operación.
-      try {
-        await markSalesClientDone(client.id, {
-          nextActionText: text,
-          nextActionDate: date,
-          ...(actividad?.text.trim()
-            ? { text: actividad.text, type: actividad.type, ...(actividad.type === 'OTRO' ? { otherLabel: actividad.otherLabel } : {}) }
-            : {}),
-        });
-        showToast('Seguimiento registrado.', 'success');
-        setNextModal(null);
-        load();
-      } catch (err: any) {
-        showToast(err?.response?.data?.message || 'No se pudo registrar el seguimiento.', 'error');
-      }
-      return;
-    }
-    await actualizarSiguientePaso(client, text, date, 'Siguiente paso guardado.');
-  };
-
-  const actualizarSiguientePaso = async (client: SalesClient, text: string, date: string, mensaje: string) => {
-    try {
-      await setSalesClientNextAction(client.id, text, date);
-      showToast(mensaje, 'success');
-      setNextModal(null);
-      load();
-    } catch (err: any) {
-      showToast(err?.response?.data?.message || 'No se pudo guardar el siguiente paso.', 'error');
-    }
-  };
-
+  const { abrirSiguientePaso, siguientePasoModal } = useSiguientePasoCliente(load);
 
   useEffect(() => { load(); }, []);
   useEffect(() => {
-    if (searchParams.get('nuevo') === '1') { setEditingClient(null); setShowForm(true); }
+    if (searchParams.get('nuevo') === '1') { setEditingClient(null); setNuevoPaso('pregunta'); }
 
     // Llegadas desde el dashboard: /ventas/clientes?seguimiento=vencido&responsable=mine, ?etapa=LEIDO, ?referido=1, ?ficha=12
     const responsable = searchParams.get('responsable');
@@ -233,6 +140,8 @@ export default function VentasClientesPage() {
     const etapa = searchParams.get('etapa');
     if (etapa) setFiltroEtapa(etapa);
     if (searchParams.get('referido') === '1') setSoloReferidos(true);
+    const ciclo = searchParams.get('ciclo');
+    if (ciclo && ciclo in CICLO_LABEL) setFiltroCiclo(ciclo as CicloVida);
     const ficha = Number(searchParams.get('ficha'));
     if (ficha) setFichaId(ficha);
   }, [searchParams]);
@@ -242,12 +151,15 @@ export default function VentasClientesPage() {
   ).sort((a, b) => a[1].localeCompare(b[1], 'es'));
 
   const hoy = hoyISO();
+  const visibles = clients.filter(visibleEnClientes);
 
-  // Vista "Hoy": clientes que no están en etapa final y cuyo seguimiento ya
-  // venció, es para hoy o aún no tiene fecha. Cada quien ve los suyos; solo
-  // Admin/Manager pueden cambiar a "Todos" o a otro vendedor.
-  const hoyClients = clients.filter((c) => {
-    if (c.stage?.isFinal) return false;
+  // Vista "Hoy": clientes que ya aceptaron o contratan (sin negociaciones
+  // abiertas: esas se siguen en Oportunidades) y tienen siguiente paso cuyo
+  // seguimiento ya venció, es para hoy o aún no tiene fecha. Cada quien ve los
+  // suyos; solo Admin/Manager pueden cambiar a "Todos" o a otro vendedor.
+  const hoyClients = visibles.filter((c) => {
+    if ((c.oportunidadesAbiertas ?? 0) > 0) return false;
+    if (!c.nextActionText && !c.nextActionDate) return false;
     const alcance = esManager ? hoyResponsable : 'mine';
     if (alcance === 'mine' && c.assignedUserId !== currentUser?.id) return false;
     if (alcance !== 'mine' && alcance !== 'all' && String(c.assignedUserId) !== alcance) return false;
@@ -272,6 +184,7 @@ export default function VentasClientesPage() {
     if (filtroEtapa === 'none' && c.stage) return false;
     if (filtroEtapa && filtroEtapa !== 'none' && c.status !== filtroEtapa) return false;
     if (soloReferidos && !c.referredByUserId) return false;
+    if (filtroCiclo && c.ciclo !== filtroCiclo) return false;
     if (filtroSeguimiento) {
       if (c.stage?.isFinal) return false;
       if (urgenciaDe(c, hoy) !== (filtroSeguimiento === 'sin' ? 'sin' : filtroSeguimiento === 'hoy' ? 'hoy' : 'vencido')) return false;
@@ -283,28 +196,18 @@ export default function VentasClientesPage() {
     !filterResponsable ||
     (filterResponsable === 'none' ? !c.assignedUserId : String(c.assignedUserId) === filterResponsable);
 
-  const filtered = (vista === 'hoy' ? hoyClients : clients.filter(coincideResponsable))
+  const filtered = (vista === 'hoy' ? hoyClients : visibles.filter(coincideResponsable))
     .filter(coincideBusqueda)
     .filter(coincideExtras);
 
-  const hayFiltrosExtra = !!filtroEtapa || !!filtroSeguimiento || soloReferidos;
+  const hayFiltrosExtra = !!filtroEtapa || !!filtroSeguimiento || soloReferidos || !!filtroCiclo;
   const etiquetaEtapa = filtroEtapa === 'none' ? 'Sin etapa' : stages.find((s) => s.key === filtroEtapa)?.label || filtroEtapa;
-
-  // Orden fijo de "Hoy": vencidos (el más atrasado primero), hoy, sin fecha.
-  const filasHoy = [...filtered].sort((a, b) => {
-    const ua = URGENCIA_ORDEN[urgenciaDe(a, hoy)];
-    const ub = URGENCIA_ORDEN[urgenciaDe(b, hoy)];
-    if (ua !== ub) return ua - ub;
-    const da = diaDe(a) || '';
-    const db = diaDe(b) || '';
-    if (da !== db) return da < db ? -1 : 1;
-    return a.name.localeCompare(b.name, 'es');
-  });
 
   const cellValue = (client: SalesClient, key: string): string => {
     if (key === SIGUIENTE_COL) return client.nextActionText || '';
     if (key === PARA_COL) return diaDe(client) || '';
     if (key === ETAPA_COL) return client.stage?.label || '';
+    if (key === CICLO_COL) return client.ciclo ? CICLO_LABEL[client.ciclo] : '';
     if (key === RESPONSABLE_COL) return client.assignedUser?.fullName || '';
     if (key === REFERIDO_POR_COL) return client.referredBy?.fullName || '';
     if (key === FECHA_COL) return client.createdAt;
@@ -320,6 +223,7 @@ export default function VentasClientesPage() {
   const { filas: filasOrdenadas, thProps, SortIcon } = useSortableTable(filtered, sortCampos, 'name');
 
   const renderCell = (client: SalesClient, key: string) => {
+    if (key === CICLO_COL) return <CicloVidaBadge ciclo={client.ciclo} razones={client.cicloRazones} />;
     if (key === ETAPA_COL) {
       return client.stage ? (
         <span className="status-badge" style={{ backgroundColor: client.stage.color + '22', color: client.stage.color }}>
@@ -337,7 +241,7 @@ export default function VentasClientesPage() {
       return (
         <button
           type="button"
-          onClick={() => setNextModal({ client, modo: 'editar' })}
+          onClick={() => abrirSiguientePaso(client, 'editar')}
           title="Editar el siguiente paso"
           style={{
             background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', textAlign: 'left',
@@ -380,6 +284,12 @@ export default function VentasClientesPage() {
       { label: 'Ver ficha', hint: 'Datos e historial del cliente', icon: <ClipboardList size={14} />, onClick: () => setFichaId(c.id) },
       { label: 'Editar cliente', icon: <Pencil size={14} />, onClick: () => { setEditingClient(c); setShowForm(true); } },
     ];
+    acciones.push({
+      label: 'Nuevo contrato',
+      hint: c.contratoPendiente ? 'Aceptó: falta cargar su contrato' : undefined,
+      icon: <FilePlus2 size={14} />,
+      onClick: () => navigate(`/ventas/contratos?nuevo=1&clienteId=${c.id}`),
+    });
     if (!c.assignedUserId) {
       acciones.push({ label: 'Asignarme este cliente', icon: <UserPlus size={14} />, onClick: () => handleAsignarme(c) });
     } else if (c.assignedUserId === currentUser?.id) {
@@ -401,18 +311,28 @@ export default function VentasClientesPage() {
     }
   };
 
+  const porContratar = (c: SalesClient) =>
+    c.contratoPendiente ? (
+      <span className="status-badge" title="Aceptó, falta cargar su contrato"
+        style={{ display: 'table', backgroundColor: '#d9770622', color: '#b45309', marginTop: 4, whiteSpace: 'nowrap', fontWeight: 600 }}>
+        Por contratar
+      </span>
+    ) : null;
+
+  const nuevoContactoGuardado = () => {
+    setNuevoPaso(null);
+    showToast('Quedó en Oportunidades como una negociación nueva', 'success');
+    navigate('/ventas/oportunidades');
+  };
+
   return (
     <div className="page-container">
-      <div className="page-header-row">
+      <div className="page-title-row">
         <div>
           <p className="page-eyebrow">Ventas y CRM</p>
           <h1>Clientes</h1>
         </div>
         <div className="header-actions">
-          <button type="button" className="btn-secondary" onClick={() => setShowStagesConfig(true)}
-            title="Configurar las etapas del pipeline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Workflow size={15} /> Etapas
-          </button>
           <button type="button" className="btn-secondary" onClick={() => setShowFieldsConfig(true)}
             title="Configurar los campos de la ficha del cliente" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Settings2 size={15} /> Campos
@@ -426,18 +346,18 @@ export default function VentasClientesPage() {
           Todos
         </button>
         <button type="button" className={`admin-tab ${vista === 'hoy' ? 'active' : ''}`} style={{ flex: '0 0 auto' }}
-          onClick={() => setVista('hoy')} title="Clientes que tienes que atender hoy">
+          onClick={() => setVista('hoy')} title="Clientes con contrato o aceptados que tienes que atender hoy">
           Hoy ({hoyClients.length})
         </button>
       </div>
 
       <div className="filter-bar">
-        <div className="filter-bar-fields">
+        <div className="filter-bar-fields filter-bar-fields--una-linea">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nombre, email, RUC, teléfono o responsable..."
-            style={{ flex: '1 1 280px', minWidth: 0, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
+            style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
           {vista === 'todos' ? (
             <>
@@ -448,7 +368,13 @@ export default function VentasClientesPage() {
                   <option key={id} value={id}>{name}</option>
                 ))}
               </select>
-              <select className="filter-select" value={filtroEtapa} onChange={(e) => setFiltroEtapa(e.target.value)} aria-label="Etapa">
+              <select className="filter-select" value={filtroCiclo} onChange={(e) => setFiltroCiclo(e.target.value as CicloVida | '')} aria-label="Ciclo de vida">
+                <option value="">Todos los ciclos</option>
+                {CICLOS_FILTRO.map((k) => (
+                  <option key={k} value={k}>{CICLO_LABEL[k]}</option>
+                ))}
+              </select>
+              <select className="filter-select" value={filtroEtapa} onChange={(e) => setFiltroEtapa(e.target.value)} aria-label="Etapa de la negociación principal">
                 <option value="">Todas las etapas</option>
                 {[...stages].sort((a, b) => a.order - b.order).map((s) => (
                   <option key={s.key} value={s.key}>{s.label}</option>
@@ -480,15 +406,20 @@ export default function VentasClientesPage() {
           <ClearFiltersButton
             onClear={() => {
               setSearch(''); setFilterResponsable(''); setHoyResponsable('mine');
-              setFiltroEtapa(''); setFiltroSeguimiento(''); setSoloReferidos(false);
+              setFiltroEtapa(''); setFiltroSeguimiento(''); setSoloReferidos(false); setFiltroCiclo('');
             }}
             disabled={!search && !hayFiltrosExtra && (vista === 'hoy' ? hoyResponsable === 'mine' : !filterResponsable)}
           />
-          <button className="auth-btn" onClick={() => { setEditingClient(null); setShowForm(true); }}>
+          <button className="auth-btn" onClick={() => { setEditingClient(null); setNuevoPaso('pregunta'); }}>
             <Plus size={16} /> Nuevo cliente
           </button>
         </div>
       </div>
+
+      <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#718096' }}>
+        Aquí están quienes ya aceptaron o contratan. Las negociaciones en curso se trabajan en{' '}
+        <Link to="/ventas/oportunidades" className="enlace-tabla">Oportunidades</Link>.
+      </p>
 
       {/* Filtros activos que no se ven en los selectores (seguimiento y referidos); la etapa también aparece en su selector. */}
       {(filtroSeguimiento || soloReferidos || (vista === 'hoy' && filtroEtapa)) && (
@@ -518,57 +449,42 @@ export default function VentasClientesPage() {
         ) : filtered.length === 0 ? (
           <p style={{ color: '#888', fontSize: 13 }}>
             {vista === 'hoy' && !search
-              ? 'No hay seguimientos pendientes para hoy.'
-              : clients.length === 0
-                ? 'Aún no hay clientes. Crea uno para mapearlo a los contratos.'
+              ? 'No hay seguimientos pendientes para hoy en tus clientes.'
+              : visibles.length === 0
+                ? 'Aún no hay clientes. Aparecen aquí cuando una negociación se acepta; también puedes registrar uno que ya contrata.'
                 : 'No hay clientes que coincidan con la búsqueda.'}
           </p>
+        ) : vista === 'hoy' ? (
+          <SeguimientoHoyTable
+            clientes={filtered}
+            storageKey="ventas-clientes-hoy"
+            mostrarResponsable={esManager && hoyResponsable !== 'mine'}
+            onHecho={(c) => abrirSiguientePaso(c, 'hecho')}
+            onEditar={(c) => abrirSiguientePaso(c, 'editar')}
+            accionesFila={accionesFila}
+            extraNombre={porContratar}
+          />
         ) : (
           <div className="tasks-table-wrapper">
-            {/* key por pestaña: al cambiar de pestaña cambian las columnas y la tabla se arma de nuevo (tiradores de ancho incluidos). */}
-            <table key={vista} className="tasks-table resizable-table" ref={tablaRef}>
+            <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  {/* En "Hoy" el orden es por urgencia y no se cambia con clics en el encabezado. */}
-                  {vista === 'hoy' ? <th>Nombre</th> : <th {...thProps('name')}>Nombre <SortIcon campo="name" /></th>}
-                  {visibleColumns.map((col) =>
-                    vista === 'hoy' ? (
-                      <th key={col.key}>{col.label}</th>
-                    ) : (
-                      <th key={col.key} {...thProps(col.key)}>{col.label} <SortIcon campo={col.key} /></th>
-                    ),
-                  )}
-                  <th className={vista === 'hoy' ? 'col-acciones col-acciones--ancha' : 'col-acciones'} title="Acciones">
+                  <th {...thProps('name')}>Nombre <SortIcon campo="name" /></th>
+                  {visibleColumns.map((col) => (
+                    <th key={col.key} {...thProps(col.key)}>{col.label} <SortIcon campo={col.key} /></th>
+                  ))}
+                  <th className="col-acciones" title="Acciones">
                     <span className="visually-hidden">Acciones</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {(vista === 'hoy' ? filasHoy : filasOrdenadas).map((c) => (
+                {filasOrdenadas.map((c) => (
                   <tr key={c.id}>
-                    <td style={{ fontWeight: 600 }}>{c.name}</td>
+                    <td style={{ fontWeight: 600 }}>{c.name}{porContratar(c)}</td>
                     {visibleColumns.map((col) => (
                       <td key={col.key}>
-                        {col.key === ETAPA_COL ? (
-                          <select
-                            value={c.status || ''}
-                            onChange={(e) => handleChangeStage(c, e.target.value)}
-                            style={{
-                              border: `1px solid ${c.stage?.color || '#cbd5e0'}`,
-                              color: c.stage?.color || '#718096',
-                              background: (c.stage?.color || '#718096') + '11',
-                              borderRadius: 6,
-                              padding: '4px 6px',
-                              fontSize: '0.8rem',
-                              maxWidth: '100%',
-                            }}
-                          >
-                            <option value="">— Sin etapa —</option>
-                            {[...stages].sort((a, b) => a.order - b.order).map((s) => (
-                              <option key={s.key} value={s.key}>{s.label}</option>
-                            ))}
-                          </select>
-                        ) : col.key === RESPONSABLE_COL ? (
+                        {col.key === RESPONSABLE_COL ? (
                           // Solo el nombre: "Asignarme"/"Quitarme" viven en el menú
                           // de la fila (un botón que aparece y desaparece en medio
                           // de la fila empuja y pisa a los demás).
@@ -578,21 +494,8 @@ export default function VentasClientesPage() {
                         ) : renderCell(c, col.key)}
                       </td>
                     ))}
-                    <td className={vista === 'hoy' ? 'col-acciones col-acciones--ancha' : 'col-acciones'}>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
-                        {vista === 'hoy' && (
-                          <button type="button" onClick={() => setNextModal({ client: c, modo: 'hecho' })}
-                            title="Ya lo atendí: dejar el siguiente paso"
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
-                              padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
-                              fontSize: 12.5, fontWeight: 600, color: '#276749', background: '#f0fff4', border: '1px solid #9ae6b4',
-                            }}>
-                            <Check size={14} /> Hecho
-                          </button>
-                        )}
-                        <RowActionsMenu actions={accionesFila(c)} />
-                      </div>
+                    <td className="col-acciones">
+                      <RowActionsMenu actions={accionesFila(c)} />
                     </td>
                   </tr>
                 ))}
@@ -601,6 +504,46 @@ export default function VentasClientesPage() {
           </div>
         )}
       </div>
+
+      {nuevoPaso === 'pregunta' && (
+        <div className="modal-overlay" onClick={() => setNuevoPaso(null)}>
+          <div className="modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Nuevo cliente</h3>
+              <button className="modal-close" onClick={() => setNuevoPaso(null)} aria-label="Cerrar"><X size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ margin: 0, fontSize: 14, color: '#2d3748', fontWeight: 600 }}>¿Este cliente ya contrata con ustedes?</p>
+              <p style={{ margin: '8px 0 0', fontSize: 13, color: '#718096', lineHeight: 1.5 }}>
+                Si todavía está negociando, se registra como una oportunidad nueva y pasa a Clientes cuando acepte.
+              </p>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setNuevoPaso('negociando')}>No, está negociando</button>
+              <button className="auth-btn" onClick={() => setNuevoPaso('ya')}>Sí, ya es cliente</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {nuevoPaso === 'ya' && (
+        <ClienteFormModal
+          client={null}
+          fields={fields}
+          yaEsCliente
+          onClose={() => setNuevoPaso(null)}
+          onSaved={() => { setNuevoPaso(null); load(); }}
+        />
+      )}
+
+      {nuevoPaso === 'negociando' && (
+        <ClienteFormModal
+          client={null}
+          fields={fields}
+          onClose={() => setNuevoPaso(null)}
+          onSaved={nuevoContactoGuardado}
+        />
+      )}
 
       {showForm && (
         <ClienteFormModal
@@ -619,45 +562,21 @@ export default function VentasClientesPage() {
         />
       )}
 
-      {showStagesConfig && (
-        <SalesClientStagesConfigModal
-          onClose={() => setShowStagesConfig(false)}
-          onChanged={load}
-        />
-      )}
-
       {fichaId !== null && clients.find((c) => c.id === fichaId) && (
         <ClienteFichaPanel
           client={clients.find((c) => c.id === fichaId)!}
           fields={fields}
           onClose={() => setFichaId(null)}
-          onEditNextStep={(client) => setNextModal({ client, modo: 'editar' })}
+          onEditNextStep={(client) => abrirSiguientePaso(client, 'editar')}
         />
       )}
 
-      {nextModal && (() => {
-        const destino = nextModal.modo === 'etapa' ? stages.find((s) => s.key === nextModal.toStatus) : undefined;
-        const esEtapa = nextModal.modo === 'etapa' && !!destino;
-        return (
-          <SiguientePasoModal
-            title={esEtapa ? 'Cambiar de etapa' : nextModal.modo === 'hecho' ? 'Seguimiento hecho' : 'Siguiente paso'}
-            clientName={nextModal.client.name}
-            initialText={nextModal.modo === 'editar' ? nextModal.client.nextActionText : ''}
-            initialDate={nextModal.modo === 'editar' ? diaDe(nextModal.client) : ''}
-            onSave={guardarSiguientePaso}
-            saveLabel={esEtapa ? (destino!.isFinal ? 'Confirmar cambio' : 'Cambiar de etapa') : nextModal.modo === 'hecho' ? 'Marcar hecho' : 'Guardar'}
-            conActividad={nextModal.modo === 'hecho'}
-            cambioEtapa={esEtapa ? { from: nextModal.client.stage ?? null, to: destino! } : undefined}
-            soloConfirmar={esEtapa && destino!.isFinal}
-            onCancel={() => setNextModal(null)}
-          />
-        );
-      })()}
+      {siguientePasoModal}
 
       {confirmDelete && (
         <ConfirmDialog
           title="Eliminar cliente"
-          message={`¿Eliminar a ${confirmDelete.name}? Los contratos ya creados no se borran.`}
+          message={`¿Eliminar a ${confirmDelete.name}? Si tiene contratos, primero hay que eliminarlos; los documentos ya generados no se borran.`}
           confirmLabel="Eliminar"
           danger
           onConfirm={handleDelete}

@@ -3,6 +3,7 @@ import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { AiProcessor } from './ai.processor';
 import { AiVentasQueries } from './ai-ventas.queries';
+import { AiVentasInvestigacionQueries } from './ai-ventas-investigacion.queries';
 import { VentasModule } from '../ventas/ventas.module';
 import { VertexChatClient } from './vertex-chat.client';
 import { PrismaModule } from '../../prisma/prisma.module';
@@ -15,7 +16,14 @@ import { GoogleAuthService } from '../../common/services/google-auth.service';
   // del cliente de VentasClientesService.
   imports: [PrismaModule, AuthModule, PermissionsModule, VentasModule],
   controllers: [AiController],
-  providers: [AiService, AiProcessor, AiVentasQueries, VertexChatClient, GoogleAuthService],
+  providers: [
+    AiService,
+    AiProcessor,
+    AiVentasQueries,
+    AiVentasInvestigacionQueries,
+    VertexChatClient,
+    GoogleAuthService,
+  ],
   exports: [AiService],
 })
 export class AiModule {}

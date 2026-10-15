@@ -59,16 +59,20 @@ export class VentasContratosService {
 
   async listContracts(
     companyId: number | null,
-    filters?: { status?: string; templateId?: number },
+    filters?: { status?: string; templateId?: number; sinCliente?: boolean },
   ) {
     const where: any = {};
     if (companyId) where.companyId = companyId;
     if (filters?.status) where.status = filters.status;
     if (filters?.templateId) where.templateId = filters.templateId;
+    if (filters?.sinCliente) where.salesClientId = null;
 
     return this.prisma.salesContract.findMany({
       where,
-      include: { template: { select: { id: true, name: true } } },
+      include: {
+        template: { select: { id: true, name: true } },
+        salesClient: { select: { id: true, name: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -95,6 +99,21 @@ export class VentasContratosService {
       include: { fields: true },
     });
     if (!template) throw new NotFoundException('Plantilla no encontrada');
+
+    // Un documento siempre es de un cliente (separación Clientes / Contratos /
+    // Documentación, 2026-10-07): antes el vínculo era opcional y quedaron
+    // documentos huérfanos. Opcionalmente cuelga de un contrato del cliente.
+    if (!dto.salesClientId) {
+      throw new BadRequestException('Elige el cliente de este documento.');
+    }
+    await this.assertClienteDeLaEmpresa(dto.salesClientId, companyId);
+    if (dto.agreementId) {
+      await this.assertContratoDelCliente(
+        dto.agreementId,
+        dto.salesClientId,
+        companyId,
+      );
+    }
 
     // If the template has any table field assigned to the client, generate
     // a link (token) so they can fill it in themselves before the contract
@@ -133,17 +152,19 @@ export class VentasContratosService {
     };
 
     if (!numberField) {
-      return this.prisma.salesContract.create({
+      const creado = await this.prisma.salesContract.create({
         data: { ...createData, fieldValues },
         include: { template: { select: { id: true, name: true } } },
       });
+      await this.vincularAContrato(creado.id, dto.agreementId);
+      return creado;
     }
 
     // La lectura+incremento del contador y la creación del contrato deben
     // ir en una sola transacción — si dos contratos se crean casi al mismo
     // tiempo para la misma plantilla, sin esto podrían recibir el mismo
     // número.
-    return this.prisma.$transaction(async (tx) => {
+    const creado = await this.prisma.$transaction(async (tx) => {
       const fresh = await tx.salesTemplate.findUniqueOrThrow({
         where: { id: dto.templateId },
       });
@@ -167,6 +188,41 @@ export class VentasContratosService {
         include: { template: { select: { id: true, name: true } } },
       });
     });
+    await this.vincularAContrato(creado.id, dto.agreementId);
+    return creado;
+  }
+
+  private async assertClienteDeLaEmpresa(clientId: number, companyId: number) {
+    const cliente = await this.prisma.salesClient.findFirst({
+      where: { id: clientId, companyId },
+      select: { id: true },
+    });
+    if (!cliente) throw new NotFoundException('Cliente no encontrado');
+  }
+
+  private async assertContratoDelCliente(
+    agreementId: number,
+    clientId: number,
+    companyId: number,
+  ) {
+    const contrato = await this.prisma.salesAgreement.findFirst({
+      where: { id: agreementId, companyId, salesClientId: clientId },
+      select: { id: true },
+    });
+    if (!contrato) {
+      throw new BadRequestException(
+        'Ese contrato no existe o es de otro cliente.',
+      );
+    }
+  }
+
+  // Cuelga el documento recién creado de un contrato comercial (tabla aparte,
+  // ver SalesAgreementDocument en schema.prisma).
+  private async vincularAContrato(contractId: number, agreementId?: number) {
+    if (!agreementId) return;
+    await this.prisma.salesAgreementDocument.create({
+      data: { contractId, agreementId },
+    });
   }
 
   async updateContract(id: number, companyId: number | null, dto: any) {
@@ -186,7 +242,13 @@ export class VentasContratosService {
     if (dto.annexA !== undefined) data.annexA = dto.annexA;
     if (dto.annexB !== undefined) data.annexB = dto.annexB;
     if (dto.annexC !== undefined) data.annexC = dto.annexC;
-    if (dto.salesClientId !== undefined) data.salesClientId = dto.salesClientId;
+    if (dto.salesClientId !== undefined) {
+      if (!dto.salesClientId) {
+        throw new BadRequestException('Elige el cliente de este documento.');
+      }
+      await this.assertClienteDeLaEmpresa(dto.salesClientId, contract.companyId);
+      data.salesClientId = dto.salesClientId;
+    }
 
     return this.prisma.salesContract.update({
       where: { id },

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { getTemplates, getTemplate, getContract, createContract, updateContract, getSalesClients, salesClientValue, SalesTemplate, SalesTemplateField, TableColumn, SalesClient } from '../../services/ventas.service';
+import { getTemplates, getTemplate, getContract, createContract, updateContract, getSalesClients, getContratosComerciales, salesClientValue, ContratoComercial, SalesTemplate, SalesTemplateField, TableColumn, SalesClient } from '../../services/ventas.service';
 import { useToast } from '../../contexts/ToastContext';
 import DateInput from '../../components/common/DateInput';
 
@@ -22,6 +22,11 @@ export default function ContratoForm() {
   const [clientEmail, setClientEmail] = useState('');
   const [clients, setClients] = useState<SalesClient[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number | ''>('');
+  // Contrato comercial (pantalla "Contratos") del que colgará este documento.
+  // Opcional; solo al crear. Llega preseleccionado desde el detalle del contrato.
+  const [searchParams] = useSearchParams();
+  const [contratosCliente, setContratosCliente] = useState<ContratoComercial[]>([]);
+  const [agreementId, setAgreementId] = useState<number | ''>(Number(searchParams.get('contratoId')) || '');
 
   // Field values (from template fields where isClientField = false). Un
   // DROPDOWN de selección múltiple guarda un arreglo de opciones marcadas
@@ -39,6 +44,26 @@ export default function ContratoForm() {
       showToast(err?.response?.data?.message || 'No se pudieron cargar los clientes', 'error');
     });
   }, []);
+
+  // Llegar con ?clienteId= (desde un contrato o la ficha del cliente) deja el
+  // cliente elegido; los datos de envío se autocompletan igual que al elegirlo.
+  const clienteIdUrl = Number(searchParams.get('clienteId')) || 0;
+  useEffect(() => {
+    if (isEditMode || !clienteIdUrl || selectedClientId || clients.length === 0) return;
+    const c = clients.find((x) => x.id === clienteIdUrl);
+    if (!c) return;
+    setSelectedClientId(c.id);
+    setClientName(c.name);
+    setClientEmail(c.email || '');
+  }, [clients, clienteIdUrl, isEditMode, selectedClientId]);
+
+  // Contratos del cliente elegido, para poder colgar el documento de uno.
+  useEffect(() => {
+    if (isEditMode || !selectedClientId) { setContratosCliente([]); return; }
+    getContratosComerciales({ clienteId: Number(selectedClientId) })
+      .then((cs) => setContratosCliente(cs.filter((c) => c.estado !== 'CANCELADO' && c.estado !== 'RENOVADO')))
+      .catch(() => setContratosCliente([]));
+  }, [selectedClientId, isEditMode]);
 
   useEffect(() => {
     if (isEditMode && contractId) {
@@ -104,7 +129,7 @@ export default function ContratoForm() {
       setTableValues(tables);
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo cargar el contrato', 'error');
-      navigate('/ventas/contratos');
+      navigate('/ventas/documentacion');
     }
   };
 
@@ -121,6 +146,7 @@ export default function ContratoForm() {
 
   const handleSelectClient = (id: number | '') => {
     setSelectedClientId(id);
+    setAgreementId('');
     if (!id) return;
     const client = clients.find((c) => c.id === id);
     applyClientContactInfo(client);
@@ -210,6 +236,7 @@ export default function ContratoForm() {
 
   const handleGenerate = async () => {
     if (!selectedTemplate) { showToast('Selecciona una plantilla', 'error'); return; }
+    if (!selectedClientId) { showToast('Elige el cliente de este documento', 'error'); return; }
     if (!clientName.trim()) { showToast('El nombre es requerido', 'error'); return; }
     if (!clientEmail.trim()) { showToast('El email es requerido', 'error'); return; }
 
@@ -233,15 +260,16 @@ export default function ContratoForm() {
           fieldValues: { ...fieldValues, ...tableValues },
         });
         showToast('Campos actualizados', 'success');
-        navigate(`/ventas/contratos/${contractId}`);
+        navigate(`/ventas/documentacion/${contractId}`);
       } else {
         const contract = await createContract({
           templateId: selectedTemplate.id,
           clientName, clientEmail,
           salesClientId: selectedClientId || undefined,
+          agreementId: agreementId || undefined,
           fieldValues: { ...fieldValues, ...tableValues },
         });
-        navigate(`/ventas/contratos/${contract.id}`);
+        navigate(`/ventas/documentacion/${contract.id}`);
       }
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'Error al guardar', 'error');
@@ -249,8 +277,9 @@ export default function ContratoForm() {
   };
 
   const handleBack = () => {
-    if (isEditMode && contractId) navigate(`/ventas/contratos/${contractId}`);
-    else navigate('/ventas/contratos');
+    if (isEditMode && contractId) navigate(`/ventas/documentacion/${contractId}`);
+    else if (searchParams.get('contratoId')) navigate(`/ventas/contratos/${searchParams.get('contratoId')}`);
+    else navigate('/ventas/documentacion');
   };
 
   const allFields = selectedTemplate?.fields || [];
@@ -293,7 +322,7 @@ export default function ContratoForm() {
       <div className="page-header-row">
         <div>
           <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>{isEditMode ? 'Editar Contrato' : 'Nuevo Contrato'}</h1>
+          <h1>{isEditMode ? 'Editar documento' : 'Nuevo documento'}</h1>
         </div>
       </div>
 
@@ -318,7 +347,7 @@ export default function ContratoForm() {
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
               <select value={selectedClientId} onChange={(e) => handleSelectClient(e.target.value ? +e.target.value : '')}
                 style={{ flex: 1, minWidth: 220, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}>
-                <option value="">— Seleccionar cliente —</option>
+                <option value="">— Seleccionar cliente * —</option>
                 {clients.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}{c.email ? ` (${c.email})` : ''}</option>
                 ))}
@@ -326,6 +355,24 @@ export default function ContratoForm() {
               <button type="button" className="btn-secondary" onClick={() => navigate('/ventas/clientes?nuevo=1')}
                 style={{ padding: '8px 12px', fontSize: 12 }}>Ir a Clientes</button>
             </div>
+            {!isEditMode && selectedClientId !== '' && (
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#666', display: 'block', marginBottom: 6 }}>
+                  Contrato del cliente (opcional)
+                </label>
+                <select value={agreementId} onChange={(e) => setAgreementId(e.target.value ? +e.target.value : '')}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}>
+                  <option value="">
+                    {contratosCliente.length === 0 ? 'Este cliente aún no tiene contratos vigentes' : '— Sin contrato —'}
+                  </option>
+                  {contratosCliente.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {(c.title || `Contrato #${c.id}`)} · {c.services.map((s) => s.name).join(', ')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Input label="Nombre para el envío *" value={clientName} onChange={setClientName} />
               <Input label="Email para el envío *" value={clientEmail} onChange={setClientEmail} type="email" />
@@ -426,7 +473,7 @@ export default function ContratoForm() {
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
             <button className="auth-btn" onClick={handleGenerate} disabled={loading}
               style={{ padding: '12px 32px', fontSize: 14 }}>
-              {loading ? 'Guardando...' : isEditMode ? '💾 Guardar cambios' : '⚡ Generar Contrato'}
+              {loading ? 'Guardando...' : isEditMode ? '💾 Guardar cambios' : '⚡ Generar documento'}
             </button>
           </div>
         </>
