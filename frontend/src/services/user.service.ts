@@ -128,6 +128,8 @@ export interface ProfileData {
   documentNumber: string | null;
   /** false en cuentas que entran solo con Google: no tienen contraseña que cambiar. */
   hasPassword: boolean;
+  /** true mientras un administrador tenga pendiente el cambio de contraseña obligatorio. */
+  debeCambiarContrasena?: boolean;
   department: { id: number; name: string } | null;
   roleRelation: { id: number; name: string } | null;
   createdAt: string;

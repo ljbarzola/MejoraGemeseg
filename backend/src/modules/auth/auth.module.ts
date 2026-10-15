@@ -5,6 +5,8 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { SessionCutoffService } from './session-cutoff.service';
+import { AuthThrottleService } from './auth-throttle.service';
+import { PasswordRotationService } from './password-rotation.service';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { MailModule } from '../mail/mail.module';
 
@@ -24,7 +26,13 @@ if (!JWT_SECRET) {
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, SessionCutoffService],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    SessionCutoffService,
+    AuthThrottleService,
+    PasswordRotationService,
+  ],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

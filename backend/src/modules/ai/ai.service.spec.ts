@@ -82,6 +82,36 @@ describe('AiService.canUseIntent — bloqueo de intenciones por permisos', () =>
     const allowed = await canUseIntent(1, 1, 'VENTAS');
     expect(allowed).toBe(true);
   });
+
+  it('Sistemas es una sección cerrada por defecto: sin fila UserPermission, denegado', async () => {
+    permissions.getCompanySections.mockResolvedValue([{ key: 'SISTEMAS', enabled: true }]);
+    permissions.getFixedSections.mockResolvedValue(['DASHBOARD', 'PROJECTS']);
+    permissions.getUserPermissions.mockResolvedValue([]);
+    const allowed = await canUseIntent(1, 1, 'SISTEMAS');
+    expect(allowed).toBe(false);
+  });
+
+  it('Sistemas con fila canView:true: permitido', async () => {
+    permissions.getCompanySections.mockResolvedValue([{ key: 'SISTEMAS', enabled: true }]);
+    permissions.getFixedSections.mockResolvedValue(['DASHBOARD', 'PROJECTS']);
+    permissions.getUserPermissions.mockResolvedValue([
+      { section: 'SISTEMAS', canView: true, canWrite: false },
+    ]);
+    const allowed = await canUseIntent(1, 1, 'SISTEMAS');
+    expect(allowed).toBe(true);
+  });
+
+  it('el manual que recibe el chat no incluye Sistemas si la persona no tiene fila; el resto sigue igual', async () => {
+    permissions.getCompanySections.mockResolvedValue([
+      { key: 'SISTEMAS', enabled: true },
+      { key: 'RRHH', enabled: true },
+    ]);
+    permissions.getFixedSections.mockResolvedValue(['DASHBOARD', 'PROJECTS']);
+    permissions.getUserPermissions.mockResolvedValue([]);
+    const claves = await (service as any).getAllowedSectionKeys(1, 1);
+    expect(claves).toContain('RRHH');
+    expect(claves).not.toContain('SISTEMAS');
+  });
 });
 
 describe('AiService.callVertexChat — la consulta nunca se ejecuta si el intento está bloqueado', () => {

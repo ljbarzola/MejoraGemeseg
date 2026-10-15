@@ -287,11 +287,22 @@ Agregado el 2026-10-07 con Leads, Oportunidades y Contratos:
 - **Siempre tres cosas:** el motivo (lista editable por empresa), **quién lo dijo** (el cliente, o es una suposición del vendedor) y un comentario. «Sin información» existe para no obligar a inventar un motivo; «Otro» exige comentario.
 - El diálogo **no cierra el flujo por su cuenta**: recibe `onConfirm`, y si ese lanza, muestra el mensaje con `ErrorBanner` (que se trae a la vista) y se queda abierto.
 - Las gráficas que usan estos motivos deben decir cuánto es «sin información» y cuánto es suposición del vendedor: un pareto sin eso parece más seguro de lo que es.
+## 23. Filtros que se Recuerdan: Validarlos y Poder Limpiarlos de un Clic
+
+### Regla: un Filtro Guardado Nunca Puede Estar Activo Sin que se Vea, ni Apuntar a Algo que el Selector no Ofrece
+
+Agregado el 2026-10-14 tras un caso real: «Mis tareas» de Inicio recordaba el proyecto elegido en `localStorage`, pero el desplegable solo listaba 10 proyectos (primera página). El proyecto recordado no estaba en la lista, el selector mostraba «Todos los proyectos» y la consulta seguía filtrando por él: la tarea asignada no aparecía en ninguna pestaña y nadie veía por qué.
+
+- Un selector que se llena desde una API paginada **carga todas las páginas** (o se pide sin paginar). Con solo la primera página las opciones y la consulta se desfasan.
+- Al cargar, el valor recordado se **valida contra las opciones**; si ya no existe se descarta **antes** de pedir los datos, no después.
+- El valor «sin filtro» debe poder recordarse. `valor || 'por defecto'` pierde la cadena vacía y devuelve la elección al filtro por defecto en cada recarga; usar `?? 'por defecto'`.
+- Una barra de filtros hecha con campos (búsqueda, selectores) lleva `ClearFiltersButton` (la escoba), que limpia **también** lo guardado. Excepción: «Mis tareas» de Inicio no la lleva (decisión del usuario, 2026-10-14): sus filtros son botones y un selector siempre visibles, y con la validación de arriba ya no quedan filtros invisibles; la escoba solo desordenaba la barra.
 
 ---
 
 ## Versión
 - v1.9 - Octubre 2026 (todo cierre se explica con `MotivoCierreModal`)
+- v2.0 - Octubre 2026 (filtros que se recuerdan: validarlos contra las opciones; escoba en barras de campos, no en Inicio)
 - v1.8 - Octubre 2026 (pantallas en solo lectura por rol: botón visible + aviso de «solo administradores»)
 - v1.7 - Octubre 2026 (enlaces como botones, íconos con fondo y acciones de fila visibles en Contratación Pública)
 - v1.6 - Septiembre 2026 (tarjetas de KPI sin línea dedicada al ícono + botón de Ayuda en dashboards de módulo)

@@ -1,7 +1,6 @@
-﻿import { Body, Controller, Get, Post, UseGuards, Req } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
-import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import {
@@ -13,10 +12,8 @@ import {
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('register')
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
-  }
+  // No hay registro público: POST /auth/register se eliminó el 2026-10-14. Las
+  // cuentas las crea un administrador de la empresa (POST /users).
 
   @Post('login')
   login(@Body() dto: LoginDto) {

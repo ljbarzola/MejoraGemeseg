@@ -40,7 +40,11 @@ export class PrismaService
       idleTimeoutMillis: 10_000,
       ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
     });
-    super({ adapter });
+    // El hash de la contraseña no sale de ninguna consulta salvo que se pida a
+    // propósito (`omit: { password: false }`, solo en auth.service.ts). Antes
+    // cualquier `include` sin `select` lo devolvía: GET /users lo mandaba al
+    // navegador de cualquier empleado.
+    super({ adapter, omit: { user: { password: true } } });
     this.poolMax = poolMax;
   }
 

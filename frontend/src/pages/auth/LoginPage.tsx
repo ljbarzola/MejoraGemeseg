@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { login as loginService, saveAuth, requestPasswordReset, confirmPasswordReset, SESSION_EXPIRED_FLAG } from '../../services/auth.service';
 import { cachedThemeForDomain, useCompany } from '../../contexts/ThemeContext';
 
@@ -239,10 +239,7 @@ export default function LoginPage() {
             </div>
 
             <div className="auth-footer">
-              ¿No tienes cuenta?{' '}
-              <Link to="/register" className="auth-link">
-                Regístrate aquí
-              </Link>
+              ¿No tienes cuenta? Pide a un administrador de tu empresa que la cree.
             </div>
           </>
         ) : (

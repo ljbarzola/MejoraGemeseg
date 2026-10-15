@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Wrench, Settings, ExternalLink, X } from 'lucide-react';
 import {
@@ -12,6 +12,12 @@ import {
 } from '../../services/sistemas.service';
 import { extractDriveFolderId, buildDriveFolderLink } from '../../utils/driveLink';
 import OpenFolderButton from '../../components/common/OpenFolderButton';
+import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
+import { useResizableColumns } from '../../hooks/useResizableColumns';
+import { useColumnPreferences } from '../../hooks/useColumnPreferences';
+import { useSortableTable } from '../../hooks/useSortableTable';
+import { useToast } from '../../contexts/ToastContext';
 import { getUser } from '../../services/auth.service';
 import { getCompanies, type Company } from '../../services/company.service';
 
@@ -24,7 +30,7 @@ const TIPO_LABEL: Record<string, string> = {
 
 const ESTADO_LABEL: Record<TicketSoporteEstado, string> = {
   ABIERTO: 'Abierto',
-  EN_REVISION: 'En revision',
+  EN_REVISION: 'En revisión',
   RESUELTO: 'Resuelto',
 };
 
@@ -34,13 +40,38 @@ const ESTADO_COLOR: Record<TicketSoporteEstado, { bg: string; fg: string }> = {
   RESUELTO: { bg: '#c6f6d5', fg: '#276749' },
 };
 
+// Columnas elegibles (además de «Título», que va siempre).
+const COLUMNAS = [
+  { key: 'tipo', label: 'Tipo' },
+  { key: 'estado', label: 'Estado' },
+  { key: 'descripcion', label: 'Descripción' },
+  { key: 'reportadoPor', label: 'Reportado por' },
+  { key: 'empresa', label: 'Empresa' },
+  { key: 'createdAt', label: 'Fecha' },
+  { key: 'adjuntos', label: 'Adjuntos' },
+];
+const COLUMNAS_POR_DEFECTO = ['tipo', 'estado', 'descripcion', 'reportadoPor', 'empresa', 'createdAt'];
+
+const reportante = (t: TicketSoporte) => t.createdBy?.fullName || t.createdBy?.email || '';
+const totalAdjuntos = (t: TicketSoporte) => (t.attachments?.length ?? 0) + (t.capturaUrl ? 1 : 0);
+
 export default function SoporteTecnicoPage() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [tickets, setTickets] = useState<TicketSoporte[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingId, setSavingId] = useState<number | null>(null);
   const [showConfig, setShowConfig] = useState(false);
+  const [detalleId, setDetalleId] = useState<number | null>(null);
+
+  const [search, setSearch] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
+  const [filtroEmpresa, setFiltroEmpresa] = useState('');
+
+  const columnPrefs = useColumnPreferences('soporte-tecnico', COLUMNAS_POR_DEFECTO);
+  const tablaRef = useResizableColumns('soporte-tecnico', ['titulo', ...columnPrefs.visible]);
 
   const load = () => {
     setLoading(true);
@@ -65,6 +96,94 @@ export default function SoporteTecnicoPage() {
     }
   };
 
+  // Empresas que aparecen en los tickets cargados (el filtro no necesita otra llamada).
+  const empresas = useMemo(() => {
+    const mapa = new Map<number, string>();
+    tickets.forEach((t) => { if (t.company) mapa.set(t.company.id, t.company.name); });
+    return Array.from(mapa, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  }, [tickets]);
+  const hayTicketsSinEmpresa = tickets.some((t) => !t.company);
+
+  const filtrados = tickets.filter((t) => {
+    if (filtroEstado && t.estado !== filtroEstado) return false;
+    if (filtroTipo && t.tipo !== filtroTipo) return false;
+    if (filtroEmpresa === 'sin') {
+      if (t.company) return false;
+    } else if (filtroEmpresa && String(t.company?.id ?? '') !== filtroEmpresa) {
+      return false;
+    }
+    const q = search.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      t.titulo.toLowerCase().includes(q) ||
+      t.descripcion.toLowerCase().includes(q) ||
+      (t.createdBy?.fullName || '').toLowerCase().includes(q) ||
+      (t.createdBy?.email || '').toLowerCase().includes(q) ||
+      (t.company?.name || '').toLowerCase().includes(q)
+    );
+  });
+
+  const { filas, thProps, SortIcon } = useSortableTable(
+    filtrados,
+    {
+      titulo: (t) => t.titulo,
+      tipo: (t) => TIPO_LABEL[t.tipo] || t.tipo,
+      estado: (t) => ESTADO_LABEL[t.estado],
+      descripcion: (t) => t.descripcion,
+      reportadoPor: (t) => reportante(t),
+      empresa: (t) => t.company?.name,
+      createdAt: (t) => t.createdAt,
+      adjuntos: (t) => totalAdjuntos(t),
+    },
+    'createdAt',
+    'desc',
+  );
+
+  const columnasVisibles = columnPrefs.visible.filter((k) => COLUMNAS.some((c) => c.key === k));
+  const hayFiltros = !!(search || filtroEstado || filtroTipo || filtroEmpresa);
+  const detalle = detalleId != null ? tickets.find((t) => t.id === detalleId) ?? null : null;
+
+  const celda = (key: string, t: TicketSoporte): ReactNode => {
+    switch (key) {
+      case 'tipo':
+        return TIPO_LABEL[t.tipo] || t.tipo;
+      case 'estado': {
+        const color = ESTADO_COLOR[t.estado];
+        return (
+          <select
+            value={t.estado}
+            disabled={savingId === t.id}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => handleEstadoChange(t.id, e.target.value as TicketSoporteEstado)}
+            aria-label={`Estado del ticket ${t.titulo}`}
+            style={{
+              padding: '4px 8px', borderRadius: '999px', border: 'none', fontSize: '0.75rem', fontWeight: 700,
+              background: color.bg, color: color.fg, cursor: 'pointer',
+            }}
+          >
+            {(Object.keys(ESTADO_LABEL) as TicketSoporteEstado[]).map((e) => (
+              <option key={e} value={e}>{ESTADO_LABEL[e]}</option>
+            ))}
+          </select>
+        );
+      }
+      case 'descripcion':
+        return <span className="truncate" title={t.descripcion}>{t.descripcion}</span>;
+      case 'reportadoPor':
+        return reportante(t) || '—';
+      case 'empresa':
+        return t.company?.name || 'Sin empresa';
+      case 'createdAt':
+        return <span style={{ whiteSpace: 'nowrap' }}>{new Date(t.createdAt).toLocaleString('es-EC')}</span>;
+      case 'adjuntos': {
+        const n = totalAdjuntos(t);
+        return n ? `${n}` : '—';
+      }
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="page-container">
       <div className="page-header-row">
@@ -72,7 +191,7 @@ export default function SoporteTecnicoPage() {
           <ArrowLeft size={18} />
         </button>
         <h1 style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-          <Wrench size={22} /> Soporte Tecnico
+          <Wrench size={22} /> Soporte Técnico
         </h1>
         <button
           className="btn-secondary"
@@ -88,69 +207,136 @@ export default function SoporteTecnicoPage() {
 
       {error && <div className="form-error" style={{ marginBottom: '14px' }}>{error}</div>}
 
+      <div className="filter-bar">
+        <div className="filter-bar-fields filter-bar-fields--una-linea">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por título, descripción, persona o empresa..."
+            style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
+          />
+          <select className="filter-select" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
+            <option value="">Todos los estados</option>
+            {(Object.keys(ESTADO_LABEL) as TicketSoporteEstado[]).map((e) => (
+              <option key={e} value={e}>{ESTADO_LABEL[e]}</option>
+            ))}
+          </select>
+          <select className="filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
+            <option value="">Todos los tipos</option>
+            {Object.entries(TIPO_LABEL).map(([k, label]) => (
+              <option key={k} value={k}>{label}</option>
+            ))}
+          </select>
+          <select className="filter-select" value={filtroEmpresa} onChange={(e) => setFiltroEmpresa(e.target.value)}>
+            <option value="">Todas las empresas</option>
+            {empresas.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+            {hayTicketsSinEmpresa && <option value="sin">Sin empresa</option>}
+          </select>
+        </div>
+        <div className="filter-bar-actions">
+          <ColumnPickerMenu
+            columns={COLUMNAS}
+            visible={columnPrefs.visible}
+            fixedLabel="Título"
+            onApply={async (keys) => {
+              const guardado = await columnPrefs.set(keys);
+              if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
+            }}
+          />
+          <ClearFiltersButton
+            onClear={() => { setSearch(''); setFiltroEstado(''); setFiltroTipo(''); setFiltroEmpresa(''); }}
+            disabled={!hayFiltros}
+          />
+        </div>
+      </div>
+
       {loading ? (
         <div className="loading-state">Cargando tickets...</div>
       ) : tickets.length === 0 ? (
-        <p style={{ color: '#94a3b8' }}>No hay tickets todavia.</p>
+        <p style={{ color: '#94a3b8' }}>No hay tickets todavía.</p>
+      ) : filas.length === 0 ? (
+        <p style={{ color: '#888', fontSize: 13 }}>No hay tickets que coincidan con los filtros.</p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {tickets.map((t) => {
-            const color = ESTADO_COLOR[t.estado];
-            return (
-              <div key={t.id} className="admin-section" style={{ margin: 0, padding: '14px 18px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: '220px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#718096' }}>{TIPO_LABEL[t.tipo] || t.tipo}</span>
-                      <span className="status-badge" style={{ background: color.bg, color: color.fg }}>{ESTADO_LABEL[t.estado]}</span>
-                    </div>
-                    <strong style={{ fontSize: '0.95rem', color: 'var(--azul-oscuro)' }}>{t.titulo}</strong>
-                    <p style={{ margin: '6px 0', fontSize: '0.85rem', color: '#475569', whiteSpace: 'pre-wrap' }}>{t.descripcion}</p>
+        <div className="admin-section">
+          <div className="tasks-table-wrapper">
+            <table className="tasks-table resizable-table" ref={tablaRef}>
+              <thead>
+                <tr>
+                  <th {...thProps('titulo')}>Título <SortIcon campo="titulo" /></th>
+                  {columnasVisibles.map((k) => {
+                    const col = COLUMNAS.find((c) => c.key === k)!;
+                    return (
+                      <th key={k} {...thProps(k)}>
+                        {col.label} <SortIcon campo={k} />
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {filas.map((t) => (
+                  <tr key={t.id} onClick={() => setDetalleId(t.id)} style={{ cursor: 'pointer' }}>
+                    <td style={{ fontWeight: 600, color: 'var(--azul-oscuro)' }}>{t.titulo}</td>
+                    {columnasVisibles.map((k) => (
+                      <td key={k}>{celda(k, t)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
-                    {t.capturaUrl && (
-                      <a href={t.capturaUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        <ExternalLink size={12} /> Ver captura adjunta
-                      </a>
-                    )}
-
-                    {t.attachments && t.attachments.length > 0 && (
-                      <div style={{ marginTop: '6px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                        {t.attachments.map((att) => (
-                          <a
-                            key={att.id}
-                            href={att.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '4px',
-                              background: '#edf2f7', padding: '3px 8px', borderRadius: '6px',
-                              color: 'var(--azul-oscuro)', textDecoration: 'none',
-                            }}
-                          >
-                            <ExternalLink size={11} /> {att.nombre || 'Adjunto'}
-                          </a>
-                        ))}
-                      </div>
-                    )}
-
-                    <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: '#a0aec0' }}>
-                      Reportado por {t.createdBy?.fullName || t.createdBy?.email} · {t.company?.name || 'Sin empresa'} · {new Date(t.createdAt).toLocaleString('es-EC')}
-                    </p>
-                  </div>
-                  <select
-                    value={t.estado}
-                    disabled={savingId === t.id}
-                    onChange={(e) => handleEstadoChange(t.id, e.target.value as TicketSoporteEstado)}
-                    style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e0', fontSize: '0.82rem' }}
-                  >
-                    <option value="ABIERTO">Abierto</option>
-                    <option value="EN_REVISION">En revision</option>
-                    <option value="RESUELTO">Resuelto</option>
-                  </select>
-                </div>
+      {detalle && (
+        <div className="modal-overlay" onClick={() => setDetalleId(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '560px' }}>
+            <div className="modal-header">
+              <h3>{detalle.titulo}</h3>
+              <button className="modal-close" onClick={() => setDetalleId(null)}><X size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#718096' }}>{TIPO_LABEL[detalle.tipo] || detalle.tipo}</span>
+                <span className="status-badge" style={{ background: ESTADO_COLOR[detalle.estado].bg, color: ESTADO_COLOR[detalle.estado].fg }}>
+                  {ESTADO_LABEL[detalle.estado]}
+                </span>
               </div>
-            );
-          })}
+              <p style={{ margin: '0 0 10px', fontSize: '0.88rem', color: '#475569', whiteSpace: 'pre-wrap' }}>{detalle.descripcion}</p>
+
+              {detalle.capturaUrl && (
+                <a href={detalle.capturaUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <ExternalLink size={12} /> Ver captura adjunta
+                </a>
+              )}
+
+              {detalle.attachments && detalle.attachments.length > 0 && (
+                <div style={{ marginTop: '6px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {detalle.attachments.map((att) => (
+                    <a
+                      key={att.id}
+                      href={att.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '4px',
+                        background: '#edf2f7', padding: '3px 8px', borderRadius: '6px',
+                        color: 'var(--azul-oscuro)', textDecoration: 'none',
+                      }}
+                    >
+                      <ExternalLink size={11} /> {att.nombre || 'Adjunto'}
+                    </a>
+                  ))}
+                </div>
+              )}
+
+              <p style={{ margin: '12px 0 0', fontSize: '0.75rem', color: '#a0aec0' }}>
+                Reportado por {reportante(detalle)} · {detalle.company?.name || 'Sin empresa'} · {new Date(detalle.createdAt).toLocaleString('es-EC')}
+              </p>
+            </div>
+          </div>
         </div>
       )}
 

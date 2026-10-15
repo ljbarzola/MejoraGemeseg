@@ -9,10 +9,10 @@
      de --gris-claro para cualquier borde que deba notarse. */
   --borde-input: #A0AEC0;
   /* Escala compartida de z-index para los botones flotantes (chat, reportar
-     un problema, campanita de notificaciones) y el panel que el chat abre
+     un problema, ícono de notificaciones) y el panel que el chat abre
      encima de ellos. El panel debe quedar siempre por encima de los tres
      botones — cualquier botón flotante nuevo debe sumarse a esta escala en
-     vez de ponerse un z-index suelto (eso fue justo el bug: la campanita
+     vez de ponerse un z-index suelto (eso fue justo el bug: el ícono de notificaciones
      nunca se migró acá y se quedó en 950, por encima de --z-panel). */
   --z-fab: 200;
   --z-report-btn: 250;
@@ -936,8 +936,76 @@ a.enlace-tabla:hover {
 .dashboard-status-filters {
   display: flex;
   gap: 8px;
-  margin-bottom: 20px;
   flex-wrap: wrap;
+}
+
+/* «Mis tareas» (Inicio): a la izquierda el estado, a la derecha las
+   herramientas (asignadas a mí, proyecto, columnas). Cada grupo es un bloque
+   aparte para que, si no caben en una línea, salte el grupo entero y no un
+   botón suelto a una línea sola. */
+.dashboard-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin-bottom: 20px;
+}
+
+.dashboard-toolbar-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dashboard-toolbar-tools .filter-select {
+  max-width: 240px;
+  height: 40px;
+  box-sizing: border-box;
+}
+
+/* Anchos de la tabla de Inicio. `.resizable-table` es `table-layout: fixed`: sin
+   ancho cada columna recibe una parte igual y se cortan los encabezados.
+   El mínimo hace que en pantallas angostas la tabla se desplace en vez de
+   aplastar las columnas. Un doble clic en el borde de una columna vuelve a
+   estos anchos. */
+.dashboard-tasks-table {
+  min-width: 900px;
+}
+/* Menos relleno lateral que en el resto de tablas: con ocho columnas posibles
+   cada píxel cuenta y los encabezados no deben cortarse. */
+.dashboard-tasks-table th,
+.dashboard-tasks-table td {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+/* «Tarea» no lleva ancho: en `table-layout: fixed` se queda con lo que sobra,
+   que es lo que más necesita (los títulos son largos). */
+.resizable-table.dashboard-tasks-table th.col-estado { width: 160px; }
+.resizable-table.dashboard-tasks-table th.col-prioridad { width: 140px; }
+.resizable-table.dashboard-tasks-table th.col-proyecto { width: 150px; }
+.resizable-table.dashboard-tasks-table th.col-asignados { width: 145px; }
+.resizable-table.dashboard-tasks-table th.col-fecha { width: 125px; }
+.resizable-table.dashboard-tasks-table th.col-horas { width: 120px; }
+
+/* El botón «Columnas» (btn-secondary) es más alto que los demás controles de la
+   barra; se iguala para que la fila se vea pareja. */
+.dashboard-toolbar-tools .btn-secondary {
+  height: 40px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 0.85rem;
+}
+
+/* Fecha fin de una tarea abierta: roja si ya venció, naranja si vence hoy o mañana. */
+.fecha-vencida { color: #c53030; font-weight: 700; }
+.fecha-pronto { color: #c05621; font-weight: 700; }
+.fecha-aviso {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .filter-select {
@@ -956,6 +1024,14 @@ a.enlace-tabla:hover {
 }
 
 .project-name-chip {
+  /* En una sola línea: como `inline`, un nombre largo se partía en dos y el
+     fondo del chip quedaba cortado a medias (igual que la insignia de estado). */
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
   background: #e8f0fe;
   color: var(--azul-oscuro);
   padding: 3px 10px;
@@ -985,6 +1061,10 @@ a.enlace-tabla:hover {
 }
 
 .status-badge {
+  /* Una sola línea: en una celda angosta «EN PROGRESO» se partía en dos y el
+     fondo de la insignia quedaba cortado a medias. */
+  display: inline-block;
+  white-space: nowrap;
   padding: 4px 12px;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -2418,8 +2498,16 @@ a.enlace-tabla:hover {
 
 .chat-typing {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 4px 0;
+}
+
+.chat-typing-texto {
+  margin-left: 6px;
+  font-size: 0.8rem;
+  color: #777;
 }
 
 .chat-typing-dot {
@@ -3002,6 +3090,61 @@ a.enlace-tabla:hover {
   border-top: 2px solid var(--gris-claro);
   padding-top: 24px;
   margin-top: 24px;
+}
+
+.profile-option-hint {
+  margin: 0 0 14px;
+  font-size: 0.85rem;
+  color: #718096;
+  line-height: 1.5;
+}
+
+.profile-option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 2px solid var(--borde-input);
+  border-radius: 10px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.profile-option:hover {
+  border-color: var(--azul-claro);
+}
+
+.profile-option.selected {
+  border-color: var(--azul-oscuro);
+  background: #f4f7fb;
+}
+
+.profile-option input[type='radio'] {
+  margin-top: 3px;
+  accent-color: var(--azul-oscuro);
+}
+
+.profile-option span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-option strong {
+  font-size: 0.9rem;
+  color: var(--azul-oscuro);
+}
+
+.profile-option small {
+  font-size: 0.8rem;
+  color: #718096;
 }
 
 .profile-security-row {
