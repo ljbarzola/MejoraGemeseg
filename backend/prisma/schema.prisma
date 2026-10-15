@@ -46,6 +46,7 @@ model Company {
   salesAgreements           SalesAgreement[]
   salesLeads                SalesLead[]
   salesConversionEvents     SalesConversionEvent[]
+  salesSettings             SalesSetting[]
   salesOpportunities        SalesOpportunity[]
   salesReasons              SalesReason[]
   salesReasonEntries        SalesReasonEntry[]
@@ -2576,6 +2577,25 @@ model SalesLead {
 
   @@unique([companyId, channel, externalId])
   @@index([companyId, status])
+}
+
+// Ajustes de Ventas por empresa (2026-10-15): lo que antes estaba fijo en el código o en
+// variables de entorno (IDs de Google Ads, tabla de landings) y que cada empresa que use
+// el CRM debe poder cambiar desde «Configuración». Una fila por empresa y clave
+// ('google_ads', 'landings'); `value` guarda el objeto. Tabla creada al arrancar por
+// VentasSchemaService (el despliegue no corre migraciones).
+model SalesSetting {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  key       String
+  value     Json     @default("{}")
+  updatedBy Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, key])
 }
 
 // Hechos de un lead de anuncio que Google Ads quiere saber (2026-10-15): que

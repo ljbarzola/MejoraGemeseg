@@ -972,6 +972,31 @@ export interface ResumenConversiones {
 export const getResumenConversiones = (): Promise<ResumenConversiones> =>
   api.get('/ventas/conversiones/resumen').then(r => r.data);
 
+// ---------- Configuración de Ventas y CRM (por empresa) ----------
+export interface AjustesGoogleAds {
+  customerId: string;
+  conversionCualificado: string;
+  conversionConvertido: string;
+  activo: boolean;
+  soloValidar: boolean;
+}
+export interface LandingConfig { slug: string; servicio: string; linea: string }
+export interface ConfiguracionVentas {
+  googleAds: AjustesGoogleAds;
+  // Cuenta de servicio que hay que invitar como usuario en Google Ads.
+  cuentaDeServicio: string;
+  landings: LandingConfig[];
+  landingsPersonalizadas: boolean;
+}
+export const getConfiguracionVentas = (): Promise<ConfiguracionVentas> =>
+  api.get('/ventas/configuracion').then(r => r.data);
+export const guardarAjustesGoogleAds = (data: Partial<AjustesGoogleAds>): Promise<AjustesGoogleAds> =>
+  api.put('/ventas/configuracion/google-ads', data).then(r => r.data);
+export const guardarLandingsConfig = (landings: LandingConfig[]): Promise<LandingConfig[]> =>
+  api.put('/ventas/configuracion/landings', { landings }).then(r => r.data);
+export const restaurarLandingsConfig = (): Promise<LandingConfig[]> =>
+  api.delete('/ventas/configuracion/landings').then(r => r.data);
+
 // Claves de las conexiones (formulario web, Google Ads): reutiliza las
 // api-keys que ya existían para los webhooks de Ventas.
 export interface ClaveConexion { id: number; name: string; apiKey: string; isActive: boolean; createdAt: string }

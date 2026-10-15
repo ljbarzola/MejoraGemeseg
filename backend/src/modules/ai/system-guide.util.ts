@@ -237,7 +237,7 @@ Los guardias de este padrón son los mismos que se eligen como personal en otros
 const VENTAS = `# Ventas y CRM — guía detallada
 
 ## Acceso y pantallas
-- Menú → "Ventas y CRM": "Dashboard", "Leads", "Oportunidades", "Clientes", "Contratos" y "Documentación" (en ese orden: un contacto entra como lead, pasa a oportunidad y, cuando acepta, es cliente).
+- Menú → "Ventas y CRM": "Dashboard", "Leads", "Oportunidades", "Clientes", "Contratos", "Documentación" y "Configuración" (en ese orden: un contacto entra como lead, pasa a oportunidad y, cuando acepta, es cliente).
 - Permiso "ver": listar y consultar. "Escribir": crear, editar, borrar, cambiar etapa, asignarse, registrar actividades, configurar y generar/enviar documentos, convertir o descartar leads, crear oportunidades y crear, editar, renovar, cancelar o eliminar contratos. Los montos (valor mensual de los contratos y monto cotizado de las oportunidades) los ve todo el que tenga permiso de ver Ventas; "Mis referidos" nunca muestra montos.
 
 ## Dashboard
@@ -326,6 +326,14 @@ const VENTAS = `# Ventas y CRM — guía detallada
 - Tablas que llena el cliente: si la plantilla tiene tablas marcadas "Cliente", la ficha muestra "📋 Copiar link para el cliente"; el cliente abre el enlace (sin cuenta), completa "Completa tu información" y al enviar el sistema genera el PDF y lo lleva directo a firmar. El enlace sirve una sola vez.
 - Editar o regenerar un documento ya Enviado muestra una advertencia: no cancela el envío en SignWell (el cliente seguiría viendo la versión anterior). Un documento Firmado ya no se edita.
 - Estados de firma en SignWell: Pendiente de firma, Visto por el cliente, Firmado, Rechazado por el cliente, No entregado, Expirado.
+
+## Configuración
+- Menú → "Ventas y CRM" → "Configuración": aquí se ajusta cómo funciona el CRM para la empresa. El administrador puede cambiar y guardar; el gerente la ve en solo lectura.
+- "Conexiones": abre las claves y la guía para conectar la página web y Google Ads (es la misma pantalla de Leads → "Conexiones").
+- "Fuentes de leads": las fuentes que existen (Google Ads, Meta Ads, LinkedIn Ads, Formulario web, Referido, WhatsApp, Llamada, Correo e Ingreso manual). Es solo informativa.
+- "Landings": una tabla con la dirección de cada landing de la página (la parte final del enlace, por ejemplo monitoreo-alarmas), el servicio que le corresponde y su línea comercial. Con ella el CRM sabe qué servicio pidió cada contacto. Botones: "Agregar landing", "Restaurar valores de Gemeseg" y "Guardar landings".
+- "Google Ads": el ID de cliente de Google Ads (10 dígitos), el ID de las conversiones "Lead cualificado" y "Lead convertido", "Enviar a Google Ads" (interruptor) y "Solo probar" (Google revisa pero no cuenta). Con el envío activo, cuando un lead que llegó de un anuncio pasa a Cotizada o a Aceptada, el CRM se lo avisa a Google. Muestra cuántos avisos están por enviar, enviados o con error.
+- Las etapas y los campos de la ficha se cambian en Clientes ("Etapas" y "Campos"); los servicios y los motivos de cierre, en Contratos.
 
 ## Preguntas frecuentes de Ventas
 - "¿Qué relación hay entre Clientes y Contratos?": ver arriba; un cliente tiene varios contratos y cada contrato varios servicios. El documento que se firma (Documentación) toma nombre, email y (si la plantilla lo mapea) otros datos de la ficha del cliente.

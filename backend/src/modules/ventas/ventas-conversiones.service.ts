@@ -68,8 +68,8 @@ export class VentasConversionesService {
       });
       // Si el envío a Google ya está configurado, se intenta al momento; si falla,
       // el cron lo reintenta. Nunca se espera: no debe frenar el cambio de etapa.
-      if (this.envio.configurado()) {
-        void this.envio.enviarPendientes().catch((e: Error) =>
+      if (await this.envio.configurado(c.companyId)) {
+        void this.envio.enviarPendientes({ companyId: c.companyId }).catch((e: Error) =>
           this.logger.error(`Envío inmediato a Google Ads: ${e.message}`),
         );
       }
@@ -115,7 +115,7 @@ export class VentasConversionesService {
     const porTipo = Object.fromEntries(tipos.map((t) => [t.kind, t._count._all]));
     return {
       // false mientras falten los IDs de la cuenta de Google Ads: los hechos quedan PENDIENTES.
-      conectado: this.envio.configurado(),
+      conectado: await this.envio.configurado(companyId),
       total: estados.reduce((n, e) => n + e._count._all, 0),
       porEstado,
       porTipo,

@@ -97,7 +97,7 @@ export default function Sidebar() {
   // 2026-09-22 (código y tablas, ver .agents/modules/recursos-humanos.md
   // punto 16a).
 
-  // Ventas/CRM: Dashboard, Leads, Oportunidades, Clientes, Contratos y Documentación están activos.
+  // Ventas/CRM: Dashboard, Leads, Oportunidades, Clientes, Contratos, Documentación y Configuración están activos.
   // Planificación y Campo se deja visible como "Próximamente" (gris, sin clic)
   // y NO tiene ruta: App.tsx redirige esa URL al Dashboard. «Reportes» se
   // quitó del menú (2026-10-08): sus cifras de visitas viven en la pestaña
@@ -113,6 +113,7 @@ export default function Sidebar() {
     { label: 'Clientes', path: '/ventas/clientes', icon: '👤' },
     { label: 'Contratos', path: '/ventas/contratos', icon: '📑' },
     { label: 'Documentación', path: '/ventas/documentacion', icon: '📄' },
+    { label: 'Configuración', path: '/ventas/configuracion', icon: '⚙️' },
     { label: 'Planificación y Campo', path: '/ventas/visitas', icon: '📍', disabled: true },
   ];
 

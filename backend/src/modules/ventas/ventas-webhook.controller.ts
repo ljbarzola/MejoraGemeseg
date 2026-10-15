@@ -9,6 +9,7 @@ import {
 import { VentasService } from './ventas.service';
 import { VentasContratosService } from './ventas-contratos.service';
 import { VentasLeadsService } from './ventas-leads.service';
+import { VentasConfigService } from './ventas-config.service';
 import { atribuirCanal, extraerAtribucion } from './lead-atribucion.util';
 import { datosDeLanding } from './lead-landing.util';
 
@@ -18,6 +19,7 @@ export class VentasWebhookController {
     private readonly ventasService: VentasService,
     private readonly contratosService: VentasContratosService,
     private readonly leadsService: VentasLeadsService,
+    private readonly configService: VentasConfigService,
   ) {}
 
   @Post('lead')
@@ -78,7 +80,8 @@ export class VentasWebhookController {
     // completa en `extra`. Lo propio de la landing (servicio y línea comercial
     // según su dirección, situación, consentimiento) sale de `datosDeLanding`.
     const atribucion = extraerAtribucion(body);
-    const landing = datosDeLanding(body);
+    // La tabla de landings es de cada empresa (Ventas → Configuración).
+    const landing = datosDeLanding(body, await this.configService.landingsDe(companyId));
     const r = await this.leadsService.ingresar(companyId, {
       // Las landings de WordPress mandan los nombres en español (nombre,
       // correo, telefono): se aceptan tal cual para no obligar a traducirlos.

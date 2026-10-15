@@ -167,6 +167,20 @@ export const SALES_PIPELINE_DDL: string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "SalesConversionEvent_opportunityId_kind_key" ON "SalesConversionEvent"("opportunityId", "kind")`,
   `CREATE INDEX IF NOT EXISTS "SalesConversionEvent_companyId_status_idx" ON "SalesConversionEvent"("companyId", "status")`,
   fk('SalesConversionEvent', 'companyId', 'Company', 'CASCADE'),
+
+  // ---- Ajustes de Ventas por empresa (2026-10-15) ----
+  `CREATE TABLE IF NOT EXISTS "SalesSetting" (
+    "id" SERIAL NOT NULL,
+    "companyId" INTEGER NOT NULL,
+    "key" TEXT NOT NULL,
+    "value" JSONB NOT NULL DEFAULT '{}',
+    "updatedBy" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "SalesSetting_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "SalesSetting_companyId_key_key" ON "SalesSetting"("companyId", "key")`,
+  fk('SalesSetting', 'companyId', 'Company', 'CASCADE'),
 ];
 
 /**

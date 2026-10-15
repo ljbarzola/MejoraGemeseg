@@ -8,9 +8,13 @@ export interface LandingDef {
   // Nombre EXACTO del servicio en el catálogo de la empresa (así el diálogo de
   // convertir lo preselecciona).
   servicio: string;
-  linea: 'Seguridad Física' | 'Solutech' | 'Monitoreo';
+  // Agrupación comercial libre (en Gemeseg: Seguridad Física, Solutech o Monitoreo).
+  linea: string;
 }
 
+// Valores de Gemeseg. Cada empresa puede cambiarlos desde Ventas → Configuración
+// (se guardan en `SalesSetting`, clave 'landings'); esta lista solo se usa mientras
+// una empresa no haya guardado la suya.
 export const LANDINGS: LandingDef[] = [
   { slug: 'agentes-de-seguridad', servicio: 'Agentes de Seguridad', linea: 'Seguridad Física' },
   { slug: 'custodia-de-mercaderia', servicio: 'Custodia de Mercadería en Movimiento', linea: 'Seguridad Física' },
@@ -34,8 +38,10 @@ export const limpiarSlug = (raw: unknown): string =>
     .replace(/[^a-z0-9-]/g, '')
     .slice(0, 80);
 
-export const landingDe = (slug: string): LandingDef | undefined =>
-  LANDINGS.find((l) => l.slug === slug);
+export const landingDe = (
+  slug: string,
+  landings: LandingDef[] = LANDINGS,
+): LandingDef | undefined => landings.find((l) => l.slug === slug);
 
 // La casilla de la landing manda un texto (p. ej. «Sí (Política 2026-10)») si
 // está marcada y nada si no. «No consta» es lo honesto cuando no llega: no se
@@ -64,9 +70,12 @@ export interface DatosLanding {
 }
 
 // Todo lo propio de una landing, listo para `SalesLead.extra`.
-export function datosDeLanding(body: Record<string, unknown> | null | undefined): DatosLanding {
+export function datosDeLanding(
+  body: Record<string, unknown> | null | undefined,
+  landings: LandingDef[] = LANDINGS,
+): DatosLanding {
   const slug = limpiarSlug(body?.landing);
-  const conocida = slug ? landingDe(slug) : undefined;
+  const conocida = slug ? landingDe(slug, landings) : undefined;
   const extra: Record<string, string> = {};
   if (slug) extra.landing = slug;
   // El servicio sale de la tabla de landings; solo si no es una conocida se

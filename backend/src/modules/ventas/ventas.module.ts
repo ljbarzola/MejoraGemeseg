@@ -22,6 +22,8 @@ import { VentasConversionesService } from './ventas-conversiones.service';
 import { VentasConversionesController } from './ventas-conversiones.controller';
 import { VentasConversionesCronController } from './ventas-conversiones-cron.controller';
 import { GoogleAdsConversionesService } from './google-ads-conversiones.service';
+import { VentasConfigService } from './ventas-config.service';
+import { VentasConfigController } from './ventas-config.controller';
 import { VentasAnaliticaController } from './ventas-analitica.controller';
 import { VentasOportunidadesController } from './ventas-oportunidades.controller';
 import { VentasAcuerdosController } from './ventas-acuerdos.controller';
@@ -52,6 +54,7 @@ import { MailModule } from '../mail/mail.module';
     VentasLeadsController,
     VentasConversionesController,
     VentasConversionesCronController,
+    VentasConfigController,
   ],
   providers: [
     VentasService,
@@ -68,6 +71,7 @@ import { MailModule } from '../mail/mail.module';
     VentasExpedienteService,
     VentasConversionesService,
     GoogleAdsConversionesService,
+    VentasConfigService,
   ],
   exports: [
     VentasExpedienteService,
