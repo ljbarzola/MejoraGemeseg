@@ -112,6 +112,7 @@ model User {
   password                           String?
   documentNumber                     String?
   position                           String?
+  phone                              String?
   isActive                           Boolean                  @default(true)
   departmentId                       Int?
   roleId                             Int?
@@ -2744,4 +2745,161 @@ model SalesReasonEntry {
   @@index([salesClientId])
   @@index([opportunityId])
   @@index([agreementId])
+}
+
+// ============================================================================
+// Cotizador (Ventas y CRM). Copia del cotizador independiente de Gemeseg.
+// Las tablas se crean al arrancar (cotizador.schema.ts) porque el despliegue no
+// corre migraciones. Sin relaciones Prisma a User/Company a propósito: las
+// claves foráneas viven solo en el SQL, así no se toca ningún modelo existente.
+// ============================================================================
+
+// Catálogo de productos (equipos, materiales y servicios en una sola tabla).
+// `code` (EQ-0001, MT-0001, SV-0001) lo asigna el servidor, no se edita y NUNCA
+// se reutiliza: borrar un producto solo lo desactiva (isActive = false), así las
+// cotizaciones que lo usaron lo siguen encontrando por su código.
+model CotProduct {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  kind        String // EQUIPO | MATERIAL | SERVICIO
+  code        String
+  category    String   @default("")
+  subcategory String   @default("")
+  model       String   @default("")
+  name        String   @default("")
+  description String   @default("")
+  unit        String   @default("")
+  defaultQty  Decimal  @default(1) @db.Decimal(10, 2)
+  unitCost    Decimal  @default(0) @db.Decimal(15, 4)
+  monthlyCost Decimal  @default(0) @db.Decimal(15, 4)
+  annualCost  Decimal  @default(0) @db.Decimal(15, 4)
+  hasProfit   Boolean  @default(false) // lleva ganancia del proveedor
+  hasInstall  Boolean  @default(false) // lleva ganancia de instalación
+  supplier    String   @default("")
+  lastUpdate  String?
+  notes       String   @default("")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, code])
+  @@index([companyId, kind, isActive])
+}
+
+// Servicios de instalación del catálogo (INST-001...). Se copian por valor dentro
+// de la cotización.
+model CotInstallService {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  code        String
+  category    String   @default("")
+  subcategory String   @default("")
+  name        String   @default("")
+  unitCost    Decimal  @default(0) @db.Decimal(15, 4)
+  notes       String   @default("")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, code])
+  @@index([companyId, isActive])
+}
+
+// Último número usado por empresa y tipo (EQUIPO, MATERIAL, SERVICIO, INSTALACION).
+// Solo sube: así un código borrado nunca se vuelve a entregar.
+model CotCounter {
+  companyId Int
+  kind      String
+  lastSeq   Int
+
+  @@id([companyId, kind])
+}
+
+// Secuencia de números de cotización (COT-AAAAMMDD-NNNN) por empresa. No se reinicia cada día.
+model CotQuoteSequence {
+  companyId Int @id
+  lastSeq   Int
+}
+
+model CotKit {
+  id         Int      @id @default(autoincrement())
+  companyId  Int
+  name       String
+  components Json     @default("[]") // [{ code, qty, included }]
+  createdBy  Int?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([companyId])
+}
+
+model CotTemplate {
+  id              Int      @id @default(autoincrement())
+  companyId       Int
+  name            String
+  description     String   @default("")
+  clientType      String   @default("mediana")
+  industry        String   @default("comercio")
+  client          Json     @default("{}")
+  items           Json     @default("[]")
+  supplierMargins Json     @default("{}")
+  installMargin   Decimal  @default(35) @db.Decimal(6, 2)
+  isSample        Boolean  @default(false)
+  createdBy       Int?
+  createdByName   String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId])
+}
+
+// Una cotización. `items` guarda las líneas: productos por CÓDIGO (con `snap`, el
+// precio con el que se cotizó), kits y servicios de instalación (por valor).
+model CotQuote {
+  id              Int      @id @default(autoincrement())
+  companyId       Int
+  ownerId         Int
+  vendorName      String   @default("")
+  quoteNumber     String
+  quoteDate       DateTime @db.Date
+  client          Json     @default("{}")
+  items           Json     @default("[]")
+  status          String   @default("borrador") // borrador, enviada, vista, aceptada, rechazada, vencida
+  installMargin   Decimal  @default(35) @db.Decimal(6, 2)
+  supplierMargins Json     @default("{}")
+  discountType    String   @default("none") // none | percent | fixed
+  discountValue   Decimal  @default(0) @db.Decimal(12, 2)
+  conditions      String   @default("")
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([companyId, quoteNumber])
+  @@index([companyId, ownerId])
+  @@index([companyId, status])
+}
+
+// Compartir UNA cotización con otro usuario (solo puede verla y crear una copia).
+model CotQuoteShare {
+  id           Int      @id @default(autoincrement())
+  companyId    Int
+  quoteId      Int
+  ownerId      Int
+  sharedWithId Int
+  createdAt    DateTime @default(now())
+
+  @@unique([quoteId, sharedWithId])
+  @@index([companyId, sharedWithId])
+}
+
+// "Edición total": el editor puede ver y modificar TODAS las cotizaciones del dueño (presentes y futuras).
+model CotEditGrant {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  ownerId   Int
+  editorId  Int
+  createdAt DateTime @default(now())
+
+  @@unique([ownerId, editorId])
+  @@index([companyId, editorId])
 }

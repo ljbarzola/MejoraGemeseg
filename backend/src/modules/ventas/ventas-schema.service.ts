@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SALES_AGREEMENT_DDL } from './sales-agreement.schema';
+import { COTIZADOR_DDL } from './cotizador.schema';
 import {
   SALES_PIPELINE_BACKFILL,
   SALES_PIPELINE_DDL,
@@ -56,6 +57,7 @@ export class VentasSchemaService implements OnModuleInit {
             ...SALES_AGREEMENT_DDL,
             ...SALES_PIPELINE_DDL,
             ...SALES_PIPELINE_BACKFILL,
+            ...COTIZADOR_DDL,
           ]) {
             await tx.$executeRawUnsafe(sql);
           }

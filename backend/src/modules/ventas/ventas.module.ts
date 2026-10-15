@@ -27,6 +27,10 @@ import { VentasConfigController } from './ventas-config.controller';
 import { VentasAnaliticaController } from './ventas-analitica.controller';
 import { VentasOportunidadesController } from './ventas-oportunidades.controller';
 import { VentasAcuerdosController } from './ventas-acuerdos.controller';
+import { CotizadorCatalogoService } from './cotizador-catalogo.service';
+import { CotizadorCatalogoController } from './cotizador-catalogo.controller';
+import { CotizadorCotizacionesService } from './cotizador-cotizaciones.service';
+import { CotizadorCotizacionesController } from './cotizador-cotizaciones.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { PersonalModule } from '../personal/personal.module';
 import { PermissionsModule } from '../permissions/permissions.module';
@@ -55,6 +59,8 @@ import { MailModule } from '../mail/mail.module';
     VentasConversionesController,
     VentasConversionesCronController,
     VentasConfigController,
+    CotizadorCatalogoController,
+    CotizadorCotizacionesController,
   ],
   providers: [
     VentasService,
@@ -72,6 +78,8 @@ import { MailModule } from '../mail/mail.module';
     VentasConversionesService,
     GoogleAdsConversionesService,
     VentasConfigService,
+    CotizadorCatalogoService,
+    CotizadorCotizacionesService,
   ],
   exports: [
     VentasExpedienteService,

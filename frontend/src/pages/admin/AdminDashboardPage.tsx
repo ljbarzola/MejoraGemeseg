@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   getUsers,
@@ -12,6 +12,7 @@ import {
 } from '../../services/user.service';
 import { getProjects } from '../../services/project.service';
 import type { AdminUser, UserStats, AdminProjectStats, CompanyLocation } from '../../services/user.service';
+import { errorTelefono } from '../../utils/telefono';
 import type { Project } from '../../types/project';
 import { getUser } from '../../services/auth.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
@@ -74,9 +75,15 @@ export default function AdminDashboardPage() {
     role: 'EMPLOYEE' as string,
     documentNumber: '',
     position: '',
+    phone: '',
     locationId: null as number | null,
   });
   const [formError, setFormError] = useState('');
+  const formErrorRef = useRef<HTMLDivElement>(null);
+  // El formulario es un modal con scroll: si el aviso sale arriba y la persona ya bajó, que lo vea.
+  useEffect(() => {
+    if (formError) formErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [formError]);
   const [formLoading, setFormLoading] = useState(false);
   const [confirmandoDesactivar, setConfirmandoDesactivar] = useState<{ id: number; name: string } | null>(null);
   const [showAddLocation, setShowAddLocation] = useState(false);
@@ -152,6 +159,7 @@ export default function AdminDashboardPage() {
       email: (u) => u.email,
       role: (u) => ROLE_LABELS[u.role] || u.role,
       position: (u) => u.position,
+      phone: (u) => u.phone,
       location: (u) => u.location?.nombre,
       isActive: (u) => (u.isActive ? 1 : 0),
       proyectos: (u) => u._count.createdProjects + u._count.projectMemberships,
@@ -168,6 +176,7 @@ export default function AdminDashboardPage() {
       role: 'EMPLOYEE',
       documentNumber: '',
       position: '',
+      phone: '',
       locationId: null,
     });
     setFormError('');
@@ -185,6 +194,7 @@ export default function AdminDashboardPage() {
       role: user.role,
       documentNumber: user.documentNumber || '',
       position: user.position || '',
+      phone: user.phone || '',
       locationId: user.location?.id ?? null,
     });
     setFormError('');
@@ -223,6 +233,11 @@ export default function AdminDashboardPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
+    const errTel = errorTelefono(formData.phone);
+    if (errTel) {
+      setFormError(errTel);
+      return;
+    }
     setFormLoading(true);
     try {
       if (editingUser) {
@@ -232,6 +247,7 @@ export default function AdminDashboardPage() {
           role: formData.role,
           documentNumber: formData.documentNumber || null,
           position: formData.position || null,
+          phone: formData.phone.trim() || null,
           locationId: formData.locationId,
         };
         await updateUser(editingUser.id, data);
@@ -248,6 +264,7 @@ export default function AdminDashboardPage() {
           role: formData.role,
           documentNumber: formData.documentNumber || undefined,
           position: formData.position || undefined,
+          phone: formData.phone.trim() || undefined,
         });
       }
       setShowForm(false);
@@ -401,6 +418,7 @@ export default function AdminDashboardPage() {
                     <th {...thProps('email')}>Email <SortIcon campo="email" /></th>
                     <th {...thProps('role')}>Rol sistema <SortIcon campo="role" /></th>
                     <th {...thProps('position')}>Cargo <SortIcon campo="position" /></th>
+                    <th {...thProps('phone')}>Teléfono <SortIcon campo="phone" /></th>
                     <th {...thProps('location')}>Ubicación <SortIcon campo="location" /></th>
                     <th {...thProps('isActive')}>Estado <SortIcon campo="isActive" /></th>
                     <th {...thProps('proyectos')}>Proyectos <SortIcon campo="proyectos" /></th>
@@ -421,6 +439,7 @@ export default function AdminDashboardPage() {
                         </span>
                       </td>
                       <td>{u.position || '—'}</td>
+                      <td>{u.phone || '—'}</td>
                       <td>{u.location?.nombre || '—'}</td>
                       <td>
                         <span
@@ -573,7 +592,7 @@ export default function AdminDashboardPage() {
               <button className="modal-close" onClick={() => setShowForm(false)}>✕</button>
             </div>
             <div className="modal-body">
-              {formError && <div className="auth-error-banner">{formError}</div>}
+              {formError && <div className="auth-error-banner" ref={formErrorRef}>{formError}</div>}
               <form onSubmit={handleSubmit} className="auth-form">
                 <div className="form-group">
                   <label>Nombre completo *</label>
@@ -626,6 +645,16 @@ export default function AdminDashboardPage() {
                       placeholder="Ej: Analista"
                     />
                   </div>
+                </div>
+                <div className="form-group">
+                  <label>Teléfono</label>
+                  <input
+                    type="tel"
+                    value={formData.phone}
+                    maxLength={25}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="Ej: +593 99 897 4909"
+                  />
                 </div>
                 <div className="form-group">
                   <label>Documento de identidad</label>
