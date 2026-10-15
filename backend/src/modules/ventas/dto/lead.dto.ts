@@ -3,6 +3,7 @@ import {
   IsArray,
   IsBoolean,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   ValidateNested,
@@ -17,9 +18,11 @@ export class CreateLeadDto {
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsString() companyName?: string;
   @IsOptional() @IsString() message?: string;
-  // MANUAL o EMAIL (los demás canales entran solos por sus conexiones).
+  // Fuente obligatoria: una clave del registro de canales (lead-canales.const.ts).
   @IsOptional() @IsString() channel?: string;
   @IsOptional() @IsString() campaign?: string;
+  // Datos propios de la fuente elegida (gclid, quién refirió, landing...).
+  @IsOptional() @IsObject() extra?: Record<string, string>;
 }
 
 export class UpdateLeadDto {

@@ -13,14 +13,17 @@ import { VentasMotivosService, type MotivoInput } from './ventas-motivos.service
 import { VentasOportunidadesService } from './ventas-oportunidades.service';
 import { VentasSchemaService } from './ventas-schema.service';
 import {
-  CANALES_LEAD,
-  ETIQUETA_CANAL,
   MOTIVOS_CONTACTO,
   normalizarCorreo,
   normalizarTelefono,
   sugerirMotivoContacto,
-  type CanalLead,
 } from './lead-triage.util';
+import {
+  CANALES_REGISTRO,
+  ETIQUETA_CANAL,
+  canalDef,
+  type CanalLead,
+} from './lead-canales.const';
 import { sugerirServicios } from './lead-atribucion.util';
 import { ensureDefaultServices } from './ventas-servicios.util';
 
@@ -350,14 +353,47 @@ export class VentasLeadsService {
       message?: string;
       channel?: string;
       campaign?: string;
+      extra?: Record<string, string>;
     },
   ) {
     const cid = this.requireCompany(companyId);
-    const canal = (CANALES_LEAD as readonly string[]).includes(dto.channel ?? '')
-      ? (dto.channel as CanalLead)
-      : 'MANUAL';
-    const r = await this.ingresar(cid, { ...dto, channel: canal, createdBy: userId });
+    // La fuente es obligatoria: sin ella no se sabría de dónde vienen los leads
+    // ni cuáles terminan en venta.
+    const canal = canalDef(dto.channel);
+    if (!canal) {
+      throw new BadRequestException(
+        'Elige cómo llegó el lead (Google Ads, Referido, WhatsApp, llamada…).',
+      );
+    }
+    // Solo se guardan los datos propios que ese canal declara en el registro.
+    const extra: Record<string, unknown> = {};
+    for (const campo of canal.campos) {
+      if (campo.key === 'campaign') continue;
+      const valor = recortar(dto.extra?.[campo.key], 300);
+      if (valor) extra[campo.key] = valor;
+    }
+    const r = await this.ingresar(cid, {
+      name: dto.name,
+      email: dto.email,
+      phone: dto.phone,
+      companyName: dto.companyName,
+      message: dto.message,
+      campaign: dto.campaign,
+      channel: canal.key,
+      extra,
+      createdBy: userId,
+    });
     return this.get(cid, r.lead.id);
+  }
+
+  // Lista de canales para el frontend (filtro, «Nuevo lead», etiquetas).
+  canales() {
+    return CANALES_REGISTRO.map((c) => ({
+      key: c.key,
+      label: c.label,
+      grupo: c.grupo,
+      campos: c.campos,
+    }));
   }
 
   async actualizar(
@@ -544,7 +580,7 @@ export class VentasLeadsService {
             ruc,
             observaciones: lead.message ? lead.message.slice(0, MAX_MENSAJE) : null,
             extra: {
-              fuente: lead.channel === 'GOOGLE_ADS' || lead.channel === 'META_ADS' ? 'CAMPANA' : 'OTRO',
+              fuente: canalDef(lead.channel)?.fuenteCliente ?? 'OTRO',
             },
             status: inicial?.key ?? null,
           },

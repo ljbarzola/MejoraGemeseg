@@ -21,15 +21,18 @@ import {
   soltarLeadEntrante,
   descartarLeadEntrante,
   getServicios,
-  CANAL_LEAD_LABEL,
   MOTIVO_CONTACTO_LABEL,
+  type CanalLeadDef,
   type LeadEntrante,
   type MotivoContacto,
   type SalesServicio,
 } from '../../services/ventas.service';
+import { useCanalesLead } from '../../hooks/useCanalesLead';
 import { diaCorto } from '../../utils/contratoComercial';
 
-// Columnas elegibles (además de Contacto y Acciones, que son fijas).
+// Columnas elegibles (además de Contacto y Acciones, que son fijas). Las
+// últimas son datos propios de cada fuente (campaña, gclid, landing, quién
+// refirió): al filtrar por una fuente se muestran solas las que ella usa.
 const COLUMNAS_LEAD = [
   { key: 'mensaje', label: 'Mensaje' },
   { key: 'canal', label: 'Canal' },
@@ -39,10 +42,24 @@ const COLUMNAS_LEAD = [
   { key: 'llego', label: 'Llegó' },
   { key: 'campana', label: 'Campaña' },
   { key: 'servicio', label: 'Servicio pedido' },
+  { key: 'landing', label: 'Landing' },
+  { key: 'gclid', label: 'gclid (Google)' },
+  { key: 'referidoPor', label: 'Referido por' },
+  { key: 'consentimiento', label: 'Consentimiento de datos' },
 ];
 const COLUMNAS_LEAD_POR_DEFECTO = ['mensaje', 'canal', 'motivo', 'estado', 'responsable', 'llego'];
 const ANCHO_COLUMNA_LEAD: Record<string, number> = {
   mensaje: 220, canal: 130, motivo: 170, estado: 150, responsable: 140, llego: 110, campana: 150, servicio: 150,
+  landing: 150, gclid: 170, referidoPor: 150, consentimiento: 150,
+};
+// Qué columna corresponde a cada dato propio de una fuente.
+const COLUMNA_DE_CAMPO: Record<string, string> = {
+  campaign: 'campana', gclid: 'gclid', landing: 'landing', referidoPor: 'referidoPor',
+};
+
+const extraTexto = (l: LeadEntrante, clave: string): string => {
+  const v = (l.extra as Record<string, unknown> | null | undefined)?.[clave];
+  return typeof v === 'string' ? v : '';
 };
 
 const ESTADO_LABEL: Record<LeadEntrante['status'], string> = {
@@ -73,6 +90,7 @@ export default function LeadsPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const usuario = getUser();
+  const { canales, etiquetaCanal } = useCanalesLead();
   const [leads, setLeads] = useState<LeadEntrante[]>([]);
   const [servicios, setServicios] = useState<SalesServicio[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -86,7 +104,16 @@ export default function LeadsPage() {
   const [descartando, setDescartando] = useState<LeadEntrante | null>(null);
   // Columnas que cada persona elige ver (preferencia en su cuenta).
   const columnPrefs = useColumnPreferences('ventas-leads', COLUMNAS_LEAD_POR_DEFECTO);
-  const tablaRef = useResizableColumns('ventas-leads', ['contacto', ...columnPrefs.visible, 'acciones']);
+  // Al filtrar por una fuente se suman las columnas con los datos propios de
+  // esa fuente (p. ej. gclid en Google Ads), aunque no las haya elegido.
+  const columnasVisiblesLead = useMemo(() => {
+    const elegidas = columnPrefs.visible.filter((k) => COLUMNAS_LEAD.some((c) => c.key === k));
+    const propias = (canales.find((c) => c.key === canal)?.campos ?? [])
+      .map((c) => COLUMNA_DE_CAMPO[c.key])
+      .filter((k): k is string => !!k && !elegidas.includes(k));
+    return [...elegidas, ...propias];
+  }, [columnPrefs.visible, canales, canal]);
+  const tablaRef = useResizableColumns('ventas-leads', ['contacto', ...columnasVisiblesLead, 'acciones']);
 
   const cargar = async () => {
     try {
@@ -101,13 +128,13 @@ export default function LeadsPage() {
   };
   useEffect(() => { cargar(); }, []);
 
-  const filtrados = useMemo(() => {
+  // Todo menos la fuente: de aquí salen los totales por fuente del resumen.
+  const sinFiltroDeFuente = useMemo(() => {
     const q = busqueda.toLowerCase().trim();
     return leads.filter((l) => {
       if (estado === 'pendientes' && (l.status === 'CONVERTIDO' || l.status === 'DESCARTADO')) return false;
       if (estado && estado !== 'pendientes' && l.status !== estado) return false;
       if (motivo === 'SIN_CLASIFICAR' ? !!l.contactReason : motivo && l.contactReason !== motivo) return false;
-      if (canal && l.channel !== canal) return false;
       if (!q) return true;
       return (
         l.name.toLowerCase().includes(q) ||
@@ -117,20 +144,33 @@ export default function LeadsPage() {
         (l.message || '').toLowerCase().includes(q)
       );
     });
-  }, [leads, busqueda, estado, motivo, canal]);
+  }, [leads, busqueda, estado, motivo]);
+  const filtrados = useMemo(
+    () => (canal ? sinFiltroDeFuente.filter((l) => l.channel === canal) : sinFiltroDeFuente),
+    [sinFiltroDeFuente, canal],
+  );
+  const totalesPorFuente = useMemo(() => {
+    const t = new Map<string, number>();
+    for (const l of sinFiltroDeFuente) t.set(l.channel, (t.get(l.channel) ?? 0) + 1);
+    return t;
+  }, [sinFiltroDeFuente]);
 
   const { filas, thProps, SortIcon } = useSortableTable(
     filtrados,
     {
       contacto: (l) => l.name,
-      canal: (l) => CANAL_LEAD_LABEL[l.channel] ?? l.channel,
+      canal: (l) => etiquetaCanal(l.channel),
       motivo: (l) => (l.contactReason ? MOTIVO_CONTACTO_LABEL[l.contactReason] : ''),
       estado: (l) => ESTADO_LABEL[l.status],
       responsable: (l) => l.assignedUserName,
       llego: (l) => l.createdAt,
       mensaje: (l) => l.message,
       campana: (l) => l.campaign,
-      servicio: (l) => String((l.extra as Record<string, unknown> | null | undefined)?.servicio ?? ''),
+      servicio: (l) => extraTexto(l, 'servicio'),
+      landing: (l) => extraTexto(l, 'landing'),
+      gclid: (l) => extraTexto(l, 'gclid'),
+      referidoPor: (l) => extraTexto(l, 'referidoPor'),
+      consentimiento: (l) => extraTexto(l, 'consentimiento'),
     },
     'llego',
     'desc',
@@ -147,7 +187,7 @@ export default function LeadsPage() {
       case 'canal':
         return (
           <>
-            {CANAL_LEAD_LABEL[l.channel] ?? l.channel}
+            {etiquetaCanal(l.channel)}
             {l.campaign && <div style={{ fontSize: 11, color: '#888' }}>{l.campaign}</div>}
             {origenLanding(l) && <div style={{ fontSize: 11, color: '#a0aec0' }}>{origenLanding(l)}</div>}
           </>
@@ -200,12 +240,24 @@ export default function LeadsPage() {
       case 'campana':
         return l.campaign || '—';
       case 'servicio':
-        return String((l.extra as Record<string, unknown> | null | undefined)?.servicio ?? '') || '—';
+        return extraTexto(l, 'servicio') || '—';
+      case 'landing':
+        return extraTexto(l, 'landing') || '—';
+      case 'gclid':
+        return extraTexto(l, 'gclid')
+          ? <span title={extraTexto(l, 'gclid')} className="truncate" style={{ display: 'block', fontSize: 11 }}>{extraTexto(l, 'gclid')}</span>
+          : '—';
+      case 'referidoPor':
+        return extraTexto(l, 'referidoPor') || '—';
+      case 'consentimiento': {
+        const c = extraTexto(l, 'consentimiento');
+        if (!c) return '—';
+        return c === 'SI' ? (extraTexto(l, 'politica') ? `Sí (${extraTexto(l, 'politica')})` : 'Sí') : 'No consta';
+      }
       default:
         return null;
     }
   };
-  const columnasVisiblesLead = columnPrefs.visible.filter((k) => COLUMNAS_LEAD.some((c) => c.key === k));
 
   const correr = async (fn: () => Promise<unknown>, ok: string, falla: string) => {
     try {
@@ -267,6 +319,16 @@ export default function LeadsPage() {
         Contactos que llegan por la web, los anuncios o a mano. Clasifícalos: solo uno de servicio pasa a oportunidad. {sinClasificar > 0 && <strong>{sinClasificar} sin clasificar.</strong>}
       </p>
 
+      {leads.length > 0 && (
+        <ResumenPorFuente
+          canales={canales}
+          totales={totalesPorFuente}
+          total={sinFiltroDeFuente.length}
+          activa={canal}
+          onElegir={setCanal}
+        />
+      )}
+
       <div className="filter-bar">
         <div className="filter-bar-fields filter-bar-fields--una-linea">
           <input
@@ -289,8 +351,8 @@ export default function LeadsPage() {
             {(Object.keys(MOTIVO_CONTACTO_LABEL) as MotivoContacto[]).map((k) => <option key={k} value={k}>{MOTIVO_CONTACTO_LABEL[k]}</option>)}
           </select>
           <select className="filter-select" value={canal} onChange={(e) => setCanal(e.target.value)} aria-label="Canal">
-            <option value="">Todos los canales</option>
-            {Object.entries(CANAL_LEAD_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            <option value="">Todas las fuentes</option>
+            {canales.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
         </div>
         <div className="filter-bar-actions">
@@ -422,6 +484,47 @@ export default function LeadsPage() {
   );
 }
 
+// Totales por fuente, de un vistazo. Cada tarjeta filtra la tabla por esa
+// fuente; respeta los demás filtros (estado, motivo, búsqueda). Solo salen las
+// fuentes que tienen leads (y la elegida), así una fuente que nadie usa no estorba.
+function ResumenPorFuente({
+  canales, totales, total, activa, onElegir,
+}: {
+  canales: CanalLeadDef[];
+  totales: Map<string, number>;
+  total: number;
+  activa: string;
+  onElegir: (key: string) => void;
+}) {
+  const conocidas = new Set(canales.map((c) => c.key));
+  // Un canal que ya no esté en el registro sigue contando, con su clave.
+  const desconocidas = [...totales.keys()].filter((k) => !conocidas.has(k));
+  const tarjetas = [
+    ...canales.filter((c) => (totales.get(c.key) ?? 0) > 0 || c.key === activa),
+    ...desconocidas.map((k) => ({ key: k, label: k })),
+  ];
+  const estilo = (seleccionada: boolean) => ({
+    display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-start', gap: 2,
+    padding: '8px 14px', borderRadius: 10, cursor: 'pointer', minWidth: 110, font: 'inherit',
+    border: seleccionada ? '2px solid #2b6cb0' : '1px solid #e2e8f0',
+    background: seleccionada ? '#ebf4ff' : '#fff',
+  });
+  return (
+    <div role="group" aria-label="Leads por fuente" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 14px' }}>
+      <button type="button" style={estilo(!activa)} onClick={() => onElegir('')} aria-pressed={!activa}>
+        <span style={{ fontSize: 22, fontWeight: 700, color: '#1a202c' }}>{total}</span>
+        <span style={{ fontSize: 12, color: '#4a5568' }}>Todas las fuentes</span>
+      </button>
+      {tarjetas.map((c) => (
+        <button key={c.key} type="button" style={estilo(activa === c.key)} onClick={() => onElegir(activa === c.key ? '' : c.key)} aria-pressed={activa === c.key}>
+          <span style={{ fontSize: 22, fontWeight: 700, color: '#1a202c' }}>{totales.get(c.key) ?? 0}</span>
+          <span style={{ fontSize: 12, color: '#4a5568' }}>{c.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // «Landing: monitoreo · Servicio pedido: Alarmas», si la landing los mandó.
 function origenLanding(l: LeadEntrante): string {
   const e = l.extra || {};
@@ -430,22 +533,42 @@ function origenLanding(l: LeadEntrante): string {
   return [landing && `Landing: ${landing}`, servicio && `Servicio pedido: ${servicio}`].filter(Boolean).join(' · ');
 }
 
-// Ingreso manual de un lead (una llamada, un correo, un lead de Meta que aún no
-// entra solo).
+const GRUPO_CANAL_LABEL: Record<CanalLeadDef['grupo'], string> = {
+  ANUNCIO: 'Anuncios pagados',
+  WEB: 'Sitio web',
+  DIRECTO: 'Contacto directo',
+};
+
+// Ingreso manual de un lead (una llamada, un referido, un lead de Meta que aún
+// no entra solo). La fuente es obligatoria: sin ella no se sabría de dónde
+// vienen los leads ni cuáles terminan en venta. Al elegirla aparecen solo los
+// datos propios de esa fuente.
 function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [datos, setDatos] = useState({ name: '', email: '', phone: '', companyName: '', message: '', channel: 'MANUAL', campaign: '' });
+  const { canales } = useCanalesLead();
+  const [datos, setDatos] = useState({ name: '', email: '', phone: '', companyName: '', message: '', channel: '' });
+  const [propios, setPropios] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
   const set = (k: keyof typeof datos, v: string) => setDatos((d) => ({ ...d, [k]: v }));
+  const canalElegido = canales.find((c) => c.key === datos.channel);
+
+  const elegirFuente = (key: string) => {
+    set('channel', key);
+    setPropios({});
+  };
 
   const guardar = async () => {
     setError('');
+    if (!datos.channel) {
+      return setError('Elige cómo llegó el lead (Google Ads, Referido, WhatsApp, llamada…).');
+    }
     if (!datos.name.trim() && !datos.email.trim() && !datos.phone.trim()) {
       return setError('Escribe al menos un nombre, un correo o un teléfono.');
     }
     setGuardando(true);
     try {
-      await createLeadEntrante(datos);
+      const { campaign, ...extra } = propios;
+      await createLeadEntrante({ ...datos, campaign, extra });
       onSaved();
     } catch (err: any) {
       const msg = err?.response?.data?.message;
@@ -470,20 +593,32 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
             <div className="form-group"><label>Teléfono</label><input type="text" value={datos.phone} onChange={(e) => set('phone', e.target.value)} /></div>
           </div>
           <div className="form-group"><label>Empresa</label><input type="text" value={datos.companyName} maxLength={150} onChange={(e) => set('companyName', e.target.value)} /></div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Cómo llegó</label>
-              <select value={datos.channel} onChange={(e) => set('channel', e.target.value)}>
-                <option value="MANUAL">Ingreso manual</option>
-                <option value="EMAIL">Correo</option>
-                <option value="META_ADS">Meta Ads</option>
-                <option value="GOOGLE_ADS">Google Ads</option>
-                <option value="LINKEDIN_ADS">LinkedIn Ads</option>
-                <option value="WEB_FORM">Formulario web</option>
-              </select>
-            </div>
-            <div className="form-group"><label>Campaña (opcional)</label><input type="text" value={datos.campaign} maxLength={150} onChange={(e) => set('campaign', e.target.value)} /></div>
+          <div className="form-group">
+            <label>Fuente: cómo llegó *</label>
+            <select value={datos.channel} onChange={(e) => elegirFuente(e.target.value)} aria-required="true">
+              <option value="">Elige una fuente…</option>
+              {(['ANUNCIO', 'WEB', 'DIRECTO'] as const).map((g) => {
+                const delGrupo = canales.filter((c) => c.grupo === g);
+                return delGrupo.length === 0 ? null : (
+                  <optgroup key={g} label={GRUPO_CANAL_LABEL[g]}>
+                    {delGrupo.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+                  </optgroup>
+                );
+              })}
+            </select>
           </div>
+          {canalElegido && canalElegido.campos.length > 0 && (
+            <div className="form-row">
+              {canalElegido.campos.map((campo) => (
+                <div className="form-group" key={campo.key}>
+                  <label>{campo.label} (opcional)</label>
+                  <input type="text" value={propios[campo.key] ?? ''} maxLength={campo.key === 'campaign' ? 150 : 300}
+                    onChange={(e) => setPropios((p) => ({ ...p, [campo.key]: e.target.value }))} />
+                  {campo.ayuda && <small style={{ color: '#718096' }}>{campo.ayuda}</small>}
+                </div>
+              ))}
+            </div>
+          )}
           <div className="form-group"><label>Qué pidió o escribió</label><textarea className="form-textarea" rows={3} maxLength={2000} value={datos.message} onChange={(e) => set('message', e.target.value)} /></div>
         </div>
         <div className="modal-actions">

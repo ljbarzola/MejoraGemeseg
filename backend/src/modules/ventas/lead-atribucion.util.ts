@@ -1,4 +1,4 @@
-import type { CanalLead } from './lead-triage.util';
+import { CANALES_REGISTRO, CLIC_IDS, type CanalLead } from './lead-canales.const';
 
 // Atribución y servicio de un lead que llega desde una landing (2026-10-08).
 // Son funciones puras: la atribución decide el CANAL con lo que el sitio mande
@@ -12,13 +12,9 @@ const sinTildes = (s: string) =>
     .toLowerCase()
     .trim();
 
-export interface Atribucion {
-  utm_source?: string | null;
-  utm_medium?: string | null;
-  gclid?: string | null;
-  fbclid?: string | null;
-  li_fat_id?: string | null;
-}
+// Los parámetros que reconoce son los del registro de canales
+// (lead-canales.const.ts): un canal nuevo se reconoce sin tocar esta función.
+export type Atribucion = Record<string, string | null | undefined>;
 
 const lleno = (v: string | null | undefined) => !!(v ?? '').toString().trim();
 
@@ -26,17 +22,21 @@ const lleno = (v: string | null | undefined) => !!(v ?? '').toString().trim();
 // utm_source que el anuncio tenga configurado; sin nada es el formulario web
 // común (visita directa, búsqueda orgánica, enlace en redes sin etiquetar).
 export function atribuirCanal(a: Atribucion): CanalLead {
-  if (lleno(a.gclid)) return 'GOOGLE_ADS';
-  if (lleno(a.fbclid)) return 'META_ADS';
-  if (lleno(a.li_fat_id)) return 'LINKEDIN_ADS';
+  for (const c of CANALES_REGISTRO) {
+    if (c.clicId && lleno(a[c.clicId])) return c.key;
+  }
   const fuente = sinTildes((a.utm_source ?? '').toString());
   const medio = sinTildes((a.utm_medium ?? '').toString());
   const pagado = ['cpc', 'ppc', 'paid', 'paidsocial', 'paid_social', 'display'].some(
     (m) => medio.includes(m),
   );
-  if (fuente.includes('google') && (pagado || medio === '')) return 'GOOGLE_ADS';
-  if (['facebook', 'instagram', 'meta', 'fb', 'ig'].includes(fuente)) return 'META_ADS';
-  if (fuente.includes('linkedin')) return 'LINKEDIN_ADS';
+  for (const c of CANALES_REGISTRO) {
+    if (!c.utmSources?.some((s) => (c.utmParcial ? fuente.includes(s) : fuente === s))) {
+      continue;
+    }
+    if (c.utmExigeNoOrganico && !(pagado || medio === '')) continue;
+    return c.key;
+  }
   return 'WEB_FORM';
 }
 
@@ -78,16 +78,17 @@ export function sugerirServicios(
 
 // Campos de atribución que el sitio puede mandar (todos opcionales). Se
 // guardan en `SalesLead.extra`. Devuelve solo los que traen valor.
-export const CAMPOS_ATRIBUCION = [
+export const CAMPOS_ATRIBUCION: string[] = [
   'utm_source',
   'utm_medium',
   'utm_campaign',
   'utm_term',
   'utm_content',
-  'gclid',
-  'fbclid',
-  'li_fat_id',
-] as const;
+  ...CLIC_IDS,
+  // Variantes del clic de Google en iOS (se guardan; no deciden el canal).
+  'gbraid',
+  'wbraid',
+];
 
 export function extraerAtribucion(body: Record<string, unknown> | null | undefined) {
   const salida: Record<string, string> = {};

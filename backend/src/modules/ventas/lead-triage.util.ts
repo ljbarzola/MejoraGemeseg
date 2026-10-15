@@ -20,25 +20,8 @@ export const ETIQUETA_MOTIVO_CONTACTO: Record<MotivoContacto, string> = {
   SPAM: 'Spam',
 };
 
-// Canales de entrada.
-export const CANALES_LEAD = [
-  'WEB_FORM',
-  'GOOGLE_ADS',
-  'META_ADS',
-  'LINKEDIN_ADS',
-  'EMAIL',
-  'MANUAL',
-] as const;
-export type CanalLead = (typeof CANALES_LEAD)[number];
-
-export const ETIQUETA_CANAL: Record<CanalLead, string> = {
-  WEB_FORM: 'Formulario web',
-  GOOGLE_ADS: 'Google Ads',
-  META_ADS: 'Meta Ads',
-  LINKEDIN_ADS: 'LinkedIn Ads',
-  EMAIL: 'Correo',
-  MANUAL: 'Ingreso manual',
-};
+// Los canales de entrada viven en un solo registro (lead-canales.const.ts).
+export { CANALES_LEAD, ETIQUETA_CANAL, type CanalLead } from './lead-canales.const';
 
 const sinTildes = (s: string) =>
   s

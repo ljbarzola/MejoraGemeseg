@@ -46,6 +46,13 @@ export class VentasLeadsController {
     });
   }
 
+  // Antes de `:id`, para que «canales» no se lea como un número.
+  @Get('canales')
+  @Section('VENTAS', 'view')
+  canales() {
+    return this.leads.canales();
+  }
+
   @Post()
   @Section('VENTAS', 'write')
   create(@Req() req: any, @Body() dto: CreateLeadDto) {

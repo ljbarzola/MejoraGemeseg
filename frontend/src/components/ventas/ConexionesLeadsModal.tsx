@@ -8,53 +8,71 @@ import {
   createClaveConexion,
   deleteClaveConexion,
   getAnaliticaMarketing,
+  getResumenConversiones,
   type ClaveConexion,
   type FilaEmbudoMarketing,
+  type ResumenConversiones,
 } from '../../services/ventas.service';
 
 const isoDia = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 // Ejemplos de referencia para quien mantiene la web: solo se muestran como texto.
 const EJEMPLO_JSON = `{
-  "name": "Ana Torres",
-  "email": "ana@empresa.com",
-  "phone": "0991234567",
-  "message": "Necesito cotizar guardias para mi bodega",
-  "servicio": "Monitoreo",
-  "landing": "monitoreo",
+  "nombre": "Ana Torres",
+  "correo": "ana@empresa.com",
+  "telefono": "0991234567",
+  "necesidad": "Necesito instalar un sistema de alarma",
+  "mensaje": "Vivienda familiar, zona norte",
+  "consentimiento": "Sí (Política 2026-10)",
+  "landing": "monitoreo-alarmas",
   "utm_source": "google",
   "utm_medium": "cpc",
   "utm_campaign": "monitoreo-quito",
-  "gclid": "Cj0KCQ...",
-  "pageUrl": "https://gemeseg.com/monitoreo/"
+  "gclid": "Cj0KCQ..."
 }`;
 
-const EJEMPLO_PHP = `// Dentro de la acción gemeseg_landing_lead (servidor de WordPress)
-$cuerpo = array(
-  'name'         => sanitize_text_field( $_POST['name'] ?? '' ),
-  'email'        => sanitize_email( $_POST['email'] ?? '' ),
-  'phone'        => sanitize_text_field( $_POST['phone'] ?? '' ),
-  'message'      => sanitize_textarea_field( $_POST['message'] ?? '' ),
-  'servicio'     => sanitize_text_field( $_POST['servicio'] ?? '' ),
-  'landing'      => sanitize_text_field( $_POST['landing'] ?? '' ),
-  'utm_source'   => sanitize_text_field( $_POST['utm_source'] ?? '' ),
-  'utm_medium'   => sanitize_text_field( $_POST['utm_medium'] ?? '' ),
-  'utm_campaign' => sanitize_text_field( $_POST['utm_campaign'] ?? '' ),
-  'gclid'        => sanitize_text_field( $_POST['gclid'] ?? '' ),
-  'fbclid'       => sanitize_text_field( $_POST['fbclid'] ?? '' ),
-  'li_fat_id'    => sanitize_text_field( $_POST['li_fat_id'] ?? '' ),
-  'pageUrl'      => esc_url_raw( $_POST['pageUrl'] ?? '' ),
-);
-wp_remote_post( 'URL_DEL_CRM/api/ventas/webhook/entrante', array(
-  'headers' => array( 'Content-Type' => 'application/json', 'X-API-KEY' => GEMESEG_CRM_KEY ),
-  'body'    => wp_json_encode( $cuerpo ),
-  'timeout' => 10,
-) );`;
+// Va dentro de la acción gemeseg_landing_lead, DESPUÉS de lo que ya hace hoy
+// (guardar y mandar el correo). Si el CRM no responde, solo deja un aviso en el
+// registro de errores: nunca debe impedir que el formulario se dé por enviado.
+// Los campos son los mismos que manda la landing.
+const EJEMPLO_PHP = `// En wp-config.php (una sola vez):
+// define( 'GEMESEG_CRM_URL', 'https://TU-DOMINIO/api/ventas/webhook/entrante' );
+// define( 'GEMESEG_CRM_KEY', 'la_clave_de_la_conexion' );
+
+function gemeseg_enviar_lead_al_crm() {
+  if ( ! defined( 'GEMESEG_CRM_URL' ) || ! defined( 'GEMESEG_CRM_KEY' ) ) { return; }
+  $campo = function ( $k ) { return isset( $_POST[ $k ] ) ? wp_unslash( $_POST[ $k ] ) : ''; };
+  $cuerpo = array(
+    'nombre'         => sanitize_text_field( $campo( 'nombre' ) ),
+    'telefono'       => sanitize_text_field( $campo( 'telefono' ) ),
+    'correo'         => sanitize_email( $campo( 'correo' ) ),
+    'necesidad'      => sanitize_text_field( $campo( 'necesidad' ) ),
+    'mensaje'        => sanitize_textarea_field( $campo( 'mensaje' ) ),
+    'consentimiento' => sanitize_text_field( $campo( 'consentimiento' ) ),
+    'landing'        => sanitize_title( $campo( 'landing' ) ),
+    'utm_source'     => sanitize_text_field( $campo( 'utm_source' ) ),
+    'utm_medium'     => sanitize_text_field( $campo( 'utm_medium' ) ),
+    'utm_campaign'   => sanitize_text_field( $campo( 'utm_campaign' ) ),
+    'utm_content'    => sanitize_text_field( $campo( 'utm_content' ) ),
+    'utm_term'       => sanitize_text_field( $campo( 'utm_term' ) ),
+    'gclid'          => sanitize_text_field( $campo( 'gclid' ) ),
+    'fbclid'         => sanitize_text_field( $campo( 'fbclid' ) ),
+    'pageUrl'        => esc_url_raw( (string) wp_get_referer() ),
+  );
+  $r = wp_remote_post( GEMESEG_CRM_URL, array(
+    'headers' => array( 'Content-Type' => 'application/json', 'X-API-KEY' => GEMESEG_CRM_KEY ),
+    'body'    => wp_json_encode( $cuerpo ),
+    'timeout' => 12,
+  ) );
+  if ( is_wp_error( $r ) || wp_remote_retrieve_response_code( $r ) >= 300 ) {
+    error_log( 'Gemeseg CRM: no se pudo enviar el lead' );
+  }
+}`;
 
 const CANALES = [
   { nombre: 'Formulario web', estado: 'Activo', activo: true },
-  { nombre: 'Google Ads', estado: 'Activo', activo: true },
-  { nombre: 'Meta Ads', estado: 'Pendiente de conectar', activo: false },
+  { nombre: 'Google Ads (formulario del anuncio)', estado: 'Activo', activo: true },
+  { nombre: 'Meta Ads', estado: 'Ingreso manual por ahora', activo: false },
   { nombre: 'LinkedIn Ads', estado: 'Próximamente', activo: false },
 ];
 
@@ -73,6 +91,7 @@ export default function ConexionesLeadsModal({ onClose }: { onClose: () => void 
   const [verClave, setVerClave] = useState<number | null>(null);
   // null = no se pudo leer: la sección se oculta sin mostrar el error.
   const [landings, setLandings] = useState<FilaEmbudoMarketing[] | null>(null);
+  const [conversiones, setConversiones] = useState<ResumenConversiones | null>(null);
 
   const origen = window.location.origin;
   const urlWeb = `${origen}/api/ventas/webhook/entrante`;
@@ -95,6 +114,7 @@ export default function ConexionesLeadsModal({ onClose }: { onClose: () => void 
     getAnaliticaMarketing({ agrupar: 'landing', desde: isoDia(hace), hasta: isoDia(hoy) })
       .then((r) => setLandings(r.filas))
       .catch(() => setLandings(null));
+    getResumenConversiones().then(setConversiones).catch(() => setConversiones(null));
   }, []);
 
   const crear = async () => {
@@ -160,6 +180,31 @@ export default function ConexionesLeadsModal({ onClose }: { onClose: () => void 
                       <span style={{ color: '#4a5568' }}>{f.leads} {f.leads === 1 ? 'lead' : 'leads'}</span>
                     </div>
                   ))
+                )}
+              </div>
+            </>
+          )}
+
+          {conversiones && (
+            <>
+              <h4 style={{ margin: '14px 0 8px' }}>Aviso a Google Ads</h4>
+              <div style={caja}>
+                <p style={{ margin: '0 0 6px', fontSize: 13 }}>
+                  Cuando un lead que llegó de un anuncio (trae <span style={codigo}>gclid</span>) pasa a <strong>Cotizada</strong> o a <strong>Aceptada</strong>, el CRM lo deja registrado para decirle a Google qué anuncios traen gente que sí compra.
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 13 }}>
+                  <span><strong>{conversiones.porTipo.CUALIFICADO ?? 0}</strong> cotizaron</span>
+                  <span><strong>{conversiones.porTipo.CONVERTIDO ?? 0}</strong> contrataron</span>
+                  <span style={{ color: '#718096' }}>
+                    Por avisar: {conversiones.porEstado.PENDIENTE ?? 0} · Enviados: {conversiones.porEstado.ENVIADO ?? 0}
+                    {(conversiones.porEstado.FALLO ?? 0) > 0 && ` · Con error: ${conversiones.porEstado.FALLO}`}
+                    {(conversiones.porEstado.VENCIDO ?? 0) > 0 && ` · Vencidos (clic de más de 90 días): ${conversiones.porEstado.VENCIDO}`}
+                  </span>
+                </div>
+                {!conversiones.conectado && (
+                  <p style={{ margin: '8px 0 0', fontSize: 12, color: '#92400e' }}>
+                    El envío automático a Google todavía no está activado: los avisos se acumulan como «por avisar» y salen solos cuando se conecte la cuenta de Google Ads.
+                  </p>
                 )}
               </div>
             </>
@@ -235,21 +280,21 @@ export default function ConexionesLeadsModal({ onClose }: { onClose: () => void 
           <h4 style={{ margin: '18px 0 8px' }}>Meta (Facebook e Instagram) y LinkedIn</h4>
           <div style={caja}>
             <p style={{ margin: 0, fontSize: 13, color: '#666' }}>
-              Meta todavía no está conectado: necesita una app de Meta aprobada por ellos. LinkedIn Ads llegará más adelante. Mientras tanto, esos leads se pueden ingresar a mano con «Nuevo lead», eligiendo el canal.
+              Meta todavía no está conectado: necesita una app de Meta aprobada por ellos. LinkedIn Ads llegará más adelante. Mientras tanto, esos leads se ingresan a mano con «Nuevo lead», eligiendo la fuente «Meta Ads».
             </p>
           </div>
 
           <h4 style={{ margin: '18px 0 8px' }}>Guía para quien mantiene la web</h4>
           <div style={caja}>
             <p style={{ margin: '0 0 6px', fontSize: 13 }}>
-              La landing de WordPress (acción <span style={codigo}>gemeseg_landing_lead</span>) debe hacer un <strong>POST de servidor a servidor</strong> (nunca desde el navegador) a{' '}
-              <span style={codigo}>/ventas/webhook/entrante</span> con el encabezado <span style={codigo}>X-API-KEY</span>. Debe enviar <span style={codigo}>name</span>, <span style={codigo}>email</span>, <span style={codigo}>phone</span>, <span style={codigo}>message</span>, <span style={codigo}>servicio</span>, <span style={codigo}>landing</span> y, si los tiene, <span style={codigo}>utm_source</span>, <span style={codigo}>utm_medium</span>, <span style={codigo}>utm_campaign</span>, <span style={codigo}>gclid</span>, <span style={codigo}>fbclid</span>, <span style={codigo}>li_fat_id</span> y <span style={codigo}>pageUrl</span>.
+              En Gemeseg el envío lo hace el plugin <strong>GEMESEG CRM Sync</strong> (versión 1.2.0 o superior), que guarda los leads en una cola y reintenta si el CRM no responde: solo hay que definir <span style={codigo}>GEMESEG_CRM_URL</span> y <span style={codigo}>GEMESEG_CRM_KEY</span> en <span style={codigo}>wp-config.php</span>. Lo que sigue es la referencia técnica, o el ejemplo para una web que no use el plugin.
             </p>
             <p style={{ margin: '0 0 6px', fontSize: 13 }}>
-              El JavaScript de la landing debe copiar <span style={codigo}>utm_*</span>, <span style={codigo}>gclid</span> y <span style={codigo}>fbclid</span> de la URL a campos ocultos del formulario.
+              La landing de WordPress (acción <span style={codigo}>gemeseg_landing_lead</span>) debe hacer un <strong>POST de servidor a servidor</strong> (nunca desde el navegador) a{' '}
+              <span style={codigo}>/ventas/webhook/entrante</span> con el encabezado <span style={codigo}>X-API-KEY</span>. Acepta los mismos campos que ya manda el formulario: <span style={codigo}>nombre</span>, <span style={codigo}>correo</span>, <span style={codigo}>telefono</span>, <span style={codigo}>necesidad</span>, <span style={codigo}>mensaje</span>, <span style={codigo}>consentimiento</span>, <span style={codigo}>landing</span> (la dirección de la landing, p. ej. <span style={codigo}>monitoreo-alarmas</span>) y, si los tiene, <span style={codigo}>utm_*</span>, <span style={codigo}>gclid</span>, <span style={codigo}>fbclid</span> y <span style={codigo}>pageUrl</span>.
             </p>
-            <p style={{ margin: '0 0 8px', fontSize: 12, color: '#92400e' }}>
-              Hoy la landing no guarda gclid/UTM ni el Pixel envía el evento Lead; sin gclid no podemos avisar a Google qué lead cotizó o contrató.
+            <p style={{ margin: '0 0 6px', fontSize: 13 }}>
+              El servicio y la línea comercial (Seguridad Física, Solutech, Monitoreo) salen de la dirección de la landing; no hace falta mandarlos. El <span style={codigo}>gclid</span> es lo que permite avisar a Google qué lead cotizó o contrató.
             </p>
             <p style={{ margin: '0 0 4px', fontSize: 12, color: '#666' }}>Ejemplo del cuerpo JSON (solo referencia):</p>
             <pre style={{ ...codigo, margin: '0 0 8px', background: '#fff', border: '1px solid #edf2f7', borderRadius: 6, padding: 8, whiteSpace: 'pre-wrap' }}>{EJEMPLO_JSON}</pre>

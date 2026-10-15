@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  CANAL_LEAD_LABEL,
   getAnaliticaMarketing,
   type AnaliticaMarketing,
   type FilaEmbudoMarketing,
 } from '../../../services/ventas.service';
+import { useCanalesLead } from '../../../hooks/useCanalesLead';
 import { useSortableTable } from '../../../hooks/useSortableTable';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
 import { BarraH, Cargando, SinDatos, Tarjeta, formatoDia, pct } from './DashboardBits';
@@ -23,6 +23,7 @@ export default function DashboardMarketing({ desde, hasta }: { desde: string; ha
   const [agrupar, setAgrupar] = useState<Agrupar>('channel');
   const [datos, setDatos] = useState<AnaliticaMarketing | null>(null);
   const [error, setError] = useState(false);
+  const { etiquetaCanal } = useCanalesLead();
 
   const cargar = useCallback(async () => {
     setError(false);
@@ -34,7 +35,7 @@ export default function DashboardMarketing({ desde, hasta }: { desde: string; ha
   }, [desde, hasta, agrupar]);
   useEffect(() => { cargar(); }, [cargar]);
 
-  const etiquetaClave = (clave: string) => (agrupar === 'channel' ? CANAL_LEAD_LABEL[clave] ?? clave : clave);
+  const etiquetaClave = (clave: string) => (agrupar === 'channel' ? etiquetaCanal(clave) : clave);
 
   const { filas, thProps, SortIcon } = useSortableTable(
     datos?.filas ?? [],

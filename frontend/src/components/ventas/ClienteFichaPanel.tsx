@@ -9,13 +9,13 @@ import EstadoContratoBadge from './EstadoContratoBadge';
 import CicloVidaBadge from './CicloVidaBadge';
 import { useToast } from '../../contexts/ToastContext';
 import { getUser } from '../../services/auth.service';
+import { useCanalesLead } from '../../hooks/useCanalesLead';
 import { diaCorto } from '../../utils/contratoComercial';
 import {
   getSalesClientTimeline,
   getContratosComerciales,
   getOportunidades,
   ORIGEN_OPORTUNIDAD_LABEL,
-  CANAL_LEAD_LABEL,
   type ContratoComercial,
   type Oportunidad,
   addSalesClientActivity,
@@ -75,9 +75,13 @@ const leerOrden = (): Orden => {
 };
 
 // "Referido" / "Lead vía Formulario web": el origen en palabras, con el canal si lo hay.
-const origenTexto = (originType: string, source?: string | null) => {
+const origenTexto = (
+  originType: string,
+  source: string | null | undefined,
+  etiquetaCanal: (key: string | null | undefined) => string,
+) => {
   const base = ORIGEN_OPORTUNIDAD_LABEL[originType] ?? originType;
-  const canal = source ? CANAL_LEAD_LABEL[source] : null;
+  const canal = source ? etiquetaCanal(source) : null;
   return canal ? `${base} vía ${canal}` : base;
 };
 
@@ -114,6 +118,7 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEditNextS
   const { showToast } = useToast();
   const currentUser = getUser();
   const navigate = useNavigate();
+  const { etiquetaCanal } = useCanalesLead();
   const [contratos, setContratos] = useState<ContratoComercial[] | null>(null);
   const [contratosError, setContratosError] = useState(false);
   const [oportunidades, setOportunidades] = useState<Oportunidad[] | null>(null);
@@ -265,7 +270,7 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEditNextS
       contenido = (
         <>
           <strong>Nueva oportunidad · {ev.nombre}</strong>
-          <div style={tenue}>{origenTexto(ev.originType, ev.source)}</div>
+          <div style={tenue}>{origenTexto(ev.originType, ev.source, etiquetaCanal)}</div>
         </>
       );
     } else if (ev.kind === 'acuerdo') {
@@ -507,7 +512,7 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEditNextS
                           <Etapa info={o.stage ? { label: o.stage.label, color: o.stage.color } : null} />
                           <span style={chipStyle(estado.color)}>{estado.texto}</span>
                         </div>
-                        <div style={tenue}>{origenTexto(o.originType, o.source)}</div>
+                        <div style={tenue}>{origenTexto(o.originType, o.source, etiquetaCanal)}</div>
                         {o.quotedAmount != null && <div style={tenue}>Cotizada en {dinero(o.quotedAmount)}</div>}
                         <div style={{ fontSize: 11.5, color: '#a0aec0', marginTop: 2 }}>Recibida el {diaCorto(o.receivedAt)}</div>
                         <div style={{ marginTop: 6 }}>

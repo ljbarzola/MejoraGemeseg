@@ -892,14 +892,18 @@ export const MOTIVO_CONTACTO_LABEL: Record<MotivoContacto, string> = {
   SPAM: 'Spam',
 };
 
-export const CANAL_LEAD_LABEL: Record<string, string> = {
-  WEB_FORM: 'Formulario web',
-  GOOGLE_ADS: 'Google Ads',
-  META_ADS: 'Meta Ads',
-  LINKEDIN_ADS: 'LinkedIn Ads',
-  EMAIL: 'Correo',
-  MANUAL: 'Ingreso manual',
-};
+// Canal (fuente) de un lead. La lista viene del servidor (registro único de
+// canales): sumar uno nuevo no pide tocar esta pantalla. `campos` son los datos
+// propios de ese canal; `campaign` va a la columna de campaña y el resto a `extra`.
+export interface CampoCanalLead { key: string; label: string; ayuda?: string }
+export interface CanalLeadDef {
+  key: string;
+  label: string;
+  grupo: 'ANUNCIO' | 'WEB' | 'DIRECTO';
+  campos: CampoCanalLead[];
+}
+export const getCanalesLead = (): Promise<CanalLeadDef[]> =>
+  api.get('/ventas/entrantes/canales').then(r => r.data);
 
 export interface LeadEntrante {
   id: number;
@@ -944,7 +948,7 @@ export const getLeadsEntrantes = (params?: { estado?: string; canal?: string; mo
   api.get('/ventas/entrantes', { params }).then(r => r.data);
 export const getLeadEntrante = (id: number): Promise<LeadEntrante> =>
   api.get(`/ventas/entrantes/${id}`).then(r => r.data);
-export const createLeadEntrante = (data: { name?: string; email?: string; phone?: string; companyName?: string; message?: string; channel?: string; campaign?: string }): Promise<LeadEntrante> =>
+export const createLeadEntrante = (data: { name?: string; email?: string; phone?: string; companyName?: string; message?: string; channel?: string; campaign?: string; extra?: Record<string, string> }): Promise<LeadEntrante> =>
   api.post('/ventas/entrantes', data).then(r => r.data);
 export const updateLeadEntrante = (id: number, data: Partial<{ name: string; email: string | null; phone: string | null; companyName: string | null; message: string | null; contactReason: MotivoContacto | null }>): Promise<LeadEntrante> =>
   api.patch(`/ventas/entrantes/${id}`, data).then(r => r.data);
@@ -956,6 +960,17 @@ export const descartarLeadEntrante = (id: number, motivo: MotivoInput): Promise<
   api.post(`/ventas/entrantes/${id}/descartar`, { motivo }).then(r => r.data);
 export const convertirLeadEntrante = (id: number, data: ConvertirLeadInput): Promise<{ clienteId: number; oportunidadId: number; sumadaAClienteExistente: boolean }> =>
   api.post(`/ventas/entrantes/${id}/convertir`, data).then(r => r.data);
+
+// Aviso a Google Ads de qué lead cotizó (CUALIFICADO) o contrató (CONVERTIDO).
+export interface ResumenConversiones {
+  // false mientras el envío automático a Google no esté configurado.
+  conectado: boolean;
+  total: number;
+  porEstado: Partial<Record<'PENDIENTE' | 'ENVIADO' | 'FALLO' | 'VENCIDO', number>>;
+  porTipo: Partial<Record<'CUALIFICADO' | 'CONVERTIDO', number>>;
+}
+export const getResumenConversiones = (): Promise<ResumenConversiones> =>
+  api.get('/ventas/conversiones/resumen').then(r => r.data);
 
 // Claves de las conexiones (formulario web, Google Ads): reutiliza las
 // api-keys que ya existían para los webhooks de Ventas.

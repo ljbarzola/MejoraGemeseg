@@ -45,6 +45,7 @@ model Company {
   salesServices             SalesService[]
   salesAgreements           SalesAgreement[]
   salesLeads                SalesLead[]
+  salesConversionEvents     SalesConversionEvent[]
   salesOpportunities        SalesOpportunity[]
   salesReasons              SalesReason[]
   salesReasonEntries        SalesReasonEntry[]
@@ -2574,6 +2575,37 @@ model SalesLead {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, channel, externalId])
+  @@index([companyId, status])
+}
+
+// Hechos de un lead de anuncio que Google Ads quiere saber (2026-10-15): que
+// un lead cotizó (CUALIFICADO) o contrató (CONVERTIDO). Se guardan solo si el
+// lead trae gclid. `status` lo mueve el envío automático: PENDIENTE -> ENVIADO,
+// o FALLO con `lastError` (se reintenta). Una oportunidad registra cada hecho
+// una sola vez (único por oportunidad y tipo). Tabla creada al arrancar por
+// VentasSchemaService (el despliegue no corre migraciones).
+model SalesConversionEvent {
+  id            Int       @id @default(autoincrement())
+  companyId     Int
+  leadId        Int
+  opportunityId Int
+  // CUALIFICADO, CONVERTIDO
+  kind          String
+  gclid         String
+  occurredAt    DateTime
+  value         Decimal?  @db.Decimal(12, 2)
+  currency      String    @default("USD")
+  // PENDIENTE, ENVIADO, FALLO
+  status        String    @default("PENDIENTE")
+  attempts      Int       @default(0)
+  lastError     String?
+  sentAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([opportunityId, kind])
   @@index([companyId, status])
 }
 

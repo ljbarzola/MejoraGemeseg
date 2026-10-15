@@ -11,6 +11,7 @@ import { GmailMailService } from '../mail/gmail-mail.service';
 import { VentasMotivosService } from './ventas-motivos.service';
 import { hoyEcuador, parseDiaContrato } from './agreement-status.util';
 import { resultadoDeEtapa } from './stage-outcome.util';
+import { VentasConversionesService } from './ventas-conversiones.service';
 import { parseSiguientePaso } from './siguiente-paso.util';
 import {
   ETIQUETA_SUBSERVICIO,
@@ -101,6 +102,7 @@ export class VentasOportunidadesService {
     private readonly notificationsService: NotificationsService,
     private readonly gmailMailService: GmailMailService,
     private readonly motivos: VentasMotivosService,
+    private readonly conversiones: VentasConversionesService,
   ) {}
 
   private requireCompany(companyId: number | null): number {
@@ -510,6 +512,17 @@ export class VentasOportunidadesService {
         destino.label,
       );
     }
+    // Si el lead vino de un anuncio de Google, se deja registrado que cotizó o
+    // contrató para avisárselo a Google. Nunca falla el cambio de etapa.
+    const montoFinal = quotedAmount !== undefined ? quotedAmount : opp.quotedAmount;
+    await this.conversiones.registrarPorEtapa({
+      companyId: cid,
+      opportunityId: id,
+      leadId: opp.leadId,
+      destinoKey: destino.key,
+      outcome,
+      quotedAmount: montoFinal === null || montoFinal === undefined ? null : Number(montoFinal),
+    });
     return this.get(cid, id);
   }
 

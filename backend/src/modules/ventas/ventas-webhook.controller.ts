@@ -10,6 +10,7 @@ import { VentasService } from './ventas.service';
 import { VentasContratosService } from './ventas-contratos.service';
 import { VentasLeadsService } from './ventas-leads.service';
 import { atribuirCanal, extraerAtribucion } from './lead-atribucion.util';
+import { datosDeLanding } from './lead-landing.util';
 
 @Controller('ventas/webhook')
 export class VentasWebhookController {
@@ -74,28 +75,22 @@ export class VentasWebhookController {
     const companyId = await this.leadsService.empresaDeClave(apiKey);
     if (body?.website) return { success: true };
     // Atribución (UTM, gclid, fbclid, li_fat_id): decide el canal y se guarda
-    // completa en `extra`. `servicio` y `landing` también: sirven para sugerir el
-    // servicio al convertir y para el embudo por landing.
+    // completa en `extra`. Lo propio de la landing (servicio y línea comercial
+    // según su dirección, situación, consentimiento) sale de `datosDeLanding`.
     const atribucion = extraerAtribucion(body);
-    const texto = (v: unknown, max: number) => {
-      const t = (v ?? '').toString().trim();
-      return t ? t.slice(0, max) : undefined;
-    };
+    const landing = datosDeLanding(body);
     const r = await this.leadsService.ingresar(companyId, {
-      name: body?.name ?? body?.fullName,
-      email: body?.email,
-      phone: body?.phone,
-      companyName: body?.companyName,
-      message: body?.message,
+      // Las landings de WordPress mandan los nombres en español (nombre,
+      // correo, telefono): se aceptan tal cual para no obligar a traducirlos.
+      name: body?.name ?? body?.fullName ?? body?.nombre,
+      email: body?.email ?? body?.correo,
+      phone: body?.phone ?? body?.telefono,
+      companyName: body?.companyName ?? body?.empresa,
+      message: landing.message,
       channel: atribuirCanal(atribucion),
       campaign: body?.campaign ?? atribucion['utm_campaign'],
       externalId: body?.externalId,
-      extra: {
-        ...atribucion,
-        ...(texto(body?.servicio, 120) ? { servicio: texto(body?.servicio, 120) } : {}),
-        ...(texto(body?.landing, 80) ? { landing: texto(body?.landing, 80) } : {}),
-        ...(texto(body?.pageUrl, 300) ? { pageUrl: texto(body?.pageUrl, 300) } : {}),
-      },
+      extra: { ...atribucion, ...landing.extra },
     });
     return { success: true, leadId: r.lead.id, duplicado: !r.nuevo };
   }
