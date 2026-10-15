@@ -17,6 +17,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateMeDto } from './dto/update-me.dto';
 import { CreateLocationDto } from './dto/create-location.dto';
 import { SetPreferenceDto } from './dto/set-preference.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -56,6 +57,14 @@ export class UsersController {
   @UseGuards(AuthGuard('jwt'))
   getMe(@Req() req: any) {
     return this.usersService.getMe(req.user.userId);
+  }
+
+  // Perfil propio: solo el teléfono (lista cerrada en UpdateMeDto). Va antes de
+  // `:id` para que esa ruta no lo capture.
+  @Patch('me')
+  @UseGuards(AuthGuard('jwt'))
+  updateMe(@Req() req: any, @Body() dto: UpdateMeDto) {
+    return this.usersService.updateMe(req.user.userId, dto);
   }
 
   @Patch('me/active-agent')

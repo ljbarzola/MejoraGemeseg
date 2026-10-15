@@ -6,7 +6,8 @@ Gestion de usuarios del sistema con permisos por seccion.
 ## Endpoints
 - `POST /users` - Crear usuario (solo ADMIN)
 - `GET /users` - Listar usuarios (cualquier autenticado)
-- `GET /users/me` - Perfil del usuario (con herramientas asignadas y `hasPassword`; el hash nunca sale)
+- `GET /users/me` - Perfil del usuario (con herramientas asignadas, `phone` y `hasPassword`; el hash nunca sale)
+- `PATCH /users/me` - La persona cambia SU teléfono (única cosa editable del perfil propio; ver punto 8)
 - `POST /auth/change-password` - Cambiar la propia contraseña desde el perfil (vive en `auth`; ver "Cambiar contraseña" abajo)
 - `GET /users/me/preferences/:key` / `PUT /users/me/preferences/:key` - Preferencia personal del usuario autenticado (ver punto 3)
 - `GET /users/stats` - Estadisticas (solo ADMIN)
@@ -113,3 +114,15 @@ Pedido tras la auditoría; al revisar el código aparecieron hallazgos más grav
   ```
 - **Producción ya expuso esos hashes** a los empleados de cada empresa (y a cuentas autoregistradas): además del cambio obligatorio a administradores, conviene pedir el cambio al resto del personal. `GET /users` sigue abierto a cualquier empleado (los selectores de personas lo usan) pero ya sin datos sensibles.
 - **Pruebas:** 793 unitarias en verde (nuevas: `auth-throttle.service.spec`, `password-rotation.service.spec`, `permissions-seguridad.spec`, `users-seguridad.spec`, `tools.service.spec`, y ampliado `auth.service.spec`). Verificado contra la BD local con el backend real (45 comprobaciones de API: sin hash en ningún endpoint, 429 al 6.º intento, bandera y modal obligatorio, Sistemas sin fila → 403 y ticket sí, aislamiento entre GEMESEG y Mikacao) y en navegador (modal sin cerrar con X, Esc, clic fuera ni Cancelar).
+
+
+## 8. Teléfono de la persona: `User.phone` (2026-10-15)
+
+Lo pidió la usuaria para el encabezado del PDF del Cotizador (el original lo tenía en `profiles.telefono`). Decisiones suyas: **cada persona lo escribe en su perfil y el administrador también puede ponerlo o corregirlo**; si alguien no tiene, el PDF usa el +593 99 897 4909 del original (constante `TELEFONO_POR_DEFECTO` en `frontend/src/utils/telefono.ts`, un solo sitio).
+
+- **Columna nueva y opcional** `User.phone TEXT`. Como el deploy no corre migraciones y Prisma pide TODAS las columnas del modelo en cada consulta de `User`, una columna que falte en producción rompería el inicio de sesión de todos. Por eso se crea **al arrancar, dentro de `PrismaService.onModuleInit`**, justo después de conectar y antes de cualquier otro módulo (`src/prisma/user-phone.schema.ts`; `ADD COLUMN IF NOT EXISTS`, con un reintento por si dos instancias arrancan a la vez). Si falla, el servidor **no arranca** (mejor que arrancar a medias). Es solo aditivo: un deploy anterior sigue funcionando con la columna ya creada. `prisma/migrations/20261017_user_phone` existe solo como referencia (no usar `migrate deploy`). Es el primer caso de columna nueva sobre una tabla que ya existe; el patrón de `UserPreference`/`UserSessionCutoff` (tabla aparte) se usó antes justamente para evitar esto.
+- **Formato** (`users/phone.const.ts` en backend, `utils/telefono.ts` en frontend, misma regla): solo dígitos, espacios, `+`, guiones y paréntesis, entre 7 y 15 dígitos, máximo 25 caracteres. Permisivo a propósito (fijos, celulares, extranjeros). Vacío o `null` = sin teléfono. Sin validación específica de Ecuador.
+- **Quién lo ve:** la propia persona (`GET /users/me`), el administrador (`GET /users`, `GET /users/:id`; el Gerente ve la lista de administración) y el encabezado/PDF del Cotizador (`ownerPhone` de cada cotización = teléfono ACTUAL del dueño, no se congela). **No** entra al listado de EMPLOYEE (`findAll` con `select` mínimo, cubierto por prueba), ni al token JWT ni a la respuesta del login: el frontend lo pide a `/users/me` cuando lo necesita porque `localStorage['user']` solo se actualiza al iniciar sesión.
+- **`PATCH /users/me`** (cualquier autenticado): lista cerrada en `UpdateMeDto` (solo `phone`). Las propiedades extra se rechazan (el `ValidationPipe` global usa `forbidNonWhitelisted`), así nadie se cambia el rol, el nombre ni el cargo por aquí. Antes el perfil era 100 % de lectura; si en el futuro se quieren más campos editables, se añaden a ese DTO, nunca se abre `PATCH /users/:id` a la propia persona.
+- **Administración → Usuarios:** campo «Teléfono» en crear/editar y columna en la tabla. **Mi perfil:** «Teléfono» con «Agregar/Editar». Los errores del formulario de administración ahora hacen `scrollIntoView` (regla de la usuaria: el modal tiene scroll).
+- **Importación desde el cotizador original** (`backend/prisma/import-cotizador.js`): copia `profiles.telefono` a `User.phone` **solo si la persona no tiene uno** y el valor no es el número por defecto. Nunca pisa un teléfono ya escrito. Como el resto de la migración real, solo con autorización explícita.

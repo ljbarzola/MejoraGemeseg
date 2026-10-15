@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getMe, getUserPreference, setUserPreference } from '../../services/user.service';
+import { getMe, getUserPreference, setUserPreference, updateMyPhone } from '../../services/user.service';
 import type { ProfileData } from '../../services/user.service';
 import { useToast } from '../../contexts/ToastContext';
 import ChangePasswordModal from './ChangePasswordModal';
+import { errorTelefono } from '../../utils/telefono';
 
 // Cómo llegan los recordatorios de tareas. Sin nada guardado se envía correo
 // (es lo que ya pasaba); solo «solo-notificaciones» lo apaga. Misma clave y valor que
@@ -26,6 +27,28 @@ export default function ProfilePage() {
   // null = todavía cargando o no se pudo leer (no se muestra una opción que podría ser falsa).
   const [soloNotificaciones, setSoloNotificaciones] = useState<boolean | null>(null);
   const [guardandoAvisos, setGuardandoAvisos] = useState(false);
+  // Teléfono propio: null = no se está editando.
+  const [telefonoEdit, setTelefonoEdit] = useState<string | null>(null);
+  const [telefonoError, setTelefonoError] = useState('');
+  const [guardandoTelefono, setGuardandoTelefono] = useState(false);
+
+  const guardarTelefono = async () => {
+    if (telefonoEdit === null || guardandoTelefono) return;
+    const err = errorTelefono(telefonoEdit);
+    if (err) return setTelefonoError(err);
+    setGuardandoTelefono(true);
+    try {
+      const r = await updateMyPhone(telefonoEdit);
+      setProfile((p) => (p ? { ...p, phone: r.phone } : p));
+      setTelefonoEdit(null);
+      setTelefonoError('');
+      showToast(r.phone ? 'Teléfono guardado' : 'Teléfono borrado', 'success');
+    } catch {
+      setTelefonoError('No pudimos guardar tu teléfono. Revisa el número e inténtalo de nuevo.');
+    } finally {
+      setGuardandoTelefono(false);
+    }
+  };
 
   useEffect(() => {
     getMe()
@@ -109,6 +132,56 @@ export default function ProfilePage() {
           <div className="profile-info-item">
             <span className="profile-info-label">Cargo</span>
             <span className="profile-info-value">{profile.position || '—'}</span>
+          </div>
+          <div className="profile-info-item">
+            <span className="profile-info-label">Teléfono</span>
+            {telefonoEdit === null ? (
+              <span className="profile-info-value profile-phone-row">
+                {profile.phone || '—'}
+                <button
+                  type="button"
+                  className="profile-phone-btn"
+                  onClick={() => {
+                    setTelefonoEdit(profile.phone ?? '');
+                    setTelefonoError('');
+                  }}
+                >
+                  {profile.phone ? 'Editar' : 'Agregar'}
+                </button>
+              </span>
+            ) : (
+              <form
+                className="profile-phone-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void guardarTelefono();
+                }}
+              >
+                <input
+                  type="tel"
+                  value={telefonoEdit}
+                  autoFocus
+                  maxLength={25}
+                  placeholder="+593 99 897 4909"
+                  aria-label="Teléfono"
+                  aria-invalid={!!telefonoError}
+                  className={telefonoError ? 'input-error' : ''}
+                  onChange={(e) => {
+                    setTelefonoEdit(e.target.value);
+                    setTelefonoError('');
+                  }}
+                />
+                <div className="profile-phone-actions">
+                  <button type="submit" className="profile-phone-btn primary" disabled={guardandoTelefono}>
+                    {guardandoTelefono ? 'Guardando...' : 'Guardar'}
+                  </button>
+                  <button type="button" className="profile-phone-btn" onClick={() => setTelefonoEdit(null)} disabled={guardandoTelefono}>
+                    Cancelar
+                  </button>
+                </div>
+                {telefonoError && <span className="field-error" role="alert">{telefonoError}</span>}
+              </form>
+            )}
           </div>
           <div className="profile-info-item">
             <span className="profile-info-label">Departamento</span>

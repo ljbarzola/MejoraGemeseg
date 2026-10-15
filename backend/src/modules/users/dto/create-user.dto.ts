@@ -5,9 +5,15 @@ import {
   IsOptional,
   IsEnum,
   IsInt,
+  Matches,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 import { UserRole } from '@prisma/client';
+import {
+  TELEFONO_USUARIO_MENSAJE,
+  TELEFONO_USUARIO_REGEX,
+} from '../phone.const';
 
 export class CreateUserDto {
   @IsString()
@@ -32,6 +38,13 @@ export class CreateUserDto {
   @IsString()
   @IsOptional()
   position?: string;
+
+  // null o vacío = sin teléfono.
+  @IsString()
+  @IsOptional()
+  @MaxLength(25)
+  @Matches(TELEFONO_USUARIO_REGEX, { message: TELEFONO_USUARIO_MENSAJE })
+  phone?: string | null;
 
   @IsInt()
   @IsOptional()

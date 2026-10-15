@@ -1,6 +1,7 @@
 ﻿import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { USER_PHONE_DDL } from './user-phone.schema';
 
 /** Default pg pool size. Cloud SQL db-f1-micro allows ~25 connections; Cloud Run max-instances=10 would blow that with pg's default of 10. */
 const DEFAULT_POOL_MAX = 3;
@@ -57,7 +58,6 @@ export class PrismaService
         console.log(
           `[Prisma] Conectado a la base de datos (pool max=${this.poolMax})`,
         );
-        return;
       } catch (error) {
         console.log(
           `[Prisma] Intento ${i}/${maxRetries} - DB no disponible, reintentando en ${retryDelay / 1000}s...`,
@@ -69,6 +69,24 @@ export class PrismaService
           throw error;
         }
         await new Promise((resolve) => setTimeout(resolve, retryDelay));
+        continue;
+      }
+      await this.asegurarColumnas();
+      return;
+    }
+  }
+
+  // Columnas nuevas de tablas que ya existen en producción (ver user-phone.schema.ts).
+  // Si fallan, el servidor NO debe arrancar: medio arrancado rompería el login.
+  private async asegurarColumnas() {
+    for (const ddl of USER_PHONE_DDL) {
+      try {
+        await this.$executeRawUnsafe(ddl);
+      } catch {
+        // Dos instancias arrancando a la vez pueden chocar al crear la misma columna:
+        // se reintenta una vez (IF NOT EXISTS lo hace inocuo si la otra ya la creó).
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        await this.$executeRawUnsafe(ddl);
       }
     }
   }

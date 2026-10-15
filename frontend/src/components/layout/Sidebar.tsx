@@ -110,6 +110,7 @@ export default function Sidebar() {
     // El orden sigue el recorrido de una persona: lead -> oportunidad -> cliente (2026-10-15).
     { label: 'Leads', path: '/ventas/leads', icon: '📥' },
     { label: 'Oportunidades', path: '/ventas/oportunidades', icon: '🎯' },
+    { label: 'Cotizador', path: '/ventas/cotizador', icon: '🧾' },
     { label: 'Clientes', path: '/ventas/clientes', icon: '👤' },
     { label: 'Contratos', path: '/ventas/contratos', icon: '📑' },
     { label: 'Documentación', path: '/ventas/documentacion', icon: '📄' },
