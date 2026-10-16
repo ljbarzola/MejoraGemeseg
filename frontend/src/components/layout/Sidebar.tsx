@@ -97,7 +97,11 @@ export default function Sidebar() {
   // 2026-09-22 (código y tablas, ver .agents/modules/recursos-humanos.md
   // punto 16a).
 
-  // Ventas/CRM: Dashboard, Leads, Oportunidades, Clientes, Contratos, Documentación y Configuración están activos.
+  // Ventas/CRM: Dashboard, Posibles clientes, Oportunidades, Cuentas, Contratos, Documentos y firma y Configuración están activos.
+  // Desde 2026-10-16 los nombres de pantalla son los que conoce Ventas desde Zoho
+  // (Leads -> Posibles clientes, Clientes -> Cuentas, Documentación -> Documentos
+  // y firma). Las URLs NO cambiaron (/ventas/leads, /ventas/clientes,
+  // /ventas/documentacion): hay notificaciones guardadas que apuntan a ellas.
   // Planificación y Campo se deja visible como "Próximamente" (gris, sin clic)
   // y NO tiene ruta: App.tsx redirige esa URL al Dashboard. «Reportes» se
   // quitó del menú (2026-10-08): sus cifras de visitas viven en la pestaña
@@ -107,12 +111,12 @@ export default function Sidebar() {
   // explicarlo en la guía del asistente.
   const ventasItems = [
     { label: 'Dashboard', path: '/ventas', icon: '📊' },
-    // El orden sigue el recorrido de una persona: lead -> oportunidad -> cliente (2026-10-15).
-    { label: 'Leads', path: '/ventas/leads', icon: '📥' },
+    // El orden sigue el recorrido de una persona: posible cliente -> oportunidad -> cuenta (2026-10-15).
+    { label: 'Posibles clientes', path: '/ventas/leads', icon: '📥' },
     { label: 'Oportunidades', path: '/ventas/oportunidades', icon: '🎯' },
-    { label: 'Clientes', path: '/ventas/clientes', icon: '👤' },
+    { label: 'Cuentas', path: '/ventas/clientes', icon: '👤' },
     { label: 'Contratos', path: '/ventas/contratos', icon: '📑' },
-    { label: 'Documentación', path: '/ventas/documentacion', icon: '📄' },
+    { label: 'Documentos y firma', path: '/ventas/documentacion', icon: '📄' },
     { label: 'Configuración', path: '/ventas/configuracion', icon: '⚙️' },
     { label: 'Planificación y Campo', path: '/ventas/visitas', icon: '📍', disabled: true },
   ];

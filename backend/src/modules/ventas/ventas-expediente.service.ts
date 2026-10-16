@@ -87,14 +87,14 @@ export class VentasExpedienteService {
     if (candidatos.length === 0) {
       return {
         estado: 'NO_ENCONTRADO',
-        texto: `No encontré ningún cliente que se parezca a «${texto}». Revisa el nombre o prueba con el RUC.`,
+        texto: `No encontré ninguna cuenta que se parezca a «${texto}». Revisa el nombre o prueba con el RUC.`,
       };
     }
     if (candidatos.length > 1) {
       const lista = candidatos.slice(0, 8).map((c) => `- ${c.name}`).join('\n');
       return {
         estado: 'AMBIGUO',
-        texto: `Hay ${candidatos.length} clientes que se parecen a «${texto}». Pregunta cuál de ellos:\n${lista}${candidatos.length > 8 ? '\n- … y más' : ''}`,
+        texto: `Hay ${candidatos.length} cuentas que se parecen a «${texto}». Pregunta cuál de ellos:\n${lista}${candidatos.length > 8 ? '\n- … y más' : ''}`,
       };
     }
     return { estado: 'OK', clienteId: candidatos[0].id, texto: await this.construir(companyId, candidatos[0].id) };
@@ -254,6 +254,17 @@ export class VentasExpedienteService {
       } else if (estado === 'CANCELADO') {
         estadoTxt = `CANCELADO${c.cancelledAt ? ` el ${fecha(c.cancelledAt)}` : ''}`;
       }
+      if (c.kind === 'PRODUCTO') {
+        out.push(
+          `- [#contrato:${c.id}] ${c.title ? `«${c.title}» · ` : ''}VENTA DE PRODUCTO (única, no se renueva) del ${fecha(c.startDate)} · ${estadoTxt}${c.deliveredAt ? ` el ${fecha(c.deliveredAt)}` : ''} · productos: ${servicios.join(', ') || 'ninguno'} · valor total: ${dinero(c.totalValue)}${c.warrantyUntil ? ` · garantía hasta ${fecha(c.warrantyUntil)}` : ''} · documentos: ${c._count.documents}`,
+        );
+        const msP = motivosPorContrato.get(c.id) ?? [];
+        for (const m of msP) out.push(`    · ${lineaMotivo(m)}`);
+        if (estado === 'CANCELADO' && !msP.some((m) => m.kind === 'CONTRATO_CANCELADO')) {
+          noConsta.push(`Contrato #${c.id}: se canceló y no se registró el motivo.`);
+        }
+        continue;
+      }
       out.push(
         `- [#contrato:${c.id}] ${c.title ? `«${c.title}» · ` : ''}desde ${fecha(c.startDate)} hasta ${c.endDate ? fecha(c.endDate) : 'sin fecha de fin'} · ${estadoTxt} · servicios: ${servicios.join(', ') || 'ninguno'} · valor mensual: ${dinero(c.monthlyValue)} · documentos: ${c._count.documents}`,
       );
@@ -285,7 +296,7 @@ export class VentasExpedienteService {
       anterior = c;
     }
     const firmados = documentos.filter((d) => d.status === 'SIGNED').length;
-    if (documentos.length) out.push(`Documentos de Documentación: ${documentos.length} (${firmados} firmados).`);
+    if (documentos.length) out.push(`Documentos de Documentos y firma: ${documentos.length} (${firmados} firmados).`);
 
     // ---- actividad ----
     out.push('');

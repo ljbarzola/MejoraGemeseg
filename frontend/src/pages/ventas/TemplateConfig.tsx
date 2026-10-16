@@ -287,7 +287,7 @@ export default function TemplateConfig() {
           <button
             type="button"
             onClick={() => setShowHelp(true)}
-            title="Cómo funciona Documentación"
+            title="Cómo funciona Documentos y firma"
             aria-label="Ayuda"
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 6, border: 'none', background: 'var(--naranja)', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
           >

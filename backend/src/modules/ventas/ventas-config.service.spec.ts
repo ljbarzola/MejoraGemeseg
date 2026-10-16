@@ -1,6 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { LANDINGS } from './lead-landing.util';
 import { VentasConfigService } from './ventas-config.service';
 
 // Base simulada: una sola tabla clave-valor por empresa, como SalesSetting.
@@ -112,16 +111,17 @@ describe('VentasConfigService — Google Ads', () => {
 });
 
 describe('VentasConfigService — landings', () => {
-  it('sin nada guardado usa las de Gemeseg', async () => {
+  it('una empresa sin nada guardado no tiene landings (empieza vacía)', async () => {
     const { servicio } = crearServicio();
-    expect(await servicio.landingsDe(1)).toEqual(LANDINGS);
+    expect(await servicio.landingsDe(1)).toEqual([]);
+    expect((await servicio.resumen(1)).landings).toEqual([]);
   });
 
   it('guarda las de la empresa, con la dirección normalizada, y no afecta a otra', async () => {
     const { servicio } = crearServicio();
     await servicio.guardarLandings(1, 5, [{ slug: 'Mi-Landing', servicio: 'Alarmas', linea: 'Casa' }]);
     expect(await servicio.landingsDe(1)).toEqual([{ slug: 'mi-landing', servicio: 'Alarmas', linea: 'Casa' }]);
-    expect(await servicio.landingsDe(2)).toEqual(LANDINGS);
+    expect(await servicio.landingsDe(2)).toEqual([]);
   });
 
   it('rechaza una landing sin dirección, sin servicio o repetida', async () => {
@@ -136,10 +136,10 @@ describe('VentasConfigService — landings', () => {
     ).rejects.toThrow(/repetida/);
   });
 
-  it('restaurar vuelve a los valores de Gemeseg', async () => {
+  it('guardar la tabla vacía es válido y se respeta', async () => {
     const { servicio } = crearServicio();
     await servicio.guardarLandings(1, 5, [{ slug: 'x', servicio: 'Y' }]);
-    await servicio.restaurarLandings(1);
-    expect(await servicio.landingsDe(1)).toEqual(LANDINGS);
+    await servicio.guardarLandings(1, 5, []);
+    expect(await servicio.landingsDe(1)).toEqual([]);
   });
 });

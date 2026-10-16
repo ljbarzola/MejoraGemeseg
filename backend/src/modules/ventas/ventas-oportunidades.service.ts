@@ -343,7 +343,7 @@ export class VentasOportunidadesService {
       where: { id: dto.salesClientId, companyId: cid },
       select: { id: true, assignedUserId: true, extra: true },
     });
-    if (!cliente) throw new NotFoundException('Cliente no encontrado');
+    if (!cliente) throw new NotFoundException('Cuenta no encontrada');
     const inicial = await this.prisma.salesClientStage.findFirst({
       where: { companyId: cid, isInitial: true },
     });
@@ -538,7 +538,7 @@ export class VentasOportunidadesService {
       where: { id: clientId, companyId },
       select: { id: true, status: true, createdBy: true, assignedUserId: true, referredByUserId: true, extra: true },
     });
-    if (!cliente) throw new NotFoundException('Cliente no encontrado');
+    if (!cliente) throw new NotFoundException('Cuenta no encontrada');
     const opps = await this.prisma.salesOpportunity.findMany({
       where: { salesClientId: clientId },
       select: { id: true, closedAt: true, updatedAt: true },

@@ -12,6 +12,7 @@ import {
   type MotivoInput,
   type SalesClient,
   type SalesServicio,
+  type TipoContrato,
 } from '../../services/ventas.service';
 import { aInputDia } from '../../utils/contratoComercial';
 
@@ -32,6 +33,12 @@ interface Props {
 const TITULOS: Record<Modo, string> = {
   crear: 'Nuevo contrato',
   editar: 'Editar contrato',
+  renovar: 'Renovar contrato',
+};
+
+const TITULOS_PRODUCTO: Record<Modo, string> = {
+  crear: 'Nueva venta de producto',
+  editar: 'Editar venta de producto',
   renovar: 'Renovar contrato',
 };
 
@@ -59,6 +66,11 @@ export default function ContratoComercialModal({
   modo, contrato, clientes = [], clienteIdInicial, servicios, onClose, onSaved,
 }: Props) {
   const [clienteId, setClienteId] = useState<number | ''>(contrato?.salesClientId ?? clienteIdInicial ?? '');
+  // Servicio recurrente o venta de producto. Se elige al crear y ya no cambia.
+  const [tipo, setTipo] = useState<TipoContrato>(contrato?.kind ?? 'SERVICIO');
+  const producto = tipo === 'PRODUCTO';
+  const [valorTotal, setValorTotal] = useState<string>(contrato?.totalValue != null ? String(contrato.totalValue) : '');
+  const [garantia, setGarantia] = useState(aInputDia(contrato?.warrantyUntil));
   const [titulo, setTitulo] = useState(contrato?.title ?? '');
   // Al renovar, el nuevo contrato arranca el día siguiente al fin del anterior
   // y sin fecha de fin (se llena a propósito).
@@ -79,10 +91,10 @@ export default function ContratoComercialModal({
   const [anterior, setAnterior] = useState<ContratoComercial | null>(modo === 'renovar' ? (contrato ?? null) : null);
 
   useEffect(() => {
-    if (modo === 'editar' && contrato?.renewedFromId) {
+    if (modo === 'editar' && contrato?.renewedFromId && contrato?.kind !== 'PRODUCTO') {
       getContratoComercial(contrato.renewedFromId).then(setAnterior).catch(() => setAnterior(null));
     }
-  }, [modo, contrato?.renewedFromId]);
+  }, [modo, contrato?.renewedFromId, contrato?.kind]);
 
   const sugerida = graciaSugerida(inicio, fin);
   useEffect(() => {
@@ -97,20 +109,28 @@ export default function ContratoComercialModal({
     setServiceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const valorNumero = valor.trim() === '' ? null : Number(valor.replace(',', '.'));
+  const totalNumero = valorTotal.trim() === '' ? null : Number(valorTotal.replace(',', '.'));
 
   // ¿Baja servicios o valor frente al contrato anterior? Entonces hay que explicar por qué.
   const reduccion = useMemo(() => {
-    if (!anterior) return null;
+    if (!anterior || producto) return null;
     const quitados = anterior.services.filter((s) => !serviceIds.includes(s.id));
     const valorBaja =
       anterior.monthlyValue != null && valorNumero != null && !Number.isNaN(valorNumero) && valorNumero < anterior.monthlyValue;
     return quitados.length > 0 || valorBaja
       ? { quitados, valorBaja, valorAnterior: anterior.monthlyValue ?? null }
       : null;
-  }, [anterior, serviceIds, valorNumero]);
+  }, [anterior, serviceIds, valorNumero, producto]);
 
   const validar = (): string => {
-    if (modo === 'crear' && !clienteId) return 'Elige el cliente del contrato.';
+    if (modo === 'crear' && !clienteId) return producto ? 'Elige la cuenta de la venta.' : 'Elige la cuenta del contrato.';
+    if (producto) {
+      if (!inicio) return 'Indica la fecha de la venta.';
+      if (serviceIds.length === 0) return 'Elige al menos un producto.';
+      if (totalNumero != null && (Number.isNaN(totalNumero) || totalNumero < 0)) return 'El valor total no es válido.';
+      if (garantia && garantia < inicio) return 'La garantía no puede terminar antes de la fecha de la venta.';
+      return '';
+    }
     if (!inicio) return 'Indica la fecha de inicio.';
     if (fin && fin < inicio) return 'La fecha de fin no puede ser anterior a la de inicio.';
     if (serviceIds.length === 0) return 'Elige al menos un servicio.';
@@ -123,20 +143,30 @@ export default function ContratoComercialModal({
   };
 
   const guardar = async (motivo?: MotivoInput) => {
-    const base: ContratoComercialInput = {
-      title: titulo.trim(),
-      startDate: inicio,
-      // Cadena vacía = sin fecha de fin (el backend la lee así al editar).
-      endDate: fin,
-      serviceIds,
-      notes: notas.trim(),
-      monthlyValue: valorNumero,
-      graceDays: Number(gracia),
-      ...(motivo ? { motivo } : {}),
-    };
+    const base: ContratoComercialInput = producto
+      ? {
+        // Venta de producto: sin fin, valor mensual ni gracia. Garantía vacía = sin garantía.
+        title: titulo.trim(),
+        startDate: inicio,
+        serviceIds,
+        notes: notas.trim(),
+        totalValue: totalNumero,
+        warrantyUntil: garantia,
+      }
+      : {
+        title: titulo.trim(),
+        startDate: inicio,
+        // Cadena vacía = sin fecha de fin (el backend la lee así al editar).
+        endDate: fin,
+        serviceIds,
+        notes: notas.trim(),
+        monthlyValue: valorNumero,
+        graceDays: Number(gracia),
+        ...(motivo ? { motivo } : {}),
+      };
     let guardado: ContratoComercial;
     if (modo === 'crear') {
-      guardado = await createContratoComercial({ ...base, salesClientId: Number(clienteId) });
+      guardado = await createContratoComercial({ ...base, kind: tipo, salesClientId: Number(clienteId) });
     } else if (modo === 'editar' && contrato) {
       guardado = await updateContratoComercial(contrato.id, base);
     } else if (contrato) {
@@ -158,7 +188,7 @@ export default function ContratoComercialModal({
       await guardar();
     } catch (err: any) {
       const msg = err?.response?.data?.message;
-      setError((Array.isArray(msg) ? msg[0] : msg) || 'No se pudo guardar el contrato. Intenta de nuevo.');
+      setError((Array.isArray(msg) ? msg[0] : msg) || (producto ? 'No se pudo guardar la venta. Intenta de nuevo.' : 'No se pudo guardar el contrato. Intenta de nuevo.'));
     } finally {
       setGuardando(false);
     }
@@ -180,22 +210,51 @@ export default function ContratoComercialModal({
       <div className="modal-overlay" onClick={onClose}>
         <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
-            <h3>{TITULOS[modo]}{modo !== 'crear' && contrato ? ` — ${contrato.salesClient.name}` : ''}</h3>
+            <h3>{producto && modo !== 'renovar' ? TITULOS_PRODUCTO[modo] : TITULOS[modo]}{modo !== 'crear' && contrato ? ` — ${contrato.salesClient.name}` : ''}</h3>
             <button className="modal-close" onClick={onClose} aria-label="Cerrar">✕</button>
           </div>
           <div className="modal-body">
             <ErrorBanner mensaje={error} />
             {modo === 'renovar' && (
               <p style={{ fontSize: 13, color: '#666', marginTop: 0 }}>
-                Se crea un contrato nuevo para el mismo cliente y el actual queda como «Renovado». Los servicios, el valor y los días de gracia se copian; ajústalos si cambiaron. Si bajan servicios o valor, se te pedirá el motivo.
+                Se crea un contrato nuevo para la misma cuenta y el actual queda como «Renovado». Los servicios, el valor y los días de gracia se copian; ajústalos si cambiaron. Si bajan servicios o valor, se te pedirá el motivo.
               </p>
             )}
 
             {modo === 'crear' && (
               <div className="form-group">
-                <label>Cliente *</label>
+                <label>Tipo *</label>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className={tipo === 'SERVICIO' ? 'auth-btn' : 'btn-secondary'}
+                    aria-pressed={tipo === 'SERVICIO'}
+                    onClick={() => { setTipo('SERVICIO'); setServiceIds([]); }}
+                  >
+                    Servicio recurrente
+                  </button>
+                  <button
+                    type="button"
+                    className={tipo === 'PRODUCTO' ? 'auth-btn' : 'btn-secondary'}
+                    aria-pressed={tipo === 'PRODUCTO'}
+                    onClick={() => { setTipo('PRODUCTO'); setServiceIds([]); }}
+                  >
+                    Venta de producto
+                  </button>
+                </div>
+                <p style={{ fontSize: 11, color: '#888', margin: '4px 0 0' }}>
+                  {producto
+                    ? 'Venta única (por ejemplo, una cámara o un equipo): no vence ni se renueva. Se sigue como «Por entregar» y «Entregado».'
+                    : 'Un servicio que se repite en el tiempo: tiene vigencia y se puede renovar.'}
+                </p>
+              </div>
+            )}
+
+            {modo === 'crear' && (
+              <div className="form-group">
+                <label>Cuenta *</label>
                 <select value={clienteId} onChange={(e) => setClienteId(e.target.value ? Number(e.target.value) : '')}>
-                  <option value="">Seleccionar cliente...</option>
+                  <option value="">Seleccionar cuenta...</option>
                   {clientes.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
@@ -214,6 +273,32 @@ export default function ContratoComercialModal({
               />
             </div>
 
+            {producto ? (
+              <>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Fecha de la venta *</label>
+                    <DateInput value={inicio} onChange={setInicio} />
+                  </div>
+                  <div className="form-group">
+                    <label>Valor total (opcional)</label>
+                    <input
+                      type="number" min={0} step="0.01" inputMode="decimal"
+                      value={valorTotal} onChange={(e) => setValorTotal(e.target.value)}
+                      placeholder="Ej: 450"
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Garantía hasta (opcional)</label>
+                  <DateInput value={garantia} onChange={setGarantia} min={inicio || undefined} />
+                  <p style={{ fontSize: 11, color: '#888', margin: '4px 0 0' }}>
+                    Déjalo vacío si el producto no tiene garantía. Si lo llenas, se avisa cuando esté por terminar.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
             <div className="form-row">
               <div className="form-group">
                 <label>Inicio *</label>
@@ -247,12 +332,14 @@ export default function ContratoComercialModal({
                 </p>
               </div>
             </div>
+              </>
+            )}
 
             <div className="form-group">
-              <label>Servicios contratados *</label>
+              <label>{producto ? 'Productos vendidos *' : 'Servicios contratados *'}</label>
               {disponibles.length === 0 ? (
                 <p style={{ fontSize: 13, color: '#888', margin: 0 }}>
-                  Aún no hay servicios. Créalos con el botón «Servicios» de la pantalla de contratos.
+                  Aún no hay {producto ? 'productos' : 'servicios'}. Créalos con el botón «Servicios» de la pantalla de contratos.
                 </p>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 6 }}>

@@ -116,7 +116,8 @@ export class VentasAnaliticaService {
         select: { id: true, name: true },
       }),
       this.prisma.salesAgreement.findMany({
-        where: { companyId: cid, ...(filtroCliente ? { salesClientId: filtroCliente } : {}) },
+        // Las ventas de producto no vencen ni se renuevan: no entran en estas cifras.
+        where: { companyId: cid, kind: { not: 'PRODUCTO' }, ...(filtroCliente ? { salesClientId: filtroCliente } : {}) },
         include: { services: { include: { service: { select: { id: true, name: true } } } } },
       }),
       this.prisma.salesReasonEntry.findMany({
@@ -302,7 +303,7 @@ export class VentasAnaliticaService {
     const r = this.rango(desdeRaw, hastaRaw, 365);
     const ids = await this.idsClientes(cid, this.vendedor(a));
     const contratos = await this.prisma.salesAgreement.findMany({
-      where: { companyId: cid, ...(ids ? { salesClientId: { in: ids } } : {}) },
+      where: { companyId: cid, kind: { not: 'PRODUCTO' }, ...(ids ? { salesClientId: { in: ids } } : {}) },
     });
 
     // ¿El contrato cubre ese día? (cancelado: hasta su fecha de cancelación)

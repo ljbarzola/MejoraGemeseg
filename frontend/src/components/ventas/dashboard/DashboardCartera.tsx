@@ -47,7 +47,7 @@ export default function DashboardCartera({ alcance }: { alcance: string }) {
         {(Object.keys(CICLO_LABEL) as CicloVida[]).map((k) => (
           <Contador
             key={k} titulo={CICLO_LABEL[k]} valor={ciclo[k]} color={CICLO_COLOR[k]}
-            detalle="Ver los clientes →"
+            detalle="Ver las cuentas →"
             onClick={() => navigate(`/ventas/clientes?ciclo=${k}`)}
           />
         ))}

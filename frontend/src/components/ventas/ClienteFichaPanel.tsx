@@ -258,7 +258,7 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEditNextS
       const servicios = ev.servicios && ev.servicios.length > 0 ? ev.servicios.join(', ') : null;
       contenido = (
         <>
-          <strong>Cliente registrado</strong>
+          <strong>Cuenta registrada</strong>
           {ev.referredByName && <> · referido por {ev.referredByName}</>}
           {servicios && <div style={tenue}>Servicio: {servicios}</div>}
           {ev.fuente && <div style={tenue}>Fuente: {ev.fuente}</div>}
@@ -279,13 +279,15 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEditNextS
       const paso = ev.step === 'creado' ? 'creado' : ev.step === 'renovado' ? 'renovado' : 'cancelado';
       const servicios = ev.servicios && ev.servicios.length > 0 ? ev.servicios.join(', ') : null;
       const vigencia = ev.startDate
-        ? `${diaCorto(ev.startDate)} → ${ev.endDate ? diaCorto(ev.endDate) : 'sin fecha de fin'}`
+        ? ev.producto
+          ? `venta del ${diaCorto(ev.startDate)}`
+          : `${diaCorto(ev.startDate)} → ${ev.endDate ? diaCorto(ev.endDate) : 'sin fecha de fin'}`
         : null;
       contenido = (
         <>
-          <strong>Contrato {paso} · {ev.title || `Contrato #${ev.agreementId}`}</strong>
-          {servicios && <div style={tenue}>Servicios: {servicios}</div>}
-          {vigencia && <div style={tenue}>Vigencia: {vigencia}</div>}
+          <strong>{ev.producto ? 'Venta de producto' : 'Contrato'} {paso} · {ev.title || `Contrato #${ev.agreementId}`}</strong>
+          {servicios && <div style={tenue}>{ev.producto ? 'Productos' : 'Servicios'}: {servicios}</div>}
+          {vigencia && <div style={tenue}>{ev.producto ? 'Fecha' : 'Vigencia'}: {vigencia}</div>}
         </>
       );
     } else if (ev.kind === 'etapa') {
@@ -392,7 +394,7 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEditNextS
       >
         <div style={{ padding: '18px 22px', borderBottom: '1px solid #edf2f7', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: '#a0aec0', textTransform: 'uppercase' }}>Ficha del cliente</p>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: '#a0aec0', textTransform: 'uppercase' }}>Ficha de la cuenta</p>
             <h2 style={{ margin: '2px 0 0', fontSize: '1.25rem', wordBreak: 'break-word' }}>{client.name}</h2>
           </div>
           <button type="button" onClick={onClose} title="Cerrar" aria-label="Cerrar"
@@ -495,7 +497,7 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEditNextS
               ) : oportunidadesError ? (
                 <p style={{ fontSize: 12.5, color: '#c53030', margin: 0 }}>No se pudieron cargar las oportunidades.</p>
               ) : oportunidades.length === 0 ? (
-                <p style={{ fontSize: 12.5, color: '#a0aec0', margin: 0 }}>Este cliente aún no tiene oportunidades.</p>
+                <p style={{ fontSize: 12.5, color: '#a0aec0', margin: 0 }}>Esta cuenta aún no tiene oportunidades.</p>
               ) : (
                 <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                   {oportunidades.map((o) => {
@@ -545,7 +547,7 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEditNextS
               ) : contratosError ? (
                 <p style={{ fontSize: 12.5, color: '#c53030', margin: 0 }}>No se pudieron cargar los contratos.</p>
               ) : contratos.length === 0 ? (
-                <p style={{ fontSize: 12.5, color: '#a0aec0', margin: 0 }}>Este cliente aún no tiene contratos.</p>
+                <p style={{ fontSize: 12.5, color: '#a0aec0', margin: 0 }}>Esta cuenta aún no tiene contratos.</p>
               ) : (
                 <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                   {contratos.map((c) => (
@@ -559,11 +561,22 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEditNextS
                           <strong style={{ fontSize: 13.5 }}>{c.title || `Contrato #${c.id}`}</strong>
                           <EstadoContratoBadge estado={c.estado} />
                         </div>
-                        <div style={tenue}>{c.services.map((s) => s.name).join(', ') || 'Sin servicios'}</div>
-                        <div style={{ fontSize: 11.5, color: '#a0aec0', marginTop: 2 }}>
-                          {diaCorto(c.startDate)} → {c.endDate ? diaCorto(c.endDate) : 'sin fecha de fin'}
-                        </div>
-                        {c.monthlyValue != null && <div style={tenue}>Valor mensual: {dinero(c.monthlyValue)}</div>}
+                        <div style={tenue}>{c.services.map((s) => s.name).join(', ') || (c.kind === 'PRODUCTO' ? 'Sin productos' : 'Sin servicios')}</div>
+                        {c.kind === 'PRODUCTO' ? (
+                          <>
+                            <div style={{ fontSize: 11.5, color: '#a0aec0', marginTop: 2 }}>
+                              Venta de producto · {diaCorto(c.startDate)}
+                            </div>
+                            {c.totalValue != null && <div style={tenue}>Valor total: {dinero(c.totalValue)}</div>}
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: 11.5, color: '#a0aec0', marginTop: 2 }}>
+                              {diaCorto(c.startDate)} → {c.endDate ? diaCorto(c.endDate) : 'sin fecha de fin'}
+                            </div>
+                            {c.monthlyValue != null && <div style={tenue}>Valor mensual: {dinero(c.monthlyValue)}</div>}
+                          </>
+                        )}
                       </button>
                     </li>
                   ))}

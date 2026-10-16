@@ -1,4 +1,4 @@
-import { calcularEstadoContrato, hoyEcuador } from './agreement-status.util';
+import { calcularEstadoContrato, esProducto, hoyEcuador } from './agreement-status.util';
 
 // Ciclo de vida de un cliente. Se CALCULA, nunca se teclea: nadie lo marca a
 // mano ni hay un proceso nocturno que lo actualice.
@@ -53,6 +53,8 @@ export function graciaSugerida(
 
 export interface ContratoParaCiclo {
   status: string;
+  // PRODUCTO = venta única: no vence ni se renueva, solo prueba que el cliente compró.
+  kind?: string | null;
   startDate: Date;
   endDate: Date | null;
   graceDays: number;
@@ -160,6 +162,11 @@ export function calcularCicloVida(
     );
     if (aceptoDespues) {
       return { ciclo: 'CLIENTE', razones: [], contratoPendiente: true };
+    }
+    // Solo compró productos (no tiene ni tuvo un servicio recurrente): sigue
+    // siendo cliente; una venta única no vence ni lo deja «en riesgo».
+    if (e.contratos.every((c) => esProducto(c))) {
+      return { ciclo: 'CLIENTE', razones: [] };
     }
     return { ciclo: 'EX_CLIENTE', razones: [] };
   }

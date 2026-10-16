@@ -14,7 +14,7 @@ export const VENTAS_AYUDA = [
   '- ventas_perdidos(rango:X): lo que se perdió en un periodo (oportunidades rechazadas, contratos cancelados o vencidos sin renovar, y los que bajaron servicios o valor) con sus motivos; rango = mes, mes_pasado, 90 (por defecto) o 365.',
   '- ventas_embudo(rango:X): conversión entre etapas y velocidad de respuesta y de cotización de la empresa; rango = 90 (por defecto), 180 o 365.',
   '- ventas_contratos(estado:X): contratos comerciales de los clientes; estado = vigente, por_vencer, vencido, cancelado o renovado (opcional).',
-  '- ventas_documentos(estado:X): documentos de Documentación (generados y firmados); estado = borrador, firma o firmados (opcional).',
+  '- ventas_documentos(estado:X): documentos de Documentos y firma (generados y firmados); estado = borrador, firma o firmados (opcional).',
   '- ventas_resumen: panorama general de clientes (por etapa, seguimientos, estancados, aceptación).',
   '- ventas_clientes_hoy: a qué clientes debe dar seguimiento HOY quien pregunta.',
   '- ventas_cliente(nombre:X): ficha corta de UN cliente (datos, etapa, responsable, siguiente paso, historial reciente). Para investigar usa ventas_expediente.',
@@ -47,6 +47,7 @@ export function buildSalesAgentPrompt(): string {
     '',
     'Para preguntas de cartera o de periodo, responde directo con las cifras y lo que significan, sin ese formato.',
     'Los montos (valor mensual, monto cotizado) existen cuando se registraron; si falta alguno, dilo.',
+    'VOCABULARIO: el equipo viene de Zoho CRM. «Posible cliente» = lead (así lo llama Google Ads); «trato» = oportunidad; «cuenta» = la persona o empresa registrada (en los datos aparece como «cliente», aunque sea un prospecto); «contacto» = hoy una cuenta tiene un solo correo y teléfono. Entiende esas palabras en las preguntas y responde con «cuenta», «oportunidad» y «posible cliente». Facturas, órdenes de compra, proveedores, casos y previsiones no existen en esta app.',
     'Si te piden algo fuera de Ventas, responde que ese tema no es de este asistente y que use Agente Gemeseg.',
   ].join('\n');
 }

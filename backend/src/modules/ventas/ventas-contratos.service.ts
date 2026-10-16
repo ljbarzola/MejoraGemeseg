@@ -104,7 +104,7 @@ export class VentasContratosService {
     // Documentación, 2026-10-07): antes el vínculo era opcional y quedaron
     // documentos huérfanos. Opcionalmente cuelga de un contrato del cliente.
     if (!dto.salesClientId) {
-      throw new BadRequestException('Elige el cliente de este documento.');
+      throw new BadRequestException('Elige la cuenta de este documento.');
     }
     await this.assertClienteDeLaEmpresa(dto.salesClientId, companyId);
     if (dto.agreementId) {
@@ -197,7 +197,7 @@ export class VentasContratosService {
       where: { id: clientId, companyId },
       select: { id: true },
     });
-    if (!cliente) throw new NotFoundException('Cliente no encontrado');
+    if (!cliente) throw new NotFoundException('Cuenta no encontrada');
   }
 
   private async assertContratoDelCliente(
@@ -244,7 +244,7 @@ export class VentasContratosService {
     if (dto.annexC !== undefined) data.annexC = dto.annexC;
     if (dto.salesClientId !== undefined) {
       if (!dto.salesClientId) {
-        throw new BadRequestException('Elige el cliente de este documento.');
+        throw new BadRequestException('Elige la cuenta de este documento.');
       }
       await this.assertClienteDeLaEmpresa(dto.salesClientId, contract.companyId);
       data.salesClientId = dto.salesClientId;

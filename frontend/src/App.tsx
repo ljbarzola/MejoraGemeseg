@@ -100,7 +100,7 @@ const OportunidadesPage = lazy(() => import('./pages/ventas/OportunidadesPage'))
 const ConfiguracionVentasPage = lazy(() => import('./pages/ventas/ConfiguracionVentasPage'));
 const TemplateList = lazy(() => import('./pages/ventas/TemplateList'));
 const TemplateConfig = lazy(() => import('./pages/ventas/TemplateConfig'));
-// "Documentación" = generar y firmar documentos desde plantillas (antes se
+// "Documentos y firma" (antes "Documentación") = generar y firmar documentos desde plantillas (antes se
 // llamaba "Contratos"). "Contratos" ahora es el acuerdo comercial del cliente.
 const ContratosList = lazy(() => import('./pages/ventas/ContratosList'));
 const ContratosComercialesList = lazy(() => import('./pages/ventas/ContratosComercialesList'));
@@ -479,7 +479,7 @@ function AppInner() {
         {/* Contratos: el acuerdo comercial de cada cliente (servicios, vigencia, renovaciones). */}
         <Route path="/ventas/contratos" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratosComercialesList /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/contratos/:id" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoComercialDetalle /></SectionRoute></ProtectedLayout>} />
-        {/* Documentación: generar y firmar documentos desde plantillas (antes "Contratos"). */}
+        {/* Documentos y firma (la URL sigue siendo /ventas/documentacion): generar y firmar documentos desde plantillas (antes "Contratos"). */}
         <Route path="/ventas/documentacion" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratosList /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/documentacion/nuevo" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoForm /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/documentacion/nuevo/:templateId" element={<ProtectedLayout><SectionRoute section="VENTAS"><ContratoForm /></SectionRoute></ProtectedLayout>} />

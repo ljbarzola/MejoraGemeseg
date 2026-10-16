@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Settings2, Eye, Pencil, RefreshCw, Trash2, Ban, ListChecks } from 'lucide-react';
+import { Plus, Settings2, Eye, Pencil, RefreshCw, Trash2, Ban, ListChecks, PackageCheck } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
@@ -18,9 +18,11 @@ import {
   getContratosComerciales,
   deleteContratoComercial,
   cancelarContratoComercial,
+  updateContratoComercial,
   getSalesClients,
   getServicios,
   ESTADO_CONTRATO_LABEL,
+  GARANTIA_LABEL,
   type ContratoComercial,
   type EstadoContrato,
   type SalesClient,
@@ -36,23 +38,27 @@ type ModalState =
 // Columnas elegibles de la tabla (además de Cliente y Acciones, que son fijas).
 const COLUMNAS_CONTRATOS = [
   { key: 'titulo', label: 'Contrato' },
-  { key: 'servicios', label: 'Servicios' },
+  { key: 'tipo', label: 'Tipo' },
+  { key: 'servicios', label: 'Servicios / productos' },
   { key: 'vigencia', label: 'Vigencia' },
-  { key: 'valor', label: 'Valor mensual' },
+  { key: 'valor', label: 'Valor' },
   { key: 'estado', label: 'Estado' },
   { key: 'documentos', label: 'Documentos' },
   { key: 'gracia', label: 'Días de gracia' },
 ];
+// «Tipo» no va por defecto: con ella la tabla se pasa del ancho visible y «Estado» queda fuera de
+// pantalla. El producto se reconoce igual por la etiqueta bajo su nombre; quien quiera la columna
+// la activa en «Columnas».
 const COLUMNAS_CONTRATOS_POR_DEFECTO = ['titulo', 'servicios', 'vigencia', 'valor', 'estado', 'documentos'];
 const ANCHO_COLUMNA_CONTRATOS: Record<string, number> = {
-  titulo: 180, servicios: 230, vigencia: 140, valor: 140, estado: 160, documentos: 120, gracia: 120,
+  titulo: 180, tipo: 110, servicios: 230, vigencia: 140, valor: 140, estado: 160, documentos: 120, gracia: 120,
 };
 // Clave de ordenamiento de cada columna (la vigencia ordena por fecha de inicio).
 const ORDEN_COLUMNA_CONTRATOS: Record<string, string> = { vigencia: 'inicio' };
 
 // "Contratos" de Ventas: el acuerdo comercial de cada cliente (servicios,
 // vigencia, renovaciones). Los documentos que se generan y firman viven en
-// "Documentación" y cuelgan de estos contratos.
+// "Documentos y firma" y cuelgan de estos contratos.
 export default function ContratosComercialesList() {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -64,6 +70,7 @@ export default function ContratosComercialesList() {
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroServicio, setFiltroServicio] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
   const [modal, setModal] = useState<ModalState>(null);
   const [verServicios, setVerServicios] = useState(false);
   const [verMotivos, setVerMotivos] = useState(false);
@@ -101,6 +108,7 @@ export default function ContratosComercialesList() {
     const q = busqueda.toLowerCase().trim();
     return contratos.filter((c) => {
       if (filtroEstado && c.estado !== filtroEstado) return false;
+      if (filtroTipo && c.kind !== filtroTipo) return false;
       if (filtroServicio && !c.services.some((s) => String(s.id) === filtroServicio)) return false;
       if (!q) return true;
       return (
@@ -109,18 +117,19 @@ export default function ContratosComercialesList() {
         c.services.some((s) => s.name.toLowerCase().includes(q))
       );
     });
-  }, [contratos, busqueda, filtroEstado, filtroServicio]);
+  }, [contratos, busqueda, filtroEstado, filtroServicio, filtroTipo]);
 
   const { filas, thProps, SortIcon } = useSortableTable(
     filtrados,
     {
       cliente: (c) => c.salesClient.name,
       titulo: (c) => c.title || `Contrato #${c.id}`,
+      tipo: (c) => (c.kind === 'PRODUCTO' ? 'Venta de producto' : 'Servicio recurrente'),
       servicios: (c) => c.services.map((s) => s.name).join(', '),
       inicio: (c) => c.startDate,
       fin: (c) => c.endDate,
       estado: (c) => ESTADO_CONTRATO_LABEL[c.estado],
-      valor: (c) => c.monthlyValue ?? -1,
+      valor: (c) => (c.kind === 'PRODUCTO' ? c.totalValue : c.monthlyValue) ?? -1,
       documentos: (c) => c.documentos,
       gracia: (c) => c.graceDays,
     },
@@ -134,32 +143,59 @@ export default function ContratosComercialesList() {
     if (!c) return;
     try {
       await deleteContratoComercial(c.id);
-      showToast('Contrato eliminado. Sus documentos siguen en Documentación.', 'success');
+      showToast('Contrato eliminado. Sus documentos siguen en Documentos y firma.', 'success');
       cargar();
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo eliminar el contrato', 'error');
     }
   };
 
-  const acciones = (c: ContratoComercial): RowAction[] => [
-    { label: 'Ver detalle', icon: <Eye size={14} />, onClick: () => navigate(`/ventas/contratos/${c.id}`) },
-    { label: 'Editar', icon: <Pencil size={14} />, onClick: () => setModal({ modo: 'editar', contrato: c }) },
-    {
-      label: 'Renovar',
-      icon: <RefreshCw size={14} />,
-      hint: c.estado === 'RENOVADO' ? 'Ya fue renovado' : c.estado === 'CANCELADO' ? 'Un contrato cancelado no se renueva' : undefined,
-      disabled: c.estado === 'RENOVADO' || c.estado === 'CANCELADO',
-      onClick: () => setModal({ modo: 'renovar', contrato: c }),
-    },
-    {
-      label: 'Cancelar contrato',
-      icon: <Ban size={14} />,
-      hint: c.estado === 'RENOVADO' || c.estado === 'CANCELADO' ? 'Ya está renovado o cancelado' : undefined,
-      disabled: c.estado === 'RENOVADO' || c.estado === 'CANCELADO',
-      onClick: () => setACancelar(c),
-    },
-    { label: 'Eliminar', icon: <Trash2 size={14} />, danger: true, onClick: () => setAEliminar(c) },
-  ];
+  const marcarEntregado = async (c: ContratoComercial) => {
+    try {
+      await updateContratoComercial(c.id, { status: 'ENTREGADO' });
+      showToast('Marcado como entregado', 'success');
+      cargar();
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'No se pudo marcar como entregado', 'error');
+    }
+  };
+
+  const acciones = (c: ContratoComercial): RowAction[] => {
+    const producto = c.kind === 'PRODUCTO';
+    const cerrado = c.estado === 'RENOVADO' || c.estado === 'CANCELADO';
+    const lista: RowAction[] = [
+      { label: 'Ver detalle', icon: <Eye size={14} />, onClick: () => navigate(`/ventas/contratos/${c.id}`) },
+      { label: 'Editar', icon: <Pencil size={14} />, onClick: () => setModal({ modo: 'editar', contrato: c }) },
+    ];
+    if (producto) {
+      lista.push({
+        label: 'Marcar como entregado',
+        icon: <PackageCheck size={14} />,
+        hint: c.estado === 'POR_ENTREGAR' ? undefined : c.estado === 'ENTREGADO' ? 'Ya está entregado' : 'Una venta cancelada no se entrega',
+        disabled: c.estado !== 'POR_ENTREGAR',
+        onClick: () => marcarEntregado(c),
+      });
+    } else {
+      lista.push({
+        label: 'Renovar',
+        icon: <RefreshCw size={14} />,
+        hint: c.estado === 'RENOVADO' ? 'Ya fue renovado' : c.estado === 'CANCELADO' ? 'Un contrato cancelado no se renueva' : undefined,
+        disabled: cerrado,
+        onClick: () => setModal({ modo: 'renovar', contrato: c }),
+      });
+    }
+    lista.push(
+      {
+        label: producto ? 'Cancelar venta' : 'Cancelar contrato',
+        icon: <Ban size={14} />,
+        hint: cerrado ? 'Ya está renovado o cancelado' : undefined,
+        disabled: cerrado,
+        onClick: () => setACancelar(c),
+      },
+      { label: 'Eliminar', icon: <Trash2 size={14} />, danger: true, onClick: () => setAEliminar(c) },
+    );
+    return lista;
+  };
 
   const celdaContrato = (key: string, c: ContratoComercial): ReactNode => {
     switch (key) {
@@ -170,9 +206,24 @@ export default function ContratosComercialesList() {
             {c.renewedFromId && <div style={{ fontSize: 11, color: '#888' }}>Renovación</div>}
           </>
         );
+      case 'tipo':
+        return c.kind === 'PRODUCTO' ? 'Producto' : 'Servicio';
       case 'servicios':
-        return c.services.map((s) => s.name).join(', ') || '—';
+        return (
+          <>
+            {c.services.map((s) => s.name).join(', ') || '—'}
+            {c.kind === 'PRODUCTO' && <div style={{ fontSize: 11, color: '#888' }}>Venta de producto</div>}
+          </>
+        );
       case 'vigencia':
+        if (c.kind === 'PRODUCTO') {
+          return (
+            <>
+              <div>{diaCorto(c.startDate)}</div>
+              <div style={{ fontSize: 11, color: '#888' }}>venta única</div>
+            </>
+          );
+        }
         return (
           <>
             <div>{diaCorto(c.startDate)}</div>
@@ -180,13 +231,33 @@ export default function ContratosComercialesList() {
           </>
         );
       case 'valor':
+        if (c.kind === 'PRODUCTO') {
+          return c.totalValue != null
+            ? (
+              <>
+                {`$${c.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                <div style={{ fontSize: 11, color: '#888' }}>total</div>
+              </>
+            )
+            : <span style={{ color: '#a0aec0' }}>—</span>;
+        }
         return c.monthlyValue != null
-          ? `$${c.monthlyValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          ? (
+            <>
+              {`$${c.monthlyValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              <div style={{ fontSize: 11, color: '#888' }}>al mes</div>
+            </>
+          )
           : <span style={{ color: '#a0aec0' }}>—</span>;
       case 'estado':
         return (
           <>
             <EstadoContratoBadge estado={c.estado} />
+            {c.kind === 'PRODUCTO' && c.garantia && (
+              <div style={{ fontSize: 11, marginTop: 3, color: c.garantia === 'VIGENTE' ? '#718096' : '#b45309' }}>
+                {GARANTIA_LABEL[c.garantia]}{c.warrantyUntil ? ` · hasta ${diaCorto(c.warrantyUntil)}` : ''}
+              </div>
+            )}
             {(c.estado === 'VENCIDO' || c.estado === 'CANCELADO') && (
               <div style={{ fontSize: 11, marginTop: 3, color: c.motivoCierre ? '#718096' : '#b45309' }}>
                 {c.motivoCierre ? `Motivo: ${c.motivoCierre}` : 'Sin motivo registrado'}
@@ -204,7 +275,7 @@ export default function ContratosComercialesList() {
   };
   const columnasVisibles = columnPrefs.visible.filter((k) => COLUMNAS_CONTRATOS.some((c) => c.key === k));
 
-  const hayFiltros = !!(busqueda || filtroEstado || filtroServicio);
+  const hayFiltros = !!(busqueda || filtroEstado || filtroServicio || filtroTipo);
 
   return (
     <div className="page-container">
@@ -215,7 +286,7 @@ export default function ContratosComercialesList() {
         </div>
         <div className="header-actions">
           <button className="btn-secondary" onClick={() => setVerMotivos(true)}>
-            <ListChecks size={16} /> Motivos
+            <ListChecks size={16} /> Motivos de cierre
           </button>
           <button className="btn-secondary" onClick={() => setVerServicios(true)}>
             <Settings2 size={16} /> Servicios
@@ -231,9 +302,14 @@ export default function ContratosComercialesList() {
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por cliente, título o servicio..."
+            placeholder="Buscar por cuenta, título o servicio..."
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
+          <select className="filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
+            <option value="">Servicios y productos</option>
+            <option value="SERVICIO">Solo servicios</option>
+            <option value="PRODUCTO">Solo productos</option>
+          </select>
           <select className="filter-select" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
             <option value="">Todos los estados</option>
             {(Object.keys(ESTADO_CONTRATO_LABEL) as EstadoContrato[]).map((e) => (
@@ -241,7 +317,7 @@ export default function ContratosComercialesList() {
             ))}
           </select>
           <select className="filter-select" value={filtroServicio} onChange={(e) => setFiltroServicio(e.target.value)}>
-            <option value="">Todos los servicios</option>
+            <option value="">Todos los servicios y productos</option>
             {servicios.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
@@ -251,14 +327,14 @@ export default function ContratosComercialesList() {
           <ColumnPickerMenu
             columns={COLUMNAS_CONTRATOS}
             visible={columnPrefs.visible}
-            fixedLabel="Cliente"
+            fixedLabel="Cuenta"
             onApply={async (keys) => {
               const guardado = await columnPrefs.set(keys);
               if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
             }}
           />
           <ClearFiltersButton
-            onClear={() => { setBusqueda(''); setFiltroEstado(''); setFiltroServicio(''); }}
+            onClear={() => { setBusqueda(''); setFiltroEstado(''); setFiltroServicio(''); setFiltroTipo(''); }}
             disabled={!hayFiltros}
           />
         </div>
@@ -270,7 +346,7 @@ export default function ContratosComercialesList() {
         ) : contratos.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36, marginBottom: 8 }}>📑</div>
-            <div>Aún no hay contratos. Crea el primero para un cliente.</div>
+            <div>Aún no hay contratos. Crea el primero para una cuenta.</div>
           </div>
         ) : filas.length === 0 ? (
           <p style={{ color: '#888', fontSize: 13 }}>No hay contratos que coincidan con los filtros.</p>
@@ -279,7 +355,7 @@ export default function ContratosComercialesList() {
             <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th {...thProps('cliente')} style={{ width: 190 }}>Cliente <SortIcon campo="cliente" /></th>
+                  <th {...thProps('cliente')} style={{ width: 190 }}>Cuenta <SortIcon campo="cliente" /></th>
                   {columnasVisibles.map((k) => {
                     const col = COLUMNAS_CONTRATOS.find((c) => c.key === k)!;
                     const orden = ORDEN_COLUMNA_CONTRATOS[k] ?? k;
@@ -336,14 +412,16 @@ export default function ContratosComercialesList() {
       {aCancelar && (
         <MotivoCierreModal
           kind="CONTRATO_CANCELADO"
-          titulo="Cancelar contrato"
-          descripcion={`Contrato de ${aCancelar.salesClient.name}`}
-          contexto="El contrato queda cancelado desde hoy y el cliente deja de contar como vigente. Explicar por qué ayuda a entender qué pasó."
-          confirmLabel="Cancelar contrato"
+          titulo={aCancelar.kind === 'PRODUCTO' ? 'Cancelar venta' : 'Cancelar contrato'}
+          descripcion={`${aCancelar.kind === 'PRODUCTO' ? 'Venta' : 'Contrato'} de ${aCancelar.salesClient.name}`}
+          contexto={aCancelar.kind === 'PRODUCTO'
+            ? 'La venta queda cancelada. Explicar por qué ayuda a entender qué pasó.'
+            : 'El contrato queda cancelado desde hoy y el cliente deja de contar como vigente. Explicar por qué ayuda a entender qué pasó.'}
+          confirmLabel={aCancelar.kind === 'PRODUCTO' ? 'Cancelar venta' : 'Cancelar contrato'}
           onConfirm={async (motivo) => {
             await cancelarContratoComercial(aCancelar.id, { motivo });
             setACancelar(null);
-            showToast('Contrato cancelado', 'success');
+            showToast(aCancelar.kind === 'PRODUCTO' ? 'Venta cancelada' : 'Contrato cancelado', 'success');
             cargar();
           }}
           onCancel={() => setACancelar(null)}
@@ -353,7 +431,7 @@ export default function ContratosComercialesList() {
       {aEliminar && (
         <ConfirmDialog
           title="Eliminar contrato"
-          message={`¿Eliminar el contrato de ${aEliminar.salesClient.name}? Los documentos generados no se borran: siguen en Documentación.`}
+          message={`¿Eliminar el contrato de ${aEliminar.salesClient.name}? Los documentos generados no se borran: siguen en Documentos y firma.`}
           confirmLabel="Eliminar"
           danger
           onConfirm={confirmarEliminar}

@@ -485,7 +485,7 @@ export type TimelineEvent =
       servicios: string[]; originType: string; source: string | null;
     }
   | {
-      kind: 'acuerdo'; id: string; at: string; agreementId: number; title: string | null; servicios: string[];
+      kind: 'acuerdo'; id: string; at: string; agreementId: number; title: string | null; producto?: boolean; servicios: string[];
       step: 'creado' | 'renovado' | 'cancelado'; authorName?: string | null; startDate?: string; endDate?: string | null;
     }
   | {
@@ -592,7 +592,7 @@ export function salesClientListaSubopcionesLabel(client: SalesClient | null | un
 // ==================== CONTRATOS COMERCIALES Y SERVICIOS ====================
 // "Contrato" en la pantalla de Ventas = el acuerdo comercial de un cliente
 // (servicios, vigencia, renovaciones). El documento que se genera y firma es
-// `SalesContract` (pantalla "Documentación"). En la API los contratos
+// `SalesContract` (pantalla "Documentos y firma"). En la API los contratos
 // comerciales viven bajo /ventas/acuerdos para no chocar con /ventas/contratos.
 export type EstadoContrato =
   | 'POR_INICIAR'
@@ -600,7 +600,14 @@ export type EstadoContrato =
   | 'POR_VENCER'
   | 'VENCIDO'
   | 'RENOVADO'
-  | 'CANCELADO';
+  | 'CANCELADO'
+  | 'POR_ENTREGAR'
+  | 'ENTREGADO';
+
+// SERVICIO = recurrente (vigencia, renovación, valor mensual). PRODUCTO = venta
+// única (sin fin ni renovación; Por entregar → Entregado, garantía opcional).
+export type TipoContrato = 'SERVICIO' | 'PRODUCTO';
+export type EstadoGarantia = 'VIGENTE' | 'POR_VENCER' | 'VENCIDA';
 
 export interface SalesServicio {
   id: number;
@@ -639,8 +646,14 @@ export interface ContratoComercial {
   title?: string | null;
   startDate: string;
   endDate?: string | null;
-  status: 'ACTIVO' | 'RENOVADO' | 'CANCELADO';
+  status: 'ACTIVO' | 'RENOVADO' | 'CANCELADO' | 'POR_ENTREGAR' | 'ENTREGADO';
   estado: EstadoContrato;
+  kind: TipoContrato;
+  // Solo producto: valor total, fecha de entrega y garantía (opcional).
+  totalValue?: number | null;
+  deliveredAt?: string | null;
+  warrantyUntil?: string | null;
+  garantia?: EstadoGarantia | null;
   notes?: string | null;
   renewedFromId?: number | null;
   // Valor mensual (null = no registrado) y días de gracia tras el vencimiento.
@@ -667,8 +680,13 @@ export interface ContratoComercialInput {
   endDate?: string;
   serviceIds?: number[];
   notes?: string;
-  // Solo se puede pedir ACTIVO (reactivar). Cancelar tiene su propia llamada, con motivo.
-  status?: 'ACTIVO';
+  kind?: TipoContrato;
+  totalValue?: number | null;
+  warrantyUntil?: string;
+  deliveredAt?: string;
+  // Servicio: solo ACTIVO (reactivar). Producto: POR_ENTREGAR o ENTREGADO.
+  // Cancelar tiene su propia llamada, con motivo.
+  status?: 'ACTIVO' | 'POR_ENTREGAR' | 'ENTREGADO';
   monthlyValue?: number | null;
   graceDays?: number;
   opportunityId?: number;
@@ -688,7 +706,7 @@ export const updateServicio = (id: number, data: { name?: string; description?: 
 export const deleteServicio = (id: number) =>
   api.delete(`/ventas/servicios/${id}`).then(r => r.data);
 
-export const getContratosComerciales = (params?: { clienteId?: number; estado?: string; servicioId?: number; q?: string }): Promise<ContratoComercial[]> =>
+export const getContratosComerciales = (params?: { clienteId?: number; estado?: string; servicioId?: number; q?: string; tipo?: TipoContrato }): Promise<ContratoComercial[]> =>
   api.get('/ventas/acuerdos', { params }).then(r => r.data);
 
 export const getContratoComercial = (id: number): Promise<ContratoComercial> =>
@@ -722,6 +740,8 @@ export const ESTADO_CONTRATO_LABEL: Record<EstadoContrato, string> = {
   VENCIDO: 'Vencido',
   RENOVADO: 'Renovado',
   CANCELADO: 'Cancelado',
+  POR_ENTREGAR: 'Por entregar',
+  ENTREGADO: 'Entregado',
 };
 
 export const ESTADO_CONTRATO_COLOR: Record<EstadoContrato, string> = {
@@ -731,6 +751,14 @@ export const ESTADO_CONTRATO_COLOR: Record<EstadoContrato, string> = {
   VENCIDO: '#dc2626',
   RENOVADO: '#6b7280',
   CANCELADO: '#9ca3af',
+  POR_ENTREGAR: '#d97706',
+  ENTREGADO: '#059669',
+};
+
+export const GARANTIA_LABEL: Record<EstadoGarantia, string> = {
+  VIGENTE: 'Garantía vigente',
+  POR_VENCER: 'Garantía por vencer',
+  VENCIDA: 'Garantía vencida',
 };
 
 // ==================== CICLO DE VIDA, MOTIVOS, OPORTUNIDADES, LEADS Y ANALÍTICA ====================
@@ -768,7 +796,7 @@ export type MotivoKind =
   | 'CONTRATO_NO_RENOVADO';
 
 export const MOTIVO_KIND_LABEL: Record<MotivoKind, string> = {
-  LEAD_DESCARTE: 'Lead descartado',
+  LEAD_DESCARTE: 'Posible cliente descartado',
   OPP_PERDIDA: 'Oportunidad perdida',
   CONTRATO_CANCELADO: 'Contrato cancelado',
   CONTRATO_REDUCCION: 'Contrato renovado con menos',
@@ -860,11 +888,11 @@ export interface CambioEtapaInput {
 }
 
 export const ORIGEN_OPORTUNIDAD_LABEL: Record<string, string> = {
-  LEAD: 'Lead',
+  LEAD: 'Posible cliente',
   MANUAL: 'Ingreso manual',
   REFERIDO: 'Referido',
   MIGRADA: 'Sistema anterior',
-  CLIENTE_EXISTENTE: 'Nuevo servicio de un cliente',
+  CLIENTE_EXISTENTE: 'Nuevo servicio de una cuenta',
   HISTORICO: 'Ya era cliente',
 };
 
@@ -904,6 +932,11 @@ export interface CanalLeadDef {
 }
 export const getCanalesLead = (): Promise<CanalLeadDef[]> =>
   api.get('/ventas/entrantes/canales').then(r => r.data);
+
+// Leads recibidos por canal y cuándo llegó el último (lo real, no un estado escrito a mano).
+export interface ActividadCanalLead { canal: string; total: number; ultimo: string | null }
+export const getActividadCanalesLead = (): Promise<ActividadCanalLead[]> =>
+  api.get('/ventas/entrantes/canales/actividad').then(r => r.data);
 
 export interface LeadEntrante {
   id: number;
@@ -986,7 +1019,6 @@ export interface ConfiguracionVentas {
   // Cuenta de servicio que hay que invitar como usuario en Google Ads.
   cuentaDeServicio: string;
   landings: LandingConfig[];
-  landingsPersonalizadas: boolean;
 }
 export const getConfiguracionVentas = (): Promise<ConfiguracionVentas> =>
   api.get('/ventas/configuracion').then(r => r.data);
@@ -994,8 +1026,6 @@ export const guardarAjustesGoogleAds = (data: Partial<AjustesGoogleAds>): Promis
   api.put('/ventas/configuracion/google-ads', data).then(r => r.data);
 export const guardarLandingsConfig = (landings: LandingConfig[]): Promise<LandingConfig[]> =>
   api.put('/ventas/configuracion/landings', { landings }).then(r => r.data);
-export const restaurarLandingsConfig = (): Promise<LandingConfig[]> =>
-  api.delete('/ventas/configuracion/landings').then(r => r.data);
 
 // Claves de las conexiones (formulario web, Google Ads): reutiliza las
 // api-keys que ya existían para los webhooks de Ventas.

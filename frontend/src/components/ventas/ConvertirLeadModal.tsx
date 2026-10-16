@@ -54,7 +54,7 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
 
   const convertir = async () => {
     setError('');
-    if (destino === 'nuevo' && !nombre.trim()) return setError('El cliente necesita un nombre.');
+    if (destino === 'nuevo' && !nombre.trim()) return setError('La cuenta necesita un nombre.');
     setGuardando(true);
     try {
       const r = await convertirLeadEntrante(lead.id, {
@@ -67,7 +67,7 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
       onDone(r);
     } catch (err: any) {
       const msg = err?.response?.data?.message;
-      setError((Array.isArray(msg) ? msg[0] : msg) || 'No se pudo pasar el lead a oportunidad. Intenta de nuevo.');
+      setError((Array.isArray(msg) ? msg[0] : msg) || 'No se pudo pasar el posible cliente a oportunidad. Intenta de nuevo.');
     } finally {
       setGuardando(false);
     }
@@ -90,26 +90,26 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
           )}
 
           <p style={{ fontSize: 12, color: '#666', margin: '0 0 12px' }}>
-            Al pasar a oportunidad la persona queda como prospecto en Oportunidades; solo será cliente cuando acepte la propuesta.
+            Al pasar a oportunidad se crea su cuenta como prospecto (la ves en Cuentas, estado «Prospecto») y la negociación en Oportunidades; solo será cliente cuando acepte la propuesta.
           </p>
 
           {cargando ? (
-            <p style={{ color: '#888', fontSize: 13 }}>Comprobando si ya es cliente...</p>
+            <p style={{ color: '#888', fontSize: 13 }}>Comprobando si ya tiene una cuenta...</p>
           ) : (
             coincidencias.length > 0 && (
               <div style={{ background: '#fffbeb', border: '1px solid #f6e05e', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
                 <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600 }}>
-                  Este contacto se parece a un cliente que ya existe (mismo correo, teléfono o RUC).
+                  Este posible cliente se parece a una cuenta que ya existe (mismo correo, teléfono o RUC).
                 </p>
                 {coincidencias.map((c) => (
                   <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 400, cursor: 'pointer', marginBottom: 4 }}>
                     <input type="radio" name="destino" checked={destino === c.id} onChange={() => setDestino(c.id)} />
-                    Sumar la oportunidad al cliente <strong>{c.name}</strong>
+                    Sumar la oportunidad a la cuenta <strong>{c.name}</strong>
                   </label>
                 ))}
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 400, cursor: 'pointer' }}>
                   <input type="radio" name="destino" checked={destino === 'nuevo'} onChange={() => setDestino('nuevo')} />
-                  Es otro cliente: crear uno nuevo
+                  Es otra persona o empresa: crear una cuenta nueva
                 </label>
               </div>
             )
@@ -118,7 +118,7 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
           {destino === 'nuevo' && (
             <>
               <div className="form-group">
-                <label>Nombre o razón social del cliente *</label>
+                <label>Nombre o razón social de la cuenta *</label>
                 <input type="text" value={nombre} maxLength={150} onChange={(e) => setNombre(e.target.value)} />
               </div>
               <div className="form-row">
@@ -163,7 +163,7 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
         <div className="modal-actions">
           <button className="btn-secondary" onClick={onClose} disabled={guardando}>Cancelar</button>
           <button className="auth-btn" onClick={convertir} disabled={guardando || cargando}>
-            {guardando ? 'Guardando...' : destino === 'nuevo' ? 'Convertir en oportunidad' : 'Sumar la oportunidad'}
+            {guardando ? 'Guardando...' : destino === 'nuevo' ? 'Pasar a oportunidad' : 'Sumar la oportunidad'}
           </button>
         </div>
       </div>

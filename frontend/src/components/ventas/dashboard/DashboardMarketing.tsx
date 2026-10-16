@@ -58,20 +58,20 @@ export default function DashboardMarketing({ desde, hasta }: { desde: string; ha
   return (
     <Tarjeta
       titulo="Embudo de marketing"
-      hint={`Leads que llegaron del ${formatoDia(datos.periodo.desde)} al ${formatoDia(datos.periodo.hasta)}`}
+      hint={`Posibles clientes (leads) que llegaron del${formatoDia(datos.periodo.desde)} al ${formatoDia(datos.periodo.hasta)}`}
     >
       {t.leads === 0 ? (
-        <SinDatos texto="Aún no llegaron leads en este periodo. Cuando lleguen por la web o los anuncios, aquí verás cuántos cotizaron y cuántos contrataron." />
+        <SinDatos texto="Aún no llegaron posibles clientes (leads) en este periodo. Cuando lleguen por la web o los anuncios, aquí verás cuántos cotizaron y cuántos contrataron." />
       ) : (
         <>
-          <BarraH etiqueta="Leads (llenaron el formulario)" valor={t.leads} max={t.leads} detalle={`${t.leads}`} />
+          <BarraH etiqueta="Posibles clientes (leads: llenaron el formulario)" valor={t.leads} max={t.leads} detalle={`${t.leads}`} />
           <BarraH
             etiqueta="Cotizaron" valor={t.cualificados} max={t.leads} color="#d97706"
-            detalle={`${t.cualificados} · ${pct(t.pctCualificados)} de los leads`}
+            detalle={`${t.cualificados} · ${pct(t.pctCualificados)} de los posibles clientes`}
           />
           <BarraH
             etiqueta="Contrataron" valor={t.convertidos} max={t.leads} color="#2f855a"
-            detalle={`${t.convertidos} · ${Math.round((t.convertidos / t.leads) * 1000) / 10}% de los leads`}
+            detalle={`${t.convertidos} · ${Math.round((t.convertidos / t.leads) * 1000) / 10}% de los posibles clientes`}
           />
           {t.cualificados > 0 && (
             <p style={{ margin: '0 0 4px', fontSize: 12, color: '#718096' }}>
@@ -92,14 +92,14 @@ export default function DashboardMarketing({ desde, hasta }: { desde: string; ha
       </div>
 
       {filas.length === 0 ? (
-        <SinDatos texto="Sin leads para agrupar en este periodo." />
+        <SinDatos texto="Sin posibles clientes para agrupar en este periodo." />
       ) : (
         <div className="tasks-table-wrapper">
           <table className="tasks-table resizable-table" ref={tablaRef}>
             <thead>
               <tr>
                 <th {...thProps('clave')}>{colTabla} <SortIcon campo="clave" /></th>
-                <th {...thProps('leads')}>Leads <SortIcon campo="leads" /></th>
+                <th {...thProps('leads')}>Posibles clientes (leads) <SortIcon campo="leads" /></th>
                 <th {...thProps('cualificados')}>Cotizaron <SortIcon campo="cualificados" /></th>
                 <th {...thProps('convertidos')}>Contrataron <SortIcon campo="convertidos" /></th>
                 <th {...thProps('pctConvertidos')}>% contrató <SortIcon campo="pctConvertidos" /></th>

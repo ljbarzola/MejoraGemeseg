@@ -53,6 +53,12 @@ export class VentasLeadsController {
     return this.leads.canales();
   }
 
+  @Get('canales/actividad')
+  @Section('VENTAS', 'view')
+  actividadCanales(@Req() req: any) {
+    return this.leads.actividadCanales(req.user.companyId);
+  }
+
   @Post()
   @Section('VENTAS', 'write')
   create(@Req() req: any, @Body() dto: CreateLeadDto) {

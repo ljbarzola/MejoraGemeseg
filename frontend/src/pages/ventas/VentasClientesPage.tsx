@@ -52,14 +52,23 @@ const PARA_COL = '__para';
 // "Columnas" de la barra de filtros (Referido por, Fecha, Fuente...).
 const DEFAULT_VISIBLE = ['email', 'phone', CICLO_COL, ETAPA_COL, SIGUIENTE_COL, PARA_COL, RESPONSABLE_COL];
 
-// Un cliente se oculta de la lista cuando su ciclo es PERDIDO o cuando es un
-// prospecto con una negociación abierta: eso se trabaja en Oportunidades.
-// Sin ciclo (las tablas aún no existen) se muestra todo.
-const visibleEnClientes = (c: SalesClient) =>
-  !(c.ciclo === 'PERDIDO' || (c.ciclo === 'PROSPECTO' && (c.oportunidadesAbiertas ?? 0) > 0));
+// «Cuentas» (antes «Clientes», 2026-10-16) lista a TODOS: prospectos, clientes,
+// ex-clientes y perdidos. Antes se escondían los perdidos y los prospectos con
+// una negociación abierta, y no había dónde editarlos. El filtro de estado
+// arranca en «Clientes y ex-clientes» ('' = lo que se veía antes). Sin ciclo
+// (las tablas aún no existen) cuenta como cliente.
+const CICLOS_DE_CLIENTE: CicloVida[] = ['CLIENTE', 'EN_RIESGO', 'EX_CLIENTE'];
+const FILTRO_TODAS = 'TODAS';
+type FiltroCiclo = '' | typeof FILTRO_TODAS | CicloVida;
+const coincideCiclo = (c: SalesClient, filtro: FiltroCiclo) => {
+  if (filtro === FILTRO_TODAS) return true;
+  if (filtro === '') return !c.ciclo || CICLOS_DE_CLIENTE.includes(c.ciclo);
+  return c.ciclo === filtro;
+};
 
-// El filtro de ciclo solo ofrece los ciclos que se ven en esta pantalla.
-const CICLOS_FILTRO: CicloVida[] = ['CLIENTE', 'EN_RIESGO', 'EX_CLIENTE'];
+// Estados que ofrece el filtro, además de los dos grupos («Clientes y
+// ex-clientes» y «Todas las cuentas»).
+const CICLOS_FILTRO: CicloVida[] = ['CLIENTE', 'EN_RIESGO', 'EX_CLIENTE', 'PROSPECTO', 'PERDIDO'];
 
 export default function VentasClientesPage() {
   const { showToast } = useToast();
@@ -81,7 +90,7 @@ export default function VentasClientesPage() {
   const [vista, setVista] = useState<'todos' | 'hoy'>('todos');
   // Solo Admin/Manager pueden mirar la vista Hoy de otros: 'mine', 'all' o el id de un vendedor.
   const [hoyResponsable, setHoyResponsable] = useState('mine');
-  const [filtroCiclo, setFiltroCiclo] = useState<CicloVida | ''>('');
+  const [filtroCiclo, setFiltroCiclo] = useState<FiltroCiclo>('');
   // Ficha abierta (id, no el objeto: se vuelve a leer de la lista cada vez que
   // esta se recarga, así muestra siempre los datos al día).
   const [fichaId, setFichaId] = useState<number | null>(null);
@@ -120,7 +129,7 @@ export default function VentasClientesPage() {
       setFields(f);
       setStages(s);
     } catch (err: any) {
-      showToast(err?.response?.data?.message || 'No se pudieron cargar los clientes', 'error');
+      showToast(err?.response?.data?.message || 'No se pudieron cargar las cuentas', 'error');
     } finally {
       setLoading(false);
     }
@@ -141,7 +150,11 @@ export default function VentasClientesPage() {
     if (etapa) setFiltroEtapa(etapa);
     if (searchParams.get('referido') === '1') setSoloReferidos(true);
     const ciclo = searchParams.get('ciclo');
-    if (ciclo && ciclo in CICLO_LABEL) setFiltroCiclo(ciclo as CicloVida);
+    if (ciclo === 'todas') setFiltroCiclo(FILTRO_TODAS);
+    else if (ciclo && ciclo in CICLO_LABEL) setFiltroCiclo(ciclo as CicloVida);
+    // Las cifras del Dashboard (por etapa, seguimientos, referidos) cuentan a
+    // todas las cuentas, prospectos incluidos: al venir de ahí no se esconden.
+    else if (etapa || seguimiento || searchParams.get('referido') === '1') setFiltroCiclo(FILTRO_TODAS);
     const ficha = Number(searchParams.get('ficha'));
     if (ficha) setFichaId(ficha);
   }, [searchParams]);
@@ -151,13 +164,14 @@ export default function VentasClientesPage() {
   ).sort((a, b) => a[1].localeCompare(b[1], 'es'));
 
   const hoy = hoyISO();
-  const visibles = clients.filter(visibleEnClientes);
+  const visibles = clients;
 
-  // Vista "Hoy": clientes que ya aceptaron o contratan (sin negociaciones
+  // Vista "Hoy": cuentas que ya aceptaron o contratan (sin negociaciones
   // abiertas: esas se siguen en Oportunidades) y tienen siguiente paso cuyo
   // seguimiento ya venció, es para hoy o aún no tiene fecha. Cada quien ve los
   // suyos; solo Admin/Manager pueden cambiar a "Todos" o a otro vendedor.
   const hoyClients = visibles.filter((c) => {
+    if (c.ciclo === 'PERDIDO') return false;
     if ((c.oportunidadesAbiertas ?? 0) > 0) return false;
     if (!c.nextActionText && !c.nextActionDate) return false;
     const alcance = esManager ? hoyResponsable : 'mine';
@@ -184,7 +198,6 @@ export default function VentasClientesPage() {
     if (filtroEtapa === 'none' && c.stage) return false;
     if (filtroEtapa && filtroEtapa !== 'none' && c.status !== filtroEtapa) return false;
     if (soloReferidos && !c.referredByUserId) return false;
-    if (filtroCiclo && c.ciclo !== filtroCiclo) return false;
     if (filtroSeguimiento) {
       if (c.stage?.isFinal) return false;
       if (urgenciaDe(c, hoy) !== (filtroSeguimiento === 'sin' ? 'sin' : filtroSeguimiento === 'hoy' ? 'hoy' : 'vencido')) return false;
@@ -196,7 +209,9 @@ export default function VentasClientesPage() {
     !filterResponsable ||
     (filterResponsable === 'none' ? !c.assignedUserId : String(c.assignedUserId) === filterResponsable);
 
-  const filtered = (vista === 'hoy' ? hoyClients : visibles.filter(coincideResponsable))
+  // El estado (Clientes, Prospectos, Perdidos…) solo se elige en la pestaña
+  // «Todos»; «Hoy» tiene su propia regla.
+  const filtered = (vista === 'hoy' ? hoyClients : visibles.filter(coincideResponsable).filter((c) => coincideCiclo(c, filtroCiclo)))
     .filter(coincideBusqueda)
     .filter(coincideExtras);
 
@@ -263,7 +278,7 @@ export default function VentasClientesPage() {
       await asignarmeSalesClient(client.id);
       load();
     } catch (err: any) {
-      showToast(err?.response?.data?.message || 'No se pudo asignar el cliente.', 'error');
+      showToast(err?.response?.data?.message || 'No se pudo asignar la cuenta.', 'error');
     }
   };
 
@@ -278,11 +293,11 @@ export default function VentasClientesPage() {
 
   // Acciones de la fila (menú "⋯"). Asignarme/Quitarme solo aparecen cuando
   // aplican: sin responsable → Asignarme; soy yo → Quitarme; otra persona →
-  // ninguna (nadie reasigna el cliente de otro).
+  // ninguna (nadie reasigna la cuenta de otro).
   const accionesFila = (c: SalesClient): RowAction[] => {
     const acciones: RowAction[] = [
-      { label: 'Ver ficha', hint: 'Datos e historial del cliente', icon: <ClipboardList size={14} />, onClick: () => setFichaId(c.id) },
-      { label: 'Editar cliente', icon: <Pencil size={14} />, onClick: () => { setEditingClient(c); setShowForm(true); } },
+      { label: 'Ver ficha', hint: 'Datos e historial de la cuenta', icon: <ClipboardList size={14} />, onClick: () => setFichaId(c.id) },
+      { label: 'Editar cuenta', icon: <Pencil size={14} />, onClick: () => { setEditingClient(c); setShowForm(true); } },
     ];
     acciones.push({
       label: 'Nuevo contrato',
@@ -291,9 +306,9 @@ export default function VentasClientesPage() {
       onClick: () => navigate(`/ventas/contratos?nuevo=1&clienteId=${c.id}`),
     });
     if (!c.assignedUserId) {
-      acciones.push({ label: 'Asignarme este cliente', icon: <UserPlus size={14} />, onClick: () => handleAsignarme(c) });
+      acciones.push({ label: 'Asignarme esta cuenta', icon: <UserPlus size={14} />, onClick: () => handleAsignarme(c) });
     } else if (c.assignedUserId === currentUser?.id) {
-      acciones.push({ label: 'Quitarme este cliente', icon: <UserMinus size={14} />, onClick: () => handleQuitarme(c) });
+      acciones.push({ label: 'Quitarme esta cuenta', icon: <UserMinus size={14} />, onClick: () => handleQuitarme(c) });
     }
     acciones.push({ label: 'Eliminar', icon: <Trash2 size={14} />, danger: true, onClick: () => setConfirmDelete(c) });
     return acciones;
@@ -303,7 +318,7 @@ export default function VentasClientesPage() {
     if (!confirmDelete) return;
     try {
       await deleteSalesClient(confirmDelete.id);
-      showToast('Cliente eliminado', 'success');
+      showToast('Cuenta eliminada', 'success');
       setConfirmDelete(null);
       load();
     } catch (err: any) {
@@ -330,11 +345,11 @@ export default function VentasClientesPage() {
       <div className="page-title-row">
         <div>
           <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Clientes</h1>
+          <h1>Cuentas</h1>
         </div>
         <div className="header-actions">
           <button type="button" className="btn-secondary" onClick={() => setShowFieldsConfig(true)}
-            title="Configurar los campos de la ficha del cliente" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            title="Configurar los campos de la ficha de la cuenta" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Settings2 size={15} /> Campos
           </button>
         </div>
@@ -368,11 +383,12 @@ export default function VentasClientesPage() {
                   <option key={id} value={id}>{name}</option>
                 ))}
               </select>
-              <select className="filter-select" value={filtroCiclo} onChange={(e) => setFiltroCiclo(e.target.value as CicloVida | '')} aria-label="Ciclo de vida">
-                <option value="">Todos los ciclos</option>
+              <select className="filter-select" value={filtroCiclo} onChange={(e) => setFiltroCiclo(e.target.value as FiltroCiclo)} aria-label="Estado de la cuenta">
+                <option value="">Clientes y ex-clientes</option>
                 {CICLOS_FILTRO.map((k) => (
                   <option key={k} value={k}>{CICLO_LABEL[k]}</option>
                 ))}
+                <option value={FILTRO_TODAS}>Todas las cuentas</option>
               </select>
               <select className="filter-select" value={filtroEtapa} onChange={(e) => setFiltroEtapa(e.target.value)} aria-label="Etapa de la negociación principal">
                 <option value="">Todas las etapas</option>
@@ -384,8 +400,8 @@ export default function VentasClientesPage() {
             </>
           ) : esManager ? (
             <select className="filter-select" value={hoyResponsable} onChange={(e) => setHoyResponsable(e.target.value)}>
-              <option value="mine">Mis clientes</option>
-              <option value="all">Todos los clientes</option>
+              <option value="mine">Mis cuentas</option>
+              <option value="all">Todas las cuentas</option>
               {responsables.filter(([id]) => id !== currentUser?.id).map(([id, name]) => (
                 <option key={id} value={String(id)}>{name}</option>
               ))}
@@ -411,13 +427,13 @@ export default function VentasClientesPage() {
             disabled={!search && !hayFiltrosExtra && (vista === 'hoy' ? hoyResponsable === 'mine' : !filterResponsable)}
           />
           <button className="auth-btn" onClick={() => { setEditingClient(null); setNuevoPaso('pregunta'); }}>
-            <Plus size={16} /> Nuevo cliente
+            <Plus size={16} /> Nueva cuenta
           </button>
         </div>
       </div>
 
       <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#718096' }}>
-        Aquí están quienes ya aceptaron o contratan. Las negociaciones en curso se trabajan en{' '}
+        Aquí están todas las personas y empresas (en Zoho: Cuentas y Contactos). Por defecto ves las que ya contratan; cambia el estado para ver los prospectos (en negociación) o los perdidos. Las negociaciones se trabajan en{' '}
         <Link to="/ventas/oportunidades" className="enlace-tabla">Oportunidades</Link>.
       </p>
 
@@ -449,10 +465,10 @@ export default function VentasClientesPage() {
         ) : filtered.length === 0 ? (
           <p style={{ color: '#888', fontSize: 13 }}>
             {vista === 'hoy' && !search
-              ? 'No hay seguimientos pendientes para hoy en tus clientes.'
+              ? 'No hay seguimientos pendientes para hoy en tus cuentas.'
               : visibles.length === 0
-                ? 'Aún no hay clientes. Aparecen aquí cuando una negociación se acepta; también puedes registrar uno que ya contrata.'
-                : 'No hay clientes que coincidan con la búsqueda.'}
+                ? 'Aún no hay cuentas. Se crean cuando un posible cliente pasa a oportunidad; también puedes registrar una que ya contrata.'
+                : 'No hay cuentas que coincidan con la búsqueda o el estado elegido.'}
           </p>
         ) : vista === 'hoy' ? (
           <SeguimientoHoyTable
@@ -509,13 +525,13 @@ export default function VentasClientesPage() {
         <div className="modal-overlay" onClick={() => setNuevoPaso(null)}>
           <div className="modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Nuevo cliente</h3>
+              <h3>Nueva cuenta</h3>
               <button className="modal-close" onClick={() => setNuevoPaso(null)} aria-label="Cerrar"><X size={16} /></button>
             </div>
             <div className="modal-body">
-              <p style={{ margin: 0, fontSize: 14, color: '#2d3748', fontWeight: 600 }}>¿Este cliente ya contrata con ustedes?</p>
+              <p style={{ margin: 0, fontSize: 14, color: '#2d3748', fontWeight: 600 }}>¿Ya contrata con ustedes?</p>
               <p style={{ margin: '8px 0 0', fontSize: 13, color: '#718096', lineHeight: 1.5 }}>
-                Si todavía está negociando, se registra como una oportunidad nueva y pasa a Clientes cuando acepte.
+                Si todavía está negociando, se registra como una oportunidad nueva y queda como prospecto en Cuentas hasta que acepte.
               </p>
             </div>
             <div className="modal-actions">
@@ -575,7 +591,7 @@ export default function VentasClientesPage() {
 
       {confirmDelete && (
         <ConfirmDialog
-          title="Eliminar cliente"
+          title="Eliminar cuenta"
           message={`¿Eliminar a ${confirmDelete.name}? Si tiene contratos, primero hay que eliminarlos; los documentos ya generados no se borran.`}
           confirmLabel="Eliminar"
           danger

@@ -1,20 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Plug, Plus, Trash2, RotateCcw } from 'lucide-react';
-import ConfirmDialog from '../../components/common/ConfirmDialog';
+import { ChevronDown, ChevronRight, Plug, Plus, Trash2 } from 'lucide-react';
 import CopyLinkButton from '../../components/common/CopyLinkButton';
 import ErrorBanner from '../../components/common/ErrorBanner';
-import SoloAdminDialog from '../../components/common/SoloAdminDialog';
 import ConexionesLeadsModal from '../../components/ventas/ConexionesLeadsModal';
 import { useToast } from '../../contexts/ToastContext';
 import { useCanalesLead } from '../../hooks/useCanalesLead';
-import { getUser } from '../../services/auth.service';
+import { usePerm } from '../../contexts/PermissionsContext';
 import {
   getConfiguracionVentas,
   getResumenConversiones,
   getServicios,
   guardarAjustesGoogleAds,
   guardarLandingsConfig,
-  restaurarLandingsConfig,
   type AjustesGoogleAds,
   type ConfiguracionVentas,
   type LandingConfig,
@@ -33,12 +30,14 @@ const mensajeDe = (err: any, porDefecto: string) => {
 const verId = (v: string) => (v.length === 10 ? `${v.slice(0, 3)}-${v.slice(3, 6)}-${v.slice(6)}` : v);
 
 // Todo lo que una empresa cambia para usar el CRM a su manera: sus landings, su cuenta de
-// Google Ads y las conexiones. Lo ve el administrador y el gerente (solo lectura); solo
-// el administrador guarda.
+// Google Ads y las conexiones. Lo ve cualquiera con acceso a Ventas; guarda quien tiene
+// «puede editar» en Ventas (el administrador de la empresa lo asigna por usuario), sin
+// depender de Sistemas.
 export default function ConfiguracionVentasPage() {
   const { showToast } = useToast();
   const { canales } = useCanalesLead();
-  const esAdmin = getUser()?.role === 'ADMIN';
+  const { canWrite } = usePerm();
+  const puedeEditar = canWrite('VENTAS');
 
   const [config, setConfig] = useState<ConfiguracionVentas | null>(null);
   const [servicios, setServicios] = useState<SalesServicio[]>([]);
@@ -50,8 +49,7 @@ export default function ConfiguracionVentasPage() {
   const [guardandoLandings, setGuardandoLandings] = useState(false);
   const [guardandoAds, setGuardandoAds] = useState(false);
   const [conexiones, setConexiones] = useState(false);
-  const [restaurando, setRestaurando] = useState(false);
-  const [soloAdmin, setSoloAdmin] = useState(false);
+  const [landingsAbiertas, setLandingsAbiertas] = useState(false);
 
   const cargar = async () => {
     try {
@@ -74,7 +72,6 @@ export default function ConfiguracionVentasPage() {
   useEffect(() => { cargar(); }, []);
 
   const guardarLandings = async () => {
-    if (!esAdmin) return setSoloAdmin(true);
     setError('');
     setGuardandoLandings(true);
     try {
@@ -89,20 +86,7 @@ export default function ConfiguracionVentasPage() {
     }
   };
 
-  const restaurarLandings = async () => {
-    setRestaurando(false);
-    setError('');
-    try {
-      await restaurarLandingsConfig();
-      showToast('Landings restauradas a los valores de Gemeseg', 'success');
-      cargar();
-    } catch (err: any) {
-      setError(mensajeDe(err, 'No se pudieron restaurar las landings.'));
-    }
-  };
-
   const guardarAds = async () => {
-    if (!esAdmin) return setSoloAdmin(true);
     if (!ads) return;
     setError('');
     setGuardandoAds(true);
@@ -134,8 +118,8 @@ export default function ConfiguracionVentasPage() {
         </div>
       </div>
       <p style={{ ...ayuda, margin: '-6px 0 14px' }}>
-        Aquí se ajusta cómo funciona el CRM para tu empresa: de dónde llegan los leads, qué servicio corresponde a cada landing y la conexión con Google Ads.
-        {!esAdmin && <strong> Estás en solo lectura: los cambios los hace un administrador.</strong>}
+        Aquí se ajusta cómo funciona el CRM para tu empresa: de dónde llegan los posibles clientes, qué servicio corresponde a cada landing y la conexión con Google Ads.
+        {!puedeEditar && <strong> Estás en solo lectura: para cambiar algo, pide a un administrador de tu empresa que te dé permiso de edición en Ventas.</strong>}
       </p>
 
       <ErrorBanner mensaje={error} />
@@ -147,7 +131,7 @@ export default function ConfiguracionVentasPage() {
           <div className="admin-section" style={caja}>
             <h3 style={{ margin: '0 0 4px' }}>Conexiones</h3>
             <p style={ayuda}>
-              Las claves para que tu página web y tus anuncios envíen leads al CRM, y la guía para conectarlos.
+              Las claves para que tu página web envíe sus contactos al CRM y cuántos posibles clientes ha traído cada canal.
             </p>
             <button className="btn-secondary" onClick={() => setConexiones(true)}>
               <Plug size={16} /> Abrir conexiones
@@ -155,9 +139,9 @@ export default function ConfiguracionVentasPage() {
           </div>
 
           <div className="admin-section" style={caja}>
-            <h3 style={{ margin: '0 0 4px' }}>Fuentes de leads</h3>
+            <h3 style={{ margin: '0 0 4px' }}>Fuentes de posibles clientes</h3>
             <p style={ayuda}>
-              Estas son las fuentes que ofrece «Nuevo lead» y que el CRM reconoce solo cuando llega un lead por la web (por el anuncio del que vino). Todo lead lleva una fuente.
+              Estas son las fuentes que ofrece «Nuevo posible cliente» y que el CRM reconoce solo cuando llega uno por la web (por el anuncio del que vino). Todo posible cliente lleva una fuente.
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {canales.map((c) => (
@@ -169,10 +153,25 @@ export default function ConfiguracionVentasPage() {
           </div>
 
           <div className="admin-section" style={caja}>
-            <h3 style={{ margin: '0 0 4px' }}>Landings</h3>
-            <p style={ayuda}>
-              Cada landing de tu sitio manda sus leads con su dirección (la parte final del enlace, por ejemplo <strong>monitoreo-alarmas</strong> en gemeseg.com/landing/monitoreo-alarmas/). Con esta tabla el CRM sabe qué servicio pidió el contacto y a qué línea comercial pertenece.
-              {config.landingsPersonalizadas ? ' Esta tabla es la tuya.' : ' Por ahora se usa la tabla de Gemeseg; si la cambias y guardas, pasa a ser la de tu empresa.'}
+            <button
+              type="button"
+              onClick={() => setLandingsAbiertas((a) => !a)}
+              aria-expanded={landingsAbiertas}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', width: '100%', textAlign: 'left' }}
+            >
+              {landingsAbiertas ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+              <h3 style={{ margin: 0 }}>Landings</h3>
+              <span style={{ fontSize: 13, color: '#718096' }}>({landings.length})</span>
+            </button>
+            {!landingsAbiertas && (
+              <p style={{ ...ayuda, margin: '4px 0 0' }}>
+                Qué servicio corresponde a cada landing de tu sitio. Despliega para verlas o cambiarlas.
+              </p>
+            )}
+            {landingsAbiertas && (
+            <>
+            <p style={{ ...ayuda, marginTop: 4 }}>
+              Cada landing de tu sitio manda sus posibles clientes con su dirección (la parte final del enlace, por ejemplo <strong>monitoreo-alarmas</strong> en tusitio.com/landing/monitoreo-alarmas/). Con esta tabla el CRM sabe qué servicio pidió el contacto y a qué línea comercial pertenece. Si una landing no está aquí, el posible cliente entra igual, solo sin servicio ni línea.
             </p>
             <div className="tasks-table-wrapper">
               <table className="tasks-table">
@@ -188,12 +187,12 @@ export default function ConfiguracionVentasPage() {
                   {landings.map((l, i) => (
                     <tr key={i}>
                       <td>
-                        <input type="text" value={l.slug} disabled={!esAdmin} maxLength={80} aria-label="Dirección de la landing"
+                        <input type="text" value={l.slug} disabled={!puedeEditar} maxLength={80} aria-label="Dirección de la landing"
                           onChange={(e) => cambiarLanding(i, 'slug', e.target.value)}
                           style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
                       </td>
                       <td>
-                        <select value={l.servicio} disabled={!esAdmin} aria-label="Servicio"
+                        <select value={l.servicio} disabled={!puedeEditar} aria-label="Servicio"
                           onChange={(e) => cambiarLanding(i, 'servicio', e.target.value)}
                           style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}>
                           <option value="">Elige un servicio…</option>
@@ -203,69 +202,70 @@ export default function ConfiguracionVentasPage() {
                         </select>
                       </td>
                       <td>
-                        <input type="text" value={l.linea} disabled={!esAdmin} maxLength={60} aria-label="Línea comercial"
+                        <input type="text" value={l.linea} disabled={!puedeEditar} maxLength={60} aria-label="Línea comercial"
                           onChange={(e) => cambiarLanding(i, 'linea', e.target.value)}
                           style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
                       </td>
                       <td className="col-acciones">
-                        <button className="icon-btn" aria-label={`Quitar la landing ${l.slug || 'sin dirección'}`} title="Quitar"
-                          onClick={() => (esAdmin ? setLandings((ls) => ls.filter((_, n) => n !== i)) : setSoloAdmin(true))}>
-                          <Trash2 size={15} />
-                        </button>
+                        <div className="acciones-iconos">
+                          <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} disabled={!puedeEditar}
+                            aria-label={`Quitar la landing ${l.slug || 'sin dirección'}`} title="Quitar"
+                            onClick={() => setLandings((ls) => ls.filter((_, n) => n !== i))}>
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
                   {landings.length === 0 && (
-                    <tr><td colSpan={4} style={{ color: '#888', fontSize: 13 }}>No hay landings. Agrega una o restaura las de Gemeseg.</td></tr>
+                    <tr><td colSpan={4} style={{ color: '#888', fontSize: 13 }}>Aún no hay landings. Agrega la primera con el botón de abajo.</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-              <button className="btn-secondary" onClick={() => (esAdmin ? setLandings((ls) => [...ls, { slug: '', servicio: '', linea: '' }]) : setSoloAdmin(true))}>
+              <button className="btn-secondary" disabled={!puedeEditar} onClick={() => setLandings((ls) => [...ls, { slug: '', servicio: '', linea: '' }])}>
                 <Plus size={16} /> Agregar landing
               </button>
-              <button className="btn-secondary" onClick={() => (esAdmin ? setRestaurando(true) : setSoloAdmin(true))}
-                disabled={esAdmin && !config.landingsPersonalizadas} title={config.landingsPersonalizadas ? '' : 'Ya estás usando los valores de Gemeseg'}>
-                <RotateCcw size={16} /> Restaurar valores de Gemeseg
-              </button>
-              <button className="auth-btn" onClick={guardarLandings} disabled={guardandoLandings}>
+              <button className="auth-btn" onClick={guardarLandings} disabled={guardandoLandings || !puedeEditar}>
                 {guardandoLandings ? 'Guardando...' : 'Guardar landings'}
               </button>
             </div>
+            </>
+            )}
           </div>
 
           <div className="admin-section" style={caja}>
             <h3 style={{ margin: '0 0 4px' }}>Google Ads</h3>
             <p style={ayuda}>
-              Cuando un lead que llegó de un anuncio pasa a <strong>Cotizada</strong> o a <strong>Aceptada</strong>, el CRM le avisa a Google Ads para que aprenda qué anuncios traen gente que sí compra. Sin esto Google solo sabe quién llenó el formulario.
+              Google Ads llama «leads» a los posibles clientes. Cuando uno que llegó de un anuncio pasa a <strong>Cotizada</strong> o a <strong>Aceptada</strong>, el CRM le avisa a Google Ads para que aprenda qué anuncios traen gente que sí compra. Sin esto Google solo sabe quién llenó el formulario.
             </p>
             <div className="form-row">
               <div className="form-group">
                 <label>ID de cliente de Google Ads</label>
-                <input type="text" value={verId(ads.customerId)} disabled={!esAdmin} placeholder="123-456-7890" maxLength={14}
+                <input type="text" value={verId(ads.customerId)} disabled={!puedeEditar} placeholder="123-456-7890" maxLength={14}
                   onChange={(e) => setAds({ ...ads, customerId: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
                 <small style={{ color: '#718096' }}>Los 10 dígitos de arriba a la derecha en Google Ads.</small>
               </div>
             </div>
             <div className="form-row">
               <div className="form-group">
-                <label>ID de la conversión «Lead cualificado»</label>
-                <input type="text" value={ads.conversionCualificado} disabled={!esAdmin} inputMode="numeric"
+                <label>ID de la conversión «Lead cualificado» (cuando cotiza)</label>
+                <input type="text" value={ads.conversionCualificado} disabled={!puedeEditar} inputMode="numeric"
                   onChange={(e) => setAds({ ...ads, conversionCualificado: e.target.value.replace(/\D/g, '') })} />
               </div>
               <div className="form-group">
-                <label>ID de la conversión «Lead convertido»</label>
-                <input type="text" value={ads.conversionConvertido} disabled={!esAdmin} inputMode="numeric"
+                <label>ID de la conversión «Lead convertido» (cuando contrata)</label>
+                <input type="text" value={ads.conversionConvertido} disabled={!puedeEditar} inputMode="numeric"
                   onChange={(e) => setAds({ ...ads, conversionConvertido: e.target.value.replace(/\D/g, '') })} />
               </div>
             </div>
             <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, margin: '4px 0 8px' }}>
-              <input type="checkbox" checked={ads.activo} disabled={!esAdmin} onChange={(e) => setAds({ ...ads, activo: e.target.checked })} />
-              <span><strong>Enviar a Google Ads.</strong> Si lo dejas apagado, los avisos se acumulan y salen cuando lo actives (cada clic vale hasta 90 días desde que llegó el lead).</span>
+              <input type="checkbox" checked={ads.activo} disabled={!puedeEditar} onChange={(e) => setAds({ ...ads, activo: e.target.checked })} />
+              <span><strong>Enviar a Google Ads.</strong> Si lo dejas apagado, los avisos se acumulan y salen cuando lo actives (cada clic vale hasta 90 días desde que llegó el posible cliente).</span>
             </label>
             <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, margin: '0 0 12px' }}>
-              <input type="checkbox" checked={ads.soloValidar} disabled={!esAdmin} onChange={(e) => setAds({ ...ads, soloValidar: e.target.checked })} />
+              <input type="checkbox" checked={ads.soloValidar} disabled={!puedeEditar} onChange={(e) => setAds({ ...ads, soloValidar: e.target.checked })} />
               <span><strong>Solo probar.</strong> Google revisa cada envío pero no cuenta nada. Úsalo la primera vez; quítalo cuando todo salga bien.</span>
             </label>
 
@@ -285,7 +285,7 @@ export default function ConfiguracionVentasPage() {
 
             {conversiones && (
               <p style={{ fontSize: 13, color: '#4a5568', margin: '0 0 12px' }}>
-                Hasta ahora: <strong>{conversiones.porTipo.CUALIFICADO ?? 0}</strong> leads cotizaron y <strong>{conversiones.porTipo.CONVERTIDO ?? 0}</strong> contrataron.
+                Hasta ahora: <strong>{conversiones.porTipo.CUALIFICADO ?? 0}</strong> posibles clientes cotizaron y <strong>{conversiones.porTipo.CONVERTIDO ?? 0}</strong> contrataron.
                 {' '}Por avisar: {conversiones.porEstado.PENDIENTE ?? 0} · Enviados: {conversiones.porEstado.ENVIADO ?? 0}
                 {(conversiones.porEstado.FALLO ?? 0) > 0 && ` · Con error: ${conversiones.porEstado.FALLO}`}
                 {(conversiones.porEstado.VENCIDO ?? 0) > 0 && ` · Vencidos (clic de más de 90 días): ${conversiones.porEstado.VENCIDO}`}
@@ -294,7 +294,7 @@ export default function ConfiguracionVentasPage() {
                   : ' — Envío apagado o incompleto.'}
               </p>
             )}
-            <button className="auth-btn" onClick={guardarAds} disabled={guardandoAds}>
+            <button className="auth-btn" onClick={guardarAds} disabled={guardandoAds || !puedeEditar}>
               {guardandoAds ? 'Guardando...' : 'Guardar Google Ads'}
             </button>
           </div>
@@ -302,23 +302,13 @@ export default function ConfiguracionVentasPage() {
           <div className="admin-section" style={caja}>
             <h3 style={{ margin: '0 0 4px' }}>Dónde se configura lo demás</h3>
             <p style={{ ...ayuda, margin: 0 }}>
-              Las <strong>etapas</strong> y los <strong>campos</strong> de la ficha están en Clientes (botones «Etapas» y «Campos»). Los <strong>servicios</strong> y los <strong>motivos de cierre</strong> están en Contratos.
+              Las <strong>etapas</strong> están en Oportunidades (botón «Etapas») y los <strong>campos</strong> de la ficha en Cuentas (botón «Campos»). Los <strong>servicios</strong> y los <strong>motivos de cierre</strong> están en Contratos.
             </p>
           </div>
         </>
       )}
 
       {conexiones && <ConexionesLeadsModal onClose={() => setConexiones(false)} />}
-      {restaurando && (
-        <ConfirmDialog
-          title="Restaurar las landings de Gemeseg"
-          message="Se descarta la tabla de landings de tu empresa y se vuelve a usar la de Gemeseg. Los leads que ya llegaron no cambian."
-          confirmLabel="Restaurar"
-          onConfirm={restaurarLandings}
-          onCancel={() => setRestaurando(false)}
-        />
-      )}
-      {soloAdmin && <SoloAdminDialog accion="cambie esta configuración" onClose={() => setSoloAdmin(false)} />}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import SalesClientStagesConfigModal from '../../components/ventas/SalesClientSta
 import SeguimientoHoyTable from '../../components/ventas/SeguimientoHoyTable';
 import ClienteFichaPanel from '../../components/ventas/ClienteFichaPanel';
 import ClienteFormModal from '../../components/ventas/ClienteFormModal';
+import VentasComoFunciona from '../../components/ventas/VentasComoFunciona';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
@@ -211,7 +212,7 @@ export default function OportunidadesPage() {
   };
 
   const acciones = (o: Oportunidad): RowAction[] => [
-    { label: 'Ver ficha del contacto', icon: <ClipboardList size={14} />, onClick: () => abrirFicha(o.salesClientId) },
+    { label: 'Ver ficha de la cuenta', icon: <ClipboardList size={14} />, onClick: () => abrirFicha(o.salesClientId) },
     { label: 'Editar', icon: <Pencil size={14} />, onClick: () => setModal({ modo: 'editar', oportunidad: o }) },
     { label: 'Eliminar', icon: <Trash2 size={14} />, danger: true, onClick: () => setAEliminar(o) },
   ];
@@ -219,7 +220,7 @@ export default function OportunidadesPage() {
   const accionesHoy = (c: SalesClient): RowAction[] => [
     { label: 'Ver ficha', icon: <ClipboardList size={14} />, onClick: () => abrirFicha(c.id) },
     { label: 'Editar siguiente paso', icon: <CalendarPlus size={14} />, onClick: () => abrirSiguientePaso(c, 'editar') },
-    { label: 'Nueva oportunidad para este contacto', icon: <Plus size={14} />, onClick: () => setModal({ modo: 'crear', clienteId: c.id }) },
+    { label: 'Nueva oportunidad para esta cuenta', icon: <Plus size={14} />, onClick: () => setModal({ modo: 'crear', clienteId: c.id }) },
   ];
 
   const celdaOpp = (key: string, o: Oportunidad): ReactNode => {
@@ -277,6 +278,7 @@ export default function OportunidadesPage() {
           <h1>Oportunidades</h1>
         </div>
         <div className="header-actions">
+          <VentasComoFunciona />
           <button type="button" className="btn-secondary" onClick={() => setMostrarEtapas(true)}
             title="Configurar las etapas de las negociaciones" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Workflow size={15} /> Etapas
@@ -286,6 +288,10 @@ export default function OportunidadesPage() {
           </button>
         </div>
       </div>
+
+      <p style={{ fontSize: 13, color: '#666', margin: '-6px 0 14px' }}>
+        Cada negociación de un servicio, con su etapa y su monto (en Zoho: Tratos). La persona o empresa vive en Cuentas.
+      </p>
 
       <div className="admin-tabs" style={{ display: 'inline-flex', marginBottom: 16 }}>
         <button type="button" className={`admin-tab ${vista === 'todas' ? 'active' : ''}`} style={{ flex: '0 0 auto' }}
@@ -303,7 +309,7 @@ export default function OportunidadesPage() {
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder={vista === 'hoy' ? 'Buscar por nombre, teléfono o correo...' : 'Buscar por cliente, título o servicio...'}
+            placeholder={vista === 'hoy' ? 'Buscar por nombre, teléfono o correo...' : 'Buscar por cuenta, título o servicio...'}
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
           {vista === 'hoy' ? (
@@ -342,7 +348,7 @@ export default function OportunidadesPage() {
           <ColumnPickerMenu
             columns={COLUMNAS_OPP}
             visible={columnPrefs.visible}
-            fixedLabel="Cliente"
+            fixedLabel="Cuenta"
             onApply={async (keys) => {
               const guardado = await columnPrefs.set(keys);
               if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
@@ -363,7 +369,7 @@ export default function OportunidadesPage() {
         ) : oportunidades.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36, marginBottom: 8 }}>🎯</div>
-            <div>Aún no hay negociaciones. Salen de pasar un lead a oportunidad o de registrar a una persona nueva.</div>
+            <div>Aún no hay negociaciones. Salen de pasar un posible cliente a oportunidad o de registrar una cuenta nueva.</div>
           </div>
         ) : vista === 'hoy' ? (
           hoyClientes.length === 0 ? (
@@ -388,7 +394,7 @@ export default function OportunidadesPage() {
             <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th {...thProps('cliente')} style={{ width: 200 }}>Cliente <SortIcon campo="cliente" /></th>
+                  <th {...thProps('cliente')} style={{ width: 200 }}>Cuenta <SortIcon campo="cliente" /></th>
                   {columnasVisiblesOpp.map((k) => {
                     const col = COLUMNAS_OPP.find((c) => c.key === k)!;
                     return (
@@ -495,7 +501,7 @@ export default function OportunidadesPage() {
       {aEliminar && (
         <ConfirmDialog
           title="Eliminar oportunidad"
-          message={`¿Eliminar la oportunidad de ${aEliminar.salesClient.name}? Se borran también sus cambios de etapa y los motivos registrados. El cliente no se borra.`}
+          message={`¿Eliminar la oportunidad de ${aEliminar.salesClient.name}? Se borran también sus cambios de etapa y los motivos registrados. La cuenta no se borra.`}
           confirmLabel="Eliminar"
           danger
           onConfirm={confirmarEliminar}

@@ -358,7 +358,7 @@ export class AiVentasQueries {
     return `${encabezado}: ${filas.length}.\n${lineas.join('\n')}${masLineas(filas.length, MAX_LINEAS)}`;
   }
 
-  // Documentos de Documentación (antes llamados "contratos"): los que se
+  // Documentos de Documentos y firma (antes "Documentación" y, antes, "contratos"): los que se
   // generan desde una plantilla y se firman. estado = borrador | firma | firmados
   // (opcional). Los contratos comerciales los consulta AiVentasInvestigacionQueries.
   async documentos(companyId: number, estadoParam?: string): Promise<string> {

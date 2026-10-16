@@ -6,7 +6,7 @@ import {
   leerConfigGoogleAds,
   type ConfigGoogleAds,
 } from './google-ads-conversiones.util';
-import { LANDINGS, limpiarSlug, type LandingDef } from './lead-landing.util';
+import { limpiarSlug, type LandingDef } from './lead-landing.util';
 
 // Ajustes de Ventas por empresa (tabla SalesSetting). Antes de 2026-10-15 esto estaba
 // fijo en el código (landings) o en variables de entorno (Google Ads): una empresa
@@ -136,7 +136,9 @@ export class VentasConfigService {
 
   async landingsDe(companyId: number): Promise<LandingDef[]> {
     const guardado = await this.leer<{ landings?: LandingDef[] }>(companyId, CLAVE_LANDINGS);
-    return Array.isArray(guardado?.landings) ? guardado.landings : LANDINGS;
+    // Una empresa que no ha cargado sus landings no tiene ninguna (línea blanca): la tabla de
+    // Gemeseg se copia una sola vez a su propia empresa al arrancar (VentasSchemaService).
+    return Array.isArray(guardado?.landings) ? guardado.landings : [];
   }
 
   async guardarLandings(
@@ -171,21 +173,13 @@ export class VentasConfigService {
     return limpia;
   }
 
-  // Vuelve a los valores de Gemeseg (borra lo guardado).
-  async restaurarLandings(companyId: number | null): Promise<LandingDef[]> {
-    const cid = this.requireCompany(companyId);
-    await this.prisma.salesSetting.deleteMany({ where: { companyId: cid, key: CLAVE_LANDINGS } });
-    return LANDINGS;
-  }
-
   // ---------------- Pantalla ----------------
 
   async resumen(companyId: number | null) {
     const cid = this.requireCompany(companyId);
-    const [googleAds, landings, personalizadas] = await Promise.all([
+    const [googleAds, landings] = await Promise.all([
       this.ajustesGoogleAds(cid),
       this.landingsDe(cid),
-      this.leer(cid, CLAVE_LANDINGS),
     ]);
     return {
       googleAds,
@@ -193,7 +187,6 @@ export class VentasConfigService {
       // instalación, no cada empresa).
       cuentaDeServicio: (process.env.GOOGLE_ADS_SERVICE_ACCOUNT ?? '').trim() || CUENTA_ADS_POR_DEFECTO,
       landings,
-      landingsPersonalizadas: personalizadas !== null,
     };
   }
 }

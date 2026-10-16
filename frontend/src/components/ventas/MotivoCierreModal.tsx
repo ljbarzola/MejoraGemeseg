@@ -22,7 +22,7 @@ interface Props {
   onCancel: () => void;
 }
 
-// Todo cierre (descartar un lead, perder una oportunidad, cancelar o no renovar
+// Todo cierre (descartar un posible cliente, perder una oportunidad, cancelar o no renovar
 // un contrato, renovar con menos) se explica aquí, igual en todos lados. Los
 // estudios de win/loss muestran que el motivo que anota el vendedor suele no ser
 // el real, por eso se pregunta también QUIÉN lo dijo y existe «Sin información»:

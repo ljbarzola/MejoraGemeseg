@@ -726,9 +726,9 @@ export class VentasClientesService {
     const client = await this.prisma.salesClient.findFirst({
       where: { id, companyId },
     });
-    if (!client) throw new NotFoundException('Cliente no encontrado');
+    if (!client) throw new NotFoundException('Cuenta no encontrada');
     if (client.status === dto.toStatus) {
-      throw new BadRequestException('El cliente ya está en esa etapa');
+      throw new BadRequestException('La cuenta ya está en esa etapa');
     }
 
     const targetStage = await this.prisma.salesClientStage.findFirst({
@@ -894,7 +894,7 @@ export class VentasClientesService {
       where: { id, companyId },
       include: CLIENT_INCLUDE,
     });
-    if (!client) throw new NotFoundException('Cliente no encontrado');
+    if (!client) throw new NotFoundException('Cuenta no encontrada');
     return client;
   }
 
@@ -1001,7 +1001,7 @@ export class VentasClientesService {
     if (!companyId) throw new BadRequestException('Se requiere una empresa');
     const client = await this.getClient(companyId, id);
     if (client.assignedUserId !== userId) {
-      throw new BadRequestException('Este cliente no está asignado a ti.');
+      throw new BadRequestException('Esta cuenta no está asignada a ti.');
     }
     return this.prisma.salesClient.update({
       where: { id },
@@ -1239,6 +1239,7 @@ export class VentasClientesService {
         kind: 'acuerdo',
         agreementId: x.id,
         title: x.title,
+        producto: x.kind === 'PRODUCTO',
         servicios: x.services.map((s) => s.service.name),
       };
       eventos.push({

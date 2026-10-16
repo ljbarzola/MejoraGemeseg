@@ -97,8 +97,8 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
       else await createSalesClient(yaEsCliente ? { ...payload, yaEsCliente: true } : payload);
       // Una persona nueva en negociación la avisa quien abrió el formulario
       // (dice a dónde quedó); aquí solo la edición y el cliente que ya contrata.
-      if (client) showToast('Cliente actualizado', 'success');
-      else if (yaEsCliente) showToast('Cliente registrado: quedó «Por contratar»', 'success');
+      if (client) showToast('Cuenta actualizada', 'success');
+      else if (yaEsCliente) showToast('Cuenta registrada: quedó «Por contratar»', 'success');
       onSaved();
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo guardar', 'error');
@@ -111,7 +111,7 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>{client ? 'Editar cliente' : yaEsCliente ? 'Nuevo cliente (ya contrata)' : 'Nuevo contacto en negociación'}</h3>
+          <h3>{client ? 'Editar cuenta' : yaEsCliente ? 'Nueva cuenta (ya contrata)' : 'Nueva cuenta en negociación'}</h3>
           <button className="modal-close" onClick={onClose}>
             <X size={16} />
           </button>
@@ -124,7 +124,7 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
           )}
           {!client && !yaEsCliente && (
             <p style={{ margin: '0 0 12px', fontSize: 13, color: '#666' }}>
-              Queda en Oportunidades como una negociación nueva. Pasa a Clientes cuando acepte.
+              Queda en Oportunidades como una negociación nueva y en Cuentas como prospecto hasta que acepte.
             </p>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
