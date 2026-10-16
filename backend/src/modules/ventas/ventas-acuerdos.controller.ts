@@ -88,8 +88,10 @@ export class VentasAcuerdosController {
     @Query('estado') estado?: string,
     @Query('servicioId') servicioId?: string,
     @Query('q') q?: string,
+    @Query('tipo') tipo?: string,
   ) {
     return this.acuerdos.listAgreements(req.user.companyId, {
+      kind: tipo || undefined,
       clientId: clienteId ? +clienteId || undefined : undefined,
       serviceId: servicioId ? +servicioId || undefined : undefined,
       estado: estado || undefined,

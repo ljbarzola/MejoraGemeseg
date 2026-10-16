@@ -35,7 +35,7 @@ const USAR_PLANTILLA: Paso[] = [
     nombre: '1. Elegir plantilla y cliente',
     parrafos: [
       'Desde "Documentación → Nuevo documento" (o con "Generar documento" dentro de un contrato del cliente) se elige una plantilla ya configurada. En "Datos de envío" se elige además el cliente al que va dirigido (a quién le llega el link de firma) — el nombre y el email de envío se autocompletan solos, siempre editables.',
-      'El cliente puede venir de dos formas: si ya existe en "Clientes", se lo selecciona del listado; si todavía no existe, el botón "Ir a Clientes" abre esa pantalla para crearlo primero (con su modal de "Nuevo cliente") y luego se vuelve aquí a continuar el contrato. Ambos caminos llegan al mismo lugar — no hace falta crear el cliente antes si no quieres, se puede hacer sobre la marcha.',
+      'El cliente puede venir de dos formas: si ya está en el "Directorio", se lo selecciona del listado; si todavía no está, el botón "Ir al Directorio" abre esa pantalla para registrarlo primero (con su modal de "Nueva empresa o persona") y luego se vuelve aquí a continuar el contrato. Ambos caminos llegan al mismo lugar — no hace falta registrarlo antes si no quieres, se puede hacer sobre la marcha.',
     ],
   },
   {

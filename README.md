@@ -61,9 +61,9 @@ Rutas, traslados y nomina de escoltas de seguridad. Estados `LISTO_PARA_CUSTODIA
 - **Buzon de Quejas y Sugerencias** (abierto a todo empleado, con gestion por etapas para RRHH) y **Encuestas** (por la app o por un enlace publico para quienes no tienen cuenta).
 
 ### Ventas y CRM
-- **Clientes**: quienes ya aceptaron o contratan, con ficha por pestanas (resumen, negociaciones, contratos e historial), campos configurables por empresa, responsable, "referido por" y columnas de la tabla elegidas por cada usuario. Un cliente que ya venia contratando se registra como "ya es cliente".
+- **Directorio** (antes Clientes): los datos de todas las empresas y personas registradas (abre con todos; el filtro «Relación» muestra clientes, inactivos, prospectos y perdidos), con ficha por pestanas (resumen, negociaciones, contratos e historial), campos configurables por empresa, responsable, "referido por" y columnas de la tabla elegidas por cada usuario. Un cliente que ya venia contratando se registra como "ya es cliente".
 - **Referidos**: cualquier empleado puede referir un cliente desde Inicio y ver en que etapa va; se le avisa cuando avanza.
-- **Leads**: bandeja de contactos que llegan sin procesar (formulario web o landings, Google Ads, referidos, llamadas, WhatsApp o a mano; Meta se ingresa a mano por ahora y LinkedIn vendra despues). Cada lead lleva su fuente (obligatoria) y, si viene de un anuncio de Google, su gclid: cuando cotiza o contrata queda registrado para avisarle a Google. Se clasifican (servicio, empleo, proveedor, spam) y solo uno de servicio pasa a una oportunidad; si ya era cliente, se le suma una oportunidad.
+- **Posibles clientes** (antes Leads; en Google Ads se llaman leads): bandeja de contactos que llegan sin procesar (formulario web o landings, Google Ads, referidos, llamadas, WhatsApp o a mano; Meta se ingresa a mano por ahora y LinkedIn vendra despues). Cada lead lleva su fuente (obligatoria) y, si viene de un anuncio de Google, su gclid: cuando cotiza o contrata queda registrado para avisarle a Google. Se clasifican (servicio, empleo, proveedor, spam) y solo uno de servicio pasa a una oportunidad; si ya era cliente, se le suma una oportunidad.
 - **Configuracion**: cada empresa ajusta sin tocar codigo sus landings (que servicio y linea comercial corresponde a cada una), la conexion con Google Ads y ve sus conexiones y fuentes de leads.
 - **Oportunidades**: cada negociacion de un servicio (nueva, en evaluacion, cotizada, en negociacion, aceptada o perdida), con monto cotizado y motivo de perdida. Es el unico lugar donde se cambia la etapa y donde se da seguimiento a los prospectos; al aceptar, la persona pasa a ser cliente. El ciclo de vida del cliente (cliente, en riesgo, ex-cliente) se calcula solo.
 - **Contratos**: el acuerdo de cada cliente con sus servicios (catalogo editable), valor mensual, fechas de vigencia, dias de gracia y renovaciones; un cliente puede tener varios contratos y cada contrato varios servicios. Cancelar, renovar con menos o dejar vencer pide el motivo.
@@ -245,7 +245,7 @@ La API completa se explora en Swagger (`/docs`). El detalle por modulo, con sus 
 | `/cacao/...` | Proveedores, recepciones, lotes, liquidaciones, embarques, cuentas, kardex |
 | `/custodias` | Custodias, nomina, PDFs y GEME-BOT |
 | `/personal/...`, `/public/surveys/:token` | Recursos Humanos (reclutamiento, cumplimiento, capacitaciones, quejas, encuestas) |
-| `/ventas/...` | Leads, clientes, referidos, oportunidades, contratos, cotizador, documentacion (plantillas y firma) y dashboard |
+| `/ventas/...` | Posibles clientes (`leads`), directorio (`clientes`), referidos, oportunidades, contratos, cotizador, documentacion (plantillas y firma) y dashboard |
 | `/contratacion-publica/...` | Entidades, contratos, puestos, horarios, informes, entregas (revisión con vista previa, historial y bandejas) |
 | `/sistemas/...`, `/tools` | Soporte tecnico e inventario de herramientas |
 

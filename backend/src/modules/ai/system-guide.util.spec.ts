@@ -29,10 +29,16 @@ describe('buildSystemGuide', () => {
     }
   });
 
-  it('Ventas explica la relación entre Clientes y Contratos', () => {
+  it('Ventas explica la relación entre Posibles clientes, Oportunidades, Directorio y Contratos', () => {
     expect(buildSystemGuide(['VENTAS'])).toContain(
-      'Relación entre los sub-módulos Clientes y Contratos',
+      'Relación entre los sub-módulos Posibles clientes, Oportunidades, Directorio y Contratos',
     );
+  });
+
+  it('Ventas traduce los nombres de Zoho CRM a los de la app', () => {
+    const guide = buildSystemGuide(['VENTAS']);
+    expect(guide).toContain('Si vienes de Zoho CRM');
+    expect(guide).toMatch(/"Tratos" = "Oportunidades"/);
   });
 
   it('Contratación Pública explica Entidades Públicas y la entrega mensual de documentos', () => {

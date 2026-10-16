@@ -10,6 +10,9 @@ import { graciaSugerida } from './client-lifecycle.util';
 import { VentasMotivosService, type MotivoInput } from './ventas-motivos.service';
 import {
   calcularEstadoContrato,
+  calcularEstadoGarantia,
+  esProducto,
+  hoyEcuador,
   parseDiaContrato,
   sumarDias,
 } from './agreement-status.util';
@@ -168,10 +171,12 @@ export class VentasAcuerdosService {
   // ---------------------------------------------------------------------
 
   private formatear(c: ContratoConRelaciones) {
-    const { services, _count, monthlyValue, ...resto } = c;
+    const { services, _count, monthlyValue, totalValue, ...resto } = c;
     return {
       ...resto,
       monthlyValue: monthlyValue === null ? null : Number(monthlyValue),
+      totalValue: totalValue === null ? null : Number(totalValue),
+      garantia: esProducto(c) ? calcularEstadoGarantia(c.warrantyUntil) : null,
       services: services.map((s) => s.service),
       documentos: _count.documents,
       estado: calcularEstadoContrato(c),
@@ -185,10 +190,14 @@ export class VentasAcuerdosService {
       estado?: string;
       serviceId?: number;
       q?: string;
+      kind?: string;
     } = {},
   ) {
     const cid = this.requireCompany(companyId);
     const where: Prisma.SalesAgreementWhereInput = { companyId: cid };
+    if (filters.kind === 'SERVICIO' || filters.kind === 'PRODUCTO') {
+      where.kind = filters.kind;
+    }
     if (filters.clientId) where.salesClientId = filters.clientId;
     if (filters.serviceId) {
       where.services = { some: { serviceId: filters.serviceId } };
@@ -310,6 +319,28 @@ export class VentasAcuerdosService {
     return v;
   }
 
+  private valorTotal(v: number | null | undefined): number | null | undefined {
+    if (v === undefined || v === null) return v;
+    if (!Number.isFinite(v) || v < 0) {
+      throw new BadRequestException('El valor total no es válido.');
+    }
+    return v;
+  }
+
+  // Fin de garantía de un producto: vacío = sin garantía; no puede ser anterior a
+  // la fecha de la venta.
+  private garantiaValida(raw: string | undefined, venta: Date): Date | null {
+    if (!(raw || '').trim()) return null;
+    const d = parseDiaContrato(raw);
+    if (!d) throw new BadRequestException('La fecha de fin de la garantía no es válida.');
+    if (d.getTime() < venta.getTime()) {
+      throw new BadRequestException(
+        'La garantía no puede terminar antes de la fecha de la venta.',
+      );
+    }
+    return d;
+  }
+
   private diasDeGracia(v: number | undefined, sugerido: number): number {
     if (v === undefined) return sugerido;
     if (!Number.isInteger(v) || v < 0 || v > 365) {
@@ -400,14 +431,21 @@ export class VentasAcuerdosService {
       select: { id: true },
     });
     if (!cliente) throw new NotFoundException('Cliente no encontrado');
+    const producto = dto.kind === 'PRODUCTO';
+    if (producto && renovacion) {
+      throw new BadRequestException('Una venta de producto no se renueva.');
+    }
+    // Una venta de producto no tiene fecha de fin: solo la fecha de la venta.
     const { startDate, endDate } = this.fechasValidas(
       dto.startDate,
-      dto.endDate,
+      producto ? undefined : dto.endDate,
     );
     const serviceIds = await this.validarServicios(cid, dto.serviceIds);
     const title = this.textoOpcional(dto.title, MAX_TITULO, 'El título');
     const notes = this.textoOpcional(dto.notes, MAX_NOTAS, 'Las notas');
-    const monthlyValue = this.valorMensual(dto.monthlyValue) ?? null;
+    const monthlyValue = producto ? null : (this.valorMensual(dto.monthlyValue) ?? null);
+    const totalValue = producto ? (this.valorTotal(dto.totalValue) ?? null) : null;
+    const warrantyUntil = producto ? this.garantiaValida(dto.warrantyUntil, startDate) : null;
     const graceDays = this.diasDeGracia(
       dto.graceDays,
       graciaSugerida(startDate, endDate),
@@ -450,6 +488,10 @@ export class VentasAcuerdosService {
             endDate,
             monthlyValue,
             graceDays,
+            kind: producto ? 'PRODUCTO' : 'SERVICIO',
+            status: producto ? 'POR_ENTREGAR' : 'ACTIVO',
+            totalValue,
+            warrantyUntil,
             opportunityId: dto.opportunityId ?? null,
             renewedFromId: renovacion?.anterior.id ?? null,
             createdBy: userId,
@@ -504,10 +546,15 @@ export class VentasAcuerdosService {
     });
     if (!actual) throw new NotFoundException('Contrato no encontrado');
 
+    const producto = esProducto(actual);
+    if (producto && (dto.endDate ?? '').trim()) {
+      throw new BadRequestException('Una venta de producto no tiene fecha de fin.');
+    }
+
     const data: Prisma.SalesAgreementUpdateInput = {};
     let inicioNuevo = actual.startDate;
     let finNuevo = actual.endDate;
-    if (dto.startDate !== undefined || dto.endDate !== undefined) {
+    if (dto.startDate !== undefined || (!producto && dto.endDate !== undefined)) {
       const inicio =
         dto.startDate !== undefined
           ? dto.startDate
@@ -528,16 +575,49 @@ export class VentasAcuerdosService {
     if (dto.notes !== undefined) {
       data.notes = this.textoOpcional(dto.notes, MAX_NOTAS, 'Las notas');
     }
-    if (dto.monthlyValue !== undefined) {
+    if (!producto && dto.monthlyValue !== undefined) {
       data.monthlyValue = this.valorMensual(dto.monthlyValue);
     }
-    if (dto.graceDays !== undefined) {
+    if (producto) {
+      if (dto.totalValue !== undefined) {
+        data.totalValue = this.valorTotal(dto.totalValue);
+      }
+      if (dto.warrantyUntil !== undefined || dto.startDate !== undefined) {
+        const garantia =
+          dto.warrantyUntil !== undefined
+            ? dto.warrantyUntil
+            : (actual.warrantyUntil?.toISOString().slice(0, 10) ?? '');
+        data.warrantyUntil = this.garantiaValida(garantia, inicioNuevo);
+      }
+    }
+    if (!producto && dto.graceDays !== undefined) {
       data.graceDays = this.diasDeGracia(
         dto.graceDays,
         graciaSugerida(inicioNuevo, finNuevo),
       );
     }
-    if (dto.status !== undefined) {
+    if (dto.status !== undefined && producto) {
+      // Venta de producto: Por entregar <-> Entregado (también reactiva un
+      // producto cancelado). Cancelar sigue teniendo su ruta, que pide el motivo.
+      if (dto.status !== 'POR_ENTREGAR' && dto.status !== 'ENTREGADO') {
+        throw new BadRequestException(
+          'Para cancelar usa «Cancelar contrato», que pide el motivo.',
+        );
+      }
+      data.status = dto.status;
+      data.cancelledAt = null;
+      if (dto.status === 'ENTREGADO') {
+        const entregado = (dto.deliveredAt ?? '').trim()
+          ? parseDiaContrato(dto.deliveredAt)
+          : parseDiaContrato(hoyEcuador());
+        if (!entregado) {
+          throw new BadRequestException('La fecha de entrega no es válida.');
+        }
+        data.deliveredAt = entregado;
+      } else {
+        data.deliveredAt = null;
+      }
+    } else if (dto.status !== undefined) {
       // Cancelar tiene su propia ruta porque exige el motivo (POST :id/cancelar);
       // por aquí solo se puede reactivar un contrato cancelado.
       if (dto.status !== 'ACTIVO') {
@@ -685,6 +765,7 @@ export class VentasAcuerdosService {
         status: true,
         startDate: true,
         endDate: true,
+        kind: true,
         salesClientId: true,
       },
     });
@@ -742,6 +823,11 @@ export class VentasAcuerdosService {
   ) {
     const cid = this.requireCompany(companyId);
     const anterior = await this.cargarAnterior(cid, id);
+    if (esProducto(anterior)) {
+      throw new BadRequestException(
+        'Una venta de producto no se renueva. Si el cliente compra otra vez, registra una venta nueva.',
+      );
+    }
     if (anterior.status === 'RENOVADO') {
       throw new BadRequestException('Este contrato ya fue renovado.');
     }

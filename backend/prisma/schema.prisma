@@ -2008,6 +2008,13 @@ model SalesAgreement {
   cancelledAt   DateTime?
   // Oportunidad comercial que origino este contrato (sin FK a proposito).
   opportunityId Int?
+  // SERVICIO (recurrente: vigencia, renovacion, valor mensual) o PRODUCTO (venta
+  // unica: sin fin ni renovacion; status POR_ENTREGAR / ENTREGADO / CANCELADO).
+  kind          String    @default("SERVICIO")
+  // Solo PRODUCTO: valor total de la venta, fecha de entrega y garantia (opcional).
+  totalValue    Decimal?  @db.Decimal(12, 2)
+  deliveredAt   DateTime? @db.Date
+  warrantyUntil DateTime? @db.Date
   createdBy     Int
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

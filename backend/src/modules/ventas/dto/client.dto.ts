@@ -50,6 +50,13 @@ export class CreateSalesClientDto {
   @IsBoolean()
   @IsOptional()
   yaEsCliente?: boolean;
+
+  // true = el Directorio es solo de datos (2026-10-16): se guarda la empresa o
+  // persona SIN oportunidad, SIN etapa y SIN responsable (esos pertenecen a la
+  // oportunidad). Es lo que manda «Nueva empresa o persona» del Directorio.
+  @IsBoolean()
+  @IsOptional()
+  soloDatos?: boolean;
 }
 
 export class UpdateSalesClientDto {

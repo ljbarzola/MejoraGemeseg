@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, RefreshCw, Trash2, FilePlus, Link2, Unlink, Ban, RotateCcw, MessageSquareWarning, Mail, Info } from 'lucide-react';
+import { ArrowLeft, Pencil, RefreshCw, Trash2, FilePlus, Link2, Unlink, Ban, RotateCcw, MessageSquareWarning, Mail, Info, PackageCheck } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import EstadoContratoBadge from '../../components/ventas/EstadoContratoBadge';
@@ -17,6 +17,7 @@ import {
   registrarCierreContrato,
   updateContratoComercial,
   MOTIVO_KIND_LABEL,
+  GARANTIA_LABEL,
   getContracts,
   getServicios,
   type ContratoComercial,
@@ -93,7 +94,8 @@ export default function ContratoComercialDetalle() {
   const vinculados = new Set((contrato.documents || []).map((d) => d.contractId));
   const sinVincular = docsCliente.filter((d) => !vinculados.has(d.id));
   const titulo = contrato.title || `Contrato #${contrato.id}`;
-  const puedeRenovar = contrato.estado !== 'RENOVADO' && contrato.estado !== 'CANCELADO' && contrato.estado !== 'POR_INICIAR';
+  const producto = contrato.kind === 'PRODUCTO';
+  const puedeRenovar = !producto && contrato.estado !== 'RENOVADO' && contrato.estado !== 'CANCELADO' && contrato.estado !== 'POR_INICIAR';
   const puedeCancelar = contrato.estado !== 'RENOVADO' && contrato.estado !== 'CANCELADO';
   const sinMotivoDeCierre =
     contrato.estado === 'VENCIDO' && !(contrato.motivos || []).some((m) => m.kind === 'CONTRATO_NO_RENOVADO');
@@ -112,9 +114,9 @@ export default function ContratoComercialDetalle() {
   const accionesMenu: RowAction[] = [];
   if (puedeCancelar) {
     accionesMenu.push({
-      label: 'Cancelar contrato',
+      label: producto ? 'Cancelar venta' : 'Cancelar contrato',
       icon: <Ban size={15} />,
-      hint: 'El contrato queda cancelado y se pide un motivo',
+      hint: producto ? 'La venta queda cancelada y se pide un motivo' : 'El contrato queda cancelado y se pide un motivo',
       onClick: () => setMotivoModal('cancelar'),
     });
   }
@@ -122,11 +124,19 @@ export default function ContratoComercialDetalle() {
     accionesMenu.push({
       label: 'Reactivar',
       icon: <RotateCcw size={15} />,
-      onClick: () => { accion(() => updateContratoComercial(contrato.id, { status: 'ACTIVO' }), 'Contrato reactivado', 'No se pudo reactivar el contrato'); },
+      onClick: () => { accion(() => updateContratoComercial(contrato.id, { status: producto ? 'POR_ENTREGAR' : 'ACTIVO' }), producto ? 'Venta reactivada' : 'Contrato reactivado', 'No se pudo reactivar'); },
+    });
+  }
+  if (producto && contrato.estado === 'ENTREGADO') {
+    accionesMenu.push({
+      label: 'Volver a «Por entregar»',
+      icon: <RotateCcw size={15} />,
+      hint: 'Úsalo si lo marcaste como entregado por error',
+      onClick: () => { accion(() => updateContratoComercial(contrato.id, { status: 'POR_ENTREGAR' }), 'Vuelve a «Por entregar»', 'No se pudo cambiar el estado'); },
     });
   }
   accionesMenu.push({
-    label: 'Eliminar contrato',
+    label: producto ? 'Eliminar venta' : 'Eliminar contrato',
     icon: <Trash2 size={15} />,
     danger: true,
     hint: 'Los documentos generados no se borran',
@@ -163,10 +173,18 @@ export default function ContratoComercialDetalle() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto', flex: '0 0 auto' }}>
           <button className="btn-secondary" onClick={() => setModo('editar')}><Pencil size={15} /> Editar</button>
-          <button className="btn-secondary" onClick={() => setModo('renovar')} disabled={!puedeRenovar}
-            title={puedeRenovar ? undefined : contrato.estado === 'RENOVADO' ? 'Ya fue renovado' : contrato.estado === 'POR_INICIAR' ? 'Se puede renovar cuando el contrato empiece' : 'Un contrato cancelado no se renueva'}>
-            <RefreshCw size={15} /> Renovar
-          </button>
+          {producto ? (
+            contrato.estado === 'POR_ENTREGAR' && (
+              <button className="auth-btn" onClick={() => { accion(() => updateContratoComercial(contrato.id, { status: 'ENTREGADO' }), 'Marcado como entregado', 'No se pudo marcar como entregado'); }}>
+                <PackageCheck size={15} /> Marcar como entregado
+              </button>
+            )
+          ) : (
+            <button className="btn-secondary" onClick={() => setModo('renovar')} disabled={!puedeRenovar}
+              title={puedeRenovar ? undefined : contrato.estado === 'RENOVADO' ? 'Ya fue renovado' : contrato.estado === 'POR_INICIAR' ? 'Se puede renovar cuando el contrato empiece' : 'Un contrato cancelado no se renueva'}>
+              <RefreshCw size={15} /> Renovar
+            </button>
+          )}
           <RowActionsMenu actions={accionesMenu} label="Más acciones del contrato" />
         </div>
       </div>
@@ -187,22 +205,49 @@ export default function ContratoComercialDetalle() {
             <div style={etiqueta}>Cliente</div>
             <div>{contrato.salesClient.name}</div>
           </div>
-          <div>
-            <div style={etiqueta}>Inicio</div>
-            <div>{diaCorto(contrato.startDate)}</div>
-          </div>
-          <div>
-            <div style={etiqueta}>Fin</div>
-            <div>{contrato.endDate ? diaCorto(contrato.endDate) : 'Sin fecha de fin'}</div>
-          </div>
-          <div>
-            <div style={etiqueta}>Valor mensual</div>
-            <div>{dinero(contrato.monthlyValue)}</div>
-          </div>
-          <div>
-            <div style={etiqueta}>Días de gracia</div>
-            <div>{contrato.graceDays}</div>
-          </div>
+          {producto ? (
+            <>
+              <div>
+                <div style={etiqueta}>Fecha de la venta</div>
+                <div>{diaCorto(contrato.startDate)}</div>
+              </div>
+              <div>
+                <div style={etiqueta}>Valor total</div>
+                <div>{dinero(contrato.totalValue)}</div>
+              </div>
+              <div>
+                <div style={etiqueta}>Entrega</div>
+                <div>{contrato.deliveredAt ? `Entregado el ${diaCorto(contrato.deliveredAt)}` : 'Por entregar'}</div>
+              </div>
+              <div>
+                <div style={etiqueta}>Garantía</div>
+                <div>
+                  {contrato.warrantyUntil
+                    ? `Hasta ${diaCorto(contrato.warrantyUntil)}${contrato.garantia ? ` · ${GARANTIA_LABEL[contrato.garantia]}` : ''}`
+                    : 'Sin garantía registrada'}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <div style={etiqueta}>Inicio</div>
+                <div>{diaCorto(contrato.startDate)}</div>
+              </div>
+              <div>
+                <div style={etiqueta}>Fin</div>
+                <div>{contrato.endDate ? diaCorto(contrato.endDate) : 'Sin fecha de fin'}</div>
+              </div>
+              <div>
+                <div style={etiqueta}>Valor mensual</div>
+                <div>{dinero(contrato.monthlyValue)}</div>
+              </div>
+              <div>
+                <div style={etiqueta}>Días de gracia</div>
+                <div>{contrato.graceDays}</div>
+              </div>
+            </>
+          )}
           {contrato.cancelledAt && (
             <div>
               <div style={etiqueta}>Cancelado el</div>
@@ -212,7 +257,7 @@ export default function ContratoComercialDetalle() {
         </div>
 
         <div style={{ marginTop: 16 }}>
-          <div style={etiqueta}>Servicios</div>
+          <div style={etiqueta}>{producto ? 'Productos' : 'Servicios'}</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
             {contrato.services.map((s) => (
               <span key={s.id} className="status-badge" style={{ backgroundColor: '#eef2f7', color: '#334155' }}>
@@ -389,7 +434,7 @@ export default function ContratoComercialDetalle() {
           onSaved={(c) => {
             const eraRenovar = modo === 'renovar';
             setModo(null);
-            showToast(eraRenovar ? 'Contrato renovado' : 'Contrato actualizado', 'success');
+            showToast(eraRenovar ? 'Contrato renovado' : producto ? 'Venta actualizada' : 'Contrato actualizado', 'success');
             if (eraRenovar) navigate(`/ventas/contratos/${c.id}`);
             else cargar();
           }}
@@ -399,14 +444,16 @@ export default function ContratoComercialDetalle() {
       {motivoModal === 'cancelar' && (
         <MotivoCierreModal
           kind="CONTRATO_CANCELADO"
-          titulo="Cancelar contrato"
-          descripcion={`Contrato de ${contrato.salesClient.name}`}
-          contexto="El contrato queda cancelado desde hoy y el cliente deja de contar como vigente. Explicar por qué ayuda a entender qué pasó."
-          confirmLabel="Cancelar contrato"
+          titulo={producto ? 'Cancelar venta' : 'Cancelar contrato'}
+          descripcion={`${producto ? 'Venta' : 'Contrato'} de ${contrato.salesClient.name}`}
+          contexto={producto
+            ? 'La venta queda cancelada. Explicar por qué ayuda a entender qué pasó.'
+            : 'El contrato queda cancelado desde hoy y el cliente deja de contar como vigente. Explicar por qué ayuda a entender qué pasó.'}
+          confirmLabel={producto ? 'Cancelar venta' : 'Cancelar contrato'}
           onConfirm={async (motivo) => {
             setContrato(await cancelarContratoComercial(contrato.id, { motivo }));
             setMotivoModal(null);
-            showToast('Contrato cancelado', 'success');
+            showToast(producto ? 'Venta cancelada' : 'Contrato cancelado', 'success');
           }}
           onCancel={() => setMotivoModal(null)}
         />
@@ -429,8 +476,8 @@ export default function ContratoComercialDetalle() {
 
       {confirmarEliminar && (
         <ConfirmDialog
-          title="Eliminar contrato"
-          message="¿Eliminar este contrato? Los documentos generados no se borran: siguen en Documentación."
+          title={producto ? 'Eliminar venta' : 'Eliminar contrato'}
+          message={`¿Eliminar ${producto ? 'esta venta' : 'este contrato'}? Los documentos generados no se borran: siguen en Documentación.`}
           confirmLabel="Eliminar"
           danger
           onConfirm={eliminar}

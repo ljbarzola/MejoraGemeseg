@@ -35,6 +35,7 @@ export class VentasCicloService {
           select: {
             salesClientId: true,
             status: true,
+            kind: true,
             startDate: true,
             endDate: true,
             graceDays: true,

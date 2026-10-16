@@ -5,6 +5,7 @@ import {
   IsInt,
   IsArray,
   IsBoolean,
+  IsIn,
   IsNumber,
   Max,
   Min,
@@ -18,6 +19,23 @@ import { MotivoInputDto } from './opportunity.dto';
 export class CreateSalesAgreementDto {
   @IsInt()
   salesClientId: number;
+
+  // SERVICIO (recurrente, por defecto) o PRODUCTO (venta única: sin fecha de fin,
+  // renovación ni valor mensual; estados Por entregar / Entregado).
+  @IsOptional()
+  @IsIn(['SERVICIO', 'PRODUCTO'])
+  kind?: 'SERVICIO' | 'PRODUCTO';
+
+  // Solo PRODUCTO: valor total de la venta y fin de la garantía (opcional).
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(9999999999)
+  totalValue?: number | null;
+
+  @IsString()
+  @IsOptional()
+  warrantyUntil?: string;
 
   @IsString()
   @IsOptional()
@@ -70,6 +88,22 @@ export class UpdateSalesAgreementDto {
   @IsOptional()
   title?: string;
 
+  // Solo PRODUCTO. Cadena vacía = quitar la garantía.
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(9999999999)
+  totalValue?: number | null;
+
+  @IsString()
+  @IsOptional()
+  warrantyUntil?: string;
+
+  // Solo PRODUCTO, al marcarlo como entregado. Sin enviar: hoy.
+  @IsString()
+  @IsOptional()
+  deliveredAt?: string;
+
   @IsString()
   @IsOptional()
   startDate?: string;
@@ -88,8 +122,9 @@ export class UpdateSalesAgreementDto {
   @IsOptional()
   notes?: string;
 
-  // Solo se puede pedir ACTIVO (reactivar un contrato cancelado). Cancelar tiene
-  // su propia ruta porque exige el motivo; RENOVADO lo pone la renovación.
+  // Servicio: solo se puede pedir ACTIVO (reactivar un contrato cancelado).
+  // Producto: POR_ENTREGAR o ENTREGADO. Cancelar tiene su propia ruta porque
+  // exige el motivo; RENOVADO lo pone la renovación.
   @IsString()
   @IsOptional()
   status?: string;

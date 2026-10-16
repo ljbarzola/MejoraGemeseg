@@ -726,9 +726,9 @@ export class VentasClientesService {
     const client = await this.prisma.salesClient.findFirst({
       where: { id, companyId },
     });
-    if (!client) throw new NotFoundException('Cliente no encontrado');
+    if (!client) throw new NotFoundException('No se encontró en el Directorio');
     if (client.status === dto.toStatus) {
-      throw new BadRequestException('El cliente ya está en esa etapa');
+      throw new BadRequestException('Ya está en esa etapa');
     }
 
     const targetStage = await this.prisma.salesClientStage.findFirst({
@@ -894,7 +894,7 @@ export class VentasClientesService {
       where: { id, companyId },
       include: CLIENT_INCLUDE,
     });
-    if (!client) throw new NotFoundException('Cliente no encontrado');
+    if (!client) throw new NotFoundException('No se encontró en el Directorio');
     return client;
   }
 
@@ -922,9 +922,13 @@ export class VentasClientesService {
       throw new BadRequestException('El nombre es requerido');
     await this.ensureCoreFields(companyId);
     await this.ensureDefaultStages(companyId);
-    const yaEsCliente = dto.yaEsCliente === true;
-    // Un cliente que ya contrataba nace en la etapa ganada; uno nuevo, en la inicial.
-    const initialStage = yaEsCliente
+    const soloDatos = dto.soloDatos === true;
+    const yaEsCliente = !soloDatos && dto.yaEsCliente === true;
+    // Solo datos: sin etapa (la etapa es de la oportunidad). Un cliente que ya
+    // contrataba nace en la etapa ganada; uno nuevo, en la inicial.
+    const initialStage = soloDatos
+      ? null
+      : yaEsCliente
       ? ((await this.prisma.salesClientStage.findFirst({
           where: { companyId, key: ETAPA_GANADA },
         })) ??
@@ -949,8 +953,9 @@ export class VentasClientesService {
         // Quien crea un cliente a mano en Ventas es, por defecto, quien lo
         // atiende — a diferencia de un referido (creado por cualquier
         // empleado vía /referir), que queda sin responsable hasta que
-        // alguien de Ventas se lo asigne (ver asignarme()).
-        assignedUserId: createdBy,
+        // alguien de Ventas se lo asigne (ver asignarme()). En «solo datos» el
+        // responsable es de la oportunidad, no de la empresa o persona.
+        assignedUserId: soloDatos ? null : createdBy,
         name: dto.name.trim(),
         email: dto.email?.trim() || null,
         phone: dto.phone?.trim() || null,
@@ -964,7 +969,7 @@ export class VentasClientesService {
       });
       // El cliente nace con su primera oportunidad (misma fecha de ingreso,
       // mismo responsable y mismos servicios que eligió en la ficha).
-      if (this.esquema.isReady()) {
+      if (this.esquema.isReady() && !soloDatos) {
         await this.oportunidades.crearInicial(tx, {
           companyId,
           salesClientId: cliente.id,
@@ -1001,7 +1006,7 @@ export class VentasClientesService {
     if (!companyId) throw new BadRequestException('Se requiere una empresa');
     const client = await this.getClient(companyId, id);
     if (client.assignedUserId !== userId) {
-      throw new BadRequestException('Este cliente no está asignado a ti.');
+      throw new BadRequestException('No está asignado a ti.');
     }
     return this.prisma.salesClient.update({
       where: { id },
@@ -1239,6 +1244,7 @@ export class VentasClientesService {
         kind: 'acuerdo',
         agreementId: x.id,
         title: x.title,
+        producto: x.kind === 'PRODUCTO',
         servicios: x.services.map((s) => s.service.name),
       };
       eventos.push({

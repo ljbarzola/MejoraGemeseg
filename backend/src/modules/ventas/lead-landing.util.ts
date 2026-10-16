@@ -12,9 +12,11 @@ export interface LandingDef {
   linea: string;
 }
 
-// Valores de Gemeseg. Cada empresa puede cambiarlos desde Ventas → Configuración
-// (se guardan en `SalesSetting`, clave 'landings'); esta lista solo se usa mientras
-// una empresa no haya guardado la suya.
+// Tabla de landings de Gemeseg. Ya NO es un valor por defecto de todas las empresas:
+// cada una tiene la suya (Ventas → Configuración, `SalesSetting` clave 'landings') y
+// una empresa nueva empieza sin ninguna. Esta lista solo sirve para copiarla, una
+// vez, a las empresas que ya usaban Ventas antes de que existiera la configuración
+// (`VentasSchemaService.sembrarLandingsDeEmpresasExistentes`).
 export const LANDINGS: LandingDef[] = [
   { slug: 'agentes-de-seguridad', servicio: 'Agentes de Seguridad', linea: 'Seguridad Física' },
   { slug: 'custodia-de-mercaderia', servicio: 'Custodia de Mercadería en Movimiento', linea: 'Seguridad Física' },

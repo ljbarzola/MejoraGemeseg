@@ -342,7 +342,7 @@ export default function ContratoForm() {
         <>
           <Section title="Datos de envío">
             <p style={{ fontSize: 12, color: '#666', margin: '-4px 0 12px' }}>
-              A quién se le envía el link para firmar. Si eliges un cliente de la ficha, el nombre y el email se autocompletan (igual editables).
+              A quién se le envía el link para firmar. Si eliges un cliente, el nombre y el email se autocompletan (igual editables).
             </p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
               <select value={selectedClientId} onChange={(e) => handleSelectClient(e.target.value ? +e.target.value : '')}
@@ -353,7 +353,7 @@ export default function ContratoForm() {
                 ))}
               </select>
               <button type="button" className="btn-secondary" onClick={() => navigate('/ventas/clientes?nuevo=1')}
-                style={{ padding: '8px 12px', fontSize: 12 }}>Ir a Clientes</button>
+                style={{ padding: '8px 12px', fontSize: 12 }}>Ir al Directorio</button>
             </div>
             {!isEditMode && selectedClientId !== '' && (
               <div style={{ marginBottom: 12 }}>

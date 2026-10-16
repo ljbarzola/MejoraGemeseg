@@ -23,8 +23,8 @@ const COLUMNAS_DOCS = [
 ];
 const COLUMNAS_DOCS_POR_DEFECTO = ['clientName', 'template', 'status', 'createdAt'];
 
-// "Documentación": los documentos que se generan desde una plantilla y se
-// firman (antes se llamaba "Contratos"). Cada documento es de un cliente y
+// "Documentación" (antes "Contratos"): los
+// documentos que se generan desde una plantilla y se firman. Cada documento es de un cliente y
 // puede colgar de un contrato comercial (pantalla "Contratos").
 export default function ContratosList() {
   const navigate = useNavigate();

@@ -8,6 +8,7 @@ import RowActionsMenu, { type RowAction } from '../../components/common/RowActio
 import MotivoCierreModal from '../../components/ventas/MotivoCierreModal';
 import ConvertirLeadModal from '../../components/ventas/ConvertirLeadModal';
 import ConexionesLeadsModal from '../../components/ventas/ConexionesLeadsModal';
+import VentasComoFunciona from '../../components/ventas/VentasComoFunciona';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
@@ -35,8 +36,8 @@ import { diaCorto } from '../../utils/contratoComercial';
 // refirió): al filtrar por una fuente se muestran solas las que ella usa.
 const COLUMNAS_LEAD = [
   { key: 'mensaje', label: 'Mensaje' },
-  { key: 'canal', label: 'Canal' },
-  { key: 'motivo', label: 'Motivo del contacto' },
+  { key: 'canal', label: 'Fuente' },
+  { key: 'motivo', label: 'Tipo de contacto' },
   { key: 'estado', label: 'Estado' },
   { key: 'responsable', label: 'Responsable' },
   { key: 'llego', label: 'Llegó' },
@@ -121,7 +122,7 @@ export default function LeadsPage() {
       setLeads(ls);
       setServicios(ss);
     } catch (err: any) {
-      showToast(err?.response?.data?.message || 'No se pudieron cargar los leads', 'error');
+      showToast(err?.response?.data?.message || 'No se pudieron cargar los posibles clientes', 'error');
     } finally {
       setCargando(false);
     }
@@ -197,7 +198,7 @@ export default function LeadsPage() {
           <>
             <select
               value={l.contactReason ?? ''}
-              aria-label={`Motivo del contacto de ${l.name}`}
+              aria-label={`Tipo de contacto de ${l.name}`}
               onChange={(e) => clasificar(l, e.target.value)}
               style={{ padding: '4px 6px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }}
             >
@@ -226,7 +227,7 @@ export default function LeadsPage() {
             {abiertos(l) && diasDesde(l.createdAt) >= DIAS_SIN_ATENDER && (
               <div>
                 <span className="status-badge" style={{ backgroundColor: '#fef3c7', color: '#92400e', whiteSpace: 'nowrap', marginTop: 4, display: 'inline-block', fontSize: 11 }}
-                  title="Solo es un aviso: el lead sigue en la bandeja hasta que lo atiendas.">
+                  title="Solo es un aviso: el posible cliente sigue en la bandeja hasta que lo atiendas.">
                   Sin atender hace {diasDesde(l.createdAt)} días
                 </span>
               </div>
@@ -286,9 +287,9 @@ export default function LeadsPage() {
     }
     if (abiertos(l)) {
       if (!l.assignedUserId) {
-        lista.push({ label: 'Tomar este lead', icon: <UserPlus size={14} />, onClick: () => correr(() => tomarLeadEntrante(l.id), 'Lead tomado', 'No se pudo tomar el lead') });
+        lista.push({ label: 'Tomar este posible cliente', icon: <UserPlus size={14} />, onClick: () => correr(() => tomarLeadEntrante(l.id), 'Posible cliente tomado', 'No se pudo tomar el posible cliente') });
       } else if (l.assignedUserId === usuario?.id) {
-        lista.push({ label: 'Soltar este lead', icon: <UserMinus size={14} />, onClick: () => correr(() => soltarLeadEntrante(l.id), 'Lead liberado', 'No se pudo soltar el lead') });
+        lista.push({ label: 'Soltar este posible cliente', icon: <UserMinus size={14} />, onClick: () => correr(() => soltarLeadEntrante(l.id), 'Posible cliente liberado', 'No se pudo soltar el posible cliente') });
       }
       lista.push({ label: 'Descartar', icon: <XCircle size={14} />, danger: true, onClick: () => setDescartando(l) });
     }
@@ -303,20 +304,21 @@ export default function LeadsPage() {
       <div className="page-title-row">
         <div>
           <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Leads</h1>
+          <h1>Posibles clientes</h1>
         </div>
         <div className="header-actions">
+          <VentasComoFunciona />
           <button className="btn-secondary" onClick={() => setConexiones(true)}>
             <Plug size={16} /> Conexiones
           </button>
           <button className="auth-btn" onClick={() => setNuevo(true)}>
-            <Plus size={16} /> Nuevo lead
+            <Plus size={16} /> Nuevo posible cliente
           </button>
         </div>
       </div>
 
       <p style={{ fontSize: 13, color: '#666', margin: '-6px 0 14px' }}>
-        Contactos que llegan por la web, los anuncios o a mano. Clasifícalos: solo uno de servicio pasa a oportunidad. {sinClasificar > 0 && <strong>{sinClasificar} sin clasificar.</strong>}
+        Personas que escriben por la web, los anuncios o a mano (en Google Ads se llaman «leads»). Clasifícalos: solo uno de servicio pasa a oportunidad. {sinClasificar > 0 && <strong>{sinClasificar} sin clasificar.</strong>}
       </p>
 
       {leads.length > 0 && (
@@ -345,12 +347,12 @@ export default function LeadsPage() {
             <option value="CONVERTIDO">Pasaron a oportunidad</option>
             <option value="DESCARTADO">Descartados</option>
           </select>
-          <select className="filter-select" value={motivo} onChange={(e) => setMotivo(e.target.value)} aria-label="Motivo del contacto">
-            <option value="">Todos los motivos</option>
+          <select className="filter-select" value={motivo} onChange={(e) => setMotivo(e.target.value)} aria-label="Tipo de contacto">
+            <option value="">Todos los tipos</option>
             <option value="SIN_CLASIFICAR">Sin clasificar</option>
             {(Object.keys(MOTIVO_CONTACTO_LABEL) as MotivoContacto[]).map((k) => <option key={k} value={k}>{MOTIVO_CONTACTO_LABEL[k]}</option>)}
           </select>
-          <select className="filter-select" value={canal} onChange={(e) => setCanal(e.target.value)} aria-label="Canal">
+          <select className="filter-select" value={canal} onChange={(e) => setCanal(e.target.value)} aria-label="Fuente">
             <option value="">Todas las fuentes</option>
             {canales.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
@@ -378,10 +380,10 @@ export default function LeadsPage() {
         ) : leads.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36, marginBottom: 8 }}>📥</div>
-            <div>Aún no hay leads. Llegan solos desde la web o Google Ads (ver «Conexiones») o se ingresan a mano.</div>
+            <div>Aún no hay posibles clientes. Llegan solos desde la web y las landings (ver «Conexiones») o se ingresan a mano.</div>
           </div>
         ) : filas.length === 0 ? (
-          <p style={{ color: '#888', fontSize: 13 }}>No hay leads que coincidan con los filtros.</p>
+          <p style={{ color: '#888', fontSize: 13 }}>No hay posibles clientes que coincidan con los filtros.</p>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef}>
@@ -408,7 +410,7 @@ export default function LeadsPage() {
                       <div style={{ fontSize: 11, color: '#888' }}>{[l.email, l.phone].filter(Boolean).join(' · ')}</div>
                       {abiertos(l) && l.clienteExistente && (
                         <div style={{ fontSize: 11, color: '#b45309', marginTop: 2 }}>
-                          Parece ser el cliente{' '}
+                          Ya está en el directorio:{' '}
                           <a className="enlace-tabla" href={`/ventas/clientes?ficha=${l.clienteExistente.id}`}
                             onClick={(e) => { e.preventDefault(); navigate(`/ventas/clientes?ficha=${l.clienteExistente!.id}`); }}>
                             {l.clienteExistente.name}
@@ -447,7 +449,7 @@ export default function LeadsPage() {
       {nuevo && (
         <NuevoLeadModal
           onClose={() => setNuevo(false)}
-          onSaved={() => { setNuevo(false); showToast('Lead creado', 'success'); cargar(); }}
+          onSaved={() => { setNuevo(false); showToast('Posible cliente creado', 'success'); cargar(); }}
         />
       )}
       {conexiones && <ConexionesLeadsModal onClose={() => setConexiones(false)} />}
@@ -458,7 +460,7 @@ export default function LeadsPage() {
           onClose={() => setConvirtiendo(null)}
           onDone={(r) => {
             setConvirtiendo(null);
-            showToast(r.sumadaAClienteExistente ? 'Oportunidad sumada al cliente' : 'Oportunidad creada: queda como prospecto hasta que acepte', 'success');
+            showToast(r.sumadaAClienteExistente ? 'Oportunidad sumada a su ficha del directorio' : 'Oportunidad creada: queda como prospecto hasta que acepte', 'success');
             cargar();
             navigate('/ventas/oportunidades');
           }}
@@ -467,14 +469,14 @@ export default function LeadsPage() {
       {descartando && (
         <MotivoCierreModal
           kind="LEAD_DESCARTE"
-          titulo="Descartar lead"
+          titulo="Descartar posible cliente"
           descripcion={descartando.name}
-          contexto="Un lead descartado sale de la bandeja pero no se borra. Elige por qué: no contestó, postulante, proveedor, spam, no es un servicio nuestro…"
+          contexto="Un posible cliente descartado sale de la bandeja pero no se borra. Elige por qué: no contestó, postulante, proveedor, spam, no es un servicio nuestro…"
           confirmLabel="Descartar"
           onConfirm={async (m) => {
             await descartarLeadEntrante(descartando.id, m);
             setDescartando(null);
-            showToast('Lead descartado', 'success');
+            showToast('Posible cliente descartado', 'success');
             cargar();
           }}
           onCancel={() => setDescartando(null)}
@@ -510,7 +512,7 @@ function ResumenPorFuente({
     background: seleccionada ? '#ebf4ff' : '#fff',
   });
   return (
-    <div role="group" aria-label="Leads por fuente" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 14px' }}>
+    <div role="group" aria-label="Posibles clientes por fuente" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 14px' }}>
       <button type="button" style={estilo(!activa)} onClick={() => onElegir('')} aria-pressed={!activa}>
         <span style={{ fontSize: 22, fontWeight: 700, color: '#1a202c' }}>{total}</span>
         <span style={{ fontSize: 12, color: '#4a5568' }}>Todas las fuentes</span>
@@ -560,7 +562,7 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
   const guardar = async () => {
     setError('');
     if (!datos.channel) {
-      return setError('Elige cómo llegó el lead (Google Ads, Referido, WhatsApp, llamada…).');
+      return setError('Elige cómo llegó el posible cliente (Google Ads, Referido, WhatsApp, llamada…).');
     }
     if (!datos.name.trim() && !datos.email.trim() && !datos.phone.trim()) {
       return setError('Escribe al menos un nombre, un correo o un teléfono.');
@@ -572,7 +574,7 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
       onSaved();
     } catch (err: any) {
       const msg = err?.response?.data?.message;
-      setError((Array.isArray(msg) ? msg[0] : msg) || 'No se pudo guardar el lead. Intenta de nuevo.');
+      setError((Array.isArray(msg) ? msg[0] : msg) || 'No se pudo guardar el posible cliente. Intenta de nuevo.');
     } finally {
       setGuardando(false);
     }
@@ -582,7 +584,7 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Nuevo lead</h3>
+          <h3>Nuevo posible cliente</h3>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">✕</button>
         </div>
         <div className="modal-body">

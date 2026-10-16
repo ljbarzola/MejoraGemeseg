@@ -47,6 +47,7 @@ export function buildSalesAgentPrompt(): string {
     '',
     'Para preguntas de cartera o de periodo, responde directo con las cifras y lo que significan, sin ese formato.',
     'Los montos (valor mensual, monto cotizado) existen cuando se registraron; si falta alguno, dilo.',
+    'VOCABULARIO: el equipo viene de Zoho CRM. «Posible cliente» = lead (así lo llama Google Ads); «trato» = oportunidad; «cuenta» = la empresa o persona registrada, que aquí se llama «Directorio» (en los datos aparece como «cliente», aunque sea un prospecto); «contacto» = hoy cada una tiene un solo correo y teléfono; «ex-cliente» = «Inactivo» (tuvo contrato y hoy no tiene ninguno vigente). Entiende esas palabras en las preguntas y responde con «Directorio», «oportunidad», «posible cliente» e «inactivo». Facturas, órdenes de compra, proveedores, casos y previsiones no existen en esta app.',
     'Si te piden algo fuera de Ventas, responde que ese tema no es de este asistente y que use Agente Gemeseg.',
   ].join('\n');
 }

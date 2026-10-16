@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Pencil, Trash2, ClipboardList, Workflow, CalendarPlus } from 'lucide-react';
+import { Plus, Pencil, Trash2, ClipboardList, Workflow, CalendarPlus, UserPlus, UserMinus } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
@@ -11,6 +11,7 @@ import SalesClientStagesConfigModal from '../../components/ventas/SalesClientSta
 import SeguimientoHoyTable from '../../components/ventas/SeguimientoHoyTable';
 import ClienteFichaPanel from '../../components/ventas/ClienteFichaPanel';
 import ClienteFormModal from '../../components/ventas/ClienteFormModal';
+import VentasComoFunciona from '../../components/ventas/VentasComoFunciona';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
@@ -21,6 +22,7 @@ import { useToast } from '../../contexts/ToastContext';
 import {
   getOportunidades,
   deleteOportunidad,
+  updateOportunidad,
   getSalesClients,
   getSalesClient,
   getSalesClientFields,
@@ -75,6 +77,8 @@ export default function OportunidadesPage() {
   const [fichaId, setFichaId] = useState<number | null>(null);
   const [mostrarEtapas, setMostrarEtapas] = useState(false);
   const [personaNueva, setPersonaNueva] = useState(false);
+  // Editar los datos de la empresa o persona desde su ficha.
+  const [editarCliente, setEditarCliente] = useState<SalesClient | null>(null);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [estado, setEstado] = useState('abiertas');
@@ -137,7 +141,13 @@ export default function OportunidadesPage() {
     if (etapa) { setFiltroEtapa(etapa); setEstado(''); }
     const ficha = Number(searchParams.get('ficha'));
     if (ficha) abrirFicha(ficha);
-    if (searchParams.get('nueva') || etapa || ficha) setSearchParams({}, { replace: true });
+    // ?vista=hoy (cifras de seguimiento del Dashboard) y ?q=nombre (desde la
+    // ficha del Directorio: todas las oportunidades de esa empresa o persona).
+    const vistaParam = searchParams.get('vista');
+    if (vistaParam === 'hoy') setVista('hoy');
+    const q = searchParams.get('q');
+    if (q) { setBusqueda(q); setEstado(''); setVista('todas'); }
+    if (searchParams.get('nueva') || etapa || ficha || vistaParam || q) setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
 
   const responsables = useMemo(
@@ -147,16 +157,24 @@ export default function OportunidadesPage() {
   );
 
   const hoy = hoyISO();
-  // «Hoy»: contactos con al menos una negociación ABIERTA y su siguiente paso
-  // vencido, para hoy o sin fecha (el siguiente paso vive en el cliente).
+  // «Hoy»: empresas o personas con al menos una negociación ABIERTA (o con un
+  // siguiente paso viejo guardado en su ficha) y su siguiente paso vencido, para
+  // hoy o sin fecha. Quien lo ve es el RESPONSABLE DE LA OPORTUNIDAD (el de la
+  // empresa solo cuenta como respaldo para lo guardado antes de 2026-10-16).
   const hoyClientes = useMemo(() => {
-    const conAbierta = new Set(oportunidades.filter((o) => o.abierta).map((o) => o.salesClientId));
+    const abiertasDe = new Map<number, Oportunidad[]>();
+    for (const o of oportunidades) {
+      if (!o.abierta) continue;
+      abiertasDe.set(o.salesClientId, [...(abiertasDe.get(o.salesClientId) ?? []), o]);
+    }
     const q = busqueda.toLowerCase().trim();
     const alcance = esManager ? hoyResponsable : 'mine';
     return clientes.filter((c) => {
-      if (!conAbierta.has(c.id)) return false;
-      if (alcance === 'mine' && c.assignedUserId !== currentUser?.id) return false;
-      if (alcance !== 'mine' && alcance !== 'all' && String(c.assignedUserId) !== alcance) return false;
+      const abiertas = abiertasDe.get(c.id) ?? [];
+      if (abiertas.length === 0 && !c.nextActionText && !c.nextActionDate) return false;
+      const duenos = [...abiertas.map((o) => o.assignedUserId), c.assignedUserId];
+      if (alcance === 'mine' && !duenos.includes(currentUser?.id)) return false;
+      if (alcance !== 'mine' && alcance !== 'all' && !duenos.some((d) => String(d) === alcance)) return false;
       if (urgenciaDe(c, hoy) === 'futuro') return false;
       return !q || c.name.toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q);
     });
@@ -210,16 +228,41 @@ export default function OportunidadesPage() {
     }
   };
 
-  const acciones = (o: Oportunidad): RowAction[] => [
-    { label: 'Ver ficha del contacto', icon: <ClipboardList size={14} />, onClick: () => abrirFicha(o.salesClientId) },
-    { label: 'Editar', icon: <Pencil size={14} />, onClick: () => setModal({ modo: 'editar', oportunidad: o }) },
-    { label: 'Eliminar', icon: <Trash2 size={14} />, danger: true, onClick: () => setAEliminar(o) },
-  ];
+  // El responsable es de la oportunidad: cada quien se la asigna o se la quita.
+  const asignar = async (o: Oportunidad, userId: number | null) => {
+    try {
+      await updateOportunidad(o.id, { assignedUserId: userId });
+      showToast(userId ? 'La oportunidad quedó a tu nombre' : 'Quedó sin responsable', 'success');
+      cargar();
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'No se pudo cambiar el responsable', 'error');
+    }
+  };
+
+  const acciones = (o: Oportunidad): RowAction[] => {
+    const lista: RowAction[] = [
+      { label: 'Ver ficha', icon: <ClipboardList size={14} />, onClick: () => abrirFicha(o.salesClientId) },
+      { label: 'Editar', icon: <Pencil size={14} />, onClick: () => setModal({ modo: 'editar', oportunidad: o }) },
+    ];
+    const cliente = clientes.find((c) => c.id === o.salesClientId);
+    if (o.abierta && cliente) {
+      lista.push({ label: 'Siguiente paso', icon: <CalendarPlus size={14} />, onClick: () => abrirSiguientePaso(cliente, 'editar') });
+    }
+    if (o.abierta && currentUser) {
+      if (!o.assignedUserId) {
+        lista.push({ label: 'Asignarme', icon: <UserPlus size={14} />, onClick: () => asignar(o, currentUser.id) });
+      } else if (o.assignedUserId === currentUser.id) {
+        lista.push({ label: 'Quitarme', icon: <UserMinus size={14} />, onClick: () => asignar(o, null) });
+      }
+    }
+    lista.push({ label: 'Eliminar', icon: <Trash2 size={14} />, danger: true, onClick: () => setAEliminar(o) });
+    return lista;
+  };
 
   const accionesHoy = (c: SalesClient): RowAction[] => [
     { label: 'Ver ficha', icon: <ClipboardList size={14} />, onClick: () => abrirFicha(c.id) },
     { label: 'Editar siguiente paso', icon: <CalendarPlus size={14} />, onClick: () => abrirSiguientePaso(c, 'editar') },
-    { label: 'Nueva oportunidad para este contacto', icon: <Plus size={14} />, onClick: () => setModal({ modo: 'crear', clienteId: c.id }) },
+    { label: 'Nueva oportunidad para esta empresa o persona', icon: <Plus size={14} />, onClick: () => setModal({ modo: 'crear', clienteId: c.id }) },
   ];
 
   const celdaOpp = (key: string, o: Oportunidad): ReactNode => {
@@ -277,6 +320,7 @@ export default function OportunidadesPage() {
           <h1>Oportunidades</h1>
         </div>
         <div className="header-actions">
+          <VentasComoFunciona />
           <button type="button" className="btn-secondary" onClick={() => setMostrarEtapas(true)}
             title="Configurar las etapas de las negociaciones" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Workflow size={15} /> Etapas
@@ -286,6 +330,10 @@ export default function OportunidadesPage() {
           </button>
         </div>
       </div>
+
+      <p style={{ fontSize: 13, color: '#666', margin: '-6px 0 14px' }}>
+        Cada negociación de un servicio, con su etapa y su monto (en Zoho: Tratos). La persona o empresa vive en el Directorio.
+      </p>
 
       <div className="admin-tabs" style={{ display: 'inline-flex', marginBottom: 16 }}>
         <button type="button" className={`admin-tab ${vista === 'todas' ? 'active' : ''}`} style={{ flex: '0 0 auto' }}
@@ -303,7 +351,7 @@ export default function OportunidadesPage() {
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder={vista === 'hoy' ? 'Buscar por nombre, teléfono o correo...' : 'Buscar por cliente, título o servicio...'}
+            placeholder={vista === 'hoy' ? 'Buscar por nombre, teléfono o correo...' : 'Buscar por empresa o persona, título o servicio...'}
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
           {vista === 'hoy' ? (
@@ -342,7 +390,7 @@ export default function OportunidadesPage() {
           <ColumnPickerMenu
             columns={COLUMNAS_OPP}
             visible={columnPrefs.visible}
-            fixedLabel="Cliente"
+            fixedLabel="Empresa o persona"
             onApply={async (keys) => {
               const guardado = await columnPrefs.set(keys);
               if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
@@ -363,7 +411,7 @@ export default function OportunidadesPage() {
         ) : oportunidades.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36, marginBottom: 8 }}>🎯</div>
-            <div>Aún no hay negociaciones. Salen de pasar un lead a oportunidad o de registrar a una persona nueva.</div>
+            <div>Aún no hay negociaciones. Salen de pasar un posible cliente a oportunidad o de registrar una empresa o persona nueva.</div>
           </div>
         ) : vista === 'hoy' ? (
           hoyClientes.length === 0 ? (
@@ -388,7 +436,7 @@ export default function OportunidadesPage() {
             <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th {...thProps('cliente')} style={{ width: 200 }}>Cliente <SortIcon campo="cliente" /></th>
+                  <th {...thProps('cliente')} style={{ width: 200 }}>Empresa o persona <SortIcon campo="cliente" /></th>
                   {columnasVisiblesOpp.map((k) => {
                     const col = COLUMNAS_OPP.find((c) => c.key === k)!;
                     return (
@@ -472,7 +520,16 @@ export default function OportunidadesPage() {
           client={clientes.find((c) => c.id === fichaId)!}
           fields={campos}
           onClose={() => setFichaId(null)}
-          onEditNextStep={(client) => abrirSiguientePaso(client, 'editar')}
+          onEdit={(client) => { setFichaId(null); setEditarCliente(client); }}
+        />
+      )}
+
+      {editarCliente && (
+        <ClienteFormModal
+          client={editarCliente}
+          fields={campos}
+          onClose={() => setEditarCliente(null)}
+          onSaved={() => { setEditarCliente(null); cargar(); }}
         />
       )}
 
@@ -495,7 +552,7 @@ export default function OportunidadesPage() {
       {aEliminar && (
         <ConfirmDialog
           title="Eliminar oportunidad"
-          message={`¿Eliminar la oportunidad de ${aEliminar.salesClient.name}? Se borran también sus cambios de etapa y los motivos registrados. El cliente no se borra.`}
+          message={`¿Eliminar la oportunidad de ${aEliminar.salesClient.name}? Se borran también sus cambios de etapa y los motivos registrados. Su ficha del directorio no se borra.`}
           confirmLabel="Eliminar"
           danger
           onConfirm={confirmarEliminar}
