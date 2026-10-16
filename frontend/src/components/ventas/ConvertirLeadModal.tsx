@@ -54,7 +54,7 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
 
   const convertir = async () => {
     setError('');
-    if (destino === 'nuevo' && !nombre.trim()) return setError('La cuenta necesita un nombre.');
+    if (destino === 'nuevo' && !nombre.trim()) return setError('Falta el nombre de la empresa o persona.');
     setGuardando(true);
     try {
       const r = await convertirLeadEntrante(lead.id, {
@@ -90,26 +90,26 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
           )}
 
           <p style={{ fontSize: 12, color: '#666', margin: '0 0 12px' }}>
-            Al pasar a oportunidad se crea su cuenta como prospecto (la ves en Cuentas, estado «Prospecto») y la negociación en Oportunidades; solo será cliente cuando acepte la propuesta.
+            Al pasar a oportunidad queda como prospecto en el Directorio (estado «Prospecto») y la negociación en Oportunidades; solo será cliente cuando acepte la propuesta.
           </p>
 
           {cargando ? (
-            <p style={{ color: '#888', fontSize: 13 }}>Comprobando si ya tiene una cuenta...</p>
+            <p style={{ color: '#888', fontSize: 13 }}>Comprobando si ya está en el directorio...</p>
           ) : (
             coincidencias.length > 0 && (
               <div style={{ background: '#fffbeb', border: '1px solid #f6e05e', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
                 <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600 }}>
-                  Este posible cliente se parece a una cuenta que ya existe (mismo correo, teléfono o RUC).
+                  Este posible cliente se parece a alguien que ya está en el directorio (mismo correo, teléfono o RUC).
                 </p>
                 {coincidencias.map((c) => (
                   <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 400, cursor: 'pointer', marginBottom: 4 }}>
                     <input type="radio" name="destino" checked={destino === c.id} onChange={() => setDestino(c.id)} />
-                    Sumar la oportunidad a la cuenta <strong>{c.name}</strong>
+                    Sumar la oportunidad a <strong>{c.name}</strong>
                   </label>
                 ))}
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 400, cursor: 'pointer' }}>
                   <input type="radio" name="destino" checked={destino === 'nuevo'} onChange={() => setDestino('nuevo')} />
-                  Es otra persona o empresa: crear una cuenta nueva
+                  Es otra persona o empresa: crear una nueva
                 </label>
               </div>
             )
@@ -118,7 +118,7 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
           {destino === 'nuevo' && (
             <>
               <div className="form-group">
-                <label>Nombre o razón social de la cuenta *</label>
+                <label>Nombre o razón social *</label>
                 <input type="text" value={nombre} maxLength={150} onChange={(e) => setNombre(e.target.value)} />
               </div>
               <div className="form-row">

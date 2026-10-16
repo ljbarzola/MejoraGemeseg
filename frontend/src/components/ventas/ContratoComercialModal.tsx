@@ -123,7 +123,7 @@ export default function ContratoComercialModal({
   }, [anterior, serviceIds, valorNumero, producto]);
 
   const validar = (): string => {
-    if (modo === 'crear' && !clienteId) return producto ? 'Elige la cuenta de la venta.' : 'Elige la cuenta del contrato.';
+    if (modo === 'crear' && !clienteId) return producto ? 'Elige el cliente de la venta.' : 'Elige el cliente del contrato.';
     if (producto) {
       if (!inicio) return 'Indica la fecha de la venta.';
       if (serviceIds.length === 0) return 'Elige al menos un producto.';
@@ -217,7 +217,7 @@ export default function ContratoComercialModal({
             <ErrorBanner mensaje={error} />
             {modo === 'renovar' && (
               <p style={{ fontSize: 13, color: '#666', marginTop: 0 }}>
-                Se crea un contrato nuevo para la misma cuenta y el actual queda como «Renovado». Los servicios, el valor y los días de gracia se copian; ajústalos si cambiaron. Si bajan servicios o valor, se te pedirá el motivo.
+                Se crea un contrato nuevo para el mismo cliente y el actual queda como «Renovado». Los servicios, el valor y los días de gracia se copian; ajústalos si cambiaron. Si bajan servicios o valor, se te pedirá el motivo.
               </p>
             )}
 
@@ -252,9 +252,9 @@ export default function ContratoComercialModal({
 
             {modo === 'crear' && (
               <div className="form-group">
-                <label>Cuenta *</label>
+                <label>Cliente *</label>
                 <select value={clienteId} onChange={(e) => setClienteId(e.target.value ? Number(e.target.value) : '')}>
-                  <option value="">Seleccionar cuenta...</option>
+                  <option value="">Seleccionar cliente...</option>
                   {clientes.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
@@ -327,7 +327,7 @@ export default function ContratoComercialModal({
                   onChange={(e) => { setGracia(e.target.value); setGraciaTocada(true); }}
                 />
                 <p style={{ fontSize: 11, color: '#888', margin: '4px 0 0' }}>
-                  Tras el fin del contrato, el cliente sigue «En riesgo» estos días antes de pasar a «Ex-cliente».
+                  Tras el fin del contrato, el cliente sigue «En riesgo» estos días antes de pasar a «Inactivo».
                   {!graciaTocada || Number(gracia) === sugerida ? ` Sugerido por la duración: ${sugerida}.` : ` Lo sugerido por la duración sería ${sugerida}.`}
                 </p>
               </div>

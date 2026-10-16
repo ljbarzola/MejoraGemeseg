@@ -23,19 +23,19 @@ const RECORRIDO: Paso[] = [
   {
     pantalla: '2. Oportunidades',
     texto:
-      'Con «Pasar a oportunidad» se crea la cuenta como prospecto y se abre la negociación de un servicio. Avanza por Nueva → En evaluación → Cotizada → En negociación y termina en Aceptada o Perdida. Es el único lugar donde se cambia la etapa.',
+      'Con «Pasar a oportunidad» queda como prospecto en el Directorio y se abre la negociación de un servicio. Avanza por Nueva → En evaluación → Cotizada → En negociación y termina en Aceptada o Perdida. Es el único lugar donde se cambia la etapa.',
   },
   {
-    pantalla: '3. Cuentas',
+    pantalla: '3. Directorio',
     texto:
-      'Cada persona o empresa registrada, con su historial y su siguiente paso; aquí se editan sus datos. Al abrir ves primero a los clientes (los que ya contratan); con el filtro de estado ves también a los prospectos (en negociación) y a los perdidos.',
+      'Los datos de cada empresa o persona registrada (RUC, correo, teléfono, dirección) y su historial; aquí se editan. Abre con todos; la «Relación» (Cliente, Inactivo, Prospecto…) se calcula sola y sirve para filtrar. La etapa, el responsable y el seguimiento están en Oportunidades.',
   },
   {
     pantalla: '4. Contratos',
-    texto: 'El acuerdo vigente de una cuenta: qué servicios contrató, desde cuándo hasta cuándo y si renueva.',
+    texto: 'El acuerdo vigente de un cliente: qué servicios contrató, desde cuándo hasta cuándo y si renueva.',
   },
   {
-    pantalla: '5. Documentos y firma',
+    pantalla: '5. Documentación',
     texto: 'Genera el PDF del contrato desde una plantilla y lo envía a firmar por correo.',
   },
 ];
@@ -58,21 +58,22 @@ const OTROS_CRM: { nombre: string; filas: FilaEquivalencia[]; diferencia: string
     filas: [
       { crm: 'Posibles clientes', aqui: 'Posibles clientes', nota: 'Igual: quien escribió y aún no sabemos si quiere contratar.' },
       { crm: 'Tratos', aqui: 'Oportunidades', nota: 'La negociación de un servicio, con su etapa y su monto cotizado.' },
-      { crm: 'Cuentas y Contactos', aqui: 'Cuentas', nota: 'La persona o empresa registrada. Por ahora cada cuenta tiene un solo correo y teléfono.' },
-      { crm: 'Tareas, Reuniones y Llamadas', aqui: 'Historial y Siguiente paso', nota: 'En la ficha de la cuenta: notas, llamadas y reuniones. La pestaña «Hoy» muestra a quién atender.' },
+      { crm: 'Cuentas y Contactos', aqui: 'Directorio', nota: 'Los datos de cada empresa o persona. Por ahora cada una tiene un solo correo y teléfono; sin responsable ni etapa (eso es de la oportunidad).' },
+      { crm: 'Tareas, Reuniones y Llamadas', aqui: 'Historial y Siguiente paso', nota: 'En la ficha: notas, llamadas y reuniones. La pestaña «Hoy» muestra a quién atender.' },
       { crm: 'Productos y Presupuestos', aqui: 'Servicios del contrato', nota: 'Los servicios contratados y el monto cotizado de la oportunidad.' },
       { crm: 'Campañas', aqui: 'Fuente y campaña', nota: 'Cada posible cliente guarda de dónde llegó (anuncio, web, referido…).' },
       { crm: 'Informes y Análisis', aqui: 'Dashboard', nota: 'Embudo, cartera de contratos, motivos de pérdida y equipo.' },
-      { crm: 'Documentos', aqui: 'Documentos y firma', nota: 'Genera el PDF desde una plantilla y lo envía a firmar.' },
+      { crm: 'Documentos', aqui: 'Documentación', nota: 'Genera el PDF desde una plantilla y lo envía a firmar.' },
     ],
     diferencia:
-      'En Zoho, al convertir un Posible cliente se crean a la vez el Contacto, la Cuenta y el Trato. Aquí «Pasar a oportunidad» crea la cuenta como prospecto y la oportunidad: la cuenta aparece de una vez en Cuentas (estado «Prospecto») y pasa a «Cliente» cuando acepta.',
+      'En Zoho, al convertir un Posible cliente se crean a la vez el Contacto, la Cuenta y el Trato. Aquí «Pasar a oportunidad» lo agrega al Directorio como prospecto y abre la oportunidad: aparece de una vez en el Directorio (estado «Prospecto») y pasa a «Cliente» cuando acepta.',
   },
 ];
 
 const GLOSARIO: { palabra: string; significa: string }[] = [
-  { palabra: 'Cuenta', significa: 'La persona o empresa registrada. «Cliente» es el estado de una cuenta que ya contrata.' },
-  { palabra: 'Estado de la cuenta', significa: 'Prospecto (negociando), Cliente (ya contrata), En riesgo (contrato por vencer o sin actividad), Ex-cliente (ya no tiene contrato) y Perdido (nunca contrató).' },
+  { palabra: 'Directorio', significa: 'La lista de todas las empresas y personas con las que trabajas, solo con sus datos. «Cliente» es una relación que se calcula sola.' },
+  { palabra: 'Responsable', significa: 'Quien lleva una oportunidad. Lo tiene cada oportunidad, no la empresa o persona.' },
+  { palabra: 'Relación', significa: 'Prospecto (negociando), Cliente (ya contrata), En riesgo (contrato por vencer o sin actividad), Inactivo (tuvo contrato y hoy no tiene ninguno vigente) y Perdido (nunca contrató).' },
   { palabra: 'Fuente', significa: 'Por dónde llegó el contacto: Formulario web, Google Ads, Meta Ads, Referido, WhatsApp, Llamada…' },
   { palabra: 'Campaña', significa: 'Qué anuncio concreto lo trajo, dentro de Google Ads o Meta.' },
   { palabra: 'Landing', significa: 'La página de la web donde llenó el formulario; indica qué servicio pidió.' },
@@ -94,7 +95,7 @@ function Modal({ onClose }: { onClose: () => void }) {
         <div className="modal-body rrhh-help-body">
           <p className="rrhh-help-intro">
             Una persona recorre estas pantallas en orden, de arriba hacia abajo. Cada una responde una pregunta distinta:
-            quién escribió, qué se está negociando, quién es la cuenta, qué contrató y qué firmó.
+            quién escribió, qué se está negociando, quién es la empresa o persona, qué contrató y qué firmó.
           </p>
 
           <div className="rrhh-help-timeline">
@@ -210,7 +211,7 @@ export default function VentasComoFunciona() {
         type="button"
         className="btn-secondary"
         onClick={() => setAbierto(true)}
-        title="Cómo se conectan Posibles clientes, Oportunidades, Cuentas y Contratos"
+        title="Cómo se conectan Posibles clientes, Oportunidades, Directorio y Contratos"
         style={{ display: 'flex', alignItems: 'center', gap: 6 }}
       >
         <HelpCircle size={15} /> Cómo funciona

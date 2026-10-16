@@ -26,7 +26,7 @@ import {
 
 // "Contrato" en la pantalla de Ventas = SalesAgreement: el acuerdo comercial de
 // un cliente (servicios, vigencia, renovaciones). SalesContract es el
-// DOCUMENTO que se genera y firma (pantalla "Documentos y firma"); un contrato puede
+// DOCUMENTO que se genera y firma (pantalla "Documentación"); un contrato puede
 // tener varios documentos colgando de él (SalesAgreementDocument).
 
 const MAX_TITULO = 150;
@@ -430,7 +430,7 @@ export class VentasAcuerdosService {
       where: { id: dto.salesClientId, companyId: cid },
       select: { id: true },
     });
-    if (!cliente) throw new NotFoundException('Cuenta no encontrada');
+    if (!cliente) throw new NotFoundException('Cliente no encontrado');
     const producto = dto.kind === 'PRODUCTO';
     if (producto && renovacion) {
       throw new BadRequestException('Una venta de producto no se renueva.');

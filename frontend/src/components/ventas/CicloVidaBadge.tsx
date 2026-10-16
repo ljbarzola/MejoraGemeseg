@@ -1,6 +1,6 @@
 import { CICLO_COLOR, CICLO_LABEL, type CicloVida } from '../../services/ventas.service';
 
-// Ciclo de vida del cliente (Prospecto, Cliente, En riesgo, Ex-cliente, Perdido).
+// Ciclo de vida del cliente (Prospecto, Cliente, En riesgo, Inactivo, Perdido).
 // Es un cálculo, no algo que se teclee: `razones` explica por qué está en riesgo.
 export default function CicloVidaBadge({
   ciclo,

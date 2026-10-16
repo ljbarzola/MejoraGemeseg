@@ -8,7 +8,7 @@ import { calcularEstadoContrato, esProducto, hoyEcuador } from './agreement-stat
 //              o por vencer sin señales de riesgo. Si aceptó y aún no hay contrato
 //              queda marcado `contratoPendiente` («Por contratar»)
 //   EN_RIESGO  contrato vigente con señales de riesgo, o vencido dentro de sus días de gracia
-//   EX_CLIENTE tuvo contratos y ya no tiene ninguno vigente (ni en gracia)
+//   EX_CLIENTE (se muestra «Inactivo») tuvo contratos y ya no tiene ninguno vigente (ni en gracia)
 //   PERDIDO    nunca contrató y todas sus oportunidades se perdieron
 //
 // Un cliente nunca vuelve a ser lead: si un ex-cliente pide otro servicio entra
@@ -32,7 +32,7 @@ export const ETIQUETA_CICLO: Record<CicloVida, string> = {
   PROSPECTO: 'Prospecto',
   CLIENTE: 'Cliente',
   EN_RIESGO: 'En riesgo',
-  EX_CLIENTE: 'Ex-cliente',
+  EX_CLIENTE: 'Inactivo',
   PERDIDO: 'Perdido',
 };
 

@@ -47,7 +47,7 @@ const caja = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
 const etiqueta = { fontSize: 11, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 2 } as const;
 
 // Detalle de un contrato comercial: datos, cadena de renovaciones y los
-// documentos (Documentos y firma) que cuelgan de él.
+// documentos (Documentación) que cuelgan de él.
 export default function ContratoComercialDetalle() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -154,7 +154,7 @@ export default function ContratoComercialDetalle() {
     setConfirmarEliminar(false);
     try {
       await deleteContratoComercial(contrato.id);
-      showToast('Contrato eliminado. Sus documentos siguen en Documentos y firma.', 'success');
+      showToast('Contrato eliminado. Sus documentos siguen en Documentación.', 'success');
       navigate('/ventas/contratos');
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo eliminar el contrato', 'error');
@@ -202,7 +202,7 @@ export default function ContratoComercialDetalle() {
       <div style={caja}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
           <div>
-            <div style={etiqueta}>Cuenta</div>
+            <div style={etiqueta}>Cliente</div>
             <div>{contrato.salesClient.name}</div>
           </div>
           {producto ? (
@@ -335,7 +335,7 @@ export default function ContratoComercialDetalle() {
           <button
             className="btn-secondary"
             disabled
-            title="Estamos probando el envío por correo; por ahora genera el archivo y envíalo desde Documentos y firma"
+            title="Estamos probando el envío por correo; por ahora genera el archivo y envíalo desde Documentación"
           >
             <Mail size={15} /> Enviar a firma por correo · Próximamente
           </button>
@@ -393,16 +393,16 @@ export default function ContratoComercialDetalle() {
           !mostrarAsociar ? (
             <button type="button" className="enlace-tabla" onClick={() => setMostrarAsociar(true)}
               style={{ background: 'none', border: 'none', padding: 0, fontSize: 13, cursor: 'pointer' }}>
-              Asociar un documento existente de esta cuenta
+              Asociar un documento existente de este cliente
             </button>
           ) : (
             <div>
               <p style={{ fontSize: 12, color: '#718096', margin: '0 0 8px' }}>
-                Útil si ya generaste un documento de esta cuenta por separado y quieres que cuente como parte de este contrato.
+                Útil si ya generaste un documento de este cliente por separado y quieres que cuente como parte de este contrato.
               </p>
               <div className="filter-bar-fields">
                 <select className="filter-select" value={docParaVincular} onChange={(e) => setDocParaVincular(e.target.value)}
-                  aria-label="Documento de la cuenta para asociar">
+                  aria-label="Documento del cliente para asociar">
                   <option value="">Elige un documento...</option>
                   {sinVincular.map((d) => (
                     <option key={d.id} value={d.id}>
@@ -477,7 +477,7 @@ export default function ContratoComercialDetalle() {
       {confirmarEliminar && (
         <ConfirmDialog
           title={producto ? 'Eliminar venta' : 'Eliminar contrato'}
-          message={`¿Eliminar ${producto ? 'esta venta' : 'este contrato'}? Los documentos generados no se borran: siguen en Documentos y firma.`}
+          message={`¿Eliminar ${producto ? 'esta venta' : 'este contrato'}? Los documentos generados no se borran: siguen en Documentación.`}
           confirmLabel="Eliminar"
           danger
           onConfirm={eliminar}
@@ -498,7 +498,7 @@ export default function ContratoComercialDetalle() {
       {aDesvincular != null && (
         <ConfirmDialog
           title="Quitar documento"
-          message="El documento deja de estar en este contrato pero no se borra: sigue en Documentos y firma."
+          message="El documento deja de estar en este contrato pero no se borra: sigue en Documentación."
           confirmLabel="Quitar"
           onConfirm={() => {
             const cid = aDesvincular;

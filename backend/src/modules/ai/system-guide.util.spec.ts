@@ -29,9 +29,9 @@ describe('buildSystemGuide', () => {
     }
   });
 
-  it('Ventas explica la relación entre Posibles clientes, Oportunidades, Cuentas y Contratos', () => {
+  it('Ventas explica la relación entre Posibles clientes, Oportunidades, Directorio y Contratos', () => {
     expect(buildSystemGuide(['VENTAS'])).toContain(
-      'Relación entre los sub-módulos Posibles clientes, Oportunidades, Cuentas y Contratos',
+      'Relación entre los sub-módulos Posibles clientes, Oportunidades, Directorio y Contratos',
     );
   });
 

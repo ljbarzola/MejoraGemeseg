@@ -548,7 +548,7 @@ export class VentasLeadsService {
     const phone = recortar(dto.phone ?? lead.phone, MAX_CONTACTO);
     const ruc = recortar(dto.ruc, 50);
     const nombre = recortar(dto.name ?? lead.companyName ?? lead.name, MAX_NOMBRE);
-    if (!nombre) throw new BadRequestException('La cuenta necesita un nombre.');
+    if (!nombre) throw new BadRequestException('Falta el nombre de la empresa o persona.');
 
     // Servicios de la oportunidad (del catálogo de la empresa).
     const serviceIds = [...new Set(dto.serviceIds ?? [])];
@@ -563,7 +563,7 @@ export class VentasLeadsService {
         where: { id: dto.salesClientId, companyId: cid },
         select: { id: true, name: true },
       });
-      if (!clienteExistente) throw new NotFoundException('Cuenta no encontrada');
+      if (!clienteExistente) throw new NotFoundException('No se encontró en el Directorio');
     } else if (!dto.confirmarNuevo) {
       const parecidos = await this.coincidencias(cid, { email, phone }, ruc);
       if (parecidos.length > 0) {

@@ -41,7 +41,7 @@ export default function ContratoForm() {
   useEffect(() => {
     getSalesClients().then(setClients).catch((err: any) => {
       setClients([]);
-      showToast(err?.response?.data?.message || 'No se pudieron cargar las cuentas', 'error');
+      showToast(err?.response?.data?.message || 'No se pudieron cargar los clientes', 'error');
     });
   }, []);
 
@@ -154,7 +154,7 @@ export default function ContratoForm() {
 
   const handleAutocompleteClientFields = (fields: SalesTemplateField[]) => {
     if (!selectedClientId) {
-      showToast('No se ha escogido una cuenta aún', 'error');
+      showToast('No se ha escogido un cliente aún', 'error');
       return;
     }
     const client = clients.find((c) => c.id === selectedClientId);
@@ -236,7 +236,7 @@ export default function ContratoForm() {
 
   const handleGenerate = async () => {
     if (!selectedTemplate) { showToast('Selecciona una plantilla', 'error'); return; }
-    if (!selectedClientId) { showToast('Elige la cuenta de este documento', 'error'); return; }
+    if (!selectedClientId) { showToast('Elige el cliente de este documento', 'error'); return; }
     if (!clientName.trim()) { showToast('El nombre es requerido', 'error'); return; }
     if (!clientEmail.trim()) { showToast('El email es requerido', 'error'); return; }
 
@@ -342,28 +342,28 @@ export default function ContratoForm() {
         <>
           <Section title="Datos de envío">
             <p style={{ fontSize: 12, color: '#666', margin: '-4px 0 12px' }}>
-              A quién se le envía el link para firmar. Si eliges una cuenta, el nombre y el email se autocompletan (igual editables).
+              A quién se le envía el link para firmar. Si eliges un cliente, el nombre y el email se autocompletan (igual editables).
             </p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
               <select value={selectedClientId} onChange={(e) => handleSelectClient(e.target.value ? +e.target.value : '')}
                 style={{ flex: 1, minWidth: 220, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}>
-                <option value="">— Seleccionar cuenta * —</option>
+                <option value="">— Seleccionar cliente * —</option>
                 {clients.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}{c.email ? ` (${c.email})` : ''}</option>
                 ))}
               </select>
               <button type="button" className="btn-secondary" onClick={() => navigate('/ventas/clientes?nuevo=1')}
-                style={{ padding: '8px 12px', fontSize: 12 }}>Ir a Cuentas</button>
+                style={{ padding: '8px 12px', fontSize: 12 }}>Ir al Directorio</button>
             </div>
             {!isEditMode && selectedClientId !== '' && (
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, color: '#666', display: 'block', marginBottom: 6 }}>
-                  Contrato de la cuenta (opcional)
+                  Contrato del cliente (opcional)
                 </label>
                 <select value={agreementId} onChange={(e) => setAgreementId(e.target.value ? +e.target.value : '')}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}>
                   <option value="">
-                    {contratosCliente.length === 0 ? 'Esta cuenta aún no tiene contratos vigentes' : '— Sin contrato —'}
+                    {contratosCliente.length === 0 ? 'Este cliente aún no tiene contratos vigentes' : '— Sin contrato —'}
                   </option>
                   {contratosCliente.map((c) => (
                     <option key={c.id} value={c.id}>

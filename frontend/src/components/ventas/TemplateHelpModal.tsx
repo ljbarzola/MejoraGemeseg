@@ -10,7 +10,7 @@ const CONFIGURAR_PLANTILLA: Paso[] = [
   {
     nombre: '1. Fuente del documento',
     parrafos: [
-      'Se crea la plantilla en "Ventas y CRM → Documentos y firma → Plantillas → Nueva plantilla" a partir de un documento Word con variables escritas como [NombreVariable] o <<NombreVariable>>.',
+      'Se crea la plantilla en "Ventas y CRM → Documentación → Plantillas → Nueva plantilla" a partir de un documento Word con variables escritas como [NombreVariable] o <<NombreVariable>>.',
       'Hay dos formas de traer ese documento: pegar el link de Google Drive (el archivo debe estar compartido como "Cualquier persona con el enlace", rol Lector, si no la descarga falla) o subir el .docx directo desde el computador, sin depender de Drive ni de permisos de compartir.',
     ],
   },
@@ -34,8 +34,8 @@ const USAR_PLANTILLA: Paso[] = [
   {
     nombre: '1. Elegir plantilla y cliente',
     parrafos: [
-      'Desde "Documentos y firma → Nuevo documento" (o con "Generar documento" dentro de un contrato del cliente) se elige una plantilla ya configurada. En "Datos de envío" se elige además el cliente al que va dirigido (a quién le llega el link de firma) — el nombre y el email de envío se autocompletan solos, siempre editables.',
-      'La cuenta puede venir de dos formas: si ya existe en "Cuentas", se la selecciona del listado; si todavía no existe, el botón "Ir a Cuentas" abre esa pantalla para crearla primero (con su modal de "Nueva cuenta") y luego se vuelve aquí a continuar el contrato. Ambos caminos llegan al mismo lugar — no hace falta crear la cuenta antes si no quieres, se puede hacer sobre la marcha.',
+      'Desde "Documentación → Nuevo documento" (o con "Generar documento" dentro de un contrato del cliente) se elige una plantilla ya configurada. En "Datos de envío" se elige además el cliente al que va dirigido (a quién le llega el link de firma) — el nombre y el email de envío se autocompletan solos, siempre editables.',
+      'El cliente puede venir de dos formas: si ya está en el "Directorio", se lo selecciona del listado; si todavía no está, el botón "Ir al Directorio" abre esa pantalla para registrarlo primero (con su modal de "Nueva empresa o persona") y luego se vuelve aquí a continuar el contrato. Ambos caminos llegan al mismo lugar — no hace falta registrarlo antes si no quieres, se puede hacer sobre la marcha.',
     ],
   },
   {
@@ -50,7 +50,7 @@ const USAR_PLANTILLA: Paso[] = [
     nombre: '3. Generar, enviar y firmar',
     parrafos: [
       'Al generar, el sistema arma el PDF final reemplazando cada variable por su valor. El documento queda en estado Borrador → Listo → Enviado → Firmado; el envío a firma se hace por SignWell, y la persona firma desde el link que le llega por correo.',
-      'El botón "Ver carpeta" en Documentos y firma abre en Google Drive la carpeta donde se guarda el respaldo de los documentos generados.',
+      'El botón "Ver carpeta" en Documentación abre en Google Drive la carpeta donde se guarda el respaldo de los documentos generados.',
     ],
   },
 ];
@@ -90,7 +90,7 @@ export default function TemplateHelpModal({ onClose }: { onClose: () => void }) 
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-lg rrhh-help-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Cómo funciona Documentos y firma</h3>
+          <h3>Cómo funciona Documentación</h3>
           <button className="modal-close" onClick={onClose}>
             <X size={16} />
           </button>
@@ -98,7 +98,7 @@ export default function TemplateHelpModal({ onClose }: { onClose: () => void }) 
 
         <div className="modal-body rrhh-help-body">
           <p className="rrhh-help-intro">
-            Son dos flujos distintos y no hay que confundirlos: el día a día es <strong>usar una plantilla ya configurada</strong> para generar el documento de un cliente; <strong>configurar una plantilla</strong> es una tarea aparte, de una sola vez, que hace quien administra Documentos y firma. Un documento siempre es de un cliente y puede colgar de uno de sus contratos (la pantalla Contratos guarda el acuerdo: servicios, vigencia y renovaciones).
+            Son dos flujos distintos y no hay que confundirlos: el día a día es <strong>usar una plantilla ya configurada</strong> para generar el documento de un cliente; <strong>configurar una plantilla</strong> es una tarea aparte, de una sola vez, que hace quien administra Documentación. Un documento siempre es de un cliente y puede colgar de uno de sus contratos (la pantalla Contratos guarda el acuerdo: servicios, vigencia y renovaciones).
           </p>
 
           <div className="rrhh-help-divider">

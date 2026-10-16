@@ -58,7 +58,7 @@ const ORDEN_COLUMNA_CONTRATOS: Record<string, string> = { vigencia: 'inicio' };
 
 // "Contratos" de Ventas: el acuerdo comercial de cada cliente (servicios,
 // vigencia, renovaciones). Los documentos que se generan y firman viven en
-// "Documentos y firma" y cuelgan de estos contratos.
+// "Documentación" y cuelgan de estos contratos.
 export default function ContratosComercialesList() {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -97,7 +97,14 @@ export default function ContratosComercialesList() {
 
   // Llegar con ?nuevo=1&clienteId=N (desde la ficha del cliente) abre el
   // formulario con ese cliente ya elegido.
+  // Llegar con ?q=nombre (desde la ficha del Directorio) deja escrita la búsqueda.
   useEffect(() => {
+    const q = searchParams.get('q');
+    if (q) {
+      setBusqueda(q);
+      setSearchParams({}, { replace: true });
+      return;
+    }
     if (searchParams.get('nuevo') !== '1') return;
     const cid = Number(searchParams.get('clienteId')) || undefined;
     setModal({ modo: 'crear', clienteId: cid });
@@ -143,7 +150,7 @@ export default function ContratosComercialesList() {
     if (!c) return;
     try {
       await deleteContratoComercial(c.id);
-      showToast('Contrato eliminado. Sus documentos siguen en Documentos y firma.', 'success');
+      showToast('Contrato eliminado. Sus documentos siguen en Documentación.', 'success');
       cargar();
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo eliminar el contrato', 'error');
@@ -302,7 +309,7 @@ export default function ContratosComercialesList() {
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por cuenta, título o servicio..."
+            placeholder="Buscar por cliente, título o servicio..."
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
           <select className="filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
@@ -327,7 +334,7 @@ export default function ContratosComercialesList() {
           <ColumnPickerMenu
             columns={COLUMNAS_CONTRATOS}
             visible={columnPrefs.visible}
-            fixedLabel="Cuenta"
+            fixedLabel="Cliente"
             onApply={async (keys) => {
               const guardado = await columnPrefs.set(keys);
               if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
@@ -346,7 +353,7 @@ export default function ContratosComercialesList() {
         ) : contratos.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36, marginBottom: 8 }}>📑</div>
-            <div>Aún no hay contratos. Crea el primero para una cuenta.</div>
+            <div>Aún no hay contratos. Crea el primero para un cliente.</div>
           </div>
         ) : filas.length === 0 ? (
           <p style={{ color: '#888', fontSize: 13 }}>No hay contratos que coincidan con los filtros.</p>
@@ -355,7 +362,7 @@ export default function ContratosComercialesList() {
             <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th {...thProps('cliente')} style={{ width: 190 }}>Cuenta <SortIcon campo="cliente" /></th>
+                  <th {...thProps('cliente')} style={{ width: 190 }}>Cliente <SortIcon campo="cliente" /></th>
                   {columnasVisibles.map((k) => {
                     const col = COLUMNAS_CONTRATOS.find((c) => c.key === k)!;
                     const orden = ORDEN_COLUMNA_CONTRATOS[k] ?? k;
@@ -431,7 +438,7 @@ export default function ContratosComercialesList() {
       {aEliminar && (
         <ConfirmDialog
           title="Eliminar contrato"
-          message={`¿Eliminar el contrato de ${aEliminar.salesClient.name}? Los documentos generados no se borran: siguen en Documentos y firma.`}
+          message={`¿Eliminar el contrato de ${aEliminar.salesClient.name}? Los documentos generados no se borran: siguen en Documentación.`}
           confirmLabel="Eliminar"
           danger
           onConfirm={confirmarEliminar}

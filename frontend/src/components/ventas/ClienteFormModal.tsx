@@ -24,6 +24,9 @@ interface Props {
   // Registrar a alguien que YA contrata con ustedes (se creó antes de usar el
   // sistema): queda como Cliente «Por contratar» en lugar de una negociación nueva.
   yaEsCliente?: boolean;
+  // Directorio (2026-10-16): guardar solo los datos de la empresa o persona,
+  // sin abrir una oportunidad (esa se crea en Posibles clientes u Oportunidades).
+  soloDatos?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -36,7 +39,7 @@ const NATIVE_KEYS = ['email', 'phone', 'ruc', 'address', 'observaciones'];
 // 'YYYY-MM-DD' en hora local (el usuario está en Ecuador), no en UTC.
 const aDiaLocal = (d: Date) => d.toLocaleDateString('en-CA');
 
-export default function ClienteFormModal({ client, fields, yaEsCliente = false, onClose, onSaved }: Props) {
+export default function ClienteFormModal({ client, fields, yaEsCliente = false, soloDatos = false, onClose, onSaved }: Props) {
   const { showToast } = useToast();
   const otherFields = fields
     .filter((f) => f.key !== 'name' && f.key !== SUBSERVICIOS_KEY)
@@ -80,7 +83,9 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
       for (const field of otherFields) {
         const value = (values[field.key] || '').trim();
         if (NATIVE_KEYS.includes(field.key)) {
-          payload[field.key] = value || undefined;
+          // Al editar se manda el texto vacío para poder BORRAR un dato (el
+          // servidor lo guarda como «sin dato»); al crear, lo vacío no se envía.
+          payload[field.key] = client ? value : value || undefined;
         } else {
           extra[field.key] = values[field.key] || '';
         }
@@ -94,11 +99,14 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
       }
       payload.extra = extra;
       if (client) await updateSalesClient(client.id, payload);
+      else if (soloDatos) await createSalesClient({ ...payload, soloDatos: true });
       else await createSalesClient(yaEsCliente ? { ...payload, yaEsCliente: true } : payload);
       // Una persona nueva en negociación la avisa quien abrió el formulario
-      // (dice a dónde quedó); aquí solo la edición y el cliente que ya contrata.
-      if (client) showToast('Cuenta actualizada', 'success');
-      else if (yaEsCliente) showToast('Cuenta registrada: quedó «Por contratar»', 'success');
+      // (dice a dónde quedó); aquí solo la edición, el alta del Directorio y el
+      // cliente que ya contrata.
+      if (client) showToast('Datos actualizados', 'success');
+      else if (soloDatos) showToast('Guardado en el directorio', 'success');
+      else if (yaEsCliente) showToast('Registrado en el directorio: quedó «Por contratar»', 'success');
       onSaved();
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo guardar', 'error');
@@ -111,7 +119,7 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>{client ? 'Editar cuenta' : yaEsCliente ? 'Nueva cuenta (ya contrata)' : 'Nueva cuenta en negociación'}</h3>
+          <h3>{client ? 'Editar empresa o persona' : soloDatos ? 'Nueva empresa o persona' : yaEsCliente ? 'Nueva empresa o persona (ya contrata)' : 'Nueva empresa o persona en negociación'}</h3>
           <button className="modal-close" onClick={onClose}>
             <X size={16} />
           </button>
@@ -122,9 +130,14 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
               Queda como Cliente «Por contratar» hasta que cargues su contrato y no cuenta en las cifras de ventas nuevas.
             </p>
           )}
-          {!client && !yaEsCliente && (
+          {!client && soloDatos && (
             <p style={{ margin: '0 0 12px', fontSize: 13, color: '#666' }}>
-              Queda en Oportunidades como una negociación nueva y en Cuentas como prospecto hasta que acepte.
+              Aquí solo se guardan los datos. La negociación se abre desde Posibles clientes o con «+ Nueva oportunidad» en Oportunidades.
+            </p>
+          )}
+          {!client && !yaEsCliente && !soloDatos && (
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#666' }}>
+              Queda en Oportunidades como una negociación nueva y en el Directorio como prospecto hasta que acepte.
             </p>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

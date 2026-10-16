@@ -14,7 +14,7 @@ import { useToast } from '../../contexts/ToastContext';
 
 // Columnas elegibles de la tabla (además de Número y Acciones, que son fijas).
 const COLUMNAS_DOCS = [
-  { key: 'clientName', label: 'Cuenta' },
+  { key: 'clientName', label: 'Cliente' },
   { key: 'template', label: 'Plantilla' },
   { key: 'status', label: 'Estado' },
   { key: 'createdAt', label: 'Fecha' },
@@ -23,7 +23,7 @@ const COLUMNAS_DOCS = [
 ];
 const COLUMNAS_DOCS_POR_DEFECTO = ['clientName', 'template', 'status', 'createdAt'];
 
-// "Documentos y firma" (antes "Documentación" y, antes, "Contratos"): los
+// "Documentación" (antes "Contratos"): los
 // documentos que se generan desde una plantilla y se firman. Cada documento es de un cliente y
 // puede colgar de un contrato comercial (pantalla "Contratos").
 export default function ContratosList() {
@@ -120,7 +120,7 @@ export default function ContratosList() {
           <>
             <div>{c.salesClient?.name || c.clientName}</div>
             <div style={{ fontSize: 11, color: '#888' }}>{c.clientEmail}</div>
-            {!c.salesClientId && <div style={{ fontSize: 11, color: '#b45309' }}>Sin cuenta asignada</div>}
+            {!c.salesClientId && <div style={{ fontSize: 11, color: '#b45309' }}>Sin cliente asignado</div>}
           </>
         );
       case 'template':
@@ -148,13 +148,13 @@ export default function ContratosList() {
       <div className="page-header-row">
         <div>
           <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Documentos y firma</h1>
+          <h1>Documentación</h1>
         </div>
         <div className="header-actions">
           <button
             type="button"
             onClick={() => setShowHelp(true)}
-            title="Cómo funciona Documentos y firma"
+            title="Cómo funciona Documentación"
             aria-label="Ayuda"
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 6, border: 'none', background: 'var(--naranja)', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
           >
@@ -187,7 +187,7 @@ export default function ContratosList() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por número, cuenta, email o plantilla..."
+            placeholder="Buscar por número, cliente, email o plantilla..."
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
           <select className="filter-select" value={filter} onChange={(e) => setFilter(e.target.value)}>
@@ -197,8 +197,8 @@ export default function ContratosList() {
             ))}
           </select>
           <select className="filter-select" value={soloSinCliente ? 'sin' : ''} onChange={(e) => setSoloSinCliente(e.target.value === 'sin')}>
-            <option value="">Todas las cuentas</option>
-            <option value="sin">Sin cuenta asignada</option>
+            <option value="">Todos los clientes</option>
+            <option value="sin">Sin cliente asignado</option>
           </select>
         </div>
         <div className="filter-bar-actions">
@@ -215,9 +215,9 @@ export default function ContratosList() {
             type="button"
             className="btn-secondary"
             onClick={() => setConfirmarVincular(true)}
-            title="Enlaza solos los documentos sin cuenta cuyo correo o nombre coincide con una cuenta"
+            title="Enlaza solos los documentos sin cliente cuyo correo o nombre coincide con un cliente"
           >
-            <Link2 size={16} /> Vincular cuentas
+            <Link2 size={16} /> Vincular clientes
           </button>
           <ClearFiltersButton onClear={() => { setSearch(''); setFilter(''); setSoloSinCliente(false); }} disabled={!search && !filter && !soloSinCliente} />
         </div>
@@ -280,8 +280,8 @@ export default function ContratosList() {
 
       {confirmarVincular && (
         <ConfirmDialog
-          title="Vincular documentos a cuentas"
-          message="Se revisan los documentos que no tienen cuenta y se enlazan solos cuando su correo (o, si no, su nombre exacto) coincide con UNA sola cuenta. Los que no coinciden, o coinciden con varias, no se tocan: quedan en «Sin cuenta asignada» para revisarlos a mano."
+          title="Vincular documentos a clientes"
+          message="Se revisan los documentos que no tienen cliente y se enlazan solos cuando su correo (o, si no, su nombre exacto) coincide con UN solo cliente. Los que no coinciden, o coinciden con varios, no se tocan: quedan en «Sin cliente asignado» para revisarlos a mano."
           confirmLabel="Vincular"
           onConfirm={async () => {
             setConfirmarVincular(false);
@@ -290,8 +290,8 @@ export default function ContratosList() {
               const resto = r.ambiguos + r.sinCoincidencia;
               showToast(
                 r.revisados === 0
-                  ? 'Todos los documentos ya tienen cuenta.'
-                  : `${r.vinculados} documento(s) vinculados${resto ? `; ${resto} quedan sin cuenta para revisar a mano` : ''}.`,
+                  ? 'Todos los documentos ya tienen cliente.'
+                  : `${r.vinculados} documento(s) vinculados${resto ? `; ${resto} quedan sin cliente para revisar a mano` : ''}.`,
                 'success',
               );
               loadContracts();

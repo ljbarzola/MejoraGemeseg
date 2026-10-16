@@ -44,7 +44,7 @@ export default function OportunidadModal({
 
   const guardar = async () => {
     setError('');
-    if (modo === 'crear' && !clienteId) return setError('Elige la cuenta de la oportunidad.');
+    if (modo === 'crear' && !clienteId) return setError('Elige la empresa o persona de la oportunidad.');
     const montoNumero = monto.trim() === '' ? null : Number(monto.replace(',', '.'));
     if (montoNumero !== null && (Number.isNaN(montoNumero) || montoNumero < 0)) {
       return setError('El monto cotizado no es válido.');
@@ -82,15 +82,15 @@ export default function OportunidadModal({
           <ErrorBanner mensaje={error} />
           {modo === 'crear' && (
             <p style={{ fontSize: 13, color: '#666', marginTop: 0 }}>
-              Para una negociación nueva de una cuenta que ya está registrada. Si apenas escribió, empieza por Posibles clientes.
+              Para una negociación nueva de una empresa o persona que ya está en el directorio. Si apenas escribió, empieza por Posibles clientes.
             </p>
           )}
 
           {modo === 'crear' && (
             <div className="form-group">
-              <label>Cuenta *</label>
+              <label>Empresa o persona *</label>
               <select value={clienteId} onChange={(e) => setClienteId(e.target.value ? Number(e.target.value) : '')}>
-                <option value="">Seleccionar cuenta...</option>
+                <option value="">Seleccionar empresa o persona...</option>
                 {clientes.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
@@ -98,7 +98,7 @@ export default function OportunidadModal({
               {onNuevaPersona && (
                 <a href="#nueva-persona" className="enlace-tabla" onClick={(e) => { e.preventDefault(); onNuevaPersona(); }}
                   style={{ display: 'inline-block', marginTop: 6, fontSize: 12.5 }}>
-                  Es una cuenta nueva
+                  Es nueva en el directorio
                 </a>
               )}
             </div>

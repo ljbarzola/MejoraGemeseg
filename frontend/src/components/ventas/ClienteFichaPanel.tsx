@@ -5,7 +5,6 @@ import {
   FileCheck, AlertTriangle, ShieldAlert, LogOut, Target, FileSignature, ArrowDownNarrowWide, ArrowUpNarrowWide,
 } from 'lucide-react';
 import ConfirmDialog from '../common/ConfirmDialog';
-import EstadoContratoBadge from './EstadoContratoBadge';
 import CicloVidaBadge from './CicloVidaBadge';
 import { useToast } from '../../contexts/ToastContext';
 import { getUser } from '../../services/auth.service';
@@ -37,8 +36,11 @@ interface Props {
   // de los sub-servicios (en extra solo se guardan las keys).
   fields: SalesClientField[];
   onClose: () => void;
-  // Abre el cuadro de "siguiente paso" de la página de Clientes.
-  onEditNextStep: (client: SalesClient) => void;
+  // Abre el cuadro de "siguiente paso" (ya no se muestra en la ficha: el
+  // seguimiento es de la oportunidad; se deja por compatibilidad).
+  onEditNextStep?: (client: SalesClient) => void;
+  // «Editar» los datos de la empresa o persona (abre su formulario).
+  onEdit?: (client: SalesClient) => void;
 }
 
 const ACTIVITY_ICON: Record<SalesActivityType, typeof StickyNote> = {
@@ -64,7 +66,7 @@ const formatCuando = (iso: string) =>
 
 const ORDEN_KEY = 'ventas-ficha-orden';
 type Orden = 'nuevo' | 'antiguo';
-type Pestana = 'resumen' | 'negociaciones' | 'contratos' | 'historial';
+type Pestana = 'resumen' | 'historial';
 
 const leerOrden = (): Orden => {
   try {
@@ -85,19 +87,9 @@ const origenTexto = (
   return canal ? `${base} vía ${canal}` : base;
 };
 
-const dinero = (n: number) =>
-  `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
 const tenue = { marginTop: 2, fontSize: 12, color: '#718096' } as const;
 const tarjetaStyle = {
   border: '1px solid #e2e8f0', background: '#f7fafc', borderRadius: 10, padding: '10px 12px', marginBottom: 8,
-} as const;
-const chipStyle = (color: string) => ({
-  fontSize: 11, fontWeight: 600, padding: '1px 8px', borderRadius: 999, background: color + '1a', color, whiteSpace: 'nowrap' as const,
-});
-const enlaceStyle = {
-  background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#2b6cb0', fontSize: 12, fontFamily: 'inherit',
-  textDecoration: 'underline',
 } as const;
 
 function Etapa({ info }: { info: { label: string; color: string } | null }) {
@@ -109,10 +101,10 @@ function Etapa({ info }: { info: { label: string; color: string } | null }) {
   );
 }
 
-// Ficha del cliente: datos de contacto, siguiente paso y línea de tiempo
-// (creación, cambios de etapa, notas/llamadas/reuniones y documentos), más sus
-// contratos comerciales.
-export default function ClienteFichaPanel({ client, fields, onClose, onEditNextStep }: Props) {
+// Ficha de la empresa o persona (Directorio): sus datos y la línea de tiempo
+// (creación, cambios de etapa, notas/llamadas/reuniones y documentos). Las
+// oportunidades y los contratos se abren desde sus accesos, no se muestran aquí.
+export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: Props) {
   const fuenteField = fields.find((f) => f.key === FUENTE_KEY);
   const servicioField = fields.find((f) => f.key === SERVICIO_KEY);
   const { showToast } = useToast();
@@ -233,13 +225,12 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEditNextS
     !!currentUser && (authorId === currentUser.id || currentUser.role === 'ADMIN');
 
   const pestanas: { key: Pestana; label: string }[] = [
-    { key: 'resumen', label: 'Resumen' },
-    { key: 'negociaciones', label: oportunidades ? `Negociaciones (${oportunidades.length})` : 'Negociaciones' },
-    { key: 'contratos', label: contratos ? `Contratos (${contratos.length})` : 'Contratos' },
+    { key: 'resumen', label: 'Datos' },
     { key: 'historial', label: 'Historial' },
   ];
 
-  const dia = client.nextActionDate ? client.nextActionDate.slice(0, 10) : null;
+  // «3 oportunidades» / «—» si no se pudieron cargar.
+  const cuenta = (lista: unknown[] | null, error: boolean) => (lista === null ? '…' : error ? '—' : String(lista.length));
 
   const dato = (label: string, value?: string | null) =>
     value ? (
@@ -258,7 +249,7 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEditNextS
       const servicios = ev.servicios && ev.servicios.length > 0 ? ev.servicios.join(', ') : null;
       contenido = (
         <>
-          <strong>Cuenta registrada</strong>
+          <strong>Registrado en el directorio</strong>
           {ev.referredByName && <> · referido por {ev.referredByName}</>}
           {servicios && <div style={tenue}>Servicio: {servicios}</div>}
           {ev.fuente && <div style={tenue}>Fuente: {ev.fuente}</div>}
@@ -394,9 +385,15 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEditNextS
       >
         <div style={{ padding: '18px 22px', borderBottom: '1px solid #edf2f7', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: '#a0aec0', textTransform: 'uppercase' }}>Ficha de la cuenta</p>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: '#a0aec0', textTransform: 'uppercase' }}>Ficha</p>
             <h2 style={{ margin: '2px 0 0', fontSize: '1.25rem', wordBreak: 'break-word' }}>{client.name}</h2>
           </div>
+          {onEdit && (
+            <button type="button" className="btn-secondary" onClick={() => onEdit(client)}
+              style={{ padding: '5px 12px', fontSize: 12.5, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Pencil size={13} /> Editar
+            </button>
+          )}
           <button type="button" onClick={onClose} title="Cerrar" aria-label="Cerrar"
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#718096', padding: 4, display: 'inline-flex' }}>
             <X size={20} />
@@ -430,158 +427,54 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEditNextS
         <div role="tabpanel" style={{ flex: 1, overflowY: 'auto', padding: '16px 22px 24px' }}>
           {pestana === 'resumen' && (
             <>
-              {client.contratoPendiente && (
-                <div style={{ background: '#fffaf0', border: '1px solid #fbd38d', borderRadius: 10, padding: '8px 12px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ flex: 1, fontSize: 12.5, color: '#975a16' }}>Aceptó: falta generar su contrato</span>
-                  <button
-                    type="button" className="btn-secondary"
-                    onClick={() => navigate(`/ventas/contratos?nuevo=1&clienteId=${client.id}`)}
-                    style={{ padding: '5px 12px', fontSize: 12.5, whiteSpace: 'nowrap' }}
-                  >
-                    Nuevo contrato
-                  </button>
-                </div>
-              )}
-
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px', marginBottom: 14 }}>
                 <div>
-                  <span style={labelStyle}>Ciclo de vida</span>
+                  <span style={labelStyle}>Relación</span>
                   <CicloVidaBadge ciclo={client.ciclo} razones={client.cicloRazones} />
                   {client.cicloRazones && client.cicloRazones.length > 0 && (
                     <div style={{ fontSize: 11, color: '#b45309', marginTop: 2 }}>{client.cicloRazones.join(' · ')}</div>
                   )}
                 </div>
-                <div>
-                  <span style={labelStyle}>Etapa de la oportunidad principal</span>
-                  <Etapa info={client.stage ? { label: client.stage.label, color: client.stage.color } : null} />
-                </div>
-                {dato('Responsable', client.assignedUser?.fullName || 'Sin asignar')}
                 {dato('Teléfono', client.phone)}
                 {dato('Correo', client.email)}
-                {dato('RUC', client.ruc)}
+                {dato('RUC / Cédula', client.ruc)}
                 {dato('Dirección', client.address)}
                 {fuenteField && dato(fuenteField.label, salesClientListaSubopcionesLabel(client, fuenteField))}
                 {servicioField && dato(servicioField.label, salesClientListaSubopcionesLabel(client, servicioField))}
-                {dato('Referido por', client.referredBy?.fullName)}
+                {dato('Observaciones', client.observaciones)}
               </div>
 
-              <div style={{ background: '#f7fafc', border: '1px solid #edf2f7', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <span style={labelStyle}>Siguiente paso</span>
-                  <span style={{ fontSize: 13, color: client.nextActionText ? '#2d3748' : '#a0aec0' }}>
-                    {client.nextActionText || 'Sin definir'}
-                  </span>
-                  {dia && <span style={{ fontSize: 12, color: '#718096' }}> · {dia.split('-').reverse().join('/')}</span>}
+              {/* Las oportunidades y los contratos NO se muestran aquí: se trabajan en su pantalla. */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ ...tarjetaStyle, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <strong style={{ fontSize: 13.5 }}>Oportunidades ({cuenta(oportunidades, oportunidadesError)})</strong>
+                    <div style={tenue}>Las negociaciones, con su etapa, responsable y siguiente paso.</div>
+                  </div>
+                  <button type="button" className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12.5, whiteSpace: 'nowrap' }}
+                    onClick={() => navigate(`/ventas/oportunidades?q=${encodeURIComponent(client.name)}`)}>
+                    Ver
+                  </button>
+                  <button type="button" className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12.5, whiteSpace: 'nowrap' }}
+                    onClick={() => navigate(`/ventas/oportunidades?nueva=1&clienteId=${client.id}`)}>
+                    Nueva oportunidad
+                  </button>
                 </div>
-                <button type="button" className="btn-secondary" onClick={() => onEditNextStep(client)} style={{ padding: '6px 12px', fontSize: 12.5, whiteSpace: 'nowrap' }}>
-                  Editar
-                </button>
+                <div style={{ ...tarjetaStyle, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <strong style={{ fontSize: 13.5 }}>Contratos ({cuenta(contratos, contratosError)})</strong>
+                    <div style={tenue}>Los acuerdos vigentes y sus renovaciones.</div>
+                  </div>
+                  <button type="button" className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12.5, whiteSpace: 'nowrap' }}
+                    onClick={() => navigate(`/ventas/contratos?q=${encodeURIComponent(client.name)}`)}>
+                    Ver
+                  </button>
+                  <button type="button" className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12.5, whiteSpace: 'nowrap' }}
+                    onClick={() => navigate(`/ventas/contratos?nuevo=1&clienteId=${client.id}`)}>
+                    Nuevo contrato
+                  </button>
+                </div>
               </div>
-            </>
-          )}
-
-          {pestana === 'negociaciones' && (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <h3 style={{ fontSize: '0.95rem', margin: 0, flex: 1 }}>Negociaciones</h3>
-                <button
-                  type="button" className="btn-secondary"
-                  onClick={() => navigate(`/ventas/oportunidades?nueva=1&clienteId=${client.id}`)}
-                  style={{ padding: '5px 12px', fontSize: 12.5, whiteSpace: 'nowrap' }}
-                >
-                  Nueva oportunidad
-                </button>
-              </div>
-              {oportunidades === null ? (
-                <p style={{ fontSize: 12.5, color: '#a0aec0', margin: 0 }}>Cargando...</p>
-              ) : oportunidadesError ? (
-                <p style={{ fontSize: 12.5, color: '#c53030', margin: 0 }}>No se pudieron cargar las oportunidades.</p>
-              ) : oportunidades.length === 0 ? (
-                <p style={{ fontSize: 12.5, color: '#a0aec0', margin: 0 }}>Esta cuenta aún no tiene oportunidades.</p>
-              ) : (
-                <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                  {oportunidades.map((o) => {
-                    const titulo = o.services.map((s) => s.name).join(', ') || o.title || `Oportunidad #${o.id}`;
-                    const estado = o.outcome === 'GANADA'
-                      ? { texto: 'Ganada', color: '#276749' }
-                      : o.outcome === 'PERDIDA'
-                        ? { texto: 'Perdida', color: '#c53030' }
-                        : { texto: 'Abierta', color: '#2b6cb0' };
-                    return (
-                      <li key={o.id} style={tarjetaStyle}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <strong style={{ fontSize: 13.5, wordBreak: 'break-word' }}>{titulo}</strong>
-                          <Etapa info={o.stage ? { label: o.stage.label, color: o.stage.color } : null} />
-                          <span style={chipStyle(estado.color)}>{estado.texto}</span>
-                        </div>
-                        <div style={tenue}>{origenTexto(o.originType, o.source, etiquetaCanal)}</div>
-                        {o.quotedAmount != null && <div style={tenue}>Cotizada en {dinero(o.quotedAmount)}</div>}
-                        <div style={{ fontSize: 11.5, color: '#a0aec0', marginTop: 2 }}>Recibida el {diaCorto(o.receivedAt)}</div>
-                        <div style={{ marginTop: 6 }}>
-                          <button type="button" style={enlaceStyle} onClick={() => navigate(`/ventas/oportunidades?q=${encodeURIComponent(client.name)}`)}>
-                            Ver en Oportunidades
-                          </button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </>
-          )}
-
-          {pestana === 'contratos' && (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <h3 style={{ fontSize: '0.95rem', margin: 0, flex: 1 }}>Contratos</h3>
-                <button
-                  type="button" className="btn-secondary"
-                  onClick={() => navigate(`/ventas/contratos?nuevo=1&clienteId=${client.id}`)}
-                  style={{ padding: '5px 12px', fontSize: 12.5, whiteSpace: 'nowrap' }}
-                >
-                  Nuevo contrato
-                </button>
-              </div>
-              {contratos === null ? (
-                <p style={{ fontSize: 12.5, color: '#a0aec0', margin: 0 }}>Cargando...</p>
-              ) : contratosError ? (
-                <p style={{ fontSize: 12.5, color: '#c53030', margin: 0 }}>No se pudieron cargar los contratos.</p>
-              ) : contratos.length === 0 ? (
-                <p style={{ fontSize: 12.5, color: '#a0aec0', margin: 0 }}>Esta cuenta aún no tiene contratos.</p>
-              ) : (
-                <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                  {contratos.map((c) => (
-                    <li key={c.id}>
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/ventas/contratos/${c.id}`)}
-                        style={{ ...tarjetaStyle, display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <strong style={{ fontSize: 13.5 }}>{c.title || `Contrato #${c.id}`}</strong>
-                          <EstadoContratoBadge estado={c.estado} />
-                        </div>
-                        <div style={tenue}>{c.services.map((s) => s.name).join(', ') || (c.kind === 'PRODUCTO' ? 'Sin productos' : 'Sin servicios')}</div>
-                        {c.kind === 'PRODUCTO' ? (
-                          <>
-                            <div style={{ fontSize: 11.5, color: '#a0aec0', marginTop: 2 }}>
-                              Venta de producto · {diaCorto(c.startDate)}
-                            </div>
-                            {c.totalValue != null && <div style={tenue}>Valor total: {dinero(c.totalValue)}</div>}
-                          </>
-                        ) : (
-                          <>
-                            <div style={{ fontSize: 11.5, color: '#a0aec0', marginTop: 2 }}>
-                              {diaCorto(c.startDate)} → {c.endDate ? diaCorto(c.endDate) : 'sin fecha de fin'}
-                            </div>
-                            {c.monthlyValue != null && <div style={tenue}>Valor mensual: {dinero(c.monthlyValue)}</div>}
-                          </>
-                        )}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </>
           )}
 

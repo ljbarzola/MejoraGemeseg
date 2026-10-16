@@ -302,7 +302,7 @@ export default function ConfiguracionVentasPage() {
           <div className="admin-section" style={caja}>
             <h3 style={{ margin: '0 0 4px' }}>Dónde se configura lo demás</h3>
             <p style={{ ...ayuda, margin: 0 }}>
-              Las <strong>etapas</strong> están en Oportunidades (botón «Etapas») y los <strong>campos</strong> de la ficha en Cuentas (botón «Campos»). Los <strong>servicios</strong> y los <strong>motivos de cierre</strong> están en Contratos.
+              Las <strong>etapas</strong> están en Oportunidades (botón «Etapas») y los <strong>campos</strong> de la ficha en el Directorio (botón «Campos»). Los <strong>servicios</strong> y los <strong>motivos de cierre</strong> están en Contratos.
             </p>
           </div>
         </>

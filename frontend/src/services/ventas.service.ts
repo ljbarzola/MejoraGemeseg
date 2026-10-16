@@ -528,7 +528,7 @@ export const getSalesClient = (id: number) =>
 // `fechaIngreso` ('YYYY-MM-DD') es la fecha de creación editable: permite
 // registrar prospectos de meses anteriores. No puede ser futura.
 // `yaEsCliente`: ya venía contratando antes de usar el sistema (queda como Cliente, «Por contratar»).
-export const createSalesClient = (data: Partial<SalesClient> & { name: string; fechaIngreso?: string; yaEsCliente?: boolean }) =>
+export const createSalesClient = (data: Partial<SalesClient> & { name: string; fechaIngreso?: string; yaEsCliente?: boolean; soloDatos?: boolean }) =>
   api.post('/ventas/clientes', data).then(r => r.data as SalesClient);
 export const updateSalesClient = (id: number, data: Partial<SalesClient> & { fechaIngreso?: string }) =>
   api.patch(`/ventas/clientes/${id}`, data).then(r => r.data as SalesClient);
@@ -592,7 +592,7 @@ export function salesClientListaSubopcionesLabel(client: SalesClient | null | un
 // ==================== CONTRATOS COMERCIALES Y SERVICIOS ====================
 // "Contrato" en la pantalla de Ventas = el acuerdo comercial de un cliente
 // (servicios, vigencia, renovaciones). El documento que se genera y firma es
-// `SalesContract` (pantalla "Documentos y firma"). En la API los contratos
+// `SalesContract` (pantalla "Documentación"). En la API los contratos
 // comerciales viven bajo /ventas/acuerdos para no chocar con /ventas/contratos.
 export type EstadoContrato =
   | 'POR_INICIAR'
@@ -775,7 +775,7 @@ export const CICLO_LABEL: Record<CicloVida, string> = {
   PROSPECTO: 'Prospecto',
   CLIENTE: 'Cliente',
   EN_RIESGO: 'En riesgo',
-  EX_CLIENTE: 'Ex-cliente',
+  EX_CLIENTE: 'Inactivo',
   PERDIDO: 'Perdido',
 };
 
@@ -892,7 +892,7 @@ export const ORIGEN_OPORTUNIDAD_LABEL: Record<string, string> = {
   MANUAL: 'Ingreso manual',
   REFERIDO: 'Referido',
   MIGRADA: 'Sistema anterior',
-  CLIENTE_EXISTENTE: 'Nuevo servicio de una cuenta',
+  CLIENTE_EXISTENTE: 'Nuevo servicio de un cliente',
   HISTORICO: 'Ya era cliente',
 };
 

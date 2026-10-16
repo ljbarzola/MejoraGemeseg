@@ -119,10 +119,11 @@ export default function VentasDashboard() {
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  // Lleva a Cuentas (antes «Clientes») ya filtrado, conservando el alcance elegido aquí.
-  const irAClientes = (filtros: Record<string, string>) => {
-    const params = new URLSearchParams({ responsable: data?.alcance.responsable ?? responsable, ...filtros });
-    navigate(`/ventas/clientes?${params.toString()}`);
+  // Lleva a Oportunidades ya filtrado: el seguimiento, la etapa y el responsable
+  // son de las oportunidades, no del Directorio (2026-10-16).
+  const irAOportunidades = (filtros: Record<string, string>) => {
+    const params = new URLSearchParams(filtros);
+    navigate(`/ventas/oportunidades${params.toString() ? `?${params.toString()}` : ''}`);
   };
 
   const [pestana, setPestana] = useState<Pestana>('resumen');
@@ -160,7 +161,7 @@ export default function VentasDashboard() {
           <p className="page-eyebrow">Ventas y CRM</p>
           <h1>Dashboard comercial</h1>
           <p style={{ color: '#718096', fontSize: '0.85rem', marginTop: 4 }}>
-            Cómo van tus cuentas: qué atender, dónde están y qué se está quedando atrás.
+            Cómo van tus clientes y prospectos: qué atender, dónde están y qué se está quedando atrás.
           </p>
         </div>
         <div className="header-actions">
@@ -180,7 +181,7 @@ export default function VentasDashboard() {
       <div className="filter-bar">
         <div className="filter-bar-fields">
           <select className="filter-select" value={responsable} onChange={(e) => { setAlcanceTocado(true); setResponsable(e.target.value); }} aria-label="Alcance">
-            <option value="mine">Mis cuentas</option>
+            <option value="mine">Mis clientes y prospectos</option>
             <option value="all">Toda la empresa</option>
             {esManager && (data?.responsables ?? [])
               .filter((r) => r.id !== currentUser?.id)
@@ -192,14 +193,14 @@ export default function VentasDashboard() {
                 {RANGOS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
               <span style={{ fontSize: '0.75rem', color: '#a0aec0', alignSelf: 'center' }}>
-                El rango solo afecta a "Nuevas cuentas" y "Referidos"; lo demás es cómo está todo hoy.
+                El rango solo afecta a "Nuevos clientes y prospectos" y "Referidos"; lo demás es cómo está todo hoy.
               </span>
             </>
           ) : (
             <span style={{ fontSize: '0.75rem', color: '#a0aec0', alignSelf: 'center' }}>
               {esManager
                 ? 'El alcance elige de quién se miran las cifras.'
-                : 'Aquí ves las cifras de tus propias cuentas y oportunidades.'}
+                : 'Aquí ves las cifras de tus propios clientes y oportunidades.'}
             </span>
           )}
         </div>
@@ -225,30 +226,30 @@ export default function VentasDashboard() {
           {/* Qué se está cayendo / aceptación */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16, marginTop: 16 }}>
             <Contador titulo="Seguimientos vencidos" valor={data.seguimientos.vencidos} color={COLOR_VENCIDO}
-              detalle={data.seguimientos.vencidos ? 'Su fecha ya pasó. Ver las cuentas →' : 'Sin pendientes atrasados'}
-              onClick={data.seguimientos.vencidos ? () => irAClientes({ seguimiento: 'vencido' }) : undefined} />
+              detalle={data.seguimientos.vencidos ? 'Su fecha ya pasó. Ver en Oportunidades →' : 'Sin pendientes atrasados'}
+              onClick={data.seguimientos.vencidos ? () => irAOportunidades({ vista: 'hoy' }) : undefined} />
             <Contador titulo="Para hoy" valor={data.seguimientos.hoy} color={COLOR_HOY}
-              detalle={data.seguimientos.hoy ? 'Toca atenderlas hoy. Ver las cuentas →' : 'Nada programado para hoy'}
-              onClick={data.seguimientos.hoy ? () => irAClientes({ seguimiento: 'hoy' }) : undefined} />
+              detalle={data.seguimientos.hoy ? 'Toca atenderlos hoy. Ver en Oportunidades →' : 'Nada programado para hoy'}
+              onClick={data.seguimientos.hoy ? () => irAOportunidades({ vista: 'hoy' }) : undefined} />
             <Contador titulo="Sin siguiente paso" valor={data.seguimientos.sinFecha} color="#718096"
               detalle={data.seguimientos.sinFecha ? 'Activos sin fecha de seguimiento →' : 'Todos tienen siguiente paso'}
-              onClick={data.seguimientos.sinFecha ? () => irAClientes({ seguimiento: 'sin' }) : undefined} />
+              onClick={data.seguimientos.sinFecha ? () => irAOportunidades({ vista: 'hoy' }) : undefined} />
             <Contador titulo="Aceptación" valor={data.aceptacion.tasa === null ? '—' : `${data.aceptacion.tasa}%`} color="#2f855a"
               detalle={data.aceptacion.tasa === null
-                ? 'Aún no hay cuentas aceptadas ni perdidas'
+                ? 'Aún no hay aceptados ni perdidos'
                 : `${data.aceptacion.aceptados} aceptados · ${data.aceptacion.rechazados} perdidos`} />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20, marginTop: 20 }}>
             {/* Embudo */}
-            <Tarjeta titulo="Cuentas por etapa" hint="Con las etapas que tiene configuradas la empresa">
+            <Tarjeta titulo="Clientes y prospectos por etapa" hint="Con las etapas que tiene configuradas la empresa">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {data.embudo.map((e) => (
                   <button
                     key={e.key ?? 'sin-etapa'}
                     type="button"
-                    onClick={() => irAClientes({ etapa: e.key ?? 'none' })}
-                    title="Ver estas cuentas"
+                    onClick={() => irAOportunidades({ etapa: e.key ?? 'none' })}
+                    title="Ver en Oportunidades"
                     style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', textAlign: 'left' }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: 3 }}>
@@ -265,11 +266,11 @@ export default function VentasDashboard() {
 
             {/* Estancados */}
             <Tarjeta
-              titulo="Cuentas estancadas"
+              titulo="Clientes y prospectos estancados"
               hint={`Más de ${data.estancados.dias} días en la misma etapa (aproximado: el historial de etapas se guarda desde el 30/09/2026)`}
             >
               {data.estancados.lista.length === 0 ? (
-                <p style={{ margin: 0, color: '#718096', fontSize: '0.88rem' }}>Ninguna cuenta lleva tanto tiempo en la misma etapa.</p>
+                <p style={{ margin: 0, color: '#718096', fontSize: '0.88rem' }}>Ninguno lleva tanto tiempo en la misma etapa.</p>
               ) : (
                 <>
                   <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
@@ -278,7 +279,7 @@ export default function VentasDashboard() {
                         <button
                           type="button"
                           onClick={() => navigate(`/ventas/clientes?ficha=${c.id}`)}
-                          title="Abrir la ficha de la cuenta"
+                          title="Abrir la ficha"
                           style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', font: 'inherit', textAlign: 'left' }}
                         >
                           <span style={{ flex: 1, minWidth: 0 }}>
@@ -300,8 +301,8 @@ export default function VentasDashboard() {
               )}
             </Tarjeta>
 
-            {/* Nuevas cuentas */}
-            <Tarjeta titulo="Nuevas cuentas" hint={`Del ${formatDia(data.alcance.desde)} al ${formatDia(data.alcance.hasta)}`}>
+            {/* Nuevos clientes y prospectos */}
+            <Tarjeta titulo="Nuevos clientes y prospectos" hint={`Del ${formatDia(data.alcance.desde)} al ${formatDia(data.alcance.hasta)}`}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
                 <span style={{ fontSize: '1.9rem', fontWeight: 800, color: '#2b6cb0' }}>{data.nuevos.total}</span>
                 <span style={{ fontSize: '0.8rem', color: '#718096' }}>
@@ -325,7 +326,7 @@ export default function VentasDashboard() {
               titulo="Referidos"
               hint={`Nuevos entre el ${formatDia(data.alcance.desde)} y el ${formatDia(data.alcance.hasta)}`}
               accion={
-                <button type="button" className="btn-secondary" onClick={() => irAClientes({ referido: '1' })} style={{ padding: '4px 10px', fontSize: '0.78rem' }}>
+                <button type="button" className="btn-secondary" onClick={() => irAOportunidades({})} style={{ padding: '4px 10px', fontSize: '0.78rem' }}>
                   Ver →
                 </button>
               }
@@ -355,8 +356,8 @@ export default function VentasDashboard() {
               )}
             </Tarjeta>
 
-            {/* Documentos (Documentos y firma) */}
-            <Tarjeta titulo="Documentos de estas cuentas" hint="Cómo están ahora">
+            {/* Documentos (Documentación) */}
+            <Tarjeta titulo="Documentos de estos clientes" hint="Cómo están ahora">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, textAlign: 'center' }}>
                 {[
                   { n: data.contratos.borrador, t: 'En borrador', c: '#718096' },
@@ -371,12 +372,12 @@ export default function VentasDashboard() {
               </div>
               {data.contratos.aceptadosSinContrato > 0 && (
                 <p style={{ margin: '12px 0 0', fontSize: '0.82rem', color: COLOR_HOY }}>
-                  {data.contratos.aceptadosSinContrato} {data.contratos.aceptadosSinContrato === 1 ? 'cuenta aceptada' : 'cuentas aceptadas'} aún sin documento.
+                  {data.contratos.aceptadosSinContrato} {data.contratos.aceptadosSinContrato === 1 ? 'cliente aceptado' : 'clientes aceptados'} aún sin documento.
                 </p>
               )}
               {alcanceTodos && data.contratos.sinClienteVinculado > 0 && (
                 <p style={{ margin: '8px 0 0', fontSize: '0.78rem', color: '#a0aec0' }}>
-                  Además hay {data.contratos.sinClienteVinculado} documentos que no están vinculados a ninguna cuenta y no se cuentan arriba.
+                  Además hay {data.contratos.sinClienteVinculado} documentos que no están vinculados a ningún cliente y no se cuentan arriba.
                 </p>
               )}
             </Tarjeta>
@@ -385,7 +386,7 @@ export default function VentasDashboard() {
           {/* Por responsable (solo cuando se mira más de uno) */}
           {alcanceTodos && (
             <div style={{ marginTop: 20 }}>
-              <Tarjeta titulo="Cuentas por responsable" hint="Quién lleva cuántas cuentas activas y qué se le está atrasando">
+              <Tarjeta titulo="Clientes y prospectos por responsable" hint="Quién lleva cuántos y qué se le está atrasando">
                 <div className="tasks-table-wrapper">
                   <table className="tasks-table resizable-table" ref={tablaRespRef}>
                     <thead>

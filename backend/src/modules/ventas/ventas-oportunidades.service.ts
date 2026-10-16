@@ -343,7 +343,7 @@ export class VentasOportunidadesService {
       where: { id: dto.salesClientId, companyId: cid },
       select: { id: true, assignedUserId: true, extra: true },
     });
-    if (!cliente) throw new NotFoundException('Cuenta no encontrada');
+    if (!cliente) throw new NotFoundException('No se encontró en el Directorio');
     const inicial = await this.prisma.salesClientStage.findFirst({
       where: { companyId: cid, isInitial: true },
     });
@@ -361,7 +361,9 @@ export class VentasOportunidadesService {
         salesClientId: cliente.id,
         status: inicial?.key ?? null,
         createdBy: userId,
-        assignedUserId: dto.assignedUserId === undefined ? (cliente.assignedUserId ?? userId) : dto.assignedUserId,
+        // El responsable es de la OPORTUNIDAD (2026-10-16): quien la crea, salvo
+        // que se indique otro. Ya no hereda el responsable de la empresa o persona.
+        assignedUserId: dto.assignedUserId === undefined ? userId : dto.assignedUserId,
         source: fuente,
         originType: existentes > 0 ? 'CLIENTE_EXISTENTE' : 'MANUAL',
         serviceIds,
@@ -538,7 +540,7 @@ export class VentasOportunidadesService {
       where: { id: clientId, companyId },
       select: { id: true, status: true, createdBy: true, assignedUserId: true, referredByUserId: true, extra: true },
     });
-    if (!cliente) throw new NotFoundException('Cuenta no encontrada');
+    if (!cliente) throw new NotFoundException('No se encontró en el Directorio');
     const opps = await this.prisma.salesOpportunity.findMany({
       where: { salesClientId: clientId },
       select: { id: true, closedAt: true, updatedAt: true },

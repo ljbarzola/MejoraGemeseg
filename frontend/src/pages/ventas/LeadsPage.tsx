@@ -410,7 +410,7 @@ export default function LeadsPage() {
                       <div style={{ fontSize: 11, color: '#888' }}>{[l.email, l.phone].filter(Boolean).join(' · ')}</div>
                       {abiertos(l) && l.clienteExistente && (
                         <div style={{ fontSize: 11, color: '#b45309', marginTop: 2 }}>
-                          Parece ser la cuenta{' '}
+                          Ya está en el directorio:{' '}
                           <a className="enlace-tabla" href={`/ventas/clientes?ficha=${l.clienteExistente.id}`}
                             onClick={(e) => { e.preventDefault(); navigate(`/ventas/clientes?ficha=${l.clienteExistente!.id}`); }}>
                             {l.clienteExistente.name}
@@ -460,7 +460,7 @@ export default function LeadsPage() {
           onClose={() => setConvirtiendo(null)}
           onDone={(r) => {
             setConvirtiendo(null);
-            showToast(r.sumadaAClienteExistente ? 'Oportunidad sumada a la cuenta' : 'Oportunidad creada: queda como prospecto hasta que acepte', 'success');
+            showToast(r.sumadaAClienteExistente ? 'Oportunidad sumada a su ficha del directorio' : 'Oportunidad creada: queda como prospecto hasta que acepte', 'success');
             cargar();
             navigate('/ventas/oportunidades');
           }}

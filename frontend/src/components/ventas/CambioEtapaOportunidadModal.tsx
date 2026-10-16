@@ -109,7 +109,7 @@ export default function CambioEtapaOportunidadModal({ oportunidad, etapas, desti
 
           {destino.isFinal && (
             <p style={{ fontSize: 13, color: '#718096', margin: '0 0 10px' }}>
-              Es una etapa final: la oportunidad se cierra y se borra el siguiente paso de la cuenta si esta era su oportunidad principal.
+              Es una etapa final: la oportunidad se cierra y se borra el siguiente paso del cliente si esta era su oportunidad principal.
             </p>
           )}
 
