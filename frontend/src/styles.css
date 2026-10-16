@@ -3041,6 +3041,70 @@ a.enlace-tabla:hover {
   color: var(--azul-oscuro);
 }
 
+.profile-phone-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.profile-phone-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-phone-form input {
+  padding: 8px 12px;
+  border: 2px solid var(--borde-input);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  outline: none;
+}
+
+.profile-phone-form input:focus {
+  border-color: var(--azul-claro);
+}
+
+.profile-phone-form input.input-error {
+  border-color: #e53e3e;
+}
+
+.profile-phone-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.profile-phone-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--azul-claro);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--azul-claro);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.profile-phone-btn:hover:not(:disabled):not(.primary) {
+  background: rgba(18, 55, 95, 0.08);
+}
+
+.profile-phone-btn.primary {
+  background: var(--azul-claro);
+  color: #fff;
+}
+
+.profile-phone-btn.primary:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.profile-phone-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .profile-stats-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

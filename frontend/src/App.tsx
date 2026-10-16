@@ -97,6 +97,7 @@ const VentasDashboard = lazy(() => import('./pages/ventas/VentasDashboard'));
 const VentasClientesPage = lazy(() => import('./pages/ventas/VentasClientesPage'));
 const LeadsPage = lazy(() => import('./pages/ventas/LeadsPage'));
 const OportunidadesPage = lazy(() => import('./pages/ventas/OportunidadesPage'));
+const CotizadorPage = lazy(() => import('./pages/ventas/CotizadorPage'));
 const ConfiguracionVentasPage = lazy(() => import('./pages/ventas/ConfiguracionVentasPage'));
 const TemplateList = lazy(() => import('./pages/ventas/TemplateList'));
 const TemplateConfig = lazy(() => import('./pages/ventas/TemplateConfig'));
@@ -474,6 +475,7 @@ function AppInner() {
         {/* Leads (2026-10-07): bandeja de contactos entrantes. Reemplaza al viejo "Prospectos CRM" apagado. */}
         <Route path="/ventas/leads" element={<ProtectedLayout><SectionRoute section="VENTAS"><LeadsPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/oportunidades" element={<ProtectedLayout><SectionRoute section="VENTAS"><OportunidadesPage /></SectionRoute></ProtectedLayout>} />
+  <Route path="/ventas/cotizador" element={<ProtectedLayout><SectionRoute section="VENTAS"><CotizadorPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/configuracion" element={<ProtectedLayout><SectionRoute section="VENTAS"><ConfiguracionVentasPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/ventas/clientes" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasClientesPage /></SectionRoute></ProtectedLayout>} />
         {/* Contratos: el acuerdo comercial de cada cliente (servicios, vigencia, renovaciones). */}

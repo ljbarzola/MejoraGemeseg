@@ -7,6 +7,7 @@ export interface AdminUser {
   role: 'ADMIN' | 'MANAGER' | 'EMPLOYEE';
   documentNumber: string | null;
   position: string | null;
+  phone: string | null;
   isActive: boolean;
   department: { id: number; name: string } | null;
   roleRelation: { id: number; name: string } | null;
@@ -71,6 +72,7 @@ export async function createUser(data: {
   role?: string;
   documentNumber?: string;
   position?: string;
+  phone?: string | null;
   departmentId?: number;
   roleId?: number;
 }): Promise<AdminUser> {
@@ -86,6 +88,7 @@ export async function updateUser(
     role?: string;
     documentNumber?: string;
     position?: string;
+    phone?: string | null;
     departmentId?: number | null;
     roleId?: number | null;
     locationId?: number | null;
@@ -125,6 +128,7 @@ export interface ProfileData {
   email: string;
   role: string;
   position: string | null;
+  phone: string | null;
   documentNumber: string | null;
   /** false en cuentas que entran solo con Google: no tienen contraseña que cambiar. */
   hasPassword: boolean;
@@ -148,6 +152,12 @@ export interface ProfileData {
 
 export async function getMe(): Promise<ProfileData> {
   const res = await api.get('/users/me');
+  return res.data;
+}
+
+/** La persona cambia SU teléfono (vacío lo borra). */
+export async function updateMyPhone(phone: string): Promise<{ phone: string | null }> {
+  const res = await api.patch('/users/me', { phone: phone.trim() === '' ? null : phone.trim() });
   return res.data;
 }
 

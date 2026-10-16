@@ -10,6 +10,8 @@
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateMeDto } from './dto/update-me.dto';
+import { limpiarTelefono } from './phone.const';
 import { PREFERENCE_KEY_PATTERN } from './dto/set-preference.dto';
 import { USER_PREFERENCE_DDL } from './user-preference.schema';
 import { CLAVE_CAMBIO_CONTRASENA } from '../auth/password-rotation.service';
@@ -63,6 +65,7 @@ export class UsersService implements OnModuleInit {
           role,
           documentNumber: dto.documentNumber,
           position: dto.position,
+          phone: limpiarTelefono(dto.phone),
           departmentId: dto.departmentId || null,
           roleId: dto.roleId || null,
           companyId: resolvedCompanyId,
@@ -225,6 +228,7 @@ export class UsersService implements OnModuleInit {
     if (dto.documentNumber !== undefined)
       data.documentNumber = dto.documentNumber;
     if (dto.position !== undefined) data.position = dto.position;
+    if (dto.phone !== undefined) data.phone = limpiarTelefono(dto.phone);
     if (dto.departmentId !== undefined) data.departmentId = dto.departmentId;
     if (dto.roleId !== undefined) data.roleId = dto.roleId;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
@@ -273,6 +277,26 @@ export class UsersService implements OnModuleInit {
     return { message: 'Usuario desactivado correctamente' };
   }
 
+  // Lo que una persona puede cambiar de SU propio perfil: solo el teléfono.
+  async updateMe(userId: number, dto: UpdateMeDto) {
+    if (dto.phone === undefined) return this.getPhone(userId);
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { phone: limpiarTelefono(dto.phone) },
+      select: { phone: true },
+    });
+    return { phone: user.phone };
+  }
+
+  private async getPhone(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { phone: true },
+    });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+    return { phone: user.phone };
+  }
+
   async getMe(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -282,6 +306,7 @@ export class UsersService implements OnModuleInit {
         email: true,
         role: true,
         position: true,
+        phone: true,
         documentNumber: true,
         companyId: true,
         department: true,

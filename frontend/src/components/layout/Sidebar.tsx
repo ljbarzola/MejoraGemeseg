@@ -114,6 +114,7 @@ export default function Sidebar() {
     // El orden sigue el recorrido de una persona: posible cliente -> oportunidad -> directorio (2026-10-15).
     { label: 'Posibles clientes', path: '/ventas/leads', icon: '📥' },
     { label: 'Oportunidades', path: '/ventas/oportunidades', icon: '🎯' },
+    { label: 'Cotizador', path: '/ventas/cotizador', icon: '🧾' },
     { label: 'Directorio', path: '/ventas/clientes', icon: '👤' },
     { label: 'Contratos', path: '/ventas/contratos', icon: '📑' },
     { label: 'Documentación', path: '/ventas/documentacion', icon: '📄' },
