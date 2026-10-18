@@ -53,4 +53,9 @@ export class ConvertLeadDto {
   @IsOptional() @IsString() ruc?: string;
   @IsOptional() @IsArray() @IsInt({ each: true }) serviceIds?: number[];
   @IsOptional() @IsString() title?: string;
+  // Fase 2: contacto reconocido en `coincidencias` (se le guarda el teléfono/
+  // correo nuevo si no lo tenía) o el nombre de un contacto nuevo a registrar
+  // en un cliente existente.
+  @IsOptional() @IsInt() contactId?: number;
+  @IsOptional() @IsString() nuevoContactoNombre?: string;
 }

@@ -388,7 +388,41 @@ export interface SalesClient {
   nextActionDate?: string | null;
   createdAt: string;
   creator?: { id: number; fullName: string } | null;
+  // Solo en la respuesta de crear: otros clientes con un nombre parecido
+  // (aviso blando, no bloquea — Fase 2 del CRM).
+  posiblesDuplicados?: { id: number; name: string }[];
 }
+
+// Fase 2 del CRM (2026-10-18): personas de contacto de un cliente, cada una
+// con varios teléfonos/correos etiquetados.
+export interface SalesContactValue {
+  label: string;
+  value: string;
+}
+export interface SalesContact {
+  id: number;
+  salesClientId: number;
+  name: string;
+  role?: string | null;
+  phones: SalesContactValue[];
+  emails: SalesContactValue[];
+  notes?: string | null;
+  createdAt: string;
+}
+export const getSalesContacts = (clientId: number): Promise<SalesContact[]> =>
+  api.get(`/ventas/clientes/${clientId}/contactos`).then(r => r.data);
+export const createSalesContact = (
+  clientId: number,
+  data: { name: string; role?: string; phones?: SalesContactValue[]; emails?: SalesContactValue[]; notes?: string },
+): Promise<SalesContact> =>
+  api.post(`/ventas/clientes/${clientId}/contactos`, data).then(r => r.data);
+export const updateSalesContact = (
+  contactId: number,
+  data: Partial<{ name: string; role: string; phones: SalesContactValue[]; emails: SalesContactValue[]; notes: string }>,
+): Promise<SalesContact> =>
+  api.patch(`/ventas/clientes/contactos/${contactId}`, data).then(r => r.data);
+export const deleteSalesContact = (contactId: number) =>
+  api.delete(`/ventas/clientes/contactos/${contactId}`).then(r => r.data);
 
 export const getSalesClientFields = () =>
   api.get('/ventas/clientes/fields').then(r => r.data as SalesClientField[]);
@@ -961,8 +995,16 @@ export interface LeadEntrante {
   createdAt: string;
   // Parecido a un cliente que ya existe (mismo correo o teléfono).
   clienteExistente?: { id: number; name: string } | null;
-  // Solo en el detalle:
-  coincidencias?: { id: number; name: string; email?: string | null; phone?: string | null }[];
+  // Solo en el detalle. `contactoId`/`contactoNombre`: Fase 2, cuando lo que
+  // coincide es una PERSONA de contacto (Juanito, María) y no la empresa.
+  coincidencias?: {
+    id: number;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    contactoId?: number | null;
+    contactoNombre?: string | null;
+  }[];
   motivos?: MotivoRegistrado[];
 }
 
@@ -975,6 +1017,11 @@ export interface ConvertirLeadInput {
   ruc?: string;
   serviceIds?: number[];
   title?: string;
+  // Fase 2: contacto reconocido en `coincidencias` (se le guarda el teléfono/
+  // correo nuevo si no lo tenía) o el nombre de un contacto nuevo a registrar
+  // en un cliente existente.
+  contactId?: number;
+  nuevoContactoNombre?: string;
 }
 
 export const getLeadsEntrantes = (params?: { estado?: string; canal?: string; motivo?: string; q?: string }): Promise<LeadEntrante[]> =>
@@ -991,7 +1038,7 @@ export const soltarLeadEntrante = (id: number): Promise<LeadEntrante> =>
   api.post(`/ventas/entrantes/${id}/soltar`).then(r => r.data);
 export const descartarLeadEntrante = (id: number, motivo: MotivoInput): Promise<LeadEntrante> =>
   api.post(`/ventas/entrantes/${id}/descartar`, { motivo }).then(r => r.data);
-export const convertirLeadEntrante = (id: number, data: ConvertirLeadInput): Promise<{ clienteId: number; oportunidadId: number; sumadaAClienteExistente: boolean }> =>
+export const convertirLeadEntrante = (id: number, data: ConvertirLeadInput): Promise<{ clienteId: number; oportunidadId: number; sumadaAClienteExistente: boolean; posiblesDuplicados?: { id: number; name: string }[] }> =>
   api.post(`/ventas/entrantes/${id}/convertir`, data).then(r => r.data);
 
 // Aviso a Google Ads de qué lead cotizó (CUALIFICADO) o contrató (CONVERTIDO).

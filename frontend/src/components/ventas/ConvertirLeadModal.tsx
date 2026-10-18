@@ -11,7 +11,7 @@ interface Props {
   lead: LeadEntrante;
   servicios: SalesServicio[];
   onClose: () => void;
-  onDone: (r: { clienteId: number; oportunidadId: number; sumadaAClienteExistente: boolean }) => void;
+  onDone: (r: { clienteId: number; oportunidadId: number; sumadaAClienteExistente: boolean; posiblesDuplicados?: { id: number; name: string }[] }) => void;
 }
 
 // Pasar un lead de servicio a oportunidad (la persona queda como prospecto en
@@ -29,6 +29,9 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
   const [telefono, setTelefono] = useState(lead.phone || '');
   const [ruc, setRuc] = useState('');
   const [titulo, setTitulo] = useState('');
+  // Fase 2: si la empresa ya existía pero la persona no, se puede anotar
+  // quién escribió (queda como contacto nuevo de ese cliente).
+  const [nuevoContacto, setNuevoContacto] = useState('');
   const [serviceIds, setServiceIds] = useState<number[]>([]);
   const [sugeridos, setSugeridos] = useState<number[]>([]);
   const [guardando, setGuardando] = useState(false);
@@ -52,6 +55,8 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
   const alternar = (id: number) =>
     setServiceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
+  const coincidenciaElegida = typeof destino === 'number' ? coincidencias.find((c) => c.id === destino) : undefined;
+
   const convertir = async () => {
     setError('');
     if (destino === 'nuevo' && !nombre.trim()) return setError('Falta el nombre de la empresa o persona.');
@@ -60,7 +65,13 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
       const r = await convertirLeadEntrante(lead.id, {
         ...(destino === 'nuevo'
           ? { confirmarNuevo: true, name: nombre.trim(), email: email.trim(), phone: telefono.trim(), ruc: ruc.trim() }
-          : { salesClientId: destino }),
+          : {
+              salesClientId: destino,
+              ...(coincidenciaElegida?.contactoId ? { contactId: coincidenciaElegida.contactoId } : {}),
+              ...(!coincidenciaElegida?.contactoId && nuevoContacto.trim()
+                ? { nuevoContactoNombre: nuevoContacto.trim() }
+                : {}),
+            }),
         serviceIds,
         title: titulo.trim() || undefined,
       });
@@ -104,13 +115,34 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
                 {coincidencias.map((c) => (
                   <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 400, cursor: 'pointer', marginBottom: 4 }}>
                     <input type="radio" name="destino" checked={destino === c.id} onChange={() => setDestino(c.id)} />
-                    Sumar la oportunidad a <strong>{c.name}</strong>
+                    {c.contactoNombre ? (
+                      <>Sumar la oportunidad a <strong>{c.contactoNombre}</strong>, de <strong>{c.name}</strong></>
+                    ) : (
+                      <>Sumar la oportunidad a <strong>{c.name}</strong></>
+                    )}
                   </label>
                 ))}
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 400, cursor: 'pointer' }}>
                   <input type="radio" name="destino" checked={destino === 'nuevo'} onChange={() => setDestino('nuevo')} />
                   Es otra persona o empresa: crear una nueva
                 </label>
+                {coincidenciaElegida?.contactoNombre && (telefono || email) && (
+                  <p style={{ margin: '8px 0 0', fontSize: 12, color: '#78350f' }}>
+                    Si este correo o teléfono es nuevo, se guarda como otro dato de contacto de {coincidenciaElegida.contactoNombre}.
+                  </p>
+                )}
+                {coincidenciaElegida && !coincidenciaElegida.contactoNombre && (
+                  <div className="form-group" style={{ marginTop: 10 }}>
+                    <label>¿Quién escribió en esta empresa? (opcional)</label>
+                    <input
+                      type="text"
+                      value={nuevoContacto}
+                      maxLength={150}
+                      placeholder="Ej: Juan Pérez"
+                      onChange={(e) => setNuevoContacto(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
             )
           )}

@@ -48,6 +48,7 @@ model Company {
   salesConversionEvents     SalesConversionEvent[]
   salesSettings             SalesSetting[]
   salesOpportunities        SalesOpportunity[]
+  salesContacts             SalesContact[]
   salesReasons              SalesReason[]
   salesReasonEntries        SalesReasonEntry[]
   entidades                 Entidad[]
@@ -1949,12 +1950,38 @@ model SalesClient {
   contracts     SalesContract[]
   agreements    SalesAgreement[]
   opportunities SalesOpportunity[]
+  contacts      SalesContact[]
 
   @@index([companyId])
   @@index([companyId, status])
   @@index([referredByUserId])
   @@index([assignedUserId])
   @@index([companyId, assignedUserId, nextActionDate])
+}
+
+// Fase 2 del CRM (2026-10-18): una empresa/persona del Directorio puede tener
+// varias personas de contacto (Juanito, María...), cada una con varios
+// teléfonos y correos etiquetados (CASA, WHATSAPP, TRABAJO...). Se guardan
+// como Json en vez de tablas hijas aparte porque el emparejamiento al "Pasar a
+// oportunidad" (ver VentasLeadsService.coincidencias) ya recorre todo en JS,
+// igual que con SalesClient — no hace falta SQL para eso todavía.
+model SalesContact {
+  id            Int         @id @default(autoincrement())
+  companyId     Int
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  salesClientId Int
+  salesClient   SalesClient @relation(fields: [salesClientId], references: [id], onDelete: Cascade)
+  name          String
+  role          String?
+  // [{ label: "WHATSAPP", value: "0991234567" }, ...]
+  phones        Json        @default("[]")
+  emails        Json        @default("[]")
+  notes         String?
+  createdBy     Int
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([companyId, salesClientId])
 }
 
 // ---------------------------------------------------------------------------

@@ -353,6 +353,67 @@ export class CreateSalesClientStageDto {
   isFinal?: boolean;
 }
 
+// Fase 2 del CRM (2026-10-18): varias personas de contacto por cliente, cada
+// una con varios teléfonos/correos etiquetados (CASA, WHATSAPP, TRABAJO...).
+export class SalesContactValueDto {
+  @IsString()
+  label: string;
+
+  @IsString()
+  value: string;
+}
+
+export class CreateSalesContactDto {
+  @IsString()
+  name: string;
+
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SalesContactValueDto)
+  phones?: SalesContactValueDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SalesContactValueDto)
+  emails?: SalesContactValueDto[];
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class UpdateSalesContactDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SalesContactValueDto)
+  phones?: SalesContactValueDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SalesContactValueDto)
+  emails?: SalesContactValueDto[];
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
 export class UpdateSalesClientStageDto {
   @IsOptional()
   @IsString()

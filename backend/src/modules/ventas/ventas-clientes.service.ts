@@ -27,7 +27,10 @@ import {
   UpdateSalesClientActivityDto,
   UpdateSalesClientStageDto,
   SalesClientFieldOptionDto,
+  CreateSalesContactDto,
+  UpdateSalesContactDto,
 } from './dto/client.dto';
+import { nombresParecidos } from './nombre-similar.util';
 
 // Dashboard: etapas "ganada"/"perdida" por clave (decisión de Ventas: en
 // producción siempre existen ACEPTADO y RECHAZADO como etapas finales) y
@@ -944,7 +947,14 @@ export class VentasClientesService {
     const serviceIds = this.esquema.isReady()
       ? await this.oportunidades.idsServiciosDesdeExtra(companyId, extra)
       : [];
-    return this.prisma.$transaction(async (tx) => {
+    // Aviso blando por nombre parecido (Fase 2, no bloquea el guardado): capaz
+    // ya está escrita distinto ("Textiles del Valle" vs "Textiles Valle").
+    const candidatosNombre = await this.prisma.salesClient.findMany({
+      where: { companyId },
+      select: { id: true, name: true },
+    });
+    const posiblesDuplicados = nombresParecidos(dto.name.trim(), candidatosNombre);
+    const cliente = await this.prisma.$transaction(async (tx) => {
       const cliente = await tx.salesClient.create({
       data: {
         companyId,
@@ -987,6 +997,7 @@ export class VentasClientesService {
       }
       return cliente;
     });
+    return { ...cliente, posiblesDuplicados };
   }
 
   async asignarme(companyId: number | null, id: number, userId: number) {
@@ -1300,6 +1311,87 @@ export class VentasClientesService {
     }
 
     return eventos.sort((a, b) => b.at.getTime() - a.at.getTime());
+  }
+
+  // ---------------------------------------------------------------------
+  // Contactos (Fase 2 del CRM, 2026-10-18): varias personas por cliente, cada
+  // una con varios teléfonos/correos etiquetados.
+  // ---------------------------------------------------------------------
+
+  private limpiarValores(
+    valores: { label?: string; value?: string }[] | undefined,
+  ): { label: string; value: string }[] {
+    if (!Array.isArray(valores)) return [];
+    return valores
+      .map((v) => ({ label: (v?.label ?? '').trim() || 'Otro', value: (v?.value ?? '').trim() }))
+      .filter((v) => v.value);
+  }
+
+  async listContacts(companyId: number | null, clientId: number) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    await this.getClient(companyId, clientId);
+    return this.prisma.salesContact.findMany({
+      where: { companyId, salesClientId: clientId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async createContact(
+    companyId: number | null,
+    clientId: number,
+    userId: number,
+    dto: CreateSalesContactDto,
+  ) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    if (!dto?.name?.trim()) throw new BadRequestException('El nombre del contacto es requerido');
+    await this.getClient(companyId, clientId);
+    return this.prisma.salesContact.create({
+      data: {
+        companyId,
+        salesClientId: clientId,
+        name: dto.name.trim(),
+        role: dto.role?.trim() || null,
+        phones: this.limpiarValores(dto.phones),
+        emails: this.limpiarValores(dto.emails),
+        notes: dto.notes?.trim() || null,
+        createdBy: userId,
+      },
+    });
+  }
+
+  private async getContact(companyId: number, contactId: number) {
+    const contacto = await this.prisma.salesContact.findFirst({
+      where: { id: contactId, companyId },
+    });
+    if (!contacto) throw new NotFoundException('Contacto no encontrado');
+    return contacto;
+  }
+
+  async updateContact(
+    companyId: number | null,
+    contactId: number,
+    dto: UpdateSalesContactDto,
+  ) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    await this.getContact(companyId, contactId);
+    const data: Prisma.SalesContactUpdateInput = {};
+    if (dto.name !== undefined) {
+      const n = dto.name.trim();
+      if (!n) throw new BadRequestException('El nombre del contacto no puede quedar vacío.');
+      data.name = n;
+    }
+    if (dto.role !== undefined) data.role = dto.role.trim() || null;
+    if (dto.phones !== undefined) data.phones = this.limpiarValores(dto.phones);
+    if (dto.emails !== undefined) data.emails = this.limpiarValores(dto.emails);
+    if (dto.notes !== undefined) data.notes = dto.notes.trim() || null;
+    return this.prisma.salesContact.update({ where: { id: contactId }, data });
+  }
+
+  async deleteContact(companyId: number | null, contactId: number) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    await this.getContact(companyId, contactId);
+    await this.prisma.salesContact.delete({ where: { id: contactId } });
+    return { ok: true };
   }
 
   async addActivity(

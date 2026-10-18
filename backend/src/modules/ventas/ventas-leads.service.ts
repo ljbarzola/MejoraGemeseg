@@ -26,6 +26,7 @@ import {
 } from './lead-canales.const';
 import { sugerirServicios } from './lead-atribucion.util';
 import { ensureDefaultServices } from './ventas-servicios.util';
+import { nombresParecidos } from './nombre-similar.util';
 
 // Un LEAD es un contacto entrante sin calificar. Solo uno de servicio,
 // calificado, se convierte en cliente + oportunidad. Un cliente NUNCA vuelve a
@@ -107,7 +108,11 @@ export class VentasLeadsService {
     const lead = await this.prisma.salesLead.create({
       data: {
         companyId,
-        name: name ?? email ?? phone ?? 'Sin nombre',
+        // Nunca el teléfono: un WhatsApp sin nombre quedaría con una empresa
+        // literalmente llamada como el número (reportado 2026-10-18). "Sin
+        // nombre" es un placeholder obvio que empuja a corregirlo; el teléfono
+        // ya queda guardado aparte en `phone`.
+        name: name ?? email ?? 'Sin nombre',
         email,
         phone,
         companyName: recortar(input.companyName, MAX_NOMBRE),
@@ -223,7 +228,11 @@ export class VentasLeadsService {
 
   // Clientes de la empresa que parecen ser la misma persona (mismo correo,
   // teléfono o RUC). Se usa para sugerir «sumar una oportunidad» en vez de
-  // crear un cliente repetido.
+  // crear un cliente repetido. Fase 2 (2026-10-18): además de la empresa/
+  // cliente, reconoce a la PERSONA de contacto (Juanito, María) cuando su
+  // propio teléfono o correo coincide, aunque el de la empresa no coincida —
+  // así el modal puede ofrecer «¿es Juanito, de esta empresa?» en vez de solo
+  // la razón social.
   private async coincidencias(
     companyId: number,
     lead: { email: string | null; phone: string | null; companyName?: string | null },
@@ -237,14 +246,71 @@ export class VentasLeadsService {
       where: { companyId },
       select: { id: true, name: true, email: true, phone: true, ruc: true },
     });
-    return clientes
+    const porCliente: {
+      id: number;
+      name: string;
+      email: string | null;
+      phone: string | null;
+      contactoId: number | null;
+      contactoNombre: string | null;
+    }[] = clientes
       .filter(
         (c) =>
           (correo && normalizarCorreo(c.email) === correo) ||
           (tel && tel.length >= 7 && normalizarTelefono(c.phone) === tel) ||
           (rucLimpio && (c.ruc ?? '').trim() === rucLimpio),
       )
-      .map((c) => ({ id: c.id, name: c.name, email: c.email, phone: c.phone }));
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        email: c.email,
+        phone: c.phone,
+        contactoId: null,
+        contactoNombre: null,
+      }));
+
+    if (correo || (tel && tel.length >= 7)) {
+      const contactos = await this.prisma.salesContact.findMany({
+        where: { companyId },
+        select: {
+          id: true,
+          name: true,
+          phones: true,
+          emails: true,
+          salesClient: { select: { id: true, name: true, email: true, phone: true } },
+        },
+      });
+      const yaIncluido = new Set(porCliente.map((c) => c.id));
+      for (const ct of contactos) {
+        const phones = Array.isArray(ct.phones)
+          ? (ct.phones as { value?: string }[])
+          : [];
+        const emails = Array.isArray(ct.emails)
+          ? (ct.emails as { value?: string }[])
+          : [];
+        const coincideTel =
+          !!tel && tel.length >= 7 && phones.some((p) => normalizarTelefono(p?.value ?? '') === tel);
+        const coincideCorreo = !!correo && emails.some((e) => normalizarCorreo(e?.value ?? '') === correo);
+        if (!coincideTel && !coincideCorreo) continue;
+        const existente = porCliente.find((c) => c.id === ct.salesClient.id);
+        if (existente) {
+          existente.contactoId = ct.id;
+          existente.contactoNombre = ct.name;
+          continue;
+        }
+        if (yaIncluido.has(ct.salesClient.id)) continue;
+        yaIncluido.add(ct.salesClient.id);
+        porCliente.push({
+          id: ct.salesClient.id,
+          name: ct.salesClient.name,
+          email: ct.salesClient.email,
+          phone: ct.salesClient.phone,
+          contactoId: ct.id,
+          contactoNombre: ct.name,
+        });
+      }
+    }
+    return porCliente;
   }
 
   private conSugerencia<T extends { message: string | null; name: string; contactReason: string | null }>(l: T) {
@@ -526,6 +592,10 @@ export class VentasLeadsService {
       ruc?: string;
       serviceIds?: number[];
       title?: string;
+      // Fase 2: contacto reconocido en `coincidencias` (persona ya guardada en
+      // ese cliente) o un contacto nuevo a registrar en un cliente existente.
+      contactId?: number;
+      nuevoContactoNombre?: string;
     },
   ) {
     const cid = this.requireCompany(companyId);
@@ -558,19 +628,32 @@ export class VentasLeadsService {
     }
 
     let clienteExistente: { id: number; name: string } | null = null;
+    let posiblesDuplicados: { id: number; name: string }[] = [];
     if (dto.salesClientId) {
       clienteExistente = await this.prisma.salesClient.findFirst({
         where: { id: dto.salesClientId, companyId: cid },
         select: { id: true, name: true },
       });
       if (!clienteExistente) throw new NotFoundException('No se encontró en el Directorio');
-    } else if (!dto.confirmarNuevo) {
-      const parecidos = await this.coincidencias(cid, { email, phone }, ruc);
-      if (parecidos.length > 0) {
-        throw new BadRequestException(
-          `Este contacto se parece al cliente «${parecidos[0].name}» (mismo correo, teléfono o RUC). Suma la oportunidad a ese cliente, o confirma que es otro cliente.`,
-        );
+    } else {
+      if (!dto.confirmarNuevo) {
+        const parecidos = await this.coincidencias(cid, { email, phone }, ruc);
+        if (parecidos.length > 0) {
+          const quien = parecidos[0].contactoNombre
+            ? `${parecidos[0].contactoNombre}, de «${parecidos[0].name}»`
+            : `«${parecidos[0].name}»`;
+          throw new BadRequestException(
+            `Este contacto se parece a ${quien} (mismo correo, teléfono o RUC). Suma la oportunidad a ese cliente, o confirma que es otro cliente.`,
+          );
+        }
       }
+      // Aviso blando por nombre parecido (no bloquea): capaz es la misma
+      // empresa escrita distinto ("Textiles del Valle" vs "Textiles Valle").
+      const candidatos = await this.prisma.salesClient.findMany({
+        where: { companyId: cid },
+        select: { id: true, name: true },
+      });
+      posiblesDuplicados = nombresParecidos(nombre, candidatos);
     }
 
     const inicial = await this.prisma.salesClientStage.findFirst({
@@ -642,8 +725,64 @@ export class VentasLeadsService {
           triagedAt: lead.triagedAt ?? new Date(),
         },
       });
+
+      // Fase 2: Juanito/María reconocidos en `coincidencias` — se les guarda
+      // el teléfono/correo nuevo si no lo tenían. Solo tiene sentido cuando se
+      // suma a un cliente existente (uno nuevo no tiene contactos todavía).
+      if (clienteExistente && dto.contactId) {
+        const contacto = await tx.salesContact.findFirst({
+          where: { id: dto.contactId, companyId: cid, salesClientId: clienteExistente.id },
+        });
+        if (contacto) {
+          const phones = agregarValorNuevo(contacto.phones, phone, normalizarTelefono);
+          const emails = agregarValorNuevo(contacto.emails, email, normalizarCorreo);
+          if (phones || emails) {
+            await tx.salesContact.update({
+              where: { id: contacto.id },
+              data: {
+                ...(phones ? { phones } : {}),
+                ...(emails ? { emails } : {}),
+              },
+            });
+          }
+        }
+      } else if (clienteExistente && recortar(dto.nuevoContactoNombre, MAX_NOMBRE)) {
+        // Empresa ya conocida, pero quien escribió es alguien nuevo ahí.
+        await tx.salesContact.create({
+          data: {
+            companyId: cid,
+            salesClientId: clienteExistente.id,
+            name: recortar(dto.nuevoContactoNombre, MAX_NOMBRE)!,
+            phones: phone ? [{ label: 'Otro', value: phone }] : [],
+            emails: email ? [{ label: 'Otro', value: email }] : [],
+            createdBy: userId,
+          },
+        });
+      }
+
       return { clienteId, oportunidadId: opp.id, sumadaAClienteExistente: !!clienteExistente };
     });
-    return resultado;
+    return { ...resultado, posiblesDuplicados };
   }
+}
+
+// Si `valor` no está ya entre los teléfonos/correos guardados (comparando
+// normalizado), agrega `{ label: 'Nuevo', value }` al final. Devuelve `null`
+// cuando no hay nada que cambiar, para no tocar la columna sin necesidad.
+function agregarValorNuevo(
+  actualJson: unknown,
+  valor: string | null,
+  normalizar: (v: string | null) => string,
+): { label: string; value: string }[] | null {
+  if (!valor) return null;
+  const actual: { label: string; value: string }[] = Array.isArray(actualJson)
+    ? (actualJson as { label?: string; value?: string }[]).map((v) => ({
+        label: v?.label ?? 'Otro',
+        value: v?.value ?? '',
+      }))
+    : [];
+  const normalizado = normalizar(valor);
+  const yaEsta = actual.some((v) => normalizar(v?.value ?? null) === normalizado);
+  if (yaEsta) return null;
+  return [...actual, { label: 'Nuevo', value: valor }];
 }

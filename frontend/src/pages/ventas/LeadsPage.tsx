@@ -460,7 +460,11 @@ export default function LeadsPage() {
           onClose={() => setConvirtiendo(null)}
           onDone={(r) => {
             setConvirtiendo(null);
-            showToast(r.sumadaAClienteExistente ? 'Oportunidad sumada a su ficha del directorio' : 'Oportunidad creada: queda como prospecto hasta que acepte', 'success');
+            const base = r.sumadaAClienteExistente ? 'Oportunidad sumada a su ficha del directorio' : 'Oportunidad creada: queda como prospecto hasta que acepte';
+            const aviso = r.posiblesDuplicados?.length
+              ? ` (se parece a «${r.posiblesDuplicados[0].name}»: revisa que no sea el mismo)`
+              : '';
+            showToast(base + aviso, 'success');
             cargar();
             navigate('/ventas/oportunidades');
           }}

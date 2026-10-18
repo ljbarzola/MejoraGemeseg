@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import ConfirmDialog from '../common/ConfirmDialog';
 import CicloVidaBadge from './CicloVidaBadge';
+import ClienteContactos from './ClienteContactos';
 import { useToast } from '../../contexts/ToastContext';
 import { getUser } from '../../services/auth.service';
 import { useCanalesLead } from '../../hooks/useCanalesLead';
@@ -66,7 +67,7 @@ const formatCuando = (iso: string) =>
 
 const ORDEN_KEY = 'ventas-ficha-orden';
 type Orden = 'nuevo' | 'antiguo';
-type Pestana = 'resumen' | 'historial';
+type Pestana = 'resumen' | 'contactos' | 'historial';
 
 const leerOrden = (): Orden => {
   try {
@@ -226,6 +227,7 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
 
   const pestanas: { key: Pestana; label: string }[] = [
     { key: 'resumen', label: 'Datos' },
+    { key: 'contactos', label: 'Contactos' },
     { key: 'historial', label: 'Historial' },
   ];
 
@@ -477,6 +479,8 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
               </div>
             </>
           )}
+
+          {pestana === 'contactos' && <ClienteContactos clientId={client.id} />}
 
           {pestana === 'historial' && (
             <>

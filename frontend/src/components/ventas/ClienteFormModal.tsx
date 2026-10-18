@@ -98,15 +98,20 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
         extra[subKey] = opciones.length === 0 ? '' : (values[subKey] || '');
       }
       payload.extra = extra;
+      let creado: { posiblesDuplicados?: { id: number; name: string }[] } | undefined;
       if (client) await updateSalesClient(client.id, payload);
-      else if (soloDatos) await createSalesClient({ ...payload, soloDatos: true });
-      else await createSalesClient(yaEsCliente ? { ...payload, yaEsCliente: true } : payload);
+      else if (soloDatos) creado = await createSalesClient({ ...payload, soloDatos: true });
+      else creado = await createSalesClient(yaEsCliente ? { ...payload, yaEsCliente: true } : payload);
       // Una persona nueva en negociación la avisa quien abrió el formulario
       // (dice a dónde quedó); aquí solo la edición, el alta del Directorio y el
       // cliente que ya contrata.
       if (client) showToast('Datos actualizados', 'success');
       else if (soloDatos) showToast('Guardado en el directorio', 'success');
       else if (yaEsCliente) showToast('Registrado en el directorio: quedó «Por contratar»', 'success');
+      // Aviso blando (Fase 2): nombre parecido a uno que ya existe — no bloquea.
+      if (creado?.posiblesDuplicados?.length) {
+        showToast(`Ojo: se parece a «${creado.posiblesDuplicados[0].name}», que ya está en el directorio`, 'info');
+      }
       onSaved();
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo guardar', 'error');
