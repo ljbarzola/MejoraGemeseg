@@ -935,30 +935,6 @@ export interface OportunidadInput {
   assignedUserId?: number | null;
 }
 
-export interface CambioEtapaInput {
-  toStatus: string;
-  notes?: string;
-  motivo?: MotivoInput;
-  quotedAmount?: number | null;
-  quotedAt?: string | null;
-  nextActionText?: string | null;
-  nextActionDate?: string | null;
-}
-
-export const ORIGEN_OPORTUNIDAD_LABEL: Record<string, string> = {
-  LEAD: 'Posible cliente',
-  MANUAL: 'Ingreso manual',
-  REFERIDO: 'Referido',
-  MIGRADA: 'Sistema anterior',
-  CLIENTE_EXISTENTE: 'Nuevo servicio de un cliente',
-  HISTORICO: 'Ya era cliente',
-};
-
-export const getOportunidades = (params?: { etapa?: string; responsableId?: number; clienteId?: number; servicioId?: number; estado?: string; q?: string }): Promise<Oportunidad[]> =>
-  api.get('/ventas/oportunidades', { params }).then(r => r.data);
-export const getOportunidad = (id: number): Promise<Oportunidad> =>
-  api.get(`/ventas/oportunidades/${id}`).then(r => r.data);
-export const createOportunidad = (data: OportunidadInput): Promise<Oportunidad> =>
 // Fase 3: al ACEPTAR una oportunidad se dice qué pasa con el contrato.
 // `agreementId` suma los servicios a ese contrato vigente; sin él se crea uno
 // nuevo (`confirmarNuevo` cuando el cliente ya tiene contratos vigentes).
@@ -978,6 +954,31 @@ export interface ContratoResultado {
   servicios: string[];
 }
 
+export interface CambioEtapaInput {
+  toStatus: string;
+  notes?: string;
+  motivo?: MotivoInput;
+  quotedAmount?: number | null;
+  quotedAt?: string | null;
+  nextActionText?: string | null;
+  nextActionDate?: string | null;
+  contrato?: AceptarContratoInput;
+}
+
+export const ORIGEN_OPORTUNIDAD_LABEL: Record<string, string> = {
+  LEAD: 'Posible cliente',
+  MANUAL: 'Ingreso manual',
+  REFERIDO: 'Referido',
+  MIGRADA: 'Sistema anterior',
+  CLIENTE_EXISTENTE: 'Nuevo servicio de un cliente',
+  HISTORICO: 'Ya era cliente',
+};
+
+export const getOportunidades = (params?: { etapa?: string; responsableId?: number; clienteId?: number; servicioId?: number; estado?: string; q?: string }): Promise<Oportunidad[]> =>
+  api.get('/ventas/oportunidades', { params }).then(r => r.data);
+export const getOportunidad = (id: number): Promise<Oportunidad> =>
+  api.get(`/ventas/oportunidades/${id}`).then(r => r.data);
+export const createOportunidad = (data: OportunidadInput): Promise<Oportunidad> =>
   api.post('/ventas/oportunidades', data).then(r => r.data);
 export const updateOportunidad = (id: number, data: OportunidadInput): Promise<Oportunidad> =>
   api.patch(`/ventas/oportunidades/${id}`, data).then(r => r.data);
@@ -986,7 +987,6 @@ export const cambiarEtapaOportunidad = (id: number, data: CambioEtapaInput): Pro
 export const deleteOportunidad = (id: number) =>
   api.delete(`/ventas/oportunidades/${id}`).then(r => r.data);
 
-  contrato?: AceptarContratoInput;
 // ---------- Leads (bandeja de contactos entrantes) ----------
 export type MotivoContacto = 'SERVICIO' | 'EMPLEO' | 'PROVEEDOR' | 'OTRO' | 'SPAM';
 
