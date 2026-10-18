@@ -82,3 +82,23 @@ export function parseDiaContrato(raw: string | undefined | null): Date | null {
 
 export const sumarDias = (d: Date, n: number): Date =>
   new Date(d.getTime() + n * DIA_MS);
+
+const aDiaCorto = (iso: string): string => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+
+// Fecha en que se canceló un contrato: puede ser pasada (contratos anteriores a la
+// app), pero no anterior al inicio del contrato ni futura. Devuelve el mensaje
+// del problema, o null si es válida.
+export function problemaFechaCancelacion(
+  cancelada: Date,
+  inicio: Date,
+  ahora: Date = new Date(),
+): string | null {
+  const dia_ = dia(cancelada);
+  if (dia_ < dia(inicio)) {
+    return `El contrato empezó el ${aDiaCorto(dia(inicio))}: no pudo cancelarse antes, el ${aDiaCorto(dia_)}.`;
+  }
+  if (dia_ > hoyEcuador(ahora)) {
+    return `La fecha de cancelación (${aDiaCorto(dia_)}) no puede ser futura.`;
+  }
+  return null;
+}

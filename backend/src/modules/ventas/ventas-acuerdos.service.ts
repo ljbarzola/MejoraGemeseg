@@ -14,6 +14,7 @@ import {
   esProducto,
   hoyEcuador,
   parseDiaContrato,
+  problemaFechaCancelacion,
   sumarDias,
 } from './agreement-status.util';
 import {
@@ -883,7 +884,7 @@ export class VentasAcuerdosService {
     const cid = this.requireCompany(companyId);
     const actual = await this.prisma.salesAgreement.findFirst({
       where: { id, companyId: cid },
-      select: { id: true, status: true, salesClientId: true },
+      select: { id: true, status: true, salesClientId: true, startDate: true },
     });
     if (!actual) throw new NotFoundException('Contrato no encontrado');
     if (actual.status === 'CANCELADO') {
@@ -898,6 +899,8 @@ export class VentasAcuerdosService {
     if (dto.date?.trim()) {
       const d = parseDiaContrato(dto.date);
       if (!d) throw new BadRequestException('La fecha de cancelación no es válida.');
+      const problema = problemaFechaCancelacion(d, actual.startDate);
+      if (problema) throw new BadRequestException(problema);
       cancelledAt = d;
     }
     await this.prisma.$transaction(async (tx) => {
