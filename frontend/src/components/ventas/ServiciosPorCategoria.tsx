@@ -1,6 +1,6 @@
 import type { SalesServicio } from '../../services/ventas.service';
 
-const CATEGORIAS_ORDEN = ['Seguridad Física', 'Monitoreo', 'Soluciones Tecnológicas'];
+export const CATEGORIAS_ORDEN =['Seguridad Física', 'Monitoreo', 'Soluciones Tecnológicas'];
 
 // La categoría de cada servicio vive en su descripción (ver
 // backend ventas-servicios.util.ts). Una descripción vacía o larga (texto libre

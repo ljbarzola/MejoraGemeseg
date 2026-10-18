@@ -339,7 +339,7 @@ export default function ContratoComercialModal({
               <label>{producto ? 'Productos vendidos *' : 'Servicios contratados *'}</label>
               {disponibles.length === 0 ? (
                 <p style={{ fontSize: 13, color: '#888', margin: 0 }}>
-                  Aún no hay {producto ? 'productos' : 'servicios'}. Créalos con el botón «Servicios» de la pantalla de contratos.
+                  Aún no hay {producto ? 'productos' : 'servicios'}. Créalos en Ventas → Configuración → Servicios que ofrecemos.
                 </p>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 6 }}>

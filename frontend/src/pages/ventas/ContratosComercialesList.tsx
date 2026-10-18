@@ -6,7 +6,6 @@ import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import ContratoComercialModal from '../../components/ventas/ContratoComercialModal';
-import ServiciosModal from '../../components/ventas/ServiciosModal';
 import MotivosConfigModal from '../../components/ventas/MotivosConfigModal';
 import MotivoCierreModal from '../../components/ventas/MotivoCierreModal';
 import EstadoContratoBadge from '../../components/ventas/EstadoContratoBadge';
@@ -72,7 +71,6 @@ export default function ContratosComercialesList() {
   const [filtroServicio, setFiltroServicio] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
   const [modal, setModal] = useState<ModalState>(null);
-  const [verServicios, setVerServicios] = useState(false);
   const [verMotivos, setVerMotivos] = useState(false);
   const [aCancelar, setACancelar] = useState<ContratoComercial | null>(null);
   const [aEliminar, setAEliminar] = useState<ContratoComercial | null>(null);
@@ -295,8 +293,9 @@ export default function ContratosComercialesList() {
           <button className="btn-secondary" onClick={() => setVerMotivos(true)}>
             <ListChecks size={16} /> Motivos de cierre
           </button>
-          <button className="btn-secondary" onClick={() => setVerServicios(true)}>
-            <Settings2 size={16} /> Servicios
+          <button className="btn-secondary" onClick={() => navigate('/ventas/configuracion')}
+            title="Los servicios se crean, renombran y desactivan en Configuración → Servicios que ofrecemos">
+            <Settings2 size={16} /> Servicios en Configuración
           </button>
           <button className="auth-btn" onClick={() => setModal({ modo: 'crear' })}>
             <Plus size={16} /> Nuevo contrato
@@ -413,7 +412,6 @@ export default function ContratosComercialesList() {
         />
       )}
 
-      {verServicios && <ServiciosModal onClose={() => setVerServicios(false)} onChanged={cargar} />}
       {verMotivos && <MotivosConfigModal onClose={() => setVerMotivos(false)} />}
 
       {aCancelar && (

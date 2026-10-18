@@ -113,7 +113,7 @@ export default function OportunidadModal({
           <div className="form-group">
             <label>Servicios que pidió</label>
             {disponibles.length === 0 ? (
-              <p style={{ fontSize: 13, color: '#888', margin: 0 }}>Aún no hay servicios. Créalos en Contratos → Servicios.</p>
+              <p style={{ fontSize: 13, color: '#888', margin: 0 }}>Aún no hay servicios. Créalos en Ventas → Configuración → Servicios que ofrecemos.</p>
             ) : (
               <ServiciosPorCategoria servicios={disponibles} seleccionados={serviceIds} onToggle={alternar} marcarDesactivados />
             )}

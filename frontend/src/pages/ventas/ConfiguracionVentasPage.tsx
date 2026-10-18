@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Plug, Plus, Trash2 } from 'lucide-react';
 import CopyLinkButton from '../../components/common/CopyLinkButton';
 import ErrorBanner from '../../components/common/ErrorBanner';
 import ConexionesLeadsModal from '../../components/ventas/ConexionesLeadsModal';
+import ServiciosConfigSection from '../../components/ventas/ServiciosConfigSection';
 import { useToast } from '../../contexts/ToastContext';
 import { useCanalesLead } from '../../hooks/useCanalesLead';
 import { usePerm } from '../../contexts/PermissionsContext';
@@ -118,7 +119,7 @@ export default function ConfiguracionVentasPage() {
         </div>
       </div>
       <p style={{ ...ayuda, margin: '-6px 0 14px' }}>
-        Aquí se ajusta cómo funciona el CRM para tu empresa: de dónde llegan los posibles clientes, qué servicio corresponde a cada landing y la conexión con Google Ads.
+        Aquí se ajusta cómo funciona el CRM para tu empresa: de dónde llegan los posibles clientes, qué servicios ofreces, qué servicio corresponde a cada landing y la conexión con Google Ads.
         {!puedeEditar && <strong> Estás en solo lectura: para cambiar algo, pide a un administrador de tu empresa que te dé permiso de edición en Ventas.</strong>}
       </p>
 
@@ -137,6 +138,8 @@ export default function ConfiguracionVentasPage() {
               <Plug size={16} /> Abrir conexiones
             </button>
           </div>
+
+          <ServiciosConfigSection puedeEditar={puedeEditar} onChanged={() => getServicios().then(setServicios).catch(() => {})} />
 
           <div className="admin-section" style={caja}>
             <h3 style={{ margin: '0 0 4px' }}>Fuentes de posibles clientes</h3>
@@ -302,7 +305,7 @@ export default function ConfiguracionVentasPage() {
           <div className="admin-section" style={caja}>
             <h3 style={{ margin: '0 0 4px' }}>Dónde se configura lo demás</h3>
             <p style={{ ...ayuda, margin: 0 }}>
-              Las <strong>etapas</strong> están en Oportunidades (botón «Etapas») y los <strong>campos</strong> de la ficha en el Directorio (botón «Campos»). Los <strong>servicios</strong> y los <strong>motivos de cierre</strong> están en Contratos.
+              Las <strong>etapas</strong> están en Oportunidades (botón «Etapas») y los <strong>campos</strong> de la ficha en el Directorio (botón «Campos»). Los <strong>motivos de cierre</strong> están en Contratos.
             </p>
           </div>
         </>
