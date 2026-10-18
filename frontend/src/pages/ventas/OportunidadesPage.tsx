@@ -539,9 +539,20 @@ export default function OportunidadesPage() {
           oportunidad={cambio.oportunidad}
           etapas={etapas}
           destino={cambio.destino}
-          onDone={() => {
+          onDone={(resultado) => {
             setCambio(null);
-            showToast('Etapa actualizada.' + (cambio.oportunidad.referredByUserId ? ' Se notificó a quien lo refirió.' : ''), 'success');
+            const c = resultado.contratoResultado;
+            const contratoTxt = !c
+              ? ''
+              : c.accion === 'AGREGADO'
+                ? ` ${c.servicios.join(', ')} se sumó al contrato ${c.titulo ? `«${c.titulo}»` : `#${c.agreementId}`} de ${c.clienteNombre}.`
+                : c.tipo === 'PRODUCTO'
+                  ? ` Se registró la venta de ${c.servicios.join(', ')} a ${c.clienteNombre} en Contratos.`
+                  : ` Se creó el contrato ${c.titulo ? `«${c.titulo}»` : `#${c.agreementId}`} de ${c.clienteNombre} en Contratos.`;
+            showToast(
+              'Etapa actualizada.' + contratoTxt + (cambio.oportunidad.referredByUserId ? ' Se notificó a quien lo refirió.' : ''),
+              'success',
+            );
             cargar();
           }}
           onCancel={() => setCambio(null)}

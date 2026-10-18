@@ -23,6 +23,7 @@ import {
   UpdateSalesAgreementDto,
   UpdateSalesServiceDto,
 } from './dto/agreement.dto';
+import type { AceptarContratoDto } from './dto/opportunity.dto';
 
 // "Contrato" en la pantalla de Ventas = SalesAgreement: el acuerdo comercial de
 // un cliente (servicios, vigencia, renovaciones). SalesContract es el
@@ -531,6 +532,173 @@ export class VentasAcuerdosService {
         return creado;
       })
       .then((r) => this.getAgreement(cid, r.id));
+  }
+
+  // -----------------------------------------------------------------
+  // Fase 3: contrato al ACEPTAR una oportunidad
+  // -----------------------------------------------------------------
+
+  private static readonly ESTADOS_VIGENTES = ['VIGENTE', 'POR_VENCER', 'POR_INICIAR'];
+
+  // Contratos de SERVICIO que hoy cubren al cliente (vigentes, por vencer o por
+  // iniciar). Sirven para ofrecer «es adicional a este contrato».
+  async contratosVigentesDeServicio(companyId: number, clientId: number) {
+    const filas = await this.prisma.salesAgreement.findMany({
+      where: { companyId, salesClientId: clientId, kind: 'SERVICIO' },
+      include: incluirContrato,
+      orderBy: [{ startDate: 'desc' }, { id: 'desc' }],
+    });
+    return filas
+      .map((c) => this.formatear(c))
+      .filter((c) => VentasAcuerdosService.ESTADOS_VIGENTES.includes(c.estado));
+  }
+
+  private describirContrato(c: {
+    id: number;
+    title: string | null;
+    startDate: Date;
+    endDate: Date | null;
+    services: { name: string }[];
+  }) {
+    const titulo = c.title ? `«${c.title}»` : `#${c.id}`;
+    const servicios = c.services.map((s) => s.name).join(', ') || 'sin servicios';
+    const fin = c.endDate ? `hasta el ${c.endDate.toISOString().slice(0, 10)}` : 'sin fecha de fin';
+    return `${titulo} (${servicios}, ${fin})`;
+  }
+
+  // Revisa TODO antes de cambiar la etapa de la oportunidad, para que un error
+  // no deje la oportunidad aceptada a medias.
+  async validarAlAceptar(
+    companyId: number,
+    opp: { id: number; title: string | null; salesClientId: number; clienteNombre: string; serviceIds: number[] },
+    c: AceptarContratoDto,
+  ): Promise<void> {
+    const etiqueta = opp.title ? `«${opp.title}»` : `#${opp.id}`;
+    if (opp.serviceIds.length === 0) {
+      throw new BadRequestException(
+        `La oportunidad ${etiqueta} de ${opp.clienteNombre} no tiene servicios. Agrégale al menos uno antes de aceptarla para poder registrar su contrato.`,
+      );
+    }
+    if (c.tipo === 'PRODUCTO') {
+      if (c.agreementId) {
+        throw new BadRequestException(
+          'Una venta de producto o instalación no se suma a un contrato de servicio: se registra como venta nueva.',
+        );
+      }
+      return;
+    }
+    if (c.garantiaMeses) {
+      throw new BadRequestException('La garantía solo aplica a productos o instalaciones.');
+    }
+    const vigentes = await this.contratosVigentesDeServicio(companyId, opp.salesClientId);
+    if (c.agreementId) {
+      const elegido = vigentes.find((v) => v.id === c.agreementId);
+      if (!elegido) {
+        throw new BadRequestException(
+          `El contrato elegido no es un contrato de servicio vigente de ${opp.clienteNombre}. Elige otro o crea un contrato nuevo.`,
+        );
+      }
+      return;
+    }
+    if (vigentes.length > 0 && !c.confirmarNuevo) {
+      const lista = vigentes
+        .map((v) => this.describirContrato({ ...v, services: v.services }))
+        .join('; ');
+      throw new BadRequestException(
+        `${opp.clienteNombre} ya tiene ${vigentes.length} contrato${vigentes.length === 1 ? '' : 's'} vigente${vigentes.length === 1 ? '' : 's'}: ${lista}. Elige a cuál se suma la oportunidad ${etiqueta}, o confirma que es un contrato nuevo.`,
+      );
+    }
+  }
+
+  // Crea el contrato nuevo o suma los servicios al contrato vigente elegido, y
+  // deja una nota explícita en el historial del cliente. Se llama DESPUÉS de
+  // pasar la oportunidad a Aceptada y de validarAlAceptar.
+  async aplicarAlAceptar(
+    companyId: number,
+    userId: number,
+    opp: {
+      id: number;
+      title: string | null;
+      salesClientId: number;
+      clienteNombre: string;
+      serviceIds: number[];
+      quotedAmount: number | null;
+    },
+    c: AceptarContratoDto,
+  ) {
+    const servicios = await this.prisma.salesService.findMany({
+      where: { id: { in: opp.serviceIds }, companyId },
+      select: { id: true, name: true },
+      orderBy: { order: 'asc' },
+    });
+    const nombresServicios = servicios.map((s) => s.name);
+    const etiqueta = opp.title ? `«${opp.title}»` : `#${opp.id}`;
+    const hoy = hoyEcuador();
+
+    let contratoId: number;
+    let contratoTitulo: string | null;
+    let accion: 'CREADO' | 'AGREGADO';
+    let nota: string;
+
+    if (c.agreementId) {
+      const ids = await this.validarServicios(companyId, opp.serviceIds);
+      const actual = await this.prisma.salesAgreement.findFirst({
+        where: { id: c.agreementId, companyId, salesClientId: opp.salesClientId },
+        select: { id: true, title: true },
+      });
+      if (!actual) throw new NotFoundException('Contrato no encontrado');
+      await this.prisma.salesAgreementService.createMany({
+        data: ids.map((serviceId) => ({ agreementId: actual.id, serviceId })),
+        skipDuplicates: true,
+      });
+      contratoId = actual.id;
+      contratoTitulo = actual.title;
+      accion = 'AGREGADO';
+      nota = `Se aceptó la oportunidad ${etiqueta}: ${nombresServicios.join(', ')} se sumó al contrato ${actual.title ? `«${actual.title}»` : `#${actual.id}`} de ${opp.clienteNombre}.`;
+    } else {
+      const producto = c.tipo === 'PRODUCTO';
+      let warrantyUntil: string | undefined;
+      if (producto && c.garantiaMeses && c.garantiaMeses > 0) {
+        const fin = new Date(`${hoy}T00:00:00.000Z`);
+        fin.setUTCMonth(fin.getUTCMonth() + c.garantiaMeses);
+        warrantyUntil = fin.toISOString().slice(0, 10);
+      }
+      const titulo = (opp.title || `${opp.clienteNombre}: ${nombresServicios.join(', ')}`).slice(0, MAX_TITULO);
+      const creado = await this.createAgreement(companyId, userId, {
+        salesClientId: opp.salesClientId,
+        kind: c.tipo,
+        title: titulo,
+        startDate: hoy,
+        serviceIds: opp.serviceIds,
+        opportunityId: opp.id,
+        ...(producto && opp.quotedAmount !== null ? { totalValue: opp.quotedAmount } : {}),
+        ...(warrantyUntil ? { warrantyUntil } : {}),
+      });
+      contratoId = creado.id;
+      contratoTitulo = creado.title;
+      accion = 'CREADO';
+      nota = producto
+        ? `Se aceptó la oportunidad ${etiqueta}: se registró la venta de ${nombresServicios.join(', ')} a ${opp.clienteNombre} (contrato #${creado.id}${warrantyUntil ? `, garantía hasta el ${warrantyUntil}` : ', sin garantía'}).`
+        : `Se aceptó la oportunidad ${etiqueta}: se creó el contrato ${contratoTitulo ? `«${contratoTitulo}»` : `#${creado.id}`} de ${opp.clienteNombre} (${nombresServicios.join(', ')}, desde el ${hoy}, sin fecha de fin; completa fecha de fin y valor mensual en Contratos).`;
+    }
+
+    await this.prisma.salesClientActivity.create({
+      data: {
+        companyId,
+        salesClientId: opp.salesClientId,
+        type: 'NOTA',
+        text: nota.slice(0, 2000),
+        createdBy: userId,
+      },
+    });
+    return {
+      accion,
+      tipo: c.tipo,
+      agreementId: contratoId,
+      titulo: contratoTitulo,
+      clienteNombre: opp.clienteNombre,
+      servicios: nombresServicios,
+    };
   }
 
   async updateAgreement(

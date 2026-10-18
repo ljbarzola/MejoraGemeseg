@@ -935,14 +935,34 @@ export const getOportunidades = (params?: { etapa?: string; responsableId?: numb
 export const getOportunidad = (id: number): Promise<Oportunidad> =>
   api.get(`/ventas/oportunidades/${id}`).then(r => r.data);
 export const createOportunidad = (data: OportunidadInput): Promise<Oportunidad> =>
+// Fase 3: al ACEPTAR una oportunidad se dice qué pasa con el contrato.
+// `agreementId` suma los servicios a ese contrato vigente; sin él se crea uno
+// nuevo (`confirmarNuevo` cuando el cliente ya tiene contratos vigentes).
+export interface AceptarContratoInput {
+  tipo: 'SERVICIO' | 'PRODUCTO';
+  agreementId?: number;
+  confirmarNuevo?: boolean;
+  garantiaMeses?: number;
+}
+
+export interface ContratoResultado {
+  accion: 'CREADO' | 'AGREGADO';
+  tipo: 'SERVICIO' | 'PRODUCTO';
+  agreementId: number;
+  titulo?: string | null;
+  clienteNombre: string;
+  servicios: string[];
+}
+
   api.post('/ventas/oportunidades', data).then(r => r.data);
 export const updateOportunidad = (id: number, data: OportunidadInput): Promise<Oportunidad> =>
   api.patch(`/ventas/oportunidades/${id}`, data).then(r => r.data);
-export const cambiarEtapaOportunidad = (id: number, data: CambioEtapaInput): Promise<Oportunidad> =>
+export const cambiarEtapaOportunidad = (id: number, data: CambioEtapaInput): Promise<Oportunidad & { contratoResultado?: ContratoResultado }> =>
   api.patch(`/ventas/oportunidades/${id}/etapa`, data).then(r => r.data);
 export const deleteOportunidad = (id: number) =>
   api.delete(`/ventas/oportunidades/${id}`).then(r => r.data);
 
+  contrato?: AceptarContratoInput;
 // ---------- Leads (bandeja de contactos entrantes) ----------
 export type MotivoContacto = 'SERVICIO' | 'EMPLEO' | 'PROVEEDOR' | 'OTRO' | 'SPAM';
 

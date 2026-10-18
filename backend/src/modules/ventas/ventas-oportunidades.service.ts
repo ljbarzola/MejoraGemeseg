@@ -12,6 +12,7 @@ import { VentasMotivosService } from './ventas-motivos.service';
 import { hoyEcuador, parseDiaContrato } from './agreement-status.util';
 import { resultadoDeEtapa } from './stage-outcome.util';
 import { VentasConversionesService } from './ventas-conversiones.service';
+import { VentasAcuerdosService } from './ventas-acuerdos.service';
 import { parseSiguientePaso } from './siguiente-paso.util';
 import {
   ETIQUETA_SUBSERVICIO,
@@ -103,6 +104,7 @@ export class VentasOportunidadesService {
     private readonly gmailMailService: GmailMailService,
     private readonly motivos: VentasMotivosService,
     private readonly conversiones: VentasConversionesService,
+    private readonly acuerdos: VentasAcuerdosService,
   ) {}
 
   private requireCompany(companyId: number | null): number {
@@ -447,6 +449,38 @@ export class VentasOportunidadesService {
     }
 
     const { outcome, cerrada } = resultadoDeEtapa(destino.key, destino.isFinal);
+
+    // Fase 3: al aceptar se pregunta qué pasa con el contrato. Se valida todo
+    // ANTES de mover la oportunidad, para no dejarla aceptada a medias.
+    let datosContrato:
+      | { id: number; title: string | null; salesClientId: number; clienteNombre: string; serviceIds: number[]; quotedAmount: number | null }
+      | undefined;
+    if (dto.contrato) {
+      if (outcome !== 'GANADA') {
+        throw new BadRequestException(
+          'El contrato solo se registra al pasar la oportunidad a Aceptada.',
+        );
+      }
+      const filasServicios = await this.prisma.salesOpportunityService.findMany({
+        where: { opportunityId: id },
+        select: { serviceId: true },
+      });
+      datosContrato = {
+        id,
+        title: opp.title,
+        salesClientId: opp.salesClientId,
+        clienteNombre: opp.salesClient.name,
+        serviceIds: filasServicios.map((s) => s.serviceId),
+        quotedAmount:
+          dto.quotedAmount !== undefined && dto.quotedAmount !== null
+            ? dto.quotedAmount
+            : opp.quotedAmount === null
+              ? null
+              : Number(opp.quotedAmount),
+      };
+      await this.acuerdos.validarAlAceptar(cid, datosContrato, dto.contrato);
+    }
+
     const quotedAmount = this.validarMonto(dto.quotedAmount);
     const quotedAtDto = this.parseDia(dto.quotedAt, 'La fecha de cotización');
     // En una etapa final ya no hay nada que seguir: se ignora el siguiente paso.
@@ -525,6 +559,23 @@ export class VentasOportunidadesService {
       outcome,
       quotedAmount: montoFinal === null || montoFinal === undefined ? null : Number(montoFinal),
     });
+
+    if (dto.contrato && datosContrato) {
+      try {
+        const contratoResultado = await this.acuerdos.aplicarAlAceptar(
+          cid,
+          userId,
+          datosContrato,
+          dto.contrato,
+        );
+        return { ...(await this.get(cid, id)), contratoResultado };
+      } catch (err) {
+        const motivo = err instanceof Error ? err.message : 'error desconocido';
+        throw new BadRequestException(
+          `La oportunidad de ${opp.salesClient.name} quedó Aceptada, pero no se pudo registrar el contrato (${motivo}). Regístralo desde Contratos.`,
+        );
+      }
+    }
     return this.get(cid, id);
   }
 

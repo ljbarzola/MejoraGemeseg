@@ -1,6 +1,8 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -32,6 +34,32 @@ export class MotivoInputDto {
 }
 
 const MAX_MONTO = 9_999_999_999;
+
+// Fase 3: qué se hace con el contrato al ACEPTAR una oportunidad. `tipo` es
+// obligatorio siempre (servicio recurrente o producto/instalación). Con
+// `agreementId` los servicios se suman a ese contrato vigente (servicio
+// adicional); sin él se crea uno nuevo. Si el cliente ya tiene contratos
+// vigentes de servicio, el servidor exige elegir uno o confirmar con
+// `confirmarNuevo` que es un contrato nuevo.
+export class AceptarContratoDto {
+  @IsIn(['SERVICIO', 'PRODUCTO'])
+  tipo: 'SERVICIO' | 'PRODUCTO';
+
+  @IsOptional()
+  @IsInt()
+  agreementId?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  confirmarNuevo?: boolean;
+
+  // Solo producto: meses de garantía (0 o vacío = sin garantía).
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(120)
+  garantiaMeses?: number;
+}
 
 export class ChangeOpportunityStageDto {
   @IsString()
@@ -66,6 +94,12 @@ export class ChangeOpportunityStageDto {
   @IsOptional()
   @IsString()
   nextActionDate?: string | null;
+
+  // Solo al pasar a Aceptada (ver AceptarContratoDto).
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AceptarContratoDto)
+  contrato?: AceptarContratoDto;
 }
 
 export class CreateOpportunityDto {
