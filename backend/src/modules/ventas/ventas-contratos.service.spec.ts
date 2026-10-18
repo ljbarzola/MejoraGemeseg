@@ -34,6 +34,9 @@ describe('VentasContratosService', () => {
       delete: jest.Mock;
     };
     salesTemplate: { findFirst: jest.Mock };
+    salesClient: { findFirst: jest.Mock };
+    salesAgreement: { findFirst: jest.Mock };
+    salesAgreementDocument: { create: jest.Mock };
     salesContractDocument: { create: jest.Mock; findMany: jest.Mock };
     storedFile: {
       findUnique: jest.Mock;
@@ -68,6 +71,9 @@ describe('VentasContratosService', () => {
         delete: jest.fn(),
       },
       salesTemplate: { findFirst: jest.fn() },
+      salesClient: { findFirst: jest.fn() },
+      salesAgreement: { findFirst: jest.fn() },
+      salesAgreementDocument: { create: jest.fn() },
       salesContractDocument: { create: jest.fn(), findMany: jest.fn() },
       // Copia permanente de los archivos (stored-file.util). Por defecto "ya
       // respaldado", así las lecturas desde disco no intentan crearla.
@@ -168,7 +174,17 @@ describe('VentasContratosService', () => {
       prisma.salesContract.findFirst.mockResolvedValue(makeContract());
 
       await expect(service.sendContract(10, 1)).rejects.toThrow(
-        'SIGNWELL_API_KEY',
+        'falta registrar la clave de SignWell',
+      );
+    });
+
+    it('rejects a document uploaded without a template', async () => {
+      prisma.salesContract.findFirst.mockResolvedValue(
+        makeContract({ template: null }),
+      );
+
+      await expect(service.sendContract(10, 1)).rejects.toThrow(
+        'no sale de una plantilla',
       );
     });
 
@@ -348,6 +364,91 @@ describe('VentasContratosService', () => {
         expect.objectContaining({ text_tags: true }),
       );
       expect(body).not.toHaveProperty('with_signature_page');
+    });
+  });
+
+  describe('uploadDocument', () => {
+    const pdf = (over: Partial<Express.Multer.File> = {}) =>
+      ({
+        buffer: Buffer.from('%PDF-1.4 contenido'),
+        mimetype: 'application/pdf',
+        originalname: 'contrato.pdf',
+        ...over,
+      }) as Express.Multer.File;
+    const cliente = { id: 7, name: 'Hotel Plaza Real', email: 'hotel@test.com' };
+
+    beforeEach(() => {
+      prisma.salesClient.findFirst.mockResolvedValue(cliente);
+      prisma.salesContract.create.mockResolvedValue({ id: 55 });
+      prisma.salesContract.update.mockResolvedValue({});
+      prisma.salesContract.findFirst.mockResolvedValue({ id: 55, template: null });
+    });
+
+    it('creates a signed document without template and links it to the contract', async () => {
+      prisma.salesAgreement.findFirst.mockResolvedValue({ id: 3 });
+
+      await service.uploadDocument(1, 9, pdf(), {
+        salesClientId: 7,
+        agreementId: 3,
+        titulo: ' Contrato firmado ',
+        firmado: true,
+      });
+
+      const data = prisma.salesContract.create.mock.calls[0][0].data;
+      expect(data).toMatchObject({
+        templateId: null,
+        status: 'SIGNED',
+        salesClientId: 7,
+        companyId: 1,
+        clientName: 'Hotel Plaza Real',
+        fieldValues: { titulo: 'Contrato firmado' },
+      });
+      expect(prisma.salesContractDocument.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ contractId: 55, type: 'FIRMADO' }),
+      });
+      expect(prisma.salesAgreementDocument.create).toHaveBeenCalledWith({
+        data: { contractId: 55, agreementId: 3 },
+      });
+    });
+
+    it('leaves it as READY (not signed) when firmado is false', async () => {
+      await service.uploadDocument(1, 9, pdf(), { salesClientId: 7, firmado: false });
+
+      expect(prisma.salesContract.create.mock.calls[0][0].data).toMatchObject({
+        status: 'READY',
+        signedAt: null,
+      });
+      expect(prisma.salesContractDocument.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ type: 'GENERADO' }),
+      });
+      expect(prisma.salesAgreementDocument.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a file that is not a PDF', async () => {
+      await expect(
+        service.uploadDocument(
+          1,
+          9,
+          pdf({ buffer: Buffer.from('no soy pdf'), originalname: 'x.pdf' }),
+          { salesClientId: 7 },
+        ),
+      ).rejects.toThrow('debe ser un PDF');
+      expect(prisma.salesContract.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects a contract that is not the client's", async () => {
+      prisma.salesAgreement.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.uploadDocument(1, 9, pdf(), { salesClientId: 7, agreementId: 99 }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.salesContract.create).not.toHaveBeenCalled();
+    });
+
+    it('requires a client', async () => {
+      await expect(
+        service.uploadDocument(1, 9, pdf(), { salesClientId: 0 }),
+      ).rejects.toThrow('Elige el cliente');
     });
   });
 

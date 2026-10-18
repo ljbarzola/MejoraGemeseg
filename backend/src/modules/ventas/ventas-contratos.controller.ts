@@ -65,6 +65,42 @@ export class VentasContratosController {
     return this.contratosService.submitPublicFill(token, body?.values || {});
   }
 
+  // Rutas fijas antes de `:id`.
+  @Get('estado-firma')
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('VENTAS', 'view')
+  estadoFirma() {
+    return this.contratosService.estadoFirmaElectronica();
+  }
+
+  // Sube un documento ya hecho (p. ej. contrato firmado en PDF) sin plantilla ni SignWell.
+  @Post('subir')
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('VENTAS', 'write')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  )
+  subir(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
+    @Req() req: any,
+  ) {
+    return this.contratosService.uploadDocument(
+      req.user.companyId,
+      req.user.userId,
+      file,
+      {
+        salesClientId: Number(body?.salesClientId) || 0,
+        agreementId: Number(body?.agreementId) || undefined,
+        titulo: body?.titulo,
+        firmado: body?.firmado !== 'false',
+      },
+    );
+  }
+
   @Get()
   @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
   @Section('VENTAS', 'view')

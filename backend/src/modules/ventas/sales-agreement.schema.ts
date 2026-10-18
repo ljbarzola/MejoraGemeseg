@@ -83,4 +83,9 @@ export const SALES_AGREEMENT_DDL: string[] = [
   `CREATE INDEX IF NOT EXISTS "SalesAgreementDocument_agreementId_idx" ON "SalesAgreementDocument"("agreementId")`,
   fk('SalesAgreementDocument', 'contractId', 'SalesContract', 'CASCADE'),
   fk('SalesAgreementDocument', 'agreementId', 'SalesAgreement', 'CASCADE'),
+
+  // 2026-10-18: un documento puede subirse ya hecho (p. ej. un contrato firmado en PDF) sin
+  // plantilla. No es una columna nueva: solo se quita el NOT NULL, así que el despliegue
+  // anterior sigue funcionando (idempotente: repetirlo no hace nada).
+  `ALTER TABLE "SalesContract" ALTER COLUMN "templateId" DROP NOT NULL`,
 ];

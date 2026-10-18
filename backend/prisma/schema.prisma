@@ -1827,7 +1827,7 @@ model SalesField {
 
 model SalesContract {
   id                 Int       @id @default(autoincrement())
-  templateId         Int
+  templateId         Int? // null = documento subido ya hecho (sin plantilla): no se genera ni se envía a firma desde el sistema
   contractNumber     String? // Código autogenerado, ej. "MEGAMONT-00001" (null si la plantilla no tiene numeración)
   clientName         String
   clientEmail        String
@@ -1855,7 +1855,7 @@ model SalesContract {
 
   company           Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
   creator           User                    @relation(fields: [createdBy], references: [id])
-  template          SalesTemplate           @relation(fields: [templateId], references: [id])
+  template          SalesTemplate?          @relation(fields: [templateId], references: [id])
   salesClient       SalesClient?            @relation(fields: [salesClientId], references: [id], onDelete: SetNull)
   contractDocuments SalesContractDocument[]
   agreementLink     SalesAgreementDocument?
