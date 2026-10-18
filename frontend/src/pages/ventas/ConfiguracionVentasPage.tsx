@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Plug, Plus, Trash2 } from 'lucide-react';
 import CopyLinkButton from '../../components/common/CopyLinkButton';
 import ErrorBanner from '../../components/common/ErrorBanner';
 import ConexionesLeadsModal from '../../components/ventas/ConexionesLeadsModal';
+import MotivosCatalogo from '../../components/ventas/MotivosCatalogo';
 import ServiciosConfigSection from '../../components/ventas/ServiciosConfigSection';
 import { useToast } from '../../contexts/ToastContext';
 import { useCanalesLead } from '../../hooks/useCanalesLead';
@@ -119,7 +120,7 @@ export default function ConfiguracionVentasPage() {
         </div>
       </div>
       <p style={{ ...ayuda, margin: '-6px 0 14px' }}>
-        Aquí se ajusta cómo funciona el CRM para tu empresa: de dónde llegan los posibles clientes, qué servicios ofreces, qué servicio corresponde a cada landing y la conexión con Google Ads.
+        Aquí se ajusta cómo funciona el CRM para tu empresa: de dónde llegan los posibles clientes, qué servicios ofreces, por qué se cierran las ventas, qué servicio corresponde a cada landing y la conexión con Google Ads.
         {!puedeEditar && <strong> Estás en solo lectura: para cambiar algo, pide a un administrador de tu empresa que te dé permiso de edición en Ventas.</strong>}
       </p>
 
@@ -140,6 +141,14 @@ export default function ConfiguracionVentasPage() {
           </div>
 
           <ServiciosConfigSection puedeEditar={puedeEditar} onChanged={() => getServicios().then(setServicios).catch(() => {})} />
+
+          <div className="admin-section" style={caja} id="motivos">
+            <h3 style={{ margin: '0 0 4px' }}>Motivos de cierre</h3>
+            <p style={ayuda}>
+              El embudo se pierde en tres lugares y cada uno tiene SU lista de motivos: un posible cliente que se descarta, una oportunidad que se pierde después de cotizar y un contrato que termina. Así se puede analizar por separado en qué nivel y por qué se va la gente. Si un motivo ya se usó no se borra: se desactiva para que deje de ofrecerse sin perder lo registrado.
+            </p>
+            <MotivosCatalogo puedeEditar={puedeEditar} />
+          </div>
 
           <div className="admin-section" style={caja}>
             <h3 style={{ margin: '0 0 4px' }}>Fuentes de posibles clientes</h3>
@@ -305,7 +314,7 @@ export default function ConfiguracionVentasPage() {
           <div className="admin-section" style={caja}>
             <h3 style={{ margin: '0 0 4px' }}>Dónde se configura lo demás</h3>
             <p style={{ ...ayuda, margin: 0 }}>
-              Las <strong>etapas</strong> están en Oportunidades (botón «Etapas») y los <strong>campos</strong> de la ficha en el Directorio (botón «Campos»). Los <strong>motivos de cierre</strong> están en Contratos.
+              Las <strong>etapas</strong> están en Oportunidades (botón «Etapas») y los <strong>campos</strong> de la ficha en el Directorio (botón «Campos»). Los <strong>motivos de cierre</strong> están más arriba, en esta misma pantalla.
             </p>
           </div>
         </>
