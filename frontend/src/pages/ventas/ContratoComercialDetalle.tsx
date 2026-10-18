@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, RefreshCw, Trash2, FilePlus, Link2, Unlink, Ban, RotateCcw, MessageSquareWarning, Mail, Info, PackageCheck } from 'lucide-react';
+import { ArrowLeft, Pencil, RefreshCw, Trash2, FilePlus, Link2, Unlink, Ban, RotateCcw, MessageSquareWarning, Mail, Info, PackageCheck, Upload } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import EstadoContratoBadge from '../../components/ventas/EstadoContratoBadge';
 import ContratoComercialModal from '../../components/ventas/ContratoComercialModal';
 import MotivoCierreModal from '../../components/ventas/MotivoCierreModal';
+import SubirDocumentoModal from '../../components/ventas/SubirDocumentoModal';
 import { useToast } from '../../contexts/ToastContext';
 import { subPageTitle } from './contratoStyles';
 import {
@@ -63,6 +64,7 @@ export default function ContratoComercialDetalle() {
   const [docParaVincular, setDocParaVincular] = useState('');
   const [mostrarAsociar, setMostrarAsociar] = useState(false);
   const [confirmarOtroDoc, setConfirmarOtroDoc] = useState(false);
+  const [subiendoDoc, setSubiendoDoc] = useState(false);
 
   const cargar = async () => {
     try {
@@ -339,6 +341,9 @@ export default function ContratoComercialDetalle() {
           >
             <Mail size={15} /> Enviar a firma por correo · Próximamente
           </button>
+          <button className="btn-secondary" onClick={() => setSubiendoDoc(true)} title="Sube un documento que ya tienes hecho, por ejemplo el contrato firmado en PDF">
+            <Upload size={15} /> Subir documento
+          </button>
           <button
             className="auth-btn"
             onClick={() => (porIniciar && yaTieneDocs ? setConfirmarOtroDoc(true) : irAGenerar())}
@@ -349,7 +354,7 @@ export default function ContratoComercialDetalle() {
 
         {(contrato.documents || []).length === 0 ? (
           <p style={{ color: '#888', fontSize: 13, margin: '0 0 12px' }}>
-            Este contrato aún no tiene documentos. Genera uno desde una plantilla.
+            Este contrato aún no tiene documentos. Sube el contrato firmado en PDF con «Subir documento»; la generación automática desde una plantilla llegará pronto.
           </p>
         ) : (
           <div className="tasks-table-wrapper" style={{ marginBottom: 12 }}>
@@ -369,7 +374,7 @@ export default function ContratoComercialDetalle() {
                   return (
                     <tr key={d.contractId} style={{ cursor: 'pointer' }} onClick={() => navigate(`/ventas/documentacion/${d.contractId}`)}>
                       <td style={{ fontWeight: 600 }}>{d.contract.contractNumber || `#${d.contractId}`}</td>
-                      <td>{d.contract.template?.name || '—'}</td>
+                      <td>{d.contract.template?.name || 'Subido (sin plantilla)'}</td>
                       <td>
                         <span className="status-badge" style={{ backgroundColor: est.color + '22', color: est.color }}>{est.label}</span>
                       </td>
@@ -406,7 +411,7 @@ export default function ContratoComercialDetalle() {
                   <option value="">Elige un documento...</option>
                   {sinVincular.map((d) => (
                     <option key={d.id} value={d.id}>
-                      {d.contractNumber || `#${d.id}`} · {d.template?.name || 'sin plantilla'} · {(DOC_ESTADO[d.status] || { label: d.status }).label}
+                      {d.contractNumber || `#${d.id}`} · {d.template?.name || 'subido sin plantilla'} · {(DOC_ESTADO[d.status] || { label: d.status }).label}
                     </option>
                   ))}
                 </select>
@@ -424,6 +429,15 @@ export default function ContratoComercialDetalle() {
           )
         )}
       </div>
+
+      {subiendoDoc && (
+        <SubirDocumentoModal
+          clienteId={contrato.salesClientId}
+          contratoId={contrato.id}
+          onClose={() => setSubiendoDoc(false)}
+          onSubido={() => { setSubiendoDoc(false); cargar(); }}
+        />
+      )}
 
       {modo && (
         <ContratoComercialModal

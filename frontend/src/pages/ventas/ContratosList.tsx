@@ -1,12 +1,14 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Plus, FolderOpen, HelpCircle, Link2 } from 'lucide-react';
+import { FileText, Plus, FolderOpen, HelpCircle, Link2, Upload } from 'lucide-react';
 import { getContracts, deleteContract, getVentasDriveConfig, vincularDocumentosSinCliente, SalesContract } from '../../services/ventas.service';
 import { buildDriveFolderLink } from '../../utils/driveLink';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import TemplateHelpModal from '../../components/ventas/TemplateHelpModal';
+import SubirDocumentoModal from '../../components/ventas/SubirDocumentoModal';
+import DocumentacionProximamente from '../../components/ventas/DocumentacionProximamente';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
@@ -37,6 +39,7 @@ export default function ContratosList() {
   const [driveFolderUrl, setDriveFolderUrl] = useState('');
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [subiendoDoc, setSubiendoDoc] = useState(false);
   // Columnas que cada persona elige ver (preferencia en su cuenta). «Número» y
   // las acciones van siempre.
   const columnPrefs = useColumnPreferences('ventas-documentacion', COLUMNAS_DOCS_POR_DEFECTO);
@@ -103,7 +106,7 @@ export default function ContratosList() {
     {
       contractNumber: (c) => c.contractNumber || `#${c.id}`,
       clientName: (c) => c.clientName,
-      template: (c) => c.template?.name,
+      template: (c) => c.template?.name ?? 'Subido (sin plantilla)',
       status: (c) => statusLabels[c.status] || c.status,
       createdAt: (c) => c.createdAt,
       sentAt: (c) => c.sentAt,
@@ -119,12 +122,13 @@ export default function ContratosList() {
         return (
           <>
             <div>{c.salesClient?.name || c.clientName}</div>
+            {c.fieldValues?.titulo && <div style={{ fontSize: 12 }}>{String(c.fieldValues.titulo)}</div>}
             <div style={{ fontSize: 11, color: '#888' }}>{c.clientEmail}</div>
             {!c.salesClientId && <div style={{ fontSize: 11, color: '#b45309' }}>Sin cliente asignado</div>}
           </>
         );
       case 'template':
-        return c.template?.name || '—';
+        return c.template?.name || 'Subido (sin plantilla)';
       case 'status':
         return (
           <span style={{ padding: '3px 10px', borderRadius: 12, background: statusColors[c.status] || '#888', color: '#fff', fontSize: 10, fontWeight: 600 }}>
@@ -176,11 +180,16 @@ export default function ContratosList() {
           <button className="btn-secondary" onClick={() => navigate('/ventas/documentacion/plantillas')}>
             <FileText size={16} /> Plantillas
           </button>
+          <button className="btn-secondary" onClick={() => setSubiendoDoc(true)} title="Sube un documento que ya tienes hecho, por ejemplo un contrato firmado en PDF">
+            <Upload size={16} /> Subir documento
+          </button>
           <button className="auth-btn" onClick={() => navigate('/ventas/documentacion/nuevo')}>
             <Plus size={16} /> Nuevo documento
           </button>
         </div>
       </div>
+
+      <DocumentacionProximamente />
 
       <div className="filter-bar">
         <div className="filter-bar-fields filter-bar-fields--una-linea">
@@ -227,7 +236,7 @@ export default function ContratosList() {
         {contracts.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36, marginBottom: 8 }}>📄</div>
-            <div>No hay documentos aún</div>
+            <div>No hay documentos aún. Sube uno que ya tengas hecho con «Subir documento».</div>
           </div>
         ) : filasOrdenadas.length === 0 ? (
           <p style={{ color: '#888', fontSize: 13 }}>No hay documentos que coincidan con la búsqueda.</p>
@@ -300,6 +309,13 @@ export default function ContratosList() {
             }
           }}
           onCancel={() => setConfirmarVincular(false)}
+        />
+      )}
+
+      {subiendoDoc && (
+        <SubirDocumentoModal
+          onClose={() => setSubiendoDoc(false)}
+          onSubido={(doc) => { setSubiendoDoc(false); loadContracts(); navigate(`/ventas/documentacion/${doc.id}`); }}
         />
       )}
 

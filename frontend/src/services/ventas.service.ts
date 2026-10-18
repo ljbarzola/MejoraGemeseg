@@ -60,7 +60,8 @@ export interface SalesContractDocument {
 
 export interface SalesContract {
   id: number;
-  templateId: number;
+  // null = documento subido ya hecho (sin plantilla): no se genera ni se envía a firma desde el sistema.
+  templateId?: number | null;
   template?: SalesTemplate;
   clientName: string;
   clientEmail: string;
@@ -234,6 +235,29 @@ export const uploadSignedContract = (contractId: number, file: File): Promise<Up
   formData.append('file', file);
   return api.post(`/ventas/contratos/${contractId}/documents/signed`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
 };
+
+export interface SubirDocumentoInput {
+  salesClientId: number;
+  agreementId?: number;
+  titulo?: string;
+  firmado: boolean;
+}
+
+// Sube un documento que ya existe (p. ej. el contrato firmado en PDF) sin plantilla ni firma
+// electrónica: crea el documento del cliente y, si se indica, lo cuelga de uno de sus contratos.
+export const subirDocumentoHecho = (file: File, data: SubirDocumentoInput): Promise<SalesContract> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('salesClientId', String(data.salesClientId));
+  if (data.agreementId) formData.append('agreementId', String(data.agreementId));
+  if (data.titulo?.trim()) formData.append('titulo', data.titulo.trim());
+  formData.append('firmado', String(data.firmado));
+  return api.post('/ventas/contratos/subir', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+};
+
+// ¿Está conectada la firma electrónica (SignWell)? Mientras no lo esté, enviar a firma no funciona.
+export const getEstadoFirmaElectronica = (): Promise<{ signwellConfigurado: boolean }> =>
+  api.get('/ventas/contratos/estado-firma').then(r => r.data);
 
 // Carpeta raíz de Drive para los documentos de Contratos: ID fijo en
 // backend `HARDCODED_DRIVE_FOLDERS.VENTAS_CONTRATOS` (no se configura en la UI).

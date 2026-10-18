@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { getContract, generateContractPdf, sendContract, getContractDocuments, fetchProtectedFile, uploadSignedContract, getContractSignatureStatus, SalesContract, SalesContractDocument, SignatureStatus } from '../../services/ventas.service';
+import { getContract, generateContractPdf, sendContract, getContractDocuments, fetchProtectedFile, uploadSignedContract, getContractSignatureStatus, getEstadoFirmaElectronica, SalesContract, SalesContractDocument, SignatureStatus } from '../../services/ventas.service';
 import { subPageTitle } from './contratoStyles';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
@@ -46,6 +46,12 @@ export default function ContratoResult() {
   const [emailTo, setEmailTo] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
+  // null = todavía no se sabe. Mientras SignWell no esté conectado, enviar a firma no funciona.
+  const [signwellListo, setSignwellListo] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    getEstadoFirmaElectronica().then((r) => setSignwellListo(r.signwellConfigurado)).catch(() => setSignwellListo(null));
+  }, []);
 
   useEffect(() => { if (id) loadContract(+id); }, [id]);
 
@@ -203,6 +209,9 @@ export default function ContratoResult() {
   };
 
   const clientFields = contract.template?.fields?.filter(f => f.isClientField) || [];
+  // Subido ya hecho: no tiene plantilla, así que no se genera ni se envía a firma desde el sistema.
+  const subido = !contract.template;
+  const nombreDoc = contract.fieldValues?.titulo ? String(contract.fieldValues.titulo) : null;
   const isReady = contract.status === 'READY';
   const isDraft = contract.status === 'DRAFT';
 
@@ -213,15 +222,15 @@ export default function ContratoResult() {
         <button className="cacao-back-btn" onClick={() => navigate('/ventas/documentacion')}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <h2 style={subPageTitle}>Documento {contract.contractNumber || `#${contract.id}`} — {contract.clientName}</h2>
+        <h2 style={subPageTitle}>{subido ? 'Documento subido' : 'Documento'} {contract.contractNumber || `#${contract.id}`}{nombreDoc ? ` · ${nombreDoc}` : ''} — {contract.clientName}</h2>
         <span style={{ padding: '3px 10px', borderRadius: 12, background: statusColors[contract.status] || '#888', color: '#fff', fontSize: 11, fontWeight: 600 }}>{contract.status}</span>
         <div style={{ flex: 1 }} />
-        {contract.status !== 'SIGNED' && (
+        {!subido && contract.status !== 'SIGNED' && (
           <button className="btn-secondary" onClick={handleEditFieldsClick} style={{ padding: '10px 20px', fontSize: 13 }}>
             ✏️ Editar campos
           </button>
         )}
-        {contract.status !== 'SIGNED' && (
+        {!subido && contract.status !== 'SIGNED' && (
           <button className="auth-btn" onClick={handleGenerateClick} disabled={generating} style={{ padding: '10px 20px', fontSize: 13 }}>
             {generating ? 'Generando PDF...' : contract.generatedPdfPath ? '🔄 Regenerar PDF' : '⚡ Generar PDF'}
           </button>
@@ -319,6 +328,15 @@ export default function ContratoResult() {
             </div>
           )}
 
+          {subido && (
+            <div style={{ padding: 16, borderBottom: '1px solid #eee', fontSize: 12, color: '#555', lineHeight: 1.5 }}>
+              <h3 style={{ margin: '0 0 8px', fontSize: 14, color: '#222' }}>Documento subido ya hecho</h3>
+              Este PDF de <strong>{contract.salesClient?.name || contract.clientName}</strong> se subió tal cual: no sale de una plantilla,
+              así que no se genera ni se envía a firma desde aquí.
+            </div>
+          )}
+
+          {!subido && (<>
           <div style={{ padding: 16, borderBottom: '1px solid #eee' }}>
             <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>Envío de correo</h3>
             <div style={{ marginBottom: 8 }}>
@@ -337,6 +355,8 @@ export default function ContratoResult() {
                 style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12, boxSizing: 'border-box', resize: 'vertical' }} />
             </div>
           </div>
+
+          </>)}
 
           {/* Estado de la firma en SignWell — a demanda, no hay polling automático */}
           {contract.signwellDocumentId && (
@@ -410,12 +430,20 @@ export default function ContratoResult() {
 
           {/* Send button — outside the scroll area so it's always reachable */}
           <div style={{ padding: 16, borderTop: '1px solid #eee', flexShrink: 0 }}>
-            <button className="auth-btn" onClick={handleSend} disabled={sending || !isReady}
-              style={{ width: '100%', padding: '10px', fontSize: 13, ...(isReady ? { background: '#059669' } : {}) }}>
-              {sending ? 'Enviando...' : isReady ? '✉️ Enviar a Firma Electrónica (SignWell)' : 'Genera el PDF primero'}
-            </button>
+            {!subido && signwellListo === false && (
+              <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 6, padding: '8px 10px', marginBottom: 8, fontSize: 12, color: '#7c2d12', lineHeight: 1.45 }}>
+                <strong>Firma electrónica: próximamente.</strong> Todavía falta conectar SignWell, por eso no se puede enviar a firma
+                el documento de {contract.salesClient?.name || contract.clientName}. Si ya lo firmaron por otro medio, sube el PDF firmado.
+              </div>
+            )}
+            {!subido && (
+              <button className="auth-btn" onClick={handleSend} disabled={sending || !isReady || signwellListo === false}
+                style={{ width: '100%', padding: '10px', fontSize: 13, ...(isReady && signwellListo !== false ? { background: '#059669' } : {}) }}>
+                {sending ? 'Enviando...' : signwellListo === false ? '✉️ Enviar a firma · Próximamente' : isReady ? '✉️ Enviar a Firma Electrónica (SignWell)' : 'Genera el PDF primero'}
+              </button>
+            )}
             {contract.status !== 'DRAFT' && contract.status !== 'SIGNED' && (
-              <label className="btn-secondary" style={{ display: 'block', width: '100%', padding: '10px', fontSize: 13, textAlign: 'center', marginTop: 8, cursor: uploadingSigned ? 'default' : 'pointer', boxSizing: 'border-box' }}>
+              <label className="btn-secondary" style={{ display: 'block', width: '100%', padding: '10px', fontSize: 13, textAlign: 'center', marginTop: subido ? 0 : 8, cursor: uploadingSigned ? 'default' : 'pointer', boxSizing: 'border-box' }}>
                 {uploadingSigned ? 'Subiendo...' : '📤 Subir PDF firmado'}
                 <input type="file" accept="application/pdf" onChange={handleUploadSigned} disabled={uploadingSigned} style={{ display: 'none' }} />
               </label>
