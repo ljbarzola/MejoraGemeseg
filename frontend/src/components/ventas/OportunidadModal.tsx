@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ServiciosPorCategoria from './ServiciosPorCategoria';
 import ErrorBanner from '../common/ErrorBanner';
 import DateInput from '../common/DateInput';
 import {
@@ -114,17 +115,7 @@ export default function OportunidadModal({
             {disponibles.length === 0 ? (
               <p style={{ fontSize: 13, color: '#888', margin: 0 }}>Aún no hay servicios. Créalos en Contratos → Servicios.</p>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 6 }}>
-                {disponibles.map((s) => (
-                  <label key={s.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, fontWeight: 400, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={serviceIds.includes(s.id)} onChange={() => alternar(s.id)} style={{ marginTop: 3 }} />
-                    <span>
-                      {s.name}
-                      {!s.isActive && <em style={{ color: '#999' }}> (desactivado)</em>}
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <ServiciosPorCategoria servicios={disponibles} seleccionados={serviceIds} onToggle={alternar} marcarDesactivados />
             )}
           </div>
 

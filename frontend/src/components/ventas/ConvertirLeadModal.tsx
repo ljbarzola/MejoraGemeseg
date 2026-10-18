@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import ServiciosPorCategoria from './ServiciosPorCategoria';
 import ErrorBanner from '../common/ErrorBanner';
 import {
   convertirLeadEntrante,
@@ -182,14 +183,7 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
                 Sugeridos según lo que pidió en la landing: {servicios.filter((s) => sugeridos.includes(s.id)).map((s) => s.name).join(', ') || 'servicios del catálogo'}; confírmalos o cámbialos.
               </p>
             )}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 6 }}>
-              {servicios.filter((s) => s.isActive).map((s) => (
-                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 400, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={serviceIds.includes(s.id)} onChange={() => alternar(s.id)} />
-                  {s.name}
-                </label>
-              ))}
-            </div>
+            <ServiciosPorCategoria servicios={servicios.filter((s) => s.isActive)} seleccionados={serviceIds} onToggle={alternar} />
           </div>
         </div>
         <div className="modal-actions">
