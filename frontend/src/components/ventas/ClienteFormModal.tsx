@@ -145,7 +145,7 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
               Queda en Oportunidades como una negociación nueva y en el Directorio como prospecto hasta que acepte.
             </p>
           )}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <Field label="Nombre / Razón social *" value={name} onChange={setName} />
             </div>
@@ -278,17 +278,17 @@ function SelectWithOther({
 
   if (isOther) {
     return (
-      <div style={{ display: 'flex', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 6, minWidth: 0 }}>
         <input
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Especifica..."
-          style={{ ...inputStyle, flex: 1, boxSizing: 'border-box' }}
+          style={{ ...inputStyle, flex: 1, minWidth: 0, boxSizing: 'border-box' }}
         />
-        <button type="button" className="btn-secondary" style={{ padding: '4px 8px', fontSize: 11, whiteSpace: 'nowrap' }}
-          onClick={() => { setForceOther(false); onChange(''); }}>
-          Elegir de lista
+        <button type="button" className="btn-secondary" style={{ padding: '4px 8px', fontSize: 11, whiteSpace: 'nowrap', flex: '0 0 auto' }}
+          title="Elegir de la lista" onClick={() => { setForceOther(false); onChange(''); }}>
+          Lista
         </button>
       </div>
     );
