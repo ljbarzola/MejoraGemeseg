@@ -734,6 +734,34 @@ body {
   }
 }
 
+/* Filtro con etiqueta encima (FilterField): el nombre del filtro siempre se lee
+   y el select tiene ancho para su texto, sin "…". */
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.filter-field-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #718096;
+  line-height: 1;
+}
+.filter-bar-fields--etiquetas {
+  align-items: flex-end;
+}
+.filter-bar:has(.filter-field) .filter-bar-actions {
+  align-self: flex-end;
+}
+.filter-field .filter-select {
+  width: auto;
+  min-width: 135px;
+  max-width: 240px;
+}
+
 /* Botón cuadrado solo-ícono: ocupa siempre lo mismo, con o sin contenido. */
 .icon-btn {
   display: inline-flex;

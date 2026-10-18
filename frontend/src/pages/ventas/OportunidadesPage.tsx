@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Plus, Pencil, Trash2, ClipboardList, Workflow, CalendarPlus, UserPlus, UserMinus } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import FilterField from '../../components/common/FilterField';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import OportunidadModal from '../../components/ventas/OportunidadModal';
@@ -347,7 +348,7 @@ export default function OportunidadesPage() {
       </div>
 
       <div className="filter-bar">
-        <div className="filter-bar-fields filter-bar-fields--una-linea">
+        <div className="filter-bar-fields filter-bar-fields--etiquetas">
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
@@ -356,33 +357,45 @@ export default function OportunidadesPage() {
           />
           {vista === 'hoy' ? (
             esManager ? (
-              <select className="filter-select" value={hoyResponsable} onChange={(e) => setHoyResponsable(e.target.value)} aria-label="Responsable">
-                <option value="mine">Mis negociaciones</option>
-                <option value="all">Todas las negociaciones</option>
-                {responsables.filter(([id]) => id !== currentUser?.id).map(([id, n]) => <option key={id} value={String(id)}>{n}</option>)}
-              </select>
+              <FilterField label="Ver negociaciones de">
+                <select className="filter-select" value={hoyResponsable} onChange={(e) => setHoyResponsable(e.target.value)}>
+                  <option value="mine">Mis negociaciones</option>
+                  <option value="all">Todas las negociaciones</option>
+                  {responsables.filter(([id]) => id !== currentUser?.id).map(([id, n]) => <option key={id} value={String(id)}>{n}</option>)}
+                </select>
+              </FilterField>
             ) : null
           ) : (
           <>
-          <select className="filter-select" value={estado} onChange={(e) => setEstado(e.target.value)} aria-label="Estado">
-            <option value="abiertas">En curso</option>
-            <option value="">Todas</option>
-            <option value="ganadas">Aceptadas</option>
-            <option value="perdidas">Perdidas</option>
-          </select>
-          <select className="filter-select" value={filtroEtapa} onChange={(e) => setFiltroEtapa(e.target.value)} aria-label="Etapa">
-            <option value="">Todas las etapas</option>
-            {etapas.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-          </select>
-          <select className="filter-select" value={filtroResponsable} onChange={(e) => setFiltroResponsable(e.target.value)} aria-label="Responsable">
-            <option value="">Todos los responsables</option>
-            <option value="none">Sin responsable</option>
-            {responsables.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
-          </select>
-          <select className="filter-select" value={filtroServicio} onChange={(e) => setFiltroServicio(e.target.value)} aria-label="Servicio">
-            <option value="">Todos los servicios</option>
-            {servicios.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+          {/* «Estado» agrupa las etapas: En curso = todas las que no están cerradas
+              (Aceptado y Rechazado cierran la negociación). «Etapa» elige una sola. */}
+          <FilterField label="Estado">
+            <select className="filter-select" value={estado} onChange={(e) => setEstado(e.target.value)}>
+              <option value="abiertas">En curso (sin cerrar)</option>
+              <option value="">Todas (también cerradas)</option>
+              <option value="ganadas">Aceptadas</option>
+              <option value="perdidas">Perdidas</option>
+            </select>
+          </FilterField>
+          <FilterField label="Etapa">
+            <select className="filter-select" value={filtroEtapa} onChange={(e) => setFiltroEtapa(e.target.value)}>
+              <option value="">Todas</option>
+              {etapas.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </select>
+          </FilterField>
+          <FilterField label="Responsable">
+            <select className="filter-select" value={filtroResponsable} onChange={(e) => setFiltroResponsable(e.target.value)}>
+              <option value="">Todos</option>
+              <option value="none">Sin responsable</option>
+              {responsables.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
+            </select>
+          </FilterField>
+          <FilterField label="Servicio">
+            <select className="filter-select" value={filtroServicio} onChange={(e) => setFiltroServicio(e.target.value)}>
+              <option value="">Todos</option>
+              {servicios.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </FilterField>
           </>
           )}
         </div>

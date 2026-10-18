@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Plus, Settings2, Pencil, Trash2, ClipboardList } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import FilterField from '../../components/common/FilterField';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import ClienteFichaPanel from '../../components/ventas/ClienteFichaPanel';
@@ -179,19 +180,21 @@ export default function VentasClientesPage() {
       </div>
 
       <div className="filter-bar">
-        <div className="filter-bar-fields filter-bar-fields--una-linea">
+        <div className="filter-bar-fields filter-bar-fields--etiquetas">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nombre, RUC, teléfono, correo o dirección..."
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
-          <select className="filter-select" value={filtroCiclo} onChange={(e) => setFiltroCiclo(e.target.value as CicloVida | '')} aria-label="Relación">
-            <option value="">Todas las relaciones</option>
-            {CICLOS_FILTRO.map((k) => (
-              <option key={k} value={k}>{CICLO_LABEL[k]}</option>
-            ))}
-          </select>
+          <FilterField label="Relación">
+            <select className="filter-select" value={filtroCiclo} onChange={(e) => setFiltroCiclo(e.target.value as CicloVida | '')}>
+              <option value="">Todas</option>
+              {CICLOS_FILTRO.map((k) => (
+                <option key={k} value={k}>{CICLO_LABEL[k]}</option>
+              ))}
+            </select>
+          </FilterField>
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu

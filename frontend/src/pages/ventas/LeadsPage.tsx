@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Plug, UserPlus, UserMinus, XCircle, ClipboardList, ArrowRightCircle } from 'lucide-react';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import FilterField from '../../components/common/FilterField';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import ErrorBanner from '../../components/common/ErrorBanner';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
@@ -332,30 +333,36 @@ export default function LeadsPage() {
       )}
 
       <div className="filter-bar">
-        <div className="filter-bar-fields filter-bar-fields--una-linea">
+        <div className="filter-bar-fields filter-bar-fields--etiquetas">
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por nombre, correo, teléfono o mensaje..."
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
-          <select className="filter-select" value={estado} onChange={(e) => setEstado(e.target.value)} aria-label="Estado">
-            <option value="pendientes">Pendientes</option>
-            <option value="">Todos</option>
-            <option value="NUEVO">Sin procesar</option>
-            <option value="EN_SEGUIMIENTO">Contactados</option>
-            <option value="CONVERTIDO">Pasaron a oportunidad</option>
-            <option value="DESCARTADO">Descartados</option>
-          </select>
-          <select className="filter-select" value={motivo} onChange={(e) => setMotivo(e.target.value)} aria-label="Tipo de contacto">
-            <option value="">Todos los tipos</option>
-            <option value="SIN_CLASIFICAR">Sin clasificar</option>
-            {(Object.keys(MOTIVO_CONTACTO_LABEL) as MotivoContacto[]).map((k) => <option key={k} value={k}>{MOTIVO_CONTACTO_LABEL[k]}</option>)}
-          </select>
-          <select className="filter-select" value={canal} onChange={(e) => setCanal(e.target.value)} aria-label="Fuente">
-            <option value="">Todas las fuentes</option>
-            {canales.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-          </select>
+          <FilterField label="Estado">
+            <select className="filter-select" value={estado} onChange={(e) => setEstado(e.target.value)}>
+              <option value="pendientes">Pendientes</option>
+              <option value="">Todos</option>
+              <option value="NUEVO">Sin procesar</option>
+              <option value="EN_SEGUIMIENTO">Contactados</option>
+              <option value="CONVERTIDO">Pasaron a oportunidad</option>
+              <option value="DESCARTADO">Descartados</option>
+            </select>
+          </FilterField>
+          <FilterField label="Tipo de contacto">
+            <select className="filter-select" value={motivo} onChange={(e) => setMotivo(e.target.value)}>
+              <option value="">Todos</option>
+              <option value="SIN_CLASIFICAR">Sin clasificar</option>
+              {(Object.keys(MOTIVO_CONTACTO_LABEL) as MotivoContacto[]).map((k) => <option key={k} value={k}>{MOTIVO_CONTACTO_LABEL[k]}</option>)}
+            </select>
+          </FilterField>
+          <FilterField label="Fuente">
+            <select className="filter-select" value={canal} onChange={(e) => setCanal(e.target.value)}>
+              <option value="">Todas</option>
+              {canales.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+          </FilterField>
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu
