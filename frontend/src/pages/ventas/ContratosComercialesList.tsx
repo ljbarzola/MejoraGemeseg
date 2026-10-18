@@ -27,7 +27,7 @@ import {
   type SalesClient,
   type SalesServicio,
 } from '../../services/ventas.service';
-import { diaCorto } from '../../utils/contratoComercial';
+import { diaCorto, describirContrato } from '../../utils/contratoComercial';
 
 type ModalState =
   | { modo: 'crear'; clienteId?: number }
@@ -148,7 +148,7 @@ export default function ContratosComercialesList() {
     if (!c) return;
     try {
       await deleteContratoComercial(c.id);
-      showToast('Contrato eliminado. Sus documentos siguen en Documentación.', 'success');
+      showToast(`Se eliminó ${describirContrato(c)}. Sus documentos siguen en Documentación.`, 'success');
       cargar();
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo eliminar el contrato', 'error');
@@ -158,7 +158,7 @@ export default function ContratosComercialesList() {
   const marcarEntregado = async (c: ContratoComercial) => {
     try {
       await updateContratoComercial(c.id, { status: 'ENTREGADO' });
-      showToast('Marcado como entregado', 'success');
+      showToast(`Se marcó como entregada ${describirContrato(c)}`, 'success');
       cargar();
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo marcar como entregado', 'error');
@@ -290,18 +290,23 @@ export default function ContratosComercialesList() {
           <h1>Contratos</h1>
         </div>
         <div className="header-actions">
-          <button className="btn-secondary" onClick={() => setVerMotivos(true)}>
-            <ListChecks size={16} /> Motivos de cierre
+          <button className="btn-secondary" onClick={() => setVerMotivos(true)}
+            title="Las razones que se ofrecen al cancelar un contrato, al explicar por qué venció sin renovarse y al renovar con menos">
+            <ListChecks size={16} /> Por qué terminan los contratos
           </button>
           <button className="btn-secondary" onClick={() => navigate('/ventas/configuracion')}
             title="Los servicios se crean, renombran y desactivan en Configuración → Servicios que ofrecemos">
             <Settings2 size={16} /> Servicios en Configuración
           </button>
-          <button className="auth-btn" onClick={() => setModal({ modo: 'crear' })}>
+          <button className="auth-btn" onClick={() => setModal({ modo: 'crear' })}
+            title="También sirve para registrar contratos anteriores a la app, con sus fechas reales">
             <Plus size={16} /> Nuevo contrato
           </button>
         </div>
       </div>
+      <p style={{ fontSize: 13, color: '#666', margin: '-6px 0 14px' }}>
+        Aquí también puedes registrar contratos anteriores a la app: con «Nuevo contrato» pon sus fechas reales, aunque ya hayan pasado, y di por qué terminaron. Los contratos que vencieron o se cancelaron sin explicación aparecen con «Sin motivo registrado».
+      </p>
 
       <div className="filter-bar">
         <div className="filter-bar-fields filter-bar-fields--una-linea">
@@ -352,7 +357,7 @@ export default function ContratosComercialesList() {
         ) : contratos.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36, marginBottom: 8 }}>📑</div>
-            <div>Aún no hay contratos. Crea el primero para un cliente.</div>
+            <div>Aún no hay contratos. Crea el primero para un cliente, o registra los que la empresa ya tenía antes de usar la app (con sus fechas reales y por qué terminaron).</div>
           </div>
         ) : filas.length === 0 ? (
           <p style={{ color: '#888', fontSize: 13 }}>No hay contratos que coincidan con los filtros.</p>
@@ -405,20 +410,20 @@ export default function ContratosComercialesList() {
           onSaved={(c) => {
             const modo = modal.modo;
             setModal(null);
-            showToast(modo === 'crear' ? 'Contrato creado' : modo === 'renovar' ? 'Contrato renovado' : 'Contrato actualizado', 'success');
+            showToast(`${modo === 'crear' ? 'Se creó' : modo === 'renovar' ? 'Se renovó' : 'Se actualizó'} ${describirContrato(c)}`, 'success');
             if (modo === 'crear') navigate(`/ventas/contratos/${c.id}`);
             else cargar();
           }}
         />
       )}
 
-      {verMotivos && <MotivosConfigModal onClose={() => setVerMotivos(false)} />}
+      {verMotivos && <MotivosConfigModal grupos={['CONTRATO']} titulo="Por qué terminan los contratos" onClose={() => setVerMotivos(false)} />}
 
       {aCancelar && (
         <MotivoCierreModal
           kind="CONTRATO_CANCELADO"
           titulo={aCancelar.kind === 'PRODUCTO' ? 'Cancelar venta' : 'Cancelar contrato'}
-          descripcion={`${aCancelar.kind === 'PRODUCTO' ? 'Venta' : 'Contrato'} de ${aCancelar.salesClient.name}`}
+          descripcion={describirContrato(aCancelar).replace(/^./, (ch) => ch.toUpperCase())}
           contexto={aCancelar.kind === 'PRODUCTO'
             ? 'La venta queda cancelada. Explicar por qué ayuda a entender qué pasó.'
             : 'El contrato queda cancelado desde hoy y el cliente deja de contar como vigente. Explicar por qué ayuda a entender qué pasó.'}
@@ -426,7 +431,7 @@ export default function ContratosComercialesList() {
           onConfirm={async (motivo) => {
             await cancelarContratoComercial(aCancelar.id, { motivo });
             setACancelar(null);
-            showToast(aCancelar.kind === 'PRODUCTO' ? 'Venta cancelada' : 'Contrato cancelado', 'success');
+            showToast(`Se canceló ${describirContrato(aCancelar)}`, 'success');
             cargar();
           }}
           onCancel={() => setACancelar(null)}
@@ -436,7 +441,7 @@ export default function ContratosComercialesList() {
       {aEliminar && (
         <ConfirmDialog
           title="Eliminar contrato"
-          message={`¿Eliminar el contrato de ${aEliminar.salesClient.name}? Los documentos generados no se borran: siguen en Documentación.`}
+          message={`¿Eliminar ${describirContrato(aEliminar)}? Se borran también los motivos de cierre que tenga registrados. Los documentos generados no se borran: siguen en Documentación.`}
           confirmLabel="Eliminar"
           danger
           onConfirm={confirmarEliminar}

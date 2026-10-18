@@ -24,7 +24,7 @@ import {
   type SalesContract,
   type SalesServicio,
 } from '../../services/ventas.service';
-import { diaCorto } from '../../utils/contratoComercial';
+import { diaCorto, describirContrato } from '../../utils/contratoComercial';
 
 const dinero = (v?: number | null) =>
   v == null ? 'No registrado' : `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -124,7 +124,7 @@ export default function ContratoComercialDetalle() {
     accionesMenu.push({
       label: 'Reactivar',
       icon: <RotateCcw size={15} />,
-      onClick: () => { accion(() => updateContratoComercial(contrato.id, { status: producto ? 'POR_ENTREGAR' : 'ACTIVO' }), producto ? 'Venta reactivada' : 'Contrato reactivado', 'No se pudo reactivar'); },
+      onClick: () => { accion(() => updateContratoComercial(contrato.id, { status: producto ? 'POR_ENTREGAR' : 'ACTIVO' }), `Se reactivó ${describirContrato(contrato)}`, 'No se pudo reactivar'); },
     });
   }
   if (producto && contrato.estado === 'ENTREGADO') {
@@ -132,7 +132,7 @@ export default function ContratoComercialDetalle() {
       label: 'Volver a «Por entregar»',
       icon: <RotateCcw size={15} />,
       hint: 'Úsalo si lo marcaste como entregado por error',
-      onClick: () => { accion(() => updateContratoComercial(contrato.id, { status: 'POR_ENTREGAR' }), 'Vuelve a «Por entregar»', 'No se pudo cambiar el estado'); },
+      onClick: () => { accion(() => updateContratoComercial(contrato.id, { status: 'POR_ENTREGAR' }), `Vuelve a «Por entregar» ${describirContrato(contrato)}`, 'No se pudo cambiar el estado'); },
     });
   }
   accionesMenu.push({
@@ -154,7 +154,7 @@ export default function ContratoComercialDetalle() {
     setConfirmarEliminar(false);
     try {
       await deleteContratoComercial(contrato.id);
-      showToast('Contrato eliminado. Sus documentos siguen en Documentación.', 'success');
+      showToast(`Se eliminó ${describirContrato(contrato)}. Sus documentos siguen en Documentación.`, 'success');
       navigate('/ventas/contratos');
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo eliminar el contrato', 'error');
@@ -193,7 +193,7 @@ export default function ContratoComercialDetalle() {
         <div style={{ background: '#fffbeb', border: '1px solid #f6e05e', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <MessageSquareWarning size={18} color="#b7791f" />
           <span style={{ flex: 1, fontSize: 13 }}>
-            Este contrato venció sin renovarse y no se ha registrado por qué. Anotarlo ayuda a entender qué pasó con el cliente.
+            {describirContrato(contrato).replace(/^./, (c) => c.toUpperCase())} venció sin renovarse y no se ha registrado por qué. Anotarlo ayuda a entender qué pasó con {contrato.salesClient.name}.
           </span>
           <button className="auth-btn" onClick={() => setMotivoModal('cierre')}>Registrar el motivo</button>
         </div>
@@ -434,7 +434,7 @@ export default function ContratoComercialDetalle() {
           onSaved={(c) => {
             const eraRenovar = modo === 'renovar';
             setModo(null);
-            showToast(eraRenovar ? 'Contrato renovado' : producto ? 'Venta actualizada' : 'Contrato actualizado', 'success');
+            showToast(`${eraRenovar ? 'Se renovó' : 'Se actualizó'} ${describirContrato(c)}`, 'success');
             if (eraRenovar) navigate(`/ventas/contratos/${c.id}`);
             else cargar();
           }}
@@ -445,7 +445,7 @@ export default function ContratoComercialDetalle() {
         <MotivoCierreModal
           kind="CONTRATO_CANCELADO"
           titulo={producto ? 'Cancelar venta' : 'Cancelar contrato'}
-          descripcion={`${producto ? 'Venta' : 'Contrato'} de ${contrato.salesClient.name}`}
+          descripcion={describirContrato(contrato).replace(/^./, (c) => c.toUpperCase())}
           contexto={producto
             ? 'La venta queda cancelada. Explicar por qué ayuda a entender qué pasó.'
             : 'El contrato queda cancelado desde hoy y el cliente deja de contar como vigente. Explicar por qué ayuda a entender qué pasó.'}
@@ -453,7 +453,7 @@ export default function ContratoComercialDetalle() {
           onConfirm={async (motivo) => {
             setContrato(await cancelarContratoComercial(contrato.id, { motivo }));
             setMotivoModal(null);
-            showToast(producto ? 'Venta cancelada' : 'Contrato cancelado', 'success');
+            showToast(`Se canceló ${describirContrato(contrato)}`, 'success');
           }}
           onCancel={() => setMotivoModal(null)}
         />
@@ -463,12 +463,12 @@ export default function ContratoComercialDetalle() {
         <MotivoCierreModal
           kind="CONTRATO_NO_RENOVADO"
           titulo="¿Por qué no se renovó?"
-          descripcion={`Contrato de ${contrato.salesClient.name}, vencido el ${diaCorto(contrato.endDate)}`}
+          descripcion={`${describirContrato(contrato).replace(/^./, (c) => c.toUpperCase())}, vencido sin renovarse`}
           confirmLabel="Guardar motivo"
           onConfirm={async (motivo) => {
             setContrato(await registrarCierreContrato(contrato.id, motivo));
             setMotivoModal(null);
-            showToast('Motivo registrado', 'success');
+            showToast(`Se registró por qué no se renovó ${describirContrato(contrato)}`, 'success');
           }}
           onCancel={() => setMotivoModal(null)}
         />
@@ -477,7 +477,7 @@ export default function ContratoComercialDetalle() {
       {confirmarEliminar && (
         <ConfirmDialog
           title={producto ? 'Eliminar venta' : 'Eliminar contrato'}
-          message={`¿Eliminar ${producto ? 'esta venta' : 'este contrato'}? Los documentos generados no se borran: siguen en Documentación.`}
+          message={`¿Eliminar ${describirContrato(contrato)}? Se borran también los motivos de cierre que tenga registrados. Los documentos generados no se borran: siguen en Documentación.`}
           confirmLabel="Eliminar"
           danger
           onConfirm={eliminar}

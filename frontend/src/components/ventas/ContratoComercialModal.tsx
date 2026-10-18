@@ -6,6 +6,8 @@ import {
   createContratoComercial,
   updateContratoComercial,
   renovarContratoComercial,
+  cancelarContratoComercial,
+  registrarCierreContrato,
   getContratoComercial,
   type ContratoComercial,
   type ContratoComercialInput,
@@ -14,7 +16,7 @@ import {
   type SalesServicio,
   type TipoContrato,
 } from '../../services/ventas.service';
-import { aInputDia } from '../../utils/contratoComercial';
+import { aInputDia, diaCorto, hoyEcuador } from '../../utils/contratoComercial';
 
 type Modo = 'crear' | 'editar' | 'renovar';
 
@@ -87,6 +89,13 @@ export default function ContratoComercialModal({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
   const [pidiendoMotivo, setPidiendoMotivo] = useState(false);
+  // Contratos anteriores a la app (solo al crear un servicio): se cancelaron antes de
+  // terminar, o ya vencieron sin renovarse. El motivo se pide al guardar.
+  const [cancelado, setCancelado] = useState(false);
+  const [fechaCancelacion, setFechaCancelacion] = useState('');
+  const [pidiendoCierre, setPidiendoCierre] = useState(false);
+  // Si el contrato ya se creó pero falló guardar su motivo, un reintento no lo crea otra vez.
+  const [creado, setCreado] = useState<ContratoComercial | null>(null);
   // Contrato anterior de la cadena: contra él se compara si esto baja servicios o valor.
   const [anterior, setAnterior] = useState<ContratoComercial | null>(modo === 'renovar' ? (contrato ?? null) : null);
 
@@ -95,6 +104,13 @@ export default function ContratoComercialModal({
       getContratoComercial(contrato.renewedFromId).then(setAnterior).catch(() => setAnterior(null));
     }
   }, [modo, contrato?.renewedFromId, contrato?.kind]);
+
+  const hoy = hoyEcuador();
+  const registrandoPasado = modo === 'crear' && !producto;
+  const yaEmpezo = registrandoPasado && !!inicio && inicio <= hoy;
+  const seCancelo = yaEmpezo && cancelado;
+  const yaVencio = registrandoPasado && !seCancelo && !!fin && fin < hoy;
+  const nombreCliente = contrato?.salesClient.name ?? clientes.find((c) => c.id === clienteId)?.name ?? 'el cliente';
 
   const sugerida = graciaSugerida(inicio, fin);
   useEffect(() => {
@@ -133,6 +149,11 @@ export default function ContratoComercialModal({
     }
     if (!inicio) return 'Indica la fecha de inicio.';
     if (fin && fin < inicio) return 'La fecha de fin no puede ser anterior a la de inicio.';
+    if (seCancelo) {
+      if (!fechaCancelacion) return `Indica en qué fecha se canceló el contrato de ${nombreCliente}.`;
+      if (fechaCancelacion < inicio) return `El contrato de ${nombreCliente} empezó el ${diaCorto(inicio)}: no pudo cancelarse antes (${diaCorto(fechaCancelacion)}).`;
+      if (fechaCancelacion > hoy) return 'La fecha de cancelación no puede ser futura: si fue hoy, elige hoy.';
+    }
     if (serviceIds.length === 0) return 'Elige al menos un servicio.';
     if (valorNumero != null && (Number.isNaN(valorNumero) || valorNumero < 0)) return 'El valor mensual no es válido.';
     const g = Number(gracia);
@@ -142,7 +163,7 @@ export default function ContratoComercialModal({
     return '';
   };
 
-  const guardar = async (motivo?: MotivoInput) => {
+  const guardar = async (motivo?: MotivoInput, cierre?: 'CANCELADO' | 'NO_RENOVADO') => {
     const base: ContratoComercialInput = producto
       ? {
         // Venta de producto: sin fin, valor mensual ni gracia. Garantía vacía = sin garantía.
@@ -162,11 +183,22 @@ export default function ContratoComercialModal({
         notes: notas.trim(),
         monthlyValue: valorNumero,
         graceDays: Number(gracia),
-        ...(motivo ? { motivo } : {}),
+        ...(motivo && !cierre ? { motivo } : {}),
       };
     let guardado: ContratoComercial;
     if (modo === 'crear') {
-      guardado = await createContratoComercial({ ...base, kind: tipo, salesClientId: Number(clienteId) });
+      guardado = creado ?? await createContratoComercial({ ...base, kind: tipo, salesClientId: Number(clienteId) });
+      if (cierre && motivo) {
+        setCreado(guardado);
+        try {
+          guardado = cierre === 'CANCELADO'
+            ? await cancelarContratoComercial(guardado.id, { date: fechaCancelacion, motivo })
+            : await registrarCierreContrato(guardado.id, motivo);
+        } catch (err: any) {
+          const msg = err?.response?.data?.message;
+          throw { response: { data: { message: `El contrato de ${nombreCliente} ya quedó creado, pero no se pudo guardar el motivo: ${(Array.isArray(msg) ? msg[0] : msg) || 'intenta de nuevo'}.` } } };
+        }
+      }
     } else if (modo === 'editar' && contrato) {
       guardado = await updateContratoComercial(contrato.id, base);
     } else if (contrato) {
@@ -183,6 +215,8 @@ export default function ContratoComercialModal({
     if (problema) return setError(problema);
     // Si baja servicios o valor, primero se pide el motivo (el servidor también lo exige).
     if (reduccion) return setPidiendoMotivo(true);
+    // Contrato que ya terminó (venció o se canceló): se explica por qué antes de guardarlo.
+    if (seCancelo || yaVencio) return setPidiendoCierre(true);
     setGuardando(true);
     try {
       await guardar();
@@ -219,6 +253,15 @@ export default function ContratoComercialModal({
               <p style={{ fontSize: 13, color: '#666', marginTop: 0 }}>
                 Se crea un contrato nuevo para el mismo cliente y el actual queda como «Renovado». Los servicios, el valor y los días de gracia se copian; ajústalos si cambiaron. Si bajan servicios o valor, se te pedirá el motivo.
               </p>
+            )}
+
+            {modo === 'crear' && (
+              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: '#1e3a8a', marginBottom: 12 }}>
+                <strong>Aquí también puedes registrar contratos anteriores a la app.</strong>{' '}
+                {producto
+                  ? 'Si la venta fue antes, pon su fecha real.'
+                  : 'Pon sus fechas reales de inicio y fin, aunque ya hayan pasado. Si el contrato ya terminó, al guardar se te pregunta por qué no se renovó (o por qué se canceló), para poder analizar por qué se van los clientes.'}
+              </div>
             )}
 
             {modo === 'crear' && (
@@ -332,6 +375,29 @@ export default function ContratoComercialModal({
                 </p>
               </div>
             </div>
+
+            {yaEmpezo && (
+              <div className="form-group" style={{ background: '#f7fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, fontSize: 13, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={cancelado} onChange={(e) => { setCancelado(e.target.checked); if (!e.target.checked) setFechaCancelacion(''); }} />
+                  Este contrato se canceló antes de terminar
+                </label>
+                {cancelado && (
+                  <div style={{ marginTop: 8, maxWidth: 260 }}>
+                    <label>Fecha en que se canceló *</label>
+                    <DateInput value={fechaCancelacion} onChange={setFechaCancelacion} min={inicio || undefined} max={hoy} />
+                    <p style={{ fontSize: 11, color: '#888', margin: '4px 0 0' }}>
+                      En «Fin» deja la fecha en que debía terminar. Al guardar se te pregunta por qué se canceló.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+            {yaVencio && (
+              <div style={{ background: '#fffbeb', border: '1px solid #f6e05e', borderRadius: 6, padding: '8px 12px', fontSize: 13, marginBottom: 12 }}>
+                <strong>Contrato anterior ya vencido.</strong> Con estas fechas el contrato de {nombreCliente} terminó el {diaCorto(fin)} y queda como «Vencido». Al guardar se te pregunta por qué no se renovó.
+              </div>
+            )}
               </>
             )}
 
@@ -386,6 +452,20 @@ export default function ContratoComercialModal({
           </div>
         </div>
       </div>
+
+      {pidiendoCierre && (
+        <MotivoCierreModal
+          kind={seCancelo ? 'CONTRATO_CANCELADO' : 'CONTRATO_NO_RENOVADO'}
+          titulo={seCancelo ? '¿Por qué se canceló el contrato?' : '¿Por qué no se renovó?'}
+          descripcion={seCancelo
+            ? `Contrato de ${nombreCliente}, del ${diaCorto(inicio)}${fin ? ` al ${diaCorto(fin)}` : ''}, cancelado el ${diaCorto(fechaCancelacion)}`
+            : `Contrato de ${nombreCliente}, del ${diaCorto(inicio)} al ${diaCorto(fin)}, vencido sin renovarse`}
+          contexto="Se guarda junto con el contrato. Si no se sabe, elige «Sin información»."
+          confirmLabel="Guardar contrato"
+          onConfirm={async (motivo) => { await guardar(motivo, seCancelo ? 'CANCELADO' : 'NO_RENOVADO'); }}
+          onCancel={() => { setPidiendoCierre(false); if (creado) onSaved(creado); }}
+        />
+      )}
 
       {pidiendoMotivo && (
         <MotivoCierreModal
