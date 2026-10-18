@@ -82,7 +82,6 @@ export default function OportunidadesPage() {
   const [editarCliente, setEditarCliente] = useState<SalesClient | null>(null);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
-  const [estado, setEstado] = useState('abiertas');
   const [filtroEtapa, setFiltroEtapa] = useState('');
   const [filtroResponsable, setFiltroResponsable] = useState('');
   const [filtroServicio, setFiltroServicio] = useState('');
@@ -139,7 +138,7 @@ export default function OportunidadesPage() {
       setModal({ modo: 'crear', clienteId: Number(searchParams.get('clienteId')) || undefined });
     }
     const etapa = searchParams.get('etapa');
-    if (etapa) { setFiltroEtapa(etapa); setEstado(''); }
+    if (etapa) setFiltroEtapa(etapa);
     const ficha = Number(searchParams.get('ficha'));
     if (ficha) abrirFicha(ficha);
     // ?vista=hoy (cifras de seguimiento del Dashboard) y ?q=nombre (desde la
@@ -147,7 +146,7 @@ export default function OportunidadesPage() {
     const vistaParam = searchParams.get('vista');
     if (vistaParam === 'hoy') setVista('hoy');
     const q = searchParams.get('q');
-    if (q) { setBusqueda(q); setEstado(''); setVista('todas'); }
+    if (q) { setBusqueda(q); setVista('todas'); }
     if (searchParams.get('nueva') || etapa || ficha || vistaParam || q) setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -184,9 +183,6 @@ export default function OportunidadesPage() {
   const filtradas = useMemo(() => {
     const q = busqueda.toLowerCase().trim();
     return oportunidades.filter((o) => {
-      if (estado === 'abiertas' && !o.abierta) return false;
-      if (estado === 'ganadas' && o.outcome !== 'GANADA') return false;
-      if (estado === 'perdidas' && o.outcome !== 'PERDIDA') return false;
       if (filtroEtapa === 'none' ? !!o.status : filtroEtapa && o.status !== filtroEtapa) return false;
       if (filtroResponsable === 'none' ? !!o.assignedUserId : filtroResponsable && String(o.assignedUserId) !== filtroResponsable) return false;
       if (filtroServicio && !o.services.some((s) => String(s.id) === filtroServicio)) return false;
@@ -197,7 +193,7 @@ export default function OportunidadesPage() {
         o.services.some((s) => s.name.toLowerCase().includes(q))
       );
     });
-  }, [oportunidades, busqueda, estado, filtroEtapa, filtroResponsable, filtroServicio]);
+  }, [oportunidades, busqueda, filtroEtapa, filtroResponsable, filtroServicio]);
 
   const { filas, thProps, SortIcon } = useSortableTable(
     filtradas,
@@ -311,7 +307,7 @@ export default function OportunidadesPage() {
   };
   const columnasVisiblesOpp = columnPrefs.visible.filter((k) => COLUMNAS_OPP.some((c) => c.key === k));
 
-  const hayFiltros = !!busqueda || estado !== 'abiertas' || !!filtroEtapa || !!filtroResponsable || !!filtroServicio;
+  const hayFiltros = !!busqueda || !!filtroEtapa || !!filtroResponsable || !!filtroServicio;
 
   return (
     <div className="page-container">
@@ -367,16 +363,6 @@ export default function OportunidadesPage() {
             ) : null
           ) : (
           <>
-          {/* «Estado» agrupa las etapas: En curso = todas las que no están cerradas
-              (Aceptado y Rechazado cierran la negociación). «Etapa» elige una sola. */}
-          <FilterField label="Estado">
-            <select className="filter-select" value={estado} onChange={(e) => setEstado(e.target.value)}>
-              <option value="abiertas">En curso (sin cerrar)</option>
-              <option value="">Todas (también cerradas)</option>
-              <option value="ganadas">Aceptadas</option>
-              <option value="perdidas">Perdidas</option>
-            </select>
-          </FilterField>
           <FilterField label="Etapa">
             <select className="filter-select" value={filtroEtapa} onChange={(e) => setFiltroEtapa(e.target.value)}>
               <option value="">Todas</option>
@@ -412,7 +398,7 @@ export default function OportunidadesPage() {
             disabledTitle="La pestaña Hoy tiene columnas fijas; cambia a Todas para elegir las tuyas"
           />
           <ClearFiltersButton
-            onClear={() => { setBusqueda(''); setEstado('abiertas'); setFiltroEtapa(''); setFiltroResponsable(''); setFiltroServicio(''); setHoyResponsable('mine'); }}
+            onClear={() => { setBusqueda(''); setFiltroEtapa(''); setFiltroResponsable(''); setFiltroServicio(''); setHoyResponsable('mine'); }}
             disabled={vista === 'hoy' ? !busqueda && hoyResponsable === 'mine' : !hayFiltros}
           />
         </div>
