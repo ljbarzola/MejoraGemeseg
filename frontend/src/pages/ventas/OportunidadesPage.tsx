@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Pencil, Trash2, ClipboardList, Workflow, CalendarPlus, UserPlus, UserMinus } from 'lucide-react';
+import { Plus, Pencil, Trash2, ClipboardList, Workflow, CalendarPlus, UserPlus, UserMinus, Bot } from 'lucide-react';
+import { abrirChatDeVentas } from '../../services/chat.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import FilterField from '../../components/common/FilterField';
@@ -240,6 +241,12 @@ export default function OportunidadesPage() {
     const lista: RowAction[] = [
       { label: 'Ver ficha', icon: <ClipboardList size={14} />, onClick: () => abrirFicha(o.salesClientId) },
       { label: 'Editar', icon: <Pencil size={14} />, onClick: () => setModal({ modo: 'editar', oportunidad: o }) },
+      {
+        label: 'Preguntar al agente',
+        icon: <Bot size={14} />,
+        hint: `El Agente de Ventas revisa el historial de ${o.salesClient.name} y te sugiere qué hacer`,
+        onClick: () => abrirChatDeVentas({ clienteId: o.salesClientId, clienteNombre: o.salesClient.name }),
+      },
     ];
     const cliente = clientes.find((c) => c.id === o.salesClientId);
     if (o.abierta && cliente) {
@@ -258,6 +265,7 @@ export default function OportunidadesPage() {
 
   const accionesHoy = (c: SalesClient): RowAction[] => [
     { label: 'Ver ficha', icon: <ClipboardList size={14} />, onClick: () => abrirFicha(c.id) },
+    { label: 'Preguntar al agente', icon: <Bot size={14} />, onClick: () => abrirChatDeVentas({ clienteId: c.id, clienteNombre: c.name }) },
     { label: 'Editar siguiente paso', icon: <CalendarPlus size={14} />, onClick: () => abrirSiguientePaso(c, 'editar') },
     { label: 'Nueva oportunidad para esta empresa o persona', icon: <Plus size={14} />, onClick: () => setModal({ modo: 'crear', clienteId: c.id }) },
   ];

@@ -111,7 +111,8 @@ export class AiVentasPlanQueries {
       const desde = o.stageChanges[0]?.createdAt ?? o.receivedAt;
       return {
         o,
-        diasEnEtapa: Math.max(0, diasEntre(dia(desde), hoy)),
+        // Instante en UTC: se pasa al día de Ecuador (de noche ya es «mañana» en UTC).
+        diasEnEtapa: Math.max(0, diasEntre(hoyEcuador(desde), hoy)),
         etapa: o.status ? (etiquetaEtapa.get(o.status) ?? o.status) : 'sin etapa',
         servicios: o.services.map((s) => s.service.name).join(', ') || 'sin servicios',
       };
@@ -205,7 +206,7 @@ export class AiVentasPlanQueries {
 
     // ---- bandeja de posibles clientes ----
     const sinAtender = leads
-      .map((l) => ({ l, dias: diasEntre(dia(l.createdAt), hoy) }))
+      .map((l) => ({ l, dias: diasEntre(hoyEcuador(l.createdAt), hoy) }))
       .filter((x) => x.dias >= DIAS_LEAD_SIN_ATENDER);
     lineas.push(`7) POSIBLES CLIENTES SIN ATENDER (${sinAtender.length}; sin asignar y con ${DIAS_LEAD_SIN_ATENDER} días o más):`);
     if (sinAtender.length === 0) lineas.push('   Ninguno.');
@@ -309,7 +310,7 @@ export class AiVentasPlanQueries {
         `    · Por qué se fue: ${f.motivo ? `${ETIQUETA_KIND[f.motivo.kind as MotivoKind] ?? f.motivo.kind}: «${f.motivo.reasonLabel}»${f.motivo.source ? ` (${f.motivo.source === 'CLIENTE' ? 'lo dijo el cliente' : 'suposición del vendedor, no confirmada'})` : ' (sin información de quién lo dijo)'}${f.motivo.comment ? ` — «${f.motivo.comment.slice(0, 120)}»` : ''} [#motivo:${f.motivo.id}]` : 'no consta (nadie registró el motivo)'}`,
       );
       lineas.push(
-        `    · Último movimiento anotado: ${f.ultimaActividad ? formatoDia(f.ultimaActividad) : 'ninguno'}${f.nIncidentes ? ` · incidentes del servicio registrados: ${f.nIncidentes}` : ''}${f.nContratos > 1 ? ` · contratos de servicio que tuvo: ${f.nContratos}` : ''}`,
+        `    · Último movimiento anotado: ${f.ultimaActividad ? formatoDia(hoyEcuador(f.ultimaActividad)) : 'ninguno'}${f.nIncidentes ? ` · incidentes del servicio registrados: ${f.nIncidentes}` : ''}${f.nContratos > 1 ? ` · contratos de servicio que tuvo: ${f.nContratos}` : ''}`,
       );
       lineas.push(
         `    · ${f.abierta ? `YA hay una oportunidad abierta (se está trabajando) [#opp:${f.abierta.id}]` : 'No hay ninguna oportunidad abierta con él'} · Contacto: ${contacto}`,

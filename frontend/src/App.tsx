@@ -12,6 +12,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/layout/Sidebar';
 import ChatFloatingButton from './components/chat/ChatFloatingButton';
 import ChatDrawer from './components/chat/ChatDrawer';
+import { EVENTO_CHAT_VENTAS } from './services/chat.service';
 import ReportarProblemaButton from './components/common/ReportarProblemaButton';
 import CambioContrasenaObligatorio from './components/security/CambioContrasenaObligatorio';
 import NotificationsBell from './components/common/NotificationsBell';
@@ -249,6 +250,14 @@ function RootRedirect() {
 function AppInner() {
   const perms = usePermissions();
   const [chatOpen, setChatOpen] = useState(false);
+
+  // «Preguntar al agente» desde la ficha de un cliente (chat.service.ts → abrirChatDeVentas):
+  // abre el cajón del chat; ChatDrawer se encarga de elegir al Agente de Ventas y mandar la pregunta.
+  useEffect(() => {
+    const abrir = () => setChatOpen(true);
+    window.addEventListener(EVENTO_CHAT_VENTAS, abrir);
+    return () => window.removeEventListener(EVENTO_CHAT_VENTAS, abrir);
+  }, []);
 
   return (
     <PermissionsProvider value={perms}>

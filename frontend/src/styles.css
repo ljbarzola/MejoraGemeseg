@@ -2630,6 +2630,132 @@ a.enlace-tabla:hover {
   opacity: 0.9;
 }
 
+/* ---- Agente de Ventas (2026-10-18) ---- */
+
+/* Entrada de varias líneas (Enter envía, Mayús+Enter baja de línea). */
+textarea.chat-input {
+  resize: none;
+  line-height: 1.4;
+  max-height: 120px;
+  overflow-y: auto;
+  border-radius: 20px;
+}
+
+/* Referencia de evidencia que cita el agente ([#opp:12] → «oportunidad 12»). */
+.chat-ref {
+  display: inline-block;
+  padding: 0 7px;
+  margin: 0 1px;
+  border-radius: 10px;
+  background: rgba(43, 108, 176, 0.12);
+  color: #2b6cb0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.55;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.chat-ref-enlace:hover {
+  background: rgba(43, 108, 176, 0.25);
+  text-decoration: underline;
+}
+
+/* Preguntas sugeridas de un clic. */
+.chat-sugerencias-titulo {
+  margin: 18px 0 8px;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8a94a6;
+}
+
+.chat-sugerencias {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.chat-sugerencia {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--borde-input);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--azul-oscuro);
+  font-size: 0.88rem;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.chat-sugerencia:hover:not(:disabled) {
+  border-color: var(--azul-claro);
+  background: #f4f8fd;
+}
+
+.chat-sugerencia:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chat-ayuda-ventas {
+  margin: 14px 0 0;
+  text-align: left;
+  font-size: 0.8rem;
+  color: #718096;
+  line-height: 1.45;
+}
+
+/* Barra «Hablando de: empresa» sobre el cuadro de texto. */
+.chat-contexto-cliente {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border-top: 1px solid var(--gris-claro);
+  background: #eef5fd;
+  color: var(--azul-oscuro);
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.chat-contexto-cliente span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-contexto-cliente button {
+  border: none;
+  background: transparent;
+  color: #4a5568;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Título de cada conversación del historial: su primera pregunta, en una o dos líneas. */
+.chat-conv-item-titulo {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 4px 0 2px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--azul-oscuro);
+  text-align: left;
+}
+
 .role-select {
   padding: 5px 10px;
   border: 2px solid var(--borde-input);

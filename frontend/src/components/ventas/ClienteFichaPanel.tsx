@@ -2,8 +2,9 @@ import { useEffect, useState, useCallback, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   X, StickyNote, Phone, Users, Mail, Tag, ArrowRight, FileText, UserPlus, Pencil, Trash2, Check,
-  FileCheck, AlertTriangle, ShieldAlert, LogOut, Target, FileSignature, ArrowDownNarrowWide, ArrowUpNarrowWide,
+  FileCheck, AlertTriangle, ShieldAlert, LogOut, Target, FileSignature, ArrowDownNarrowWide, ArrowUpNarrowWide, Bot,
 } from 'lucide-react';
+import { abrirChatDeVentas } from '../../services/chat.service';
 import ConfirmDialog from '../common/ConfirmDialog';
 import CicloVidaBadge from './CicloVidaBadge';
 import ClienteContactos from './ClienteContactos';
@@ -391,6 +392,12 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
             <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: '#a0aec0', textTransform: 'uppercase' }}>Ficha</p>
             <h2 style={{ margin: '2px 0 0', fontSize: '1.25rem', wordBreak: 'break-word' }}>{client.name}</h2>
           </div>
+          <button type="button" className="btn-secondary"
+            title={`El Agente de Ventas revisa todo el historial de ${client.name} y te sugiere qué hacer`}
+            onClick={() => { abrirChatDeVentas({ clienteId: client.id, clienteNombre: client.name }); onClose(); }}
+            style={{ padding: '5px 12px', fontSize: 12.5, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Bot size={14} /> Preguntar al agente
+          </button>
           {onEdit && (
             <button type="button" className="btn-secondary" onClick={() => onEdit(client)}
               style={{ padding: '5px 12px', fontSize: 12.5, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}>

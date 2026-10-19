@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, RefreshCw, Trash2, FilePlus, Link2, Unlink, Ban, RotateCcw, MessageSquareWarning, Mail, Info, PackageCheck, Upload } from 'lucide-react';
+import { ArrowLeft, Pencil, RefreshCw, Trash2, FilePlus, Link2, Unlink, Ban, RotateCcw, MessageSquareWarning, Mail, Info, PackageCheck, Upload, Bot } from 'lucide-react';
+import { abrirChatDeVentas } from '../../services/chat.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import EstadoContratoBadge from '../../components/ventas/EstadoContratoBadge';
@@ -115,7 +116,14 @@ export default function ContratoComercialDetalle() {
     }
   };
 
-  const accionesMenu: RowAction[] = [];
+  const accionesMenu: RowAction[] = [
+    {
+      label: 'Preguntar al agente',
+      icon: <Bot size={15} />,
+      hint: `El Agente de Ventas revisa todo el historial de ${contrato.salesClient.name} y te sugiere qué hacer`,
+      onClick: () => abrirChatDeVentas({ clienteId: contrato.salesClientId, clienteNombre: contrato.salesClient.name }),
+    },
+  ];
   if (puedeCancelar) {
     accionesMenu.push({
       label: producto ? 'Cancelar venta' : 'Cancelar contrato',
