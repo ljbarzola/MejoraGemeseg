@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -12,6 +13,7 @@ import { PermissionsService } from '../permissions/permissions.service';
 import { VentasMotivosService, type MotivoInput } from './ventas-motivos.service';
 import { VentasOportunidadesService } from './ventas-oportunidades.service';
 import { VentasSchemaService } from './ventas-schema.service';
+import { VentasConversionesService } from './ventas-conversiones.service';
 import {
   MOTIVOS_CONTACTO,
   normalizarCorreo,
@@ -67,6 +69,8 @@ export class VentasLeadsService {
     private readonly motivos: VentasMotivosService,
     private readonly oportunidades: VentasOportunidadesService,
     private readonly esquema: VentasSchemaService,
+    // Opcional para no romper quien arma este servicio a mano (pruebas): sin él, «lead válido» no se registra.
+    @Optional() private readonly conversiones?: VentasConversionesService,
   ) {}
 
   private requireCompany(companyId: number | null): number {
@@ -515,6 +519,11 @@ export class VentasLeadsService {
       data.triagedAt = dto.contactReason ? new Date() : null;
     }
     await this.prisma.salesLead.update({ where: { id }, data });
+    // Clasificarlo como «Servicio» lo confirma como contacto real: hecho «Lead válido» para Google Ads
+    // (solo si la empresa lo configuró y vino de un anuncio; ver VentasConversionesService).
+    if (dto.contactReason === 'SERVICIO' && actual.contactReason !== 'SERVICIO') {
+      await this.conversiones?.registrarLeadValido(cid, id);
+    }
     return this.get(cid, id);
   }
 
@@ -762,6 +771,8 @@ export class VentasLeadsService {
 
       return { clienteId, oportunidadId: opp.id, sumadaAClienteExistente: !!clienteExistente };
     });
+    // Pasar a oportunidad también lo confirma como contacto real de servicio.
+    await this.conversiones?.registrarLeadValido(cid, lead.id);
     return { ...resultado, posiblesDuplicados };
   }
 }

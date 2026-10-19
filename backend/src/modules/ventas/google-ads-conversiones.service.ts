@@ -24,7 +24,7 @@ export interface ResultadoEnvio {
   vencidos: number;
 }
 
-// Envía a Google Ads los hechos (lead cualificado / convertido) que
+// Envía a Google Ads los hechos (lead válido / cualificado / convertido) que
 // VentasConversionesService dejó PENDIENTES. Los IDs de la cuenta de Ads de cada
 // empresa salen de Ventas → Configuración (VentasConfigService); sin ellos, o con el
 // envío desactivado, no hace nada. Se autentica SIN claves: el backend (identidad de
@@ -41,6 +41,13 @@ export class GoogleAdsConversionesService {
 
   async configurado(companyId: number): Promise<boolean> {
     return (await this.config.configGoogleAds(companyId)) !== null;
+  }
+
+  // ¿Esta empresa usa el paso intermedio «Lead válido»? Solo si el envío está listo Y guardó el ID de esa
+  // conversión; si no, ese hecho ni se registra (así no se acumulan hechos que nadie va a enviar).
+  async usaLeadValido(companyId: number): Promise<boolean> {
+    const config = await this.config.configGoogleAds(companyId);
+    return !!config?.conversiones.VALIDO;
   }
 
   private async token(cuenta: string): Promise<string> {
@@ -118,9 +125,15 @@ export class GoogleAdsConversionesService {
 
     const ahora = new Date();
     const espera = new Date(ahora.getTime() - ESPERA_REINTENTO_MIN * 60_000);
+    // «Lead válido» solo se envía si la empresa guardó el ID de esa conversión; sin él, esos hechos
+    // se quedan quietos (no se descartan: si después lo configura, se envían los que sigan vigentes).
+    const tipos: TipoConversion[] = config.conversiones.VALIDO
+      ? ['CUALIFICADO', 'CONVERTIDO', 'VALIDO']
+      : ['CUALIFICADO', 'CONVERTIDO'];
     const eventos = await this.prisma.salesConversionEvent.findMany({
       where: {
         companyId,
+        kind: { in: tipos },
         OR: [
           { status: 'PENDIENTE' },
           { status: 'FALLO', attempts: { lt: MAX_INTENTOS }, updatedAt: { lt: espera } },
@@ -157,6 +170,7 @@ export class GoogleAdsConversionesService {
         id: e.id,
         hecho: {
           opportunityId: e.opportunityId,
+          leadId: e.leadId,
           kind: e.kind as TipoConversion,
           gclid: e.gclid,
           occurredAt: e.occurredAt,

@@ -23,6 +23,8 @@ export interface AjustesGoogleAds {
   customerId: string;
   conversionCualificado: string;
   conversionConvertido: string;
+  // «Lead válido»: paso intermedio, OPCIONAL. Vacío = no se registra ni se envía (2026-10-18).
+  conversionValido: string;
   // Interruptor general del envío a Google.
   activo: boolean;
   // Google solo valida cada envío y no cuenta nada: para la primera prueba.
@@ -42,6 +44,7 @@ const VACIO_GOOGLE_ADS: AjustesGoogleAds = {
   customerId: '',
   conversionCualificado: '',
   conversionConvertido: '',
+  conversionValido: '',
   activo: false,
   soloValidar: true,
 };
@@ -90,6 +93,7 @@ export class VentasConfigService {
           customerId: env.customerId,
           conversionCualificado: env.conversiones.CUALIFICADO,
           conversionConvertido: env.conversiones.CONVERTIDO,
+          conversionValido: env.conversiones.VALIDO,
           activo: true,
           soloValidar: env.validateOnly,
         }
@@ -107,6 +111,7 @@ export class VentasConfigService {
       conversiones: {
         CUALIFICADO: soloDigitos(a.conversionCualificado),
         CONVERTIDO: soloDigitos(a.conversionConvertido),
+        VALIDO: soloDigitos(a.conversionValido),
       },
       cuentaDeServicio: (process.env.GOOGLE_ADS_SERVICE_ACCOUNT ?? '').trim() || CUENTA_ADS_POR_DEFECTO,
       validateOnly: a.soloValidar,
@@ -122,6 +127,7 @@ export class VentasConfigService {
     const customerId = soloDigitos(dto.customerId);
     const cualificado = soloDigitos(dto.conversionCualificado);
     const convertido = soloDigitos(dto.conversionConvertido);
+    const valido = soloDigitos(dto.conversionValido);
     if (customerId && customerId.length !== 10) {
       throw new BadRequestException(
         'El ID de cliente de Google Ads tiene 10 dígitos (por ejemplo 123-456-7890).',
@@ -137,6 +143,7 @@ export class VentasConfigService {
       customerId,
       conversionCualificado: cualificado,
       conversionConvertido: convertido,
+      conversionValido: valido,
       activo,
       soloValidar: dto.soloValidar !== false,
     };

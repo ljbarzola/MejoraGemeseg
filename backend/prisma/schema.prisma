@@ -2666,8 +2666,9 @@ model SalesConversionEvent {
   id            Int       @id @default(autoincrement())
   companyId     Int
   leadId        Int
-  opportunityId Int
-  // CUALIFICADO, CONVERTIDO
+  // null solo en VALIDO (2026-10-18): ese hecho pasa antes de que exista la oportunidad.
+  opportunityId Int?
+  // VALIDO, CUALIFICADO, CONVERTIDO
   kind          String
   gclid         String
   occurredAt    DateTime
@@ -2688,37 +2689,37 @@ model SalesConversionEvent {
 }
 
 model SalesOpportunity {
-  id               Int       @id @default(autoincrement())
-  companyId        Int
-  salesClientId    Int
-  title            String?
+  id                Int       @id @default(autoincrement())
+  companyId         Int
+  salesClientId     Int
+  title             String?
   // Clave de etapa (SalesClientStage.key). Sin FK: las claves no cambian y un
   // ON DELETE SET NULL sobre [companyId, key] intentaría anular companyId.
-  status           String?
+  status            String?
   // GANADA, PERDIDA o null (abierta). Una oportunidad está abierta mientras
   // closedAt sea null.
-  outcome          String?
-  receivedAt       DateTime  @default(now())
-  closedAt         DateTime?
-  quotedAt         DateTime? @db.Date
-  quotedAmount     Decimal?  @db.Decimal(12, 2)
-  assignedUserId   Int?
+  outcome           String?
+  receivedAt        DateTime  @default(now())
+  closedAt          DateTime?
+  quotedAt          DateTime? @db.Date
+  quotedAmount      Decimal?  @db.Decimal(12, 2)
+  assignedUserId    Int?
   // Fuente copiada del cliente/lead (REFERIDO, CAMPANA, WEB_FORM…).
-  source           String?
+  source            String?
   // Quién refirió: solo la primera oportunidad lo trae, para no avisarle otra
   // vez cuando el mismo cliente tiene una segunda negociación.
-  referredByUserId Int?
-  leadId           Int?
+  referredByUserId  Int?
+  leadId            Int?
   // LEAD, MANUAL, REFERIDO, MIGRADA, CLIENTE_EXISTENTE, HISTORICO, RENOVACION
-  originType       String    @default("MANUAL")
+  originType        String    @default("MANUAL")
   // Fase 4 (2026-10-18): contrato de servicio que esta oportunidad renueva (originType
   // RENOVACION). Sin FK a propósito, igual que SalesAgreement.opportunityId. Una sola
   // oportunidad de renovación por contrato.
   renewsAgreementId Int?
-  notes            String?
-  createdBy        Int
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  notes             String?
+  createdBy         Int
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   company      Company                       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   salesClient  SalesClient                   @relation(fields: [salesClientId], references: [id], onDelete: Cascade)

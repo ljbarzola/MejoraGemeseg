@@ -17,6 +17,7 @@ export class GoogleAdsConfigDto {
   @IsOptional() @IsString() @MaxLength(20) customerId?: string;
   @IsOptional() @IsString() @MaxLength(30) conversionCualificado?: string;
   @IsOptional() @IsString() @MaxLength(30) conversionConvertido?: string;
+  @IsOptional() @IsString() @MaxLength(30) conversionValido?: string;
   @IsOptional() @IsBoolean() activo?: boolean;
   @IsOptional() @IsBoolean() soloValidar?: boolean;
 }

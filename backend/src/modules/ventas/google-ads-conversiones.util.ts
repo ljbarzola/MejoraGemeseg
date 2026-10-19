@@ -6,6 +6,8 @@
 //   GOOGLE_ADS_CONVERSION_CUALIFICADO ID de la acción de conversión «Lead cualificado»
 //   GOOGLE_ADS_CONVERSION_CONVERTIDO  ID de la acción de conversión «Lead convertido»
 // Opcionales:
+//   GOOGLE_ADS_CONVERSION_VALIDO      ID de la acción «Lead válido» (paso intermedio, 2026-10-18); sin él
+//                                     no se registra ni se envía ese hecho
 //   GOOGLE_ADS_SERVICE_ACCOUNT        cuenta que se impersona (por defecto, la dedicada de Ads)
 //   GOOGLE_ADS_VALIDATE_ONLY=true     Google solo valida: no cuenta nada ni se marca como enviado
 // Sin los tres primeros, el envío no hace nada y los hechos quedan PENDIENTES.
@@ -17,9 +19,14 @@ export const CUENTA_ADS_POR_DEFECTO =
 export const ALCANCE_DATA_MANAGER = 'https://www.googleapis.com/auth/datamanager';
 export const URL_INGEST = 'https://datamanager.googleapis.com/v1/events:ingest';
 
+// CUALIFICADO y CONVERTIDO son obligatorios para activar el envío; VALIDO es opcional ('' = no se usa).
+export type ConversionesGoogleAds = Record<Exclude<TipoConversion, 'VALIDO'>, string> & {
+  VALIDO: string;
+};
+
 export interface ConfigGoogleAds {
   customerId: string;
-  conversiones: Record<TipoConversion, string>;
+  conversiones: ConversionesGoogleAds;
   cuentaDeServicio: string;
   validateOnly: boolean;
 }
@@ -36,19 +43,33 @@ export function leerConfigGoogleAds(
   if (customerId.length !== 10 || !cualificado || !convertido) return null;
   return {
     customerId,
-    conversiones: { CUALIFICADO: cualificado, CONVERTIDO: convertido },
+    conversiones: {
+      CUALIFICADO: cualificado,
+      CONVERTIDO: convertido,
+      VALIDO: soloDigitos(env.GOOGLE_ADS_CONVERSION_VALIDO),
+    },
     cuentaDeServicio: (env.GOOGLE_ADS_SERVICE_ACCOUNT ?? '').trim() || CUENTA_ADS_POR_DEFECTO,
     validateOnly: (env.GOOGLE_ADS_VALIDATE_ONLY ?? '').toLowerCase() === 'true',
   };
 }
 
 export interface HechoParaEnviar {
-  opportunityId: number;
+  // null en «Lead válido»: ese hecho pasa ANTES de que exista la oportunidad y se identifica por el lead.
+  opportunityId: number | null;
+  leadId: number;
   kind: TipoConversion;
   gclid: string;
   occurredAt: Date;
   value: number | null;
   currency: string;
+}
+
+// El mismo hecho siempre lleva el mismo id (Google no lo cuenta dos veces si se reintenta). Los de siempre
+// conservan su formato para no duplicar lo ya enviado; «Lead válido» se identifica por el lead.
+export function idTransaccion(h: Pick<HechoParaEnviar, 'opportunityId' | 'leadId' | 'kind'>): string {
+  return h.kind === 'VALIDO' || h.opportunityId === null
+    ? `crm-lead-${h.leadId}-${h.kind}`
+    : `crm-${h.opportunityId}-${h.kind}`;
 }
 
 // Cuerpo de `events:ingest`: una destinación por tipo de conversión usado y un
@@ -66,7 +87,7 @@ export function construirSolicitud(config: ConfigGoogleAds, hechos: HechoParaEnv
     events: hechos.map((h) => ({
       destinationReferences: [h.kind],
       eventTimestamp: h.occurredAt.toISOString(),
-      transactionId: `crm-${h.opportunityId}-${h.kind}`,
+      transactionId: idTransaccion(h),
       eventSource: 'OTHER',
       adIdentifiers: { gclid: h.gclid },
       ...(h.value !== null && h.value > 0

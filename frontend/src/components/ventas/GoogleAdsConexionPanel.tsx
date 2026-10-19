@@ -71,6 +71,14 @@ export default function GoogleAdsConexionPanel({ inicial, cuentaDeServicio, pued
       </div>
       <div className="form-row">
         <div className="form-group">
+          <label>ID de la conversión «Lead válido» (opcional: cuando lo confirmas como contacto de servicio)</label>
+          <input type="text" value={ads.conversionValido ?? ''} disabled={!puedeEditar} inputMode="numeric" placeholder="Déjalo vacío si no la usas"
+            onChange={(e) => setAds({ ...ads, conversionValido: e.target.value.replace(/\D/g, '') })} />
+          <small style={{ color: '#718096' }}>Paso intermedio entre el formulario y la cotización: se avisa cuando clasificas al posible cliente como «Servicio» o lo pasas a oportunidad, para que Google distinga a los contactos reales de los que solo llenaron el formulario (empleo, proveedores, spam). Solo cuenta si venía de un anuncio.</small>
+        </div>
+      </div>
+      <div className="form-row">
+        <div className="form-group">
           <label>ID de la conversión «Lead cualificado» (cuando cotiza)</label>
           <input type="text" value={ads.conversionCualificado} disabled={!puedeEditar} inputMode="numeric"
             onChange={(e) => setAds({ ...ads, conversionCualificado: e.target.value.replace(/\D/g, '') })} />
@@ -99,14 +107,14 @@ export default function GoogleAdsConexionPanel({ inicial, cuentaDeServicio, pued
               {cuentaDeServicio} <CopyLinkButton url={cuentaDeServicio} title="Copiar" />
             </div>
           </li>
-          <li>Crea dos conversiones de tipo «Importar» → «CRM u otras fuentes»: «Lead cualificado» y «Lead convertido». El ID de cada una aparece en la dirección del navegador como <strong>ctId=…</strong>.</li>
+          <li>Crea dos conversiones de tipo «Importar» → «CRM u otras fuentes»: «Lead cualificado» y «Lead convertido» (y, si quieres el paso intermedio, una tercera: «Lead válido»). El ID de cada una aparece en la dirección del navegador como <strong>ctId=…</strong>.</li>
           <li>Pega aquí los IDs y guarda. Empieza con «Solo probar».</li>
         </ol>
       </div>
 
       {conversiones && (
         <p style={{ fontSize: 13, color: '#4a5568', margin: '0 0 12px' }}>
-          Hasta ahora: <strong>{conversiones.porTipo.CUALIFICADO ?? 0}</strong> posibles clientes cotizaron y <strong>{conversiones.porTipo.CONVERTIDO ?? 0}</strong> contrataron.
+          Hasta ahora:{(conversiones.porTipo.VALIDO ?? 0) > 0 && <> <strong>{conversiones.porTipo.VALIDO}</strong> resultaron contactos válidos,</>} <strong>{conversiones.porTipo.CUALIFICADO ?? 0}</strong> posibles clientes cotizaron y <strong>{conversiones.porTipo.CONVERTIDO ?? 0}</strong> contrataron.
           {' '}Por avisar: {conversiones.porEstado.PENDIENTE ?? 0} · Enviados: {conversiones.porEstado.ENVIADO ?? 0}
           {(conversiones.porEstado.FALLO ?? 0) > 0 && ` · Con error: ${conversiones.porEstado.FALLO}`}
           {(conversiones.porEstado.VENCIDO ?? 0) > 0 && ` · Vencidos (clic de más de 90 días): ${conversiones.porEstado.VENCIDO}`}

@@ -188,6 +188,10 @@ export const SALES_PIPELINE_DDL: string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "SalesConversionEvent_opportunityId_kind_key" ON "SalesConversionEvent"("opportunityId", "kind")`,
   `CREATE INDEX IF NOT EXISTS "SalesConversionEvent_companyId_status_idx" ON "SalesConversionEvent"("companyId", "status")`,
   fk('SalesConversionEvent', 'companyId', 'Company', 'CASCADE'),
+  // 2026-10-18: «Lead válido» pasa ANTES de que exista la oportunidad, así que ese hecho no tiene
+  // oportunidad. Solo se quita el NOT NULL (no se agrega columna ni se borra nada; idempotente) y la
+  // unicidad (oportunidad, tipo) sigue igual para los hechos de siempre; la de «válido» se cuida en código.
+  `ALTER TABLE "SalesConversionEvent" ALTER COLUMN "opportunityId" DROP NOT NULL`,
 
   // ---- Ajustes de Ventas por empresa (2026-10-15) ----
   `CREATE TABLE IF NOT EXISTS "SalesSetting" (

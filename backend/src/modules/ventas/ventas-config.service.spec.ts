@@ -56,8 +56,22 @@ describe('VentasConfigService — Google Ads', () => {
     });
     const c = await servicio.configGoogleAds(1);
     expect(c?.customerId).toBe('1234567890');
-    expect(c?.conversiones).toEqual({ CUALIFICADO: '111', CONVERTIDO: '222' });
+    // «Lead válido» es opcional: sin su ID queda vacío y no se usa.
+    expect(c?.conversiones).toEqual({ CUALIFICADO: '111', CONVERTIDO: '222', VALIDO: '' });
     expect(c?.validateOnly).toBe(false);
+  });
+
+  it('el ID de «Lead válido» es opcional: se guarda limpio y se lee con la configuración', async () => {
+    const { servicio } = crearServicio();
+    const a = await servicio.guardarGoogleAds(1, 5, {
+      customerId: '1234567890',
+      conversionCualificado: '1',
+      conversionConvertido: '2',
+      conversionValido: ' 33-3 ',
+      activo: true,
+    });
+    expect(a.conversionValido).toBe('333');
+    expect((await servicio.configGoogleAds(1))?.conversiones.VALIDO).toBe('333');
   });
 
   it('el envío empieza en modo de validación salvo que se diga lo contrario', async () => {
