@@ -392,6 +392,7 @@ describe('VentasContratosService', () => {
         agreementId: 3,
         titulo: ' Contrato firmado ',
         firmado: true,
+        tipo: 'GARANTIA',
       });
 
       const data = prisma.salesContract.create.mock.calls[0][0].data;
@@ -402,6 +403,8 @@ describe('VentasContratosService', () => {
         companyId: 1,
         clientName: 'Hotel Plaza Real',
         fieldValues: { titulo: 'Contrato firmado' },
+        documentType: 'GARANTIA',
+        documentTypeOther: null,
       });
       expect(prisma.salesContractDocument.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ contractId: 55, type: 'FIRMADO' }),
@@ -412,7 +415,7 @@ describe('VentasContratosService', () => {
     });
 
     it('leaves it as READY (not signed) when firmado is false', async () => {
-      await service.uploadDocument(1, 9, pdf(), { salesClientId: 7, firmado: false });
+      await service.uploadDocument(1, 9, pdf(), { salesClientId: 7, firmado: false, tipo: 'CONTRATO' });
 
       expect(prisma.salesContract.create.mock.calls[0][0].data).toMatchObject({
         status: 'READY',
@@ -440,15 +443,63 @@ describe('VentasContratosService', () => {
       prisma.salesAgreement.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.uploadDocument(1, 9, pdf(), { salesClientId: 7, agreementId: 99 }),
+        service.uploadDocument(1, 9, pdf(), { salesClientId: 7, agreementId: 99, tipo: 'CONTRATO' }),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(prisma.salesContract.create).not.toHaveBeenCalled();
     });
 
     it('requires a client', async () => {
       await expect(
-        service.uploadDocument(1, 9, pdf(), { salesClientId: 0 }),
+        service.uploadDocument(1, 9, pdf(), { salesClientId: 0, tipo: 'CONTRATO' }),
       ).rejects.toThrow('Elige el cliente');
+    });
+
+    it('requires the document type', async () => {
+      await expect(
+        service.uploadDocument(1, 9, pdf(), { salesClientId: 7 }),
+      ).rejects.toThrow('Elige el tipo de documento');
+      expect(prisma.salesContract.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown type and an «Otro» without a name', async () => {
+      await expect(
+        service.uploadDocument(1, 9, pdf(), { salesClientId: 7, tipo: 'XYZ' }),
+      ).rejects.toThrow('no es válido');
+      await expect(
+        service.uploadDocument(1, 9, pdf(), { salesClientId: 7, tipo: 'OTRO', tipoOtro: '  ' }),
+      ).rejects.toThrow('Escribe cómo se llama');
+      expect(prisma.salesContract.create).not.toHaveBeenCalled();
+    });
+
+    it('keeps the custom name when the type is «Otro»', async () => {
+      await service.uploadDocument(1, 9, pdf(), {
+        salesClientId: 7,
+        tipo: 'OTRO',
+        tipoOtro: ' Póliza de seguro ',
+      });
+      expect(prisma.salesContract.create.mock.calls[0][0].data).toMatchObject({
+        documentType: 'OTRO',
+        documentTypeOther: 'Póliza de seguro',
+      });
+    });
+  });
+
+  describe('cambiarTipoDocumento', () => {
+    it('updates the type of a document of the company', async () => {
+      prisma.salesContract.findFirst.mockResolvedValue({ id: 55, template: null });
+      prisma.salesContract.update.mockResolvedValue({});
+      await service.cambiarTipoDocumento(55, 1, 'GARANTIA', 'ignorado');
+      expect(prisma.salesContract.update).toHaveBeenCalledWith({
+        where: { id: 55 },
+        data: { documentType: 'GARANTIA', documentTypeOther: null },
+      });
+    });
+
+    it('does not touch a document of another company', async () => {
+      prisma.salesContract.findFirst.mockResolvedValue(null);
+      await expect(service.cambiarTipoDocumento(55, 1, 'CONTRATO', undefined)).rejects.toThrow(
+        'Documento no encontrado',
+      );
     });
   });
 

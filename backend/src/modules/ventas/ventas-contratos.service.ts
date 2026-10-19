@@ -33,6 +33,7 @@ import {
   loadContractPdf,
   deleteContractPdf,
 } from './ventas-files.util';
+import { normalizarTipoDocumento } from './ventas-documento-tipos.const';
 
 /** Reemplaza las variables del asunto/cuerpo de la plantilla, igual que la vista previa de la ficha. */
 function renderEmailText(text: string, contract: { id: number; clientName: string }): string {
@@ -78,6 +79,12 @@ export class VentasContratosService {
       include: {
         template: { select: { id: true, name: true } },
         salesClient: { select: { id: true, name: true } },
+        // A qué contrato pertenece el documento (para el enlace desde Documentación).
+        agreementLink: {
+          select: {
+            agreement: { select: { id: true, title: true } },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -91,6 +98,11 @@ export class VentasContratosService {
       include: {
         template: {
           include: { fields: { orderBy: { order: 'asc' } } },
+        },
+        agreementLink: {
+          select: {
+            agreement: { select: { id: true, title: true } },
+          },
         },
       },
     });
@@ -1555,6 +1567,8 @@ export class VentasContratosService {
       agreementId?: number;
       titulo?: string;
       firmado?: boolean;
+      tipo?: string;
+      tipoOtro?: string;
     },
   ) {
     if (!companyId) throw new BadRequestException('Se requiere una empresa');
@@ -1570,6 +1584,8 @@ export class VentasContratosService {
     if (!dto.salesClientId) {
       throw new BadRequestException('Elige el cliente de este documento.');
     }
+    const tipo = normalizarTipoDocumento(dto.tipo, dto.tipoOtro, true);
+    if (!tipo.ok) throw new BadRequestException(tipo.mensaje);
     const cliente = await this.prisma.salesClient.findFirst({
       where: { id: dto.salesClientId, companyId },
       select: { id: true, name: true, email: true },
@@ -1594,6 +1610,8 @@ export class VentasContratosService {
         fieldValues: titulo ? { titulo } : {},
         status: firmado ? 'SIGNED' : 'READY',
         signedAt: firmado ? ahora : null,
+        documentType: tipo.tipo,
+        documentTypeOther: tipo.otro,
         salesClientId: cliente.id,
         companyId,
         createdBy,
@@ -1615,6 +1633,28 @@ export class VentasContratosService {
     });
     await this.vincularAContrato(creado.id, dto.agreementId);
     return this.getContract(creado.id, companyId);
+  }
+
+  /** Cambia el tipo de un documento ya guardado (p. ej. uno subido antes de que existieran los tipos). */
+  async cambiarTipoDocumento(
+    id: number,
+    companyId: number | null,
+    tipoRaw: unknown,
+    otroRaw: unknown,
+  ) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    const tipo = normalizarTipoDocumento(tipoRaw, otroRaw, true);
+    if (!tipo.ok) throw new BadRequestException(tipo.mensaje);
+    const doc = await this.prisma.salesContract.findFirst({
+      where: { id, companyId },
+      select: { id: true },
+    });
+    if (!doc) throw new NotFoundException('Documento no encontrado');
+    await this.prisma.salesContract.update({
+      where: { id },
+      data: { documentType: tipo.tipo, documentTypeOther: tipo.otro },
+    });
+    return this.getContract(id, companyId);
   }
 
   /** ¿Está conectada la firma electrónica (SignWell)? Para avisar en pantalla antes de intentar enviar. */

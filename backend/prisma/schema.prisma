@@ -1847,6 +1847,8 @@ model SalesContract {
   signedAt           DateTime?
   clientFillToken    String?   @unique // link público para que el cliente complete sus campos/tablas
   clientFilledAt     DateTime? // cuándo el cliente envió su parte
+  documentType       String? // CONTRATO, ADENDA, GARANTIA, ACTA_ENTREGA, ORDEN_COMPRA, OTRO (null = sin tipo); ver ventas-documento-tipos.const.ts
+  documentTypeOther  String? // nombre propio cuando documentType = OTRO
   salesClientId      Int?
   companyId          Int
   createdBy          Int

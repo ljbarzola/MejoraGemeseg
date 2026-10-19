@@ -10,7 +10,8 @@
  * (ver users/user-preference.schema.ts): el servicio se arregla solo al
  * arrancar. Por eso los documentos se enlazan con una tabla aparte y no con una
  * columna nueva en "SalesContract": una columna que Prisma conoce y la base no
- * tiene rompe TODA consulta a esa tabla.
+ * tiene rompe TODA consulta a esa tabla. (Excepción 2026-10-18/19: las columnas
+ * del tipo de documento, ver SALES_CONTRACT_COLUMNS_DDL al final.)
  *
  * Es el MISMO SQL de prisma/migrations/20261007_sales_agreements/migration.sql
  * (queda como registro/para quien aplique migraciones a mano). Cada sentencia
@@ -88,4 +89,15 @@ export const SALES_AGREEMENT_DDL: string[] = [
   // plantilla. No es una columna nueva: solo se quita el NOT NULL, así que el despliegue
   // anterior sigue funcionando (idempotente: repetirlo no hace nada).
   `ALTER TABLE "SalesContract" ALTER COLUMN "templateId" DROP NOT NULL`,
+];
+
+/**
+ * Columnas nuevas en tablas que YA existen (2026-10-18): tipo de documento de Documentación.
+ * Van en una transacción aparte y ANTES del resto (ver VentasSchemaService), para que un fallo
+ * de otra sentencia no las deshaga: una columna que Prisma conoce y la base no tiene rompe TODA
+ * consulta a "SalesContract". Aditivas y nulas, así el despliegue anterior sigue funcionando.
+ */
+export const SALES_CONTRACT_COLUMNS_DDL: string[] = [
+  `ALTER TABLE "SalesContract" ADD COLUMN IF NOT EXISTS "documentType" TEXT`,
+  `ALTER TABLE "SalesContract" ADD COLUMN IF NOT EXISTS "documentTypeOther" TEXT`,
 ];

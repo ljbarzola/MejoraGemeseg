@@ -1,7 +1,10 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SALES_AGREEMENT_DDL } from './sales-agreement.schema';
+import {
+  SALES_AGREEMENT_DDL,
+  SALES_CONTRACT_COLUMNS_DDL,
+} from './sales-agreement.schema';
 import { COTIZADOR_DDL } from './cotizador.schema';
 import {
   SALES_PIPELINE_BACKFILL,
@@ -53,6 +56,7 @@ export class VentasSchemaService implements OnModuleInit {
   }
 
   async onModuleInit() {
+    await this.agregarColumnasNuevas();
     try {
       await this.prisma.$transaction(
         async (tx) => {
@@ -79,6 +83,29 @@ export class VentasSchemaService implements OnModuleInit {
     } catch (err) {
       this.logger.error(
         `No se pudo preparar el esquema de Ventas (contratos y embudo): ${(err as Error).message}`,
+      );
+    }
+  }
+
+  // Columnas nuevas de tablas que ya existen (tipo de documento de Documentación). Aparte del
+  // resto del esquema: si otra sentencia falla y deshace la transacción grande, estas columnas
+  // igual quedan, porque Prisma las pide en cada consulta a "SalesContract".
+  private async agregarColumnasNuevas() {
+    try {
+      await this.prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRawUnsafe(
+            `SELECT 1 AS ok FROM (SELECT pg_advisory_xact_lock(${LOCK_ID})) AS candado`,
+          );
+          for (const sql of SALES_CONTRACT_COLUMNS_DDL) {
+            await tx.$executeRawUnsafe(sql);
+          }
+        },
+        { timeout: 60_000, maxWait: 60_000 },
+      );
+    } catch (err) {
+      this.logger.error(
+        `No se pudieron agregar las columnas de tipo de documento a SalesContract: ${(err as Error).message}`,
       );
     }
   }

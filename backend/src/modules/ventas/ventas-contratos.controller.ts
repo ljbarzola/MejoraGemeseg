@@ -97,6 +97,8 @@ export class VentasContratosController {
         agreementId: Number(body?.agreementId) || undefined,
         titulo: body?.titulo,
         firmado: body?.firmado !== 'false',
+        tipo: body?.tipo,
+        tipoOtro: body?.tipoOtro,
       },
     );
   }
@@ -133,6 +135,19 @@ export class VentasContratosController {
   @Section('VENTAS', 'view')
   get(@Param('id') id: string, @Req() req: any) {
     return this.contratosService.getContract(+id, req.user.companyId);
+  }
+
+  // Cambia solo el tipo del documento (Contrato, Garantía, Otro...). Antes de `:id`.
+  @Patch(':id/tipo')
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('VENTAS', 'write')
+  cambiarTipo(@Param('id') id: string, @Req() req: any, @Body() body: any) {
+    return this.contratosService.cambiarTipoDocumento(
+      +id,
+      req.user.companyId,
+      body?.tipo,
+      body?.tipoOtro,
+    );
   }
 
   @Patch(':id')
