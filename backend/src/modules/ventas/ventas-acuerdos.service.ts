@@ -294,7 +294,13 @@ export class VentasAcuerdosService {
       ...i,
       createdByName: nombreAutor.get(i.createdBy) ?? null,
     }));
-    return { ...this.formatear(c), motivos, incidentes };
+    // Fase 4: la oportunidad de renovación de este contrato, si la hay (abierta o ya cerrada).
+    const renovacionOportunidad = await this.prisma.salesOpportunity.findFirst({
+      where: { companyId: cid, renewsAgreementId: id },
+      select: { id: true, status: true, outcome: true, closedAt: true },
+      orderBy: { id: 'desc' },
+    });
+    return { ...this.formatear(c), motivos, incidentes, renovacionOportunidad };
   }
 
   // Incidente del servicio o conversación de salida de un contrato (antes eran actividades
@@ -749,7 +755,7 @@ export class VentasAcuerdosService {
       const titulo = (opp.title || `${opp.clienteNombre}: ${nombresServicios.join(', ')}`).slice(0, MAX_TITULO);
       const creado = await this.createAgreement(companyId, userId, {
         salesClientId: opp.salesClientId,
-        kind: c.tipo,
+        kind: c.tipo === 'PRODUCTO' ? 'PRODUCTO' : 'SERVICIO',
         title: titulo,
         startDate: hoy,
         serviceIds: opp.serviceIds,
@@ -781,6 +787,121 @@ export class VentasAcuerdosService {
       titulo: contratoTitulo,
       clienteNombre: opp.clienteNombre,
       servicios: nombresServicios,
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Fase 4: contrato nuevo al ACEPTAR una oportunidad de RENOVACIÓN
+  // -----------------------------------------------------------------
+
+  // Revisa todo antes de mover la oportunidad. Devuelve 'YA_RENOVADO' si el contrato ya fue
+  // renovado a mano con «Renovar» (entonces solo se acepta la oportunidad, sin crear otro) y 'OK'
+  // si hay que crear el contrato nuevo.
+  async validarRenovacion(
+    companyId: number,
+    opp: { id: number; salesClientId: number; clienteNombre: string },
+    renewsAgreementId: number,
+    c: AceptarContratoDto | undefined,
+  ): Promise<'OK' | 'YA_RENOVADO'> {
+    const anterior = await this.prisma.salesAgreement
+      .findFirst({
+        where: { id: renewsAgreementId, companyId, salesClientId: opp.salesClientId },
+        include: { services: { include: { service: { select: { name: true } } } } },
+      })
+      .catch(() => null);
+    if (!anterior) {
+      throw new BadRequestException(
+        `El contrato que esta oportunidad renueva ya no existe. Pasa la oportunidad de ${opp.clienteNombre} a Perdida o elimínala.`,
+      );
+    }
+    const nombre = anterior.title ? `«${anterior.title}»` : `#${anterior.id}`;
+    if (anterior.status === 'RENOVADO') return 'YA_RENOVADO';
+    if (anterior.status === 'CANCELADO') {
+      throw new BadRequestException(
+        `El contrato ${nombre} de ${opp.clienteNombre} está cancelado y no se puede renovar. Pasa la oportunidad a Perdida o crea un contrato nuevo desde Contratos.`,
+      );
+    }
+    if (c?.tipo !== 'RENOVACION') {
+      throw new BadRequestException(
+        `Esta oportunidad renueva el contrato ${nombre} de ${opp.clienteNombre}: confirma las fechas y el valor del contrato nuevo.`,
+      );
+    }
+    const r = c.renovacion ?? {};
+    const inicio =
+      r.startDate ||
+      (anterior.endDate ? sumarDias(anterior.endDate, 1).toISOString().slice(0, 10) : '');
+    if (!inicio) {
+      throw new BadRequestException(
+        `El contrato ${nombre} no tiene fecha de fin: indica desde cuándo empieza la renovación.`,
+      );
+    }
+    this.fechasValidas(inicio, r.endDate);
+    const serviceIds = await this.validarServicios(
+      companyId,
+      r.serviceIds ?? anterior.services.map((s) => s.serviceId),
+    );
+    const valor =
+      r.monthlyValue !== undefined
+        ? (this.valorMensual(r.monthlyValue) ?? null)
+        : anterior.monthlyValue === null
+          ? null
+          : Number(anterior.monthlyValue);
+    const reduccion = this.detectarReduccion(anterior, serviceIds, valor);
+    if (reduccion.hay && !r.motivo?.reasonId) {
+      throw new BadRequestException(
+        `La renovación de ${opp.clienteNombre} baja los servicios o el valor mensual respecto al contrato ${nombre}: indica el motivo.`,
+      );
+    }
+    return 'OK';
+  }
+
+  // Crea el contrato nuevo (el anterior queda «Renovado») y deja una nota explícita en el
+  // historial del cliente. Se llama DESPUÉS de pasar la oportunidad a Aceptada y de validarRenovacion.
+  async aplicarRenovacion(
+    companyId: number,
+    userId: number,
+    opp: { id: number; title: string | null; salesClientId: number; clienteNombre: string },
+    renewsAgreementId: number,
+    c: AceptarContratoDto,
+  ) {
+    const r = c.renovacion ?? {};
+    const creado = await this.renewAgreement(
+      companyId,
+      userId,
+      renewsAgreementId,
+      {
+        title: r.title,
+        startDate: r.startDate,
+        endDate: r.endDate,
+        serviceIds: r.serviceIds,
+        notes: r.notes,
+        monthlyValue: r.monthlyValue,
+        graceDays: r.graceDays,
+        motivo: r.motivo,
+      },
+      { opportunityId: opp.id },
+    );
+    const etiqueta = opp.title ? `«${opp.title}»` : `#${opp.id}`;
+    const nombres = creado.services.map((s) => s.name);
+    const inicio = creado.startDate.toISOString().slice(0, 10);
+    const fin = creado.endDate ? creado.endDate.toISOString().slice(0, 10) : null;
+    const nota = `Se aceptó la renovación ${etiqueta}: se creó el contrato ${creado.title ? `«${creado.title}»` : `#${creado.id}`} de ${opp.clienteNombre} (${nombres.join(', ')}, del ${inicio} ${fin ? `al ${fin}` : 'sin fecha de fin'}) y el contrato anterior quedó Renovado.`;
+    await this.prisma.salesClientActivity.create({
+      data: {
+        companyId,
+        salesClientId: opp.salesClientId,
+        type: 'NOTA',
+        text: nota.slice(0, 2000),
+        createdBy: userId,
+      },
+    });
+    return {
+      accion: 'RENOVADO' as const,
+      tipo: 'RENOVACION' as const,
+      agreementId: creado.id,
+      titulo: creado.title,
+      clienteNombre: opp.clienteNombre,
+      servicios: nombres,
     };
   }
 
@@ -1073,6 +1194,8 @@ export class VentasAcuerdosService {
     userId: number,
     id: number,
     dto: RenewSalesAgreementDto,
+    // Fase 4: oportunidad de renovación que originó este contrato nuevo.
+    opciones: { opportunityId?: number } = {},
   ) {
     const cid = this.requireCompany(companyId);
     const anterior = await this.cargarAnterior(cid, id);
@@ -1119,6 +1242,7 @@ export class VentasAcuerdosService {
               : Number(anterior.monthlyValue),
         graceDays: dto.graceDays ?? anterior.graceDays,
         motivo: dto.motivo,
+        opportunityId: opciones.opportunityId,
       },
       { anterior },
     );

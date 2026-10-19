@@ -58,6 +58,10 @@ describe('buildSystemGuide', () => {
     expect(guide).not.toContain('pestaña "Hoy"');
     expect(guide).toContain('antes se llamaba "Conexiones"');
     expect(guide).not.toContain('Planificación y Campo');
+    // Fase 4: las renovaciones se gestionan como oportunidad.
+    expect(guide).toContain('Renovación – nombre del contrato');
+    expect(guide).toContain('faltan 30 días o menos');
+    expect(guide).toContain('¿Por qué no se renovó?');
   });
 
   it('Contratación Pública explica Entidades Públicas y la entrega mensual de documentos', () => {

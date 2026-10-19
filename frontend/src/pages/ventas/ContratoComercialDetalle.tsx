@@ -206,6 +206,16 @@ export default function ContratoComercialDetalle() {
         </div>
       )}
 
+      {contrato.renovacionOportunidad && !contrato.renovacionOportunidad.closedAt && (
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 13, color: '#1e3a8a' }}>
+          <RefreshCw size={18} color="#2563eb" style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>
+            {describirContrato(contrato).replace(/^./, (c) => c.toUpperCase())} {contrato.estado === 'VENCIDO' ? 'venció' : 'está por terminar'} y su renovación se está gestionando como una oportunidad en Oportunidades. Al aceptarla se crea el contrato nuevo desde ahí.
+          </span>
+          <button className="btn-secondary" onClick={() => navigate('/ventas/oportunidades')}>Ver en Oportunidades</button>
+        </div>
+      )}
+
       <div style={caja}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
           <div>

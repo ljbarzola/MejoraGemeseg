@@ -41,9 +41,62 @@ const MAX_MONTO = 9_999_999_999;
 // adicional); sin él se crea uno nuevo. Si el cliente ya tiene contratos
 // vigentes de servicio, el servidor exige elegir uno o confirmar con
 // `confirmarNuevo` que es un contrato nuevo.
+// Fase 4 (2026-10-18): contrato nuevo al aceptar una RENOVACIÓN. Mismos campos que
+// RenewSalesAgreementDto (se declaran aquí y no se reutiliza esa clase porque
+// agreement.dto.ts ya importa de este archivo: un import circular dejaría los
+// decoradores sin clase). Lo que no se envíe se toma del contrato anterior.
+export class RenovacionAlAceptarDto {
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  // 'YYYY-MM-DD'. Sin enviar: el día siguiente al fin del contrato que se renueva.
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  serviceIds?: number[];
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(MAX_MONTO)
+  monthlyValue?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(365)
+  graceDays?: number;
+
+  // Obligatorio cuando la renovación baja servicios o valor (se exige en el servicio).
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => MotivoInputDto)
+  motivo?: MotivoInputDto;
+}
+
 export class AceptarContratoDto {
-  @IsIn(['SERVICIO', 'PRODUCTO'])
-  tipo: 'SERVICIO' | 'PRODUCTO';
+  // RENOVACION solo vale para una oportunidad de renovación (renewsAgreementId).
+  @IsIn(['SERVICIO', 'PRODUCTO', 'RENOVACION'])
+  tipo: 'SERVICIO' | 'PRODUCTO' | 'RENOVACION';
+
+  // Solo RENOVACION: datos del contrato nuevo (lo que no se envíe sale del anterior).
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RenovacionAlAceptarDto)
+  renovacion?: RenovacionAlAceptarDto;
 
   @IsOptional()
   @IsInt()

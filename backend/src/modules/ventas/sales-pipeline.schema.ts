@@ -13,6 +13,15 @@ import { fk } from './sales-agreement.schema';
  *
  * Va DESPUÉS de SALES_AGREEMENT_DDL: usa "SalesService" y "SalesClient".
  */
+/**
+ * Columnas nuevas en "SalesOpportunity" (2026-10-18, Fase 4: renovaciones). Van en la transacción
+ * aparte que corre ANTES del resto (ver VentasSchemaService.agregarColumnasNuevas), aditivas y
+ * nulas para que el despliegue anterior siga funcionando.
+ */
+export const SALES_OPPORTUNITY_COLUMNS_DDL: string[] = [
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "renewsAgreementId" INTEGER`,
+];
+
 export const SALES_PIPELINE_DDL: string[] = [
   // ---- Columnas nuevas de SalesAgreement (la tabla aún no está en producción) ----
   `ALTER TABLE "SalesAgreement" ADD COLUMN IF NOT EXISTS "monthlyValue" DECIMAL(12,2)`,
@@ -80,6 +89,12 @@ export const SALES_PIPELINE_DDL: string[] = [
   `CREATE INDEX IF NOT EXISTS "SalesOpportunity_companyId_status_idx" ON "SalesOpportunity"("companyId", "status")`,
   `CREATE INDEX IF NOT EXISTS "SalesOpportunity_salesClientId_idx" ON "SalesOpportunity"("salesClientId")`,
   `CREATE INDEX IF NOT EXISTS "SalesOpportunity_companyId_assignedUserId_idx" ON "SalesOpportunity"("companyId", "assignedUserId")`,
+  // 2026-10-18 (Fase 4): la oportunidad de renovación apunta al contrato que renueva. Es una
+  // columna nueva sobre una tabla que ya existe: en producción la agrega ANTES, aparte, la lista
+  // SALES_OPPORTUNITY_COLUMNS_DDL (Prisma pide toda columna que conoce en cada consulta). Aquí se
+  // repite solo para una base nueva, donde la tabla se acaba de crear; es idempotente.
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "renewsAgreementId" INTEGER`,
+  `CREATE INDEX IF NOT EXISTS "SalesOpportunity_renewsAgreementId_idx" ON "SalesOpportunity"("renewsAgreementId")`,
   fk('SalesOpportunity', 'companyId', 'Company', 'CASCADE'),
   fk('SalesOpportunity', 'salesClientId', 'SalesClient', 'CASCADE'),
 

@@ -397,8 +397,10 @@ export class VentasAnaliticaService {
         where: {
           companyId: cid,
           receivedAt: { gte: r.desde, lte: r.hastaFin },
-          // Un cliente que ya venía contratando y se registró a mano no es una venta nueva.
-          originType: { not: 'HISTORICO' },
+          // Un cliente que ya venía contratando y se registró a mano no es una venta nueva. Una
+          // renovación (la abre sola el sistema, sin responsable) tampoco: contarla falsearía el
+          // tiempo de respuesta y la conversión del embudo de ventas nuevas.
+          originType: { notIn: ['HISTORICO', 'RENOVACION'] },
           ...(vend !== null ? { assignedUserId: vend } : {}),
         },
         include: { stageChanges: { orderBy: { createdAt: 'asc' } } },

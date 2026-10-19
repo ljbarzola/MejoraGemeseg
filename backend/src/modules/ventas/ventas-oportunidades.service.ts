@@ -82,7 +82,10 @@ export interface NuevaOportunidadInicial {
     | 'REFERIDO'
     | 'CLIENTE_EXISTENTE'
     | 'MIGRADA'
-    | 'HISTORICO';
+    | 'HISTORICO'
+    | 'RENOVACION';
+  // Solo RENOVACION: contrato de servicio que esta oportunidad renueva (Fase 4).
+  renewsAgreementId?: number | null;
   receivedAt?: Date;
   serviceIds?: number[];
   title?: string | null;
@@ -176,6 +179,7 @@ export class VentasOportunidadesService {
         referredByUserId: p.referredByUserId ?? null,
         leadId: p.leadId ?? null,
         originType: p.originType,
+        renewsAgreementId: p.renewsAgreementId ?? null,
         notes: p.notes ?? null,
         quotedAmount: p.quotedAmount ?? null,
         quotedAt: p.quotedAt ?? null,
@@ -211,6 +215,61 @@ export class VentasOportunidadesService {
     }
     await tx.salesClient.update({ where: { id: salesClientId }, data });
     return principal;
+  }
+
+  // Fase 4: cierra las oportunidades de renovación ABIERTAS de un contrato cuando el contrato se
+  // renueva a mano con «Renovar» (GANADA) o se cancela (PERDIDA), para que no queden oportunidades
+  // sueltas. No pide motivo: el contrato cancelado ya tiene el suyo. Devuelve cuántas cerró.
+  async cerrarRenovacionesAbiertas(
+    companyId: number,
+    agreementId: number,
+    userId: number,
+    outcome: 'GANADA' | 'PERDIDA',
+    nota: string,
+  ): Promise<number> {
+    const abiertas = await this.prisma.salesOpportunity.findMany({
+      where: { companyId, renewsAgreementId: agreementId, closedAt: null },
+      select: { id: true, status: true, salesClientId: true },
+    });
+    if (abiertas.length === 0) return 0;
+    const key = outcome === 'GANADA' ? 'ACEPTADO' : 'RECHAZADO';
+    const etapa = await this.prisma.salesClientStage.findFirst({
+      where: { companyId, key },
+    });
+    if (!etapa) return 0;
+    for (const o of abiertas) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.salesOpportunity.update({
+          where: { id: o.id },
+          data: { status: key, outcome, closedAt: new Date() },
+        });
+        await tx.salesOpportunityStageChange.create({
+          data: {
+            opportunityId: o.id,
+            salesClientId: o.salesClientId,
+            companyId,
+            fromStatus: o.status,
+            toStatus: key,
+            notes: nota,
+            changedBy: userId,
+          },
+        });
+        const principal = await this.espejarCliente(tx, o.salesClientId);
+        if (principal && principal.id === o.id) {
+          await tx.salesClientStageChange.create({
+            data: {
+              salesClientId: o.salesClientId,
+              fromStatus: o.status,
+              toStatus: key,
+              notes: nota,
+              changedBy: userId,
+              companyId,
+            },
+          });
+        }
+      });
+    }
+    return abiertas.length;
   }
 
   private validarMonto(v: number | null | undefined): number | null | undefined {
@@ -455,7 +514,24 @@ export class VentasOportunidadesService {
     let datosContrato:
       | { id: number; title: string | null; salesClientId: number; clienteNombre: string; serviceIds: number[]; quotedAmount: number | null }
       | undefined;
-    if (dto.contrato) {
+    // Fase 4: una oportunidad de RENOVACIÓN no pregunta servicio/producto: al aceptar crea el
+    // contrato nuevo que renueva al anterior (o, si ese ya se renovó a mano, solo se acepta).
+    const renueva = opp.renewsAgreementId;
+    let estadoRenovacion: 'OK' | 'YA_RENOVADO' | undefined;
+    if (!renueva && dto.contrato?.tipo === 'RENOVACION') {
+      throw new BadRequestException(
+        'Esa oportunidad no es una renovación: elige si fue un servicio o un producto.',
+      );
+    }
+    if (renueva && outcome === 'GANADA') {
+      estadoRenovacion = await this.acuerdos.validarRenovacion(
+        cid,
+        { id, salesClientId: opp.salesClientId, clienteNombre: opp.salesClient.name },
+        renueva,
+        dto.contrato,
+      );
+    }
+    if (dto.contrato && !renueva) {
       if (outcome !== 'GANADA') {
         throw new BadRequestException(
           'El contrato solo se registra al pasar la oportunidad a Aceptada.',
@@ -501,11 +577,21 @@ export class VentasOportunidadesService {
 
     await this.prisma.$transaction(async (tx) => {
       if (outcome === 'PERDIDA') {
-        await this.motivos.registrar(tx, cid, userId, 'OPP_PERDIDA', dto.motivo, {
-          opportunityId: id,
-          salesClientId: opp.salesClientId,
-          detail: { desde: opp.status, hacia: destino.key },
-        });
+        // Una renovación perdida es un contrato que no se renovó: el motivo se pide UNA sola vez y
+        // queda también en el contrato (quita el aviso «Registrar el motivo» del contrato vencido).
+        await this.motivos.registrar(
+          tx,
+          cid,
+          userId,
+          renueva ? 'CONTRATO_NO_RENOVADO' : 'OPP_PERDIDA',
+          dto.motivo,
+          {
+            opportunityId: id,
+            salesClientId: opp.salesClientId,
+            ...(renueva ? { agreementId: renueva } : {}),
+            detail: { desde: opp.status, hacia: destino.key },
+          },
+        );
       }
       await tx.salesOpportunity.update({ where: { id }, data });
       await tx.salesOpportunityStageChange.create({
@@ -560,6 +646,23 @@ export class VentasOportunidadesService {
       quotedAmount: montoFinal === null || montoFinal === undefined ? null : Number(montoFinal),
     });
 
+    if (renueva && estadoRenovacion === 'OK' && dto.contrato) {
+      try {
+        const contratoResultado = await this.acuerdos.aplicarRenovacion(
+          cid,
+          userId,
+          { id, title: opp.title, salesClientId: opp.salesClientId, clienteNombre: opp.salesClient.name },
+          renueva,
+          dto.contrato,
+        );
+        return { ...(await this.get(cid, id)), contratoResultado };
+      } catch (err) {
+        const motivo = err instanceof Error ? err.message : 'error desconocido';
+        throw new BadRequestException(
+          `La renovación de ${opp.salesClient.name} quedó Aceptada, pero no se pudo crear el contrato nuevo (${motivo}). Renuévalo desde Contratos con «Renovar».`,
+        );
+      }
+    }
     if (dto.contrato && datosContrato) {
       try {
         const contratoResultado = await this.acuerdos.aplicarAlAceptar(

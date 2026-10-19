@@ -2709,8 +2709,12 @@ model SalesOpportunity {
   // vez cuando el mismo cliente tiene una segunda negociación.
   referredByUserId Int?
   leadId           Int?
-  // LEAD, MANUAL, REFERIDO, MIGRADA, CLIENTE_EXISTENTE
+  // LEAD, MANUAL, REFERIDO, MIGRADA, CLIENTE_EXISTENTE, HISTORICO, RENOVACION
   originType       String    @default("MANUAL")
+  // Fase 4 (2026-10-18): contrato de servicio que esta oportunidad renueva (originType
+  // RENOVACION). Sin FK a propósito, igual que SalesAgreement.opportunityId. Una sola
+  // oportunidad de renovación por contrato.
+  renewsAgreementId Int?
   notes            String?
   createdBy        Int
   createdAt        DateTime  @default(now())
@@ -2721,6 +2725,7 @@ model SalesOpportunity {
   services     SalesOpportunityService[]
   stageChanges SalesOpportunityStageChange[]
 
+  @@index([renewsAgreementId])
   @@index([companyId, status])
   @@index([salesClientId])
   @@index([companyId, assignedUserId])

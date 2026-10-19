@@ -544,6 +544,8 @@ export default function OportunidadesPage() {
             const c = resultado.contratoResultado;
             const contratoTxt = !c
               ? ''
+              : c.accion === 'RENOVADO'
+                ? ` Se renovó el contrato de ${c.clienteNombre}: el contrato nuevo ${c.titulo ? `«${c.titulo}»` : `#${c.agreementId}`} (${c.servicios.join(', ')}) está en Contratos y el anterior quedó Renovado.`
               : c.accion === 'AGREGADO'
                 ? ` ${c.servicios.join(', ')} se sumó al contrato ${c.titulo ? `«${c.titulo}»` : `#${c.agreementId}`} de ${c.clienteNombre}.`
                 : c.tipo === 'PRODUCTO'

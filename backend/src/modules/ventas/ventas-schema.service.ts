@@ -7,6 +7,7 @@ import {
 } from './sales-agreement.schema';
 import { COTIZADOR_DDL } from './cotizador.schema';
 import {
+  SALES_OPPORTUNITY_COLUMNS_DDL,
   SALES_PIPELINE_BACKFILL,
   SALES_PIPELINE_DDL,
 } from './sales-pipeline.schema';
@@ -89,26 +90,34 @@ export class VentasSchemaService implements OnModuleInit {
     }
   }
 
-  // Columnas nuevas de tablas que ya existen (tipo de documento de Documentación). Aparte del
-  // resto del esquema: si otra sentencia falla y deshace la transacción grande, estas columnas
-  // igual quedan, porque Prisma las pide en cada consulta a "SalesContract".
+  // Columnas nuevas de tablas que ya existen (tipo de documento de Documentación y el contrato que
+  // renueva una oportunidad). Aparte del resto del esquema: si otra sentencia falla y deshace la
+  // transacción grande, estas columnas igual quedan, porque Prisma las pide en cada consulta a
+  // "SalesContract" y "SalesOpportunity". Cada lista va en su propia transacción: en una base nueva
+  // la tabla de oportunidades aún no existe y su ALTER fallaría (se crea con la transacción grande).
   private async agregarColumnasNuevas() {
-    try {
-      await this.prisma.$transaction(
-        async (tx) => {
-          await tx.$queryRawUnsafe(
-            `SELECT 1 AS ok FROM (SELECT pg_advisory_xact_lock(${LOCK_ID})) AS candado`,
-          );
-          for (const sql of SALES_CONTRACT_COLUMNS_DDL) {
-            await tx.$executeRawUnsafe(sql);
-          }
-        },
-        { timeout: 60_000, maxWait: 60_000 },
-      );
-    } catch (err) {
-      this.logger.error(
-        `No se pudieron agregar las columnas de tipo de documento a SalesContract: ${(err as Error).message}`,
-      );
+    const listas: { nombre: string; sentencias: string[] }[] = [
+      { nombre: 'SalesContract (tipo de documento)', sentencias: SALES_CONTRACT_COLUMNS_DDL },
+      { nombre: 'SalesOpportunity (renovaciones)', sentencias: SALES_OPPORTUNITY_COLUMNS_DDL },
+    ];
+    for (const { nombre, sentencias } of listas) {
+      try {
+        await this.prisma.$transaction(
+          async (tx) => {
+            await tx.$queryRawUnsafe(
+              `SELECT 1 AS ok FROM (SELECT pg_advisory_xact_lock(${LOCK_ID})) AS candado`,
+            );
+            for (const sql of sentencias) {
+              await tx.$executeRawUnsafe(sql);
+            }
+          },
+          { timeout: 60_000, maxWait: 60_000 },
+        );
+      } catch (err) {
+        this.logger.error(
+          `No se pudieron agregar las columnas nuevas de ${nombre}: ${(err as Error).message}`,
+        );
+      }
     }
   }
 

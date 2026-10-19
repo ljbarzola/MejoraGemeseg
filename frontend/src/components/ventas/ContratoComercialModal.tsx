@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import ErrorBanner from '../common/ErrorBanner';
 import DateInput from '../common/DateInput';
 import MotivoCierreModal from './MotivoCierreModal';
@@ -30,6 +30,13 @@ interface Props {
   servicios: SalesServicio[];
   onClose: () => void;
   onSaved: (c: ContratoComercial) => void;
+  // Solo al renovar. Fase 4: al aceptar una oportunidad de renovación este mismo formulario recoge las
+  // fechas, servicios y valor del contrato nuevo, pero NO renueva por su cuenta: entrega los datos a
+  // quien lo abrió (que los manda junto con el cambio de etapa). Si lanza, el error se muestra aquí.
+  // Con esto el fin del contrato nuevo viene lleno (misma duración que el anterior).
+  onCapturar?: (datos: ContratoComercialInput) => Promise<void>;
+  introRenovar?: ReactNode;
+  textoBoton?: string;
 }
 
 const TITULOS: Record<Modo, string> = {
@@ -66,6 +73,7 @@ const dineroTexto = (v: number) =>
 
 export default function ContratoComercialModal({
   modo, contrato, clientes = [], clienteIdInicial, servicios, onClose, onSaved,
+  onCapturar, introRenovar, textoBoton,
 }: Props) {
   const [clienteId, setClienteId] = useState<number | ''>(contrato?.salesClientId ?? clienteIdInicial ?? '');
   // Servicio recurrente o venta de producto. Se elige al crear y ya no cambia.
@@ -79,7 +87,17 @@ export default function ContratoComercialModal({
   const [inicio, setInicio] = useState(
     modo === 'renovar' ? diaSiguiente(aInputDia(contrato?.endDate)) : aInputDia(contrato?.startDate),
   );
-  const [fin, setFin] = useState(modo === 'renovar' ? '' : aInputDia(contrato?.endDate));
+  const [fin, setFin] = useState(() => {
+    if (modo !== 'renovar') return aInputDia(contrato?.endDate);
+    // Al aceptar una renovación (onCapturar) el formulario viene LLENO: el contrato nuevo dura lo mismo que el anterior.
+    const ini = aInputDia(contrato?.startDate);
+    const finAnterior = aInputDia(contrato?.endDate);
+    if (!onCapturar || !ini || !finAnterior) return '';
+    const dias = Math.round((Date.parse(`${finAnterior}T00:00:00Z`) - Date.parse(`${ini}T00:00:00Z`)) / 86400000);
+    const f = new Date(`${diaSiguiente(finAnterior)}T00:00:00.000Z`);
+    f.setUTCDate(f.getUTCDate() + dias);
+    return f.toISOString().slice(0, 10);
+  });
   const [serviceIds, setServiceIds] = useState<number[]>(contrato?.services.map((s) => s.id) ?? []);
   const [valor, setValor] = useState<string>(contrato?.monthlyValue != null ? String(contrato.monthlyValue) : '');
   const [gracia, setGracia] = useState<string>(contrato?.graceDays != null ? String(contrato.graceDays) : '');
@@ -201,6 +219,9 @@ export default function ContratoComercialModal({
       }
     } else if (modo === 'editar' && contrato) {
       guardado = await updateContratoComercial(contrato.id, base);
+    } else if (contrato && onCapturar) {
+      await onCapturar(base);
+      return;
     } else if (contrato) {
       guardado = await renovarContratoComercial(contrato.id, base);
     } else {
@@ -250,9 +271,11 @@ export default function ContratoComercialModal({
           <div className="modal-body">
             <ErrorBanner mensaje={error} />
             {modo === 'renovar' && (
-              <p style={{ fontSize: 13, color: '#666', marginTop: 0 }}>
-                Se crea un contrato nuevo para el mismo cliente y el actual queda como «Renovado». Los servicios, el valor y los días de gracia se copian; ajústalos si cambiaron. Si bajan servicios o valor, se te pedirá el motivo.
-              </p>
+              introRenovar ?? (
+                <p style={{ fontSize: 13, color: '#666', marginTop: 0 }}>
+                  Se crea un contrato nuevo para el mismo cliente y el actual queda como «Renovado». Los servicios, el valor y los días de gracia se copian; ajústalos si cambiaron. Si bajan servicios o valor, se te pedirá el motivo.
+                </p>
+              )
             )}
 
             {modo === 'crear' && (
@@ -447,7 +470,7 @@ export default function ContratoComercialModal({
           <div className="modal-actions">
             <button className="btn-secondary" onClick={onClose}>Cancelar</button>
             <button className="auth-btn" onClick={alGuardar} disabled={guardando}>
-              {guardando ? 'Guardando...' : modo === 'renovar' ? 'Renovar contrato' : 'Guardar'}
+              {guardando ? 'Guardando...' : modo === 'renovar' ? (textoBoton ?? 'Renovar contrato') : 'Guardar'}
             </button>
           </div>
         </div>
@@ -473,7 +496,7 @@ export default function ContratoComercialModal({
           titulo="¿Por qué baja el contrato?"
           descripcion={contrato ? `Contrato de ${contrato.salesClient.name}` : undefined}
           contexto={contextoReduccion}
-          confirmLabel={modo === 'renovar' ? 'Renovar contrato' : 'Guardar'}
+          confirmLabel={modo === 'renovar' ? (textoBoton ?? 'Renovar contrato') : 'Guardar'}
           onConfirm={async (motivo) => { await guardar(motivo); }}
           onCancel={() => setPidiendoMotivo(false)}
         />

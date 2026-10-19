@@ -3,15 +3,19 @@ import { ArrowRight } from 'lucide-react';
 import ErrorBanner from '../common/ErrorBanner';
 import DateInput from '../common/DateInput';
 import MotivoCierreModal from './MotivoCierreModal';
+import ContratoComercialModal from './ContratoComercialModal';
 import { diaCorto } from '../../utils/contratoComercial';
 import {
   cambiarEtapaOportunidad,
+  getContratoComercial,
   getContratosComerciales,
+  getServicios,
   type AceptarContratoInput,
   type ContratoComercial,
   type ContratoResultado,
   type Oportunidad,
   type SalesClientStage,
+  type SalesServicio,
 } from '../../services/ventas.service';
 
 interface Props {
@@ -54,18 +58,51 @@ export default function CambioEtapaOportunidadModal({ oportunidad, etapas, desti
   const [garantia, setGarantia] = useState<'' | 'si' | 'no'>('');
   const [meses, setMeses] = useState('');
 
+  // Fase 4: si la oportunidad renueva un contrato, al aceptar no se pregunta servicio/producto: se
+  // abre el formulario de renovación ya lleno con los datos del contrato anterior.
+  const renueva = oportunidad.renewsAgreementId ?? null;
+  const [contratoPrevio, setContratoPrevio] = useState<ContratoComercial | null | undefined>(undefined);
+  const [catalogo, setCatalogo] = useState<SalesServicio[]>([]);
+
   useEffect(() => {
-    if (!esAceptada) return;
+    if (!esAceptada || renueva) return;
     getContratosComerciales({ clienteId: oportunidad.salesClientId, tipo: 'SERVICIO' })
       .then((lista) => setVigentes(lista.filter((c) => ESTADOS_VIGENTES.includes(c.estado))))
       .catch(() => setVigentes([]));
-  }, [esAceptada, oportunidad.salesClientId]);
+  }, [esAceptada, renueva, oportunidad.salesClientId]);
+
+  useEffect(() => {
+    if (!esAceptada || !renueva) return;
+    Promise.all([getContratoComercial(renueva), getServicios(true)])
+      .then(([c, ss]) => { setContratoPrevio(c); setCatalogo(ss); })
+      .catch(() => setContratoPrevio(null));
+  }, [esAceptada, renueva]);
 
   const cliente = oportunidad.salesClient.name;
   const serviciosTexto = oportunidad.services.map((s) => s.name).join(', ');
-  const sinServicios = esAceptada && oportunidad.services.length === 0;
+  const sinServicios = esAceptada && !renueva && oportunidad.services.length === 0;
+  const nombreContratoPrevio = contratoPrevio ? (contratoPrevio.title ? `«${contratoPrevio.title}»` : `#${contratoPrevio.id}`) : '';
+  // Solo se pide el formulario si el contrato todavía se puede renovar; si ya se renovó a mano o se
+  // canceló, se cae al modal sencillo (el servidor acepta sin crear otro, o explica por qué no).
+  const renovando = esAceptada && !!renueva && !!contratoPrevio
+    && contratoPrevio.estado !== 'RENOVADO' && contratoPrevio.estado !== 'CANCELADO';
 
   if (esPerdida) {
+    if (renueva) {
+      return (
+        <MotivoCierreModal
+          kind="CONTRATO_NO_RENOVADO"
+          titulo="¿Por qué no se renovó?"
+          descripcion={`${cliente}${oportunidad.title ? ` · ${oportunidad.title}` : ''}`}
+          contexto="Se guarda una sola vez: queda como el motivo por el que ese contrato no se renovó y también en esta oportunidad. Si no se sabe, elige «Sin información»."
+          confirmLabel="Marcar como perdida"
+          onConfirm={async (motivo) => {
+            onDone(await cambiarEtapaOportunidad(oportunidad.id, { toStatus: destino.key, motivo }));
+          }}
+          onCancel={onCancel}
+        />
+      );
+    }
     return (
       <MotivoCierreModal
         kind="OPP_PERDIDA"
@@ -80,6 +117,55 @@ export default function CambioEtapaOportunidadModal({ oportunidad, etapas, desti
     );
   }
 
+  if (esAceptada && renueva && contratoPrevio === undefined) {
+    return (
+      <div className="modal-overlay" onClick={onCancel}>
+        <div className="modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-body"><p style={{ margin: 0, color: '#888' }}>Revisando el contrato que se renueva...</p></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (renovando && contratoPrevio) {
+    return (
+      <ContratoComercialModal
+        modo="renovar"
+        contrato={contratoPrevio}
+        servicios={catalogo}
+        onClose={onCancel}
+        onSaved={() => undefined}
+        textoBoton="Aceptar y crear el contrato nuevo"
+        introRenovar={
+          <p style={{ fontSize: 13, color: '#4a5568', marginTop: 0 }}>
+            Se acepta la renovación de <strong>{cliente}</strong>: se crea el contrato nuevo y {nombreContratoPrevio}
+            {contratoPrevio.endDate ? ` (termina el ${diaCorto(contratoPrevio.endDate)})` : ''} queda como «Renovado». Ya viene lleno con los datos del contrato anterior (empieza el día siguiente a su fin y dura lo mismo): revisa las fechas, los servicios y el valor mensual. Si baja servicios o valor, se te pedirá el motivo.
+          </p>
+        }
+        onCapturar={async (datos) => {
+          onDone(
+            await cambiarEtapaOportunidad(oportunidad.id, {
+              toStatus: destino.key,
+              contrato: {
+                tipo: 'RENOVACION',
+                renovacion: {
+                  title: datos.title || undefined,
+                  startDate: datos.startDate,
+                  endDate: datos.endDate || undefined,
+                  serviceIds: datos.serviceIds,
+                  monthlyValue: datos.monthlyValue,
+                  graceDays: datos.graceDays,
+                  notes: datos.notes || undefined,
+                  motivo: datos.motivo,
+                },
+              },
+            }),
+          );
+        }}
+      />
+    );
+  }
+
   const confirmar = async () => {
     setError('');
     const montoNumero = monto.trim() === '' ? undefined : Number(monto.replace(',', '.'));
@@ -87,7 +173,7 @@ export default function CambioEtapaOportunidadModal({ oportunidad, etapas, desti
       return setError('El monto cotizado no es válido.');
     }
     let contrato: AceptarContratoInput | undefined;
-    if (esAceptada) {
+    if (esAceptada && !renueva) {
       if (!tipo) return setError('Elige si lo que se aceptó es un servicio o un producto/instalación.');
       if (tipo === 'SERVICIO') {
         if (vigentes === null) return setError('Estoy revisando los contratos de este cliente; intenta de nuevo en un momento.');
@@ -157,7 +243,17 @@ export default function CambioEtapaOportunidadModal({ oportunidad, etapas, desti
             </div>
           )}
 
-          {esAceptada && (
+          {esAceptada && renueva && (
+            <div style={{ background: '#f7fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: 13, color: '#4a5568' }}>
+              {contratoPrevio === null
+                ? `No pude revisar el contrato que renueva esta oportunidad de ${cliente}. Si confirmas, el servidor lo comprueba y te avisa si falta algo.`
+                : contratoPrevio?.estado === 'RENOVADO'
+                  ? `El contrato ${nombreContratoPrevio} de ${cliente} ya se renovó desde Contratos. Al confirmar solo se marca la oportunidad como Aceptada; no se crea otro contrato.`
+                  : `El contrato ${nombreContratoPrevio} de ${cliente} está cancelado y no se puede renovar. Al confirmar el servidor te lo explicará: si no se va a renovar, pasa la oportunidad a Perdida.`}
+            </div>
+          )}
+
+          {esAceptada && !renueva && (
             <div style={{ background: '#f7fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
               {sinServicios ? (
                 <p style={{ margin: 0, fontSize: 13, color: '#c53030' }}>

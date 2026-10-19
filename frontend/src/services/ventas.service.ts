@@ -764,6 +764,8 @@ export interface ContratoComercial {
   // Solo en el detalle:
   motivos?: MotivoRegistrado[];
   incidentes?: IncidenteContrato[];
+  // Fase 4: la oportunidad que gestiona la renovación de este contrato, si existe.
+  renovacionOportunidad?: { id: number; status?: string | null; outcome?: 'GANADA' | 'PERDIDA' | null; closedAt?: string | null } | null;
   renewedFrom?: ContratoComercialRef | null;
   renewals?: ContratoComercialRef[];
   documents?: ContratoComercialDocumento[];
@@ -956,6 +958,8 @@ export interface Oportunidad {
   referredByUserId?: number | null;
   leadId?: number | null;
   originType: string;
+  // Fase 4: contrato de servicio que esta oportunidad renueva (originType RENOVACION).
+  renewsAgreementId?: number | null;
   notes?: string | null;
   services: { id: number; name: string }[];
   // Solo en el detalle:
@@ -976,16 +980,29 @@ export interface OportunidadInput {
 // Fase 3: al ACEPTAR una oportunidad se dice qué pasa con el contrato.
 // `agreementId` suma los servicios a ese contrato vigente; sin él se crea uno
 // nuevo (`confirmarNuevo` cuando el cliente ya tiene contratos vigentes).
+// Fase 4: datos del contrato nuevo al aceptar una renovación (lo que falte sale del anterior).
+export interface RenovacionAlAceptarInput {
+  title?: string;
+  startDate?: string;
+  endDate?: string;
+  serviceIds?: number[];
+  monthlyValue?: number | null;
+  graceDays?: number;
+  notes?: string;
+  motivo?: MotivoInput;
+}
+
 export interface AceptarContratoInput {
-  tipo: 'SERVICIO' | 'PRODUCTO';
+  tipo: 'SERVICIO' | 'PRODUCTO' | 'RENOVACION';
   agreementId?: number;
   confirmarNuevo?: boolean;
   garantiaMeses?: number;
+  renovacion?: RenovacionAlAceptarInput;
 }
 
 export interface ContratoResultado {
-  accion: 'CREADO' | 'AGREGADO';
-  tipo: 'SERVICIO' | 'PRODUCTO';
+  accion: 'CREADO' | 'AGREGADO' | 'RENOVADO';
+  tipo: 'SERVICIO' | 'PRODUCTO' | 'RENOVACION';
   agreementId: number;
   titulo?: string | null;
   clienteNombre: string;
@@ -1010,6 +1027,7 @@ export const ORIGEN_OPORTUNIDAD_LABEL: Record<string, string> = {
   MIGRADA: 'Sistema anterior',
   CLIENTE_EXISTENTE: 'Nuevo servicio de un cliente',
   HISTORICO: 'Ya era cliente',
+  RENOVACION: 'Renovación',
 };
 
 export const getOportunidades = (params?: { etapa?: string; responsableId?: number; clienteId?: number; servicioId?: number; estado?: string; q?: string }): Promise<Oportunidad[]> =>
