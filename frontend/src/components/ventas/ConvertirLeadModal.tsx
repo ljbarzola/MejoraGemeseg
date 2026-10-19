@@ -29,6 +29,10 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
   const [email, setEmail] = useState(lead.email || '');
   const [telefono, setTelefono] = useState(lead.phone || '');
   const [ruc, setRuc] = useState('');
+  // La dirección que trajo el posible cliente (formulario web, anuncio o ingreso a mano): llega a la ficha y se puede corregir.
+  const direccionDeLead = (l: LeadEntrante) =>
+    typeof l.extra?.direccion === 'string' ? (l.extra.direccion as string) : '';
+  const [direccion, setDireccion] = useState(direccionDeLead(lead));
   const [titulo, setTitulo] = useState('');
   // Fase 2: si la empresa ya existía pero la persona no, se puede anotar
   // quién escribió (queda como contacto nuevo de ese cliente).
@@ -48,6 +52,7 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
         const sug = d.serviciosSugeridos ?? lead.serviciosSugeridos ?? [];
         setSugeridos(sug);
         setServiceIds(sug);
+        setDireccion((actual) => actual || direccionDeLead(d));
       })
       .catch(() => setCoincidencias([]))
       .finally(() => setCargando(false));
@@ -65,7 +70,7 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
     try {
       const r = await convertirLeadEntrante(lead.id, {
         ...(destino === 'nuevo'
-          ? { confirmarNuevo: true, name: nombre.trim(), email: email.trim(), phone: telefono.trim(), ruc: ruc.trim() }
+          ? { confirmarNuevo: true, name: nombre.trim(), email: email.trim(), phone: telefono.trim(), ruc: ruc.trim(), address: direccion.trim() || undefined }
           : {
               salesClientId: destino,
               ...(coincidenciaElegida?.contactoId ? { contactId: coincidenciaElegida.contactoId } : {}),
@@ -167,6 +172,13 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
               <div className="form-group">
                 <label>Cédula / RUC (opcional)</label>
                 <input type="text" value={ruc} maxLength={50} onChange={(e) => setRuc(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Dirección (opcional)</label>
+                <input type="text" value={direccion} maxLength={300} onChange={(e) => setDireccion(e.target.value)} placeholder="Ej: Av. Amazonas 123, Quito" />
+                {direccionDeLead(lead) && direccion === direccionDeLead(lead) && (
+                  <small style={{ color: '#718096' }}>La escribió el posible cliente; puedes corregirla. Pasa a la ficha de la empresa.</small>
+                )}
               </div>
             </>
           )}

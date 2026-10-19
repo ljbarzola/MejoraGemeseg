@@ -11,6 +11,7 @@ import { VentasContratosService } from './ventas-contratos.service';
 import { VentasLeadsService } from './ventas-leads.service';
 import { VentasConfigService } from './ventas-config.service';
 import { atribuirCanal, extraerAtribucion } from './lead-atribucion.util';
+import { combinarDireccion } from './lead-datos.util';
 import { datosDeLanding } from './lead-landing.util';
 
 @Controller('ventas/webhook')
@@ -90,6 +91,11 @@ export class VentasWebhookController {
       phone: body?.phone ?? body?.telefono,
       companyName: body?.companyName ?? body?.empresa,
       message: landing.message,
+      // Dirección y ciudad (si el formulario las manda, con nombres en español o inglés): pasan a la ficha.
+      direccion: combinarDireccion(
+        body?.direccion ?? body?.['dirección'] ?? body?.address,
+        body?.ciudad ?? body?.city,
+      ),
       channel: atribuirCanal(atribucion),
       campaign: body?.campaign ?? atribucion['utm_campaign'],
       externalId: body?.externalId,

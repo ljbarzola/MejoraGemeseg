@@ -18,6 +18,8 @@ export class CreateLeadDto {
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsString() companyName?: string;
   @IsOptional() @IsString() message?: string;
+  // Dirección y ciudad (opcionales): pasan a la ficha al convertir el posible cliente en oportunidad.
+  @IsOptional() @IsString() direccion?: string;
   // Fuente obligatoria: una clave del registro de canales (lead-canales.const.ts).
   @IsOptional() @IsString() channel?: string;
   @IsOptional() @IsString() campaign?: string;
@@ -31,6 +33,8 @@ export class UpdateLeadDto {
   @IsOptional() @IsString() phone?: string | null;
   @IsOptional() @IsString() companyName?: string | null;
   @IsOptional() @IsString() message?: string | null;
+  // Vacío o null = quitar la dirección guardada.
+  @IsOptional() @IsString() direccion?: string | null;
   // SERVICIO, EMPLEO, PROVEEDOR, OTRO, SPAM; null = sin clasificar.
   @IsOptional() @IsString() contactReason?: string | null;
 }
@@ -51,6 +55,8 @@ export class ConvertLeadDto {
   @IsOptional() @IsString() email?: string;
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsString() ruc?: string;
+  // Dirección de la ficha. Sin enviar se usa la que trajo el posible cliente.
+  @IsOptional() @IsString() address?: string;
   @IsOptional() @IsArray() @IsInt({ each: true }) serviceIds?: number[];
   @IsOptional() @IsString() title?: string;
   // Fase 2: contacto reconocido en `coincidencias` (se le guarda el teléfono/

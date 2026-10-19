@@ -1115,6 +1115,8 @@ export interface ConvertirLeadInput {
   email?: string;
   phone?: string;
   ruc?: string;
+  // Dirección de la ficha de la empresa nueva (sin enviar, se usa la que trajo el posible cliente).
+  address?: string;
   serviceIds?: number[];
   title?: string;
   // Fase 2: contacto reconocido en `coincidencias` (se le guarda el teléfono/
@@ -1128,9 +1130,9 @@ export const getLeadsEntrantes = (params?: { estado?: string; canal?: string; mo
   api.get('/ventas/entrantes', { params }).then(r => r.data);
 export const getLeadEntrante = (id: number): Promise<LeadEntrante> =>
   api.get(`/ventas/entrantes/${id}`).then(r => r.data);
-export const createLeadEntrante = (data: { name?: string; email?: string; phone?: string; companyName?: string; message?: string; channel?: string; campaign?: string; extra?: Record<string, string> }): Promise<LeadEntrante> =>
+export const createLeadEntrante = (data: { name?: string; email?: string; phone?: string; companyName?: string; message?: string; direccion?: string; channel?: string; campaign?: string; extra?: Record<string, string> }): Promise<LeadEntrante> =>
   api.post('/ventas/entrantes', data).then(r => r.data);
-export const updateLeadEntrante = (id: number, data: Partial<{ name: string; email: string | null; phone: string | null; companyName: string | null; message: string | null; contactReason: MotivoContacto | null }>): Promise<LeadEntrante> =>
+export const updateLeadEntrante = (id: number, data: Partial<{ name: string; email: string | null; phone: string | null; companyName: string | null; message: string | null; direccion: string | null; contactReason: MotivoContacto | null }>): Promise<LeadEntrante> =>
   api.patch(`/ventas/entrantes/${id}`, data).then(r => r.data);
 export const tomarLeadEntrante = (id: number): Promise<LeadEntrante> =>
   api.post(`/ventas/entrantes/${id}/tomar`).then(r => r.data);

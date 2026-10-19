@@ -556,7 +556,7 @@ const GRUPO_CANAL_LABEL: Record<CanalLeadDef['grupo'], string> = {
 // datos propios de esa fuente.
 function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const { canales } = useCanalesLead();
-  const [datos, setDatos] = useState({ name: '', email: '', phone: '', companyName: '', message: '', channel: '' });
+  const [datos, setDatos] = useState({ name: '', email: '', phone: '', companyName: '', direccion: '', message: '', channel: '' });
   const [propios, setPropios] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -604,6 +604,11 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
             <div className="form-group"><label>Teléfono</label><input type="text" value={datos.phone} onChange={(e) => set('phone', e.target.value)} /></div>
           </div>
           <div className="form-group"><label>Empresa</label><input type="text" value={datos.companyName} maxLength={150} onChange={(e) => set('companyName', e.target.value)} /></div>
+          <div className="form-group">
+            <label>Dirección (opcional)</label>
+            <input type="text" value={datos.direccion} maxLength={300} placeholder="Ej: Av. Amazonas 123, Quito" onChange={(e) => set('direccion', e.target.value)} />
+            <small style={{ color: '#718096' }}>Pasa a la ficha de la empresa cuando este posible cliente se convierta en oportunidad.</small>
+          </div>
           <div className="form-group">
             <label>Fuente: cómo llegó *</label>
             <select value={datos.channel} onChange={(e) => elegirFuente(e.target.value)} aria-required="true">

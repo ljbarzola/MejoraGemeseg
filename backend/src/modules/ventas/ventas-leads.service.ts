@@ -27,7 +27,8 @@ import {
   type CanalLead,
 } from './lead-canales.const';
 import { sugerirServicios } from './lead-atribucion.util';
-import { ensureDefaultServices } from './ventas-servicios.util';
+import { ensureDefaultServices, extraServicioRequerido } from './ventas-servicios.util';
+import { combinarDireccion, direccionDeLead } from './lead-datos.util';
 import { nombresParecidos } from './nombre-similar.util';
 
 // Un LEAD es un contacto entrante sin calificar. Solo uno de servicio,
@@ -50,6 +51,9 @@ export interface EntranteInput {
   campaign?: string | null;
   externalId?: string | null;
   extra?: Record<string, unknown>;
+  // Dirección (y ciudad ya combinada, ver combinarDireccion): se guarda en extra.direccion y pasa a la
+  // ficha al convertir el posible cliente en oportunidad.
+  direccion?: string | null;
   createdBy?: number | null;
 }
 
@@ -124,7 +128,10 @@ export class VentasLeadsService {
         channel: input.channel,
         campaign: recortar(input.campaign, MAX_CAMPANA),
         externalId,
-        extra: (input.extra ?? {}) as Prisma.InputJsonValue,
+        extra: {
+          ...(input.extra ?? {}),
+          ...(recortar(input.direccion, 300) ? { direccion: recortar(input.direccion, 300) } : {}),
+        } as Prisma.InputJsonValue,
         createdBy: input.createdBy ?? null,
       },
     });
@@ -202,7 +209,11 @@ export class VentasLeadsService {
     const nombre =
       valor('FULL_NAME') ||
       [valor('FIRST_NAME'), valor('LAST_NAME')].filter(Boolean).join(' ');
-    const conocidas = ['FULL_NAME', 'FIRST_NAME', 'LAST_NAME', 'EMAIL', 'PHONE_NUMBER', 'COMPANY_NAME'];
+    const conocidas = [
+      'FULL_NAME', 'FIRST_NAME', 'LAST_NAME', 'EMAIL', 'PHONE_NUMBER', 'COMPANY_NAME',
+      // La dirección y la ciudad se guardan aparte (pasan a la ficha), no como pregunta del formulario.
+      'STREET_ADDRESS', 'CITY',
+    ];
     // Preguntas propias del formulario: se guardan como texto en el mensaje.
     const preguntas = columnas
       .filter((c) => !conocidas.includes(String(c.column_id).toUpperCase()) && c.string_value)
@@ -213,6 +224,7 @@ export class VentasLeadsService {
       phone: valor('PHONE_NUMBER'),
       companyName: valor('COMPANY_NAME'),
       message: preguntas.join('\n'),
+      direccion: combinarDireccion(valor('STREET_ADDRESS'), valor('CITY')),
       channel: 'GOOGLE_ADS',
       campaign: body?.campaign_id ? `Campaña ${body.campaign_id}` : null,
       externalId: body?.lead_id ? String(body.lead_id) : null,
@@ -421,6 +433,7 @@ export class VentasLeadsService {
       phone?: string;
       companyName?: string;
       message?: string;
+      direccion?: string;
       channel?: string;
       campaign?: string;
       extra?: Record<string, string>;
@@ -448,6 +461,7 @@ export class VentasLeadsService {
       phone: dto.phone,
       companyName: dto.companyName,
       message: dto.message,
+      direccion: dto.direccion,
       campaign: dto.campaign,
       channel: canal.key,
       extra,
@@ -492,6 +506,7 @@ export class VentasLeadsService {
       phone?: string | null;
       companyName?: string | null;
       message?: string | null;
+      direccion?: string | null;
       contactReason?: string | null;
     },
   ) {
@@ -502,6 +517,14 @@ export class VentasLeadsService {
       throw new BadRequestException('Este posible cliente ya está cerrado: no se puede modificar.');
     }
     const data: Prisma.SalesLeadUpdateInput = {};
+    if (dto.direccion !== undefined) {
+      // La dirección vive en `extra`; se cambia solo esa clave y se respeta el resto (gclid, campaña…).
+      const extra = { ...((actual.extra ?? {}) as Record<string, unknown>) };
+      const nueva = recortar(dto.direccion, 300);
+      if (nueva) extra['direccion'] = nueva;
+      else delete extra['direccion'];
+      data.extra = extra as Prisma.InputJsonValue;
+    }
     if (dto.name !== undefined) {
       const n = recortar(dto.name, MAX_NOMBRE);
       if (!n) throw new BadRequestException('El nombre no puede quedar vacío.');
@@ -599,6 +622,8 @@ export class VentasLeadsService {
       email?: string;
       phone?: string;
       ruc?: string;
+      // Dirección de la ficha; sin enviar se usa la que trajo el posible cliente.
+      address?: string;
       serviceIds?: number[];
       title?: string;
       // Fase 2: contacto reconocido en `coincidencias` (persona ya guardada en
@@ -629,19 +654,28 @@ export class VentasLeadsService {
     const nombre = recortar(dto.name ?? lead.companyName ?? lead.name, MAX_NOMBRE);
     if (!nombre) throw new BadRequestException('Falta el nombre de la empresa o persona.');
 
+    // Dirección que llega a la ficha: la que se corrigió en el cuadro de «Pasar a oportunidad» o, si no se
+    // tocó, la que trajo el posible cliente.
+    const direccion = recortar(dto.address, 300) ?? direccionDeLead(lead.extra);
+
     // Servicios de la oportunidad (del catálogo de la empresa).
     const serviceIds = [...new Set(dto.serviceIds ?? [])];
+    let nombresServicios: string[] = [];
     if (serviceIds.length > 0) {
-      const ok = await this.prisma.salesService.count({ where: { id: { in: serviceIds }, companyId: cid } });
-      if (ok !== serviceIds.length) throw new BadRequestException('Alguno de los servicios no existe.');
+      const servicios = await this.prisma.salesService.findMany({
+        where: { id: { in: serviceIds }, companyId: cid },
+        select: { name: true },
+      });
+      if (servicios.length !== serviceIds.length) throw new BadRequestException('Alguno de los servicios no existe.');
+      nombresServicios = servicios.map((s) => s.name);
     }
 
-    let clienteExistente: { id: number; name: string } | null = null;
+    let clienteExistente: { id: number; name: string; address: string | null } | null = null;
     let posiblesDuplicados: { id: number; name: string }[] = [];
     if (dto.salesClientId) {
       clienteExistente = await this.prisma.salesClient.findFirst({
         where: { id: dto.salesClientId, companyId: cid },
-        select: { id: true, name: true },
+        select: { id: true, name: true, address: true },
       });
       if (!clienteExistente) throw new NotFoundException('No se encontró en el Directorio');
     } else {
@@ -677,6 +711,10 @@ export class VentasLeadsService {
       if (clienteExistente) {
         clienteId = clienteExistente.id;
         originType = 'CLIENTE_EXISTENTE';
+        // Solo se completa lo que le falta: nunca se pisa una dirección que la ficha ya tiene.
+        if (direccion && !(clienteExistente.address ?? '').trim()) {
+          await tx.salesClient.update({ where: { id: clienteId }, data: { address: direccion } });
+        }
       } else {
         const creado = await tx.salesClient.create({
           data: {
@@ -687,9 +725,12 @@ export class VentasLeadsService {
             email,
             phone,
             ruc,
+            address: direccion,
             observaciones: lead.message ? lead.message.slice(0, MAX_MENSAJE) : null,
             extra: {
               fuente: canalDef(lead.channel)?.fuenteCliente ?? 'OTRO',
+              // «Servicio requerido» de la ficha, con lo que se eligió al pasar a oportunidad.
+              ...extraServicioRequerido(nombresServicios),
             },
             status: inicial?.key ?? null,
           },
