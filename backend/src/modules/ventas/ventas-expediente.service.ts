@@ -103,7 +103,7 @@ export class VentasExpedienteService {
   private async construir(companyId: number, clienteId: number): Promise<string> {
     const hoy = hoyEcuador();
     const hoyD = diaUtc(hoy);
-    const [cliente, opps, actividades, contratos, motivos, documentos, ciclo, velocidad, usuarios] =
+    const [cliente, opps, actividades, contratos, motivos, documentos, ciclo, velocidad, usuarios, incidentesContrato] =
       await Promise.all([
         this.prisma.salesClient.findFirstOrThrow({
           where: { id: clienteId, companyId },
@@ -137,6 +137,11 @@ export class VentasExpedienteService {
         this.ciclos.calcular(companyId, [clienteId]),
         this.analitica.velocidadEmpresa(companyId),
         this.prisma.user.findMany({ where: { companyId }, select: { id: true, fullName: true } }),
+        // Desde 2026-10-18 los incidentes y la conversación de salida se anotan en el contrato.
+        this.prisma.salesAgreementIncident.findMany({
+          where: { companyId, agreement: { salesClientId: clienteId } },
+          orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+        }),
       ]);
     const nombreUsuario = new Map(usuarios.map((u) => [u.id, u.fullName]));
     const cicloCliente = ciclo.get(clienteId);
@@ -329,18 +334,27 @@ export class VentasExpedienteService {
     );
 
     // lo operativo: quejas e incidentes
+    // Las quejas siguen en el Historial del cliente; los incidentes y la conversación de salida
+    // viven en cada contrato (los registros viejos del Historial se siguen leyendo).
+    const tituloContrato = new Map(contratos.map((c) => [c.id, c.title || `Contrato #${c.id}`]));
     const operativas = actividades.filter((a) => a.type === 'QUEJA' || a.type === 'INCIDENTE_SERVICIO');
-    if (operativas.length) {
-      out.push(`QUEJAS E INCIDENTES DEL SERVICIO (${operativas.length}):`);
+    const incidentes = incidentesContrato.filter((i) => i.type === 'INCIDENTE_SERVICIO');
+    if (operativas.length || incidentes.length) {
+      out.push(`QUEJAS E INCIDENTES DEL SERVICIO (${operativas.length + incidentes.length}):`);
       for (const a of operativas) {
         out.push(`- ${fecha(a.createdAt)} [#act:${a.id}] ${ETIQUETA_ACTIVIDAD[a.type]}: ${recorte(a.text, MAX_TEXTO_ACTIVIDAD)}`);
+      }
+      for (const i of incidentes) {
+        out.push(`- ${fecha(i.occurredAt)} Incidente del servicio en «${tituloContrato.get(i.agreementId)}»: ${recorte(i.text, MAX_TEXTO_ACTIVIDAD)}`);
       }
     } else {
       out.push('Quejas e incidentes del servicio: ninguno registrado (no significa que no hayan ocurrido: solo que nadie los anotó).');
     }
     const salida = actividades.filter((a) => a.type === 'CONVERSACION_SALIDA');
-    if (salida.length) {
+    const salidaContrato = incidentesContrato.filter((i) => i.type === 'CONVERSACION_SALIDA');
+    if (salida.length || salidaContrato.length) {
       for (const a of salida) out.push(`Conversación de salida ${fecha(a.createdAt)} [#act:${a.id}]: ${recorte(a.text, 400)}`);
+      for (const i of salidaContrato) out.push(`Conversación de salida ${fecha(i.occurredAt)} sobre «${tituloContrato.get(i.agreementId)}»: ${recorte(i.text, 400)}`);
     } else if (cicloCliente && (cicloCliente.ciclo === 'EX_CLIENTE' || cicloCliente.ciclo === 'PERDIDO')) {
       out.push('Conversación de salida: no se registró.');
       noConsta.push('No hay conversación de salida con el cliente: nadie anotó qué dijo el propio cliente sobre por qué se fue.');

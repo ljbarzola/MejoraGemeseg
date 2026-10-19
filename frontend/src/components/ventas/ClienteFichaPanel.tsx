@@ -22,6 +22,7 @@ import {
   updateSalesClientActivity,
   deleteSalesClientActivity,
   SALES_ACTIVITY_TYPES,
+  SALES_ACTIVITY_TYPES_TODOS,
   SalesClient,
   SalesClientField,
   SalesActivityType,
@@ -313,7 +314,7 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
       const Icono = ACTIVITY_ICON[ev.type] || StickyNote;
       icono = <Icono size={14} />;
       color = '#4a5568';
-      const nombreTipo = ev.type === 'OTRO' ? ev.otherLabel || 'Otro' : SALES_ACTIVITY_TYPES.find((t) => t.value === ev.type)?.label;
+      const nombreTipo = ev.type === 'OTRO' ? ev.otherLabel || 'Otro' : SALES_ACTIVITY_TYPES_TODOS.find((t) => t.value === ev.type)?.label;
       contenido = editingId === ev.activityId ? (
         <div>
           <textarea
@@ -485,7 +486,10 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
           {pestana === 'historial' && (
             <>
               {/* Agregar actividad */}
-              <h3 style={{ fontSize: '0.95rem', margin: '0 0 8px' }}>Agregar a la línea de tiempo</h3>
+              <h3 style={{ fontSize: '0.95rem', margin: '0 0 4px' }}>Agregar a la línea de tiempo</h3>
+              <p style={{ fontSize: 12, color: '#718096', margin: '0 0 8px' }}>
+                Los incidentes del servicio y la conversación de salida ya no se anotan aquí: se registran dentro de cada contrato (Ventas → Contratos), porque ocurren durante la vigencia de uno en particular.
+              </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <div style={{ flex: '0 0 auto' }}>

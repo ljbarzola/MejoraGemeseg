@@ -7,6 +7,7 @@ import EstadoContratoBadge from '../../components/ventas/EstadoContratoBadge';
 import ContratoComercialModal from '../../components/ventas/ContratoComercialModal';
 import MotivoCierreModal from '../../components/ventas/MotivoCierreModal';
 import SubirDocumentoModal from '../../components/ventas/SubirDocumentoModal';
+import IncidentesContrato from '../../components/ventas/IncidentesContrato';
 import { useToast } from '../../contexts/ToastContext';
 import { etiquetaTipoDocumento } from '../../utils/documentoTipos';
 import { subPageTitle } from './contratoStyles';
@@ -443,6 +444,8 @@ export default function ContratoComercialDetalle() {
           )
         )}
       </div>
+
+      <IncidentesContrato contrato={contrato} onCambio={setContrato} />
 
       {subiendoDoc && (
         <SubirDocumentoModal

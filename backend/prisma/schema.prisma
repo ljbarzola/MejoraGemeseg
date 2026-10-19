@@ -49,7 +49,8 @@ model Company {
   salesSettings             SalesSetting[]
   salesOpportunities        SalesOpportunity[]
   salesContacts             SalesContact[]
-  salesReasons              SalesReason[]
+  salesAgreementIncidents   SalesAgreementIncident[]
+  salesReasons            SalesReason[]
   salesReasonEntries        SalesReasonEntry[]
   entidades                 Entidad[]
   requisitosDocumento       RequisitoDocumento[]
@@ -2054,6 +2055,7 @@ model SalesAgreement {
   renewals    SalesAgreement[]         @relation("SalesAgreementRenewal")
   services    SalesAgreementService[]
   documents   SalesAgreementDocument[]
+  incidents   SalesAgreementIncident[]
 
   @@index([companyId, status])
   @@index([salesClientId])
@@ -2080,6 +2082,25 @@ model SalesAgreementDocument {
   agreement SalesAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
 
   @@index([agreementId])
+}
+
+// Incidentes del servicio y conversación de salida de UN contrato (2026-10-18). Antes se
+// anotaban como actividades del cliente (SalesClientActivity); ver sales-agreement-incident.schema.ts.
+// type: INCIDENTE_SERVICIO | CONVERSACION_SALIDA (String, sin enum: no hace falta migración).
+model SalesAgreementIncident {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  agreementId Int
+  type        String
+  occurredAt  DateTime @db.Date
+  text        String
+  createdBy   Int
+  createdAt   DateTime @default(now())
+
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agreement SalesAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, agreementId])
 }
 
 enum TicketSoporteTipo {

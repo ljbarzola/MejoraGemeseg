@@ -527,6 +527,9 @@ export type SalesActivityType =
   | 'COTIZACION_ENVIADA' | 'QUEJA' | 'INCIDENTE_SERVICIO' | 'CONVERSACION_SALIDA'
   | 'OTRO';
 
+// Lo que se puede anotar hoy en el Historial. «Incidente del servicio» y «Conversación de salida»
+// se movieron al contrato (2026-10-18; ver IncidentesContrato): ya no se ofrecen aquí, pero los
+// registros viejos se siguen mostrando con su nombre (SALES_ACTIVITY_TYPES_TODOS).
 export const SALES_ACTIVITY_TYPES: { value: SalesActivityType; label: string }[] = [
   { value: 'NOTA', label: 'Nota' },
   { value: 'LLAMADA', label: 'Llamada' },
@@ -534,9 +537,13 @@ export const SALES_ACTIVITY_TYPES: { value: SalesActivityType; label: string }[]
   { value: 'CORREO', label: 'Correo' },
   { value: 'COTIZACION_ENVIADA', label: 'Cotización enviada' },
   { value: 'QUEJA', label: 'Queja' },
+  { value: 'OTRO', label: 'Otro' },
+];
+
+export const SALES_ACTIVITY_TYPES_TODOS: { value: SalesActivityType; label: string }[] = [
+  ...SALES_ACTIVITY_TYPES,
   { value: 'INCIDENTE_SERVICIO', label: 'Incidente del servicio' },
   { value: 'CONVERSACION_SALIDA', label: 'Conversación de salida' },
-  { value: 'OTRO', label: 'Otro' },
 ];
 
 export interface TimelineStageInfo { label: string; color: string }
@@ -714,6 +721,19 @@ export interface ContratoComercialDocumento {
   };
 }
 
+export type TipoIncidenteContrato = 'INCIDENTE_SERVICIO' | 'CONVERSACION_SALIDA';
+
+export interface IncidenteContrato {
+  id: number;
+  agreementId: number;
+  type: TipoIncidenteContrato;
+  occurredAt: string;
+  text: string;
+  createdBy: number;
+  createdByName?: string | null;
+  createdAt: string;
+}
+
 export interface ContratoComercial {
   id: number;
   salesClientId: number;
@@ -743,6 +763,7 @@ export interface ContratoComercial {
   createdAt: string;
   // Solo en el detalle:
   motivos?: MotivoRegistrado[];
+  incidentes?: IncidenteContrato[];
   renewedFrom?: ContratoComercialRef | null;
   renewals?: ContratoComercialRef[];
   documents?: ContratoComercialDocumento[];
@@ -1224,6 +1245,16 @@ export const cancelarContratoComercial = (id: number, data: { date?: string; mot
   api.post(`/ventas/acuerdos/${id}/cancelar`, data).then(r => r.data);
 export const registrarCierreContrato = (id: number, motivo: MotivoInput): Promise<ContratoComercial> =>
   api.post(`/ventas/acuerdos/${id}/cierre`, { motivo }).then(r => r.data);
+
+// Incidentes del servicio y conversación de salida de un contrato. Devuelven el contrato completo.
+export const crearIncidenteContrato = (
+  id: number,
+  input: { type: TipoIncidenteContrato; text: string; date?: string },
+): Promise<ContratoComercial> =>
+  api.post(`/ventas/acuerdos/${id}/incidentes`, input).then(r => r.data);
+
+export const borrarIncidenteContrato = (id: number, incidenteId: number): Promise<ContratoComercial> =>
+  api.delete(`/ventas/acuerdos/${id}/incidentes/${incidenteId}`).then(r => r.data);
 
 // ---------- Embudo de marketing (Leads -> Cotizaron -> Contrataron) ----------
 // Mismos pasos que el panel «Embudo de conversión de clientes potenciales» de

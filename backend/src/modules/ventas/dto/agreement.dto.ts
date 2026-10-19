@@ -216,6 +216,20 @@ export class CloseSalesAgreementDto {
   motivo?: MotivoInputDto;
 }
 
+// Incidente del servicio o conversación de salida de un contrato. `type` se valida en el
+// servicio para dar un mensaje en español; `date` es 'YYYY-MM-DD' (sin enviar: hoy).
+export class CreateAgreementIncidentDto {
+  @IsString()
+  type: string;
+
+  @IsString()
+  text: string;
+
+  @IsOptional()
+  @IsString()
+  date?: string;
+}
+
 export class LinkAgreementDocumentDto {
   @IsInt()
   contractId: number;

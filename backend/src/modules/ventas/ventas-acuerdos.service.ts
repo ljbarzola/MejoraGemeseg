@@ -18,6 +18,7 @@ import {
   sumarDias,
 } from './agreement-status.util';
 import {
+  CreateAgreementIncidentDto,
   CreateSalesAgreementDto,
   CreateSalesServiceDto,
   RenewSalesAgreementDto,
@@ -34,6 +35,7 @@ import type { AceptarContratoDto } from './dto/opportunity.dto';
 const MAX_TITULO = 150;
 const MAX_NOTAS = 2000;
 const MAX_SERVICIO = 100;
+const TIPOS_INCIDENTE = ['INCIDENTE_SERVICIO', 'CONVERSACION_SALIDA'];
 
 const norm = (s: string | null | undefined) =>
   (s || '')
@@ -279,7 +281,84 @@ export class VentasAcuerdosService {
       where: { companyId: cid, agreementId: id },
       orderBy: { createdAt: 'desc' },
     });
-    return { ...this.formatear(c), motivos };
+    const incidentesBd = await this.prisma.salesAgreementIncident.findMany({
+      where: { companyId: cid, agreementId: id },
+      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+    });
+    const autores = await this.prisma.user.findMany({
+      where: { id: { in: [...new Set(incidentesBd.map((i) => i.createdBy))] } },
+      select: { id: true, fullName: true },
+    });
+    const nombreAutor = new Map(autores.map((u) => [u.id, u.fullName]));
+    const incidentes = incidentesBd.map((i) => ({
+      ...i,
+      createdByName: nombreAutor.get(i.createdBy) ?? null,
+    }));
+    return { ...this.formatear(c), motivos, incidentes };
+  }
+
+  // Incidente del servicio o conversación de salida de un contrato (antes eran actividades
+  // del Historial del cliente). Devuelve el contrato completo para que la pantalla se refresque.
+  async crearIncidente(
+    companyId: number | null,
+    userId: number,
+    id: number,
+    dto: CreateAgreementIncidentDto,
+  ) {
+    const cid = this.requireCompany(companyId);
+    if (!TIPOS_INCIDENTE.includes(dto.type)) {
+      throw new BadRequestException(
+        'El tipo debe ser «Incidente del servicio» o «Conversación de salida».',
+      );
+    }
+    const texto = (dto.text || '').trim();
+    if (!texto) {
+      throw new BadRequestException('Escribe qué pasó antes de guardar.');
+    }
+    if (texto.length > MAX_NOTAS) {
+      throw new BadRequestException(
+        `El texto es demasiado largo (máximo ${MAX_NOTAS} caracteres).`,
+      );
+    }
+    const contrato = await this.prisma.salesAgreement.findFirst({
+      where: { id, companyId: cid },
+      select: { id: true },
+    });
+    if (!contrato) throw new NotFoundException('Contrato no encontrado');
+    let fecha = parseDiaContrato(hoyEcuador());
+    if ((dto.date || '').trim()) {
+      fecha = parseDiaContrato(dto.date);
+      if (!fecha) throw new BadRequestException('La fecha no es válida.');
+      if (dto.date! > hoyEcuador()) {
+        throw new BadRequestException('La fecha no puede ser futura.');
+      }
+    }
+    await this.prisma.salesAgreementIncident.create({
+      data: {
+        companyId: cid,
+        agreementId: id,
+        type: dto.type,
+        occurredAt: fecha!,
+        text: texto,
+        createdBy: userId,
+      },
+    });
+    return this.getAgreement(cid, id);
+  }
+
+  async borrarIncidente(
+    companyId: number | null,
+    id: number,
+    incidenteId: number,
+  ) {
+    const cid = this.requireCompany(companyId);
+    const borrados = await this.prisma.salesAgreementIncident.deleteMany({
+      where: { id: incidenteId, agreementId: id, companyId: cid },
+    });
+    if (borrados.count === 0) {
+      throw new NotFoundException('Registro no encontrado');
+    }
+    return this.getAgreement(cid, id);
   }
 
   private fechasValidas(

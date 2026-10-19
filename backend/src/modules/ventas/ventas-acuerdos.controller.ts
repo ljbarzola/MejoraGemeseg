@@ -18,6 +18,7 @@ import { VentasAcuerdosService } from './ventas-acuerdos.service';
 import {
   CancelSalesAgreementDto,
   CloseSalesAgreementDto,
+  CreateAgreementIncidentDto,
   CreateSalesAgreementDto,
   CreateSalesServiceDto,
   LinkAgreementDocumentDto,
@@ -164,6 +165,31 @@ export class VentasAcuerdosController {
       id,
       dto.motivo,
     );
+  }
+
+  @Post('acuerdos/:id/incidentes')
+  @Section('VENTAS', 'write')
+  crearIncidente(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateAgreementIncidentDto,
+  ) {
+    return this.acuerdos.crearIncidente(
+      req.user.companyId,
+      req.user.userId,
+      id,
+      dto,
+    );
+  }
+
+  @Delete('acuerdos/:id/incidentes/:incidenteId')
+  @Section('VENTAS', 'write')
+  borrarIncidente(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('incidenteId', ParseIntPipe) incidenteId: number,
+  ) {
+    return this.acuerdos.borrarIncidente(req.user.companyId, id, incidenteId);
   }
 
   @Post('acuerdos/:id/renovar')
