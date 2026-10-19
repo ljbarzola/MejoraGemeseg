@@ -33,7 +33,7 @@ const MOTIVOS_POR_PESTANA: Partial<Record<Pestana, GrupoMotivoClave>> = {
 const tituloMotivos = (clave: GrupoMotivoClave) => GRUPOS_MOTIVOS.find((g) => g.clave === clave)?.titulo ?? '';
 
 const PESTANAS: { key: Pestana; label: string }[] = [
-  { key: 'conexiones', label: 'Conexiones' },
+  { key: 'conexiones', label: 'Cómo llegan los posibles clientes' },
   { key: 'servicios', label: 'Servicios' },
   { key: 'descartes', label: tituloMotivos('POSIBLE_CLIENTE') },
   { key: 'perdidas', label: tituloMotivos('OPORTUNIDAD') },
@@ -137,7 +137,7 @@ export default function ConfiguracionVentasPage() {
           {pestana === 'fuentes' && (
             <div className="admin-section">
               <p style={ayuda}>
-                Estas son las fuentes que ofrece «Nuevo posible cliente» y que el CRM reconoce solo cuando llega uno por la web (por el anuncio del que vino). Todo posible cliente lleva una fuente. La lista es fija; para conectar una fuente nueva ve a «Conexiones».
+                Estas son las fuentes que ofrece «Nuevo posible cliente» y que el CRM reconoce solo cuando llega uno por la web (por el anuncio del que vino). Todo posible cliente lleva una fuente. La lista es fija; para conectar una fuente nueva ve a «Cómo llegan los posibles clientes».
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {canales.map((c) => (

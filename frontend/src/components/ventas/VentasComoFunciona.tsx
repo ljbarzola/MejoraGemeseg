@@ -59,7 +59,7 @@ const OTROS_CRM: { nombre: string; filas: FilaEquivalencia[]; diferencia: string
       { crm: 'Posibles clientes', aqui: 'Posibles clientes', nota: 'Igual: quien escribió y aún no sabemos si quiere contratar.' },
       { crm: 'Tratos', aqui: 'Oportunidades', nota: 'La negociación de un servicio, con su etapa y su monto cotizado.' },
       { crm: 'Cuentas y Contactos', aqui: 'Directorio', nota: 'Los datos de cada empresa o persona. Por ahora cada una tiene un solo correo y teléfono; sin responsable ni etapa (eso es de la oportunidad).' },
-      { crm: 'Tareas, Reuniones y Llamadas', aqui: 'Historial y Siguiente paso', nota: 'En la ficha: notas, llamadas y reuniones. La pestaña «Hoy» muestra a quién atender.' },
+      { crm: 'Tareas, Reuniones y Llamadas', aqui: 'Historial y Siguiente paso', nota: 'En la ficha: notas, llamadas y reuniones. La pestaña «Para hoy» muestra a quién atender.' },
       { crm: 'Productos y Presupuestos', aqui: 'Cotizador', nota: 'El catálogo y las cotizaciones con líneas (aún sin vínculo a las oportunidades). Los servicios contratados están en Contratos y el monto cotizado, en la oportunidad.' },
       { crm: 'Campañas', aqui: 'Fuente y campaña', nota: 'Cada posible cliente guarda de dónde llegó (anuncio, web, referido…).' },
       { crm: 'Informes y Análisis', aqui: 'Dashboard', nota: 'Embudo, cartera de contratos, motivos de pérdida y equipo.' },

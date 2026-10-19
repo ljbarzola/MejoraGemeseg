@@ -52,6 +52,12 @@ describe('buildSystemGuide', () => {
     expect(guide).not.toContain('todavía no existe');
     expect(guide).not.toContain('un solo correo y teléfono');
     expect(guide).not.toContain('botón "Motivos de cierre"');
+    // Nombres de pantalla de 2026-10-18: «Hoy» → «Para hoy», «Conexiones» → «Cómo llegan los posibles clientes».
+    expect(guide).toContain('pestaña "Para hoy"');
+    expect(guide).toContain('Cómo llegan los posibles clientes');
+    expect(guide).not.toContain('pestaña "Hoy"');
+    expect(guide).toContain('antes se llamaba "Conexiones"');
+    expect(guide).not.toContain('Planificación y Campo');
   });
 
   it('Contratación Pública explica Entidades Públicas y la entrega mensual de documentos', () => {

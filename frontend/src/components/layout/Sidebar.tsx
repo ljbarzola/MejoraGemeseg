@@ -102,13 +102,12 @@ export default function Sidebar() {
   // (Leads -> Posibles clientes, Clientes -> Directorio; Documentación se queda
   // igual). Las URLs NO cambiaron (/ventas/leads, /ventas/clientes,
   // /ventas/documentacion): hay notificaciones guardadas que apuntan a ellas.
-  // Planificación y Campo se deja visible como "Próximamente" (gris, sin clic)
-  // y NO tiene ruta: App.tsx redirige esa URL al Dashboard. «Reportes» se
-  // quitó del menú (2026-10-08): sus cifras de visitas viven en la pestaña
-  // «Resultados» de VisitasPage y el embudo de marketing, en el Dashboard. Tampoco las conoce el asistente de IA
-  // (system-guide.util.ts / ai.processor.ts). Al reactivar uno, hay que
-  // devolverle la ruta en App.tsx, quitar `disabled` aquí y volver a
-  // explicarlo en la guía del asistente.
+  // «Planificación y Campo – Próximamente» se quitó del menú (2026-10-18, a pedido de la
+  // usuaria): no tenía ruta ni función y solo confundía. «Reportes» se quitó el 2026-10-08.
+  // Sus cifras de visitas siguen en la pestaña «Resultados» de VisitasPage y el embudo de
+  // marketing, en el Dashboard. Tampoco las conoce el asistente de IA (system-guide.util.ts /
+  // ai.processor.ts). Al reactivar uno, hay que devolverle la ruta en App.tsx, ponerlo de
+  // nuevo aquí y explicarlo en la guía del asistente.
   const ventasItems = [
     { label: 'Dashboard', path: '/ventas', icon: '📊' },
     // El orden sigue el recorrido de una persona: posible cliente -> oportunidad -> directorio (2026-10-15).
@@ -119,7 +118,6 @@ export default function Sidebar() {
     { label: 'Contratos', path: '/ventas/contratos', icon: '📑' },
     { label: 'Documentación', path: '/ventas/documentacion', icon: '📄' },
     { label: 'Configuración', path: '/ventas/configuracion', icon: '⚙️' },
-    { label: 'Planificación y Campo', path: '/ventas/visitas', icon: '📍', disabled: true },
   ];
 
   const custodiasSubItems = [

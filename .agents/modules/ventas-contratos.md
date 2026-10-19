@@ -516,3 +516,10 @@ SignWell aún no tiene API key registrada, así que la generación automática +
 - **Datos viejos.** Las actividades de cliente con tipo `INCIDENTE_SERVICIO` / `CONVERSACION_SALIDA` NO se migraron: siguen mostrándose en el Historial con su nombre (`SALES_ACTIVITY_TYPES_TODOS` solo sirve para ponerles etiqueta; `SALES_ACTIVITY_TYPES` es lo que se ofrece al crear) y el backend sigue aceptándolos en `ACTIVITY_TYPES`.
 - **Agente.** `ventas-expediente.service.ts` junta ambas fuentes (actividades viejas + incidentes por contrato) en «QUEJAS E INCIDENTES DEL SERVICIO» y en la conversación de salida, citando el contrato.
 - **Decisiones de la usuaria (2026-10-18):** «Añadir nueva conexión» se queda como está (nombre + clave); Meta Ads y LinkedIn Ads quedan como base desactivada con el texto que explica que no hay conexión directa; los contactos NO se crean solos desde el teléfono/correo principal del Directorio (principal = pestaña Datos, adicionales = pestaña Contactos).
+
+## 23. Tres cambios de nombre decididos por la usuaria (2026-10-18)
+
+Las propuestas «sin decidir» de la sección 17 quedaron aprobadas y hechas (solo texto; claves, rutas y URLs no cambian):
+- **«Hoy» → «Para hoy»**: pestaña de Oportunidades (`OportunidadesPage.tsx`; la clave interna sigue siendo `vista === 'hoy'`), su ayuda en `VentasComoFunciona.tsx` y el manual de los agentes.
+- **«Conexiones» → «Cómo llegan los posibles clientes»**: pestaña de Configuración (la clave `?tab=conexiones` no cambia) y el botón de Posibles clientes, que antes decía «Configurar conexiones» y ahora lleva el mismo nombre que la pestaña. Dentro de la pestaña, cada conexión sigue llamándose «Google Ads», «Formulario web», etc. El manual dice «antes se llamaba "Conexiones"» para entender a quien use el nombre viejo.
+- **Se quitó «Planificación y Campo – Próximamente» del menú de Ventas** (`Sidebar.tsx`). Nunca tuvo ruta (App.tsx redirigía al Dashboard) ni función. El código de `VisitasPage` sigue en el repositorio.

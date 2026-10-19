@@ -339,7 +339,7 @@ export default function OportunidadesPage() {
         </button>
         <button type="button" className={`admin-tab ${vista === 'hoy' ? 'active' : ''}`} style={{ flex: '0 0 auto' }}
           onClick={() => setVista('hoy')} title="Negociaciones en curso cuyo seguimiento toca atender hoy">
-          Hoy ({hoyClientes.length})
+          Para hoy ({hoyClientes.length})
         </button>
       </div>
 
@@ -395,7 +395,7 @@ export default function OportunidadesPage() {
               if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
             }}
             disabled={vista === 'hoy'}
-            disabledTitle="La pestaña Hoy tiene columnas fijas; cambia a Todas para elegir las tuyas"
+            disabledTitle="La pestaña Para hoy tiene columnas fijas; cambia a Todas para elegir las tuyas"
           />
           <ClearFiltersButton
             onClear={() => { setBusqueda(''); setFiltroEtapa(''); setFiltroResponsable(''); setFiltroServicio(''); setHoyResponsable('mine'); }}

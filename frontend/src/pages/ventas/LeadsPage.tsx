@@ -308,8 +308,8 @@ export default function LeadsPage() {
         <div className="header-actions">
           <VentasComoFunciona />
           <button className="btn-secondary" onClick={() => navigate('/ventas/configuracion')}
-            title="Las conexiones se configuran en Configuración → Conexiones">
-            <Plug size={16} /> Configurar conexiones
+            title="Las claves y las conexiones (Google Ads, formulario web, landings) se configuran en Configuración → Cómo llegan los posibles clientes">
+            <Plug size={16} /> Cómo llegan los posibles clientes
           </button>
           <button className="auth-btn" onClick={() => setNuevo(true)}>
             <Plus size={16} /> Nuevo posible cliente
@@ -386,7 +386,7 @@ export default function LeadsPage() {
         ) : leads.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36, marginBottom: 8 }}>📥</div>
-            <div>Aún no hay posibles clientes. Llegan solos desde la web y las landings (ver Configuración → Conexiones) o se ingresan a mano.</div>
+            <div>Aún no hay posibles clientes. Llegan solos desde la web y las landings (ver Configuración → Cómo llegan los posibles clientes) o se ingresan a mano.</div>
           </div>
         ) : filas.length === 0 ? (
           <p style={{ color: '#888', fontSize: 13 }}>No hay posibles clientes que coincidan con los filtros.</p>
