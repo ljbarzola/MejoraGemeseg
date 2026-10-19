@@ -1147,7 +1147,7 @@ export interface ResumenConversiones {
   conectado: boolean;
   total: number;
   porEstado: Partial<Record<'PENDIENTE' | 'ENVIADO' | 'FALLO' | 'VENCIDO', number>>;
-  porTipo: Partial<Record<'CUALIFICADO' | 'CONVERTIDO', number>>;
+  porTipo: Partial<Record<'VALIDO' | 'CUALIFICADO' | 'CONVERTIDO', number>>;
 }
 export const getResumenConversiones = (): Promise<ResumenConversiones> =>
   api.get('/ventas/conversiones/resumen').then(r => r.data);
@@ -1157,6 +1157,8 @@ export interface AjustesGoogleAds {
   customerId: string;
   conversionCualificado: string;
   conversionConvertido: string;
+  // «Lead válido»: paso intermedio, opcional. Vacío = no se avisa (2026-10-18).
+  conversionValido: string;
   activo: boolean;
   soloValidar: boolean;
 }
