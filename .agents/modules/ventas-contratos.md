@@ -522,7 +522,7 @@ SignWell aún no tiene API key registrada, así que la generación automática +
 Las propuestas «sin decidir» de la sección 17 quedaron aprobadas y hechas (solo texto; claves, rutas y URLs no cambian):
 - **«Hoy» → «Para hoy»**: pestaña de Oportunidades (`OportunidadesPage.tsx`; la clave interna sigue siendo `vista === 'hoy'`), su ayuda en `VentasComoFunciona.tsx` y el manual de los agentes.
 - **«Conexiones» → «Cómo llegan los posibles clientes»**: pestaña de Configuración (la clave `?tab=conexiones` no cambia) y el botón de Posibles clientes, que antes decía «Configurar conexiones» y ahora lleva el mismo nombre que la pestaña. Dentro de la pestaña, cada conexión sigue llamándose «Google Ads», «Formulario web», etc. El manual dice «antes se llamaba "Conexiones"» para entender a quien use el nombre viejo.
-- **Se quitó «Planificación y Campo – Próximamente» del menú de Ventas** (`Sidebar.tsx`). Nunca tuvo ruta (App.tsx redirigía al Dashboard) ni función. El código de `VisitasPage` sigue en el repositorio.
+- **«Planificación y Campo – Próximamente» se quitó del menú y la usuaria pidió volver a dejarlo (gris, sin clic).** Está de nuevo en `Sidebar.tsx` con `disabled: true`; nunca tuvo ruta (App.tsx redirige al Dashboard). No volver a quitarlo sin que ella lo pida: la frase «quitar … Próximamente» de sus notas era una propuesta sin decidir que se interpretó mal.
 
 ## 24. Fase 4: renovaciones como oportunidad (2026-10-18)
 
