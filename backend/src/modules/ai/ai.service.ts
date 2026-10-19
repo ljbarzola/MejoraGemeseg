@@ -17,6 +17,7 @@ import {
 import { parseKnowledgeBase, filterKnowledgeBase } from './knowledge-base.util';
 import { buildCapabilitiesPrompt } from './capabilities-prompt.util';
 import { buildSystemGuide } from './system-guide.util';
+import { esAgenteSinChat } from '../agents/agent-trabajadores.const';
 import { SendMessageDto } from './dto/send-message.dto';
 import {
   SCOPE_VENTAS,
@@ -42,6 +43,34 @@ const RATE_LIMIT_VENTAS = 30;
 export const INSTRUCCIONES_VENTAS_POR_DEFECTO = `Tono profesional y cercano, directo y sin rodeos. Prioriza lo accionable: qué hacer con el cliente y para cuándo.
 Cuando investigues por qué se perdió un cliente, no te quedes en el precio: revisa también la rapidez de la atención, el seguimiento y la calidad del servicio.
 Tutea a la persona y usa los nombres de menús y botones tal como se ven en pantalla.`;
+
+// Lo que ve quien le escribe al Agente de Ventas cuando la IA no responde. Antes caía al modo
+// mock, que habla de proyectos y tareas y no sirve de nada en Ventas.
+export const MENSAJE_VENTAS_SIN_IA =
+  'El Agente de Ventas todavía no está conectado a la inteligencia artificial en este entorno (falta configurar Google Vertex AI). Avisa a Sistemas.';
+export const MENSAJE_VENTAS_ERROR =
+  'No pude consultar al Agente de Ventas en este momento. Intenta de nuevo en unos minutos; si sigue pasando, avisa a Sistemas.';
+
+// Cuánto de la conversación se le vuelve a mandar al modelo cuando redacta con datos del sistema:
+// los últimos turnos, cada uno recortado (los datos ya son largos). Exportada para probarla.
+export function historialParaDatos(historial: ChatTurn[]): ChatTurn[] {
+  const MAX_TURNOS = 6;
+  const MAX_CARACTERES = 1500;
+  return historial.slice(-MAX_TURNOS).map((t) => ({
+    role: t.role,
+    content:
+      t.content.length > MAX_CARACTERES
+        ? `${t.content.slice(0, MAX_CARACTERES)}…`
+        : t.content,
+  }));
+}
+
+// Primera pregunta de una conversación, en una línea y sin pasar de 70 letras. Exportada para probarla.
+export function tituloDeConversacion(texto: string): string | null {
+  const limpio = texto.replace(/\s+/g, ' ').trim();
+  if (!limpio) return null;
+  return limpio.length > 70 ? `${limpio.slice(0, 69).trimEnd()}…` : limpio;
+}
 
 /** Secciones visibles al generar un mensaje, ordenadas y separadas por coma ('' = solo lo común). */
 export function sectionsSnapshot(allowedKeys: string[]): string {
@@ -107,8 +136,9 @@ export class AiService implements OnModuleInit {
   // Quién puede usar qué agente. Antes `agentId` llegaba del cliente y no se
   // validaba: cualquiera podía usar un agente que no tenía asignado. Los agentes
   // generales del sistema (sin dueño) los usa cualquiera, como en el selector;
-  // un agente propio o uno especializado (Ventas) exige que esté asignado a la
-  // persona. El de Ventas además exige tener acceso a Ventas.
+  // un agente propio exige que esté asignado a la persona. El Agente de Ventas del
+  // sistema (sin dueño) lo usa cualquiera que tenga acceso a Ventas, sin asignarlo
+  // (2026-10-18); uno de Ventas creado por una persona sí exige asignación.
   private async assertAgentUsable(
     userId: number,
     agentId: number,
@@ -129,11 +159,17 @@ export class AiService implements OnModuleInit {
         perfil: 'GENERAL',
       };
     }
+    // Un agente que trabaja solo (revisor de bitácoras) no conversa.
+    if (esAgenteSinChat(agent.scope)) {
+      throw new ForbiddenException(
+        'Ese agente no conversa: se usa desde su pantalla (por ejemplo, Contratación Pública → Bitácoras).',
+      );
+    }
     if (agent.scope === SCOPE_VENTAS && !agent.isActive) {
       throw new ForbiddenException('El Agente de Ventas no está disponible ahora.');
     }
-    const esDelSistemaGeneral = agent.createdBy === null && agent.scope !== SCOPE_VENTAS;
-    if (!esDelSistemaGeneral && agent.createdBy !== userId) {
+    const esDelSistema = agent.createdBy === null;
+    if (!esDelSistema && agent.createdBy !== userId) {
       const asignado = await this.prisma.userAgent.findUnique({
         where: { userId_agentId: { userId, agentId } },
         select: { agentId: true },
@@ -215,10 +251,14 @@ export class AiService implements OnModuleInit {
           companyId,
           allowedKeys,
           agente.perfil,
+          dto.clienteId,
         );
         reply = result.reply;
         tokensUsed = result.tokensUsed;
         auditoria = result.auditoria;
+      } else if (agente.perfil === 'VENTAS') {
+        // El modo mock habla de proyectos y tareas: al Agente de Ventas se le dice la verdad.
+        reply = MENSAJE_VENTAS_SIN_IA;
       } else {
         reply = await this.mockResponse(dto.message, dto.context);
       }
@@ -228,8 +268,12 @@ export class AiService implements OnModuleInit {
         agentId,
         perfil: agente.perfil,
       });
-      this.logger.warn('Error en IA, usando modo mock como fallback');
-      reply = await this.mockResponse(dto.message, dto.context);
+      if (agente.perfil === 'VENTAS') {
+        reply = MENSAJE_VENTAS_ERROR;
+      } else {
+        this.logger.warn('Error en IA, usando modo mock como fallback');
+        reply = await this.mockResponse(dto.message, dto.context);
+      }
     }
 
     await this.prisma.chatMessage.create({
@@ -354,6 +398,7 @@ export class AiService implements OnModuleInit {
     companyId: number | null,
     allowedKeysParam?: string[],
     perfil: PerfilAgente = 'GENERAL',
+    clienteId?: number,
   ): Promise<{
     reply: string;
     tokensUsed: number;
@@ -389,6 +434,32 @@ export class AiService implements OnModuleInit {
     ]
       .filter(Boolean)
       .join('\n\n');
+
+    // Abierto desde la ficha de un cliente: su expediente ya se conoce, así que no hace falta que
+    // el modelo lo pida (una sola llamada, más rápida y sin riesgo de buscar al cliente equivocado).
+    if (esVentas && clienteId) {
+      if (!companyId) {
+        return {
+          reply: 'Para analizar a un cliente hace falta entrar con un usuario de una empresa.',
+          tokensUsed: 0,
+        };
+      }
+      const inicioExp = Date.now();
+      const datosCliente = await this.processor.expedienteDeCliente(companyId, clienteId);
+      return this.redactarConDatos({
+        esVentas,
+        message,
+        chatHistory,
+        dataResult: datosCliente,
+        tokensPrevios: 0,
+        auditoria: {
+          intent: 'ventas_expediente',
+          params: { clienteId },
+          ms: Date.now() - inicioExp,
+          caracteresDeDatos: datosCliente.length,
+        },
+      });
+    }
 
     const result = await this.vertexChat.sendChat(
       systemPrompt,
@@ -445,13 +516,39 @@ export class AiService implements OnModuleInit {
       userId,
       companyId,
     );
-    const auditoria = {
-      intent,
-      params,
-      ms: Date.now() - inicio,
-      caracteresDeDatos: dataResult.length,
-    };
+    return this.redactarConDatos({
+      esVentas,
+      message,
+      chatHistory,
+      dataResult,
+      tokensPrevios: result.tokensUsed,
+      auditoria: {
+        intent,
+        params,
+        ms: Date.now() - inicio,
+        caracteresDeDatos: dataResult.length,
+      },
+    });
+  }
 
+  // Segunda llamada: redactar la respuesta con los datos que devolvió el sistema. Para el Agente de
+  // Ventas incluye el final de la conversación (antes iba vacía y una pregunta de seguimiento como
+  // «¿y qué le digo?» perdía el hilo) y las marcas de evidencia que el modelo cite se comprueban
+  // contra los datos de ahora Y contra sus respuestas anteriores ya verificadas.
+  private async redactarConDatos(p: {
+    esVentas: boolean;
+    message: string;
+    chatHistory: ChatTurn[];
+    dataResult: string;
+    tokensPrevios: number;
+    auditoria: Record<string, unknown>;
+  }): Promise<{
+    reply: string;
+    tokensUsed: number;
+    auditoria?: Record<string, unknown>;
+  }> {
+    const { esVentas, message, dataResult, tokensPrevios, auditoria } = p;
+    const historial = esVentas ? historialParaDatos(p.chatHistory) : [];
     try {
       const finalResult = await this.vertexChat.sendChat(
         esVentas
@@ -459,7 +556,7 @@ export class AiService implements OnModuleInit {
           : // "Concisa" a secas hacía que el modelo resumiera listas y omitiera
             // clientes (p. ej. "¿a quién atiendo hoy?" respondía solo uno de tres).
             'Responde de forma clara y breve, en español, basándote en los datos proporcionados. Si los datos traen una lista, menciona TODOS sus elementos (no resumas ni omitas ninguno) y respeta cualquier aviso que incluyan.',
-        [],
+        historial,
         `Datos del sistema:\n${dataResult}\n\nPregunta original: ${message}`,
         esVentas
           ? { maxOutputTokens: 4096, nivel: 'fuerte' }
@@ -467,32 +564,34 @@ export class AiService implements OnModuleInit {
       );
       let reply = finalResult.reply || dataResult;
       let extra: Record<string, unknown> = {};
-      // Las marcas de evidencia que el modelo cite se comprueban contra los
-      // datos que se le dieron: una inventada se quita y se avisa.
       if (esVentas) {
-        const v = verificarCitas(reply, dataResult);
+        const yaVerificado = historial
+          .filter((t) => t.role === 'assistant')
+          .map((t) => t.content)
+          .join('\n');
+        const v = verificarCitas(reply, `${dataResult}\n${yaVerificado}`);
         reply = v.respuesta;
         extra = { citas: v.citadas, citasNoVerificadas: v.noVerificadas };
       }
       return {
         reply,
-        tokensUsed: result.tokensUsed + finalResult.tokensUsed,
+        tokensUsed: tokensPrevios + finalResult.tokensUsed,
         auditoria: { ...auditoria, ...extra },
       };
     } catch {
-      return { reply: dataResult, tokensUsed: result.tokensUsed, auditoria };
+      return { reply: dataResult, tokensUsed: tokensPrevios, auditoria };
     }
   }
 
-  // ¿Tiene esta persona asignado el Agente de Ventas (y acceso a Ventas)? Si sí,
-  // Agente Gemeseg puede mandarla allá para datos en vivo.
+  // ¿Puede esta persona usar el Agente de Ventas? Con acceso a Ventas y el agente activo, sí (ya no
+  // hace falta asignarlo). Si sí, Agente Gemeseg puede mandarla allá para datos en vivo.
   private async tieneAgenteVentas(
     userId: number,
     allowedKeys: string[],
   ): Promise<boolean> {
     if (!allowedKeys.includes('VENTAS')) return false;
-    const n = await this.prisma.userAgent.count({
-      where: { userId, agent: { scope: SCOPE_VENTAS, isActive: true } },
+    const n = await this.prisma.agent.count({
+      where: { scope: SCOPE_VENTAS, isActive: true, createdBy: null },
     });
     return n > 0;
   }
@@ -673,7 +772,7 @@ export class AiService implements OnModuleInit {
     const where: any = { userId };
     if (agentId) where.agentId = agentId;
 
-    return this.prisma.conversation.findMany({
+    const conversaciones = await this.prisma.conversation.findMany({
       where,
       include: {
         agent: { select: { id: true, name: true } },
@@ -681,6 +780,26 @@ export class AiService implements OnModuleInit {
       },
       orderBy: { updatedAt: 'desc' },
     });
+    if (conversaciones.length === 0) return conversaciones;
+
+    // Título de cada conversación = su primera pregunta (así el historial se lee como
+    // «¿Qué debo atender hoy?» en vez de mostrar solo «Ventas» en todas). Sin columna nueva.
+    const primeras = await this.prisma.chatMessage.findMany({
+      where: {
+        conversationId: { in: conversaciones.map((c) => c.id) },
+        role: 'user',
+      },
+      orderBy: [{ conversationId: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      distinct: ['conversationId'],
+      select: { conversationId: true, content: true },
+    });
+    const porConversacion = new Map(
+      primeras.map((m) => [m.conversationId, tituloDeConversacion(m.content)]),
+    );
+    return conversaciones.map((c) => ({
+      ...c,
+      title: porConversacion.get(c.id) ?? null,
+    }));
   }
 
   async getConversationMessages(conversationId: number, userId: number) {

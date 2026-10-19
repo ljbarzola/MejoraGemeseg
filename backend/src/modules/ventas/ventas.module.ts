@@ -86,6 +86,7 @@ import { MailModule } from '../mail/mail.module';
     CotizadorCotizacionesService,
   ],
   exports: [
+    VentasCicloService,
     VentasExpedienteService,
     VentasAnaliticaService,
     VentasOportunidadesService,

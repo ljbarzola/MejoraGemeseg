@@ -124,9 +124,8 @@ describe('AiService.callVertexChat — la consulta nunca se ejecuta si el intent
     getUserPermissions: jest.Mock;
   };
   let prisma: {
-    agent: { findUnique: jest.Mock };
+    agent: { findUnique: jest.Mock; count: jest.Mock };
     companyKnowledgeBase: { findUnique: jest.Mock };
-    userAgent: { count: jest.Mock };
   };
 
   beforeEach(() => {
@@ -138,9 +137,12 @@ describe('AiService.callVertexChat — la consulta nunca se ejecuta si el intent
       getUserPermissions: jest.fn().mockResolvedValue([]),
     };
     prisma = {
-      agent: { findUnique: jest.fn().mockResolvedValue({ instructions: 'system', isActive: true }) },
+      agent: {
+        findUnique: jest.fn().mockResolvedValue({ instructions: 'system', isActive: true }),
+        // ¿Existe el Agente de Ventas del sistema? (ya no se asigna uno a uno)
+        count: jest.fn().mockResolvedValue(0),
+      },
       companyKnowledgeBase: { findUnique: jest.fn().mockResolvedValue(null) },
-      userAgent: { count: jest.fn().mockResolvedValue(0) },
     };
 
     service = new AiService(

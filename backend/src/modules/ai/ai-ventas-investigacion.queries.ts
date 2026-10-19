@@ -80,6 +80,11 @@ export class AiVentasInvestigacionQueries {
     return (await this.expedientes.armar(companyId, cliente)).texto;
   }
 
+  // Expediente de un cliente que ya se conoce por su id (botón «Preguntar al agente» de la ficha).
+  async expedientePorId(companyId: number, clienteId: number): Promise<string> {
+    return (await this.expedientes.armarPorId(companyId, clienteId)).texto;
+  }
+
   // ---- cartera ----
   async cartera(companyId: number, userId: number): Promise<string> {
     const a = await this.alcance(userId);

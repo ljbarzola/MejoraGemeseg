@@ -100,6 +100,22 @@ export class VentasExpedienteService {
     return { estado: 'OK', clienteId: candidatos[0].id, texto: await this.construir(companyId, candidatos[0].id) };
   }
 
+  // Expediente de un cliente conocido por su id (botón «Preguntar al agente» de la ficha): no hay
+  // nada que buscar ni desambiguar. Un cliente de otra empresa no se encuentra.
+  async armarPorId(companyId: number, clienteId: number): Promise<ResultadoExpediente> {
+    const existe = await this.prisma.salesClient.findFirst({
+      where: { id: clienteId, companyId },
+      select: { id: true },
+    });
+    if (!existe) {
+      return {
+        estado: 'NO_ENCONTRADO',
+        texto: 'No encontré a esa empresa o persona en el Directorio: puede que ya no exista.',
+      };
+    }
+    return { estado: 'OK', clienteId, texto: await this.construir(companyId, clienteId) };
+  }
+
   private async construir(companyId: number, clienteId: number): Promise<string> {
     const hoy = hoyEcuador();
     const hoyD = diaUtc(hoy);
