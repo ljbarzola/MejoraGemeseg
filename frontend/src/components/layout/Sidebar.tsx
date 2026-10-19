@@ -131,11 +131,10 @@ export default function Sidebar() {
     { label: 'Asistente GEME-BOT', path: '/custodias/gemebot', icon: '🤖' },
   ];
 
-  // Contratación Pública: por ahora solo "Entidades Públicas" (ver la bandera
-  // CP_MOSTRAR_SUBMODULOS_OCULTOS en App.tsx). Al reactivar, volver a poner
-  // Contratos, Horarios, Informes, Códigos de Turno y Textos Institucionales
-  // (rutas /contratacion-publica/contratos, /horarios, /informes,
-  // /config/codigos-turno y /config/textos-institucionales).
+  // Contratación Pública: Entidades Públicas con sus entregas de documentos, y desde
+  // 2026-10-18 las Operaciones (Contratos, Horarios, Códigos de turno y Bitácoras, que
+  // compara las hojas de los guardias con el horario). Informes y Textos Institucionales
+  // siguen ocultos (ver CP_MOSTRAR_SUBMODULOS_OCULTOS y CP_MOSTRAR_OPERACIONES en App.tsx).
   const contratacionPublicaItems = [
     { label: 'Entidades Públicas', path: '/contratacion-publica/entidades', icon: '🏛️' },
     // Solo el personal de Contratación Pública aprueba; el resto tiene "Por entregar".
@@ -143,6 +142,10 @@ export default function Sidebar() {
       ? [{ label: 'Por aprobar', path: '/contratacion-publica/por-revisar', icon: '🔎' }]
       : []),
     { label: 'Por entregar', path: '/contratacion-publica/mis-documentos', icon: '📥' },
+    { label: 'Contratos', path: '/contratacion-publica/contratos', icon: '📑' },
+    { label: 'Horarios', path: '/contratacion-publica/horarios', icon: '🗓️' },
+    { label: 'Códigos de turno', path: '/contratacion-publica/config/codigos-turno', icon: '🏷️' },
+    { label: 'Bitácoras', path: '/contratacion-publica/bitacoras', icon: '📒' },
   ];
 
   const sistemasSubItems = [

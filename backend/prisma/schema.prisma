@@ -50,7 +50,7 @@ model Company {
   salesOpportunities        SalesOpportunity[]
   salesContacts             SalesContact[]
   salesAgreementIncidents   SalesAgreementIncident[]
-  salesReasons            SalesReason[]
+  salesReasons              SalesReason[]
   salesReasonEntries        SalesReasonEntry[]
   entidades                 Entidad[]
   requisitosDocumento       RequisitoDocumento[]
@@ -2460,6 +2460,13 @@ model CPCodigoTurno {
   nombre     String // Ej. "Día", "Noche", "Libre"
   color      String?
   esDescanso Boolean  @default(false) // true = no cuenta como "trabajando" para la cobertura mínima del puesto
+  // Ventana horaria del turno ("07:00"–"19:00"; fin menor que inicio = cruza la
+  // medianoche). La usa el revisor de bitácoras para comparar lo que el guardia
+  // anotó con lo que le tocaba. Opcionales: sin ellas solo se compara la persona.
+  // Columnas nuevas de una tabla existente: se aseguran al arrancar
+  // (bitacoras/bitacoras.schema.ts), el despliegue no corre migraciones.
+  horaInicio String?
+  horaFin    String?
   activo     Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -2584,6 +2591,148 @@ model CPPlantillaInforme {
   updatedAt DateTime @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Bitácoras de guardianía (2026-10-18).
+//
+// Los guardias llenan la bitácora a mano en cada puesto; alguien la fotografía y
+// la sube. El agente revisor LEE la foto (sin conocer el horario, para no
+// "corregir" lo que está mal) y el sistema compara, con reglas fijas, lo leído
+// contra el horario aprobado del puesto. Ver .agents/modules/contratacion-publica.md.
+//
+// Tablas nuevas, creadas al arrancar (bitacoras/bitacoras.schema.ts). El puesto,
+// el contrato y la entidad van como instantánea (id + nombre) sin relación: la
+// bitácora es un registro histórico y debe sobrevivir a que se borre un puesto.
+// ---------------------------------------------------------------------------
+model CPBitacora {
+  id              Int       @id @default(autoincrement())
+  companyId       Int
+  puestoId        Int
+  puestoNombre    String
+  contratoId      Int
+  contratoNumero  String
+  entidadId       Int
+  entidadNombre   String
+  subidoPorId     Int
+  subidoPorNombre String
+  // Foto o PDF guardado en StoredFile (clave lógica); null si se cargó a mano.
+  archivoKey      String?
+  archivoNombre   String?
+  archivoTipo     String?
+  // IA = la leyó el agente; MANUAL = la transcribió una persona.
+  origenLectura   String    @default("IA")
+  // LEIDA | SIN_LECTURA (IA no configurada o agente apagado) | ERROR
+  estadoLectura   String    @default("SIN_LECTURA")
+  mensajeLectura  String?
+  puestoLeido     String? // lo que dice la hoja como puesto, tal cual
+  observaciones   String? // lo que el agente no pudo leer o dudó
+  // Días que cubre la hoja (YYYY-MM-DD), aunque algún día no tenga guardia ni novedad escritas.
+  fechas          String[]
+  fechaDesde      DateTime? @db.Date
+  fechaHasta      DateTime? @db.Date
+  // SIN_REVISAR | CONFORME | A_REVISAR | CON_ERRORES | SIN_COMPARAR
+  resultado       String    @default("SIN_REVISAR")
+  revisadaAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  registros CPBitacoraRegistro[]
+  novedades CPBitacoraNovedad[]
+  hallazgos CPBitacoraHallazgo[]
+
+  @@index([companyId, puestoId])
+  @@index([companyId, fechaDesde])
+}
+
+// Una línea "guardia X estuvo de H1 a H2 el día D".
+model CPBitacoraRegistro {
+  id            Int      @id @default(autoincrement())
+  bitacoraId    Int
+  fecha         DateTime @db.Date
+  guardiaLeido  String // nombre tal como lo escribió el guardia
+  // Guardia del puesto con el que se emparejó (null = no coincide con ninguno).
+  cedula        String?
+  guardiaNombre String?
+  coincidencia  Float?
+  horaEntrada   String? // "HH:mm"
+  horaSalida    String?
+  legible       Boolean  @default(true)
+  orden         Int      @default(0)
+
+  bitacora CPBitacora @relation(fields: [bitacoraId], references: [id], onDelete: Cascade)
+
+  @@index([bitacoraId])
+}
+
+model CPBitacoraNovedad {
+  id           Int      @id @default(autoincrement())
+  bitacoraId   Int
+  fecha        DateTime @db.Date
+  hora         String?
+  guardiaLeido String?
+  texto        String
+  // SIN_NOVEDAD | ACCESO | VEHICULOS | RONDA | INCIDENTE | EQUIPOS | ENTREGA_TURNO | OTRO
+  categoria    String   @default("OTRO")
+  // BAJA | MEDIA | ALTA — se deriva de la categoría en código, no la inventa el modelo.
+  gravedad     String   @default("BAJA")
+  orden        Int      @default(0)
+
+  bitacora CPBitacora @relation(fields: [bitacoraId], references: [id], onDelete: Cascade)
+
+  @@index([bitacoraId])
+  @@index([fecha])
+}
+
+model CPBitacoraHallazgo {
+  id                Int       @id @default(autoincrement())
+  bitacoraId        Int
+  fecha             DateTime? @db.Date
+  tipo              String
+  severidad         String // ALTA | MEDIA | BAJA
+  mensaje           String
+  // Identifica el hallazgo entre una revisión y la siguiente, para no perder lo
+  // que la persona ya resolvió o descartó al volver a revisar.
+  clave             String
+  estado            String    @default("ABIERTO") // ABIERTO | RESUELTO | DESCARTADO
+  nota              String?
+  resueltoPorNombre String?
+  resueltoAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  bitacora CPBitacora @relation(fields: [bitacoraId], references: [id], onDelete: Cascade)
+
+  @@index([bitacoraId])
+}
+
+// Registro de lo que hacen los agentes que trabajan solos (hoy el revisor de
+// bitácoras). Sistemas lo lee en Sistemas → Agentes. Sin relaciones: guarda el
+// nombre del agente y de la persona tal como estaban, y sobrevive a que se
+// borre cualquiera de los dos.
+model AgentRun {
+  id            Int      @id @default(autoincrement())
+  agentId       Int?
+  agentNombre   String
+  agentScope    String?
+  companyId     Int?
+  userId        Int?
+  userNombre    String?
+  accion        String // p. ej. LEER_BITACORA
+  resumen       String?
+  // A qué se aplicó: p. ej. entidadTipo 'CPBitacora' + id.
+  entidadTipo   String?
+  entidadId     Int?
+  modelo        String?
+  tokensEntrada Int?
+  tokensSalida  Int?
+  duracionMs    Int?
+  exito         Boolean
+  error         String?
+  detalle       Json?
+  createdAt     DateTime @default(now())
+
+  @@index([agentId, createdAt])
+  @@index([companyId, createdAt])
 }
 
 // ---------------------------------------------------------------------------

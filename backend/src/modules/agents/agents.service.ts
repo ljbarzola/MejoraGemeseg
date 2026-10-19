@@ -9,6 +9,7 @@ import {
   permiteSinFila,
 } from '../permissions/permissions.service';
 import { CreateAgentDto, UpdateAgentDto } from './dto/agent.dto';
+import { esAgenteSinChat, SCOPES_SIN_CHAT } from './agent-trabajadores.const';
 
 @Injectable()
 export class AgentsService {
@@ -122,6 +123,13 @@ export class AgentsService {
   }
 
   async create(dto: CreateAgentDto) {
+    // Los agentes que trabajan solos (revisor de bitácoras) los siembra el
+    // sistema, uno por tipo: crear otro a mano no haría nada.
+    if (esAgenteSinChat(dto.scope)) {
+      throw new ConflictException(
+        'Ese tipo de agente lo crea el sistema y no se puede crear a mano.',
+      );
+    }
     const existing = await this.prisma.agent.findFirst({
       where: { createdBy: dto.userId, name: dto.name },
     });
@@ -198,10 +206,13 @@ export class AgentsService {
       where: {
         isActive: true,
         OR: [
-          { createdBy: null, NOT: { scope: 'VENTAS' } },
+          { createdBy: null, NOT: { scope: { in: ['VENTAS', ...SCOPES_SIN_CHAT] } } },
           { id: { in: assignedAgentIds } },
           ...(verVentas ? [{ createdBy: null, scope: 'VENTAS' }] : []),
         ],
+        // Un agente que trabaja solo (revisor de bitácoras) no conversa: no se
+        // ofrece en el chat ni aunque alguien lo tenga asignado.
+        NOT: { scope: { in: [...SCOPES_SIN_CHAT] } },
       },
       select: {
         id: true,

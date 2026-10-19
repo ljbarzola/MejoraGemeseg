@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Activity, BookOpen } from 'lucide-react';
 import {
   getAgentCatalog,
   getAgentAssignments,
@@ -7,9 +8,12 @@ import {
   deleteAgent,
   assignAgent,
   unassignAgent,
+  getAgentDocs,
 } from '../../services/agent.service';
-import type { Agent, AgentAssignment } from '../../types/agent';
+import type { Agent, AgentAssignment, DocumentacionAgente } from '../../types/agent';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import AgenteDocModal from '../../components/sistemas/AgenteDocModal';
+import ActividadAgentes from '../../components/sistemas/ActividadAgentes';
 
 const SCOPE_OPTIONS = [
   { value: 'GLOBAL', label: 'Global', desc: 'Accede a toda la informacion del sistema' },
@@ -19,7 +23,12 @@ const SCOPE_OPTIONS = [
   // Agente especializado (2026-10-07): solo consulta datos de Ventas y no aparece
   // para nadie hasta que se le asigne a una persona (botón de asignar).
   { value: 'VENTAS', label: 'Ventas', desc: 'Investiga clientes y cartera de Ventas; solo lo ve quien lo tenga asignado' },
+  // Agente que trabaja solo (2026-10-18): lo siembra el sistema, no conversa ni se asigna.
+  { value: 'BITACORAS', label: 'Revisor de bitácoras', desc: 'Lee las fotos de las bitácoras de Contratación Pública; no conversa' },
 ];
+
+/** Los agentes que trabajan solos no se crean a mano, no se asignan y no cambian de alcance. */
+const ES_TRABAJADOR = (scope: string) => scope === 'BITACORAS';
 
 const SCOPE_PREVIEW: Record<string, string[]> = {
   GLOBAL: ['Proyectos activos', 'Tareas asignadas', 'Rol del usuario', 'Informacion del perfil'],
@@ -27,6 +36,7 @@ const SCOPE_PREVIEW: Record<string, string[]> = {
   TASKS: ['Tareas asignadas', 'Estados Kanban', 'Prioridades', 'Fechas de entrega'],
   ADMIN: ['Todos los usuarios', 'Estadisticas globales', 'Roles y permisos', 'Metricas del sistema'],
   VENTAS: ['Expediente de un cliente', 'Cartera y contratos', 'Perdidos y sus motivos', 'Embudo y velocidad'],
+  BITACORAS: ['Foto de la hoja', 'Guardias y sus horas', 'Novedades por tipo', 'Nada del horario ni de los guardias'],
 };
 
 export default function AgentsPage() {
@@ -49,6 +59,9 @@ export default function AgentsPage() {
   const [formLoading, setFormLoading] = useState(false);
   const [confirmandoEliminarAgente, setConfirmandoEliminarAgente] = useState<number | null>(null);
   const [confirmandoQuitarAsignacion, setConfirmandoQuitarAsignacion] = useState<number | null>(null);
+  const [docs, setDocs] = useState<DocumentacionAgente[]>([]);
+  const [verDoc, setVerDoc] = useState<DocumentacionAgente | null>(null);
+  const [verActividad, setVerActividad] = useState<Agent | null>(null);
 
   const loadData = () => {
     setLoading(true);
@@ -58,6 +71,7 @@ export default function AgentsPage() {
   };
 
   useEffect(() => { loadData(); }, []);
+  useEffect(() => { getAgentDocs().then(setDocs).catch(() => setDocs([])); }, []);
 
   const filteredAssignments = assignments.filter((a) => {
     if (agentFilter && !a.agent.name.toLowerCase().includes(agentFilter.toLowerCase())) return false;
@@ -214,12 +228,22 @@ export default function AgentsPage() {
                           <span className="agent-scope-badge">{agent.scope}</span>
                         </div>
                         <div className="tools-actions-cell">
+                          {docs.some((d) => d.scope === agent.scope) && (
+                            <>
+                              <button className="btn-sm-edit" onClick={() => setVerDoc(docs.find((d) => d.scope === agent.scope) ?? null)} title="Qué hace este agente" aria-label="Qué hace este agente"><BookOpen size={14} /></button>
+                              <button className="btn-sm-edit" onClick={() => setVerActividad(agent)} title="Qué ha hecho este agente" aria-label="Qué ha hecho este agente"><Activity size={14} /></button>
+                            </>
+                          )}
                           <button className="btn-sm-edit" onClick={() => openEditModal(agent)} title="Editar">✎</button>
-                          <button className="btn-danger-sm" onClick={() => handleDeleteAgent(agent.id)} title="Eliminar">✕</button>
+                          {!ES_TRABAJADOR(agent.scope) && (
+                            <button className="btn-danger-sm" onClick={() => handleDeleteAgent(agent.id)} title="Eliminar">✕</button>
+                          )}
                         </div>
                       </div>
                       <div className="tools-catalog-meta">
-                        {agent._count.userLinks} asignacion(es) — {agent.isActive ? 'Activo' : 'Inactivo'}
+                        {ES_TRABAJADOR(agent.scope)
+                          ? `Trabaja solo, no conversa — ${agent.isActive ? 'Activo' : 'Inactivo'}`
+                          : `${agent._count.userLinks} asignacion(es) — ${agent.isActive ? 'Activo' : 'Inactivo'}`}
                       </div>
                     </div>
                   ))}
@@ -275,6 +299,10 @@ export default function AgentsPage() {
                 </div>
               )}
             </div>
+            <div className="tools-section" style={{ marginTop: '32px' }}>
+              <h2 className="tools-section-title">Actividad de los agentes que trabajan solos</h2>
+              <ActividadAgentes />
+            </div>
           </>
         )}
       </div>
@@ -304,7 +332,7 @@ export default function AgentsPage() {
               <div className="form-group">
                 <label>Alcance</label>
                 <select value={createForm.scope} onChange={(e) => setCreateForm({ ...createForm, scope: e.target.value })}>
-                  {SCOPE_OPTIONS.map((opt) => (
+                  {SCOPE_OPTIONS.filter((opt) => !ES_TRABAJADOR(opt.value)).map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label} — {opt.desc}</option>
                   ))}
                 </select>
@@ -337,14 +365,14 @@ export default function AgentsPage() {
               </div>
               <div className="form-group">
                 <label>Alcance</label>
-                <select value={editForm.scope} onChange={(e) => setEditForm({ ...editForm, scope: e.target.value })}>
+                <select value={editForm.scope} disabled={ES_TRABAJADOR(editingAgent.scope)} onChange={(e) => setEditForm({ ...editForm, scope: e.target.value })}>
                   {SCOPE_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label} — {opt.desc}</option>
                   ))}
                 </select>
               </div>
               <div className="form-group">
-                <label>System Prompt * ({editForm.systemMsg.length}/6000)</label>
+                <label>{ES_TRABAJADOR(editingAgent.scope) ? 'Instrucciones: cómo es la hoja de tu empresa' : 'System Prompt *'} ({editForm.systemMsg.length}/6000)</label>
                 <textarea className="form-textarea" value={editForm.systemMsg} onChange={(e) => setEditForm({ ...editForm, systemMsg: e.target.value })} rows={6} maxLength={6000} />
               </div>
               <div className="agent-preview">
@@ -373,6 +401,25 @@ export default function AgentsPage() {
         </div>
       )}
 
+      {verDoc && <AgenteDocModal doc={verDoc} modelo={verDoc.modelo} onClose={() => setVerDoc(null)} />}
+
+      {verActividad && (
+        <div className="modal-overlay" onClick={() => setVerActividad(null)}>
+          <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Qué ha hecho — {verActividad.name}</h3>
+              <button className="modal-close" onClick={() => setVerActividad(null)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              <ActividadAgentes agentId={verActividad.id} />
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setVerActividad(null)}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showAssignModal && (
         <div className="modal-overlay" onClick={() => setShowAssignModal(false)}>
           <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
@@ -387,7 +434,7 @@ export default function AgentsPage() {
                   <label>Agente *</label>
                   <select value="" onChange={(e) => { const ag = catalog.find((a) => a.id === Number(e.target.value)); if (ag) { setAssigningAgent(ag); setAssignForm({ selectedUsers: [] }); } }}>
                     <option value="">Seleccionar agente...</option>
-                    {catalog.filter((a) => a.isActive).map((a) => (
+                    {catalog.filter((a) => a.isActive && !ES_TRABAJADOR(a.scope)).map((a) => (
                       <option key={a.id} value={a.id}>{a.name} ({a.scope})</option>
                     ))}
                   </select>

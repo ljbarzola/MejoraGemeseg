@@ -375,20 +375,18 @@ const VENTAS = `# Ventas y CRM — guía detallada
 - "El PDF no se genera / sale 'Falta llenar'": completar los campos obligatorios; si la plantilla dice que falta el documento, volver a "Descargar" o subir el Word.
 - "El cliente no recibió el correo de firma": revisar el "Email para el envío" y el "Estado de la firma" ("No entregado" = rebotó); corregir con "Editar campos", regenerar y volver a enviar.`;
 
-// Contratación Pública: desde 2026-10-01 solo está visible "Entidades Públicas"
-// con el seguimiento de entregas de documentos. Contratos, Puestos, Horarios,
-// Informes, Códigos de Turno y Textos Institucionales siguen en el código pero
-// están ocultos, así que este manual NO los menciona (el agente no debe
-// explicar pantallas que la persona no puede abrir). La guía completa anterior
-// se recupera del historial de git (commit anterior a este cambio) y vuelve acá
-// cuando se reactiven; ver "Submódulos ocultos" en .agents/modules/contratacion-publica.md.
+// Contratación Pública: desde 2026-10-01 solo estaba visible "Entidades Públicas" con el
+// seguimiento de entregas. Desde 2026-10-18 también las Operaciones (Contratos, Horarios,
+// Códigos de turno y Bitácoras). Informes y Textos Institucionales siguen ocultos, así que este
+// manual NO los menciona (el agente no debe explicar pantallas que la persona no puede abrir).
+// Ver "Submódulos ocultos" y "Bitácoras" en .agents/modules/contratacion-publica.md.
 const CONTRATACION_PUBLICA = `# Contratación Pública — guía detallada
 
 ## Para qué sirve
-Sirve para pedir y seguir, mes a mes, los documentos que otras áreas (RRHH, Financiero, Operaciones, Legal) deben entregar para el informe que se envía a cada entidad pública: qué se pidió, a quién, para cuándo y en qué estado está cada documento.
+Sirve para pedir y seguir, mes a mes, los documentos que otras áreas (RRHH, Financiero, Operaciones, Legal) deben entregar para el informe que se envía a cada entidad pública: qué se pidió, a quién, para cuándo y en qué estado está cada documento. También reúne las operaciones de guardianía de los contratos: contratos con sus puestos, horarios de los guardias y la revisión de las bitácoras que llenan los guardias.
 
 ## Acceso y pantallas
-- Menú → "Contratación Pública" tiene tres pantallas: "Entidades Públicas", "Por aprobar" (solo el personal de Contratación Pública) y "Por entregar".
+- Menú → "Contratación Pública" tiene estas pantallas: "Entidades Públicas", "Por aprobar" (solo el personal de Contratación Pública), "Por entregar", "Contratos", "Horarios", "Códigos de turno" y "Bitácoras".
 - Con permiso "ver" una persona entra y entrega solo los documentos que le asignaron. Con "escribir" (el personal de Contratación Pública) arma las solicitudes, las envía, y aprueba o rechaza lo entregado.
 
 ## Entidades Públicas
@@ -424,6 +422,23 @@ Sirve para pedir y seguir, mes a mes, los documentos que otras áreas (RRHH, Fin
 - Cuando alguien entrega un documento, el aviso por la campana le llega a todo el personal de Contratación Pública que revisa (no por correo).
 - Los archivos subidos se guardan en la subcarpeta de la entidad en Drive, dentro de una carpeta por mes. Sin la carpeta general de Contratación Pública (ver Entidades Públicas) solo se pueden entregar enlaces.
 
+## Operaciones: Contratos, Horarios y Códigos de turno
+- Menú → "Contratación Pública" → "Contratos": "+ Nuevo Contrato" pide Entidad Pública *, Número de contrato / orden de compra *, Objeto del servicio *, Referencia del proceso, Fecha de inicio *, Fecha de fin * y Valor total. Al abrir un contrato hay pestañas: Puestos, Adendas, Adjuntos y Horarios.
+- Puestos (pestaña del contrato): cada puesto de servicio lleva Nombre (ej. "Garita norte"), Tipo de turno (8H, 12H o 24H), Cantidad de guardias y Guardias simultáneos requeridos (cuántos deben estar trabajando a la vez cada día). A cada puesto se le asignan sus guardias.
+- Menú → "Contratación Pública" → "Códigos de turno": las letras que se usan en el horario (D, N, L…). Cada código tiene Código, Nombre, Color, Activo y "Es descanso/libre" (un descanso no cuenta como guardia trabajando). El horario de cada turno (de qué hora a qué hora) se pone en Bitácoras → "Horario de los turnos".
+- Menú → "Contratación Pública" → "Horarios": "Nuevo Horario" pide Fecha inicio y Fecha fin (no tiene que ser un mes calendario, por ejemplo del 30 de julio al 29 de agosto) y no puede cruzarse con otro horario del mismo contrato. Dentro se llena qué código le toca a cada guardia cada día; el horario pasa de Borrador a Enviado y a Aprobado.
+
+## Bitácoras (hojas de los guardias)
+- Para qué sirve: los guardias llenan a mano la bitácora de su puesto (quién estuvo, de qué hora a qué hora y las novedades). Alguien la fotografía y la sube; el Agente Revisor de Bitácoras la lee y el sistema la compara con el horario del puesto para avisar si quien aparece en la hoja no es quien debía estar.
+- Menú → "Contratación Pública" → "Bitácoras". Tiene dos pestañas: "Resumen" y "Hojas subidas", y filtros por puesto, resultado y fechas (con el botón de escoba para limpiarlos). Con permiso "ver" se mira todo; subir, corregir, resolver hallazgos y eliminar piden permiso de escribir en Contratación Pública.
+- "Subir bitácora": se elige el Puesto (de ahí sale el horario contra el que se compara, así que debe ser el de esa hoja) y la foto: "Tomar foto" abre la cámara en el celular y "Elegir archivo" sube una foto (JPG, PNG, WebP o HEIC) o un PDF de hasta 15 MB. "Subir y leer" tarda unos segundos, hasta medio minuto, y abre la bitácora ya leída y comparada. "Cargar sin foto" crea la bitácora vacía para escribir lo que dice la hoja a mano.
+- Al abrir una bitácora: a la izquierda la foto; a la derecha "Qué encontró la revisión" (los hallazgos), "Lo que dice la hoja" (lo que el agente leyó: días, guardias con su entrada y salida, y novedades) y "Lo que decía el horario" (quién le tocaba a cada guardia cada día y si aparece en la hoja). El resultado es Conforme (todo cuadra), A revisar (hay cosas por confirmar), Con errores (aparece alguien que no debía estar o falta alguien) o Sin comparar (no hay horario cargado para esos días).
+- Hallazgos: otro guardia en lugar del programado (por ejemplo, el horario decía Juan y la hoja trae a Pedro), guardia que no aparece, guardia que estaba libre, nombre que no es de ninguno del puesto, horas distintas a las del turno (se toleran 30 minutos), nombre dudoso o ambiguo, día sin horario, horario sin aprobar, fecha fuera del contrato, puesto distinto al elegido y hoja repetida. Cada uno se marca "Resolver" o "Descartar" con una nota obligatoria que queda en el historial; "Reabrir" lo deja abierto otra vez.
+- Si el agente leyó mal algo (la letra a mano a veces es difícil), se corrige en "Lo que dice la hoja" y se pulsa "Guardar y revisar de nuevo": la comparación se hace otra vez. "Volver a leer con el agente" vuelve a leer la foto y reemplaza lo corregido a mano (pide confirmación).
+- El agente solo transcribe la hoja: no conoce el horario ni a los guardias mientras lee (así no "corrige" un nombre equivocado), y la comparación la hace el sistema con reglas fijas. Si el agente está desactivado o la lectura con IA no está configurada, la foto se guarda sin leer y se transcribe a mano.
+- "Horario de los turnos" (botón de arriba): se escribe de qué hora a qué hora es cada turno, por ejemplo D de 07:00 a 19:00 y N de 19:00 a 07:00 (la noche cruza la medianoche). Sin esto solo se compara quién estuvo, no las horas.
+- "Resumen": cuántas bitácoras cuadran con el horario (%), hallazgos abiertos, la novedad que más se repite, el día y el puesto con más novedades, las novedades por tipo (ingreso de personas, vehículos, rondas, cambio de turno, equipos, incidente) y las más graves.
+
 ## Recordatorios
 - Cada día el sistema recuerda a los responsables los documentos Pendientes o Rechazados cuya fecha límite es dentro de 3 días y los que vencen ese mismo día, dentro del sistema y por correo.
 
@@ -431,7 +446,11 @@ Sirve para pedir y seguir, mes a mes, los documentos que otras áreas (RRHH, Fin
 - "No veo Contratación Pública": pedir el permiso a un administrador (Administración → Permisos de usuario) o por "Reportar un problema a Sistemas".
 - "No puedo subir un archivo": revisar que sea PDF, Word, Excel, imagen o ZIP de hasta 15 MB; si dice que falta configurar la carpeta de Drive, pegar un enlace o avisar al personal de Contratación Pública.
 - "No me deja enviar la solicitud": falta agregar al menos un documento, o algún documento no tiene responsable.
-- "Ya no recibo el recordatorio de un documento": solo se recuerdan los Pendientes o Rechazados; uno Entregado o Aprobado ya no genera recordatorios.`;
+- "Ya no recibo el recordatorio de un documento": solo se recuerdan los Pendientes o Rechazados; uno Entregado o Aprobado ya no genera recordatorios.
+- "El agente leyó mal un nombre o una hora": abrir la bitácora, corregirlo en "Lo que dice la hoja" y pulsar "Guardar y revisar de nuevo".
+- "Sale «Día sin horario»": falta cargar el horario de ese período del contrato (Contratación Pública → Horarios).
+- "No puedo subir una bitácora": hace falta permiso de escribir en Contratación Pública; si el aviso dice que la lectura con IA no está configurada o el agente está desactivado, la foto se guarda igual y se escribe a mano.
+- "Un hallazgo no es un error": pulsar "Descartar" y explicar por qué en la nota.`;
 
 const CACAO = `# Cacao — guía
 
@@ -495,7 +514,7 @@ const SISTEMAS = `# Sistemas — guía
 - Novedades: menú Sistemas → Novedades. "Nueva novedad": se escribe Título y "Qué cambió", se marcan los módulos afectados y la pantalla muestra a cuántas personas llegará y la lista de quiénes son (nombre, correo y empresa), más "No la recibirán" con el motivo de cada persona que queda fuera (cuenta inactiva, módulo negado, etc.); "Publicar" pide confirmar. El aviso le sale en las notificaciones (ícono de campana, nunca por correo) solo a quienes tienen acceso a alguno de esos módulos, sin contar a quien publica. No se puede deshacer; la tabla guarda el historial.
 - Soporte Técnico: los reportes que llegan por la llave inglesa, en una tabla (Título, Tipo, Estado, Descripción, Reportado por, Empresa, Fecha, Adjuntos; el botón "Columnas" elige cuáles ver y un clic en el encabezado ordena). Arriba hay una búsqueda (título, descripción, quién reportó o empresa), filtros de Estado, Tipo y Empresa, y la escoba para limpiarlos. El estado se cambia directamente en la columna Estado (Abierto, En revisión, Resuelto); un clic en la fila abre el detalle con la descripción completa y los adjuntos. Cuando alguien reporta algo, las notificaciones (ícono de campana) avisan ("Nuevo reporte para Sistemas") solo a quienes tienen Sistemas con "Escribir" marcado en Permisos Usuarios; nunca por correo. Ahí también se configura la carpeta de Drive para capturas ("Probar conexión").
 - Herramientas: catálogo (Nombre, Categoría, Versión, Licencia) y asignación a usuarios con auditoría; lo asignado aparece en "Mi perfil". Es parte de Sistemas (no es un módulo aparte en Permisos Usuarios): la ve quien tiene Sistemas.
-- Agentes: crear agentes de IA con nombre, instrucciones y alcance, y asignarlos a usuarios.
+- Agentes: crear agentes de IA con nombre, instrucciones y alcance, y asignarlos a usuarios. Hay agentes que trabajan solos y no conversan, como el Agente Revisor de Bitácoras (lee las fotos de las bitácoras de Contratación Pública): en su tarjeta, el botón del libro explica qué hace, qué decide el sistema y qué límites tiene, y el botón de actividad muestra cada vez que trabajó (quién lo pidió, sobre qué, cuánto tardó, tokens, si falló y por qué). Abajo, "Actividad de los agentes que trabajan solos" resume los últimos 30 días. Se puede editar su texto de instrucciones (cómo es la hoja de la empresa) y desactivarlo; no se asigna a personas ni se crea a mano.
 - Base de conocimiento (menú Sistemas → "Base de Conocimiento"): texto en Markdown que Agente Gemeseg usa además de este manual, para lo propio de la empresa (políticas, contactos, procesos internos). Se divide con encabezados "## CLAVE" exactos en mayúsculas (## GENERAL, ## RRHH, ## VENTAS, ## CACAO, ## CUSTODIAS, ## CONTRATACION_PUBLICA, ## SISTEMAS…). Lo de ## GENERAL o antes del primer encabezado lo recibe cualquier usuario; cada otra sección solo quien tiene acceso a ella. Un encabezado mal escrito no abre sección nueva (se pega a la anterior) y la pantalla avisa al guardar.`;
 
 /** Bloques por clave de ALL_SECTIONS. GENERAL no está acá: va siempre. */

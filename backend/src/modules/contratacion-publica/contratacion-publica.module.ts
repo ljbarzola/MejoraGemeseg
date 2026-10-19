@@ -7,10 +7,12 @@ import { CPHorariosModule } from './horarios/horarios.module';
 import { CPInformesModule } from './informes/informes.module';
 import { CPTextosInstitucionalesModule } from './textos-institucionales/textos-institucionales.module';
 import { CPEntregasModule } from './entregas/entregas.module';
+import { CPBitacorasModule } from './bitacoras/bitacoras.module';
 
 @Module({
   imports: [
     CPEntregasModule,
+    CPBitacorasModule,
     CPEntidadesModule,
     CPContratosModule,
     CPPuestosModule,

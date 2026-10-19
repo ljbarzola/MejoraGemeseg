@@ -79,19 +79,26 @@ describe('buildSystemGuide', () => {
     expect(guide).toContain('Entregar un documento');
   });
 
-  it('Contratación Pública no enseña lo que está oculto (contratos, puestos, horarios, informes, códigos de turno, textos institucionales)', () => {
+  it('Contratación Pública explica las operaciones y las bitácoras', () => {
     const guide = buildSystemGuide(['CONTRATACION_PUBLICA']);
-    for (const oculto of [
-      /contratos?\b/i,
-      /puestos? de servicio/i,
-      /horarios?/i,
-      /códigos? de turno/i,
-      /textos institucionales/i,
-      /generar pdf/i,
-      /patrón de rotación/i,
-    ]) {
+    expect(guide).toContain('Operaciones: Contratos, Horarios y Códigos de turno');
+    expect(guide).toContain('Bitácoras (hojas de los guardias)');
+    expect(guide).toContain('Subir bitácora');
+    expect(guide).toContain('Horario de los turnos');
+    expect(guide).toContain('Guardar y revisar de nuevo');
+    expect(guide).toContain('Agente Revisor de Bitácoras');
+  });
+
+  it('Contratación Pública no enseña lo que sigue oculto (informes, textos institucionales)', () => {
+    const guide = buildSystemGuide(['CONTRATACION_PUBLICA']);
+    for (const oculto of [/textos institucionales/i, /generar pdf/i, /patrón de rotación/i, /pestaña informes/i]) {
       expect(guide).not.toMatch(oculto);
     }
+  });
+
+  it('Sistemas explica los agentes que trabajan solos y su actividad', () => {
+    const guide = buildSystemGuide(['SISTEMAS']);
+    expect(guide).toContain('agentes que trabajan solos');
   });
 
   it('RRHH trae la gestión detallada de quejas y encuestas', () => {

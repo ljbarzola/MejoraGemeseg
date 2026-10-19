@@ -4871,3 +4871,54 @@ textarea.chat-input {
   gap: 6px;
   padding-bottom: 4px;
 }
+
+/* ---- Bitácoras de guardianía (Contratación Pública): detalle de una hoja ---- */
+.bitacora-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 18px;
+  align-items: start;
+}
+.bitacora-layout > :first-child {
+  position: sticky;
+  top: 12px;
+}
+.bitacora-layout--una {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (max-width: 1100px) {
+  .bitacora-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bitacora-layout > :first-child {
+    position: static;
+  }
+}
+.bitacora-fila {
+  display: grid;
+  gap: 8px;
+  align-items: center;
+}
+.bitacora-fila--guardia {
+  grid-template-columns: 136px minmax(110px, 1fr) 96px 96px 36px;
+}
+.bitacora-fila--novedad {
+  grid-template-columns: 136px 96px minmax(120px, 1fr) 36px;
+}
+.bitacora-fila--cabecera {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #718096;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.bitacora-fila-caja {
+  border-bottom: 1px solid #edf2f7;
+  padding: 8px 0;
+}
+.bitacora-fila-nota {
+  font-size: 0.76rem;
+  color: #718096;
+  margin-top: 4px;
+}

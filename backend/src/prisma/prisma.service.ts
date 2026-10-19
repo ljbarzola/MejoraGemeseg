@@ -2,6 +2,7 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { USER_PHONE_DDL } from './user-phone.schema';
+import { CP_CODIGO_TURNO_HORAS_DDL } from './cp-codigo-turno-horas.schema';
 
 /** Default pg pool size. Cloud SQL db-f1-micro allows ~25 connections; Cloud Run max-instances=10 would blow that with pg's default of 10. */
 const DEFAULT_POOL_MAX = 3;
@@ -79,7 +80,7 @@ export class PrismaService
   // Columnas nuevas de tablas que ya existen en producción (ver user-phone.schema.ts).
   // Si fallan, el servidor NO debe arrancar: medio arrancado rompería el login.
   private async asegurarColumnas() {
-    for (const ddl of USER_PHONE_DDL) {
+    for (const ddl of [...USER_PHONE_DDL, ...CP_CODIGO_TURNO_HORAS_DDL]) {
       try {
         await this.$executeRawUnsafe(ddl);
       } catch {

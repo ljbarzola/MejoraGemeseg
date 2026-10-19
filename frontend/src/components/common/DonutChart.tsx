@@ -11,6 +11,10 @@ interface DonutChartProps {
   segments: DonutSegment[];
   /** Texto bajo el total, en el centro (ej. "tickets"). */
   centerLabel: string;
+  /** Mensaje cuando no hay nada que mostrar (por defecto, el de los tickets). */
+  emptyText?: string;
+  /** Descripción para lectores de pantalla (por defecto, la de los tickets). */
+  ariaLabel?: string;
 }
 
 const SIZE = 132;
@@ -26,12 +30,17 @@ const GAP = 2;
  * cursor por un segmento o por su fila, el centro muestra ese dato.
  * No usa ninguna librería de gráficos: el proyecto no tiene una instalada.
  */
-export default function DonutChart({ segments, centerLabel }: DonutChartProps) {
+export default function DonutChart({
+  segments,
+  centerLabel,
+  emptyText = 'Todavía no hay tickets.',
+  ariaLabel = 'Tickets por tipo',
+}: DonutChartProps) {
   const [activo, setActivo] = useState<string | null>(null);
   const total = segments.reduce((a, s) => a + s.value, 0);
 
   if (total === 0) {
-    return <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: 0 }}>Todavía no hay tickets.</p>;
+    return <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: 0 }}>{emptyText}</p>;
   }
 
   const pct = (v: number) => Math.round((v / total) * 100);
@@ -51,7 +60,7 @@ export default function DonutChart({ segments, centerLabel }: DonutChartProps) {
           height={SIZE}
           viewBox={`0 0 ${SIZE} ${SIZE}`}
           role="img"
-          aria-label={`Tickets por tipo. ${resumen}`}
+          aria-label={`${ariaLabel}. ${resumen}`}
         >
           <g transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}>
             {conDatos.map((s) => {

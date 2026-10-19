@@ -9,9 +9,13 @@ import {
   UseGuards,
   Req,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AgentsService } from './agents.service';
+import { AgentRunService } from './agent-run.service';
+import { DOCUMENTACION_AGENTES } from './agent-trabajadores.const';
+import { modeloVertex } from '../../common/utils/vertex-endpoint.util';
 import { CreateAgentDto, UpdateAgentDto } from './dto/agent.dto';
 import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
 import { Section } from '../../common/decorators/section.decorator';
@@ -26,7 +30,42 @@ import { Section } from '../../common/decorators/section.decorator';
 @Controller('admin/agents')
 @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
 export class AgentsController {
-  constructor(private readonly agentsService: AgentsService) {}
+  constructor(
+    private readonly agentsService: AgentsService,
+    private readonly runs: AgentRunService,
+  ) {}
+
+  // Qué hace cada agente que trabaja solo y qué ha hecho (2026-10-18). Lo lee
+  // Sistemas → Agentes; los datos de actividad son de la empresa de quien mira.
+  @Get('docs')
+  @Section('SISTEMAS', 'view')
+  docs() {
+    // El modelo se lee en cada pedido: cambia con las variables de entorno, no con el código.
+    return DOCUMENTACION_AGENTES.map((d) => ({ ...d, modelo: modeloVertex('fuerte') }));
+  }
+
+  @Get('runs/summary')
+  @Section('SISTEMAS', 'view')
+  runsSummary(@Req() req: any, @Query('dias') dias?: string) {
+    return this.runs.resumen(req.user.companyId ?? null, dias ? parseInt(dias, 10) || 30 : 30);
+  }
+
+  @Get('runs')
+  @Section('SISTEMAS', 'view')
+  runsList(
+    @Req() req: any,
+    @Query('agentId') agentId?: string,
+    @Query('exito') exito?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.runs.listar(req.user.companyId ?? null, {
+      agentId: agentId ? parseInt(agentId, 10) || undefined : undefined,
+      exito: exito === 'true' ? true : exito === 'false' ? false : undefined,
+      limit: limit ? parseInt(limit, 10) || undefined : undefined,
+      offset: offset ? parseInt(offset, 10) || undefined : undefined,
+    });
+  }
 
   @Get()
   @Section('SISTEMAS', 'view')

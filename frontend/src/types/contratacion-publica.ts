@@ -163,6 +163,9 @@ export interface CPCodigoTurno {
   nombre: string;
   color: string | null;
   esDescanso: boolean;
+  /** Ventana del turno ("07:00"–"19:00"); la usa el revisor de bitácoras. */
+  horaInicio?: string | null;
+  horaFin?: string | null;
   activo: boolean;
   createdAt: string;
   updatedAt: string;

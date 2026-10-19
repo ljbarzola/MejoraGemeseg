@@ -23,6 +23,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed": "node prisma/seed.js",
     "seed:minimal": "node prisma/seed.minimal.js",
+    "seed:bitacoras": "node prisma/seed.bitacoras.js",
     "backfill:permissions": "node prisma/backfill-user-permissions.js"
   },
   "dependencies": {
