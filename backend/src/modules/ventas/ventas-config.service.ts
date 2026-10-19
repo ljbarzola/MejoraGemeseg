@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -14,7 +15,9 @@ import { limpiarSlug, type LandingDef } from './lead-landing.util';
 
 const CLAVE_GOOGLE_ADS = 'google_ads';
 const CLAVE_LANDINGS = 'landings';
+const CLAVE_CONEXIONES = 'conexiones';
 const MAX_LANDINGS = 100;
+const MAX_CONEXIONES = 20;
 
 export interface AjustesGoogleAds {
   customerId: string;
@@ -24,6 +27,15 @@ export interface AjustesGoogleAds {
   activo: boolean;
   // Google solo valida cada envío y no cuenta nada: para la primera prueba.
   soloValidar: boolean;
+}
+
+// Una conexión «propia» que la empresa añade (otra página, otra herramienta): un nombre y su
+// clave de conexión (SalesApiKey). Las cuatro básicas (Google Ads, Meta Ads, LinkedIn Ads y
+// Formulario web) no se guardan aquí: siempre existen.
+export interface ConexionPropia {
+  id: string;
+  nombre: string;
+  apiKeyId: number;
 }
 
 const VACIO_GOOGLE_ADS: AjustesGoogleAds = {
@@ -173,13 +185,61 @@ export class VentasConfigService {
     return limpia;
   }
 
+  // ---------------- Conexiones propias ----------------
+
+  async conexionesDe(companyId: number): Promise<ConexionPropia[]> {
+    const guardado = await this.leer<{ items?: ConexionPropia[] }>(companyId, CLAVE_CONEXIONES);
+    return Array.isArray(guardado?.items) ? guardado.items : [];
+  }
+
+  // Crea la conexión con su clave. Entra por la misma dirección que el formulario web
+  // (POST /ventas/webhook/entrante); el canal lo decide la atribución del propio posible cliente.
+  async crearConexion(companyId: number | null, userId: number, nombreIn: string): Promise<ConexionPropia> {
+    const cid = this.requireCompany(companyId);
+    const nombre = texto(nombreIn, 60);
+    if (!nombre) throw new BadRequestException('Ponle un nombre a la conexión (por ejemplo «Landing de seguridad física»).');
+    const actuales = await this.conexionesDe(cid);
+    if (actuales.length >= MAX_CONEXIONES) {
+      throw new BadRequestException(`Se admiten hasta ${MAX_CONEXIONES} conexiones propias.`);
+    }
+    if (actuales.some((c) => c.nombre.toLowerCase() === nombre.toLowerCase())) {
+      throw new BadRequestException(`Ya tienes una conexión llamada «${nombre}».`);
+    }
+    // Aleatoria de verdad, igual que VentasService.createApiKey.
+    const clave = await this.prisma.salesApiKey.create({
+      data: { name: nombre, apiKey: `sk_ventas_${randomBytes(24).toString('hex')}`, companyId: cid },
+    });
+    const nueva: ConexionPropia = { id: `c${Date.now().toString(36)}${randomBytes(2).toString('hex')}`, nombre, apiKeyId: clave.id };
+    await this.guardar(cid, userId, CLAVE_CONEXIONES, { items: [...actuales, nueva] });
+    return nueva;
+  }
+
+  // Quita la conexión y borra su clave: lo que la use deja de entrar.
+  async quitarConexion(companyId: number | null, userId: number, id: string): Promise<void> {
+    const cid = this.requireCompany(companyId);
+    const actuales = await this.conexionesDe(cid);
+    const c = actuales.find((x) => x.id === id);
+    if (!c) throw new NotFoundException('Conexión no encontrada');
+    await this.guardar(cid, userId, CLAVE_CONEXIONES, { items: actuales.filter((x) => x.id !== id) });
+    await this.prisma.salesApiKey.deleteMany({ where: { id: c.apiKeyId, companyId: cid } });
+  }
+
+  // Activa o desactiva una clave sin borrarla (desactivada, lo que la use deja de entrar).
+  async cambiarClave(companyId: number | null, id: number, isActive: boolean) {
+    const cid = this.requireCompany(companyId);
+    const clave = await this.prisma.salesApiKey.findFirst({ where: { id, companyId: cid } });
+    if (!clave) throw new NotFoundException('Clave no encontrada');
+    return this.prisma.salesApiKey.update({ where: { id }, data: { isActive } });
+  }
+
   // ---------------- Pantalla ----------------
 
   async resumen(companyId: number | null) {
     const cid = this.requireCompany(companyId);
-    const [googleAds, landings] = await Promise.all([
+    const [googleAds, landings, conexiones] = await Promise.all([
       this.ajustesGoogleAds(cid),
       this.landingsDe(cid),
+      this.conexionesDe(cid),
     ]);
     return {
       googleAds,
@@ -187,6 +247,7 @@ export class VentasConfigService {
       // instalación, no cada empresa).
       cuentaDeServicio: (process.env.GOOGLE_ADS_SERVICE_ACCOUNT ?? '').trim() || CUENTA_ADS_POR_DEFECTO,
       landings,
+      conexiones,
     };
   }
 }

@@ -8,7 +8,6 @@ import ErrorBanner from '../../components/common/ErrorBanner';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import MotivoCierreModal from '../../components/ventas/MotivoCierreModal';
 import ConvertirLeadModal from '../../components/ventas/ConvertirLeadModal';
-import ConexionesLeadsModal from '../../components/ventas/ConexionesLeadsModal';
 import VentasComoFunciona from '../../components/ventas/VentasComoFunciona';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
@@ -100,7 +99,6 @@ export default function LeadsPage() {
   const [estado, setEstado] = useState('pendientes');
   const [motivo, setMotivo] = useState('');
   const [canal, setCanal] = useState('');
-  const [conexiones, setConexiones] = useState(false);
   const [nuevo, setNuevo] = useState(false);
   const [convirtiendo, setConvirtiendo] = useState<LeadEntrante | null>(null);
   const [descartando, setDescartando] = useState<LeadEntrante | null>(null);
@@ -309,8 +307,9 @@ export default function LeadsPage() {
         </div>
         <div className="header-actions">
           <VentasComoFunciona />
-          <button className="btn-secondary" onClick={() => setConexiones(true)}>
-            <Plug size={16} /> Conexiones
+          <button className="btn-secondary" onClick={() => navigate('/ventas/configuracion')}
+            title="Las conexiones se configuran en Configuración → Conexiones">
+            <Plug size={16} /> Configurar conexiones
           </button>
           <button className="auth-btn" onClick={() => setNuevo(true)}>
             <Plus size={16} /> Nuevo posible cliente
@@ -387,7 +386,7 @@ export default function LeadsPage() {
         ) : leads.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36, marginBottom: 8 }}>📥</div>
-            <div>Aún no hay posibles clientes. Llegan solos desde la web y las landings (ver «Conexiones») o se ingresan a mano.</div>
+            <div>Aún no hay posibles clientes. Llegan solos desde la web y las landings (ver Configuración → Conexiones) o se ingresan a mano.</div>
           </div>
         ) : filas.length === 0 ? (
           <p style={{ color: '#888', fontSize: 13 }}>No hay posibles clientes que coincidan con los filtros.</p>
@@ -459,7 +458,6 @@ export default function LeadsPage() {
           onSaved={() => { setNuevo(false); showToast('Posible cliente creado', 'success'); cargar(); }}
         />
       )}
-      {conexiones && <ConexionesLeadsModal onClose={() => setConexiones(false)} />}
       {convirtiendo && (
         <ConvertirLeadModal
           lead={convirtiendo}

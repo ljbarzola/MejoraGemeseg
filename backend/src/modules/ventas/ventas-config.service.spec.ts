@@ -19,6 +19,12 @@ function crearServicio() {
         filas.delete(`${where.companyId}:${where.key}`);
       }),
     },
+    salesApiKey: {
+      create: jest.fn(async ({ data }) => ({ id: 7, isActive: true, ...data })),
+      findFirst: jest.fn(async ({ where }) => (where.id === 7 ? { id: 7, companyId: where.companyId } : null)),
+      update: jest.fn(async ({ where, data }) => ({ id: where.id, ...data })),
+      deleteMany: jest.fn(async () => ({ count: 1 })),
+    },
   };
   return {
     servicio: new VentasConfigService(mockPrisma as unknown as PrismaService),
@@ -141,5 +147,39 @@ describe('VentasConfigService — landings', () => {
     await servicio.guardarLandings(1, 5, [{ slug: 'x', servicio: 'Y' }]);
     await servicio.guardarLandings(1, 5, []);
     expect(await servicio.landingsDe(1)).toEqual([]);
+  });
+});
+
+describe('VentasConfigService — conexiones propias', () => {
+  it('crea la conexión con su clave y la deja en la lista de la empresa', async () => {
+    const { servicio, mockPrisma } = crearServicio();
+    const c = await servicio.crearConexion(1, 5, '  Landing nueva ');
+    expect(c.nombre).toBe('Landing nueva');
+    expect(c.apiKeyId).toBe(7);
+    expect(mockPrisma.salesApiKey.create.mock.calls[0][0].data.apiKey).toMatch(/^sk_ventas_[0-9a-f]{48}$/);
+    expect(await servicio.conexionesDe(1)).toHaveLength(1);
+    expect((await servicio.resumen(1)).conexiones).toHaveLength(1);
+  });
+
+  it('no deja crear una conexión sin nombre ni con un nombre repetido', async () => {
+    const { servicio } = crearServicio();
+    await expect(servicio.crearConexion(1, 5, '   ')).rejects.toThrow(BadRequestException);
+    await servicio.crearConexion(1, 5, 'Mi web');
+    await expect(servicio.crearConexion(1, 5, 'mi WEB')).rejects.toThrow(/Ya tienes/);
+  });
+
+  it('quitar una conexión borra su clave y la saca de la lista', async () => {
+    const { servicio, mockPrisma } = crearServicio();
+    const c = await servicio.crearConexion(1, 5, 'Mi web');
+    await servicio.quitarConexion(1, 5, c.id);
+    expect(await servicio.conexionesDe(1)).toHaveLength(0);
+    expect(mockPrisma.salesApiKey.deleteMany).toHaveBeenCalledWith({ where: { id: 7, companyId: 1 } });
+    await expect(servicio.quitarConexion(1, 5, c.id)).rejects.toThrow(/no encontrada/);
+  });
+
+  it('activar o desactivar una clave solo funciona con claves de la propia empresa', async () => {
+    const { servicio } = crearServicio();
+    expect(await servicio.cambiarClave(1, 7, false)).toMatchObject({ isActive: false });
+    await expect(servicio.cambiarClave(1, 99, true)).rejects.toThrow(/no encontrada/);
   });
 });

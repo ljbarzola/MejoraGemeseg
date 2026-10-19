@@ -1110,7 +1110,10 @@ export interface ConfiguracionVentas {
   // Cuenta de servicio que hay que invitar como usuario en Google Ads.
   cuentaDeServicio: string;
   landings: LandingConfig[];
+  // Conexiones que la empresa añadió (cada una con su clave). Las cuatro básicas no van aquí.
+  conexiones: ConexionPropia[];
 }
+export interface ConexionPropia { id: string; nombre: string; apiKeyId: number }
 export const getConfiguracionVentas = (): Promise<ConfiguracionVentas> =>
   api.get('/ventas/configuracion').then(r => r.data);
 export const guardarAjustesGoogleAds = (data: Partial<AjustesGoogleAds>): Promise<AjustesGoogleAds> =>
@@ -1127,6 +1130,12 @@ export const createClaveConexion = (name: string): Promise<ClaveConexion> =>
   api.post('/ventas/api-keys', { name }).then(r => r.data);
 export const deleteClaveConexion = (id: number) =>
   api.delete(`/ventas/api-keys/${id}`).then(r => r.data);
+export const cambiarClaveConexion = (id: number, isActive: boolean): Promise<ClaveConexion> =>
+  api.put(`/ventas/configuracion/claves/${id}`, { isActive }).then(r => r.data);
+export const crearConexionPropia = (nombre: string): Promise<ConexionPropia> =>
+  api.post('/ventas/configuracion/conexiones', { nombre }).then(r => r.data);
+export const quitarConexionPropia = (id: string) =>
+  api.delete(`/ventas/configuracion/conexiones/${id}`).then(r => r.data);
 
 // ---------- Analítica del tablero (cartera, retención, embudo, motivos, equipo) ----------
 export interface ResumenMuestra { n: number; mediana: number | null; p75: number | null; pocasMuestras: boolean }

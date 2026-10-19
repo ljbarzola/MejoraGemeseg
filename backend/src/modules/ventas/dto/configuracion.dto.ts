@@ -34,3 +34,11 @@ export class LandingsConfigDto {
   @Type(() => LandingItemDto)
   landings!: LandingItemDto[];
 }
+
+export class NuevaConexionDto {
+  @IsString() @MaxLength(60) nombre!: string;
+}
+
+export class CambiarClaveDto {
+  @IsBoolean() isActive!: boolean;
+}
