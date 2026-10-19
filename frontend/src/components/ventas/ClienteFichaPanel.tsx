@@ -437,8 +437,8 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
                     <div style={{ fontSize: 11, color: '#b45309', marginTop: 2 }}>{client.cicloRazones.join(' · ')}</div>
                   )}
                 </div>
-                {dato('Teléfono', client.phone)}
-                {dato('Correo', client.email)}
+                {dato('Teléfono principal', client.phone)}
+                {dato('Correo principal', client.email)}
                 {dato('RUC / Cédula', client.ruc)}
                 {dato('Dirección', client.address)}
                 {fuenteField && dato(fuenteField.label, salesClientListaSubopcionesLabel(client, fuenteField))}

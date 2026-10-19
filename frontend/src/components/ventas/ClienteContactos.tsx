@@ -151,7 +151,7 @@ export default function ClienteContactos({ clientId }: Props) {
         )}
       </div>
       <p style={{ fontSize: 12, color: '#718096', margin: '0 0 12px' }}>
-        Varias personas pueden escribir por esta misma empresa — cada una con sus propios teléfonos y correos. Al pasar un posible cliente a oportunidad, se reconoce automáticamente a quien ya está aquí.
+        El teléfono y el correo principales de la empresa o persona están en la pestaña Datos. Aquí se agregan los adicionales: otras personas que escriben por esta misma empresa, cada una con sus propios teléfonos y correos. Al pasar un posible cliente a oportunidad, se reconoce automáticamente a quien ya está aquí.
       </p>
 
       {nuevo && (
