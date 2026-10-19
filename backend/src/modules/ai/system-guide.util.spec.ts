@@ -62,6 +62,14 @@ describe('buildSystemGuide', () => {
     expect(guide).toContain('Renovación – nombre del contrato');
     expect(guide).toContain('faltan 30 días o menos');
     expect(guide).toContain('¿Por qué no se renovó?');
+    // Posible cliente → ficha, lead válido y el Agente de Ventas.
+    expect(guide).toContain('La dirección que trajo el posible cliente');
+    expect(guide).toContain('"Lead válido"');
+    expect(guide).toContain('## Agente de Ventas');
+    expect(guide).toContain('Preguntar al agente');
+    expect(guide).toContain('Qué hacer ahora');
+    expect(guide).toContain('"Oportunidades por responsable"');
+    expect(guide).not.toContain('"Clientes y prospectos por responsable"');
   });
 
   it('Contratación Pública explica Entidades Públicas y la entrega mensual de documentos', () => {
