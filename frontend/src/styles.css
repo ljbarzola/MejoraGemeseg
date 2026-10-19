@@ -934,6 +934,25 @@ a.enlace-tabla:hover {
   flex: 0 0 auto;
 }
 
+/* Encabezados con varios botones largos: en pantalla angosta cada botón ocupa todo el ancho
+   en vez de quedar cada uno de un tamaño pegado a la derecha. */
+@media (max-width: 640px) {
+  .header-actions--ancho-movil > .auth-btn,
+  .header-actions--ancho-movil > .btn-secondary {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}
+
+/* Texto de ayuda bajo el título + acciones: va DESPUÉS de .page-title-row, con su propio margen.
+   No uses margen negativo para «subirlo»: si las acciones pasan a otra línea, se montan encima. */
+.page-title-help {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+  margin: 8px 0 16px;
+}
+
 .filter-btn {
   padding: 8px 16px;
   border: 2px solid var(--gris-claro);

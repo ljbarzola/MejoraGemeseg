@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { getContract, generateContractPdf, sendContract, getContractDocuments, fetchProtectedFile, uploadSignedContract, getContractSignatureStatus, getEstadoFirmaElectronica, SalesContract, SalesContractDocument, SignatureStatus } from '../../services/ventas.service';
+import { getContract, generateContractPdf, sendContract, getContractDocuments, fetchProtectedFile, uploadSignedContract, getContractSignatureStatus, getEstadoFirmaElectronica, cambiarTipoDocumento, SalesContract, SalesContractDocument, SignatureStatus } from '../../services/ventas.service';
 import { subPageTitle } from './contratoStyles';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import TipoDocumentoSelect from '../../components/ventas/TipoDocumentoSelect';
+import { etiquetaTipoDocumento } from '../../utils/documentoTipos';
 
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   GENERADO: 'PDF generado',
@@ -48,6 +50,11 @@ export default function ContratoResult() {
   const [emailBody, setEmailBody] = useState('');
   // null = todavía no se sabe. Mientras SignWell no esté conectado, enviar a firma no funciona.
   const [signwellListo, setSignwellListo] = useState<boolean | null>(null);
+  // Cambiar el tipo del documento (Contrato, Garantía...).
+  const [cambiandoTipo, setCambiandoTipo] = useState(false);
+  const [tipoNuevo, setTipoNuevo] = useState('');
+  const [tipoOtroNuevo, setTipoOtroNuevo] = useState('');
+  const [guardandoTipo, setGuardandoTipo] = useState(false);
 
   useEffect(() => {
     getEstadoFirmaElectronica().then((r) => setSignwellListo(r.signwellConfigurado)).catch(() => setSignwellListo(null));
@@ -203,6 +210,24 @@ export default function ContratoResult() {
 
   if (!contract) return <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>Cargando...</div>;
 
+  const etiquetaTipo = etiquetaTipoDocumento(contract.documentType, contract.documentTypeOther);
+  const contratoDelDoc = contract.agreementLink?.agreement;
+  const nombreContratoDoc = contratoDelDoc ? (contratoDelDoc.title || `Contrato #${contratoDelDoc.id}`) : '';
+
+  const guardarTipo = async () => {
+    if (!tipoNuevo) { showToast('Elige el tipo de documento.', 'error'); return; }
+    if (tipoNuevo === 'OTRO' && !tipoOtroNuevo.trim()) { showToast('Escribe cómo se llama el tipo de documento «Otro».', 'error'); return; }
+    setGuardandoTipo(true);
+    try {
+      const c = await cambiarTipoDocumento(contract.id, tipoNuevo, tipoOtroNuevo);
+      setContract({ ...contract, documentType: c.documentType, documentTypeOther: c.documentTypeOther });
+      setCambiandoTipo(false);
+      showToast(`El documento de ${contract.clientName} ahora es de tipo «${etiquetaTipoDocumento(c.documentType, c.documentTypeOther)}».`, 'success');
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'No se pudo cambiar el tipo del documento', 'error');
+    } finally { setGuardandoTipo(false); }
+  };
+
   const statusColors: Record<string, string> = {
     DRAFT: '#f59e0b', GENERATING: '#3b82f6', READY: '#10b981',
     SENT: '#8b5cf6', SIGNED: '#059669', CANCELLED: '#ef4444',
@@ -236,6 +261,54 @@ export default function ContratoResult() {
           </button>
         )}
       </div>
+
+      <div style={{ padding: '8px 24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 13, flexShrink: 0 }}>
+        <span>
+          Tipo:{' '}
+          {etiquetaTipo
+            ? <span className="status-badge" style={{ backgroundColor: '#eef2f7', color: '#334155' }}>{etiquetaTipo}</span>
+            : <span style={{ color: '#a0aec0' }}>sin tipo</span>}{' '}
+          <button type="button" className="enlace-tabla" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13 }}
+            onClick={() => { setTipoNuevo(contract.documentType || ''); setTipoOtroNuevo(contract.documentTypeOther || ''); setCambiandoTipo(true); }}>
+            Cambiar tipo
+          </button>
+        </span>
+        <span>
+          Contrato:{' '}
+          {contratoDelDoc ? (
+            <a className="enlace-tabla" href={`/ventas/contratos/${contratoDelDoc.id}`}
+              title={`Ver el contrato «${nombreContratoDoc}» de ${contract.clientName}`}
+              onClick={(e) => { e.preventDefault(); navigate(`/ventas/contratos/${contratoDelDoc.id}`); }}>
+              {nombreContratoDoc}
+            </a>
+          ) : <span style={{ color: '#a0aec0' }}>no está asociado a ningún contrato</span>}
+        </span>
+      </div>
+
+      {cambiandoTipo && (
+        <div className="modal-overlay" onClick={() => setCambiandoTipo(false)}>
+          <div className="modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Cambiar el tipo del documento</h3>
+              <button className="modal-close" onClick={() => setCambiandoTipo(false)} aria-label="Cerrar">✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 13, color: '#666', marginTop: 0 }}>
+                Documento {contract.contractNumber || `#${contract.id}`} de {contract.clientName}
+                {contratoDelDoc ? `, del contrato «${nombreContratoDoc}»` : ''}.
+              </p>
+              <div className="form-group">
+                <label>Tipo de documento *</label>
+                <TipoDocumentoSelect tipo={tipoNuevo} tipoOtro={tipoOtroNuevo} onChange={(t, o) => { setTipoNuevo(t); setTipoOtroNuevo(o); }} />
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setCambiandoTipo(false)}>Cancelar</button>
+              <button className="auth-btn" onClick={guardarTipo} disabled={guardandoTipo}>{guardandoTipo ? 'Guardando...' : 'Guardar'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingSentAction && (
         <ConfirmDialog

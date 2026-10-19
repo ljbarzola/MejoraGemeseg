@@ -84,6 +84,11 @@ export interface SalesContract {
   clientFilledAt?: string | null;
   salesClientId?: number | null;
   salesClient?: { id: number; name: string } | null;
+  // Tipo de documento (Contrato, Garantía...); «Otro» trae su nombre en documentTypeOther. null = sin tipo.
+  documentType?: string | null;
+  documentTypeOther?: string | null;
+  // Contrato al que pertenece, si está colgado de uno.
+  agreementLink?: { agreement: { id: number; title?: string | null } } | null;
   companyId: number;
   createdBy: number;
   createdAt: string;
@@ -241,6 +246,9 @@ export interface SubirDocumentoInput {
   agreementId?: number;
   titulo?: string;
   firmado: boolean;
+  // Tipo de documento (obligatorio); con 'OTRO' hay que dar su nombre en tipoOtro.
+  tipo: string;
+  tipoOtro?: string;
 }
 
 // Sube un documento que ya existe (p. ej. el contrato firmado en PDF) sin plantilla ni firma
@@ -252,8 +260,14 @@ export const subirDocumentoHecho = (file: File, data: SubirDocumentoInput): Prom
   if (data.agreementId) formData.append('agreementId', String(data.agreementId));
   if (data.titulo?.trim()) formData.append('titulo', data.titulo.trim());
   formData.append('firmado', String(data.firmado));
+  formData.append('tipo', data.tipo);
+  if (data.tipo === 'OTRO' && data.tipoOtro?.trim()) formData.append('tipoOtro', data.tipoOtro.trim());
   return api.post('/ventas/contratos/subir', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
 };
+
+// Cambia el tipo de un documento ya guardado (p. ej. uno subido antes de que existieran los tipos).
+export const cambiarTipoDocumento = (id: number, tipo: string, tipoOtro?: string): Promise<SalesContract> =>
+  api.patch(`/ventas/contratos/${id}/tipo`, { tipo, tipoOtro }).then(r => r.data);
 
 // ¿Está conectada la firma electrónica (SignWell)? Mientras no lo esté, enviar a firma no funciona.
 export const getEstadoFirmaElectronica = (): Promise<{ signwellConfigurado: boolean }> =>
@@ -693,6 +707,9 @@ export interface ContratoComercialDocumento {
     status: string;
     createdAt: string;
     signedAt?: string | null;
+    documentType?: string | null;
+    documentTypeOther?: string | null;
+    fieldValues?: Record<string, any> | null;
     template?: { name: string } | null;
   };
 }

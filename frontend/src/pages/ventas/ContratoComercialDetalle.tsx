@@ -8,6 +8,7 @@ import ContratoComercialModal from '../../components/ventas/ContratoComercialMod
 import MotivoCierreModal from '../../components/ventas/MotivoCierreModal';
 import SubirDocumentoModal from '../../components/ventas/SubirDocumentoModal';
 import { useToast } from '../../contexts/ToastContext';
+import { etiquetaTipoDocumento } from '../../utils/documentoTipos';
 import { subPageTitle } from './contratoStyles';
 import {
   getContratoComercial,
@@ -165,16 +166,19 @@ export default function ContratoComercialDetalle() {
 
   return (
     <div className="page-container">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', flex: '1 1 320px', minWidth: 0 }}>
+      <div className="page-title-row" style={{ alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
           <button className="cacao-back-btn" onClick={() => navigate('/ventas/contratos')}>
             <ArrowLeft size={16} strokeWidth={2.4} /> Volver
           </button>
           <h2 style={subPageTitle}>{titulo} — {contrato.salesClient.name}</h2>
           <EstadoContratoBadge estado={contrato.estado} />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto', flex: '0 0 auto' }}>
-          <button className="btn-secondary" onClick={() => setModo('editar')}><Pencil size={15} /> Editar</button>
+        <div className="header-actions header-actions--ancho-movil">
+          <button className="btn-secondary" onClick={() => setModo('editar')}
+            title="Cambia las fechas, los servicios, el valor y las notas">
+            <Pencil size={15} /> {producto ? 'Editar venta' : 'Editar contrato'}
+          </button>
           {producto ? (
             contrato.estado === 'POR_ENTREGAR' && (
               <button className="auth-btn" onClick={() => { accion(() => updateContratoComercial(contrato.id, { status: 'ENTREGADO' }), 'Marcado como entregado', 'No se pudo marcar como entregado'); }}>
@@ -331,9 +335,9 @@ export default function ContratoComercialDetalle() {
       )}
 
       <div style={caja}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div className="page-title-row" style={{ alignItems: 'center', marginBottom: 12 }}>
           <h3 style={{ margin: 0, fontSize: 15 }}>Documentos</h3>
-          <div style={{ flex: 1 }} />
+          <div className="header-actions header-actions--ancho-movil">
           <button
             className="btn-secondary"
             disabled
@@ -341,20 +345,22 @@ export default function ContratoComercialDetalle() {
           >
             <Mail size={15} /> Enviar a firma por correo · Próximamente
           </button>
-          <button className="btn-secondary" onClick={() => setSubiendoDoc(true)} title="Sube un documento que ya tienes hecho, por ejemplo el contrato firmado en PDF">
+          <button className="auth-btn" onClick={() => setSubiendoDoc(true)}
+            title="Sube un documento que ya tienes hecho (contrato firmado, garantía...) y elige de qué tipo es">
             <Upload size={15} /> Subir documento
           </button>
           <button
-            className="auth-btn"
+            className="btn-secondary"
             onClick={() => (porIniciar && yaTieneDocs ? setConfirmarOtroDoc(true) : irAGenerar())}
           >
             <FilePlus size={15} /> {porIniciar && yaTieneDocs ? 'Generar otro documento' : 'Generar documento'}
           </button>
+          </div>
         </div>
 
         {(contrato.documents || []).length === 0 ? (
           <p style={{ color: '#888', fontSize: 13, margin: '0 0 12px' }}>
-            Este contrato aún no tiene documentos. Sube el contrato firmado en PDF con «Subir documento»; la generación automática desde una plantilla llegará pronto.
+            {producto ? 'Esta venta' : 'Este contrato'} aún no tiene documentos. Sube con «Subir documento» el contrato firmado, la garantía u otro PDF y elige su tipo; también quedará en Documentación. La generación automática desde una plantilla llegará pronto.
           </p>
         ) : (
           <div className="tasks-table-wrapper" style={{ marginBottom: 12 }}>
@@ -362,7 +368,8 @@ export default function ContratoComercialDetalle() {
               <thead>
                 <tr>
                   <th>Documento</th>
-                  <th>Plantilla</th>
+                  <th>Tipo</th>
+                  <th>Origen</th>
                   <th>Estado</th>
                   <th>Fecha</th>
                   <th className="col-acciones col-acciones--ancha"><span className="visually-hidden">Acciones</span></th>
@@ -373,7 +380,14 @@ export default function ContratoComercialDetalle() {
                   const est = DOC_ESTADO[d.contract.status] || { label: d.contract.status, color: '#888' };
                   return (
                     <tr key={d.contractId} style={{ cursor: 'pointer' }} onClick={() => navigate(`/ventas/documentacion/${d.contractId}`)}>
-                      <td style={{ fontWeight: 600 }}>{d.contract.contractNumber || `#${d.contractId}`}</td>
+                      <td style={{ fontWeight: 600 }}>
+                        {d.contract.fieldValues?.titulo || d.contract.contractNumber || `Documento #${d.contractId}`}
+                      </td>
+                      <td>
+                        {etiquetaTipoDocumento(d.contract.documentType, d.contract.documentTypeOther)
+                          ? <span className="status-badge" style={{ backgroundColor: '#eef2f7', color: '#334155' }}>{etiquetaTipoDocumento(d.contract.documentType, d.contract.documentTypeOther)}</span>
+                          : <span style={{ color: '#a0aec0', fontSize: 12 }}>Sin tipo</span>}
+                      </td>
                       <td>{d.contract.template?.name || 'Subido (sin plantilla)'}</td>
                       <td>
                         <span className="status-badge" style={{ backgroundColor: est.color + '22', color: est.color }}>{est.label}</span>
@@ -411,7 +425,7 @@ export default function ContratoComercialDetalle() {
                   <option value="">Elige un documento...</option>
                   {sinVincular.map((d) => (
                     <option key={d.id} value={d.id}>
-                      {d.contractNumber || `#${d.id}`} · {d.template?.name || 'subido sin plantilla'} · {(DOC_ESTADO[d.status] || { label: d.status }).label}
+                      {d.contractNumber || `#${d.id}`}{etiquetaTipoDocumento(d.documentType, d.documentTypeOther) ? ` · ${etiquetaTipoDocumento(d.documentType, d.documentTypeOther)}` : ''} · {d.template?.name || 'subido sin plantilla'} · {(DOC_ESTADO[d.status] || { label: d.status }).label}
                     </option>
                   ))}
                 </select>

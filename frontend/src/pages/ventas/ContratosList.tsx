@@ -13,17 +13,22 @@ import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import { useToast } from '../../contexts/ToastContext';
+import { TIPOS_DOCUMENTO, etiquetaTipoDocumento } from '../../utils/documentoTipos';
 
 // Columnas elegibles de la tabla (además de Número y Acciones, que son fijas).
 const COLUMNAS_DOCS = [
   { key: 'clientName', label: 'Cliente' },
+  { key: 'tipo', label: 'Tipo' },
+  { key: 'contrato', label: 'Contrato' },
   { key: 'template', label: 'Plantilla' },
   { key: 'status', label: 'Estado' },
   { key: 'createdAt', label: 'Fecha' },
   { key: 'sentAt', label: 'Enviado' },
   { key: 'signedAt', label: 'Firmado' },
 ];
-const COLUMNAS_DOCS_POR_DEFECTO = ['clientName', 'template', 'status', 'createdAt'];
+const COLUMNAS_DOCS_POR_DEFECTO = ['clientName', 'tipo', 'contrato', 'status', 'createdAt'];
+
+const nombreContratoDe = (c: SalesContract) => c.agreementLink?.agreement.title || (c.agreementLink ? `Contrato #${c.agreementLink.agreement.id}` : '');
 
 // "Documentación" (antes "Contratos"): los
 // documentos que se generan desde una plantilla y se firman. Cada documento es de un cliente y
@@ -32,7 +37,10 @@ export default function ContratosList() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [contracts, setContracts] = useState<SalesContract[]>([]);
+  // Mientras carga no se muestra «No hay documentos aún» (parecía que la lista estaba vacía).
+  const [cargando, setCargando] = useState(true);
   const [filter, setFilter] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
   const [soloSinCliente, setSoloSinCliente] = useState(false);
   const [confirmarVincular, setConfirmarVincular] = useState(false);
   const [search, setSearch] = useState('');
@@ -65,6 +73,8 @@ export default function ContratosList() {
       setContracts(data);
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudieron cargar los documentos', 'error');
+    } finally {
+      setCargando(false);
     }
   };
 
@@ -91,10 +101,14 @@ export default function ContratosList() {
   };
 
   const filteredContracts = contracts.filter((c) => {
+    if (filtroTipo === 'SIN_TIPO' ? !!c.documentType : filtroTipo && c.documentType !== filtroTipo) return false;
     const q = search.toLowerCase().trim();
     if (!q) return true;
     return (
       (c.contractNumber || '').toLowerCase().includes(q) ||
+      nombreContratoDe(c).toLowerCase().includes(q) ||
+      (etiquetaTipoDocumento(c.documentType, c.documentTypeOther) || '').toLowerCase().includes(q) ||
+      String(c.fieldValues?.titulo || '').toLowerCase().includes(q) ||
       c.clientName?.toLowerCase().includes(q) ||
       c.clientEmail?.toLowerCase().includes(q) ||
       (c.template?.name || '').toLowerCase().includes(q)
@@ -106,6 +120,8 @@ export default function ContratosList() {
     {
       contractNumber: (c) => c.contractNumber || `#${c.id}`,
       clientName: (c) => c.clientName,
+      tipo: (c) => etiquetaTipoDocumento(c.documentType, c.documentTypeOther),
+      contrato: (c) => nombreContratoDe(c) || null,
       template: (c) => c.template?.name ?? 'Subido (sin plantilla)',
       status: (c) => statusLabels[c.status] || c.status,
       createdAt: (c) => c.createdAt,
@@ -127,6 +143,23 @@ export default function ContratosList() {
             {!c.salesClientId && <div style={{ fontSize: 11, color: '#b45309' }}>Sin cliente asignado</div>}
           </>
         );
+      case 'tipo': {
+        const t = etiquetaTipoDocumento(c.documentType, c.documentTypeOther);
+        return t
+          ? <span className="status-badge" style={{ backgroundColor: '#eef2f7', color: '#334155' }}>{t}</span>
+          : <span style={{ color: '#a0aec0', fontSize: 12 }}>Sin tipo</span>;
+      }
+      case 'contrato':
+        return c.agreementLink ? (
+          <a
+            className="enlace-tabla"
+            href={`/ventas/contratos/${c.agreementLink.agreement.id}`}
+            title={`Ver el contrato «${nombreContratoDe(c)}»`}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/ventas/contratos/${c.agreementLink!.agreement.id}`); }}
+          >
+            <span className="truncate">{nombreContratoDe(c)}</span>
+          </a>
+        ) : <span style={{ color: '#a0aec0', fontSize: 12 }}>Sin contrato</span>;
       case 'template':
         return c.template?.name || 'Subido (sin plantilla)';
       case 'status':
@@ -149,12 +182,12 @@ export default function ContratosList() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
+      <div className="page-title-row" style={{ marginBottom: 16 }}>
         <div>
           <p className="page-eyebrow">Ventas y CRM</p>
           <h1>Documentación</h1>
         </div>
-        <div className="header-actions">
+        <div className="header-actions header-actions--ancho-movil">
           <button
             type="button"
             onClick={() => setShowHelp(true)}
@@ -172,7 +205,7 @@ export default function ContratosList() {
               rel="noopener noreferrer"
               title="Abrir la carpeta de documentos en Google Drive"
               aria-label="Ver carpeta en Google Drive"
-              style={{ display: 'inline-flex', alignItems: 'center', padding: '8px 10px' }}
+              style={{ display: 'inline-flex', alignItems: 'center', padding: '8px 10px', flex: '0 0 auto' }}
             >
               <FolderOpen size={16} />
             </a>
@@ -196,7 +229,7 @@ export default function ContratosList() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por número, cliente, email o plantilla..."
+            placeholder="Buscar por número, cliente, contrato o tipo..."
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
           <select className="filter-select" value={filter} onChange={(e) => setFilter(e.target.value)}>
@@ -204,6 +237,13 @@ export default function ContratosList() {
             {(['DRAFT', 'READY', 'SENT', 'SIGNED'] as const).map((s) => (
               <option key={s} value={s}>{statusLabels[s]}</option>
             ))}
+          </select>
+          <select className="filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} aria-label="Filtrar por tipo de documento">
+            <option value="">Todos los tipos</option>
+            {TIPOS_DOCUMENTO.map((t) => (
+              <option key={t.key} value={t.key}>{t.label}</option>
+            ))}
+            <option value="SIN_TIPO">Sin tipo</option>
           </select>
           <select className="filter-select" value={soloSinCliente ? 'sin' : ''} onChange={(e) => setSoloSinCliente(e.target.value === 'sin')}>
             <option value="">Todos los clientes</option>
@@ -228,18 +268,20 @@ export default function ContratosList() {
           >
             <Link2 size={16} /> Vincular clientes
           </button>
-          <ClearFiltersButton onClear={() => { setSearch(''); setFilter(''); setSoloSinCliente(false); }} disabled={!search && !filter && !soloSinCliente} />
+          <ClearFiltersButton onClear={() => { setSearch(''); setFilter(''); setFiltroTipo(''); setSoloSinCliente(false); }} disabled={!search && !filter && !filtroTipo && !soloSinCliente} />
         </div>
       </div>
 
       <div className="admin-section">
-        {contracts.length === 0 ? (
+        {cargando ? (
+          <p style={{ color: '#888', fontSize: 13 }}>Cargando...</p>
+        ) : contracts.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36, marginBottom: 8 }}>📄</div>
-            <div>No hay documentos aún. Sube uno que ya tengas hecho con «Subir documento».</div>
+            <div>No hay documentos aún. Sube uno con «Subir documento», o desde un contrato en Contratos: los documentos que subas a un contrato aparecen aquí solos, con su tipo.</div>
           </div>
         ) : filasOrdenadas.length === 0 ? (
-          <p style={{ color: '#888', fontSize: 13 }}>No hay documentos que coincidan con la búsqueda.</p>
+          <p style={{ color: '#888', fontSize: 13 }}>No hay documentos que coincidan con los filtros.</p>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef}>

@@ -9,6 +9,8 @@ import {
 } from '../../services/ventas.service';
 import { useToast } from '../../contexts/ToastContext';
 import ErrorBanner from '../common/ErrorBanner';
+import TipoDocumentoSelect from './TipoDocumentoSelect';
+import { etiquetaTipoDocumento } from '../../utils/documentoTipos';
 
 interface Props {
   onClose: () => void;
@@ -30,6 +32,8 @@ export default function SubirDocumentoModal({ onClose, onSubido, clienteId, cont
   const [cliente, setCliente] = useState<number | ''>(clienteId ?? '');
   const [contrato, setContrato] = useState<number | ''>(contratoId ?? '');
   const [titulo, setTitulo] = useState('');
+  const [tipo, setTipo] = useState('');
+  const [tipoOtro, setTipoOtro] = useState('');
   const [firmado, setFirmado] = useState(true);
   const [archivo, setArchivo] = useState<File | null>(null);
   const [subiendo, setSubiendo] = useState(false);
@@ -54,6 +58,8 @@ export default function SubirDocumentoModal({ onClose, onSubido, clienteId, cont
   const subir = async () => {
     setError('');
     if (!cliente) { setError('Elige el cliente al que pertenece el documento.'); return; }
+    if (!tipo) { setError('Elige el tipo de documento (Contrato, Garantía, etc.).'); return; }
+    if (tipo === 'OTRO' && !tipoOtro.trim()) { setError('Escribe cómo se llama el tipo de documento «Otro».'); return; }
     if (!archivo) { setError('Elige el archivo PDF que quieres subir.'); return; }
     setSubiendo(true);
     try {
@@ -62,9 +68,15 @@ export default function SubirDocumentoModal({ onClose, onSubido, clienteId, cont
         agreementId: contrato ? Number(contrato) : undefined,
         titulo,
         firmado,
+        tipo,
+        tipoOtro,
       });
+      const nombreCliente = clienteElegido?.name || doc.clientName;
+      const nombreTipo = etiquetaTipoDocumento(tipo, tipoOtro);
       showToast(
-        `Documento de ${clienteElegido?.name || doc.clientName} subido${contratoElegido ? ` y asociado a «${nombreContrato(contratoElegido)}»` : ''}.`,
+        contratoElegido
+          ? `Se subió «${nombreTipo}» al contrato «${nombreContrato(contratoElegido)}» de ${nombreCliente}. Ya aparece también en Documentación.`
+          : `Se subió «${nombreTipo}» de ${nombreCliente}. Ya aparece en Documentación.`,
         'success',
       );
       onSubido(doc);
@@ -85,8 +97,8 @@ export default function SubirDocumentoModal({ onClose, onSubido, clienteId, cont
         <div className="modal-body">
           <ErrorBanner mensaje={error} />
           <p style={{ fontSize: 13, color: '#666', marginTop: 0 }}>
-            Para un documento que ya fue hecho fuera del sistema, por ejemplo un contrato firmado en PDF. Queda guardado en Documentación,
-            a nombre del cliente, y puedes asociarlo a uno de sus contratos.
+            Para un documento que ya fue hecho fuera del sistema, por ejemplo un contrato firmado o una garantía en PDF. Queda guardado en
+            Documentación, a nombre del cliente y con su tipo{contratoId ? ', y se ve también en este contrato' : ', y puedes asociarlo a uno de sus contratos'}.
           </p>
 
           <div className="form-group">
@@ -111,6 +123,11 @@ export default function SubirDocumentoModal({ onClose, onSubido, clienteId, cont
                 <option key={c.id} value={c.id}>{nombreContrato(c)}</option>
               ))}
             </select>
+          </div>
+
+          <div className="form-group">
+            <label>Tipo de documento *</label>
+            <TipoDocumentoSelect tipo={tipo} tipoOtro={tipoOtro} onChange={(t, o) => { setTipo(t); setTipoOtro(o); }} />
           </div>
 
           <div className="form-group">

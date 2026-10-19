@@ -285,11 +285,12 @@ export default function ContratosComercialesList() {
   return (
     <div className="page-container">
       <div className="page-title-row">
-        <div>
+        {/* Tres botones largos: el título solo necesita ~180px, así se quedan en su fila. */}
+        <div style={{ flexBasis: 180 }}>
           <p className="page-eyebrow">Ventas y CRM</p>
           <h1>Contratos</h1>
         </div>
-        <div className="header-actions">
+        <div className="header-actions header-actions--ancho-movil">
           <button className="btn-secondary" onClick={() => setVerMotivos(true)}
             title="Las razones que se ofrecen al cancelar un contrato, al explicar por qué venció sin renovarse y al renovar con menos">
             <ListChecks size={16} /> Por qué terminan los contratos
@@ -304,7 +305,7 @@ export default function ContratosComercialesList() {
           </button>
         </div>
       </div>
-      <p style={{ fontSize: 13, color: '#666', margin: '-6px 0 14px' }}>
+      <p className="page-title-help">
         Aquí también puedes registrar contratos anteriores a la app: con «Nuevo contrato» pon sus fechas reales, aunque ya hayan pasado, y di por qué terminaron. Los contratos que vencieron o se cancelaron sin explicación aparecen con «Sin motivo registrado».
       </p>
 
