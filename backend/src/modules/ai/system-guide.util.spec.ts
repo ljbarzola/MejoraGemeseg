@@ -41,6 +41,19 @@ describe('buildSystemGuide', () => {
     expect(guide).toMatch(/"Tratos" = "Oportunidades"/);
   });
 
+  it('Ventas explica lo del CRM nuevo: contactos, qué pasa al aceptar, incidentes en el contrato y Configuración en pestañas', () => {
+    const guide = buildSystemGuide(['VENTAS']);
+    expect(guide).toContain('pestaña "Contactos"');
+    expect(guide).toContain('es adicional a ESTE contrato');
+    expect(guide).toContain('Incidentes y conversación de salida');
+    expect(guide).toContain('Por qué terminó un contrato');
+    expect(guide).toContain('Añadir nueva conexión');
+    // Cosas que ya no son verdad y no deben volver a enseñarse.
+    expect(guide).not.toContain('todavía no existe');
+    expect(guide).not.toContain('un solo correo y teléfono');
+    expect(guide).not.toContain('botón "Motivos de cierre"');
+  });
+
   it('Contratación Pública explica Entidades Públicas y la entrega mensual de documentos', () => {
     const guide = buildSystemGuide(['CONTRATACION_PUBLICA']);
     expect(guide).toContain('Entidades Públicas');
