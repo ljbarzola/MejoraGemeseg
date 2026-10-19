@@ -386,7 +386,7 @@ export default function VentasDashboard() {
           {/* Por responsable (solo cuando se mira más de uno) */}
           {alcanceTodos && (
             <div style={{ marginTop: 20 }}>
-              <Tarjeta titulo="Clientes y prospectos por responsable" hint="Quién lleva cuántos y qué se le está atrasando">
+              <Tarjeta titulo="Oportunidades por responsable" hint="Quién lleva cuántas oportunidades abiertas (Activos), a cuántas se les venció el seguimiento (Vencidos) y cuántas ganó (Aceptados). Las que no tienen responsable están en la primera fila">
                 <div className="tasks-table-wrapper">
                   <table className="tasks-table resizable-table" ref={tablaRespRef}>
                     <thead>

@@ -1500,17 +1500,31 @@ export class VentasClientesService {
     const desdeFecha = diaUtc(desde);
     const hastaExclusivo = new Date(diaUtc(hasta).getTime() + DIA_MS);
 
-    // Alcance
+    // Alcance. Desde 2026-10-16 el responsable es de cada OPORTUNIDAD, no de la empresa o persona del
+    // Directorio (que suele quedar sin responsable). Por eso «mis clientes» son los que tienen una
+    // oportunidad a mi nombre, además de los que aún traen mi nombre del sistema anterior; antes solo
+    // contaba este último y un vendedor veía su tablero vacío aunque llevara oportunidades.
     let responsable: string = 'mine';
+    let alcanceUsuario: number | null = null;
     const where: Prisma.SalesClientWhereInput = { companyId };
     if (query.responsable === 'all') {
       responsable = 'all';
     } else if (esManager && query.responsable && /^\d+$/.test(query.responsable)) {
       responsable = query.responsable;
-      where.assignedUserId = Number(query.responsable);
+      alcanceUsuario = Number(query.responsable);
     } else {
-      where.assignedUserId = user.userId;
+      alcanceUsuario = user.userId;
     }
+    const clausulaAlcance: Prisma.SalesClientWhereInput | null =
+      alcanceUsuario === null
+        ? null
+        : {
+            OR: [
+              { assignedUserId: alcanceUsuario },
+              { opportunities: { some: { assignedUserId: alcanceUsuario } } },
+            ],
+          };
+    if (clausulaAlcance) where.OR = clausulaAlcance.OR;
 
     const stages = await this.prisma.salesClientStage.findMany({
       where: { companyId },
@@ -1568,22 +1582,56 @@ export class VentasClientesService {
         : []),
     ];
 
-    // Por responsable
+    // Por responsable: se cuenta por el responsable de cada OPORTUNIDAD (abiertas = activos, ganadas =
+    // aceptados). Una empresa que todavía no tiene oportunidades (solo datos, o del sistema anterior)
+    // se cuenta, como antes, por el responsable de la empresa. Con un vendedor elegido (o «mis clientes»)
+    // solo se cuentan SUS oportunidades.
+    const oportunidades = clientes.length
+      ? await this.prisma.salesOpportunity.findMany({
+          where: { companyId, salesClientId: { in: clientes.map((c) => c.id) } },
+          select: { salesClientId: true, closedAt: true, outcome: true, assignedUserId: true },
+        })
+      : [];
+    const oportunidadesPorCliente = new Map<number, typeof oportunidades>();
+    for (const o of oportunidades) {
+      oportunidadesPorCliente.set(o.salesClientId, [...(oportunidadesPorCliente.get(o.salesClientId) ?? []), o]);
+    }
+    const idsResponsables = [...new Set(oportunidades.map((o) => o.assignedUserId).filter((x): x is number => x !== null))];
+    const nombreResponsable = new Map(
+      (idsResponsables.length
+        ? await this.prisma.user.findMany({ where: { id: { in: idsResponsables } }, select: { id: true, fullName: true } })
+        : []
+      ).map((u) => [u.id, u.fullName]),
+    );
     const resp = new Map<number | null, { nombre: string; activos: number; vencidos: number; aceptados: number }>();
-    for (const c of clientes) {
-      const k = c.assignedUserId ?? null;
-      const fila = resp.get(k) ?? {
-        nombre: c.assignedUser?.fullName ?? 'Sin responsable',
-        activos: 0,
-        vencidos: 0,
-        aceptados: 0,
-      };
-      if (esActivo(c.status)) {
-        fila.activos++;
-        if (c.nextActionDate && c.nextActionDate < hoyFecha) fila.vencidos++;
-      }
-      if (ganada && c.status === ganada) fila.aceptados++;
+    const filaDe = (k: number | null, nombre: string) => {
+      const fila = resp.get(k) ?? { nombre, activos: 0, vencidos: 0, aceptados: 0 };
       resp.set(k, fila);
+      return fila;
+    };
+    for (const c of clientes) {
+      const suyas = oportunidadesPorCliente.get(c.id) ?? [];
+      if (suyas.length === 0) {
+        if (alcanceUsuario !== null && c.assignedUserId !== alcanceUsuario) continue;
+        const fila = filaDe(c.assignedUserId ?? null, c.assignedUser?.fullName ?? 'Sin responsable');
+        if (esActivo(c.status)) {
+          fila.activos++;
+          if (c.nextActionDate && c.nextActionDate < hoyFecha) fila.vencidos++;
+        }
+        if (ganada && c.status === ganada) fila.aceptados++;
+        continue;
+      }
+      for (const o of suyas) {
+        if (alcanceUsuario !== null && o.assignedUserId !== alcanceUsuario) continue;
+        const k = o.assignedUserId ?? null;
+        const fila = filaDe(k, k === null ? 'Sin responsable' : (nombreResponsable.get(k) ?? 'Sin nombre'));
+        if (o.closedAt === null) {
+          fila.activos++;
+          if (c.nextActionDate && c.nextActionDate < hoyFecha) fila.vencidos++;
+        } else if (o.outcome === 'GANADA') {
+          fila.aceptados++;
+        }
+      }
     }
     const porResponsable = [...resp.entries()]
       .map(([userId, v]) => ({ userId, ...v }))
@@ -1666,10 +1714,9 @@ export class VentasClientesService {
     const nPerdidos = perdida ? clientes.filter((c) => c.status === perdida).length : 0;
 
     // Contratos de estos clientes
-    const clientesFiltro: Prisma.SalesContractWhereInput =
-      where.assignedUserId !== undefined
-        ? { salesClient: { is: { assignedUserId: where.assignedUserId as number } } }
-        : { salesClientId: { not: null } };
+    const clientesFiltro: Prisma.SalesContractWhereInput = clausulaAlcance
+      ? { salesClient: { is: clausulaAlcance } }
+      : { salesClientId: { not: null } };
     const [contratosPorEstado, aceptadosSinContrato, sinClienteVinculado] = await Promise.all([
       this.prisma.salesContract.groupBy({
         by: ['status'],
@@ -1690,12 +1737,22 @@ export class VentasClientesService {
     // clientes asignados). Los demás usuarios no ven ese selector.
     let responsables: { id: number; nombre: string }[] = [];
     if (esManager) {
-      const asignados = await this.prisma.salesClient.groupBy({
-        by: ['assignedUserId'],
-        where: { companyId, assignedUserId: { not: null } },
-      });
+      // Quienes tienen clientes del sistema anterior a su nombre O llevan oportunidades.
+      const [asignados, conOportunidades] = await Promise.all([
+        this.prisma.salesClient.groupBy({
+          by: ['assignedUserId'],
+          where: { companyId, assignedUserId: { not: null } },
+        }),
+        this.prisma.salesOpportunity.groupBy({
+          by: ['assignedUserId'],
+          where: { companyId, assignedUserId: { not: null } },
+        }),
+      ]);
+      const idsVendedores = [
+        ...new Set([...asignados, ...conOportunidades].map((a) => a.assignedUserId!)),
+      ];
       const usuarios = await this.prisma.user.findMany({
-        where: { id: { in: asignados.map((a) => a.assignedUserId!) } },
+        where: { id: { in: idsVendedores } },
         select: { id: true, fullName: true },
         orderBy: { fullName: 'asc' },
       });
