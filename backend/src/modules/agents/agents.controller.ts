@@ -96,6 +96,6 @@ export class AgentsUserController {
   @Get('available')
   @UseGuards(AuthGuard('jwt'))
   getAvailable(@Req() req: any) {
-    return this.agentsService.getAvailableForUser(req.user.userId);
+    return this.agentsService.getAvailableForUser(req.user.userId, req.user.companyId);
   }
 }

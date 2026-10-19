@@ -17,7 +17,6 @@ import {
 import { parseKnowledgeBase, filterKnowledgeBase } from './knowledge-base.util';
 import { buildCapabilitiesPrompt } from './capabilities-prompt.util';
 import { buildSystemGuide } from './system-guide.util';
-import { esAgenteSinChat } from '../agents/agent-trabajadores.const';
 import { SendMessageDto } from './dto/send-message.dto';
 import {
   SCOPE_VENTAS,
@@ -158,12 +157,6 @@ export class AiService implements OnModuleInit {
         scope: null,
         perfil: 'GENERAL',
       };
-    }
-    // Un agente que trabaja solo (revisor de bitácoras) no conversa.
-    if (esAgenteSinChat(agent.scope)) {
-      throw new ForbiddenException(
-        'Ese agente no conversa: se usa desde su pantalla (por ejemplo, Contratación Pública → Bitácoras).',
-      );
     }
     if (agent.scope === SCOPE_VENTAS && !agent.isActive) {
       throw new ForbiddenException('El Agente de Ventas no está disponible ahora.');
