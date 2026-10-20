@@ -47,6 +47,8 @@ export interface EntranteInput {
   campaign?: string | null;
   externalId?: string | null;
   extra?: Record<string, unknown>;
+  // Cuándo llegó de verdad (si la web lo mandó con retraso, ver lead-recepcion.util.ts). Sin valor: ahora.
+  recibidoEn?: Date | null;
   createdBy?: number | null;
 }
 
@@ -117,6 +119,8 @@ export class VentasLeadsService {
         externalId,
         extra: (input.extra ?? {}) as Prisma.InputJsonValue,
         createdBy: input.createdBy ?? null,
+        // Solo si la web mandó la fecha real; si no, la base pone la de ahora (default).
+        ...(input.recibidoEn ? { createdAt: input.recibidoEn } : {}),
       },
     });
     // Aviso en las notificaciones; un fallo acá nunca debe perder el lead ya guardado.
