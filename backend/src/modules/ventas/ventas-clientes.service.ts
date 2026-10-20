@@ -1046,6 +1046,12 @@ export class VentasClientesService {
         : null;
     if (dto.extra !== undefined) {
       const extra = trasladarSubserviciosLegado({ ...dto.extra });
+      // El Directorio ya no muestra «Servicio requerido» (es de la oportunidad) y un formulario que no lo
+      // manda no debe borrar lo guardado: se conserva si no viene.
+      const previo = (actual.extra ?? {}) as Record<string, string>;
+      for (const clave of [SERVICIO_KEY, `${SERVICIO_KEY}__sub`]) {
+        if (extra[clave] === undefined && previo[clave] !== undefined) extra[clave] = previo[clave];
+      }
       await this.validarSubopcionesDeExtra(companyId as number, extra);
       data.extra = extra;
     }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardClientes, DashboardClientes } from '../../services/ventas.service';
 import { getUser } from '../../services/auth.service';
@@ -9,6 +9,9 @@ import DashboardEmbudo from '../../components/ventas/dashboard/DashboardEmbudo';
 import DashboardMotivos from '../../components/ventas/dashboard/DashboardMotivos';
 import DashboardEquipo from '../../components/ventas/dashboard/DashboardEquipo';
 import VentasComoFunciona from '../../components/ventas/VentasComoFunciona';
+
+// El mapa (Leaflet) pesa: se descarga solo al abrir el Resumen.
+const DashboardMapa = lazy(() => import('../../components/ventas/dashboard/DashboardMapa'));
 
 // Pestañas del dashboard (2026-10-07). «Resumen» es el tablero de siempre (se
 // mira por clientes); las demás salen de las oportunidades, los contratos y los
@@ -239,6 +242,11 @@ export default function VentasDashboard() {
                 ? 'Aún no hay aceptados ni perdidos'
                 : `${data.aceptacion.aceptados} aceptados · ${data.aceptacion.rechazados} perdidos`} />
           </div>
+
+          {/* Mapa de Ecuador: dónde se cotiza (2026-10-19), por la Ubicación opcional de cada oportunidad */}
+          <Suspense fallback={null}>
+            <DashboardMapa alcance={responsable} />
+          </Suspense>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20, marginTop: 20 }}>
             {/* Embudo */}

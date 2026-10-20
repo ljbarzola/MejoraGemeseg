@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import ServiciosPorCategoria from './ServiciosPorCategoria';
+import UbicacionCampo from './UbicacionCampo';
 import ErrorBanner from '../common/ErrorBanner';
 import {
   convertirLeadEntrante,
   getLeadEntrante,
   type LeadEntrante,
   type SalesServicio,
+  type UbicacionOportunidad,
 } from '../../services/ventas.service';
 
 interface Props {
@@ -34,6 +36,8 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
     typeof l.extra?.direccion === 'string' ? (l.extra.direccion as string) : '';
   const [direccion, setDireccion] = useState(direccionDeLead(lead));
   const [titulo, setTitulo] = useState('');
+  // Ubicación OPCIONAL de la oportunidad (mapa): es del lugar del servicio, no de la persona.
+  const [ubicacion, setUbicacion] = useState<UbicacionOportunidad | null>(null);
   // Fase 2: si la empresa ya existía pero la persona no, se puede anotar
   // quién escribió (queda como contacto nuevo de ese cliente).
   const [nuevoContacto, setNuevoContacto] = useState('');
@@ -80,6 +84,7 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
             }),
         serviceIds,
         title: titulo.trim() || undefined,
+        ...(ubicacion ? { ubicacion } : {}),
       });
       onDone(r);
     } catch (err: any) {
@@ -187,6 +192,8 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
             <label>Título de la oportunidad (opcional)</label>
             <input type="text" value={titulo} maxLength={150} onChange={(e) => setTitulo(e.target.value)} placeholder="Ej: Monitoreo de cámaras de la bodega" />
           </div>
+
+          <UbicacionCampo value={ubicacion} onChange={setUbicacion} busquedaInicial={direccion || direccionDeLead(lead)} />
 
           <div className="form-group">
             <label>Servicios que pidió</label>

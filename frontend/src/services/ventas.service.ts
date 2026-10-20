@@ -294,13 +294,27 @@ export interface ClientVisit {
   visitDate?: string; isVerified?: boolean;
   commercialOffer?: string; quotedAmount?: number; outcome?: string;
   user?: any; companyId: number; createdBy: number; createdAt: string;
+  // Conexión con el CRM (2026-10-19): vacíos en las visitas de antes.
+  salesClientId?: number | null; opportunityId?: number | null;
+  cliente?: { id: number; name: string } | null;
+  oportunidad?: { id: number; title: string | null } | null;
+  ubicacion?: UbicacionOportunidad | null;
 }
-export const getVisits = (params?: any) => api.get('/ventas/visitas', { params }).then(r => r.data);
-export const createVisit = (data: any) => api.post('/ventas/visitas', data).then(r => r.data);
-export const checkInVisit = (id: number, data?: any) => api.post(`/ventas/visitas/${id}/checkin`, data).then(r => r.data);
-export const completeVisit = (id: number, data?: any) => api.post(`/ventas/visitas/${id}/complete`, data).then(r => r.data);
-export const cancelVisit = (id: number, reason?: string) => api.post(`/ventas/visitas/${id}/cancel`, { reason }).then(r => r.data);
-export const deleteVisit = (id: number) => api.delete(`/ventas/visitas/${id}`).then(r => r.data);
+export interface VisitaInput {
+  salesClientId?: number | null;
+  opportunityId?: number | null;
+  visitDate?: string;
+  notes?: string | null;
+  // Sin enviar no se toca; null la quita.
+  ubicacion?: UbicacionOportunidad | null;
+}
+export const getVisits = (params?: any) => api.get('/ventas/visits', { params }).then(r => r.data);
+export const createVisit = (data: VisitaInput): Promise<ClientVisit> => api.post('/ventas/visits', data).then(r => r.data);
+export const updateVisit = (id: number, data: VisitaInput): Promise<ClientVisit> => api.patch(`/ventas/visits/${id}`, data).then(r => r.data);
+export const checkInVisit = (id: number, data?: any) => api.post(`/ventas/visits/${id}/checkin`, data).then(r => r.data);
+export const completeVisit = (id: number, data?: any) => api.post(`/ventas/visits/${id}/complete`, data).then(r => r.data);
+export const cancelVisit = (id: number, reason?: string) => api.post(`/ventas/visits/${id}/cancel`, { reason }).then(r => r.data);
+export const deleteVisit = (id: number) => api.delete(`/ventas/visits/${id}`).then(r => r.data);
 
 // ==================== LEGACY: LEADS ====================
 export interface Lead {
@@ -939,6 +953,17 @@ export const deleteMotivo = (id: number) =>
   api.delete(`/ventas/motivos/${id}`).then(r => r.data);
 
 // ---------- Oportunidades ----------
+// Ubicación OPCIONAL de una oportunidad (el lugar del servicio, elegido en un mapa de OpenStreetMap).
+export interface UbicacionOportunidad {
+  name: string | null;
+  address: string | null;
+  lat: number;
+  lng: number;
+  city: string | null;
+  province: string | null;
+  osmId: string | null;
+}
+
 export interface Oportunidad {
   id: number;
   salesClientId: number;
@@ -960,6 +985,10 @@ export interface Oportunidad {
   originType: string;
   // Fase 4: contrato de servicio que esta oportunidad renueva (originType RENOVACION).
   renewsAgreementId?: number | null;
+  // Ubicación opcional (mapa); null si no se puso.
+  ubicacion?: UbicacionOportunidad | null;
+  // Sin servicios propios: el servicio que la ficha del cliente tiene guardado (o null).
+  servicioDeFicha?: string | null;
   notes?: string | null;
   services: { id: number; name: string }[];
   // Solo en el detalle:
@@ -975,6 +1004,8 @@ export interface OportunidadInput {
   quotedAt?: string | null;
   notes?: string;
   assignedUserId?: number | null;
+  // Sin enviar no se toca; null la quita.
+  ubicacion?: UbicacionOportunidad | null;
 }
 
 // Fase 3: al ACEPTAR una oportunidad se dice qué pasa con el contrato.
@@ -1124,6 +1155,8 @@ export interface ConvertirLeadInput {
   // en un cliente existente.
   contactId?: number;
   nuevoContactoNombre?: string;
+  // Ubicación opcional de la oportunidad (mapa).
+  ubicacion?: UbicacionOportunidad | null;
 }
 
 export const getLeadsEntrantes = (params?: { estado?: string; canal?: string; motivo?: string; q?: string }): Promise<LeadEntrante[]> =>
@@ -1261,6 +1294,40 @@ export const getAnaliticaMotivos = (p?: RangoParams): Promise<AnaliticaMotivos> 
   api.get('/ventas/analitica/motivos', { params: p }).then(r => r.data);
 export const getAnaliticaActividad = (p?: RangoParams): Promise<AnaliticaActividad> =>
   api.get('/ventas/analitica/actividad', { params: p }).then(r => r.data);
+
+// Mapa de Ecuador del Dashboard: dónde están las oportunidades que tienen Ubicación.
+export type VistaMapa = 'todas' | 'abiertas' | 'cotizadas' | 'aceptadas' | 'perdidas';
+export interface PuntoMapa {
+  lat: number;
+  lng: number;
+  ciudad: string | null;
+  provincia: string;
+  total: number;
+  aceptadas: number;
+  perdidas: number;
+  abiertas: number;
+  montoCotizado: number;
+  lugares: string[];
+}
+export interface AnaliticaMapa {
+  vista: VistaMapa;
+  total: number;
+  conUbicacion: number;
+  sinUbicacion: number;
+  puntos: PuntoMapa[];
+  // Cada oportunidad con ubicación por separado (mapa de calor y puntos).
+  oportunidades: { lat: number; lng: number; monto: number; lugar: string | null; ciudad: string | null; provincia: string; estado: 'abierta' | 'aceptada' | 'perdida' }[];
+  provincias: { provincia: string; total: number; montoCotizado: number }[];
+  provinciasSinOportunidades: string[];
+}
+export const getAnaliticaMapa = (p: { alcance?: string; vista?: VistaMapa }): Promise<AnaliticaMapa> =>
+  api.get('/ventas/analitica/mapa', { params: p }).then(r => r.data);
+
+// Buscador de lugares (OpenStreetMap, a través del servidor) para el cuadro «Ubicación».
+export const buscarUbicaciones = (q: string): Promise<UbicacionOportunidad[]> =>
+  api.get('/ventas/ubicaciones/buscar', { params: { q } }).then(r => r.data);
+export const ubicacionDePunto = (lat: number, lng: number): Promise<UbicacionOportunidad> =>
+  api.get('/ventas/ubicaciones/inversa', { params: { lat, lng } }).then(r => r.data);
 
 // Cancelar un contrato y explicar cierres (exigen motivo).
 export const cancelarContratoComercial = (id: number, data: { date?: string; motivo: MotivoInput }): Promise<ContratoComercial> =>

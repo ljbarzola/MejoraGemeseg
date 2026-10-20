@@ -12,6 +12,7 @@ import {
   SALES_PIPELINE_DDL,
 } from './sales-pipeline.schema';
 import { SALES_CONTACT_DDL } from './sales-contact.schema';
+import { SALES_VISIT_COLUMNS_DDL } from './sales-visit.schema';
 import { SALES_AGREEMENT_INCIDENT_DDL } from './sales-agreement-incident.schema';
 import { LANDINGS } from './lead-landing.util';
 import {
@@ -98,7 +99,8 @@ export class VentasSchemaService implements OnModuleInit {
   private async agregarColumnasNuevas() {
     const listas: { nombre: string; sentencias: string[] }[] = [
       { nombre: 'SalesContract (tipo de documento)', sentencias: SALES_CONTRACT_COLUMNS_DDL },
-      { nombre: 'SalesOpportunity (renovaciones)', sentencias: SALES_OPPORTUNITY_COLUMNS_DDL },
+      { nombre: 'SalesOpportunity (renovaciones y ubicación)', sentencias: SALES_OPPORTUNITY_COLUMNS_DDL },
+      { nombre: 'ClientVisit (cliente y ubicación)', sentencias: SALES_VISIT_COLUMNS_DDL },
     ];
     for (const { nombre, sentencias } of listas) {
       try {

@@ -22,6 +22,13 @@ export class VentasAnaliticaController {
     return this.analitica.cartera(req.user.companyId, this.alcance(req, alcance));
   }
 
+  // Mapa de Ecuador del Dashboard: dónde están las oportunidades que tienen Ubicación.
+  @Get('mapa')
+  @Section('VENTAS', 'view')
+  mapa(@Req() req: any, @Query('alcance') alcance?: string, @Query('vista') vista?: string) {
+    return this.analitica.mapa(req.user.companyId, this.alcance(req, alcance), vista);
+  }
+
   @Get('retencion')
   @Section('VENTAS', 'view')
   retencion(

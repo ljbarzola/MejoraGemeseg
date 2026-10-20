@@ -72,6 +72,18 @@ describe('buildSystemGuide', () => {
     expect(guide).not.toContain('"Clientes y prospectos por responsable"');
   });
 
+  it('Ventas explica la Ubicación opcional de la oportunidad y el mapa del Dashboard', () => {
+    const guide = buildSystemGuide(['VENTAS']);
+    expect(guide).toContain('Ubicación del servicio (OPCIONAL)');
+    expect(guide).toContain('Elegir en el mapa');
+    expect(guide).toContain('Solo vale dentro de Ecuador');
+    expect(guide).toContain('Dónde se está cotizando');
+    expect(guide).toContain('"Ubicación del servicio" (opcional, con mapa)');
+    // El servicio es de la oportunidad: el Directorio ya no lo tiene.
+    expect(guide).toContain('el Directorio no tiene "Servicio requerido"');
+    expect(guide).not.toContain('llenan también su "Servicio requerido"');
+  });
+
   it('Contratación Pública explica Entidades Públicas y la entrega mensual de documentos', () => {
     const guide = buildSystemGuide(['CONTRATACION_PUBLICA']);
     expect(guide).toContain('Entidades Públicas');

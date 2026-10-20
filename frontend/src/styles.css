@@ -4922,3 +4922,29 @@ textarea.chat-input {
   color: #718096;
   margin-top: 4px;
 }
+
+/* ===== Mapas de Ventas (Leaflet): pin de «Ubicación» y burbujas del Dashboard (2026-10-19) ===== */
+.ubicacion-pin {
+  background: none;
+  border: 0;
+  font-size: 28px;
+  line-height: 32px;
+  text-align: center;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+.mapa-ecuador {
+  height: 420px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  z-index: 0;
+}
+.mapa-ecuador .leaflet-popup-content { font-size: 12.5px; margin: 10px 12px; }
+.mapa-burbuja-numero {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: #1a202c;
+  font-weight: 800;
+  font-size: 12px;
+}
+.mapa-burbuja-numero::before { display: none; }

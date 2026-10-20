@@ -20,6 +20,14 @@ import { fk } from './sales-agreement.schema';
  */
 export const SALES_OPPORTUNITY_COLUMNS_DDL: string[] = [
   `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "renewsAgreementId" INTEGER`,
+  // 2026-10-19: ubicación opcional de la oportunidad (mapa). Todas nulas, sin índice ni valor por defecto.
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "locationName" TEXT`,
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "locationAddress" TEXT`,
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "locationLat" DOUBLE PRECISION`,
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "locationLng" DOUBLE PRECISION`,
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "locationCity" TEXT`,
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "locationProvince" TEXT`,
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "locationOsmId" TEXT`,
 ];
 
 export const SALES_PIPELINE_DDL: string[] = [
@@ -94,6 +102,7 @@ export const SALES_PIPELINE_DDL: string[] = [
   // SALES_OPPORTUNITY_COLUMNS_DDL (Prisma pide toda columna que conoce en cada consulta). Aquí se
   // repite solo para una base nueva, donde la tabla se acaba de crear; es idempotente.
   `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "renewsAgreementId" INTEGER`,
+  ...SALES_OPPORTUNITY_COLUMNS_DDL,
   `CREATE INDEX IF NOT EXISTS "SalesOpportunity_renewsAgreementId_idx" ON "SalesOpportunity"("renewsAgreementId")`,
   fk('SalesOpportunity', 'companyId', 'Company', 'CASCADE'),
   fk('SalesOpportunity', 'salesClientId', 'SalesClient', 'CASCADE'),
@@ -230,7 +239,12 @@ export const SALES_PIPELINE_BACKFILL: string[] = [
       c."createdBy", c."createdAt", CURRENT_TIMESTAMP
     FROM "SalesClient" c
     LEFT JOIN "SalesClientStage" s ON s."companyId" = c."companyId" AND s."key" = c."status"
-    WHERE NOT EXISTS (SELECT 1 FROM "SalesOpportunity" o WHERE o."salesClientId" = c."id")`,
+    WHERE NOT EXISTS (SELECT 1 FROM "SalesOpportunity" o WHERE o."salesClientId" = c."id")
+      -- SOLO la primera vez (tabla de oportunidades vacía). Este relleno corre en CADA arranque del servidor
+      -- (Cloud Run arranca de cero tras cada reposo): sin esta guarda, una empresa o persona guardada solo
+      -- con datos en el Directorio (que NO tiene oportunidad a propósito) o a la que se le borró su única
+      -- oportunidad recibía una oportunidad «MIGRADA» fantasma en el siguiente arranque.
+      AND NOT EXISTS (SELECT 1 FROM "SalesOpportunity")`,
   `INSERT INTO "SalesOpportunityStageChange" (
       "opportunityId","salesClientId","companyId","fromStatus","toStatus","notes","changedBy","createdAt","legacyChangeId"
     )

@@ -27,9 +27,18 @@ interface Props {
   // Directorio (2026-10-16): guardar solo los datos de la empresa o persona,
   // sin abrir una oportunidad (esa se crea en Posibles clientes u Oportunidades).
   soloDatos?: boolean;
+  // Nombre con el que arranca el formulario (por ejemplo, lo que se estaba buscando al decidir crearlo).
+  nombreInicial?: string;
   onClose: () => void;
-  onSaved: () => void;
+  // Al CREAR devuelve la empresa o persona recién guardada (para quien necesita elegirla enseguida,
+  // como Planificación y Campo); al editar no devuelve nada.
+  onSaved: (creado?: SalesClient) => void;
 }
+
+// Con «solo datos» (Directorio y visitas) solo se piden el nombre y la fecha de ingreso; la fuente se
+// ofrece a la vista y el resto queda en «Más datos (opcional)». Nadie siempre tiene a la mano la cédula,
+// el teléfono o el correo. «Servicio requerido» NO se pide: es de la oportunidad, no de la empresa.
+const CAMPOS_VISIBLES = ['fuente'];
 
 // Únicos campos núcleo que viven como columna propia de SalesClient en vez
 // de en `extra` — todo lo demás (fuente, servicio_requerido, cualquier
@@ -39,14 +48,19 @@ const NATIVE_KEYS = ['email', 'phone', 'ruc', 'address', 'observaciones'];
 // 'YYYY-MM-DD' en hora local (el usuario está en Ecuador), no en UTC.
 const aDiaLocal = (d: Date) => d.toLocaleDateString('en-CA');
 
-export default function ClienteFormModal({ client, fields, yaEsCliente = false, soloDatos = false, onClose, onSaved }: Props) {
+export default function ClienteFormModal({ client, fields, yaEsCliente = false, soloDatos = false, nombreInicial = '', onClose, onSaved }: Props) {
   const { showToast } = useToast();
+  // Alta de solo datos: sin «Servicio requerido» (ni sus subopciones). Al editar una ficha que ya lo
+  // tiene sí se muestra, para no dejar un dato guardado sin poder corregirlo.
+  const sinServicio = soloDatos && !client;
   const otherFields = fields
-    .filter((f) => f.key !== 'name' && f.key !== SUBSERVICIOS_KEY)
+    .filter((f) => f.key !== 'name' && f.key !== SUBSERVICIOS_KEY && !(sinServicio && f.key === SERVICIO_KEY))
     .sort((a, b) => a.order - b.order);
+  const camposVisibles = soloDatos && !client ? otherFields.filter((f) => CAMPOS_VISIBLES.includes(f.key)) : otherFields;
+  const camposOpcionales = soloDatos && !client ? otherFields.filter((f) => !CAMPOS_VISIBLES.includes(f.key)) : [];
   const hoy = aDiaLocal(new Date());
 
-  const [name, setName] = useState(client?.name || '');
+  const [name, setName] = useState(client?.name || nombreInicial);
   // Fecha de ingreso editable: permite registrar prospectos de meses anteriores.
   const [fechaIngreso, setFechaIngreso] = useState(client ? aDiaLocal(new Date(client.createdAt)) : hoy);
   const [values, setValues] = useState<Record<string, string>>(() => {
@@ -78,7 +92,9 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
     }
     setSaving(true);
     try {
-      const extra: Record<string, string> = {};
+      // Al editar se parte de lo que la ficha ya tiene: el servidor reemplaza `extra` completo, y lo que este
+      // formulario no muestra (por ejemplo «Servicio requerido», oculto en el Directorio) se perdería.
+      const extra: Record<string, string> = client ? { ...(client.extra || {}) } : {};
       const payload: any = { name: name.trim(), fechaIngreso };
       for (const field of otherFields) {
         const value = (values[field.key] || '').trim();
@@ -98,7 +114,7 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
         extra[subKey] = opciones.length === 0 ? '' : (values[subKey] || '');
       }
       payload.extra = extra;
-      let creado: { posiblesDuplicados?: { id: number; name: string }[] } | undefined;
+      let creado: (SalesClient & { posiblesDuplicados?: { id: number; name: string }[] }) | undefined;
       if (client) await updateSalesClient(client.id, payload);
       else if (soloDatos) creado = await createSalesClient({ ...payload, soloDatos: true });
       else creado = await createSalesClient(yaEsCliente ? { ...payload, yaEsCliente: true } : payload);
@@ -112,12 +128,49 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
       if (creado?.posiblesDuplicados?.length) {
         showToast(`Ojo: se parece a «${creado.posiblesDuplicados[0].name}», que ya está en el directorio`, 'info');
       }
-      onSaved();
+      onSaved(creado);
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo guardar', 'error');
     } finally {
       setSaving(false);
     }
+  };
+
+  const renderCampo = (f: SalesClientField) => {
+    if (f.fieldType === LISTA_SUBOPCIONES) {
+      const subKey = subopcionesKey(f.key);
+      const opciones = subserviciosDe(f.options, values[f.key] || '');
+      return (
+        <div key={f.key} style={opciones.length > 0 ? { gridColumn: '1 / -1' } : undefined}>
+          <ExtraField
+            field={{ ...f, fieldType: 'SELECT' }}
+            value={values[f.key] || ''}
+            onChange={(v) => setValues({ ...values, [f.key]: v, [subKey]: '' })}
+          />
+          {opciones.length > 0 && (
+            <div style={{ marginTop: 6 }}>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>
+                Subopciones <span style={{ fontWeight: 400 }}>(opcional)</span>
+              </label>
+              <SubserviciosCheckboxes
+                options={opciones}
+                value={values[subKey] || ''}
+                onChange={(v) => setValues({ ...values, [subKey]: v })}
+              />
+            </div>
+          )}
+        </div>
+      );
+    }
+    return (
+      <div key={f.key} style={f.fieldType === 'TEXTAREA' ? { gridColumn: '1 / -1' } : undefined}>
+        <ExtraField
+          field={f}
+          value={values[f.key] || ''}
+          onChange={(v) => setValues({ ...values, [f.key]: v })}
+        />
+      </div>
+    );
   };
 
   return (
@@ -137,7 +190,7 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
           )}
           {!client && soloDatos && (
             <p style={{ margin: '0 0 12px', fontSize: 13, color: '#666' }}>
-              Aquí solo se guardan los datos. La negociación se abre desde Posibles clientes o con «+ Nueva oportunidad» en Oportunidades.
+              Solo el nombre es obligatorio; el resto lo puedes completar después. La negociación se abre desde Posibles clientes o con «+ Nueva oportunidad» en Oportunidades.
             </p>
           )}
           {!client && !yaEsCliente && !soloDatos && (
@@ -154,42 +207,17 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
               <DateInput value={fechaIngreso} onChange={setFechaIngreso} max={hoy}
                 style={{ padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }} />
             </div>
-            {otherFields.map((f) => {
-              if (f.fieldType === LISTA_SUBOPCIONES) {
-                const subKey = subopcionesKey(f.key);
-                const opciones = subserviciosDe(f.options, values[f.key] || '');
-                return (
-                  <div key={f.key} style={opciones.length > 0 ? { gridColumn: '1 / -1' } : undefined}>
-                    <ExtraField
-                      field={{ ...f, fieldType: 'SELECT' }}
-                      value={values[f.key] || ''}
-                      onChange={(v) => setValues({ ...values, [f.key]: v, [subKey]: '' })}
-                    />
-                    {opciones.length > 0 && (
-                      <div style={{ marginTop: 6 }}>
-                        <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>
-                          Subopciones <span style={{ fontWeight: 400 }}>(opcional)</span>
-                        </label>
-                        <SubserviciosCheckboxes
-                          options={opciones}
-                          value={values[subKey] || ''}
-                          onChange={(v) => setValues({ ...values, [subKey]: v })}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-              return (
-                <div key={f.key} style={f.fieldType === 'TEXTAREA' ? { gridColumn: '1 / -1' } : undefined}>
-                  <ExtraField
-                    field={f}
-                    value={values[f.key] || ''}
-                    onChange={(v) => setValues({ ...values, [f.key]: v })}
-                  />
+            {camposVisibles.map(renderCampo)}
+            {camposOpcionales.length > 0 && (
+              <details style={{ gridColumn: '1 / -1' }}>
+                <summary style={{ cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: '#2b6cb0' }}>
+                  Más datos (opcional): correo, teléfono, cédula / RUC, dirección…
+                </summary>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12, marginTop: 10 }}>
+                  {camposOpcionales.map(renderCampo)}
                 </div>
-              );
-            })}
+              </details>
+            )}
             {/* Solo lectura: el vínculo lo crea el flujo "Referir un cliente", no este formulario. */}
             {client?.referredBy && (
               <div style={{ gridColumn: '1 / -1' }}>

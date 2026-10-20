@@ -155,9 +155,44 @@ export class ChangeOpportunityStageDto {
   contrato?: AceptarContratoDto;
 }
 
+// Ubicación opcional de una oportunidad, elegida en el mapa (OpenStreetMap). En Create/Update, `null`
+// la quita; sin enviar no se toca. Se valida en ubicacion.util.ts (debe estar en Ecuador).
+export class UbicacionDto {
+  @IsOptional()
+  @IsString()
+  name?: string | null;
+
+  @IsOptional()
+  @IsString()
+  address?: string | null;
+
+  @IsNumber()
+  lat: number;
+
+  @IsNumber()
+  lng: number;
+
+  @IsOptional()
+  @IsString()
+  city?: string | null;
+
+  @IsOptional()
+  @IsString()
+  province?: string | null;
+
+  @IsOptional()
+  @IsString()
+  osmId?: string | null;
+}
+
 export class CreateOpportunityDto {
   @IsInt()
   salesClientId: number;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UbicacionDto)
+  ubicacion?: UbicacionDto | null;
 
   @IsOptional()
   @IsString()
@@ -188,6 +223,11 @@ export class CreateOpportunityDto {
 }
 
 export class UpdateOpportunityDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UbicacionDto)
+  ubicacion?: UbicacionDto | null;
+
   @IsOptional()
   @IsString()
   title?: string;

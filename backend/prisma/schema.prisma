@@ -1497,12 +1497,25 @@ model ClientVisit {
   quotedAmount    Float?        @default(0)
   outcome         VisitOutcome?
   notes           String?
+  // 2026-10-19: la visita se conecta al CRM. Cliente del Directorio y, si se quiere, la oportunidad que se
+  // visita (sin FK a propósito: el servidor las valida; borrar un cliente no debe romper visitas viejas).
+  // `clientName/Address/Phone` siguen guardando lo que se veía al agendar. Todo nulo en las visitas de antes.
+  salesClientId    Int?
+  opportunityId    Int?
+  locationName     String?
+  locationAddress  String?
+  locationLat      Float?
+  locationLng      Float?
+  locationCity     String?
+  locationProvince String?
+  locationOsmId    String?
   companyId       Int
   company         Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   @@index([companyId, userId])
+  @@index([salesClientId])
 }
 
 model Lead {
@@ -2865,6 +2878,15 @@ model SalesOpportunity {
   // RENOVACION). Sin FK a propósito, igual que SalesAgreement.opportunityId. Una sola
   // oportunidad de renovación por contrato.
   renewsAgreementId Int?
+  // Ubicación OPCIONAL (2026-10-19): el lugar del servicio, elegido en un mapa de OpenStreetMap. Es de la
+  // oportunidad, no de la persona o empresa. Todas nulas por defecto; alimentan el mapa del Dashboard.
+  locationName      String?
+  locationAddress   String?
+  locationLat       Float?
+  locationLng       Float?
+  locationCity      String?
+  locationProvince  String?
+  locationOsmId     String?
   notes             String?
   createdBy         Int
   createdAt         DateTime  @default(now())

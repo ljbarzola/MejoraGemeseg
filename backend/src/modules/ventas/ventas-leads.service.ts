@@ -27,9 +27,10 @@ import {
   type CanalLead,
 } from './lead-canales.const';
 import { sugerirServicios } from './lead-atribucion.util';
-import { ensureDefaultServices, extraServicioRequerido } from './ventas-servicios.util';
+import { ensureDefaultServices } from './ventas-servicios.util';
 import { combinarDireccion, direccionDeLead } from './lead-datos.util';
 import { nombresParecidos } from './nombre-similar.util';
+import { limpiarUbicacion, type UbicacionInput } from './ubicacion.util';
 
 // Un LEAD es un contacto entrante sin calificar. Solo uno de servicio,
 // calificado, se convierte en cliente + oportunidad. Un cliente NUNCA vuelve a
@@ -630,6 +631,8 @@ export class VentasLeadsService {
       // ese cliente) o un contacto nuevo a registrar en un cliente existente.
       contactId?: number;
       nuevoContactoNombre?: string;
+      // Ubicación opcional de la OPORTUNIDAD (mapa); sin enviar o null = sin ubicación.
+      ubicacion?: UbicacionInput | null;
     },
   ) {
     const cid = this.requireCompany(companyId);
@@ -657,6 +660,8 @@ export class VentasLeadsService {
     // Dirección que llega a la ficha: la que se corrigió en el cuadro de «Pasar a oportunidad» o, si no se
     // tocó, la que trajo el posible cliente.
     const direccion = recortar(dto.address, 300) ?? direccionDeLead(lead.extra);
+    // Ubicación opcional de la oportunidad: se valida antes de tocar nada.
+    const ubicacion = dto.ubicacion ? limpiarUbicacion(dto.ubicacion) : null;
 
     // Servicios de la oportunidad (del catálogo de la empresa).
     const serviceIds = [...new Set(dto.serviceIds ?? [])];
@@ -729,8 +734,7 @@ export class VentasLeadsService {
             observaciones: lead.message ? lead.message.slice(0, MAX_MENSAJE) : null,
             extra: {
               fuente: canalDef(lead.channel)?.fuenteCliente ?? 'OTRO',
-              // «Servicio requerido» de la ficha, con lo que se eligió al pasar a oportunidad.
-              ...extraServicioRequerido(nombresServicios),
+              // Los servicios elegidos viven SOLO en la oportunidad (2026-10-20): ya no se copian a la ficha.
             },
             status: inicial?.key ?? null,
           },
@@ -752,6 +756,7 @@ export class VentasLeadsService {
         receivedAt: lead.createdAt,
         serviceIds,
         title: recortar(dto.title, 150),
+        ubicacion,
       });
       await this.oportunidades.espejarCliente(tx, clienteId);
       // Lo que el contacto escribió queda en el historial del cliente.

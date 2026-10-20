@@ -2,10 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import ResultadosVisitas from './VentasReportes';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus } from 'lucide-react';
-import { getVisits, createVisit, checkInVisit, completeVisit, cancelVisit, deleteVisit, ClientVisit } from '../../services/ventas.service';
+import { getVisits, checkInVisit, completeVisit, cancelVisit, deleteVisit, ClientVisit } from '../../services/ventas.service';
+import VisitaModal from '../../components/ventas/VisitaModal';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import PromptDialog from '../../components/common/PromptDialog';
-import DateInput from '../../components/common/DateInput';
 import { useToast } from '../../contexts/ToastContext';
 
 const OUTCOME_LABELS: Record<string, string> = {
@@ -22,13 +22,12 @@ export default function VisitasPage() {
   const [visits, setVisits] = useState<ClientVisit[]>([]);
   const [loading, setLoading] = useState(true);
   const [pestana, setPestana] = useState<'visitas' | 'resultados'>('visitas');
-  const [showNewModal, setShowNewModal] = useState(false);
+  // Cuadro de «Nueva visita» / «Editar visita» (VisitaModal): null = cerrado.
+  const [visitaModal, setVisitaModal] = useState<{ visita: ClientVisit | null } | null>(null);
   const [showOfferModal, setShowOfferModal] = useState<ClientVisit | null>(null);
   const [saving, setSaving] = useState(false);
   const [checkingInId, setCheckingInId] = useState<number | null>(null);
 
-  const [newVisitError, setNewVisitError] = useState('');
-  const newVisitErrorRef = useRef<HTMLDivElement>(null);
   const [checkInInfo, setCheckInInfo] = useState('');
   const checkInInfoRef = useRef<HTMLDivElement>(null);
   const [checkInError, setCheckInError] = useState('');
@@ -41,10 +40,6 @@ export default function VisitasPage() {
   const deleteErrorRef = useRef<HTMLDivElement>(null);
   const [confirmDeleteVisit, setConfirmDeleteVisit] = useState<ClientVisit | null>(null);
   const [promptCancelVisit, setPromptCancelVisit] = useState<ClientVisit | null>(null);
-
-  useEffect(() => {
-    if (newVisitError) newVisitErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [newVisitError]);
 
   useEffect(() => {
     if (checkInInfo) checkInInfoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -66,15 +61,6 @@ export default function VisitasPage() {
     if (deleteError) deleteErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [deleteError]);
 
-  // New Visit Form
-  const [newForm, setNewForm] = useState({
-    clientName: '',
-    clientAddress: '',
-    clientPhone: '',
-    visitDate: new Date().toISOString().split('T')[0],
-    notes: '',
-  });
-
   // Post-Visit Offer Form
   const [offerForm, setOfferForm] = useState({
     commercialOffer: '',
@@ -94,23 +80,6 @@ export default function VisitasPage() {
   };
 
   useEffect(() => { loadVisits(); }, []);
-
-  const handleCreateVisit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setNewVisitError('');
-    if (!newForm.clientName.trim()) { setNewVisitError('El nombre del cliente es obligatorio'); return; }
-    setSaving(true);
-    try {
-      await createVisit(newForm);
-      setShowNewModal(false);
-      setNewForm({ clientName: '', clientAddress: '', clientPhone: '', visitDate: new Date().toISOString().split('T')[0], notes: '' });
-      loadVisits();
-    } catch (err: any) {
-      setNewVisitError(err.response?.data?.message || 'Error al agendar visita');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleCheckIn = async (visit: ClientVisit) => {
     setCheckingInId(visit.id);
@@ -220,7 +189,7 @@ export default function VisitasPage() {
             <h1>Visitas</h1>
           </div>
           <div className="header-actions">
-            <button className="auth-btn" onClick={() => setShowNewModal(true)}>
+            <button className="auth-btn" onClick={() => setVisitaModal({ visita: null })}>
               <Plus size={16} /> Nueva visita
             </button>
           </div>
@@ -257,7 +226,7 @@ export default function VisitasPage() {
             <p style={{ fontSize: '0.9rem', marginTop: '4px' }}>
               Planifica las visitas de tu semana para cumplir la meta de ventas.
             </p>
-            <button className="auth-btn" style={{ marginTop: '16px' }} onClick={() => setShowNewModal(true)}>
+            <button className="auth-btn" style={{ marginTop: '16px' }} onClick={() => setVisitaModal({ visita: null })}>
               + Planificar Mi Primera Visita
             </button>
           </div>
@@ -280,12 +249,24 @@ export default function VisitasPage() {
                 {visits.map((v) => (
                   <tr key={v.id}>
                     <td>
-                      <div style={{ fontWeight: 600, color: 'var(--azul-oscuro)' }}>{v.clientName}</div>
-                      {v.clientAddress && <div style={{ fontSize: '0.78rem', color: '#718096' }}>📍 {v.clientAddress}</div>}
+                      {v.cliente ? (
+                        <a href={`/ventas/clientes?ficha=${v.cliente.id}`} className="enlace-tabla" style={{ fontWeight: 600 }}>{v.cliente.name}</a>
+                      ) : (
+                        <div style={{ fontWeight: 600, color: 'var(--azul-oscuro)' }}>{v.clientName}</div>
+                      )}
+                      {v.ubicacion ? (
+                        <div style={{ fontSize: '0.78rem', color: '#718096' }}>
+                          📍 {v.ubicacion.name || v.ubicacion.address}
+                          {[v.ubicacion.city, v.ubicacion.province].filter(Boolean).length > 0 && ` · ${[v.ubicacion.city, v.ubicacion.province].filter(Boolean).join(', ')}`}
+                        </div>
+                      ) : (
+                        v.clientAddress && <div style={{ fontSize: '0.78rem', color: '#718096' }}>📍 {v.clientAddress}</div>
+                      )}
                       {v.clientPhone && <div style={{ fontSize: '0.78rem', color: '#718096' }}>📞 {v.clientPhone}</div>}
+                      {v.oportunidad && <div style={{ fontSize: '0.78rem', color: '#2b6cb0' }}>💼 {v.oportunidad.title || `Oportunidad ${v.oportunidad.id}`}</div>}
                     </td>
                     <td>{v.user?.fullName || '—'}</td>
-                    <td>{v.visitDate ? new Date(v.visitDate).toLocaleDateString('es-EC') : '—'}</td>
+                    <td>{v.visitDate ? new Date(v.visitDate).toLocaleDateString('es-EC', { timeZone: 'UTC' }) : '—'}</td>
                     <td>
                       {v.isVerified ? (
                         <div style={{ color: '#276749', fontSize: '0.82rem', fontWeight: 600 }}>
@@ -360,6 +341,17 @@ export default function VisitasPage() {
 
                         {v.status !== 'COMPLETED' && v.status !== 'CANCELLED' && (
                           <button
+                            className="btn-secondary-sm"
+                            style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                            title="Editar la visita"
+                            onClick={() => setVisitaModal({ visita: v })}
+                          >
+                            ✏️
+                          </button>
+                        )}
+
+                        {v.status !== 'COMPLETED' && v.status !== 'CANCELLED' && (
+                          <button
                             className="btn-danger-sm"
                             style={{ padding: '4px 6px', fontSize: '0.75rem' }}
                             onClick={() => handleCancelVisit(v)}
@@ -387,84 +379,30 @@ export default function VisitasPage() {
         </>
       )}
 
-      {/* PLAN NEW VISIT MODAL */}
-      {showNewModal && (
-        <div className="modal-backdrop">
-          <div className="modal-card" style={{ maxWidth: 500 }}>
-            <h3>Planificar Nueva Visita</h3>
-            {newVisitError && <div ref={newVisitErrorRef} className="form-error" style={{ marginTop: '10px' }}>{newVisitError}</div>}
-            <form onSubmit={handleCreateVisit} style={{ marginTop: '12px' }}>
-              <div className="form-group">
-                <label>Nombre del Cliente / Empresa *</label>
-                <input
-                  value={newForm.clientName}
-                  onChange={(e) => setNewForm({ ...newForm, clientName: e.target.value })}
-                  placeholder="Ej: Agro Cacao San José"
-                  required
-                />
-              </div>
-
-              <div className="form-group" style={{ marginTop: '8px' }}>
-                <label>Dirección / Ubicación de la Visita</label>
-                <input
-                  value={newForm.clientAddress}
-                  onChange={(e) => setNewForm({ ...newForm, clientAddress: e.target.value })}
-                  placeholder="Ej: Km 12 Vía a Quevedo, Finca San José"
-                />
-              </div>
-
-              <div className="form-row" style={{ marginTop: '8px' }}>
-                <div className="form-group">
-                  <label>Teléfono de Contacto</label>
-                  <input
-                    value={newForm.clientPhone}
-                    onChange={(e) => setNewForm({ ...newForm, clientPhone: e.target.value })}
-                    placeholder="Ej: 0991234567"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Fecha Programada *</label>
-                  <DateInput
-                    value={newForm.visitDate}
-                    onChange={(v) => setNewForm({ ...newForm, visitDate: v })}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="form-group" style={{ marginTop: '8px' }}>
-                <label>Notas / Objetivo de la visita</label>
-                <textarea
-                  value={newForm.notes}
-                  onChange={(e) => setNewForm({ ...newForm, notes: e.target.value })}
-                  rows={2}
-                  placeholder="Notas de preparación previa..."
-                />
-              </div>
-
-              <div className="modal-actions" style={{ marginTop: '16px' }}>
-                <button type="button" className="btn-secondary" onClick={() => setShowNewModal(false)}>Cancelar</button>
-                <button type="submit" className="auth-btn" disabled={saving}>
-                  {saving ? 'Guardando...' : 'Agendar Visita'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {/* NUEVA / EDITAR VISITA: cliente del Directorio, oportunidad y ubicación en el mapa */}
+      {visitaModal && (
+        <VisitaModal
+          visita={visitaModal.visita}
+          onClose={() => setVisitaModal(null)}
+          onSaved={() => { setVisitaModal(null); loadVisits(); }}
+        />
       )}
 
       {/* POST-VISIT OFFER MODAL */}
       {showOfferModal && (
-        <div className="modal-backdrop">
-          <div className="modal-card" style={{ maxWidth: 550 }}>
-            <h3>Registro de Oferta Comercial y Cierre</h3>
-            <p style={{ fontSize: '0.85rem', color: '#718096' }}>
-              Cliente: <strong>{showOfferModal.clientName}</strong>
+        <div className="modal-overlay" onClick={() => setShowOfferModal(null)}>
+          <div className="modal" style={{ maxWidth: 550 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Registro de oferta comercial y cierre</h3>
+              <button className="modal-close" onClick={() => setShowOfferModal(null)} aria-label="Cerrar">✕</button>
+            </div>
+            <p style={{ fontSize: '0.85rem', color: '#718096', margin: '0 0 0', padding: '0 20px' }}>
+              Cliente: <strong>{showOfferModal.cliente?.name ?? showOfferModal.clientName}</strong>
             </p>
 
             {offerError && <div ref={offerErrorRef} className="form-error">{offerError}</div>}
 
-            <form onSubmit={handleCompleteVisitSubmit} style={{ marginTop: '12px' }}>
+            <form onSubmit={handleCompleteVisitSubmit} className="modal-body">
               <div className="form-group">
                 <label>Productos / Servicios Ofrecidos (Detalle de Oferta) *</label>
                 <textarea

@@ -8,7 +8,7 @@ import {
   IsString,
   ValidateNested,
 } from 'class-validator';
-import { MotivoInputDto } from './opportunity.dto';
+import { MotivoInputDto, UbicacionDto } from './opportunity.dto';
 
 // El servidor tiene forbidNonWhitelisted: todo campo del body debe estar aquí.
 
@@ -64,4 +64,6 @@ export class ConvertLeadDto {
   // en un cliente existente.
   @IsOptional() @IsInt() contactId?: number;
   @IsOptional() @IsString() nuevoContactoNombre?: string;
+  // Ubicación opcional de la oportunidad (mapa de OpenStreetMap). Es de la oportunidad, no de la persona.
+  @IsOptional() @ValidateNested() @Type(() => UbicacionDto) ubicacion?: UbicacionDto | null;
 }

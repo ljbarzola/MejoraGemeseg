@@ -27,6 +27,7 @@ import {
   salesClientSelectLabel,
   salesClientListaSubopcionesLabel,
   SUBSERVICIOS_KEY,
+  SERVICIO_KEY,
   LISTA_SUBOPCIONES,
 } from '../../services/ventas.service';
 
@@ -87,7 +88,9 @@ export default function VentasClientesPage() {
     try {
       const [c, f] = await Promise.all([getSalesClients(), getSalesClientFields()]);
       setClients(c);
-      setFields(f);
+      // «Servicio requerido» es de la oportunidad, no del Directorio: no se muestra ni se pide aquí. El dato
+      // guardado en las fichas NO se borra (lo usan los referidos, el historial y el Agente de Ventas).
+      setFields(f.filter((x) => x.key !== SERVICIO_KEY));
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo cargar el directorio', 'error');
     } finally {

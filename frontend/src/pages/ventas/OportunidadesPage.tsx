@@ -273,7 +273,15 @@ export default function OportunidadesPage() {
   const celdaOpp = (key: string, o: Oportunidad): ReactNode => {
     switch (key) {
       case 'servicios':
-        return o.services.map((s) => s.name).join(', ') || <span style={{ color: '#a0aec0' }}>Sin indicar</span>;
+        if (o.services.length > 0) return o.services.map((s) => s.name).join(', ');
+        // Sin servicios propios: lo que la ficha guardó (en gris, para saber que falta elegirlo en la oportunidad).
+        return o.servicioDeFicha ? (
+          <span style={{ color: '#718096', fontStyle: 'italic' }} title="Viene de la ficha de la empresa o persona. Edita la oportunidad para elegir los servicios.">
+            {o.servicioDeFicha}
+          </span>
+        ) : (
+          <span style={{ color: '#a0aec0' }}>Sin indicar</span>
+        );
       case 'etapa':
         return (
           <select

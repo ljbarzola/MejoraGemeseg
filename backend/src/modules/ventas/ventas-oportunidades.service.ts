@@ -15,6 +15,12 @@ import { VentasConversionesService } from './ventas-conversiones.service';
 import { VentasAcuerdosService } from './ventas-acuerdos.service';
 import { parseSiguientePaso } from './siguiente-paso.util';
 import {
+  columnasDeUbicacion,
+  limpiarUbicacion,
+  ubicacionDeFila,
+  type UbicacionOportunidad,
+} from './ubicacion.util';
+import {
   ETIQUETA_SUBSERVICIO,
   ensureDefaultServices,
 } from './ventas-servicios.util';
@@ -35,13 +41,39 @@ const MAX_TITULO = 150;
 const MAX_NOTAS = 2000;
 
 const incluir = {
-  salesClient: { select: { id: true, name: true, email: true, phone: true } },
+  salesClient: { select: { id: true, name: true, email: true, phone: true, extra: true } },
   services: { include: { service: { select: { id: true, name: true } } } },
 } satisfies Prisma.SalesOpportunityInclude;
 
 type OportunidadConRelaciones = Prisma.SalesOpportunityGetPayload<{
   include: typeof incluir;
 }>;
+
+// Opciones del campo «Servicio requerido» de la ficha (con sus hijos), para poner nombre al servicio guardado.
+type OpcionServicioFicha = { key: string; label: string; children?: { key: string; label: string }[] };
+
+// Texto de lo que la ficha del cliente guardó como servicio («Agentes de Seguridad, Seguridad VIP» o, si solo
+// eligió la categoría, «Monitoreo»), o null si no hay nada. Es lo que se muestra en una oportunidad que no
+// tiene servicios propios, para que el dato guardado en la ficha no se pierda de vista ahora que el
+// Directorio ya no lo muestra.
+export function servicioGuardadoEnFicha(
+  extra: unknown,
+  opciones: OpcionServicioFicha[],
+): string | null {
+  const e = (extra ?? {}) as Record<string, unknown>;
+  const principal = typeof e['servicio_requerido'] === 'string' ? (e['servicio_requerido'] as string).trim() : '';
+  const subClaves = (typeof e['servicio_requerido__sub'] === 'string' ? (e['servicio_requerido__sub'] as string) : '')
+    .split(',')
+    .map((k) => k.trim())
+    .filter(Boolean);
+  const opcion = opciones.find((o) => o.key === principal);
+  const subs = subClaves.map(
+    (k) => opcion?.children?.find((h) => h.key === k)?.label ?? ETIQUETA_SUBSERVICIO[k] ?? k,
+  );
+  if (subs.length > 0) return subs.join(', ');
+  if (!principal) return null;
+  return opcion?.label ?? principal;
+}
 
 export interface EtapaInfo {
   key: string;
@@ -92,6 +124,8 @@ export interface NuevaOportunidadInicial {
   notes?: string | null;
   quotedAmount?: number | null;
   quotedAt?: Date | null;
+  // Ubicación opcional ya validada (limpiarUbicacion); null o sin enviar = sin ubicación.
+  ubicacion?: UbicacionOportunidad | null;
   // Solo para una oportunidad que nace ya cerrada (originType HISTORICO).
   outcome?: 'GANADA' | 'PERDIDA' | null;
   closedAt?: Date | null;
@@ -109,6 +143,15 @@ export class VentasOportunidadesService {
     private readonly conversiones: VentasConversionesService,
     private readonly acuerdos: VentasAcuerdosService,
   ) {}
+
+  // Opciones del campo «Servicio requerido» de la empresa (para nombrar el servicio guardado en una ficha).
+  private async opcionesServicioFicha(companyId: number): Promise<OpcionServicioFicha[]> {
+    const campo = await this.prisma.salesClientField.findFirst({
+      where: { companyId, key: 'servicio_requerido' },
+      select: { options: true },
+    });
+    return Array.isArray(campo?.options) ? (campo.options as unknown as OpcionServicioFicha[]) : [];
+  }
 
   private requireCompany(companyId: number | null): number {
     if (!companyId) throw new BadRequestException('Se requiere una empresa');
@@ -183,6 +226,7 @@ export class VentasOportunidadesService {
         notes: p.notes ?? null,
         quotedAmount: p.quotedAmount ?? null,
         quotedAt: p.quotedAt ?? null,
+        ...columnasDeUbicacion(p.ubicacion ?? null),
         outcome: p.outcome ?? null,
         closedAt: p.closedAt ?? null,
         createdBy: p.createdBy,
@@ -308,10 +352,40 @@ export class VentasOportunidadesService {
     return t || null;
   }
 
-  private formatear(o: OportunidadConRelaciones, etapas: Map<string, EtapaInfo>) {
-    const { services, quotedAmount, ...resto } = o;
+  private formatear(
+    o: OportunidadConRelaciones,
+    etapas: Map<string, EtapaInfo>,
+    opcionesServicio: OpcionServicioFicha[] = [],
+  ) {
+    const {
+      services,
+      quotedAmount,
+      locationName,
+      locationAddress,
+      locationLat,
+      locationLng,
+      locationCity,
+      locationProvince,
+      locationOsmId,
+      salesClient: { extra: extraCliente, ...cliente },
+      ...resto
+    } = o;
     return {
       ...resto,
+      salesClient: cliente,
+      // Sin servicios propios, lo que la ficha del cliente tiene guardado (la oportunidad es donde se ve).
+      servicioDeFicha:
+        services.length === 0 ? servicioGuardadoEnFicha(extraCliente, opcionesServicio) : null,
+      // Ubicación opcional (mapa): un solo objeto, o null si no tiene punto.
+      ubicacion: ubicacionDeFila({
+        locationName,
+        locationAddress,
+        locationLat,
+        locationLng,
+        locationCity,
+        locationProvince,
+        locationOsmId,
+      }),
       quotedAmount: quotedAmount === null ? null : Number(quotedAmount),
       services: services.map((s) => s.service),
       stage: o.status ? (etapas.get(o.status) ?? null) : null,
@@ -352,13 +426,14 @@ export class VentasOportunidadesService {
         { services: { some: { service: { name: { contains: q, mode: 'insensitive' } } } } },
       ];
     }
-    const [filas, etapas, usuarios] = await Promise.all([
+    const [filas, etapas, opcionesServicio, usuarios] = await Promise.all([
       this.prisma.salesOpportunity.findMany({
         where,
         include: incluir,
         orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
       }),
       this.etapasDeEmpresa(cid),
+      this.opcionesServicioFicha(cid),
       this.prisma.user.findMany({
         where: { companyId: cid },
         select: { id: true, fullName: true },
@@ -366,7 +441,7 @@ export class VentasOportunidadesService {
     ]);
     const nombre = new Map(usuarios.map((u) => [u.id, u.fullName]));
     return filas.map((o) => ({
-      ...this.formatear(o, etapas),
+      ...this.formatear(o, etapas, opcionesServicio),
       assignedUserName: o.assignedUserId ? (nombre.get(o.assignedUserId) ?? null) : null,
     }));
   }
@@ -382,13 +457,14 @@ export class VentasOportunidadesService {
     });
     if (!o) throw new NotFoundException('Oportunidad no encontrada');
     const etapas = await this.etapasDeEmpresa(cid);
+    const opcionesServicio = await this.opcionesServicioFicha(cid);
     const entradas = await this.prisma.salesReasonEntry.findMany({
       where: { companyId: cid, opportunityId: id },
       orderBy: { createdAt: 'desc' },
     });
     const { stageChanges, ...base } = o;
     return {
-      ...this.formatear(base as OportunidadConRelaciones, etapas),
+      ...this.formatear(base as OportunidadConRelaciones, etapas, opcionesServicio),
       stageChanges,
       motivos: entradas,
     };
@@ -411,6 +487,7 @@ export class VentasOportunidadesService {
     const serviceIds = await this.validarServicios(cid, dto.serviceIds);
     const quotedAmount = this.validarMonto(dto.quotedAmount);
     const quotedAt = this.parseDia(dto.quotedAt, 'La fecha de cotización');
+    const ubicacion = dto.ubicacion ? limpiarUbicacion(dto.ubicacion) : null;
     const existentes = await this.prisma.salesOpportunity.count({
       where: { salesClientId: cliente.id },
     });
@@ -432,6 +509,7 @@ export class VentasOportunidadesService {
         notes: this.texto(dto.notes, MAX_NOTAS, 'Las notas'),
         quotedAmount: quotedAmount ?? null,
         quotedAt: quotedAt ?? null,
+        ubicacion,
       });
       await this.espejarCliente(tx, cliente.id);
       return o;
@@ -452,6 +530,13 @@ export class VentasOportunidadesService {
     if (dto.quotedAmount !== undefined) data.quotedAmount = this.validarMonto(dto.quotedAmount);
     if (dto.quotedAt !== undefined) data.quotedAt = this.parseDia(dto.quotedAt, 'La fecha de cotización');
     if (dto.assignedUserId !== undefined) data.assignedUserId = dto.assignedUserId;
+    // Ubicación opcional: sin enviar no se toca; null la quita; un objeto la reemplaza entera.
+    if (dto.ubicacion !== undefined) {
+      Object.assign(
+        data,
+        columnasDeUbicacion(dto.ubicacion === null ? null : limpiarUbicacion(dto.ubicacion)),
+      );
+    }
     const serviceIds =
       dto.serviceIds !== undefined ? await this.validarServicios(cid, dto.serviceIds) : null;
     await this.prisma.$transaction(async (tx) => {

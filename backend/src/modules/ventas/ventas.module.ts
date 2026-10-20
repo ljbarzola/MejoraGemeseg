@@ -38,6 +38,8 @@ import { PersonalModule } from '../personal/personal.module';
 import { PermissionsModule } from '../permissions/permissions.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { MailModule } from '../mail/mail.module';
+import { VentasUbicacionesController } from './ventas-ubicaciones.controller';
+import { VentasUbicacionesService } from './ventas-ubicaciones.service';
 
 @Module({
   imports: [
@@ -62,6 +64,7 @@ import { MailModule } from '../mail/mail.module';
     VentasConversionesCronController,
     VentasRenovacionesCronController,
     VentasConfigController,
+    VentasUbicacionesController,
     CotizadorCatalogoController,
     CotizadorCotizacionesController,
   ],
@@ -82,6 +85,7 @@ import { MailModule } from '../mail/mail.module';
     VentasConversionesService,
     GoogleAdsConversionesService,
     VentasConfigService,
+    VentasUbicacionesService,
     CotizadorCatalogoService,
     CotizadorCotizacionesService,
   ],

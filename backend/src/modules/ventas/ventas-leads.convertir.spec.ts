@@ -57,14 +57,13 @@ describe('VentasLeadsService.convertir — datos que llegan a la ficha', () => {
     jest.spyOn(servicio as any, 'coincidencias').mockResolvedValue([]);
   });
 
-  it('una empresa nueva nace con la dirección del posible cliente y su «Servicio requerido»', async () => {
+  it('una empresa nueva nace con la dirección del posible cliente y los servicios van SOLO a la oportunidad', async () => {
     await servicio.convertir(1, 5, 7, { serviceIds: [1, 3] });
     const datos = tx.salesClient.create.mock.calls[0][0].data;
     expect(datos.address).toBe('Av. Colón 45, Quito');
-    expect(datos.extra).toMatchObject({
-      servicio_requerido: 'SEGURIDAD_FISICA',
-      servicio_requerido__sub: 'AGENTES_DE_SEGURIDAD,SEGURIDAD_VIP',
-    });
+    // El servicio es de la oportunidad (2026-10-20): ya no se copia a la ficha del Directorio.
+    expect(datos.extra.servicio_requerido).toBeUndefined();
+    expect(datos.extra.servicio_requerido__sub).toBeUndefined();
     // y los servicios siguen yendo a la oportunidad
     expect(oportunidades.crearInicial).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ serviceIds: [1, 3] }));
   });
@@ -80,11 +79,12 @@ describe('VentasLeadsService.convertir — datos que llegan a la ficha', () => {
     expect(tx.salesClient.create.mock.calls[0][0].data.address).toBeNull();
   });
 
-  it('un servicio propio de la empresa no llena el «Servicio requerido» de la ficha', async () => {
+  it('un servicio propio de la empresa igual va a la oportunidad y no a la ficha', async () => {
     prisma.salesService.findMany.mockResolvedValue([{ name: 'Servicio propio de la empresa' }]);
     await servicio.convertir(1, 5, 7, { serviceIds: [9] });
     const extra = tx.salesClient.create.mock.calls[0][0].data.extra;
     expect(extra.servicio_requerido).toBeUndefined();
+    expect(oportunidades.crearInicial).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ serviceIds: [9] }));
   });
 
   it('si alguno de los servicios no existe, avisa y no crea nada', async () => {
@@ -104,6 +104,44 @@ describe('VentasLeadsService.convertir — datos que llegan a la ficha', () => {
     prisma.salesClient.findFirst.mockResolvedValue({ id: 20, name: 'Textiles Valle', address: 'Dirección de siempre' });
     await servicio.convertir(1, 5, 7, { salesClientId: 20, serviceIds: [1, 3] });
     expect(tx.salesClient.update).not.toHaveBeenCalled();
+  });
+
+  // Ubicación (2026-10-19): opcional y de la OPORTUNIDAD, no de la persona o empresa.
+  it('sin ubicación (lo normal) la oportunidad nace sin ubicación', async () => {
+    await servicio.convertir(1, 5, 7, { serviceIds: [1, 3] });
+    expect(oportunidades.crearInicial).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ ubicacion: null }));
+  });
+
+  it('con ubicación, va a la oportunidad (validada) y NO a la ficha de la empresa', async () => {
+    await servicio.convertir(1, 5, 7, {
+      serviceIds: [1, 3],
+      ubicacion: { name: ' Sugar Coffee ', lat: -2.15, lng: -79.96, city: 'Guayaquil', province: 'Provincia del Guayas' },
+    });
+    expect(oportunidades.crearInicial).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        ubicacion: expect.objectContaining({ name: 'Sugar Coffee', lat: -2.15, lng: -79.96, city: 'Guayaquil', province: 'Guayas' }),
+      }),
+    );
+    // La dirección de la ficha sigue saliendo de lo que escribió el posible cliente, no del mapa.
+    expect(tx.salesClient.create.mock.calls[0][0].data.address).toBe('Av. Colón 45, Quito');
+  });
+
+  it('una ubicación fuera de Ecuador se rechaza antes de crear nada', async () => {
+    await expect(
+      servicio.convertir(1, 5, 7, { serviceIds: [1, 3], ubicacion: { lat: 4.6, lng: -74.08 } }),
+    ).rejects.toThrow('Ecuador');
+    expect(tx.salesClient.create).not.toHaveBeenCalled();
+    expect(oportunidades.crearInicial).not.toHaveBeenCalled();
+  });
+
+  it('la ubicación también vale al sumar la oportunidad a una empresa que ya existe', async () => {
+    prisma.salesClient.findFirst.mockResolvedValue({ id: 20, name: 'Textiles Valle', address: 'Dirección de siempre' });
+    await servicio.convertir(1, 5, 7, { salesClientId: 20, serviceIds: [1, 3], ubicacion: { lat: -0.18, lng: -78.47 } });
+    expect(oportunidades.crearInicial).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ ubicacion: expect.objectContaining({ province: 'Pichincha' }) }),
+    );
   });
 });
 

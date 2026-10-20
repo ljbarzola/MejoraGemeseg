@@ -23,7 +23,7 @@ const RECORRIDO: Paso[] = [
   {
     pantalla: '2. Oportunidades',
     texto:
-      'Con «Pasar a oportunidad» queda como prospecto en el Directorio y se abre la negociación de un servicio. Avanza por Nueva → En evaluación → Cotizada → En negociación y termina en Aceptada o Perdida. Es el único lugar donde se cambia la etapa.',
+      'Con «Pasar a oportunidad» queda como prospecto en el Directorio y se abre la negociación de un servicio. Avanza por Nueva → En evaluación → Cotizada → En negociación y termina en Aceptada o Perdida. Es el único lugar donde se cambia la etapa. Cada oportunidad puede llevar, si se quiere, su «Ubicación» (se elige en un mapa): sirve para ver en el Dashboard qué zonas del país se están cotizando.',
   },
   {
     pantalla: '3. Directorio',
@@ -62,7 +62,7 @@ const OTROS_CRM: { nombre: string; filas: FilaEquivalencia[]; diferencia: string
       { crm: 'Tareas, Reuniones y Llamadas', aqui: 'Historial y Siguiente paso', nota: 'En la ficha: notas, llamadas y reuniones. La pestaña «Para hoy» muestra a quién atender.' },
       { crm: 'Productos y Presupuestos', aqui: 'Cotizador', nota: 'El catálogo y las cotizaciones con líneas (aún sin vínculo a las oportunidades). Los servicios contratados están en Contratos y el monto cotizado, en la oportunidad.' },
       { crm: 'Campañas', aqui: 'Fuente y campaña', nota: 'Cada posible cliente guarda de dónde llegó (anuncio, web, referido…).' },
-      { crm: 'Informes y Análisis', aqui: 'Dashboard', nota: 'Embudo, cartera de contratos, motivos de pérdida y equipo.' },
+      { crm: 'Informes y Análisis', aqui: 'Dashboard', nota: 'Embudo, cartera de contratos, motivos de pérdida, equipo y un mapa de Ecuador con dónde se está cotizando.' },
       { crm: 'Documentos', aqui: 'Documentación', nota: 'Genera el PDF desde una plantilla y lo envía a firmar.' },
     ],
     diferencia:

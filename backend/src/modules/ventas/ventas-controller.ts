@@ -14,6 +14,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { VentasService } from './ventas.service';
 import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
 import { Section } from '../../common/decorators/section.decorator';
+import type { UbicacionInput } from './ubicacion.util';
 
 @Controller('ventas')
 @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
@@ -80,18 +81,34 @@ export class VentasController {
     @Req() req: any,
     @Body()
     body: {
-      clientName: string;
+      salesClientId?: number | null;
+      opportunityId?: number | null;
+      clientName?: string;
       clientAddress?: string;
       clientPhone?: string;
       visitDate: string;
       notes?: string;
+      ubicacion?: UbicacionInput | null;
     },
   ) {
-    return this.ventasService.createVisit(
-      req.user.companyId,
-      req.user.userId,
-      body,
-    );
+    return this.ventasService.createVisit(req.user.companyId, req.user.userId, body);
+  }
+
+  @Patch('visits/:id')
+  @Section('VENTAS', 'write')
+  updateVisit(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body()
+    body: {
+      salesClientId?: number | null;
+      opportunityId?: number | null;
+      visitDate?: string;
+      notes?: string | null;
+      ubicacion?: UbicacionInput | null;
+    },
+  ) {
+    return this.ventasService.updateVisit(+id, req.user.companyId, body);
   }
 
   @Post('visits/:id/checkin')
@@ -136,9 +153,10 @@ export class VentasController {
   cancelVisit(
     @Param('id') id: string,
     @Req() req: any,
-    @Body() body: { notes?: string },
+    @Body() body: { notes?: string; reason?: string },
   ) {
-    return this.ventasService.cancelVisit(+id, req.user.companyId, body.notes);
+    // La pantalla manda `reason`; antes solo se leía `notes` y el motivo se perdía.
+    return this.ventasService.cancelVisit(+id, req.user.companyId, body.notes ?? body.reason);
   }
 
   @Delete('visits/:id')

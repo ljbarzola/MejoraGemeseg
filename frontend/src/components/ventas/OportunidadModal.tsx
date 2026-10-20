@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ServiciosPorCategoria from './ServiciosPorCategoria';
+import UbicacionCampo from './UbicacionCampo';
 import ErrorBanner from '../common/ErrorBanner';
 import DateInput from '../common/DateInput';
 import {
@@ -8,6 +9,7 @@ import {
   type Oportunidad,
   type SalesClient,
   type SalesServicio,
+  type UbicacionOportunidad,
 } from '../../services/ventas.service';
 
 interface Props {
@@ -35,6 +37,7 @@ export default function OportunidadModal({
   const [monto, setMonto] = useState(oportunidad?.quotedAmount != null ? String(oportunidad.quotedAmount) : '');
   const [cotizadaEl, setCotizadaEl] = useState(oportunidad?.quotedAt ? oportunidad.quotedAt.slice(0, 10) : '');
   const [notas, setNotas] = useState(oportunidad?.notes ?? '');
+  const [ubicacion, setUbicacion] = useState<UbicacionOportunidad | null>(oportunidad?.ubicacion ?? null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
 
@@ -58,6 +61,8 @@ export default function OportunidadModal({
         quotedAmount: montoNumero,
         quotedAt: cotizadaEl || null,
         notes: notas.trim(),
+        // null quita la ubicación que tenía; sin ubicación en una oportunidad nueva simplemente no se envía.
+        ubicacion,
       };
       const guardada =
         modo === 'crear'
@@ -129,6 +134,8 @@ export default function OportunidadModal({
               <DateInput value={cotizadaEl} onChange={setCotizadaEl} />
             </div>
           </div>
+
+          <UbicacionCampo value={ubicacion} onChange={setUbicacion} />
 
           <div className="form-group">
             <label>Notas (opcional)</label>
