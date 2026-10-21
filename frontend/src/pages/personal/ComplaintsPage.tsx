@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { createComplaint, getComplaintFields, type ComplaintFieldDefinition } from '../../services/personal.service';
 
 // Pantalla de envío únicamente — accesible a cualquier empleado autenticado
@@ -10,7 +9,6 @@ import { createComplaint, getComplaintFields, type ComplaintFieldDefinition } fr
 // "mío" consistente). La gestión (ver todas, mover de etapa) vive aparte en
 // ComplaintsManagementPage.tsx, dentro del submódulo RRHH.
 export default function ComplaintsPage() {
-  const navigate = useNavigate();
 
   const [fields, setFields] = useState<ComplaintFieldDefinition[]>([]);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
@@ -46,10 +44,7 @@ export default function ComplaintsPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate('/dashboard')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} /> Volver
-        </button>
+      <div className="page-header-row">
         <div>
           <p className="page-eyebrow">RECURSOS HUMANOS</p>
           <h1>Buzón de Quejas y Sugerencias</h1>

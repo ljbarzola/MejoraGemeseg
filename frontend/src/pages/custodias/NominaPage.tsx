@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
 import { getNomina, getNominaPdfUrl } from '../../services/custodia.service';
 import DateInput from '../../components/common/DateInput';
 
@@ -8,8 +7,6 @@ const TIPO_LABELS: Record<string, string> = { HACIENDA: 'Hacienda', PUERTO: 'Pue
 const TIPOS = ['HACIENDA', 'PUERTO', 'VIP'] as const;
 
 export default function NominaPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
   const [nomina, setNomina] = useState<any>(null);
@@ -53,7 +50,6 @@ export default function NominaPage() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/custodias')}>← Volver</button>
           <div>
             <p className="page-eyebrow">CUSTODIAS</p>
             <h1>Nómina de Custodias</h1>

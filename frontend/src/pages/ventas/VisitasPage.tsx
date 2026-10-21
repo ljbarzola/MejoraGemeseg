@@ -6,6 +6,7 @@ import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import PageTabs from '../../components/common/PageTabs';
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
+import DateInput from '../../components/common/DateInput';
 import FilterField from '../../components/common/FilterField';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
@@ -269,20 +270,26 @@ export default function VisitasPage() {
   // ---- Lista: filtros, orden, columnas y acciones de cada visita ----
   const [busqueda, setBusqueda] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState('');
+  // Fecha o rango de fechas de la visita (AAAA-MM-DD). Con solo «Desde» se filtra ese día en adelante; con solo «Hasta», hasta ese día.
+  const [desde, setDesde] = useState('');
+  const [hasta, setHasta] = useState('');
   const columnPrefs = useColumnPreferences('ventas-visitas', COLUMNAS_POR_DEFECTO);
   const columnasVisibles = columnPrefs.visible.filter((k) => COLUMNAS_VISITA.some((c) => c.key === k));
   const tablaRef = useResizableColumns('ventas-visitas', ['cliente', ...columnasVisibles, 'acciones']);
-  const hayFiltros = !!busqueda || !!estadoFiltro;
+  const hayFiltros = !!busqueda || !!estadoFiltro || !!desde || !!hasta;
 
   const filtradas = useMemo(() => {
     const q = sinTildes(busqueda.trim());
     return visits.filter((v) => {
       if (estadoFiltro && v.status !== estadoFiltro) return false;
+      const dia = (v.visitDate ?? '').slice(0, 10);
+      if (desde && dia < desde) return false;
+      if (hasta && dia > hasta) return false;
       if (!q) return true;
       const texto = [v.cliente?.name ?? v.clientName, lugarDeVisita(v), v.user?.fullName, v.oportunidad?.title].filter(Boolean).join(' ');
       return sinTildes(texto).includes(q);
     });
-  }, [visits, busqueda, estadoFiltro]);
+  }, [visits, busqueda, estadoFiltro, desde, hasta]);
 
   const { filas, thProps, SortIcon } = useSortableTable(filtradas, {
     cliente: (v) => v.cliente?.name ?? v.clientName,
@@ -400,6 +407,12 @@ export default function VisitasPage() {
               {Object.entries(ESTADO_VISITA).map(([k, e]) => <option key={k} value={k}>{e.label}</option>)}
             </select>
           </FilterField>
+          <FilterField label="Desde">
+            <DateInput value={desde} onChange={(v) => { setDesde(v); if (hasta && v && v > hasta) setHasta(v); }} max={hasta || undefined} />
+          </FilterField>
+          <FilterField label="Hasta">
+            <DateInput value={hasta} onChange={(v) => { setHasta(v); if (desde && v && v < desde) setDesde(v); }} min={desde || undefined} />
+          </FilterField>
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu
@@ -414,7 +427,7 @@ export default function VisitasPage() {
             }}
           />
           <ClearFiltersButton
-            onClear={() => { setBusqueda(''); setEstadoFiltro(''); }}
+            onClear={() => { setBusqueda(''); setEstadoFiltro(''); setDesde(''); setHasta(''); }}
             disabled={!hayFiltros}
           />
         </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../../../services/cacao.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import { Trash2, Pencil } from 'lucide-react';
 
 export default function SuppliersPage() {
   const navigate = useNavigate();
@@ -143,8 +144,8 @@ export default function SuppliersPage() {
                     <td>{s.bank || '—'}</td>
                     <td>
                       <div className="tools-actions-cell">
-                        <button className="btn-sm-edit" onClick={() => startEdit(s)}>✎</button>
-                        <button className="btn-danger-sm" onClick={() => handleDelete(s.id)}>✕</button>
+                        <button className="btn-secondary icon-btn" onClick={() => startEdit(s)} title="Editar" aria-label="Editar"><Pencil size={14} /></button>
+                        <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => handleDelete(s.id)} title="Eliminar proveedor" aria-label="Eliminar proveedor"><Trash2 size={14} /></button>
                       </div>
                     </td>
                   </tr>

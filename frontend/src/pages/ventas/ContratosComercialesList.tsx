@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Eye, Pencil, RefreshCw, Trash2, Ban, PackageCheck } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import FilterField from '../../components/common/FilterField';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
@@ -11,6 +12,8 @@ import MotivoCierreModal from '../../components/ventas/MotivoCierreModal';
 import EstadoContratoBadge from '../../components/ventas/EstadoContratoBadge';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
+import { useClientesDelAlcance } from '../../hooks/useClientesDelAlcance';
+import ChipAlcance from '../../components/ventas/ChipAlcance';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import { useToast } from '../../contexts/ToastContext';
 import {
@@ -70,6 +73,7 @@ export default function ContratosComercialesList() {
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroServicio, setFiltroServicio] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
+  const [filtroMotivo, setFiltroMotivo] = useState('');
   const [modal, setModal] = useState<ModalState>(null);
   const [aCancelar, setACancelar] = useState<ContratoComercial | null>(null);
   const [aEliminar, setAEliminar] = useState<ContratoComercial | null>(null);
@@ -95,10 +99,25 @@ export default function ContratosComercialesList() {
   // Llegar con ?nuevo=1&clienteId=N (desde la ficha del cliente) abre el
   // formulario con ese cliente ya elegido.
   // Llegar con ?q=nombre (desde la ficha del Directorio) deja escrita la búsqueda.
+  // Llega del Dashboard con «mis clientes» (o un vendedor): la lista se limita a ese alcance, con aviso y «Quitar».
+  const alcanceLista = useClientesDelAlcance();
+  const { aplicar: aplicarAlcance } = alcanceLista;
   useEffect(() => {
+    const resp = searchParams.get('responsable');
+    if (resp) aplicarAlcance(resp);
+    // ?motivo=Precio: el Dashboard («Motivos de pérdida») lleva a los contratos que terminaron por ese motivo.
+    const motivoCierre = searchParams.get('motivo');
+    if (motivoCierre) setFiltroMotivo(motivoCierre);
     const q = searchParams.get('q');
+    // ?estado=VIGENTE|POR_VENCER|VENCIDO|CANCELADO: lo manda el Dashboard (pestaña Cartera) para ver esos contratos.
+    const estado = searchParams.get('estado');
+    if (estado) setFiltroEstado(estado);
     if (q) {
       setBusqueda(q);
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    if (estado || resp || motivoCierre) {
       setSearchParams({}, { replace: true });
       return;
     }
@@ -106,13 +125,16 @@ export default function ContratosComercialesList() {
     const cid = Number(searchParams.get('clienteId')) || undefined;
     setModal({ modo: 'crear', clienteId: cid });
     setSearchParams({}, { replace: true });
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, aplicarAlcance]);
 
   const filtrados = useMemo(() => {
     const q = busqueda.toLowerCase().trim();
     return contratos.filter((c) => {
-      if (filtroEstado && c.estado !== filtroEstado) return false;
+      // «En curso» agrupa lo que el Dashboard cuenta como vigente: vigentes, por vencer y por iniciar.
+      if (filtroEstado === 'EN_CURSO' ? !['VIGENTE', 'POR_VENCER', 'POR_INICIAR'].includes(c.estado) : filtroEstado && c.estado !== filtroEstado) return false;
       if (filtroTipo && c.kind !== filtroTipo) return false;
+      if (filtroMotivo && c.motivoCierre !== filtroMotivo) return false;
+      if (alcanceLista.ids && !alcanceLista.ids.has(c.salesClientId)) return false;
       if (filtroServicio && !c.services.some((s) => String(s.id) === filtroServicio)) return false;
       if (!q) return true;
       return (
@@ -121,7 +143,11 @@ export default function ContratosComercialesList() {
         c.services.some((s) => s.name.toLowerCase().includes(q))
       );
     });
-  }, [contratos, busqueda, filtroEstado, filtroServicio, filtroTipo]);
+  }, [contratos, busqueda, filtroEstado, filtroServicio, filtroTipo, filtroMotivo, alcanceLista.ids]);
+  const motivosDeCierre = useMemo(
+    () => [...new Set(contratos.map((c) => c.motivoCierre).filter((m): m is string => !!m))].sort((a, b) => a.localeCompare(b, 'es')),
+    [contratos],
+  );
 
   const { filas, thProps, SortIcon } = useSortableTable(
     filtrados,
@@ -279,7 +305,7 @@ export default function ContratosComercialesList() {
   };
   const columnasVisibles = columnPrefs.visible.filter((k) => COLUMNAS_CONTRATOS.some((c) => c.key === k));
 
-  const hayFiltros = !!(busqueda || filtroEstado || filtroServicio || filtroTipo);
+  const hayFiltros = !!(busqueda || filtroEstado || filtroServicio || filtroTipo || filtroMotivo);
 
   return (
     <div className="page-container">
@@ -295,30 +321,45 @@ export default function ContratosComercialesList() {
       />
 
       <div className="filter-bar">
-        <div className="filter-bar-fields filter-bar-fields--una-linea">
+        <div className="filter-bar-fields filter-bar-fields--etiquetas">
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por cliente, título o servicio..."
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
-          <select className="filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
-            <option value="">Servicios y productos</option>
-            <option value="SERVICIO">Solo servicios</option>
-            <option value="PRODUCTO">Solo productos</option>
-          </select>
-          <select className="filter-select" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
-            <option value="">Todos los estados</option>
-            {(Object.keys(ESTADO_CONTRATO_LABEL) as EstadoContrato[]).map((e) => (
-              <option key={e} value={e}>{ESTADO_CONTRATO_LABEL[e]}</option>
-            ))}
-          </select>
-          <select className="filter-select" value={filtroServicio} onChange={(e) => setFiltroServicio(e.target.value)}>
-            <option value="">Todos los servicios y productos</option>
-            {servicios.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
+          <FilterField label="Tipo">
+  <select className="filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
+              <option value="">Servicios y productos</option>
+              <option value="SERVICIO">Solo servicios</option>
+              <option value="PRODUCTO">Solo productos</option>
+            </select>
+          </FilterField>
+          <FilterField label="Estado">
+  <select className="filter-select" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
+              <option value="">Todos los estados</option>
+            <option value="EN_CURSO">En curso (vigentes, por vencer y por iniciar)</option>
+              {(Object.keys(ESTADO_CONTRATO_LABEL) as EstadoContrato[]).map((e) => (
+                <option key={e} value={e}>{ESTADO_CONTRATO_LABEL[e]}</option>
+              ))}
+            </select>
+          </FilterField>
+          <FilterField label="Servicio">
+            <select className="filter-select" value={filtroServicio} onChange={(e) => setFiltroServicio(e.target.value)}>
+              <option value="">Todos los servicios y productos</option>
+              {servicios.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </FilterField>
+          {motivosDeCierre.length > 0 && (
+            <FilterField label="Motivo de cierre">
+              <select className="filter-select" value={filtroMotivo} onChange={(e) => setFiltroMotivo(e.target.value)}>
+                <option value="">Todos</option>
+                {motivosDeCierre.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </FilterField>
+          )}
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu
@@ -333,11 +374,13 @@ export default function ContratosComercialesList() {
             }}
           />
           <ClearFiltersButton
-            onClear={() => { setBusqueda(''); setFiltroEstado(''); setFiltroServicio(''); setFiltroTipo(''); }}
-            disabled={!hayFiltros}
+            onClear={() => { setBusqueda(''); setFiltroEstado(''); setFiltroServicio(''); setFiltroTipo(''); setFiltroMotivo(''); alcanceLista.quitar(); }}
+            disabled={!hayFiltros && !alcanceLista.alcance}
           />
         </div>
       </div>
+
+      <ChipAlcance alcance={alcanceLista.alcance} total={filtrados.length} onQuitar={alcanceLista.quitar} />
 
       <div className="admin-section">
         {cargando ? (

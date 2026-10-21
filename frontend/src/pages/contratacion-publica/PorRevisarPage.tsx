@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search } from 'lucide-react';
+import { Navigate } from 'react-router-dom';
+import { Search } from 'lucide-react';
 import {
   aprobarDocumento,
   getPorRevisar,
@@ -39,8 +39,6 @@ const aRevisable = (f: CPDocumentoBandeja): DocumentoRevisable => ({
  * tras otro con el panel dividido, sin entrar entidad por entidad.
  */
 export default function PorRevisarPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const { canWrite } = usePerm();
   const canEdit = canWrite('CONTRATACION_PUBLICA');
   const tablaRef = useResizableColumns('cp-por-revisar');
@@ -99,10 +97,7 @@ export default function PorRevisarPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-        </button>
+      <div className="page-header-row">
         <div className="page-title-row">
           <div>
             <p className="page-eyebrow">CONTRATACIÓN PÚBLICA</p>

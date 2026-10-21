@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, UserPlus, UserMinus, XCircle, ClipboardList, ArrowRightCircle } from 'lucide-react';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import FilterField from '../../components/common/FilterField';
@@ -9,6 +9,7 @@ import RowActionsMenu, { type RowAction } from '../../components/common/RowActio
 import MotivoCierreModal from '../../components/ventas/MotivoCierreModal';
 import ConvertirLeadModal from '../../components/ventas/ConvertirLeadModal';
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
+import ChipAlcance from '../../components/ventas/ChipAlcance';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
@@ -100,6 +101,19 @@ export default function LeadsPage() {
   const [estado, setEstado] = useState('pendientes');
   const [motivo, setMotivo] = useState('');
   const [canal, setCanal] = useState('');
+  // Llegan del Dashboard («Motivos de pérdida»): ?estado=DESCARTADO&motivoDescarte=…&responsable=mine|<id>.
+  const [motivoDescarte, setMotivoDescarte] = useState('');
+  const [soloResp, setSoloResp] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const e = searchParams.get('estado');
+    const m = searchParams.get('motivoDescarte');
+    const r = searchParams.get('responsable');
+    if (e) setEstado(e);
+    if (m) setMotivoDescarte(m);
+    if (r && r !== 'all') setSoloResp(r);
+    if (e || m || r) setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
   const [nuevo, setNuevo] = useState(false);
   const [convirtiendo, setConvirtiendo] = useState<LeadEntrante | null>(null);
   const [descartando, setDescartando] = useState<LeadEntrante | null>(null);
@@ -136,6 +150,8 @@ export default function LeadsPage() {
       if (estado === 'pendientes' && (l.status === 'CONVERTIDO' || l.status === 'DESCARTADO')) return false;
       if (estado && estado !== 'pendientes' && l.status !== estado) return false;
       if (motivo === 'SIN_CLASIFICAR' ? !!l.contactReason : motivo && l.contactReason !== motivo) return false;
+      if (motivoDescarte && l.motivoDescarte !== motivoDescarte) return false;
+      if (soloResp && String(l.assignedUserId ?? '') !== (soloResp === 'mine' ? String(usuario?.id ?? '') : soloResp)) return false;
       if (!q) return true;
       return (
         l.name.toLowerCase().includes(q) ||
@@ -145,7 +161,7 @@ export default function LeadsPage() {
         (l.message || '').toLowerCase().includes(q)
       );
     });
-  }, [leads, busqueda, estado, motivo]);
+  }, [leads, busqueda, estado, motivo, motivoDescarte, soloResp, usuario?.id]);
   const filtrados = useMemo(
     () => (canal ? sinFiltroDeFuente.filter((l) => l.channel === canal) : sinFiltroDeFuente),
     [sinFiltroDeFuente, canal],
@@ -296,7 +312,11 @@ export default function LeadsPage() {
     return lista;
   };
 
-  const hayFiltros = !!busqueda || estado !== 'pendientes' || !!motivo || !!canal;
+  const hayFiltros = !!busqueda || estado !== 'pendientes' || !!motivo || !!canal || !!motivoDescarte || !!soloResp;
+  const motivosDeDescarte = useMemo(
+    () => [...new Set(leads.map((l) => l.motivoDescarte).filter((m): m is string => !!m))].sort((a, b) => a.localeCompare(b, 'es')),
+    [leads],
+  );
   const sinClasificar = leads.filter((l) => abiertos(l) && !l.contactReason).length;
 
   return (
@@ -310,16 +330,6 @@ export default function LeadsPage() {
           </button>
         }
       />
-
-      {leads.length > 0 && (
-        <ResumenPorFuente
-          canales={canales}
-          totales={totalesPorFuente}
-          total={sinFiltroDeFuente.length}
-          activa={canal}
-          onElegir={setCanal}
-        />
-      )}
 
       <div className="filter-bar">
         <div className="filter-bar-fields filter-bar-fields--etiquetas">
@@ -346,10 +356,18 @@ export default function LeadsPage() {
               {(Object.keys(MOTIVO_CONTACTO_LABEL) as MotivoContacto[]).map((k) => <option key={k} value={k}>{MOTIVO_CONTACTO_LABEL[k]}</option>)}
             </select>
           </FilterField>
+          {estado === 'DESCARTADO' && (
+            <FilterField label="Motivo del descarte">
+              <select className="filter-select" value={motivoDescarte} onChange={(e) => setMotivoDescarte(e.target.value)}>
+                <option value="">Todos</option>
+                {motivosDeDescarte.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </FilterField>
+          )}
           <FilterField label="Fuente">
             <select className="filter-select" value={canal} onChange={(e) => setCanal(e.target.value)}>
-              <option value="">Todas</option>
-              {canales.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+              <option value="">Todas ({sinFiltroDeFuente.length})</option>
+              {canales.map((c) => <option key={c.key} value={c.key}>{c.label} ({totalesPorFuente.get(c.key) ?? 0})</option>)}
             </select>
           </FilterField>
         </div>
@@ -366,11 +384,13 @@ export default function LeadsPage() {
             }}
           />
           <ClearFiltersButton
-            onClear={() => { setBusqueda(''); setEstado('pendientes'); setMotivo(''); setCanal(''); }}
+            onClear={() => { setBusqueda(''); setEstado('pendientes'); setMotivo(''); setCanal(''); setMotivoDescarte(''); setSoloResp(''); }}
             disabled={!hayFiltros}
           />
         </div>
       </div>
+
+      <ChipAlcance alcance={soloResp || null} que="posibles clientes" total={filtrados.length} onQuitar={() => setSoloResp('')} />
 
       <div className="admin-section">
         {cargando ? (
@@ -483,47 +503,6 @@ export default function LeadsPage() {
           onCancel={() => setDescartando(null)}
         />
       )}
-    </div>
-  );
-}
-
-// Totales por fuente, de un vistazo. Cada tarjeta filtra la tabla por esa
-// fuente; respeta los demás filtros (estado, motivo, búsqueda). Solo salen las
-// fuentes que tienen leads (y la elegida), así una fuente que nadie usa no estorba.
-function ResumenPorFuente({
-  canales, totales, total, activa, onElegir,
-}: {
-  canales: CanalLeadDef[];
-  totales: Map<string, number>;
-  total: number;
-  activa: string;
-  onElegir: (key: string) => void;
-}) {
-  const conocidas = new Set(canales.map((c) => c.key));
-  // Un canal que ya no esté en el registro sigue contando, con su clave.
-  const desconocidas = [...totales.keys()].filter((k) => !conocidas.has(k));
-  const tarjetas = [
-    ...canales.filter((c) => (totales.get(c.key) ?? 0) > 0 || c.key === activa),
-    ...desconocidas.map((k) => ({ key: k, label: k })),
-  ];
-  const estilo = (seleccionada: boolean) => ({
-    display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-start', gap: 2,
-    padding: '8px 14px', borderRadius: 10, cursor: 'pointer', minWidth: 110, font: 'inherit',
-    border: seleccionada ? '2px solid #2b6cb0' : '1px solid #e2e8f0',
-    background: seleccionada ? '#ebf4ff' : '#fff',
-  });
-  return (
-    <div role="group" aria-label="Posibles clientes por fuente" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 14px' }}>
-      <button type="button" style={estilo(!activa)} onClick={() => onElegir('')} aria-pressed={!activa}>
-        <span style={{ fontSize: 22, fontWeight: 700, color: '#1a202c' }}>{total}</span>
-        <span style={{ fontSize: 12, color: '#4a5568' }}>Todas las fuentes</span>
-      </button>
-      {tarjetas.map((c) => (
-        <button key={c.key} type="button" style={estilo(activa === c.key)} onClick={() => onElegir(activa === c.key ? '' : c.key)} aria-pressed={activa === c.key}>
-          <span style={{ fontSize: 22, fontWeight: 700, color: '#1a202c' }}>{totales.get(c.key) ?? 0}</span>
-          <span style={{ fontSize: 12, color: '#4a5568' }}>{c.label}</span>
-        </button>
-      ))}
     </div>
   );
 }

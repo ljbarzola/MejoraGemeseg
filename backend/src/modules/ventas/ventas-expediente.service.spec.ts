@@ -57,6 +57,12 @@ describe('VentasExpedienteService', () => {
       salesContract: { findMany: jest.fn().mockResolvedValue([]) },
       user: { findMany: jest.fn().mockResolvedValue([{ id: 7, fullName: 'Ana' }]) },
       salesAgreementIncident: { findMany: jest.fn().mockResolvedValue([]) },
+      salesClientStage: {
+        findMany: jest.fn().mockResolvedValue([
+          { key: 'NEGOCIACION', label: 'Negociación' },
+          { key: 'RECHAZADO', label: 'Perdida' },
+        ]),
+      },
     };
     const ciclos = { calcular: jest.fn().mockResolvedValue(new Map([[1, { ciclo: 'CLIENTE', razones: [] }]])) };
     const analitica = {
@@ -107,11 +113,77 @@ describe('VentasExpedienteService', () => {
       }),
     ]);
     const { texto } = await servicio.armarPorId(1, 1);
-    expect(texto).toContain('Frente al contrato anterior (#1)');
+    expect(texto).toContain('Frente al contrato anterior:');
+    expect(texto).not.toContain('(#1)');
     expect(texto).toContain('servicios QUITADOS: Agentes de Seguridad');
     expect(texto).toContain('servicios agregados: Monitoreo de Cámaras');
     expect(texto).toContain('baja 20%');
     expect(texto).not.toContain('No renueva a otro contrato');
+  });
+
+  it('una oportunidad perdida habla con nombres de pantalla: etapa «Perdida», sin números internos en el texto', async () => {
+    prisma.salesOpportunity.findMany.mockResolvedValue([
+      {
+        id: 46,
+        title: 'Punto de Seguridad 10 horas',
+        services: [{ service: { name: 'Agentes de Seguridad' } }],
+        receivedAt: new Date('2026-10-16T15:00:00.000Z'),
+        originType: 'LEAD',
+        source: null,
+        status: 'RECHAZADO',
+        outcome: 'PERDIDA',
+        closedAt: new Date('2026-10-20T15:00:00.000Z'),
+        quotedAmount: 350,
+        quotedAt: null,
+        stageChanges: [
+          { id: 26, fromStatus: null, toStatus: 'NEGOCIACION', createdAt: new Date('2026-10-16T15:00:00.000Z') },
+          { id: 53, fromStatus: 'NEGOCIACION', toStatus: 'RECHAZADO', createdAt: new Date('2026-10-20T15:00:00.000Z') },
+        ],
+      },
+    ]);
+    const { texto } = await servicio.armarPorId(1, 1);
+    expect(texto).toContain('etapa actual: Perdida · Perdida el 20/10/2026');
+    expect(texto).toContain('llegada → Negociación');
+    expect(texto).toContain('Negociación → Perdida');
+    expect(texto).not.toContain('RECHAZADO');
+    // El aviso de que falta el motivo nombra la oportunidad por su título, no por su número.
+    expect(texto).toContain('Oportunidad 1 de 1 (Punto de Seguridad 10 horas): se perdió pero no se registró el motivo.');
+    expect(texto).not.toMatch(/Oportunidad #\d/);
+    // La marca interna de la oportunidad sigue en los datos (el código la verifica), pero la del cambio de etapa ya no.
+    expect(texto).toContain('[#opp:46]');
+    expect(texto).not.toContain('[#etapa:');
+  });
+
+  it('con varias oportunidades las numera («1 de 2», «2 de 2») para que se pueda decir de cuál se habla', async () => {
+    const opp = (id: number, extra: Record<string, unknown> = {}) => ({
+      id,
+      title: null,
+      services: [],
+      receivedAt: new Date(`2026-10-${10 + id}T15:00:00.000Z`),
+      originType: 'MANUAL',
+      source: null,
+      status: 'RECIBIDO',
+      outcome: null,
+      closedAt: null,
+      quotedAmount: null,
+      quotedAt: null,
+      stageChanges: [],
+      ...extra,
+    });
+    prisma.salesOpportunity.findMany.mockResolvedValue([
+      opp(1),
+      opp(2, { title: 'Cámaras sede norte', status: 'RECHAZADO', outcome: 'PERDIDA', closedAt: new Date('2026-10-20T15:00:00.000Z') }),
+    ]);
+    const { texto } = await servicio.armarPorId(1, 1);
+    expect(texto).toContain('Oportunidad 1 de 2: servicios: servicio no indicado');
+    expect(texto).toContain('Oportunidad 2 de 2: «Cámaras sede norte»');
+    expect(texto).toContain('Oportunidad 2 de 2 (Cámaras sede norte): se perdió pero no se registró el motivo.');
+  });
+
+  it('sin cambios de responsable en «lo que no consta» salvo como nota fija', async () => {
+    const { texto } = await servicio.armarPorId(1, 1);
+    expect(texto).toContain('Nota fija (menciónala solo si preguntan quién atendió antes)');
+    expect(texto).not.toMatch(/- Cambios de responsable/);
   });
 
   it('los eventos con hora salen con el día de Ecuador, no el de UTC', async () => {

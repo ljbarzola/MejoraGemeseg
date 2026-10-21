@@ -12,6 +12,7 @@ import {
 } from '../../services/tool.service';
 import type { Tool, UserWithTools, ToolAssignment, ToolAuditLog } from '../../types/tool';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import { Trash2, Pencil, ClipboardList } from 'lucide-react';
 
 export default function ToolsPage() {
   const [users, setUsers] = useState<UserWithTools[]>([]);
@@ -261,7 +262,7 @@ export default function ToolsPage() {
                           <div className="tools-catalog-name">{t.name}</div>
                           {t.category && <span className="tools-category">{t.category}</span>}
                         </div>
-                        <button className="btn-danger-sm" onClick={() => handleDeleteTool(t.id)} title="Eliminar">✕</button>
+                        <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => handleDeleteTool(t.id)} title="Eliminar herramienta" aria-label="Eliminar herramienta"><Trash2 size={14} /></button>
                       </div>
                       <div className="tools-catalog-meta">
                         {t._count?.assignments ?? 0} asignación(es)
@@ -308,9 +309,9 @@ export default function ToolsPage() {
                           </td>
                           <td>
                             <div className="tools-actions-cell">
-                              <button className="btn-sm-edit" onClick={() => openEditModal(a)} title="Editar">✎</button>
-                              <button className="btn-sm-audit" onClick={() => openAuditModal(a.id)} title="Auditoría">📋</button>
-                              <button className="btn-danger-sm" onClick={() => handleDeleteAssignment(a.id)} title="Eliminar">✕</button>
+                              <button className="btn-secondary icon-btn" onClick={() => openEditModal(a)} title="Editar" aria-label="Editar"><Pencil size={14} /></button>
+                              <button className="btn-secondary icon-btn" onClick={() => openAuditModal(a.id)} title="Auditoría" aria-label="Auditoría"><ClipboardList size={14} /></button>
+                              <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => handleDeleteAssignment(a.id)} title="Quitar asignación" aria-label="Quitar asignación"><Trash2 size={14} /></button>
                             </div>
                           </td>
                         </tr>

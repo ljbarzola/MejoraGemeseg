@@ -422,7 +422,7 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
                   )}
                   <div className="chat-msg-bubble">
                     <div className="chat-msg-text">
-                      {msg.role === 'assistant' ? <ChatMarkdown text={msg.content} onNavegar={onClose} /> : msg.content}
+                      {msg.role === 'assistant' ? <ChatMarkdown text={msg.content} /> : msg.content}
                     </div>
                     <div className="chat-msg-time">
                       {msg.timestamp.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}

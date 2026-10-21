@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Pencil, Trash2, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, X } from 'lucide-react';
 import {
   getCodigosTurno,
   createCodigoTurno,
@@ -14,7 +13,6 @@ import ConfirmDialog from '../../../components/common/ConfirmDialog';
 const COLOR_DEFAULT = '#3b82f6';
 
 export default function CodigosTurnoConfig() {
-  const navigate = useNavigate();
   const { canWrite } = usePerm();
   const canEdit = canWrite('CONTRATACION_PUBLICA');
 
@@ -106,10 +104,7 @@ export default function CodigosTurnoConfig() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate('/contratacion-publica/contratos')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-        </button>
+      <div className="page-header-row">
         <div className="page-title-row">
           <div>
             <p className="page-eyebrow">CONTRATACIÓN PÚBLICA · CONFIGURACIÓN</p>

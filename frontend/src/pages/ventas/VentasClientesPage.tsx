@@ -15,6 +15,8 @@ import { useToast } from '../../contexts/ToastContext';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
+import { useClientesDelAlcance } from '../../hooks/useClientesDelAlcance';
+import ChipAlcance from '../../components/ventas/ChipAlcance';
 import {
   getSalesClients,
   deleteSalesClient,
@@ -99,6 +101,13 @@ export default function VentasClientesPage() {
   };
 
   useEffect(() => { load(); }, []);
+  // Llega del Dashboard con «mis clientes» (o un vendedor): la lista se limita a ese alcance, con aviso y «Quitar».
+  const alcanceLista = useClientesDelAlcance();
+  const { aplicar: aplicarAlcance } = alcanceLista;
+  useEffect(() => {
+    const resp = searchParams.get('responsable');
+    if (resp) aplicarAlcance(resp);
+  }, [searchParams, aplicarAlcance]);
   useEffect(() => {
     // Llegadas desde otras pantallas: /ventas/clientes?nuevo=1 (Documentación →
     // «Ir al Directorio»), ?ciclo=PROSPECTO (tarjetas del Dashboard) y ?ficha=12.
@@ -123,7 +132,8 @@ export default function VentasClientesPage() {
 
   const filtered = clients
     .filter(coincideBusqueda)
-    .filter((c) => !filtroCiclo || c.ciclo === filtroCiclo);
+    .filter((c) => !filtroCiclo || c.ciclo === filtroCiclo)
+    .filter((c) => !alcanceLista.ids || alcanceLista.ids.has(c.id));
 
   const cellValue = (client: SalesClient, key: string): string => {
     if (key === CICLO_COL) return client.ciclo ? CICLO_LABEL[client.ciclo] : '';
@@ -208,8 +218,8 @@ export default function VentasClientesPage() {
             }}
           />
           <ClearFiltersButton
-            onClear={() => { setSearch(''); setFiltroCiclo(''); }}
-            disabled={!search && !filtroCiclo}
+            onClear={() => { setSearch(''); setFiltroCiclo(''); alcanceLista.quitar(); }}
+            disabled={!search && !filtroCiclo && !alcanceLista.alcance}
           />
           <button className="auth-btn" onClick={() => { setEditingClient(null); setShowNuevo(true); }}>
             <Plus size={16} /> Nueva empresa o persona
@@ -222,6 +232,8 @@ export default function VentasClientesPage() {
         <Link to="/ventas/oportunidades" className="enlace-tabla">Oportunidades</Link>; los acuerdos, en{' '}
         <Link to="/ventas/contratos" className="enlace-tabla">Contratos</Link>.
       </p>
+
+      <ChipAlcance alcance={alcanceLista.alcance} total={filtered.length} onQuitar={alcanceLista.quitar} />
 
       <div className="admin-section">
         {loading ? (

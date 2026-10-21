@@ -1,0 +1,206 @@
+/* ============================================================================================
+   VISTAS EN PRUEBA (2026-10-21)
+   La usuaria vio varios estilos de encabezado, pestañas y franjas en las pantallas de Ventas y CRM y los
+   descartó casi todos. Quedan: las pestañas «ventana» (Configuración) y el sistema del dashboard. Cuando decida la vista definitiva se pasa al resto de la app y se borra lo demás.
+   Todo se apoya en los colores de la marca: --azul-oscuro, --azul-claro, --naranja.
+   ============================================================================================ */
+
+:root {
+  --v-tinta: #100F31;
+  --v-suave: #64748b;
+  --v-linea: #e2e8f0;
+  --v-fondo-suave: #f1f5f9;
+  --v-naranja: #EE3B1B;
+}
+
+/* ============ PESTAÑAS EN PRUEBA ============ */
+/* Ventana (como las pestañas de un editor de código): más anchas; la elegida «sube», se une al panel de abajo
+   sin costura, lleva una línea de color arriba y cambia de fondo; las demás quedan hundidas.
+   Las pestañas arrancan en el borde izquierdo del panel (sin sangría) y la línea que las separa del panel
+   es el borde de arriba del propio panel: así gris y blanco encajan al píxel. */
+.page-tabs--ventana {
+  display: flex; flex-wrap: nowrap; align-items: flex-end; gap: 4px; margin: 0; padding: 0;
+  background: transparent; border-radius: 0; box-shadow: none;
+}
+.page-tabs--ventana .admin-tab {
+  flex: 0 0 auto; min-width: 168px; padding: 13px 28px 12px; gap: 9px;
+  position: relative; z-index: 1; margin-bottom: -1px;
+  border: 1px solid transparent; border-bottom: 0; border-radius: 14px 14px 0 0;
+  background: #e4e8ee; color: var(--v-suave); font-weight: 600;
+  transition: background 0.14s, color 0.14s;
+}
+.page-tabs--ventana .admin-tab:hover:not(.active) { background: #d9dfe8; color: var(--v-tinta); }
+.page-tabs--ventana .admin-tab.active {
+  background: #fff; color: var(--v-tinta); font-weight: 700;
+  border-color: var(--v-linea); padding-bottom: 13px;
+}
+.page-tabs--ventana .admin-tab.active::before {
+  content: ''; position: absolute; left: -1px; right: -1px; top: -1px; height: 4px; border-radius: 14px 14px 0 0; background: var(--v-naranja);
+}
+.page-tabs--ventana .admin-tab.active svg { color: var(--v-naranja); }
+/* El panel que cuelga de las pestañas: su borde de arriba es la línea de las pestañas; si la elegida es la
+   primera, la esquina de arriba a la izquierda queda recta para unirse a ella. */
+.page-tabs--ventana + .cfg-panel {
+  margin-top: 0; border: 1px solid var(--v-linea); border-radius: 20px; box-shadow: 0 1px 2px rgba(16, 15, 49, 0.04);
+}
+.page-tabs--ventana:has(.admin-tab:first-child.active) + .cfg-panel { border-top-left-radius: 0; }
+@media (max-width: 760px) {
+  .page-tabs--ventana { overflow-x: auto; }
+  .page-tabs--ventana .admin-tab { min-width: 0; padding: 12px 16px 11px; }
+}
+
+/* ============================================================================================
+   DASHBOARD COMERCIAL (2026-10-21)
+   Un solo sistema para las 5 pestañas: UNA barra de filtros con nombre visible, UNA franja de cifras,
+   tarjetas iguales y una rejilla con el mismo espacio entre piezas (16px).
+   ============================================================================================ */
+
+/* Pila vertical de una pestaña: el espacio entre bloques lo pone la pila, no cada bloque. */
+.dash-pila { display: flex; flex-direction: column; gap: 16px; }
+
+/* Barra de filtros: «Cifras de», «Periodo» y, a la derecha, una nota corta de qué cambia. */
+.dash-barra {
+  display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px 18px;
+  padding: 12px 16px; margin: 0 0 16px;
+  background: #fff; border: 1px solid var(--v-linea); border-radius: 14px;
+}
+.dash-barra-extra { display: contents; }
+.dash-barra-nota {
+  margin: 0 0 4px auto; max-width: 52ch; text-align: right;
+  font-size: 0.78rem; line-height: 1.35; color: var(--v-suave);
+}
+@media (max-width: 760px) { .dash-barra-nota { margin-left: 0; text-align: left; max-width: none; } }
+
+/* Franja de cifras: una tarjeta partida en celdas con líneas finas (nada de tarjetas altas sueltas). */
+.dash-kpis {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1px;
+  background: var(--v-linea); border: 1px solid var(--v-linea); border-radius: 16px; overflow: hidden;
+}
+.dash-kpi {
+  display: flex; flex-direction: column; gap: 1px; min-width: 0;
+  padding: 13px 18px 12px; background: #fff; border: 0; text-align: left; font-family: inherit; color: var(--v-tinta);
+}
+button.dash-kpi { cursor: pointer; transition: background 0.12s; }
+button.dash-kpi:hover { background: #f8fafc; }
+.dash-kpi-t { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; font-weight: 600; color: var(--v-suave); }
+.dash-kpi-t::before { content: ''; flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--kpi, #94a3b8); }
+.dash-kpi-v { font-size: 1.6rem; font-weight: 800; line-height: 1.2; color: var(--kpi, var(--v-tinta)); font-variant-numeric: tabular-nums; }
+.dash-kpi-d { font-size: 0.74rem; color: var(--v-suave); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash-kpis--dos { grid-template-columns: repeat(2, minmax(0, 1fr)); border-radius: 12px; }
+.dash-kpis--dos .dash-kpi-d { white-space: normal; }
+.dash-kpis--cuatro { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); border-radius: 12px; }
+.dash-kpis--cuatro .dash-kpi-d { white-space: normal; }
+
+/* Rejilla de tarjetas */
+.dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: stretch; }
+.dash-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dash-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dash-span2 { grid-column: span 2; }
+.dash-span3 { grid-column: 1 / -1; }
+@media (max-width: 1100px) { .dash-grid--3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1000px) { .dash-grid--2 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 720px) { .dash-grid--3 { grid-template-columns: minmax(0, 1fr); } .dash-span2 { grid-column: auto; } }
+
+/* Tarjeta */
+.dash-card {
+  display: flex; flex-direction: column; min-width: 0;
+  padding: 18px 20px; background: #fff; border: 1px solid var(--v-linea); border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(16, 15, 49, 0.04);
+}
+.dash-card-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+.dash-card h3 { margin: 0; font-size: 1rem; font-weight: 700; color: var(--v-tinta); line-height: 1.3; }
+.dash-card-hint { margin: 3px 0 0; font-size: 0.78rem; line-height: 1.4; color: var(--v-suave); }
+/* una tarjeta dentro de otra (la lista por provincia del mapa) va plana: sin segundo borde */
+.dash-card .dash-card { padding: 0; border: 0; border-radius: 0; box-shadow: none; }
+
+/* Mapa */
+.dash-mapa-tipos { display: inline-flex; margin: 0; padding: 3px; background: var(--v-fondo-suave); }
+.dash-mapa-tipos .admin-tab { flex: 0 0 auto; padding: 6px 12px; font-size: 0.8rem; }
+.dash-mapa-cuerpo { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+.dash-mapa-lienzo { flex: 2 1 380px; min-width: 0; }
+.dash-mapa-lado { flex: 1 1 220px; min-width: 0; }
+.dash-card .mapa-ecuador { height: 340px; }
+
+/* ---------- Gráficos del dashboard ---------- */
+.dash-dona { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; position: relative; }
+.dash-dona-aro { position: relative; flex: 0 0 auto; width: 148px; height: 148px; }
+.dash-dona-aro svg { width: 100%; height: 100%; display: block; }
+.dash-dona-centro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; pointer-events: none; }
+.dash-dona-centro strong { font-size: 1.7rem; font-weight: 800; line-height: 1.1; color: var(--v-tinta); font-variant-numeric: tabular-nums; }
+.dash-dona-centro span { font-size: 0.72rem; color: var(--v-suave); max-width: 80px; line-height: 1.2; }
+.dash-dona-vacio { margin: 8px 0 0; font-size: 0.78rem; color: var(--v-suave); }
+
+.dash-leyenda { flex: 1 1 150px; min-width: 0; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.dash-leyenda li > button, .dash-leyenda li > div {
+  display: flex; align-items: center; gap: 9px; width: 100%; padding: 6px 8px; margin: 0;
+  background: transparent; border: 0; border-radius: 8px; font: inherit; font-size: 0.84rem; color: var(--v-tinta); text-align: left;
+}
+.dash-leyenda li > button { cursor: pointer; }
+.dash-leyenda li > button:hover { background: var(--v-fondo-suave); }
+.dash-leyenda i { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 3px; }
+.dash-leyenda-t { flex: 1 1 auto; min-width: 0; font-weight: 600; }
+.dash-leyenda-t small { display: block; font-weight: 400; font-size: 0.72rem; color: var(--v-suave); }
+.dash-leyenda b { font-variant-numeric: tabular-nums; }
+.dash-leyenda-p { min-width: 34px; text-align: right; font-size: 0.74rem; color: var(--v-suave); }
+
+.dash-medidor { position: relative; width: 100%; max-width: 230px; margin: 4px auto 0; }
+.dash-medidor svg { display: block; width: 100%; }
+.dash-medidor-centro { position: absolute; left: 0; right: 0; bottom: 2px; display: flex; flex-direction: column; align-items: center; }
+.dash-medidor-centro strong { font-size: 2rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.dash-medidor-centro span { margin-top: 2px; font-size: 0.74rem; color: var(--v-suave); }
+
+.dash-apilada-barra { display: flex; height: 14px; border-radius: 7px; overflow: hidden; gap: 2px; background: #eef1f5; margin: 2px 0 12px; }
+.dash-apilada-barra span { display: block; min-width: 6px; }
+.dash-leyenda--filas { gap: 0; }
+.dash-leyenda--filas li > button, .dash-leyenda--filas li > div { padding: 8px 8px; border-bottom: 1px solid var(--v-fondo-suave); border-radius: 0; }
+.dash-leyenda--filas li:last-child > button, .dash-leyenda--filas li:last-child > div { border-bottom: 0; }
+.dash-leyenda--filas b { font-size: 1.15rem; }
+
+/* cifra grande + gráfico (tarjeta «Nuevos») */
+.dash-cifra { display: flex; align-items: baseline; gap: 10px; margin: 0 0 8px; }
+.dash-cifra strong { font-size: 2.1rem; font-weight: 800; line-height: 1; color: var(--v-tinta); font-variant-numeric: tabular-nums; }
+.dash-cifra span { font-size: 0.8rem; color: var(--v-suave); }
+.dash-notas { margin: 12px 0 0; font-size: 0.8rem; color: var(--v-suave); }
+.dash-cierres { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.dash-cierre {
+  display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 10px;
+  background: var(--v-fondo-suave); font: inherit; font-size: 0.82rem; font-weight: 600; color: var(--v-tinta); border: 0; cursor: pointer;
+}
+.dash-cierre b { font-size: 1.05rem; }
+.dash-cierre i { width: 8px; height: 8px; border-radius: 50%; }
+
+/* La dona en una tarjeta ancha crece; en una angosta se apila (aro arriba, leyenda debajo). */
+.dash-span2 .dash-dona-aro { width: 184px; height: 184px; }
+.dash-span2 .dash-dona-centro strong { font-size: 2.1rem; }
+.dash-card:not(.dash-span2) .dash-dona { flex-direction: column; align-items: stretch; }
+.dash-card:not(.dash-span2) .dash-dona-aro { margin: 0 auto; }
+
+/* Embudo con una cifra al lado */
+.dash-embudo-fila { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; margin-bottom: 8px; }
+.dash-embudo-grafico { flex: 1 1 420px; max-width: 700px; min-width: 0; }
+.dash-embudo-dato { flex: 0 1 220px; display: flex; flex-direction: column; gap: 2px; padding: 14px 18px; border-radius: 14px; background: var(--v-fondo-suave); }
+.dash-embudo-dato strong { font-size: 2.2rem; line-height: 1.1; font-weight: 800; color: #2f855a; font-variant-numeric: tabular-nums; }
+.dash-embudo-dato span { font-size: 0.8rem; color: var(--v-suave); }
+
+/* En una tarjeta ancha, dona y leyenda van juntas y centradas; la leyenda no se estira (el nombre y su número
+   quedan pegados, sin un hueco enorme en medio). */
+.dash-span2 .dash-dona { justify-content: center; gap: 44px; }
+.dash-span2 .dash-leyenda { flex: 0 1 340px; }
+.dash-span2 .dash-leyenda li > button, .dash-span2 .dash-leyenda li > div { padding: 8px 10px; font-size: 0.9rem; }
+
+/* Aviso de que una lista está limitada al alcance del Dashboard */
+.chip-alcance {
+  display: inline-flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 6px 8px 6px 14px;
+  border-radius: 999px; background: #eaf1fb; color: #12375F; font-size: 0.82rem; font-weight: 600;
+}
+.chip-alcance button {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 0; border-radius: 999px;
+  background: #fff; color: #12375F; font: inherit; font-size: 0.78rem; cursor: pointer;
+}
+.chip-alcance button:hover { background: #dbe7f6; }
+
+/* Subtítulo de un bloque del dashboard («Qué tan rápido trabajamos») */
+.dash-seccion { margin: 0 0 8px; font-size: 0.9rem; font-weight: 700; color: var(--v-tinta); }
+/* «Ver por» + la explicación de lo que se elige */
+.dash-ver-por { display: flex; align-items: flex-end; gap: 14px 18px; flex-wrap: wrap; margin: 4px 0 12px; }
+.dash-ver-por .dash-notas { margin: 0 0 4px; flex: 1 1 260px; }

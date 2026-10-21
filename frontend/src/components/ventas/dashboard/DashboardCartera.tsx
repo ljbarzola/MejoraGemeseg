@@ -9,7 +9,10 @@ import {
   type AnaliticaRetencion,
   type CicloVida,
 } from '../../../services/ventas.service';
-import { BarraH, Cargando, Contador, SelectorPeriodo, SinDatos, Tarjeta, dinero, formatoDia, pct, periodoDesdeDias } from './DashboardBits';
+import FilterField from '../../common/FilterField';
+import { BarraH, Cargando, SelectorPeriodo, SinDatos, Tarjeta, dinero, formatoDia, pct, periodoDesdeDias } from './DashboardBits';
+import { Contador, KpiFila } from './DashboardBits';
+import { Dona } from './DashboardGraficos';
 
 const COLOR_ALERTA = '#c53030';
 const COLOR_AVISO = '#d97706';
@@ -42,30 +45,36 @@ export default function DashboardCartera({ alcance }: { alcance: string }) {
   const maxServicio = Math.max(1, ...servicios.masContratados.map((s) => s.contratos));
 
   return (
-    <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginTop: 16 }}>
-        {(Object.keys(CICLO_LABEL) as CicloVida[]).map((k) => (
-          <Contador
-            key={k} titulo={CICLO_LABEL[k]} valor={ciclo[k]} color={CICLO_COLOR[k]}
-            detalle="Ver el directorio →"
-            onClick={() => navigate(`/ventas/clientes?ciclo=${k}`)}
+    <div className="dash-pila">
+      <div className="dash-grid">
+        <Tarjeta className="dash-span2" titulo="Clientes y prospectos por relación" hint="Cómo se reparte el directorio. Pulsa una relación para verla">
+          <Dona
+            aria={`Directorio por relación: ${(Object.keys(CICLO_LABEL) as CicloVida[]).map((k) => `${CICLO_LABEL[k]} ${ciclo[k]}`).join(', ')}`}
+            centroTitulo="en el directorio"
+            vacio="El directorio está vacío."
+            segmentos={(Object.keys(CICLO_LABEL) as CicloVida[]).map((k) => ({
+              key: k, etiqueta: CICLO_LABEL[k], valor: ciclo[k], color: CICLO_COLOR[k],
+              onClick: () => navigate(`/ventas/clientes?ciclo=${k}&responsable=${alcance}`),
+            }))}
           />
-        ))}
-      </div>
+        </Tarjeta>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20, marginTop: 20 }}>
         <Tarjeta titulo="Contratos" hint="Cómo están hoy">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, textAlign: 'center' }}>
             {[
-              { n: contratos.vigentes, t: 'Vigentes', c: '#2f855a' },
-              { n: contratos.porVencer, t: 'Por vencer (30 días)', c: COLOR_AVISO },
-              { n: contratos.vencidosSinRenovar, t: 'Vencidos sin renovar', c: COLOR_ALERTA },
-              { n: contratos.cancelados, t: 'Cancelados', c: '#718096' },
+              { n: contratos.vigentes, t: 'Vigentes', c: '#2f855a', estado: 'EN_CURSO' },
+              { n: contratos.porVencer, t: 'Por vencer (30 días)', c: COLOR_AVISO, estado: 'POR_VENCER' },
+              { n: contratos.vencidosSinRenovar, t: 'Vencidos sin renovar', c: COLOR_ALERTA, estado: 'VENCIDO' },
+              { n: contratos.cancelados, t: 'Cancelados', c: '#718096', estado: 'CANCELADO' },
             ].map((x) => (
-              <div key={x.t}>
+              <button
+                key={x.t} type="button" onClick={() => navigate(`/ventas/contratos?estado=${x.estado}&responsable=${alcance}`)}
+                title="Ver estos contratos en Contratos" disabled={x.n === 0}
+                style={{ background: 'none', border: 0, padding: '4px 0', font: 'inherit', cursor: x.n === 0 ? 'default' : 'pointer' }}
+              >
                 <div style={{ fontSize: '1.5rem', fontWeight: 800, color: x.c }}>{x.n}</div>
                 <div style={{ fontSize: '0.72rem', color: '#718096' }}>{x.t}</div>
-              </div>
+              </button>
             ))}
           </div>
           <p style={{ margin: '14px 0 0', fontSize: 13 }}>
@@ -153,11 +162,11 @@ export default function DashboardCartera({ alcance }: { alcance: string }) {
           ))}
         </Tarjeta>
 
-        <Tarjeta titulo="Retención" hint={`Del ${formatoDia(retencion.periodo.desde)} al ${formatoDia(retencion.periodo.hasta)}`}>
-          <div style={{ marginBottom: 10 }}>
-            <SelectorPeriodo dias={dias} onChange={setDias} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+        <Tarjeta
+          className="dash-span2" titulo="Retención" hint={`Del ${formatoDia(retencion.periodo.desde)} al ${formatoDia(retencion.periodo.hasta)}`}
+          accion={<FilterField label="Periodo"><SelectorPeriodo dias={dias} onChange={setDias} /></FilterField>}
+        >
+          <KpiFila className="dash-kpis--cuatro">
             <Contador titulo="Clientes retenidos" valor={pct(retencion.clientes.tasa)} color="#2f855a"
               detalle={`${retencion.clientes.retenidos} de ${retencion.clientes.cohorte} que estaban al inicio`} />
             <Contador titulo="Renovación de contratos" valor={pct(retencion.renovacion.tasa)} color="#2b6cb0"
@@ -166,7 +175,7 @@ export default function DashboardCartera({ alcance }: { alcance: string }) {
               detalle="Lo que se conserva sin contar lo que crece" />
             <Contador titulo="Retención neta (dinero)" valor={pct(retencion.dinero.retencionNeta)} color="#2b6cb0"
               detalle="Contando lo que crece (más de 100% = se vende más a los mismos)" />
-          </div>
+          </KpiFila>
           <p style={{ margin: '10px 0 0', fontSize: 11.5, color: '#a0aec0' }}>
             Valor mensual de ese grupo: de {dinero(retencion.dinero.mrrInicial)} a {dinero(retencion.dinero.mrrFinal)}.
             {retencion.dinero.clientesSinValor > 0 && ` ${retencion.dinero.clientesSinValor} clientes se dejaron fuera del dinero por no tener valor registrado.`}

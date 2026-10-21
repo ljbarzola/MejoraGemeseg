@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getClients, createClient, updateClient, deleteClient } from '../../../services/cacao.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import { Trash2, Pencil } from 'lucide-react';
 
 export default function ClientsPage() {
   const navigate = useNavigate();
@@ -143,8 +144,8 @@ export default function ClientsPage() {
                     <td>{c.phone || '—'}</td>
                     <td>
                       <div className="tools-actions-cell">
-                        <button className="btn-sm-edit" onClick={() => startEdit(c)}>✎</button>
-                        <button className="btn-danger-sm" onClick={() => handleDelete(c.id)}>✕</button>
+                        <button className="btn-secondary icon-btn" onClick={() => startEdit(c)} title="Editar" aria-label="Editar"><Pencil size={14} /></button>
+                        <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => handleDelete(c.id)} title="Eliminar cliente" aria-label="Eliminar cliente"><Trash2 size={14} /></button>
                       </div>
                     </td>
                   </tr>

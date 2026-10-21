@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Plus, Pencil, Trash2, X, Building2, Layers, Check, Lock, Clock, Infinity as InfinityIcon, GitMerge, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Building2, Layers, Check, Lock, Clock, Infinity as InfinityIcon, GitMerge, AlertTriangle } from 'lucide-react';
 import { getUser } from '../../../services/auth.service';
 import CedulaMergeModal from './CedulaMergeModal';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
@@ -502,11 +502,7 @@ export default function EntidadesList() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/rrhh')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-        </button>
-
+      <div className="page-header-row">
         <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS · CUMPLIMIENTO</p>

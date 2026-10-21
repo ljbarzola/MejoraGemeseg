@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { createCustodia, getCustodiaPdfUrl } from '../../services/custodia.service';
 import EmpleadoSelect from '../../components/custodias/EmpleadoSelect';
 import ImprimirOrdenModal from '../../components/custodias/ImprimirOrdenModal';
@@ -37,7 +37,6 @@ interface Contenedor {
 
 export default function CustodiaForm() {
   const navigate = useNavigate();
-  const location = useLocation();
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -149,7 +148,6 @@ export default function CustodiaForm() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/custodias')}>← Volver</button>
           <div>
             <p className="page-eyebrow">CUSTODIAS</p>
             <h1>Nueva Custodia</h1>

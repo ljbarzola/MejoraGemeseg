@@ -31,6 +31,7 @@ import {
   UpdateSalesContactDto,
 } from './dto/client.dto';
 import { nombresParecidos } from './nombre-similar.util';
+import { KINDS_MOTIVO_PERDIDA, motivoPorCambioDeEtapa } from './motivo-perdida.util';
 
 // Dashboard: etapas "ganada"/"perdida" por clave (decisión de Ventas: en
 // producción siempre existen ACEPTADO y RECHAZADO como etapas finales) y
@@ -1162,6 +1163,24 @@ export class VentasClientesService {
           include: { services: { include: { service: { select: { name: true } } } } },
         })
       : [];
+    // Motivo de cada pérdida, para mostrarlo en el cambio de etapa a «Perdida».
+    const motivosPerdida = nuevo
+      ? await this.prisma.salesReasonEntry.findMany({
+          where: {
+            companyId,
+            salesClientId: clientId,
+            opportunityId: { not: null },
+            kind: { in: KINDS_MOTIVO_PERDIDA },
+          },
+          select: { opportunityId: true, kind: true, reasonLabel: true, comment: true, source: true, createdAt: true },
+        })
+      : [];
+    const motivoDelCambio = motivoPorCambioDeEtapa(
+      oportunidades.flatMap((o) =>
+        o.stageChanges.map((c) => ({ id: c.id, opportunityId: o.id, toStatus: c.toStatus, createdAt: c.createdAt })),
+      ),
+      motivosPerdida,
+    );
 
     // Quién hizo cada cambio de etapa de una oportunidad (solo se guarda el id).
     const idsUsuario = [
@@ -1220,7 +1239,7 @@ export class VentasClientesService {
     const fuenteElegida = etiquetaDeLista('fuente').principal;
 
     const nombreOportunidad = (o: { id: number; title: string | null; services: { service: { name: string } }[] }) =>
-      o.title || o.services.map((x) => x.service.name).join(', ') || `Oportunidad #${o.id}`;
+      o.title || o.services.map((x) => x.service.name).join(', ') || 'Sin título ni servicio';
 
     type Evento = { kind: string; at: Date; [k: string]: unknown };
     const eventos: Evento[] = [];
@@ -1269,6 +1288,8 @@ export class VentasClientesService {
           from: infoEtapa(c.fromStatus),
           to: infoEtapa(c.toStatus),
           notes: c.notes,
+          // Solo en el cambio a «Perdida» y si se registró; si no, no se inventa.
+          motivo: motivoDelCambio.get(c.id) ?? null,
           opportunityId: o.id,
           opportunityName: nombre,
         });
@@ -1588,10 +1609,41 @@ export class VentasClientesService {
       else if (c.nextActionDate.getTime() === hoyFecha.getTime()) paraHoy++;
     }
 
+    // Las oportunidades de estos clientes. De aquí salen el embudo, la aceptación y el bloque por responsable:
+    // se cuenta por OPORTUNIDAD (así el número coincide con la lista a la que lleva cada botón del tablero).
+    const oportunidades = clientes.length
+      ? await this.prisma.salesOpportunity.findMany({
+          where: { companyId, salesClientId: { in: clientes.map((c) => c.id) } },
+          select: { salesClientId: true, status: true, closedAt: true, outcome: true, assignedUserId: true },
+        })
+      : [];
+    const oportunidadesPorCliente = new Map<number, typeof oportunidades>();
+    for (const o of oportunidades) {
+      oportunidadesPorCliente.set(o.salesClientId, [...(oportunidadesPorCliente.get(o.salesClientId) ?? []), o]);
+    }
+    // Lo que se cuenta, como lista de etapas: una por oportunidad del alcance y, para una empresa o persona
+    // SIN oportunidades pero con una etapa guardada (del sistema anterior), la etapa de su ficha. Con un vendedor elegido (o
+    // «mis clientes») solo cuentan SUS oportunidades.
+    const etapasContadas: (string | null)[] = [];
+    for (const c of clientes) {
+      const suyas = oportunidadesPorCliente.get(c.id) ?? [];
+      if (suyas.length === 0) {
+        // Una empresa solo de datos (sin oportunidades ni etapa) no es parte del embudo.
+        if (!c.status) continue;
+        if (alcanceUsuario !== null && c.assignedUserId !== alcanceUsuario) continue;
+        etapasContadas.push(c.status);
+        continue;
+      }
+      for (const o of suyas) {
+        if (alcanceUsuario !== null && o.assignedUserId !== alcanceUsuario) continue;
+        etapasContadas.push(o.status);
+      }
+    }
+
     // Embudo por etapa (en el orden y color que definió la empresa)
     const porEtapa = new Map<string | null, number>();
-    for (const c of clientes) {
-      const k = c.status && stages.some((s) => s.key === c.status) ? c.status : null;
+    for (const etapa of etapasContadas) {
+      const k = etapa && stages.some((s) => s.key === etapa) ? etapa : null;
       porEtapa.set(k, (porEtapa.get(k) ?? 0) + 1);
     }
     const embudo = [
@@ -1611,16 +1663,6 @@ export class VentasClientesService {
     // aceptados). Una empresa que todavía no tiene oportunidades (solo datos, o del sistema anterior)
     // se cuenta, como antes, por el responsable de la empresa. Con un vendedor elegido (o «mis clientes»)
     // solo se cuentan SUS oportunidades.
-    const oportunidades = clientes.length
-      ? await this.prisma.salesOpportunity.findMany({
-          where: { companyId, salesClientId: { in: clientes.map((c) => c.id) } },
-          select: { salesClientId: true, closedAt: true, outcome: true, assignedUserId: true },
-        })
-      : [];
-    const oportunidadesPorCliente = new Map<number, typeof oportunidades>();
-    for (const o of oportunidades) {
-      oportunidadesPorCliente.set(o.salesClientId, [...(oportunidadesPorCliente.get(o.salesClientId) ?? []), o]);
-    }
     const idsResponsables = [...new Set(oportunidades.map((o) => o.assignedUserId).filter((x): x is number => x !== null))];
     const nombreResponsable = new Map(
       (idsResponsables.length
@@ -1735,8 +1777,8 @@ export class VentasClientesService {
       .sort((a, b) => b.dias - a.dias);
 
     // Aceptación (foto actual, no por rango: sin historial confiable)
-    const nGanados = ganada ? clientes.filter((c) => c.status === ganada).length : 0;
-    const nPerdidos = perdida ? clientes.filter((c) => c.status === perdida).length : 0;
+    const nGanados = ganada ? etapasContadas.filter((e) => e === ganada).length : 0;
+    const nPerdidos = perdida ? etapasContadas.filter((e) => e === perdida).length : 0;
 
     // Contratos de estos clientes
     const clientesFiltro: Prisma.SalesContractWhereInput = clausulaAlcance

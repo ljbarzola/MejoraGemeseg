@@ -19,15 +19,18 @@ export default function PageTabs<T extends string>({
   value,
   onChange,
   label,
+  estilo = 'pastilla',
 }: {
   tabs: PageTab<T>[];
   value: T;
   onChange: (key: T) => void;
   /** Nombre accesible del grupo de pestañas. */
   label: string;
+  /** Estilo en prueba: `pastilla` (el de siempre) o `ventana`. */
+  estilo?: 'pastilla' | 'ventana';
 }) {
   return (
-    <div className="admin-tabs page-tabs" role="tablist" aria-label={label}>
+    <div className={`admin-tabs page-tabs page-tabs--${estilo}`} role="tablist" aria-label={label}>
       {tabs.map((t) => {
         const Icono = t.icon;
         return (

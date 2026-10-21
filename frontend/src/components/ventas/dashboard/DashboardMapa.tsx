@@ -59,7 +59,7 @@ function cargarCalor(): Promise<void> {
 // Mapa de Ecuador del Dashboard (Resumen): dónde están las oportunidades que tienen «Ubicación», en tres
 // vistas (burbujas por ciudad, mapa de calor y puntos sueltos), contando por cantidad o por monto cotizado.
 // Al lado va el ranking por provincia y las provincias donde todavía no hay nada.
-export default function DashboardMapa({ alcance }: { alcance: string }) {
+export default function DashboardMapa({ alcance, className }: { alcance: string; className?: string }) {
   const contenedor = useRef<HTMLDivElement>(null);
   const mapa = useRef<L.Map | null>(null);
   const capa = useRef<L.LayerGroup | null>(null);
@@ -155,19 +155,19 @@ export default function DashboardMapa({ alcance }: { alcance: string }) {
   const ayuda = TIPOS.find((t) => t.value === tipo)?.ayuda;
 
   return (
-    <div className="admin-section" style={{ margin: '20px 0 0' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+    <section className={`dash-card${className ? ` ${className}` : ''}`}>
+      <div className="dash-card-cab" style={{ flexWrap: 'wrap' }}>
         <div>
-          <h3 style={{ margin: 0, fontSize: '0.95rem' }}>Dónde se está cotizando</h3>
-          <p style={{ margin: '2px 0 10px', fontSize: '0.75rem', color: '#a0aec0' }}>
+          <h3>Dónde se está cotizando</h3>
+          <p className="dash-card-hint">
             {ayuda} Solo cuentan las oportunidades que tienen «Ubicación».
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div className="admin-tabs" style={{ display: 'inline-flex' }} role="group" aria-label="Tipo de mapa">
+          <div className="admin-tabs dash-mapa-tipos" role="group" aria-label="Tipo de mapa">
             {TIPOS.map((t) => (
               <button key={t.value} type="button" className={`admin-tab ${tipo === t.value ? 'active' : ''}`}
-                style={{ flex: '0 0 auto', padding: '6px 12px', fontSize: '0.8rem' }} onClick={() => setTipo(t.value)}>
+                onClick={() => setTipo(t.value)}>
                 {t.label}
               </button>
             ))}
@@ -184,8 +184,8 @@ export default function DashboardMapa({ alcance }: { alcance: string }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-start' }}>
-        <div style={{ flex: '2 1 420px', minWidth: 0 }}>
+      <div className="dash-mapa-cuerpo">
+        <div className="dash-mapa-lienzo">
           <div ref={contenedor} className="mapa-ecuador" />
           {/* Leyenda de cada vista */}
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', marginTop: 8, fontSize: 11.5, color: '#718096' }}>
@@ -205,7 +205,7 @@ export default function DashboardMapa({ alcance }: { alcance: string }) {
             {tipo === 'burbujas' && <span>El número es {metrica === 'monto' ? 'el monto cotizado' : 'la cantidad de oportunidades'} de cada ciudad.</span>}
           </div>
         </div>
-        <div style={{ flex: '1 1 280px', minWidth: 0 }}>
+        <div className="dash-mapa-lado">
           {error ? (
             <>
               <SinDatos texto="No se pudo cargar el mapa." />
@@ -242,6 +242,6 @@ export default function DashboardMapa({ alcance }: { alcance: string }) {
           )}
         </div>
       </div>
-    </div>
+    </section>
   );
 }

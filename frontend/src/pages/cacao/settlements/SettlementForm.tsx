@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getSuppliers, getLots, createSettlement, getNextSettlementId } from '../../../services/cacao.service';
 import DateInput from '../../../components/common/DateInput';
+import { Trash2 } from 'lucide-react';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
@@ -343,7 +344,7 @@ export default function SettlementForm() {
                     </select>
                     <input type="number" step="0.0001" min="0" max={lot?.netWeight || 99999} placeholder="Cantidad kg" value={sl.quantity} onChange={(e) => updateLot(i, 'quantity', e.target.value)} style={{ flex: 1, borderColor: exceeds ? '#e53e3e' : undefined }} />
                     {lot && <button type="button" className="btn-secondary" style={{ fontSize: '11px', padding: '4px 8px', whiteSpace: 'nowrap' }} onClick={() => updateLot(i, 'quantity', String(round4(lot.netWeight)))}>Usar todo</button>}
-                    <button className="btn-danger-sm" onClick={() => removeLot(i)}>✕</button>
+                    <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => removeLot(i)} title="Quitar lote" aria-label="Quitar lote"><Trash2 size={14} /></button>
                     {isDuplicate && <span style={{ color: '#e53e3e', fontSize: '11px', fontWeight: 700 }}>Duplicado</span>}
                     {exceeds && <span style={{ color: '#e53e3e', fontSize: '11px', fontWeight: 700 }}>Excede {lot.netWeight}kg</span>}
                   </div>

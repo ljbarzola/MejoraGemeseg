@@ -7,13 +7,15 @@ import {
 import { useCanalesLead } from '../../../hooks/useCanalesLead';
 import { useSortableTable } from '../../../hooks/useSortableTable';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
-import { BarraH, Cargando, SinDatos, Tarjeta, formatoDia, pct } from './DashboardBits';
+import { EmbudoGrafico } from './DashboardGraficos';
+import FilterField from '../../common/FilterField';
+import { Cargando, SinDatos, Tarjeta, formatoDia, pct } from './DashboardBits';
 
 type Agrupar = 'channel' | 'campana' | 'landing';
-const AGRUPACIONES: { value: Agrupar; label: string; columna: string }[] = [
-  { value: 'channel', label: 'Canal', columna: 'Canal' },
-  { value: 'campana', label: 'Campaña', columna: 'Campaña' },
-  { value: 'landing', label: 'Landing', columna: 'Landing' },
+const AGRUPACIONES: { value: Agrupar; label: string; columna: string; explica: string }[] = [
+  { value: 'channel', label: 'Canal', columna: 'Canal', explica: 'Canal = por dónde llegó el contacto: Google Ads, Meta, el sitio web, un referido, WhatsApp…' },
+  { value: 'campana', label: 'Campaña', columna: 'Campaña', explica: 'Campaña = el anuncio o la promoción concreta que lo trajo (el nombre que le pusiste en Google Ads o Meta).' },
+  { value: 'landing', label: 'Landing', columna: 'Landing', explica: 'Landing = la página web donde llenó el formulario (por ejemplo, la de monitoreo de alarmas).' },
 ];
 
 // Mismo recorrido que el panel de Google Ads, pero contado desde el formulario:
@@ -57,38 +59,45 @@ export default function DashboardMarketing({ desde, hasta }: { desde: string; ha
 
   return (
     <Tarjeta
-      titulo="Embudo de marketing"
-      hint={`Posibles clientes (leads) que llegaron del${formatoDia(datos.periodo.desde)} al ${formatoDia(datos.periodo.hasta)}`}
+      titulo="De posible cliente a venta"
+      hint={`De los ${formatoDia(datos.periodo.desde)} al ${formatoDia(datos.periodo.hasta)}: cuántos posibles clientes llenaron un formulario, a cuántos se les cotizó y cuántos terminaron contratando.`}
     >
       {t.leads === 0 ? (
         <SinDatos texto="Aún no llegaron posibles clientes (leads) en este periodo. Cuando lleguen por la web o los anuncios, aquí verás cuántos cotizaron y cuántos contrataron." />
       ) : (
         <>
-          <BarraH etiqueta="Posibles clientes (leads: llenaron el formulario)" valor={t.leads} max={t.leads} detalle={`${t.leads}`} />
-          <BarraH
-            etiqueta="Cotizaron" valor={t.cualificados} max={t.leads} color="#d97706"
-            detalle={`${t.cualificados} · ${pct(t.pctCualificados)} de los posibles clientes`}
-          />
-          <BarraH
-            etiqueta="Contrataron" valor={t.convertidos} max={t.leads} color="#2f855a"
-            detalle={`${t.convertidos} · ${Math.round((t.convertidos / t.leads) * 1000) / 10}% de los posibles clientes`}
-          />
-          {t.cualificados > 0 && (
-            <p style={{ margin: '0 0 4px', fontSize: 12, color: '#718096' }}>
-              De los que cotizaron, contrató el {Math.round((t.convertidos / t.cualificados) * 100)}%.
-            </p>
-          )}
+          <div className="dash-embudo-fila">
+            <div className="dash-embudo-grafico">
+              <EmbudoGrafico
+                etiquetaAncho={176} notaAncho={150}
+                aria={`Embudo de marketing: ${t.leads} posibles clientes, ${t.cualificados} cotizaron, ${t.convertidos} contrataron`}
+                pasos={[
+                  { key: 'leads', etiqueta: 'Llenaron el formulario', valor: t.leads, color: '#12375F', nota: 'posibles clientes' },
+                  { key: 'cotizaron', etiqueta: 'Cotizaron', valor: t.cualificados, color: '#d97706', nota: `${pct(t.pctCualificados)} de los leads` },
+                  { key: 'contrataron', etiqueta: 'Contrataron', valor: t.convertidos, color: '#2f855a', nota: `${Math.round((t.convertidos / t.leads) * 1000) / 10}% de los leads` },
+                ]}
+              />
+            </div>
+            {t.cualificados > 0 && (
+              <div className="dash-embudo-dato">
+                <strong>{Math.round((t.convertidos / t.cualificados) * 100)}%</strong>
+                <span>de los que cotizaron terminó contratando</span>
+              </div>
+            )}
+          </div>
         </>
       )}
       <p style={{ margin: '6px 0 12px', fontSize: 12, color: '#a0aec0' }}>
         Las visitas a la página (interacciones) solo las ve Google Ads; aquí contamos desde que llenan el formulario.
       </p>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <label htmlFor="agrupar-marketing" style={{ fontSize: 13, color: '#4a5568' }}>Agrupar por:</label>
-        <select id="agrupar-marketing" className="filter-select" value={agrupar} onChange={(e) => setAgrupar(e.target.value as Agrupar)}>
-          {AGRUPACIONES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
-        </select>
+      <div className="dash-ver-por">
+        <FilterField label="Ver por">
+          <select id="agrupar-marketing" className="filter-select" value={agrupar} onChange={(e) => setAgrupar(e.target.value as Agrupar)}>
+            {AGRUPACIONES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+          </select>
+        </FilterField>
+        <p className="dash-notas">{AGRUPACIONES.find((a) => a.value === agrupar)?.explica}</p>
       </div>
 
       {filas.length === 0 ? (

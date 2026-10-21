@@ -4,6 +4,7 @@ import { FileText, Plus, FolderOpen, HelpCircle, Link2, Trash2, Upload } from 'l
 import { getContracts, deleteContract, getVentasDriveConfig, vincularDocumentosSinCliente, SalesContract } from '../../services/ventas.service';
 import { buildDriveFolderLink } from '../../utils/driveLink';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import FilterField from '../../components/common/FilterField';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import RowActionsMenu from '../../components/common/RowActionsMenu';
@@ -232,31 +233,37 @@ export default function ContratosList() {
       <DocumentacionProximamente />
 
       <div className="filter-bar">
-        <div className="filter-bar-fields filter-bar-fields--una-linea">
+        <div className="filter-bar-fields filter-bar-fields--etiquetas">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por número, cliente, contrato o tipo..."
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
-          <select className="filter-select" value={filter} onChange={(e) => setFilter(e.target.value)}>
-            <option value="">Todos los estados</option>
-            {(['DRAFT', 'READY', 'SENT', 'SIGNED'] as const).map((s) => (
-              <option key={s} value={s}>{statusLabels[s]}</option>
-            ))}
-          </select>
-          <select className="filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} aria-label="Filtrar por tipo de documento">
-            <option value="">Todos los tipos</option>
-            {TIPOS_DOCUMENTO.map((t) => (
-              <option key={t.key} value={t.key}>{t.label}</option>
-            ))}
-            <option value="SIN_TIPO">Sin tipo</option>
-          </select>
-          {sinClienteTotal > 0 && (
-            <select className="filter-select" value={soloSinCliente ? 'sin' : ''} onChange={(e) => setSoloSinCliente(e.target.value === 'sin')}>
-              <option value="">Todos los clientes</option>
-              <option value="sin">Sin cliente asignado ({sinClienteTotal})</option>
+          <FilterField label="Estado">
+  <select className="filter-select" value={filter} onChange={(e) => setFilter(e.target.value)}>
+              <option value="">Todos los estados</option>
+              {(['DRAFT', 'READY', 'SENT', 'SIGNED'] as const).map((s) => (
+                <option key={s} value={s}>{statusLabels[s]}</option>
+              ))}
             </select>
+          </FilterField>
+          <FilterField label="Tipo de documento">
+  <select className="filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} aria-label="Filtrar por tipo de documento">
+              <option value="">Todos los tipos</option>
+              {TIPOS_DOCUMENTO.map((t) => (
+                <option key={t.key} value={t.key}>{t.label}</option>
+              ))}
+              <option value="SIN_TIPO">Sin tipo</option>
+            </select>
+          </FilterField>
+          {sinClienteTotal > 0 && (
+            <FilterField label="Cliente">
+  <select className="filter-select" value={soloSinCliente ? 'sin' : ''} onChange={(e) => setSoloSinCliente(e.target.value === 'sin')}>
+                <option value="">Todos los clientes</option>
+                <option value="sin">Sin cliente asignado ({sinClienteTotal})</option>
+              </select>
+            </FilterField>
           )}
         </div>
         <div className="filter-bar-actions">
