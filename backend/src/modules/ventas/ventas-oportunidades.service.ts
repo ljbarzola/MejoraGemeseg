@@ -10,6 +10,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { VentasMotivosService } from './ventas-motivos.service';
 import { hoyEcuador, parseDiaContrato } from './agreement-status.util';
 import { resultadoDeEtapa } from './stage-outcome.util';
+import { KINDS_MOTIVO_PERDIDA, ultimoMotivoPorOportunidad } from './motivo-perdida.util';
 import { VentasConversionesService } from './ventas-conversiones.service';
 import { VentasAcuerdosService } from './ventas-acuerdos.service';
 import { parseSiguientePaso } from './siguiente-paso.util';
@@ -446,9 +447,20 @@ export class VentasOportunidadesService {
       }),
     ]);
     const nombre = new Map(usuarios.map((u) => [u.id, u.fullName]));
+    // Motivo de las perdidas, para mostrarlo bajo la etapa «Perdida» de la tabla.
+    const idsPerdidas = filas.filter((o) => o.outcome === 'PERDIDA').map((o) => o.id);
+    const motivos = idsPerdidas.length
+      ? ultimoMotivoPorOportunidad(
+          await this.prisma.salesReasonEntry.findMany({
+            where: { companyId: cid, opportunityId: { in: idsPerdidas }, kind: { in: KINDS_MOTIVO_PERDIDA } },
+            select: { opportunityId: true, kind: true, reasonLabel: true, comment: true, source: true, createdAt: true },
+          }),
+        )
+      : new Map();
     return filas.map((o) => ({
       ...this.formatear(o, etapas, opcionesServicio),
       assignedUserName: o.assignedUserId ? (nombre.get(o.assignedUserId) ?? null) : null,
+      motivoPerdida: o.outcome === 'PERDIDA' ? (motivos.get(o.id) ?? null) : null,
     }));
   }
 

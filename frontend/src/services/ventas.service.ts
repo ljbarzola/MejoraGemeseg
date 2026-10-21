@@ -586,6 +586,8 @@ export type TimelineEvent =
     }
   | {
       kind: 'etapa'; id: string; at: string; authorName: string | null; from: TimelineStageInfo | null; to: TimelineStageInfo | null; notes: string | null;
+      // Solo en el cambio a «Perdida», si se registró el motivo.
+      motivo?: MotivoDePerdida | null;
       // De qué negociación es el cambio (no viene en los registros viejos del cliente).
       opportunityId?: number; opportunityName?: string;
     }
@@ -984,6 +986,13 @@ export interface UbicacionOportunidad {
   osmId: string | null;
 }
 
+// Motivo con el que se perdió una oportunidad (lo que se muestra junto a la etapa «Perdida»).
+export interface MotivoDePerdida {
+  label: string;
+  comment: string | null;
+  source: 'CLIENTE' | 'VENDEDOR' | null;
+}
+
 export interface Oportunidad {
   id: number;
   salesClientId: number;
@@ -1009,6 +1018,8 @@ export interface Oportunidad {
   ubicacion?: UbicacionOportunidad | null;
   // Sin servicios propios: el servicio que la ficha del cliente tiene guardado (o null).
   servicioDeFicha?: string | null;
+  // Solo en la lista y solo si está perdida: el motivo registrado (null si no se registró).
+  motivoPerdida?: MotivoDePerdida | null;
   notes?: string | null;
   services: { id: number; name: string }[];
   // Solo en el detalle:

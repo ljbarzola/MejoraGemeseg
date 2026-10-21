@@ -280,7 +280,7 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
         : null;
       contenido = (
         <>
-          <strong>{ev.producto ? 'Venta de producto' : 'Contrato'} {paso} · {ev.title || `Contrato #${ev.agreementId}`}</strong>
+          <strong>{ev.producto ? 'Venta de producto' : 'Contrato'} {paso} · {ev.title || 'sin título'}</strong>
           {servicios && <div style={tenue}>{ev.producto ? 'Productos' : 'Servicios'}: {servicios}</div>}
           {vigencia && <div style={tenue}>{ev.producto ? 'Fecha' : 'Vigencia'}: {vigencia}</div>}
         </>
@@ -297,13 +297,20 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
             <Etapa info={ev.to} />
           </div>
           {ev.opportunityName && <div style={tenue}>Oportunidad: {ev.opportunityName}</div>}
+          {ev.motivo && (
+            <div style={{ marginTop: 4, color: '#4a5568' }}>
+              <span style={{ color: '#718096' }}>Motivo: </span>{ev.motivo.label}
+              {ev.motivo.source && <span style={tenue}> ({ev.motivo.source === 'CLIENTE' ? 'lo dijo el cliente' : 'según el vendedor'})</span>}
+              {ev.motivo.comment && <div style={tenue}>{ev.motivo.comment}</div>}
+            </div>
+          )}
           {ev.notes && <div style={{ marginTop: 4, color: '#4a5568' }}>{ev.notes}</div>}
         </>
       );
     } else if (ev.kind === 'contrato') {
       icono = <FileText size={14} />;
       color = ev.step === 'firmado' ? '#276749' : '#2b6cb0';
-      const nombre = ev.contractNumber || `#${ev.contractId}`;
+      const nombre = ev.contractNumber || 'sin número';
       const paso = ev.step === 'creado' ? 'creado' : ev.step === 'enviado' ? 'enviado a firma' : 'firmado';
       contenido = (
         <>

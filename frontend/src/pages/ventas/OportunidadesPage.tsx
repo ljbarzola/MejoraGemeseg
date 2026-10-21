@@ -284,6 +284,7 @@ export default function OportunidadesPage() {
         );
       case 'etapa':
         return (
+          <>
           <select
             value={o.status ?? ''}
             aria-label={`Etapa de ${o.salesClient.name}`}
@@ -299,6 +300,14 @@ export default function OportunidadesPage() {
             {!o.status && <option value="">Sin etapa</option>}
             {etapas.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
+          {/* Una perdida dice por qué: el motivo queda visible sin abrir nada. */}
+          {o.outcome === 'PERDIDA' && o.motivoPerdida && (
+            <div style={{ fontSize: 11, color: '#718096', marginTop: 3, lineHeight: 1.3 }}
+              title={o.motivoPerdida.comment ? `${o.motivoPerdida.label}: ${o.motivoPerdida.comment}` : o.motivoPerdida.label}>
+              {o.motivoPerdida.label}
+            </div>
+          )}
+          </>
         );
       case 'monto':
         return (

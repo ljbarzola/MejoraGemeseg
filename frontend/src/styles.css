@@ -2658,26 +2658,6 @@ textarea.chat-input {
   border-radius: 20px;
 }
 
-/* Referencia de evidencia que cita el agente ([#opp:12] → «oportunidad 12»). */
-.chat-ref {
-  display: inline-block;
-  padding: 0 7px;
-  margin: 0 1px;
-  border-radius: 10px;
-  background: rgba(43, 108, 176, 0.12);
-  color: #2b6cb0;
-  font-size: 0.7rem;
-  font-weight: 600;
-  line-height: 1.55;
-  white-space: nowrap;
-  text-decoration: none;
-}
-
-.chat-ref-enlace:hover {
-  background: rgba(43, 108, 176, 0.25);
-  text-decoration: underline;
-}
-
 /* Preguntas sugeridas de un clic. */
 .chat-sugerencias-titulo {
   margin: 18px 0 8px;

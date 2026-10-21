@@ -31,6 +31,7 @@ import {
   UpdateSalesContactDto,
 } from './dto/client.dto';
 import { nombresParecidos } from './nombre-similar.util';
+import { KINDS_MOTIVO_PERDIDA, motivoPorCambioDeEtapa } from './motivo-perdida.util';
 
 // Dashboard: etapas "ganada"/"perdida" por clave (decisión de Ventas: en
 // producción siempre existen ACEPTADO y RECHAZADO como etapas finales) y
@@ -1162,6 +1163,24 @@ export class VentasClientesService {
           include: { services: { include: { service: { select: { name: true } } } } },
         })
       : [];
+    // Motivo de cada pérdida, para mostrarlo en el cambio de etapa a «Perdida».
+    const motivosPerdida = nuevo
+      ? await this.prisma.salesReasonEntry.findMany({
+          where: {
+            companyId,
+            salesClientId: clientId,
+            opportunityId: { not: null },
+            kind: { in: KINDS_MOTIVO_PERDIDA },
+          },
+          select: { opportunityId: true, kind: true, reasonLabel: true, comment: true, source: true, createdAt: true },
+        })
+      : [];
+    const motivoDelCambio = motivoPorCambioDeEtapa(
+      oportunidades.flatMap((o) =>
+        o.stageChanges.map((c) => ({ id: c.id, opportunityId: o.id, toStatus: c.toStatus, createdAt: c.createdAt })),
+      ),
+      motivosPerdida,
+    );
 
     // Quién hizo cada cambio de etapa de una oportunidad (solo se guarda el id).
     const idsUsuario = [
@@ -1220,7 +1239,7 @@ export class VentasClientesService {
     const fuenteElegida = etiquetaDeLista('fuente').principal;
 
     const nombreOportunidad = (o: { id: number; title: string | null; services: { service: { name: string } }[] }) =>
-      o.title || o.services.map((x) => x.service.name).join(', ') || `Oportunidad #${o.id}`;
+      o.title || o.services.map((x) => x.service.name).join(', ') || 'Sin título ni servicio';
 
     type Evento = { kind: string; at: Date; [k: string]: unknown };
     const eventos: Evento[] = [];
@@ -1269,6 +1288,8 @@ export class VentasClientesService {
           from: infoEtapa(c.fromStatus),
           to: infoEtapa(c.toStatus),
           notes: c.notes,
+          // Solo en el cambio a «Perdida» y si se registró; si no, no se inventa.
+          motivo: motivoDelCambio.get(c.id) ?? null,
           opportunityId: o.id,
           opportunityName: nombre,
         });
