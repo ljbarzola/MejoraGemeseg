@@ -3,9 +3,13 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles.css';
 import { installOverlayClickGuard } from './utils/overlayClickGuard';
+import { installTablasVivas } from './utils/tablasVivas';
 
 // Un modal no se cierra si el mouse se soltó en el fondo tras arrastrar desde dentro.
 installOverlayClickGuard();
+
+// Toda tabla de listado se desplaza por dentro, con encabezado y primera columna fijos.
+installTablasVivas();
 
 // Si la pestana quedo abierta durante un despliegue, los chunks con hash del
 // build anterior ya no existen en Hosting y las rutas lazy fallan en blanco.

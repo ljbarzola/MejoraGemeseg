@@ -8,7 +8,7 @@ import {
   IsString,
   ValidateNested,
 } from 'class-validator';
-import { MotivoInputDto } from './opportunity.dto';
+import { MotivoInputDto, UbicacionDto } from './opportunity.dto';
 
 // El servidor tiene forbidNonWhitelisted: todo campo del body debe estar aquí.
 
@@ -18,6 +18,8 @@ export class CreateLeadDto {
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsString() companyName?: string;
   @IsOptional() @IsString() message?: string;
+  // Dirección y ciudad (opcionales): pasan a la ficha al convertir el posible cliente en oportunidad.
+  @IsOptional() @IsString() direccion?: string;
   // Fuente obligatoria: una clave del registro de canales (lead-canales.const.ts).
   @IsOptional() @IsString() channel?: string;
   @IsOptional() @IsString() campaign?: string;
@@ -31,6 +33,8 @@ export class UpdateLeadDto {
   @IsOptional() @IsString() phone?: string | null;
   @IsOptional() @IsString() companyName?: string | null;
   @IsOptional() @IsString() message?: string | null;
+  // Vacío o null = quitar la dirección guardada.
+  @IsOptional() @IsString() direccion?: string | null;
   // SERVICIO, EMPLEO, PROVEEDOR, OTRO, SPAM; null = sin clasificar.
   @IsOptional() @IsString() contactReason?: string | null;
 }
@@ -51,6 +55,15 @@ export class ConvertLeadDto {
   @IsOptional() @IsString() email?: string;
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsString() ruc?: string;
+  // Dirección de la ficha. Sin enviar se usa la que trajo el posible cliente.
+  @IsOptional() @IsString() address?: string;
   @IsOptional() @IsArray() @IsInt({ each: true }) serviceIds?: number[];
   @IsOptional() @IsString() title?: string;
+  // Fase 2: contacto reconocido en `coincidencias` (se le guarda el teléfono/
+  // correo nuevo si no lo tenía) o el nombre de un contacto nuevo a registrar
+  // en un cliente existente.
+  @IsOptional() @IsInt() contactId?: number;
+  @IsOptional() @IsString() nuevoContactoNombre?: string;
+  // Ubicación opcional de la oportunidad (mapa de OpenStreetMap). Es de la oportunidad, no de la persona.
+  @IsOptional() @ValidateNested() @Type(() => UbicacionDto) ubicacion?: UbicacionDto | null;
 }

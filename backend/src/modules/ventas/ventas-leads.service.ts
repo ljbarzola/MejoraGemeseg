@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -12,6 +13,7 @@ import { PermissionsService } from '../permissions/permissions.service';
 import { VentasMotivosService, type MotivoInput } from './ventas-motivos.service';
 import { VentasOportunidadesService } from './ventas-oportunidades.service';
 import { VentasSchemaService } from './ventas-schema.service';
+import { VentasConversionesService } from './ventas-conversiones.service';
 import {
   MOTIVOS_CONTACTO,
   normalizarCorreo,
@@ -26,6 +28,9 @@ import {
 } from './lead-canales.const';
 import { sugerirServicios } from './lead-atribucion.util';
 import { ensureDefaultServices } from './ventas-servicios.util';
+import { combinarDireccion, direccionDeLead } from './lead-datos.util';
+import { nombresParecidos } from './nombre-similar.util';
+import { limpiarUbicacion, type UbicacionInput } from './ubicacion.util';
 
 // Un LEAD es un contacto entrante sin calificar. Solo uno de servicio,
 // calificado, se convierte en cliente + oportunidad. Un cliente NUNCA vuelve a
@@ -49,6 +54,9 @@ export interface EntranteInput {
   extra?: Record<string, unknown>;
   // Cuándo llegó de verdad (si la web lo mandó con retraso, ver lead-recepcion.util.ts). Sin valor: ahora.
   recibidoEn?: Date | null;
+  // Dirección (y ciudad ya combinada, ver combinarDireccion): se guarda en extra.direccion y pasa a la
+  // ficha al convertir el posible cliente en oportunidad.
+  direccion?: string | null;
   createdBy?: number | null;
 }
 
@@ -68,6 +76,8 @@ export class VentasLeadsService {
     private readonly motivos: VentasMotivosService,
     private readonly oportunidades: VentasOportunidadesService,
     private readonly esquema: VentasSchemaService,
+    // Opcional para no romper quien arma este servicio a mano (pruebas): sin él, «lead válido» no se registra.
+    @Optional() private readonly conversiones?: VentasConversionesService,
   ) {}
 
   private requireCompany(companyId: number | null): number {
@@ -109,7 +119,11 @@ export class VentasLeadsService {
     const lead = await this.prisma.salesLead.create({
       data: {
         companyId,
-        name: name ?? email ?? phone ?? 'Sin nombre',
+        // Nunca el teléfono: un WhatsApp sin nombre quedaría con una empresa
+        // literalmente llamada como el número (reportado 2026-10-18). "Sin
+        // nombre" es un placeholder obvio que empuja a corregirlo; el teléfono
+        // ya queda guardado aparte en `phone`.
+        name: name ?? email ?? 'Sin nombre',
         email,
         phone,
         companyName: recortar(input.companyName, MAX_NOMBRE),
@@ -117,7 +131,10 @@ export class VentasLeadsService {
         channel: input.channel,
         campaign: recortar(input.campaign, MAX_CAMPANA),
         externalId,
-        extra: (input.extra ?? {}) as Prisma.InputJsonValue,
+        extra: {
+          ...(input.extra ?? {}),
+          ...(recortar(input.direccion, 300) ? { direccion: recortar(input.direccion, 300) } : {}),
+        } as Prisma.InputJsonValue,
         createdBy: input.createdBy ?? null,
         // Solo si la web mandó la fecha real; si no, la base pone la de ahora (default).
         ...(input.recibidoEn ? { createdAt: input.recibidoEn } : {}),
@@ -150,8 +167,8 @@ export class VentasLeadsService {
           await this.notifications.create({
             userId: persona.id,
             companyId: persona.companyId,
-            title: 'Nuevo lead',
-            message: `${lead.name} escribió (${canal}). Está en la bandeja de Leads, sin asignar.`,
+            title: 'Nuevo posible cliente',
+            message: `${lead.name} escribió (${canal}). Está en Posibles clientes, sin asignar.`,
             link: '/ventas/leads',
           });
         } catch (err: any) {
@@ -197,7 +214,11 @@ export class VentasLeadsService {
     const nombre =
       valor('FULL_NAME') ||
       [valor('FIRST_NAME'), valor('LAST_NAME')].filter(Boolean).join(' ');
-    const conocidas = ['FULL_NAME', 'FIRST_NAME', 'LAST_NAME', 'EMAIL', 'PHONE_NUMBER', 'COMPANY_NAME'];
+    const conocidas = [
+      'FULL_NAME', 'FIRST_NAME', 'LAST_NAME', 'EMAIL', 'PHONE_NUMBER', 'COMPANY_NAME',
+      // La dirección y la ciudad se guardan aparte (pasan a la ficha), no como pregunta del formulario.
+      'STREET_ADDRESS', 'CITY',
+    ];
     // Preguntas propias del formulario: se guardan como texto en el mensaje.
     const preguntas = columnas
       .filter((c) => !conocidas.includes(String(c.column_id).toUpperCase()) && c.string_value)
@@ -208,6 +229,7 @@ export class VentasLeadsService {
       phone: valor('PHONE_NUMBER'),
       companyName: valor('COMPANY_NAME'),
       message: preguntas.join('\n'),
+      direccion: combinarDireccion(valor('STREET_ADDRESS'), valor('CITY')),
       channel: 'GOOGLE_ADS',
       campaign: body?.campaign_id ? `Campaña ${body.campaign_id}` : null,
       externalId: body?.lead_id ? String(body.lead_id) : null,
@@ -227,7 +249,11 @@ export class VentasLeadsService {
 
   // Clientes de la empresa que parecen ser la misma persona (mismo correo,
   // teléfono o RUC). Se usa para sugerir «sumar una oportunidad» en vez de
-  // crear un cliente repetido.
+  // crear un cliente repetido. Fase 2 (2026-10-18): además de la empresa/
+  // cliente, reconoce a la PERSONA de contacto (Juanito, María) cuando su
+  // propio teléfono o correo coincide, aunque el de la empresa no coincida —
+  // así el modal puede ofrecer «¿es Juanito, de esta empresa?» en vez de solo
+  // la razón social.
   private async coincidencias(
     companyId: number,
     lead: { email: string | null; phone: string | null; companyName?: string | null },
@@ -241,14 +267,71 @@ export class VentasLeadsService {
       where: { companyId },
       select: { id: true, name: true, email: true, phone: true, ruc: true },
     });
-    return clientes
+    const porCliente: {
+      id: number;
+      name: string;
+      email: string | null;
+      phone: string | null;
+      contactoId: number | null;
+      contactoNombre: string | null;
+    }[] = clientes
       .filter(
         (c) =>
           (correo && normalizarCorreo(c.email) === correo) ||
           (tel && tel.length >= 7 && normalizarTelefono(c.phone) === tel) ||
           (rucLimpio && (c.ruc ?? '').trim() === rucLimpio),
       )
-      .map((c) => ({ id: c.id, name: c.name, email: c.email, phone: c.phone }));
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        email: c.email,
+        phone: c.phone,
+        contactoId: null,
+        contactoNombre: null,
+      }));
+
+    if (correo || (tel && tel.length >= 7)) {
+      const contactos = await this.prisma.salesContact.findMany({
+        where: { companyId },
+        select: {
+          id: true,
+          name: true,
+          phones: true,
+          emails: true,
+          salesClient: { select: { id: true, name: true, email: true, phone: true } },
+        },
+      });
+      const yaIncluido = new Set(porCliente.map((c) => c.id));
+      for (const ct of contactos) {
+        const phones = Array.isArray(ct.phones)
+          ? (ct.phones as { value?: string }[])
+          : [];
+        const emails = Array.isArray(ct.emails)
+          ? (ct.emails as { value?: string }[])
+          : [];
+        const coincideTel =
+          !!tel && tel.length >= 7 && phones.some((p) => normalizarTelefono(p?.value ?? '') === tel);
+        const coincideCorreo = !!correo && emails.some((e) => normalizarCorreo(e?.value ?? '') === correo);
+        if (!coincideTel && !coincideCorreo) continue;
+        const existente = porCliente.find((c) => c.id === ct.salesClient.id);
+        if (existente) {
+          existente.contactoId = ct.id;
+          existente.contactoNombre = ct.name;
+          continue;
+        }
+        if (yaIncluido.has(ct.salesClient.id)) continue;
+        yaIncluido.add(ct.salesClient.id);
+        porCliente.push({
+          id: ct.salesClient.id,
+          name: ct.salesClient.name,
+          email: ct.salesClient.email,
+          phone: ct.salesClient.phone,
+          contactoId: ct.id,
+          contactoNombre: ct.name,
+        });
+      }
+    }
+    return porCliente;
   }
 
   private conSugerencia<T extends { message: string | null; name: string; contactReason: string | null }>(l: T) {
@@ -319,7 +402,7 @@ export class VentasLeadsService {
   async get(companyId: number | null, id: number) {
     const cid = this.requireCompany(companyId);
     const lead = await this.prisma.salesLead.findFirst({ where: { id, companyId: cid } });
-    if (!lead) throw new NotFoundException('Lead no encontrado');
+    if (!lead) throw new NotFoundException('Posible cliente no encontrado');
     const [coincidencias, motivos] = await Promise.all([
       lead.status === 'CONVERTIDO' ? [] : this.coincidencias(cid, lead),
       this.prisma.salesReasonEntry.findMany({
@@ -355,6 +438,7 @@ export class VentasLeadsService {
       phone?: string;
       companyName?: string;
       message?: string;
+      direccion?: string;
       channel?: string;
       campaign?: string;
       extra?: Record<string, string>;
@@ -373,6 +457,22 @@ export class VentasLeadsService {
     const extra: Record<string, unknown> = {};
     for (const campo of canal.campos) {
       if (campo.key === 'campaign') continue;
+      if (campo.usuario) {
+        // Quién lo refirió: un usuario de la empresa (queda enlazado) o un nombre escrito a mano.
+        const idElegido = Number(dto.extra?.[`${campo.key}UserId`]);
+        if (Number.isInteger(idElegido) && idElegido > 0) {
+          const usuario = await this.prisma.user.findFirst({
+            where: { id: idElegido, companyId: cid, isActive: true },
+            select: { id: true, fullName: true },
+          });
+          if (!usuario) {
+            throw new BadRequestException('Esa persona ya no está en la empresa. Elige otra o escribe su nombre.');
+          }
+          extra[campo.key] = usuario.fullName;
+          extra[`${campo.key}UserId`] = usuario.id;
+          continue;
+        }
+      }
       const valor = recortar(dto.extra?.[campo.key], 300);
       if (valor) extra[campo.key] = valor;
     }
@@ -382,12 +482,30 @@ export class VentasLeadsService {
       phone: dto.phone,
       companyName: dto.companyName,
       message: dto.message,
+      direccion: dto.direccion,
       campaign: dto.campaign,
       channel: canal.key,
       extra,
       createdBy: userId,
     });
     return this.get(cid, r.lead.id);
+  }
+
+  // Qué ha llegado de verdad por cada canal: cuántos leads y cuándo llegó el último.
+  // Es lo que muestra «Conexiones» en lugar de un estado escrito a mano.
+  async actividadCanales(companyId: number | null) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    const filas = await this.prisma.salesLead.groupBy({
+      by: ['channel'],
+      where: { companyId },
+      _count: { _all: true },
+      _max: { createdAt: true },
+    });
+    return filas.map((f) => ({
+      canal: f.channel,
+      total: f._count._all,
+      ultimo: f._max.createdAt,
+    }));
   }
 
   // Lista de canales para el frontend (filtro, «Nuevo lead», etiquetas).
@@ -400,6 +518,28 @@ export class VentasLeadsService {
     }));
   }
 
+  // Quién puede figurar como «quien lo refirió»: cualquier persona activa de la empresa
+  // (incluida quien registra, que a veces es quien trajo al cliente).
+  async referidores(companyId: number | null) {
+    const cid = this.requireCompany(companyId);
+    return this.prisma.user.findMany({
+      where: { companyId: cid, isActive: true },
+      select: { id: true, fullName: true, position: true },
+      orderBy: { fullName: 'asc' },
+    });
+  }
+
+  // El usuario que el lead trae como referidor, si todavía existe y sigue activo en la empresa.
+  private async referidorDeLead(companyId: number, extra: unknown): Promise<number | null> {
+    const id = Number(((extra ?? {}) as Record<string, unknown>)['referidoPorUserId']);
+    if (!Number.isInteger(id) || id <= 0) return null;
+    const u = await this.prisma.user.findFirst({
+      where: { id, companyId, isActive: true },
+      select: { id: true },
+    });
+    return u?.id ?? null;
+  }
+
   async actualizar(
     companyId: number | null,
     id: number,
@@ -409,16 +549,25 @@ export class VentasLeadsService {
       phone?: string | null;
       companyName?: string | null;
       message?: string | null;
+      direccion?: string | null;
       contactReason?: string | null;
     },
   ) {
     const cid = this.requireCompany(companyId);
     const actual = await this.prisma.salesLead.findFirst({ where: { id, companyId: cid } });
-    if (!actual) throw new NotFoundException('Lead no encontrado');
+    if (!actual) throw new NotFoundException('Posible cliente no encontrado');
     if (actual.status === 'CONVERTIDO' || actual.status === 'DESCARTADO') {
-      throw new BadRequestException('Este lead ya está cerrado: no se puede modificar.');
+      throw new BadRequestException('Este posible cliente ya está cerrado: no se puede modificar.');
     }
     const data: Prisma.SalesLeadUpdateInput = {};
+    if (dto.direccion !== undefined) {
+      // La dirección vive en `extra`; se cambia solo esa clave y se respeta el resto (gclid, campaña…).
+      const extra = { ...((actual.extra ?? {}) as Record<string, unknown>) };
+      const nueva = recortar(dto.direccion, 300);
+      if (nueva) extra['direccion'] = nueva;
+      else delete extra['direccion'];
+      data.extra = extra as Prisma.InputJsonValue;
+    }
     if (dto.name !== undefined) {
       const n = recortar(dto.name, MAX_NOMBRE);
       if (!n) throw new BadRequestException('El nombre no puede quedar vacío.');
@@ -430,12 +579,17 @@ export class VentasLeadsService {
     if (dto.message !== undefined) data.message = recortar(dto.message, MAX_MENSAJE);
     if (dto.contactReason !== undefined) {
       if (dto.contactReason !== null && !(MOTIVOS_CONTACTO as readonly string[]).includes(dto.contactReason)) {
-        throw new BadRequestException('El motivo del contacto no es válido.');
+        throw new BadRequestException('El tipo de contacto no es válido.');
       }
       data.contactReason = dto.contactReason;
       data.triagedAt = dto.contactReason ? new Date() : null;
     }
     await this.prisma.salesLead.update({ where: { id }, data });
+    // Clasificarlo como «Servicio» lo confirma como contacto real: hecho «Lead válido» para Google Ads
+    // (solo si la empresa lo configuró y vino de un anuncio; ver VentasConversionesService).
+    if (dto.contactReason === 'SERVICIO' && actual.contactReason !== 'SERVICIO') {
+      await this.conversiones?.registrarLeadValido(cid, id);
+    }
     return this.get(cid, id);
   }
 
@@ -443,12 +597,12 @@ export class VentasLeadsService {
   async tomar(companyId: number | null, id: number, userId: number) {
     const cid = this.requireCompany(companyId);
     const lead = await this.prisma.salesLead.findFirst({ where: { id, companyId: cid } });
-    if (!lead) throw new NotFoundException('Lead no encontrado');
+    if (!lead) throw new NotFoundException('Posible cliente no encontrado');
     if (lead.status === 'CONVERTIDO' || lead.status === 'DESCARTADO') {
-      throw new BadRequestException('Este lead ya está cerrado.');
+      throw new BadRequestException('Este posible cliente ya está cerrado.');
     }
     if (lead.assignedUserId && lead.assignedUserId !== userId) {
-      throw new BadRequestException('Este lead ya lo tiene otra persona.');
+      throw new BadRequestException('Este posible cliente ya lo tiene otra persona.');
     }
     await this.prisma.salesLead.update({
       where: { id },
@@ -460,12 +614,12 @@ export class VentasLeadsService {
   async soltar(companyId: number | null, id: number, userId: number) {
     const cid = this.requireCompany(companyId);
     const lead = await this.prisma.salesLead.findFirst({ where: { id, companyId: cid } });
-    if (!lead) throw new NotFoundException('Lead no encontrado');
+    if (!lead) throw new NotFoundException('Posible cliente no encontrado');
     if (lead.assignedUserId !== userId) {
-      throw new BadRequestException('Solo puedes soltar un lead que tienes tú.');
+      throw new BadRequestException('Solo puedes soltar un posible cliente que tienes tú.');
     }
     if (lead.status === 'CONVERTIDO' || lead.status === 'DESCARTADO') {
-      throw new BadRequestException('Este lead ya está cerrado.');
+      throw new BadRequestException('Este posible cliente ya está cerrado.');
     }
     await this.prisma.salesLead.update({
       where: { id },
@@ -482,12 +636,12 @@ export class VentasLeadsService {
   ) {
     const cid = this.requireCompany(companyId);
     const lead = await this.prisma.salesLead.findFirst({ where: { id, companyId: cid } });
-    if (!lead) throw new NotFoundException('Lead no encontrado');
+    if (!lead) throw new NotFoundException('Posible cliente no encontrado');
     if (lead.status === 'CONVERTIDO') {
-      throw new BadRequestException('Este lead ya se convirtió en cliente: no se puede descartar.');
+      throw new BadRequestException('Este posible cliente ya pasó a oportunidad: no se puede descartar.');
     }
     if (lead.status === 'DESCARTADO') {
-      throw new BadRequestException('Este lead ya está descartado.');
+      throw new BadRequestException('Este posible cliente ya está descartado.');
     }
     await this.prisma.$transaction(async (tx) => {
       await this.motivos.registrar(tx, cid, userId, 'LEAD_DESCARTE', motivo, { leadId: id });
@@ -511,23 +665,31 @@ export class VentasLeadsService {
       email?: string;
       phone?: string;
       ruc?: string;
+      // Dirección de la ficha; sin enviar se usa la que trajo el posible cliente.
+      address?: string;
       serviceIds?: number[];
       title?: string;
+      // Fase 2: contacto reconocido en `coincidencias` (persona ya guardada en
+      // ese cliente) o un contacto nuevo a registrar en un cliente existente.
+      contactId?: number;
+      nuevoContactoNombre?: string;
+      // Ubicación opcional de la OPORTUNIDAD (mapa); sin enviar o null = sin ubicación.
+      ubicacion?: UbicacionInput | null;
     },
   ) {
     const cid = this.requireCompany(companyId);
     this.requireListo();
     const lead = await this.prisma.salesLead.findFirst({ where: { id, companyId: cid } });
-    if (!lead) throw new NotFoundException('Lead no encontrado');
+    if (!lead) throw new NotFoundException('Posible cliente no encontrado');
     if (lead.status === 'CONVERTIDO') {
-      throw new BadRequestException('Este lead ya se convirtió en cliente.');
+      throw new BadRequestException('Este posible cliente ya pasó a oportunidad.');
     }
     if (lead.status === 'DESCARTADO') {
-      throw new BadRequestException('Este lead está descartado. Si fue un error, créalo de nuevo.');
+      throw new BadRequestException('Este posible cliente está descartado. Si fue un error, créalo de nuevo.');
     }
     if (lead.contactReason && lead.contactReason !== 'SERVICIO') {
       throw new BadRequestException(
-        'Solo un contacto de servicio se convierte en cliente. Cambia su motivo a «Servicio» o descártalo.',
+        'Solo un contacto de servicio se convierte en cliente. Cambia su tipo de contacto a «Servicio» o descártalo.',
       );
     }
 
@@ -535,34 +697,65 @@ export class VentasLeadsService {
     const phone = recortar(dto.phone ?? lead.phone, MAX_CONTACTO);
     const ruc = recortar(dto.ruc, 50);
     const nombre = recortar(dto.name ?? lead.companyName ?? lead.name, MAX_NOMBRE);
-    if (!nombre) throw new BadRequestException('El cliente necesita un nombre.');
+    if (!nombre) throw new BadRequestException('Falta el nombre de la empresa o persona.');
+
+    // Dirección que llega a la ficha: la que se corrigió en el cuadro de «Pasar a oportunidad» o, si no se
+    // tocó, la que trajo el posible cliente.
+    const direccion = recortar(dto.address, 300) ?? direccionDeLead(lead.extra);
+    // Ubicación opcional de la oportunidad: se valida antes de tocar nada.
+    const ubicacion = dto.ubicacion ? limpiarUbicacion(dto.ubicacion) : null;
 
     // Servicios de la oportunidad (del catálogo de la empresa).
     const serviceIds = [...new Set(dto.serviceIds ?? [])];
+    let nombresServicios: string[] = [];
     if (serviceIds.length > 0) {
-      const ok = await this.prisma.salesService.count({ where: { id: { in: serviceIds }, companyId: cid } });
-      if (ok !== serviceIds.length) throw new BadRequestException('Alguno de los servicios no existe.');
+      const servicios = await this.prisma.salesService.findMany({
+        where: { id: { in: serviceIds }, companyId: cid },
+        select: { name: true, isActive: true },
+      });
+      if (servicios.length !== serviceIds.length) throw new BadRequestException('Alguno de los servicios no existe.');
+      // El catálogo de Configuración → Servicios es la única fuente: un servicio desactivado no se asocia a nada nuevo.
+      if (servicios.some((s) => s.isActive === false)) {
+        throw new BadRequestException('Alguno de los servicios está desactivado. Actívalo primero o quítalo.');
+      }
+      nombresServicios = servicios.map((s) => s.name);
     }
 
-    let clienteExistente: { id: number; name: string } | null = null;
+    let clienteExistente: { id: number; name: string; address: string | null } | null = null;
+    let posiblesDuplicados: { id: number; name: string }[] = [];
     if (dto.salesClientId) {
       clienteExistente = await this.prisma.salesClient.findFirst({
         where: { id: dto.salesClientId, companyId: cid },
+        select: { id: true, name: true, address: true },
+      });
+      if (!clienteExistente) throw new NotFoundException('No se encontró en el Directorio');
+    } else {
+      if (!dto.confirmarNuevo) {
+        const parecidos = await this.coincidencias(cid, { email, phone }, ruc);
+        if (parecidos.length > 0) {
+          const quien = parecidos[0].contactoNombre
+            ? `${parecidos[0].contactoNombre}, de «${parecidos[0].name}»`
+            : `«${parecidos[0].name}»`;
+          throw new BadRequestException(
+            `Este contacto se parece a ${quien} (mismo correo, teléfono o RUC). Suma la oportunidad a ese cliente, o confirma que es otro cliente.`,
+          );
+        }
+      }
+      // Aviso blando por nombre parecido (no bloquea): capaz es la misma
+      // empresa escrita distinto ("Textiles del Valle" vs "Textiles Valle").
+      const candidatos = await this.prisma.salesClient.findMany({
+        where: { companyId: cid },
         select: { id: true, name: true },
       });
-      if (!clienteExistente) throw new NotFoundException('Cliente no encontrado');
-    } else if (!dto.confirmarNuevo) {
-      const parecidos = await this.coincidencias(cid, { email, phone }, ruc);
-      if (parecidos.length > 0) {
-        throw new BadRequestException(
-          `Este contacto se parece al cliente «${parecidos[0].name}» (mismo correo, teléfono o RUC). Suma la oportunidad a ese cliente, o confirma que es otro cliente.`,
-        );
-      }
+      posiblesDuplicados = nombresParecidos(nombre, candidatos);
     }
 
     const inicial = await this.prisma.salesClientStage.findFirst({
       where: { companyId: cid, isInitial: true },
     });
+    // Si el lead vino con un compañero como referidor, queda como quien refirió al cliente (si es nuevo)
+    // y a la oportunidad: así recibe los avisos de etapa y cuenta en «Referidos» del Dashboard.
+    const referidorId = await this.referidorDeLead(cid, lead.extra);
     const canal = ETIQUETA_CANAL[lead.channel as CanalLead] ?? lead.channel;
     const nota = `Lead de ${canal}${lead.campaign ? ` (${lead.campaign})` : ''}${lead.message ? `: ${lead.message}` : '.'}`;
 
@@ -572,6 +765,10 @@ export class VentasLeadsService {
       if (clienteExistente) {
         clienteId = clienteExistente.id;
         originType = 'CLIENTE_EXISTENTE';
+        // Solo se completa lo que le falta: nunca se pisa una dirección que la ficha ya tiene.
+        if (direccion && !(clienteExistente.address ?? '').trim()) {
+          await tx.salesClient.update({ where: { id: clienteId }, data: { address: direccion } });
+        }
       } else {
         const creado = await tx.salesClient.create({
           data: {
@@ -582,11 +779,14 @@ export class VentasLeadsService {
             email,
             phone,
             ruc,
+            address: direccion,
             observaciones: lead.message ? lead.message.slice(0, MAX_MENSAJE) : null,
             extra: {
               fuente: canalDef(lead.channel)?.fuenteCliente ?? 'OTRO',
+              // Los servicios elegidos viven SOLO en la oportunidad (2026-10-20): ya no se copian a la ficha.
             },
             status: inicial?.key ?? null,
+            referredByUserId: referidorId,
           },
         });
         clienteId = creado.id;
@@ -599,6 +799,7 @@ export class VentasLeadsService {
         createdBy: userId,
         assignedUserId: userId,
         source: lead.channel,
+        referredByUserId: referidorId,
         leadId: lead.id,
         originType,
         // La oportunidad empieza cuando el contacto llegó, no cuando alguien lo
@@ -606,6 +807,7 @@ export class VentasLeadsService {
         receivedAt: lead.createdAt,
         serviceIds,
         title: recortar(dto.title, 150),
+        ubicacion,
       });
       await this.oportunidades.espejarCliente(tx, clienteId);
       // Lo que el contacto escribió queda en el historial del cliente.
@@ -629,8 +831,66 @@ export class VentasLeadsService {
           triagedAt: lead.triagedAt ?? new Date(),
         },
       });
+
+      // Fase 2: Juanito/María reconocidos en `coincidencias` — se les guarda
+      // el teléfono/correo nuevo si no lo tenían. Solo tiene sentido cuando se
+      // suma a un cliente existente (uno nuevo no tiene contactos todavía).
+      if (clienteExistente && dto.contactId) {
+        const contacto = await tx.salesContact.findFirst({
+          where: { id: dto.contactId, companyId: cid, salesClientId: clienteExistente.id },
+        });
+        if (contacto) {
+          const phones = agregarValorNuevo(contacto.phones, phone, normalizarTelefono);
+          const emails = agregarValorNuevo(contacto.emails, email, normalizarCorreo);
+          if (phones || emails) {
+            await tx.salesContact.update({
+              where: { id: contacto.id },
+              data: {
+                ...(phones ? { phones } : {}),
+                ...(emails ? { emails } : {}),
+              },
+            });
+          }
+        }
+      } else if (clienteExistente && recortar(dto.nuevoContactoNombre, MAX_NOMBRE)) {
+        // Empresa ya conocida, pero quien escribió es alguien nuevo ahí.
+        await tx.salesContact.create({
+          data: {
+            companyId: cid,
+            salesClientId: clienteExistente.id,
+            name: recortar(dto.nuevoContactoNombre, MAX_NOMBRE)!,
+            phones: phone ? [{ label: 'Otro', value: phone }] : [],
+            emails: email ? [{ label: 'Otro', value: email }] : [],
+            createdBy: userId,
+          },
+        });
+      }
+
       return { clienteId, oportunidadId: opp.id, sumadaAClienteExistente: !!clienteExistente };
     });
-    return resultado;
+    // Pasar a oportunidad también lo confirma como contacto real de servicio.
+    await this.conversiones?.registrarLeadValido(cid, lead.id);
+    return { ...resultado, posiblesDuplicados };
   }
+}
+
+// Si `valor` no está ya entre los teléfonos/correos guardados (comparando
+// normalizado), agrega `{ label: 'Nuevo', value }` al final. Devuelve `null`
+// cuando no hay nada que cambiar, para no tocar la columna sin necesidad.
+function agregarValorNuevo(
+  actualJson: unknown,
+  valor: string | null,
+  normalizar: (v: string | null) => string,
+): { label: string; value: string }[] | null {
+  if (!valor) return null;
+  const actual: { label: string; value: string }[] = Array.isArray(actualJson)
+    ? (actualJson as { label?: string; value?: string }[]).map((v) => ({
+        label: v?.label ?? 'Otro',
+        value: v?.value ?? '',
+      }))
+    : [];
+  const normalizado = normalizar(valor);
+  const yaEsta = actual.some((v) => normalizar(v?.value ?? null) === normalizado);
+  if (yaEsta) return null;
+  return [...actual, { label: 'Nuevo', value: valor }];
 }

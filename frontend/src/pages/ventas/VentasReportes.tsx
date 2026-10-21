@@ -33,7 +33,14 @@ export default function ResultadosVisitas() {
   useEffect(() => { loadData(); }, [startDate, endDate]);
 
   const completedVisits = visits.filter((v) => v.status === 'COMPLETED');
-  const verifiedVisits = visits.filter((v) => v.isVerified);
+  // Solo cuenta el check-in comparado con el lugar de la visita y a menos de 500 m (2026-10-20). Los de antes
+  // quedaron con `isVerified` pero nunca se comprobó el lugar, así que no se cuentan.
+  const verifiedVisits = visits.filter((v) => v.checkInResult === 'EN_SITIO');
+  const estadoCheckIn = (v: ClientVisit) =>
+    v.checkInResult === 'EN_SITIO' ? '✅ En el sitio'
+      : v.checkInResult === 'FUERA_DEL_SITIO' ? '⚠ Fuera del sitio'
+        : v.checkInResult === 'SIN_GPS' || v.checkInResult === 'SIN_UBICACION' ? 'Sin verificar'
+          : v.checkInTime ? 'Check-in anterior (sin comprobar)' : 'Pendiente';
   const totalQuoted = completedVisits.reduce((acc, v) => acc + (v.quotedAmount || 0), 0);
   const wonLeads = leads.filter((l) => l.status === 'WON');
   const totalWonMD = wonLeads
@@ -41,13 +48,13 @@ export default function ResultadosVisitas() {
     .reduce((acc, l) => acc + (l.closedValue || 0), 0);
 
   const exportCSV = () => {
-    const headers = ['Cliente', 'Vendedor', 'Fecha', 'Estado', 'Verificado_GPS', 'Oferta_Comercial', 'Monto_Cotizado', 'Resultado'];
+    const headers = ['Cliente', 'Vendedor', 'Fecha', 'Estado', 'Check_in', 'Oferta_Comercial', 'Monto_Cotizado', 'Resultado'];
     const rows = visits.map((v) => [
       `"${v.clientName.replace(/"/g, '""')}"`,
       `"${(v.user?.fullName || '').replace(/"/g, '""')}"`,
       `"${v.visitDate ? new Date(v.visitDate).toLocaleDateString('es-EC') : ''}"`,
       `"${v.status}"`,
-      v.isVerified ? 'SI' : 'NO',
+      `"${estadoCheckIn(v).replace(/^[^\p{L}]+/u, '')}"`,
       `"${(v.commercialOffer || '').replace(/"/g, '""')}"`,
       v.quotedAmount || 0,
       `"${v.outcome || ''}"`,
@@ -108,9 +115,9 @@ export default function ResultadosVisitas() {
         </div>
 
         <div className="admin-section" style={{ padding: '14px', background: '#f0fff4' }}>
-          <div style={{ fontSize: '0.78rem', color: '#276749', fontWeight: 700 }}>CHECK-INS VERIFICADOS GPS</div>
+          <div style={{ fontSize: '0.78rem', color: '#276749', fontWeight: 700 }}>CHECK-INS EN EL SITIO</div>
           <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#276749' }}>{verifiedVisits.length}</div>
-          <div style={{ fontSize: '0.72rem', color: '#718096' }}>Geolocalización en sitio</div>
+          <div style={{ fontSize: '0.72rem', color: '#718096' }}>A menos de 500 m del lugar de la visita</div>
         </div>
 
         <div className="admin-section" style={{ padding: '14px', background: '#fefcbf' }}>
@@ -160,7 +167,7 @@ export default function ResultadosVisitas() {
                     <td style={{ fontWeight: 600 }}>{v.clientName}</td>
                     <td>{v.user?.fullName || '—'}</td>
                     <td>{v.visitDate ? new Date(v.visitDate).toLocaleDateString('es-EC') : '—'}</td>
-                    <td>{v.isVerified ? '✅ Verificado GPS' : 'Pendiente'}</td>
+                    <td>{estadoCheckIn(v)}</td>
                     <td>{v.commercialOffer || '—'}</td>
                     <td style={{ fontWeight: 600 }}>${(v.quotedAmount || 0).toFixed(2)}</td>
                     <td>{v.outcome || '—'}</td>

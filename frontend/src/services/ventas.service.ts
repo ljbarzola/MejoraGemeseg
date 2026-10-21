@@ -60,7 +60,8 @@ export interface SalesContractDocument {
 
 export interface SalesContract {
   id: number;
-  templateId: number;
+  // null = documento subido ya hecho (sin plantilla): no se genera ni se envía a firma desde el sistema.
+  templateId?: number | null;
   template?: SalesTemplate;
   clientName: string;
   clientEmail: string;
@@ -83,6 +84,11 @@ export interface SalesContract {
   clientFilledAt?: string | null;
   salesClientId?: number | null;
   salesClient?: { id: number; name: string } | null;
+  // Tipo de documento (Contrato, Garantía...); «Otro» trae su nombre en documentTypeOther. null = sin tipo.
+  documentType?: string | null;
+  documentTypeOther?: string | null;
+  // Contrato al que pertenece, si está colgado de uno.
+  agreementLink?: { agreement: { id: number; title?: string | null } } | null;
   companyId: number;
   createdBy: number;
   createdAt: string;
@@ -235,6 +241,38 @@ export const uploadSignedContract = (contractId: number, file: File): Promise<Up
   return api.post(`/ventas/contratos/${contractId}/documents/signed`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
 };
 
+export interface SubirDocumentoInput {
+  salesClientId: number;
+  agreementId?: number;
+  titulo?: string;
+  firmado: boolean;
+  // Tipo de documento (obligatorio); con 'OTRO' hay que dar su nombre en tipoOtro.
+  tipo: string;
+  tipoOtro?: string;
+}
+
+// Sube un documento que ya existe (p. ej. el contrato firmado en PDF) sin plantilla ni firma
+// electrónica: crea el documento del cliente y, si se indica, lo cuelga de uno de sus contratos.
+export const subirDocumentoHecho = (file: File, data: SubirDocumentoInput): Promise<SalesContract> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('salesClientId', String(data.salesClientId));
+  if (data.agreementId) formData.append('agreementId', String(data.agreementId));
+  if (data.titulo?.trim()) formData.append('titulo', data.titulo.trim());
+  formData.append('firmado', String(data.firmado));
+  formData.append('tipo', data.tipo);
+  if (data.tipo === 'OTRO' && data.tipoOtro?.trim()) formData.append('tipoOtro', data.tipoOtro.trim());
+  return api.post('/ventas/contratos/subir', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+};
+
+// Cambia el tipo de un documento ya guardado (p. ej. uno subido antes de que existieran los tipos).
+export const cambiarTipoDocumento = (id: number, tipo: string, tipoOtro?: string): Promise<SalesContract> =>
+  api.patch(`/ventas/contratos/${id}/tipo`, { tipo, tipoOtro }).then(r => r.data);
+
+// ¿Está conectada la firma electrónica (SignWell)? Mientras no lo esté, enviar a firma no funciona.
+export const getEstadoFirmaElectronica = (): Promise<{ signwellConfigurado: boolean }> =>
+  api.get('/ventas/contratos/estado-firma').then(r => r.data);
+
 // Carpeta raíz de Drive para los documentos de Contratos: ID fijo en
 // backend `HARDCODED_DRIVE_FOLDERS.VENTAS_CONTRATOS` (no se configura en la UI).
 export const getVentasDriveConfig = () =>
@@ -254,15 +292,45 @@ export interface ClientVisit {
   scheduledDate?: string; checkInTime?: string; checkOutTime?: string;
   checkInLat?: number; checkInLng?: number;
   visitDate?: string; isVerified?: boolean;
+  // Check-in comparado con el lugar de la visita (2026-10-20). Nulo en los check-in de antes, que no se comprobaban.
+  checkInResult?: ResultadoCheckIn | null; checkInDistanceM?: number | null;
   commercialOffer?: string; quotedAmount?: number; outcome?: string;
   user?: any; companyId: number; createdBy: number; createdAt: string;
+  // Conexión con el CRM (2026-10-19): vacíos en las visitas de antes.
+  salesClientId?: number | null; opportunityId?: number | null;
+  cliente?: { id: number; name: string } | null;
+  oportunidad?: { id: number; title: string | null } | null;
+  ubicacion?: UbicacionOportunidad | null;
 }
-export const getVisits = (params?: any) => api.get('/ventas/visitas', { params }).then(r => r.data);
-export const createVisit = (data: any) => api.post('/ventas/visitas', data).then(r => r.data);
-export const checkInVisit = (id: number, data?: any) => api.post(`/ventas/visitas/${id}/checkin`, data).then(r => r.data);
-export const completeVisit = (id: number, data?: any) => api.post(`/ventas/visitas/${id}/complete`, data).then(r => r.data);
-export const cancelVisit = (id: number, reason?: string) => api.post(`/ventas/visitas/${id}/cancel`, { reason }).then(r => r.data);
-export const deleteVisit = (id: number) => api.delete(`/ventas/visitas/${id}`).then(r => r.data);
+export interface VisitaInput {
+  salesClientId?: number | null;
+  opportunityId?: number | null;
+  visitDate?: string;
+  notes?: string | null;
+  // Sin enviar no se toca; null la quita.
+  ubicacion?: UbicacionOportunidad | null;
+}
+export const getVisits = (params?: any) => api.get('/ventas/visits', { params }).then(r => r.data);
+export const createVisit = (data: VisitaInput): Promise<ClientVisit> => api.post('/ventas/visits', data).then(r => r.data);
+export const updateVisit = (id: number, data: VisitaInput): Promise<ClientVisit> => api.patch(`/ventas/visits/${id}`, data).then(r => r.data);
+// EN_SITIO = a menos de 500 m del lugar (única que cuenta como verificada); FUERA_DEL_SITIO = más lejos;
+// SIN_GPS = el navegador no dio la ubicación; SIN_UBICACION = la visita no tiene lugar para comparar.
+export type ResultadoCheckIn = 'EN_SITIO' | 'FUERA_DEL_SITIO' | 'SIN_GPS' | 'SIN_UBICACION';
+// Respuesta cuando no se puede comprobar el lugar: no se guardó nada; hay que preguntar y reenviar con `confirmado`.
+export interface CheckInPorConfirmar {
+  requiereConfirmacion: true;
+  resultado: 'FUERA_DEL_SITIO' | 'SIN_GPS';
+  distanciaM: number | null;
+  maximoM: number;
+  lugar: string | null;
+}
+export const checkInVisit = (
+  id: number,
+  data?: { lat?: number; lng?: number; confirmado?: boolean },
+): Promise<ClientVisit | CheckInPorConfirmar> => api.post(`/ventas/visits/${id}/checkin`, data).then(r => r.data);
+export const completeVisit = (id: number, data?: any) => api.post(`/ventas/visits/${id}/complete`, data).then(r => r.data);
+export const cancelVisit = (id: number, reason?: string) => api.post(`/ventas/visits/${id}/cancel`, { reason }).then(r => r.data);
+export const deleteVisit = (id: number) => api.delete(`/ventas/visits/${id}`).then(r => r.data);
 
 // ==================== LEGACY: LEADS ====================
 export interface Lead {
@@ -388,7 +456,41 @@ export interface SalesClient {
   nextActionDate?: string | null;
   createdAt: string;
   creator?: { id: number; fullName: string } | null;
+  // Solo en la respuesta de crear: otros clientes con un nombre parecido
+  // (aviso blando, no bloquea — Fase 2 del CRM).
+  posiblesDuplicados?: { id: number; name: string }[];
 }
+
+// Fase 2 del CRM (2026-10-18): personas de contacto de un cliente, cada una
+// con varios teléfonos/correos etiquetados.
+export interface SalesContactValue {
+  label: string;
+  value: string;
+}
+export interface SalesContact {
+  id: number;
+  salesClientId: number;
+  name: string;
+  role?: string | null;
+  phones: SalesContactValue[];
+  emails: SalesContactValue[];
+  notes?: string | null;
+  createdAt: string;
+}
+export const getSalesContacts = (clientId: number): Promise<SalesContact[]> =>
+  api.get(`/ventas/clientes/${clientId}/contactos`).then(r => r.data);
+export const createSalesContact = (
+  clientId: number,
+  data: { name: string; role?: string; phones?: SalesContactValue[]; emails?: SalesContactValue[]; notes?: string },
+): Promise<SalesContact> =>
+  api.post(`/ventas/clientes/${clientId}/contactos`, data).then(r => r.data);
+export const updateSalesContact = (
+  contactId: number,
+  data: Partial<{ name: string; role: string; phones: SalesContactValue[]; emails: SalesContactValue[]; notes: string }>,
+): Promise<SalesContact> =>
+  api.patch(`/ventas/clientes/contactos/${contactId}`, data).then(r => r.data);
+export const deleteSalesContact = (contactId: number) =>
+  api.delete(`/ventas/clientes/contactos/${contactId}`).then(r => r.data);
 
 export const getSalesClientFields = () =>
   api.get('/ventas/clientes/fields').then(r => r.data as SalesClientField[]);
@@ -455,6 +557,9 @@ export type SalesActivityType =
   | 'COTIZACION_ENVIADA' | 'QUEJA' | 'INCIDENTE_SERVICIO' | 'CONVERSACION_SALIDA'
   | 'OTRO';
 
+// Lo que se puede anotar hoy en el Historial. «Incidente del servicio» y «Conversación de salida»
+// se movieron al contrato (2026-10-18; ver IncidentesContrato): ya no se ofrecen aquí, pero los
+// registros viejos se siguen mostrando con su nombre (SALES_ACTIVITY_TYPES_TODOS).
 export const SALES_ACTIVITY_TYPES: { value: SalesActivityType; label: string }[] = [
   { value: 'NOTA', label: 'Nota' },
   { value: 'LLAMADA', label: 'Llamada' },
@@ -462,9 +567,13 @@ export const SALES_ACTIVITY_TYPES: { value: SalesActivityType; label: string }[]
   { value: 'CORREO', label: 'Correo' },
   { value: 'COTIZACION_ENVIADA', label: 'Cotización enviada' },
   { value: 'QUEJA', label: 'Queja' },
+  { value: 'OTRO', label: 'Otro' },
+];
+
+export const SALES_ACTIVITY_TYPES_TODOS: { value: SalesActivityType; label: string }[] = [
+  ...SALES_ACTIVITY_TYPES,
   { value: 'INCIDENTE_SERVICIO', label: 'Incidente del servicio' },
   { value: 'CONVERSACION_SALIDA', label: 'Conversación de salida' },
-  { value: 'OTRO', label: 'Otro' },
 ];
 
 export interface TimelineStageInfo { label: string; color: string }
@@ -485,7 +594,7 @@ export type TimelineEvent =
       servicios: string[]; originType: string; source: string | null;
     }
   | {
-      kind: 'acuerdo'; id: string; at: string; agreementId: number; title: string | null; servicios: string[];
+      kind: 'acuerdo'; id: string; at: string; agreementId: number; title: string | null; producto?: boolean; servicios: string[];
       step: 'creado' | 'renovado' | 'cancelado'; authorName?: string | null; startDate?: string; endDate?: string | null;
     }
   | {
@@ -516,8 +625,12 @@ export const setSalesClientNextAction = (id: number, text: string, date: string)
   api.patch(`/ventas/clientes/${id}`, { nextActionText: text, nextActionDate: date }).then(r => r.data as SalesClient);
 
 // Formulario abierto "Referir un cliente" — cualquier autenticado.
-export const referirCliente = (data: { nombre: string; celular?: string; correo?: string; servicioRequerido?: string; subserviciosRequeridos?: string[]; nota?: string }) =>
+// `serviceIds` = servicios del catálogo de Configuración → Servicios (solo activos; los valida el servidor).
+export const referirCliente = (data: { nombre: string; celular?: string; correo?: string; serviceIds?: number[]; nota?: string }) =>
   api.post('/ventas/clientes/referir', data).then(r => r.data as SalesClient);
+// Servicios activos del catálogo para el formulario «Referir un cliente» (no pide acceso a Ventas).
+export const getServiciosParaReferir = (): Promise<SalesServicio[]> =>
+  api.get('/ventas/clientes/servicios-referir').then(r => r.data);
 export const misReferidosClientes = () =>
   api.get('/ventas/clientes/mis-referidos').then(r => r.data as MiReferidoCliente[]);
 
@@ -528,7 +641,7 @@ export const getSalesClient = (id: number) =>
 // `fechaIngreso` ('YYYY-MM-DD') es la fecha de creación editable: permite
 // registrar prospectos de meses anteriores. No puede ser futura.
 // `yaEsCliente`: ya venía contratando antes de usar el sistema (queda como Cliente, «Por contratar»).
-export const createSalesClient = (data: Partial<SalesClient> & { name: string; fechaIngreso?: string; yaEsCliente?: boolean }) =>
+export const createSalesClient = (data: Partial<SalesClient> & { name: string; fechaIngreso?: string; yaEsCliente?: boolean; soloDatos?: boolean }) =>
   api.post('/ventas/clientes', data).then(r => r.data as SalesClient);
 export const updateSalesClient = (id: number, data: Partial<SalesClient> & { fechaIngreso?: string }) =>
   api.patch(`/ventas/clientes/${id}`, data).then(r => r.data as SalesClient);
@@ -600,7 +713,14 @@ export type EstadoContrato =
   | 'POR_VENCER'
   | 'VENCIDO'
   | 'RENOVADO'
-  | 'CANCELADO';
+  | 'CANCELADO'
+  | 'POR_ENTREGAR'
+  | 'ENTREGADO';
+
+// SERVICIO = recurrente (vigencia, renovación, valor mensual). PRODUCTO = venta
+// única (sin fin ni renovación; Por entregar → Entregado, garantía opcional).
+export type TipoContrato = 'SERVICIO' | 'PRODUCTO';
+export type EstadoGarantia = 'VIGENTE' | 'POR_VENCER' | 'VENCIDA';
 
 export interface SalesServicio {
   id: number;
@@ -628,8 +748,24 @@ export interface ContratoComercialDocumento {
     status: string;
     createdAt: string;
     signedAt?: string | null;
+    documentType?: string | null;
+    documentTypeOther?: string | null;
+    fieldValues?: Record<string, any> | null;
     template?: { name: string } | null;
   };
+}
+
+export type TipoIncidenteContrato = 'INCIDENTE_SERVICIO' | 'CONVERSACION_SALIDA';
+
+export interface IncidenteContrato {
+  id: number;
+  agreementId: number;
+  type: TipoIncidenteContrato;
+  occurredAt: string;
+  text: string;
+  createdBy: number;
+  createdByName?: string | null;
+  createdAt: string;
 }
 
 export interface ContratoComercial {
@@ -639,8 +775,14 @@ export interface ContratoComercial {
   title?: string | null;
   startDate: string;
   endDate?: string | null;
-  status: 'ACTIVO' | 'RENOVADO' | 'CANCELADO';
+  status: 'ACTIVO' | 'RENOVADO' | 'CANCELADO' | 'POR_ENTREGAR' | 'ENTREGADO';
   estado: EstadoContrato;
+  kind: TipoContrato;
+  // Solo producto: valor total, fecha de entrega y garantía (opcional).
+  totalValue?: number | null;
+  deliveredAt?: string | null;
+  warrantyUntil?: string | null;
+  garantia?: EstadoGarantia | null;
   notes?: string | null;
   renewedFromId?: number | null;
   // Valor mensual (null = no registrado) y días de gracia tras el vencimiento.
@@ -655,6 +797,9 @@ export interface ContratoComercial {
   createdAt: string;
   // Solo en el detalle:
   motivos?: MotivoRegistrado[];
+  incidentes?: IncidenteContrato[];
+  // Fase 4: la oportunidad que gestiona la renovación de este contrato, si existe.
+  renovacionOportunidad?: { id: number; status?: string | null; outcome?: 'GANADA' | 'PERDIDA' | null; closedAt?: string | null } | null;
   renewedFrom?: ContratoComercialRef | null;
   renewals?: ContratoComercialRef[];
   documents?: ContratoComercialDocumento[];
@@ -667,8 +812,13 @@ export interface ContratoComercialInput {
   endDate?: string;
   serviceIds?: number[];
   notes?: string;
-  // Solo se puede pedir ACTIVO (reactivar). Cancelar tiene su propia llamada, con motivo.
-  status?: 'ACTIVO';
+  kind?: TipoContrato;
+  totalValue?: number | null;
+  warrantyUntil?: string;
+  deliveredAt?: string;
+  // Servicio: solo ACTIVO (reactivar). Producto: POR_ENTREGAR o ENTREGADO.
+  // Cancelar tiene su propia llamada, con motivo.
+  status?: 'ACTIVO' | 'POR_ENTREGAR' | 'ENTREGADO';
   monthlyValue?: number | null;
   graceDays?: number;
   opportunityId?: number;
@@ -688,7 +838,7 @@ export const updateServicio = (id: number, data: { name?: string; description?: 
 export const deleteServicio = (id: number) =>
   api.delete(`/ventas/servicios/${id}`).then(r => r.data);
 
-export const getContratosComerciales = (params?: { clienteId?: number; estado?: string; servicioId?: number; q?: string }): Promise<ContratoComercial[]> =>
+export const getContratosComerciales = (params?: { clienteId?: number; estado?: string; servicioId?: number; q?: string; tipo?: TipoContrato }): Promise<ContratoComercial[]> =>
   api.get('/ventas/acuerdos', { params }).then(r => r.data);
 
 export const getContratoComercial = (id: number): Promise<ContratoComercial> =>
@@ -722,6 +872,8 @@ export const ESTADO_CONTRATO_LABEL: Record<EstadoContrato, string> = {
   VENCIDO: 'Vencido',
   RENOVADO: 'Renovado',
   CANCELADO: 'Cancelado',
+  POR_ENTREGAR: 'Por entregar',
+  ENTREGADO: 'Entregado',
 };
 
 export const ESTADO_CONTRATO_COLOR: Record<EstadoContrato, string> = {
@@ -731,6 +883,14 @@ export const ESTADO_CONTRATO_COLOR: Record<EstadoContrato, string> = {
   VENCIDO: '#dc2626',
   RENOVADO: '#6b7280',
   CANCELADO: '#9ca3af',
+  POR_ENTREGAR: '#d97706',
+  ENTREGADO: '#059669',
+};
+
+export const GARANTIA_LABEL: Record<EstadoGarantia, string> = {
+  VIGENTE: 'Garantía vigente',
+  POR_VENCER: 'Garantía por vencer',
+  VENCIDA: 'Garantía vencida',
 };
 
 // ==================== CICLO DE VIDA, MOTIVOS, OPORTUNIDADES, LEADS Y ANALÍTICA ====================
@@ -747,7 +907,7 @@ export const CICLO_LABEL: Record<CicloVida, string> = {
   PROSPECTO: 'Prospecto',
   CLIENTE: 'Cliente',
   EN_RIESGO: 'En riesgo',
-  EX_CLIENTE: 'Ex-cliente',
+  EX_CLIENTE: 'Inactivo',
   PERDIDO: 'Perdido',
 };
 
@@ -768,7 +928,7 @@ export type MotivoKind =
   | 'CONTRATO_NO_RENOVADO';
 
 export const MOTIVO_KIND_LABEL: Record<MotivoKind, string> = {
-  LEAD_DESCARTE: 'Lead descartado',
+  LEAD_DESCARTE: 'Posible cliente descartado',
   OPP_PERDIDA: 'Oportunidad perdida',
   CONTRATO_CANCELADO: 'Contrato cancelado',
   CONTRATO_REDUCCION: 'Contrato renovado con menos',
@@ -813,6 +973,17 @@ export const deleteMotivo = (id: number) =>
   api.delete(`/ventas/motivos/${id}`).then(r => r.data);
 
 // ---------- Oportunidades ----------
+// Ubicación OPCIONAL de una oportunidad (el lugar del servicio, elegido en un mapa de OpenStreetMap).
+export interface UbicacionOportunidad {
+  name: string | null;
+  address: string | null;
+  lat: number;
+  lng: number;
+  city: string | null;
+  province: string | null;
+  osmId: string | null;
+}
+
 export interface Oportunidad {
   id: number;
   salesClientId: number;
@@ -832,6 +1003,12 @@ export interface Oportunidad {
   referredByUserId?: number | null;
   leadId?: number | null;
   originType: string;
+  // Fase 4: contrato de servicio que esta oportunidad renueva (originType RENOVACION).
+  renewsAgreementId?: number | null;
+  // Ubicación opcional (mapa); null si no se puso.
+  ubicacion?: UbicacionOportunidad | null;
+  // Sin servicios propios: el servicio que la ficha del cliente tiene guardado (o null).
+  servicioDeFicha?: string | null;
   notes?: string | null;
   services: { id: number; name: string }[];
   // Solo en el detalle:
@@ -847,6 +1024,40 @@ export interface OportunidadInput {
   quotedAt?: string | null;
   notes?: string;
   assignedUserId?: number | null;
+  // Sin enviar no se toca; null la quita.
+  ubicacion?: UbicacionOportunidad | null;
+}
+
+// Fase 3: al ACEPTAR una oportunidad se dice qué pasa con el contrato.
+// `agreementId` suma los servicios a ese contrato vigente; sin él se crea uno
+// nuevo (`confirmarNuevo` cuando el cliente ya tiene contratos vigentes).
+// Fase 4: datos del contrato nuevo al aceptar una renovación (lo que falte sale del anterior).
+export interface RenovacionAlAceptarInput {
+  title?: string;
+  startDate?: string;
+  endDate?: string;
+  serviceIds?: number[];
+  monthlyValue?: number | null;
+  graceDays?: number;
+  notes?: string;
+  motivo?: MotivoInput;
+}
+
+export interface AceptarContratoInput {
+  tipo: 'SERVICIO' | 'PRODUCTO' | 'RENOVACION';
+  agreementId?: number;
+  confirmarNuevo?: boolean;
+  garantiaMeses?: number;
+  renovacion?: RenovacionAlAceptarInput;
+}
+
+export interface ContratoResultado {
+  accion: 'CREADO' | 'AGREGADO' | 'RENOVADO';
+  tipo: 'SERVICIO' | 'PRODUCTO' | 'RENOVACION';
+  agreementId: number;
+  titulo?: string | null;
+  clienteNombre: string;
+  servicios: string[];
 }
 
 export interface CambioEtapaInput {
@@ -857,15 +1068,17 @@ export interface CambioEtapaInput {
   quotedAt?: string | null;
   nextActionText?: string | null;
   nextActionDate?: string | null;
+  contrato?: AceptarContratoInput;
 }
 
 export const ORIGEN_OPORTUNIDAD_LABEL: Record<string, string> = {
-  LEAD: 'Lead',
+  LEAD: 'Posible cliente',
   MANUAL: 'Ingreso manual',
   REFERIDO: 'Referido',
   MIGRADA: 'Sistema anterior',
   CLIENTE_EXISTENTE: 'Nuevo servicio de un cliente',
   HISTORICO: 'Ya era cliente',
+  RENOVACION: 'Renovación',
 };
 
 export const getOportunidades = (params?: { etapa?: string; responsableId?: number; clienteId?: number; servicioId?: number; estado?: string; q?: string }): Promise<Oportunidad[]> =>
@@ -876,7 +1089,7 @@ export const createOportunidad = (data: OportunidadInput): Promise<Oportunidad> 
   api.post('/ventas/oportunidades', data).then(r => r.data);
 export const updateOportunidad = (id: number, data: OportunidadInput): Promise<Oportunidad> =>
   api.patch(`/ventas/oportunidades/${id}`, data).then(r => r.data);
-export const cambiarEtapaOportunidad = (id: number, data: CambioEtapaInput): Promise<Oportunidad> =>
+export const cambiarEtapaOportunidad = (id: number, data: CambioEtapaInput): Promise<Oportunidad & { contratoResultado?: ContratoResultado }> =>
   api.patch(`/ventas/oportunidades/${id}/etapa`, data).then(r => r.data);
 export const deleteOportunidad = (id: number) =>
   api.delete(`/ventas/oportunidades/${id}`).then(r => r.data);
@@ -895,7 +1108,7 @@ export const MOTIVO_CONTACTO_LABEL: Record<MotivoContacto, string> = {
 // Canal (fuente) de un lead. La lista viene del servidor (registro único de
 // canales): sumar uno nuevo no pide tocar esta pantalla. `campos` son los datos
 // propios de ese canal; `campaign` va a la columna de campaña y el resto a `extra`.
-export interface CampoCanalLead { key: string; label: string; ayuda?: string }
+export interface CampoCanalLead { key: string; label: string; ayuda?: string; usuario?: boolean }
 export interface CanalLeadDef {
   key: string;
   label: string;
@@ -904,6 +1117,16 @@ export interface CanalLeadDef {
 }
 export const getCanalesLead = (): Promise<CanalLeadDef[]> =>
   api.get('/ventas/entrantes/canales').then(r => r.data);
+
+// Personas de la empresa que se pueden elegir como «quien lo refirió» al ingresar un posible cliente.
+export interface ReferidorLead { id: number; fullName: string; position?: string | null }
+export const getReferidoresLead = (): Promise<ReferidorLead[]> =>
+  api.get('/ventas/entrantes/referidores').then(r => r.data);
+
+// Leads recibidos por canal y cuándo llegó el último (lo real, no un estado escrito a mano).
+export interface ActividadCanalLead { canal: string; total: number; ultimo: string | null }
+export const getActividadCanalesLead = (): Promise<ActividadCanalLead[]> =>
+  api.get('/ventas/entrantes/canales/actividad').then(r => r.data);
 
 export interface LeadEntrante {
   id: number;
@@ -928,8 +1151,16 @@ export interface LeadEntrante {
   createdAt: string;
   // Parecido a un cliente que ya existe (mismo correo o teléfono).
   clienteExistente?: { id: number; name: string } | null;
-  // Solo en el detalle:
-  coincidencias?: { id: number; name: string; email?: string | null; phone?: string | null }[];
+  // Solo en el detalle. `contactoId`/`contactoNombre`: Fase 2, cuando lo que
+  // coincide es una PERSONA de contacto (Juanito, María) y no la empresa.
+  coincidencias?: {
+    id: number;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    contactoId?: number | null;
+    contactoNombre?: string | null;
+  }[];
   motivos?: MotivoRegistrado[];
 }
 
@@ -940,17 +1171,26 @@ export interface ConvertirLeadInput {
   email?: string;
   phone?: string;
   ruc?: string;
+  // Dirección de la ficha de la empresa nueva (sin enviar, se usa la que trajo el posible cliente).
+  address?: string;
   serviceIds?: number[];
   title?: string;
+  // Fase 2: contacto reconocido en `coincidencias` (se le guarda el teléfono/
+  // correo nuevo si no lo tenía) o el nombre de un contacto nuevo a registrar
+  // en un cliente existente.
+  contactId?: number;
+  nuevoContactoNombre?: string;
+  // Ubicación opcional de la oportunidad (mapa).
+  ubicacion?: UbicacionOportunidad | null;
 }
 
 export const getLeadsEntrantes = (params?: { estado?: string; canal?: string; motivo?: string; q?: string }): Promise<LeadEntrante[]> =>
   api.get('/ventas/entrantes', { params }).then(r => r.data);
 export const getLeadEntrante = (id: number): Promise<LeadEntrante> =>
   api.get(`/ventas/entrantes/${id}`).then(r => r.data);
-export const createLeadEntrante = (data: { name?: string; email?: string; phone?: string; companyName?: string; message?: string; channel?: string; campaign?: string; extra?: Record<string, string> }): Promise<LeadEntrante> =>
+export const createLeadEntrante = (data: { name?: string; email?: string; phone?: string; companyName?: string; message?: string; direccion?: string; channel?: string; campaign?: string; extra?: Record<string, string> }): Promise<LeadEntrante> =>
   api.post('/ventas/entrantes', data).then(r => r.data);
-export const updateLeadEntrante = (id: number, data: Partial<{ name: string; email: string | null; phone: string | null; companyName: string | null; message: string | null; contactReason: MotivoContacto | null }>): Promise<LeadEntrante> =>
+export const updateLeadEntrante = (id: number, data: Partial<{ name: string; email: string | null; phone: string | null; companyName: string | null; message: string | null; direccion: string | null; contactReason: MotivoContacto | null }>): Promise<LeadEntrante> =>
   api.patch(`/ventas/entrantes/${id}`, data).then(r => r.data);
 export const tomarLeadEntrante = (id: number): Promise<LeadEntrante> =>
   api.post(`/ventas/entrantes/${id}/tomar`).then(r => r.data);
@@ -958,7 +1198,7 @@ export const soltarLeadEntrante = (id: number): Promise<LeadEntrante> =>
   api.post(`/ventas/entrantes/${id}/soltar`).then(r => r.data);
 export const descartarLeadEntrante = (id: number, motivo: MotivoInput): Promise<LeadEntrante> =>
   api.post(`/ventas/entrantes/${id}/descartar`, { motivo }).then(r => r.data);
-export const convertirLeadEntrante = (id: number, data: ConvertirLeadInput): Promise<{ clienteId: number; oportunidadId: number; sumadaAClienteExistente: boolean }> =>
+export const convertirLeadEntrante = (id: number, data: ConvertirLeadInput): Promise<{ clienteId: number; oportunidadId: number; sumadaAClienteExistente: boolean; posiblesDuplicados?: { id: number; name: string }[] }> =>
   api.post(`/ventas/entrantes/${id}/convertir`, data).then(r => r.data);
 
 // Aviso a Google Ads de qué lead cotizó (CUALIFICADO) o contrató (CONVERTIDO).
@@ -967,7 +1207,7 @@ export interface ResumenConversiones {
   conectado: boolean;
   total: number;
   porEstado: Partial<Record<'PENDIENTE' | 'ENVIADO' | 'FALLO' | 'VENCIDO', number>>;
-  porTipo: Partial<Record<'CUALIFICADO' | 'CONVERTIDO', number>>;
+  porTipo: Partial<Record<'VALIDO' | 'CUALIFICADO' | 'CONVERTIDO', number>>;
 }
 export const getResumenConversiones = (): Promise<ResumenConversiones> =>
   api.get('/ventas/conversiones/resumen').then(r => r.data);
@@ -977,6 +1217,8 @@ export interface AjustesGoogleAds {
   customerId: string;
   conversionCualificado: string;
   conversionConvertido: string;
+  // «Lead válido»: paso intermedio, opcional. Vacío = no se avisa (2026-10-18).
+  conversionValido: string;
   activo: boolean;
   soloValidar: boolean;
 }
@@ -986,16 +1228,16 @@ export interface ConfiguracionVentas {
   // Cuenta de servicio que hay que invitar como usuario en Google Ads.
   cuentaDeServicio: string;
   landings: LandingConfig[];
-  landingsPersonalizadas: boolean;
+  // Conexiones que la empresa añadió (cada una con su clave). Las cuatro básicas no van aquí.
+  conexiones: ConexionPropia[];
 }
+export interface ConexionPropia { id: string; nombre: string; apiKeyId: number }
 export const getConfiguracionVentas = (): Promise<ConfiguracionVentas> =>
   api.get('/ventas/configuracion').then(r => r.data);
 export const guardarAjustesGoogleAds = (data: Partial<AjustesGoogleAds>): Promise<AjustesGoogleAds> =>
   api.put('/ventas/configuracion/google-ads', data).then(r => r.data);
 export const guardarLandingsConfig = (landings: LandingConfig[]): Promise<LandingConfig[]> =>
   api.put('/ventas/configuracion/landings', { landings }).then(r => r.data);
-export const restaurarLandingsConfig = (): Promise<LandingConfig[]> =>
-  api.delete('/ventas/configuracion/landings').then(r => r.data);
 
 // Claves de las conexiones (formulario web, Google Ads): reutiliza las
 // api-keys que ya existían para los webhooks de Ventas.
@@ -1006,6 +1248,12 @@ export const createClaveConexion = (name: string): Promise<ClaveConexion> =>
   api.post('/ventas/api-keys', { name }).then(r => r.data);
 export const deleteClaveConexion = (id: number) =>
   api.delete(`/ventas/api-keys/${id}`).then(r => r.data);
+export const cambiarClaveConexion = (id: number, isActive: boolean): Promise<ClaveConexion> =>
+  api.put(`/ventas/configuracion/claves/${id}`, { isActive }).then(r => r.data);
+export const crearConexionPropia = (nombre: string): Promise<ConexionPropia> =>
+  api.post('/ventas/configuracion/conexiones', { nombre }).then(r => r.data);
+export const quitarConexionPropia = (id: string) =>
+  api.delete(`/ventas/configuracion/conexiones/${id}`).then(r => r.data);
 
 // ---------- Analítica del tablero (cartera, retención, embudo, motivos, equipo) ----------
 export interface ResumenMuestra { n: number; mediana: number | null; p75: number | null; pocasMuestras: boolean }
@@ -1072,11 +1320,55 @@ export const getAnaliticaMotivos = (p?: RangoParams): Promise<AnaliticaMotivos> 
 export const getAnaliticaActividad = (p?: RangoParams): Promise<AnaliticaActividad> =>
   api.get('/ventas/analitica/actividad', { params: p }).then(r => r.data);
 
+// Mapa de Ecuador del Dashboard: dónde están las oportunidades que tienen Ubicación.
+export type VistaMapa = 'todas' | 'abiertas' | 'cotizadas' | 'aceptadas' | 'perdidas';
+export interface PuntoMapa {
+  lat: number;
+  lng: number;
+  ciudad: string | null;
+  provincia: string;
+  total: number;
+  aceptadas: number;
+  perdidas: number;
+  abiertas: number;
+  montoCotizado: number;
+  lugares: string[];
+}
+export interface AnaliticaMapa {
+  vista: VistaMapa;
+  total: number;
+  conUbicacion: number;
+  sinUbicacion: number;
+  puntos: PuntoMapa[];
+  // Cada oportunidad con ubicación por separado (mapa de calor y puntos).
+  oportunidades: { lat: number; lng: number; monto: number; lugar: string | null; ciudad: string | null; provincia: string; estado: 'abierta' | 'aceptada' | 'perdida' }[];
+  provincias: { provincia: string; total: number; montoCotizado: number }[];
+  provinciasSinOportunidades: string[];
+}
+export const getAnaliticaMapa = (p: { alcance?: string; vista?: VistaMapa }): Promise<AnaliticaMapa> =>
+  api.get('/ventas/analitica/mapa', { params: p }).then(r => r.data);
+
+// Buscador de lugares (OpenStreetMap, a través del servidor) para el cuadro «Ubicación».
+export const buscarUbicaciones = (q: string): Promise<UbicacionOportunidad[]> =>
+  api.get('/ventas/ubicaciones/buscar', { params: { q } }).then(r => r.data);
+export const ubicacionDePunto = (lat: number, lng: number): Promise<UbicacionOportunidad> =>
+  api.get('/ventas/ubicaciones/inversa', { params: { lat, lng } }).then(r => r.data);
+
 // Cancelar un contrato y explicar cierres (exigen motivo).
 export const cancelarContratoComercial = (id: number, data: { date?: string; motivo: MotivoInput }): Promise<ContratoComercial> =>
   api.post(`/ventas/acuerdos/${id}/cancelar`, data).then(r => r.data);
 export const registrarCierreContrato = (id: number, motivo: MotivoInput): Promise<ContratoComercial> =>
   api.post(`/ventas/acuerdos/${id}/cierre`, { motivo }).then(r => r.data);
+
+// Incidentes del servicio y conversación de salida de un contrato. Devuelven el contrato completo.
+export const crearIncidenteContrato = (
+  id: number,
+  input: { type: TipoIncidenteContrato; text: string; date?: string },
+): Promise<ContratoComercial> =>
+  api.post(`/ventas/acuerdos/${id}/incidentes`, input).then(r => r.data);
+
+export const borrarIncidenteContrato = (id: number, incidenteId: number): Promise<ContratoComercial> =>
+  api.delete(`/ventas/acuerdos/${id}/incidentes/${incidenteId}`).then(r => r.data);
 
 // ---------- Embudo de marketing (Leads -> Cotizaron -> Contrataron) ----------
 // Mismos pasos que el panel «Embudo de conversión de clientes potenciales» de

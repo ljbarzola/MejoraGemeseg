@@ -1,11 +1,20 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SALES_AGREEMENT_DDL } from './sales-agreement.schema';
+import {
+  SALES_AGREEMENT_DDL,
+  SALES_CONTRACT_COLUMNS_DDL,
+} from './sales-agreement.schema';
 import { COTIZADOR_DDL } from './cotizador.schema';
 import {
+  SALES_OPPORTUNITY_COLUMNS_DDL,
   SALES_PIPELINE_BACKFILL,
   SALES_PIPELINE_DDL,
 } from './sales-pipeline.schema';
+import { SALES_CONTACT_DDL } from './sales-contact.schema';
+import { SALES_VISIT_COLUMNS_DDL } from './sales-visit.schema';
+import { SALES_AGREEMENT_INCIDENT_DDL } from './sales-agreement-incident.schema';
+import { LANDINGS } from './lead-landing.util';
 import {
   DEFAULT_STAGES,
   ETAPAS_FABRICA_ANTERIORES,
@@ -19,6 +28,10 @@ import {
 // para que, al arrancar varias de Cloud Run a la vez, una sola cree las tablas
 // y las demás esperen.
 const LOCK_ID = 7_190_207;
+
+// Las empresas creadas antes de este instante conservan la tabla de landings de Gemeseg
+// que ya usaban (ver sembrarLandingsDeEmpresasExistentes); las posteriores empiezan vacías.
+const CORTE_LANDINGS_POR_EMPRESA = '2026-10-17T00:00:00Z';
 
 /**
  * Arranque ordenado del esquema de Ventas.
@@ -46,6 +59,7 @@ export class VentasSchemaService implements OnModuleInit {
   }
 
   async onModuleInit() {
+    await this.agregarColumnasNuevas();
     try {
       await this.prisma.$transaction(
         async (tx) => {
@@ -57,6 +71,8 @@ export class VentasSchemaService implements OnModuleInit {
             ...SALES_AGREEMENT_DDL,
             ...SALES_PIPELINE_DDL,
             ...SALES_PIPELINE_BACKFILL,
+            ...SALES_CONTACT_DDL,
+            ...SALES_AGREEMENT_INCIDENT_DDL,
             ...COTIZADOR_DDL,
           ]) {
             await tx.$executeRawUnsafe(sql);
@@ -66,10 +82,82 @@ export class VentasSchemaService implements OnModuleInit {
       );
       await this.mapearServiciosMigrados();
       await this.actualizarEtapasDeFabrica();
+      await this.sembrarLandingsDeEmpresasExistentes();
       this.listo = true;
     } catch (err) {
       this.logger.error(
         `No se pudo preparar el esquema de Ventas (contratos y embudo): ${(err as Error).message}`,
+      );
+    }
+  }
+
+  // Columnas nuevas de tablas que ya existen (tipo de documento de Documentación y el contrato que
+  // renueva una oportunidad). Aparte del resto del esquema: si otra sentencia falla y deshace la
+  // transacción grande, estas columnas igual quedan, porque Prisma las pide en cada consulta a
+  // "SalesContract" y "SalesOpportunity". Cada lista va en su propia transacción: en una base nueva
+  // la tabla de oportunidades aún no existe y su ALTER fallaría (se crea con la transacción grande).
+  private async agregarColumnasNuevas() {
+    const listas: { nombre: string; sentencias: string[] }[] = [
+      { nombre: 'SalesContract (tipo de documento)', sentencias: SALES_CONTRACT_COLUMNS_DDL },
+      { nombre: 'SalesOpportunity (renovaciones y ubicación)', sentencias: SALES_OPPORTUNITY_COLUMNS_DDL },
+      { nombre: 'ClientVisit (cliente y ubicación)', sentencias: SALES_VISIT_COLUMNS_DDL },
+    ];
+    for (const { nombre, sentencias } of listas) {
+      try {
+        await this.prisma.$transaction(
+          async (tx) => {
+            await tx.$queryRawUnsafe(
+              `SELECT 1 AS ok FROM (SELECT pg_advisory_xact_lock(${LOCK_ID})) AS candado`,
+            );
+            for (const sql of sentencias) {
+              await tx.$executeRawUnsafe(sql);
+            }
+          },
+          { timeout: 60_000, maxWait: 60_000 },
+        );
+      } catch (err) {
+        this.logger.error(
+          `No se pudieron agregar las columnas nuevas de ${nombre}: ${(err as Error).message}`,
+        );
+      }
+    }
+  }
+
+  // 2026-10-16 (línea blanca): antes, una empresa sin tabla de landings propia usaba la de
+  // Gemeseg. Ahora cada empresa tiene la suya y una nueva empieza vacía; para no cambiar
+  // nada a quien ya usaba Ventas, a cada empresa que (1) existía antes de esta fecha, (2)
+  // ya tiene leads, clientes o claves de conexión y (3) no guardó una tabla propia, se le
+  // copia la de Gemeseg a su propia configuración. Solo agrega filas (nunca pisa ni
+  // borra) y es idempotente: con la fila creada, o si una empresa la vacía a propósito
+  // (guardar sin landings crea la fila igual), no vuelve a copiar. Las empresas creadas
+  // después de la fecha de corte nunca la reciben.
+  private async sembrarLandingsDeEmpresasExistentes() {
+    try {
+      const empresas = await this.prisma.$queryRawUnsafe<{ id: number }[]>(`
+        SELECT c."id" FROM "Company" c
+        WHERE c."createdAt" < '${CORTE_LANDINGS_POR_EMPRESA}'
+          AND NOT EXISTS (
+            SELECT 1 FROM "SalesSetting" s WHERE s."companyId" = c."id" AND s."key" = 'landings')
+          AND (
+            EXISTS (SELECT 1 FROM "SalesLead" l WHERE l."companyId" = c."id")
+            OR EXISTS (SELECT 1 FROM "SalesClient" x WHERE x."companyId" = c."id")
+            OR EXISTS (SELECT 1 FROM "SalesApiKey" k WHERE k."companyId" = c."id")
+          )`);
+      if (empresas.length === 0) return;
+      await this.prisma.salesSetting.createMany({
+        data: empresas.map((e) => ({
+          companyId: e.id,
+          key: 'landings',
+          value: { landings: LANDINGS } as unknown as Prisma.InputJsonValue,
+        })),
+        skipDuplicates: true,
+      });
+      this.logger.log(
+        `Landings de Gemeseg copiadas a ${empresas.length} empresa(s) que ya usaban Ventas.`,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `No se pudieron copiar las landings a las empresas existentes: ${(err as Error).message}`,
       );
     }
   }

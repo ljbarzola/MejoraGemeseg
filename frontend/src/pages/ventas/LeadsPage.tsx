@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Plug, UserPlus, UserMinus, XCircle, ClipboardList, ArrowRightCircle } from 'lucide-react';
+import { Plus, UserPlus, UserMinus, XCircle, ClipboardList, ArrowRightCircle } from 'lucide-react';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import FilterField from '../../components/common/FilterField';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import ErrorBanner from '../../components/common/ErrorBanner';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import MotivoCierreModal from '../../components/ventas/MotivoCierreModal';
 import ConvertirLeadModal from '../../components/ventas/ConvertirLeadModal';
-import ConexionesLeadsModal from '../../components/ventas/ConexionesLeadsModal';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
@@ -16,6 +17,7 @@ import { getUser } from '../../services/auth.service';
 import {
   getLeadsEntrantes,
   createLeadEntrante,
+  getReferidoresLead,
   updateLeadEntrante,
   tomarLeadEntrante,
   soltarLeadEntrante,
@@ -35,8 +37,8 @@ import { diaCorto } from '../../utils/contratoComercial';
 // refirió): al filtrar por una fuente se muestran solas las que ella usa.
 const COLUMNAS_LEAD = [
   { key: 'mensaje', label: 'Mensaje' },
-  { key: 'canal', label: 'Canal' },
-  { key: 'motivo', label: 'Motivo del contacto' },
+  { key: 'canal', label: 'Fuente' },
+  { key: 'motivo', label: 'Tipo de contacto' },
   { key: 'estado', label: 'Estado' },
   { key: 'responsable', label: 'Responsable' },
   { key: 'llego', label: 'Llegó' },
@@ -98,7 +100,6 @@ export default function LeadsPage() {
   const [estado, setEstado] = useState('pendientes');
   const [motivo, setMotivo] = useState('');
   const [canal, setCanal] = useState('');
-  const [conexiones, setConexiones] = useState(false);
   const [nuevo, setNuevo] = useState(false);
   const [convirtiendo, setConvirtiendo] = useState<LeadEntrante | null>(null);
   const [descartando, setDescartando] = useState<LeadEntrante | null>(null);
@@ -121,7 +122,7 @@ export default function LeadsPage() {
       setLeads(ls);
       setServicios(ss);
     } catch (err: any) {
-      showToast(err?.response?.data?.message || 'No se pudieron cargar los leads', 'error');
+      showToast(err?.response?.data?.message || 'No se pudieron cargar los posibles clientes', 'error');
     } finally {
       setCargando(false);
     }
@@ -197,7 +198,7 @@ export default function LeadsPage() {
           <>
             <select
               value={l.contactReason ?? ''}
-              aria-label={`Motivo del contacto de ${l.name}`}
+              aria-label={`Tipo de contacto de ${l.name}`}
               onChange={(e) => clasificar(l, e.target.value)}
               style={{ padding: '4px 6px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }}
             >
@@ -226,7 +227,7 @@ export default function LeadsPage() {
             {abiertos(l) && diasDesde(l.createdAt) >= DIAS_SIN_ATENDER && (
               <div>
                 <span className="status-badge" style={{ backgroundColor: '#fef3c7', color: '#92400e', whiteSpace: 'nowrap', marginTop: 4, display: 'inline-block', fontSize: 11 }}
-                  title="Solo es un aviso: el lead sigue en la bandeja hasta que lo atiendas.">
+                  title="Solo es un aviso: el posible cliente sigue en la bandeja hasta que lo atiendas.">
                   Sin atender hace {diasDesde(l.createdAt)} días
                 </span>
               </div>
@@ -286,9 +287,9 @@ export default function LeadsPage() {
     }
     if (abiertos(l)) {
       if (!l.assignedUserId) {
-        lista.push({ label: 'Tomar este lead', icon: <UserPlus size={14} />, onClick: () => correr(() => tomarLeadEntrante(l.id), 'Lead tomado', 'No se pudo tomar el lead') });
+        lista.push({ label: 'Tomar este posible cliente', icon: <UserPlus size={14} />, onClick: () => correr(() => tomarLeadEntrante(l.id), 'Posible cliente tomado', 'No se pudo tomar el posible cliente') });
       } else if (l.assignedUserId === usuario?.id) {
-        lista.push({ label: 'Soltar este lead', icon: <UserMinus size={14} />, onClick: () => correr(() => soltarLeadEntrante(l.id), 'Lead liberado', 'No se pudo soltar el lead') });
+        lista.push({ label: 'Soltar este posible cliente', icon: <UserMinus size={14} />, onClick: () => correr(() => soltarLeadEntrante(l.id), 'Posible cliente liberado', 'No se pudo soltar el posible cliente') });
       }
       lista.push({ label: 'Descartar', icon: <XCircle size={14} />, danger: true, onClick: () => setDescartando(l) });
     }
@@ -300,24 +301,15 @@ export default function LeadsPage() {
 
   return (
     <div className="page-container">
-      <div className="page-title-row">
-        <div>
-          <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Leads</h1>
-        </div>
-        <div className="header-actions">
-          <button className="btn-secondary" onClick={() => setConexiones(true)}>
-            <Plug size={16} /> Conexiones
-          </button>
+      <VentasPageHeader
+        title="Posibles clientes"
+        description={<>Contactos que llegan por la web, los anuncios o a mano (en Google Ads: leads). Solo los de servicio pasan a oportunidad. {sinClasificar > 0 && <strong>{sinClasificar} sin clasificar.</strong>}</>}
+        actions={
           <button className="auth-btn" onClick={() => setNuevo(true)}>
-            <Plus size={16} /> Nuevo lead
+            <Plus size={16} /> Nuevo posible cliente
           </button>
-        </div>
-      </div>
-
-      <p style={{ fontSize: 13, color: '#666', margin: '-6px 0 14px' }}>
-        Contactos que llegan por la web, los anuncios o a mano. Clasifícalos: solo uno de servicio pasa a oportunidad. {sinClasificar > 0 && <strong>{sinClasificar} sin clasificar.</strong>}
-      </p>
+        }
+      />
 
       {leads.length > 0 && (
         <ResumenPorFuente
@@ -330,38 +322,46 @@ export default function LeadsPage() {
       )}
 
       <div className="filter-bar">
-        <div className="filter-bar-fields filter-bar-fields--una-linea">
+        <div className="filter-bar-fields filter-bar-fields--etiquetas">
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por nombre, correo, teléfono o mensaje..."
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
-          <select className="filter-select" value={estado} onChange={(e) => setEstado(e.target.value)} aria-label="Estado">
-            <option value="pendientes">Pendientes</option>
-            <option value="">Todos</option>
-            <option value="NUEVO">Sin procesar</option>
-            <option value="EN_SEGUIMIENTO">Contactados</option>
-            <option value="CONVERTIDO">Pasaron a oportunidad</option>
-            <option value="DESCARTADO">Descartados</option>
-          </select>
-          <select className="filter-select" value={motivo} onChange={(e) => setMotivo(e.target.value)} aria-label="Motivo del contacto">
-            <option value="">Todos los motivos</option>
-            <option value="SIN_CLASIFICAR">Sin clasificar</option>
-            {(Object.keys(MOTIVO_CONTACTO_LABEL) as MotivoContacto[]).map((k) => <option key={k} value={k}>{MOTIVO_CONTACTO_LABEL[k]}</option>)}
-          </select>
-          <select className="filter-select" value={canal} onChange={(e) => setCanal(e.target.value)} aria-label="Canal">
-            <option value="">Todas las fuentes</option>
-            {canales.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-          </select>
+          <FilterField label="Estado">
+            <select className="filter-select" value={estado} onChange={(e) => setEstado(e.target.value)}>
+              <option value="pendientes">Pendientes</option>
+              <option value="">Todos</option>
+              <option value="NUEVO">Sin procesar</option>
+              <option value="EN_SEGUIMIENTO">Contactados</option>
+              <option value="CONVERTIDO">Pasaron a oportunidad</option>
+              <option value="DESCARTADO">Descartados</option>
+            </select>
+          </FilterField>
+          <FilterField label="Tipo de contacto">
+            <select className="filter-select" value={motivo} onChange={(e) => setMotivo(e.target.value)}>
+              <option value="">Todos</option>
+              <option value="SIN_CLASIFICAR">Sin clasificar</option>
+              {(Object.keys(MOTIVO_CONTACTO_LABEL) as MotivoContacto[]).map((k) => <option key={k} value={k}>{MOTIVO_CONTACTO_LABEL[k]}</option>)}
+            </select>
+          </FilterField>
+          <FilterField label="Fuente">
+            <select className="filter-select" value={canal} onChange={(e) => setCanal(e.target.value)}>
+              <option value="">Todas</option>
+              {canales.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+          </FilterField>
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu
             columns={COLUMNAS_LEAD}
             visible={columnPrefs.visible}
+            pinned={columnPrefs.pinned}
+            maxPinned={columnPrefs.maxPinned}
             fixedLabel="Contacto"
-            onApply={async (keys) => {
-              const guardado = await columnPrefs.set(keys);
+            onApply={async (keys, fijas) => {
+              const guardado = await columnPrefs.set(keys, fijas);
               if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
             }}
           />
@@ -378,13 +378,13 @@ export default function LeadsPage() {
         ) : leads.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36, marginBottom: 8 }}>📥</div>
-            <div>Aún no hay leads. Llegan solos desde la web o Google Ads (ver «Conexiones») o se ingresan a mano.</div>
+            <div>Aún no hay posibles clientes. Llegan solos desde la web y las landings (ver Configuración → Cómo llegan los posibles clientes) o se ingresan a mano.</div>
           </div>
         ) : filas.length === 0 ? (
-          <p style={{ color: '#888', fontSize: 13 }}>No hay leads que coincidan con los filtros.</p>
+          <p style={{ color: '#888', fontSize: 13 }}>No hay posibles clientes que coincidan con los filtros.</p>
         ) : (
           <div className="tasks-table-wrapper">
-            <table className="tasks-table resizable-table" ref={tablaRef}>
+            <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
                   <th {...thProps('contacto')} style={{ width: 240 }}>Contacto <SortIcon campo="contacto" /></th>
@@ -408,7 +408,7 @@ export default function LeadsPage() {
                       <div style={{ fontSize: 11, color: '#888' }}>{[l.email, l.phone].filter(Boolean).join(' · ')}</div>
                       {abiertos(l) && l.clienteExistente && (
                         <div style={{ fontSize: 11, color: '#b45309', marginTop: 2 }}>
-                          Parece ser el cliente{' '}
+                          Ya está en el directorio:{' '}
                           <a className="enlace-tabla" href={`/ventas/clientes?ficha=${l.clienteExistente.id}`}
                             onClick={(e) => { e.preventDefault(); navigate(`/ventas/clientes?ficha=${l.clienteExistente!.id}`); }}>
                             {l.clienteExistente.name}
@@ -447,10 +447,9 @@ export default function LeadsPage() {
       {nuevo && (
         <NuevoLeadModal
           onClose={() => setNuevo(false)}
-          onSaved={() => { setNuevo(false); showToast('Lead creado', 'success'); cargar(); }}
+          onSaved={() => { setNuevo(false); showToast('Posible cliente creado', 'success'); cargar(); }}
         />
       )}
-      {conexiones && <ConexionesLeadsModal onClose={() => setConexiones(false)} />}
       {convirtiendo && (
         <ConvertirLeadModal
           lead={convirtiendo}
@@ -458,7 +457,11 @@ export default function LeadsPage() {
           onClose={() => setConvirtiendo(null)}
           onDone={(r) => {
             setConvirtiendo(null);
-            showToast(r.sumadaAClienteExistente ? 'Oportunidad sumada al cliente' : 'Oportunidad creada: queda como prospecto hasta que acepte', 'success');
+            const base = r.sumadaAClienteExistente ? 'Oportunidad sumada a su ficha del directorio' : 'Oportunidad creada: queda como prospecto hasta que acepte';
+            const aviso = r.posiblesDuplicados?.length
+              ? ` (se parece a «${r.posiblesDuplicados[0].name}»: revisa que no sea el mismo)`
+              : '';
+            showToast(base + aviso, 'success');
             cargar();
             navigate('/ventas/oportunidades');
           }}
@@ -467,14 +470,14 @@ export default function LeadsPage() {
       {descartando && (
         <MotivoCierreModal
           kind="LEAD_DESCARTE"
-          titulo="Descartar lead"
+          titulo="Descartar posible cliente"
           descripcion={descartando.name}
-          contexto="Un lead descartado sale de la bandeja pero no se borra. Elige por qué: no contestó, postulante, proveedor, spam, no es un servicio nuestro…"
+          contexto="Un posible cliente descartado sale de la bandeja pero no se borra. Elige por qué: no contestó, postulante, proveedor, spam, no es un servicio nuestro…"
           confirmLabel="Descartar"
           onConfirm={async (m) => {
             await descartarLeadEntrante(descartando.id, m);
             setDescartando(null);
-            showToast('Lead descartado', 'success');
+            showToast('Posible cliente descartado', 'success');
             cargar();
           }}
           onCancel={() => setDescartando(null)}
@@ -510,7 +513,7 @@ function ResumenPorFuente({
     background: seleccionada ? '#ebf4ff' : '#fff',
   });
   return (
-    <div role="group" aria-label="Leads por fuente" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 14px' }}>
+    <div role="group" aria-label="Posibles clientes por fuente" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '0 0 14px' }}>
       <button type="button" style={estilo(!activa)} onClick={() => onElegir('')} aria-pressed={!activa}>
         <span style={{ fontSize: 22, fontWeight: 700, color: '#1a202c' }}>{total}</span>
         <span style={{ fontSize: 12, color: '#4a5568' }}>Todas las fuentes</span>
@@ -539,13 +542,63 @@ const GRUPO_CANAL_LABEL: Record<CanalLeadDef['grupo'], string> = {
   DIRECTO: 'Contacto directo',
 };
 
+const OTRA_PERSONA = '__otra__';
+
+// «Quién lo refirió»: se elige a alguien de la empresa de la lista (queda unido al cliente y se le avisa
+// cuando avance) o se escribe el nombre de alguien de afuera. Guarda `<campo>UserId` cuando es de la lista.
+function CampoReferidor({ campo, propios, setPropios }: {
+  campo: { key: string; label: string; ayuda?: string };
+  propios: Record<string, string>;
+  setPropios: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+}) {
+  const [personas, setPersonas] = useState<{ id: number; fullName: string; position?: string | null }[]>([]);
+  const [fallo, setFallo] = useState(false);
+  const claveId = `${campo.key}UserId`;
+  useEffect(() => {
+    let vivo = true;
+    getReferidoresLead().then((p) => { if (vivo) setPersonas(p); }).catch(() => { if (vivo) setFallo(true); });
+    return () => { vivo = false; };
+  }, []);
+
+  const elegido = propios[claveId] ?? '';
+  const escribiendo = elegido === OTRA_PERSONA || fallo;
+  const elegir = (v: string) => setPropios((p) => {
+    const { [campo.key]: _texto, [claveId]: _id, ...resto } = p;
+    return v === '' ? resto : { ...resto, [claveId]: v };
+  });
+
+  return (
+    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+      <label>{campo.label} (opcional)</label>
+      {!fallo && (
+        <select value={elegido} onChange={(e) => elegir(e.target.value)}>
+          <option value="">Nadie en particular</option>
+          {personas.length > 0 && (
+            <optgroup label="Personas de la empresa">
+              {personas.map((u) => (
+                <option key={u.id} value={String(u.id)}>{u.fullName}{u.position ? ` · ${u.position}` : ''}</option>
+              ))}
+            </optgroup>
+          )}
+          <option value={OTRA_PERSONA}>Otra persona (escribir el nombre)</option>
+        </select>
+      )}
+      {escribiendo && (
+        <input type="text" style={{ marginTop: fallo ? 0 : 8 }} placeholder="Nombre de quien lo refirió" maxLength={300}
+          value={propios[campo.key] ?? ''} onChange={(e) => setPropios((p) => ({ ...p, [campo.key]: e.target.value }))} />
+      )}
+      {campo.ayuda && <small style={{ color: '#718096' }}>{campo.ayuda}</small>}
+    </div>
+  );
+}
+
 // Ingreso manual de un lead (una llamada, un referido, un lead de Meta que aún
 // no entra solo). La fuente es obligatoria: sin ella no se sabría de dónde
 // vienen los leads ni cuáles terminan en venta. Al elegirla aparecen solo los
 // datos propios de esa fuente.
 function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const { canales } = useCanalesLead();
-  const [datos, setDatos] = useState({ name: '', email: '', phone: '', companyName: '', message: '', channel: '' });
+  const [datos, setDatos] = useState({ name: '', email: '', phone: '', companyName: '', direccion: '', message: '', channel: '' });
   const [propios, setPropios] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -560,7 +613,7 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
   const guardar = async () => {
     setError('');
     if (!datos.channel) {
-      return setError('Elige cómo llegó el lead (Google Ads, Referido, WhatsApp, llamada…).');
+      return setError('Elige cómo llegó el posible cliente (Google Ads, Referido, WhatsApp, llamada…).');
     }
     if (!datos.name.trim() && !datos.email.trim() && !datos.phone.trim()) {
       return setError('Escribe al menos un nombre, un correo o un teléfono.');
@@ -568,11 +621,13 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
     setGuardando(true);
     try {
       const { campaign, ...extra } = propios;
+      // «Otra persona» es solo una opción del selector, no un usuario: no viaja al servidor.
+      for (const k of Object.keys(extra)) if (extra[k] === OTRA_PERSONA) delete extra[k];
       await createLeadEntrante({ ...datos, campaign, extra });
       onSaved();
     } catch (err: any) {
       const msg = err?.response?.data?.message;
-      setError((Array.isArray(msg) ? msg[0] : msg) || 'No se pudo guardar el lead. Intenta de nuevo.');
+      setError((Array.isArray(msg) ? msg[0] : msg) || 'No se pudo guardar el posible cliente. Intenta de nuevo.');
     } finally {
       setGuardando(false);
     }
@@ -582,7 +637,7 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Nuevo lead</h3>
+          <h3>Nuevo posible cliente</h3>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">✕</button>
         </div>
         <div className="modal-body">
@@ -593,6 +648,11 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
             <div className="form-group"><label>Teléfono</label><input type="text" value={datos.phone} onChange={(e) => set('phone', e.target.value)} /></div>
           </div>
           <div className="form-group"><label>Empresa</label><input type="text" value={datos.companyName} maxLength={150} onChange={(e) => set('companyName', e.target.value)} /></div>
+          <div className="form-group">
+            <label>Dirección (opcional)</label>
+            <input type="text" value={datos.direccion} maxLength={300} placeholder="Ej: Av. Amazonas 123, Quito" onChange={(e) => set('direccion', e.target.value)} />
+            <small style={{ color: '#718096' }}>Pasa a la ficha de la empresa cuando este posible cliente se convierta en oportunidad.</small>
+          </div>
           <div className="form-group">
             <label>Fuente: cómo llegó *</label>
             <select value={datos.channel} onChange={(e) => elegirFuente(e.target.value)} aria-required="true">
@@ -609,7 +669,9 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
           </div>
           {canalElegido && canalElegido.campos.length > 0 && (
             <div className="form-row">
-              {canalElegido.campos.map((campo) => (
+              {canalElegido.campos.map((campo) => campo.usuario ? (
+                <CampoReferidor key={campo.key} campo={campo} propios={propios} setPropios={setPropios} />
+              ) : (
                 <div className="form-group" key={campo.key}>
                   <label>{campo.label} (opcional)</label>
                   <input type="text" value={propios[campo.key] ?? ''} maxLength={campo.key === 'campaign' ? 150 : 300}

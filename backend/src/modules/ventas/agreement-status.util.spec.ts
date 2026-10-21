@@ -1,6 +1,7 @@
 import {
   calcularEstadoContrato,
   parseDiaContrato,
+  problemaFechaCancelacion,
   sumarDias,
 } from './agreement-status.util';
 
@@ -89,6 +90,28 @@ describe('sumarDias', () => {
   it('pasa de mes y de año', () => {
     expect(sumarDias(dia('2026-12-31'), 1).toISOString().slice(0, 10)).toBe(
       '2027-01-01',
+    );
+  });
+});
+
+describe('problemaFechaCancelacion', () => {
+  const inicio = dia('2026-01-01');
+
+  it('acepta una cancelación pasada, entre el inicio y hoy (contrato anterior a la app)', () => {
+    expect(problemaFechaCancelacion(dia('2026-02-01'), inicio, ahora)).toBeNull();
+    expect(problemaFechaCancelacion(dia('2026-01-01'), inicio, ahora)).toBeNull();
+    expect(problemaFechaCancelacion(dia('2026-10-07'), inicio, ahora)).toBeNull();
+  });
+
+  it('rechaza una cancelación anterior al inicio del contrato, con las fechas en el mensaje', () => {
+    expect(problemaFechaCancelacion(dia('2025-12-31'), inicio, ahora)).toBe(
+      'El contrato empezó el 01/01/2026: no pudo cancelarse antes, el 31/12/2025.',
+    );
+  });
+
+  it('rechaza una cancelación futura', () => {
+    expect(problemaFechaCancelacion(dia('2026-10-08'), inicio, ahora)).toContain(
+      'no puede ser futura',
     );
   });
 });

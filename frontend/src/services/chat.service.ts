@@ -11,6 +11,9 @@ export interface ChatMessage {
 export interface Conversation {
   id: number;
   context: string;
+  // Primera pregunta de la conversación (la pone el servidor): así el historial se lee como
+  // «¿Qué debo atender hoy?» y no solo como «Ventas».
+  title?: string | null;
   agentId: number;
   agent: { id: number; name: string } | null;
   _count: { messages: number };
@@ -74,13 +77,32 @@ export async function sendMessage(
   context: string,
   agentId: number | null = null,
   conversationId: number | null = null,
+  // Solo Agente de Ventas: empresa o persona del Directorio de la que se habla.
+  clienteId: number | null = null,
 ): Promise<{ reply: string; conversationId: number; agentId: number }> {
   const res = await api.post('/chat/message', {
     conversationId,
     agentId: agentId || undefined,
     message: content,
     context,
+    ...(clienteId ? { clienteId } : {}),
   });
 
   return res.data;
+}
+
+// «Preguntar al agente» desde la ficha de un cliente, una oportunidad o un contrato: abre el chat
+// con el Agente de Ventas ya hablando de esa empresa y le manda la primera pregunta. Es un evento
+// del navegador (no un prop) para poder pedirlo desde cualquier pantalla sin pasar por App.tsx.
+export const EVENTO_CHAT_VENTAS = 'gemeseg:chat-ventas';
+
+export interface PedidoChatVentas {
+  clienteId: number;
+  clienteNombre: string;
+  // Primera pregunta; sin ella se usa «¿Qué ha pasado con X y qué puedo hacer ahora?».
+  mensaje?: string;
+}
+
+export function abrirChatDeVentas(pedido: PedidoChatVentas) {
+  window.dispatchEvent(new CustomEvent<PedidoChatVentas>(EVENTO_CHAT_VENTAS, { detail: pedido }));
 }

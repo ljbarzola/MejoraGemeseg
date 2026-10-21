@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import ServiciosPorCategoria from './ServiciosPorCategoria';
+import UbicacionCampo from './UbicacionCampo';
 import ErrorBanner from '../common/ErrorBanner';
 import DateInput from '../common/DateInput';
 import {
@@ -7,6 +9,7 @@ import {
   type Oportunidad,
   type SalesClient,
   type SalesServicio,
+  type UbicacionOportunidad,
 } from '../../services/ventas.service';
 
 interface Props {
@@ -34,6 +37,7 @@ export default function OportunidadModal({
   const [monto, setMonto] = useState(oportunidad?.quotedAmount != null ? String(oportunidad.quotedAmount) : '');
   const [cotizadaEl, setCotizadaEl] = useState(oportunidad?.quotedAt ? oportunidad.quotedAt.slice(0, 10) : '');
   const [notas, setNotas] = useState(oportunidad?.notes ?? '');
+  const [ubicacion, setUbicacion] = useState<UbicacionOportunidad | null>(oportunidad?.ubicacion ?? null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
 
@@ -44,7 +48,7 @@ export default function OportunidadModal({
 
   const guardar = async () => {
     setError('');
-    if (modo === 'crear' && !clienteId) return setError('Elige el cliente de la oportunidad.');
+    if (modo === 'crear' && !clienteId) return setError('Elige la empresa o persona de la oportunidad.');
     const montoNumero = monto.trim() === '' ? null : Number(monto.replace(',', '.'));
     if (montoNumero !== null && (Number.isNaN(montoNumero) || montoNumero < 0)) {
       return setError('El monto cotizado no es válido.');
@@ -57,6 +61,8 @@ export default function OportunidadModal({
         quotedAmount: montoNumero,
         quotedAt: cotizadaEl || null,
         notes: notas.trim(),
+        // null quita la ubicación que tenía; sin ubicación en una oportunidad nueva simplemente no se envía.
+        ubicacion,
       };
       const guardada =
         modo === 'crear'
@@ -82,15 +88,15 @@ export default function OportunidadModal({
           <ErrorBanner mensaje={error} />
           {modo === 'crear' && (
             <p style={{ fontSize: 13, color: '#666', marginTop: 0 }}>
-              Para una negociación nueva de alguien que ya está registrado. Si apenas escribió, empieza por la bandeja de Leads.
+              Para una negociación nueva de una empresa o persona que ya está en el directorio. Si apenas escribió, empieza por Posibles clientes.
             </p>
           )}
 
           {modo === 'crear' && (
             <div className="form-group">
-              <label>Cliente *</label>
+              <label>Empresa o persona *</label>
               <select value={clienteId} onChange={(e) => setClienteId(e.target.value ? Number(e.target.value) : '')}>
-                <option value="">Seleccionar cliente...</option>
+                <option value="">Seleccionar empresa o persona...</option>
                 {clientes.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
@@ -98,7 +104,7 @@ export default function OportunidadModal({
               {onNuevaPersona && (
                 <a href="#nueva-persona" className="enlace-tabla" onClick={(e) => { e.preventDefault(); onNuevaPersona(); }}
                   style={{ display: 'inline-block', marginTop: 6, fontSize: 12.5 }}>
-                  Es una persona nueva
+                  Es nueva en el directorio
                 </a>
               )}
             </div>
@@ -112,19 +118,9 @@ export default function OportunidadModal({
           <div className="form-group">
             <label>Servicios que pidió</label>
             {disponibles.length === 0 ? (
-              <p style={{ fontSize: 13, color: '#888', margin: 0 }}>Aún no hay servicios. Créalos en Contratos → Servicios.</p>
+              <p style={{ fontSize: 13, color: '#888', margin: 0 }}>Aún no hay servicios. Créalos en Ventas → Configuración → Servicios que ofrecemos.</p>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 6 }}>
-                {disponibles.map((s) => (
-                  <label key={s.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, fontWeight: 400, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={serviceIds.includes(s.id)} onChange={() => alternar(s.id)} style={{ marginTop: 3 }} />
-                    <span>
-                      {s.name}
-                      {!s.isActive && <em style={{ color: '#999' }}> (desactivado)</em>}
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <ServiciosPorCategoria servicios={disponibles} seleccionados={serviceIds} onToggle={alternar} marcarDesactivados />
             )}
           </div>
 
@@ -138,6 +134,8 @@ export default function OportunidadModal({
               <DateInput value={cotizadaEl} onChange={setCotizadaEl} />
             </div>
           </div>
+
+          <UbicacionCampo value={ubicacion} onChange={setUbicacion} />
 
           <div className="form-group">
             <label>Notas (opcional)</label>

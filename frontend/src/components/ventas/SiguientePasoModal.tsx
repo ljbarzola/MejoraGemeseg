@@ -148,7 +148,7 @@ export default function SiguientePasoModal({
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={inputStyle} />
           </div>
           <p style={{ margin: 0, color: '#a0aec0', fontSize: 12 }}>
-            Si los dejas vacíos, el cliente queda sin siguiente paso.
+            Si los dejas vacíos, queda sin siguiente paso.
           </p>
           {errorLocal && <p style={{ margin: 0, color: '#c53030', fontSize: 13 }}>{errorLocal}</p>}
         </div>

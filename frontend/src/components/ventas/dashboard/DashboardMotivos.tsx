@@ -36,7 +36,7 @@ export default function DashboardMotivos({ alcance }: { alcance: string }) {
 
       {conDatos.length === 0 ? (
         <div className="admin-section" style={{ marginTop: 16 }}>
-          <SinDatos texto="Todavía no hay motivos registrados en este periodo. Se piden al descartar un lead, perder una oportunidad o cancelar, reducir o no renovar un contrato." />
+          <SinDatos texto="Todavía no hay motivos registrados en este periodo. Se piden al descartar un posible cliente, perder una oportunidad o cancelar, reducir o no renovar un contrato." />
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20, marginTop: 16 }}>

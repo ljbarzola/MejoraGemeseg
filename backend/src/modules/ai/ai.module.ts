@@ -4,6 +4,7 @@ import { AiService } from './ai.service';
 import { AiProcessor } from './ai.processor';
 import { AiVentasQueries } from './ai-ventas.queries';
 import { AiVentasInvestigacionQueries } from './ai-ventas-investigacion.queries';
+import { AiVentasPlanQueries } from './ai-ventas-plan.queries';
 import { VentasModule } from '../ventas/ventas.module';
 import { VertexChatClient } from './vertex-chat.client';
 import { PrismaModule } from '../../prisma/prisma.module';
@@ -21,6 +22,7 @@ import { GoogleAuthService } from '../../common/services/google-auth.service';
     AiProcessor,
     AiVentasQueries,
     AiVentasInvestigacionQueries,
+    AiVentasPlanQueries,
     VertexChatClient,
     GoogleAuthService,
   ],

@@ -1,48 +1,66 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Plus, FolderOpen, HelpCircle, Link2 } from 'lucide-react';
+import { FileText, Plus, FolderOpen, HelpCircle, Link2, Trash2, Upload } from 'lucide-react';
 import { getContracts, deleteContract, getVentasDriveConfig, vincularDocumentosSinCliente, SalesContract } from '../../services/ventas.service';
 import { buildDriveFolderLink } from '../../utils/driveLink';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
+import RowActionsMenu from '../../components/common/RowActionsMenu';
 import TemplateHelpModal from '../../components/ventas/TemplateHelpModal';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
+import SubirDocumentoModal from '../../components/ventas/SubirDocumentoModal';
+import DocumentacionProximamente from '../../components/ventas/DocumentacionProximamente';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import { useToast } from '../../contexts/ToastContext';
+import { TIPOS_DOCUMENTO, etiquetaTipoDocumento } from '../../utils/documentoTipos';
 
 // Columnas elegibles de la tabla (además de Número y Acciones, que son fijas).
 const COLUMNAS_DOCS = [
   { key: 'clientName', label: 'Cliente' },
+  { key: 'tipo', label: 'Tipo' },
+  { key: 'contrato', label: 'Contrato' },
   { key: 'template', label: 'Plantilla' },
   { key: 'status', label: 'Estado' },
   { key: 'createdAt', label: 'Fecha' },
   { key: 'sentAt', label: 'Enviado' },
   { key: 'signedAt', label: 'Firmado' },
 ];
-const COLUMNAS_DOCS_POR_DEFECTO = ['clientName', 'template', 'status', 'createdAt'];
+const COLUMNAS_DOCS_POR_DEFECTO = ['clientName', 'tipo', 'contrato', 'status', 'createdAt'];
 
-// "Documentación": los documentos que se generan desde una plantilla y se
-// firman (antes se llamaba "Contratos"). Cada documento es de un cliente y
+const nombreContratoDe = (c: SalesContract) => c.agreementLink?.agreement.title || (c.agreementLink ? `Contrato #${c.agreementLink.agreement.id}` : '');
+
+// "Documentación" (antes "Contratos"): los
+// documentos que se generan desde una plantilla y se firman. Cada documento es de un cliente y
 // puede colgar de un contrato comercial (pantalla "Contratos").
 export default function ContratosList() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [contracts, setContracts] = useState<SalesContract[]>([]);
+  // Mientras carga no se muestra «No hay documentos aún» (parecía que la lista estaba vacía).
+  const [cargando, setCargando] = useState(true);
   const [filter, setFilter] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
   const [soloSinCliente, setSoloSinCliente] = useState(false);
   const [confirmarVincular, setConfirmarVincular] = useState(false);
+  // Cuántos documentos no tienen cliente. «Vincular clientes» y el filtro «Sin cliente asignado» solo existen si hay alguno.
+  const [sinClienteTotal, setSinClienteTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [driveFolderUrl, setDriveFolderUrl] = useState('');
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [subiendoDoc, setSubiendoDoc] = useState(false);
   // Columnas que cada persona elige ver (preferencia en su cuenta). «Número» y
   // las acciones van siempre.
   const columnPrefs = useColumnPreferences('ventas-documentacion', COLUMNAS_DOCS_POR_DEFECTO);
   const tablaRef = useResizableColumns('ventas-contratos', ['contractNumber', ...columnPrefs.visible, 'acciones']);
 
   useEffect(() => { loadContracts(); }, [filter, soloSinCliente]);
+
+  // Si ya no queda ninguno sin cliente, el filtro que los mostraba deja de tener sentido.
+  useEffect(() => { if (sinClienteTotal === 0 && soloSinCliente) setSoloSinCliente(false); }, [sinClienteTotal, soloSinCliente]);
 
   useEffect(() => {
     getVentasDriveConfig()
@@ -60,8 +78,12 @@ export default function ContratosList() {
     try {
       const data = await getContracts({ ...(filter ? { status: filter } : {}), ...(soloSinCliente ? { sinCliente: true } : {}) });
       setContracts(data);
+      // Aparte del filtro actual: ¿queda algún documento sin cliente?
+      getContracts({ sinCliente: true }).then((l: SalesContract[]) => setSinClienteTotal(l.length)).catch(() => {});
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudieron cargar los documentos', 'error');
+    } finally {
+      setCargando(false);
     }
   };
 
@@ -88,10 +110,14 @@ export default function ContratosList() {
   };
 
   const filteredContracts = contracts.filter((c) => {
+    if (filtroTipo === 'SIN_TIPO' ? !!c.documentType : filtroTipo && c.documentType !== filtroTipo) return false;
     const q = search.toLowerCase().trim();
     if (!q) return true;
     return (
       (c.contractNumber || '').toLowerCase().includes(q) ||
+      nombreContratoDe(c).toLowerCase().includes(q) ||
+      (etiquetaTipoDocumento(c.documentType, c.documentTypeOther) || '').toLowerCase().includes(q) ||
+      String(c.fieldValues?.titulo || '').toLowerCase().includes(q) ||
       c.clientName?.toLowerCase().includes(q) ||
       c.clientEmail?.toLowerCase().includes(q) ||
       (c.template?.name || '').toLowerCase().includes(q)
@@ -103,7 +129,9 @@ export default function ContratosList() {
     {
       contractNumber: (c) => c.contractNumber || `#${c.id}`,
       clientName: (c) => c.clientName,
-      template: (c) => c.template?.name,
+      tipo: (c) => etiquetaTipoDocumento(c.documentType, c.documentTypeOther),
+      contrato: (c) => nombreContratoDe(c) || null,
+      template: (c) => c.template?.name ?? 'Subido (sin plantilla)',
       status: (c) => statusLabels[c.status] || c.status,
       createdAt: (c) => c.createdAt,
       sentAt: (c) => c.sentAt,
@@ -119,12 +147,30 @@ export default function ContratosList() {
         return (
           <>
             <div>{c.salesClient?.name || c.clientName}</div>
+            {c.fieldValues?.titulo && <div style={{ fontSize: 12 }}>{String(c.fieldValues.titulo)}</div>}
             <div style={{ fontSize: 11, color: '#888' }}>{c.clientEmail}</div>
             {!c.salesClientId && <div style={{ fontSize: 11, color: '#b45309' }}>Sin cliente asignado</div>}
           </>
         );
+      case 'tipo': {
+        const t = etiquetaTipoDocumento(c.documentType, c.documentTypeOther);
+        return t
+          ? <span className="status-badge" style={{ backgroundColor: '#eef2f7', color: '#334155' }}>{t}</span>
+          : <span style={{ color: '#a0aec0', fontSize: 12 }}>Sin tipo</span>;
+      }
+      case 'contrato':
+        return c.agreementLink ? (
+          <a
+            className="enlace-tabla"
+            href={`/ventas/contratos/${c.agreementLink.agreement.id}`}
+            title={`Ver el contrato «${nombreContratoDe(c)}»`}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/ventas/contratos/${c.agreementLink!.agreement.id}`); }}
+          >
+            <span className="truncate">{nombreContratoDe(c)}</span>
+          </a>
+        ) : <span style={{ color: '#a0aec0', fontSize: 12 }}>Sin contrato</span>;
       case 'template':
-        return c.template?.name || '—';
+        return c.template?.name || 'Subido (sin plantilla)';
       case 'status':
         return (
           <span style={{ padding: '3px 10px', borderRadius: 12, background: statusColors[c.status] || '#888', color: '#fff', fontSize: 10, fontWeight: 600 }}>
@@ -145,49 +191,52 @@ export default function ContratosList() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div>
-          <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Documentación</h1>
-        </div>
-        <div className="header-actions">
-          <button
-            type="button"
-            onClick={() => setShowHelp(true)}
-            title="Cómo funciona Documentación"
-            aria-label="Ayuda"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 6, border: 'none', background: 'var(--naranja)', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
-          >
-            <HelpCircle size={18} /> Ayuda
+      <VentasPageHeader
+        title="Documentación"
+        description="Genera documentos desde tus plantillas o sube uno que ya tienes hecho, por ejemplo un contrato firmado en PDF."
+        ayuda={
+          <button type="button" className="btn-secondary" onClick={() => setShowHelp(true)}
+            title="Cómo funciona Documentación" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <HelpCircle size={15} /> Cómo funciona
           </button>
-          {driveFolderUrl && (
-            <a
-              className="btn-secondary"
-              href={driveFolderUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Abrir la carpeta de documentos en Google Drive"
-              aria-label="Ver carpeta en Google Drive"
-              style={{ display: 'inline-flex', alignItems: 'center', padding: '8px 10px' }}
-            >
-              <FolderOpen size={16} />
-            </a>
-          )}
-          <button className="btn-secondary" onClick={() => navigate('/ventas/documentacion/plantillas')}>
-            <FileText size={16} /> Plantillas
-          </button>
-          <button className="auth-btn" onClick={() => navigate('/ventas/documentacion/nuevo')}>
-            <Plus size={16} /> Nuevo documento
-          </button>
-        </div>
-      </div>
+        }
+        actions={
+          <>
+            {driveFolderUrl && (
+              <a
+                className="btn-secondary btn-icon-toolbar"
+                href={driveFolderUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Abrir la carpeta de documentos en Google Drive"
+                aria-label="Ver carpeta en Google Drive"
+              >
+                <FolderOpen size={16} />
+              </a>
+            )}
+            <button className="btn-secondary" onClick={() => navigate('/ventas/documentacion/plantillas')}>
+              <FileText size={16} /> Plantillas
+            </button>
+            <RowActionsMenu
+              label="Nuevo documento"
+              boton={{ texto: <><Plus size={16} /> Nuevo documento</>, className: 'auth-btn' }}
+              actions={[
+                { label: 'Generar desde una plantilla', icon: <FileText size={14} />, onClick: () => navigate('/ventas/documentacion/nuevo') },
+                { label: 'Subir uno ya hecho', hint: 'Por ejemplo, un contrato firmado en PDF', icon: <Upload size={14} />, onClick: () => setSubiendoDoc(true) },
+              ]}
+            />
+          </>
+        }
+      />
+
+      <DocumentacionProximamente />
 
       <div className="filter-bar">
         <div className="filter-bar-fields filter-bar-fields--una-linea">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por número, cliente, email o plantilla..."
+            placeholder="Buscar por número, cliente, contrato o tipo..."
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
           <select className="filter-select" value={filter} onChange={(e) => setFilter(e.target.value)}>
@@ -196,44 +245,59 @@ export default function ContratosList() {
               <option key={s} value={s}>{statusLabels[s]}</option>
             ))}
           </select>
-          <select className="filter-select" value={soloSinCliente ? 'sin' : ''} onChange={(e) => setSoloSinCliente(e.target.value === 'sin')}>
-            <option value="">Todos los clientes</option>
-            <option value="sin">Sin cliente asignado</option>
+          <select className="filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} aria-label="Filtrar por tipo de documento">
+            <option value="">Todos los tipos</option>
+            {TIPOS_DOCUMENTO.map((t) => (
+              <option key={t.key} value={t.key}>{t.label}</option>
+            ))}
+            <option value="SIN_TIPO">Sin tipo</option>
           </select>
+          {sinClienteTotal > 0 && (
+            <select className="filter-select" value={soloSinCliente ? 'sin' : ''} onChange={(e) => setSoloSinCliente(e.target.value === 'sin')}>
+              <option value="">Todos los clientes</option>
+              <option value="sin">Sin cliente asignado ({sinClienteTotal})</option>
+            </select>
+          )}
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu
             columns={COLUMNAS_DOCS}
             visible={columnPrefs.visible}
+            pinned={columnPrefs.pinned}
+            maxPinned={columnPrefs.maxPinned}
             fixedLabel="Número"
-            onApply={async (keys) => {
-              const guardado = await columnPrefs.set(keys);
+            onApply={async (keys, fijas) => {
+              const guardado = await columnPrefs.set(keys, fijas);
               if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
             }}
           />
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => setConfirmarVincular(true)}
-            title="Enlaza solos los documentos sin cliente cuyo correo o nombre coincide con un cliente"
-          >
-            <Link2 size={16} /> Vincular clientes
-          </button>
-          <ClearFiltersButton onClear={() => { setSearch(''); setFilter(''); setSoloSinCliente(false); }} disabled={!search && !filter && !soloSinCliente} />
+          {sinClienteTotal > 0 && (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setConfirmarVincular(true)}
+              title="Enlaza solos los documentos sin cliente cuyo correo o nombre coincide con un cliente"
+            >
+              <Link2 size={16} /> Vincular clientes ({sinClienteTotal})
+            </button>
+          )}
+          <ClearFiltersButton onClear={() => { setSearch(''); setFilter(''); setFiltroTipo(''); setSoloSinCliente(false); }} disabled={!search && !filter && !filtroTipo && !soloSinCliente} />
         </div>
       </div>
 
       <div className="admin-section">
-        {contracts.length === 0 ? (
+        {cargando ? (
+          <p style={{ color: '#888', fontSize: 13 }}>Cargando...</p>
+        ) : contracts.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 36, marginBottom: 8 }}>📄</div>
-            <div>No hay documentos aún</div>
+            <div>No hay documentos aún. Sube uno con «Subir documento», o desde un contrato en Contratos: los documentos que subas a un contrato aparecen aquí solos, con su tipo.</div>
           </div>
         ) : filasOrdenadas.length === 0 ? (
-          <p style={{ color: '#888', fontSize: 13 }}>No hay documentos que coincidan con la búsqueda.</p>
+          <p style={{ color: '#888', fontSize: 13 }}>No hay documentos que coincidan con los filtros.</p>
         ) : (
           <div className="tasks-table-wrapper">
-            <table className="tasks-table resizable-table" ref={tablaRef}>
+            <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
                   <th {...thProps('contractNumber')}>Número <SortIcon campo="contractNumber" /></th>
@@ -256,8 +320,13 @@ export default function ContratosList() {
                       <td key={k}>{celdaDoc(k, c)}</td>
                     ))}
                     <td className="col-acciones">
-                      <button onClick={e => { e.stopPropagation(); setPendingDeleteId(c.id); }}
-                        style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #e55', background: '#fff', color: '#c33', cursor: 'pointer', fontSize: 11 }}>✕</button>
+                      <div className="acciones-iconos">
+                        <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }}
+                          title="Eliminar el documento" aria-label={`Eliminar el documento ${c.contractNumber || c.id}`}
+                          onClick={e => { e.stopPropagation(); setPendingDeleteId(c.id); }}>
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -300,6 +369,13 @@ export default function ContratosList() {
             }
           }}
           onCancel={() => setConfirmarVincular(false)}
+        />
+      )}
+
+      {subiendoDoc && (
+        <SubirDocumentoModal
+          onClose={() => setSubiendoDoc(false)}
+          onSubido={(doc) => { setSubiendoDoc(false); loadContracts(); navigate(`/ventas/documentacion/${doc.id}`); }}
         />
       )}
 

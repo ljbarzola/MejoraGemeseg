@@ -35,6 +35,8 @@ export const INTENCIONES_VENTAS = [
   'ventas_cartera',
   'ventas_perdidos',
   'ventas_embudo',
+  'ventas_prioridades',
+  'ventas_inactivos',
 ] as const;
 
 export const esIntencionDeVentas = (intent: string): boolean =>

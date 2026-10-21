@@ -20,6 +20,8 @@ import {
   type LeadParaEmbudo,
 } from './ventas-marketing.util';
 import { ETIQUETA_KIND, MOTIVO_KINDS } from './ventas-motivos.service';
+import { agruparMapa, vistaValida } from './ventas-mapa.util';
+import { Prisma } from '@prisma/client';
 
 // Desde cuándo existe el historial de cambios de etapa (SalesClientStageChange
 // empezó a guardarse ese día). Lo anterior se mide solo cuando hay datos
@@ -116,7 +118,8 @@ export class VentasAnaliticaService {
         select: { id: true, name: true },
       }),
       this.prisma.salesAgreement.findMany({
-        where: { companyId: cid, ...(filtroCliente ? { salesClientId: filtroCliente } : {}) },
+        // Las ventas de producto no vencen ni se renuevan: no entran en estas cifras.
+        where: { companyId: cid, kind: { not: 'PRODUCTO' }, ...(filtroCliente ? { salesClientId: filtroCliente } : {}) },
         include: { services: { include: { service: { select: { id: true, name: true } } } } },
       }),
       this.prisma.salesReasonEntry.findMany({
@@ -302,7 +305,7 @@ export class VentasAnaliticaService {
     const r = this.rango(desdeRaw, hastaRaw, 365);
     const ids = await this.idsClientes(cid, this.vendedor(a));
     const contratos = await this.prisma.salesAgreement.findMany({
-      where: { companyId: cid, ...(ids ? { salesClientId: { in: ids } } : {}) },
+      where: { companyId: cid, kind: { not: 'PRODUCTO' }, ...(ids ? { salesClientId: { in: ids } } : {}) },
     });
 
     // ¿El contrato cubre ese día? (cancelado: hasta su fecha de cancelación)
@@ -396,8 +399,10 @@ export class VentasAnaliticaService {
         where: {
           companyId: cid,
           receivedAt: { gte: r.desde, lte: r.hastaFin },
-          // Un cliente que ya venía contratando y se registró a mano no es una venta nueva.
-          originType: { not: 'HISTORICO' },
+          // Un cliente que ya venía contratando y se registró a mano no es una venta nueva. Una
+          // renovación (la abre sola el sistema, sin responsable) tampoco: contarla falsearía el
+          // tiempo de respuesta y la conversión del embudo de ventas nuevas.
+          originType: { notIn: ['HISTORICO', 'RENOVACION'] },
           ...(vend !== null ? { assignedUserId: vend } : {}),
         },
         include: { stageChanges: { orderBy: { createdAt: 'asc' } } },
@@ -487,6 +492,48 @@ export class VentasAnaliticaService {
         de: opps.length,
         historialDesde: FECHA_INICIO_HISTORIAL,
       },
+    };
+  }
+
+  // ---------------------------------------------------------------------
+  // Mapa de Ecuador: dónde se cotiza (2026-10-19)
+  // ---------------------------------------------------------------------
+
+  // Las oportunidades que tienen Ubicación, agrupadas por ciudad y provincia. Las renovaciones (las abre
+  // sola el sistema) y los clientes históricos no son demanda nueva, así que no cuentan. Quien no es
+  // ADMIN/MANAGER solo ve las suyas (por el responsable de la oportunidad, como el resto del Resumen).
+  async mapa(companyId: number | null, a: AlcanceAnalitica, vistaRaw?: string) {
+    const cid = this.requireCompany(companyId);
+    const vend = this.vendedor(a);
+    const vista = vistaValida(vistaRaw);
+    const where: Prisma.SalesOpportunityWhereInput = {
+      companyId: cid,
+      originType: { notIn: ['HISTORICO', 'RENOVACION'] },
+      ...(vend !== null ? { assignedUserId: vend } : {}),
+    };
+    if (vista === 'abiertas') where.closedAt = null;
+    else if (vista === 'aceptadas') where.outcome = 'GANADA';
+    else if (vista === 'perdidas') where.outcome = 'PERDIDA';
+    else if (vista === 'cotizadas') where.OR = [{ quotedAmount: { not: null } }, { quotedAt: { not: null } }];
+
+    const filas = await this.prisma.salesOpportunity.findMany({
+      where,
+      select: {
+        locationName: true,
+        locationLat: true,
+        locationLng: true,
+        locationCity: true,
+        locationProvince: true,
+        quotedAmount: true,
+        outcome: true,
+        closedAt: true,
+      },
+    });
+    return {
+      vista,
+      ...agruparMapa(
+        filas.map((f) => ({ ...f, quotedAmount: f.quotedAmount === null ? null : Number(f.quotedAmount) })),
+      ),
     };
   }
 

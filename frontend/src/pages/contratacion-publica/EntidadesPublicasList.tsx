@@ -512,8 +512,10 @@ export default function EntidadesPublicasList() {
           <ColumnPickerMenu
             columns={columnasElegibles}
             visible={columnPrefs.visible}
-            onApply={async (keys) => {
-              const guardado = await columnPrefs.set(keys);
+            pinned={columnPrefs.pinned}
+            maxPinned={columnPrefs.maxPinned}
+            onApply={async (keys, fijas) => {
+              const guardado = await columnPrefs.set(keys, fijas);
               if (!guardado) setError('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.');
             }}
           />
@@ -534,7 +536,7 @@ export default function EntidadesPublicasList() {
           </div>
         ) : (
           <div className="tasks-table-wrapper">
-            <table className="tasks-table resizable-table" ref={tablaRef}>
+            <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
                   <th {...thProps('nombre')}>Nombre <SortIcon campo="nombre" /></th>

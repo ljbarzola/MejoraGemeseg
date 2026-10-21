@@ -12,6 +12,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/layout/Sidebar';
 import ChatFloatingButton from './components/chat/ChatFloatingButton';
 import ChatDrawer from './components/chat/ChatDrawer';
+import { EVENTO_CHAT_VENTAS } from './services/chat.service';
 import ReportarProblemaButton from './components/common/ReportarProblemaButton';
 import CambioContrasenaObligatorio from './components/security/CambioContrasenaObligatorio';
 import NotificationsBell from './components/common/NotificationsBell';
@@ -69,6 +70,8 @@ const CPInformesList = lazy(() => import('./pages/contratacion-publica/informes/
 const CPInformeForm = lazy(() => import('./pages/contratacion-publica/informes/InformeForm'));
 const CPCodigosTurnoConfig = lazy(() => import('./pages/contratacion-publica/config/CodigosTurnoConfig'));
 const CPTextosInstitucionalesConfig = lazy(() => import('./pages/contratacion-publica/config/TextosInstitucionalesConfig'));
+const CPBitacoras = lazy(() => import('./pages/contratacion-publica/bitacoras/BitacorasPage'));
+const CPBitacoraDetalle = lazy(() => import('./pages/contratacion-publica/bitacoras/BitacoraDetallePage'));
 
 // Contratación Pública: desde 2026-10-01 solo está visible "Entidades Públicas"
 // (con el seguimiento de entregas de documentos). Contratos, Horarios, Informes,
@@ -77,6 +80,11 @@ const CPTextosInstitucionalesConfig = lazy(() => import('./pages/contratacion-pu
 // esta bandera en true y devolver los ítems en Sidebar.tsx (contratacionPublicaItems).
 // Ver "Submódulos ocultos" en .agents/modules/contratacion-publica.md.
 const CP_MOSTRAR_SUBMODULOS_OCULTOS = false;
+// Operaciones (2026-10-18): Contratos, Horarios y Códigos de turno vuelven al menú porque
+// las Bitácoras comparan lo que anotan los guardias contra el horario del puesto, y sin
+// poder cargar contratos, puestos y horarios no hay contra qué comparar. Informes y
+// Textos Institucionales siguen ocultos (los controla la bandera de arriba).
+const CP_MOSTRAR_OPERACIONES = true;
 const PersonalDashboard = lazy(() => import('./pages/personal/PersonalDashboard'));
 const ReclutamientoPage = lazy(() => import('./pages/personal/ReclutamientoPage'));
 const GuardiasList = lazy(() => import('./pages/personal/GuardiasList'));
@@ -250,6 +258,14 @@ function AppInner() {
   const perms = usePermissions();
   const [chatOpen, setChatOpen] = useState(false);
 
+  // «Preguntar al agente» desde la ficha de un cliente (chat.service.ts → abrirChatDeVentas):
+  // abre el cajón del chat; ChatDrawer se encarga de elegir al Agente de Ventas y mandar la pregunta.
+  useEffect(() => {
+    const abrir = () => setChatOpen(true);
+    window.addEventListener(EVENTO_CHAT_VENTAS, abrir);
+    return () => window.removeEventListener(EVENTO_CHAT_VENTAS, abrir);
+  }, []);
+
   return (
     <PermissionsProvider value={perms}>
       <SidebarProvider>
@@ -421,7 +437,9 @@ function AppInner() {
         <Route path="/contratacion-publica/entidades/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPEntidadDetail /></SectionRoute></ProtectedLayout>} />
         <Route path="/contratacion-publica/mis-documentos" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPMisDocumentos /></SectionRoute></ProtectedLayout>} />
         <Route path="/contratacion-publica/por-revisar" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPPorRevisar /></SectionRoute></ProtectedLayout>} />
-        {CP_MOSTRAR_SUBMODULOS_OCULTOS && (
+        <Route path="/contratacion-publica/bitacoras" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPBitacoras /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/bitacoras/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPBitacoraDetalle /></SectionRoute></ProtectedLayout>} />
+        {CP_MOSTRAR_OPERACIONES && (
           <>
             <Route path="/contratacion-publica/contratos" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratosList /></SectionRoute></ProtectedLayout>} />
             <Route path="/contratacion-publica/contratos/nuevo" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoForm /></SectionRoute></ProtectedLayout>} />
@@ -429,10 +447,14 @@ function AppInner() {
             <Route path="/contratacion-publica/contratos/:id/editar" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoForm /></SectionRoute></ProtectedLayout>} />
             <Route path="/contratacion-publica/horarios" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPHorarioMensualList /></SectionRoute></ProtectedLayout>} />
             <Route path="/contratacion-publica/horarios/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPHorarioMensualEditor /></SectionRoute></ProtectedLayout>} />
+            <Route path="/contratacion-publica/config/codigos-turno" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPCodigosTurnoConfig /></SectionRoute></ProtectedLayout>} />
+          </>
+        )}
+        {CP_MOSTRAR_SUBMODULOS_OCULTOS && (
+          <>
             <Route path="/contratacion-publica/informes" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformesList /></SectionRoute></ProtectedLayout>} />
             <Route path="/contratacion-publica/informes/nuevo" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformeForm /></SectionRoute></ProtectedLayout>} />
             <Route path="/contratacion-publica/informes/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPInformeForm /></SectionRoute></ProtectedLayout>} />
-            <Route path="/contratacion-publica/config/codigos-turno" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPCodigosTurnoConfig /></SectionRoute></ProtectedLayout>} />
             <Route path="/contratacion-publica/config/textos-institucionales" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPTextosInstitucionalesConfig /></SectionRoute></ProtectedLayout>} />
           </>
         )}

@@ -155,7 +155,7 @@ export default function SalesClientStagesConfigModal({ onClose, onChanged }: Pro
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Etapas del pipeline de Clientes</h3>
+          <h3>Etapas de las oportunidades</h3>
           <button className="modal-close" onClick={onClose}><X size={16} /></button>
         </div>
         <div className="modal-body">

@@ -26,6 +26,8 @@ import {
   MarkSalesClientDoneDto,
   UpdateSalesClientActivityDto,
   UpdateSalesClientStageDto,
+  CreateSalesContactDto,
+  UpdateSalesContactDto,
 } from './dto/client.dto';
 
 @Controller('ventas/clientes')
@@ -53,6 +55,13 @@ export class VentasClientesController {
       req.user.userId,
       req.user.companyId,
     );
+  }
+
+  // Tampoco lleva @Section: el formulario abierto de «Referir un cliente» lee los servicios activos del
+  // catálogo de Configuración → Servicios (igual que Nueva oportunidad).
+  @Get('servicios-referir')
+  serviciosParaReferir(@Req() req: any) {
+    return this.clientesService.serviciosParaReferir(req.user.companyId);
   }
 
   // El GET no lleva @Section: el formulario abierto de "Referir un cliente"
@@ -145,6 +154,45 @@ export class VentasClientesController {
       { userId: req.user.userId, role: req.user.role },
       { desde, hasta, responsable, hoy },
     );
+  }
+
+  // Contactos del cliente (Fase 2): varias personas, cada una con varios
+  // teléfonos/correos etiquetados.
+  @Get(':id/contactos')
+  @Section('VENTAS', 'view')
+  listContacts(@Req() req: any, @Param('id') id: string) {
+    return this.clientesService.listContacts(req.user.companyId, +id);
+  }
+
+  @Post(':id/contactos')
+  @Section('VENTAS', 'write')
+  createContact(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: CreateSalesContactDto,
+  ) {
+    return this.clientesService.createContact(
+      req.user.companyId,
+      +id,
+      req.user.userId,
+      dto,
+    );
+  }
+
+  @Patch('contactos/:contactId')
+  @Section('VENTAS', 'write')
+  updateContact(
+    @Req() req: any,
+    @Param('contactId') contactId: string,
+    @Body() dto: UpdateSalesContactDto,
+  ) {
+    return this.clientesService.updateContact(req.user.companyId, +contactId, dto);
+  }
+
+  @Delete('contactos/:contactId')
+  @Section('VENTAS', 'write')
+  deleteContact(@Req() req: any, @Param('contactId') contactId: string) {
+    return this.clientesService.deleteContact(req.user.companyId, +contactId);
   }
 
   // Ficha del cliente: línea de tiempo y actividades (notas, llamadas...).

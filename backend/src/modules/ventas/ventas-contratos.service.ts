@@ -20,6 +20,12 @@ const SIGNWELL_API_BASE = 'https://www.signwell.com/api/v1';
 
 const execFileAsync = promisify(execFile);
 
+// Mensajes que ve la gente de ventas (la firma electrónica aún no está conectada).
+export const SIGNWELL_NO_CONECTADO =
+  'La firma electrónica todavía no está conectada: falta registrar la clave de SignWell. Mientras tanto puedes subir el PDF ya firmado del documento.';
+export const DOCUMENTO_SIN_PLANTILLA =
+  'Este documento se subió ya hecho (no sale de una plantilla), así que no se genera ni se envía a firma desde el sistema.';
+
 import {
   CONTRACTS_DIR,
   loadTemplateDocx,
@@ -27,6 +33,7 @@ import {
   loadContractPdf,
   deleteContractPdf,
 } from './ventas-files.util';
+import { normalizarTipoDocumento } from './ventas-documento-tipos.const';
 
 /** Reemplaza las variables del asunto/cuerpo de la plantilla, igual que la vista previa de la ficha. */
 function renderEmailText(text: string, contract: { id: number; clientName: string }): string {
@@ -72,6 +79,12 @@ export class VentasContratosService {
       include: {
         template: { select: { id: true, name: true } },
         salesClient: { select: { id: true, name: true } },
+        // A qué contrato pertenece el documento (para el enlace desde Documentación).
+        agreementLink: {
+          select: {
+            agreement: { select: { id: true, title: true } },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -85,6 +98,11 @@ export class VentasContratosService {
       include: {
         template: {
           include: { fields: { orderBy: { order: 'asc' } } },
+        },
+        agreementLink: {
+          select: {
+            agreement: { select: { id: true, title: true } },
+          },
         },
       },
     });
@@ -272,7 +290,7 @@ export class VentasContratosService {
     });
     if (!contract) throw new NotFoundException('Link no válido o expirado');
 
-    const clientTableFields = contract.template.fields.filter(
+    const clientTableFields = (contract.template?.fields ?? []).filter(
       (f) => f.fieldType === 'TABLE' && f.isClientField,
     );
     const fieldValues = (contract.fieldValues as Record<string, any>) || {};
@@ -323,7 +341,7 @@ export class VentasContratosService {
     }
 
     const clientTableFieldNames = new Set(
-      contract.template.fields
+      (contract.template?.fields ?? [])
         .filter((f) => f.fieldType === 'TABLE' && f.isClientField)
         .map((f) => f.variableName),
     );
@@ -376,6 +394,7 @@ export class VentasContratosService {
       include: { template: { include: { fields: true } } },
     });
     if (!contract) throw new NotFoundException('Contrato no encontrado');
+    if (!contract.template) throw new BadRequestException(DOCUMENTO_SIN_PLANTILLA);
 
     // Campos que llena el vendedor (no el cliente, no tablas) marcados como
     // obligatorios en la plantilla — el frontend ya valida esto, pero un
@@ -818,11 +837,13 @@ export class VentasContratosService {
    * whoever was waiting for a "backed up to Drive" contract.
    */
   private async uploadToDriveIfConfigured(
-    template: { id: number; name: string; driveFolderId: string | null },
+    template: { id: number; name: string; driveFolderId: string | null } | null,
     companyId: number,
     pdfBuffer: Buffer,
     fileName: string,
   ): Promise<string | undefined> {
+    // Un documento subido ya hecho no tiene plantilla, y la carpeta de Drive es por plantilla.
+    if (!template) return undefined;
     try {
       const folderId = await this.getOrCreateTemplateDriveFolder(
         template,
@@ -1098,6 +1119,7 @@ export class VentasContratosService {
       include: { template: { include: { fields: true } } },
     });
     if (!contract) throw new NotFoundException('Contrato no encontrado');
+    if (!contract.template) throw new BadRequestException(DOCUMENTO_SIN_PLANTILLA);
     if (contract.status !== 'READY')
       throw new BadRequestException('El contrato debe estar en estado READY');
     if (!contract.generatedPdfPath)
@@ -1163,7 +1185,7 @@ export class VentasContratosService {
   }> {
     const apiKey = this.getSignWellKey();
     if (!apiKey)
-      throw new BadRequestException('SIGNWELL_API_KEY no configurada');
+      throw new BadRequestException(SIGNWELL_NO_CONECTADO);
 
     // `SIGNWELL_TEST_MODE` defaults to true on purpose: a test-mode document
     // doesn't count against the account's paid quota and isn't legally
@@ -1398,7 +1420,7 @@ export class VentasContratosService {
 
     const apiKey = this.getSignWellKey();
     if (!apiKey)
-      throw new BadRequestException('SIGNWELL_API_KEY no configurada');
+      throw new BadRequestException(SIGNWELL_NO_CONECTADO);
 
     let response;
     try {
@@ -1529,6 +1551,115 @@ export class VentasContratosService {
     );
 
     return { success: true, filePath: publicPath, driveWarning };
+  }
+
+  /**
+   * Sube un documento que ya existe (p. ej. un contrato firmado en PDF) sin pasar por una
+   * plantilla ni por SignWell: se crea el documento del cliente (opcionalmente colgado de uno
+   * de sus contratos) con el PDF adjunto. `firmado` lo deja en «Firmado»; si no, en «Listo».
+   */
+  async uploadDocument(
+    companyId: number | null,
+    createdBy: number,
+    file: Express.Multer.File,
+    dto: {
+      salesClientId: number;
+      agreementId?: number;
+      titulo?: string;
+      firmado?: boolean;
+      tipo?: string;
+      tipoOtro?: string;
+    },
+  ) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    if (!file) throw new BadRequestException('Elige el archivo PDF que quieres subir.');
+    const esPdf =
+      file.mimetype === 'application/pdf' ||
+      file.originalname?.toLowerCase().endsWith('.pdf');
+    if (!esPdf || file.buffer?.subarray(0, 4).toString() !== '%PDF') {
+      throw new BadRequestException(
+        'El archivo debe ser un PDF. Si tienes un Word, guárdalo como PDF antes de subirlo.',
+      );
+    }
+    if (!dto.salesClientId) {
+      throw new BadRequestException('Elige el cliente de este documento.');
+    }
+    const tipo = normalizarTipoDocumento(dto.tipo, dto.tipoOtro, true);
+    if (!tipo.ok) throw new BadRequestException(tipo.mensaje);
+    const cliente = await this.prisma.salesClient.findFirst({
+      where: { id: dto.salesClientId, companyId },
+      select: { id: true, name: true, email: true },
+    });
+    if (!cliente) throw new NotFoundException('Cliente no encontrado');
+    if (dto.agreementId) {
+      await this.assertContratoDelCliente(
+        dto.agreementId,
+        dto.salesClientId,
+        companyId,
+      );
+    }
+
+    const titulo = dto.titulo?.trim() || null;
+    const firmado = dto.firmado !== false;
+    const ahora = new Date();
+    const creado = await this.prisma.salesContract.create({
+      data: {
+        templateId: null,
+        clientName: cliente.name,
+        clientEmail: cliente.email || '',
+        fieldValues: titulo ? { titulo } : {},
+        status: firmado ? 'SIGNED' : 'READY',
+        signedAt: firmado ? ahora : null,
+        documentType: tipo.tipo,
+        documentTypeOther: tipo.otro,
+        salesClientId: cliente.id,
+        companyId,
+        createdBy,
+      },
+    });
+    const fileName = `${creado.id}_${firmado ? 'firmado' : 'subido'}_${Date.now()}.pdf`;
+    await saveContractPdf(this.prisma, fileName, file.buffer);
+    const publicPath = `/api/ventas/contratos/file/${fileName}`;
+    await this.prisma.salesContractDocument.create({
+      data: {
+        contractId: creado.id,
+        type: firmado ? 'FIRMADO' : 'GENERADO',
+        filePath: publicPath,
+      },
+    });
+    await this.prisma.salesContract.update({
+      where: { id: creado.id },
+      data: { generatedPdfPath: publicPath },
+    });
+    await this.vincularAContrato(creado.id, dto.agreementId);
+    return this.getContract(creado.id, companyId);
+  }
+
+  /** Cambia el tipo de un documento ya guardado (p. ej. uno subido antes de que existieran los tipos). */
+  async cambiarTipoDocumento(
+    id: number,
+    companyId: number | null,
+    tipoRaw: unknown,
+    otroRaw: unknown,
+  ) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    const tipo = normalizarTipoDocumento(tipoRaw, otroRaw, true);
+    if (!tipo.ok) throw new BadRequestException(tipo.mensaje);
+    const doc = await this.prisma.salesContract.findFirst({
+      where: { id, companyId },
+      select: { id: true },
+    });
+    if (!doc) throw new NotFoundException('Documento no encontrado');
+    await this.prisma.salesContract.update({
+      where: { id },
+      data: { documentType: tipo.tipo, documentTypeOther: tipo.otro },
+    });
+    return this.getContract(id, companyId);
+  }
+
+  /** ¿Está conectada la firma electrónica (SignWell)? Para avisar en pantalla antes de intentar enviar. */
+  estadoFirmaElectronica() {
+    return { signwellConfigurado: !!this.getSignWellKey() };
   }
 
   // ==================== FILE ACCESS / DOCUMENT HISTORY ====================

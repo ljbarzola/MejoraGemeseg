@@ -10,16 +10,22 @@ import { graciaSugerida } from './client-lifecycle.util';
 import { VentasMotivosService, type MotivoInput } from './ventas-motivos.service';
 import {
   calcularEstadoContrato,
+  calcularEstadoGarantia,
+  esProducto,
+  hoyEcuador,
   parseDiaContrato,
+  problemaFechaCancelacion,
   sumarDias,
 } from './agreement-status.util';
 import {
+  CreateAgreementIncidentDto,
   CreateSalesAgreementDto,
   CreateSalesServiceDto,
   RenewSalesAgreementDto,
   UpdateSalesAgreementDto,
   UpdateSalesServiceDto,
 } from './dto/agreement.dto';
+import type { AceptarContratoDto } from './dto/opportunity.dto';
 
 // "Contrato" en la pantalla de Ventas = SalesAgreement: el acuerdo comercial de
 // un cliente (servicios, vigencia, renovaciones). SalesContract es el
@@ -29,6 +35,7 @@ import {
 const MAX_TITULO = 150;
 const MAX_NOTAS = 2000;
 const MAX_SERVICIO = 100;
+const TIPOS_INCIDENTE = ['INCIDENTE_SERVICIO', 'CONVERSACION_SALIDA'];
 
 const norm = (s: string | null | undefined) =>
   (s || '')
@@ -168,10 +175,12 @@ export class VentasAcuerdosService {
   // ---------------------------------------------------------------------
 
   private formatear(c: ContratoConRelaciones) {
-    const { services, _count, monthlyValue, ...resto } = c;
+    const { services, _count, monthlyValue, totalValue, ...resto } = c;
     return {
       ...resto,
       monthlyValue: monthlyValue === null ? null : Number(monthlyValue),
+      totalValue: totalValue === null ? null : Number(totalValue),
+      garantia: esProducto(c) ? calcularEstadoGarantia(c.warrantyUntil) : null,
       services: services.map((s) => s.service),
       documentos: _count.documents,
       estado: calcularEstadoContrato(c),
@@ -185,10 +194,14 @@ export class VentasAcuerdosService {
       estado?: string;
       serviceId?: number;
       q?: string;
+      kind?: string;
     } = {},
   ) {
     const cid = this.requireCompany(companyId);
     const where: Prisma.SalesAgreementWhereInput = { companyId: cid };
+    if (filters.kind === 'SERVICIO' || filters.kind === 'PRODUCTO') {
+      where.kind = filters.kind;
+    }
     if (filters.clientId) where.salesClientId = filters.clientId;
     if (filters.serviceId) {
       where.services = { some: { serviceId: filters.serviceId } };
@@ -252,6 +265,9 @@ export class VentasAcuerdosService {
                 status: true,
                 createdAt: true,
                 signedAt: true,
+                documentType: true,
+                documentTypeOther: true,
+                fieldValues: true,
                 template: { select: { name: true } },
               },
             },
@@ -265,7 +281,90 @@ export class VentasAcuerdosService {
       where: { companyId: cid, agreementId: id },
       orderBy: { createdAt: 'desc' },
     });
-    return { ...this.formatear(c), motivos };
+    const incidentesBd = await this.prisma.salesAgreementIncident.findMany({
+      where: { companyId: cid, agreementId: id },
+      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+    });
+    const autores = await this.prisma.user.findMany({
+      where: { id: { in: [...new Set(incidentesBd.map((i) => i.createdBy))] } },
+      select: { id: true, fullName: true },
+    });
+    const nombreAutor = new Map(autores.map((u) => [u.id, u.fullName]));
+    const incidentes = incidentesBd.map((i) => ({
+      ...i,
+      createdByName: nombreAutor.get(i.createdBy) ?? null,
+    }));
+    // Fase 4: la oportunidad de renovación de este contrato, si la hay (abierta o ya cerrada).
+    const renovacionOportunidad = await this.prisma.salesOpportunity.findFirst({
+      where: { companyId: cid, renewsAgreementId: id },
+      select: { id: true, status: true, outcome: true, closedAt: true },
+      orderBy: { id: 'desc' },
+    });
+    return { ...this.formatear(c), motivos, incidentes, renovacionOportunidad };
+  }
+
+  // Incidente del servicio o conversación de salida de un contrato (antes eran actividades
+  // del Historial del cliente). Devuelve el contrato completo para que la pantalla se refresque.
+  async crearIncidente(
+    companyId: number | null,
+    userId: number,
+    id: number,
+    dto: CreateAgreementIncidentDto,
+  ) {
+    const cid = this.requireCompany(companyId);
+    if (!TIPOS_INCIDENTE.includes(dto.type)) {
+      throw new BadRequestException(
+        'El tipo debe ser «Incidente del servicio» o «Conversación de salida».',
+      );
+    }
+    const texto = (dto.text || '').trim();
+    if (!texto) {
+      throw new BadRequestException('Escribe qué pasó antes de guardar.');
+    }
+    if (texto.length > MAX_NOTAS) {
+      throw new BadRequestException(
+        `El texto es demasiado largo (máximo ${MAX_NOTAS} caracteres).`,
+      );
+    }
+    const contrato = await this.prisma.salesAgreement.findFirst({
+      where: { id, companyId: cid },
+      select: { id: true },
+    });
+    if (!contrato) throw new NotFoundException('Contrato no encontrado');
+    let fecha = parseDiaContrato(hoyEcuador());
+    if ((dto.date || '').trim()) {
+      fecha = parseDiaContrato(dto.date);
+      if (!fecha) throw new BadRequestException('La fecha no es válida.');
+      if (dto.date! > hoyEcuador()) {
+        throw new BadRequestException('La fecha no puede ser futura.');
+      }
+    }
+    await this.prisma.salesAgreementIncident.create({
+      data: {
+        companyId: cid,
+        agreementId: id,
+        type: dto.type,
+        occurredAt: fecha!,
+        text: texto,
+        createdBy: userId,
+      },
+    });
+    return this.getAgreement(cid, id);
+  }
+
+  async borrarIncidente(
+    companyId: number | null,
+    id: number,
+    incidenteId: number,
+  ) {
+    const cid = this.requireCompany(companyId);
+    const borrados = await this.prisma.salesAgreementIncident.deleteMany({
+      where: { id: incidenteId, agreementId: id, companyId: cid },
+    });
+    if (borrados.count === 0) {
+      throw new NotFoundException('Registro no encontrado');
+    }
+    return this.getAgreement(cid, id);
   }
 
   private fechasValidas(
@@ -308,6 +407,28 @@ export class VentasAcuerdosService {
       throw new BadRequestException('El valor mensual no es válido.');
     }
     return v;
+  }
+
+  private valorTotal(v: number | null | undefined): number | null | undefined {
+    if (v === undefined || v === null) return v;
+    if (!Number.isFinite(v) || v < 0) {
+      throw new BadRequestException('El valor total no es válido.');
+    }
+    return v;
+  }
+
+  // Fin de garantía de un producto: vacío = sin garantía; no puede ser anterior a
+  // la fecha de la venta.
+  private garantiaValida(raw: string | undefined, venta: Date): Date | null {
+    if (!(raw || '').trim()) return null;
+    const d = parseDiaContrato(raw);
+    if (!d) throw new BadRequestException('La fecha de fin de la garantía no es válida.');
+    if (d.getTime() < venta.getTime()) {
+      throw new BadRequestException(
+        'La garantía no puede terminar antes de la fecha de la venta.',
+      );
+    }
+    return d;
   }
 
   private diasDeGracia(v: number | undefined, sugerido: number): number {
@@ -400,14 +521,21 @@ export class VentasAcuerdosService {
       select: { id: true },
     });
     if (!cliente) throw new NotFoundException('Cliente no encontrado');
+    const producto = dto.kind === 'PRODUCTO';
+    if (producto && renovacion) {
+      throw new BadRequestException('Una venta de producto no se renueva.');
+    }
+    // Una venta de producto no tiene fecha de fin: solo la fecha de la venta.
     const { startDate, endDate } = this.fechasValidas(
       dto.startDate,
-      dto.endDate,
+      producto ? undefined : dto.endDate,
     );
     const serviceIds = await this.validarServicios(cid, dto.serviceIds);
     const title = this.textoOpcional(dto.title, MAX_TITULO, 'El título');
     const notes = this.textoOpcional(dto.notes, MAX_NOTAS, 'Las notas');
-    const monthlyValue = this.valorMensual(dto.monthlyValue) ?? null;
+    const monthlyValue = producto ? null : (this.valorMensual(dto.monthlyValue) ?? null);
+    const totalValue = producto ? (this.valorTotal(dto.totalValue) ?? null) : null;
+    const warrantyUntil = producto ? this.garantiaValida(dto.warrantyUntil, startDate) : null;
     const graceDays = this.diasDeGracia(
       dto.graceDays,
       graciaSugerida(startDate, endDate),
@@ -450,6 +578,10 @@ export class VentasAcuerdosService {
             endDate,
             monthlyValue,
             graceDays,
+            kind: producto ? 'PRODUCTO' : 'SERVICIO',
+            status: producto ? 'POR_ENTREGAR' : 'ACTIVO',
+            totalValue,
+            warrantyUntil,
             opportunityId: dto.opportunityId ?? null,
             renewedFromId: renovacion?.anterior.id ?? null,
             createdBy: userId,
@@ -491,6 +623,288 @@ export class VentasAcuerdosService {
       .then((r) => this.getAgreement(cid, r.id));
   }
 
+  // -----------------------------------------------------------------
+  // Fase 3: contrato al ACEPTAR una oportunidad
+  // -----------------------------------------------------------------
+
+  private static readonly ESTADOS_VIGENTES = ['VIGENTE', 'POR_VENCER', 'POR_INICIAR'];
+
+  // Contratos de SERVICIO que hoy cubren al cliente (vigentes, por vencer o por
+  // iniciar). Sirven para ofrecer «es adicional a este contrato».
+  async contratosVigentesDeServicio(companyId: number, clientId: number) {
+    const filas = await this.prisma.salesAgreement.findMany({
+      where: { companyId, salesClientId: clientId, kind: 'SERVICIO' },
+      include: incluirContrato,
+      orderBy: [{ startDate: 'desc' }, { id: 'desc' }],
+    });
+    return filas
+      .map((c) => this.formatear(c))
+      .filter((c) => VentasAcuerdosService.ESTADOS_VIGENTES.includes(c.estado));
+  }
+
+  private describirContrato(c: {
+    id: number;
+    title: string | null;
+    startDate: Date;
+    endDate: Date | null;
+    services: { name: string }[];
+  }) {
+    const titulo = c.title ? `«${c.title}»` : `#${c.id}`;
+    const servicios = c.services.map((s) => s.name).join(', ') || 'sin servicios';
+    const fin = c.endDate ? `hasta el ${c.endDate.toISOString().slice(0, 10)}` : 'sin fecha de fin';
+    return `${titulo} (${servicios}, ${fin})`;
+  }
+
+  // Revisa TODO antes de cambiar la etapa de la oportunidad, para que un error
+  // no deje la oportunidad aceptada a medias.
+  async validarAlAceptar(
+    companyId: number,
+    opp: { id: number; title: string | null; salesClientId: number; clienteNombre: string; serviceIds: number[] },
+    c: AceptarContratoDto,
+  ): Promise<void> {
+    const etiqueta = opp.title ? `«${opp.title}»` : `#${opp.id}`;
+    if (opp.serviceIds.length === 0) {
+      throw new BadRequestException(
+        `La oportunidad ${etiqueta} de ${opp.clienteNombre} no tiene servicios. Agrégale al menos uno antes de aceptarla para poder registrar su contrato.`,
+      );
+    }
+    if (c.tipo === 'PRODUCTO') {
+      if (c.agreementId) {
+        throw new BadRequestException(
+          'Una venta de producto o instalación no se suma a un contrato de servicio: se registra como venta nueva.',
+        );
+      }
+      return;
+    }
+    if (c.garantiaMeses) {
+      throw new BadRequestException('La garantía solo aplica a productos o instalaciones.');
+    }
+    const vigentes = await this.contratosVigentesDeServicio(companyId, opp.salesClientId);
+    if (c.agreementId) {
+      const elegido = vigentes.find((v) => v.id === c.agreementId);
+      if (!elegido) {
+        throw new BadRequestException(
+          `El contrato elegido no es un contrato de servicio vigente de ${opp.clienteNombre}. Elige otro o crea un contrato nuevo.`,
+        );
+      }
+      return;
+    }
+    if (vigentes.length > 0 && !c.confirmarNuevo) {
+      const lista = vigentes
+        .map((v) => this.describirContrato({ ...v, services: v.services }))
+        .join('; ');
+      throw new BadRequestException(
+        `${opp.clienteNombre} ya tiene ${vigentes.length} contrato${vigentes.length === 1 ? '' : 's'} vigente${vigentes.length === 1 ? '' : 's'}: ${lista}. Elige a cuál se suma la oportunidad ${etiqueta}, o confirma que es un contrato nuevo.`,
+      );
+    }
+  }
+
+  // Crea el contrato nuevo o suma los servicios al contrato vigente elegido, y
+  // deja una nota explícita en el historial del cliente. Se llama DESPUÉS de
+  // pasar la oportunidad a Aceptada y de validarAlAceptar.
+  async aplicarAlAceptar(
+    companyId: number,
+    userId: number,
+    opp: {
+      id: number;
+      title: string | null;
+      salesClientId: number;
+      clienteNombre: string;
+      serviceIds: number[];
+      quotedAmount: number | null;
+    },
+    c: AceptarContratoDto,
+  ) {
+    const servicios = await this.prisma.salesService.findMany({
+      where: { id: { in: opp.serviceIds }, companyId },
+      select: { id: true, name: true },
+      orderBy: { order: 'asc' },
+    });
+    const nombresServicios = servicios.map((s) => s.name);
+    const etiqueta = opp.title ? `«${opp.title}»` : `#${opp.id}`;
+    const hoy = hoyEcuador();
+
+    let contratoId: number;
+    let contratoTitulo: string | null;
+    let accion: 'CREADO' | 'AGREGADO';
+    let nota: string;
+
+    if (c.agreementId) {
+      const ids = await this.validarServicios(companyId, opp.serviceIds);
+      const actual = await this.prisma.salesAgreement.findFirst({
+        where: { id: c.agreementId, companyId, salesClientId: opp.salesClientId },
+        select: { id: true, title: true },
+      });
+      if (!actual) throw new NotFoundException('Contrato no encontrado');
+      await this.prisma.salesAgreementService.createMany({
+        data: ids.map((serviceId) => ({ agreementId: actual.id, serviceId })),
+        skipDuplicates: true,
+      });
+      contratoId = actual.id;
+      contratoTitulo = actual.title;
+      accion = 'AGREGADO';
+      nota = `Se aceptó la oportunidad ${etiqueta}: ${nombresServicios.join(', ')} se sumó al contrato ${actual.title ? `«${actual.title}»` : `#${actual.id}`} de ${opp.clienteNombre}.`;
+    } else {
+      const producto = c.tipo === 'PRODUCTO';
+      let warrantyUntil: string | undefined;
+      if (producto && c.garantiaMeses && c.garantiaMeses > 0) {
+        const fin = new Date(`${hoy}T00:00:00.000Z`);
+        fin.setUTCMonth(fin.getUTCMonth() + c.garantiaMeses);
+        warrantyUntil = fin.toISOString().slice(0, 10);
+      }
+      const titulo = (opp.title || `${opp.clienteNombre}: ${nombresServicios.join(', ')}`).slice(0, MAX_TITULO);
+      const creado = await this.createAgreement(companyId, userId, {
+        salesClientId: opp.salesClientId,
+        kind: c.tipo === 'PRODUCTO' ? 'PRODUCTO' : 'SERVICIO',
+        title: titulo,
+        startDate: hoy,
+        serviceIds: opp.serviceIds,
+        opportunityId: opp.id,
+        ...(producto && opp.quotedAmount !== null ? { totalValue: opp.quotedAmount } : {}),
+        ...(warrantyUntil ? { warrantyUntil } : {}),
+      });
+      contratoId = creado.id;
+      contratoTitulo = creado.title;
+      accion = 'CREADO';
+      nota = producto
+        ? `Se aceptó la oportunidad ${etiqueta}: se registró la venta de ${nombresServicios.join(', ')} a ${opp.clienteNombre} (contrato #${creado.id}${warrantyUntil ? `, garantía hasta el ${warrantyUntil}` : ', sin garantía'}).`
+        : `Se aceptó la oportunidad ${etiqueta}: se creó el contrato ${contratoTitulo ? `«${contratoTitulo}»` : `#${creado.id}`} de ${opp.clienteNombre} (${nombresServicios.join(', ')}, desde el ${hoy}, sin fecha de fin; completa fecha de fin y valor mensual en Contratos).`;
+    }
+
+    await this.prisma.salesClientActivity.create({
+      data: {
+        companyId,
+        salesClientId: opp.salesClientId,
+        type: 'NOTA',
+        text: nota.slice(0, 2000),
+        createdBy: userId,
+      },
+    });
+    return {
+      accion,
+      tipo: c.tipo,
+      agreementId: contratoId,
+      titulo: contratoTitulo,
+      clienteNombre: opp.clienteNombre,
+      servicios: nombresServicios,
+    };
+  }
+
+  // -----------------------------------------------------------------
+  // Fase 4: contrato nuevo al ACEPTAR una oportunidad de RENOVACIÓN
+  // -----------------------------------------------------------------
+
+  // Revisa todo antes de mover la oportunidad. Devuelve 'YA_RENOVADO' si el contrato ya fue
+  // renovado a mano con «Renovar» (entonces solo se acepta la oportunidad, sin crear otro) y 'OK'
+  // si hay que crear el contrato nuevo.
+  async validarRenovacion(
+    companyId: number,
+    opp: { id: number; salesClientId: number; clienteNombre: string },
+    renewsAgreementId: number,
+    c: AceptarContratoDto | undefined,
+  ): Promise<'OK' | 'YA_RENOVADO'> {
+    const anterior = await this.prisma.salesAgreement
+      .findFirst({
+        where: { id: renewsAgreementId, companyId, salesClientId: opp.salesClientId },
+        include: { services: { include: { service: { select: { name: true } } } } },
+      })
+      .catch(() => null);
+    if (!anterior) {
+      throw new BadRequestException(
+        `El contrato que esta oportunidad renueva ya no existe. Pasa la oportunidad de ${opp.clienteNombre} a Perdida o elimínala.`,
+      );
+    }
+    const nombre = anterior.title ? `«${anterior.title}»` : `#${anterior.id}`;
+    if (anterior.status === 'RENOVADO') return 'YA_RENOVADO';
+    if (anterior.status === 'CANCELADO') {
+      throw new BadRequestException(
+        `El contrato ${nombre} de ${opp.clienteNombre} está cancelado y no se puede renovar. Pasa la oportunidad a Perdida o crea un contrato nuevo desde Contratos.`,
+      );
+    }
+    if (c?.tipo !== 'RENOVACION') {
+      throw new BadRequestException(
+        `Esta oportunidad renueva el contrato ${nombre} de ${opp.clienteNombre}: confirma las fechas y el valor del contrato nuevo.`,
+      );
+    }
+    const r = c.renovacion ?? {};
+    const inicio =
+      r.startDate ||
+      (anterior.endDate ? sumarDias(anterior.endDate, 1).toISOString().slice(0, 10) : '');
+    if (!inicio) {
+      throw new BadRequestException(
+        `El contrato ${nombre} no tiene fecha de fin: indica desde cuándo empieza la renovación.`,
+      );
+    }
+    this.fechasValidas(inicio, r.endDate);
+    const serviceIds = await this.validarServicios(
+      companyId,
+      r.serviceIds ?? anterior.services.map((s) => s.serviceId),
+    );
+    const valor =
+      r.monthlyValue !== undefined
+        ? (this.valorMensual(r.monthlyValue) ?? null)
+        : anterior.monthlyValue === null
+          ? null
+          : Number(anterior.monthlyValue);
+    const reduccion = this.detectarReduccion(anterior, serviceIds, valor);
+    if (reduccion.hay && !r.motivo?.reasonId) {
+      throw new BadRequestException(
+        `La renovación de ${opp.clienteNombre} baja los servicios o el valor mensual respecto al contrato ${nombre}: indica el motivo.`,
+      );
+    }
+    return 'OK';
+  }
+
+  // Crea el contrato nuevo (el anterior queda «Renovado») y deja una nota explícita en el
+  // historial del cliente. Se llama DESPUÉS de pasar la oportunidad a Aceptada y de validarRenovacion.
+  async aplicarRenovacion(
+    companyId: number,
+    userId: number,
+    opp: { id: number; title: string | null; salesClientId: number; clienteNombre: string },
+    renewsAgreementId: number,
+    c: AceptarContratoDto,
+  ) {
+    const r = c.renovacion ?? {};
+    const creado = await this.renewAgreement(
+      companyId,
+      userId,
+      renewsAgreementId,
+      {
+        title: r.title,
+        startDate: r.startDate,
+        endDate: r.endDate,
+        serviceIds: r.serviceIds,
+        notes: r.notes,
+        monthlyValue: r.monthlyValue,
+        graceDays: r.graceDays,
+        motivo: r.motivo,
+      },
+      { opportunityId: opp.id },
+    );
+    const etiqueta = opp.title ? `«${opp.title}»` : `#${opp.id}`;
+    const nombres = creado.services.map((s) => s.name);
+    const inicio = creado.startDate.toISOString().slice(0, 10);
+    const fin = creado.endDate ? creado.endDate.toISOString().slice(0, 10) : null;
+    const nota = `Se aceptó la renovación ${etiqueta}: se creó el contrato ${creado.title ? `«${creado.title}»` : `#${creado.id}`} de ${opp.clienteNombre} (${nombres.join(', ')}, del ${inicio} ${fin ? `al ${fin}` : 'sin fecha de fin'}) y el contrato anterior quedó Renovado.`;
+    await this.prisma.salesClientActivity.create({
+      data: {
+        companyId,
+        salesClientId: opp.salesClientId,
+        type: 'NOTA',
+        text: nota.slice(0, 2000),
+        createdBy: userId,
+      },
+    });
+    return {
+      accion: 'RENOVADO' as const,
+      tipo: 'RENOVACION' as const,
+      agreementId: creado.id,
+      titulo: creado.title,
+      clienteNombre: opp.clienteNombre,
+      servicios: nombres,
+    };
+  }
+
   async updateAgreement(
     companyId: number | null,
     userId: number,
@@ -504,10 +918,15 @@ export class VentasAcuerdosService {
     });
     if (!actual) throw new NotFoundException('Contrato no encontrado');
 
+    const producto = esProducto(actual);
+    if (producto && (dto.endDate ?? '').trim()) {
+      throw new BadRequestException('Una venta de producto no tiene fecha de fin.');
+    }
+
     const data: Prisma.SalesAgreementUpdateInput = {};
     let inicioNuevo = actual.startDate;
     let finNuevo = actual.endDate;
-    if (dto.startDate !== undefined || dto.endDate !== undefined) {
+    if (dto.startDate !== undefined || (!producto && dto.endDate !== undefined)) {
       const inicio =
         dto.startDate !== undefined
           ? dto.startDate
@@ -528,16 +947,49 @@ export class VentasAcuerdosService {
     if (dto.notes !== undefined) {
       data.notes = this.textoOpcional(dto.notes, MAX_NOTAS, 'Las notas');
     }
-    if (dto.monthlyValue !== undefined) {
+    if (!producto && dto.monthlyValue !== undefined) {
       data.monthlyValue = this.valorMensual(dto.monthlyValue);
     }
-    if (dto.graceDays !== undefined) {
+    if (producto) {
+      if (dto.totalValue !== undefined) {
+        data.totalValue = this.valorTotal(dto.totalValue);
+      }
+      if (dto.warrantyUntil !== undefined || dto.startDate !== undefined) {
+        const garantia =
+          dto.warrantyUntil !== undefined
+            ? dto.warrantyUntil
+            : (actual.warrantyUntil?.toISOString().slice(0, 10) ?? '');
+        data.warrantyUntil = this.garantiaValida(garantia, inicioNuevo);
+      }
+    }
+    if (!producto && dto.graceDays !== undefined) {
       data.graceDays = this.diasDeGracia(
         dto.graceDays,
         graciaSugerida(inicioNuevo, finNuevo),
       );
     }
-    if (dto.status !== undefined) {
+    if (dto.status !== undefined && producto) {
+      // Venta de producto: Por entregar <-> Entregado (también reactiva un
+      // producto cancelado). Cancelar sigue teniendo su ruta, que pide el motivo.
+      if (dto.status !== 'POR_ENTREGAR' && dto.status !== 'ENTREGADO') {
+        throw new BadRequestException(
+          'Para cancelar usa «Cancelar contrato», que pide el motivo.',
+        );
+      }
+      data.status = dto.status;
+      data.cancelledAt = null;
+      if (dto.status === 'ENTREGADO') {
+        const entregado = (dto.deliveredAt ?? '').trim()
+          ? parseDiaContrato(dto.deliveredAt)
+          : parseDiaContrato(hoyEcuador());
+        if (!entregado) {
+          throw new BadRequestException('La fecha de entrega no es válida.');
+        }
+        data.deliveredAt = entregado;
+      } else {
+        data.deliveredAt = null;
+      }
+    } else if (dto.status !== undefined) {
       // Cancelar tiene su propia ruta porque exige el motivo (POST :id/cancelar);
       // por aquí solo se puede reactivar un contrato cancelado.
       if (dto.status !== 'ACTIVO') {
@@ -635,7 +1087,7 @@ export class VentasAcuerdosService {
     const cid = this.requireCompany(companyId);
     const actual = await this.prisma.salesAgreement.findFirst({
       where: { id, companyId: cid },
-      select: { id: true, status: true, salesClientId: true },
+      select: { id: true, status: true, salesClientId: true, startDate: true },
     });
     if (!actual) throw new NotFoundException('Contrato no encontrado');
     if (actual.status === 'CANCELADO') {
@@ -650,6 +1102,8 @@ export class VentasAcuerdosService {
     if (dto.date?.trim()) {
       const d = parseDiaContrato(dto.date);
       if (!d) throw new BadRequestException('La fecha de cancelación no es válida.');
+      const problema = problemaFechaCancelacion(d, actual.startDate);
+      if (problema) throw new BadRequestException(problema);
       cancelledAt = d;
     }
     await this.prisma.$transaction(async (tx) => {
@@ -685,6 +1139,7 @@ export class VentasAcuerdosService {
         status: true,
         startDate: true,
         endDate: true,
+        kind: true,
         salesClientId: true,
       },
     });
@@ -739,9 +1194,16 @@ export class VentasAcuerdosService {
     userId: number,
     id: number,
     dto: RenewSalesAgreementDto,
+    // Fase 4: oportunidad de renovación que originó este contrato nuevo.
+    opciones: { opportunityId?: number } = {},
   ) {
     const cid = this.requireCompany(companyId);
     const anterior = await this.cargarAnterior(cid, id);
+    if (esProducto(anterior)) {
+      throw new BadRequestException(
+        'Una venta de producto no se renueva. Si el cliente compra otra vez, registra una venta nueva.',
+      );
+    }
     if (anterior.status === 'RENOVADO') {
       throw new BadRequestException('Este contrato ya fue renovado.');
     }
@@ -780,6 +1242,7 @@ export class VentasAcuerdosService {
               : Number(anterior.monthlyValue),
         graceDays: dto.graceDays ?? anterior.graceDays,
         motivo: dto.motivo,
+        opportunityId: opciones.opportunityId,
       },
       { anterior },
     );

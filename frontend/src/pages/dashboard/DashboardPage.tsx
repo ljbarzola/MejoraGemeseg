@@ -312,9 +312,11 @@ export default function DashboardPage() {
             <ColumnPickerMenu
               columns={COLUMNAS_TAREAS}
               visible={columnPrefs.visible}
+              pinned={columnPrefs.pinned}
+              maxPinned={columnPrefs.maxPinned}
               fixedLabel="Tarea"
-              onApply={async (keys) => {
-                const guardado = await columnPrefs.set(keys);
+              onApply={async (keys, fijas) => {
+                const guardado = await columnPrefs.set(keys, fijas);
                 if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
               }}
             />
@@ -335,7 +337,7 @@ export default function DashboardPage() {
             <div className="empty-state">No hay tareas que mostrar con estos filtros.</div>
           ) : (
             <div className="tasks-table-wrapper">
-              <table className="tasks-table resizable-table dashboard-tasks-table" ref={tablaRef}>
+              <table className="tasks-table resizable-table dashboard-tasks-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
                 <thead>
                   <tr>
                     <th {...thProps('title')} className={`sortable-th ${CLASE_COLUMNA.title}`}>

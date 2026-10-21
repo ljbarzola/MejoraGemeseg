@@ -13,6 +13,7 @@ import MarginConfig from '../../components/ventas/cotizador/MarginConfig';
 import NumInput from '../../components/ventas/cotizador/NumInput';
 import PriceChangesModal from '../../components/ventas/cotizador/PriceChangesModal';
 import ProductDetailModal from '../../components/ventas/cotizador/ProductDetailModal';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import QuoteDetail from '../../components/ventas/cotizador/QuoteDetail';
 import QuotePrint from '../../components/ventas/cotizador/QuotePrint';
 import QuoteTotals from '../../components/ventas/cotizador/QuoteTotals';
@@ -524,35 +525,35 @@ export default function CotizadorPage() {
   const cargoEmisor = draft.ownerName && user && draft.ownerName !== user.fullName ? '' : (user?.position ?? '');
 
   return (
-    <div className="cot-page">
+    <div className="page-container cot-page">
       <div className="cot-screen">
-        <div className="cot-heading">
-          <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Cotizador</h1>
-        </div>
-
-        <div className="cot-toolbar" role="toolbar" aria-label="Acciones del cotizador">
-          <button type="button" className="cot-tool-btn" onClick={() => setVerCatalogo(true)}>
-            <Package size={15} /> Catálogo
-          </button>
-          <button type="button" className="cot-tool-btn" onClick={abrirHistorial}>
-            <FolderOpen size={15} /> Historial
-          </button>
-          <button type="button" className="cot-tool-btn" onClick={abrirPlantillas}>
-            <FileText size={15} /> Plantillas
-          </button>
-          <button type="button" className="cot-tool-btn" onClick={() => setVerAccesoEdicion(true)}>
-            <Lock size={15} /> Compartir edición
-          </button>
-          <span className="cot-toolbar-spacer" />
-          <button
-            type="button"
-            className="cot-tool-btn primary"
-            onClick={() => (draftHasContent(draft) ? setConfirmNueva(true) : nuevaCotizacion())}
-          >
-            <Plus size={16} /> Nueva cotización
-          </button>
-        </div>
+        <VentasPageHeader
+          title="Cotizador"
+          description="Arma cotizaciones con el catálogo de productos y kits, calcula tus márgenes y descárgalas en PDF."
+          actions={
+            <>
+              <button type="button" className="btn-secondary" onClick={() => setVerCatalogo(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Package size={15} /> Catálogo
+              </button>
+              <button type="button" className="btn-secondary" onClick={abrirHistorial} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <FolderOpen size={15} /> Historial
+              </button>
+              <button type="button" className="btn-secondary" onClick={abrirPlantillas} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <FileText size={15} /> Plantillas
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => setVerAccesoEdicion(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Lock size={15} /> Compartir edición
+              </button>
+              <button
+                type="button"
+                className="auth-btn"
+                onClick={() => (draftHasContent(draft) ? setConfirmNueva(true) : nuevaCotizacion())}
+              >
+                <Plus size={16} /> Nueva cotización
+              </button>
+            </>
+          }
+        />
 
         {errorCarga && (
           <div className="cot-banner warn" role="alert">

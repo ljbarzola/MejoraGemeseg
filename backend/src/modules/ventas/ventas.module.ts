@@ -21,6 +21,8 @@ import { VentasLeadsController } from './ventas-leads.controller';
 import { VentasConversionesService } from './ventas-conversiones.service';
 import { VentasConversionesController } from './ventas-conversiones.controller';
 import { VentasConversionesCronController } from './ventas-conversiones-cron.controller';
+import { VentasRenovacionesCronController } from './ventas-renovaciones-cron.controller';
+import { VentasRenovacionesService } from './ventas-renovaciones.service';
 import { GoogleAdsConversionesService } from './google-ads-conversiones.service';
 import { VentasConfigService } from './ventas-config.service';
 import { VentasConfigController } from './ventas-config.controller';
@@ -36,6 +38,8 @@ import { PersonalModule } from '../personal/personal.module';
 import { PermissionsModule } from '../permissions/permissions.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { MailModule } from '../mail/mail.module';
+import { VentasUbicacionesController } from './ventas-ubicaciones.controller';
+import { VentasUbicacionesService } from './ventas-ubicaciones.service';
 
 @Module({
   imports: [
@@ -58,7 +62,9 @@ import { MailModule } from '../mail/mail.module';
     VentasLeadsController,
     VentasConversionesController,
     VentasConversionesCronController,
+    VentasRenovacionesCronController,
     VentasConfigController,
+    VentasUbicacionesController,
     CotizadorCatalogoController,
     CotizadorCotizacionesController,
   ],
@@ -71,6 +77,7 @@ import { MailModule } from '../mail/mail.module';
     VentasSchemaService,
     VentasMotivosService,
     VentasOportunidadesService,
+    VentasRenovacionesService,
     VentasCicloService,
     VentasAnaliticaService,
     VentasLeadsService,
@@ -78,10 +85,12 @@ import { MailModule } from '../mail/mail.module';
     VentasConversionesService,
     GoogleAdsConversionesService,
     VentasConfigService,
+    VentasUbicacionesService,
     CotizadorCatalogoService,
     CotizadorCotizacionesService,
   ],
   exports: [
+    VentasCicloService,
     VentasExpedienteService,
     VentasAnaliticaService,
     VentasOportunidadesService,

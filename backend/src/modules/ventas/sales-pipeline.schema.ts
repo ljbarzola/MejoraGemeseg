@@ -13,12 +13,35 @@ import { fk } from './sales-agreement.schema';
  *
  * Va DESPUÉS de SALES_AGREEMENT_DDL: usa "SalesService" y "SalesClient".
  */
+/**
+ * Columnas nuevas en "SalesOpportunity" (2026-10-18, Fase 4: renovaciones). Van en la transacción
+ * aparte que corre ANTES del resto (ver VentasSchemaService.agregarColumnasNuevas), aditivas y
+ * nulas para que el despliegue anterior siga funcionando.
+ */
+export const SALES_OPPORTUNITY_COLUMNS_DDL: string[] = [
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "renewsAgreementId" INTEGER`,
+  // 2026-10-19: ubicación opcional de la oportunidad (mapa). Todas nulas, sin índice ni valor por defecto.
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "locationName" TEXT`,
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "locationAddress" TEXT`,
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "locationLat" DOUBLE PRECISION`,
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "locationLng" DOUBLE PRECISION`,
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "locationCity" TEXT`,
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "locationProvince" TEXT`,
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "locationOsmId" TEXT`,
+];
+
 export const SALES_PIPELINE_DDL: string[] = [
   // ---- Columnas nuevas de SalesAgreement (la tabla aún no está en producción) ----
   `ALTER TABLE "SalesAgreement" ADD COLUMN IF NOT EXISTS "monthlyValue" DECIMAL(12,2)`,
   `ALTER TABLE "SalesAgreement" ADD COLUMN IF NOT EXISTS "graceDays" INTEGER NOT NULL DEFAULT 30`,
   `ALTER TABLE "SalesAgreement" ADD COLUMN IF NOT EXISTS "cancelledAt" TIMESTAMP(3)`,
   `ALTER TABLE "SalesAgreement" ADD COLUMN IF NOT EXISTS "opportunityId" INTEGER`,
+  // Servicio recurrente o venta de producto (2026-10-15). Los contratos que ya
+  // existen quedan como SERVICIO por el DEFAULT.
+  `ALTER TABLE "SalesAgreement" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL DEFAULT 'SERVICIO'`,
+  `ALTER TABLE "SalesAgreement" ADD COLUMN IF NOT EXISTS "totalValue" DECIMAL(12,2)`,
+  `ALTER TABLE "SalesAgreement" ADD COLUMN IF NOT EXISTS "deliveredAt" DATE`,
+  `ALTER TABLE "SalesAgreement" ADD COLUMN IF NOT EXISTS "warrantyUntil" DATE`,
 
   // ---- Leads ----
   `CREATE TABLE IF NOT EXISTS "SalesLead" (
@@ -74,6 +97,13 @@ export const SALES_PIPELINE_DDL: string[] = [
   `CREATE INDEX IF NOT EXISTS "SalesOpportunity_companyId_status_idx" ON "SalesOpportunity"("companyId", "status")`,
   `CREATE INDEX IF NOT EXISTS "SalesOpportunity_salesClientId_idx" ON "SalesOpportunity"("salesClientId")`,
   `CREATE INDEX IF NOT EXISTS "SalesOpportunity_companyId_assignedUserId_idx" ON "SalesOpportunity"("companyId", "assignedUserId")`,
+  // 2026-10-18 (Fase 4): la oportunidad de renovación apunta al contrato que renueva. Es una
+  // columna nueva sobre una tabla que ya existe: en producción la agrega ANTES, aparte, la lista
+  // SALES_OPPORTUNITY_COLUMNS_DDL (Prisma pide toda columna que conoce en cada consulta). Aquí se
+  // repite solo para una base nueva, donde la tabla se acaba de crear; es idempotente.
+  `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "renewsAgreementId" INTEGER`,
+  ...SALES_OPPORTUNITY_COLUMNS_DDL,
+  `CREATE INDEX IF NOT EXISTS "SalesOpportunity_renewsAgreementId_idx" ON "SalesOpportunity"("renewsAgreementId")`,
   fk('SalesOpportunity', 'companyId', 'Company', 'CASCADE'),
   fk('SalesOpportunity', 'salesClientId', 'SalesClient', 'CASCADE'),
 
@@ -167,6 +197,10 @@ export const SALES_PIPELINE_DDL: string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "SalesConversionEvent_opportunityId_kind_key" ON "SalesConversionEvent"("opportunityId", "kind")`,
   `CREATE INDEX IF NOT EXISTS "SalesConversionEvent_companyId_status_idx" ON "SalesConversionEvent"("companyId", "status")`,
   fk('SalesConversionEvent', 'companyId', 'Company', 'CASCADE'),
+  // 2026-10-18: «Lead válido» pasa ANTES de que exista la oportunidad, así que ese hecho no tiene
+  // oportunidad. Solo se quita el NOT NULL (no se agrega columna ni se borra nada; idempotente) y la
+  // unicidad (oportunidad, tipo) sigue igual para los hechos de siempre; la de «válido» se cuida en código.
+  `ALTER TABLE "SalesConversionEvent" ALTER COLUMN "opportunityId" DROP NOT NULL`,
 
   // ---- Ajustes de Ventas por empresa (2026-10-15) ----
   `CREATE TABLE IF NOT EXISTS "SalesSetting" (
@@ -205,7 +239,12 @@ export const SALES_PIPELINE_BACKFILL: string[] = [
       c."createdBy", c."createdAt", CURRENT_TIMESTAMP
     FROM "SalesClient" c
     LEFT JOIN "SalesClientStage" s ON s."companyId" = c."companyId" AND s."key" = c."status"
-    WHERE NOT EXISTS (SELECT 1 FROM "SalesOpportunity" o WHERE o."salesClientId" = c."id")`,
+    WHERE NOT EXISTS (SELECT 1 FROM "SalesOpportunity" o WHERE o."salesClientId" = c."id")
+      -- SOLO la primera vez (tabla de oportunidades vacía). Este relleno corre en CADA arranque del servidor
+      -- (Cloud Run arranca de cero tras cada reposo): sin esta guarda, una empresa o persona guardada solo
+      -- con datos en el Directorio (que NO tiene oportunidad a propósito) o a la que se le borró su única
+      -- oportunidad recibía una oportunidad «MIGRADA» fantasma en el siguiente arranque.
+      AND NOT EXISTS (SELECT 1 FROM "SalesOpportunity")`,
   `INSERT INTO "SalesOpportunityStageChange" (
       "opportunityId","salesClientId","companyId","fromStatus","toStatus","notes","changedBy","createdAt","legacyChangeId"
     )

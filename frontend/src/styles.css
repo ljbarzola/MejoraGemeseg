@@ -448,8 +448,10 @@ body {
 
 .page-container {
   min-height: 100vh;
-  padding: 32px;
-  max-width: 1100px;
+  padding: 28px 24px;
+  /* 1100px dejaba ~45px vacíos a cada lado en una pantalla de 1440 y obligaba a
+     las tablas anchas a desplazarse de lado (2026-10-20). */
+  max-width: 1480px;
   margin: 0 auto;
   background: linear-gradient(120deg, rgba(16, 15, 49, 0.06), rgba(18, 55, 95, 0.04));
 }
@@ -734,6 +736,34 @@ body {
   }
 }
 
+/* Filtro con etiqueta encima (FilterField): el nombre del filtro siempre se lee
+   y el select tiene ancho para su texto, sin "…". */
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.filter-field-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #718096;
+  line-height: 1;
+}
+.filter-bar-fields--etiquetas {
+  align-items: flex-end;
+}
+.filter-bar:has(.filter-field) .filter-bar-actions {
+  align-self: flex-end;
+}
+.filter-field .filter-select {
+  width: auto;
+  min-width: 135px;
+  max-width: 240px;
+}
+
 /* Botón cuadrado solo-ícono: ocupa siempre lo mismo, con o sin contenido. */
 .icon-btn {
   display: inline-flex;
@@ -890,10 +920,25 @@ a.enlace-tabla:hover {
 .page-title-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  /* Las acciones se alinean con el PIE del título (y de su descripción), no con el borde de arriba:
+     la campana de notificaciones es fija arriba a la derecha y tapaba el último botón. */
+  align-items: flex-end;
   flex-wrap: wrap;
   gap: 12px;
 }
+
+/* El nombre del módulo («VENTAS Y CRM») y el de la pantalla («Oportunidades») van pegados: el h1 traía
+   ~21px de margen del navegador arriba y abajo y separaba todo (2026-10-20). */
+.page-title-row h1 { margin: 0; line-height: 1.15; }
+.page-title-row .page-eyebrow { margin: 0 0 2px; line-height: 1.2; }
+.page-title-row { margin-bottom: 8px; }
+
+/* Con botones, el encabezado mide al menos lo que la campana (16px + ~52px de alto) deja libre: así los
+   botones, alineados abajo, quedan siempre por debajo de ella aunque el título sea corto. */
+.page-title-row:has(> .header-actions) { min-height: 76px; }
+
+/* Descripción de la pantalla DENTRO del bloque del título: los botones quedan a su lado, no encima. */
+.page-title-row .page-title-help { margin: 6px 0 0; max-width: 110ch; }
 
 .page-title-row > *:first-child {
   flex: 1 1 320px;
@@ -904,6 +949,25 @@ a.enlace-tabla:hover {
 .page-title-row > *:last-child:not(:first-child) {
   margin-left: auto;
   flex: 0 0 auto;
+}
+
+/* Encabezados con varios botones largos: en pantalla angosta cada botón ocupa todo el ancho
+   en vez de quedar cada uno de un tamaño pegado a la derecha. */
+@media (max-width: 640px) {
+  .header-actions--ancho-movil > .auth-btn,
+  .header-actions--ancho-movil > .btn-secondary {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}
+
+/* Texto de ayuda bajo el título + acciones: va DESPUÉS de .page-title-row, con su propio margen.
+   No uses margen negativo para «subirlo»: si las acciones pasan a otra línea, se montan encima. */
+.page-title-help {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+  margin: 8px 0 16px;
 }
 
 .filter-btn {
@@ -2583,6 +2647,132 @@ a.enlace-tabla:hover {
   opacity: 0.9;
 }
 
+/* ---- Agente de Ventas (2026-10-18) ---- */
+
+/* Entrada de varias líneas (Enter envía, Mayús+Enter baja de línea). */
+textarea.chat-input {
+  resize: none;
+  line-height: 1.4;
+  max-height: 120px;
+  overflow-y: auto;
+  border-radius: 20px;
+}
+
+/* Referencia de evidencia que cita el agente ([#opp:12] → «oportunidad 12»). */
+.chat-ref {
+  display: inline-block;
+  padding: 0 7px;
+  margin: 0 1px;
+  border-radius: 10px;
+  background: rgba(43, 108, 176, 0.12);
+  color: #2b6cb0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.55;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.chat-ref-enlace:hover {
+  background: rgba(43, 108, 176, 0.25);
+  text-decoration: underline;
+}
+
+/* Preguntas sugeridas de un clic. */
+.chat-sugerencias-titulo {
+  margin: 18px 0 8px;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8a94a6;
+}
+
+.chat-sugerencias {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.chat-sugerencia {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--borde-input);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--azul-oscuro);
+  font-size: 0.88rem;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.chat-sugerencia:hover:not(:disabled) {
+  border-color: var(--azul-claro);
+  background: #f4f8fd;
+}
+
+.chat-sugerencia:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chat-ayuda-ventas {
+  margin: 14px 0 0;
+  text-align: left;
+  font-size: 0.8rem;
+  color: #718096;
+  line-height: 1.45;
+}
+
+/* Barra «Hablando de: empresa» sobre el cuadro de texto. */
+.chat-contexto-cliente {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border-top: 1px solid var(--gris-claro);
+  background: #eef5fd;
+  color: var(--azul-oscuro);
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.chat-contexto-cliente span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-contexto-cliente button {
+  border: none;
+  background: transparent;
+  color: #4a5568;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Título de cada conversación del historial: su primera pregunta, en una o dos líneas. */
+.chat-conv-item-titulo {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 4px 0 2px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--azul-oscuro);
+  text-align: left;
+}
+
 .role-select {
   padding: 5px 10px;
   border: 2px solid var(--borde-input);
@@ -3974,6 +4164,7 @@ a.enlace-tabla:hover {
 }
 
 .sidebar-link-sub {
+  gap: 8px; /* 12px dejaba «Planificación y Campo» cortado con «…» en el menú de 240px */
   font-size: 0.82rem;
   padding: 6px 12px 6px 20px;
   opacity: 0.9;
@@ -4697,4 +4888,405 @@ a.enlace-tabla:hover {
   flex-shrink: 0;
   gap: 6px;
   padding-bottom: 4px;
+}
+
+/* ---- Bitácoras de guardianía (Contratación Pública): detalle de una hoja ---- */
+.bitacora-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 18px;
+  align-items: start;
+}
+.bitacora-layout > :first-child {
+  position: sticky;
+  top: 12px;
+}
+.bitacora-layout--una {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* Motivos de cierre: las tres listas una al lado de la otra */
+.cfg-mot-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+
+.cfg-mot-col { min-width: 0; padding: 14px; border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; }
+
+.cfg-mot-cab { margin-bottom: 12px; }
+.cfg-mot-cab h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 0.98rem; color: var(--azul-oscuro); }
+.cfg-mot-cab h3 svg { flex: none; color: #8a96a8; }
+.cfg-mot-cab p { margin: 0; min-height: 4.35em; font-size: 0.78rem; line-height: 1.45; color: #718096; } /* alto fijo: así los cuadros de «nuevo motivo» quedan alineados entre columnas */
+
+.cfg-mot-cab--corta p { min-height: 0; }
+
+.cfg-mot-nuevo { margin-bottom: 12px; padding: 10px; border-radius: 10px; background: #f4f7fb; }
+.cfg-mot-nuevo-fila { display: flex; gap: 8px; }
+.cfg-mot-nuevo input[type="text"] { background: #fff; }
+.cfg-mot-opciones { margin-top: 8px; font-size: 0.78rem; color: #718096; }
+.cfg-mot-opciones summary { cursor: pointer; }
+
+.cfg-mot-lista { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.cfg-mot-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+  border-top: 1px solid #edf2f7;
+}
+.cfg-mot-item:first-child { border-top: 0; }
+.cfg-mot-item--off .cfg-serv-texto { opacity: 0.55; }
+.cfg-mot-item--edit { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px; border-radius: 10px; background: #f4f7fb; }
+.cfg-mot-vacio { margin: 0; font-size: 0.85rem; color: #8a96a8; }
+
+@media (max-width: 1100px) {
+  .bitacora-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bitacora-layout > :first-child {
+    position: static;
+  }
+}
+.bitacora-fila {
+  display: grid;
+  gap: 8px;
+  align-items: center;
+}
+.bitacora-fila--guardia {
+  grid-template-columns: 136px minmax(110px, 1fr) 96px 96px 36px;
+}
+.bitacora-fila--novedad {
+  grid-template-columns: 136px 96px minmax(120px, 1fr) 36px;
+}
+.bitacora-fila--cabecera {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #718096;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.bitacora-fila-caja {
+  border-bottom: 1px solid #edf2f7;
+  padding: 8px 0;
+}
+.bitacora-fila-nota {
+  font-size: 0.76rem;
+  color: #718096;
+  margin-top: 4px;
+}
+
+/* ===== Mapas de Ventas (Leaflet): pin de «Ubicación» y burbujas del Dashboard (2026-10-19) ===== */
+.ubicacion-pin {
+  background: none;
+  border: 0;
+  font-size: 28px;
+  line-height: 32px;
+  text-align: center;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+.mapa-ecuador {
+  height: 420px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  z-index: 0;
+}
+.mapa-ecuador .leaflet-popup-content { font-size: 12.5px; margin: 10px 12px; }
+.mapa-burbuja-numero {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: #1a202c;
+  font-weight: 800;
+  font-size: 12px;
+}
+.mapa-burbuja-numero::before { display: none; }
+
+
+/* ══════════════════════════════════════════════════════════════════
+   TABLAS VIVAS (2026-10-20) — utils/tablasVivas.ts las activa solas
+   ══════════════════════════════════════════════════════════════════
+   Toda `.tasks-table-wrapper` fuera de un modal se vuelve una "ventana" con
+   altura propia: se desplaza por dentro, el encabezado y las primeras columnas
+   no se van, y la barra de scroll horizontal queda siempre visible al pie.
+   `--tabla-alto` lo calcula el script (lo que queda de pantalla desde donde
+   empieza la tabla). `data-fijas` en la <table> manda cuántas columnas se fijan
+   (0, 1 o 2; sin atributo, 1). */
+.tasks-table-wrapper.tabla-viva {
+  overflow: auto;
+  max-height: var(--tabla-alto, none);
+  overscroll-behavior-x: contain;
+  background: #fff;
+}
+
+.tasks-table-wrapper.tabla-viva[data-desborda] { cursor: grab; }
+.tasks-table-wrapper.tabla-viva[data-arrastrando] { cursor: grabbing; }
+.tasks-table-wrapper.tabla-viva[data-arrastrando] * { cursor: grabbing !important; }
+
+/* Con `border-collapse: collapse` los bordes de las celdas fijas desaparecen al
+   desplazar; con `separate` se quedan pegados a su celda. */
+.tabla-viva .tasks-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.tabla-viva .tasks-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--gris-claro);
+}
+
+/* Columnas fijas: la 1.ª (y la 2.ª si data-fijas="2"). Necesitan fondo opaco o el
+   contenido que pasa por debajo se transparenta. */
+.tabla-viva .tasks-table[data-fijas="1"] :is(th, td):nth-child(1),
+.tabla-viva .tasks-table[data-fijas="2"] :is(th, td):nth-child(-n+2) {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+}
+.tabla-viva .tasks-table[data-fijas="2"] :is(th, td):nth-child(2) { left: var(--fija-2, 200px); }
+
+.tabla-viva .tasks-table[data-fijas="1"] td:nth-child(1),
+.tabla-viva .tasks-table[data-fijas="2"] td:nth-child(-n+2) { background: #fff; }
+.tabla-viva .tasks-table[data-fijas="1"] tbody tr:hover > td:nth-child(1),
+.tabla-viva .tasks-table[data-fijas="2"] tbody tr:hover > td:nth-child(-n+2) { background: #f6f7f9; }
+
+/* El cruce encabezado + columna fija queda por encima de ambos. */
+.tabla-viva .tasks-table[data-fijas="1"] th:nth-child(1),
+.tabla-viva .tasks-table[data-fijas="2"] th:nth-child(-n+2) { z-index: 4; }
+
+/* Sombra en el borde de la última fija, solo cuando la tabla ya se movió de lado:
+   es la pista visual de que hay datos "por debajo". */
+.tabla-viva[data-scrolled] .tasks-table[data-fijas="1"] :is(th, td):nth-child(1),
+.tabla-viva[data-scrolled] .tasks-table[data-fijas="2"] :is(th, td):nth-child(2) {
+  box-shadow: 6px 0 8px -6px rgba(16, 15, 49, 0.28);
+}
+
+/* En el teléfono una columna fija de ~240px se comería casi todo el ancho: ahí no se
+   fijan columnas (el encabezado sí se queda arriba). */
+@media (max-width: 768px) {
+  .tabla-viva .tasks-table[data-fijas] :is(th, td):nth-child(-n+2) { left: auto; }
+  .tabla-viva .tasks-table[data-fijas] td:nth-child(-n+2) { position: static; background: transparent; }
+  .tabla-viva[data-scrolled] .tasks-table[data-fijas] :is(th, td):nth-child(-n+2) { box-shadow: none; }
+}
+
+/* Submenús con grupos (2026-10-20): título pequeño no clicable y línea separadora.
+   Ver `grupo` / `separadorAntes` en Sidebar.tsx. */
+.sidebar-sub-grupo {
+  padding: 10px 12px 3px 20px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  user-select: none;
+}
+
+.sidebar-sub-separador {
+  height: 1px;
+  margin: 8px 12px 6px 16px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   CONFIGURACIÓN DE VENTAS (2026-10-20) — pages/ventas/ConfiguracionVentasPage.tsx
+   ══════════════════════════════════════════════════════════════════
+   Pestañas `.admin-tabs` (el mismo patrón de Administración, Oportunidades y Visitas) con
+   icono, y un panel con el título de la sección. «Motivos de cierre» muestra las tres listas
+   en columnas. Las filas de «Conexiones» (.cfg-conex*) muestran estado y
+   actividad real y se abren en su lugar. */
+.cfg-panel {
+  min-width: 0;
+  padding: 28px 32px 32px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.06);
+}
+
+.cfg-panel-cab {
+  margin-bottom: 22px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--gris-claro);
+}
+.cfg-panel-cab h2 { margin: 0 0 6px; font-size: 1.3rem; color: var(--azul-oscuro); }
+.cfg-panel-cab p { max-width: 72ch; margin: 0; font-size: 0.9rem; line-height: 1.55; color: #4a5568; }
+.cfg-panel-cab p + p { margin-top: 6px; color: #718096; font-size: 0.85rem; }
+
+.cfg-aviso-lectura {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #fffaf0;
+  border: 1px solid #fbd38d;
+  color: #744210;
+  font-size: 0.85rem;
+}
+
+.cfg-pie { margin: 18px 4px 0; font-size: 0.82rem; line-height: 1.6; color: #718096; }
+.cfg-pie button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--azul-oscuro);
+  cursor: pointer;
+}
+.cfg-pie button:hover { text-decoration: underline; }
+
+/* Conexiones */
+.cfg-conex-lista { display: flex; flex-direction: column; gap: 10px; }
+
+.cfg-conex {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.cfg-conex[data-abierta] { border-color: #8fb0d3; box-shadow: 0 4px 14px rgba(18, 55, 95, 0.08); }
+
+.cfg-conex-cab {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 18px;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cfg-conex-cab:hover { background: #f7f9fc; }
+
+.cfg-punto { flex: none; width: 10px; height: 10px; border-radius: 50%; background: #a0aec0; }
+.cfg-punto--activa { background: #38a169; box-shadow: 0 0 0 4px rgba(56, 161, 105, 0.16); }
+
+.cfg-conex-texto { flex: 1; min-width: 0; }
+.cfg-conex-nombre { display: block; font-size: 0.97rem; font-weight: 700; color: #1a202c; }
+.cfg-conex-resumen { display: block; margin-top: 2px; font-size: 0.82rem; color: #718096; }
+
+.cfg-estado {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #edf2f7;
+  color: #4a5568;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+.cfg-estado--activa { background: #e6f6ec; color: #276749; }
+
+.cfg-conex-flecha { flex: none; color: #8a96a8; transition: transform 0.15s; }
+.cfg-conex[data-abierta] .cfg-conex-flecha { transform: rotate(180deg); }
+
+.cfg-conex-cuerpo { padding: 6px 22px 22px 46px; border-top: 1px solid #edf2f7; }
+.cfg-conex-cuerpo .admin-section {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.cfg-conex--nueva { border-style: dashed; border-color: #a9c3de; background: #fbfdff; }
+.cfg-conex--nueva .cfg-conex-nombre { color: var(--azul-oscuro); }
+
+/* Fuentes y catálogos */
+.cfg-fuentes { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+.cfg-fuente-grupo { padding: 16px 18px; border: 1px solid #e2e8f0; border-radius: 12px; }
+.cfg-fuente-grupo h3 { margin: 0 0 10px; font-size: 0.92rem; color: var(--azul-oscuro); }
+.cfg-fuente-grupo ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.cfg-fuente-grupo li { font-size: 0.88rem; color: #2d3748; }
+.cfg-fuente-grupo li small { display: block; color: #8a96a8; font-size: 0.76rem; }
+
+.cfg-herramientas {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f4f7fb;
+}
+.cfg-herramientas input[type="text"], .cfg-herramientas select { background: #fff; }
+
+/* Servicios: una columna por categoría, con las mismas filas que Motivos de cierre (.cfg-mot-*) */
+
+.cfg-serv-texto { flex: 1; min-width: 0; }
+.cfg-serv-nombre { display: block; font-size: 0.88rem; font-weight: 600; line-height: 1.25; color: #1a202c; overflow-wrap: anywhere; }
+.cfg-serv-sub { display: block; margin-top: 1px; font-size: 0.76rem; color: #8a96a8; }
+
+.cfg-serv-acciones { display: flex; flex: none; gap: 4px; }
+.cfg-serv-acciones .icon-btn { width: 30px; height: 30px; }
+
+/* Interruptor activo / desactivado (es un checkbox, accesible con teclado) */
+.cfg-switch { position: relative; flex: none; display: inline-block; width: 34px; height: 19px; cursor: pointer; }
+.cfg-switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: inherit; }
+.cfg-switch span {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #cbd5e0;
+  transition: background 0.15s;
+  pointer-events: none;
+}
+.cfg-switch span::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s;
+}
+.cfg-switch input:checked + span { background: #38a169; }
+.cfg-switch input:checked + span::after { transform: translateX(15px); }
+.cfg-switch input:focus-visible + span { outline: 2px solid var(--azul-claro, #2b6cb0); outline-offset: 2px; }
+.cfg-switch input:disabled { cursor: not-allowed; }
+.cfg-switch input:disabled + span { opacity: 0.5; }
+
+@media (max-width: 1100px) {
+  .cfg-mot-cols { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 900px) {
+  .cfg-panel { padding: 20px 16px 24px; }
+  .cfg-conex-cuerpo { padding-left: 18px; padding-right: 16px; }
+}
+
+/* En el teléfono el estado baja a su propia línea para no apretar el nombre. */
+@media (max-width: 600px) {
+  .cfg-conex-cab { flex-wrap: wrap; row-gap: 8px; padding: 14px; }
+  .cfg-conex-texto { flex: 1 1 calc(100% - 70px); }
+  .cfg-conex-flecha { order: 2; }
+  .cfg-estado { order: 3; margin-left: 24px; }
+}
+
+/* Visitas: líneas pequeñas bajo el nombre del cliente (lugar, teléfono, oportunidad) */
+.visita-sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: #718096;
+}
+.visita-sub svg { flex: none; }
+.visita-sub--opp { color: #2b6cb0; }
+
+/* Pestañas estándar (components/common/PageTabs.tsx): compactas, con icono opcional y siempre el mismo margen
+   debajo del encabezado. */
+.page-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  margin: 0 0 16px;
+}
+.page-tabs .admin-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 11px 20px;
 }

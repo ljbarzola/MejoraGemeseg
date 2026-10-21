@@ -1,6 +1,7 @@
 import {
   CUENTA_ADS_POR_DEFECTO,
   construirSolicitud,
+  idTransaccion,
   leerConfigGoogleAds,
   mensajeDeError,
 } from './google-ads-conversiones.util';
@@ -36,8 +37,8 @@ describe('construirSolicitud', () => {
 
   it('arma una destinación por tipo y un evento por hecho, con su gclid', () => {
     const body = construirSolicitud(config, [
-      { opportunityId: 7, kind: 'CUALIFICADO', gclid: 'G1', occurredAt: salida, value: null, currency: 'USD' },
-      { opportunityId: 7, kind: 'CONVERTIDO', gclid: 'G1', occurredAt: salida, value: 1200, currency: 'USD' },
+      { opportunityId: 7, leadId: 70, kind: 'CUALIFICADO', gclid: 'G1', occurredAt: salida, value: null, currency: 'USD' },
+      { opportunityId: 7, leadId: 70, kind: 'CONVERTIDO', gclid: 'G1', occurredAt: salida, value: 1200, currency: 'USD' },
     ]);
     expect(body.destinations).toHaveLength(2);
     expect(body.destinations[0]).toMatchObject({
@@ -58,7 +59,7 @@ describe('construirSolicitud', () => {
 
   it('un hecho sin valor no manda monto', () => {
     const body = construirSolicitud(config, [
-      { opportunityId: 1, kind: 'CUALIFICADO', gclid: 'G', occurredAt: salida, value: null, currency: 'USD' },
+      { opportunityId: 1, leadId: 10, kind: 'CUALIFICADO', gclid: 'G', occurredAt: salida, value: null, currency: 'USD' },
     ]);
     expect(body.events[0]).not.toHaveProperty('conversionValue');
     expect(body.destinations).toHaveLength(1);
@@ -67,6 +68,34 @@ describe('construirSolicitud', () => {
   it('en modo validación lo pide a Google', () => {
     const c = leerConfigGoogleAds({ ...ENV_COMPLETO, GOOGLE_ADS_VALIDATE_ONLY: 'true' })!;
     expect(construirSolicitud(c, []).validateOnly).toBe(true);
+  });
+});
+
+describe('Lead válido (paso intermedio, opcional)', () => {
+  const salida = new Date('2026-10-18T14:00:00.000Z');
+
+  it('sin su ID, la conversión «válido» queda vacía y se ignora; con él, se lee', () => {
+    expect(leerConfigGoogleAds(ENV_COMPLETO)?.conversiones.VALIDO).toBe('');
+    expect(leerConfigGoogleAds({ ...ENV_COMPLETO, GOOGLE_ADS_CONVERSION_VALIDO: '333' })?.conversiones.VALIDO).toBe('333');
+  });
+
+  it('un hecho válido no tiene oportunidad y se identifica por el lead', () => {
+    const config = leerConfigGoogleAds({ ...ENV_COMPLETO, GOOGLE_ADS_CONVERSION_VALIDO: '333' })!;
+    const body = construirSolicitud(config, [
+      { opportunityId: null, leadId: 55, kind: 'VALIDO', gclid: 'GV', occurredAt: salida, value: null, currency: 'USD' },
+    ]);
+    expect(body.destinations).toHaveLength(1);
+    expect(body.destinations[0]).toMatchObject({ reference: 'VALIDO', productDestinationId: '333' });
+    expect(body.events[0]).toMatchObject({
+      destinationReferences: ['VALIDO'],
+      transactionId: 'crm-lead-55-VALIDO',
+      adIdentifiers: { gclid: 'GV' },
+    });
+  });
+
+  it('los hechos de siempre conservan su id de transacción (no se duplica lo ya enviado)', () => {
+    expect(idTransaccion({ opportunityId: 7, leadId: 70, kind: 'CONVERTIDO' })).toBe('crm-7-CONVERTIDO');
+    expect(idTransaccion({ opportunityId: 7, leadId: 70, kind: 'CUALIFICADO' })).toBe('crm-7-CUALIFICADO');
   });
 });
 

@@ -24,6 +24,8 @@ const ETIQUETA_ESTADO: Record<EstadoContrato, string> = {
   VENCIDO: 'vencido',
   RENOVADO: 'renovado',
   CANCELADO: 'cancelado',
+  POR_ENTREGAR: 'por entregar',
+  ENTREGADO: 'entregado',
 };
 
 const dinero = (v: number | null | undefined) =>
@@ -76,6 +78,11 @@ export class AiVentasInvestigacionQueries {
       return 'Indica de qué cliente quieres el expediente (parte de su nombre o su RUC).';
     }
     return (await this.expedientes.armar(companyId, cliente)).texto;
+  }
+
+  // Expediente de un cliente que ya se conoce por su id (botón «Preguntar al agente» de la ficha).
+  async expedientePorId(companyId: number, clienteId: number): Promise<string> {
+    return (await this.expedientes.armarPorId(companyId, clienteId)).texto;
   }
 
   // ---- cartera ----
@@ -199,9 +206,12 @@ export class AiVentasInvestigacionQueries {
       renovado: 'RENOVADO',
       renovados: 'RENOVADO',
       por_iniciar: 'POR_INICIAR',
+      por_entregar: 'POR_ENTREGAR',
+      entregado: 'ENTREGADO',
+      entregados: 'ENTREGADO',
     };
     if (estadoParam && !mapa[e]) {
-      return `El estado "${estadoParam}" no es válido: usa vigente, por_vencer, vencido, cancelado o renovado.`;
+      return `El estado "${estadoParam}" no es válido: usa vigente, por_vencer, vencido, cancelado, renovado, por_entregar o entregado.`;
     }
     const filas = await this.prisma.salesAgreement.findMany({
       where: { companyId },
@@ -216,7 +226,9 @@ export class AiVentasInvestigacionQueries {
     if (sel.length === 0) return mapa[e] ? `No hay contratos ${ETIQUETA_ESTADO[mapa[e]]}s.` : 'No hay contratos registrados.';
     const lineas = sel.slice(0, MAX_LINEAS).map(
       ({ c, estado }) =>
-        `- ${c.salesClient.name}${c.title ? ` · ${c.title}` : ''} · ${ETIQUETA_ESTADO[estado]} · ${formatoDia(c.startDate)} a ${c.endDate ? formatoDia(c.endDate) : 'sin fin'} · ${c.services.map((s) => s.service.name).join(', ') || 'sin servicios'} · ${dinero(c.monthlyValue === null ? null : Number(c.monthlyValue))} [#contrato:${c.id}]`,
+        c.kind === 'PRODUCTO'
+          ? `- ${c.salesClient.name}${c.title ? ` · ${c.title}` : ''} · VENTA DE PRODUCTO (única, no se renueva) · ${ETIQUETA_ESTADO[estado]} · vendido el ${formatoDia(c.startDate)} · ${c.services.map((s) => s.service.name).join(', ') || 'sin productos'} · valor total ${dinero(c.totalValue === null ? null : Number(c.totalValue))}${c.warrantyUntil ? ` · garantía hasta ${formatoDia(c.warrantyUntil)}` : ''} [#contrato:${c.id}]`
+          : `- ${c.salesClient.name}${c.title ? ` · ${c.title}` : ''} · ${ETIQUETA_ESTADO[estado]} · ${formatoDia(c.startDate)} a ${c.endDate ? formatoDia(c.endDate) : 'sin fin'} · ${c.services.map((s) => s.service.name).join(', ') || 'sin servicios'} · ${dinero(c.monthlyValue === null ? null : Number(c.monthlyValue))} [#contrato:${c.id}]`,
     );
     const porEstado = (Object.keys(ETIQUETA_ESTADO) as EstadoContrato[])
       .map((k) => `${ETIQUETA_ESTADO[k]}: ${conEstado.filter((x) => x.estado === k).length}`)

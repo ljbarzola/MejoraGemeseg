@@ -18,7 +18,7 @@ export const MOTIVO_KINDS = [
 export type MotivoKind = (typeof MOTIVO_KINDS)[number];
 
 export const ETIQUETA_KIND: Record<MotivoKind, string> = {
-  LEAD_DESCARTE: 'Lead descartado',
+  LEAD_DESCARTE: 'Posible cliente descartado',
   OPP_PERDIDA: 'Oportunidad perdida',
   CONTRATO_CANCELADO: 'Contrato cancelado',
   CONTRATO_REDUCCION: 'Contrato renovado con menos',

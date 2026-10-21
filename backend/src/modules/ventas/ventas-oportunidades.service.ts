@@ -7,12 +7,18 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { GmailMailService } from '../mail/gmail-mail.service';
 import { VentasMotivosService } from './ventas-motivos.service';
 import { hoyEcuador, parseDiaContrato } from './agreement-status.util';
 import { resultadoDeEtapa } from './stage-outcome.util';
 import { VentasConversionesService } from './ventas-conversiones.service';
+import { VentasAcuerdosService } from './ventas-acuerdos.service';
 import { parseSiguientePaso } from './siguiente-paso.util';
+import {
+  columnasDeUbicacion,
+  limpiarUbicacion,
+  ubicacionDeFila,
+  type UbicacionOportunidad,
+} from './ubicacion.util';
 import {
   ETIQUETA_SUBSERVICIO,
   ensureDefaultServices,
@@ -34,13 +40,39 @@ const MAX_TITULO = 150;
 const MAX_NOTAS = 2000;
 
 const incluir = {
-  salesClient: { select: { id: true, name: true, email: true, phone: true } },
+  salesClient: { select: { id: true, name: true, email: true, phone: true, extra: true } },
   services: { include: { service: { select: { id: true, name: true } } } },
 } satisfies Prisma.SalesOpportunityInclude;
 
 type OportunidadConRelaciones = Prisma.SalesOpportunityGetPayload<{
   include: typeof incluir;
 }>;
+
+// Opciones del campo «Servicio requerido» de la ficha (con sus hijos), para poner nombre al servicio guardado.
+type OpcionServicioFicha = { key: string; label: string; children?: { key: string; label: string }[] };
+
+// Texto de lo que la ficha del cliente guardó como servicio («Agentes de Seguridad, Seguridad VIP» o, si solo
+// eligió la categoría, «Monitoreo»), o null si no hay nada. Es lo que se muestra en una oportunidad que no
+// tiene servicios propios, para que el dato guardado en la ficha no se pierda de vista ahora que el
+// Directorio ya no lo muestra.
+export function servicioGuardadoEnFicha(
+  extra: unknown,
+  opciones: OpcionServicioFicha[],
+): string | null {
+  const e = (extra ?? {}) as Record<string, unknown>;
+  const principal = typeof e['servicio_requerido'] === 'string' ? (e['servicio_requerido'] as string).trim() : '';
+  const subClaves = (typeof e['servicio_requerido__sub'] === 'string' ? (e['servicio_requerido__sub'] as string) : '')
+    .split(',')
+    .map((k) => k.trim())
+    .filter(Boolean);
+  const opcion = opciones.find((o) => o.key === principal);
+  const subs = subClaves.map(
+    (k) => opcion?.children?.find((h) => h.key === k)?.label ?? ETIQUETA_SUBSERVICIO[k] ?? k,
+  );
+  if (subs.length > 0) return subs.join(', ');
+  if (!principal) return null;
+  return opcion?.label ?? principal;
+}
 
 export interface EtapaInfo {
   key: string;
@@ -81,13 +113,18 @@ export interface NuevaOportunidadInicial {
     | 'REFERIDO'
     | 'CLIENTE_EXISTENTE'
     | 'MIGRADA'
-    | 'HISTORICO';
+    | 'HISTORICO'
+    | 'RENOVACION';
+  // Solo RENOVACION: contrato de servicio que esta oportunidad renueva (Fase 4).
+  renewsAgreementId?: number | null;
   receivedAt?: Date;
   serviceIds?: number[];
   title?: string | null;
   notes?: string | null;
   quotedAmount?: number | null;
   quotedAt?: Date | null;
+  // Ubicación opcional ya validada (limpiarUbicacion); null o sin enviar = sin ubicación.
+  ubicacion?: UbicacionOportunidad | null;
   // Solo para una oportunidad que nace ya cerrada (originType HISTORICO).
   outcome?: 'GANADA' | 'PERDIDA' | null;
   closedAt?: Date | null;
@@ -100,10 +137,19 @@ export class VentasOportunidadesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
-    private readonly gmailMailService: GmailMailService,
     private readonly motivos: VentasMotivosService,
     private readonly conversiones: VentasConversionesService,
+    private readonly acuerdos: VentasAcuerdosService,
   ) {}
+
+  // Opciones del campo «Servicio requerido» de la empresa (para nombrar el servicio guardado en una ficha).
+  private async opcionesServicioFicha(companyId: number): Promise<OpcionServicioFicha[]> {
+    const campo = await this.prisma.salesClientField.findFirst({
+      where: { companyId, key: 'servicio_requerido' },
+      select: { options: true },
+    });
+    return Array.isArray(campo?.options) ? (campo.options as unknown as OpcionServicioFicha[]) : [];
+  }
 
   private requireCompany(companyId: number | null): number {
     if (!companyId) throw new BadRequestException('Se requiere una empresa');
@@ -146,8 +192,9 @@ export class VentasOportunidadesService {
       .filter(Boolean);
     if (claves.length === 0) return [];
     await ensureDefaultServices(this.prisma, companyId);
+    // Solo los activos: un servicio desactivado no vuelve a asociarse a nada nuevo.
     const servicios = await this.prisma.salesService.findMany({
-      where: { companyId },
+      where: { companyId, isActive: true },
       select: { id: true, name: true },
     });
     const idPorNombre = new Map(servicios.map((s) => [s.name, s.id]));
@@ -174,9 +221,11 @@ export class VentasOportunidadesService {
         referredByUserId: p.referredByUserId ?? null,
         leadId: p.leadId ?? null,
         originType: p.originType,
+        renewsAgreementId: p.renewsAgreementId ?? null,
         notes: p.notes ?? null,
         quotedAmount: p.quotedAmount ?? null,
         quotedAt: p.quotedAt ?? null,
+        ...columnasDeUbicacion(p.ubicacion ?? null),
         outcome: p.outcome ?? null,
         closedAt: p.closedAt ?? null,
         createdBy: p.createdBy,
@@ -211,6 +260,61 @@ export class VentasOportunidadesService {
     return principal;
   }
 
+  // Fase 4: cierra las oportunidades de renovación ABIERTAS de un contrato cuando el contrato se
+  // renueva a mano con «Renovar» (GANADA) o se cancela (PERDIDA), para que no queden oportunidades
+  // sueltas. No pide motivo: el contrato cancelado ya tiene el suyo. Devuelve cuántas cerró.
+  async cerrarRenovacionesAbiertas(
+    companyId: number,
+    agreementId: number,
+    userId: number,
+    outcome: 'GANADA' | 'PERDIDA',
+    nota: string,
+  ): Promise<number> {
+    const abiertas = await this.prisma.salesOpportunity.findMany({
+      where: { companyId, renewsAgreementId: agreementId, closedAt: null },
+      select: { id: true, status: true, salesClientId: true },
+    });
+    if (abiertas.length === 0) return 0;
+    const key = outcome === 'GANADA' ? 'ACEPTADO' : 'RECHAZADO';
+    const etapa = await this.prisma.salesClientStage.findFirst({
+      where: { companyId, key },
+    });
+    if (!etapa) return 0;
+    for (const o of abiertas) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.salesOpportunity.update({
+          where: { id: o.id },
+          data: { status: key, outcome, closedAt: new Date() },
+        });
+        await tx.salesOpportunityStageChange.create({
+          data: {
+            opportunityId: o.id,
+            salesClientId: o.salesClientId,
+            companyId,
+            fromStatus: o.status,
+            toStatus: key,
+            notes: nota,
+            changedBy: userId,
+          },
+        });
+        const principal = await this.espejarCliente(tx, o.salesClientId);
+        if (principal && principal.id === o.id) {
+          await tx.salesClientStageChange.create({
+            data: {
+              salesClientId: o.salesClientId,
+              fromStatus: o.status,
+              toStatus: key,
+              notes: nota,
+              changedBy: userId,
+              companyId,
+            },
+          });
+        }
+      });
+    }
+    return abiertas.length;
+  }
+
   private validarMonto(v: number | null | undefined): number | null | undefined {
     if (v === undefined || v === null) return v;
     if (!Number.isFinite(v) || v < 0) {
@@ -227,14 +331,21 @@ export class VentasOportunidadesService {
     return d;
   }
 
-  private async validarServicios(companyId: number, ids: number[] | undefined) {
+  // Los servicios salen del catálogo de Ventas → Configuración → Servicios, y es la ÚNICA fuente: un servicio
+  // desactivado no se puede asociar a nada nuevo (oportunidad, posible cliente que se convierte, referido,
+  // contrato). Lo que ya lo tenía lo conserva: `yaAsignados` son los que la oportunidad ya traía.
+  async validarServicios(companyId: number, ids: number[] | undefined, yaAsignados: number[] = []) {
     const lista = [...new Set(ids ?? [])];
     if (lista.length === 0) return lista;
-    const encontrados = await this.prisma.salesService.count({
+    const encontrados = await this.prisma.salesService.findMany({
       where: { id: { in: lista }, companyId },
+      select: { id: true, isActive: true },
     });
-    if (encontrados !== lista.length) {
+    if (encontrados.length !== lista.length) {
       throw new BadRequestException('Alguno de los servicios no existe.');
+    }
+    if (encontrados.some((s) => !s.isActive && !yaAsignados.includes(s.id))) {
+      throw new BadRequestException('Alguno de los servicios está desactivado. Actívalo primero o quítalo.');
     }
     return lista;
   }
@@ -247,10 +358,40 @@ export class VentasOportunidadesService {
     return t || null;
   }
 
-  private formatear(o: OportunidadConRelaciones, etapas: Map<string, EtapaInfo>) {
-    const { services, quotedAmount, ...resto } = o;
+  private formatear(
+    o: OportunidadConRelaciones,
+    etapas: Map<string, EtapaInfo>,
+    opcionesServicio: OpcionServicioFicha[] = [],
+  ) {
+    const {
+      services,
+      quotedAmount,
+      locationName,
+      locationAddress,
+      locationLat,
+      locationLng,
+      locationCity,
+      locationProvince,
+      locationOsmId,
+      salesClient: { extra: extraCliente, ...cliente },
+      ...resto
+    } = o;
     return {
       ...resto,
+      salesClient: cliente,
+      // Sin servicios propios, lo que la ficha del cliente tiene guardado (la oportunidad es donde se ve).
+      servicioDeFicha:
+        services.length === 0 ? servicioGuardadoEnFicha(extraCliente, opcionesServicio) : null,
+      // Ubicación opcional (mapa): un solo objeto, o null si no tiene punto.
+      ubicacion: ubicacionDeFila({
+        locationName,
+        locationAddress,
+        locationLat,
+        locationLng,
+        locationCity,
+        locationProvince,
+        locationOsmId,
+      }),
       quotedAmount: quotedAmount === null ? null : Number(quotedAmount),
       services: services.map((s) => s.service),
       stage: o.status ? (etapas.get(o.status) ?? null) : null,
@@ -291,13 +432,14 @@ export class VentasOportunidadesService {
         { services: { some: { service: { name: { contains: q, mode: 'insensitive' } } } } },
       ];
     }
-    const [filas, etapas, usuarios] = await Promise.all([
+    const [filas, etapas, opcionesServicio, usuarios] = await Promise.all([
       this.prisma.salesOpportunity.findMany({
         where,
         include: incluir,
         orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
       }),
       this.etapasDeEmpresa(cid),
+      this.opcionesServicioFicha(cid),
       this.prisma.user.findMany({
         where: { companyId: cid },
         select: { id: true, fullName: true },
@@ -305,7 +447,7 @@ export class VentasOportunidadesService {
     ]);
     const nombre = new Map(usuarios.map((u) => [u.id, u.fullName]));
     return filas.map((o) => ({
-      ...this.formatear(o, etapas),
+      ...this.formatear(o, etapas, opcionesServicio),
       assignedUserName: o.assignedUserId ? (nombre.get(o.assignedUserId) ?? null) : null,
     }));
   }
@@ -321,13 +463,14 @@ export class VentasOportunidadesService {
     });
     if (!o) throw new NotFoundException('Oportunidad no encontrada');
     const etapas = await this.etapasDeEmpresa(cid);
+    const opcionesServicio = await this.opcionesServicioFicha(cid);
     const entradas = await this.prisma.salesReasonEntry.findMany({
       where: { companyId: cid, opportunityId: id },
       orderBy: { createdAt: 'desc' },
     });
     const { stageChanges, ...base } = o;
     return {
-      ...this.formatear(base as OportunidadConRelaciones, etapas),
+      ...this.formatear(base as OportunidadConRelaciones, etapas, opcionesServicio),
       stageChanges,
       motivos: entradas,
     };
@@ -343,13 +486,14 @@ export class VentasOportunidadesService {
       where: { id: dto.salesClientId, companyId: cid },
       select: { id: true, assignedUserId: true, extra: true },
     });
-    if (!cliente) throw new NotFoundException('Cliente no encontrado');
+    if (!cliente) throw new NotFoundException('No se encontró en el Directorio');
     const inicial = await this.prisma.salesClientStage.findFirst({
       where: { companyId: cid, isInitial: true },
     });
     const serviceIds = await this.validarServicios(cid, dto.serviceIds);
     const quotedAmount = this.validarMonto(dto.quotedAmount);
     const quotedAt = this.parseDia(dto.quotedAt, 'La fecha de cotización');
+    const ubicacion = dto.ubicacion ? limpiarUbicacion(dto.ubicacion) : null;
     const existentes = await this.prisma.salesOpportunity.count({
       where: { salesClientId: cliente.id },
     });
@@ -361,7 +505,9 @@ export class VentasOportunidadesService {
         salesClientId: cliente.id,
         status: inicial?.key ?? null,
         createdBy: userId,
-        assignedUserId: dto.assignedUserId === undefined ? (cliente.assignedUserId ?? userId) : dto.assignedUserId,
+        // El responsable es de la OPORTUNIDAD (2026-10-16): quien la crea, salvo
+        // que se indique otro. Ya no hereda el responsable de la empresa o persona.
+        assignedUserId: dto.assignedUserId === undefined ? userId : dto.assignedUserId,
         source: fuente,
         originType: existentes > 0 ? 'CLIENTE_EXISTENTE' : 'MANUAL',
         serviceIds,
@@ -369,6 +515,7 @@ export class VentasOportunidadesService {
         notes: this.texto(dto.notes, MAX_NOTAS, 'Las notas'),
         quotedAmount: quotedAmount ?? null,
         quotedAt: quotedAt ?? null,
+        ubicacion,
       });
       await this.espejarCliente(tx, cliente.id);
       return o;
@@ -389,8 +536,22 @@ export class VentasOportunidadesService {
     if (dto.quotedAmount !== undefined) data.quotedAmount = this.validarMonto(dto.quotedAmount);
     if (dto.quotedAt !== undefined) data.quotedAt = this.parseDia(dto.quotedAt, 'La fecha de cotización');
     if (dto.assignedUserId !== undefined) data.assignedUserId = dto.assignedUserId;
+    // Ubicación opcional: sin enviar no se toca; null la quita; un objeto la reemplaza entera.
+    if (dto.ubicacion !== undefined) {
+      Object.assign(
+        data,
+        columnasDeUbicacion(dto.ubicacion === null ? null : limpiarUbicacion(dto.ubicacion)),
+      );
+    }
+    // Al editar, los servicios que la oportunidad ya tenía se conservan aunque se hayan desactivado después.
+    const yaAsignados =
+      dto.serviceIds !== undefined
+        ? (await this.prisma.salesOpportunityService.findMany({ where: { opportunityId: id }, select: { serviceId: true } })).map(
+          (r) => r.serviceId,
+        )
+        : [];
     const serviceIds =
-      dto.serviceIds !== undefined ? await this.validarServicios(cid, dto.serviceIds) : null;
+      dto.serviceIds !== undefined ? await this.validarServicios(cid, dto.serviceIds, yaAsignados) : null;
     await this.prisma.$transaction(async (tx) => {
       await tx.salesOpportunity.update({ where: { id }, data });
       if (serviceIds) {
@@ -445,6 +606,55 @@ export class VentasOportunidadesService {
     }
 
     const { outcome, cerrada } = resultadoDeEtapa(destino.key, destino.isFinal);
+
+    // Fase 3: al aceptar se pregunta qué pasa con el contrato. Se valida todo
+    // ANTES de mover la oportunidad, para no dejarla aceptada a medias.
+    let datosContrato:
+      | { id: number; title: string | null; salesClientId: number; clienteNombre: string; serviceIds: number[]; quotedAmount: number | null }
+      | undefined;
+    // Fase 4: una oportunidad de RENOVACIÓN no pregunta servicio/producto: al aceptar crea el
+    // contrato nuevo que renueva al anterior (o, si ese ya se renovó a mano, solo se acepta).
+    const renueva = opp.renewsAgreementId;
+    let estadoRenovacion: 'OK' | 'YA_RENOVADO' | undefined;
+    if (!renueva && dto.contrato?.tipo === 'RENOVACION') {
+      throw new BadRequestException(
+        'Esa oportunidad no es una renovación: elige si fue un servicio o un producto.',
+      );
+    }
+    if (renueva && outcome === 'GANADA') {
+      estadoRenovacion = await this.acuerdos.validarRenovacion(
+        cid,
+        { id, salesClientId: opp.salesClientId, clienteNombre: opp.salesClient.name },
+        renueva,
+        dto.contrato,
+      );
+    }
+    if (dto.contrato && !renueva) {
+      if (outcome !== 'GANADA') {
+        throw new BadRequestException(
+          'El contrato solo se registra al pasar la oportunidad a Aceptada.',
+        );
+      }
+      const filasServicios = await this.prisma.salesOpportunityService.findMany({
+        where: { opportunityId: id },
+        select: { serviceId: true },
+      });
+      datosContrato = {
+        id,
+        title: opp.title,
+        salesClientId: opp.salesClientId,
+        clienteNombre: opp.salesClient.name,
+        serviceIds: filasServicios.map((s) => s.serviceId),
+        quotedAmount:
+          dto.quotedAmount !== undefined && dto.quotedAmount !== null
+            ? dto.quotedAmount
+            : opp.quotedAmount === null
+              ? null
+              : Number(opp.quotedAmount),
+      };
+      await this.acuerdos.validarAlAceptar(cid, datosContrato, dto.contrato);
+    }
+
     const quotedAmount = this.validarMonto(dto.quotedAmount);
     const quotedAtDto = this.parseDia(dto.quotedAt, 'La fecha de cotización');
     // En una etapa final ya no hay nada que seguir: se ignora el siguiente paso.
@@ -465,11 +675,21 @@ export class VentasOportunidadesService {
 
     await this.prisma.$transaction(async (tx) => {
       if (outcome === 'PERDIDA') {
-        await this.motivos.registrar(tx, cid, userId, 'OPP_PERDIDA', dto.motivo, {
-          opportunityId: id,
-          salesClientId: opp.salesClientId,
-          detail: { desde: opp.status, hacia: destino.key },
-        });
+        // Una renovación perdida es un contrato que no se renovó: el motivo se pide UNA sola vez y
+        // queda también en el contrato (quita el aviso «Registrar el motivo» del contrato vencido).
+        await this.motivos.registrar(
+          tx,
+          cid,
+          userId,
+          renueva ? 'CONTRATO_NO_RENOVADO' : 'OPP_PERDIDA',
+          dto.motivo,
+          {
+            opportunityId: id,
+            salesClientId: opp.salesClientId,
+            ...(renueva ? { agreementId: renueva } : {}),
+            detail: { desde: opp.status, hacia: destino.key },
+          },
+        );
       }
       await tx.salesOpportunity.update({ where: { id }, data });
       await tx.salesOpportunityStageChange.create({
@@ -523,6 +743,40 @@ export class VentasOportunidadesService {
       outcome,
       quotedAmount: montoFinal === null || montoFinal === undefined ? null : Number(montoFinal),
     });
+
+    if (renueva && estadoRenovacion === 'OK' && dto.contrato) {
+      try {
+        const contratoResultado = await this.acuerdos.aplicarRenovacion(
+          cid,
+          userId,
+          { id, title: opp.title, salesClientId: opp.salesClientId, clienteNombre: opp.salesClient.name },
+          renueva,
+          dto.contrato,
+        );
+        return { ...(await this.get(cid, id)), contratoResultado };
+      } catch (err) {
+        const motivo = err instanceof Error ? err.message : 'error desconocido';
+        throw new BadRequestException(
+          `La renovación de ${opp.salesClient.name} quedó Aceptada, pero no se pudo crear el contrato nuevo (${motivo}). Renuévalo desde Contratos con «Renovar».`,
+        );
+      }
+    }
+    if (dto.contrato && datosContrato) {
+      try {
+        const contratoResultado = await this.acuerdos.aplicarAlAceptar(
+          cid,
+          userId,
+          datosContrato,
+          dto.contrato,
+        );
+        return { ...(await this.get(cid, id)), contratoResultado };
+      } catch (err) {
+        const motivo = err instanceof Error ? err.message : 'error desconocido';
+        throw new BadRequestException(
+          `La oportunidad de ${opp.salesClient.name} quedó Aceptada, pero no se pudo registrar el contrato (${motivo}). Regístralo desde Contratos.`,
+        );
+      }
+    }
     return this.get(cid, id);
   }
 
@@ -538,7 +792,7 @@ export class VentasOportunidadesService {
       where: { id: clientId, companyId },
       select: { id: true, status: true, createdBy: true, assignedUserId: true, referredByUserId: true, extra: true },
     });
-    if (!cliente) throw new NotFoundException('Cliente no encontrado');
+    if (!cliente) throw new NotFoundException('No se encontró en el Directorio');
     const opps = await this.prisma.salesOpportunity.findMany({
       where: { salesClientId: clientId },
       select: { id: true, closedAt: true, updatedAt: true },
@@ -562,10 +816,10 @@ export class VentasOportunidadesService {
     return this.prisma.salesClient.findUnique({ where: { id: clientId } });
   }
 
-  // Se ejecuta después de confirmado el cambio de etapa. Un fallo acá (correo
-  // caído, config incompleta) nunca debe deshacer ni bloquear el cambio que ya
-  // se guardó — solo se registra en el servidor. Ningún texto menciona dinero,
-  // comisión ni porcentaje.
+  // Se ejecuta después de confirmado el cambio de etapa. Un fallo acá nunca debe
+  // deshacer ni bloquear el cambio que ya se guardó — solo se registra en el
+  // servidor. Ningún texto menciona dinero, comisión ni porcentaje. Avisa solo
+  // dentro de la app (campana), nunca por correo.
   async notificarReferidor(
     clientId: number,
     clientNombre: string,
@@ -589,28 +843,7 @@ export class VentasOportunidadesService {
         err.stack,
       );
     }
-
-    try {
-      const referrer = await this.prisma.user.findUnique({
-        where: { id: referredByUserId },
-        select: { email: true },
-      });
-      if (!referrer?.email) return;
-
-      // Este aviso lo manda Sistemas, no el remitente que RRHH configuró para
-      // sus propios recordatorios — mismo remitente fijo que la recuperación de
-      // contraseña (ver AuthService.REMITENTE_CONTRASENA).
-      await this.gmailMailService.sendMail({
-        to: referrer.email,
-        subject: 'Actualización de tu referido',
-        bodyText: `${mensaje}\n\nPuedes ver el estado de tus referidos ingresando a la app, en "Mis Referidos".`,
-        from: 'sistemas@gemeseg.com',
-        fromName: 'Sistemas',
-      });
-    } catch (err: any) {
-      this.logger.error(
-        `No se pudo enviar el correo de notificación del cliente #${clientId}: ${err.message}`,
-      );
-    }
+    // Solo notificación dentro de la app: a quien refiere NO se le manda correo (decisión de la
+    // usuaria, 2026-10-20; antes salía también un correo desde sistemas@gemeseg.com).
   }
 }

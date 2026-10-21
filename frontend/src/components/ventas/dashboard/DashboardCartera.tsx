@@ -14,7 +14,7 @@ import { BarraH, Cargando, Contador, SelectorPeriodo, SinDatos, Tarjeta, dinero,
 const COLOR_ALERTA = '#c53030';
 const COLOR_AVISO = '#d97706';
 
-// Cartera y contratos: cuántos prospectos, clientes, en riesgo y ex-clientes hay,
+// Cartera y contratos: cuántos prospectos, clientes, en riesgo e inactivos hay,
 // qué contratos vencen o ya vencieron sin renovarse, cuánto valen y cuánto se
 // retiene. Es una foto de HOY (salvo la retención, que mira un periodo).
 export default function DashboardCartera({ alcance }: { alcance: string }) {
@@ -47,7 +47,7 @@ export default function DashboardCartera({ alcance }: { alcance: string }) {
         {(Object.keys(CICLO_LABEL) as CicloVida[]).map((k) => (
           <Contador
             key={k} titulo={CICLO_LABEL[k]} valor={ciclo[k]} color={CICLO_COLOR[k]}
-            detalle="Ver los clientes →"
+            detalle="Ver el directorio →"
             onClick={() => navigate(`/ventas/clientes?ciclo=${k}`)}
           />
         ))}
@@ -102,7 +102,7 @@ export default function DashboardCartera({ alcance }: { alcance: string }) {
           )}
         </Tarjeta>
 
-        <Tarjeta titulo="Vencidos sin renovar" hint="Dentro de la gracia aún pueden renovar; pasada, el cliente ya es ex-cliente">
+        <Tarjeta titulo="Vencidos sin renovar" hint="Dentro de la gracia aún pueden renovar; pasada, el cliente ya está inactivo">
           {vencidos.length === 0 ? (
             <SinDatos texto="No hay contratos vencidos sin renovar." />
           ) : (

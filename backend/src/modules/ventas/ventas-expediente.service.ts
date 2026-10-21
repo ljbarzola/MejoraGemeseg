@@ -40,6 +40,9 @@ const fecha = (d: Date | string | null | undefined): string => {
   return `${dd}/${m}/${y}`;
 };
 const dia = (d: Date) => d.toISOString().slice(0, 10);
+// Los instantes (createdAt, closedAt…) se guardan en UTC: de noche en Ecuador (UTC-5) ya son «mañana» en UTC y la
+// fecha salía un día adelantada. Las columnas de solo-día (startDate, endDate, quotedAt…) NO se convierten: usan fecha().
+const fechaHora = (d: Date | null | undefined): string => (d ? fecha(hoyEcuador(d)) : '—');
 const diaUtc = (s: string) => new Date(`${s}T00:00:00.000Z`);
 const dinero = (v: unknown): string =>
   v === null || v === undefined
@@ -87,23 +90,39 @@ export class VentasExpedienteService {
     if (candidatos.length === 0) {
       return {
         estado: 'NO_ENCONTRADO',
-        texto: `No encontré ningún cliente que se parezca a «${texto}». Revisa el nombre o prueba con el RUC.`,
+        texto: `No encontré a nadie en el Directorio que se parezca a «${texto}». Revisa el nombre o prueba con el RUC.`,
       };
     }
     if (candidatos.length > 1) {
       const lista = candidatos.slice(0, 8).map((c) => `- ${c.name}`).join('\n');
       return {
         estado: 'AMBIGUO',
-        texto: `Hay ${candidatos.length} clientes que se parecen a «${texto}». Pregunta cuál de ellos:\n${lista}${candidatos.length > 8 ? '\n- … y más' : ''}`,
+        texto: `Hay ${candidatos.length} registros del Directorio que se parecen a «${texto}». Pregunta cuál de ellos:\n${lista}${candidatos.length > 8 ? '\n- … y más' : ''}`,
       };
     }
     return { estado: 'OK', clienteId: candidatos[0].id, texto: await this.construir(companyId, candidatos[0].id) };
   }
 
+  // Expediente de un cliente conocido por su id (botón «Preguntar al agente» de la ficha): no hay
+  // nada que buscar ni desambiguar. Un cliente de otra empresa no se encuentra.
+  async armarPorId(companyId: number, clienteId: number): Promise<ResultadoExpediente> {
+    const existe = await this.prisma.salesClient.findFirst({
+      where: { id: clienteId, companyId },
+      select: { id: true },
+    });
+    if (!existe) {
+      return {
+        estado: 'NO_ENCONTRADO',
+        texto: 'No encontré a esa empresa o persona en el Directorio: puede que ya no exista.',
+      };
+    }
+    return { estado: 'OK', clienteId, texto: await this.construir(companyId, clienteId) };
+  }
+
   private async construir(companyId: number, clienteId: number): Promise<string> {
     const hoy = hoyEcuador();
     const hoyD = diaUtc(hoy);
-    const [cliente, opps, actividades, contratos, motivos, documentos, ciclo, velocidad, usuarios] =
+    const [cliente, opps, actividades, contratos, motivos, documentos, ciclo, velocidad, usuarios, incidentesContrato] =
       await Promise.all([
         this.prisma.salesClient.findFirstOrThrow({
           where: { id: clienteId, companyId },
@@ -137,6 +156,11 @@ export class VentasExpedienteService {
         this.ciclos.calcular(companyId, [clienteId]),
         this.analitica.velocidadEmpresa(companyId),
         this.prisma.user.findMany({ where: { companyId }, select: { id: true, fullName: true } }),
+        // Desde 2026-10-18 los incidentes y la conversación de salida se anotan en el contrato.
+        this.prisma.salesAgreementIncident.findMany({
+          where: { companyId, agreement: { salesClientId: clienteId } },
+          orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+        }),
       ]);
     const nombreUsuario = new Map(usuarios.map((u) => [u.id, u.fullName]));
     const cicloCliente = ciclo.get(clienteId);
@@ -151,7 +175,7 @@ export class VentasExpedienteService {
       `${ETIQUETA_KIND[m.kind as MotivoKind] ?? m.kind}: «${m.reasonLabel}»` +
       (m.source ? ` (${ETIQUETA_SOURCE[m.source] ?? m.source})` : ' (sin información de quién lo dijo)') +
       (m.comment ? ` — comentario: «${recorte(m.comment, 240)}»` : '') +
-      ` — registrado el ${fecha(m.createdAt)} [#motivo:${m.id}]`;
+      ` — registrado el ${fechaHora(m.createdAt)} [#motivo:${m.id}]`;
 
     const noConsta: string[] = [
       'Cambios de responsable: el sistema no los registra, así que no consta quién atendió al cliente antes del responsable actual.',
@@ -167,7 +191,7 @@ export class VentasExpedienteService {
     );
     const extra = (cliente.extra ?? {}) as Record<string, string>;
     out.push(
-      `Registrado el ${fecha(cliente.createdAt)}. Fuente: ${extra.fuente || 'no consta'}. ` +
+      `Registrado el ${fechaHora(cliente.createdAt)}. Fuente: ${extra.fuente || 'no consta'}. ` +
         `Servicio de interés inicial: ${extra.servicio_requerido || 'no consta'}. ` +
         `Responsable actual: ${cliente.assignedUser?.fullName || 'sin responsable'}. ` +
         `Referido por: ${cliente.referredBy?.fullName || 'nadie'}.`,
@@ -185,8 +209,8 @@ export class VentasExpedienteService {
       const servicios = o.services.map((s) => s.service.name).join(', ') || 'servicio no indicado';
       const resultado = o.outcome === 'GANADA' ? 'GANADA' : o.outcome === 'PERDIDA' ? 'PERDIDA' : o.closedAt ? 'cerrada' : 'abierta';
       out.push(
-        `- [#opp:${o.id}] ${o.title ? `«${o.title}» · ` : ''}servicios: ${servicios} · llegó el ${fecha(o.receivedAt)} (${o.originType}${o.source ? `, fuente ${o.source}` : ''}) · etapa actual: ${o.status || 'sin etapa'} · ${resultado}` +
-          (o.closedAt ? ` el ${fecha(o.closedAt)}` : '') +
+        `- [#opp:${o.id}] ${o.title ? `«${o.title}» · ` : ''}servicios: ${servicios} · llegó el ${fechaHora(o.receivedAt)} (${o.originType}${o.source ? `, fuente ${o.source}` : ''}) · etapa actual: ${o.status || 'sin etapa'} · ${resultado}` +
+          (o.closedAt ? ` el ${fechaHora(o.closedAt)}` : '') +
           ` · monto cotizado: ${dinero(o.quotedAmount)}${o.quotedAt ? ` (cotizada el ${fecha(o.quotedAt)})` : ''}`,
       );
 
@@ -227,7 +251,7 @@ export class VentasExpedienteService {
       if (cambios.length) {
         out.push(
           `    · Cambios de etapa: ${cambios
-            .map((c) => `${fecha(c.createdAt)} ${c.fromStatus ?? '—'}→${c.toStatus} [#etapa:${c.id}]`)
+            .map((c) => `${fechaHora(c.createdAt)} ${c.fromStatus ?? '—'}→${c.toStatus} [#etapa:${c.id}]`)
             .join('; ')}.`,
         );
       }
@@ -243,7 +267,7 @@ export class VentasExpedienteService {
     out.push('');
     out.push(`CONTRATOS (${contratos.length}):`);
     if (contratos.length === 0) out.push('- Este cliente no tiene contratos registrados.');
-    let anterior: (typeof contratos)[number] | null = null;
+    let haContratadoServicioAntes = false;
     for (const c of contratos) {
       const estado = calcularEstadoContrato(c);
       const servicios = c.services.map((s) => s.service.name);
@@ -254,9 +278,30 @@ export class VentasExpedienteService {
       } else if (estado === 'CANCELADO') {
         estadoTxt = `CANCELADO${c.cancelledAt ? ` el ${fecha(c.cancelledAt)}` : ''}`;
       }
+      if (c.kind === 'PRODUCTO') {
+        out.push(
+          `- [#contrato:${c.id}] ${c.title ? `«${c.title}» · ` : ''}VENTA DE PRODUCTO (única, no se renueva) del ${fecha(c.startDate)} · ${estadoTxt}${c.deliveredAt ? ` el ${fecha(c.deliveredAt)}` : ''} · productos: ${servicios.join(', ') || 'ninguno'} · valor total: ${dinero(c.totalValue)}${c.warrantyUntil ? ` · garantía hasta ${fecha(c.warrantyUntil)}` : ''} · documentos: ${c._count.documents}`,
+        );
+        const msP = motivosPorContrato.get(c.id) ?? [];
+        for (const m of msP) out.push(`    · ${lineaMotivo(m)}`);
+        if (estado === 'CANCELADO' && !msP.some((m) => m.kind === 'CONTRATO_CANCELADO')) {
+          noConsta.push(`Contrato #${c.id}: se canceló y no se registró el motivo.`);
+        }
+        continue;
+      }
       out.push(
         `- [#contrato:${c.id}] ${c.title ? `«${c.title}» · ` : ''}desde ${fecha(c.startDate)} hasta ${c.endDate ? fecha(c.endDate) : 'sin fecha de fin'} · ${estadoTxt} · servicios: ${servicios.join(', ') || 'ninguno'} · valor mensual: ${dinero(c.monthlyValue)} · documentos: ${c._count.documents}`,
       );
+      // Solo se compara con el contrato que ESTE renueva. Antes se comparaba con el anterior en el
+      // tiempo, y un contrato adicional (otro servicio contratado aparte) parecía haber «quitado»
+      // los servicios del primero: el agente explicaba una baja que nunca existió.
+      const anterior = c.renewedFromId
+        ? (contratos.find((x) => x.id === c.renewedFromId && x.kind !== 'PRODUCTO') ?? null)
+        : null;
+      if (!anterior && haContratadoServicioAntes) {
+        out.push('    · No renueva a otro contrato: es un contrato aparte (por ejemplo, un servicio adicional), no un cambio frente a los anteriores.');
+      }
+      haContratadoServicioAntes = true;
       if (anterior) {
         const antes = anterior.services.map((s) => s.service.name);
         const quitados = antes.filter((n) => !servicios.includes(n));
@@ -282,7 +327,6 @@ export class VentasExpedienteService {
       if (estado === 'CANCELADO' && !ms.some((m) => m.kind === 'CONTRATO_CANCELADO')) {
         noConsta.push(`Contrato #${c.id}: se canceló y no se registró el motivo.`);
       }
-      anterior = c;
     }
     const firmados = documentos.filter((d) => d.status === 'SIGNED').length;
     if (documentos.length) out.push(`Documentos de Documentación: ${documentos.length} (${firmados} firmados).`);
@@ -298,7 +342,7 @@ export class VentasExpedienteService {
     if (actividades.length > recientes.length) out.push(`(se muestran las últimas ${recientes.length} de ${actividades.length})`);
     for (const a of recientes) {
       const tipo = a.type === 'OTRO' ? a.otherLabel || 'Otro' : (ETIQUETA_ACTIVIDAD[a.type] ?? a.type);
-      out.push(`- ${fecha(a.createdAt)} [#act:${a.id}] ${tipo} (${nombreUsuario.get(a.createdBy) ?? 'alguien'}): ${recorte(a.text, MAX_TEXTO_ACTIVIDAD)}`);
+      out.push(`- ${fechaHora(a.createdAt)} [#act:${a.id}] ${tipo} (${nombreUsuario.get(a.createdBy) ?? 'alguien'}): ${recorte(a.text, MAX_TEXTO_ACTIVIDAD)}`);
     }
     if (actividades.length === 0) {
       out.push('- No hay notas ni actividades registradas.');
@@ -309,27 +353,36 @@ export class VentasExpedienteService {
     let mayor = { d: 0, desde: '', hasta: '' };
     for (let i = 1; i < eventos.length; i++) {
       const d = diasEntre(eventos[i - 1].at, eventos[i].at);
-      if (d > mayor.d) mayor = { d, desde: fecha(eventos[i - 1].at), hasta: fecha(eventos[i].at) };
+      if (d > mayor.d) mayor = { d, desde: fechaHora(eventos[i - 1].at), hasta: fechaHora(eventos[i].at) };
     }
     const ultimo = eventos.length ? eventos[eventos.length - 1].at : cliente.createdAt;
-    const desdeUltimo = Math.floor((hoyD.getTime() - diaUtc(dia(ultimo)).getTime()) / DIA_MS);
+    const desdeUltimo = Math.max(0, Math.floor((hoyD.getTime() - diaUtc(hoyEcuador(ultimo)).getTime()) / DIA_MS));
     out.push(
-      `Silencios: ${mayor.d > SILENCIO_LARGO_DIAS ? `el mayor fue de ${dias(mayor.d)} sin ningún movimiento (entre ${mayor.desde} y ${mayor.hasta})` : `no hubo silencios de más de ${SILENCIO_LARGO_DIAS} días entre movimientos registrados`}. Último movimiento registrado: ${fecha(ultimo)} (hace ${desdeUltimo} día${desdeUltimo === 1 ? '' : 's'}).`,
+      `Silencios: ${mayor.d > SILENCIO_LARGO_DIAS ? `el mayor fue de ${dias(mayor.d)} sin ningún movimiento (entre ${mayor.desde} y ${mayor.hasta})` : `no hubo silencios de más de ${SILENCIO_LARGO_DIAS} días entre movimientos registrados`}. Último movimiento registrado: ${fechaHora(ultimo)} (hace ${desdeUltimo} día${desdeUltimo === 1 ? '' : 's'}).`,
     );
 
     // lo operativo: quejas e incidentes
+    // Las quejas siguen en el Historial del cliente; los incidentes y la conversación de salida
+    // viven en cada contrato (los registros viejos del Historial se siguen leyendo).
+    const tituloContrato = new Map(contratos.map((c) => [c.id, c.title || `Contrato #${c.id}`]));
     const operativas = actividades.filter((a) => a.type === 'QUEJA' || a.type === 'INCIDENTE_SERVICIO');
-    if (operativas.length) {
-      out.push(`QUEJAS E INCIDENTES DEL SERVICIO (${operativas.length}):`);
+    const incidentes = incidentesContrato.filter((i) => i.type === 'INCIDENTE_SERVICIO');
+    if (operativas.length || incidentes.length) {
+      out.push(`QUEJAS E INCIDENTES DEL SERVICIO (${operativas.length + incidentes.length}):`);
       for (const a of operativas) {
-        out.push(`- ${fecha(a.createdAt)} [#act:${a.id}] ${ETIQUETA_ACTIVIDAD[a.type]}: ${recorte(a.text, MAX_TEXTO_ACTIVIDAD)}`);
+        out.push(`- ${fechaHora(a.createdAt)} [#act:${a.id}] ${ETIQUETA_ACTIVIDAD[a.type]}: ${recorte(a.text, MAX_TEXTO_ACTIVIDAD)}`);
+      }
+      for (const i of incidentes) {
+        out.push(`- ${fecha(i.occurredAt)} Incidente del servicio en «${tituloContrato.get(i.agreementId)}»: ${recorte(i.text, MAX_TEXTO_ACTIVIDAD)}`);
       }
     } else {
       out.push('Quejas e incidentes del servicio: ninguno registrado (no significa que no hayan ocurrido: solo que nadie los anotó).');
     }
     const salida = actividades.filter((a) => a.type === 'CONVERSACION_SALIDA');
-    if (salida.length) {
-      for (const a of salida) out.push(`Conversación de salida ${fecha(a.createdAt)} [#act:${a.id}]: ${recorte(a.text, 400)}`);
+    const salidaContrato = incidentesContrato.filter((i) => i.type === 'CONVERSACION_SALIDA');
+    if (salida.length || salidaContrato.length) {
+      for (const a of salida) out.push(`Conversación de salida ${fechaHora(a.createdAt)} [#act:${a.id}]: ${recorte(a.text, 400)}`);
+      for (const i of salidaContrato) out.push(`Conversación de salida ${fecha(i.occurredAt)} sobre «${tituloContrato.get(i.agreementId)}»: ${recorte(i.text, 400)}`);
     } else if (cicloCliente && (cicloCliente.ciclo === 'EX_CLIENTE' || cicloCliente.ciclo === 'PERDIDO')) {
       out.push('Conversación de salida: no se registró.');
       noConsta.push('No hay conversación de salida con el cliente: nadie anotó qué dijo el propio cliente sobre por qué se fue.');

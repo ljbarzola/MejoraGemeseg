@@ -48,6 +48,8 @@ model Company {
   salesConversionEvents     SalesConversionEvent[]
   salesSettings             SalesSetting[]
   salesOpportunities        SalesOpportunity[]
+  salesContacts             SalesContact[]
+  salesAgreementIncidents   SalesAgreementIncident[]
   salesReasons              SalesReason[]
   salesReasonEntries        SalesReasonEntry[]
   entidades                 Entidad[]
@@ -1490,17 +1492,36 @@ model ClientVisit {
   checkInTime     DateTime?
   checkInLat      Float?
   checkInLng      Float?
+  // `isVerified` es true SOLO si el check-in quedó a menos de 500 m del lugar de la visita (ver
+  // checkin.util.ts). `checkInResult`: EN_SITIO, FUERA_DEL_SITIO, SIN_GPS o SIN_UBICACION; nulo en
+  // los check-in de antes de 2026-10-20, cuando no se comprobaba el lugar. `checkInDistanceM`: metros
+  // al lugar (nulo si no se pudo medir). Columnas nulas creadas al arrancar (sales-visit.schema.ts).
   isVerified      Boolean       @default(false)
+  checkInResult   String?
+  checkInDistanceM Int?
   commercialOffer String?
   quotedAmount    Float?        @default(0)
   outcome         VisitOutcome?
   notes           String?
+  // 2026-10-19: la visita se conecta al CRM. Cliente del Directorio y, si se quiere, la oportunidad que se
+  // visita (sin FK a propósito: el servidor las valida; borrar un cliente no debe romper visitas viejas).
+  // `clientName/Address/Phone` siguen guardando lo que se veía al agendar. Todo nulo en las visitas de antes.
+  salesClientId    Int?
+  opportunityId    Int?
+  locationName     String?
+  locationAddress  String?
+  locationLat      Float?
+  locationLng      Float?
+  locationCity     String?
+  locationProvince String?
+  locationOsmId    String?
   companyId       Int
   company         Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   @@index([companyId, userId])
+  @@index([salesClientId])
 }
 
 model Lead {
@@ -1826,7 +1847,7 @@ model SalesField {
 
 model SalesContract {
   id                 Int       @id @default(autoincrement())
-  templateId         Int
+  templateId         Int? // null = documento subido ya hecho (sin plantilla): no se genera ni se envía a firma desde el sistema
   contractNumber     String? // Código autogenerado, ej. "MEGAMONT-00001" (null si la plantilla no tiene numeración)
   clientName         String
   clientEmail        String
@@ -1846,6 +1867,8 @@ model SalesContract {
   signedAt           DateTime?
   clientFillToken    String?   @unique // link público para que el cliente complete sus campos/tablas
   clientFilledAt     DateTime? // cuándo el cliente envió su parte
+  documentType       String? // CONTRATO, ADENDA, GARANTIA, ACTA_ENTREGA, ORDEN_COMPRA, OTRO (null = sin tipo); ver ventas-documento-tipos.const.ts
+  documentTypeOther  String? // nombre propio cuando documentType = OTRO
   salesClientId      Int?
   companyId          Int
   createdBy          Int
@@ -1854,7 +1877,7 @@ model SalesContract {
 
   company           Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
   creator           User                    @relation(fields: [createdBy], references: [id])
-  template          SalesTemplate           @relation(fields: [templateId], references: [id])
+  template          SalesTemplate?          @relation(fields: [templateId], references: [id])
   salesClient       SalesClient?            @relation(fields: [salesClientId], references: [id], onDelete: SetNull)
   contractDocuments SalesContractDocument[]
   agreementLink     SalesAgreementDocument?
@@ -1949,12 +1972,38 @@ model SalesClient {
   contracts     SalesContract[]
   agreements    SalesAgreement[]
   opportunities SalesOpportunity[]
+  contacts      SalesContact[]
 
   @@index([companyId])
   @@index([companyId, status])
   @@index([referredByUserId])
   @@index([assignedUserId])
   @@index([companyId, assignedUserId, nextActionDate])
+}
+
+// Fase 2 del CRM (2026-10-18): una empresa/persona del Directorio puede tener
+// varias personas de contacto (Juanito, María...), cada una con varios
+// teléfonos y correos etiquetados (CASA, WHATSAPP, TRABAJO...). Se guardan
+// como Json en vez de tablas hijas aparte porque el emparejamiento al "Pasar a
+// oportunidad" (ver VentasLeadsService.coincidencias) ya recorre todo en JS,
+// igual que con SalesClient — no hace falta SQL para eso todavía.
+model SalesContact {
+  id            Int         @id @default(autoincrement())
+  companyId     Int
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  salesClientId Int
+  salesClient   SalesClient @relation(fields: [salesClientId], references: [id], onDelete: Cascade)
+  name          String
+  role          String?
+  // [{ label: "WHATSAPP", value: "0991234567" }, ...]
+  phones        Json        @default("[]")
+  emails        Json        @default("[]")
+  notes         String?
+  createdBy     Int
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([companyId, salesClientId])
 }
 
 // ---------------------------------------------------------------------------
@@ -2008,6 +2057,13 @@ model SalesAgreement {
   cancelledAt   DateTime?
   // Oportunidad comercial que origino este contrato (sin FK a proposito).
   opportunityId Int?
+  // SERVICIO (recurrente: vigencia, renovacion, valor mensual) o PRODUCTO (venta
+  // unica: sin fin ni renovacion; status POR_ENTREGAR / ENTREGADO / CANCELADO).
+  kind          String    @default("SERVICIO")
+  // Solo PRODUCTO: valor total de la venta, fecha de entrega y garantia (opcional).
+  totalValue    Decimal?  @db.Decimal(12, 2)
+  deliveredAt   DateTime? @db.Date
+  warrantyUntil DateTime? @db.Date
   createdBy     Int
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -2018,6 +2074,7 @@ model SalesAgreement {
   renewals    SalesAgreement[]         @relation("SalesAgreementRenewal")
   services    SalesAgreementService[]
   documents   SalesAgreementDocument[]
+  incidents   SalesAgreementIncident[]
 
   @@index([companyId, status])
   @@index([salesClientId])
@@ -2044,6 +2101,25 @@ model SalesAgreementDocument {
   agreement SalesAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
 
   @@index([agreementId])
+}
+
+// Incidentes del servicio y conversación de salida de UN contrato (2026-10-18). Antes se
+// anotaban como actividades del cliente (SalesClientActivity); ver sales-agreement-incident.schema.ts.
+// type: INCIDENTE_SERVICIO | CONVERSACION_SALIDA (String, sin enum: no hace falta migración).
+model SalesAgreementIncident {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  agreementId Int
+  type        String
+  occurredAt  DateTime @db.Date
+  text        String
+  createdBy   Int
+  createdAt   DateTime @default(now())
+
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agreement SalesAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, agreementId])
 }
 
 enum TicketSoporteTipo {
@@ -2403,6 +2479,13 @@ model CPCodigoTurno {
   nombre     String // Ej. "Día", "Noche", "Libre"
   color      String?
   esDescanso Boolean  @default(false) // true = no cuenta como "trabajando" para la cobertura mínima del puesto
+  // Ventana horaria del turno ("07:00"–"19:00"; fin menor que inicio = cruza la
+  // medianoche). La usa el revisor de bitácoras para comparar lo que el guardia
+  // anotó con lo que le tocaba. Opcionales: sin ellas solo se compara la persona.
+  // Columnas nuevas de una tabla existente: se aseguran al arrancar
+  // (bitacoras/bitacoras.schema.ts), el despliegue no corre migraciones.
+  horaInicio String?
+  horaFin    String?
   activo     Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -2530,6 +2613,148 @@ model CPPlantillaInforme {
 }
 
 // ---------------------------------------------------------------------------
+// Bitácoras de guardianía (2026-10-18).
+//
+// Los guardias llenan la bitácora a mano en cada puesto; alguien la fotografía y
+// la sube. El agente revisor LEE la foto (sin conocer el horario, para no
+// "corregir" lo que está mal) y el sistema compara, con reglas fijas, lo leído
+// contra el horario aprobado del puesto. Ver .agents/modules/contratacion-publica.md.
+//
+// Tablas nuevas, creadas al arrancar (bitacoras/bitacoras.schema.ts). El puesto,
+// el contrato y la entidad van como instantánea (id + nombre) sin relación: la
+// bitácora es un registro histórico y debe sobrevivir a que se borre un puesto.
+// ---------------------------------------------------------------------------
+model CPBitacora {
+  id              Int       @id @default(autoincrement())
+  companyId       Int
+  puestoId        Int
+  puestoNombre    String
+  contratoId      Int
+  contratoNumero  String
+  entidadId       Int
+  entidadNombre   String
+  subidoPorId     Int
+  subidoPorNombre String
+  // Foto o PDF guardado en StoredFile (clave lógica); null si se cargó a mano.
+  archivoKey      String?
+  archivoNombre   String?
+  archivoTipo     String?
+  // IA = la leyó el agente; MANUAL = la transcribió una persona.
+  origenLectura   String    @default("IA")
+  // LEIDA | SIN_LECTURA (IA no configurada o agente apagado) | ERROR
+  estadoLectura   String    @default("SIN_LECTURA")
+  mensajeLectura  String?
+  puestoLeido     String? // lo que dice la hoja como puesto, tal cual
+  observaciones   String? // lo que el agente no pudo leer o dudó
+  // Días que cubre la hoja (YYYY-MM-DD), aunque algún día no tenga guardia ni novedad escritas.
+  fechas          String[]
+  fechaDesde      DateTime? @db.Date
+  fechaHasta      DateTime? @db.Date
+  // SIN_REVISAR | CONFORME | A_REVISAR | CON_ERRORES | SIN_COMPARAR
+  resultado       String    @default("SIN_REVISAR")
+  revisadaAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  registros CPBitacoraRegistro[]
+  novedades CPBitacoraNovedad[]
+  hallazgos CPBitacoraHallazgo[]
+
+  @@index([companyId, puestoId])
+  @@index([companyId, fechaDesde])
+}
+
+// Una línea "guardia X estuvo de H1 a H2 el día D".
+model CPBitacoraRegistro {
+  id            Int      @id @default(autoincrement())
+  bitacoraId    Int
+  fecha         DateTime @db.Date
+  guardiaLeido  String // nombre tal como lo escribió el guardia
+  // Guardia del puesto con el que se emparejó (null = no coincide con ninguno).
+  cedula        String?
+  guardiaNombre String?
+  coincidencia  Float?
+  horaEntrada   String? // "HH:mm"
+  horaSalida    String?
+  legible       Boolean  @default(true)
+  orden         Int      @default(0)
+
+  bitacora CPBitacora @relation(fields: [bitacoraId], references: [id], onDelete: Cascade)
+
+  @@index([bitacoraId])
+}
+
+model CPBitacoraNovedad {
+  id           Int      @id @default(autoincrement())
+  bitacoraId   Int
+  fecha        DateTime @db.Date
+  hora         String?
+  guardiaLeido String?
+  texto        String
+  // SIN_NOVEDAD | ACCESO | VEHICULOS | RONDA | INCIDENTE | EQUIPOS | ENTREGA_TURNO | OTRO
+  categoria    String   @default("OTRO")
+  // BAJA | MEDIA | ALTA — se deriva de la categoría en código, no la inventa el modelo.
+  gravedad     String   @default("BAJA")
+  orden        Int      @default(0)
+
+  bitacora CPBitacora @relation(fields: [bitacoraId], references: [id], onDelete: Cascade)
+
+  @@index([bitacoraId])
+  @@index([fecha])
+}
+
+model CPBitacoraHallazgo {
+  id                Int       @id @default(autoincrement())
+  bitacoraId        Int
+  fecha             DateTime? @db.Date
+  tipo              String
+  severidad         String // ALTA | MEDIA | BAJA
+  mensaje           String
+  // Identifica el hallazgo entre una revisión y la siguiente, para no perder lo
+  // que la persona ya resolvió o descartó al volver a revisar.
+  clave             String
+  estado            String    @default("ABIERTO") // ABIERTO | RESUELTO | DESCARTADO
+  nota              String?
+  resueltoPorNombre String?
+  resueltoAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  bitacora CPBitacora @relation(fields: [bitacoraId], references: [id], onDelete: Cascade)
+
+  @@index([bitacoraId])
+}
+
+// Registro de lo que hacen los agentes que trabajan solos (hoy el revisor de
+// bitácoras). Sistemas lo lee en Sistemas → Agentes. Sin relaciones: guarda el
+// nombre del agente y de la persona tal como estaban, y sobrevive a que se
+// borre cualquiera de los dos.
+model AgentRun {
+  id            Int      @id @default(autoincrement())
+  agentId       Int?
+  agentNombre   String
+  agentScope    String?
+  companyId     Int?
+  userId        Int?
+  userNombre    String?
+  accion        String // p. ej. LEER_BITACORA
+  resumen       String?
+  // A qué se aplicó: p. ej. entidadTipo 'CPBitacora' + id.
+  entidadTipo   String?
+  entidadId     Int?
+  modelo        String?
+  tokensEntrada Int?
+  tokensSalida  Int?
+  duracionMs    Int?
+  exito         Boolean
+  error         String?
+  detalle       Json?
+  createdAt     DateTime @default(now())
+
+  @@index([agentId, createdAt])
+  @@index([companyId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
 // Leads, oportunidades y motivos (2026-10-07).
 //
 // Un LEAD es un contacto entrante sin calificar (web, campañas, correo): puede
@@ -2609,8 +2834,9 @@ model SalesConversionEvent {
   id            Int       @id @default(autoincrement())
   companyId     Int
   leadId        Int
-  opportunityId Int
-  // CUALIFICADO, CONVERTIDO
+  // null solo en VALIDO (2026-10-18): ese hecho pasa antes de que exista la oportunidad.
+  opportunityId Int?
+  // VALIDO, CUALIFICADO, CONVERTIDO
   kind          String
   gclid         String
   occurredAt    DateTime
@@ -2631,39 +2857,53 @@ model SalesConversionEvent {
 }
 
 model SalesOpportunity {
-  id               Int       @id @default(autoincrement())
-  companyId        Int
-  salesClientId    Int
-  title            String?
+  id                Int       @id @default(autoincrement())
+  companyId         Int
+  salesClientId     Int
+  title             String?
   // Clave de etapa (SalesClientStage.key). Sin FK: las claves no cambian y un
   // ON DELETE SET NULL sobre [companyId, key] intentaría anular companyId.
-  status           String?
+  status            String?
   // GANADA, PERDIDA o null (abierta). Una oportunidad está abierta mientras
   // closedAt sea null.
-  outcome          String?
-  receivedAt       DateTime  @default(now())
-  closedAt         DateTime?
-  quotedAt         DateTime? @db.Date
-  quotedAmount     Decimal?  @db.Decimal(12, 2)
-  assignedUserId   Int?
+  outcome           String?
+  receivedAt        DateTime  @default(now())
+  closedAt          DateTime?
+  quotedAt          DateTime? @db.Date
+  quotedAmount      Decimal?  @db.Decimal(12, 2)
+  assignedUserId    Int?
   // Fuente copiada del cliente/lead (REFERIDO, CAMPANA, WEB_FORM…).
-  source           String?
+  source            String?
   // Quién refirió: solo la primera oportunidad lo trae, para no avisarle otra
   // vez cuando el mismo cliente tiene una segunda negociación.
-  referredByUserId Int?
-  leadId           Int?
-  // LEAD, MANUAL, REFERIDO, MIGRADA, CLIENTE_EXISTENTE
-  originType       String    @default("MANUAL")
-  notes            String?
-  createdBy        Int
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  referredByUserId  Int?
+  leadId            Int?
+  // LEAD, MANUAL, REFERIDO, MIGRADA, CLIENTE_EXISTENTE, HISTORICO, RENOVACION
+  originType        String    @default("MANUAL")
+  // Fase 4 (2026-10-18): contrato de servicio que esta oportunidad renueva (originType
+  // RENOVACION). Sin FK a propósito, igual que SalesAgreement.opportunityId. Una sola
+  // oportunidad de renovación por contrato.
+  renewsAgreementId Int?
+  // Ubicación OPCIONAL (2026-10-19): el lugar del servicio, elegido en un mapa de OpenStreetMap. Es de la
+  // oportunidad, no de la persona o empresa. Todas nulas por defecto; alimentan el mapa del Dashboard.
+  locationName      String?
+  locationAddress   String?
+  locationLat       Float?
+  locationLng       Float?
+  locationCity      String?
+  locationProvince  String?
+  locationOsmId     String?
+  notes             String?
+  createdBy         Int
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   company      Company                       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   salesClient  SalesClient                   @relation(fields: [salesClientId], references: [id], onDelete: Cascade)
   services     SalesOpportunityService[]
   stageChanges SalesOpportunityStageChange[]
 
+  @@index([renewsAgreementId])
   @@index([companyId, status])
   @@index([salesClientId])
   @@index([companyId, assignedUserId])

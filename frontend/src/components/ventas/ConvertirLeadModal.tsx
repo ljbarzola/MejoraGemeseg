@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
+import ServiciosPorCategoria from './ServiciosPorCategoria';
+import UbicacionCampo from './UbicacionCampo';
 import ErrorBanner from '../common/ErrorBanner';
 import {
   convertirLeadEntrante,
   getLeadEntrante,
   type LeadEntrante,
   type SalesServicio,
+  type UbicacionOportunidad,
 } from '../../services/ventas.service';
 
 interface Props {
   lead: LeadEntrante;
   servicios: SalesServicio[];
   onClose: () => void;
-  onDone: (r: { clienteId: number; oportunidadId: number; sumadaAClienteExistente: boolean }) => void;
+  onDone: (r: { clienteId: number; oportunidadId: number; sumadaAClienteExistente: boolean; posiblesDuplicados?: { id: number; name: string }[] }) => void;
 }
 
 // Pasar un lead de servicio a oportunidad (la persona queda como prospecto en
@@ -28,7 +31,16 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
   const [email, setEmail] = useState(lead.email || '');
   const [telefono, setTelefono] = useState(lead.phone || '');
   const [ruc, setRuc] = useState('');
+  // La dirección que trajo el posible cliente (formulario web, anuncio o ingreso a mano): llega a la ficha y se puede corregir.
+  const direccionDeLead = (l: LeadEntrante) =>
+    typeof l.extra?.direccion === 'string' ? (l.extra.direccion as string) : '';
+  const [direccion, setDireccion] = useState(direccionDeLead(lead));
   const [titulo, setTitulo] = useState('');
+  // Ubicación OPCIONAL de la oportunidad (mapa): es del lugar del servicio, no de la persona.
+  const [ubicacion, setUbicacion] = useState<UbicacionOportunidad | null>(null);
+  // Fase 2: si la empresa ya existía pero la persona no, se puede anotar
+  // quién escribió (queda como contacto nuevo de ese cliente).
+  const [nuevoContacto, setNuevoContacto] = useState('');
   const [serviceIds, setServiceIds] = useState<number[]>([]);
   const [sugeridos, setSugeridos] = useState<number[]>([]);
   const [guardando, setGuardando] = useState(false);
@@ -44,6 +56,7 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
         const sug = d.serviciosSugeridos ?? lead.serviciosSugeridos ?? [];
         setSugeridos(sug);
         setServiceIds(sug);
+        setDireccion((actual) => actual || direccionDeLead(d));
       })
       .catch(() => setCoincidencias([]))
       .finally(() => setCargando(false));
@@ -52,22 +65,31 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
   const alternar = (id: number) =>
     setServiceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
+  const coincidenciaElegida = typeof destino === 'number' ? coincidencias.find((c) => c.id === destino) : undefined;
+
   const convertir = async () => {
     setError('');
-    if (destino === 'nuevo' && !nombre.trim()) return setError('El cliente necesita un nombre.');
+    if (destino === 'nuevo' && !nombre.trim()) return setError('Falta el nombre de la empresa o persona.');
     setGuardando(true);
     try {
       const r = await convertirLeadEntrante(lead.id, {
         ...(destino === 'nuevo'
-          ? { confirmarNuevo: true, name: nombre.trim(), email: email.trim(), phone: telefono.trim(), ruc: ruc.trim() }
-          : { salesClientId: destino }),
+          ? { confirmarNuevo: true, name: nombre.trim(), email: email.trim(), phone: telefono.trim(), ruc: ruc.trim(), address: direccion.trim() || undefined }
+          : {
+              salesClientId: destino,
+              ...(coincidenciaElegida?.contactoId ? { contactId: coincidenciaElegida.contactoId } : {}),
+              ...(!coincidenciaElegida?.contactoId && nuevoContacto.trim()
+                ? { nuevoContactoNombre: nuevoContacto.trim() }
+                : {}),
+            }),
         serviceIds,
         title: titulo.trim() || undefined,
+        ...(ubicacion ? { ubicacion } : {}),
       });
       onDone(r);
     } catch (err: any) {
       const msg = err?.response?.data?.message;
-      setError((Array.isArray(msg) ? msg[0] : msg) || 'No se pudo pasar el lead a oportunidad. Intenta de nuevo.');
+      setError((Array.isArray(msg) ? msg[0] : msg) || 'No se pudo pasar el posible cliente a oportunidad. Intenta de nuevo.');
     } finally {
       setGuardando(false);
     }
@@ -90,27 +112,48 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
           )}
 
           <p style={{ fontSize: 12, color: '#666', margin: '0 0 12px' }}>
-            Al pasar a oportunidad la persona queda como prospecto en Oportunidades; solo será cliente cuando acepte la propuesta.
+            Al pasar a oportunidad queda como prospecto en el Directorio (estado «Prospecto») y la negociación en Oportunidades; solo será cliente cuando acepte la propuesta.
           </p>
 
           {cargando ? (
-            <p style={{ color: '#888', fontSize: 13 }}>Comprobando si ya es cliente...</p>
+            <p style={{ color: '#888', fontSize: 13 }}>Comprobando si ya está en el directorio...</p>
           ) : (
             coincidencias.length > 0 && (
               <div style={{ background: '#fffbeb', border: '1px solid #f6e05e', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
                 <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600 }}>
-                  Este contacto se parece a un cliente que ya existe (mismo correo, teléfono o RUC).
+                  Este posible cliente se parece a alguien que ya está en el directorio (mismo correo, teléfono o RUC).
                 </p>
                 {coincidencias.map((c) => (
                   <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 400, cursor: 'pointer', marginBottom: 4 }}>
                     <input type="radio" name="destino" checked={destino === c.id} onChange={() => setDestino(c.id)} />
-                    Sumar la oportunidad al cliente <strong>{c.name}</strong>
+                    {c.contactoNombre ? (
+                      <>Sumar la oportunidad a <strong>{c.contactoNombre}</strong>, de <strong>{c.name}</strong></>
+                    ) : (
+                      <>Sumar la oportunidad a <strong>{c.name}</strong></>
+                    )}
                   </label>
                 ))}
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 400, cursor: 'pointer' }}>
                   <input type="radio" name="destino" checked={destino === 'nuevo'} onChange={() => setDestino('nuevo')} />
-                  Es otro cliente: crear uno nuevo
+                  Es otra persona o empresa: crear una nueva
                 </label>
+                {coincidenciaElegida?.contactoNombre && (telefono || email) && (
+                  <p style={{ margin: '8px 0 0', fontSize: 12, color: '#78350f' }}>
+                    Si este correo o teléfono es nuevo, se guarda como otro dato de contacto de {coincidenciaElegida.contactoNombre}.
+                  </p>
+                )}
+                {coincidenciaElegida && !coincidenciaElegida.contactoNombre && (
+                  <div className="form-group" style={{ marginTop: 10 }}>
+                    <label>¿Quién escribió en esta empresa? (opcional)</label>
+                    <input
+                      type="text"
+                      value={nuevoContacto}
+                      maxLength={150}
+                      placeholder="Ej: Juan Pérez"
+                      onChange={(e) => setNuevoContacto(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
             )
           )}
@@ -118,7 +161,7 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
           {destino === 'nuevo' && (
             <>
               <div className="form-group">
-                <label>Nombre o razón social del cliente *</label>
+                <label>Nombre o razón social *</label>
                 <input type="text" value={nombre} maxLength={150} onChange={(e) => setNombre(e.target.value)} />
               </div>
               <div className="form-row">
@@ -135,6 +178,13 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
                 <label>Cédula / RUC (opcional)</label>
                 <input type="text" value={ruc} maxLength={50} onChange={(e) => setRuc(e.target.value)} />
               </div>
+              <div className="form-group">
+                <label>Dirección (opcional)</label>
+                <input type="text" value={direccion} maxLength={300} onChange={(e) => setDireccion(e.target.value)} placeholder="Ej: Av. Amazonas 123, Quito" />
+                {direccionDeLead(lead) && direccion === direccionDeLead(lead) && (
+                  <small style={{ color: '#718096' }}>La escribió el posible cliente; puedes corregirla. Pasa a la ficha de la empresa.</small>
+                )}
+              </div>
             </>
           )}
 
@@ -143,6 +193,8 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
             <input type="text" value={titulo} maxLength={150} onChange={(e) => setTitulo(e.target.value)} placeholder="Ej: Monitoreo de cámaras de la bodega" />
           </div>
 
+          <UbicacionCampo value={ubicacion} onChange={setUbicacion} busquedaInicial={direccion || direccionDeLead(lead)} />
+
           <div className="form-group">
             <label>Servicios que pidió</label>
             {sugeridos.length > 0 && (
@@ -150,20 +202,13 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
                 Sugeridos según lo que pidió en la landing: {servicios.filter((s) => sugeridos.includes(s.id)).map((s) => s.name).join(', ') || 'servicios del catálogo'}; confírmalos o cámbialos.
               </p>
             )}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 6 }}>
-              {servicios.filter((s) => s.isActive).map((s) => (
-                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 400, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={serviceIds.includes(s.id)} onChange={() => alternar(s.id)} />
-                  {s.name}
-                </label>
-              ))}
-            </div>
+            <ServiciosPorCategoria servicios={servicios.filter((s) => s.isActive)} seleccionados={serviceIds} onToggle={alternar} />
           </div>
         </div>
         <div className="modal-actions">
           <button className="btn-secondary" onClick={onClose} disabled={guardando}>Cancelar</button>
           <button className="auth-btn" onClick={convertir} disabled={guardando || cargando}>
-            {guardando ? 'Guardando...' : destino === 'nuevo' ? 'Convertir en oportunidad' : 'Sumar la oportunidad'}
+            {guardando ? 'Guardando...' : destino === 'nuevo' ? 'Pasar a oportunidad' : 'Sumar la oportunidad'}
           </button>
         </div>
       </div>

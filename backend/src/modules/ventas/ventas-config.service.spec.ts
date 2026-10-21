@@ -1,6 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { LANDINGS } from './lead-landing.util';
 import { VentasConfigService } from './ventas-config.service';
 
 // Base simulada: una sola tabla clave-valor por empresa, como SalesSetting.
@@ -19,6 +18,12 @@ function crearServicio() {
       deleteMany: jest.fn(async ({ where }) => {
         filas.delete(`${where.companyId}:${where.key}`);
       }),
+    },
+    salesApiKey: {
+      create: jest.fn(async ({ data }) => ({ id: 7, isActive: true, ...data })),
+      findFirst: jest.fn(async ({ where }) => (where.id === 7 ? { id: 7, companyId: where.companyId } : null)),
+      update: jest.fn(async ({ where, data }) => ({ id: where.id, ...data })),
+      deleteMany: jest.fn(async () => ({ count: 1 })),
     },
   };
   return {
@@ -51,8 +56,22 @@ describe('VentasConfigService — Google Ads', () => {
     });
     const c = await servicio.configGoogleAds(1);
     expect(c?.customerId).toBe('1234567890');
-    expect(c?.conversiones).toEqual({ CUALIFICADO: '111', CONVERTIDO: '222' });
+    // «Lead válido» es opcional: sin su ID queda vacío y no se usa.
+    expect(c?.conversiones).toEqual({ CUALIFICADO: '111', CONVERTIDO: '222', VALIDO: '' });
     expect(c?.validateOnly).toBe(false);
+  });
+
+  it('el ID de «Lead válido» es opcional: se guarda limpio y se lee con la configuración', async () => {
+    const { servicio } = crearServicio();
+    const a = await servicio.guardarGoogleAds(1, 5, {
+      customerId: '1234567890',
+      conversionCualificado: '1',
+      conversionConvertido: '2',
+      conversionValido: ' 33-3 ',
+      activo: true,
+    });
+    expect(a.conversionValido).toBe('333');
+    expect((await servicio.configGoogleAds(1))?.conversiones.VALIDO).toBe('333');
   });
 
   it('el envío empieza en modo de validación salvo que se diga lo contrario', async () => {
@@ -112,16 +131,17 @@ describe('VentasConfigService — Google Ads', () => {
 });
 
 describe('VentasConfigService — landings', () => {
-  it('sin nada guardado usa las de Gemeseg', async () => {
+  it('una empresa sin nada guardado no tiene landings (empieza vacía)', async () => {
     const { servicio } = crearServicio();
-    expect(await servicio.landingsDe(1)).toEqual(LANDINGS);
+    expect(await servicio.landingsDe(1)).toEqual([]);
+    expect((await servicio.resumen(1)).landings).toEqual([]);
   });
 
   it('guarda las de la empresa, con la dirección normalizada, y no afecta a otra', async () => {
     const { servicio } = crearServicio();
     await servicio.guardarLandings(1, 5, [{ slug: 'Mi-Landing', servicio: 'Alarmas', linea: 'Casa' }]);
     expect(await servicio.landingsDe(1)).toEqual([{ slug: 'mi-landing', servicio: 'Alarmas', linea: 'Casa' }]);
-    expect(await servicio.landingsDe(2)).toEqual(LANDINGS);
+    expect(await servicio.landingsDe(2)).toEqual([]);
   });
 
   it('rechaza una landing sin dirección, sin servicio o repetida', async () => {
@@ -136,10 +156,44 @@ describe('VentasConfigService — landings', () => {
     ).rejects.toThrow(/repetida/);
   });
 
-  it('restaurar vuelve a los valores de Gemeseg', async () => {
+  it('guardar la tabla vacía es válido y se respeta', async () => {
     const { servicio } = crearServicio();
     await servicio.guardarLandings(1, 5, [{ slug: 'x', servicio: 'Y' }]);
-    await servicio.restaurarLandings(1);
-    expect(await servicio.landingsDe(1)).toEqual(LANDINGS);
+    await servicio.guardarLandings(1, 5, []);
+    expect(await servicio.landingsDe(1)).toEqual([]);
+  });
+});
+
+describe('VentasConfigService — conexiones propias', () => {
+  it('crea la conexión con su clave y la deja en la lista de la empresa', async () => {
+    const { servicio, mockPrisma } = crearServicio();
+    const c = await servicio.crearConexion(1, 5, '  Landing nueva ');
+    expect(c.nombre).toBe('Landing nueva');
+    expect(c.apiKeyId).toBe(7);
+    expect(mockPrisma.salesApiKey.create.mock.calls[0][0].data.apiKey).toMatch(/^sk_ventas_[0-9a-f]{48}$/);
+    expect(await servicio.conexionesDe(1)).toHaveLength(1);
+    expect((await servicio.resumen(1)).conexiones).toHaveLength(1);
+  });
+
+  it('no deja crear una conexión sin nombre ni con un nombre repetido', async () => {
+    const { servicio } = crearServicio();
+    await expect(servicio.crearConexion(1, 5, '   ')).rejects.toThrow(BadRequestException);
+    await servicio.crearConexion(1, 5, 'Mi web');
+    await expect(servicio.crearConexion(1, 5, 'mi WEB')).rejects.toThrow(/Ya tienes/);
+  });
+
+  it('quitar una conexión borra su clave y la saca de la lista', async () => {
+    const { servicio, mockPrisma } = crearServicio();
+    const c = await servicio.crearConexion(1, 5, 'Mi web');
+    await servicio.quitarConexion(1, 5, c.id);
+    expect(await servicio.conexionesDe(1)).toHaveLength(0);
+    expect(mockPrisma.salesApiKey.deleteMany).toHaveBeenCalledWith({ where: { id: 7, companyId: 1 } });
+    await expect(servicio.quitarConexion(1, 5, c.id)).rejects.toThrow(/no encontrada/);
+  });
+
+  it('activar o desactivar una clave solo funciona con claves de la propia empresa', async () => {
+    const { servicio } = crearServicio();
+    expect(await servicio.cambiarClave(1, 7, false)).toMatchObject({ isActive: false });
+    await expect(servicio.cambiarClave(1, 99, true)).rejects.toThrow(/no encontrada/);
   });
 });

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { getContract, generateContractPdf, sendContract, getContractDocuments, fetchProtectedFile, uploadSignedContract, getContractSignatureStatus, SalesContract, SalesContractDocument, SignatureStatus } from '../../services/ventas.service';
+import { getContract, generateContractPdf, sendContract, getContractDocuments, fetchProtectedFile, uploadSignedContract, getContractSignatureStatus, getEstadoFirmaElectronica, cambiarTipoDocumento, SalesContract, SalesContractDocument, SignatureStatus } from '../../services/ventas.service';
 import { subPageTitle } from './contratoStyles';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import TipoDocumentoSelect from '../../components/ventas/TipoDocumentoSelect';
+import { etiquetaTipoDocumento } from '../../utils/documentoTipos';
 
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   GENERADO: 'PDF generado',
@@ -46,6 +48,17 @@ export default function ContratoResult() {
   const [emailTo, setEmailTo] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
+  // null = todavía no se sabe. Mientras SignWell no esté conectado, enviar a firma no funciona.
+  const [signwellListo, setSignwellListo] = useState<boolean | null>(null);
+  // Cambiar el tipo del documento (Contrato, Garantía...).
+  const [cambiandoTipo, setCambiandoTipo] = useState(false);
+  const [tipoNuevo, setTipoNuevo] = useState('');
+  const [tipoOtroNuevo, setTipoOtroNuevo] = useState('');
+  const [guardandoTipo, setGuardandoTipo] = useState(false);
+
+  useEffect(() => {
+    getEstadoFirmaElectronica().then((r) => setSignwellListo(r.signwellConfigurado)).catch(() => setSignwellListo(null));
+  }, []);
 
   useEffect(() => { if (id) loadContract(+id); }, [id]);
 
@@ -197,12 +210,33 @@ export default function ContratoResult() {
 
   if (!contract) return <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>Cargando...</div>;
 
+  const etiquetaTipo = etiquetaTipoDocumento(contract.documentType, contract.documentTypeOther);
+  const contratoDelDoc = contract.agreementLink?.agreement;
+  const nombreContratoDoc = contratoDelDoc ? (contratoDelDoc.title || `Contrato #${contratoDelDoc.id}`) : '';
+
+  const guardarTipo = async () => {
+    if (!tipoNuevo) { showToast('Elige el tipo de documento.', 'error'); return; }
+    if (tipoNuevo === 'OTRO' && !tipoOtroNuevo.trim()) { showToast('Escribe cómo se llama el tipo de documento «Otro».', 'error'); return; }
+    setGuardandoTipo(true);
+    try {
+      const c = await cambiarTipoDocumento(contract.id, tipoNuevo, tipoOtroNuevo);
+      setContract({ ...contract, documentType: c.documentType, documentTypeOther: c.documentTypeOther });
+      setCambiandoTipo(false);
+      showToast(`El documento de ${contract.clientName} ahora es de tipo «${etiquetaTipoDocumento(c.documentType, c.documentTypeOther)}».`, 'success');
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'No se pudo cambiar el tipo del documento', 'error');
+    } finally { setGuardandoTipo(false); }
+  };
+
   const statusColors: Record<string, string> = {
     DRAFT: '#f59e0b', GENERATING: '#3b82f6', READY: '#10b981',
     SENT: '#8b5cf6', SIGNED: '#059669', CANCELLED: '#ef4444',
   };
 
   const clientFields = contract.template?.fields?.filter(f => f.isClientField) || [];
+  // Subido ya hecho: no tiene plantilla, así que no se genera ni se envía a firma desde el sistema.
+  const subido = !contract.template;
+  const nombreDoc = contract.fieldValues?.titulo ? String(contract.fieldValues.titulo) : null;
   const isReady = contract.status === 'READY';
   const isDraft = contract.status === 'DRAFT';
 
@@ -213,20 +247,68 @@ export default function ContratoResult() {
         <button className="cacao-back-btn" onClick={() => navigate('/ventas/documentacion')}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <h2 style={subPageTitle}>Documento {contract.contractNumber || `#${contract.id}`} — {contract.clientName}</h2>
+        <h2 style={subPageTitle}>{subido ? 'Documento subido' : 'Documento'} {contract.contractNumber || `#${contract.id}`}{nombreDoc ? ` · ${nombreDoc}` : ''} — {contract.clientName}</h2>
         <span style={{ padding: '3px 10px', borderRadius: 12, background: statusColors[contract.status] || '#888', color: '#fff', fontSize: 11, fontWeight: 600 }}>{contract.status}</span>
         <div style={{ flex: 1 }} />
-        {contract.status !== 'SIGNED' && (
+        {!subido && contract.status !== 'SIGNED' && (
           <button className="btn-secondary" onClick={handleEditFieldsClick} style={{ padding: '10px 20px', fontSize: 13 }}>
             ✏️ Editar campos
           </button>
         )}
-        {contract.status !== 'SIGNED' && (
+        {!subido && contract.status !== 'SIGNED' && (
           <button className="auth-btn" onClick={handleGenerateClick} disabled={generating} style={{ padding: '10px 20px', fontSize: 13 }}>
             {generating ? 'Generando PDF...' : contract.generatedPdfPath ? '🔄 Regenerar PDF' : '⚡ Generar PDF'}
           </button>
         )}
       </div>
+
+      <div style={{ padding: '8px 24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 13, flexShrink: 0 }}>
+        <span>
+          Tipo:{' '}
+          {etiquetaTipo
+            ? <span className="status-badge" style={{ backgroundColor: '#eef2f7', color: '#334155' }}>{etiquetaTipo}</span>
+            : <span style={{ color: '#a0aec0' }}>sin tipo</span>}{' '}
+          <button type="button" className="enlace-tabla" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13 }}
+            onClick={() => { setTipoNuevo(contract.documentType || ''); setTipoOtroNuevo(contract.documentTypeOther || ''); setCambiandoTipo(true); }}>
+            Cambiar tipo
+          </button>
+        </span>
+        <span>
+          Contrato:{' '}
+          {contratoDelDoc ? (
+            <a className="enlace-tabla" href={`/ventas/contratos/${contratoDelDoc.id}`}
+              title={`Ver el contrato «${nombreContratoDoc}» de ${contract.clientName}`}
+              onClick={(e) => { e.preventDefault(); navigate(`/ventas/contratos/${contratoDelDoc.id}`); }}>
+              {nombreContratoDoc}
+            </a>
+          ) : <span style={{ color: '#a0aec0' }}>no está asociado a ningún contrato</span>}
+        </span>
+      </div>
+
+      {cambiandoTipo && (
+        <div className="modal-overlay" onClick={() => setCambiandoTipo(false)}>
+          <div className="modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Cambiar el tipo del documento</h3>
+              <button className="modal-close" onClick={() => setCambiandoTipo(false)} aria-label="Cerrar">✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 13, color: '#666', marginTop: 0 }}>
+                Documento {contract.contractNumber || `#${contract.id}`} de {contract.clientName}
+                {contratoDelDoc ? `, del contrato «${nombreContratoDoc}»` : ''}.
+              </p>
+              <div className="form-group">
+                <label>Tipo de documento *</label>
+                <TipoDocumentoSelect tipo={tipoNuevo} tipoOtro={tipoOtroNuevo} onChange={(t, o) => { setTipoNuevo(t); setTipoOtroNuevo(o); }} />
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setCambiandoTipo(false)}>Cancelar</button>
+              <button className="auth-btn" onClick={guardarTipo} disabled={guardandoTipo}>{guardandoTipo ? 'Guardando...' : 'Guardar'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingSentAction && (
         <ConfirmDialog
@@ -319,6 +401,15 @@ export default function ContratoResult() {
             </div>
           )}
 
+          {subido && (
+            <div style={{ padding: 16, borderBottom: '1px solid #eee', fontSize: 12, color: '#555', lineHeight: 1.5 }}>
+              <h3 style={{ margin: '0 0 8px', fontSize: 14, color: '#222' }}>Documento subido ya hecho</h3>
+              Este PDF de <strong>{contract.salesClient?.name || contract.clientName}</strong> se subió tal cual: no sale de una plantilla,
+              así que no se genera ni se envía a firma desde aquí.
+            </div>
+          )}
+
+          {!subido && (<>
           <div style={{ padding: 16, borderBottom: '1px solid #eee' }}>
             <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>Envío de correo</h3>
             <div style={{ marginBottom: 8 }}>
@@ -337,6 +428,8 @@ export default function ContratoResult() {
                 style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12, boxSizing: 'border-box', resize: 'vertical' }} />
             </div>
           </div>
+
+          </>)}
 
           {/* Estado de la firma en SignWell — a demanda, no hay polling automático */}
           {contract.signwellDocumentId && (
@@ -410,12 +503,20 @@ export default function ContratoResult() {
 
           {/* Send button — outside the scroll area so it's always reachable */}
           <div style={{ padding: 16, borderTop: '1px solid #eee', flexShrink: 0 }}>
-            <button className="auth-btn" onClick={handleSend} disabled={sending || !isReady}
-              style={{ width: '100%', padding: '10px', fontSize: 13, ...(isReady ? { background: '#059669' } : {}) }}>
-              {sending ? 'Enviando...' : isReady ? '✉️ Enviar a Firma Electrónica (SignWell)' : 'Genera el PDF primero'}
-            </button>
+            {!subido && signwellListo === false && (
+              <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 6, padding: '8px 10px', marginBottom: 8, fontSize: 12, color: '#7c2d12', lineHeight: 1.45 }}>
+                <strong>Firma electrónica: próximamente.</strong> Todavía falta conectar SignWell, por eso no se puede enviar a firma
+                el documento de {contract.salesClient?.name || contract.clientName}. Si ya lo firmaron por otro medio, sube el PDF firmado.
+              </div>
+            )}
+            {!subido && (
+              <button className="auth-btn" onClick={handleSend} disabled={sending || !isReady || signwellListo === false}
+                style={{ width: '100%', padding: '10px', fontSize: 13, ...(isReady && signwellListo !== false ? { background: '#059669' } : {}) }}>
+                {sending ? 'Enviando...' : signwellListo === false ? '✉️ Enviar a firma · Próximamente' : isReady ? '✉️ Enviar a Firma Electrónica (SignWell)' : 'Genera el PDF primero'}
+              </button>
+            )}
             {contract.status !== 'DRAFT' && contract.status !== 'SIGNED' && (
-              <label className="btn-secondary" style={{ display: 'block', width: '100%', padding: '10px', fontSize: 13, textAlign: 'center', marginTop: 8, cursor: uploadingSigned ? 'default' : 'pointer', boxSizing: 'border-box' }}>
+              <label className="btn-secondary" style={{ display: 'block', width: '100%', padding: '10px', fontSize: 13, textAlign: 'center', marginTop: subido ? 0 : 8, cursor: uploadingSigned ? 'default' : 'pointer', boxSizing: 'border-box' }}>
                 {uploadingSigned ? 'Subiendo...' : '📤 Subir PDF firmado'}
                 <input type="file" accept="application/pdf" onChange={handleUploadSigned} disabled={uploadingSigned} style={{ display: 'none' }} />
               </label>

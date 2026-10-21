@@ -5,9 +5,14 @@
 
 import { ETAPAS_COTIZADAS } from './ventas-marketing.util';
 
-export type TipoConversion = 'CUALIFICADO' | 'CONVERTIDO';
+// VALIDO (2026-10-18) es el paso INTERMEDIO entre llenar el formulario y cotizar: una persona del
+// equipo revisó el posible cliente y confirmó que es un contacto real de servicio (no empleo,
+// proveedor ni spam). Sirve para que Google aprenda qué anuncios traen contactos reales y no solo
+// formularios. Es opcional: solo se registra y se envía si la empresa guardó el ID de esa conversión.
+export type TipoConversion = 'VALIDO' | 'CUALIFICADO' | 'CONVERTIDO';
 
 export const ETIQUETA_CONVERSION: Record<TipoConversion, string> = {
+  VALIDO: 'Lead válido (contacto real de servicio)',
   CUALIFICADO: 'Lead cualificado (cotizó)',
   CONVERTIDO: 'Lead convertido (contrató)',
 };

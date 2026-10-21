@@ -27,7 +27,10 @@ import {
   UpdateSalesClientActivityDto,
   UpdateSalesClientStageDto,
   SalesClientFieldOptionDto,
+  CreateSalesContactDto,
+  UpdateSalesContactDto,
 } from './dto/client.dto';
+import { nombresParecidos } from './nombre-similar.util';
 
 // Dashboard: etapas "ganada"/"perdida" por clave (decisión de Ventas: en
 // producción siempre existen ACEPTADO y RECHAZADO como etapas finales) y
@@ -726,9 +729,9 @@ export class VentasClientesService {
     const client = await this.prisma.salesClient.findFirst({
       where: { id, companyId },
     });
-    if (!client) throw new NotFoundException('Cliente no encontrado');
+    if (!client) throw new NotFoundException('No se encontró en el Directorio');
     if (client.status === dto.toStatus) {
-      throw new BadRequestException('El cliente ya está en esa etapa');
+      throw new BadRequestException('Ya está en esa etapa');
     }
 
     const targetStage = await this.prisma.salesClientStage.findFirst({
@@ -794,15 +797,23 @@ export class VentasClientesService {
     });
 
     const extra: Record<string, string> = { fuente: 'REFERIDO' };
-    if (dto.servicioRequerido) extra[SERVICIO_KEY] = dto.servicioRequerido;
-    if (dto.subserviciosRequeridos?.length) {
-      extra[subopcionesKey(SERVICIO_KEY)] = dto.subserviciosRequeridos.join(',');
+    // Los servicios salen del catálogo de Configuración → Servicios (solo activos, validados por el servidor).
+    let serviceIds: number[] = [];
+    if (dto.serviceIds?.length) {
+      if (this.esquema.isReady()) {
+        serviceIds = await this.oportunidades.validarServicios(companyId, dto.serviceIds);
+      }
+    } else {
+      // Camino viejo (formulario anterior a 2026-10-20): opción de campo + sub-opciones traducidas por nombre.
+      if (dto.servicioRequerido) extra[SERVICIO_KEY] = dto.servicioRequerido;
+      if (dto.subserviciosRequeridos?.length) {
+        extra[subopcionesKey(SERVICIO_KEY)] = dto.subserviciosRequeridos.join(',');
+      }
+      await this.validarSubopcionesDeExtra(companyId, extra);
+      serviceIds = this.esquema.isReady()
+        ? await this.oportunidades.idsServiciosDesdeExtra(companyId, extra)
+        : [];
     }
-    await this.validarSubopcionesDeExtra(companyId, extra);
-
-    const serviceIds = this.esquema.isReady()
-      ? await this.oportunidades.idsServiciosDesdeExtra(companyId, extra)
-      : [];
     return this.prisma.$transaction(async (tx) => {
       const cliente = await tx.salesClient.create({
         data: {
@@ -832,6 +843,17 @@ export class VentasClientesService {
         });
       }
       return cliente;
+    });
+  }
+
+  // Servicios que ofrece la empresa (solo activos), para el formulario abierto «Referir un cliente». Salen del
+  // catálogo de Configuración → Servicios, igual que en Nueva oportunidad, y no necesitan acceso a Ventas.
+  async serviciosParaReferir(companyId: number) {
+    if (!this.esquema.isReady()) return [];
+    return this.prisma.salesService.findMany({
+      where: { companyId, isActive: true },
+      select: { id: true, name: true, description: true, isActive: true },
+      orderBy: [{ order: 'asc' }, { name: 'asc' }],
     });
   }
 
@@ -894,7 +916,7 @@ export class VentasClientesService {
       where: { id, companyId },
       include: CLIENT_INCLUDE,
     });
-    if (!client) throw new NotFoundException('Cliente no encontrado');
+    if (!client) throw new NotFoundException('No se encontró en el Directorio');
     return client;
   }
 
@@ -922,9 +944,13 @@ export class VentasClientesService {
       throw new BadRequestException('El nombre es requerido');
     await this.ensureCoreFields(companyId);
     await this.ensureDefaultStages(companyId);
-    const yaEsCliente = dto.yaEsCliente === true;
-    // Un cliente que ya contrataba nace en la etapa ganada; uno nuevo, en la inicial.
-    const initialStage = yaEsCliente
+    const soloDatos = dto.soloDatos === true;
+    const yaEsCliente = !soloDatos && dto.yaEsCliente === true;
+    // Solo datos: sin etapa (la etapa es de la oportunidad). Un cliente que ya
+    // contrataba nace en la etapa ganada; uno nuevo, en la inicial.
+    const initialStage = soloDatos
+      ? null
+      : yaEsCliente
       ? ((await this.prisma.salesClientStage.findFirst({
           where: { companyId, key: ETAPA_GANADA },
         })) ??
@@ -940,7 +966,14 @@ export class VentasClientesService {
     const serviceIds = this.esquema.isReady()
       ? await this.oportunidades.idsServiciosDesdeExtra(companyId, extra)
       : [];
-    return this.prisma.$transaction(async (tx) => {
+    // Aviso blando por nombre parecido (Fase 2, no bloquea el guardado): capaz
+    // ya está escrita distinto ("Textiles del Valle" vs "Textiles Valle").
+    const candidatosNombre = await this.prisma.salesClient.findMany({
+      where: { companyId },
+      select: { id: true, name: true },
+    });
+    const posiblesDuplicados = nombresParecidos(dto.name.trim(), candidatosNombre);
+    const cliente = await this.prisma.$transaction(async (tx) => {
       const cliente = await tx.salesClient.create({
       data: {
         companyId,
@@ -949,8 +982,9 @@ export class VentasClientesService {
         // Quien crea un cliente a mano en Ventas es, por defecto, quien lo
         // atiende — a diferencia de un referido (creado por cualquier
         // empleado vía /referir), que queda sin responsable hasta que
-        // alguien de Ventas se lo asigne (ver asignarme()).
-        assignedUserId: createdBy,
+        // alguien de Ventas se lo asigne (ver asignarme()). En «solo datos» el
+        // responsable es de la oportunidad, no de la empresa o persona.
+        assignedUserId: soloDatos ? null : createdBy,
         name: dto.name.trim(),
         email: dto.email?.trim() || null,
         phone: dto.phone?.trim() || null,
@@ -964,7 +998,7 @@ export class VentasClientesService {
       });
       // El cliente nace con su primera oportunidad (misma fecha de ingreso,
       // mismo responsable y mismos servicios que eligió en la ficha).
-      if (this.esquema.isReady()) {
+      if (this.esquema.isReady() && !soloDatos) {
         await this.oportunidades.crearInicial(tx, {
           companyId,
           salesClientId: cliente.id,
@@ -982,6 +1016,7 @@ export class VentasClientesService {
       }
       return cliente;
     });
+    return { ...cliente, posiblesDuplicados };
   }
 
   async asignarme(companyId: number | null, id: number, userId: number) {
@@ -1001,7 +1036,7 @@ export class VentasClientesService {
     if (!companyId) throw new BadRequestException('Se requiere una empresa');
     const client = await this.getClient(companyId, id);
     if (client.assignedUserId !== userId) {
-      throw new BadRequestException('Este cliente no está asignado a ti.');
+      throw new BadRequestException('No está asignado a ti.');
     }
     return this.prisma.salesClient.update({
       where: { id },
@@ -1030,6 +1065,12 @@ export class VentasClientesService {
         : null;
     if (dto.extra !== undefined) {
       const extra = trasladarSubserviciosLegado({ ...dto.extra });
+      // El Directorio ya no muestra «Servicio requerido» (es de la oportunidad) y un formulario que no lo
+      // manda no debe borrar lo guardado: se conserva si no viene.
+      const previo = (actual.extra ?? {}) as Record<string, string>;
+      for (const clave of [SERVICIO_KEY, `${SERVICIO_KEY}__sub`]) {
+        if (extra[clave] === undefined && previo[clave] !== undefined) extra[clave] = previo[clave];
+      }
       await this.validarSubopcionesDeExtra(companyId as number, extra);
       data.extra = extra;
     }
@@ -1239,6 +1280,7 @@ export class VentasClientesService {
         kind: 'acuerdo',
         agreementId: x.id,
         title: x.title,
+        producto: x.kind === 'PRODUCTO',
         servicios: x.services.map((s) => s.service.name),
       };
       eventos.push({
@@ -1294,6 +1336,87 @@ export class VentasClientesService {
     }
 
     return eventos.sort((a, b) => b.at.getTime() - a.at.getTime());
+  }
+
+  // ---------------------------------------------------------------------
+  // Contactos (Fase 2 del CRM, 2026-10-18): varias personas por cliente, cada
+  // una con varios teléfonos/correos etiquetados.
+  // ---------------------------------------------------------------------
+
+  private limpiarValores(
+    valores: { label?: string; value?: string }[] | undefined,
+  ): { label: string; value: string }[] {
+    if (!Array.isArray(valores)) return [];
+    return valores
+      .map((v) => ({ label: (v?.label ?? '').trim() || 'Otro', value: (v?.value ?? '').trim() }))
+      .filter((v) => v.value);
+  }
+
+  async listContacts(companyId: number | null, clientId: number) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    await this.getClient(companyId, clientId);
+    return this.prisma.salesContact.findMany({
+      where: { companyId, salesClientId: clientId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async createContact(
+    companyId: number | null,
+    clientId: number,
+    userId: number,
+    dto: CreateSalesContactDto,
+  ) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    if (!dto?.name?.trim()) throw new BadRequestException('El nombre del contacto es requerido');
+    await this.getClient(companyId, clientId);
+    return this.prisma.salesContact.create({
+      data: {
+        companyId,
+        salesClientId: clientId,
+        name: dto.name.trim(),
+        role: dto.role?.trim() || null,
+        phones: this.limpiarValores(dto.phones),
+        emails: this.limpiarValores(dto.emails),
+        notes: dto.notes?.trim() || null,
+        createdBy: userId,
+      },
+    });
+  }
+
+  private async getContact(companyId: number, contactId: number) {
+    const contacto = await this.prisma.salesContact.findFirst({
+      where: { id: contactId, companyId },
+    });
+    if (!contacto) throw new NotFoundException('Contacto no encontrado');
+    return contacto;
+  }
+
+  async updateContact(
+    companyId: number | null,
+    contactId: number,
+    dto: UpdateSalesContactDto,
+  ) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    await this.getContact(companyId, contactId);
+    const data: Prisma.SalesContactUpdateInput = {};
+    if (dto.name !== undefined) {
+      const n = dto.name.trim();
+      if (!n) throw new BadRequestException('El nombre del contacto no puede quedar vacío.');
+      data.name = n;
+    }
+    if (dto.role !== undefined) data.role = dto.role.trim() || null;
+    if (dto.phones !== undefined) data.phones = this.limpiarValores(dto.phones);
+    if (dto.emails !== undefined) data.emails = this.limpiarValores(dto.emails);
+    if (dto.notes !== undefined) data.notes = dto.notes.trim() || null;
+    return this.prisma.salesContact.update({ where: { id: contactId }, data });
+  }
+
+  async deleteContact(companyId: number | null, contactId: number) {
+    if (!companyId) throw new BadRequestException('Se requiere una empresa');
+    await this.getContact(companyId, contactId);
+    await this.prisma.salesContact.delete({ where: { id: contactId } });
+    return { ok: true };
   }
 
   async addActivity(
@@ -1402,17 +1525,31 @@ export class VentasClientesService {
     const desdeFecha = diaUtc(desde);
     const hastaExclusivo = new Date(diaUtc(hasta).getTime() + DIA_MS);
 
-    // Alcance
+    // Alcance. Desde 2026-10-16 el responsable es de cada OPORTUNIDAD, no de la empresa o persona del
+    // Directorio (que suele quedar sin responsable). Por eso «mis clientes» son los que tienen una
+    // oportunidad a mi nombre, además de los que aún traen mi nombre del sistema anterior; antes solo
+    // contaba este último y un vendedor veía su tablero vacío aunque llevara oportunidades.
     let responsable: string = 'mine';
+    let alcanceUsuario: number | null = null;
     const where: Prisma.SalesClientWhereInput = { companyId };
     if (query.responsable === 'all') {
       responsable = 'all';
     } else if (esManager && query.responsable && /^\d+$/.test(query.responsable)) {
       responsable = query.responsable;
-      where.assignedUserId = Number(query.responsable);
+      alcanceUsuario = Number(query.responsable);
     } else {
-      where.assignedUserId = user.userId;
+      alcanceUsuario = user.userId;
     }
+    const clausulaAlcance: Prisma.SalesClientWhereInput | null =
+      alcanceUsuario === null
+        ? null
+        : {
+            OR: [
+              { assignedUserId: alcanceUsuario },
+              { opportunities: { some: { assignedUserId: alcanceUsuario } } },
+            ],
+          };
+    if (clausulaAlcance) where.OR = clausulaAlcance.OR;
 
     const stages = await this.prisma.salesClientStage.findMany({
       where: { companyId },
@@ -1470,22 +1607,56 @@ export class VentasClientesService {
         : []),
     ];
 
-    // Por responsable
+    // Por responsable: se cuenta por el responsable de cada OPORTUNIDAD (abiertas = activos, ganadas =
+    // aceptados). Una empresa que todavía no tiene oportunidades (solo datos, o del sistema anterior)
+    // se cuenta, como antes, por el responsable de la empresa. Con un vendedor elegido (o «mis clientes»)
+    // solo se cuentan SUS oportunidades.
+    const oportunidades = clientes.length
+      ? await this.prisma.salesOpportunity.findMany({
+          where: { companyId, salesClientId: { in: clientes.map((c) => c.id) } },
+          select: { salesClientId: true, closedAt: true, outcome: true, assignedUserId: true },
+        })
+      : [];
+    const oportunidadesPorCliente = new Map<number, typeof oportunidades>();
+    for (const o of oportunidades) {
+      oportunidadesPorCliente.set(o.salesClientId, [...(oportunidadesPorCliente.get(o.salesClientId) ?? []), o]);
+    }
+    const idsResponsables = [...new Set(oportunidades.map((o) => o.assignedUserId).filter((x): x is number => x !== null))];
+    const nombreResponsable = new Map(
+      (idsResponsables.length
+        ? await this.prisma.user.findMany({ where: { id: { in: idsResponsables } }, select: { id: true, fullName: true } })
+        : []
+      ).map((u) => [u.id, u.fullName]),
+    );
     const resp = new Map<number | null, { nombre: string; activos: number; vencidos: number; aceptados: number }>();
-    for (const c of clientes) {
-      const k = c.assignedUserId ?? null;
-      const fila = resp.get(k) ?? {
-        nombre: c.assignedUser?.fullName ?? 'Sin responsable',
-        activos: 0,
-        vencidos: 0,
-        aceptados: 0,
-      };
-      if (esActivo(c.status)) {
-        fila.activos++;
-        if (c.nextActionDate && c.nextActionDate < hoyFecha) fila.vencidos++;
-      }
-      if (ganada && c.status === ganada) fila.aceptados++;
+    const filaDe = (k: number | null, nombre: string) => {
+      const fila = resp.get(k) ?? { nombre, activos: 0, vencidos: 0, aceptados: 0 };
       resp.set(k, fila);
+      return fila;
+    };
+    for (const c of clientes) {
+      const suyas = oportunidadesPorCliente.get(c.id) ?? [];
+      if (suyas.length === 0) {
+        if (alcanceUsuario !== null && c.assignedUserId !== alcanceUsuario) continue;
+        const fila = filaDe(c.assignedUserId ?? null, c.assignedUser?.fullName ?? 'Sin responsable');
+        if (esActivo(c.status)) {
+          fila.activos++;
+          if (c.nextActionDate && c.nextActionDate < hoyFecha) fila.vencidos++;
+        }
+        if (ganada && c.status === ganada) fila.aceptados++;
+        continue;
+      }
+      for (const o of suyas) {
+        if (alcanceUsuario !== null && o.assignedUserId !== alcanceUsuario) continue;
+        const k = o.assignedUserId ?? null;
+        const fila = filaDe(k, k === null ? 'Sin responsable' : (nombreResponsable.get(k) ?? 'Sin nombre'));
+        if (o.closedAt === null) {
+          fila.activos++;
+          if (c.nextActionDate && c.nextActionDate < hoyFecha) fila.vencidos++;
+        } else if (o.outcome === 'GANADA') {
+          fila.aceptados++;
+        }
+      }
     }
     const porResponsable = [...resp.entries()]
       .map(([userId, v]) => ({ userId, ...v }))
@@ -1568,10 +1739,9 @@ export class VentasClientesService {
     const nPerdidos = perdida ? clientes.filter((c) => c.status === perdida).length : 0;
 
     // Contratos de estos clientes
-    const clientesFiltro: Prisma.SalesContractWhereInput =
-      where.assignedUserId !== undefined
-        ? { salesClient: { is: { assignedUserId: where.assignedUserId as number } } }
-        : { salesClientId: { not: null } };
+    const clientesFiltro: Prisma.SalesContractWhereInput = clausulaAlcance
+      ? { salesClient: { is: clausulaAlcance } }
+      : { salesClientId: { not: null } };
     const [contratosPorEstado, aceptadosSinContrato, sinClienteVinculado] = await Promise.all([
       this.prisma.salesContract.groupBy({
         by: ['status'],
@@ -1592,12 +1762,22 @@ export class VentasClientesService {
     // clientes asignados). Los demás usuarios no ven ese selector.
     let responsables: { id: number; nombre: string }[] = [];
     if (esManager) {
-      const asignados = await this.prisma.salesClient.groupBy({
-        by: ['assignedUserId'],
-        where: { companyId, assignedUserId: { not: null } },
-      });
+      // Quienes tienen clientes del sistema anterior a su nombre O llevan oportunidades.
+      const [asignados, conOportunidades] = await Promise.all([
+        this.prisma.salesClient.groupBy({
+          by: ['assignedUserId'],
+          where: { companyId, assignedUserId: { not: null } },
+        }),
+        this.prisma.salesOpportunity.groupBy({
+          by: ['assignedUserId'],
+          where: { companyId, assignedUserId: { not: null } },
+        }),
+      ]);
+      const idsVendedores = [
+        ...new Set([...asignados, ...conOportunidades].map((a) => a.assignedUserId!)),
+      ];
       const usuarios = await this.prisma.user.findMany({
-        where: { id: { in: asignados.map((a) => a.assignedUserId!) } },
+        where: { id: { in: idsVendedores } },
         select: { id: true, fullName: true },
         orderBy: { fullName: 'asc' },
       });

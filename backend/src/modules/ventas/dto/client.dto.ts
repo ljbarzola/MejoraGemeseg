@@ -50,6 +50,13 @@ export class CreateSalesClientDto {
   @IsBoolean()
   @IsOptional()
   yaEsCliente?: boolean;
+
+  // true = el Directorio es solo de datos (2026-10-16): se guarda la empresa o
+  // persona SIN oportunidad, SIN etapa y SIN responsable (esos pertenecen a la
+  // oportunidad). Es lo que manda «Nueva empresa o persona» del Directorio.
+  @IsBoolean()
+  @IsOptional()
+  soloDatos?: boolean;
 }
 
 export class UpdateSalesClientDto {
@@ -185,12 +192,20 @@ export class CreateReferralDto {
   @IsOptional()
   correo?: string;
 
-  // key de una opción del campo núcleo `servicio_requerido`.
+  // Servicios del catálogo de Ventas → Configuración → Servicios (ids). Es lo que manda el formulario
+  // «Referir un cliente» desde 2026-10-20: solo activos (los valida el servidor).
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  serviceIds?: number[];
+
+  // LEGADO (antes de 2026-10-20): key de una opción del campo núcleo `servicio_requerido`. Se sigue aceptando
+  // por si queda una pestaña abierta con el formulario viejo; ya no lo manda la pantalla.
   @IsString()
   @IsOptional()
   servicioRequerido?: string;
 
-  // keys de `children` de esa opción del servicio. Opcional.
+  // LEGADO: keys de `children` de esa opción del servicio. Opcional.
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
@@ -344,6 +359,67 @@ export class CreateSalesClientStageDto {
   @IsOptional()
   @IsBoolean()
   isFinal?: boolean;
+}
+
+// Fase 2 del CRM (2026-10-18): varias personas de contacto por cliente, cada
+// una con varios teléfonos/correos etiquetados (CASA, WHATSAPP, TRABAJO...).
+export class SalesContactValueDto {
+  @IsString()
+  label: string;
+
+  @IsString()
+  value: string;
+}
+
+export class CreateSalesContactDto {
+  @IsString()
+  name: string;
+
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SalesContactValueDto)
+  phones?: SalesContactValueDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SalesContactValueDto)
+  emails?: SalesContactValueDto[];
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class UpdateSalesContactDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SalesContactValueDto)
+  phones?: SalesContactValueDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SalesContactValueDto)
+  emails?: SalesContactValueDto[];
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }
 
 export class UpdateSalesClientStageDto {

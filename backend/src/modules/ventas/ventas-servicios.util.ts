@@ -18,6 +18,32 @@ export const ETIQUETA_SUBSERVICIO: Record<string, string> = Object.fromEntries(
     .map((s) => [s.key, s.label]),
 );
 
+// «Servicio requerido» de la ficha (extra.servicio_requerido y su lista de sub-servicios
+// extra.servicio_requerido__sub) a partir de los servicios elegidos al pasar un posible cliente a
+// oportunidad. Se escriben las claves y no se importa el servicio de clientes (importaría este archivo
+// de vuelta). Solo reconoce los servicios del catálogo de fábrica; uno propio de la empresa no tiene
+// clave en esa lista y queda solo en la oportunidad. Si los servicios son de varias categorías gana la que
+// tiene más (la ficha guarda una sola). Vacío si ninguno se reconoce.
+export function extraServicioRequerido(nombres: string[]): Record<string, string> {
+  const porCategoria = new Map<string, string[]>();
+  for (const nombre of nombres) {
+    const buscado = nombre.trim().toLowerCase();
+    for (const [categoria, subs] of Object.entries(DEFAULT_SUBSERVICIOS)) {
+      const sub = subs.find((s) => s.label.toLowerCase() === buscado);
+      if (sub) {
+        porCategoria.set(categoria, [...(porCategoria.get(categoria) ?? []), sub.key]);
+        break;
+      }
+    }
+  }
+  if (porCategoria.size === 0) return {};
+  const [categoria, claves] = [...porCategoria.entries()].sort((a, b) => b[1].length - a[1].length)[0];
+  return {
+    servicio_requerido: categoria,
+    servicio_requerido__sub: [...new Set(claves)].join(','),
+  };
+}
+
 // Siembra el catálogo de servicios de una empresa la primera vez que hace
 // falta: los sub-servicios que ya existían como opciones de "Servicio
 // requerido" del cliente. Solo si la empresa no tiene ninguno todavía.

@@ -17,6 +17,7 @@ export class GoogleAdsConfigDto {
   @IsOptional() @IsString() @MaxLength(20) customerId?: string;
   @IsOptional() @IsString() @MaxLength(30) conversionCualificado?: string;
   @IsOptional() @IsString() @MaxLength(30) conversionConvertido?: string;
+  @IsOptional() @IsString() @MaxLength(30) conversionValido?: string;
   @IsOptional() @IsBoolean() activo?: boolean;
   @IsOptional() @IsBoolean() soloValidar?: boolean;
 }
@@ -33,4 +34,12 @@ export class LandingsConfigDto {
   @ValidateNested({ each: true })
   @Type(() => LandingItemDto)
   landings!: LandingItemDto[];
+}
+
+export class NuevaConexionDto {
+  @IsString() @MaxLength(60) nombre!: string;
+}
+
+export class CambiarClaveDto {
+  @IsBoolean() isActive!: boolean;
 }

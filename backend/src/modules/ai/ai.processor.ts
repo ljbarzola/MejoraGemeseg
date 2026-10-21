@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiVentasQueries, textoParam } from './ai-ventas.queries';
 import { AiVentasInvestigacionQueries } from './ai-ventas-investigacion.queries';
+import { AiVentasPlanQueries } from './ai-ventas-plan.queries';
 
 // Qué sección de permisos es dueña de cada intención — AiService la consulta
 // antes de ejecutar cualquier intención aquí abajo (ver canUseIntent en
@@ -34,6 +35,8 @@ export const INTENT_SECTION: Record<string, string | null> = {
   ventas_cartera: 'VENTAS',
   ventas_perdidos: 'VENTAS',
   ventas_embudo: 'VENTAS',
+  ventas_prioridades: 'VENTAS',
+  ventas_inactivos: 'VENTAS',
 };
 
 @Injectable()
@@ -42,7 +45,14 @@ export class AiProcessor {
     private prisma: PrismaService,
     private ventas: AiVentasQueries,
     private investigacion: AiVentasInvestigacionQueries,
+    private plan: AiVentasPlanQueries,
   ) {}
+
+  // Expediente de un cliente conocido por su id: lo usa AiService cuando el chat se abre desde la
+  // ficha de ese cliente (el permiso de Ventas ya se comprobó antes de llegar aquí).
+  expedienteDeCliente(companyId: number, clienteId: number): Promise<string> {
+    return this.investigacion.expedientePorId(companyId, clienteId);
+  }
 
   async executeQuery(
     intent: string,
@@ -80,6 +90,8 @@ export class AiProcessor {
       case 'ventas_cartera':
       case 'ventas_perdidos':
       case 'ventas_embudo':
+      case 'ventas_prioridades':
+      case 'ventas_inactivos':
         return this.ventasQuery(intent, params, userId, companyId);
       default:
         return '';
@@ -170,6 +182,10 @@ export class AiProcessor {
         return this.investigacion.perdidos(companyId, userId, textoParam(params?.rango));
       case 'ventas_embudo':
         return this.investigacion.embudo(companyId, userId, textoParam(params?.rango));
+      case 'ventas_prioridades':
+        return this.plan.prioridades(companyId, userId, textoParam(params?.alcance));
+      case 'ventas_inactivos':
+        return this.plan.inactivos(companyId);
       default:
         return this.ventas.resumen(companyId, userId);
     }

@@ -15,9 +15,11 @@ import { AuthGuard } from '@nestjs/passport';
 import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
 import { Section } from '../../common/decorators/section.decorator';
 import { VentasAcuerdosService } from './ventas-acuerdos.service';
+import { VentasRenovacionesService } from './ventas-renovaciones.service';
 import {
   CancelSalesAgreementDto,
   CloseSalesAgreementDto,
+  CreateAgreementIncidentDto,
   CreateSalesAgreementDto,
   CreateSalesServiceDto,
   LinkAgreementDocumentDto,
@@ -32,7 +34,10 @@ import {
 @Controller('ventas')
 @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
 export class VentasAcuerdosController {
-  constructor(private readonly acuerdos: VentasAcuerdosService) {}
+  constructor(
+    private readonly acuerdos: VentasAcuerdosService,
+    private readonly renovaciones: VentasRenovacionesService,
+  ) {}
 
   // ---- Catálogo de servicios ----
 
@@ -88,8 +93,10 @@ export class VentasAcuerdosController {
     @Query('estado') estado?: string,
     @Query('servicioId') servicioId?: string,
     @Query('q') q?: string,
+    @Query('tipo') tipo?: string,
   ) {
     return this.acuerdos.listAgreements(req.user.companyId, {
+      kind: tipo || undefined,
       clientId: clienteId ? +clienteId || undefined : undefined,
       serviceId: servicioId ? +servicioId || undefined : undefined,
       estado: estado || undefined,
@@ -130,23 +137,29 @@ export class VentasAcuerdosController {
 
   @Delete('acuerdos/:id')
   @Section('VENTAS', 'write')
-  remove(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
-    return this.acuerdos.deleteAgreement(req.user.companyId, id);
+  async remove(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
+    const resultado = await this.acuerdos.deleteAgreement(req.user.companyId, id);
+    // Fase 4: sus oportunidades de renovación abiertas se van con él.
+    await this.renovaciones.alEliminar(req.user.companyId, id);
+    return resultado;
   }
 
   @Post('acuerdos/:id/cancelar')
   @Section('VENTAS', 'write')
-  cancel(
+  async cancel(
     @Req() req: any,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CancelSalesAgreementDto,
   ) {
-    return this.acuerdos.cancelAgreement(
+    const resultado = await this.acuerdos.cancelAgreement(
       req.user.companyId,
       req.user.userId,
       id,
       dto,
     );
+    // Fase 4: un contrato cancelado ya no se renueva.
+    await this.renovaciones.alCancelar(req.user.companyId, req.user.userId, id);
+    return resultado;
   }
 
   @Post('acuerdos/:id/cierre')
@@ -164,19 +177,47 @@ export class VentasAcuerdosController {
     );
   }
 
-  @Post('acuerdos/:id/renovar')
+  @Post('acuerdos/:id/incidentes')
   @Section('VENTAS', 'write')
-  renew(
+  crearIncidente(
     @Req() req: any,
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: RenewSalesAgreementDto,
+    @Body() dto: CreateAgreementIncidentDto,
   ) {
-    return this.acuerdos.renewAgreement(
+    return this.acuerdos.crearIncidente(
       req.user.companyId,
       req.user.userId,
       id,
       dto,
     );
+  }
+
+  @Delete('acuerdos/:id/incidentes/:incidenteId')
+  @Section('VENTAS', 'write')
+  borrarIncidente(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('incidenteId', ParseIntPipe) incidenteId: number,
+  ) {
+    return this.acuerdos.borrarIncidente(req.user.companyId, id, incidenteId);
+  }
+
+  @Post('acuerdos/:id/renovar')
+  @Section('VENTAS', 'write')
+  async renew(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: RenewSalesAgreementDto,
+  ) {
+    const resultado = await this.acuerdos.renewAgreement(
+      req.user.companyId,
+      req.user.userId,
+      id,
+      dto,
+    );
+    // Fase 4: renovar a mano también cierra la oportunidad de renovación abierta.
+    await this.renovaciones.alRenovarManual(req.user.companyId, req.user.userId, id);
+    return resultado;
   }
 
   @Post('acuerdos/:id/documentos')

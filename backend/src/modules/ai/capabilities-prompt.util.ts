@@ -85,8 +85,11 @@ export function buildCapabilitiesPrompt(
       m.intents.length > 0
         ? `## ${m.titulo}\nPara datos reales de este módulo, usa la(s) intención(es): ${m.intents.join(', ')}.${m.ayuda ? `\n${m.ayuda}` : ''}`
         : `## ${m.titulo}\nNo tienes consulta de datos en vivo para este módulo, pero SÍ conoces cómo se usa: explícalo con el manual de abajo.${
-            m.section === 'VENTAS' && opciones.ventasAgenteDisponible
-              ? ' Si la persona quiere datos en vivo de Ventas (cartera, clientes, por qué se perdió un cliente), dile que use el Agente de Ventas desde el selector de agentes del chat.'
+            m.section === 'VENTAS'
+              ? ' No analices la situación comercial ni des recomendaciones de venta (quién está estancado, cómo cerrar a un cliente, por qué se perdió uno): tú solo explicas cómo se usa el módulo y, si te piden eso, di que no es lo tuyo.' +
+                (opciones.ventasAgenteDisponible
+                  ? ' Si la persona quiere datos en vivo de Ventas (cartera, clientes, por qué se perdió un cliente) o una recomendación comercial, dile que use el Agente de Ventas desde el selector de agentes del chat.'
+                  : '')
               : ''
           }`,
     )

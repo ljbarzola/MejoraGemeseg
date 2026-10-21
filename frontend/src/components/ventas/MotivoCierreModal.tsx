@@ -6,6 +6,7 @@ import {
   type MotivoKind,
   type SalesMotivo,
 } from '../../services/ventas.service';
+import { PREGUNTA_MOTIVO, grupoDeKind } from '../../utils/motivosCierre';
 
 interface Props {
   kind: MotivoKind;
@@ -22,7 +23,7 @@ interface Props {
   onCancel: () => void;
 }
 
-// Todo cierre (descartar un lead, perder una oportunidad, cancelar o no renovar
+// Todo cierre (descartar un posible cliente, perder una oportunidad, cancelar o no renovar
 // un contrato, renovar con menos) se explica aquí, igual en todos lados. Los
 // estudios de win/loss muestran que el motivo que anota el vendedor suele no ser
 // el real, por eso se pregunta también QUIÉN lo dijo y existe «Sin información»:
@@ -84,7 +85,7 @@ export default function MotivoCierreModal({
           {contexto && <div style={{ fontSize: 13, color: '#666', marginBottom: 12 }}>{contexto}</div>}
 
           <div className="form-group">
-            <label>Motivo *</label>
+            <label>{PREGUNTA_MOTIVO[kind]} *</label>
             <select
               value={reasonId}
               disabled={cargando}
@@ -98,6 +99,9 @@ export default function MotivoCierreModal({
                 <option key={m.id} value={m.id}>{m.label}</option>
               ))}
             </select>
+            <p style={{ fontSize: 11, color: '#888', margin: '4px 0 0' }}>
+              Lista «{grupoDeKind(kind).titulo}». Si no encuentras el motivo, elige «Otro» y explícalo, o pide que lo agreguen en Ventas → Configuración → Motivos de cierre.
+            </p>
           </div>
 
           {elegido && !elegido.isNoInfo && (

@@ -80,6 +80,53 @@ export class VentasConversionesService {
     }
   }
 
+  // «Lead válido» (2026-10-18): una persona del equipo confirmó que el posible cliente es un contacto
+  // real de servicio (lo clasificó como «Servicio» o lo pasó a oportunidad). Es el paso intermedio entre
+  // llenar el formulario y cotizar. Solo cuenta si vino de un anuncio (trae gclid) y la empresa guardó el ID
+  // de esa conversión; una sola vez por posible cliente, y registrar NUNCA debe romper lo que la persona hacía.
+  async registrarLeadValido(companyId: number, leadId: number): Promise<void> {
+    try {
+      if (!(await this.envio.usaLeadValido(companyId))) return;
+      const lead = await this.prisma.salesLead.findFirst({
+        where: { id: leadId, companyId },
+        select: { id: true, extra: true, createdAt: true },
+      });
+      const gclid = gclidDeLead(lead?.extra);
+      if (!lead || !gclid) return;
+      // La unicidad de la base es (oportunidad, tipo) y este hecho no tiene oportunidad: se cuida aquí.
+      const yaEsta = await this.prisma.salesConversionEvent.findFirst({
+        where: { leadId: lead.id, kind: 'VALIDO' },
+        select: { id: true },
+      });
+      if (yaEsta) return;
+
+      const ahora = new Date();
+      const vigente = gclidVigente(lead.createdAt, ahora);
+      await this.prisma.salesConversionEvent.create({
+        data: {
+          companyId,
+          leadId: lead.id,
+          opportunityId: null,
+          kind: 'VALIDO',
+          gclid,
+          occurredAt: ahora,
+          value: null,
+          status: vigente ? 'PENDIENTE' : 'VENCIDO',
+          lastError: vigente
+            ? null
+            : `El clic tiene más de ${VIGENCIA_GCLID_DIAS} días: Google ya no lo acepta.`,
+        },
+      });
+      void this.envio.enviarPendientes({ companyId }).catch((e: Error) =>
+        this.logger.error(`Envío inmediato a Google Ads: ${e.message}`),
+      );
+    } catch (err) {
+      this.logger.error(
+        `No se pudo registrar el lead válido #${leadId}: ${(err as Error).message}`,
+      );
+    }
+  }
+
   // Conteos por estado y por tipo para la pantalla de Conexiones.
   async resumen(companyId: number | null) {
     if (!companyId) {

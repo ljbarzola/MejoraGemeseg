@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, HelpCircle } from 'lucide-react';
+import { ArrowLeft, HelpCircle, Trash2 } from 'lucide-react';
 import { getTemplate, createTemplate, updateTemplate, downloadFromDrive, uploadTemplateDocx, detectVariables, saveTemplateFields, getSalesClientFields, SalesTemplateField, TableColumn, SalesClientField } from '../../services/ventas.service';
 import { PRIMARY } from './contratoStyles';
 import { useToast } from '../../contexts/ToastContext';
@@ -516,8 +516,10 @@ export default function TemplateConfig() {
                                         <option value="NUMBER">Número</option>
                                         <option value="DATE">Fecha</option>
                                       </select>
-                                      <button type="button" onClick={() => removeTableColumn(i, ci)}
-                                        style={{ padding: '4px 8px', borderRadius: 3, border: '1px solid #e55', background: '#fff', color: '#c33', cursor: 'pointer', fontSize: 11 }}>✕</button>
+                                      <button type="button" className="btn-secondary icon-btn" onClick={() => removeTableColumn(i, ci)}
+                                        style={{ color: '#c53030' }} title="Quitar" aria-label="Quitar">
+                                          <Trash2 size={14} />
+                                        </button>
                                     </div>
                                   ))}
                                   <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
@@ -542,8 +544,10 @@ export default function TemplateConfig() {
                                       <input value={opt} onChange={e => updateDropdownOption(i, oi, e.target.value)}
                                         placeholder={`Opción ${oi + 1}`}
                                         style={{ flex: 1, padding: '4px 6px', borderRadius: 3, border: '1px solid #ddd', fontSize: 12 }} />
-                                      <button type="button" onClick={() => removeDropdownOption(i, oi)}
-                                        style={{ padding: '4px 8px', borderRadius: 3, border: '1px solid #e55', background: '#fff', color: '#c33', cursor: 'pointer', fontSize: 11 }}>✕</button>
+                                      <button type="button" className="btn-secondary icon-btn" onClick={() => removeDropdownOption(i, oi)}
+                                        style={{ color: '#c53030' }} title="Quitar" aria-label="Quitar">
+                                          <Trash2 size={14} />
+                                        </button>
                                     </div>
                                   ))}
                                   <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
