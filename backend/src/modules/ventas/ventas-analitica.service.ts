@@ -43,8 +43,10 @@ function lunesDe(s: string): string {
 
 const VIGENTES: EstadoContrato[] = ['VIGENTE', 'POR_VENCER', 'POR_INICIAR'];
 
-// A quién se miran las cifras. Quien no es ADMIN/MANAGER solo ve las de sus
-// propios clientes (misma regla que el dashboard de clientes de siempre).
+// A quién se miran las cifras. Todo el que tiene acceso a Ventas puede elegir «toda la empresa» (es solo lectura de
+// cifras y el Resumen del Dashboard ya funcionaba así); elegir a OTRO vendedor es solo de ADMIN y MANAGER. Sin elegir
+// nada, un empleado ve lo suyo y un ADMIN/MANAGER ve a toda la empresa. Antes un empleado veía estas pestañas
+// siempre en 0 aunque eligiera «toda la empresa», mientras el Resumen sí le mostraba datos (2026-10-21).
 export interface AlcanceAnalitica {
   userId: number;
   role: string;
@@ -66,9 +68,10 @@ export class VentasAnaliticaService {
   // null = toda la empresa; número = solo lo de ese vendedor.
   private vendedor(a: AlcanceAnalitica): number | null {
     const privilegiado = a.role === 'ADMIN' || a.role === 'MANAGER';
-    if (!privilegiado) return a.userId;
-    if (!a.alcance || a.alcance === 'all') return null;
+    if (a.alcance === 'all') return null;
     if (a.alcance === 'mine') return a.userId;
+    if (!privilegiado) return a.userId; // sin elegir, o pidiendo a otra persona: solo lo suyo
+    if (!a.alcance) return null;
     const id = Number(a.alcance);
     return Number.isInteger(id) && id > 0 ? id : null;
   }

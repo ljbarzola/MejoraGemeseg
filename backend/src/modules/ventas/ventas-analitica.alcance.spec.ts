@@ -23,9 +23,11 @@ describe('VentasAnaliticaService.clientesDelAlcance', () => {
     );
   });
 
-  it('un vendedor no puede pedir toda la empresa ni a otro: siempre ve lo suyo', async () => {
-    await servicio.clientesDelAlcance(1, { userId: 7, role: 'EMPLOYEE', alcance: 'all' });
+  it('un empleado puede elegir «toda la empresa» (solo cifras) pero no a otro vendedor', async () => {
+    expect((await servicio.clientesDelAlcance(1, { userId: 7, role: 'EMPLOYEE', alcance: 'all' })).ids).toBeNull();
+    expect(prisma.salesClient.findMany).not.toHaveBeenCalled();
     await servicio.clientesDelAlcance(1, { userId: 7, role: 'EMPLOYEE', alcance: '8' });
+    await servicio.clientesDelAlcance(1, { userId: 7, role: 'EMPLOYEE' });
     for (const llamada of prisma.salesClient.findMany.mock.calls) {
       expect(llamada[0].where.OR[0]).toEqual({ assignedUserId: 7 });
     }

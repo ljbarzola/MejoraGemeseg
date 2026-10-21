@@ -144,6 +144,11 @@ export default function VentasDashboard() {
   const tablaRespRef = useResizableColumns('ventas-dashboard-responsables', ['nombre', 'activos', 'vencidos', 'aceptados']);
 
   const esManager = !!data?.alcance.esManager;
+  // «Mis clientes» sin nada a mi nombre: en vez de mostrar todo en 0 sin explicación, se dice por qué y se ofrece
+  // ver a toda la empresa (todos pueden; ver a otra persona es solo de ADMIN y MANAGER).
+  const sinNadaMio = responsable === 'mine' && !!data
+    && data.embudo.every((e) => e.count === 0) && data.aceptacion.aceptados === 0 && data.aceptacion.rechazados === 0
+    && data.nuevos.total === 0 && data.seguimientos.activos === 0;
   // Embudo de etapas: el número de cada franja es lo que hay AHORA en ella; el ancho es el acumulado (las que
   // llegaron a esa etapa o más lejos, contando las aceptadas), así la figura solo se angosta y se lee como embudo.
   const activasEmbudo = (data?.embudo ?? []).filter((e) => !e.isFinal && e.key !== null);
@@ -172,13 +177,17 @@ export default function VentasDashboard() {
           <select
             className="filter-select" value={responsable}
             onChange={(e) => { setAlcanceTocado(true); setResponsable(e.target.value); }}
-            title={esManager ? 'Elige de quién se miran las cifras' : 'Aquí ves las cifras de tus propios clientes y oportunidades'}
+            title={esManager ? 'Elige de quién se miran las cifras: tuyas, de toda la empresa o de una persona con acceso a Ventas y CRM' : 'Aquí ves las cifras de tus propios clientes y oportunidades'}
           >
             <option value="mine">Mis clientes y prospectos</option>
             <option value="all">Toda la empresa</option>
-            {esManager && (data?.responsables ?? [])
-              .filter((r) => r.id !== currentUser?.id)
-              .map((r) => <option key={r.id} value={String(r.id)}>{r.nombre}</option>)}
+            {esManager && (data?.responsables ?? []).some((r) => r.id !== currentUser?.id) && (
+              <optgroup label="Una persona con acceso a Ventas y CRM">
+                {(data?.responsables ?? [])
+                  .filter((r) => r.id !== currentUser?.id)
+                  .map((r) => <option key={r.id} value={String(r.id)}>{r.nombre}</option>)}
+              </optgroup>
+            )}
           </select>
         </FilterField>
         {pestana === 'resumen' && (
@@ -193,6 +202,18 @@ export default function VentasDashboard() {
           <p className="dash-barra-nota">El periodo solo cambia «Nuevos» y «Referidos»; lo demás es cómo está todo hoy.</p>
         )}
       </div>
+
+      {sinNadaMio && (
+        <div className="dash-aviso" role="status">
+          <span>
+            <strong>No llevas oportunidades a tu nombre</strong>, por eso las cifras de «Mis clientes y prospectos» están en 0.
+            Mira cómo va toda la empresa para ver datos.
+          </span>
+          <button type="button" className="btn-secondary" onClick={() => { setAlcanceTocado(true); setResponsable('all'); }}>
+            Ver toda la empresa
+          </button>
+        </div>
+      )}
 
       <BarraDestino.Provider value={barraEl}>
       {pestana === 'cartera' ? (
