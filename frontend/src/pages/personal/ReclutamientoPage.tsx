@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef, lazy, Suspense, type ReactNode } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
 import { buildDriveFolderLink } from '../../utils/driveLink';
 import { formatFechaHoraSync } from '../../utils/formatFechaHora';
 import { getUser } from '../../services/auth.service';
 import CopyLinkButton from '../../components/common/CopyLinkButton';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import {
-  ArrowLeft,
+  
   RefreshCw,
   Plus,
   Pin,
@@ -396,8 +395,6 @@ function guardarCacheSincronizacion(candidatos: Candidate[]): string {
 }
 
 export default function ReclutamientoPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const { canWrite } = usePerm();
 
   const [puestos, setPuestos] = useState<JobPosition[]>([]);
@@ -913,11 +910,7 @@ export default function ReclutamientoPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/rrhh')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-        </button>
-
+      <div className="page-header-row">
         <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS</p>

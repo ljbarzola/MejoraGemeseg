@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getQualities, createQuality, updateQuality, deleteQuality } from '../../../services/cacao.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import { Trash2, Pencil } from 'lucide-react';
 
 export default function QualitiesPage() {
   const navigate = useNavigate();
@@ -167,8 +168,8 @@ export default function QualitiesPage() {
                     <td>{q.fixedPrice ? `$${q.fixedPrice}/kg` : '—'}</td>
                     <td>
                       <div className="tools-actions-cell">
-                        <button className="btn-sm-edit" onClick={() => startEdit(q)}>✎</button>
-                        <button className="btn-danger-sm" onClick={() => handleDelete(q.id)}>✕</button>
+                        <button className="btn-secondary icon-btn" onClick={() => startEdit(q)} title="Editar" aria-label="Editar"><Pencil size={14} /></button>
+                        <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => handleDelete(q.id)} title="Eliminar calidad" aria-label="Eliminar calidad"><Trash2 size={14} /></button>
                       </div>
                     </td>
                   </tr>

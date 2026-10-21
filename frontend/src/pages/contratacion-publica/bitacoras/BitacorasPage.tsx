@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Bot, Camera, Clock, Eye, Trash2 } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Bot, Camera, Clock, Eye, Trash2 } from 'lucide-react';
 import {
   eliminarBitacora,
   getAgenteBitacoras,
@@ -62,7 +62,6 @@ const PAGE_SIZE = 50;
  */
 export default function BitacorasPage() {
   const navigate = useNavigate();
-  const location = useLocation();
   const [params, setParams] = useSearchParams();
   const { canWrite } = usePerm();
   const puedeEscribir = canWrite('CONTRATACION_PUBLICA');
@@ -169,10 +168,7 @@ export default function BitacorasPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/contratacion-publica/entidades')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-        </button>
+      <div className="page-header-row">
         <div className="page-title-row">
           <div>
             <p className="page-eyebrow">CONTRATACIÓN PÚBLICA · OPERACIONES</p>

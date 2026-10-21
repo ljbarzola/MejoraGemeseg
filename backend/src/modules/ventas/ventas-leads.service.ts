@@ -383,6 +383,18 @@ export class VentasLeadsService {
       if (tel.length >= 7) porTel.set(tel, { id: c.id, name: c.name });
     }
     const nombre = new Map(usuarios.map((u) => [u.id, u.fullName]));
+    // Por qué se descartó cada posible cliente descartado (el último motivo registrado), para filtrar por él
+    // desde el Dashboard («Motivos de pérdida»).
+    const descartados = filas.filter((l) => l.status === 'DESCARTADO').map((l) => l.id);
+    const motivoDescarte = new Map<number, string>();
+    if (descartados.length) {
+      const entradas = await this.prisma.salesReasonEntry.findMany({
+        where: { companyId: cid, kind: 'LEAD_DESCARTE', leadId: { in: descartados } },
+        orderBy: { createdAt: 'desc' },
+        select: { leadId: true, reasonLabel: true },
+      });
+      for (const e of entradas) if (e.leadId && !motivoDescarte.has(e.leadId)) motivoDescarte.set(e.leadId, e.reasonLabel);
+    }
     return filas.map((l) => {
       const tel = normalizarTelefono(l.phone);
       const clienteExistente =
@@ -394,6 +406,7 @@ export class VentasLeadsService {
       return {
         ...this.conSugerencia(l),
         assignedUserName: l.assignedUserId ? (nombre.get(l.assignedUserId) ?? null) : null,
+        motivoDescarte: motivoDescarte.get(l.id) ?? null,
         clienteExistente,
       };
     });

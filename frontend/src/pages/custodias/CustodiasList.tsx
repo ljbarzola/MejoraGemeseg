@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { getCustodias, deleteCustodia } from '../../services/custodia.service';
 import EstadoSelect from '../../components/custodias/EstadoSelect';
 import CustodiaDetalleModal from '../../components/custodias/CustodiaDetalleModal';
@@ -33,7 +33,6 @@ function formatFechaHora(date: string) {
 
 export default function CustodiasList() {
   const navigate = useNavigate();
-  const location = useLocation();
   const [custodias, setCustodias] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [fechaInicio, setFechaInicio] = useState('');
@@ -71,7 +70,6 @@ export default function CustodiasList() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/dashboard')}>← Volver</button>
           <div>
             <p className="page-eyebrow">CUSTODIAS</p>
             <h1>Custodias</h1>

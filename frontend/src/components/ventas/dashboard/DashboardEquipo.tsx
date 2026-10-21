@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getAnaliticaActividad, type AnaliticaActividad } from '../../../services/ventas.service';
-import { Cargando, SinDatos, Tarjeta, formatoDia, periodoDesdeDias } from './DashboardBits';
+import { Cargando, SinDatos, Tarjeta, formatoDia, periodoDesdeDias, EnBarra } from './DashboardBits';
+import FilterField from '../../common/FilterField';
 
 const corto = (s: string) => s.split('-').reverse().slice(0, 2).join('/');
 
@@ -26,19 +27,21 @@ export default function DashboardEquipo({ alcance }: { alcance: string }) {
   const maxSemana = Math.max(1, ...datos.vendedores.flatMap((v) => Object.values(v.porSemana)));
 
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', margin: '16px 0 0' }}>
-        <select className="filter-select" value={periodo} onChange={(e) => setPeriodo(Number(e.target.value))} aria-label="Periodo">
+    <div className="dash-pila">
+      <EnBarra>
+        <FilterField label="Periodo">
+          <select className="filter-select" value={periodo} onChange={(e) => setPeriodo(Number(e.target.value))} aria-label="Periodo">
           <option value={28}>Últimas 4 semanas</option>
           <option value={56}>Últimas 8 semanas</option>
           <option value={90}>Últimos 90 días</option>
-        </select>
-        <span style={{ fontSize: 12, color: '#a0aec0' }}>
+          </select>
+        </FilterField>
+        <p className="dash-barra-nota">
           Del {formatoDia(datos.periodo.desde)} al {formatoDia(datos.periodo.hasta)}.
-        </span>
-      </div>
+        </p>
+      </EnBarra>
 
-      <div style={{ marginTop: 16 }}>
+      <div>
         <Tarjeta titulo="Actividad por vendedor" hint="Notas, llamadas, reuniones y cambios de etapa que registró cada persona; la barra de cada semana es relativa a la semana más activa">
           {datos.vendedores.length === 0 ? (
             <SinDatos texto="No hay actividad registrada en este periodo." />

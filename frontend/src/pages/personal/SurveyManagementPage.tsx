@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, BarChart3, Link2, LinkIcon, Copy, Lock, Unlock, Trash2, Send, Pencil } from 'lucide-react';
+import { Plus, BarChart3, Link2, LinkIcon, Copy, Lock, Unlock, Trash2, Send, Pencil } from 'lucide-react';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
@@ -20,7 +19,6 @@ const STATUS_COLOR: Record<string, { bg: string; fg: string }> = {
 };
 
 export default function SurveyManagementPage() {
-  const navigate = useNavigate();
   const { canWrite } = usePerm();
   const canManage = canWrite('RRHH');
 
@@ -181,10 +179,7 @@ export default function SurveyManagementPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate('/rrhh')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} /> Volver
-        </button>
+      <div className="page-header-row">
         <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS</p>

@@ -16,6 +16,14 @@ export class VentasAnaliticaController {
     return { userId: req.user.userId, role: req.user.role, alcance };
   }
 
+  // Quiénes son «mis clientes» (o los de un vendedor): lo usan el Directorio y Contratos cuando el Dashboard
+  // lleva ahí con el alcance puesto, para que la lista tenga las mismas filas que la cifra.
+  @Get('clientes-del-alcance')
+  @Section('VENTAS', 'view')
+  clientesDelAlcance(@Req() req: any, @Query('alcance') alcance?: string) {
+    return this.analitica.clientesDelAlcance(req.user.companyId, this.alcance(req, alcance));
+  }
+
   @Get('cartera')
   @Section('VENTAS', 'view')
   cartera(@Req() req: any, @Query('alcance') alcance?: string) {

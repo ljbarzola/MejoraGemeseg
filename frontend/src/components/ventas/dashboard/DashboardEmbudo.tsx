@@ -8,27 +8,28 @@ import {
   type ResumenMuestra,
 } from '../../../services/ventas.service';
 import DashboardMarketing from './DashboardMarketing';
-import { BarraH, Cargando, Contador, Muestra, SelectorPeriodo, SinDatos, Tarjeta, formatoDia, periodoDesdeDias } from './DashboardBits';
+import { BarraH, Cargando, Contador, Muestra, SelectorPeriodo, SinDatos, Tarjeta, formatoDia, periodoDesdeDias, EnBarra, KpiFila } from './DashboardBits';
+import FilterField from '../../common/FilterField';
 
 const dias = (v: number | null) => (v === null ? '—' : `${v} ${v === 1 ? 'día' : 'días'}`);
 
 function Velocidad({ titulo, detalle, m }: { titulo: string; detalle: string; m: ResumenMuestra }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 14px' }}>
-      <div style={{ fontSize: '0.78rem', color: '#718096', fontWeight: 600 }}>{titulo}</div>
-      <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#2b6cb0', lineHeight: 1.2 }}>{dias(m.mediana)}</div>
-      <div style={{ fontSize: 11.5, color: '#a0aec0' }}>
+    <div className="dash-kpi" style={{ ['--kpi' as string]: '#2b6cb0' }}>
+      <span className="dash-kpi-t">{titulo}</span>
+      <span className="dash-kpi-v">{dias(m.mediana)}</span>
+      <span className="dash-kpi-d">
         {m.p75 !== null && <>El 75% en {dias(m.p75)} o menos · </>}
         <Muestra n={m.n} pocas={m.pocasMuestras} />
-      </div>
-      <div style={{ fontSize: 11, color: '#cbd5e0', marginTop: 2 }}>{detalle}</div>
+      </span>
+      <span className="dash-kpi-d">{detalle}</span>
     </div>
   );
 }
 
-function TablaAceptacion({ titulo, filas }: { titulo: string; filas: GrupoAceptacion[] }) {
+function TablaAceptacion({ titulo, filas, hint }: { titulo: string; filas: GrupoAceptacion[]; hint?: string }) {
   return (
-    <Tarjeta titulo={titulo}>
+    <Tarjeta titulo={titulo} hint={hint ?? 'De las oportunidades que se cerraron en el periodo, cuántas se ganaron y cuántas se perdieron.'}>
       {filas.length === 0 ? (
         <SinDatos texto="Sin cierres en el periodo." />
       ) : (
@@ -85,27 +86,32 @@ export default function DashboardEmbudo({ alcance }: { alcance: string }) {
   const maxAlcanzaron = Math.max(1, ...embudo.conversion.map((c) => c.alcanzaron));
 
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', margin: '16px 0 0' }}>
-        <SelectorPeriodo dias={periodo} onChange={setPeriodo} />
-        <span style={{ fontSize: 12, color: '#a0aec0' }}>
+    <div className="dash-pila">
+      <EnBarra>
+        <FilterField label="Periodo">
+          <SelectorPeriodo dias={periodo} onChange={setPeriodo} />
+        </FilterField>
+        <p className="dash-barra-nota">
           {embudo.oportunidades} oportunidades llegaron del {formatoDia(embudo.periodo.desde)} al {formatoDia(embudo.periodo.hasta)}.
-        </span>
-      </div>
+        </p>
+      </EnBarra>
 
-      <div style={{ marginTop: 14 }}>
+      <div>
         <DashboardMarketing desde={embudo.periodo.desde.slice(0, 10)} hasta={embudo.periodo.hasta.slice(0, 10)} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 12, marginTop: 14 }}>
+      <div>
+        <p className="dash-seccion">Qué tan rápido trabajamos</p>
+      <KpiFila>
         <Velocidad titulo="Tiempo de respuesta" detalle="De llegar a la primera revisión" m={embudo.velocidad.respuestaDias} />
         <Velocidad titulo="Tiempo de cotización" detalle="De llegar a cotizar" m={embudo.velocidad.cotizacionDias} />
         <Velocidad titulo="Duración del ciclo" detalle="De llegar a aceptar" m={embudo.velocidad.cicloDias} />
         <Contador titulo="Medido en" valor={`${embudo.cobertura.medidas} de ${embudo.cobertura.de}`} color="#718096"
           detalle={`El historial de etapas existe desde el ${formatoDia(embudo.cobertura.historialDesde)}; lo anterior no se puede medir`} />
+      </KpiFila>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20, marginTop: 20 }}>
+      <div className="dash-grid dash-grid--2">
         <Tarjeta titulo="Conversión entre etapas" hint="Cuántas llegaron a cada etapa y cuántas pasaron a la siguiente">
           {embudo.oportunidades === 0 ? (
             <SinDatos texto="No llegaron oportunidades en este periodo." />
@@ -136,7 +142,9 @@ export default function DashboardEmbudo({ alcance }: { alcance: string }) {
             </table>
           </div>
         </Tarjeta>
+      </div>
 
+      <div className="dash-grid dash-grid--2">
         <TablaAceptacion titulo="Aceptación por fuente" filas={aceptacion.porFuente} />
         <TablaAceptacion titulo="Aceptación por servicio" filas={aceptacion.porServicio} />
         {aceptacion.porResponsable.length > 0 && <TablaAceptacion titulo="Aceptación por responsable" filas={aceptacion.porResponsable} />}

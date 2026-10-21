@@ -82,16 +82,17 @@ describe('AiService — Agente de Ventas', () => {
       expect(pregunta).toContain('EXPEDIENTE Hotel Sol');
       expect(pregunta).toContain('¿qué hago con él?');
       expect(opciones).toEqual(expect.objectContaining({ nivel: 'fuerte', maxOutputTokens: 4096 }));
-      expect(r.reply).toBe('Llámalo hoy [#opp:1].');
+      // Las marcas internas nunca llegan a la persona.
+      expect(r.reply).toBe('Llámalo hoy.');
       expect(r.auditoria).toMatchObject({ intent: 'ventas_expediente', params: { clienteId: 42 } });
     });
 
-    it('quita las referencias inventadas y deja las que sí están en los datos', async () => {
+    it('quita todas las marcas, también las inventadas, y deja constancia en la auditoría', async () => {
       vertexChat.sendChat.mockResolvedValue({ reply: 'Hubo una queja [#act:2] y un cierre [#opp:999].', tokensUsed: 1 });
       const r = await desdeFicha();
-      expect(r.reply).toContain('[#act:2]');
-      expect(r.reply).not.toContain('[#opp:999]');
-      expect(r.reply).toContain('quité algunas referencias');
+      expect(r.reply).toBe('Hubo una queja y un cierre.');
+      expect(r.reply).not.toMatch(/quité algunas referencias/);
+      expect(r.auditoria).toMatchObject({ citas: 2, citasNoVerificadas: ['opp:999'] });
     });
 
     it('un super admin sin empresa no puede analizar a un cliente', async () => {
@@ -124,13 +125,13 @@ describe('AiService — Agente de Ventas', () => {
       expect(segunda[1]).toEqual(historia);
     });
 
-    it('una referencia ya verificada en una respuesta anterior no se borra al repetirla', async () => {
+    it('una referencia ya verificada en una respuesta anterior tampoco se muestra al repetirla', async () => {
       vertexChat.sendChat
         .mockResolvedValueOnce({ reply: '[INTENCION: ventas_prioridades]', tokensUsed: 1 })
         .mockResolvedValueOnce({ reply: 'Como te dije [#act:55] y ahora [#opp:1].', tokensUsed: 1 });
       const r = await conPregunta(historia, 'VENTAS');
-      expect(r.reply).toContain('[#act:55]');
-      expect(r.reply).toContain('[#opp:1]');
+      expect(r.reply).not.toContain('[#');
+      expect(r.auditoria).toMatchObject({ citasNoVerificadas: [] });
     });
 
     it('Agente Gemeseg sigue sin historial en la segunda llamada (no cambia)', async () => {

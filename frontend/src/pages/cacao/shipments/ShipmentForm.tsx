@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getClients, getLots, createShipment, getUnitConfig, getNextShipmentId } from '../../../services/cacao.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import DateInput from '../../../components/common/DateInput';
+import { Trash2 } from 'lucide-react';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FULL: Record<string, string> = { TON: 'Toneladas', KG: 'Kilogramos', SACO: 'Sacos' };
@@ -295,7 +296,7 @@ export default function ShipmentForm() {
                   <span style={{ fontSize: '13px', color: '#718096', minWidth: '120px', textAlign: 'right' }}>
                     = {quantityKg.toFixed(0)} kg
                   </span>
-                  <button className="btn-danger-sm" onClick={() => removeLot(i)}>✕</button>
+                  <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => removeLot(i)} title="Quitar lote" aria-label="Quitar lote"><Trash2 size={14} /></button>
                   {exceeds && <span style={{ color: '#e53e3e', fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap' }}>¡Excede {lot.netWeight}kg!</span>}
                 </div>
                 {/* Per-lot conversion display */}

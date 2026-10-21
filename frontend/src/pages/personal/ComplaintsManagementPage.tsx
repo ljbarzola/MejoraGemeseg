@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, X, Settings2, ListOrdered, Trash2 } from 'lucide-react';
+import { X, Settings2, ListOrdered, Trash2 } from 'lucide-react';
 import {
   getAllComplaints,
   changeComplaintStage,
@@ -22,7 +21,6 @@ import ComplaintStagesConfigModal from '../../components/personal/ComplaintStage
 // (ver ComplaintStagesConfigModal), ordenadas por `order`, con su propio
 // `color` en vez del STAGE_COLOR hardcodeado de antes.
 export default function ComplaintsManagementPage() {
-  const navigate = useNavigate();
   const { canWrite } = usePerm();
   const canManage = canWrite('RRHH');
 
@@ -169,10 +167,7 @@ export default function ComplaintsManagementPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate('/rrhh')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} /> Volver
-        </button>
+      <div className="page-header-row">
         <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS</p>

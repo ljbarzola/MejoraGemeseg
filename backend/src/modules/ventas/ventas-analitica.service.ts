@@ -92,13 +92,26 @@ export class VentasAnaliticaService {
     };
   }
 
+  // Las empresas o personas «de» un vendedor: las que tienen una oportunidad a su nombre, más las que aún traen su
+  // nombre del sistema anterior. Desde 2026-10-16 el responsable es de la OPORTUNIDAD; mirar solo el de la
+  // empresa dejaba la cartera de un vendedor casi vacía aunque llevara oportunidades. Es la misma regla del
+  // Resumen del Dashboard (VentasClientesService.getDashboard).
   private async idsClientes(companyId: number, vendedor: number | null) {
     if (vendedor === null) return null;
     const cs = await this.prisma.salesClient.findMany({
-      where: { companyId, assignedUserId: vendedor },
+      where: {
+        companyId,
+        OR: [{ assignedUserId: vendedor }, { opportunities: { some: { assignedUserId: vendedor } } }],
+      },
       select: { id: true },
     });
     return cs.map((c) => c.id);
+  }
+
+  /** Ids de las empresas o personas del alcance (null = toda la empresa). Los usan las pantallas a las que lleva el Dashboard. */
+  async clientesDelAlcance(companyId: number | null, a: AlcanceAnalitica): Promise<{ ids: number[] | null }> {
+    const cid = this.requireCompany(companyId);
+    return { ids: await this.idsClientes(cid, this.vendedor(a)) };
   }
 
   // ---------------------------------------------------------------------
@@ -630,12 +643,18 @@ export class VentasAnaliticaService {
   ) {
     const cid = this.requireCompany(companyId);
     const r = this.rango(desdeRaw, hastaRaw, 180);
-    const ids = await this.idsClientes(cid, this.vendedor(a));
+    const vend = this.vendedor(a);
+    const ids = await this.idsClientes(cid, vend);
+    // Un posible cliente descartado aún no es una empresa del Directorio (no tiene salesClientId): para un vendedor
+    // cuentan los que tenía asignados.
+    const leadsDelVendedor = vend === null
+      ? []
+      : (await this.prisma.salesLead.findMany({ where: { companyId: cid, assignedUserId: vend }, select: { id: true } })).map((l) => l.id);
     const entradas = await this.prisma.salesReasonEntry.findMany({
       where: {
         companyId: cid,
         createdAt: { gte: r.desde, lte: r.hastaFin },
-        ...(ids ? { salesClientId: { in: ids } } : {}),
+        ...(ids ? { OR: [{ salesClientId: { in: ids } }, { leadId: { in: leadsDelVendedor } }] } : {}),
       },
       select: { kind: true, reasonLabel: true, source: true },
     });

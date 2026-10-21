@@ -107,7 +107,7 @@ export default function ConfiguracionVentasPage() {
       />
 
       <PageTabs
-        label="Secciones de la configuración" value={pestana}
+        label="Secciones de la configuración" value={pestana} estilo="ventana"
         onChange={(k) => elegir(PESTANAS.find((p) => p.key === k)!.primera)}
         tabs={PESTANAS.map((p) => ({ key: p.key, label: p.label, icon: p.icono }))}
       />

@@ -586,6 +586,8 @@ export type TimelineEvent =
     }
   | {
       kind: 'etapa'; id: string; at: string; authorName: string | null; from: TimelineStageInfo | null; to: TimelineStageInfo | null; notes: string | null;
+      // Solo en el cambio a «Perdida», si se registró el motivo.
+      motivo?: MotivoDePerdida | null;
       // De qué negociación es el cambio (no viene en los registros viejos del cliente).
       opportunityId?: number; opportunityName?: string;
     }
@@ -984,6 +986,13 @@ export interface UbicacionOportunidad {
   osmId: string | null;
 }
 
+// Motivo con el que se perdió una oportunidad (lo que se muestra junto a la etapa «Perdida»).
+export interface MotivoDePerdida {
+  label: string;
+  comment: string | null;
+  source: 'CLIENTE' | 'VENDEDOR' | null;
+}
+
 export interface Oportunidad {
   id: number;
   salesClientId: number;
@@ -1009,6 +1018,8 @@ export interface Oportunidad {
   ubicacion?: UbicacionOportunidad | null;
   // Sin servicios propios: el servicio que la ficha del cliente tiene guardado (o null).
   servicioDeFicha?: string | null;
+  // Solo en la lista y solo si está perdida: el motivo registrado (null si no se registró).
+  motivoPerdida?: MotivoDePerdida | null;
   notes?: string | null;
   services: { id: number; name: string }[];
   // Solo en el detalle:
@@ -1151,6 +1162,8 @@ export interface LeadEntrante {
   createdAt: string;
   // Parecido a un cliente que ya existe (mismo correo o teléfono).
   clienteExistente?: { id: number; name: string } | null;
+  // Solo en los descartados: por qué se descartó (el último motivo registrado).
+  motivoDescarte?: string | null;
   // Solo en el detalle. `contactoId`/`contactoNombre`: Fase 2, cuando lo que
   // coincide es una PERSONA de contacto (Juanito, María) y no la empresa.
   coincidencias?: {
@@ -1389,3 +1402,8 @@ export interface AnaliticaMarketing {
 }
 export const getAnaliticaMarketing = (p?: RangoParams & { agrupar?: 'channel' | 'campana' | 'landing'; canal?: string }): Promise<AnaliticaMarketing> =>
   api.get('/ventas/analitica/marketing', { params: p }).then(r => r.data);
+
+// Ids de las empresas o personas del alcance del Dashboard (null = toda la empresa). Lo usan el Directorio y Contratos
+// cuando el Dashboard lleva ahí con «mis clientes» o un vendedor: la lista queda con las mismas filas que la cifra.
+export const getClientesDelAlcance = (alcance: string): Promise<{ ids: number[] | null }> =>
+  api.get('/ventas/analitica/clientes-del-alcance', { params: { alcance } }).then(r => r.data);

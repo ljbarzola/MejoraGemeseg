@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
 import { queryGemeBot } from '../../services/custodia.service';
 
 interface Message {
@@ -11,8 +10,6 @@ interface Message {
 }
 
 export default function GemeBotChat() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -81,7 +78,6 @@ export default function GemeBotChat() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/custodias')}>← Volver</button>
           <div>
             <p className="page-eyebrow">CUSTODIAS</p>
             <h1>GEME-BOT Asistente Operativo</h1>

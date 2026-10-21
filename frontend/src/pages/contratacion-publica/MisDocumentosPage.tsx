@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Upload } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Upload } from 'lucide-react';
 import { getMisDocumentos } from '../../services/contratacion-publica.service';
 import type { CPDocumentoBandeja } from '../../types/contratacion-publica';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
@@ -20,7 +20,6 @@ const prioridad = (f: CPDocumentoBandeja) =>
  */
 export default function MisDocumentosPage() {
   const navigate = useNavigate();
-  const location = useLocation();
   const tablaRef = useResizableColumns('cp-mis-documentos');
 
   const [filas, setFilas] = useState<CPDocumentoBandeja[]>([]);
@@ -62,10 +61,7 @@ export default function MisDocumentosPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-        </button>
+      <div className="page-header-row">
         <div className="page-title-row">
           <div>
             <p className="page-eyebrow">CONTRATACIÓN PÚBLICA</p>

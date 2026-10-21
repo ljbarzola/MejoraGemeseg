@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, AlertTriangle, Hourglass, ClipboardCheck, Info, Settings } from 'lucide-react';
+import { RefreshCw, AlertTriangle, Hourglass, ClipboardCheck, Info, Settings } from 'lucide-react';
 import {
   getComplianceOverview,
   getEntidades,
@@ -81,11 +81,7 @@ export default function CumplimientoEntidades() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/rrhh')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-        </button>
-
+      <div className="page-header-row">
         <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS · CUMPLIMIENTO</p>

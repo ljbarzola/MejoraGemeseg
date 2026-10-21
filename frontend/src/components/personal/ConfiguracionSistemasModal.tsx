@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X } from 'lucide-react';
+import { X, Pencil, Trash2 } from 'lucide-react';
 import {
   getSistemasVerificacion,
   createSistemaVerificacion,
@@ -185,8 +185,8 @@ export default function ConfiguracionSistemasModal({ open, onClose }: Props) {
                     <button className="btn-secondary" style={{ padding: '4px 10px', fontSize: '0.78rem' }} onClick={() => handleToggleActivo(s)}>
                       {s.activo ? 'Desactivar' : 'Activar'}
                     </button>
-                    <button className="btn-sm-edit" onClick={() => handleEdit(s)}>✏️</button>
-                    <button className="btn-danger-sm" onClick={() => handleDelete(s)}>🗑️</button>
+                    <button className="btn-secondary icon-btn" onClick={() => handleEdit(s)} title="Editar" aria-label="Editar"><Pencil size={14} /></button>
+                    <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => handleDelete(s)} title="Eliminar" aria-label="Eliminar"><Trash2 size={14} /></button>
                   </div>
                 </div>
               ))}

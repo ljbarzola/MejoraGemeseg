@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 // Piezas visuales compartidas por las pestañas del dashboard de Ventas. Sin
 // librería de gráficos a propósito (igual que el resumen): barras hechas con
@@ -24,33 +25,59 @@ export const pct = (v: number | null | undefined): string => (v === null || v ==
 
 export const formatoDia = (s: string) => s.slice(0, 10).split('-').reverse().join('/');
 
-export function Tarjeta({ titulo, hint, children }: { titulo: string; hint?: string; children: ReactNode }) {
+/**
+ * Tarjeta ESTÁNDAR del dashboard (2026-10-21): blanca, con borde fino, título y una línea de ayuda. Todas las
+ * pestañas usan esta misma pieza para que el tablero se lea igual en todas partes.
+ */
+export function Tarjeta({ titulo, hint, children, accion, className }: { titulo: string; hint?: ReactNode; children: ReactNode; accion?: ReactNode; className?: string }) {
   return (
-    <div className="admin-section" style={{ margin: 0 }}>
-      <h3 style={{ margin: 0, fontSize: '0.95rem' }}>{titulo}</h3>
-      {hint && <p style={{ margin: '2px 0 10px', fontSize: '0.75rem', color: '#a0aec0' }}>{hint}</p>}
-      {!hint && <div style={{ height: 10 }} />}
+    // data-tablas-vivas="off": una tabla dentro de una tarjeta no lleva su propio scroll (ver utils/tablasVivas.ts).
+    <section className={`dash-card${className ? ` ${className}` : ''}`} data-tablas-vivas="off">
+      <header className="dash-card-cab">
+        <div>
+          <h3>{titulo}</h3>
+          {hint && <p className="dash-card-hint">{hint}</p>}
+        </div>
+        {accion}
+      </header>
       {children}
-    </div>
+    </section>
   );
 }
 
+/** Franja de cifras: UNA sola tarjeta partida en celdas finas (no una tarjeta alta por cifra). */
+export function KpiFila({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={`dash-kpis${className ? ` ${className}` : ''}`}>{children}</div>;
+}
+
+/** Una celda de la franja de cifras: nombre, número y una línea de detalle. */
 export function Contador({
   titulo, valor, color, detalle, onClick,
 }: { titulo: string; valor: ReactNode; color: string; detalle?: string; onClick?: () => void }) {
   const contenido = (
     <>
-      <div style={{ fontSize: '0.78rem', color: '#718096', fontWeight: 600 }}>{titulo}</div>
-      <div style={{ fontSize: '1.9rem', fontWeight: 800, color, lineHeight: 1.2 }}>{valor}</div>
-      {detalle && <div style={{ fontSize: '0.75rem', color: '#a0aec0', marginTop: 2 }}>{detalle}</div>}
+      <span className="dash-kpi-t">{titulo}</span>
+      <span className="dash-kpi-v">{valor}</span>
+      {detalle && <span className="dash-kpi-d" title={detalle}>{detalle}</span>}
     </>
   );
-  const estilo = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 14px', textAlign: 'left' as const };
+  const estilo = { ['--kpi' as string]: color };
   return onClick ? (
-    <button type="button" onClick={onClick} style={{ ...estilo, cursor: 'pointer', font: 'inherit' }}>{contenido}</button>
+    <button type="button" className="dash-kpi" style={estilo} onClick={onClick}>{contenido}</button>
   ) : (
-    <div style={estilo}>{contenido}</div>
+    <div className="dash-kpi" style={estilo}>{contenido}</div>
   );
+}
+
+/**
+ * La barra de filtros del dashboard es UNA: la arma VentasDashboard con «Cifras de» y, cuando la pestaña tiene
+ * un periodo propio, esa pestaña lo mete en la misma barra con <EnBarra> (así nunca hay una segunda fila de
+ * filtros suelta más abajo).
+ */
+export const BarraDestino = createContext<HTMLElement | null>(null);
+export function EnBarra({ children }: { children: ReactNode }) {
+  const destino = useContext(BarraDestino);
+  return destino ? createPortal(children, destino) : null;
 }
 
 export function BarraH({

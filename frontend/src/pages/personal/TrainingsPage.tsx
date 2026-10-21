@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, X, CheckCircle2, RotateCcw, Paperclip, Trash2, FolderOpen } from 'lucide-react';
+import { Plus, X, CheckCircle2, RotateCcw, Paperclip, Trash2, FolderOpen } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import DateInput from '../../components/common/DateInput';
 import {
@@ -100,7 +99,6 @@ const AttachmentSection = forwardRef<AttachmentSectionHandle, {
 });
 
 export default function TrainingsPage() {
-  const navigate = useNavigate();
   const { canWrite } = usePerm();
   const canEdit = canWrite('RRHH');
 
@@ -480,10 +478,7 @@ export default function TrainingsPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate('/rrhh')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} /> Volver
-        </button>
+      <div className="page-header-row">
         <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS</p>

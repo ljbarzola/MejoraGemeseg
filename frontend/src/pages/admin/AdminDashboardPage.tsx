@@ -306,10 +306,6 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="page-container">
-      <button className="btn-back" onClick={() => navigate('/dashboard')}>
-        &larr; Volver al dashboard
-      </button>
-
       <div className="page-header-row">
         <div>
           <p className="page-eyebrow">Panel de administración</p>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, Settings, Settings2, X, Users, Building2, Landmark, UserX, LogOut, IdCard, ArrowRightLeft } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { RefreshCw, Settings, Settings2, X, Users, Building2, Landmark, UserX, LogOut, IdCard, ArrowRightLeft } from 'lucide-react';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
@@ -67,7 +67,6 @@ function KpiCard({ icon, value, label, color }: { icon: React.ReactNode; value: 
 }
 
 export default function GuardiasList() {
-  const navigate = useNavigate();
   const location = useLocation();
   const { canWrite } = usePerm();
   const canEdit = canWrite('RRHH');
@@ -444,11 +443,7 @@ export default function GuardiasList() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/rrhh')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-        </button>
-
+      <div className="page-header-row">
         <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS</p>

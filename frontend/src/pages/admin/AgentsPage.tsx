@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Activity, BookOpen } from 'lucide-react';
+import { Activity, BookOpen, Trash2, Pencil } from 'lucide-react';
 import {
   getAgentCatalog,
   getAgentAssignments,
@@ -35,7 +35,7 @@ const SCOPE_PREVIEW: Record<string, string[]> = {
   PROJECTS: ['Proyectos activos', 'Estados de proyectos', 'Miembros por proyecto', 'Estadisticas'],
   TASKS: ['Tareas asignadas', 'Estados Kanban', 'Prioridades', 'Fechas de entrega'],
   ADMIN: ['Todos los usuarios', 'Estadisticas globales', 'Roles y permisos', 'Metricas del sistema'],
-  VENTAS: ['Expediente de un cliente', 'Cartera y contratos', 'Perdidos y sus motivos', 'Embudo y velocidad'],
+  VENTAS: ['Expediente de un cliente', 'Cartera y contratos', 'Motivos de pérdida', 'Embudo de ventas'],
   BITACORAS: ['Foto de la hoja', 'Guardias y sus horas', 'Novedades por tipo', 'Nada del horario ni de los guardias'],
 };
 
@@ -230,13 +230,13 @@ export default function AgentsPage() {
                         <div className="tools-actions-cell">
                           {docs.some((d) => d.scope === agent.scope) && (
                             <>
-                              <button className="btn-sm-edit" onClick={() => setVerDoc(docs.find((d) => d.scope === agent.scope) ?? null)} title="Qué hace este agente" aria-label="Qué hace este agente"><BookOpen size={14} /></button>
-                              <button className="btn-sm-edit" onClick={() => setVerActividad(agent)} title="Qué ha hecho este agente" aria-label="Qué ha hecho este agente"><Activity size={14} /></button>
+                              <button className="btn-secondary icon-btn" onClick={() => setVerDoc(docs.find((d) => d.scope === agent.scope) ?? null)} title="Qué hace este agente" aria-label="Qué hace este agente"><BookOpen size={14} /></button>
+                              <button className="btn-secondary icon-btn" onClick={() => setVerActividad(agent)} title="Qué ha hecho este agente" aria-label="Qué ha hecho este agente"><Activity size={14} /></button>
                             </>
                           )}
-                          <button className="btn-sm-edit" onClick={() => openEditModal(agent)} title="Editar">✎</button>
+                          <button className="btn-secondary icon-btn" onClick={() => openEditModal(agent)} title="Editar" aria-label="Editar"><Pencil size={14} /></button>
                           {!ES_TRABAJADOR(agent.scope) && (
-                            <button className="btn-danger-sm" onClick={() => handleDeleteAgent(agent.id)} title="Eliminar">✕</button>
+                            <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => handleDeleteAgent(agent.id)} title="Eliminar agente" aria-label="Eliminar agente"><Trash2 size={14} /></button>
                           )}
                         </div>
                       </div>
@@ -289,7 +289,7 @@ export default function AgentsPage() {
                           </td>
                           <td>
                             <div className="tools-actions-cell">
-                              <button className="btn-danger-sm" onClick={() => handleUnassign(a.id)} title="Quitar agente">✕</button>
+                              <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => handleUnassign(a.id)} title="Quitar agente" aria-label="Quitar agente"><Trash2 size={14} /></button>
                             </div>
                           </td>
                         </tr>

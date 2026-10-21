@@ -53,6 +53,7 @@ describe('VentasClientesService.getDashboard — por responsable de la oportunid
 
   const opp = (clienteId: number, asignado: number | null, over: Record<string, unknown> = {}) => ({
     salesClientId: clienteId,
+    status: 'RECIBIDO',
     closedAt: null,
     outcome: null,
     assignedUserId: asignado,
@@ -120,5 +121,46 @@ describe('VentasClientesService.getDashboard — por responsable de la oportunid
       { assignedUserId: 7 },
       { opportunities: { some: { assignedUserId: 7 } } },
     ]);
+  });
+  // 2026-10-21: el embudo y la aceptación cuentan OPORTUNIDADES, igual que la lista a la que lleva cada botón.
+  describe('embudo y aceptación por oportunidad', () => {
+    const ganadaOpp = (clienteId: number, asignado: number | null) =>
+      opp(clienteId, asignado, { status: 'ACEPTADO', closedAt: new Date(), outcome: 'GANADA' });
+    const cuenta = (r: any, key: string | null) => r.embudo.find((e: any) => e.key === key)?.count ?? 0;
+
+    it('un cliente con dos oportunidades aceptadas cuenta dos, no una (aunque su ficha diga otra cosa)', async () => {
+      prisma.salesClient.findMany.mockResolvedValue([cliente(1, { status: 'RECIBIDO' })]);
+      prisma.salesOpportunity.findMany.mockResolvedValue([ganadaOpp(1, 7), ganadaOpp(1, 7)]);
+      const r = await servicio.getDashboard(1, { userId: 1, role: 'ADMIN' }, { responsable: 'all' });
+      expect(cuenta(r, 'ACEPTADO')).toBe(2);
+      expect(cuenta(r, 'RECIBIDO')).toBe(0);
+      expect(r.aceptacion.aceptados).toBe(2);
+    });
+
+    it('con «mis clientes» solo cuentan MIS oportunidades: lo mismo que filtra Oportunidades por responsable', async () => {
+      prisma.salesClient.findMany.mockResolvedValue([cliente(1), cliente(2)]);
+      prisma.salesOpportunity.findMany.mockResolvedValue([
+        opp(1, 7),
+        ganadaOpp(1, 8), // del mismo cliente pero de otro vendedor: no es mía
+        ganadaOpp(2, 7),
+      ]);
+      const r = await servicio.getDashboard(1, { userId: 7, role: 'EMPLOYEE' }, {});
+      expect(cuenta(r, 'RECIBIDO')).toBe(1);
+      expect(cuenta(r, 'ACEPTADO')).toBe(1);
+      expect(r.aceptacion.aceptados).toBe(1);
+    });
+
+    it('una empresa del sistema anterior, sin oportunidades, cuenta por la etapa de su ficha', async () => {
+      prisma.salesClient.findMany.mockResolvedValue([cliente(1, { status: 'ACEPTADO', assignedUserId: 7, assignedUser: { fullName: 'Ana' } })]);
+      const r = await servicio.getDashboard(1, { userId: 7, role: 'EMPLOYEE' }, {});
+      expect(cuenta(r, 'ACEPTADO')).toBe(1);
+      expect(r.aceptacion.aceptados).toBe(1);
+    });
+
+    it('una empresa solo de datos (sin oportunidades y sin etapa) no aparece como «Sin etapa» en el embudo', async () => {
+      prisma.salesClient.findMany.mockResolvedValue([cliente(1, { status: null })]);
+      const r = await servicio.getDashboard(1, { userId: 1, role: 'ADMIN' }, { responsable: 'all' });
+      expect(r.embudo.find((e: any) => e.key === null)).toBeUndefined();
+    });
   });
 });

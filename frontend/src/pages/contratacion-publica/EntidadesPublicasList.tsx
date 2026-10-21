@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Plus, Pencil, X, Building2, FolderOpen, RefreshCw,
+  Plus, Pencil, X, Building2, FolderOpen, RefreshCw,
   Archive, ArchiveRestore, SlidersHorizontal, ExternalLink,
 } from 'lucide-react';
 import {
@@ -89,7 +89,6 @@ function textoValor(campo: CPEntidadCampo, valor: string | number | null | undef
 
 export default function EntidadesPublicasList() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { canWrite } = usePerm();
   const canEdit = canWrite('CONTRATACION_PUBLICA');
   const tablaRef = useResizableColumns('cp-entidades');
@@ -352,10 +351,7 @@ export default function EntidadesPublicasList() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-        </button>
+      <div className="page-header-row">
         <div className="page-title-row">
           <div>
             <p className="page-eyebrow">CONTRATACIÓN PÚBLICA</p>

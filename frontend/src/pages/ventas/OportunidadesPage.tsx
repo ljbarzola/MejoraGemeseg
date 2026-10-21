@@ -87,6 +87,8 @@ export default function OportunidadesPage() {
   const [filtroEtapa, setFiltroEtapa] = useState('');
   const [filtroResponsable, setFiltroResponsable] = useState('');
   const [filtroServicio, setFiltroServicio] = useState('');
+  const [filtroOrigen, setFiltroOrigen] = useState('');
+  const [filtroMotivo, setFiltroMotivo] = useState('');
   const [modal, setModal] = useState<ModalState>(null);
   const [cambio, setCambio] = useState<{ oportunidad: Oportunidad; destino: SalesClientStage } | null>(null);
   const [aEliminar, setAEliminar] = useState<Oportunidad | null>(null);
@@ -149,7 +151,19 @@ export default function OportunidadesPage() {
     if (vistaParam === 'hoy') setVista('hoy');
     const q = searchParams.get('q');
     if (q) { setBusqueda(q); setVista('todas'); }
-    if (searchParams.get('nueva') || etapa || ficha || vistaParam || q) setSearchParams({}, { replace: true });
+    // ?responsable=mine|all|<id> y ?origen=REFERIDO: el dashboard manda aquí con el mismo alcance que se estaba mirando.
+    // «mine» = quien tiene la sesión; «all» = sin filtro. En «Para hoy» el alcance tiene su propio selector.
+    const resp = searchParams.get('responsable');
+    if (resp) {
+      if (vistaParam === 'hoy') setHoyResponsable(resp);
+      else setFiltroResponsable(resp === 'all' ? '' : resp === 'mine' ? String(currentUser?.id ?? '') : resp);
+    }
+    const origen = searchParams.get('origen');
+    if (origen) { setFiltroOrigen(origen); setVista('todas'); }
+    // ?motivo=Precio: el Dashboard («Motivos de pérdida») lleva a las perdidas por ese motivo.
+    const motivoPerdida = searchParams.get('motivo');
+    if (motivoPerdida) { setFiltroMotivo(motivoPerdida); setVista('todas'); }
+    if (searchParams.get('nueva') || etapa || ficha || vistaParam || q || resp || origen || motivoPerdida) setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
 
   const responsables = useMemo(
@@ -188,6 +202,8 @@ export default function OportunidadesPage() {
       if (filtroEtapa === 'none' ? !!o.status : filtroEtapa && o.status !== filtroEtapa) return false;
       if (filtroResponsable === 'none' ? !!o.assignedUserId : filtroResponsable && String(o.assignedUserId) !== filtroResponsable) return false;
       if (filtroServicio && !o.services.some((s) => String(s.id) === filtroServicio)) return false;
+      if (filtroOrigen && o.originType !== filtroOrigen) return false;
+      if (filtroMotivo && o.motivoPerdida?.label !== filtroMotivo) return false;
       if (!q) return true;
       return (
         o.salesClient.name.toLowerCase().includes(q) ||
@@ -195,7 +211,7 @@ export default function OportunidadesPage() {
         o.services.some((s) => s.name.toLowerCase().includes(q))
       );
     });
-  }, [oportunidades, busqueda, filtroEtapa, filtroResponsable, filtroServicio]);
+  }, [oportunidades, busqueda, filtroEtapa, filtroResponsable, filtroServicio, filtroOrigen, filtroMotivo]);
 
   const { filas, thProps, SortIcon } = useSortableTable(
     filtradas,
@@ -284,6 +300,7 @@ export default function OportunidadesPage() {
         );
       case 'etapa':
         return (
+          <>
           <select
             value={o.status ?? ''}
             aria-label={`Etapa de ${o.salesClient.name}`}
@@ -299,6 +316,14 @@ export default function OportunidadesPage() {
             {!o.status && <option value="">Sin etapa</option>}
             {etapas.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
+          {/* Una perdida dice por qué: el motivo queda visible sin abrir nada. */}
+          {o.outcome === 'PERDIDA' && o.motivoPerdida && (
+            <div style={{ fontSize: 11, color: '#718096', marginTop: 3, lineHeight: 1.3 }}
+              title={o.motivoPerdida.comment ? `${o.motivoPerdida.label}: ${o.motivoPerdida.comment}` : o.motivoPerdida.label}>
+              {o.motivoPerdida.label}
+            </div>
+          )}
+          </>
         );
       case 'monto':
         return (
@@ -323,7 +348,11 @@ export default function OportunidadesPage() {
   };
   const columnasVisiblesOpp = columnPrefs.visible.filter((k) => COLUMNAS_OPP.some((c) => c.key === k));
 
-  const hayFiltros = !!busqueda || !!filtroEtapa || !!filtroResponsable || !!filtroServicio;
+  const hayFiltros = !!busqueda || !!filtroEtapa || !!filtroResponsable || !!filtroServicio || !!filtroOrigen || !!filtroMotivo;
+  const motivosDePerdida = useMemo(
+    () => [...new Set(oportunidades.map((o) => o.motivoPerdida?.label).filter((m): m is string => !!m))].sort((a, b) => a.localeCompare(b, 'es')),
+    [oportunidades],
+  );
 
   return (
     <div className="page-container">
@@ -390,6 +419,20 @@ export default function OportunidadesPage() {
               {servicios.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </FilterField>
+          {(filtroEtapa === 'RECHAZADO' || !!filtroMotivo) && (
+            <FilterField label="Motivo de pérdida">
+              <select className="filter-select" value={filtroMotivo} onChange={(e) => setFiltroMotivo(e.target.value)}>
+                <option value="">Todos</option>
+                {motivosDePerdida.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </FilterField>
+          )}
+          <FilterField label="Origen">
+            <select className="filter-select" value={filtroOrigen} onChange={(e) => setFiltroOrigen(e.target.value)}>
+              <option value="">Todos</option>
+              {Object.entries(ORIGEN_OPORTUNIDAD_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+            </select>
+          </FilterField>
           </>
           )}
         </div>
@@ -408,7 +451,7 @@ export default function OportunidadesPage() {
             disabledTitle="La pestaña Para hoy tiene columnas fijas; cambia a Todas para elegir las tuyas"
           />
           <ClearFiltersButton
-            onClear={() => { setBusqueda(''); setFiltroEtapa(''); setFiltroResponsable(''); setFiltroServicio(''); setHoyResponsable('mine'); }}
+            onClear={() => { setBusqueda(''); setFiltroEtapa(''); setFiltroResponsable(''); setFiltroServicio(''); setFiltroOrigen(''); setFiltroMotivo(''); setHoyResponsable('mine'); }}
             disabled={vista === 'hoy' ? !busqueda && hoyResponsable === 'mine' : !hayFiltros}
           />
         </div>

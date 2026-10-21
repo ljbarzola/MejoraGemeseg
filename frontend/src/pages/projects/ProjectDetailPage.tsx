@@ -14,6 +14,7 @@ import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import { useToast } from '../../contexts/ToastContext';
+import { Trash2 } from 'lucide-react';
 
 // Columnas elegibles de la tabla de tareas (además de «#» y «Título», que van siempre).
 const COLUMNAS_TAREAS = [
@@ -428,11 +429,13 @@ export default function ProjectDetailPage() {
                   </div>
                   {canManage && (
                     <button
-                      className="btn-danger-sm"
+                      className="btn-secondary icon-btn"
+                      style={{ color: '#c53030' }}
                       onClick={() => handleRemoveMember(m.user.id)}
-                      title="Eliminar miembro"
+                      title="Quitar miembro"
+                      aria-label="Quitar miembro"
                     >
-                      ✕
+                      <Trash2 size={14} />
                     </button>
                   )}
                 </div>

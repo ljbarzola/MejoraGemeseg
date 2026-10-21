@@ -199,7 +199,7 @@ export class AiVentasPlanQueries {
           ? `su oportunidad de renovación ya se cerró (${r.outcome === 'GANADA' ? 'aceptada' : 'perdida'})`
           : `oportunidad de renovación abierta, ${r.assignedUserId ? (r.assignedUserId === userId ? 'a tu nombre' : 'con responsable') : 'SIN responsable'}`;
       lineas.push(
-        `   · ${c.salesClient.name} — ${c.title ?? `contrato #${c.id}`} — ${cuando} — ${dinero(c.monthlyValue === null ? null : Number(c.monthlyValue))} — ${estado} [#contrato:${c.id}]${r ? ` [#opp:${r.id}]` : ''}`,
+        `   · ${c.salesClient.name} — ${c.title ?? 'contrato sin título'} — ${cuando} — ${dinero(c.monthlyValue === null ? null : Number(c.monthlyValue))} — ${estado} [#contrato:${c.id}]${r ? ` [#opp:${r.id}]` : ''}`,
       );
     }
     if (porRenovar.length > MAX_POR_GRUPO + 2) lineas.push(mas(porRenovar.length, MAX_POR_GRUPO + 2).replace(/^\n/, ''));

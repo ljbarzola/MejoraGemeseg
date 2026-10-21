@@ -71,7 +71,8 @@ describe('buildSystemGuide', () => {
     expect(guide).toContain('"Lead válido"');
     expect(guide).toContain('## Agente de Ventas');
     expect(guide).toContain('Preguntar al agente');
-    expect(guide).toContain('Qué hacer ahora');
+    expect(guide).toContain('"Qué hacer" (2 o 3 acciones de una oración)');
+    expect(guide).not.toContain('etiquetas pequeñas');
     expect(guide).toContain('"Oportunidades por responsable"');
     expect(guide).not.toContain('"Clientes y prospectos por responsable"');
   });

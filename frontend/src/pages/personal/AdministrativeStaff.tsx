@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
-import { ArrowLeft, RefreshCw, Settings, FileCog, X, IdCard, UserPlus } from 'lucide-react';
+import { RefreshCw, Settings, FileCog, X, IdCard, UserPlus } from 'lucide-react';
 import { usePerm } from '../../contexts/PermissionsContext';
 import { extractDriveFolderId, buildDriveFolderLink } from '../../utils/driveLink';
 import { formatFechaHoraSync } from '../../utils/formatFechaHora';
@@ -33,7 +32,6 @@ interface StaffRow {
 }
 
 export default function AdministrativeStaff() {
-  const navigate = useNavigate();
   const { canWrite } = usePerm();
   const canEdit = canWrite('RRHH');
   const [showNuevo, setShowNuevo] = useState(false);
@@ -192,11 +190,7 @@ export default function AdministrativeStaff() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate('/rrhh')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-        </button>
-
+      <div className="page-header-row">
         <div className="page-title-row">
           <div>
             <p className="page-eyebrow">RECURSOS HUMANOS</p>

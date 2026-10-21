@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
 import { getTrabajadorByCedula } from '../../services/custodia.service';
 
 function formatFechaHora(date: string) {
@@ -10,8 +9,6 @@ function formatFechaHora(date: string) {
 }
 
 export default function ConsultaTrabajador() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const [cedula, setCedula] = useState('');
   const [mes, setMes] = useState('');
   const [data, setData] = useState<any>(null);
@@ -44,7 +41,6 @@ export default function ConsultaTrabajador() {
     <div className="page-container">
       <div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/custodias')}>← Volver</button>
           <div>
             <p className="page-eyebrow">CUSTODIAS</p>
             <h1>Consulta de Viajes por Cédula</h1>

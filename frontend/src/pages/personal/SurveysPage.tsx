@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send } from 'lucide-react';
+import { Send } from 'lucide-react';
 import {
   getPendingSurveys,
   getSurveyToRespond,
@@ -12,7 +11,6 @@ import {
 // permite responderlas — no requiere permiso de RRHH, cualquier empleado
 // con cuenta puede tener encuestas pendientes.
 export default function SurveysPage() {
-  const navigate = useNavigate();
   const [pending, setPending] = useState<{ id: number; title: string; description: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [openSurvey, setOpenSurvey] = useState<Survey | null>(null);
@@ -99,10 +97,7 @@ export default function SurveysPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate('/dashboard')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} /> Volver
-        </button>
+      <div className="page-header-row">
         <div>
           <p className="page-eyebrow">RECURSOS HUMANOS</p>
           <h1>Encuestas</h1>
