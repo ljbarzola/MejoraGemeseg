@@ -163,4 +163,17 @@ describe('VentasClientesService.getDashboard — por responsable de la oportunid
       expect(r.embudo.find((e: any) => e.key === null)).toBeUndefined();
     });
   });
+
+  it('el gerente puede elegir a TODAS las personas con acceso a Ventas, tengan o no oportunidades', async () => {
+    prisma.salesOpportunity.groupBy.mockResolvedValue([{ assignedUserId: 7 }]);
+    prisma.user.findMany
+      .mockResolvedValueOnce([{ id: 7 }, { id: 8 }, { id: 9 }]) // con acceso a Ventas (la consulta de acceso)
+      .mockResolvedValueOnce([{ id: 7, fullName: 'Ana' }, { id: 8, fullName: 'Beto' }, { id: 9, fullName: 'Carla' }]);
+    const r = await servicio.getDashboard(1, { userId: 1, role: 'MANAGER' }, { responsable: 'all' });
+    expect(r.responsables.map((x: any) => x.nombre)).toEqual(['Ana', 'Beto', 'Carla']);
+    // y la consulta de acceso excluye a quien tiene Ventas negado en sus permisos
+    expect(prisma.user.findMany.mock.calls[0][0].where).toEqual({
+      companyId: 1, isActive: true, NOT: { permissions: { some: { section: 'VENTAS', canView: false } } },
+    });
+  });
 });

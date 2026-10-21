@@ -1800,12 +1800,12 @@ export class VentasClientesService {
     const nContratos = (...estados: string[]) =>
       contratosPorEstado.filter((e) => estados.includes(e.status)).reduce((s, e) => s + e._count._all, 0);
 
-    // Vendedores entre los que un gerente puede elegir (quienes ya tienen
-    // clientes asignados). Los demás usuarios no ven ese selector.
+    // Personas entre las que un ADMIN o MANAGER puede elegir en «Cifras de»: TODAS las que tienen acceso a Ventas y CRM
+    // (activas y sin el módulo negado en sus permisos), además de quienes ya llevan clientes u oportunidades aunque
+    // hoy no tengan acceso. Los demás usuarios no ven esa lista.
     let responsables: { id: number; nombre: string }[] = [];
     if (esManager) {
-      // Quienes tienen clientes del sistema anterior a su nombre O llevan oportunidades.
-      const [asignados, conOportunidades] = await Promise.all([
+      const [asignados, conOportunidades, conAcceso] = await Promise.all([
         this.prisma.salesClient.groupBy({
           by: ['assignedUserId'],
           where: { companyId, assignedUserId: { not: null } },
@@ -1814,9 +1814,16 @@ export class VentasClientesService {
           by: ['assignedUserId'],
           where: { companyId, assignedUserId: { not: null } },
         }),
+        this.prisma.user.findMany({
+          where: { companyId, isActive: true, NOT: { permissions: { some: { section: 'VENTAS', canView: false } } } },
+          select: { id: true },
+        }),
       ]);
       const idsVendedores = [
-        ...new Set([...asignados, ...conOportunidades].map((a) => a.assignedUserId!)),
+        ...new Set([
+          ...[...asignados, ...conOportunidades].map((a) => a.assignedUserId!),
+          ...conAcceso.map((u) => u.id),
+        ]),
       ];
       const usuarios = await this.prisma.user.findMany({
         where: { id: { in: idsVendedores } },
