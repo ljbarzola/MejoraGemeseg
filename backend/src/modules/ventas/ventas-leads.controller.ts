@@ -53,6 +53,13 @@ export class VentasLeadsController {
     return this.leads.canales();
   }
 
+  // Personas de la empresa que se pueden elegir como «quien lo refirió».
+  @Get('referidores')
+  @Section('VENTAS', 'view')
+  referidores(@Req() req: any) {
+    return this.leads.referidores(req.user.companyId);
+  }
+
   @Get('canales/actividad')
   @Section('VENTAS', 'view')
   actividadCanales(@Req() req: any) {

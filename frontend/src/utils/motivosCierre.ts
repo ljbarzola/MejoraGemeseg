@@ -8,6 +8,8 @@ export type GrupoMotivoClave = 'POSIBLE_CLIENTE' | 'OPORTUNIDAD' | 'CONTRATO';
 export interface GrupoMotivos {
   clave: GrupoMotivoClave;
   titulo: string;
+  // Nombre corto para el encabezado de una columna.
+  corto: string;
   // Dónde se pide este motivo.
   donde: string;
   // Para qué sirve analizarlo.
@@ -19,6 +21,7 @@ export const GRUPOS_MOTIVOS: GrupoMotivos[] = [
   {
     clave: 'POSIBLE_CLIENTE',
     titulo: 'Por qué descartamos un posible cliente',
+    corto: 'Posibles clientes descartados',
     donde: 'Se pide en Posibles clientes, al descartar uno.',
     ejemplos: 'Sirve para saber cuánta gente que llega no era para nosotros: spam, busca empleo, era un proveedor, no contestó…',
     kinds: ['LEAD_DESCARTE'],
@@ -26,6 +29,7 @@ export const GRUPOS_MOTIVOS: GrupoMotivos[] = [
   {
     clave: 'OPORTUNIDAD',
     titulo: 'Por qué se perdió una oportunidad',
+    corto: 'Oportunidades perdidas',
     donde: 'Se pide en Oportunidades, al marcar una como perdida.',
     ejemplos: 'Ya se habló del servicio y se cotizó, pero no se dio: muy caro, eligió a la competencia, no respondió…',
     kinds: ['OPP_PERDIDA'],
@@ -33,6 +37,7 @@ export const GRUPOS_MOTIVOS: GrupoMotivos[] = [
   {
     clave: 'CONTRATO',
     titulo: 'Por qué terminó un contrato',
+    corto: 'Contratos terminados',
     donde: 'Se pide en Contratos: al cancelar uno, al registrar por qué venció sin renovarse y al renovar con menos.',
     ejemplos: 'Sirve para ver por qué se van los clientes, por ejemplo uno que contrató en enero y un mes después ya no siguió. Aplica sobre todo a servicios: una venta de producto es única y casi no tiene motivo de no renovación.',
     kinds: ['CONTRATO_CANCELADO', 'CONTRATO_NO_RENOVADO', 'CONTRATO_REDUCCION'],

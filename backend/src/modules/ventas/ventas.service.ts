@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { DISTANCIA_MAXIMA_CHECKIN_M, evaluarCheckIn, puntoValido } from './checkin.util';
 import {
   columnasDeUbicacion,
   limpiarUbicacion,
@@ -344,26 +345,66 @@ export class VentasService {
     return d;
   }
 
+  // Check-in de una visita. El servidor compara el punto que leyó el navegador con el lugar de la
+  // visita (el suyo o, si no tiene, el de su oportunidad): sin importar lo que mande el navegador, solo
+  // queda «verificado» quien está a menos de 500 m. Si no se puede comprobar (lejos, o sin ubicación del
+  // navegador) NO se registra nada hasta que la persona lo confirme (`confirmado: true`): la respuesta es
+  // `{ requiereConfirmacion: true, ... }` con los datos para el aviso, que el frontend muestra con
+  // «Cancelar» / «Registrar de todos modos». Ya confirmado, queda guardado como no verificado.
   async checkInVisit(
     id: number,
     companyId: number,
-    userId: number,
+    _userId: number,
     lat?: number,
     lng?: number,
+    confirmado = false,
   ) {
     const visit = await this.prisma.clientVisit.findFirst({
       where: { id, companyId },
     });
     if (!visit) throw new NotFoundException('Visita no encontrada');
 
+    // Lugar de la visita: el suyo; si no, el de su oportunidad.
+    let destino: { lat: number | null; lng: number | null } = {
+      lat: visit.locationLat,
+      lng: visit.locationLng,
+    };
+    let lugar = visit.locationName || visit.locationAddress || visit.clientAddress || null;
+    if (!puntoValido(destino) && visit.opportunityId) {
+      const opp = await this.prisma.salesOpportunity.findFirst({
+        where: { id: visit.opportunityId, companyId },
+        select: { locationLat: true, locationLng: true, locationName: true, locationAddress: true },
+      });
+      if (opp) {
+        destino = { lat: opp.locationLat, lng: opp.locationLng };
+        lugar = opp.locationName || opp.locationAddress || lugar;
+      }
+    }
+
+    const { resultado, distanciaM } = evaluarCheckIn({ lat, lng }, destino);
+
+    // Lejos o sin ubicación del navegador: se pregunta antes de registrar.
+    if ((resultado === 'FUERA_DEL_SITIO' || resultado === 'SIN_GPS') && !confirmado) {
+      return {
+        requiereConfirmacion: true as const,
+        resultado,
+        distanciaM,
+        maximoM: DISTANCIA_MAXIMA_CHECKIN_M,
+        lugar,
+      };
+    }
+
+    const conGps = puntoValido({ lat, lng });
     return this.prisma.clientVisit.update({
       where: { id },
       data: {
         status: 'IN_PROGRESS',
         checkInTime: new Date(),
-        checkInLat: lat || null,
-        checkInLng: lng || null,
-        isVerified: true,
+        checkInLat: conGps ? (lat as number) : null,
+        checkInLng: conGps ? (lng as number) : null,
+        isVerified: resultado === 'EN_SITIO',
+        checkInResult: resultado,
+        checkInDistanceM: distanciaM,
       },
     });
   }

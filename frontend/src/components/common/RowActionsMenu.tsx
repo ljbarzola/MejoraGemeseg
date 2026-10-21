@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreHorizontal } from 'lucide-react';
+import { ChevronDown, MoreHorizontal } from 'lucide-react';
 
 export interface RowAction {
   label: string;
@@ -27,9 +27,16 @@ export interface RowAction {
 export default function RowActionsMenu({
   actions,
   label = 'Más acciones',
+  boton,
 }: {
   actions: RowAction[];
   label?: string;
+  /**
+   * Por defecto el menú se abre con el botón «⋯». Con `boton` se abre con un botón con texto y una flecha
+   * (ej. «Nuevo documento ▾» en el encabezado de Documentación, con sus dos formas de crear uno).
+   * `className` es el del botón: `auth-btn` para el principal, `btn-secondary` por defecto.
+   */
+  boton?: { texto: ReactNode; className?: string; title?: string };
 }) {
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
@@ -102,15 +109,15 @@ export default function RowActionsMenu({
       <button
         ref={btnRef}
         type="button"
-        className="btn-secondary"
+        className={boton?.className ?? 'btn-secondary'}
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={label}
-        title={label}
-        style={{ padding: '6px 9px', display: 'flex', alignItems: 'center' }}
+        aria-label={boton ? undefined : label}
+        title={boton?.title ?? label}
+        style={boton ? { display: 'inline-flex', alignItems: 'center', gap: 6 } : { padding: '6px 9px', display: 'flex', alignItems: 'center' }}
       >
-        <MoreHorizontal size={16} />
+        {boton ? <>{boton.texto}<ChevronDown size={15} aria-hidden /></> : <MoreHorizontal size={16} />}
       </button>
 
       {open && createPortal(

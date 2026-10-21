@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pencil, Trash2, Check, X as XIcon, Lock } from 'lucide-react';
+import { Pencil, Trash2, Check, X as XIcon, Lock, FileX, TrendingDown, UserX } from 'lucide-react';
 import ConfirmDialog from '../common/ConfirmDialog';
 import ErrorBanner from '../common/ErrorBanner';
 import {
@@ -90,8 +90,9 @@ export default function MotivosCatalogo({ grupos, puedeEditar = true }: Props) {
       {cargando ? (
         <p style={{ color: '#888', fontSize: 13 }}>Cargando...</p>
       ) : (
-        visibles.map((g) => (
-          <GrupoMotivosCaja
+        <div className="cfg-mot-cols">{visibles.map((g) => {
+          return (
+          <GrupoMotivosColumna
             key={g.clave}
             grupo={g}
             motivos={motivos.filter((m) => m.kinds.some((k) => g.kinds.includes(k)))}
@@ -110,7 +111,8 @@ export default function MotivosCatalogo({ grupos, puedeEditar = true }: Props) {
               correr(() => createMotivo({ label, kinds, requiresComment: requiereComentario }), 'No se pudo crear el motivo.')}
             onError={setError}
           />
-        ))
+          );
+        })}</div>
       )}
 
       {aBorrar && (
@@ -145,11 +147,17 @@ interface CajaProps {
   onError: (msg: string) => void;
 }
 
-function GrupoMotivosCaja({
+const ICONO_GRUPO = { POSIBLE_CLIENTE: UserX, OPORTUNIDAD: TrendingDown, CONTRATO: FileX } as const;
+
+// Una de las tres listas, como columna: título, cuándo se pide, un campo para agregar y los motivos
+// en filas compactas (interruptor para ofrecerlo o no, lápiz y papelera). Los marcados con candado
+// los usa el sistema: no se desactivan ni se tocan.
+function GrupoMotivosColumna({
   grupo, motivos, puedeEditar, editId, editLabel, editKinds, setEditLabel, alternarEditKind,
   onEditar, onGuardarEdicion, onCancelarEdicion, onBorrar, onActivar, onCrear, onError,
 }: CajaProps) {
   const varios = grupo.kinds.length > 1;
+  const Icono = ICONO_GRUPO[grupo.clave];
   const [nuevo, setNuevo] = useState('');
   const [nuevosKinds, setNuevosKinds] = useState<MotivoKind[]>(grupo.kinds);
   const [exigirComentario, setExigirComentario] = useState(false);
@@ -162,142 +170,137 @@ function GrupoMotivosCaja({
     setExigirComentario(false);
   };
 
+  // Una sola línea de aclaraciones bajo el nombre, en vez de una por dato.
+  const notasDe = (m: SalesMotivo) => {
+    const notas: string[] = [];
+    if (m.requiresComment) notas.push('Exige comentario');
+    // Dentro de una lista con varios casos (Contratos), solo se aclara cuando el motivo NO sirve para todos.
+    const delGrupo = m.kinds.filter((k) => grupo.kinds.includes(k));
+    if (varios && delGrupo.length < grupo.kinds.length) notas.push(`Solo: ${delGrupo.map((k) => ETIQUETA_CIERRE_CORTA[k].toLowerCase()).join(', ')}`);
+    const otros = m.kinds.filter((k) => !grupo.kinds.includes(k));
+    if (otros.length > 0) {
+      notas.push(
+        m.kinds.length === Object.keys(ETIQUETA_CIERRE).length
+          ? 'En todos los niveles'
+          : `También en ${[...new Set(otros.map((k) => (GRUPOS_MOTIVOS.find((x) => x.kinds.includes(k))?.corto ?? ETIQUETA_CIERRE[k]).toLowerCase()))].join('; ')}`,
+      );
+    }
+    return notas.join(' · ');
+  };
+
   return (
-    <section style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 14, marginBottom: 16 }}>
-      <h4 style={{ margin: '0 0 2px', fontSize: 15 }}>{grupo.titulo}</h4>
-      <p style={{ fontSize: 12, color: '#4a5568', margin: '0 0 2px', fontWeight: 600 }}>{grupo.donde}</p>
-      <p style={{ fontSize: 12, color: '#718096', margin: '0 0 10px' }}>{grupo.ejemplos}</p>
+    <section className="cfg-mot-col" aria-label={grupo.corto}>
+      <header className="cfg-mot-cab" title={grupo.ejemplos}>
+        <h3><Icono size={17} aria-hidden />{grupo.corto}</h3>
+        <p>{grupo.donde}</p>
+      </header>
 
       {puedeEditar && (
-        <div style={{ background: '#f7fafc', borderRadius: 6, padding: 10, marginBottom: 10 }}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: varios ? 8 : 0 }}>
+        <div className="cfg-mot-nuevo">
+          <div className="cfg-mot-nuevo-fila">
             <input
               type="text" value={nuevo} maxLength={80}
-              placeholder="Escribe un motivo nuevo para esta lista"
-              aria-label={`Nuevo motivo: ${grupo.titulo}`}
+              placeholder="Escribe un motivo nuevo"
+              aria-label={`Nuevo motivo: ${grupo.corto}`}
               onChange={(e) => setNuevo(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') agregar(); }}
-              style={{ ...inputStyle, flex: '1 1 240px' }}
+              style={{ ...inputStyle, flex: 1, minWidth: 0 }}
             />
-            <button className="auth-btn" onClick={agregar}>Agregar</button>
+            <button className="auth-btn" onClick={agregar} style={{ padding: '8px 14px', fontSize: 13 }}>Agregar</button>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 8 }}>
-            {varios && grupo.kinds.map((k) => (
-              <label key={k} style={checkStyle}>
-                <input
-                  type="checkbox" checked={nuevosKinds.includes(k)}
-                  onChange={() => setNuevosKinds((l) => (l.includes(k) ? l.filter((x) => x !== k) : [...l, k]))}
-                />
-                {ETIQUETA_CIERRE[k]}
+          <details className="cfg-mot-opciones">
+            <summary>Opciones del motivo nuevo</summary>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+              {varios && grupo.kinds.map((k) => (
+                <label key={k} style={checkStyle}>
+                  <input
+                    type="checkbox" checked={nuevosKinds.includes(k)}
+                    onChange={() => setNuevosKinds((l) => (l.includes(k) ? l.filter((x) => x !== k) : [...l, k]))}
+                  />
+                  {ETIQUETA_CIERRE[k]}
+                </label>
+              ))}
+              <label style={checkStyle}>
+                <input type="checkbox" checked={exigirComentario} onChange={(e) => setExigirComentario(e.target.checked)} />
+                Exigir comentario al elegirlo
               </label>
-            ))}
-            <label style={checkStyle}>
-              <input type="checkbox" checked={exigirComentario} onChange={(e) => setExigirComentario(e.target.checked)} />
-              Exigir comentario al elegirlo
-            </label>
-          </div>
+            </div>
+          </details>
         </div>
       )}
 
-      <div className="tasks-table-wrapper">
-        <table className="tasks-table">
-          <thead>
-            <tr>
-              <th>Motivo</th>
-              {varios && <th>Se usa cuando</th>}
-              <th>Se ofrece</th>
-              {puedeEditar && <th className="col-acciones col-acciones--ancha"><span className="visually-hidden">Acciones</span></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {motivos.length === 0 && (
-              <tr><td colSpan={4} style={{ color: '#888', fontSize: 13 }}>Aún no hay motivos para esto.</td></tr>
-            )}
-            {motivos.map((m) => {
-              const enEdicion = editId === m.id;
-              const otros = m.kinds.filter((k) => !grupo.kinds.includes(k));
-              return (
-                <tr key={m.id} style={m.isActive ? undefined : { opacity: 0.6 }}>
-                  <td>
-                    {enEdicion ? (
-                      <input value={editLabel} maxLength={80} onChange={(e) => setEditLabel(e.target.value)}
-                        aria-label="Nombre del motivo" style={{ ...inputStyle, width: '100%', padding: '5px 8px' }} />
-                    ) : (
-                      <>
-                        <span style={{ fontWeight: 600 }}>{m.label}</span>
-                        {m.isSystem && <Lock size={12} style={{ marginLeft: 6, color: '#999' }} aria-label="Lo usa el sistema" />}
-                        {m.requiresComment && <div style={{ fontSize: 11, color: '#888' }}>Exige comentario</div>}
-                        {otros.length > 0 && m.kinds.length === Object.keys(ETIQUETA_CIERRE).length && (
-                          <div style={{ fontSize: 11, color: '#888' }}>Se ofrece en los tres niveles</div>
-                        )}
-                        {otros.length > 0 && m.kinds.length < Object.keys(ETIQUETA_CIERRE).length && (
-                          <div style={{ fontSize: 11, color: '#888' }}>
-                            También se usa en: {[...new Set(otros.map((k) => (GRUPOS_MOTIVOS.find((x) => x.kinds.includes(k))?.titulo ?? ETIQUETA_CIERRE[k]).toLowerCase()))].join('; ')}
-                          </div>
-                        )}
-                      </>
-                    )}
-                    {enEdicion && (
-                      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <span style={{ fontSize: 11, color: '#718096' }}>Se usa en:</span>
-                        {GRUPOS_MOTIVOS.map((gr) => (
-                          <div key={gr.clave}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: '#4a5568' }}>{gr.titulo}</div>
-                            {gr.kinds.map((k) => (
-                              <label key={k} style={checkStyle}>
-                                <input type="checkbox" checked={editKinds.includes(k)} onChange={() => alternarEditKind(k)} />
-                                {ETIQUETA_CIERRE[k]}
-                              </label>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                  {varios && (
-                    <td style={{ fontSize: 12 }}>
-                      {m.kinds.filter((k) => grupo.kinds.includes(k)).map((k) => ETIQUETA_CIERRE_CORTA[k]).join(', ')}
-                    </td>
-                  )}
-                  <td>
-                    <label style={{ ...checkStyle, fontSize: 12 }}>
+      {motivos.length === 0 ? (
+        <p className="cfg-mot-vacio">Aún no hay motivos para esto.</p>
+      ) : (
+        <ul className="cfg-mot-lista">
+          {motivos.map((m) => {
+            const enEdicion = editId === m.id;
+            const notas = notasDe(m);
+            return (
+              <li key={m.id} className={`cfg-mot-item${m.isActive ? '' : ' cfg-mot-item--off'}${enEdicion ? ' cfg-mot-item--edit' : ''}`}>
+                {enEdicion ? (
+                  <>
+                    <input value={editLabel} maxLength={80} onChange={(e) => setEditLabel(e.target.value)}
+                      aria-label="Nombre del motivo" style={{ ...inputStyle, width: '100%', padding: '6px 8px' }} />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <span style={{ fontSize: 11, color: '#718096' }}>Se usa en:</span>
+                      {GRUPOS_MOTIVOS.map((gr) => (
+                        <div key={gr.clave}>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: '#4a5568' }}>{gr.corto}</div>
+                          {gr.kinds.map((k) => (
+                            <label key={k} style={checkStyle}>
+                              <input type="checkbox" checked={editKinds.includes(k)} onChange={() => alternarEditKind(k)} />
+                              {ETIQUETA_CIERRE[k]}
+                            </label>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="cfg-serv-acciones" style={{ justifyContent: 'flex-end' }}>
+                      <button className="btn-secondary icon-btn" title="Guardar" aria-label="Guardar" onClick={onGuardarEdicion}><Check size={15} /></button>
+                      <button className="btn-secondary icon-btn" title="Cancelar" aria-label="Cancelar" onClick={onCancelarEdicion}><XIcon size={15} /></button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="cfg-serv-texto">
+                      <span className="cfg-serv-nombre">
+                        {m.label}
+                        {m.isSystem && <Lock size={11} style={{ marginLeft: 6, color: '#999' }} aria-label="Lo usa el sistema" />}
+                      </span>
+                      {notas && <span className="cfg-serv-sub">{notas}</span>}
+                    </div>
+                    <label className="cfg-switch" title={m.isActive ? 'Se ofrece. Clic para dejar de ofrecerlo.' : 'No se ofrece. Clic para ofrecerlo.'}>
                       <input
-                        type="checkbox" checked={m.isActive} disabled={m.isSystem || !puedeEditar}
+                        type="checkbox" role="switch" checked={m.isActive} disabled={m.isSystem || !puedeEditar}
                         aria-label={`Ofrecer el motivo ${m.label}`}
                         onChange={(e) => onActivar(m, e.target.checked)}
                       />
-                      {m.isActive ? 'Sí' : 'No'}
+                      <span aria-hidden />
                     </label>
-                  </td>
-                  {puedeEditar && (
-                    <td className="col-acciones col-acciones--ancha">
-                      <div className="acciones-iconos">
+                    {puedeEditar && (
+                      <div className="cfg-serv-acciones">
                         {m.isSystem ? (
-                          <span className="icon-btn" aria-hidden="true" />
-                        ) : enEdicion ? (
-                          <>
-                            <button className="icon-btn" title="Guardar" aria-label="Guardar" onClick={onGuardarEdicion}><Check size={15} /></button>
-                            <button className="icon-btn" title="Cancelar" aria-label="Cancelar" onClick={onCancelarEdicion}><XIcon size={15} /></button>
-                          </>
+                          <span className="icon-btn" aria-hidden="true" style={{ width: 64 }} />
                         ) : (
                           <>
-                            <button className="icon-btn" title="Editar" aria-label={`Editar ${m.label}`} onClick={() => onEditar(m)}>
-                              <Pencil size={15} />
+                            <button className="btn-secondary icon-btn" title="Editar" aria-label={`Editar ${m.label}`} onClick={() => onEditar(m)}>
+                              <Pencil size={14} />
                             </button>
-                            <button className="icon-btn" title="Eliminar" aria-label={`Eliminar ${m.label}`} onClick={() => onBorrar(m)}>
-                              <Trash2 size={15} />
+                            <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Eliminar" aria-label={`Eliminar ${m.label}`} onClick={() => onBorrar(m)}>
+                              <Trash2 size={14} />
                             </button>
                           </>
                         )}
                       </div>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    )}
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </section>
   );
 }

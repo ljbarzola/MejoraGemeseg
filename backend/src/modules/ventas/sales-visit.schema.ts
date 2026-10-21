@@ -15,5 +15,8 @@ export const SALES_VISIT_COLUMNS_DDL: string[] = [
   `ALTER TABLE "ClientVisit" ADD COLUMN IF NOT EXISTS "locationCity" TEXT`,
   `ALTER TABLE "ClientVisit" ADD COLUMN IF NOT EXISTS "locationProvince" TEXT`,
   `ALTER TABLE "ClientVisit" ADD COLUMN IF NOT EXISTS "locationOsmId" TEXT`,
+  // 2026-10-20: el check-in compara el GPS con el lugar de la visita (ver checkin.util.ts).
+  `ALTER TABLE "ClientVisit" ADD COLUMN IF NOT EXISTS "checkInResult" TEXT`,
+  `ALTER TABLE "ClientVisit" ADD COLUMN IF NOT EXISTS "checkInDistanceM" INTEGER`,
   `CREATE INDEX IF NOT EXISTS "ClientVisit_salesClientId_idx" ON "ClientVisit"("salesClientId")`,
 ];

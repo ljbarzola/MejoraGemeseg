@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useState, type ComponentType } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Inbox, ListX, Package, Plug } from 'lucide-react';
 import ErrorBanner from '../../components/common/ErrorBanner';
+import PageTabs from '../../components/common/PageTabs';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import ConexionesConfigSection from '../../components/ventas/ConexionesConfigSection';
 import MotivosCatalogo from '../../components/ventas/MotivosCatalogo';
 import ServiciosConfigSection from '../../components/ventas/ServiciosConfigSection';
 import { useCanalesLead } from '../../hooks/useCanalesLead';
 import { usePerm } from '../../contexts/PermissionsContext';
-import { GRUPOS_MOTIVOS, type GrupoMotivoClave } from '../../utils/motivosCierre';
 import {
   getConfiguracionVentas,
   getServicios,
@@ -21,39 +23,38 @@ const mensajeDe = (err: any, porDefecto: string) => {
   return (Array.isArray(m) ? m[0] : m) || porDefecto;
 };
 
-type Pestana = 'conexiones' | 'servicios' | 'descartes' | 'perdidas' | 'contratos' | 'fuentes';
+// `?tab=` se conserva tal cual: hay enlaces guardados. `descartes`, `perdidas` y `contratos`
+// eran listas de motivos aparte; hoy las tres se ven a la vez bajo «Motivos de cierre».
+type Seccion = 'conexiones' | 'fuentes' | 'servicios' | 'descartes' | 'perdidas' | 'contratos';
+type Pestana = 'conexiones' | 'fuentes' | 'servicios' | 'motivos';
 
-// Cada pestaña de motivos es uno de los tres niveles del embudo.
-const MOTIVOS_POR_PESTANA: Partial<Record<Pestana, GrupoMotivoClave>> = {
-  descartes: 'POSIBLE_CLIENTE',
-  perdidas: 'OPORTUNIDAD',
-  contratos: 'CONTRATO',
-};
+type Icono = ComponentType<{ size?: number }>;
 
-const tituloMotivos = (clave: GrupoMotivoClave) => GRUPOS_MOTIVOS.find((g) => g.clave === clave)?.titulo ?? '';
-
-const PESTANAS: { key: Pestana; label: string }[] = [
-  { key: 'conexiones', label: 'Cómo llegan los posibles clientes' },
-  { key: 'servicios', label: 'Servicios' },
-  { key: 'descartes', label: tituloMotivos('POSIBLE_CLIENTE') },
-  { key: 'perdidas', label: tituloMotivos('OPORTUNIDAD') },
-  { key: 'contratos', label: tituloMotivos('CONTRATO') },
-  { key: 'fuentes', label: 'Fuentes de posibles clientes' },
+const PESTANAS: { key: Pestana; label: string; icono: Icono; primera: Seccion }[] = [
+  { key: 'conexiones', label: 'Conexiones', icono: Plug, primera: 'conexiones' },
+  { key: 'fuentes', label: 'Fuentes', icono: Inbox, primera: 'fuentes' },
+  { key: 'servicios', label: 'Servicios', icono: Package, primera: 'servicios' },
+  { key: 'motivos', label: 'Motivos de cierre', icono: ListX, primera: 'descartes' },
 ];
 
-// Todo lo que una empresa cambia para usar el CRM a su manera. Se reparte en pestañas
-// (antes era una página larga): «Conexiones» abre primero y lleva dentro Google Ads, el
-// formulario web con sus landings y las claves. Lo ve cualquiera con acceso a Ventas; guarda
-// quien tiene «puede editar» en Ventas (el administrador de la empresa lo asigna por usuario),
-// sin depender de Sistemas.
+const SECCIONES: Seccion[] = ['conexiones', 'fuentes', 'servicios', 'descartes', 'perdidas', 'contratos'];
+const SECCIONES_MOTIVOS: Seccion[] = ['descartes', 'perdidas', 'contratos'];
+
+const pestanaDe = (s: Seccion): Pestana => (SECCIONES_MOTIVOS.includes(s) ? 'motivos' : (s as Pestana));
+
+// Todo lo que una empresa cambia para usar el CRM a su manera. Lo ve cualquiera con acceso a
+// Ventas; guarda quien tiene «puede editar» en Ventas (el administrador de la empresa lo asigna
+// por usuario), sin depender de Sistemas.
 export default function ConfiguracionVentasPage() {
+  const navigate = useNavigate();
   const { canales } = useCanalesLead();
   const { canWrite } = usePerm();
   const puedeEditar = canWrite('VENTAS');
   const [params, setParams] = useSearchParams();
-  const pedida = params.get('tab') as Pestana | null;
-  const pestana: Pestana = PESTANAS.some((p) => p.key === pedida) ? (pedida as Pestana) : 'conexiones';
-  const elegir = (p: Pestana) => setParams(p === 'conexiones' ? {} : { tab: p }, { replace: true });
+  const pedida = params.get('tab') as Seccion | null;
+  const seccion: Seccion = pedida && SECCIONES.includes(pedida) ? pedida : 'conexiones';
+  const pestana = pestanaDe(seccion);
+  const elegir = (s: Seccion) => setParams(s === 'conexiones' ? {} : { tab: s }, { replace: true });
 
   const [config, setConfig] = useState<ConfiguracionVentas | null>(null);
   const [servicios, setServicios] = useState<SalesServicio[]>([]);
@@ -73,87 +74,102 @@ export default function ConfiguracionVentasPage() {
   };
   useEffect(() => { cargar(); }, []);
 
-  const ayuda = { fontSize: 13, color: '#666', margin: '0 0 12px' } as const;
-  const grupoMotivos = MOTIVOS_POR_PESTANA[pestana];
+  // Título y explicación de lo que se está viendo.
+  const cabecera: { titulo: string; ayuda: string; detalle?: string } =
+    pestana === 'motivos'
+      ? {
+        titulo: 'Motivos de cierre',
+        ayuda: 'El embudo se pierde en tres lugares y cada uno tiene SU lista de motivos. Así se puede analizar por separado en qué nivel y por qué se va la gente.',
+        detalle: 'Si un motivo ya se usó no se borra: se desactiva para que deje de ofrecerse sin perder lo registrado.',
+      }
+      : pestana === 'fuentes'
+        ? {
+          titulo: 'Fuentes de posibles clientes',
+          ayuda: 'Las fuentes que ofrece «Nuevo posible cliente» y que el CRM reconoce solo cuando llega uno por la web. Todo posible cliente lleva una fuente.',
+          detalle: 'La lista es fija. Para conectar una fuente nueva ve a Conexiones.',
+        }
+        : pestana === 'servicios'
+          ? {
+            titulo: 'Servicios que ofrecemos',
+            ayuda: 'Lo que vende la empresa. Se eligen con casillas en Nueva oportunidad y en Contratos; aquí se crean, renombran o desactivan.',
+            detalle: 'Si un servicio deja de ofrecerse, desactívalo: ya no sale para elegir en los nuevos, pero se conserva en los contratos que ya lo tienen.',
+          }
+          : {
+            titulo: 'Cómo llegan los posibles clientes',
+            ayuda: 'Las puertas por las que entran contactos al CRM: tu página web, tus landings y los anuncios. Abre una para ver su estado, sus claves y sus datos.',
+          };
 
   return (
     <div className="page-container">
-      <div className="page-title-row">
-        <div>
-          <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Configuración</h1>
-        </div>
-      </div>
-      {!puedeEditar && (
-        <p style={{ ...ayuda, margin: '-6px 0 10px' }}>
-          <strong>Estás en solo lectura: para cambiar algo, pide a un administrador de tu empresa que te dé permiso de edición en Ventas.</strong>
-        </p>
-      )}
+      <VentasPageHeader
+        title="Configuración"
+        description="Lo que la empresa ajusta del CRM: conexiones, fuentes, servicios y motivos de cierre."
+      />
 
-      <div role="tablist" aria-label="Secciones de la configuración"
-        style={{ display: 'flex', gap: 2, borderBottom: '1px solid #e2e8f0', overflowX: 'auto', marginBottom: 16 }}>
-        {PESTANAS.map((p) => {
-          const activa = pestana === p.key;
-          return (
-            <button
-              key={p.key} type="button" role="tab" aria-selected={activa}
-              onClick={() => elegir(p.key)}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-                padding: '10px 14px', fontSize: 14, fontWeight: activa ? 700 : 500,
-                color: activa ? '#2b6cb0' : '#718096',
-                borderBottom: activa ? '2px solid #2b6cb0' : '2px solid transparent', marginBottom: -1,
-              }}
-            >
-              {p.label}
-            </button>
-          );
-        })}
-      </div>
+      <PageTabs
+        label="Secciones de la configuración" value={pestana}
+        onChange={(k) => elegir(PESTANAS.find((p) => p.key === k)!.primera)}
+        tabs={PESTANAS.map((p) => ({ key: p.key, label: p.label, icon: p.icono }))}
+      />
 
-      <ErrorBanner mensaje={error} />
+      <section className="cfg-panel" aria-labelledby="cfg-titulo" data-tablas-vivas="off">
+        <header className="cfg-panel-cab">
+          <h2 id="cfg-titulo">{cabecera.titulo}</h2>
+          <p>{cabecera.ayuda}</p>
+          {cabecera.detalle && <p>{cabecera.detalle}</p>}
+        </header>
 
-      {cargando || !config ? (
-        <p style={{ color: '#888', fontSize: 13 }}>Cargando...</p>
-      ) : (
-        <div role="tabpanel">
-          {pestana === 'conexiones' && (
-            <ConexionesConfigSection config={config} servicios={servicios} puedeEditar={puedeEditar} onRecargar={cargar} />
-          )}
-
-          {pestana === 'servicios' && (
-            <ServiciosConfigSection puedeEditar={puedeEditar} onChanged={() => getServicios().then(setServicios).catch(() => {})} />
-          )}
-
-          {grupoMotivos && (
-            <div id="motivos">
-              <p style={ayuda}>
-                El embudo se pierde en tres lugares y cada uno tiene SU lista de motivos (cada una en su pestaña). Así se puede analizar por separado en qué nivel y por qué se va la gente. Si un motivo ya se usó no se borra: se desactiva para que deje de ofrecerse sin perder lo registrado.
-              </p>
-              <MotivosCatalogo key={grupoMotivos} grupos={[grupoMotivos]} puedeEditar={puedeEditar} />
-            </div>
-          )}
-
-          {pestana === 'fuentes' && (
-            <div className="admin-section">
-              <p style={ayuda}>
-                Estas son las fuentes que ofrece «Nuevo posible cliente» y que el CRM reconoce solo cuando llega uno por la web (por el anuncio del que vino). Todo posible cliente lleva una fuente. La lista es fija; para conectar una fuente nueva ve a «Cómo llegan los posibles clientes».
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {canales.map((c) => (
-                  <span key={c.key} className="status-badge" style={{ background: '#edf2f7', color: '#2d3748' }} title={GRUPO_LABEL[c.grupo]}>
-                    {c.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <p style={{ ...ayuda, margin: '18px 0 0', paddingTop: 12, borderTop: '1px solid #edf2f7' }}>
-            Las <strong>etapas</strong> están en Oportunidades (botón «Etapas») y los <strong>campos</strong> de la ficha en el Directorio (botón «Campos»).
+        {!puedeEditar && (
+          <p className="cfg-aviso-lectura" role="note">
+            <strong>Estás en solo lectura.</strong> Para cambiar algo, pide a un administrador de tu empresa que te dé permiso de edición en Ventas.
           </p>
-        </div>
-      )}
+        )}
+
+        <ErrorBanner mensaje={error} />
+
+        {cargando || !config ? (
+          <p style={{ color: '#888', fontSize: 13 }}>Cargando...</p>
+        ) : (
+          <>
+            {seccion === 'conexiones' && (
+              <ConexionesConfigSection config={config} servicios={servicios} puedeEditar={puedeEditar} onRecargar={cargar} />
+            )}
+
+            {seccion === 'servicios' && (
+              <ServiciosConfigSection puedeEditar={puedeEditar} onChanged={() => getServicios().then(setServicios).catch(() => {})} />
+            )}
+
+            {pestana === 'motivos' && <MotivosCatalogo puedeEditar={puedeEditar} />}
+
+            {seccion === 'fuentes' && (
+              <div className="cfg-fuentes">
+                {(['ANUNCIO', 'WEB', 'DIRECTO'] as const).map((g) => {
+                  const delGrupo = canales.filter((c) => c.grupo === g);
+                  if (delGrupo.length === 0) return null;
+                  return (
+                    <div className="cfg-fuente-grupo" key={g}>
+                      <h3>{GRUPO_LABEL[g]}</h3>
+                      <ul>
+                        {delGrupo.map((c) => (
+                          <li key={c.key}>
+                            {c.label}
+                            {c.campos.length > 0 && <small>Pide: {c.campos.map((x) => x.label.toLowerCase()).join(', ')}</small>}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      <p className="cfg-pie">
+        Las <strong>etapas</strong> se cambian en <button type="button" onClick={() => navigate('/ventas/oportunidades')}>Oportunidades</button> (botón «Etapas») y los{' '}
+        <strong>campos</strong> de la ficha en el <button type="button" onClick={() => navigate('/ventas/clientes')}>Directorio</button> (botón «Campos»).
+      </p>
     </div>
   );
 }

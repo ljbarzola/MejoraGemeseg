@@ -797,15 +797,23 @@ export class VentasClientesService {
     });
 
     const extra: Record<string, string> = { fuente: 'REFERIDO' };
-    if (dto.servicioRequerido) extra[SERVICIO_KEY] = dto.servicioRequerido;
-    if (dto.subserviciosRequeridos?.length) {
-      extra[subopcionesKey(SERVICIO_KEY)] = dto.subserviciosRequeridos.join(',');
+    // Los servicios salen del catálogo de Configuración → Servicios (solo activos, validados por el servidor).
+    let serviceIds: number[] = [];
+    if (dto.serviceIds?.length) {
+      if (this.esquema.isReady()) {
+        serviceIds = await this.oportunidades.validarServicios(companyId, dto.serviceIds);
+      }
+    } else {
+      // Camino viejo (formulario anterior a 2026-10-20): opción de campo + sub-opciones traducidas por nombre.
+      if (dto.servicioRequerido) extra[SERVICIO_KEY] = dto.servicioRequerido;
+      if (dto.subserviciosRequeridos?.length) {
+        extra[subopcionesKey(SERVICIO_KEY)] = dto.subserviciosRequeridos.join(',');
+      }
+      await this.validarSubopcionesDeExtra(companyId, extra);
+      serviceIds = this.esquema.isReady()
+        ? await this.oportunidades.idsServiciosDesdeExtra(companyId, extra)
+        : [];
     }
-    await this.validarSubopcionesDeExtra(companyId, extra);
-
-    const serviceIds = this.esquema.isReady()
-      ? await this.oportunidades.idsServiciosDesdeExtra(companyId, extra)
-      : [];
     return this.prisma.$transaction(async (tx) => {
       const cliente = await tx.salesClient.create({
         data: {
@@ -835,6 +843,17 @@ export class VentasClientesService {
         });
       }
       return cliente;
+    });
+  }
+
+  // Servicios que ofrece la empresa (solo activos), para el formulario abierto «Referir un cliente». Salen del
+  // catálogo de Configuración → Servicios, igual que en Nueva oportunidad, y no necesitan acceso a Ventas.
+  async serviciosParaReferir(companyId: number) {
+    if (!this.esquema.isReady()) return [];
+    return this.prisma.salesService.findMany({
+      where: { companyId, isActive: true },
+      select: { id: true, name: true, description: true, isActive: true },
+      orderBy: [{ order: 'asc' }, { name: 'asc' }],
     });
   }
 

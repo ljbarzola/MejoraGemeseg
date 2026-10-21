@@ -115,15 +115,11 @@ export default function ServiciosConfigSection({ puedeEditar, onChanged }: { pue
   const activos = servicios.filter((s) => s.isActive).length;
 
   return (
-    <div className="admin-section" style={{ marginBottom: 16 }}>
-      <h3 style={{ margin: '0 0 4px' }}>Servicios que ofrecemos</h3>
-      <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px' }}>
-        La lista de lo que vende la empresa. Estos servicios se eligen con casillas en Nueva oportunidad y en Contratos, pero se crean, renombran o desactivan solo aquí. Si un servicio deja de ofrecerse, desactívalo: ya no sale para elegir en los nuevos, pero se conserva en los contratos que ya lo tienen.
-      </p>
+    <div>
       <ErrorBanner mensaje={error} />
 
       {puedeEditar && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        <div className="cfg-herramientas">
           <input
             type="text" value={nuevo} maxLength={100} placeholder="Nombre del servicio nuevo"
             aria-label="Nombre del servicio nuevo"
@@ -144,86 +140,81 @@ export default function ServiciosConfigSection({ puedeEditar, onChanged }: { pue
         <p style={{ color: '#888', fontSize: 13 }}>Todavía no hay servicios. Agrega el primero con el formulario de arriba.</p>
       ) : (
         <>
-          <p style={{ fontSize: 12, color: '#718096', margin: '0 0 8px' }}>
-            {activos} de {servicios.length} servicios activos.
+          <p style={{ fontSize: 13, color: '#4a5568', margin: '0 0 12px' }}>
+            <strong>{activos}</strong> de {servicios.length} servicios activos.
           </p>
-          {titulos.map((cat) => (
-            <div key={cat} style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#718096', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
-                {cat}
-              </div>
-              <div className="tasks-table-wrapper">
-                <table className="tasks-table">
-                  <thead>
-                    <tr>
-                      <th>Servicio</th>
-                      <th style={{ width: 130 }}>Contratos</th>
-                      <th style={{ width: 90 }}>Activo</th>
-                      <th className="col-acciones"><span className="visually-hidden">Acciones</span></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {grupos.get(cat)!.map((s) => {
+          <div className="cfg-mot-cols">
+            {titulos.map((cat) => {
+              const lista = grupos.get(cat)!;
+              const apagados = lista.filter((s) => !s.isActive).length;
+              return (
+                <section key={cat} className="cfg-mot-col" aria-label={cat}>
+                  <header className="cfg-mot-cab cfg-mot-cab--corta">
+                    <h3>{cat}</h3>
+                    <p>
+                      {lista.length} {lista.length === 1 ? 'servicio' : 'servicios'}
+                      {apagados === 0 ? ' · todos activos' : ` · ${apagados} ${apagados === 1 ? 'desactivado' : 'desactivados'}`}
+                    </p>
+                  </header>
+
+                  <ul className="cfg-mot-lista">
+                    {lista.map((s) => {
                       const n = s.contratos ?? 0;
+                      const editando = editId === s.id;
                       return (
-                        <tr key={s.id} style={s.isActive ? undefined : { opacity: 0.6 }}>
-                          <td>
-                            {editId === s.id ? (
-                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                <input value={editNombre} maxLength={100} aria-label={`Nombre de ${s.name}`}
-                                  onChange={(e) => setEditNombre(e.target.value)}
-                                  onKeyDown={(e) => { if (e.key === 'Enter') guardarEdicion(); }}
-                                  style={{ ...inputStyle, flex: '1 1 160px', padding: '5px 8px' }} />
-                                <select value={editCat} aria-label={`Categoría de ${s.name}`}
-                                  onChange={(e) => setEditCat(e.target.value)}
-                                  style={{ ...inputStyle, padding: '5px 8px' }}>
-                                  {opcionesCategoria(editCat).map((c) => <option key={c} value={c}>{c}</option>)}
-                                  <option value={SIN_CATEGORIA}>Otros (sin categoría)</option>
-                                </select>
+                        <li key={s.id} className={`cfg-mot-item${s.isActive ? '' : ' cfg-mot-item--off'}${editando ? ' cfg-mot-item--edit' : ''}`}>
+                          {editando ? (
+                            <>
+                              <input value={editNombre} maxLength={100} aria-label={`Nombre de ${s.name}`}
+                                onChange={(e) => setEditNombre(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') guardarEdicion(); }}
+                                style={{ ...inputStyle, width: '100%', padding: '6px 8px' }} />
+                              <select value={editCat} aria-label={`Categoría de ${s.name}`}
+                                onChange={(e) => setEditCat(e.target.value)}
+                                style={{ ...inputStyle, width: '100%', padding: '6px 8px' }}>
+                                {opcionesCategoria(editCat).map((c) => <option key={c} value={c}>{c}</option>)}
+                                <option value={SIN_CATEGORIA}>Otros (sin categoría)</option>
+                              </select>
+                              <div className="cfg-serv-acciones" style={{ justifyContent: 'flex-end' }}>
+                                <button className="btn-secondary icon-btn" title="Guardar" aria-label={`Guardar ${s.name}`} onClick={guardarEdicion}><Check size={15} /></button>
+                                <button className="btn-secondary icon-btn" title="Cancelar" aria-label="Cancelar" onClick={() => setEditId(null)}><XIcon size={15} /></button>
                               </div>
-                            ) : (
-                              <span style={{ fontWeight: 600 }}>{s.name}</span>
-                            )}
-                          </td>
-                          <td>{n === 0 ? 'Ninguno' : contratosTexto(n)}</td>
-                          <td>
-                            <input
-                              type="checkbox" checked={s.isActive} disabled={!puedeEditar}
-                              aria-label={`${s.name} activo`}
-                              title={s.isActive ? `Desactivar ${s.name}` : `Activar ${s.name}`}
-                              onChange={(e) => cambiarActivo(s, e.target.checked)}
-                            />
-                          </td>
-                          <td className="col-acciones">
-                            <div className="acciones-iconos">
-                              {editId === s.id ? (
-                                <>
-                                  <button className="icon-btn" title="Guardar" aria-label={`Guardar ${s.name}`} onClick={guardarEdicion}><Check size={15} /></button>
-                                  <button className="icon-btn" title="Cancelar" aria-label="Cancelar" onClick={() => setEditId(null)}><XIcon size={15} /></button>
-                                </>
-                              ) : (
-                                <>
-                                  <button className="icon-btn" disabled={!puedeEditar} title={`Renombrar o cambiar de categoría ${s.name}`} aria-label={`Editar ${s.name}`}
-                                    onClick={() => { setEditId(s.id); setEditNombre(s.name); setEditCat(categoriaDe(s)); }}>
-                                    <Pencil size={15} />
-                                  </button>
-                                  <button className="icon-btn" disabled={!puedeEditar || n > 0} aria-label={`Eliminar ${s.name}`}
-                                    title={n > 0 ? `${s.name} está en ${contratosTexto(n)}: desactívalo en lugar de eliminarlo` : `Eliminar ${s.name}`}
-                                    onClick={() => setABorrar(s)}>
-                                    <Trash2 size={15} />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
+                            </>
+                          ) : (
+                            <>
+                              <div className="cfg-serv-texto">
+                                <span className="cfg-serv-nombre">{s.name}</span>
+                                <span className="cfg-serv-sub">{n === 0 ? 'Sin contratos' : contratosTexto(n)}</span>
+                              </div>
+                              <label className="cfg-switch" title={s.isActive ? `Desactivar ${s.name}` : `Activar ${s.name}`}>
+                                <input
+                                  type="checkbox" role="switch" checked={s.isActive} disabled={!puedeEditar}
+                                  aria-label={`${s.name} activo`}
+                                  onChange={(e) => cambiarActivo(s, e.target.checked)}
+                                />
+                                <span aria-hidden />
+                              </label>
+                              <div className="cfg-serv-acciones">
+                                <button className="btn-secondary icon-btn" disabled={!puedeEditar} title={`Renombrar o cambiar de categoría ${s.name}`} aria-label={`Editar ${s.name}`}
+                                  onClick={() => { setEditId(s.id); setEditNombre(s.name); setEditCat(categoriaDe(s)); }}>
+                                  <Pencil size={14} />
+                                </button>
+                                <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} disabled={!puedeEditar || n > 0} aria-label={`Eliminar ${s.name}`}
+                                  title={n > 0 ? `${s.name} está en ${contratosTexto(n)}: desactívalo en lugar de eliminarlo` : `Eliminar ${s.name}`}
+                                  onClick={() => setABorrar(s)}>
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </li>
                       );
                     })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))}
+                  </ul>
+                </section>
+              );
+            })}
+          </div>
         </>
       )}
 

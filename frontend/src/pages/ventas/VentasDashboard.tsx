@@ -8,7 +8,8 @@ import DashboardCartera from '../../components/ventas/dashboard/DashboardCartera
 import DashboardEmbudo from '../../components/ventas/dashboard/DashboardEmbudo';
 import DashboardMotivos from '../../components/ventas/dashboard/DashboardMotivos';
 import DashboardEquipo from '../../components/ventas/dashboard/DashboardEquipo';
-import VentasComoFunciona from '../../components/ventas/VentasComoFunciona';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
+import PageTabs from '../../components/common/PageTabs';
 
 // El mapa (Leaflet) pesa: se descarga solo al abrir el Resumen.
 const DashboardMapa = lazy(() => import('../../components/ventas/dashboard/DashboardMapa'));
@@ -159,27 +160,15 @@ export default function VentasDashboard() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div>
-          <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Dashboard comercial</h1>
-          <p style={{ color: '#718096', fontSize: '0.85rem', marginTop: 4 }}>
-            Cómo van tus clientes y prospectos: qué atender, dónde están y qué se está quedando atrás.
-          </p>
-        </div>
-        <div className="header-actions">
-          <VentasComoFunciona />
-        </div>
-      </div>
+      <VentasPageHeader
+        title="Dashboard comercial"
+        description="Cómo van tus clientes y prospectos: qué atender, dónde están y qué se está quedando atrás."
+      />
 
-      <div className="admin-tabs" style={{ display: 'inline-flex', flexWrap: 'wrap', marginBottom: 16 }}>
-        {PESTANAS.map((p) => (
-          <button key={p.value} type="button" className={`admin-tab ${pestana === p.value ? 'active' : ''}`}
-            style={{ flex: '0 0 auto' }} onClick={() => cambiarPestana(p.value)}>
-            {p.label}
-          </button>
-        ))}
-      </div>
+      <PageTabs
+        label="Secciones del dashboard" value={pestana} onChange={cambiarPestana}
+        tabs={PESTANAS.map((p) => ({ key: p.value, label: p.label }))}
+      />
 
       <div className="filter-bar">
         <div className="filter-bar-fields">

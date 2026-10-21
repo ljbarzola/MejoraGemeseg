@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, Trash2 } from 'lucide-react';
 import ConfirmDialog from '../common/ConfirmDialog';
 import CopyLinkButton from '../common/CopyLinkButton';
 import ErrorBanner from '../common/ErrorBanner';
@@ -19,9 +19,6 @@ import {
   type SalesServicio,
 } from '../../services/ventas.service';
 
-const VERDE = '#38a169';
-const GRIS = '#a0aec0';
-
 const mensajeDe = (err: any, porDefecto: string) => {
   const m = err?.response?.data?.message;
   return (Array.isArray(m) ? m[0] : m) || porDefecto;
@@ -38,27 +35,6 @@ const caja = { background: '#f7fafc', border: '1px solid #edf2f7', borderRadius:
 const codigo = { fontFamily: 'Consolas, monospace', fontSize: 12, wordBreak: 'break-all' } as const;
 const inputStyle = { padding: '8px 10px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 } as const;
 const enmascarar = (k: string) => `${k.slice(0, 12)}…${k.slice(-4)}`;
-
-// Qué ha llegado de verdad por un canal. Si no se pudo leer, no se inventa nada.
-function Actividad({ a }: { a: ActividadCanalLead | undefined | null }) {
-  if (a === null) return null;
-  return (
-    <p style={{ fontSize: 13, margin: '0 0 10px', color: a && a.total > 0 ? '#2f855a' : '#718096' }}>
-      {a && a.total > 0
-        ? `Han llegado ${a.total} ${a.total === 1 ? 'posible cliente' : 'posibles clientes'} por este canal${a.ultimo ? ` · el último ${hace(a.ultimo)}` : ''}.`
-        : 'Todavía no ha llegado ningún posible cliente por este canal.'}
-    </p>
-  );
-}
-
-function Estado({ activa, texto }: { activa: boolean; texto: string }) {
-  return (
-    <p style={{ margin: '0 0 10px', fontSize: 14, fontWeight: 700, color: activa ? '#2f855a' : '#4a5568', display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ width: 10, height: 10, borderRadius: '50%', background: activa ? VERDE : GRIS, display: 'inline-block' }} aria-hidden />
-      {texto}
-    </p>
-  );
-}
 
 // Explicación de la «clave», para gente que no es técnica.
 function QueEsLaClave() {
@@ -161,16 +137,33 @@ export default function ConexionesConfigSection({ config, servicios, puedeEditar
   const adsActivo = googleAdsActivo(config.googleAds);
   const act = (canal: string) => (actividad ? actividad.find((x) => x.canal === canal) ?? { canal, total: 0, ultimo: null } : null);
 
-  const botones: { id: Abierta; nombre: string; activa: boolean }[] = [
-    { id: 'GOOGLE_ADS', nombre: 'Google Ads', activa: adsActivo },
-    { id: 'META_ADS', nombre: 'Meta Ads', activa: false },
-    { id: 'LINKEDIN_ADS', nombre: 'LinkedIn Ads', activa: false },
-    { id: 'WEB_FORM', nombre: 'Formulario web', activa: webActiva },
-    ...propias.map((c) => ({
-      id: `c:${c.id}` as Abierta,
-      nombre: c.nombre,
-      activa: !!claves.find((k) => k.id === c.apiKeyId)?.isActive,
-    })),
+  const resumenActividad = (canal: string) => {
+    const a = act(canal);
+    if (a === null) return '';
+    if (a.total === 0) return 'Todavía no ha llegado ninguno';
+    return `${a.total} ${a.total === 1 ? 'posible cliente' : 'posibles clientes'}${a.ultimo ? ` · el último ${hace(a.ultimo)}` : ''}`;
+  };
+
+  // Una fila por conexión. El estado y la actividad son datos reales (ver el comentario de arriba).
+  const filas: { id: Abierta; nombre: string; activa: boolean; estado: string; resumen: string }[] = [
+    {
+      id: 'GOOGLE_ADS', nombre: 'Google Ads', activa: adsActivo,
+      estado: adsActivo ? (config.googleAds.soloValidar ? 'Activa · modo de prueba' : 'Activa') : 'Desactivada',
+      resumen: resumenActividad('GOOGLE_ADS'),
+    },
+    { id: 'META_ADS', nombre: 'Meta Ads', activa: false, estado: 'Sin conexión directa', resumen: resumenActividad('META_ADS') },
+    { id: 'LINKEDIN_ADS', nombre: 'LinkedIn Ads', activa: false, estado: 'Sin conexión directa', resumen: resumenActividad('LINKEDIN_ADS') },
+    {
+      id: 'WEB_FORM', nombre: 'Formulario web', activa: webActiva,
+      estado: webActiva ? 'Activa' : 'Desactivada', resumen: resumenActividad('WEB_FORM'),
+    },
+    ...propias.map((c) => {
+      const activa = !!claves.find((k) => k.id === c.apiKeyId)?.isActive;
+      return {
+        id: `c:${c.id}` as Abierta, nombre: c.nombre, activa,
+        estado: activa ? 'Activa' : 'Desactivada', resumen: 'Conexión añadida por tu empresa',
+      };
+    }),
   ];
 
   const crearClaveWeb = () =>
@@ -195,189 +188,178 @@ export default function ConexionesConfigSection({ config, servicios, puedeEditar
     }
   };
 
-  const botonConexion = ({ id, nombre, activa }: { id: Abierta; nombre: string; activa: boolean }) => {
-    const sel = abierta === id;
-    return (
-      <button
-        key={String(id)}
-        type="button"
-        aria-expanded={sel}
-        aria-controls="panel-conexion"
-        onClick={() => setAbierta(sel ? null : id)}
-        title={activa ? `${nombre}: activa` : `${nombre}: desactivada`}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 8, cursor: 'pointer',
-          font: 'inherit', fontSize: 14, fontWeight: 600,
-          background: sel ? '#ebf8ff' : '#fff', color: '#2d3748',
-          border: sel ? '1.5px solid #2b6cb0' : '1px solid #cbd5e0',
-        }}
-      >
-        <span style={{ width: 10, height: 10, borderRadius: '50%', background: activa ? VERDE : GRIS, flex: '0 0 auto' }} aria-hidden />
-        {nombre}
-        <span className="visually-hidden">{activa ? ' (activa)' : ' (desactivada)'}</span>
-      </button>
-    );
-  };
-
   const propiaAbierta = typeof abierta === 'string' && abierta.startsWith('c:')
     ? propias.find((c) => `c:${c.id}` === abierta) ?? null
     : null;
 
+  // Lo que se ve al abrir una fila. El nombre, el estado y la actividad ya están en la cabecera de la fila.
+  const cuerpo = (id: Abierta) => {
+    if (id === 'GOOGLE_ADS') {
+      return (
+        <div className="admin-section">
+          <p style={{ fontSize: 13, color: '#4a5568', margin: '12px 0' }}>
+            <strong>No necesita clave.</strong> Los posibles clientes de tus anuncios llegan por la landing (a través del Formulario web) y el CRM los reconoce por el clic del anuncio. Esta conexión sirve para avisarle a Google qué anuncios terminaron en venta.
+          </p>
+          <GoogleAdsConexionPanel inicial={config.googleAds} cuentaDeServicio={config.cuentaDeServicio} puedeEditar={puedeEditar} onGuardado={onRecargar} />
+        </div>
+      );
+    }
+
+    if (id === 'META_ADS' || id === 'LINKEDIN_ADS') {
+      const meta = id === 'META_ADS';
+      const nombre = meta ? 'Meta Ads' : 'LinkedIn Ads';
+      return (
+        <div className="admin-section">
+          <p style={{ fontSize: 13, margin: '12px 0 10px' }}>
+            Todavía no hay una conexión directa con {meta ? 'los formularios de Facebook e Instagram' : 'los formularios de LinkedIn'}, así que aquí no hay nada que activar ni ninguna clave que crear.
+          </p>
+          <p style={{ fontSize: 13, color: '#666', margin: 0 }}>
+            Mientras tanto: si el anuncio lleva a una de tus landings, el posible cliente llega por el Formulario web y el CRM lo reconoce como de {nombre} por los datos del anuncio. También puedes ingresarlo a mano en Posibles clientes eligiendo {nombre} como fuente.
+          </p>
+        </div>
+      );
+    }
+
+    if (id === 'WEB_FORM') {
+      return (
+        <div className="admin-section">
+          <p style={{ fontSize: 13, color: '#666', margin: '12px 0' }}>
+            Es la puerta por la que tu página y tus landings mandan sus contactos al CRM. Los de anuncios también entran por aquí y se cuentan en su canal (Google Ads, etc.).
+          </p>
+          <QueEsLaClave />
+
+          <h4 style={{ margin: '0 0 8px' }}>Claves de conexión</h4>
+          {clavesWeb.length === 0 && (
+            <p style={{ fontSize: 13, color: '#4a5568', margin: '0 0 10px' }}>
+              Está <strong>desactivada</strong> porque todavía no hay ninguna clave. Crea una para activarla (una por cada sitio que vaya a enviar contactos).
+            </p>
+          )}
+          {puedeEditar && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+              <input
+                type="text" value={nombreClaveWeb} maxLength={60} placeholder="Nombre del sitio (ej: Sitio web)"
+                aria-label="Nombre de la clave"
+                onChange={(e) => setNombreClaveWeb(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') crearClaveWeb(); }}
+                style={{ ...inputStyle, flex: '1 1 220px' }}
+              />
+              <button className="auth-btn" onClick={crearClaveWeb}>{clavesWeb.length === 0 ? 'Activar con una clave nueva' : 'Crear clave'}</button>
+            </div>
+          )}
+          {clavesWeb.map((c) => (
+            <FilaClave key={c.id} c={c} visible={verClave === c.id} puedeEditar={puedeEditar}
+              onVer={() => setVerClave(verClave === c.id ? null : c.id)}
+              onActivar={(v) => correr(() => cambiarClaveConexion(c.id, v), 'No se pudo cambiar la clave.')}
+              onBorrar={() => setABorrarClave(c)} />
+          ))}
+
+          <h4 style={{ margin: '14px 0 8px' }}>Dirección del CRM</h4>
+          <div style={caja}>
+            <p style={{ margin: '0 0 6px', fontSize: 13 }}>
+              A quien administra el sitio pásale esta dirección junto con la clave:
+            </p>
+            <div style={{ ...codigo, display: 'flex', alignItems: 'center', gap: 8 }}>{urlWeb} <CopyLinkButton url={urlWeb} title="Copiar la dirección" /></div>
+          </div>
+
+          <LandingsConfigPanel inicial={config.landings} servicios={servicios} puedeEditar={puedeEditar} onGuardado={onRecargar} />
+        </div>
+      );
+    }
+
+    if (propiaAbierta) {
+      const clave = claves.find((k) => k.id === propiaAbierta.apiKeyId);
+      return (
+        <div className="admin-section">
+          <p style={{ fontSize: 13, color: '#666', margin: '12px 0' }}>
+            Envía los contactos a la misma dirección que el Formulario web. Todavía no se cuenta cuántos llegaron por esta clave en particular: aparecen en Posibles clientes según el canal que traiga cada uno.
+          </p>
+          <QueEsLaClave />
+          {clave && (
+            <FilaClave c={clave} visible={verClave === clave.id} puedeEditar={puedeEditar}
+              onVer={() => setVerClave(verClave === clave.id ? null : clave.id)}
+              onActivar={(v) => correr(() => cambiarClaveConexion(clave.id, v), 'No se pudo cambiar la clave.')} />
+          )}
+          <div style={caja}>
+            <p style={{ margin: '0 0 6px', fontSize: 13 }}>Dirección del CRM para esta conexión:</p>
+            <div style={{ ...codigo, display: 'flex', alignItems: 'center', gap: 8 }}>{urlWeb} <CopyLinkButton url={urlWeb} title="Copiar la dirección" /></div>
+          </div>
+          <button className="btn-secondary" style={{ color: '#c53030' }} disabled={!puedeEditar}
+            onClick={() => setAQuitar({ id: propiaAbierta.id, nombre: propiaAbierta.nombre })}>
+            <Trash2 size={16} /> Quitar esta conexión
+          </button>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  const idPanel = (id: Abierta) => `cfg-conex-${String(id).replace(/[^a-z0-9]/gi, '-')}`;
+
   return (
     <div>
-      <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px' }}>
-        Por aquí llegan los posibles clientes al CRM. Punto <strong style={{ color: '#2f855a' }}>verde</strong> = la conexión está activa; punto <strong>gris</strong> = desactivada. Toca una para ver y cambiar sus datos.
-      </p>
       <ErrorBanner mensaje={error} />
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
-        {botones.map(botonConexion)}
-        <button
-          type="button"
-          aria-expanded={abierta === 'NUEVA'}
-          aria-controls="panel-conexion"
-          onClick={() => setAbierta(abierta === 'NUEVA' ? null : 'NUEVA')}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 8, cursor: 'pointer',
-            font: 'inherit', fontSize: 14, fontWeight: 600, color: '#2b6cb0', background: abierta === 'NUEVA' ? '#ebf8ff' : '#fff',
-            border: abierta === 'NUEVA' ? '1.5px solid #2b6cb0' : '1px dashed #90cdf4',
-          }}
-        >
-          <Plus size={16} /> Añadir nueva conexión
-        </button>
-      </div>
-
-      <div id="panel-conexion" role="region" aria-label="Configuración de la conexión elegida">
-        {abierta === null && (
-          <p style={{ fontSize: 13, color: '#a0aec0', margin: 0 }}>Ninguna conexión abierta.</p>
-        )}
-
-        {abierta === 'GOOGLE_ADS' && (
-          <div className="admin-section">
-            <h3 style={{ margin: '0 0 8px' }}>Google Ads</h3>
-            <Estado activa={adsActivo} texto={adsActivo ? (config.googleAds.soloValidar ? 'Activa (en modo de prueba)' : 'Activa') : 'Desactivada'} />
-            <Actividad a={act('GOOGLE_ADS')} />
-            <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px' }}>
-              <strong>No necesita clave.</strong> Los posibles clientes de tus anuncios llegan por la landing (a través del Formulario web) y el CRM los reconoce por el clic del anuncio. Esta conexión sirve para avisarle a Google qué anuncios terminaron en venta.
-            </p>
-            <GoogleAdsConexionPanel inicial={config.googleAds} cuentaDeServicio={config.cuentaDeServicio} puedeEditar={puedeEditar} onGuardado={onRecargar} />
-          </div>
-        )}
-
-        {(abierta === 'META_ADS' || abierta === 'LINKEDIN_ADS') && (() => {
-          const meta = abierta === 'META_ADS';
-          const nombre = meta ? 'Meta Ads' : 'LinkedIn Ads';
+      <div className="cfg-conex-lista">
+        {filas.map((f) => {
+          const sel = abierta === f.id;
           return (
-            <div className="admin-section">
-              <h3 style={{ margin: '0 0 8px' }}>{nombre}</h3>
-              <Estado activa={false} texto="Desactivada · Pendiente de conectar" />
-              <p style={{ fontSize: 13, margin: '0 0 10px' }}>
-                Todavía no hay una conexión directa con {meta ? 'los formularios de Facebook e Instagram' : 'los formularios de LinkedIn'}, así que aquí no hay nada que activar ni ninguna clave que crear.
-              </p>
-              <Actividad a={act(meta ? 'META_ADS' : 'LINKEDIN_ADS')} />
-              <p style={{ fontSize: 13, color: '#666', margin: 0 }}>
-                Mientras tanto: si el anuncio lleva a una de tus landings, el posible cliente llega por el Formulario web y el CRM lo reconoce como de {nombre} por los datos del anuncio. También puedes ingresarlo a mano en Posibles clientes eligiendo {nombre} como fuente.
-              </p>
-            </div>
-          );
-        })()}
-
-        {abierta === 'WEB_FORM' && (
-          <div className="admin-section">
-            <h3 style={{ margin: '0 0 8px' }}>Formulario web</h3>
-            <Estado activa={webActiva} texto={webActiva ? 'Activa' : 'Desactivada'} />
-            <Actividad a={act('WEB_FORM')} />
-            <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px' }}>
-              Es la puerta por la que tu página y tus landings mandan sus contactos al CRM. Los de anuncios también entran por aquí y se cuentan en su canal (Google Ads, etc.).
-            </p>
-            <QueEsLaClave />
-
-            <h4 style={{ margin: '0 0 8px' }}>Claves de conexión</h4>
-            {clavesWeb.length === 0 && (
-              <p style={{ fontSize: 13, color: '#4a5568', margin: '0 0 10px' }}>
-                Está <strong>desactivada</strong> porque todavía no hay ninguna clave. Crea una para activarla (una por cada sitio que vaya a enviar contactos).
-              </p>
-            )}
-            {puedeEditar && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-                <input
-                  type="text" value={nombreClaveWeb} maxLength={60} placeholder="Nombre del sitio (ej: Sitio web)"
-                  aria-label="Nombre de la clave"
-                  onChange={(e) => setNombreClaveWeb(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') crearClaveWeb(); }}
-                  style={{ ...inputStyle, flex: '1 1 220px' }}
-                />
-                <button className="auth-btn" onClick={crearClaveWeb}>{clavesWeb.length === 0 ? 'Activar con una clave nueva' : 'Crear clave'}</button>
-              </div>
-            )}
-            {clavesWeb.map((c) => (
-              <FilaClave key={c.id} c={c} visible={verClave === c.id} puedeEditar={puedeEditar}
-                onVer={() => setVerClave(verClave === c.id ? null : c.id)}
-                onActivar={(v) => correr(() => cambiarClaveConexion(c.id, v), 'No se pudo cambiar la clave.')}
-                onBorrar={() => setABorrarClave(c)} />
-            ))}
-
-            <h4 style={{ margin: '14px 0 8px' }}>Dirección del CRM</h4>
-            <div style={caja}>
-              <p style={{ margin: '0 0 6px', fontSize: 13 }}>
-                A quien administra el sitio pásale esta dirección junto con la clave:
-              </p>
-              <div style={{ ...codigo, display: 'flex', alignItems: 'center', gap: 8 }}>{urlWeb} <CopyLinkButton url={urlWeb} title="Copiar la dirección" /></div>
-            </div>
-
-            <LandingsConfigPanel inicial={config.landings} servicios={servicios} puedeEditar={puedeEditar} onGuardado={onRecargar} />
-          </div>
-        )}
-
-        {propiaAbierta && (() => {
-          const clave = claves.find((k) => k.id === propiaAbierta.apiKeyId);
-          return (
-            <div className="admin-section">
-              <h3 style={{ margin: '0 0 8px' }}>{propiaAbierta.nombre}</h3>
-              <Estado activa={!!clave?.isActive} texto={!clave ? 'Desactivada · sin clave' : clave.isActive ? 'Activa' : 'Desactivada'} />
-              <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px' }}>
-                Conexión añadida por tu empresa. Envía los contactos a la misma dirección que el Formulario web. Todavía no se cuenta cuántos llegaron por esta clave en particular: aparecen en Posibles clientes según el canal que traiga cada uno.
-              </p>
-              <QueEsLaClave />
-              {clave && (
-                <FilaClave c={clave} visible={verClave === clave.id} puedeEditar={puedeEditar}
-                  onVer={() => setVerClave(verClave === clave.id ? null : clave.id)}
-                  onActivar={(v) => correr(() => cambiarClaveConexion(clave.id, v), 'No se pudo cambiar la clave.')} />
-              )}
-              <div style={caja}>
-                <p style={{ margin: '0 0 6px', fontSize: 13 }}>Dirección del CRM para esta conexión:</p>
-                <div style={{ ...codigo, display: 'flex', alignItems: 'center', gap: 8 }}>{urlWeb} <CopyLinkButton url={urlWeb} title="Copiar la dirección" /></div>
-              </div>
-              <button className="btn-secondary" style={{ color: '#c53030' }} disabled={!puedeEditar}
-                onClick={() => setAQuitar({ id: propiaAbierta.id, nombre: propiaAbierta.nombre })}>
-                <Trash2 size={16} /> Quitar esta conexión
+            <div key={String(f.id)} className="cfg-conex" data-abierta={sel || undefined}>
+              <button
+                type="button" className="cfg-conex-cab"
+                aria-expanded={sel} aria-controls={idPanel(f.id)}
+                onClick={() => setAbierta(sel ? null : f.id)}
+              >
+                <span className={`cfg-punto${f.activa ? ' cfg-punto--activa' : ''}`} aria-hidden />
+                <span className="cfg-conex-texto">
+                  <span className="cfg-conex-nombre">{f.nombre}</span>
+                  {f.resumen && <span className="cfg-conex-resumen">{f.resumen}</span>}
+                </span>
+                <span className={`cfg-estado${f.activa ? ' cfg-estado--activa' : ''}`}>{f.estado}</span>
+                <ChevronDown size={18} className="cfg-conex-flecha" aria-hidden />
               </button>
+              {sel && <div className="cfg-conex-cuerpo" id={idPanel(f.id)}>{cuerpo(f.id)}</div>}
             </div>
           );
-        })()}
+        })}
 
-        {abierta === 'NUEVA' && (
-          <div className="admin-section">
-            <h3 style={{ margin: '0 0 8px' }}>Añadir nueva conexión</h3>
-            <p style={{ fontSize: 13, margin: '0 0 10px' }}>
-              Sirve para conectar otra página web, otra landing o una herramienta que pueda enviar contactos a una dirección. El CRM le da <strong>su propia clave</strong> y la dirección a la que debe enviar; quien administra esa página o herramienta lo configura.
-            </p>
-            <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px' }}>
-              Qué NO hace todavía: no existe una conexión directa con los formularios de Meta, LinkedIn ni TikTok; cada una necesitaría un desarrollo aparte. Por ahora todas las nuevas entran por la misma puerta que el Formulario web, y el CRM reconoce el canal por los datos del anuncio.
-            </p>
-            <QueEsLaClave />
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <input
-                type="text" value={nombreNueva} maxLength={60} placeholder="Nombre de la conexión (ej: Otra página web)"
-                aria-label="Nombre de la nueva conexión" disabled={!puedeEditar}
-                onChange={(e) => setNombreNueva(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') crearNueva(); }}
-                style={{ ...inputStyle, flex: '1 1 260px' }}
-              />
-              <button className="auth-btn" onClick={crearNueva} disabled={!puedeEditar}>Crear conexión</button>
+        <div className="cfg-conex cfg-conex--nueva" data-abierta={abierta === 'NUEVA' || undefined}>
+          <button
+            type="button" className="cfg-conex-cab"
+            aria-expanded={abierta === 'NUEVA'} aria-controls={idPanel('NUEVA')}
+            onClick={() => setAbierta(abierta === 'NUEVA' ? null : 'NUEVA')}
+          >
+            <Plus size={16} color="#2b6cb0" aria-hidden />
+            <span className="cfg-conex-texto">
+              <span className="cfg-conex-nombre">Añadir nueva conexión</span>
+              <span className="cfg-conex-resumen">Otra página web, otra landing o una herramienta que envíe contactos</span>
+            </span>
+            <ChevronDown size={18} className="cfg-conex-flecha" aria-hidden />
+          </button>
+          {abierta === 'NUEVA' && (
+            <div className="cfg-conex-cuerpo" id={idPanel('NUEVA')}>
+              <div className="admin-section">
+                <p style={{ fontSize: 13, margin: '12px 0 10px' }}>
+                  El CRM le da <strong>su propia clave</strong> y la dirección a la que debe enviar; quien administra esa página o herramienta lo configura.
+                </p>
+                <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px' }}>
+                  Qué NO hace todavía: no existe una conexión directa con los formularios de Meta, LinkedIn ni TikTok; cada una necesitaría un desarrollo aparte. Por ahora todas las nuevas entran por la misma puerta que el Formulario web, y el CRM reconoce el canal por los datos del anuncio.
+                </p>
+                <QueEsLaClave />
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <input
+                    type="text" value={nombreNueva} maxLength={60} placeholder="Nombre de la conexión (ej: Otra página web)"
+                    aria-label="Nombre de la nueva conexión" disabled={!puedeEditar}
+                    onChange={(e) => setNombreNueva(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') crearNueva(); }}
+                    style={{ ...inputStyle, flex: '1 1 260px' }}
+                  />
+                  <button className="auth-btn" onClick={crearNueva} disabled={!puedeEditar}>Crear conexión</button>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {aBorrarClave && (

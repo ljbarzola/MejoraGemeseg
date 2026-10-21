@@ -52,6 +52,8 @@ export interface EntranteInput {
   campaign?: string | null;
   externalId?: string | null;
   extra?: Record<string, unknown>;
+  // Cuándo llegó de verdad (si la web lo mandó con retraso, ver lead-recepcion.util.ts). Sin valor: ahora.
+  recibidoEn?: Date | null;
   // Dirección (y ciudad ya combinada, ver combinarDireccion): se guarda en extra.direccion y pasa a la
   // ficha al convertir el posible cliente en oportunidad.
   direccion?: string | null;
@@ -134,6 +136,8 @@ export class VentasLeadsService {
           ...(recortar(input.direccion, 300) ? { direccion: recortar(input.direccion, 300) } : {}),
         } as Prisma.InputJsonValue,
         createdBy: input.createdBy ?? null,
+        // Solo si la web mandó la fecha real; si no, la base pone la de ahora (default).
+        ...(input.recibidoEn ? { createdAt: input.recibidoEn } : {}),
       },
     });
     // Aviso en las notificaciones; un fallo acá nunca debe perder el lead ya guardado.
@@ -453,6 +457,22 @@ export class VentasLeadsService {
     const extra: Record<string, unknown> = {};
     for (const campo of canal.campos) {
       if (campo.key === 'campaign') continue;
+      if (campo.usuario) {
+        // Quién lo refirió: un usuario de la empresa (queda enlazado) o un nombre escrito a mano.
+        const idElegido = Number(dto.extra?.[`${campo.key}UserId`]);
+        if (Number.isInteger(idElegido) && idElegido > 0) {
+          const usuario = await this.prisma.user.findFirst({
+            where: { id: idElegido, companyId: cid, isActive: true },
+            select: { id: true, fullName: true },
+          });
+          if (!usuario) {
+            throw new BadRequestException('Esa persona ya no está en la empresa. Elige otra o escribe su nombre.');
+          }
+          extra[campo.key] = usuario.fullName;
+          extra[`${campo.key}UserId`] = usuario.id;
+          continue;
+        }
+      }
       const valor = recortar(dto.extra?.[campo.key], 300);
       if (valor) extra[campo.key] = valor;
     }
@@ -496,6 +516,28 @@ export class VentasLeadsService {
       grupo: c.grupo,
       campos: c.campos,
     }));
+  }
+
+  // Quién puede figurar como «quien lo refirió»: cualquier persona activa de la empresa
+  // (incluida quien registra, que a veces es quien trajo al cliente).
+  async referidores(companyId: number | null) {
+    const cid = this.requireCompany(companyId);
+    return this.prisma.user.findMany({
+      where: { companyId: cid, isActive: true },
+      select: { id: true, fullName: true, position: true },
+      orderBy: { fullName: 'asc' },
+    });
+  }
+
+  // El usuario que el lead trae como referidor, si todavía existe y sigue activo en la empresa.
+  private async referidorDeLead(companyId: number, extra: unknown): Promise<number | null> {
+    const id = Number(((extra ?? {}) as Record<string, unknown>)['referidoPorUserId']);
+    if (!Number.isInteger(id) || id <= 0) return null;
+    const u = await this.prisma.user.findFirst({
+      where: { id, companyId, isActive: true },
+      select: { id: true },
+    });
+    return u?.id ?? null;
   }
 
   async actualizar(
@@ -669,9 +711,13 @@ export class VentasLeadsService {
     if (serviceIds.length > 0) {
       const servicios = await this.prisma.salesService.findMany({
         where: { id: { in: serviceIds }, companyId: cid },
-        select: { name: true },
+        select: { name: true, isActive: true },
       });
       if (servicios.length !== serviceIds.length) throw new BadRequestException('Alguno de los servicios no existe.');
+      // El catálogo de Configuración → Servicios es la única fuente: un servicio desactivado no se asocia a nada nuevo.
+      if (servicios.some((s) => s.isActive === false)) {
+        throw new BadRequestException('Alguno de los servicios está desactivado. Actívalo primero o quítalo.');
+      }
       nombresServicios = servicios.map((s) => s.name);
     }
 
@@ -707,6 +753,9 @@ export class VentasLeadsService {
     const inicial = await this.prisma.salesClientStage.findFirst({
       where: { companyId: cid, isInitial: true },
     });
+    // Si el lead vino con un compañero como referidor, queda como quien refirió al cliente (si es nuevo)
+    // y a la oportunidad: así recibe los avisos de etapa y cuenta en «Referidos» del Dashboard.
+    const referidorId = await this.referidorDeLead(cid, lead.extra);
     const canal = ETIQUETA_CANAL[lead.channel as CanalLead] ?? lead.channel;
     const nota = `Lead de ${canal}${lead.campaign ? ` (${lead.campaign})` : ''}${lead.message ? `: ${lead.message}` : '.'}`;
 
@@ -737,6 +786,7 @@ export class VentasLeadsService {
               // Los servicios elegidos viven SOLO en la oportunidad (2026-10-20): ya no se copian a la ficha.
             },
             status: inicial?.key ?? null,
+            referredByUserId: referidorId,
           },
         });
         clienteId = creado.id;
@@ -749,6 +799,7 @@ export class VentasLeadsService {
         createdBy: userId,
         assignedUserId: userId,
         source: lead.channel,
+        referredByUserId: referidorId,
         leadId: lead.id,
         originType,
         // La oportunidad empieza cuando el contacto llegó, no cuando alguien lo

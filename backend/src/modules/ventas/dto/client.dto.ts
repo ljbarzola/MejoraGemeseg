@@ -192,12 +192,20 @@ export class CreateReferralDto {
   @IsOptional()
   correo?: string;
 
-  // key de una opción del campo núcleo `servicio_requerido`.
+  // Servicios del catálogo de Ventas → Configuración → Servicios (ids). Es lo que manda el formulario
+  // «Referir un cliente» desde 2026-10-20: solo activos (los valida el servidor).
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  serviceIds?: number[];
+
+  // LEGADO (antes de 2026-10-20): key de una opción del campo núcleo `servicio_requerido`. Se sigue aceptando
+  // por si queda una pestaña abierta con el formulario viejo; ya no lo manda la pantalla.
   @IsString()
   @IsOptional()
   servicioRequerido?: string;
 
-  // keys de `children` de esa opción del servicio. Opcional.
+  // LEGADO: keys de `children` de esa opción del servicio. Opcional.
   @IsOptional()
   @IsArray()
   @IsString({ each: true })

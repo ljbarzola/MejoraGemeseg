@@ -1,8 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import ResultadosVisitas from './VentasReportes';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus } from 'lucide-react';
-import { getVisits, checkInVisit, completeVisit, cancelVisit, deleteVisit, ClientVisit } from '../../services/ventas.service';
+import { Briefcase, FileText, MapPin, Pencil, Phone, Plus, Trash2, XCircle } from 'lucide-react';
+import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import PageTabs from '../../components/common/PageTabs';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
+import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
+import FilterField from '../../components/common/FilterField';
+import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
+import { useColumnPreferences } from '../../hooks/useColumnPreferences';
+import { useResizableColumns } from '../../hooks/useResizableColumns';
+import { useSortableTable } from '../../hooks/useSortableTable';
+import { getVisits, checkInVisit, completeVisit, cancelVisit, deleteVisit, ClientVisit, type CheckInPorConfirmar } from '../../services/ventas.service';
 import VisitaModal from '../../components/ventas/VisitaModal';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import PromptDialog from '../../components/common/PromptDialog';
@@ -16,6 +25,91 @@ const OUTCOME_LABELS: Record<string, string> = {
   FOLLOW_UP: 'Requiere Seguimiento',
 };
 
+const ESTADO_VISITA: Record<string, { label: string; fondo: string; texto: string }> = {
+  PLANNED: { label: 'Agendada', fondo: '#e2e8f0', texto: '#4a5568' },
+  IN_PROGRESS: { label: 'En proceso', fondo: '#fefcbf', texto: '#744210' },
+  COMPLETED: { label: 'Completada', fondo: '#c6f6d5', texto: '#22543d' },
+  CANCELLED: { label: 'Cancelada', fondo: '#fed7d7', texto: '#742a2a' },
+};
+
+// Columnas elegibles con «Columnas»: «Cliente» va siempre primero y fija.
+const COLUMNAS_VISITA = [
+  { key: 'vendedor', label: 'Vendedor' },
+  { key: 'fecha', label: 'Fecha agendada' },
+  { key: 'checkin', label: 'Check-in GPS' },
+  { key: 'estado', label: 'Estado' },
+  { key: 'oferta', label: 'Oferta comercial' },
+  { key: 'resultado', label: 'Resultado' },
+];
+// «Oferta comercial» solo tiene datos al cerrar la visita (y ya está en la pestaña Resultados): se
+// elige con «Columnas» para que Acciones quepa a la vista sin desplazarse.
+const COLUMNAS_POR_DEFECTO = COLUMNAS_VISITA.map((c) => c.key).filter((k) => k !== 'oferta');
+const ANCHO_COLUMNA_VISITA: Record<string, number> = {
+  vendedor: 125, fecha: 105, checkin: 165, estado: 112, oferta: 190, resultado: 125,
+};
+
+const sinTildes = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+// El lugar al que va la visita, en una línea: el del mapa (con ciudad y provincia) o la dirección escrita.
+function lugarDeVisita(v: ClientVisit): string {
+  if (v.ubicacion) {
+    const zona = [v.ubicacion.city, v.ubicacion.province].filter(Boolean).join(', ');
+    return [v.ubicacion.name || v.ubicacion.address, zona].filter(Boolean).join(' · ');
+  }
+  return v.clientAddress ?? '';
+}
+
+// «850 m» o «2,3 km».
+const distanciaLegible = (m: number) =>
+  m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1).replace('.', ',')} km`;
+
+// Qué pasó con el check-in de una visita. Solo «En el sitio» cuenta como verificado.
+function EstadoCheckIn({ v }: { v: ClientVisit }) {
+  if (!v.checkInTime) return <span style={{ color: '#a0aec0', fontSize: '0.82rem' }}>Pendiente</span>;
+  const hora = new Date(v.checkInTime).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
+  const nota = (texto: string) => <div style={{ fontSize: '0.72rem', color: '#718096', fontWeight: 400 }}>{texto}</div>;
+  const metros = typeof v.checkInDistanceM === 'number' ? distanciaLegible(v.checkInDistanceM) : null;
+
+  switch (v.checkInResult) {
+    case 'EN_SITIO':
+      return (
+        <div style={{ color: '#276749', fontSize: '0.82rem', fontWeight: 600 }}>
+          ✅ En el sitio
+          {nota(`${hora}${metros ? ` · a ${metros} del lugar` : ''}`)}
+        </div>
+      );
+    case 'FUERA_DEL_SITIO':
+      return (
+        <div style={{ color: '#b7791f', fontSize: '0.82rem', fontWeight: 600 }}>
+          ⚠ Fuera del sitio
+          {nota(`${hora}${metros ? ` · a ${metros} del lugar` : ''}`)}
+        </div>
+      );
+    case 'SIN_GPS':
+      return (
+        <div style={{ color: '#4a5568', fontSize: '0.82rem', fontWeight: 600 }}>
+          Sin verificar
+          {nota(`${hora} · sin ubicación del navegador`)}
+        </div>
+      );
+    case 'SIN_UBICACION':
+      return (
+        <div style={{ color: '#4a5568', fontSize: '0.82rem', fontWeight: 600 }}>
+          Sin verificar
+          {nota(`${hora} · la visita no tiene lugar definido`)}
+        </div>
+      );
+    default:
+      // Check-in de antes del 2026-10-20: entonces no se comparaba con el lugar de la visita.
+      return (
+        <div style={{ color: '#4a5568', fontSize: '0.82rem', fontWeight: 600 }}>
+          Check-in anterior
+          {nota(`${hora} · no se comprobó el lugar`)}
+        </div>
+      );
+  }
+}
+
 export default function VisitasPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -27,6 +121,10 @@ export default function VisitasPage() {
   const [showOfferModal, setShowOfferModal] = useState<ClientVisit | null>(null);
   const [saving, setSaving] = useState(false);
   const [checkingInId, setCheckingInId] = useState<number | null>(null);
+  // Aviso previo al check-in cuando estás lejos del lugar o sin ubicación: null = no hay aviso.
+  const [checkInConfirmar, setCheckInConfirmar] = useState<{
+    visit: ClientVisit; pos: { lat: number; lng: number } | null; aviso: CheckInPorConfirmar;
+  } | null>(null);
 
   const [checkInInfo, setCheckInInfo] = useState('');
   const checkInInfoRef = useRef<HTMLDivElement>(null);
@@ -81,48 +179,39 @@ export default function VisitasPage() {
 
   useEffect(() => { loadVisits(); }, []);
 
-  const handleCheckIn = async (visit: ClientVisit) => {
+  // Check-in: el SERVIDOR compara tu ubicación con el lugar de la visita. Si estás a más de 500 m, o el
+  // navegador no dio tu ubicación, no registra nada y devuelve el aviso (`requiereConfirmacion`): aquí se
+  // muestra con «Cancelar» y «Registrar de todos modos»; si confirmas, queda como no verificado.
+  const registrarCheckIn = async (visit: ClientVisit, pos: { lat: number; lng: number } | null, confirmado = false) => {
     setCheckingInId(visit.id);
     setCheckInInfo('');
     setCheckInError('');
-    if (!navigator.geolocation) {
-      setCheckInInfo('Tu navegador no soporta geolocalización. Realizando Check-in sin GPS...');
-      try {
-        await checkInVisit(visit.id);
-        loadVisits();
-      } catch (err: any) {
-        setCheckInError(err.response?.data?.message || 'Error en Check-in');
-      } finally {
-        setCheckingInId(null);
+    try {
+      const r = await checkInVisit(visit.id, { ...(pos ?? {}), confirmado });
+      if ('requiereConfirmacion' in r) {
+        setCheckInConfirmar({ visit, pos, aviso: r });
+        return;
       }
+      loadVisits();
+    } catch (err: any) {
+      setCheckInError(err.response?.data?.message || 'No se pudo registrar el check-in. Intenta de nuevo.');
+    } finally {
+      setCheckingInId(null);
+    }
+  };
+
+  const handleCheckIn = (visit: ClientVisit) => {
+    setCheckInInfo('');
+    setCheckInError('');
+    if (!navigator.geolocation) {
+      void registrarCheckIn(visit, null);
       return;
     }
-
+    setCheckingInId(visit.id);
     navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          await checkInVisit(visit.id, {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          });
-          loadVisits();
-        } catch (err: any) {
-          setCheckInError(err.response?.data?.message || 'Error en Check-in');
-        } finally {
-          setCheckingInId(null);
-        }
-      },
-      async () => {
-        // Geolocation error/denied fallback
-        try {
-          await checkInVisit(visit.id);
-          loadVisits();
-        } catch (err: any) {
-          setCheckInError(err.response?.data?.message || 'Error en Check-in');
-        } finally {
-          setCheckingInId(null);
-        }
-      },
+      (pos) => void registrarCheckIn(visit, { lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      // Permiso negado, sin señal o tiempo agotado: el servidor lo trata como «sin ubicación» y pregunta.
+      () => void registrarCheckIn(visit, null),
       { timeout: 10000, enableHighAccuracy: true },
     );
   };
@@ -177,33 +266,114 @@ export default function VisitasPage() {
     }
   };
 
+  // ---- Lista: filtros, orden, columnas y acciones de cada visita ----
+  const [busqueda, setBusqueda] = useState('');
+  const [estadoFiltro, setEstadoFiltro] = useState('');
+  const columnPrefs = useColumnPreferences('ventas-visitas', COLUMNAS_POR_DEFECTO);
+  const columnasVisibles = columnPrefs.visible.filter((k) => COLUMNAS_VISITA.some((c) => c.key === k));
+  const tablaRef = useResizableColumns('ventas-visitas', ['cliente', ...columnasVisibles, 'acciones']);
+  const hayFiltros = !!busqueda || !!estadoFiltro;
+
+  const filtradas = useMemo(() => {
+    const q = sinTildes(busqueda.trim());
+    return visits.filter((v) => {
+      if (estadoFiltro && v.status !== estadoFiltro) return false;
+      if (!q) return true;
+      const texto = [v.cliente?.name ?? v.clientName, lugarDeVisita(v), v.user?.fullName, v.oportunidad?.title].filter(Boolean).join(' ');
+      return sinTildes(texto).includes(q);
+    });
+  }, [visits, busqueda, estadoFiltro]);
+
+  const { filas, thProps, SortIcon } = useSortableTable(filtradas, {
+    cliente: (v) => v.cliente?.name ?? v.clientName,
+    vendedor: (v) => v.user?.fullName,
+    fecha: (v) => v.visitDate,
+    checkin: (v) => v.checkInTime,
+    estado: (v) => ESTADO_VISITA[v.status]?.label,
+    oferta: (v) => v.quotedAmount,
+    resultado: (v) => (v.outcome ? OUTCOME_LABELS[v.outcome] ?? v.outcome : ''),
+  });
+
+  const abrirOferta = (v: ClientVisit) => {
+    setShowOfferModal(v);
+    setOfferForm({
+      commercialOffer: v.commercialOffer || '',
+      quotedAmount: v.quotedAmount || 0,
+      outcome: v.outcome || 'QUOTED',
+      notes: v.notes || '',
+    });
+  };
+
+  // La acción visible de cada fila es el SIGUIENTE PASO de la visita; el resto va en el menú «⋯».
+  const accionPrincipal = (v: ClientVisit) => {
+    if (v.status === 'PLANNED') {
+      const ocupado = checkingInId === v.id;
+      return { texto: ocupado ? 'Verificando...' : 'Check-in', icono: <MapPin size={14} />, ocupado, onClick: () => handleCheckIn(v) };
+    }
+    if (v.status === 'IN_PROGRESS') {
+      return { texto: 'Oferta y cierre', icono: <FileText size={14} />, ocupado: false, onClick: () => abrirOferta(v) };
+    }
+    return null;
+  };
+
+  const accionesDeVisita = (v: ClientVisit): RowAction[] => {
+    const lista: RowAction[] = [];
+    const abierta = v.status === 'PLANNED' || v.status === 'IN_PROGRESS';
+    if (v.status === 'PLANNED') {
+      lista.push({ label: 'Registrar oferta y cierre', icon: <FileText size={14} />, onClick: () => abrirOferta(v) });
+    }
+    if (abierta) {
+      lista.push({ label: 'Editar la visita', icon: <Pencil size={14} />, onClick: () => setVisitaModal({ visita: v }) });
+      lista.push({ label: 'Cancelar la visita', icon: <XCircle size={14} />, danger: true, onClick: () => handleCancelVisit(v) });
+    }
+    lista.push({ label: 'Eliminar el registro', icon: <Trash2 size={14} />, danger: true, onClick: () => handleDeleteVisit(v) });
+    return lista;
+  };
+
+  const celdaVisita = (k: string, v: ClientVisit) => {
+    switch (k) {
+      case 'vendedor':
+        return v.user?.fullName || '—';
+      case 'fecha':
+        return v.visitDate ? new Date(v.visitDate).toLocaleDateString('es-EC', { timeZone: 'UTC' }) : '—';
+      case 'checkin':
+        return <EstadoCheckIn v={v} />;
+      case 'estado': {
+        const e = ESTADO_VISITA[v.status] ?? ESTADO_VISITA.PLANNED;
+        return <span className="status-badge" style={{ background: e.fondo, color: e.texto }}>{e.label}</span>;
+      }
+      case 'oferta':
+        return v.commercialOffer ? (
+          <div>
+            <div style={{ fontWeight: 500, fontSize: 13 }}>{v.commercialOffer}</div>
+            {v.quotedAmount ? <div style={{ fontSize: 12, color: '#2b6cb0', fontWeight: 700 }}>${v.quotedAmount.toFixed(2)}</div> : null}
+          </div>
+        ) : <span style={{ color: '#a0aec0' }}>—</span>;
+      case 'resultado':
+        return v.outcome
+          ? <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--azul-oscuro)' }}>{OUTCOME_LABELS[v.outcome] || v.outcome}</span>
+          : <span style={{ color: '#a0aec0' }}>—</span>;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate('/ventas')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-        </button>
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">Ventas y CRM</p>
-            <h1>Visitas</h1>
-          </div>
-          <div className="header-actions">
-            <button className="auth-btn" onClick={() => setVisitaModal({ visita: null })}>
-              <Plus size={16} /> Nueva visita
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="admin-tabs" style={{ display: 'inline-flex', marginTop: 16 }}>
-        {([['visitas', 'Visitas'], ['resultados', 'Resultados']] as const).map(([valor, etiqueta]) => (
-          <button key={valor} type="button" className={`admin-tab ${pestana === valor ? 'active' : ''}`}
-            style={{ flex: '0 0 auto' }} onClick={() => setPestana(valor)}>
-            {etiqueta}
+      <VentasPageHeader
+        title="Visitas"
+        description="Planifica las visitas de campo, registra tu llegada con el check-in y cierra cada una con su oferta y resultado."
+        actions={
+          <button className="auth-btn" onClick={() => setVisitaModal({ visita: null })}>
+            <Plus size={16} /> Nueva visita
           </button>
-        ))}
-      </div>
+        }
+      />
+
+      <PageTabs
+        label="Vista de visitas" value={pestana} onChange={setPestana}
+        tabs={[{ key: 'visitas', label: 'Visitas' }, { key: 'resultados', label: 'Resultados' }]}
+      />
 
       {pestana === 'resultados' ? (
         <ResultadosVisitas />
@@ -216,161 +386,107 @@ export default function VisitasPage() {
       {cancelError && <div ref={cancelErrorRef} className="form-error" style={{ marginTop: '16px' }}>{cancelError}</div>}
       {deleteError && <div ref={deleteErrorRef} className="form-error" style={{ marginTop: '16px' }}>{deleteError}</div>}
 
-      <div className="admin-section" style={{ marginTop: '16px' }}>
+      <div className="filter-bar" style={{ marginTop: 16 }}>
+        <div className="filter-bar-fields filter-bar-fields--etiquetas">
+          <input
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por cliente, lugar, vendedor u oportunidad..."
+            style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
+          />
+          <FilterField label="Estado">
+            <select className="filter-select" value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value)}>
+              <option value="">Todas</option>
+              {Object.entries(ESTADO_VISITA).map(([k, e]) => <option key={k} value={k}>{e.label}</option>)}
+            </select>
+          </FilterField>
+        </div>
+        <div className="filter-bar-actions">
+          <ColumnPickerMenu
+            columns={COLUMNAS_VISITA}
+            visible={columnPrefs.visible}
+            pinned={columnPrefs.pinned}
+            maxPinned={columnPrefs.maxPinned}
+            fixedLabel="Cliente"
+            onApply={async (keys, fijas) => {
+              const guardado = await columnPrefs.set(keys, fijas);
+              if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
+            }}
+          />
+          <ClearFiltersButton
+            onClear={() => { setBusqueda(''); setEstadoFiltro(''); }}
+            disabled={!hayFiltros}
+          />
+        </div>
+      </div>
+
+      <div className="admin-section">
         {loading ? (
-          <div className="loading-state">Cargando visitas de campo...</div>
+          <p style={{ color: '#888', fontSize: 13 }}>Cargando visitas...</p>
         ) : visits.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '48px', color: '#a0aec0' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '12px' }}>📍</div>
-            <h3>No hay visitas agendadas</h3>
-            <p style={{ fontSize: '0.9rem', marginTop: '4px' }}>
-              Planifica las visitas de tu semana para cumplir la meta de ventas.
-            </p>
-            <button className="auth-btn" style={{ marginTop: '16px' }} onClick={() => setVisitaModal({ visita: null })}>
-              + Planificar Mi Primera Visita
-            </button>
+          <div className="empty-state">
+            <div style={{ fontSize: 36, marginBottom: 8 }}>📍</div>
+            <div>No hay visitas agendadas. Planifica las visitas de tu semana desde «Nueva visita».</div>
           </div>
+        ) : filas.length === 0 ? (
+          <p style={{ color: '#888', fontSize: 13 }}>No hay visitas que coincidan con los filtros.</p>
         ) : (
           <div className="tasks-table-wrapper">
-            <table className="tasks-table">
+            <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
-                  <th>Cliente</th>
-                  <th>Vendedor</th>
-                  <th>Fecha Agendada</th>
-                  <th>Check-In GPS</th>
-                  <th>Estado</th>
-                  <th>Oferta Comercial</th>
-                  <th>Resultado</th>
-                  <th className="no-print">Acciones</th>
+                  <th {...thProps('cliente')} style={{ width: 220 }}>Cliente <SortIcon campo="cliente" /></th>
+                  {columnasVisibles.map((k) => {
+                    const col = COLUMNAS_VISITA.find((c) => c.key === k)!;
+                    return (
+                      <th key={k} {...thProps(k)} style={{ width: ANCHO_COLUMNA_VISITA[k] }}>
+                        {col.label} <SortIcon campo={k} />
+                      </th>
+                    );
+                  })}
+                  <th className="col-acciones col-acciones--ancha" style={{ width: 190 }}><span className="visually-hidden">Acciones</span></th>
                 </tr>
               </thead>
               <tbody>
-                {visits.map((v) => (
-                  <tr key={v.id}>
-                    <td>
-                      {v.cliente ? (
-                        <a href={`/ventas/clientes?ficha=${v.cliente.id}`} className="enlace-tabla" style={{ fontWeight: 600 }}>{v.cliente.name}</a>
-                      ) : (
-                        <div style={{ fontWeight: 600, color: 'var(--azul-oscuro)' }}>{v.clientName}</div>
-                      )}
-                      {v.ubicacion ? (
-                        <div style={{ fontSize: '0.78rem', color: '#718096' }}>
-                          📍 {v.ubicacion.name || v.ubicacion.address}
-                          {[v.ubicacion.city, v.ubicacion.province].filter(Boolean).length > 0 && ` · ${[v.ubicacion.city, v.ubicacion.province].filter(Boolean).join(', ')}`}
+                {filas.map((v) => {
+                  const principal = accionPrincipal(v);
+                  return (
+                    <tr key={v.id}>
+                      <td>
+                        {v.cliente ? (
+                          <a href={`/ventas/clientes?ficha=${v.cliente.id}`} className="enlace-tabla"
+                            onClick={(e) => { e.preventDefault(); navigate(`/ventas/clientes?ficha=${v.cliente!.id}`); }}>
+                            {v.cliente.name}
+                          </a>
+                        ) : (
+                          <div style={{ fontWeight: 600 }}>{v.clientName}</div>
+                        )}
+                        {lugarDeVisita(v) && (
+                          <div className="visita-sub"><MapPin size={12} aria-hidden /> {lugarDeVisita(v)}</div>
+                        )}
+                        {v.clientPhone && <div className="visita-sub"><Phone size={12} aria-hidden /> {v.clientPhone}</div>}
+                        {v.oportunidad && (
+                          <div className="visita-sub visita-sub--opp"><Briefcase size={12} aria-hidden /> {v.oportunidad.title || `Oportunidad ${v.oportunidad.id}`}</div>
+                        )}
+                      </td>
+                      {columnasVisibles.map((k) => <td key={k}>{celdaVisita(k, v)}</td>)}
+                      <td className="col-acciones col-acciones--ancha">
+                        <div className="acciones-iconos" style={{ justifyContent: 'flex-end' }}>
+                          {principal && (
+                            <button
+                              type="button" className="btn-secondary" disabled={principal.ocupado}
+                              onClick={principal.onClick}
+                              style={{ padding: '4px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            >
+                              {principal.icono} {principal.texto}
+                            </button>
+                          )}
+                          <RowActionsMenu actions={accionesDeVisita(v)} />
                         </div>
-                      ) : (
-                        v.clientAddress && <div style={{ fontSize: '0.78rem', color: '#718096' }}>📍 {v.clientAddress}</div>
-                      )}
-                      {v.clientPhone && <div style={{ fontSize: '0.78rem', color: '#718096' }}>📞 {v.clientPhone}</div>}
-                      {v.oportunidad && <div style={{ fontSize: '0.78rem', color: '#2b6cb0' }}>💼 {v.oportunidad.title || `Oportunidad ${v.oportunidad.id}`}</div>}
-                    </td>
-                    <td>{v.user?.fullName || '—'}</td>
-                    <td>{v.visitDate ? new Date(v.visitDate).toLocaleDateString('es-EC', { timeZone: 'UTC' }) : '—'}</td>
-                    <td>
-                      {v.isVerified ? (
-                        <div style={{ color: '#276749', fontSize: '0.82rem', fontWeight: 600 }}>
-                          ✅ Verificado
-                          {v.checkInTime && <div style={{ fontSize: '0.72rem', color: '#718096' }}>{new Date(v.checkInTime).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}</div>}
-                          {v.checkInLat && <div style={{ fontSize: '0.7rem', color: '#a0aec0' }}>GPS: {v.checkInLat.toFixed(4)}, {v.checkInLng?.toFixed(4)}</div>}
-                        </div>
-                      ) : (
-                        <span style={{ color: '#a0aec0', fontSize: '0.82rem' }}>Pendiente</span>
-                      )}
-                    </td>
-                    <td>
-                      <span
-                        style={{
-                          padding: '3px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600,
-                          background: v.status === 'COMPLETED' ? '#c6f6d5' : v.status === 'IN_PROGRESS' ? '#fefcbf' : v.status === 'CANCELLED' ? '#fed7d7' : '#e2e8f0',
-                          color: v.status === 'COMPLETED' ? '#22543d' : v.status === 'IN_PROGRESS' ? '#744210' : v.status === 'CANCELLED' ? '#742a2a' : '#4a5568',
-                        }}
-                      >
-                        {v.status === 'COMPLETED' ? 'Completada' : v.status === 'IN_PROGRESS' ? 'En Proceso' : v.status === 'CANCELLED' ? 'Cancelada' : 'Agendada'}
-                      </span>
-                    </td>
-                    <td>
-                      {v.commercialOffer ? (
-                        <div>
-                          <div style={{ fontWeight: 500, fontSize: '0.82rem' }}>{v.commercialOffer}</div>
-                          {v.quotedAmount ? <div style={{ fontSize: '0.78rem', color: '#2b6cb0', fontWeight: 700 }}>${v.quotedAmount.toFixed(2)}</div> : null}
-                        </div>
-                      ) : (
-                        <span style={{ color: '#a0aec0', fontSize: '0.8rem' }}>—</span>
-                      )}
-                    </td>
-                    <td>
-                      {v.outcome ? (
-                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--azul-oscuro)' }}>
-                          {OUTCOME_LABELS[v.outcome] || v.outcome}
-                        </span>
-                      ) : (
-                        <span style={{ color: '#a0aec0', fontSize: '0.8rem' }}>—</span>
-                      )}
-                    </td>
-                    <td className="no-print">
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        {v.status === 'PLANNED' && (
-                          <button
-                            className="auth-btn"
-                            style={{ padding: '4px 8px', fontSize: '0.75rem' }}
-                            disabled={checkingInId === v.id}
-                            onClick={() => handleCheckIn(v)}
-                          >
-                            {checkingInId === v.id ? '📍 Verificando...' : '📍 Check-In GPS'}
-                          </button>
-                        )}
-
-                        {(v.status === 'IN_PROGRESS' || v.status === 'PLANNED') && (
-                          <button
-                            className="btn-secondary-sm"
-                            style={{ padding: '4px 8px', fontSize: '0.75rem' }}
-                            onClick={() => {
-                              setShowOfferModal(v);
-                              setOfferForm({
-                                commercialOffer: v.commercialOffer || '',
-                                quotedAmount: v.quotedAmount || 0,
-                                outcome: v.outcome || 'QUOTED',
-                                notes: v.notes || '',
-                              });
-                            }}
-                          >
-                            📝 Oferta / Cierre
-                          </button>
-                        )}
-
-                        {v.status !== 'COMPLETED' && v.status !== 'CANCELLED' && (
-                          <button
-                            className="btn-secondary-sm"
-                            style={{ padding: '4px 8px', fontSize: '0.75rem' }}
-                            title="Editar la visita"
-                            onClick={() => setVisitaModal({ visita: v })}
-                          >
-                            ✏️
-                          </button>
-                        )}
-
-                        {v.status !== 'COMPLETED' && v.status !== 'CANCELLED' && (
-                          <button
-                            className="btn-danger-sm"
-                            style={{ padding: '4px 6px', fontSize: '0.75rem' }}
-                            onClick={() => handleCancelVisit(v)}
-                          >
-                            X
-                          </button>
-                        )}
-
-                        <button
-                          style={{ background: 'none', border: 'none', color: '#e53e3e', cursor: 'pointer', fontSize: '0.85rem' }}
-                          onClick={() => handleDeleteVisit(v)}
-                          title="Eliminar registro"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -459,6 +575,44 @@ export default function VisitasPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {checkInConfirmar && (
+        <ConfirmDialog
+          title={checkInConfirmar.aviso.resultado === 'SIN_GPS' ? 'No pudimos leer tu ubicación' : 'Estás lejos del lugar de la visita'}
+          message={
+            checkInConfirmar.aviso.resultado === 'SIN_GPS' ? (
+              <>
+                <p style={{ margin: '0 0 8px' }}>
+                  El navegador no nos dio tu ubicación. Revisa que hayas permitido la ubicación para esta página.
+                </p>
+                <p style={{ margin: 0 }}>
+                  Si registras el check-in ahora, quedará como <strong>Sin verificar</strong>.
+                </p>
+              </>
+            ) : (
+              <>
+                <p style={{ margin: '0 0 8px' }}>
+                  Estás a <strong>{distanciaLegible(checkInConfirmar.aviso.distanciaM ?? 0)}</strong> del lugar de la visita
+                  {checkInConfirmar.aviso.lugar ? <> ({checkInConfirmar.aviso.lugar})</> : null}. Para quedar «En el sitio» hay que estar
+                  a menos de {checkInConfirmar.aviso.maximoM} m.
+                </p>
+                <p style={{ margin: 0 }}>
+                  Si registras el check-in ahora, quedará como <strong>Fuera del sitio</strong> y no contará como verificado.
+                </p>
+              </>
+            )
+          }
+          confirmLabel="Registrar de todos modos"
+          cancelLabel="Cancelar"
+          danger
+          onConfirm={() => {
+            const c = checkInConfirmar;
+            setCheckInConfirmar(null);
+            void registrarCheckIn(c.visit, c.pos, true);
+          }}
+          onCancel={() => setCheckInConfirmar(null)}
+        />
       )}
 
       {confirmDeleteVisit && (

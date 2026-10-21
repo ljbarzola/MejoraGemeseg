@@ -120,7 +120,6 @@ export default function ContratoComercialDetalle() {
     {
       label: 'Preguntar al agente',
       icon: <Bot size={15} />,
-      hint: `El Agente de Ventas revisa todo el historial de ${contrato.salesClient.name} y te sugiere qué hacer`,
       onClick: () => abrirChatDeVentas({ clienteId: contrato.salesClientId, clienteNombre: contrato.salesClient.name }),
     },
   ];
@@ -414,7 +413,7 @@ export default function ContratoComercialDetalle() {
                       <td>{new Date(d.contract.createdAt).toLocaleDateString('es-EC')}</td>
                       <td className="col-acciones col-acciones--ancha" onClick={(e) => e.stopPropagation()}>
                         <div className="acciones-iconos">
-                          <button className="icon-btn" title="Quitar de este contrato" aria-label="Quitar de este contrato" onClick={() => setADesvincular(d.contractId)}>
+                          <button className="btn-secondary icon-btn" title="Quitar de este contrato" aria-label="Quitar de este contrato" onClick={() => setADesvincular(d.contractId)}>
                             <Unlink size={15} />
                           </button>
                         </div>

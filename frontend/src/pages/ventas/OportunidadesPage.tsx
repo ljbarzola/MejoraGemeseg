@@ -13,7 +13,8 @@ import SalesClientStagesConfigModal from '../../components/ventas/SalesClientSta
 import SeguimientoHoyTable from '../../components/ventas/SeguimientoHoyTable';
 import ClienteFichaPanel from '../../components/ventas/ClienteFichaPanel';
 import ClienteFormModal from '../../components/ventas/ClienteFormModal';
-import VentasComoFunciona from '../../components/ventas/VentasComoFunciona';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
+import PageTabs from '../../components/common/PageTabs';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
@@ -244,7 +245,6 @@ export default function OportunidadesPage() {
       {
         label: 'Preguntar al agente',
         icon: <Bot size={14} />,
-        hint: `El Agente de Ventas revisa el historial de ${o.salesClient.name} y te sugiere qué hacer`,
         onClick: () => abrirChatDeVentas({ clienteId: o.salesClientId, clienteNombre: o.salesClient.name }),
       },
     ];
@@ -327,37 +327,29 @@ export default function OportunidadesPage() {
 
   return (
     <div className="page-container">
-      <div className="page-title-row">
-        <div>
-          <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Oportunidades</h1>
-        </div>
-        <div className="header-actions">
-          <VentasComoFunciona />
-          <button type="button" className="btn-secondary" onClick={() => setMostrarEtapas(true)}
-            title="Configurar las etapas de las negociaciones" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Workflow size={15} /> Etapas
-          </button>
-          <button className="auth-btn" onClick={() => setModal({ modo: 'crear' })}>
-            <Plus size={16} /> Nueva oportunidad
-          </button>
-        </div>
-      </div>
+      <VentasPageHeader
+        title="Oportunidades"
+        description="Cada negociación de un servicio, con su etapa y su monto (en Zoho: Tratos)."
+        actions={
+          <>
+            <button type="button" className="btn-secondary" onClick={() => setMostrarEtapas(true)}
+              title="Configurar las etapas de las negociaciones" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Workflow size={15} /> Etapas
+            </button>
+            <button className="auth-btn" onClick={() => setModal({ modo: 'crear' })}>
+              <Plus size={16} /> Nueva oportunidad
+            </button>
+          </>
+        }
+      />
 
-      <p style={{ fontSize: 13, color: '#666', margin: '-6px 0 14px' }}>
-        Cada negociación de un servicio, con su etapa y su monto (en Zoho: Tratos). La persona o empresa vive en el Directorio.
-      </p>
-
-      <div className="admin-tabs" style={{ display: 'inline-flex', marginBottom: 16 }}>
-        <button type="button" className={`admin-tab ${vista === 'todas' ? 'active' : ''}`} style={{ flex: '0 0 auto' }}
-          onClick={() => setVista('todas')}>
-          Todas
-        </button>
-        <button type="button" className={`admin-tab ${vista === 'hoy' ? 'active' : ''}`} style={{ flex: '0 0 auto' }}
-          onClick={() => setVista('hoy')} title="Negociaciones en curso cuyo seguimiento toca atender hoy">
-          Para hoy ({hoyClientes.length})
-        </button>
-      </div>
+      <PageTabs
+        label="Vista de oportunidades" value={vista} onChange={setVista}
+        tabs={[
+          { key: 'todas', label: 'Todas' },
+          { key: 'hoy', label: `Para hoy (${hoyClientes.length})`, title: 'Negociaciones en curso cuyo seguimiento toca atender hoy' },
+        ]}
+      />
 
       <div className="filter-bar">
         <div className="filter-bar-fields filter-bar-fields--etiquetas">
@@ -405,9 +397,11 @@ export default function OportunidadesPage() {
           <ColumnPickerMenu
             columns={COLUMNAS_OPP}
             visible={columnPrefs.visible}
+            pinned={columnPrefs.pinned}
+            maxPinned={columnPrefs.maxPinned}
             fixedLabel="Empresa o persona"
-            onApply={async (keys) => {
-              const guardado = await columnPrefs.set(keys);
+            onApply={async (keys, fijas) => {
+              const guardado = await columnPrefs.set(keys, fijas);
               if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
             }}
             disabled={vista === 'hoy'}
@@ -448,7 +442,7 @@ export default function OportunidadesPage() {
           <p style={{ color: '#888', fontSize: 13 }}>No hay negociaciones que coincidan con los filtros.</p>
         ) : (
           <div className="tasks-table-wrapper">
-            <table className="tasks-table resizable-table" ref={tablaRef}>
+            <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
                   <th {...thProps('cliente')} style={{ width: 200 }}>Empresa o persona <SortIcon campo="cliente" /></th>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Plug, UserPlus, UserMinus, XCircle, ClipboardList, ArrowRightCircle } from 'lucide-react';
+import { Plus, UserPlus, UserMinus, XCircle, ClipboardList, ArrowRightCircle } from 'lucide-react';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import FilterField from '../../components/common/FilterField';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
@@ -8,7 +8,7 @@ import ErrorBanner from '../../components/common/ErrorBanner';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import MotivoCierreModal from '../../components/ventas/MotivoCierreModal';
 import ConvertirLeadModal from '../../components/ventas/ConvertirLeadModal';
-import VentasComoFunciona from '../../components/ventas/VentasComoFunciona';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
@@ -17,6 +17,7 @@ import { getUser } from '../../services/auth.service';
 import {
   getLeadsEntrantes,
   createLeadEntrante,
+  getReferidoresLead,
   updateLeadEntrante,
   tomarLeadEntrante,
   soltarLeadEntrante,
@@ -300,26 +301,15 @@ export default function LeadsPage() {
 
   return (
     <div className="page-container">
-      <div className="page-title-row">
-        <div>
-          <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Posibles clientes</h1>
-        </div>
-        <div className="header-actions">
-          <VentasComoFunciona />
-          <button className="btn-secondary" onClick={() => navigate('/ventas/configuracion')}
-            title="Las claves y las conexiones (Google Ads, formulario web, landings) se configuran en Configuración → Cómo llegan los posibles clientes">
-            <Plug size={16} /> Cómo llegan los posibles clientes
-          </button>
+      <VentasPageHeader
+        title="Posibles clientes"
+        description={<>Contactos que llegan por la web, los anuncios o a mano (en Google Ads: leads). Solo los de servicio pasan a oportunidad. {sinClasificar > 0 && <strong>{sinClasificar} sin clasificar.</strong>}</>}
+        actions={
           <button className="auth-btn" onClick={() => setNuevo(true)}>
             <Plus size={16} /> Nuevo posible cliente
           </button>
-        </div>
-      </div>
-
-      <p style={{ fontSize: 13, color: '#666', margin: '-6px 0 14px' }}>
-        Personas que escriben por la web, los anuncios o a mano (en Google Ads se llaman «leads»). Clasifícalos: solo uno de servicio pasa a oportunidad. {sinClasificar > 0 && <strong>{sinClasificar} sin clasificar.</strong>}
-      </p>
+        }
+      />
 
       {leads.length > 0 && (
         <ResumenPorFuente
@@ -367,9 +357,11 @@ export default function LeadsPage() {
           <ColumnPickerMenu
             columns={COLUMNAS_LEAD}
             visible={columnPrefs.visible}
+            pinned={columnPrefs.pinned}
+            maxPinned={columnPrefs.maxPinned}
             fixedLabel="Contacto"
-            onApply={async (keys) => {
-              const guardado = await columnPrefs.set(keys);
+            onApply={async (keys, fijas) => {
+              const guardado = await columnPrefs.set(keys, fijas);
               if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
             }}
           />
@@ -392,7 +384,7 @@ export default function LeadsPage() {
           <p style={{ color: '#888', fontSize: 13 }}>No hay posibles clientes que coincidan con los filtros.</p>
         ) : (
           <div className="tasks-table-wrapper">
-            <table className="tasks-table resizable-table" ref={tablaRef}>
+            <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
                   <th {...thProps('contacto')} style={{ width: 240 }}>Contacto <SortIcon campo="contacto" /></th>
@@ -550,6 +542,56 @@ const GRUPO_CANAL_LABEL: Record<CanalLeadDef['grupo'], string> = {
   DIRECTO: 'Contacto directo',
 };
 
+const OTRA_PERSONA = '__otra__';
+
+// «Quién lo refirió»: se elige a alguien de la empresa de la lista (queda unido al cliente y se le avisa
+// cuando avance) o se escribe el nombre de alguien de afuera. Guarda `<campo>UserId` cuando es de la lista.
+function CampoReferidor({ campo, propios, setPropios }: {
+  campo: { key: string; label: string; ayuda?: string };
+  propios: Record<string, string>;
+  setPropios: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+}) {
+  const [personas, setPersonas] = useState<{ id: number; fullName: string; position?: string | null }[]>([]);
+  const [fallo, setFallo] = useState(false);
+  const claveId = `${campo.key}UserId`;
+  useEffect(() => {
+    let vivo = true;
+    getReferidoresLead().then((p) => { if (vivo) setPersonas(p); }).catch(() => { if (vivo) setFallo(true); });
+    return () => { vivo = false; };
+  }, []);
+
+  const elegido = propios[claveId] ?? '';
+  const escribiendo = elegido === OTRA_PERSONA || fallo;
+  const elegir = (v: string) => setPropios((p) => {
+    const { [campo.key]: _texto, [claveId]: _id, ...resto } = p;
+    return v === '' ? resto : { ...resto, [claveId]: v };
+  });
+
+  return (
+    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+      <label>{campo.label} (opcional)</label>
+      {!fallo && (
+        <select value={elegido} onChange={(e) => elegir(e.target.value)}>
+          <option value="">Nadie en particular</option>
+          {personas.length > 0 && (
+            <optgroup label="Personas de la empresa">
+              {personas.map((u) => (
+                <option key={u.id} value={String(u.id)}>{u.fullName}{u.position ? ` · ${u.position}` : ''}</option>
+              ))}
+            </optgroup>
+          )}
+          <option value={OTRA_PERSONA}>Otra persona (escribir el nombre)</option>
+        </select>
+      )}
+      {escribiendo && (
+        <input type="text" style={{ marginTop: fallo ? 0 : 8 }} placeholder="Nombre de quien lo refirió" maxLength={300}
+          value={propios[campo.key] ?? ''} onChange={(e) => setPropios((p) => ({ ...p, [campo.key]: e.target.value }))} />
+      )}
+      {campo.ayuda && <small style={{ color: '#718096' }}>{campo.ayuda}</small>}
+    </div>
+  );
+}
+
 // Ingreso manual de un lead (una llamada, un referido, un lead de Meta que aún
 // no entra solo). La fuente es obligatoria: sin ella no se sabría de dónde
 // vienen los leads ni cuáles terminan en venta. Al elegirla aparecen solo los
@@ -579,6 +621,8 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
     setGuardando(true);
     try {
       const { campaign, ...extra } = propios;
+      // «Otra persona» es solo una opción del selector, no un usuario: no viaja al servidor.
+      for (const k of Object.keys(extra)) if (extra[k] === OTRA_PERSONA) delete extra[k];
       await createLeadEntrante({ ...datos, campaign, extra });
       onSaved();
     } catch (err: any) {
@@ -625,7 +669,9 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
           </div>
           {canalElegido && canalElegido.campos.length > 0 && (
             <div className="form-row">
-              {canalElegido.campos.map((campo) => (
+              {canalElegido.campos.map((campo) => campo.usuario ? (
+                <CampoReferidor key={campo.key} campo={campo} propios={propios} setPropios={setPropios} />
+              ) : (
                 <div className="form-group" key={campo.key}>
                   <label>{campo.label} (opcional)</label>
                   <input type="text" value={propios[campo.key] ?? ''} maxLength={campo.key === 'campaign' ? 150 : 300}

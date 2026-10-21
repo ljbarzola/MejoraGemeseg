@@ -14,6 +14,10 @@ export interface CampoCanal {
   key: string;
   label: string;
   ayuda?: string;
+  // true: además de escribir un nombre, se puede elegir a un usuario de la empresa. El
+  // elegido se guarda en `extra[<key>UserId]` y, al convertir el lead, queda como quien
+  // refirió al cliente (recibe los avisos de etapa). Hoy solo lo usa «Quién lo refirió».
+  usuario?: boolean;
 }
 
 export interface CanalDef {
@@ -86,7 +90,12 @@ export const CANALES_REGISTRO: CanalDef[] = [
     label: 'Referido',
     grupo: 'DIRECTO',
     fuenteCliente: 'REFERIDO',
-    campos: [{ key: 'referidoPor', label: 'Quién lo refirió' }],
+    campos: [{
+      key: 'referidoPor',
+      label: 'Quién lo refirió',
+      usuario: true,
+      ayuda: 'Si fue alguien de la empresa, elígelo de la lista: se le avisa cuando este cliente avance de etapa. Si no, escribe su nombre.',
+    }],
   },
   {
     key: 'WHATSAPP',

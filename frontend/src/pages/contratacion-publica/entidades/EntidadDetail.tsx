@@ -421,9 +421,11 @@ export default function EntidadDetail() {
                     <ColumnPickerMenu
                       columns={COLUMNAS_DOCUMENTO}
                       visible={columnPrefs.visible}
+                      pinned={columnPrefs.pinned}
+                      maxPinned={columnPrefs.maxPinned}
                       fixedLabel="Documento"
-                      onApply={async (keys) => {
-                        const guardado = await columnPrefs.set(keys);
+                      onApply={async (keys, fijas) => {
+                        const guardado = await columnPrefs.set(keys, fijas);
                         if (!guardado) setError('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.');
                       }}
                     />
@@ -466,7 +468,7 @@ export default function EntidadDetail() {
                 </div>
               ) : (
                 <div className="tasks-table-wrapper">
-                  <table className="tasks-table resizable-table" ref={tablaDocsRef}>
+                  <table className="tasks-table resizable-table" ref={tablaDocsRef} data-fijas={columnPrefs.fijas}>
                     <thead>
                       <tr>
                         <th {...thDocs('nombre')} style={{ width: '22%' }}>Documento <SortDocs campo="nombre" /></th>

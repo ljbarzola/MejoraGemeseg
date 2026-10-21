@@ -3,15 +3,12 @@ import { UserPlus, X, Plus, ArrowLeft } from 'lucide-react';
 import {
   referirCliente,
   misReferidosClientes,
-  getSalesClientFields,
-  parseSubservicios,
-  subserviciosDe,
-  SERVICIO_KEY,
-  type SalesClientField,
+  getServiciosParaReferir,
+  type SalesServicio,
   type MiReferidoCliente,
 } from '../../services/ventas.service';
 import { useToast } from '../../contexts/ToastContext';
-import SubserviciosCheckboxes from './SubserviciosCheckboxes';
+import ServiciosPorCategoria from '../ventas/ServiciosPorCategoria';
 
 // Botón visible para cualquier usuario autenticado (no depende de permisos
 // de sección): cualquier empleado puede referir un cliente potencial a
@@ -152,21 +149,19 @@ function FormularioReferido({
   const [nombre, setNombre] = useState('');
   const [celular, setCelular] = useState('');
   const [correo, setCorreo] = useState('');
-  const [servicioRequerido, setServicioRequerido] = useState('');
   const [nota, setNota] = useState('');
-  const [servicioOptions, setServicioOptions] = useState<SalesClientField['options']>([]);
-  const [subservicios, setSubservicios] = useState('');
+  // Los servicios salen del catálogo de Ventas → Configuración → Servicios (solo activos), igual que en
+  // «Nueva oportunidad»: si Ventas desactiva uno, deja de ofrecerse aquí.
+  const [servicios, setServicios] = useState<SalesServicio[]>([]);
+  const [serviceIds, setServiceIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const errorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    getSalesClientFields()
-      .then((fields) => {
-        const servicio = fields.find((f) => f.key === SERVICIO_KEY);
-        setServicioOptions(servicio?.options || []);
-      })
-      .catch(() => setServicioOptions([]));
+    getServiciosParaReferir()
+      .then(setServicios)
+      .catch(() => setServicios([]));
   }, []);
 
   useEffect(() => {
@@ -183,8 +178,7 @@ function FormularioReferido({
         nombre: nombre.trim(),
         celular: celular.trim() || undefined,
         correo: correo.trim() || undefined,
-        servicioRequerido: servicioRequerido || undefined,
-        subserviciosRequeridos: subservicios ? parseSubservicios(subservicios) : undefined,
+        serviceIds: serviceIds.length > 0 ? serviceIds : undefined,
         nota: nota.trim() || undefined,
       });
       showToast('Referido enviado. Ventas se pondrá en contacto.', 'success');
@@ -228,26 +222,13 @@ function FormularioReferido({
             <label>Correo</label>
             <input type="email" value={correo} onChange={(e) => setCorreo(e.target.value)} placeholder="correo@ejemplo.com" />
           </div>
-          <div className="form-group">
-            <label>Servicio requerido</label>
-            <select
-              value={servicioRequerido}
-              onChange={(e) => { setServicioRequerido(e.target.value); setSubservicios(''); }}
-            >
-              <option value="">— Seleccionar —</option>
-              {(servicioOptions || []).map((o) => (
-                <option key={o.key} value={o.key}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-          {/* Opcional, y solo si el servicio elegido tiene sub-servicios. */}
-          {subserviciosDe(servicioOptions, servicioRequerido).length > 0 && (
+          {servicios.length > 0 && (
             <div className="form-group">
-              <label>Sub-servicios <span style={{ fontWeight: 400 }}>(opcional)</span></label>
-              <SubserviciosCheckboxes
-                options={subserviciosDe(servicioOptions, servicioRequerido)}
-                value={subservicios}
-                onChange={setSubservicios}
+              <label>Servicios que necesita <span style={{ fontWeight: 400 }}>(opcional)</span></label>
+              <ServiciosPorCategoria
+                servicios={servicios}
+                seleccionados={serviceIds}
+                onToggle={(id) => setServiceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))}
               />
             </div>
           )}

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Columns3, Lock, Menu } from 'lucide-react';
+import { Columns3, Menu, Pin } from 'lucide-react';
 
 export interface PickableColumn {
   key: string;
@@ -20,11 +20,17 @@ export interface PickableColumn {
  *  - Clic fuera del menú o Escape lo cierra descartando el borrador.
  *  - Las filas visibles se reordenan arrastrando el asa de tres rayitas (☰);
  *    con teclado, el asa responde a flecha arriba/abajo.
+ *  - Columnas fijas (2026-10-20): la principal ya viene fijada y no se suelta; con
+ *    la chincheta de otra fila se fija una más (máximo 2 en total) y esa pasa a
+ *    ir pegada a la izquierda. Solo se muestra si la pantalla pasa `pinned`
+ *    (viene de useColumnPreferences) y `onApply` recibe la fijada como 2.º argumento.
  */
 export default function ColumnPickerMenu({
   columns,
   visible,
   onApply,
+  pinned,
+  maxPinned = 1,
   fixedLabel = 'Nombre',
   disabled,
   disabledTitle,
@@ -33,8 +39,12 @@ export default function ColumnPickerMenu({
   columns: PickableColumn[];
   /** Keys visibles hoy, en orden. */
   visible: string[];
-  /** Recibe las keys visibles en su orden final. */
-  onApply: (keys: string[]) => void | Promise<unknown>;
+  /** Recibe las keys visibles en su orden final y, si hay `pinned`, las fijadas. */
+  onApply: (keys: string[], pinned?: string[]) => void | Promise<unknown>;
+  /** Columnas elegibles fijadas hoy. Sin esta prop el menú no ofrece fijar. */
+  pinned?: string[];
+  /** Cuántas columnas elegibles se pueden fijar (la principal ya cuenta aparte). */
+  maxPinned?: number;
   /** Columna que siempre va primera y no se puede ocultar. */
   fixedLabel?: string;
   disabled?: boolean;
@@ -42,6 +52,7 @@ export default function ColumnPickerMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<string[]>([]);
+  const [draftPinned, setDraftPinned] = useState<string[]>([]);
   const [coords, setCoords] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [overKey, setOverKey] = useState<string | null>(null);
@@ -52,12 +63,15 @@ export default function ColumnPickerMenu({
   // pero no debe arrancar al pulsar la casilla o el texto.
   const desdeAsa = useRef(false);
 
+  // Sin `pinned`, o si la pantalla ya fija todo lo que cabe (maxPinned 0), no se ofrece fijar.
+  const puedeFijar = !!pinned && maxPinned > 0;
   const porKey = new Map(columns.map((c) => [c.key, c]));
   const ocultas = columns.filter((c) => !draft.includes(c.key));
 
   const abrir = () => {
     // Borrador inicial = lo que se ve hoy, sin keys de campos que ya no existen.
     setDraft(visible.filter((k) => porKey.has(k)));
+    setDraftPinned((pinned ?? []).filter((k) => porKey.has(k)));
     setDragKey(null);
     setOverKey(null);
     setOpen(true);
@@ -116,8 +130,22 @@ export default function ColumnPickerMenu({
     };
   }, [open]);
 
-  const toggle = (key: string) =>
+  const toggle = (key: string) => {
     setDraft((d) => (d.includes(key) ? d.filter((k) => k !== key) : [...d, key]));
+    // Ocultar una columna la suelta.
+    setDraftPinned((p) => p.filter((k) => k !== key));
+  };
+
+  /** Fija/suelta una columna; al fijarla sube al inicio de la lista, que es donde va a quedar. */
+  const alternarFija = (key: string) => {
+    if (draftPinned.includes(key)) {
+      setDraftPinned((p) => p.filter((k) => k !== key));
+      return;
+    }
+    if (draftPinned.length >= maxPinned) return;
+    setDraftPinned((p) => [...p, key]);
+    setDraft((d) => [key, ...d.filter((k) => k !== key)]);
+  };
 
   /** Mueve `key` para que quede justo antes de `antesDe` (o al final si es null). */
   const mover = (key: string, antesDe: string | null) =>
@@ -140,7 +168,7 @@ export default function ColumnPickerMenu({
 
   const aplicar = () => {
     setOpen(false);
-    void onApply(draft);
+    void (pinned ? onApply(draft, draftPinned) : onApply(draft));
   };
 
   return (
@@ -183,7 +211,7 @@ export default function ColumnPickerMenu({
           <div style={{ padding: '10px 12px 6px', fontSize: 12, fontWeight: 700, color: '#2d3748' }}>
             Columnas de la tabla
             <div style={{ fontWeight: 400, fontSize: 11, color: '#718096', marginTop: 2 }}>
-              Arrastra ☰ para ordenar. Se guarda en tu cuenta.
+              Arrastra ☰ para ordenar.{puedeFijar ? ' Usa 📌 para fijar una columna al desplazar.' : ''} Se guarda en tu cuenta.
             </div>
           </div>
 
@@ -192,7 +220,7 @@ export default function ColumnPickerMenu({
               <span style={{ width: 14 }} />
               <input type="checkbox" checked disabled />
               <span style={{ flex: 1, fontSize: 12.5, color: '#a0aec0' }}>{fixedLabel}</span>
-              <Lock size={11} color="#a0aec0" aria-label="siempre visible" />
+              <Pin size={12} color="#a0aec0" fill="#a0aec0" aria-label="siempre visible y fija" />
             </Fila>
 
             {draft.map((key) => {
@@ -245,6 +273,30 @@ export default function ColumnPickerMenu({
                     </span>
                     <input type="checkbox" checked onChange={() => toggle(key)} id={`col-${key}`} />
                     <label htmlFor={`col-${key}`} style={{ flex: 1, fontSize: 12.5, color: '#2d3748', cursor: 'pointer' }}>{col.label}</label>
+                    {puedeFijar && (
+                      <button
+                        type="button"
+                        onClick={() => alternarFija(key)}
+                        disabled={!draftPinned.includes(key) && draftPinned.length >= maxPinned}
+                        aria-pressed={draftPinned.includes(key)}
+                        aria-label={draftPinned.includes(key) ? `Soltar ${col.label}` : `Fijar ${col.label}`}
+                        title={
+                          draftPinned.includes(key)
+                            ? 'Fijada: no se va al desplazar la tabla. Clic para soltarla.'
+                            : draftPinned.length >= maxPinned
+                              ? 'Ya hay el máximo de columnas fijas (2 con la principal). Suelta otra primero.'
+                              : 'Fijar: se queda a la izquierda al desplazar la tabla.'
+                        }
+                        style={{
+                          display: 'flex', padding: 2, border: 'none', background: 'transparent', borderRadius: 4,
+                          cursor: !draftPinned.includes(key) && draftPinned.length >= maxPinned ? 'not-allowed' : 'pointer',
+                          opacity: !draftPinned.includes(key) && draftPinned.length >= maxPinned ? 0.3 : 1,
+                          color: draftPinned.includes(key) ? 'var(--azul-claro, #12375f)' : '#a0aec0',
+                        }}
+                      >
+                        <Pin size={13} fill={draftPinned.includes(key) ? 'currentColor' : 'none'} />
+                      </button>
+                    )}
                   </Fila>
                 </div>
               );

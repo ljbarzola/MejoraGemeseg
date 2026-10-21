@@ -1,3 +1,4 @@
+import { Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { getPublicContractFill, submitPublicContractFill, PublicContractFill } from '../../services/ventas.service';
@@ -120,8 +121,10 @@ export default function CompletarContrato() {
                       )}
                     </div>
                   ))}
-                  <button onClick={() => removeRow(field.variableName, i)}
-                    style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #e55', background: '#fff', color: '#c33', cursor: 'pointer', fontSize: 12, marginBottom: 2 }}>✕</button>
+                  <button type="button" className="btn-secondary icon-btn" onClick={() => removeRow(field.variableName, i)}
+                    style={{ color: '#c53030' }} title="Quitar" aria-label="Quitar">
+                      <Trash2 size={14} />
+                    </button>
                 </div>
               ))}
               <button onClick={() => addRow(field.variableName, columns, maxRows)}

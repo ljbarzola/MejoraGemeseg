@@ -292,6 +292,8 @@ export interface ClientVisit {
   scheduledDate?: string; checkInTime?: string; checkOutTime?: string;
   checkInLat?: number; checkInLng?: number;
   visitDate?: string; isVerified?: boolean;
+  // Check-in comparado con el lugar de la visita (2026-10-20). Nulo en los check-in de antes, que no se comprobaban.
+  checkInResult?: ResultadoCheckIn | null; checkInDistanceM?: number | null;
   commercialOffer?: string; quotedAmount?: number; outcome?: string;
   user?: any; companyId: number; createdBy: number; createdAt: string;
   // Conexión con el CRM (2026-10-19): vacíos en las visitas de antes.
@@ -311,7 +313,21 @@ export interface VisitaInput {
 export const getVisits = (params?: any) => api.get('/ventas/visits', { params }).then(r => r.data);
 export const createVisit = (data: VisitaInput): Promise<ClientVisit> => api.post('/ventas/visits', data).then(r => r.data);
 export const updateVisit = (id: number, data: VisitaInput): Promise<ClientVisit> => api.patch(`/ventas/visits/${id}`, data).then(r => r.data);
-export const checkInVisit = (id: number, data?: any) => api.post(`/ventas/visits/${id}/checkin`, data).then(r => r.data);
+// EN_SITIO = a menos de 500 m del lugar (única que cuenta como verificada); FUERA_DEL_SITIO = más lejos;
+// SIN_GPS = el navegador no dio la ubicación; SIN_UBICACION = la visita no tiene lugar para comparar.
+export type ResultadoCheckIn = 'EN_SITIO' | 'FUERA_DEL_SITIO' | 'SIN_GPS' | 'SIN_UBICACION';
+// Respuesta cuando no se puede comprobar el lugar: no se guardó nada; hay que preguntar y reenviar con `confirmado`.
+export interface CheckInPorConfirmar {
+  requiereConfirmacion: true;
+  resultado: 'FUERA_DEL_SITIO' | 'SIN_GPS';
+  distanciaM: number | null;
+  maximoM: number;
+  lugar: string | null;
+}
+export const checkInVisit = (
+  id: number,
+  data?: { lat?: number; lng?: number; confirmado?: boolean },
+): Promise<ClientVisit | CheckInPorConfirmar> => api.post(`/ventas/visits/${id}/checkin`, data).then(r => r.data);
 export const completeVisit = (id: number, data?: any) => api.post(`/ventas/visits/${id}/complete`, data).then(r => r.data);
 export const cancelVisit = (id: number, reason?: string) => api.post(`/ventas/visits/${id}/cancel`, { reason }).then(r => r.data);
 export const deleteVisit = (id: number) => api.delete(`/ventas/visits/${id}`).then(r => r.data);
@@ -609,8 +625,12 @@ export const setSalesClientNextAction = (id: number, text: string, date: string)
   api.patch(`/ventas/clientes/${id}`, { nextActionText: text, nextActionDate: date }).then(r => r.data as SalesClient);
 
 // Formulario abierto "Referir un cliente" — cualquier autenticado.
-export const referirCliente = (data: { nombre: string; celular?: string; correo?: string; servicioRequerido?: string; subserviciosRequeridos?: string[]; nota?: string }) =>
+// `serviceIds` = servicios del catálogo de Configuración → Servicios (solo activos; los valida el servidor).
+export const referirCliente = (data: { nombre: string; celular?: string; correo?: string; serviceIds?: number[]; nota?: string }) =>
   api.post('/ventas/clientes/referir', data).then(r => r.data as SalesClient);
+// Servicios activos del catálogo para el formulario «Referir un cliente» (no pide acceso a Ventas).
+export const getServiciosParaReferir = (): Promise<SalesServicio[]> =>
+  api.get('/ventas/clientes/servicios-referir').then(r => r.data);
 export const misReferidosClientes = () =>
   api.get('/ventas/clientes/mis-referidos').then(r => r.data as MiReferidoCliente[]);
 
@@ -1088,7 +1108,7 @@ export const MOTIVO_CONTACTO_LABEL: Record<MotivoContacto, string> = {
 // Canal (fuente) de un lead. La lista viene del servidor (registro único de
 // canales): sumar uno nuevo no pide tocar esta pantalla. `campos` son los datos
 // propios de ese canal; `campaign` va a la columna de campaña y el resto a `extra`.
-export interface CampoCanalLead { key: string; label: string; ayuda?: string }
+export interface CampoCanalLead { key: string; label: string; ayuda?: string; usuario?: boolean }
 export interface CanalLeadDef {
   key: string;
   label: string;
@@ -1097,6 +1117,11 @@ export interface CanalLeadDef {
 }
 export const getCanalesLead = (): Promise<CanalLeadDef[]> =>
   api.get('/ventas/entrantes/canales').then(r => r.data);
+
+// Personas de la empresa que se pueden elegir como «quien lo refirió» al ingresar un posible cliente.
+export interface ReferidorLead { id: number; fullName: string; position?: string | null }
+export const getReferidoresLead = (): Promise<ReferidorLead[]> =>
+  api.get('/ventas/entrantes/referidores').then(r => r.data);
 
 // Leads recibidos por canal y cuándo llegó el último (lo real, no un estado escrito a mano).
 export interface ActividadCanalLead { canal: string; total: number; ultimo: string | null }

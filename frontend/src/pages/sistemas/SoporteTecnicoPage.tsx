@@ -239,9 +239,11 @@ export default function SoporteTecnicoPage() {
           <ColumnPickerMenu
             columns={COLUMNAS}
             visible={columnPrefs.visible}
+            pinned={columnPrefs.pinned}
+            maxPinned={columnPrefs.maxPinned}
             fixedLabel="Título"
-            onApply={async (keys) => {
-              const guardado = await columnPrefs.set(keys);
+            onApply={async (keys, fijas) => {
+              const guardado = await columnPrefs.set(keys, fijas);
               if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
             }}
           />
@@ -261,7 +263,7 @@ export default function SoporteTecnicoPage() {
       ) : (
         <div className="admin-section">
           <div className="tasks-table-wrapper">
-            <table className="tasks-table resizable-table" ref={tablaRef}>
+            <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
                   <th {...thProps('titulo')}>Título <SortIcon campo="titulo" /></th>

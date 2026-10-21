@@ -3,63 +3,11 @@
    para no chocar con styles.css. La hoja de impresión (PDF) está al final.
    ============================================================================ */
 
-.cot-page {
-  padding: 24px 28px 40px;
+/* El encabezado (nombre del módulo, título, descripción y botones) es el estándar de Ventas: <VentasPageHeader>
+   dentro de `.page-container`. Aquí solo se ensancha la página: el cotizador usa dos paneles. */
+.page-container.cot-page {
   max-width: 1700px;
-}
-
-.cot-heading {
-  margin-bottom: 14px;
-}
-
-.cot-heading h1 {
-  margin: 0;
-}
-
-/* Barra de herramientas: va DEBAJO del título (no encima) y reproduce la barra oscura del cotizador original */
-.cot-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--azul-oscuro) 0%, var(--azul-claro) 100%);
-  box-shadow: 0 6px 18px rgba(16, 15, 49, 0.18);
-}
-
-.cot-toolbar-spacer {
-  flex: 1 1 auto;
-}
-
-.cot-tool-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.09);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.cot-tool-btn:hover {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.35);
-}
-
-.cot-tool-btn.primary {
-  background: var(--naranja);
-  border-color: var(--naranja);
-}
-
-.cot-tool-btn.primary:hover {
-  filter: brightness(1.08);
+  padding-bottom: 40px;
 }
 
 /* Dos paneles con un divisor arrastrable en medio (ancho guardado por persona) */
@@ -70,11 +18,29 @@
   align-items: start;
 }
 
+/* El catálogo (izquierda) queda fijo mientras se mueve la página: solo se desplaza la cotización (derecha).
+   Mide EXACTAMENTE la altura de la pantalla y solo su lista de productos hace scroll por dentro (con el
+   mouse encima de ella); antes tenía un alto máximo calculado con un número fijo y, con productos de
+   verdad, la parte de abajo (la paginación) quedaba cortada y fuera de alcance (2026-10-20). */
 .cot-split > .cot-card:first-child {
   position: sticky;
   top: 12px;
-  max-height: calc(100vh - 24px);
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 24px);
   overflow: hidden;
+}
+
+.cot-split > .cot-card:first-child > * {
+  flex: 0 0 auto;
+}
+
+/* `contain`: al llegar al final de la lista el scroll NO pasa a la página (no mueve la cotización). */
+.cot-split > .cot-card:first-child > .cot-prod-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overscroll-behavior: contain;
 }
 
 .cot-right {
@@ -138,9 +104,16 @@
   .cot-divider {
     display: none;
   }
+  /* En pantalla angosta los paneles van uno debajo del otro: el catálogo vuelve a ser una tarjeta normal. */
   .cot-split > .cot-card:first-child {
     position: static;
+    display: block;
+    height: auto;
     max-height: none;
+  }
+  .cot-split > .cot-card:first-child > .cot-prod-list {
+    min-height: 260px;
+    max-height: calc(100vh - 330px);
   }
 }
 
@@ -1247,7 +1220,6 @@
   box-shadow: 0 0 0 3px rgba(18, 55, 95, 0.14);
 }
 
-.cot-tool-btn:focus-visible,
 .cot-tab:focus-visible,
 .cot-add-btn:focus-visible {
   outline: 3px solid var(--naranja);

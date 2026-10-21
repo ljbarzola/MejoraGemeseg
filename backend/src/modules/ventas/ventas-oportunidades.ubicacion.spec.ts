@@ -21,7 +21,7 @@ describe('VentasOportunidadesService — ubicación opcional', () => {
       salesClientStage: { findFirst: jest.fn().mockResolvedValue({ key: 'RECIBIDO' }) },
       $transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(prisma)),
     };
-    servicio = new VentasOportunidadesService(prisma as unknown as PrismaService, {} as never, {} as never, {} as never, {} as never, {} as never);
+    servicio = new VentasOportunidadesService(prisma as unknown as PrismaService, {} as never, {} as never, {} as never, {} as never);
     jest.spyOn(servicio, 'espejarCliente').mockResolvedValue(null);
     get = jest.spyOn(servicio, 'get').mockResolvedValue({} as never);
   });

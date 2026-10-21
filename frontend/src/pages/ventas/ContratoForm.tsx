@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Trash2 } from 'lucide-react';
 import { getTemplates, getTemplate, getContract, createContract, updateContract, getSalesClients, getContratosComerciales, salesClientValue, ContratoComercial, SalesTemplate, SalesTemplateField, TableColumn, SalesClient } from '../../services/ventas.service';
 import { useToast } from '../../contexts/ToastContext';
 import DateInput from '../../components/common/DateInput';
@@ -445,8 +445,10 @@ export default function ContratoForm() {
                         onChange={v => updateTableCell(field.variableName, i, col.key, v)}
                         type={col.type === 'DATE' ? 'date' : col.type === 'NUMBER' ? 'number' : 'text'} />
                     ))}
-                    <button onClick={() => removeTableRow(field.variableName, i)}
-                      style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #e55', background: '#fff', color: '#c33', cursor: 'pointer', fontSize: 12, marginBottom: 2 }}>✕</button>
+                    <button type="button" className="btn-secondary icon-btn" onClick={() => removeTableRow(field.variableName, i)}
+                      style={{ color: '#c53030' }} title="Quitar" aria-label="Quitar">
+                        <Trash2 size={14} />
+                      </button>
                   </div>
                 ))}
                 <button onClick={() => addTableRow(field.variableName, config.columns, config.maxRows)}

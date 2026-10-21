@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Settings2, Eye, Pencil, RefreshCw, Trash2, Ban, ListChecks, PackageCheck } from 'lucide-react';
+import { Plus, Eye, Pencil, RefreshCw, Trash2, Ban, PackageCheck } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import ContratoComercialModal from '../../components/ventas/ContratoComercialModal';
-import MotivosConfigModal from '../../components/ventas/MotivosConfigModal';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import MotivoCierreModal from '../../components/ventas/MotivoCierreModal';
 import EstadoContratoBadge from '../../components/ventas/EstadoContratoBadge';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
@@ -71,7 +71,6 @@ export default function ContratosComercialesList() {
   const [filtroServicio, setFiltroServicio] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
   const [modal, setModal] = useState<ModalState>(null);
-  const [verMotivos, setVerMotivos] = useState(false);
   const [aCancelar, setACancelar] = useState<ContratoComercial | null>(null);
   const [aEliminar, setAEliminar] = useState<ContratoComercial | null>(null);
   // Columnas que cada persona elige ver (preferencia en su cuenta). «Cliente» y
@@ -284,30 +283,16 @@ export default function ContratosComercialesList() {
 
   return (
     <div className="page-container">
-      <div className="page-title-row">
-        {/* Tres botones largos: el título solo necesita ~180px, así se quedan en su fila. */}
-        <div style={{ flexBasis: 180 }}>
-          <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Contratos</h1>
-        </div>
-        <div className="header-actions header-actions--ancho-movil">
-          <button className="btn-secondary" onClick={() => setVerMotivos(true)}
-            title="Las razones que se ofrecen al cancelar un contrato, al explicar por qué venció sin renovarse y al renovar con menos">
-            <ListChecks size={16} /> Por qué terminan los contratos
-          </button>
-          <button className="btn-secondary" onClick={() => navigate('/ventas/configuracion')}
-            title="Los servicios se crean, renombran y desactivan en Configuración → Servicios que ofrecemos">
-            <Settings2 size={16} /> Servicios en Configuración
-          </button>
+      <VentasPageHeader
+        title="Contratos"
+        description="El acuerdo comercial de cada cliente: servicios, vigencia, valor y renovaciones. Aquí también se cargan los anteriores a la app."
+        actions={
           <button className="auth-btn" onClick={() => setModal({ modo: 'crear' })}
             title="También sirve para registrar contratos anteriores a la app, con sus fechas reales">
             <Plus size={16} /> Nuevo contrato
           </button>
-        </div>
-      </div>
-      <p className="page-title-help">
-        Aquí también puedes registrar contratos anteriores a la app: con «Nuevo contrato» pon sus fechas reales, aunque ya hayan pasado, y di por qué terminaron. Los contratos que vencieron o se cancelaron sin explicación aparecen con «Sin motivo registrado».
-      </p>
+        }
+      />
 
       <div className="filter-bar">
         <div className="filter-bar-fields filter-bar-fields--una-linea">
@@ -339,9 +324,11 @@ export default function ContratosComercialesList() {
           <ColumnPickerMenu
             columns={COLUMNAS_CONTRATOS}
             visible={columnPrefs.visible}
+            pinned={columnPrefs.pinned}
+            maxPinned={columnPrefs.maxPinned}
             fixedLabel="Cliente"
-            onApply={async (keys) => {
-              const guardado = await columnPrefs.set(keys);
+            onApply={async (keys, fijas) => {
+              const guardado = await columnPrefs.set(keys, fijas);
               if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
             }}
           />
@@ -364,7 +351,7 @@ export default function ContratosComercialesList() {
           <p style={{ color: '#888', fontSize: 13 }}>No hay contratos que coincidan con los filtros.</p>
         ) : (
           <div className="tasks-table-wrapper">
-            <table className="tasks-table resizable-table" ref={tablaRef}>
+            <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
                   <th {...thProps('cliente')} style={{ width: 190 }}>Cliente <SortIcon campo="cliente" /></th>
@@ -418,7 +405,6 @@ export default function ContratosComercialesList() {
         />
       )}
 
-      {verMotivos && <MotivosConfigModal grupos={['CONTRATO']} titulo="Por qué terminan los contratos" onClose={() => setVerMotivos(false)} />}
 
       {aCancelar && (
         <MotivoCierreModal

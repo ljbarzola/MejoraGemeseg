@@ -14,7 +14,7 @@ export default function DocumentacionProximamente() {
         <div style={{ marginTop: 4, lineHeight: 1.5 }}>
           Muy pronto el sistema armará solo el contrato o la propuesta, con los datos del cliente y del contrato que ya registraste,
           sin que tengas que llenarlo a mano. Después podrás enviarlo para que tu cliente lo firme desde su correo.
-          Mientras tanto, si ya tienes el documento hecho (por ejemplo, el contrato firmado en PDF), súbelo con «Subir documento».
+          Mientras tanto, si ya tienes el documento hecho (por ejemplo, el contrato firmado en PDF), súbelo con «Nuevo documento» → «Subir uno ya hecho».
         </div>
       </div>
     </div>

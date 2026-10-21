@@ -46,17 +46,21 @@ describe('buildSystemGuide', () => {
     expect(guide).toContain('pestaña "Contactos"');
     expect(guide).toContain('es adicional a ESTE contrato');
     expect(guide).toContain('Incidentes y conversación de salida');
-    expect(guide).toContain('Por qué terminó un contrato');
+    expect(guide).toContain('Contratos terminados');
     expect(guide).toContain('Añadir nueva conexión');
     // Cosas que ya no son verdad y no deben volver a enseñarse.
     expect(guide).not.toContain('todavía no existe');
     expect(guide).not.toContain('un solo correo y teléfono');
     expect(guide).not.toContain('botón "Motivos de cierre"');
-    // Nombres de pantalla de 2026-10-18: «Hoy» → «Para hoy», «Conexiones» → «Cómo llegan los posibles clientes».
+    // Nombres de pantalla: «Hoy» → «Para hoy» (2026-10-18) y Configuración con cuatro pestañas (2026-10-20):
+    // Conexiones, Fuentes, Servicios y Motivos de cierre. El servicio sale SOLO del catálogo de Configuración.
     expect(guide).toContain('pestaña "Para hoy"');
-    expect(guide).toContain('Cómo llegan los posibles clientes');
+    expect(guide).toContain('cuatro pestañas arriba');
+    expect(guide).toContain('pestaña "Motivos de cierre"');
     expect(guide).not.toContain('pestaña "Hoy"');
-    expect(guide).toContain('antes se llamaba "Conexiones"');
+    expect(guide).not.toContain('antes se llamaba "Conexiones"');
+    expect(guide).not.toContain('Por qué terminó un contrato');
+    expect(guide).toContain('un servicio desactivado no se puede asociar a nada nuevo');
     expect(guide).not.toContain('Planificación y Campo');
     // Fase 4: las renovaciones se gestionan como oportunidad.
     expect(guide).toContain('Renovación – nombre del contrato');

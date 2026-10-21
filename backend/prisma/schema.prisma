@@ -1492,7 +1492,13 @@ model ClientVisit {
   checkInTime     DateTime?
   checkInLat      Float?
   checkInLng      Float?
+  // `isVerified` es true SOLO si el check-in quedó a menos de 500 m del lugar de la visita (ver
+  // checkin.util.ts). `checkInResult`: EN_SITIO, FUERA_DEL_SITIO, SIN_GPS o SIN_UBICACION; nulo en
+  // los check-in de antes de 2026-10-20, cuando no se comprobaba el lugar. `checkInDistanceM`: metros
+  // al lugar (nulo si no se pudo medir). Columnas nulas creadas al arrancar (sales-visit.schema.ts).
   isVerified      Boolean       @default(false)
+  checkInResult   String?
+  checkInDistanceM Int?
   commercialOffer String?
   quotedAmount    Float?        @default(0)
   outcome         VisitOutcome?

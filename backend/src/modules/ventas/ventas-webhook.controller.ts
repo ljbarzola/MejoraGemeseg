@@ -13,6 +13,7 @@ import { VentasConfigService } from './ventas-config.service';
 import { atribuirCanal, extraerAtribucion } from './lead-atribucion.util';
 import { combinarDireccion } from './lead-datos.util';
 import { datosDeLanding } from './lead-landing.util';
+import { fechaDeRecepcion } from './lead-recepcion.util';
 
 @Controller('ventas/webhook')
 export class VentasWebhookController {
@@ -99,6 +100,8 @@ export class VentasWebhookController {
       channel: atribuirCanal(atribucion),
       campaign: body?.campaign ?? atribucion['utm_campaign'],
       externalId: body?.externalId,
+      // Si la web mandó el lead con retraso (cola de WordPress detenida), conserva la fecha en que llegó de verdad.
+      recibidoEn: fechaDeRecepcion(body?.recibidoEn),
       extra: { ...atribucion, ...landing.extra },
     });
     return { success: true, leadId: r.lead.id, duplicado: !r.nuevo };

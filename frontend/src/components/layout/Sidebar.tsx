@@ -1,9 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getUser, removeToken } from '../../services/auth.service';
 import { useCompany } from '../../contexts/ThemeContext';
 import { usePerm } from '../../contexts/PermissionsContext';
 import { useSidebar } from '../../contexts/SidebarContext';
+
+interface SubItem {
+  label: string;
+  path: string;
+  icon: string;
+  disabled?: boolean;
+  /** Título (no clicable) que se pinta justo antes de este ítem y abre un grupo. */
+  grupo?: string;
+  /** Línea que separa este ítem de los anteriores. */
+  separadorAntes?: boolean;
+}
+
+// «Planificación y Campo»: en producción sigue en gris («Próximamente») hasta que la usuaria decida
+// encenderla (ver App.tsx, ruta /ventas/visitas). Prendida SOLO en su copia local desde 2026-10-20:
+// al hacer commit, esta constante debe quedar en false.
+const PLANIFICACION_Y_CAMPO_ACTIVA = false;
 
 // Mismo corte que el @media (max-width: 768px) de styles.css.
 const MOBILE_QUERY = '(max-width: 768px)';
@@ -109,17 +125,19 @@ export default function Sidebar() {
   // «Resultados» de VisitasPage y el embudo de marketing, en el Dashboard. Tampoco las conoce el
   // asistente de IA (system-guide.util.ts / ai.processor.ts). Al reactivar uno, hay que
   // devolverle la ruta en App.tsx, quitar `disabled` aquí y explicarlo en la guía del asistente.
-  const ventasItems = [
+  // Agrupado «por etapa de la venta» (2026-10-20, opción A elegida por la usuaria): Captar ->
+  // Negociar -> Cerrar. Directorio y Configuración no son una etapa: van al final, bajo una línea.
+  // `grupo` pinta un título (no clicable) antes del ítem; `separadorAntes` una línea.
+  const ventasItems: SubItem[] = [
     { label: 'Dashboard', path: '/ventas', icon: '📊' },
-    // El orden sigue el recorrido de una persona: posible cliente -> oportunidad -> directorio (2026-10-15).
-    { label: 'Posibles clientes', path: '/ventas/leads', icon: '📥' },
-    { label: 'Oportunidades', path: '/ventas/oportunidades', icon: '🎯' },
+    { label: 'Posibles clientes', path: '/ventas/leads', icon: '📥', grupo: 'Captar' },
+    { label: 'Oportunidades', path: '/ventas/oportunidades', icon: '🎯', grupo: 'Negociar' },
+    { label: 'Planificación y Campo', path: '/ventas/visitas', icon: '📍', disabled: !PLANIFICACION_Y_CAMPO_ACTIVA },
     { label: 'Cotizador', path: '/ventas/cotizador', icon: '🧾' },
-    { label: 'Directorio', path: '/ventas/clientes', icon: '👤' },
-    { label: 'Contratos', path: '/ventas/contratos', icon: '📑' },
+    { label: 'Contratos', path: '/ventas/contratos', icon: '📑', grupo: 'Cerrar' },
     { label: 'Documentación', path: '/ventas/documentacion', icon: '📄' },
+    { label: 'Directorio', path: '/ventas/clientes', icon: '👤', separadorAntes: true },
     { label: 'Configuración', path: '/ventas/configuracion', icon: '⚙️' },
-    { label: 'Planificación y Campo', path: '/ventas/visitas', icon: '📍', disabled: true },
   ];
 
   const custodiasSubItems = [
@@ -157,26 +175,35 @@ export default function Sidebar() {
     { label: 'Novedades', path: '/sistemas/novedades', icon: '📣' },
   ];
 
-  const renderSubItems = (items: { label: string; path: string; icon: string; disabled?: boolean }[], depth: number = 0) => (
-    items.map((child) => (
+  // Dentro de un submenú se marca UN solo ítem: el de la ruta más específica. Sin esto,
+  // «Dashboard» (/ventas) quedaba marcado también en /ventas/leads, porque es prefijo de ella;
+  // lo mismo pasaba con «Lista de Operaciones» (/custodias) y sus hermanas.
+  const renderSubItems = (items: SubItem[], depth: number = 0) => {
+    const activePath = items
+      .filter((i) => isActive(i.path))
+      .reduce<string | null>((best, i) => (best === null || i.path.length > best.length ? i.path : best), null);
+    return items.map((child) => (
+      <Fragment key={child.path}>
+      {child.separadorAntes && <div className="sidebar-sub-separador" role="separator" />}
+      {child.grupo && <div className="sidebar-sub-grupo" role="presentation">{child.grupo}</div>}
       <button
-        key={child.path}
-        className={`sidebar-link sidebar-link-sub ${isActive(child.path) ? 'sidebar-link-active' : ''}`}
+        className={`sidebar-link sidebar-link-sub ${child.path === activePath ? 'sidebar-link-active' : ''}`}
         onClick={child.disabled ? undefined : () => navigate(child.path)}
         disabled={child.disabled}
         aria-disabled={child.disabled}
         title={child.disabled ? 'Próximamente' : undefined}
         style={{
           fontSize: '0.82rem',
-          padding: `7px 12px 7px ${16 + depth * 16}px`,
+          padding: `7px 6px 7px ${16 + depth * 16}px`,
           ...(child.disabled ? { opacity: 0.45, cursor: 'not-allowed' } : {}),
         }}
       >
         <span className="sidebar-icon" style={{ fontSize: '0.85rem' }}>{child.icon}</span>
         <span className="sidebar-label">{child.label}</span>
       </button>
-    ))
-  );
+      </Fragment>
+    ));
+  };
 
   return (
     <>

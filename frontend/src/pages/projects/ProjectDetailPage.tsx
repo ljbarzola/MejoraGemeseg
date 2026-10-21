@@ -91,7 +91,7 @@ export default function ProjectDetailPage() {
   // Van aquí arriba porque los hooks no pueden quedar detrás de los `return`
   // tempranos de más abajo.
   const { showToast } = useToast();
-  const columnPrefs = useColumnPreferences('proyecto-tareas', COLUMNAS_TAREAS_POR_DEFECTO);
+  const columnPrefs = useColumnPreferences('proyecto-tareas', COLUMNAS_TAREAS_POR_DEFECTO, { columnasBase: 2 });
   const columnasVisibles = columnPrefs.visible.filter((k) => COLUMNAS_TAREAS.some((c) => c.key === k));
   const tablaRef = useResizableColumns('proyecto-tareas', ['id', 'title', ...columnasVisibles]);
   const { filas: tareasOrdenadas, thProps, SortIcon } = useSortableTable(
@@ -448,9 +448,11 @@ export default function ProjectDetailPage() {
               <ColumnPickerMenu
                 columns={COLUMNAS_TAREAS}
                 visible={columnPrefs.visible}
+                pinned={columnPrefs.pinned}
+                maxPinned={columnPrefs.maxPinned}
                 fixedLabel="Título"
-                onApply={async (keys) => {
-                  const guardado = await columnPrefs.set(keys);
+                onApply={async (keys, fijas) => {
+                  const guardado = await columnPrefs.set(keys, fijas);
                   if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
                 }}
               />
@@ -479,7 +481,7 @@ export default function ProjectDetailPage() {
             </div>
           ) : (
             <div className="tasks-table-wrapper">
-              <table className="tasks-table resizable-table" ref={tablaRef}>
+              <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
                 <thead>
                   <tr>
                     <th {...thProps('id')} className="sortable-th tasks-table-id">

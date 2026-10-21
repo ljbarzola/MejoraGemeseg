@@ -116,7 +116,7 @@ export class VentasController {
   checkInVisit(
     @Param('id') id: string,
     @Req() req: any,
-    @Body() body: { lat?: number; lng?: number },
+    @Body() body: { lat?: number; lng?: number; confirmado?: boolean },
   ) {
     return this.ventasService.checkInVisit(
       +id,
@@ -124,6 +124,7 @@ export class VentasController {
       req.user.userId,
       body.lat,
       body.lng,
+      body.confirmado === true,
     );
   }
 

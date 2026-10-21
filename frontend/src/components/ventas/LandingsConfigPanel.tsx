@@ -95,8 +95,9 @@ export default function LandingsConfigPanel({ inicial, servicios, puedeEditar, o
                         onChange={(e) => cambiar(i, 'servicio', e.target.value)}
                         style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}>
                         <option value="">Elige un servicio…</option>
-                        {/* Si el servicio ya no está en el catálogo se conserva, para no perderlo sin querer. */}
-                        {l.servicio && !nombresServicio.includes(l.servicio) && <option value={l.servicio}>{l.servicio}</option>}
+                        {/* Si el servicio se desactivó o se borró del catálogo, se conserva a la vista (para no perderlo
+                            sin querer) pero avisando que ya no está disponible: hay que elegir otro. */}
+                        {l.servicio && !nombresServicio.includes(l.servicio) && <option value={l.servicio}>{l.servicio} (ya no está disponible)</option>}
                         {servicios.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
                       </select>
                     </td>

@@ -158,7 +158,7 @@ export default function IncidentesContrato({ contrato, onCambio }: Props) {
                   </div>
                   <div style={{ whiteSpace: 'pre-wrap', fontSize: 13.5, marginTop: 2 }}>{i.text}</div>
                 </div>
-                <button type="button" className="icon-btn" title="Borrar este registro" aria-label="Borrar este registro" onClick={() => setABorrar(i)}>
+                <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Borrar este registro" aria-label="Borrar este registro" onClick={() => setABorrar(i)}>
                   <Trash2 size={14} />
                 </button>
               </li>

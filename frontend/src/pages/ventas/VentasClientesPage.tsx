@@ -10,7 +10,7 @@ import ClienteFichaPanel from '../../components/ventas/ClienteFichaPanel';
 import CicloVidaBadge from '../../components/ventas/CicloVidaBadge';
 import ClienteFormModal from '../../components/ventas/ClienteFormModal';
 import ClienteFieldsConfigModal from '../../components/ventas/ClienteFieldsConfigModal';
-import VentasComoFunciona from '../../components/ventas/VentasComoFunciona';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import { useToast } from '../../contexts/ToastContext';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
@@ -168,19 +168,16 @@ export default function VentasClientesPage() {
 
   return (
     <div className="page-container">
-      <div className="page-title-row">
-        <div>
-          <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Directorio</h1>
-        </div>
-        <div className="header-actions">
-          <VentasComoFunciona />
+      <VentasPageHeader
+        title="Directorio"
+        description="Empresas y personas con las que trabajas: sus datos y contactos. Si son prospectos, clientes o inactivos se calcula solo."
+        actions={
           <button type="button" className="btn-secondary" onClick={() => setShowFieldsConfig(true)}
             title="Configurar los campos de la ficha" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Settings2 size={15} /> Campos
           </button>
-        </div>
-      </div>
+        }
+      />
 
       <div className="filter-bar">
         <div className="filter-bar-fields filter-bar-fields--etiquetas">
@@ -203,8 +200,10 @@ export default function VentasClientesPage() {
           <ColumnPickerMenu
             columns={pickableColumns}
             visible={columnPrefs.visible}
-            onApply={async (keys) => {
-              const guardado = await columnPrefs.set(keys);
+            pinned={columnPrefs.pinned}
+            maxPinned={columnPrefs.maxPinned}
+            onApply={async (keys, fijas) => {
+              const guardado = await columnPrefs.set(keys, fijas);
               if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
             }}
           />
@@ -235,7 +234,7 @@ export default function VentasClientesPage() {
           </p>
         ) : (
           <div className="tasks-table-wrapper">
-            <table className="tasks-table resizable-table" ref={tablaRef}>
+            <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
                   <th {...thProps('name')}>Nombre / Razón social <SortIcon campo="name" /></th>

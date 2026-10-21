@@ -1,12 +1,14 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Plus, FolderOpen, HelpCircle, Link2, Upload } from 'lucide-react';
+import { FileText, Plus, FolderOpen, HelpCircle, Link2, Trash2, Upload } from 'lucide-react';
 import { getContracts, deleteContract, getVentasDriveConfig, vincularDocumentosSinCliente, SalesContract } from '../../services/ventas.service';
 import { buildDriveFolderLink } from '../../utils/driveLink';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
+import RowActionsMenu from '../../components/common/RowActionsMenu';
 import TemplateHelpModal from '../../components/ventas/TemplateHelpModal';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import SubirDocumentoModal from '../../components/ventas/SubirDocumentoModal';
 import DocumentacionProximamente from '../../components/ventas/DocumentacionProximamente';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
@@ -43,6 +45,8 @@ export default function ContratosList() {
   const [filtroTipo, setFiltroTipo] = useState('');
   const [soloSinCliente, setSoloSinCliente] = useState(false);
   const [confirmarVincular, setConfirmarVincular] = useState(false);
+  // Cuántos documentos no tienen cliente. «Vincular clientes» y el filtro «Sin cliente asignado» solo existen si hay alguno.
+  const [sinClienteTotal, setSinClienteTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [driveFolderUrl, setDriveFolderUrl] = useState('');
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
@@ -54,6 +58,9 @@ export default function ContratosList() {
   const tablaRef = useResizableColumns('ventas-contratos', ['contractNumber', ...columnPrefs.visible, 'acciones']);
 
   useEffect(() => { loadContracts(); }, [filter, soloSinCliente]);
+
+  // Si ya no queda ninguno sin cliente, el filtro que los mostraba deja de tener sentido.
+  useEffect(() => { if (sinClienteTotal === 0 && soloSinCliente) setSoloSinCliente(false); }, [sinClienteTotal, soloSinCliente]);
 
   useEffect(() => {
     getVentasDriveConfig()
@@ -71,6 +78,8 @@ export default function ContratosList() {
     try {
       const data = await getContracts({ ...(filter ? { status: filter } : {}), ...(soloSinCliente ? { sinCliente: true } : {}) });
       setContracts(data);
+      // Aparte del filtro actual: ¿queda algún documento sin cliente?
+      getContracts({ sinCliente: true }).then((l: SalesContract[]) => setSinClienteTotal(l.length)).catch(() => {});
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudieron cargar los documentos', 'error');
     } finally {
@@ -182,45 +191,43 @@ export default function ContratosList() {
 
   return (
     <div className="page-container">
-      <div className="page-title-row" style={{ marginBottom: 16 }}>
-        <div>
-          <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Documentación</h1>
-        </div>
-        <div className="header-actions header-actions--ancho-movil">
-          <button
-            type="button"
-            onClick={() => setShowHelp(true)}
-            title="Cómo funciona Documentación"
-            aria-label="Ayuda"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 6, border: 'none', background: 'var(--naranja)', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
-          >
-            <HelpCircle size={18} /> Ayuda
+      <VentasPageHeader
+        title="Documentación"
+        description="Genera documentos desde tus plantillas o sube uno que ya tienes hecho, por ejemplo un contrato firmado en PDF."
+        ayuda={
+          <button type="button" className="btn-secondary" onClick={() => setShowHelp(true)}
+            title="Cómo funciona Documentación" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <HelpCircle size={15} /> Cómo funciona
           </button>
-          {driveFolderUrl && (
-            <a
-              className="btn-secondary"
-              href={driveFolderUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Abrir la carpeta de documentos en Google Drive"
-              aria-label="Ver carpeta en Google Drive"
-              style={{ display: 'inline-flex', alignItems: 'center', padding: '8px 10px', flex: '0 0 auto' }}
-            >
-              <FolderOpen size={16} />
-            </a>
-          )}
-          <button className="btn-secondary" onClick={() => navigate('/ventas/documentacion/plantillas')}>
-            <FileText size={16} /> Plantillas
-          </button>
-          <button className="btn-secondary" onClick={() => setSubiendoDoc(true)} title="Sube un documento que ya tienes hecho, por ejemplo un contrato firmado en PDF">
-            <Upload size={16} /> Subir documento
-          </button>
-          <button className="auth-btn" onClick={() => navigate('/ventas/documentacion/nuevo')}>
-            <Plus size={16} /> Nuevo documento
-          </button>
-        </div>
-      </div>
+        }
+        actions={
+          <>
+            {driveFolderUrl && (
+              <a
+                className="btn-secondary btn-icon-toolbar"
+                href={driveFolderUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Abrir la carpeta de documentos en Google Drive"
+                aria-label="Ver carpeta en Google Drive"
+              >
+                <FolderOpen size={16} />
+              </a>
+            )}
+            <button className="btn-secondary" onClick={() => navigate('/ventas/documentacion/plantillas')}>
+              <FileText size={16} /> Plantillas
+            </button>
+            <RowActionsMenu
+              label="Nuevo documento"
+              boton={{ texto: <><Plus size={16} /> Nuevo documento</>, className: 'auth-btn' }}
+              actions={[
+                { label: 'Generar desde una plantilla', icon: <FileText size={14} />, onClick: () => navigate('/ventas/documentacion/nuevo') },
+                { label: 'Subir uno ya hecho', hint: 'Por ejemplo, un contrato firmado en PDF', icon: <Upload size={14} />, onClick: () => setSubiendoDoc(true) },
+              ]}
+            />
+          </>
+        }
+      />
 
       <DocumentacionProximamente />
 
@@ -245,29 +252,35 @@ export default function ContratosList() {
             ))}
             <option value="SIN_TIPO">Sin tipo</option>
           </select>
-          <select className="filter-select" value={soloSinCliente ? 'sin' : ''} onChange={(e) => setSoloSinCliente(e.target.value === 'sin')}>
-            <option value="">Todos los clientes</option>
-            <option value="sin">Sin cliente asignado</option>
-          </select>
+          {sinClienteTotal > 0 && (
+            <select className="filter-select" value={soloSinCliente ? 'sin' : ''} onChange={(e) => setSoloSinCliente(e.target.value === 'sin')}>
+              <option value="">Todos los clientes</option>
+              <option value="sin">Sin cliente asignado ({sinClienteTotal})</option>
+            </select>
+          )}
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu
             columns={COLUMNAS_DOCS}
             visible={columnPrefs.visible}
+            pinned={columnPrefs.pinned}
+            maxPinned={columnPrefs.maxPinned}
             fixedLabel="Número"
-            onApply={async (keys) => {
-              const guardado = await columnPrefs.set(keys);
+            onApply={async (keys, fijas) => {
+              const guardado = await columnPrefs.set(keys, fijas);
               if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
             }}
           />
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => setConfirmarVincular(true)}
-            title="Enlaza solos los documentos sin cliente cuyo correo o nombre coincide con un cliente"
-          >
-            <Link2 size={16} /> Vincular clientes
-          </button>
+          {sinClienteTotal > 0 && (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setConfirmarVincular(true)}
+              title="Enlaza solos los documentos sin cliente cuyo correo o nombre coincide con un cliente"
+            >
+              <Link2 size={16} /> Vincular clientes ({sinClienteTotal})
+            </button>
+          )}
           <ClearFiltersButton onClear={() => { setSearch(''); setFilter(''); setFiltroTipo(''); setSoloSinCliente(false); }} disabled={!search && !filter && !filtroTipo && !soloSinCliente} />
         </div>
       </div>
@@ -284,7 +297,7 @@ export default function ContratosList() {
           <p style={{ color: '#888', fontSize: 13 }}>No hay documentos que coincidan con los filtros.</p>
         ) : (
           <div className="tasks-table-wrapper">
-            <table className="tasks-table resizable-table" ref={tablaRef}>
+            <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
                   <th {...thProps('contractNumber')}>Número <SortIcon campo="contractNumber" /></th>
@@ -307,8 +320,13 @@ export default function ContratosList() {
                       <td key={k}>{celdaDoc(k, c)}</td>
                     ))}
                     <td className="col-acciones">
-                      <button onClick={e => { e.stopPropagation(); setPendingDeleteId(c.id); }}
-                        style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #e55', background: '#fff', color: '#c33', cursor: 'pointer', fontSize: 11 }}>✕</button>
+                      <div className="acciones-iconos">
+                        <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }}
+                          title="Eliminar el documento" aria-label={`Eliminar el documento ${c.contractNumber || c.id}`}
+                          onClick={e => { e.stopPropagation(); setPendingDeleteId(c.id); }}>
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

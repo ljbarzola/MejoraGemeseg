@@ -7,7 +7,6 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { GmailMailService } from '../mail/gmail-mail.service';
 import { VentasMotivosService } from './ventas-motivos.service';
 import { hoyEcuador, parseDiaContrato } from './agreement-status.util';
 import { resultadoDeEtapa } from './stage-outcome.util';
@@ -138,7 +137,6 @@ export class VentasOportunidadesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
-    private readonly gmailMailService: GmailMailService,
     private readonly motivos: VentasMotivosService,
     private readonly conversiones: VentasConversionesService,
     private readonly acuerdos: VentasAcuerdosService,
@@ -194,8 +192,9 @@ export class VentasOportunidadesService {
       .filter(Boolean);
     if (claves.length === 0) return [];
     await ensureDefaultServices(this.prisma, companyId);
+    // Solo los activos: un servicio desactivado no vuelve a asociarse a nada nuevo.
     const servicios = await this.prisma.salesService.findMany({
-      where: { companyId },
+      where: { companyId, isActive: true },
       select: { id: true, name: true },
     });
     const idPorNombre = new Map(servicios.map((s) => [s.name, s.id]));
@@ -332,14 +331,21 @@ export class VentasOportunidadesService {
     return d;
   }
 
-  private async validarServicios(companyId: number, ids: number[] | undefined) {
+  // Los servicios salen del catálogo de Ventas → Configuración → Servicios, y es la ÚNICA fuente: un servicio
+  // desactivado no se puede asociar a nada nuevo (oportunidad, posible cliente que se convierte, referido,
+  // contrato). Lo que ya lo tenía lo conserva: `yaAsignados` son los que la oportunidad ya traía.
+  async validarServicios(companyId: number, ids: number[] | undefined, yaAsignados: number[] = []) {
     const lista = [...new Set(ids ?? [])];
     if (lista.length === 0) return lista;
-    const encontrados = await this.prisma.salesService.count({
+    const encontrados = await this.prisma.salesService.findMany({
       where: { id: { in: lista }, companyId },
+      select: { id: true, isActive: true },
     });
-    if (encontrados !== lista.length) {
+    if (encontrados.length !== lista.length) {
       throw new BadRequestException('Alguno de los servicios no existe.');
+    }
+    if (encontrados.some((s) => !s.isActive && !yaAsignados.includes(s.id))) {
+      throw new BadRequestException('Alguno de los servicios está desactivado. Actívalo primero o quítalo.');
     }
     return lista;
   }
@@ -537,8 +543,15 @@ export class VentasOportunidadesService {
         columnasDeUbicacion(dto.ubicacion === null ? null : limpiarUbicacion(dto.ubicacion)),
       );
     }
+    // Al editar, los servicios que la oportunidad ya tenía se conservan aunque se hayan desactivado después.
+    const yaAsignados =
+      dto.serviceIds !== undefined
+        ? (await this.prisma.salesOpportunityService.findMany({ where: { opportunityId: id }, select: { serviceId: true } })).map(
+          (r) => r.serviceId,
+        )
+        : [];
     const serviceIds =
-      dto.serviceIds !== undefined ? await this.validarServicios(cid, dto.serviceIds) : null;
+      dto.serviceIds !== undefined ? await this.validarServicios(cid, dto.serviceIds, yaAsignados) : null;
     await this.prisma.$transaction(async (tx) => {
       await tx.salesOpportunity.update({ where: { id }, data });
       if (serviceIds) {
@@ -803,10 +816,10 @@ export class VentasOportunidadesService {
     return this.prisma.salesClient.findUnique({ where: { id: clientId } });
   }
 
-  // Se ejecuta después de confirmado el cambio de etapa. Un fallo acá (correo
-  // caído, config incompleta) nunca debe deshacer ni bloquear el cambio que ya
-  // se guardó — solo se registra en el servidor. Ningún texto menciona dinero,
-  // comisión ni porcentaje.
+  // Se ejecuta después de confirmado el cambio de etapa. Un fallo acá nunca debe
+  // deshacer ni bloquear el cambio que ya se guardó — solo se registra en el
+  // servidor. Ningún texto menciona dinero, comisión ni porcentaje. Avisa solo
+  // dentro de la app (campana), nunca por correo.
   async notificarReferidor(
     clientId: number,
     clientNombre: string,
@@ -830,28 +843,7 @@ export class VentasOportunidadesService {
         err.stack,
       );
     }
-
-    try {
-      const referrer = await this.prisma.user.findUnique({
-        where: { id: referredByUserId },
-        select: { email: true },
-      });
-      if (!referrer?.email) return;
-
-      // Este aviso lo manda Sistemas, no el remitente que RRHH configuró para
-      // sus propios recordatorios — mismo remitente fijo que la recuperación de
-      // contraseña (ver AuthService.REMITENTE_CONTRASENA).
-      await this.gmailMailService.sendMail({
-        to: referrer.email,
-        subject: 'Actualización de tu referido',
-        bodyText: `${mensaje}\n\nPuedes ver el estado de tus referidos ingresando a la app, en "Mis Referidos".`,
-        from: 'sistemas@gemeseg.com',
-        fromName: 'Sistemas',
-      });
-    } catch (err: any) {
-      this.logger.error(
-        `No se pudo enviar el correo de notificación del cliente #${clientId}: ${err.message}`,
-      );
-    }
+    // Solo notificación dentro de la app: a quien refiere NO se le manda correo (decisión de la
+    // usuaria, 2026-10-20; antes salía también un correo desde sistemas@gemeseg.com).
   }
 }

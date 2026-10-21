@@ -88,8 +88,10 @@ export function useResizableColumns(storageKey: string, columnKeys?: string[]) {
     headers.forEach((th, index) => {
       if (index === headers.length - 1) return; // la última no se arrastra
 
+      // El <th> ya es `position: relative` por CSS (`.resizable-table th`) o `sticky`
+      // en las tablas vivas (utils/tablasVivas.ts): no se fuerza aquí, un estilo en
+      // línea anularía el encabezado fijo.
       const el = th as HTMLElement;
-      if (!el.style.position) el.style.position = 'relative';
 
       const tirador = document.createElement('span');
       tirador.className = 'col-resizer';

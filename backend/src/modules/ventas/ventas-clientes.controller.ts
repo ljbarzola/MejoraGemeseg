@@ -57,6 +57,13 @@ export class VentasClientesController {
     );
   }
 
+  // Tampoco lleva @Section: el formulario abierto de «Referir un cliente» lee los servicios activos del
+  // catálogo de Configuración → Servicios (igual que Nueva oportunidad).
+  @Get('servicios-referir')
+  serviciosParaReferir(@Req() req: any) {
+    return this.clientesService.serviciosParaReferir(req.user.companyId);
+  }
+
   // El GET no lleva @Section: el formulario abierto de "Referir un cliente"
   // necesita poder leer las opciones de "Servicio requerido" sin tener
   // acceso a Ventas (mismo patrón que complaint-fields).
