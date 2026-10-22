@@ -1150,14 +1150,15 @@ a.enlace-tabla:hover {
 
 .project-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
 }
 
 .project-card {
   background: white;
-  border-radius: 16px;
-  padding: 24px;
+  border-radius: 14px;
+  /* Ficha baja (2026-10-21): antes 24px de relleno y 12-16px entre bloques la dejaban de ~220px. */
+  padding: 14px 18px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
@@ -1175,19 +1176,21 @@ a.enlace-tabla:hover {
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 
 .project-card-header h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.02rem;
+  line-height: 1.3;
   color: var(--azul-oscuro);
 }
 
 .project-card-desc {
   color: #666;
-  font-size: 0.9rem;
-  margin: 0 0 16px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  margin: 0 0 8px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1196,15 +1199,17 @@ a.enlace-tabla:hover {
 
 .project-card-meta {
   display: flex;
-  gap: 16px;
-  font-size: 0.8rem;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 0.78rem;
   color: #888;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .project-card-footer {
   border-top: 1px solid var(--gris-claro);
-  padding-top: 12px;
+  padding-top: 8px;
+  min-width: 0;
 }
 
 .project-card-owner {
@@ -1260,18 +1265,21 @@ a.enlace-tabla:hover {
   color: #666;
 }
 
+/* Detalle del proyecto compacto (2026-10-21): relleno y separaciones a la mitad para que la
+   descripción, los datos y los miembros no se coman la pantalla antes de llegar a las tareas. */
 .project-detail {
   background: white;
-  border-radius: 24px;
-  padding: 40px;
+  border-radius: 20px;
+  padding: 24px 28px;
   box-shadow: 0 16px 40px rgba(16, 15, 49, 0.12);
 }
 
 .project-detail-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 20px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
 .project-detail-header-actions {
@@ -1288,29 +1296,29 @@ a.enlace-tabla:hover {
 
 .project-detail-desc {
   color: #666;
-  font-size: 1rem;
-  margin-bottom: 32px;
-  line-height: 1.6;
+  font-size: 0.95rem;
+  margin: 0 0 14px;
+  line-height: 1.5;
 }
 
 .project-detail-meta {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 20px;
-  padding: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px 24px;
+  padding: 12px 18px;
   background: var(--gris-claro);
-  border-radius: 16px;
-  margin-bottom: 32px;
+  border-radius: 12px;
+  margin-bottom: 16px;
 }
 
 .meta-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .meta-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -1318,35 +1326,35 @@ a.enlace-tabla:hover {
 }
 
 .meta-value {
-  font-size: 1rem;
+  font-size: 0.92rem;
   font-weight: 600;
   color: var(--azul-oscuro);
 }
 
 .project-members h2 {
-  margin: 0 0 16px;
+  margin: 0 0 10px;
   color: var(--azul-claro);
   font-size: 1.1rem;
 }
 
 .members-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
 }
 
 .member-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 10px;
+  padding: 8px 12px;
   background: var(--gris-claro);
-  border-radius: 12px;
+  border-radius: 10px;
 }
 
 .member-avatar {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--azul-oscuro), var(--azul-claro));
   color: white;
@@ -1483,14 +1491,14 @@ a.enlace-tabla:hover {
 }
 
 .tasks-section {
-  margin-top: 32px;
+  margin-top: 20px;
 }
 
 .tasks-section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .tasks-section-header h2 {
@@ -2927,10 +2935,11 @@ textarea.chat-input {
   margin-top: 8px;
 }
 
+/* Mismo título que las tarjetas del dashboard (Sistemas, 2026-10-22): antes era azul claro y más grande. */
 .tools-section-title {
-  margin: 0 0 16px;
-  color: var(--azul-claro);
-  font-size: 1.1rem;
+  margin: 0 0 12px;
+  color: var(--azul-oscuro);
+  font-size: 1rem;
   font-weight: 700;
 }
 
@@ -3030,16 +3039,17 @@ textarea.chat-input {
 
 .tools-catalog-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  /* 300px: con los botones de acción en la cabecera, 240px dejaba el nombre en «Agente G…». */
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 12px;
 }
 
 .tools-catalog-card {
-  background: var(--gris-claro);
-  border-radius: 12px;
-  padding: 16px;
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 14px 16px;
   transition: border-color 0.2s, box-shadow 0.2s;
-  border: 2px solid transparent;
+  border: 1px solid #e2e8f0;
 }
 
 .tools-catalog-card:hover {
@@ -5270,3 +5280,321 @@ textarea.chat-input {
   flex: 0 0 auto;
   padding: 11px 20px;
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   MARCO DE PANTALLA (2026-10-21)
+   Todas las pantallas llevan un borde claro y fino alrededor del panel de contenido (el que ya tenía
+   Inicio). Es pequeño a propósito para no gastar ancho, y es también el sitio donde viven los tres
+   botones flotantes (campana, reportar problema, agente): ya no tapan una fila de tabla entera.
+   Solo en escritorio; en móvil el contenido ocupa todo el ancho como antes.
+   ══════════════════════════════════════════════════════════════════ */
+:root {
+  --marco: 12px;
+}
+
+@media (min-width: 769px) {
+  .main-content {
+    padding: var(--marco);
+    background: #f8f9fb;
+  }
+
+  .page-container {
+    min-height: calc(100vh - 2 * var(--marco));
+    border-radius: 18px;
+    padding: 20px 18px;
+  }
+
+  /* Inicio (2026-10-22): mismo marco fino que el resto, pero el panel gris es el propio .app-shell y
+     el «Bienvenido» es lo que llama la atención. Un solo panel: el .page-container de dentro queda
+     transparente para que no haya un segundo gris con esquinas distintas a las del encabezado. */
+  .app-shell {
+    min-height: calc(100vh - 2 * var(--marco));
+    padding: 20px 18px 64px;
+    border-radius: 18px;
+  }
+
+  .app-shell > .hero {
+    padding: 34px 40px;
+    border-radius: 18px;
+    margin-bottom: 18px;
+  }
+
+  .app-shell > .page-container {
+    min-height: 0;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    background: none;
+    border-radius: 0;
+  }
+
+  /* Botones flotantes más chicos y pegados a su esquina, dentro del marco. */
+  .chat-fab {
+    bottom: 12px;
+    right: 12px;
+    width: 52px;
+    height: 52px;
+  }
+
+  .report-problem-fab {
+    bottom: 14px;
+    right: 72px;
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* Con los botones de la esquina más cerca del borde, el último renglón de una pantalla larga no debe
+   quedar debajo de ellos. */
+@media (min-width: 769px) {
+  .page-container {
+    padding-bottom: 64px;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TAREAS: estado desde la lista y tarea como ventana (2026-10-21)
+   ══════════════════════════════════════════════════════════════════ */
+.task-status-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  /* Un poco menos de relleno que la insignia sola: con la flecha, «EN PROGRESO» se salía de su celda. */
+  padding: 4px 8px 4px 10px;
+  letter-spacing: 0.03em;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition: filter 0.15s, box-shadow 0.15s;
+}
+.task-status-btn:hover:not(:disabled) {
+  filter: brightness(0.94);
+  box-shadow: 0 0 0 2px rgba(18, 55, 95, 0.15);
+}
+.task-status-btn:disabled {
+  cursor: default;
+}
+
+.task-status-menu {
+  position: fixed;
+  z-index: 1200;
+  min-width: 176px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+}
+.task-status-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #2d3748;
+  text-align: left;
+  cursor: pointer;
+}
+.task-status-option:hover {
+  background: #f1f5f9;
+}
+
+/* La ventana de tarea: cabecera y botones fijos, solo el formulario se desplaza. */
+.modal.modal-tarea {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-width: 660px;
+}
+.modal-tarea .modal-header,
+.modal-tarea .modal-actions {
+  flex: 0 0 auto;
+}
+.modal-tarea .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Filtros en una sola línea (2026-10-21)
+   Con etiqueta encima, cada select se encogía solo hasta su texto más largo y el último («Origen») saltaba
+   a la línea de abajo. Aquí los filtros comparten el ancho: se achican parejo (con «…») y todos caben
+   en una línea; el buscador se lleva lo que sobra. Solo escritorio; en móvil vuelven a envolver.
+   ══════════════════════════════════════════════════════════════════ */
+@media (min-width: 901px) {
+  .filter-bar-fields--una-linea.filter-bar-fields--etiquetas {
+    flex-wrap: nowrap;
+  }
+  .filter-bar-fields--una-linea .filter-field {
+    flex: 0 1 150px;
+    min-width: 92px;
+  }
+  .filter-bar-fields--una-linea .filter-field .filter-select {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+  .filter-bar-fields--una-linea > input {
+    flex: 1 1 200px;
+    min-width: 130px;
+    max-width: 380px;
+  }
+}
+.filter-bar-fields--una-linea > input {
+  flex: 1 1 200px;
+  min-width: 160px;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Buzón de quejas y Encuestas (2026-10-21): ya no son una tarjeta angosta perdida a la izquierda.
+   ══════════════════════════════════════════════════════════════════ */
+.buzon-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(250px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .buzon-layout { grid-template-columns: 1fr; }
+}
+.buzon-title {
+  margin: 0 0 14px;
+  color: var(--azul-oscuro);
+  font-size: 1.05rem;
+}
+.buzon-ok {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f0fff4;
+  border: 1px solid #9ae6b4;
+  color: #276749;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+}
+.buzon-campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px 16px;
+}
+.buzon-anonimo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  color: #4a5568;
+  transition: border-color 0.15s, background 0.15s;
+}
+.buzon-anonimo:hover { border-color: #cbd5e0; }
+.buzon-anonimo--on {
+  border-color: var(--azul-claro);
+  background: #f1f6fb;
+  color: var(--azul-claro);
+}
+.buzon-anonimo input { width: 18px; height: 18px; flex: none; }
+.buzon-anonimo span { display: flex; flex-direction: column; gap: 1px; }
+.buzon-anonimo strong { font-size: 0.9rem; color: var(--azul-oscuro); }
+.buzon-anonimo small { font-size: 0.78rem; color: #718096; }
+
+.buzon-info { background: #fff; }
+.buzon-info-intro {
+  margin: 0 0 14px;
+  font-size: 0.85rem;
+  color: #718096;
+}
+.buzon-pasos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.buzon-pasos li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #f4f6f9;
+  border-radius: 10px;
+}
+.buzon-pasos strong { font-size: 0.9rem; color: var(--azul-oscuro); }
+.buzon-paso-icono {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--azul-oscuro), var(--azul-claro));
+  color: #fff;
+}
+
+.encuestas-contador {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: #718096;
+}
+.encuestas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 14px;
+}
+@media (max-width: 480px) {
+  .encuestas-grid { grid-template-columns: 1fr; }
+}
+.encuesta-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+.encuesta-card-icono {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 12px;
+  background: #e8f0fa;
+  color: var(--azul-claro);
+}
+.encuesta-card-texto { flex: 1; min-width: 0; }
+.encuesta-card-titulo { font-weight: 700; color: var(--azul-oscuro); }
+.encuesta-card-desc {
+  margin-top: 2px;
+  font-size: 0.8rem;
+  color: #718096;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.encuestas-vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 48px 20px;
+  text-align: center;
+  color: #718096;
+}
+.encuestas-vacio svg { color: var(--azul-claro); margin-bottom: 4px; }
+.encuestas-vacio strong { color: var(--azul-oscuro); font-size: 1.05rem; }

@@ -14,6 +14,7 @@ export async function createProject(data: {
 export async function getProjects(params?: {
   status?: string;
   page?: number;
+  pageSize?: number;
 }): Promise<PaginatedProjects> {
   const res = await api.get('/projects', { params });
   return res.data;

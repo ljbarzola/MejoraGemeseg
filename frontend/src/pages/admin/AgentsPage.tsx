@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Activity, BookOpen, Trash2, Pencil } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
 import {
   getAgentCatalog,
   getAgentAssignments,
@@ -188,27 +189,30 @@ export default function AgentsPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div>
-          <p className="page-eyebrow">GEMESEG</p>
-          <h1>Agentes de IA</h1>
-        </div>
-        <div className="tools-actions">
-          <button className="auth-btn" onClick={() => { setFormError(''); setShowAssignModal(true); setAssigningAgent(null); setAssignForm({ selectedUsers: [] }); }}>
-            + Asignar agente
-          </button>
-          <button className="btn-secondary" onClick={openCreateModal}>
-            + Nuevo agente
-          </button>
+      <PageHeader
+        eyebrow="Sistemas"
+        title="Agentes de IA"
+        description="Qué agentes hay, a quién está asignado cada uno y qué han hecho los que trabajan solos."
+        actions={
+          <>
+            <button className="btn-secondary" onClick={openCreateModal}>
+              + Nuevo agente
+            </button>
+            <button className="auth-btn" onClick={() => { setFormError(''); setShowAssignModal(true); setAssigningAgent(null); setAssignForm({ selectedUsers: [] }); }}>
+              + Asignar agente
+            </button>
+          </>
+        }
+      />
+
+      <div className="filter-bar">
+        <div className="filter-bar-fields">
+          <input type="text" placeholder="Buscar por agente..." value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className="admin-search" />
+          <input type="text" placeholder="Buscar por usuario..." value={userFilter} onChange={(e) => setUserFilter(e.target.value)} className="admin-search" />
         </div>
       </div>
 
       <div className="admin-section">
-        <div className="admin-toolbar">
-          <input type="text" placeholder="Buscar por agente..." value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className="admin-search" />
-          <input type="text" placeholder="Buscar por usuario..." value={userFilter} onChange={(e) => setUserFilter(e.target.value)} className="admin-search" />
-        </div>
-
         {loading ? (
           <div className="loading-state">Cargando agentes...</div>
         ) : (
