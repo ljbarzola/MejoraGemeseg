@@ -12,6 +12,7 @@ import {
 } from '../../services/tool.service';
 import type { Tool, UserWithTools, ToolAssignment, ToolAuditLog } from '../../types/tool';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import PageHeader from '../../components/common/PageHeader';
 import { Trash2, Pencil, ClipboardList } from 'lucide-react';
 
 export default function ToolsPage() {
@@ -175,23 +176,24 @@ export default function ToolsPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div>
-          <p className="page-eyebrow">GEMESEG</p>
-          <h1>Herramientas</h1>
-        </div>
-        <div className="tools-actions">
-          <button className="auth-btn" onClick={() => { setFormError(''); setAssignForm({ toolId: '', selectedUsers: [], version: '', licenseKey: '' }); setShowAssignModal(true); }}>
-            + Asignar herramienta
-          </button>
-          <button className="btn-secondary" onClick={() => { setFormError(''); setShowToolModal(true); }}>
-            + Nueva herramienta
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Sistemas"
+        title="Herramientas"
+        description="El catálogo de herramientas y a qué persona está asignada cada una, con su versión y licencia."
+        actions={
+          <>
+            <button className="btn-secondary" onClick={() => { setFormError(''); setShowToolModal(true); }}>
+              + Nueva herramienta
+            </button>
+            <button className="auth-btn" onClick={() => { setFormError(''); setAssignForm({ toolId: '', selectedUsers: [], version: '', licenseKey: '' }); setShowAssignModal(true); }}>
+              + Asignar herramienta
+            </button>
+          </>
+        }
+      />
 
-      <div className="admin-section">
-        <div className="admin-toolbar">
+      <div className="filter-bar">
+        <div className="filter-bar-fields">
           <input
             type="text"
             placeholder="Buscar por nombre de usuario..."
@@ -207,7 +209,9 @@ export default function ToolsPage() {
             className="admin-search"
           />
         </div>
+      </div>
 
+      <div className="admin-section">
         {loading ? (
           <div className="loading-state">Cargando herramientas...</div>
         ) : (

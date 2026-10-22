@@ -298,9 +298,20 @@ Agregado el 2026-10-14 tras un caso real: «Mis tareas» de Inicio recordaba el 
 - El valor «sin filtro» debe poder recordarse. `valor || 'por defecto'` pierde la cadena vacía y devuelve la elección al filtro por defecto en cada recarga; usar `?? 'por defecto'`.
 - Una barra de filtros hecha con campos (búsqueda, selectores) lleva `ClearFiltersButton` (la escoba), que limpia **también** lo guardado. Excepción: «Mis tareas» de Inicio no la lleva (decisión del usuario, 2026-10-14): sus filtros son botones y un selector siempre visibles, y con la validación de arriba ya no quedan filtros invisibles; la escoba solo desordenaba la barra.
 
+## 24. Marco de Pantalla, Estado desde la Lista y Tarea como Ventana
+
+Agregado el 2026-10-22 (ver también `CLAUDE.md`, «Frontend layout rules»):
+
+- **Marco común:** en escritorio todas las pantallas llevan un borde claro de 12px alrededor del panel gris. Es el sitio de los botones flotantes: más chicos y pegados a su esquina, dentro del marco. En móvil no cambia nada.
+- **Un solo panel gris.** Si una pantalla tiene un bloque destacado arriba (el «Bienvenido» de Inicio), va **dentro** del panel, con el mismo radio de esquina; nunca un segundo panel gris debajo con esquinas distintas.
+- **Mover algo entre estados no debe obligar a abrirlo, editar, guardar y salir.** El estado de una fila es un botón que abre un menú y guarda al instante (se pinta ya y, si falla, vuelve atrás y avisa).
+- **Detalle de un registro = ventana encima de la lista**, no una página nueva: así no se pierden filtros ni posición. Cerrar con cambios sin guardar pregunta antes.
+- **Filtros en una línea:** cuando los filtros caben, se achican parejo (con «…») en vez de que el último baje de línea; el buscador se lleva lo que sobra.
+
 ---
 
 ## Versión
+- v2.1 - Octubre 2026 (marco de pantalla, estado desde la lista, tarea como ventana)
 - v1.9 - Octubre 2026 (todo cierre se explica con `MotivoCierreModal`)
 - v2.0 - Octubre 2026 (filtros que se recuerdan: validarlos contra las opciones; escoba en barras de campos, no en Inicio)
 - v1.8 - Octubre 2026 (pantallas en solo lectura por rol: botón visible + aviso de «solo administradores»)

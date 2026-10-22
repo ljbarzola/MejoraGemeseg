@@ -34,7 +34,9 @@ export default function ProjectsListPage() {
     try {
       const page = parseInt(searchParams.get('page') || '1');
       const status = searchParams.get('status') || undefined;
-      const res = await getProjects({ status, page });
+      // 12 por página: llena 3 o 4 columnas en filas completas (con 10 quedaba una fila coja y
+      // una segunda página casi vacía).
+      const res = await getProjects({ status, page, pageSize: 12 });
       setProjects(res.data);
       setPagination(res.pagination);
     } catch {
@@ -135,12 +137,12 @@ export default function ProjectsListPage() {
                   <span>{project._count.members} miembros</span>
                   {project.endDate && (
                     <span>
-                      Vence: {new Date(project.endDate).toLocaleDateString('es-EC')}
+                      Vence {new Date(project.endDate).toLocaleDateString('es-EC')}
                     </span>
                   )}
                 </div>
                 <div className="project-card-footer">
-                  <span className="project-card-owner">
+                  <span className="project-card-owner truncate" title={`Creado por ${project.createdBy.fullName}`}>
                     Creado por {project.createdBy.fullName}
                   </span>
                 </div>

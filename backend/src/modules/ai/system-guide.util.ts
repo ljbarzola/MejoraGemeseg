@@ -90,20 +90,21 @@ En este orden:
 - "Tareas (N)": tabla con #, Título, Estado, Prioridad, Asignado, Fecha inicio y Fecha fin. Botones "Columnas" (elige qué columnas ver), "Ver tablero Kanban" y "+ Nueva tarea". Un clic en el encabezado de una columna ordena la tabla (la flechita ⇅ indica que se puede; otro clic invierte el orden) y arrastrando el borde entre dos encabezados se cambia el ancho.
 
 ### Crear una tarea
-- Desde "Inicio" ("+ Nueva tarea") o desde el proyecto ("+ Nueva tarea").
+- Desde "Inicio" ("+ Nueva tarea"), desde el proyecto ("+ Nueva tarea") o desde su tablero Kanban. Se abre como una ventana encima de la pantalla.
 - Campos: "Proyecto *", "Título *", Descripción, Prioridad (Baja, Media, Alta, Urgente), Horas estimadas, Fecha inicio, Fecha fin, "Asignar a" (se pueden elegir varios miembros del proyecto) y Estado inicial → "Crear tarea".
 - Solo se puede asignar a personas que sean miembros del proyecto: si no aparece alguien, primero hay que agregarlo en "Miembros".
 
 ### Estados de una tarea y cómo moverla
 - Por hacer → En progreso → En revisión → Completado.
 - En el tablero Kanban ("Ver tablero Kanban") hay 4 columnas; el botón ▶ de cada tarjeta la pasa a la columna siguiente (no se arrastra).
-- O abriendo la tarea: en "Tarea #N" se editan todos los campos, incluido el Estado (4 botones) → "Guardar y volver". "Eliminar tarea" la borra. Si sales con cambios sin guardar, el sistema pregunta si guardar o descartar.
+- Sin abrir la tarea: en las listas (Inicio y la tabla "Tareas (N)" del proyecto) el Estado es un botón; haces clic, eliges el nuevo estado (Por hacer, En progreso, En revisión o Completado) y se guarda al instante. Si no se puede guardar, vuelve al estado anterior y avisa. Los Observadores del proyecto no pueden cambiarlo.
+- Abriendo la tarea (clic en ella desde Inicio, el proyecto o el tablero): se abre una ventana "Tarea #N" encima de la pantalla donde estabas, no una página nueva. Ahí se editan todos los campos, incluido el Estado (4 botones) → "Guardar", que cierra la ventana y refresca la lista. "Eliminar tarea" la borra y "Cancelar" cierra (los Observadores ven "Cerrar"). Si cierras con cambios sin guardar, el sistema pregunta si guardar o descartar.
 - Las tareas no tienen comentarios; para dejar notas se usa la Descripción. La fecha que se muestra como vencimiento es la "Fecha fin".
 
 ### "Mis tareas" en Inicio
 - Botones de estado: Todos, Por hacer, En progreso (filtro por defecto), En revisión, Completado. Casilla "Asignadas a mí" y selector "Todos los proyectos" (lista todos tus proyectos). El sistema recuerda tus filtros; si el proyecto que tenías elegido ya no está en tu lista, ese filtro se quita solo.
 - "Asignadas a mí" es un botón que se enciende y se apaga. Junto a los filtros está el botón "Columnas" (elige qué columnas ver: Estado, Prioridad, Proyecto, Asignados, Inicio, Fin, Horas est.; por defecto salen Estado, Prioridad, Proyecto, Asignados y Fin). La fecha de la columna "Fin" se pone roja con "Vencida" si ya pasó y naranja con "Vence hoy" o "Vence mañana" en las tareas abiertas.
-- Sin "Asignadas a mí" se listan las tareas de todos los proyectos donde eres miembro. Se ordena con clic en los encabezados y se cambia el ancho arrastrando el borde de una columna. Clic en la fila abre la tarea; clic en el proyecto abre el proyecto.
+- Sin "Asignadas a mí" se listan las tareas de todos los proyectos donde eres miembro. Se ordena con clic en los encabezados y se cambia el ancho arrastrando el borde de una columna. Clic en la fila abre la tarea en una ventana; clic en el estado de la fila lo cambia sin abrirla; clic en el proyecto abre el proyecto.
 - Si "no ves tus tareas": pasa a "Todos" (el estado que viene por defecto es "En progreso", que oculta las de "Por hacer"), apaga "Asignadas a mí", deja "Todos los proyectos" y comprueba que seas miembro del proyecto.
 
 ### Quién puede qué en Proyectos
