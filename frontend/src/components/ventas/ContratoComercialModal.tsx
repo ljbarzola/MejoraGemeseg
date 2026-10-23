@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import ErrorBanner from '../common/ErrorBanner';
 import DateInput from '../common/DateInput';
 import MotivoCierreModal from './MotivoCierreModal';
+import ServiciosPorCategoria from './ServiciosPorCategoria';
 import {
   createContratoComercial,
   updateContratoComercial,
@@ -76,7 +77,7 @@ export default function ContratoComercialModal({
   onCapturar, introRenovar, textoBoton,
 }: Props) {
   const [clienteId, setClienteId] = useState<number | ''>(contrato?.salesClientId ?? clienteIdInicial ?? '');
-  // Servicio recurrente o venta de producto. Se elige al crear y ya no cambia.
+  // Servicio recurrente o venta de producto. Se elige al crear y se puede corregir al editar (no al renovar).
   const [tipo, setTipo] = useState<TipoContrato>(contrato?.kind ?? 'SERVICIO');
   const producto = tipo === 'PRODUCTO';
   const [valorTotal, setValorTotal] = useState<string>(contrato?.totalValue != null ? String(contrato.totalValue) : '');
@@ -218,7 +219,8 @@ export default function ContratoComercialModal({
         }
       }
     } else if (modo === 'editar' && contrato) {
-      guardado = await updateContratoComercial(contrato.id, base);
+      // `kind` solo viaja si cambió: así editar otro dato nunca toca el tipo.
+      guardado = await updateContratoComercial(contrato.id, tipo !== contrato.kind ? { ...base, kind: tipo } : base);
     } else if (contrato && onCapturar) {
       await onCapturar(base);
       return;
@@ -263,7 +265,7 @@ export default function ContratoComercialModal({
   return (
     <>
       <div className="modal-overlay" onClick={onClose}>
-        <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="modal modal-ventas-md" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h3>{producto && modo !== 'renovar' ? TITULOS_PRODUCTO[modo] : TITULOS[modo]}{modo !== 'crear' && contrato ? ` — ${contrato.salesClient.name}` : ''}</h3>
             <button className="modal-close" onClick={onClose} aria-label="Cerrar">✕</button>
@@ -287,7 +289,7 @@ export default function ContratoComercialModal({
               </div>
             )}
 
-            {modo === 'crear' && (
+            {(modo === 'crear' || modo === 'editar') && (
               <div className="form-group">
                 <label>Tipo *</label>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -295,7 +297,8 @@ export default function ContratoComercialModal({
                     type="button"
                     className={tipo === 'SERVICIO' ? 'auth-btn' : 'btn-secondary'}
                     aria-pressed={tipo === 'SERVICIO'}
-                    onClick={() => { setTipo('SERVICIO'); setServiceIds([]); }}
+                    // Al crear se vacía la lista; al editar se conserva lo ya elegido (el catálogo es el mismo).
+                    onClick={() => { setTipo('SERVICIO'); if (modo === 'crear') setServiceIds([]); }}
                   >
                     Servicio recurrente
                   </button>
@@ -303,7 +306,7 @@ export default function ContratoComercialModal({
                     type="button"
                     className={tipo === 'PRODUCTO' ? 'auth-btn' : 'btn-secondary'}
                     aria-pressed={tipo === 'PRODUCTO'}
-                    onClick={() => { setTipo('PRODUCTO'); setServiceIds([]); }}
+                    onClick={() => { setTipo('PRODUCTO'); if (modo === 'crear') setServiceIds([]); }}
                   >
                     Venta de producto
                   </button>
@@ -313,6 +316,13 @@ export default function ContratoComercialModal({
                     ? 'Venta única (por ejemplo, una cámara o un equipo): no vence ni se renueva. Se sigue como «Por entregar» y «Entregado».'
                     : 'Un servicio que se repite en el tiempo: tiene vigencia y se puede renovar.'}
                 </p>
+                {modo === 'editar' && contrato && tipo !== contrato.kind && (
+                  <p style={{ fontSize: 12, color: '#744210', background: '#fffbeb', border: '1px solid #f6e05e', borderRadius: 6, padding: '6px 10px', margin: '8px 0 0' }}>
+                    {producto
+                      ? 'Al guardar pasa a «Venta de producto»: pierde la fecha de fin, el valor mensual y los días de gracia, y queda «Por entregar» (puedes marcarlo entregado después). No es posible si el contrato forma parte de una renovación.'
+                      : 'Al guardar pasa a «Servicio recurrente»: pierde la garantía y el valor total, y queda activo. Revisa el fin, el valor mensual y los días de gracia.'}
+                  </p>
+                )}
               </div>
             )}
 
@@ -431,26 +441,8 @@ export default function ContratoComercialModal({
                   Aún no hay {producto ? 'productos' : 'servicios'}. Créalos en Ventas → Configuración → Servicios que ofrecemos.
                 </p>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 6 }}>
-                  {disponibles.map((s) => (
-                    <label
-                      key={s.id}
-                      style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, fontWeight: 400, cursor: 'pointer' }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={serviceIds.includes(s.id)}
-                        onChange={() => alternar(s.id)}
-                        style={{ marginTop: 3 }}
-                      />
-                      <span>
-                        {s.name}
-                        {!s.isActive && <em style={{ color: '#999' }}> (desactivado)</em>}
-                        {s.description && <span style={{ display: 'block', fontSize: 11, color: '#888' }}>{s.description}</span>}
-                      </span>
-                    </label>
-                  ))}
-                </div>
+                // Agrupados por categoría, igual que en «Nueva oportunidad».
+                <ServiciosPorCategoria servicios={disponibles} seleccionados={serviceIds} onToggle={alternar} marcarDesactivados />
               )}
             </div>
 

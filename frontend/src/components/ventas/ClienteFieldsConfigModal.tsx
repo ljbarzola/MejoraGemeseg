@@ -191,7 +191,7 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-ventas-sm" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Settings2 size={17} /> Configurar campos de la ficha

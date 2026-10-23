@@ -97,7 +97,7 @@ export default function ConvertirLeadModal({ lead, servicios, onClose, onDone }:
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-ventas-md" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Pasar a oportunidad — {lead.name}</h3>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">✕</button>

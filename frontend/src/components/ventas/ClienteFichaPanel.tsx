@@ -16,7 +16,7 @@ import {
   getSalesClientTimeline,
   getContratosComerciales,
   getOportunidades,
-  ORIGEN_OPORTUNIDAD_LABEL,
+  origenDeOportunidad,
   type ContratoComercial,
   type Oportunidad,
   addSalesClientActivity,
@@ -79,16 +79,13 @@ const leerOrden = (): Orden => {
   }
 };
 
-// "Referido" / "Lead vía Formulario web": el origen en palabras, con el canal si lo hay.
+// El origen en palabras («Referido», «Formulario web», «Renovación»…): la misma lista que el
+// filtro «Origen» de Oportunidades.
 const origenTexto = (
   originType: string,
   source: string | null | undefined,
-  etiquetaCanal: (key: string | null | undefined) => string,
-) => {
-  const base = ORIGEN_OPORTUNIDAD_LABEL[originType] ?? originType;
-  const canal = source ? etiquetaCanal(source) : null;
-  return canal ? `${base} vía ${canal}` : base;
-};
+  canales: { key: string; label: string }[],
+) => origenDeOportunidad({ originType, source }, canales).etiqueta;
 
 const tenue = { marginTop: 2, fontSize: 12, color: '#718096' } as const;
 const tarjetaStyle = {
@@ -113,7 +110,7 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
   const { showToast } = useToast();
   const currentUser = getUser();
   const navigate = useNavigate();
-  const { etiquetaCanal } = useCanalesLead();
+  const { canales } = useCanalesLead();
   const [contratos, setContratos] = useState<ContratoComercial[] | null>(null);
   const [contratosError, setContratosError] = useState(false);
   const [oportunidades, setOportunidades] = useState<Oportunidad[] | null>(null);
@@ -265,7 +262,7 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
       contenido = (
         <>
           <strong>Nueva oportunidad · {ev.nombre}</strong>
-          <div style={tenue}>{origenTexto(ev.originType, ev.source, etiquetaCanal)}</div>
+          <div style={tenue}>{origenTexto(ev.originType, ev.source, canales)}</div>
         </>
       );
     } else if (ev.kind === 'acuerdo') {

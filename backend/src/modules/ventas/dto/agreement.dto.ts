@@ -88,6 +88,12 @@ export class UpdateSalesAgreementDto {
   @IsOptional()
   title?: string;
 
+  // Cambiar el tipo de un contrato ya creado (por ejemplo, uno anterior a que existiera «Venta de producto»).
+  // Sin enviar: no cambia. Ver `updateAgreement` para lo que pasa con cada campo.
+  @IsIn(['SERVICIO', 'PRODUCTO'])
+  @IsOptional()
+  kind?: 'SERVICIO' | 'PRODUCTO';
+
   // Solo PRODUCTO. Cadena vacía = quitar la garantía.
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })

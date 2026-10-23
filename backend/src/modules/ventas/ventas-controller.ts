@@ -139,6 +139,7 @@ export class VentasController {
       quotedAmount?: number;
       outcome?: string;
       notes?: string;
+      serviceIds?: number[];
     },
   ) {
     return this.ventasService.completeVisit(

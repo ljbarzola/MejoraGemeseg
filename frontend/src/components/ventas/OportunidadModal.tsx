@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ServiciosPorCategoria from './ServiciosPorCategoria';
 import UbicacionCampo from './UbicacionCampo';
+import FlujoComercialPasos from './FlujoComercialPasos';
 import ErrorBanner from '../common/ErrorBanner';
 import DateInput from '../common/DateInput';
 import {
@@ -31,6 +33,7 @@ interface Props {
 export default function OportunidadModal({
   modo, oportunidad, clientes = [], clienteIdInicial, servicios, onNuevaPersona, onClose, onSaved,
 }: Props) {
+  const navigate = useNavigate();
   const [clienteId, setClienteId] = useState<number | ''>(oportunidad?.salesClientId ?? clienteIdInicial ?? '');
   const [titulo, setTitulo] = useState(oportunidad?.title ?? '');
   const [serviceIds, setServiceIds] = useState<number[]>(oportunidad?.services.map((s) => s.id) ?? []);
@@ -79,7 +82,7 @@ export default function OportunidadModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-ventas-md" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{modo === 'crear' ? 'Nueva oportunidad' : `Editar oportunidad — ${oportunidad?.salesClient.name}`}</h3>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">✕</button>
@@ -87,9 +90,19 @@ export default function OportunidadModal({
         <div className="modal-body">
           <ErrorBanner mensaje={error} />
           {modo === 'crear' && (
-            <p style={{ fontSize: 13, color: '#666', marginTop: 0 }}>
-              Para una negociación nueva de una empresa o persona que ya está en el directorio. Si apenas escribió, empieza por Posibles clientes.
-            </p>
+            <div className="form-ayuda">
+              <FlujoComercialPasos actual={2} />
+              <p>
+                Para <strong>alguien que ya está en el Directorio</strong> (si es nuevo, usa «Es nueva en el directorio»). Empieza en <strong>Nueva</strong>;
+                el monto cotizado se pide al pasarla a <strong>Cotizada</strong>. Las renovaciones las abre el sistema solo.
+              </p>
+              <p>
+                ¿Apenas te contactó?{' '}
+                <a href="#nuevo-posible-cliente" className="enlace-tabla" onClick={(e) => { e.preventDefault(); navigate('/ventas/leads?nuevo=1'); }}>
+                  Regístralo como posible cliente
+                </a>
+              </p>
+            </div>
           )}
 
           {modo === 'crear' && (
@@ -124,16 +137,19 @@ export default function OportunidadModal({
             )}
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label>Monto cotizado (opcional)</label>
-              <input type="number" min={0} step="0.01" inputMode="decimal" value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="Ej: 3000" />
+          {/* Al crear no se pide: la oportunidad nace en «Nueva» y el monto se registra al pasarla a «Cotizada». */}
+          {modo === 'editar' && (
+            <div className="form-row">
+              <div className="form-group">
+                <label>Monto cotizado (opcional)</label>
+                <input type="number" min={0} step="0.01" inputMode="decimal" value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="Ej: 3000" />
+              </div>
+              <div className="form-group">
+                <label>Cotizada el (opcional)</label>
+                <DateInput value={cotizadaEl} onChange={setCotizadaEl} />
+              </div>
             </div>
-            <div className="form-group">
-              <label>Cotizada el (opcional)</label>
-              <DateInput value={cotizadaEl} onChange={setCotizadaEl} />
-            </div>
-          </div>
+          )}
 
           <UbicacionCampo value={ubicacion} onChange={setUbicacion} />
 

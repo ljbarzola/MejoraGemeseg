@@ -70,7 +70,7 @@ export function ShareQuoteModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-lg" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="cot-sh-title">
+      <div className="modal modal-ventas-sm" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="cot-sh-title">
         <div className="modal-header">
           <h3 id="cot-sh-title">🔗 Compartir cotización {quoteNumber}</h3>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">
@@ -171,7 +171,7 @@ export function EditAccessModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-lg" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="cot-ea-title">
+      <div className="modal modal-ventas-sm" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="cot-ea-title">
         <div className="modal-header">
           <h3 id="cot-ea-title">🔒 Compartir edición de mis cotizaciones</h3>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">

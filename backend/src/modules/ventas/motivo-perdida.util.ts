@@ -9,6 +9,10 @@ import { ETAPA_PERDIDA } from './stage-outcome.util';
 // Una renovación perdida guarda su motivo como «contrato no renovado» (ver cambiarEtapa).
 export const KINDS_MOTIVO_PERDIDA = ['OPP_PERDIDA', 'CONTRATO_NO_RENOVADO'];
 
+// Lo que se perdió o descartó antes de que el sistema pidiera un motivo no tiene registro: se muestra y se cuenta con
+// este mismo texto (es también un motivo del catálogo), así la dona, la lista y el medidor suman lo mismo.
+export const MOTIVO_SIN_INFORMACION = 'Sin información';
+
 export interface EntradaMotivoPerdida {
   opportunityId: number | null;
   kind: string;

@@ -89,7 +89,7 @@ export default function SubirDocumentoModal({ onClose, onSubido, clienteId, cont
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-ventas-sm" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Subir un documento que ya tienes</h3>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">✕</button>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import ClienteFormModal from './ClienteFormModal';
+import OportunidadModal from './OportunidadModal';
 import UbicacionCampo from './UbicacionCampo';
 import ErrorBanner from '../common/ErrorBanner';
 import DateInput from '../common/DateInput';
@@ -9,11 +10,13 @@ import {
   getOportunidades,
   getSalesClientFields,
   getSalesClients,
+  getServicios,
   updateVisit,
   type ClientVisit,
   type Oportunidad,
   type SalesClient,
   type SalesClientField,
+  type SalesServicio,
   type UbicacionOportunidad,
 } from '../../services/ventas.service';
 
@@ -45,6 +48,8 @@ export default function VisitaModal({ visita, onClose, onSaved }: Props) {
   );
   const [busqueda, setBusqueda] = useState('');
   const [creando, setCreando] = useState(false);
+  const [creandoOportunidad, setCreandoOportunidad] = useState(false);
+  const [servicios, setServicios] = useState<SalesServicio[]>([]);
   const [oportunidades, setOportunidades] = useState<Oportunidad[]>([]);
   const [oportunidadId, setOportunidadId] = useState<number | ''>(visita?.opportunityId ?? '');
   const [fecha, setFecha] = useState(visita?.visitDate ? visita.visitDate.slice(0, 10) : hoyLocal());
@@ -56,6 +61,7 @@ export default function VisitaModal({ visita, onClose, onSaved }: Props) {
   useEffect(() => {
     getSalesClients().then(setClientes).catch(() => { setClientes([]); setError('No se pudo cargar el Directorio. Cierra y vuelve a intentar.'); });
     getSalesClientFields().then(setCampos).catch(() => setCampos([]));
+    getServicios().then(setServicios).catch(() => setServicios([]));
   }, []);
 
   // Las oportunidades abiertas de la empresa elegida (para decir cuál se visita).
@@ -107,7 +113,7 @@ export default function VisitaModal({ visita, onClose, onSaved }: Props) {
   return (
     <>
       <div className="modal-overlay" onClick={onClose}>
-        <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="modal modal-ventas-md" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h3>{editando ? 'Editar visita' : 'Nueva visita'}</h3>
             <button className="modal-close" onClick={onClose} aria-label="Cerrar"><X size={16} /></button>
@@ -171,17 +177,19 @@ export default function VisitaModal({ visita, onClose, onSaved }: Props) {
               )}
             </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label>Fecha de la visita *</label>
-                <DateInput value={fecha} onChange={setFecha} />
-              </div>
-              <div className="form-group">
-                <label>Oportunidad que se visita (opcional)</label>
+            <div className="form-group" style={{ maxWidth: 260 }}>
+              <label>Fecha de la visita *</label>
+              <DateInput value={fecha} onChange={setFecha} />
+            </div>
+
+            <div className="form-group">
+              <label>Oportunidad que se visita (opcional)</label>
+              <div style={{ display: 'flex', gap: 8 }}>
                 <select
                   value={oportunidadId}
                   disabled={!cliente}
                   onChange={(e) => setOportunidadId(e.target.value ? Number(e.target.value) : '')}
+                  style={{ flex: 1 }}
                 >
                   <option value="">{cliente ? 'Ninguna (visita de prospección)' : 'Primero elige a quién visitas'}</option>
                   {oportunidades.map((o) => (
@@ -194,7 +202,13 @@ export default function VisitaModal({ visita, onClose, onSaved }: Props) {
                     <option value={oportunidadId}>{visita?.oportunidad?.title || `Oportunidad ${oportunidadId}`}</option>
                   )}
                 </select>
+                <button type="button" className="btn-secondary" disabled={!cliente} onClick={() => setCreandoOportunidad(true)} style={{ whiteSpace: 'nowrap' }}>
+                  + Nueva oportunidad
+                </button>
               </div>
+              <small style={{ color: '#a0aec0' }}>
+                Elige una negociación abierta de esta empresa o persona, o crea una nueva. Sin oportunidad es una visita de prospección.
+              </small>
             </div>
 
             <UbicacionCampo value={ubicacion} onChange={setUbicacion} busquedaInicial={cliente?.address ?? undefined} />
@@ -210,6 +224,22 @@ export default function VisitaModal({ visita, onClose, onSaved }: Props) {
           </div>
         </div>
       </div>
+
+      {/* El mismo cuadro de «Nueva oportunidad» de Oportunidades, con la empresa de la visita ya elegida. */}
+      {creandoOportunidad && cliente && (
+        <OportunidadModal
+          modo="crear"
+          clientes={(clientes ?? []).filter((c) => c.id === cliente.id)}
+          clienteIdInicial={cliente.id}
+          servicios={servicios}
+          onClose={() => setCreandoOportunidad(false)}
+          onSaved={(nueva) => {
+            setCreandoOportunidad(false);
+            setOportunidades((prev) => [nueva, ...prev.filter((o) => o.id !== nueva.id)]);
+            setOportunidadId(nueva.id);
+          }}
+        />
+      )}
 
       {/* El mismo cuadro del Directorio: al guardar, la nueva empresa o persona queda elegida para la visita. */}
       {creando && (

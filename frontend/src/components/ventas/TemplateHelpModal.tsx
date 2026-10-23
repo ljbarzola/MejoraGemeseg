@@ -43,7 +43,7 @@ const USAR_PLANTILLA: Paso[] = [
     parrafos: [
       'Cuando la plantilla agrupa variables "Cliente.Algo", aparece una sección "Cliente" con el botón "Autocompletar campos de cliente". Al usarlo, rellena esos campos con los datos del cliente elegido en "Datos de envío" — si todavía no elegiste ninguno, avisa con un aviso y no hace nada.',
       'Es una acción manual, no automática: se puede volver a usar el botón después de cambiar de cliente, y cualquier valor autocompletado se puede editar a mano para ese contrato puntual sin tocar la ficha permanente del cliente.',
-      'Los campos que queden en blanco (el cliente no tiene ese dato) o que no estén mapeados a ningún campo de Cliente se llenan a mano ahí mismo; para un campo sin mapear, un botón "Añadir a Clientes" lo suma a la ficha para la próxima vez.',
+      'Los campos que queden en blanco (el cliente no tiene ese dato) o que no estén mapeados a ningún campo de Cliente se llenan a mano ahí mismo, solo para ese contrato.',
     ],
   },
   {
@@ -88,7 +88,7 @@ export default function TemplateHelpModal({ onClose }: { onClose: () => void }) 
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-lg rrhh-help-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-ventas-md rrhh-help-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Cómo funciona Documentación</h3>
           <button className="modal-close" onClick={onClose}>

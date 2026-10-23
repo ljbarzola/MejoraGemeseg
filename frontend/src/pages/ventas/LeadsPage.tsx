@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, UserPlus, UserMinus, XCircle, ClipboardList, ArrowRightCircle } from 'lucide-react';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import FilterField from '../../components/common/FilterField';
+import FiltroFecha from '../../components/common/FiltroFecha';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import ErrorBanner from '../../components/common/ErrorBanner';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
@@ -31,7 +32,8 @@ import {
   type SalesServicio,
 } from '../../services/ventas.service';
 import { useCanalesLead } from '../../hooks/useCanalesLead';
-import { diaCorto } from '../../utils/contratoComercial';
+import FlujoComercialPasos from '../../components/ventas/FlujoComercialPasos';
+import { FILTRO_FECHA_VACIO, diaCortoEcuador, fechaEnRango, filtroFechaDeUrl, hayFiltroFecha, type FiltroFechaValor } from '../../utils/rangoFechas';
 
 // Columnas elegibles (además de Contacto y Acciones, que son fijas). Las
 // últimas son datos propios de cada fuente (campaña, gclid, landing, quién
@@ -104,6 +106,7 @@ export default function LeadsPage() {
   // Llegan del Dashboard («Motivos de pérdida»): ?estado=DESCARTADO&motivoDescarte=…&responsable=mine|<id>.
   const [motivoDescarte, setMotivoDescarte] = useState('');
   const [soloResp, setSoloResp] = useState('');
+  const [filtroFecha, setFiltroFecha] = useState<FiltroFechaValor>(FILTRO_FECHA_VACIO);
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
     const e = searchParams.get('estado');
@@ -112,7 +115,12 @@ export default function LeadsPage() {
     if (e) setEstado(e);
     if (m) setMotivoDescarte(m);
     if (r && r !== 'all') setSoloResp(r);
-    if (e || m || r) setSearchParams({}, { replace: true });
+    // ?desde=&hasta=: el periodo que se miraba en el Dashboard; queda a la vista en el filtro «Llegó».
+    const fecha = filtroFechaDeUrl(searchParams.get('desde'), searchParams.get('hasta'));
+    if (fecha) setFiltroFecha(fecha);
+    // ?nuevo=1: «Nueva oportunidad» manda aquí a quien apenas escribió y todavía no es oportunidad.
+    if (searchParams.get('nuevo') === '1') setNuevo(true);
+    if (e || m || r || fecha || searchParams.get('nuevo')) setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
   const [nuevo, setNuevo] = useState(false);
   const [convirtiendo, setConvirtiendo] = useState<LeadEntrante | null>(null);
@@ -152,6 +160,7 @@ export default function LeadsPage() {
       if (motivo === 'SIN_CLASIFICAR' ? !!l.contactReason : motivo && l.contactReason !== motivo) return false;
       if (motivoDescarte && l.motivoDescarte !== motivoDescarte) return false;
       if (soloResp && String(l.assignedUserId ?? '') !== (soloResp === 'mine' ? String(usuario?.id ?? '') : soloResp)) return false;
+      if (!fechaEnRango(l.createdAt, filtroFecha)) return false;
       if (!q) return true;
       return (
         l.name.toLowerCase().includes(q) ||
@@ -161,7 +170,7 @@ export default function LeadsPage() {
         (l.message || '').toLowerCase().includes(q)
       );
     });
-  }, [leads, busqueda, estado, motivo, motivoDescarte, soloResp, usuario?.id]);
+  }, [leads, busqueda, estado, motivo, motivoDescarte, soloResp, filtroFecha, usuario?.id]);
   const filtrados = useMemo(
     () => (canal ? sinFiltroDeFuente.filter((l) => l.channel === canal) : sinFiltroDeFuente),
     [sinFiltroDeFuente, canal],
@@ -253,7 +262,7 @@ export default function LeadsPage() {
       case 'responsable':
         return l.assignedUserName || <span style={{ color: '#a0aec0' }}>Sin asignar</span>;
       case 'llego':
-        return diaCorto(l.createdAt);
+        return diaCortoEcuador(l.createdAt);
       case 'campana':
         return l.campaign || '—';
       case 'servicio':
@@ -312,7 +321,7 @@ export default function LeadsPage() {
     return lista;
   };
 
-  const hayFiltros = !!busqueda || estado !== 'pendientes' || !!motivo || !!canal || !!motivoDescarte || !!soloResp;
+  const hayFiltros = !!busqueda || estado !== 'pendientes' || !!motivo || !!canal || !!motivoDescarte || !!soloResp || hayFiltroFecha(filtroFecha);
   const motivosDeDescarte = useMemo(
     () => [...new Set(leads.map((l) => l.motivoDescarte).filter((m): m is string => !!m))].sort((a, b) => a.localeCompare(b, 'es')),
     [leads],
@@ -370,6 +379,7 @@ export default function LeadsPage() {
               {canales.map((c) => <option key={c.key} value={c.key}>{c.label} ({totalesPorFuente.get(c.key) ?? 0})</option>)}
             </select>
           </FilterField>
+          <FiltroFecha label="Llegó" valor={filtroFecha} onChange={setFiltroFecha} title="Filtra por el día en que llegó el posible cliente (la columna «Llegó»)" />
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu
@@ -384,7 +394,7 @@ export default function LeadsPage() {
             }}
           />
           <ClearFiltersButton
-            onClear={() => { setBusqueda(''); setEstado('pendientes'); setMotivo(''); setCanal(''); setMotivoDescarte(''); setSoloResp(''); }}
+            onClear={() => { setBusqueda(''); setEstado('pendientes'); setMotivo(''); setCanal(''); setMotivoDescarte(''); setSoloResp(''); setFiltroFecha(FILTRO_FECHA_VACIO); }}
             disabled={!hayFiltros}
           />
         </div>
@@ -547,7 +557,7 @@ function CampoReferidor({ campo, propios, setPropios }: {
   });
 
   return (
-    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+    <div className="form-group">
       <label>{campo.label} (opcional)</label>
       {!fallo && (
         <select value={elegido} onChange={(e) => elegir(e.target.value)}>
@@ -576,6 +586,7 @@ function CampoReferidor({ campo, propios, setPropios }: {
 // vienen los leads ni cuáles terminan en venta. Al elegirla aparecen solo los
 // datos propios de esa fuente.
 function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const navigate = useNavigate();
   const { canales } = useCanalesLead();
   const [datos, setDatos] = useState({ name: '', email: '', phone: '', companyName: '', direccion: '', message: '', channel: '' });
   const [propios, setPropios] = useState<Record<string, string>>({});
@@ -614,13 +625,26 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-ventas-md" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Nuevo posible cliente</h3>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">✕</button>
         </div>
         <div className="modal-body">
           <ErrorBanner mensaje={error} />
+          <div className="form-ayuda">
+            <FlujoComercialPasos actual={1} />
+            <p>
+              Para alguien que <strong>apenas te contactó</strong> y aún no sabes si quiere un servicio. Solo guardas sus datos y cómo llegó;
+              {' '}<strong>todavía no está en el Directorio</strong>: entra cuando lo pasas a oportunidad, y ahí eliges los servicios.
+            </p>
+            <p>
+              ¿Ya está en el Directorio y pide otro servicio?{' '}
+              <a href="#nueva-oportunidad" className="enlace-tabla" onClick={(e) => { e.preventDefault(); navigate('/ventas/oportunidades?nueva=1'); }}>
+                Crea una nueva oportunidad
+              </a>
+            </p>
+          </div>
           <div className="form-group"><label>Nombre</label><input type="text" value={datos.name} maxLength={150} onChange={(e) => set('name', e.target.value)} /></div>
           <div className="form-row">
             <div className="form-group"><label>Correo</label><input type="email" value={datos.email} onChange={(e) => set('email', e.target.value)} /></div>
@@ -632,22 +656,29 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
             <input type="text" value={datos.direccion} maxLength={300} placeholder="Ej: Av. Amazonas 123, Quito" onChange={(e) => set('direccion', e.target.value)} />
             <small style={{ color: '#718096' }}>Pasa a la ficha de la empresa cuando este posible cliente se convierta en oportunidad.</small>
           </div>
-          <div className="form-group">
-            <label>Fuente: cómo llegó *</label>
-            <select value={datos.channel} onChange={(e) => elegirFuente(e.target.value)} aria-required="true">
-              <option value="">Elige una fuente…</option>
-              {(['ANUNCIO', 'WEB', 'DIRECTO'] as const).map((g) => {
-                const delGrupo = canales.filter((c) => c.grupo === g);
-                return delGrupo.length === 0 ? null : (
-                  <optgroup key={g} label={GRUPO_CANAL_LABEL[g]}>
-                    {delGrupo.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-                  </optgroup>
-                );
-              })}
-            </select>
+          <div className="form-group" role="radiogroup" aria-label="Fuente: cómo llegó" aria-required="true">
+            <label>Fuente: ¿cómo llegó? *</label>
+            {(['ANUNCIO', 'WEB', 'DIRECTO'] as const).map((g) => {
+              const delGrupo = canales.filter((c) => c.grupo === g);
+              return delGrupo.length === 0 ? null : (
+                <div key={g} className="fuente-grupo">
+                  <span className="fuente-grupo-titulo">{GRUPO_CANAL_LABEL[g]}</span>
+                  <div className="fuente-chips">
+                    {delGrupo.map((c) => (
+                      <button type="button" key={c.key} role="radio" aria-checked={datos.channel === c.key}
+                        className={`fuente-chip${datos.channel === c.key ? ' activo' : ''}`}
+                        onClick={() => elegirFuente(c.key)}>
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           {canalElegido && canalElegido.campos.length > 0 && (
-            <div className="form-row">
+            <div className="fuente-datos">
+              <span className="fuente-grupo-titulo">Datos de «{canalElegido.label}»</span>
               {canalElegido.campos.map((campo) => campo.usuario ? (
                 <CampoReferidor key={campo.key} campo={campo} propios={propios} setPropios={setPropios} />
               ) : (
@@ -660,7 +691,11 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
               ))}
             </div>
           )}
-          <div className="form-group"><label>Qué pidió o escribió</label><textarea className="form-textarea" rows={3} maxLength={2000} value={datos.message} onChange={(e) => set('message', e.target.value)} /></div>
+          <div className="form-group">
+            <label>Qué pidió o escribió</label>
+            <textarea className="form-textarea" rows={3} maxLength={2000} value={datos.message} onChange={(e) => set('message', e.target.value)} />
+            <small style={{ color: '#718096' }}>Con sus palabras. Los servicios exactos se eligen al pasar a oportunidad.</small>
+          </div>
         </div>
         <div className="modal-actions">
           <button className="btn-secondary" onClick={onClose}>Cancelar</button>

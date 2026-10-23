@@ -207,8 +207,8 @@ export class AiVentasQueries {
     const ref = d.referidos;
     const lineas = [
       `Periodo: ${r.etiqueta} (del ${formatoDia(r.desde)} al ${formatoDia(r.hasta)}).`,
-      `Clientes nuevos: ${d.nuevos.total}, de los cuales ${d.nuevos.referidos} llegaron por referido.`,
-      `Referidos recibidos: ${ref.recibidos} (${ref.sinAtender} sin atender, ${ref.aceptados} aceptados, ${ref.rechazados} rechazados).`,
+      `Empresas y personas nuevas en el Directorio: ${d.nuevos.total}.`,
+      `Oportunidades por referido que llegaron en el periodo: ${ref.recibidos} (${ref.enCurso} en curso, ${ref.aceptados} aceptadas, ${ref.rechazados} perdidas).`,
     ];
     if (ref.top.length > 0) {
       lineas.push(`Quién más refiere: ${ref.top.map((t) => `${t.nombre} (${t.total})`).join(', ')}.`);

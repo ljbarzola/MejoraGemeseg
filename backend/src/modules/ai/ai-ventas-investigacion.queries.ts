@@ -92,7 +92,7 @@ export class AiVentasInvestigacionQueries {
     const ciclo = c.ciclo;
     const lineas: string[] = [
       `Cartera al ${formatoDia(c.hoy)}${a.role === 'ADMIN' || a.role === 'MANAGER' ? '' : ' (solo tus clientes)'}:`,
-      `- Clientes por ciclo de vida: ${(['PROSPECTO', 'CLIENTE', 'EN_RIESGO', 'EX_CLIENTE', 'PERDIDO'] as CicloVida[])
+      `- Clientes por ciclo de vida: ${(['SOLO_DATOS', 'PROSPECTO', 'CLIENTE', 'EN_RIESGO', 'EX_CLIENTE', 'PERDIDO'] as CicloVida[])
         .map((k) => `${ETIQUETA_CICLO[k]} ${ciclo[k]}`)
         .join(', ')} (total ${ciclo.total}).`,
       `- Contratos: ${c.contratos.vigentes} vigentes (${c.contratos.porVencer} por vencer), ${c.contratos.vencidosSinRenovar} vencidos sin renovar, ${c.contratos.cancelados} cancelados.`,

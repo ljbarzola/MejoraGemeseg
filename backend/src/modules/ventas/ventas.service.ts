@@ -418,6 +418,9 @@ export class VentasService {
       quotedAmount?: number;
       outcome?: any;
       notes?: string;
+      // Productos y servicios que se ofrecieron, elegidos del catálogo de Ventas (2026-10-23). Si vienen,
+      // `commercialOffer` se arma con sus nombres y, si la visita tiene oportunidad, se suman a ella.
+      serviceIds?: number[];
     },
   ) {
     const visit = await this.prisma.clientVisit.findFirst({
@@ -425,16 +428,56 @@ export class VentasService {
     });
     if (!visit) throw new NotFoundException('Visita no encontrada');
 
-    return this.prisma.clientVisit.update({
-      where: { id },
-      data: {
-        status: 'COMPLETED',
-        commercialOffer: data.commercialOffer?.trim() || null,
-        quotedAmount: data.quotedAmount || 0,
-        outcome: data.outcome || 'FOLLOW_UP',
-        notes: data.notes?.trim() || visit.notes,
-      },
+    const ids = [...new Set((data.serviceIds ?? []).filter((n) => Number.isInteger(n)))];
+    const servicios = ids.length
+      ? await this.prisma.salesService.findMany({
+          where: { id: { in: ids }, companyId },
+          select: { id: true, name: true },
+        })
+      : [];
+    if (servicios.length !== ids.length) {
+      throw new BadRequestException('Alguno de los productos o servicios elegidos ya no existe.');
+    }
+    const monto = Number(data.quotedAmount) > 0 ? Number(data.quotedAmount) : 0;
+
+    // La oportunidad que se visitó: solo se le suman servicios y monto mientras siga abierta (una aceptada o
+    // perdida ya es historia). El cambio de ETAPA no se hace aquí: lo confirma la persona en la pantalla,
+    // con el mismo cuadro de «Cambiar de etapa» (pide monto, motivo o contrato según el caso).
+    const opp = visit.opportunityId
+      ? await this.prisma.salesOpportunity.findFirst({
+          where: { id: visit.opportunityId, companyId },
+          select: { id: true, closedAt: true },
+        })
+      : null;
+    const actualizaOportunidad = !!opp && opp.closedAt === null;
+
+    const completada = await this.prisma.$transaction(async (tx) => {
+      const v = await tx.clientVisit.update({
+        where: { id },
+        data: {
+          status: 'COMPLETED',
+          commercialOffer: servicios.length
+            ? servicios.map((s) => s.name).join(', ')
+            : data.commercialOffer?.trim() || null,
+          quotedAmount: monto,
+          outcome: data.outcome || 'FOLLOW_UP',
+          notes: data.notes?.trim() || visit.notes,
+        },
+      });
+      if (actualizaOportunidad && opp) {
+        if (servicios.length) {
+          await tx.salesOpportunityService.createMany({
+            data: servicios.map((s) => ({ opportunityId: opp.id, serviceId: s.id })),
+            skipDuplicates: true,
+          });
+        }
+        if (monto > 0) {
+          await tx.salesOpportunity.update({ where: { id: opp.id }, data: { quotedAmount: monto } });
+        }
+      }
+      return v;
     });
+    return { ...(await this.conCrm(companyId, [completada]))[0], oportunidadActualizada: actualizaOportunidad };
   }
 
   async cancelVisit(id: number, companyId: number, notes?: string) {

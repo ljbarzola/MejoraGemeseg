@@ -120,7 +120,7 @@ export default function CambioEtapaOportunidadModal({ oportunidad, etapas, desti
   if (esAceptada && renueva && contratoPrevio === undefined) {
     return (
       <div className="modal-overlay" onClick={onCancel}>
-        <div className="modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal modal-ventas-sm" onClick={(e) => e.stopPropagation()}>
           <div className="modal-body"><p style={{ margin: 0, color: '#888' }}>Revisando el contrato que se renueva...</p></div>
         </div>
       </div>
@@ -214,7 +214,8 @@ export default function CambioEtapaOportunidadModal({ oportunidad, etapas, desti
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal" style={{ maxWidth: esAceptada ? 580 : 480 }} onClick={(e) => e.stopPropagation()}>
+      {/* Pequeño para un cambio simple; estándar solo al aceptar, que pregunta por el contrato y es más largo. */}
+      <div className={`modal ${esAceptada ? 'modal-ventas-md' : 'modal-ventas-sm'}`} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Cambiar de etapa</h3>
           <button className="modal-close" onClick={onCancel} aria-label="Cerrar">✕</button>
@@ -229,6 +230,17 @@ export default function CambioEtapaOportunidadModal({ oportunidad, etapas, desti
             <ArrowRight size={16} color="#718096" />
             <Badge label={destino.label} color={destino.color} />
           </div>
+
+          {!oportunidad.abierta && (
+            <div className="form-ayuda" style={{ background: '#fffbeb', borderColor: '#f6e05e' }}>
+              <p><strong>Vas a reabrir esta oportunidad.</strong> Vuelve a «{destino.label}» y quedará marcada con «!» para que se sepa que estuvo cerrada.</p>
+              <p>
+                {oportunidad.outcome === 'GANADA'
+                  ? 'El contrato que se creó al aceptarla NO se borra. Si fue un error, cancélalo desde Contratos.'
+                  : 'El motivo de pérdida anterior queda en el historial, pero ya no cuenta en el Dashboard mientras siga abierta.'}
+              </p>
+            </div>
+          )}
 
           {esCotizado && (
             <div className="form-row">

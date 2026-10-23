@@ -127,7 +127,7 @@ export default function UbicacionModal({ inicial, busquedaInicial, onClose, onCo
 
   return createPortal(
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1300 }}>
-      <div className="modal modal-lg" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 820 }}>
+      <div className="modal modal-ventas-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Ubicación de la oportunidad</h3>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">✕</button>

@@ -23,12 +23,12 @@ const RECORRIDO: Paso[] = [
   {
     pantalla: '2. Oportunidades',
     texto:
-      'Con «Pasar a oportunidad» queda como prospecto en el Directorio y se abre la negociación de un servicio. Avanza por Nueva → En evaluación → Cotizada → En negociación y termina en Aceptada o Perdida. Es el único lugar donde se cambia la etapa. Cada oportunidad puede llevar, si se quiere, su «Ubicación» (se elige en un mapa): sirve para ver en el Dashboard qué zonas del país se están cotizando.',
+      'Con «Pasar a oportunidad» queda como prospecto en el Directorio y se abre la negociación de un servicio. Avanza por Nueva → En evaluación → Cotizada → En negociación y termina en Aceptada o Perdida; solo se avanza (se pueden saltar etapas), no se vuelve atrás. Una oportunidad cerrada se puede reabrir y vuelve a En evaluación, marcada con «!». Es el único lugar donde se cambia la etapa. Cada oportunidad puede llevar, si se quiere, su «Ubicación» (se elige en un mapa): sirve para ver en el Dashboard qué zonas del país se están cotizando.',
   },
   {
     pantalla: '3. Directorio',
     texto:
-      'Los datos de cada empresa o persona registrada (RUC, correo, teléfono, dirección) y su historial; aquí se editan. Abre con todos; la «Relación» (Cliente, Inactivo, Prospecto…) se calcula sola y sirve para filtrar. La etapa, el responsable y el seguimiento están en Oportunidades.',
+      'Los datos de cada empresa o persona registrada (RUC, correo, teléfono, dirección) y su historial; aquí se editan. Abre con todos; la «Relación» (Cliente, Inactivo, Prospecto, Solo datos…) se calcula sola y sirve para filtrar. La etapa, el responsable y el seguimiento están en Oportunidades.',
   },
   {
     pantalla: '4. Contratos',
@@ -73,7 +73,7 @@ const OTROS_CRM: { nombre: string; filas: FilaEquivalencia[]; diferencia: string
 const GLOSARIO: { palabra: string; significa: string }[] = [
   { palabra: 'Directorio', significa: 'La lista de todas las empresas y personas con las que trabajas, solo con sus datos. «Cliente» es una relación que se calcula sola.' },
   { palabra: 'Responsable', significa: 'Quien lleva una oportunidad. Lo tiene cada oportunidad, no la empresa o persona.' },
-  { palabra: 'Relación', significa: 'Prospecto (negociando), Cliente (ya contrata), En riesgo (contrato por vencer o sin actividad), Inactivo (tuvo contrato y hoy no tiene ninguno vigente) y Perdido (nunca contrató).' },
+  { palabra: 'Relación', significa: 'Solo datos (registrado en el Directorio, sin oportunidades ni contratos), Prospecto (tiene una oportunidad en negociación), Cliente (ya contrata), En riesgo (contrato por vencer o sin actividad), Inactivo (tuvo contrato y hoy no tiene ninguno vigente) y Perdido (nunca contrató).' },
   { palabra: 'Fuente', significa: 'Por dónde llegó el contacto: Formulario web, Google Ads, Meta Ads, Referido, WhatsApp, Llamada…' },
   { palabra: 'Campaña', significa: 'Qué anuncio concreto lo trajo, dentro de Google Ads o Meta.' },
   { palabra: 'Landing', significa: 'La página de la web donde llenó el formulario; indica qué servicio pidió.' },
@@ -84,7 +84,7 @@ const GLOSARIO: { palabra: string; significa: string }[] = [
 function Modal({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-lg rrhh-help-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-ventas-md rrhh-help-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Cómo funciona Ventas y CRM</h3>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">

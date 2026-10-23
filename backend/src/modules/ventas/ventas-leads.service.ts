@@ -12,6 +12,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PermissionsService } from '../permissions/permissions.service';
 import { VentasMotivosService, type MotivoInput } from './ventas-motivos.service';
 import { VentasOportunidadesService } from './ventas-oportunidades.service';
+import { MOTIVO_SIN_INFORMACION } from './motivo-perdida.util';
 import { VentasSchemaService } from './ventas-schema.service';
 import { VentasConversionesService } from './ventas-conversiones.service';
 import {
@@ -406,7 +407,8 @@ export class VentasLeadsService {
       return {
         ...this.conSugerencia(l),
         assignedUserName: l.assignedUserId ? (nombre.get(l.assignedUserId) ?? null) : null,
-        motivoDescarte: motivoDescarte.get(l.id) ?? null,
+        // Un descarte anterior al registro de motivos sale como «Sin información» (igual que en la dona del Dashboard).
+        motivoDescarte: l.status === 'DESCARTADO' ? (motivoDescarte.get(l.id) ?? MOTIVO_SIN_INFORMACION) : null,
         clienteExistente,
       };
     });

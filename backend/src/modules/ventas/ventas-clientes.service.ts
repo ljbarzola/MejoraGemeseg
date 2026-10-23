@@ -31,6 +31,7 @@ import {
   UpdateSalesContactDto,
 } from './dto/client.dto';
 import { nombresParecidos } from './nombre-similar.util';
+import { esOrigenReferido } from './origen-referido.util';
 import { KINDS_MOTIVO_PERDIDA, motivoPorCambioDeEtapa } from './motivo-perdida.util';
 
 // Dashboard: etapas "ganada"/"perdida" por clave (decisión de Ventas: en
@@ -45,6 +46,9 @@ const esDiaValido = (s?: string): s is string =>
   !!s && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00.000Z`));
 const diaUtc = (s: string) => new Date(`${s}T00:00:00.000Z`);
 const aDia = (d: Date) => d.toISOString().slice(0, 10);
+// Ecuador no cambia de hora en el año: su día es el instante menos 5 horas.
+const HORAS_ECUADOR_MS = 5 * 3600 * 1000;
+const aDiaEcuador = (d: Date) => aDia(new Date(d.getTime() - HORAS_ECUADOR_MS));
 // Lunes (UTC) de la semana de un día 'YYYY-MM-DD'.
 function lunesDe(dia: string): Date {
   const d = diaUtc(dia);
@@ -1543,8 +1547,11 @@ export class VentasClientesService {
     if (desde > hasta) {
       throw new BadRequestException('La fecha "desde" no puede ser posterior a "hasta".');
     }
-    const desdeFecha = diaUtc(desde);
-    const hastaExclusivo = new Date(diaUtc(hasta).getTime() + DIA_MS);
+    // El periodo se mide en días de Ecuador (UTC-5), igual que el filtro «Fecha» de las listas
+    // (frontend `utils/rangoFechas.ts`): así «Nuevos» y «Referidos» dan el mismo número que la lista a la que llevan.
+    const desdeFecha = new Date(diaUtc(desde).getTime() + HORAS_ECUADOR_MS);
+    const hastaExclusivo = new Date(diaUtc(hasta).getTime() + DIA_MS + HORAS_ECUADOR_MS);
+    const hastaDiaExclusivo = new Date(diaUtc(hasta).getTime() + DIA_MS);
 
     // Alcance. Desde 2026-10-16 el responsable es de cada OPORTUNIDAD, no de la empresa o persona del
     // Directorio (que suele quedar sin responsable). Por eso «mis clientes» son los que tienen una
@@ -1576,8 +1583,7 @@ export class VentasClientesService {
       where: { companyId },
       orderBy: { order: 'asc' },
     });
-    const finales = new Set(stages.filter((s) => s.isFinal).map((s) => s.key));
-    const ganada = stages.find((s) => s.key === ETAPA_GANADA && s.isFinal)?.key ?? null;
+    const finales = new Set(stages.filter((s) => s.isFinal).map((s) => s.key));    const ganada = stages.find((s) => s.key === ETAPA_GANADA && s.isFinal)?.key ?? null;
     const perdida = stages.find((s) => s.key === ETAPA_PERDIDA && s.isFinal)?.key ?? null;
     const esActivo = (status: string | null) => !status || !finales.has(status);
 
@@ -1614,7 +1620,17 @@ export class VentasClientesService {
     const oportunidades = clientes.length
       ? await this.prisma.salesOpportunity.findMany({
           where: { companyId, salesClientId: { in: clientes.map((c) => c.id) } },
-          select: { salesClientId: true, status: true, closedAt: true, outcome: true, assignedUserId: true },
+          select: {
+            salesClientId: true,
+            status: true,
+            closedAt: true,
+            outcome: true,
+            assignedUserId: true,
+            receivedAt: true,
+            source: true,
+            originType: true,
+            referredByUserId: true,
+          },
         })
       : [];
     const oportunidadesPorCliente = new Map<number, typeof oportunidades>();
@@ -1713,30 +1729,52 @@ export class VentasClientesService {
     // noche en Ecuador puede caer en el día siguiente.
     const enRango = clientes.filter((c) => c.createdAt >= desdeFecha && c.createdAt < hastaExclusivo);
     const semanas = new Map<string, number>();
-    for (let d = lunesDe(desde); d < hastaExclusivo; d = new Date(d.getTime() + 7 * DIA_MS)) {
+    for (let d = lunesDe(desde); d < hastaDiaExclusivo; d = new Date(d.getTime() + 7 * DIA_MS)) {
       semanas.set(aDia(d), 0);
     }
     for (const c of enRango) {
-      const k = aDia(lunesDe(aDia(c.createdAt)));
+      const k = aDia(lunesDe(aDiaEcuador(c.createdAt)));
       semanas.set(k, (semanas.get(k) ?? 0) + 1);
     }
     const porSemana = [...semanas.entries()]
       .map(([inicio, total]) => ({ inicio, total }))
       .slice(-MAX_SEMANAS_SERIE);
 
-    const referidosRango = enRango.filter((c) => c.referredByUserId);
+    // Referidos: se cuentan OPORTUNIDADES con origen «Referido» que llegaron dentro del periodo (la misma regla y la
+    // misma fecha «Llegó» de la lista de Oportunidades, que es a donde lleva el botón). Con un vendedor elegido
+    // (o «mis clientes») solo cuentan las que están a su nombre.
+    const clientePorId = new Map(clientes.map((c) => [c.id, c]));
+    const referidasRango = oportunidades.filter(
+      (o) =>
+        esOrigenReferido(o) &&
+        o.receivedAt >= desdeFecha &&
+        o.receivedAt < hastaExclusivo &&
+        (alcanceUsuario === null || o.assignedUserId === alcanceUsuario),
+    );
+    // Quién refirió: solo la primera oportunidad de una empresa lo trae; las demás lo heredan de la ficha.
+    const quienRefirio = (o: (typeof referidasRango)[number]) =>
+      o.referredByUserId ?? clientePorId.get(o.salesClientId)?.referredByUserId ?? null;
+    const idsReferidores = [...new Set(referidasRango.map(quienRefirio).filter((x): x is number => x !== null))];
+    const nombreReferidor = new Map(
+      (idsReferidores.length
+        ? await this.prisma.user.findMany({ where: { id: { in: idsReferidores } }, select: { id: true, fullName: true } })
+        : []
+      ).map((u) => [u.id, u.fullName]),
+    );
     const topReferidores = new Map<number, { nombre: string; total: number }>();
-    for (const c of referidosRango) {
-      const id = c.referredByUserId!;
-      const fila = topReferidores.get(id) ?? { nombre: c.referredBy?.fullName ?? 'Sin nombre', total: 0 };
+    for (const o of referidasRango) {
+      const id = quienRefirio(o);
+      if (id === null) continue;
+      const fila = topReferidores.get(id) ?? { nombre: nombreReferidor.get(id) ?? 'Sin nombre', total: 0 };
       fila.total++;
       topReferidores.set(id, fila);
     }
     const referidos = {
-      recibidos: referidosRango.length,
-      sinAtender: referidosRango.filter((c) => !c.assignedUserId && esActivo(c.status)).length,
-      aceptados: ganada ? referidosRango.filter((c) => c.status === ganada).length : 0,
-      rechazados: perdida ? referidosRango.filter((c) => c.status === perdida).length : 0,
+      recibidos: referidasRango.length,
+      // «En curso» = todo referido abierto (en la etapa Nueva o más adelante); las otras dos casillas son los cerrados.
+      enCurso: referidasRango.filter((o) => o.closedAt === null).length,
+      aceptados: referidasRango.filter((o) => o.outcome === 'GANADA').length,
+      rechazados: referidasRango.filter((o) => o.outcome === 'PERDIDA').length,
       top: [...topReferidores.entries()]
         .map(([userId, v]) => ({ userId, ...v }))
         .sort((a, b) => b.total - a.total)
@@ -1839,7 +1877,7 @@ export class VentasClientesService {
       seguimientos: { vencidos, hoy: paraHoy, sinFecha, activos },
       embudo,
       porResponsable,
-      nuevos: { total: enRango.length, referidos: referidosRango.length, porSemana },
+      nuevos: { total: enRango.length, referidos: referidos.recibidos, porSemana },
       referidos,
       estancados: {
         dias: DIAS_ESTANCADO,

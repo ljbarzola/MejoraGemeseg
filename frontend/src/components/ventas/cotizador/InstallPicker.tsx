@@ -35,7 +35,7 @@ export default function InstallPicker({ installs, onPick, onClose }: Props) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
-        className="modal modal-xl"
+        className="modal modal-ventas-lg"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

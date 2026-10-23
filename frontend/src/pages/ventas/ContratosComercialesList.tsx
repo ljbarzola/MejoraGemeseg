@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Eye, Pencil, RefreshCw, Trash2, Ban, PackageCheck } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import FilterField from '../../components/common/FilterField';
+import FiltroFecha from '../../components/common/FiltroFecha';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
@@ -31,6 +32,7 @@ import {
   type SalesServicio,
 } from '../../services/ventas.service';
 import { diaCorto, describirContrato } from '../../utils/contratoComercial';
+import { FILTRO_FECHA_VACIO, fechaEnRango, filtroFechaDeUrl, hayFiltroFecha, type FiltroFechaValor } from '../../utils/rangoFechas';
 
 type ModalState =
   | { modo: 'crear'; clienteId?: number }
@@ -74,6 +76,7 @@ export default function ContratosComercialesList() {
   const [filtroServicio, setFiltroServicio] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroMotivo, setFiltroMotivo] = useState('');
+  const [filtroFecha, setFiltroFecha] = useState<FiltroFechaValor>(FILTRO_FECHA_VACIO);
   const [modal, setModal] = useState<ModalState>(null);
   const [aCancelar, setACancelar] = useState<ContratoComercial | null>(null);
   const [aEliminar, setAEliminar] = useState<ContratoComercial | null>(null);
@@ -112,12 +115,15 @@ export default function ContratosComercialesList() {
     // ?estado=VIGENTE|POR_VENCER|VENCIDO|CANCELADO: lo manda el Dashboard (pestaña Cartera) para ver esos contratos.
     const estado = searchParams.get('estado');
     if (estado) setFiltroEstado(estado);
+    // ?desde=&hasta=: el periodo que se miraba en el Dashboard; queda a la vista en el filtro «Empieza».
+    const fecha = filtroFechaDeUrl(searchParams.get('desde'), searchParams.get('hasta'));
+    if (fecha) setFiltroFecha(fecha);
     if (q) {
       setBusqueda(q);
       setSearchParams({}, { replace: true });
       return;
     }
-    if (estado || resp || motivoCierre) {
+    if (estado || resp || motivoCierre || fecha) {
       setSearchParams({}, { replace: true });
       return;
     }
@@ -135,6 +141,7 @@ export default function ContratosComercialesList() {
       if (filtroTipo && c.kind !== filtroTipo) return false;
       if (filtroMotivo && c.motivoCierre !== filtroMotivo) return false;
       if (alcanceLista.ids && !alcanceLista.ids.has(c.salesClientId)) return false;
+      if (!fechaEnRango(c.startDate, filtroFecha, true)) return false;
       if (filtroServicio && !c.services.some((s) => String(s.id) === filtroServicio)) return false;
       if (!q) return true;
       return (
@@ -143,7 +150,7 @@ export default function ContratosComercialesList() {
         c.services.some((s) => s.name.toLowerCase().includes(q))
       );
     });
-  }, [contratos, busqueda, filtroEstado, filtroServicio, filtroTipo, filtroMotivo, alcanceLista.ids]);
+  }, [contratos, busqueda, filtroEstado, filtroServicio, filtroTipo, filtroMotivo, filtroFecha, alcanceLista.ids]);
   const motivosDeCierre = useMemo(
     () => [...new Set(contratos.map((c) => c.motivoCierre).filter((m): m is string => !!m))].sort((a, b) => a.localeCompare(b, 'es')),
     [contratos],
@@ -305,7 +312,7 @@ export default function ContratosComercialesList() {
   };
   const columnasVisibles = columnPrefs.visible.filter((k) => COLUMNAS_CONTRATOS.some((c) => c.key === k));
 
-  const hayFiltros = !!(busqueda || filtroEstado || filtroServicio || filtroTipo || filtroMotivo);
+  const hayFiltros = !!(busqueda || filtroEstado || filtroServicio || filtroTipo || filtroMotivo || hayFiltroFecha(filtroFecha));
 
   return (
     <div className="page-container">
@@ -352,6 +359,7 @@ export default function ContratosComercialesList() {
               ))}
             </select>
           </FilterField>
+          <FiltroFecha label="Empieza" valor={filtroFecha} onChange={setFiltroFecha} title="Filtra por el día en que empieza la vigencia del contrato" />
           {motivosDeCierre.length > 0 && (
             <FilterField label="Motivo de cierre">
               <select className="filter-select" value={filtroMotivo} onChange={(e) => setFiltroMotivo(e.target.value)}>
@@ -374,7 +382,7 @@ export default function ContratosComercialesList() {
             }}
           />
           <ClearFiltersButton
-            onClear={() => { setBusqueda(''); setFiltroEstado(''); setFiltroServicio(''); setFiltroTipo(''); setFiltroMotivo(''); alcanceLista.quitar(); }}
+            onClear={() => { setBusqueda(''); setFiltroEstado(''); setFiltroServicio(''); setFiltroTipo(''); setFiltroMotivo(''); setFiltroFecha(FILTRO_FECHA_VACIO); alcanceLista.quitar(); }}
             disabled={!hayFiltros && !alcanceLista.alcance}
           />
         </div>

@@ -86,8 +86,7 @@ export default function CatalogManager({ products, installs, kits, byCode, canWr
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
-        className="modal"
-        style={{ maxWidth: 1250, width: '97vw' }}
+        className="modal modal-ventas-xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

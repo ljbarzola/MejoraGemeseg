@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import ResultadosVisitas from './VentasReportes';
-import { useNavigate } from 'react-router-dom';
-import { Briefcase, FileText, MapPin, Pencil, Phone, Plus, Trash2, XCircle } from 'lucide-react';
+import { Briefcase, FileText, MapPin, Pencil, Plus, Trash2, XCircle } from 'lucide-react';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import PageTabs from '../../components/common/PageTabs';
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
@@ -12,19 +11,17 @@ import RowActionsMenu, { type RowAction } from '../../components/common/RowActio
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
-import { getVisits, checkInVisit, completeVisit, cancelVisit, deleteVisit, ClientVisit, type CheckInPorConfirmar } from '../../services/ventas.service';
+import { getVisits, checkInVisit, cancelVisit, deleteVisit, getSalesClient, getSalesClientFields, ClientVisit, type CheckInPorConfirmar, type SalesClient, type SalesClientField } from '../../services/ventas.service';
 import VisitaModal from '../../components/ventas/VisitaModal';
+import VisitaOfertaModal from '../../components/ventas/VisitaOfertaModal';
+import ClienteFichaPanel from '../../components/ventas/ClienteFichaPanel';
+import ClienteFormModal from '../../components/ventas/ClienteFormModal';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import PromptDialog from '../../components/common/PromptDialog';
 import { useToast } from '../../contexts/ToastContext';
+import { RESULTADO_VISITA_LABEL } from '../../utils/visitasVentas';
 
-const OUTCOME_LABELS: Record<string, string> = {
-  INTERESTED: 'Interesado',
-  QUOTED: 'Cotizado',
-  CLOSED_SALE: 'Venta Cerrada',
-  NOT_INTERESTED: 'No Interesado',
-  FOLLOW_UP: 'Requiere Seguimiento',
-};
+const OUTCOME_LABELS = RESULTADO_VISITA_LABEL;
 
 const ESTADO_VISITA: Record<string, { label: string; fondo: string; texto: string }> = {
   PLANNED: { label: 'Agendada', fondo: '#e2e8f0', texto: '#4a5568' },
@@ -112,7 +109,6 @@ function EstadoCheckIn({ v }: { v: ClientVisit }) {
 }
 
 export default function VisitasPage() {
-  const navigate = useNavigate();
   const { showToast } = useToast();
   const [visits, setVisits] = useState<ClientVisit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,7 +116,6 @@ export default function VisitasPage() {
   // Cuadro de «Nueva visita» / «Editar visita» (VisitaModal): null = cerrado.
   const [visitaModal, setVisitaModal] = useState<{ visita: ClientVisit | null } | null>(null);
   const [showOfferModal, setShowOfferModal] = useState<ClientVisit | null>(null);
-  const [saving, setSaving] = useState(false);
   const [checkingInId, setCheckingInId] = useState<number | null>(null);
   // Aviso previo al check-in cuando estás lejos del lugar o sin ubicación: null = no hay aviso.
   const [checkInConfirmar, setCheckInConfirmar] = useState<{
@@ -131,8 +126,6 @@ export default function VisitasPage() {
   const checkInInfoRef = useRef<HTMLDivElement>(null);
   const [checkInError, setCheckInError] = useState('');
   const checkInErrorRef = useRef<HTMLDivElement>(null);
-  const [offerError, setOfferError] = useState('');
-  const offerErrorRef = useRef<HTMLDivElement>(null);
   const [cancelError, setCancelError] = useState('');
   const cancelErrorRef = useRef<HTMLDivElement>(null);
   const [deleteError, setDeleteError] = useState('');
@@ -149,10 +142,6 @@ export default function VisitasPage() {
   }, [checkInError]);
 
   useEffect(() => {
-    if (offerError) offerErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [offerError]);
-
-  useEffect(() => {
     if (cancelError) cancelErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [cancelError]);
 
@@ -160,13 +149,19 @@ export default function VisitasPage() {
     if (deleteError) deleteErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [deleteError]);
 
-  // Post-Visit Offer Form
-  const [offerForm, setOfferForm] = useState({
-    commercialOffer: '',
-    quotedAmount: 0,
-    outcome: 'QUOTED',
-    notes: '',
-  });
+  // La ficha de la empresa o persona se abre AQUÍ, a la derecha, sin salir de Visitas.
+  const [fichaCliente, setFichaCliente] = useState<SalesClient | null>(null);
+  const [editarCliente, setEditarCliente] = useState<SalesClient | null>(null);
+  const [camposFicha, setCamposFicha] = useState<SalesClientField[] | null>(null);
+  const abrirFicha = async (id: number) => {
+    try {
+      const [cliente, campos] = await Promise.all([getSalesClient(id), camposFicha ?? getSalesClientFields()]);
+      setCamposFicha(campos);
+      setFichaCliente(cliente);
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'No se pudo abrir la ficha', 'error');
+    }
+  };
 
   const loadVisits = () => {
     setLoading(true);
@@ -215,22 +210,6 @@ export default function VisitasPage() {
       () => void registrarCheckIn(visit, null),
       { timeout: 10000, enableHighAccuracy: true },
     );
-  };
-
-  const handleCompleteVisitSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!showOfferModal) return;
-    setSaving(true);
-    setOfferError('');
-    try {
-      await completeVisit(showOfferModal.id, offerForm);
-      setShowOfferModal(null);
-      loadVisits();
-    } catch (err: any) {
-      setOfferError(err.response?.data?.message || 'Error al registrar oferta comercial');
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleCancelVisit = (visit: ClientVisit) => {
@@ -301,15 +280,7 @@ export default function VisitasPage() {
     resultado: (v) => (v.outcome ? OUTCOME_LABELS[v.outcome] ?? v.outcome : ''),
   });
 
-  const abrirOferta = (v: ClientVisit) => {
-    setShowOfferModal(v);
-    setOfferForm({
-      commercialOffer: v.commercialOffer || '',
-      quotedAmount: v.quotedAmount || 0,
-      outcome: v.outcome || 'QUOTED',
-      notes: v.notes || '',
-    });
-  };
+  const abrirOferta = (v: ClientVisit) => setShowOfferModal(v);
 
   // La acción visible de cada fila es el SIGUIENTE PASO de la visita; el resto va en el menú «⋯».
   const accionPrincipal = (v: ClientVisit) => {
@@ -467,8 +438,8 @@ export default function VisitasPage() {
                     <tr key={v.id}>
                       <td>
                         {v.cliente ? (
-                          <a href={`/ventas/clientes?ficha=${v.cliente.id}`} className="enlace-tabla"
-                            onClick={(e) => { e.preventDefault(); navigate(`/ventas/clientes?ficha=${v.cliente!.id}`); }}>
+                          <a href="#ficha" className="enlace-tabla" title="Ver la ficha"
+                            onClick={(e) => { e.preventDefault(); void abrirFicha(v.cliente!.id); }}>
                             {v.cliente.name}
                           </a>
                         ) : (
@@ -477,7 +448,6 @@ export default function VisitasPage() {
                         {lugarDeVisita(v) && (
                           <div className="visita-sub"><MapPin size={12} aria-hidden /> {lugarDeVisita(v)}</div>
                         )}
-                        {v.clientPhone && <div className="visita-sub"><Phone size={12} aria-hidden /> {v.clientPhone}</div>}
                         {v.oportunidad && (
                           <div className="visita-sub visita-sub--opp"><Briefcase size={12} aria-hidden /> {v.oportunidad.title || `Oportunidad ${v.oportunidad.id}`}</div>
                         )}
@@ -517,77 +487,31 @@ export default function VisitasPage() {
         />
       )}
 
-      {/* POST-VISIT OFFER MODAL */}
+      {/* OFERTA Y CIERRE: productos y servicios del catálogo, oportunidad y propuesta de etapa */}
       {showOfferModal && (
-        <div className="modal-overlay" onClick={() => setShowOfferModal(null)}>
-          <div className="modal" style={{ maxWidth: 550 }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Registro de oferta comercial y cierre</h3>
-              <button className="modal-close" onClick={() => setShowOfferModal(null)} aria-label="Cerrar">✕</button>
-            </div>
-            <p style={{ fontSize: '0.85rem', color: '#718096', margin: '0 0 0', padding: '0 20px' }}>
-              Cliente: <strong>{showOfferModal.cliente?.name ?? showOfferModal.clientName}</strong>
-            </p>
+        <VisitaOfertaModal
+          visita={showOfferModal}
+          onClose={() => setShowOfferModal(null)}
+          onDone={(mensaje) => { setShowOfferModal(null); showToast(mensaje, 'success'); loadVisits(); }}
+        />
+      )}
 
-            {offerError && <div ref={offerErrorRef} className="form-error">{offerError}</div>}
+      {fichaCliente && (
+        <ClienteFichaPanel
+          client={fichaCliente}
+          fields={camposFicha ?? []}
+          onClose={() => setFichaCliente(null)}
+          onEdit={(c) => { setFichaCliente(null); setEditarCliente(c); }}
+        />
+      )}
 
-            <form onSubmit={handleCompleteVisitSubmit} className="modal-body">
-              <div className="form-group">
-                <label>Productos / Servicios Ofrecidos (Detalle de Oferta) *</label>
-                <textarea
-                  value={offerForm.commercialOffer}
-                  onChange={(e) => setOfferForm({ ...offerForm, commercialOffer: e.target.value })}
-                  rows={3}
-                  placeholder="Ej: Ofrecido lote de 50 sacos de cacao fino de aroma, servicio de custodia y transporte hasta puerto..."
-                  required
-                />
-              </div>
-
-              <div className="form-row" style={{ marginTop: '8px' }}>
-                <div className="form-group">
-                  <label>Monto Cotizado ($ USD)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={offerForm.quotedAmount}
-                    onChange={(e) => setOfferForm({ ...offerForm, quotedAmount: Number(e.target.value) })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Resultado de la Visita *</label>
-                  <select
-                    value={offerForm.outcome}
-                    onChange={(e) => setOfferForm({ ...offerForm, outcome: e.target.value })}
-                  >
-                    <option value="INTERESTED">Interesado</option>
-                    <option value="QUOTED">Cotizado</option>
-                    <option value="CLOSED_SALE">Venta Cerrada (Ganado)</option>
-                    <option value="FOLLOW_UP">Requiere Seguimiento</option>
-                    <option value="NOT_INTERESTED">No Interesado</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="form-group" style={{ marginTop: '8px' }}>
-                <label>Notas de Conclusión de Visita</label>
-                <textarea
-                  value={offerForm.notes}
-                  onChange={(e) => setOfferForm({ ...offerForm, notes: e.target.value })}
-                  rows={2}
-                  placeholder="Observaciones finales..."
-                />
-              </div>
-
-              <div className="modal-actions" style={{ marginTop: '16px' }}>
-                <button type="button" className="btn-secondary" onClick={() => setShowOfferModal(null)}>Cancelar</button>
-                <button type="submit" className="auth-btn" disabled={saving}>
-                  {saving ? 'Guardando...' : 'Completar Visita'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {editarCliente && (
+        <ClienteFormModal
+          client={editarCliente}
+          fields={camposFicha ?? []}
+          onClose={() => setEditarCliente(null)}
+          onSaved={() => { setEditarCliente(null); loadVisits(); }}
+        />
       )}
 
       {checkInConfirmar && (

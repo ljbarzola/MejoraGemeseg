@@ -3,7 +3,8 @@ import { calcularEstadoContrato, esProducto, hoyEcuador } from './agreement-stat
 // Ciclo de vida de un cliente. Se CALCULA, nunca se teclea: nadie lo marca a
 // mano ni hay un proceso nocturno que lo actualice.
 //
-//   PROSPECTO  sin contrato ni oportunidad ganada todavía (negociando)
+//   SOLO_DATOS  está registrado en el Directorio pero no tiene oportunidades ni contratos (nadie lo está atendiendo)
+//   PROSPECTO  tiene oportunidades y ninguna ganada todavía (negociando)
 //   CLIENTE    aceptó (oportunidad ganada) o tiene un contrato vigente, por iniciar
 //              o por vencer sin señales de riesgo. Si aceptó y aún no hay contrato
 //              queda marcado `contratoPendiente` («Por contratar»)
@@ -14,6 +15,7 @@ import { calcularEstadoContrato, esProducto, hoyEcuador } from './agreement-stat
 // Un cliente nunca vuelve a ser lead: si un ex-cliente pide otro servicio entra
 // como lead nuevo y se le suma una oportunidad (ver ventas-leads.service.ts).
 export type CicloVida =
+  | 'SOLO_DATOS'
   | 'PROSPECTO'
   | 'CLIENTE'
   | 'EN_RIESGO'
@@ -21,6 +23,7 @@ export type CicloVida =
   | 'PERDIDO';
 
 export const CICLOS_VIDA: CicloVida[] = [
+  'SOLO_DATOS',
   'PROSPECTO',
   'CLIENTE',
   'EN_RIESGO',
@@ -29,6 +32,7 @@ export const CICLOS_VIDA: CicloVida[] = [
 ];
 
 export const ETIQUETA_CICLO: Record<CicloVida, string> = {
+  SOLO_DATOS: 'Solo datos',
   PROSPECTO: 'Prospecto',
   CLIENTE: 'Cliente',
   EN_RIESGO: 'En riesgo',
@@ -174,5 +178,7 @@ export function calcularCicloVida(
   const todasPerdidas =
     e.oportunidades.length > 0 &&
     e.oportunidades.every((o) => o.closedAt !== null && o.outcome === 'PERDIDA');
+  // Sin oportunidades ni contratos no hay ninguna negociación: «Prospecto» sería decir que alguien lo atiende.
+  if (e.oportunidades.length === 0) return { ciclo: 'SOLO_DATOS', razones: [] };
   return { ciclo: todasPerdidas ? 'PERDIDO' : 'PROSPECTO', razones: [] };
 }

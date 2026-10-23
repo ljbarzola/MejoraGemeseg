@@ -86,7 +86,7 @@ export default function SiguientePasoModal({
 
   return (
     <div className="modal-overlay" style={{ zIndex: 1100 }} onClick={onCancel}>
-      <div className="modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-ventas-sm" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{title}</h3>
         </div>

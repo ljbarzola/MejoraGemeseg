@@ -31,7 +31,7 @@ type Pestana = 'conexiones' | 'fuentes' | 'servicios' | 'motivos';
 type Icono = ComponentType<{ size?: number }>;
 
 const PESTANAS: { key: Pestana; label: string; icono: Icono; primera: Seccion }[] = [
-  { key: 'conexiones', label: 'Conexiones', icono: Plug, primera: 'conexiones' },
+  { key: 'conexiones', label: 'Cómo llegan los posibles clientes', icono: Plug, primera: 'conexiones' },
   { key: 'fuentes', label: 'Fuentes', icono: Inbox, primera: 'fuentes' },
   { key: 'servicios', label: 'Servicios', icono: Package, primera: 'servicios' },
   { key: 'motivos', label: 'Motivos de cierre', icono: ListX, primera: 'descartes' },
@@ -86,7 +86,7 @@ export default function ConfiguracionVentasPage() {
         ? {
           titulo: 'Fuentes de posibles clientes',
           ayuda: 'Las fuentes que ofrece «Nuevo posible cliente» y que el CRM reconoce solo cuando llega uno por la web. Todo posible cliente lleva una fuente.',
-          detalle: 'La lista es fija. Para conectar una fuente nueva ve a Conexiones.',
+          detalle: 'La lista es fija. Para conectar una fuente nueva ve a «Cómo llegan los posibles clientes».',
         }
         : pestana === 'servicios'
           ? {
@@ -103,7 +103,7 @@ export default function ConfiguracionVentasPage() {
     <div className="page-container">
       <VentasPageHeader
         title="Configuración"
-        description="Lo que la empresa ajusta del CRM: conexiones, fuentes, servicios y motivos de cierre."
+        description="Lo que la empresa ajusta del CRM: cómo llegan los posibles clientes, fuentes, servicios y motivos de cierre."
       />
 
       <PageTabs

@@ -103,6 +103,7 @@ const PublicSurveyPage = lazy(() => import('./pages/personal/PublicSurveyPage'))
 const SurveyManagementPage = lazy(() => import('./pages/personal/SurveyManagementPage'));
 const VentasDashboard = lazy(() => import('./pages/ventas/VentasDashboard'));
 const VentasClientesPage = lazy(() => import('./pages/ventas/VentasClientesPage'));
+const VisitasPage = lazy(() => import('./pages/ventas/VisitasPage'));
 const LeadsPage = lazy(() => import('./pages/ventas/LeadsPage'));
 const OportunidadesPage = lazy(() => import('./pages/ventas/OportunidadesPage'));
 const CotizadorPage = lazy(() => import('./pages/ventas/CotizadorPage'));
@@ -487,11 +488,11 @@ function AppInner() {
         <Route path="/rrhh/asignaciones" element={<Navigate to="/rrhh/historial" replace />} />
         <Route path="/rrhh/movimientos" element={<Navigate to="/rrhh/historial" replace />} />
         <Route path="/ventas" element={<ProtectedLayout><SectionRoute section="VENTAS"><VentasDashboard /></SectionRoute></ProtectedLayout>} />
-        {/* Planificación y Campo (Visitas), Reportes y Config Webhook están "Próximamente":
-            sus pantallas siguen en el código (pages/ventas/VisitasPage, VentasReportes, WebhookConfig) pero
-            ya no tienen ruta — quien llegue por un enlace guardado o escribiendo la URL vuelve al Dashboard. Para
-            reactivarlas: volver a importarlas arriba, registrar su ruta aquí y quitar `disabled` en Sidebar.tsx. */}
-        {['visitas', 'reportes', 'webhook-config'].map((p) => (
+        {/* Planificación y Campo (Visitas) está activa desde 2026-10-23 (su pestaña «Resultados» es VentasReportes).
+            Reportes y Config Webhook siguen "Próximamente": sus pantallas están en el código (VentasReportes como
+            pestaña, WebhookConfig) pero sin ruta propia — quien llegue por un enlace guardado vuelve al Dashboard. */}
+        <Route path="/ventas/visitas" element={<ProtectedLayout><SectionRoute section="VENTAS"><VisitasPage /></SectionRoute></ProtectedLayout>} />
+        {['reportes', 'webhook-config'].map((p) => (
           <Route key={p} path={`/ventas/${p}`} element={<Navigate to="/ventas" replace />} />
         ))}
         {/* Leads (2026-10-07): bandeja de contactos entrantes. Reemplaza al viejo "Prospectos CRM" apagado. */}
