@@ -59,6 +59,8 @@ export default function Sidebar() {
   const [personalOpen, setPersonalOpen] = useState(false);
   const [custodiosOpen, setCustodiosOpen] = useState(false);
   const [ventasOpen, setVentasOpen] = useState(false);
+  // Abierto desde el inicio si se entra directo a una pantalla de Cacao (si no, se veía cerrado y sin pista de dónde estás).
+  const [cacaoOpen, setCacaoOpen] = useState(() => location.pathname.startsWith('/cacao'));
   const [custodiasOpen, setCustodiasOpen] = useState(false);
   const [sistemasOpen, setSistemasOpen] = useState(false);
   const [contratacionPublicaOpen, setContratacionPublicaOpen] = useState(false);
@@ -97,6 +99,7 @@ export default function Sidebar() {
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
   const isPersonalActive = location.pathname.startsWith('/rrhh');
   const isVentasActive = location.pathname.startsWith('/ventas');
+  const isCacaoActive = location.pathname.startsWith('/cacao');
   const isCustodiasActive = location.pathname.startsWith('/custodias');
   const isSistemasActive = location.pathname.startsWith('/sistemas');
   const isContratacionPublicaActive = location.pathname.startsWith('/contratacion-publica');
@@ -110,7 +113,6 @@ export default function Sidebar() {
     { label: 'Administración', path: '/admin', icon: '👥', show: canView('ADMIN') && (isAdmin || isManager) },
     { label: 'Empresas', path: '/admin/companies', icon: '🏢', show: isSuperAdmin && canView('COMPANIES') },
     { label: 'Mi Empresa', path: '/admin/company-settings', icon: '🎨', show: (isCompanyAdmin || isManager) && canView('COMPANY_SETTINGS') },
-    { label: 'Cacao', path: '/cacao', icon: '🫘', show: canView('CACAO') },
     { label: 'Permisos', path: '/admin/permissions', icon: '🔐', show: isSuperAdmin },
     { label: 'Permisos Usuarios', path: '/admin/user-permissions', icon: '🔑', show: isCompanyAdmin || isManager },
   ];
@@ -179,6 +181,25 @@ export default function Sidebar() {
     { label: 'Documentación', path: '/ventas/documentacion', icon: '📄' },
     { label: 'Directorio', path: '/ventas/clientes', icon: '👤', separadorAntes: true },
     { label: 'Configuración', path: '/ventas/configuracion', icon: '⚙️' },
+  ];
+
+  // Cacao: el Dashboard va primero (regla de todos los módulos) y luego el orden en que fluye el negocio,
+  // agrupado como Ventas: Compra → Venta. Configuración (calidades, unidades y plazos de la empresa) va al
+  // final, bajo una línea. Desde 2026-10-23 Cacao tiene su propio menú desplegable; antes era una sola
+  // entrada y todo se navegaba desde el Dashboard. Las URLs no cambiaron.
+  const cacaoItems: SubItem[] = [
+    { label: 'Dashboard', path: '/cacao', icon: '📊' },
+    { label: 'Proveedores', path: '/cacao/suppliers', icon: '🤝', grupo: 'Compra' },
+    { label: 'Recepciones', path: '/cacao/receptions', icon: '🚚' },
+    { label: 'Lotes', path: '/cacao/lots', icon: '📦' },
+    { label: 'Fijaciones de precio', path: '/cacao/price-fixings', icon: '💲' },
+    { label: 'Liquidaciones', path: '/cacao/settlements', icon: '🧾' },
+    { label: 'Cuentas por pagar', path: '/cacao/payables', icon: '📤' },
+    { label: 'Clientes', path: '/cacao/clients', icon: '🏢', grupo: 'Venta' },
+    { label: 'Embarques', path: '/cacao/shipments', icon: '🚢' },
+    { label: 'Cuentas por cobrar', path: '/cacao/receivables', icon: '💵' },
+    { label: 'Configuración', path: '/cacao/configuracion', icon: '⚙️', separadorAntes: true },
+    { label: 'Guía del módulo', path: '/cacao/guia', icon: '📖' },
   ];
 
   const custodiasSubItems = [
@@ -415,6 +436,40 @@ export default function Sidebar() {
             {!collapsed && ventasOpen && (
               <div style={{ marginLeft: '12px', borderLeft: '2px solid #e2e8f0', paddingLeft: '0' }}>
                 {renderSubItems(ventasItems)}
+              </div>
+            )}
+          </>
+        )}
+
+        {canView('CACAO') && (
+          <>
+            <button
+              className={`sidebar-link ${isCacaoActive ? 'sidebar-link-active' : ''}`}
+              onClick={() => {
+                if (collapsed) {
+                  navigate('/cacao');
+                } else {
+                  setCacaoOpen(!cacaoOpen);
+                  if (!cacaoOpen) navigate('/cacao');
+                }
+              }}
+              title={collapsed ? 'Cacao' : undefined}
+              style={{ justifyContent: 'space-between' }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span className="sidebar-icon">🫘</span>
+                {!collapsed && <span className="sidebar-label">Cacao</span>}
+              </span>
+              {!collapsed && (
+                <span style={{ fontSize: '0.7rem', transition: 'transform 0.2s', transform: cacaoOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▶
+                </span>
+              )}
+            </button>
+
+            {!collapsed && cacaoOpen && (
+              <div style={{ marginLeft: '12px', borderLeft: '2px solid #e2e8f0', paddingLeft: '0' }}>
+                {renderSubItems(cacaoItems)}
               </div>
             )}
           </>

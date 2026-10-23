@@ -2,10 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getSuppliers, getQualities, createReception, getNextLotCode, getUnitConfig } from '../../../services/cacao.service';
 import DateInput from '../../../components/common/DateInput';
+import { apiErrorMessage } from '../utils';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FULL: Record<string, string> = { TON: 'Toneladas', KG: 'Kilogramos', SACO: 'Sacos' };
-const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
+// Toneladas y kilos son universales; el peso del saco es de cada empresa (Cacao → Configuración).
+const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1 };
 function round4(n: number) { return Math.round(n * 10000) / 10000; }
 function getTodayLocal() {
   const d = new Date();
@@ -105,10 +107,9 @@ export default function ReceptionForm() {
 
   const selectedQuality = qualities.find((q) => q.id === Number(form.qualityId));
 
+  const kgPorSaco: number | null = unitConfigs.find((c: any) => c.isDefault)?.kgPerUnit ?? null;
   const getUnitFactor = () => {
-    if (form.unitOfMeasure === 'SACO') {
-      return unitConfigs.find((c: any) => c.isDefault)?.kgPerUnit || 69;
-    }
+    if (form.unitOfMeasure === 'SACO') return kgPorSaco ?? 1;
     return UNIT_FACTORS[form.unitOfMeasure] || 1;
   };
 
@@ -158,7 +159,7 @@ export default function ReceptionForm() {
       isDirty.current = false;
       navigate('/cacao/receptions');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al crear recepción');
+      setError(apiErrorMessage(err, 'No se pudo registrar la recepción. Revisa los datos e inténtalo de nuevo.'));
     } finally { setSaving(false); }
   }
 
@@ -215,7 +216,9 @@ export default function ReceptionForm() {
               <select value={form.unitOfMeasure} onChange={(e) => setField('unitOfMeasure', e.target.value)}>
                 <option value="KG">Kilogramos (KG)</option>
                 <option value="TON">Toneladas (T)</option>
-                <option value="SACO">Sacos ({unitConfigs.find((c: any) => c.isDefault)?.kgPerUnit || 69} kg)</option>
+                {kgPorSaco
+                  ? <option value="SACO">Sacos ({kgPorSaco} kg)</option>
+                  : <option value="SACO" disabled>Sacos (configura el peso del saco)</option>}
               </select>
             </div>
           </div>
@@ -240,6 +243,12 @@ export default function ReceptionForm() {
                 {qualities.map((q) => <option key={q.id} value={q.id}>{q.name}{q.isFixedPrice ? ' (Precio Fijo)' : ' (Precio Provisional)'}</option>)}
               </select>
               {fieldErrors.qualityId && <span className="field-error">Este campo es requerido</span>}
+              {qualities.length === 0 && (
+                <span style={{ fontSize: '12px', color: '#b7791f' }}>
+                  Tu empresa aún no tiene calidades.{' '}
+                  <button type="button" className="btn-sm-edit" onClick={() => navigate('/cacao/configuracion?tab=calidades')}>Crear calidades</button>
+                </span>
+              )}
             </div>
           </div>
 

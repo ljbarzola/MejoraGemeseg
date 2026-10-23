@@ -85,7 +85,7 @@ export default function ShipmentDetail() {
         <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px 32px', fontSize: '14px' }}>
           <div><strong>Peso Total:</strong> {shipment.totalWeight.toLocaleString()} {unitAbbr} ({shipment.totalWeightKg?.toLocaleString() || '—'} kg)</div>
           <div><strong>Costo Total:</strong> {fmt(shipment.totalCost)}</div>
-          <div><strong>Precio Venta:</strong> {fmt(shipment.salePrice)}/{unitAbbr}</div>
+          <div><strong>Precio Venta:</strong> {fmt(shipment.salePrice)}/kg</div>
           <div><strong>Margen:</strong> <span style={{ color: shipment.margin >= 0 ? '#38a169' : '#e53e3e', fontWeight: 600 }}>{shipment.margin}%</span></div>
         </div>
       </div>

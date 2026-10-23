@@ -57,3 +57,7 @@ export const getUnitConfig = () => api.get('/cacao/unit-config').then(r => r.dat
 export const createUnitConfig = (data: any) => api.post('/cacao/unit-config', data).then(r => r.data);
 export const updateUnitConfig = (id: number, data: any) => api.patch(`/cacao/unit-config/${id}`, data).then(r => r.data);
 export const deleteUnitConfig = (id: number) => api.delete(`/cacao/unit-config/${id}`);
+
+// Ajustes de la empresa (plazos de pago y cobro)
+export const getCacaoConfig = () => api.get('/cacao/configuracion').then(r => r.data);
+export const updateCacaoConfig = (data: { plazoPagoDias?: number; plazoCobroDias?: number }) => api.put('/cacao/configuracion', data).then(r => r.data);

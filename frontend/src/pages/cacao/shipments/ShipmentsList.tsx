@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import PageHeader from '../../../components/common/PageHeader';
+import { useNavigate } from 'react-router-dom';
 import { getShipments } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
@@ -8,7 +9,6 @@ import { useColumnFilters } from '../../../hooks/useColumnFilters';
 
 export default function ShipmentsList() {
   const navigate = useNavigate();
-  const location = useLocation();
   const [shipments, setShipments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -39,16 +39,16 @@ export default function ShipmentsList() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao')}>← Volver</button>
-          <div>
-            <p className="page-eyebrow">CACAO</p>
-            <h1>Embarques</h1>
-          </div>
-        </div>
-        <button className="auth-btn" onClick={() => navigate('/cacao/shipments/new')}>+ Nuevo Embarque</button>
-      </div>
+      <PageHeader
+        eyebrow="Cacao"
+        title="Embarques"
+        description="Ventas y exportaciones. Cada embarque descuenta el inventario y genera su cuenta por cobrar."
+        actions={
+          <>
+            <button className="auth-btn" onClick={() => navigate('/cacao/shipments/new')}>+ Nuevo Embarque</button>
+          </>
+        }
+      />
 
       <div className="filter-bar">
         <div className="filter-bar-actions">

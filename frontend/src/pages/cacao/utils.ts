@@ -20,6 +20,10 @@ export function formatKg(n: number): string {
  * ("lots.0.quantity must be..."), que no se muestran tal cual.
  */
 export function apiErrorMessage(err: any, fallback: string): string {
+  // El servidor responde «Forbidden resource» cuando el rol no puede hacer la acción (p. ej. un gerente que paga).
+  if (err?.response?.status === 403) {
+    return 'No tienes permiso para hacer esto. Contacta a un administrador de tu empresa.';
+  }
   const raw = err?.response?.data?.message;
   const text = Array.isArray(raw) ? raw.join('. ') : typeof raw === 'string' ? raw : '';
   if (!text || /\bmust\b|should not exist|should not be empty/i.test(text)) return fallback;

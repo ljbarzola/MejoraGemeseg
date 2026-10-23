@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useCacaoUnidades } from '../useCacaoUnidades';
+import PageHeader from '../../../components/common/PageHeader';
+import { useNavigate } from 'react-router-dom';
 import { getLots } from '../../../services/cacao.service';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
 import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
 import { useColumnFilters } from '../../../hooks/useColumnFilters';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
-const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
 
 export default function LotsList() {
+  const { factor: factorUnidad } = useCacaoUnidades();
   const navigate = useNavigate();
-  const location = useLocation();
   const [lots, setLots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -32,19 +33,23 @@ export default function LotsList() {
 
   function getOrigWeight(kg: number, unit: string | null) {
     if (!unit || unit === 'KG') return null;
-    const factor = UNIT_FACTORS[unit] || 1;
+    // El peso del saco es el de la empresa; si aún no lo configuró no se inventa una conversión.
+    const factor = factorUnidad(unit);
+    if (!factor) return null;
     return { value: (kg / factor).toFixed(2), abbr: UNIT_ABBR[unit] || unit };
   }
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao')}>← Volver</button>
-          <div>
-            <p className="page-eyebrow">CACAO</p>
-            <h1>Lotes</h1>
-          </div>
+      <PageHeader eyebrow="Cacao" title="Lotes" description="El inventario de cacao: cada recepción forma un lote que viaja hasta su embarque." />
+
+      <div className="filter-bar">
+        <div className="filter-bar-fields">
+          <select className="filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">Todos</option>
+            <option value="OPEN">Abierto</option>
+            <option value="CLOSED">Cerrado</option>
+          </select>
         </div>
       </div>
 

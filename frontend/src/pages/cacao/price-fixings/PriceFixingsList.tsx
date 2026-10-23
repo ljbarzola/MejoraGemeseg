@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import PageHeader from '../../../components/common/PageHeader';
 import { getPriceFixings, createPriceFixing, fixPrice, getLots } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
 import DateInput from '../../../components/common/DateInput';
@@ -13,8 +13,6 @@ function pesoPendiente(f: any): number {
 }
 
 export default function PriceFixingsList() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const [fixings, setFixings] = useState<any[]>([]);
   const [provisionalLots, setProvisionalLots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,18 +129,18 @@ export default function PriceFixingsList() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao')}>← Volver</button>
-          <div>
-            <p className="page-eyebrow">CACAO</p>
-            <h1>Fijaciones de Precio</h1>
-          </div>
-        </div>
-        <button className="auth-btn" onClick={() => { setError(''); setShowForm(true); }} disabled={provisionalLots.length === 0}>
-          + Nueva Fijación
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Cacao"
+        title="Fijaciones de Precio"
+        description="Lotes comprados a precio provisional: fija su precio definitivo antes de la fecha límite."
+        actions={
+          <>
+            <button className="auth-btn" onClick={() => { setError(''); setShowForm(true); }} disabled={provisionalLots.length === 0}>
+              + Nueva Fijación
+            </button>
+          </>
+        }
+      />
 
       {/* Precio ICE Cocoa - Editable */}
       <div style={{ padding: '14px 20px', backgroundColor: '#fffbeb', border: '1px solid #fbd38d', borderRadius: '10px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>

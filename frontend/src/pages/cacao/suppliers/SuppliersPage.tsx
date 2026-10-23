@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import PageHeader from '../../../components/common/PageHeader';
 import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../../../services/cacao.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { Trash2, Pencil } from 'lucide-react';
@@ -8,8 +8,6 @@ import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
 import { useColumnFilters } from '../../../hooks/useColumnFilters';
 
 export default function SuppliersPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -79,16 +77,16 @@ export default function SuppliersPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao')}>← Volver</button>
-          <div>
-            <p className="page-eyebrow">CACAO</p>
-            <h1>Proveedores</h1>
-          </div>
-        </div>
-        <button className="auth-btn" onClick={() => { resetForm(); setShowForm(true); }}>+ Nuevo Proveedor</button>
-      </div>
+      <PageHeader
+        eyebrow="Cacao"
+        title="Proveedores"
+        description="Las personas y empresas a las que les compras cacao."
+        actions={
+          <>
+            <button className="auth-btn" onClick={() => { resetForm(); setShowForm(true); }}>+ Nuevo Proveedor</button>
+          </>
+        }
+      />
 
       {showForm && (
         <div className="page-card" style={{ marginBottom: '16px' }}>

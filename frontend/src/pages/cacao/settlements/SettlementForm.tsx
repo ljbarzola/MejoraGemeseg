@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getSuppliers, getAvailableLots, createSettlement, getNextSettlementId } from '../../../services/cacao.service';
+import { getSuppliers, getAvailableLots, createSettlement, getNextSettlementId, getCacaoConfig } from '../../../services/cacao.service';
+import { useCacaoUnidades } from '../useCacaoUnidades';
 import DateInput from '../../../components/common/DateInput';
 import ErrorBanner from '../../../components/common/ErrorBanner';
 import { apiErrorMessage } from '../utils';
 import { Trash2 } from 'lucide-react';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
-const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
 function round4(n: number) { return Math.round(n * 10000) / 10000; }
 function round2(n: number) { return Math.round(n * 100) / 100; }
 function getTodayLocal() {
@@ -24,6 +24,7 @@ interface LotSelection {
 }
 
 export default function SettlementForm() {
+  const { factor: factorUnidad } = useCacaoUnidades();
   const navigate = useNavigate();
   const location = useLocation();
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -39,7 +40,7 @@ export default function SettlementForm() {
     supplierId: '',
     periodStart: '',
     periodEnd: '',
-    dueDays: '30',
+    dueDays: '',
   });
   const [selectedLots, setSelectedLots] = useState<LotSelection[]>([]);
   const isDirty = useRef(false);
@@ -47,8 +48,13 @@ export default function SettlementForm() {
   const pendingNav = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    Promise.all([getSuppliers(), getNextSettlementId()])
-      .then(([s, nid]) => { setSuppliers(s); setNextIdCode(nid.code); })
+    Promise.all([getSuppliers(), getNextSettlementId(), getCacaoConfig()])
+      .then(([s, nid, cfg]) => {
+        setSuppliers(s);
+        setNextIdCode(nid.code);
+        // El plazo de pago arranca con el que la empresa configuró; esta liquidación puede cambiarlo.
+        setForm((prev) => ({ ...prev, dueDays: String(cfg.plazoPagoDias) }));
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -80,7 +86,8 @@ export default function SettlementForm() {
       setAvailableLots([]);
       return;
     }
-    let filtered = allLots.filter((lot: any) => lot.status === 'OPEN' && lot.netWeight > 0);
+    // Se le paga al proveedor lo que entregó, aunque el lote ya se haya embarcado (y esté cerrado).
+    let filtered = allLots.filter((lot: any) => lot.netWeight > 0);
     if (form.periodStart && form.periodEnd) {
       const start = new Date(form.periodStart);
       const end = new Date(form.periodEnd);
@@ -172,8 +179,8 @@ export default function SettlementForm() {
     const receptionUnit = lot.receptions?.[0]?.unitOfMeasure || null;
     let origQty = null;
     if (receptionUnit && receptionUnit !== 'KG') {
-      const factor = UNIT_FACTORS[receptionUnit] || 1;
-      origQty = { value: (qty / factor).toFixed(2), abbr: UNIT_ABBR[receptionUnit] || receptionUnit };
+      const factor = factorUnidad(receptionUnit);
+      if (factor) origQty = { value: (qty / factor).toFixed(2), abbr: UNIT_ABBR[receptionUnit] || receptionUnit };
     }
     return {
       code: lot.code,

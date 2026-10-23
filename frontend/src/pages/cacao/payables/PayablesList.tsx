@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import PageHeader from '../../../components/common/PageHeader';
 import { getPayables, payPayable, voidPayment } from '../../../services/cacao.service';
 import { getUser } from '../../../services/auth.service';
 import { formatDateEc, estadoCuenta, apiErrorMessage } from '../utils';
@@ -7,8 +7,6 @@ import ErrorBanner from '../../../components/common/ErrorBanner';
 import PaymentsHistoryModal from '../PaymentsHistoryModal';
 
 export default function PayablesList() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const [payables, setPayables] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -74,15 +72,7 @@ export default function PayablesList() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao')}>← Volver</button>
-          <div>
-            <p className="page-eyebrow">CACAO</p>
-            <h1>Cuentas por Pagar</h1>
-          </div>
-        </div>
-      </div>
+      <PageHeader eyebrow="Cacao" title="Cuentas por Pagar" description="Lo que debes a tus proveedores. Cada cuenta nace cuando se aprueba una liquidación." />
 
       <div className="filter-bar">
         <div className="filter-bar-actions">

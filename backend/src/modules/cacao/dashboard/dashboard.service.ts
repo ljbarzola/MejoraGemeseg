@@ -21,8 +21,18 @@ export class CacaoDashboardService {
   }
 
   private async fetchDashboard(companyId: number) {
-    const [lots, fixings, payables, receivables, recentShipments] =
-      await Promise.all([
+    const [
+      lots,
+      fixings,
+      payables,
+      receivables,
+      recentShipments,
+      porAprobar,
+      calidades,
+      proveedores,
+      recepciones,
+      saco,
+    ] = await Promise.all([
         this.prisma.cacaoLot.findMany({
           where: { companyId, status: 'OPEN' },
           select: { netWeight: true, averageCost: true },
@@ -44,6 +54,19 @@ export class CacaoDashboardService {
           include: { client: true },
           orderBy: { date: 'desc' },
           take: 5,
+        }),
+        // Liquidaciones que esperan la aprobación de un gerente (todavía no son deuda).
+        this.prisma.cacaoSettlement.aggregate({
+          where: { companyId, status: 'PENDING' },
+          _count: true,
+          _sum: { totalAmount: true },
+        }),
+        // Lo que ya está configurado: alimenta la guía de primeros pasos de una empresa nueva.
+        this.prisma.cacaoQuality.count({ where: { companyId } }),
+        this.prisma.cacaoSupplier.count({ where: { companyId } }),
+        this.prisma.cacaoReception.count({ where: { companyId } }),
+        this.prisma.cacaoUnitConfig.count({
+          where: { companyId, isDefault: true },
         }),
       ]);
 
@@ -79,6 +102,14 @@ export class CacaoDashboardService {
       payableCount: payables.length,
       receivableCount: receivables.length,
       recentShipments,
+      pendingApprovalCount: porAprobar._count,
+      pendingApprovalAmount: porAprobar._sum.totalAmount ?? 0,
+      setup: {
+        calidades: calidades > 0,
+        saco: saco > 0,
+        proveedores: proveedores > 0,
+        recepciones: recepciones > 0,
+      },
     };
   }
 }

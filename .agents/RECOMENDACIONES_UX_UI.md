@@ -310,21 +310,22 @@ Agregado el 2026-10-22 (ver también `CLAUDE.md`, «Frontend layout rules»):
 
 ---
 
-## 25. Tablas: un solo botón por columna para ordenar y filtrar
+## 25. Módulo en Línea Blanca: Submódulos, Dashboard Primero y «Primeros Pasos»
 
-Agregado el 2026-10-28 (ver también `CLAUDE.md`, «Frontend layout rules», y `ventas-contratos.md` sección 43):
+### Regla: Todo Módulo Nuevo Empieza Vacío para Cada Empresa, Vive en un Menú Desplegable y su Primera Pantalla es el Dashboard
 
-- **Toda tabla de listado lleva, en cada cabecera, UN solo botón** (`<ColumnFilter cf={cf} col="x" orden={…} />`, dentro del `<th>`) a la derecha del título. Abre un panel con «Ordenar» en una línea (dos direcciones lado a lado; pulsar la activa quita el orden) y, debajo, el filtro de esa columna. Nada de un `⇅` suelto más un embudo aparte: en cabeceras estrechas se perdía el de ordenar.
-- **El botón cuenta el estado de la columna:** flecha azul si ordena, embudo naranja (con punto o contador) si filtra, las dos si hace ambas, flecha hacia abajo tenue si no hace nada.
-- **Cómo pedir el orden:** en una pantalla simple, `orden={cf.ordenDe('columna')}` (el hook de filtros ordena con el valor que la columna ya declaró para filtrar); si la pantalla ya usa `useSortableTable` (clic en el título, orden inicial, columnas calculadas), `orden={ordenDe('columna')}` de ese hook. No mezclar las dos en una misma tabla.
-- **Reglas de orden:** texto con `localeCompare(…, 'es')` (tildes y ñ en su sitio), números como números, fechas por fecha, estados en su orden lógico (nombres «Orden lógico / Orden inverso») y las celdas vacías SIEMPRE al final.
-- **El panel es corto:** «Ordenar» es una sola línea, para no obligar a bajar hasta el filtro; no se le ponen títulos de sección.
-- **Una columna que solo ordena** (sin filtro) lleva el mismo botón con `etiqueta` y solo muestra «Ordenar»; no se deja el `⇅` junto a columnas que ya tienen el botón.
+Agregado el 2026-10-23 con Cacao (las tres pautas fijas de la usuaria; ver `.agents/modules/cacao.md`):
+
+- **Línea blanca.** Ningún dato, texto ni valor de fábrica de una empresa (Gemeseg, Mikacao) puede estar en el módulo: ni catálogos sembrados, ni un peso de saco, ni un plazo, ni un margen sugerido. Cada empresa configura lo suyo y una empresa nueva empieza con todo vacío. Toda tabla de datos propios lleva `companyId` y las claves únicas (nombres, códigos) lo incluyen.
+- **Lo configurable vive en UNA pantalla «Configuración»** del módulo (con `<PageTabs>`), al final del menú y bajo una línea. Quien no puede editar ve los botones y el aviso de solo lectura (§21).
+- **Submódulos.** El módulo es un menú desplegable en `Sidebar.tsx` (`SubItem[]`, con `grupo` para agrupar por etapa y `separadorAntes`), no una entrada suelta desde la que se navega todo. Se abre solo si se entra directo a una de sus URLs.
+- **El Dashboard es el primer submódulo.** No repite el menú con «accesos directos»: muestra cifras clicables y, si a la empresa le falta configurar algo para empezar, una tarjeta **«Primeros pasos»** con cada paso marcado cuando está hecho, que desaparece al completarlos. El servidor entrega ese avance en el propio dashboard (`setup`).
+- Las pantallas del menú usan `<PageHeader eyebrow="…">` y no llevan «← Volver»; el detalle y los formularios de segundo nivel sí.
 
 ---
 
 ## Versión
-- v2.2 - Octubre 2026 (tablas: botón único por columna para ordenar y filtrar)
+- v2.2 - Octubre 2026 (módulo en línea blanca: submódulos, Dashboard primero y «Primeros pasos»)
 - v2.1 - Octubre 2026 (marco de pantalla, estado desde la lista, tarea como ventana)
 - v1.9 - Octubre 2026 (todo cierre se explica con `MotivoCierreModal`)
 - v2.0 - Octubre 2026 (filtros que se recuerdan: validarlos contra las opciones; escoba en barras de campos, no en Inicio)

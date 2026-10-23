@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import PageHeader from '../../../components/common/PageHeader';
 import { getReceivables, receiveReceivable, voidReceipt } from '../../../services/cacao.service';
 import { getUser } from '../../../services/auth.service';
 import { formatDateEc, estadoCuenta, apiErrorMessage } from '../utils';
@@ -7,8 +7,6 @@ import ErrorBanner from '../../../components/common/ErrorBanner';
 import PaymentsHistoryModal from '../PaymentsHistoryModal';
 
 export default function ReceivablesList() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const [receivables, setReceivables] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -74,15 +72,7 @@ export default function ReceivablesList() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao')}>← Volver</button>
-          <div>
-            <p className="page-eyebrow">CACAO</p>
-            <h1>Cuentas por Cobrar</h1>
-          </div>
-        </div>
-      </div>
+      <PageHeader eyebrow="Cacao" title="Cuentas por Cobrar" description="Lo que te deben tus clientes. Cada cuenta nace con un embarque." />
 
       <div className="filter-bar">
         <div className="filter-bar-actions">

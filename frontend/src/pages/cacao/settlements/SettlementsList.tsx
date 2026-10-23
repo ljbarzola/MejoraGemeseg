@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import PageHeader from '../../../components/common/PageHeader';
+import { useNavigate } from 'react-router-dom';
 import { getSettlements } from '../../../services/cacao.service';
 import { formatDateEc, estadoLiquidacion } from '../utils';
 
 export default function SettlementsList() {
   const navigate = useNavigate();
-  const location = useLocation();
   const [settlements, setSettlements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -30,16 +30,16 @@ export default function SettlementsList() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao')}>← Volver</button>
-          <div>
-            <p className="page-eyebrow">CACAO</p>
-            <h1>Liquidaciones</h1>
-          </div>
-        </div>
-        <button className="auth-btn" onClick={() => navigate('/cacao/settlements/new')}>+ Nueva Liquidación</button>
-      </div>
+      <PageHeader
+        eyebrow="Cacao"
+        title="Liquidaciones"
+        description="Lo que se le paga a cada proveedor por su cacao. Un gerente debe aprobar la liquidación antes de que nazca la deuda."
+        actions={
+          <>
+            <button className="auth-btn" onClick={() => navigate('/cacao/settlements/new')}>+ Nueva Liquidación</button>
+          </>
+        }
+      />
 
       <div className="filter-bar">
         <div className="filter-bar-actions">

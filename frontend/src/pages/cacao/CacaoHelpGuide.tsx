@@ -1,18 +1,22 @@
 import { useNavigate } from 'react-router-dom';
+import { useCompany } from '../../contexts/ThemeContext';
+import PageHeader from '../../components/common/PageHeader';
 
 const STEPS = [
   {
     num: 1,
-    title: 'Maestros (Configuración Inicial)',
+    title: 'Configuración inicial',
     icon: '⚙️',
     color: '#4a5568',
-    description: 'Antes de usar el sistema, configure los catálogos base que alimentarán todos los demás módulos.',
+    description: 'Tu empresa empieza sin nada cargado: antes de registrar la primera compra, deja listo lo propio de tu empresa.',
     details: [
       { label: 'Proveedores', desc: 'Registre cada proveedor con nombre, RUC, condición de pago y datos bancarios. Los proveedores aparecerán al crear recepciones y liquidaciones.', path: '/cacao/suppliers' },
       { label: 'Clientes / Exportadores', desc: 'Registre los destinos de exportación: nombre, país, contacto. Se usarán al crear embarques.', path: '/cacao/clients' },
-      { label: 'Calidades de Cacao', desc: 'Defina las calidades (Convencional, Orgánico, Fino de Aroma, etc.) con sus descuentos por humedad e impurezas, y si tienen precio fijo o provisional.', path: '/cacao/qualities' },
+      { label: 'Calidades de cacao', desc: 'Crea las calidades que maneja tu empresa con sus descuentos por humedad e impurezas, y si tienen precio fijo o provisional. Está en Configuración → Calidades.', path: '/cacao/configuracion?tab=calidades' },
+      { label: 'Unidades de medida', desc: 'Indica cuánto pesa un saco en tu empresa. Solo hace falta si compras o vendes en sacos; las toneladas y los kilos no necesitan configuración.', path: '/cacao/configuracion?tab=unidades' },
+      { label: 'Plazos', desc: 'Define en cuántos días se paga a un proveedor y en cuántos se cobra a un cliente. Cada liquidación y cada embarque puede cambiar el suyo.', path: '/cacao/configuracion?tab=plazos' },
     ],
-    tip: 'Registre primero los proveedores y calidades. El sistema viene con 5 calidades predefinidas.',
+    tip: 'El sistema no trae calidades, pesos ni plazos de fábrica: son los de tu empresa. El Dashboard te muestra qué pasos te faltan.',
   },
   {
     num: 2,
@@ -22,7 +26,7 @@ const STEPS = [
     description: 'Cada vez que un proveedor entrega cacao, registre una recepción. El sistema generará automáticamente un lote que viajará por todo el sistema.',
     details: [
       { label: 'Datos que registra', desc: 'Fecha, proveedor, guía de remisión, unidad de medida (TON/KG/SACO), peso bruto, tara, humedad %, impurezas %, calidad, precio provisional y diferencial pactado.' },
-      { label: 'Conversión automática', desc: 'Si registra en Toneladas o Sacos, el sistema convierte automáticamente a Kilogramos para el kárdex y el lote. La unidad original queda registrada para consulta.' },
+      { label: 'Conversión automática', desc: 'Si registra en Toneladas o Sacos, el sistema convierte automáticamente a Kilogramos para el kárdex y el lote (el saco pesa lo que configuró tu empresa). La unidad original queda registrada para consulta.' },
       { label: 'Lote generado', desc: 'El sistema asigna un código (ej: LOTE-2026-001) que identificará este cacao en liquidaciones, fijaciones, kárdex y embarques.' },
       { label: 'Precio', desc: 'Si la calidad tiene precio fijo, se asigna automáticamente. Si es provisional, puede dejarlo vacío y fijarlo después.' },
     ],
@@ -132,18 +136,16 @@ const FLOW = [
 
 export default function CacaoHelpGuide() {
   const navigate = useNavigate();
+  const { theme } = useCompany();
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/cacao')}>← Volver</button>
-          <div>
-            <p className="page-eyebrow">CACAO</p>
-            <h1>Guía del Sistema de Inventario</h1>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Cacao"
+        title="Guía del módulo"
+        description="Cómo se conectan las pantallas de Cacao, de la compra al proveedor hasta el cobro al cliente."
+        actions={<button className="btn-secondary" onClick={() => navigate('/cacao')}>Ir al Dashboard</button>}
+      />
 
       {/* Intro */}
       <div style={{
@@ -155,7 +157,7 @@ export default function CacaoHelpGuide() {
       }}>
         <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px', marginTop: 0 }}>Bienvenido al Módulo de Cacao</h2>
         <p style={{ fontSize: '14px', lineHeight: 1.7, margin: 0, opacity: 0.9 }}>
-          Este sistema controla el flujo completo de inventario de cacao de Mikacao S.A.: desde la recepción del grano del proveedor hasta la exportación al cliente final.
+          Este módulo controla el flujo completo del cacao de {theme.name}: desde la recepción del grano del proveedor hasta la exportación al cliente final.
           Cada paso está conectado: un cambio en recepción afecta el lote, el lote afecta la liquidación, la liquidación, una vez aprobada, genera la CxP, y así sucesivamente.
         </p>
       </div>
@@ -316,7 +318,7 @@ export default function CacaoHelpGuide() {
             { term: 'Liquidación', def: 'Cierre contable de una recepción: aplica descuentos y calcula lo que se debe al proveedor. Debe aprobarla un gerente antes de poder pagarse.' },
             { term: 'CxP', def: 'Cuenta por Pagar. Deuda con proveedores que se genera al aprobar una liquidación de compra.' },
             { term: 'CxC', def: 'Cuenta por Cobrar. Derecho de cobro generado por embarques/exportaciones.' },
-            { term: 'Unidad de Medida', def: 'TON (Toneladas = 1000 kg), KG (Kilogramos), SACO (Sacos, configurable, default 90 kg).' },
+            { term: 'Unidad de Medida', def: 'TON (Toneladas = 1000 kg), KG (Kilogramos), SACO (Sacos: el peso lo defines tú en Configuración → Unidades de medida).' },
             { term: 'Guía de Remisión', def: 'Documento fiscal que acompaña al cacao al momento de la entrega. Número único por recepción.' },
           ].map((g, i) => (
             <div key={i} style={{ fontSize: '13px' }}>

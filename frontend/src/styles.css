@@ -3920,6 +3920,23 @@ textarea.chat-input {
   }
 }
 
+/* Cacao: texto que explica una pestaña de configuración, con su botón principal a la derecha */
+.config-intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 4px 0 16px;
+}
+.config-intro p {
+  margin: 0;
+  max-width: 760px;
+  color: #4a5568;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 /* Cacao forms */
 .cacao-form {
   display: flex;

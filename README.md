@@ -48,7 +48,7 @@ Ademas del rol, cada modulo es una "seccion" con su propio control de acceso:
 - **Mi Empresa**: pagina de ajustes de marca para el administrador de cada empresa.
 
 ### Cacao
-Back-office de comercio de cacao que replica el proceso fisico: proveedores y clientes, recepciones, lotes, liquidaciones, embarques, cuentas por pagar y por cobrar, precios fijados, calidades y kardex. Las liquidaciones a proveedores pasan por aprobacion de un gerente (la cuenta por pagar nace al aprobar), el servidor recalcula sus montos, y los pagos y cobros se validan y pueden anularse con motivo. Incluye una guia de uso dentro de la app (`/cacao/guia`).
+Back-office de comercio de cacao que replica el proceso fisico: proveedores y clientes, recepciones, lotes, liquidaciones, embarques, cuentas por pagar y por cobrar, precios fijados, calidades y kardex. Esta en linea blanca: cada empresa configura sus calidades, el peso de su saco y sus plazos (Cacao → Configuracion) y empieza sin nada cargado. Tiene su propio menu desplegable con el Dashboard primero. Las liquidaciones a proveedores pasan por aprobacion de un gerente (la cuenta por pagar nace al aprobar), el servidor recalcula sus montos, y los pagos y cobros se validan y pueden anularse con motivo. Incluye una guia de uso dentro de la app (`/cacao/guia`).
 
 ### Custodias
 Rutas, traslados y nomina de escoltas de seguridad. Estados `LISTO_PARA_CUSTODIAR → EN_CAMINO → LLEGO` (la nomina solo liquida lo que llego), tarifas por tipo (hacienda, puerto, VIP), PDFs de orden de custodia y de nomina, consulta por cedula y el asistente GEME-BOT.

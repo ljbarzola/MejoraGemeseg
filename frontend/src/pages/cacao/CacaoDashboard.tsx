@@ -1,25 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDashboard } from '../../services/cacao.service';
+import PageHeader from '../../components/common/PageHeader';
 
-const SectionIcon = ({ d, color }: { d: string; color: string }) => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d={d} />
-  </svg>
-);
-
-const ICONS: Record<string, { d: string; color: string }> = {
-  receptions: { d: 'M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z', color: '#2b6cb0' },
-  lots: { d: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4', color: '#2c7a7b' },
-  settlements: { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', color: '#6b46c1' },
-  priceFixings: { d: 'M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6', color: '#b7791f' },
-  shipments: { d: 'M1 18l5-4 5 4 5-4 5 4', color: '#2f855a' },
-  payables: { d: 'M17 1l4 4-4 4', color: '#c53030' },
-  receivables: { d: 'M7 1L3 5l4 4', color: '#276749' },
-  suppliers: { d: 'M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2', color: '#4a5568' },
-  clients: { d: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2', color: '#4a5568' },
-  qualities: { d: 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z', color: '#d69e2e' },
-};
+const PASOS_INICIALES: Array<{ clave: 'calidades' | 'saco' | 'proveedores' | 'recepciones'; titulo: string; texto: string; ruta: string }> = [
+  { clave: 'calidades', titulo: 'Crea tus calidades de cacao', texto: 'Define cuánto se descuenta por humedad e impurezas en cada calidad.', ruta: '/cacao/configuracion?tab=calidades' },
+  { clave: 'saco', titulo: 'Configura el peso de tu saco', texto: 'Solo si compras o vendes en sacos; las toneladas y los kilos no lo necesitan.', ruta: '/cacao/configuracion?tab=unidades' },
+  { clave: 'proveedores', titulo: 'Registra a tus proveedores', texto: 'Las personas y empresas a las que les compras cacao.', ruta: '/cacao/suppliers' },
+  { clave: 'recepciones', titulo: 'Registra tu primera recepción', texto: 'Al guardarla se crea su lote y entra al inventario.', ruta: '/cacao/receptions/new' },
+];
 
 export default function CacaoDashboard() {
   const navigate = useNavigate();
@@ -38,42 +27,57 @@ export default function CacaoDashboard() {
 
   if (loading) return <div className="loading-state">Cargando dashboard...</div>;
 
+  const setup = data?.setup;
+  const pasosPendientes = setup ? PASOS_INICIALES.filter((p) => !setup[p.clave]) : [];
+  const porAprobar = data?.pendingApprovalCount || 0;
+
+  const kpis = [
+    { label: 'Valor Inventario', value: fmt(data?.inventoryValue || 0), sub: fmtKg(data?.totalInventoryKg || 0), color: '#2b6cb0', icon: '📦', path: '/cacao/lots' },
+    { label: 'Exposición Sin Fijar', value: fmt(data?.openFixingValue || 0), sub: fmtKg(data?.openFixingKg || 0) + ' pendientes', color: '#b7791f', icon: '⚠️', path: '/cacao/price-fixings' },
+    { label: 'Liquidaciones por aprobar', value: fmt(data?.pendingApprovalAmount || 0), sub: porAprobar ? `${porAprobar} ${porAprobar === 1 ? 'LIQUIDACIÓN' : 'LIQUIDACIONES'}` : 'NINGUNA PENDIENTE', color: '#6b46c1', icon: '🧾', path: '/cacao/settlements' },
+    { label: 'CxP Pendiente', value: fmt(data?.totalPayables || 0), sub: data?.payableCount ? `${data.payableCount} FACTURAS` : 'SALDO', color: '#e53e3e', icon: '📤', path: '/cacao/payables' },
+    { label: 'CxC Pendiente', value: fmt(data?.totalReceivables || 0), sub: data?.receivableCount ? `${data.receivableCount} FACTURAS` : 'SALDO', color: '#38a169', icon: '📥', path: '/cacao/receivables' },
+  ];
+
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div>
-          <p className="page-eyebrow">MÓDULO CACAO</p>
-          <h1>Dashboard</h1>
-        </div>
-        <button
-          onClick={() => navigate('/cacao/guia')}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: 'transparent',
-            color: '#4a5568',
-            border: '1px solid #e2e8f0',
-            borderRadius: '8px',
-            fontSize: '13px',
-            fontWeight: 500,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-          }}
-        >
-          📖 Guía del Sistema
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Cacao"
+        title="Dashboard"
+        description="Cómo va tu negocio de cacao: inventario, precios por fijar y lo que debes y te deben."
+        actions={<button className="btn-secondary" onClick={() => navigate('/cacao/guia')}>Cómo funciona</button>}
+      />
 
       <div className="admin-section">
+        {pasosPendientes.length > 0 && (
+          <div style={{ marginBottom: '24px', padding: '18px 20px', background: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '10px' }}>
+            <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#2c5282', margin: '0 0 4px' }}>Primeros pasos</h2>
+            <p style={{ fontSize: '13px', color: '#4a5568', margin: '0 0 12px' }}>
+              Antes de registrar tu primera compra, deja listo lo propio de tu empresa. Estos pasos desaparecen cuando los completes.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '10px' }}>
+              {PASOS_INICIALES.map((p, i) => {
+                const hecho = !!setup?.[p.clave];
+                return (
+                  <button
+                    key={p.clave}
+                    onClick={() => navigate(p.ruta)}
+                    style={{ textAlign: 'left', padding: '12px 14px', background: hecho ? '#f0fff4' : 'white', border: `1px solid ${hecho ? '#c6f6d5' : '#bee3f8'}`, borderRadius: '8px', cursor: 'pointer' }}
+                  >
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: hecho ? '#276749' : '#2d3748' }}>
+                      {hecho ? '✓' : `${i + 1}.`} {p.titulo}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#718096', marginTop: '4px', lineHeight: 1.4 }}>{p.texto}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* KPIs */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '28px' }}>
-          {[
-            { label: 'Valor Inventario', value: fmt(data?.inventoryValue || 0), sub: fmtKg(data?.totalInventoryKg || 0), color: '#2b6cb0', icon: '📦', path: '/cacao/lots' },
-            { label: 'Exposición Sin Fijar', value: fmt(data?.openFixingValue || 0), sub: fmtKg(data?.openFixingKg || 0) + ' pendientes', color: '#b7791f', icon: '⚠️', path: '/cacao/price-fixings' },
-            { label: 'CxP Pendiente', value: fmt(data?.totalPayables || 0), sub: data?.payableCount ? `${data.payableCount} FACTURAS` : 'SALDO', color: '#e53e3e', icon: '📤', path: '/cacao/payables' },
-            { label: 'CxC Pendiente', value: fmt(data?.totalReceivables || 0), sub: data?.receivableCount ? `${data.receivableCount} FACTURAS` : 'SALDO', color: '#38a169', icon: '📥', path: '/cacao/receivables' },
-          ].map((kpi) => (
+          {kpis.map((kpi) => (
             <div
               key={kpi.path}
               onClick={() => navigate(kpi.path)}
@@ -101,107 +105,6 @@ export default function CacaoDashboard() {
           ))}
         </div>
 
-        {/* Navegación por secciones */}
-        <div style={{ marginBottom: '28px' }}>
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#4a5568', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Accesos directos</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-            {[
-              { label: 'Recepciones', desc: 'Registrar entradas de cacao', path: '/cacao/receptions', icon: ICONS.receptions },
-              { label: 'Lotes', desc: 'Inventario y kárdex', path: '/cacao/lots', icon: ICONS.lots },
-              { label: 'Fijaciones', desc: 'Fijar precio definitivo', path: '/cacao/price-fixings', icon: ICONS.priceFixings },
-              { label: 'Liquidaciones', desc: 'Liquidar compras a proveedores', path: '/cacao/settlements', icon: ICONS.settlements },
-              { label: 'Embarques', desc: 'Exportaciones y ventas', path: '/cacao/shipments', icon: ICONS.shipments },
-              { label: 'CxP', desc: 'Pendientes a proveedores', path: '/cacao/payables', icon: ICONS.payables },
-              { label: 'CxC', desc: 'Cobros a clientes', path: '/cacao/receivables', icon: ICONS.receivables },
-            ].map((item) => (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'flex-start',
-                  gap: '8px',
-                  padding: '16px',
-                  background: 'white',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '10px',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.2s',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = item.icon.color; e.currentTarget.style.boxShadow = `0 4px 12px ${item.icon.color}18`; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'; e.currentTarget.style.transform = 'translateY(0)'; }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{
-                    width: '34px',
-                    height: '34px',
-                    borderRadius: '8px',
-                    background: `${item.icon.color}10`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}>
-                    <SectionIcon d={item.icon.d} color={item.icon.color} />
-                  </div>
-                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#2d3748' }}>{item.label}</span>
-                </div>
-                <span style={{ fontSize: '12px', color: '#a0aec0', lineHeight: 1.3 }}>{item.desc}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Configuración */}
-        <div style={{ marginBottom: '28px' }}>
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#718096', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Configuración</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-            {[
-              { label: 'Calidades', desc: 'Descuentos por humedad/impurezas', path: '/cacao/qualities', icon: ICONS.qualities },
-              { label: 'Proveedores', desc: 'Directorio de proveedores', path: '/cacao/suppliers', icon: ICONS.suppliers },
-              { label: 'Clientes', desc: 'Directorio de clientes/exportadores', path: '/cacao/clients', icon: ICONS.clients },
-            ].map((item) => (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'flex-start',
-                  gap: '8px',
-                  padding: '14px',
-                  background: '#f7fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '10px',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.2s',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = item.icon.color; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.transform = 'translateY(0)'; }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{
-                    width: '30px',
-                    height: '30px',
-                    borderRadius: '6px',
-                    background: `${item.icon.color}10`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}>
-                    <SectionIcon d={item.icon.d} color={item.icon.color} />
-                  </div>
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#4a5568' }}>{item.label}</span>
-                </div>
-                <span style={{ fontSize: '11px', color: '#a0aec0', lineHeight: 1.3 }}>{item.desc}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Últimos Embarques */}
         <div>
           <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#4a5568', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Últimos Embarques</h2>
@@ -226,8 +129,8 @@ export default function CacaoDashboard() {
                       <td>{new Date(s.date).toLocaleDateString('es-EC')}</td>
                       <td>{s.client?.name || '—'}</td>
                       <td>{s.contractRef}</td>
-                      <td>{fmtKg(s.totalWeight)}</td>
-                      <td>{fmt(s.salePrice)}</td>
+                      <td>{fmtKg(s.totalWeightKg ?? s.totalWeight)}</td>
+                      <td>${fmt(s.salePrice)}/kg</td>
                       <td style={{ color: s.margin >= 0 ? '#38a169' : '#e53e3e', fontWeight: 600 }}>{s.margin}%</td>
                     </tr>
                   ))}
