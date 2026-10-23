@@ -4,6 +4,7 @@ import { Plus, Settings2, Pencil, Trash2, ClipboardList } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import FilterField from '../../components/common/FilterField';
+import FiltroFecha from '../../components/common/FiltroFecha';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import ClienteFichaPanel from '../../components/ventas/ClienteFichaPanel';
@@ -17,6 +18,7 @@ import { useSortableTable } from '../../hooks/useSortableTable';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useClientesDelAlcance } from '../../hooks/useClientesDelAlcance';
 import ChipAlcance from '../../components/ventas/ChipAlcance';
+import { FILTRO_FECHA_VACIO, diaCortoEcuador, fechaEnRango, filtroFechaDeUrl, hayFiltroFecha, type FiltroFechaValor } from '../../utils/rangoFechas';
 import {
   getSalesClients,
   deleteSalesClient,
@@ -50,7 +52,7 @@ const FECHA_COL = '__fecha';
 const DEFAULT_VISIBLE = ['ruc', 'email', 'phone', CICLO_COL];
 
 // Relaciones que ofrece el filtro (todas vacías al abrir = salen todos).
-const CICLOS_FILTRO: CicloVida[] = ['CLIENTE', 'EN_RIESGO', 'EX_CLIENTE', 'PROSPECTO', 'PERDIDO'];
+const CICLOS_FILTRO: CicloVida[] = ['CLIENTE', 'EN_RIESGO', 'EX_CLIENTE', 'PROSPECTO', 'PERDIDO', 'SOLO_DATOS'];
 
 export default function VentasClientesPage() {
   const { showToast } = useToast();
@@ -60,6 +62,7 @@ export default function VentasClientesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filtroCiclo, setFiltroCiclo] = useState<CicloVida | ''>('');
+  const [filtroFecha, setFiltroFecha] = useState<FiltroFechaValor>(FILTRO_FECHA_VACIO);
   const [editingClient, setEditingClient] = useState<SalesClient | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showNuevo, setShowNuevo] = useState(false);
@@ -116,6 +119,9 @@ export default function VentasClientesPage() {
     if (ciclo && ciclo in CICLO_LABEL) setFiltroCiclo(ciclo as CicloVida);
     const ficha = Number(searchParams.get('ficha'));
     if (ficha) setFichaId(ficha);
+    // ?desde=&hasta=: el periodo que se miraba en el Dashboard; queda a la vista en el filtro «Ingresó».
+    const fecha = filtroFechaDeUrl(searchParams.get('desde'), searchParams.get('hasta'));
+    if (fecha) setFiltroFecha(fecha);
   }, [searchParams]);
 
   const coincideBusqueda = (c: SalesClient) => {
@@ -133,6 +139,7 @@ export default function VentasClientesPage() {
   const filtered = clients
     .filter(coincideBusqueda)
     .filter((c) => !filtroCiclo || c.ciclo === filtroCiclo)
+    .filter((c) => fechaEnRango(c.createdAt, filtroFecha))
     .filter((c) => !alcanceLista.ids || alcanceLista.ids.has(c.id));
 
   const cellValue = (client: SalesClient, key: string): string => {
@@ -151,7 +158,7 @@ export default function VentasClientesPage() {
 
   const renderCell = (client: SalesClient, key: string) => {
     if (key === CICLO_COL) return <CicloVidaBadge ciclo={client.ciclo} razones={client.cicloRazones} />;
-    if (key === FECHA_COL) return new Date(client.createdAt).toLocaleDateString('es-EC');
+    if (key === FECHA_COL) return diaCortoEcuador(client.createdAt);
     const value = cellValue(client, key);
     return value || '—';
   };
@@ -205,6 +212,7 @@ export default function VentasClientesPage() {
               ))}
             </select>
           </FilterField>
+          <FiltroFecha label="Ingresó" valor={filtroFecha} onChange={setFiltroFecha} title="Filtra por el día en que se registró la empresa o persona (la columna «Fecha de ingreso»)" />
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu
@@ -218,8 +226,8 @@ export default function VentasClientesPage() {
             }}
           />
           <ClearFiltersButton
-            onClear={() => { setSearch(''); setFiltroCiclo(''); alcanceLista.quitar(); }}
-            disabled={!search && !filtroCiclo && !alcanceLista.alcance}
+            onClear={() => { setSearch(''); setFiltroCiclo(''); setFiltroFecha(FILTRO_FECHA_VACIO); alcanceLista.quitar(); }}
+            disabled={!search && !filtroCiclo && !hayFiltroFecha(filtroFecha) && !alcanceLista.alcance}
           />
           <button className="auth-btn" onClick={() => { setEditingClient(null); setShowNuevo(true); }}>
             <Plus size={16} /> Nueva empresa o persona
@@ -242,7 +250,7 @@ export default function VentasClientesPage() {
           <p style={{ color: '#888', fontSize: 13 }}>
             {clients.length === 0
               ? 'Aún no hay nadie en el directorio. Se agregan cuando un posible cliente pasa a oportunidad; también puedes registrar a alguien con «Nueva empresa o persona».'
-              : 'No hay nadie que coincida con la búsqueda o la relación elegida.'}
+              : 'No hay nadie que coincida con la búsqueda, la relación o la fecha elegidas.'}
           </p>
         ) : (
           <div className="tasks-table-wrapper">

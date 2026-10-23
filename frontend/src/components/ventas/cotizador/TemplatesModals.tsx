@@ -86,8 +86,7 @@ export function TemplatesModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
-        className="modal"
-        style={{ maxWidth: 860, width: '96vw' }}
+        className="modal modal-ventas-lg"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -200,7 +199,7 @@ function TemplatePreview({
   const comp = totalDe(t, byCode);
   return (
     <div className="modal-overlay" style={{ zIndex: 1050 }} onClick={onClose}>
-      <div className="modal modal-xl" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="cot-tp-title">
+      <div className="modal modal-ventas-lg" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="cot-tp-title">
         <div className="modal-header">
           <h3 id="cot-tp-title">{t.name}</h3>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">
@@ -309,7 +308,7 @@ export function SaveTemplateModal({
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal modal-lg" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="cot-st-title">
+      <div className="modal modal-ventas-sm" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="cot-st-title">
         <div className="modal-header">
           <h3 id="cot-st-title">Guardar como plantilla</h3>
           <button className="modal-close" onClick={onCancel} aria-label="Cerrar">

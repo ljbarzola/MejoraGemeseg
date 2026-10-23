@@ -98,7 +98,7 @@ export function ProductFormModal({
 
   return (
     <div className="modal-overlay" style={{ zIndex: 1050 }} onClick={onClose}>
-      <div className="modal modal-xl" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="cot-pf-title">
+      <div className="modal modal-ventas-lg" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="cot-pf-title">
         <div className="modal-header">
           <h3 id="cot-pf-title">{edit ? `Editar ${product!.code}` : 'Nuevo producto'}</h3>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">
@@ -283,7 +283,7 @@ export function InstallFormModal({
 
   return (
     <div className="modal-overlay" style={{ zIndex: 1050 }} onClick={onClose}>
-      <div className="modal modal-lg" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="cot-if-title">
+      <div className="modal modal-ventas-sm" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="cot-if-title">
         <div className="modal-header">
           <h3 id="cot-if-title">{edit ? `Editar ${install!.code}` : 'Nuevo servicio de instalación'}</h3>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">

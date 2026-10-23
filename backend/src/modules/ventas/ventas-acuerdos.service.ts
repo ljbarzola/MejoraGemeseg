@@ -918,7 +918,23 @@ export class VentasAcuerdosService {
     });
     if (!actual) throw new NotFoundException('Contrato no encontrado');
 
-    const producto = esProducto(actual);
+    // El tipo se puede corregir (2026-10-22): un contrato creado antes de que existiera «Venta de producto» quedaba
+    // como servicio sin remedio. `producto` es el tipo con el que queda al terminar de editar.
+    const productoActual = esProducto(actual);
+    const producto = dto.kind ? dto.kind === 'PRODUCTO' : productoActual;
+    const cambiaTipo = producto !== productoActual;
+    if (cambiaTipo && producto) {
+      // Una venta de producto no se renueva: un contrato que forma parte de una cadena de renovaciones no puede serlo.
+      const [renovadoPor, oportunidadesDeRenovacion] = await Promise.all([
+        this.prisma.salesAgreement.count({ where: { renewedFromId: id } }),
+        this.prisma.salesOpportunity.count({ where: { renewsAgreementId: id } }),
+      ]);
+      if (actual.renewedFromId !== null || actual.status === 'RENOVADO' || renovadoPor > 0 || oportunidadesDeRenovacion > 0) {
+        throw new BadRequestException(
+          'Este contrato es parte de una renovación y no puede ser una venta de producto, porque los productos no se renuevan.',
+        );
+      }
+    }
     if (producto && (dto.endDate ?? '').trim()) {
       throw new BadRequestException('Una venta de producto no tiene fecha de fin.');
     }
@@ -940,6 +956,24 @@ export class VentasAcuerdosService {
       data.endDate = endDate;
       inicioNuevo = startDate;
       finNuevo = endDate;
+    }
+    if (cambiaTipo) {
+      // Cada tipo guarda sus propios datos: lo del otro tipo se limpia para que no quede un valor que ya no se muestra.
+      data.kind = producto ? 'PRODUCTO' : 'SERVICIO';
+      data.deliveredAt = null;
+      if (producto) {
+        // Producto: sin fin ni valor mensual; empieza «Por entregar» (se marca entregado desde la edición).
+        data.endDate = null;
+        finNuevo = null;
+        data.monthlyValue = null;
+        if (actual.status !== 'CANCELADO') data.status = 'POR_ENTREGAR';
+      } else {
+        // Servicio: sin garantía ni valor total; queda activo y con los días de gracia sugeridos por su duración.
+        data.warrantyUntil = null;
+        data.totalValue = null;
+        if (actual.status !== 'CANCELADO') data.status = 'ACTIVO';
+        if (dto.graceDays === undefined) data.graceDays = graciaSugerida(inicioNuevo, finNuevo);
+      }
     }
     if (dto.title !== undefined) {
       data.title = this.textoOpcional(dto.title, MAX_TITULO, 'El título');
@@ -1040,6 +1074,17 @@ export class VentasAcuerdosService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.salesAgreement.update({ where: { id }, data });
+      if (cambiaTipo) {
+        await tx.salesClientActivity.create({
+          data: {
+            companyId: cid,
+            salesClientId: actual.salesClientId,
+            type: 'NOTA',
+            text: `Se cambió el tipo del contrato #${id}: de ${productoActual ? 'venta de producto' : 'servicio recurrente'} a ${producto ? 'venta de producto' : 'servicio recurrente'}.`,
+            createdBy: userId,
+          },
+        });
+      }
       if (nuevosServicios) {
         await tx.salesAgreementService.deleteMany({
           where: { agreementId: id },

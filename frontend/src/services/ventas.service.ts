@@ -328,7 +328,13 @@ export const checkInVisit = (
   id: number,
   data?: { lat?: number; lng?: number; confirmado?: boolean },
 ): Promise<ClientVisit | CheckInPorConfirmar> => api.post(`/ventas/visits/${id}/checkin`, data).then(r => r.data);
-export const completeVisit = (id: number, data?: any) => api.post(`/ventas/visits/${id}/complete`, data).then(r => r.data);
+// Cierra la visita con su oferta (productos y servicios del catálogo, monto y resultado). Si la visita tiene una
+// oportunidad abierta, el servidor le suma los servicios y el monto (`oportunidadActualizada`); la etapa no.
+export interface CierreVisitaInput {
+  serviceIds?: number[]; quotedAmount?: number; outcome?: string; notes?: string; commercialOffer?: string;
+}
+export const completeVisit = (id: number, data?: CierreVisitaInput): Promise<ClientVisit & { oportunidadActualizada: boolean }> =>
+  api.post(`/ventas/visits/${id}/complete`, data).then(r => r.data);
 export const cancelVisit = (id: number, reason?: string) => api.post(`/ventas/visits/${id}/cancel`, { reason }).then(r => r.data);
 export const deleteVisit = (id: number) => api.delete(`/ventas/visits/${id}`).then(r => r.data);
 
@@ -535,7 +541,7 @@ export interface DashboardClientes {
   porResponsable: { userId: number | null; nombre: string; activos: number; vencidos: number; aceptados: number }[];
   nuevos: { total: number; referidos: number; porSemana: { inicio: string; total: number }[] };
   referidos: {
-    recibidos: number; sinAtender: number; aceptados: number; rechazados: number;
+    recibidos: number; enCurso: number; aceptados: number; rechazados: number;
     top: { userId: number; nombre: string; total: number }[];
   };
   estancados: {
@@ -903,9 +909,10 @@ export const GARANTIA_LABEL: Record<EstadoGarantia, string> = {
 // vuelve a ser lead. En la API los leads viven bajo /ventas/entrantes porque
 // /ventas/leads lo usa el módulo viejo de prospectos.
 
-export type CicloVida = 'PROSPECTO' | 'CLIENTE' | 'EN_RIESGO' | 'EX_CLIENTE' | 'PERDIDO';
+export type CicloVida = 'SOLO_DATOS' | 'PROSPECTO' | 'CLIENTE' | 'EN_RIESGO' | 'EX_CLIENTE' | 'PERDIDO';
 
 export const CICLO_LABEL: Record<CicloVida, string> = {
+  SOLO_DATOS: 'Solo datos',
   PROSPECTO: 'Prospecto',
   CLIENTE: 'Cliente',
   EN_RIESGO: 'En riesgo',
@@ -914,6 +921,7 @@ export const CICLO_LABEL: Record<CicloVida, string> = {
 };
 
 export const CICLO_COLOR: Record<CicloVida, string> = {
+  SOLO_DATOS: '#cbd5e0',
   PROSPECTO: '#718096',
   CLIENTE: '#2f855a',
   EN_RIESGO: '#d97706',
@@ -1020,6 +1028,8 @@ export interface Oportunidad {
   servicioDeFicha?: string | null;
   // Solo en la lista y solo si está perdida: el motivo registrado (null si no se registró).
   motivoPerdida?: MotivoDePerdida | null;
+  // Si alguna vez estuvo cerrada y se reabrió: desde qué etapa, cuándo (la última vez) y cuántas veces. Null si nunca.
+  reabierta?: { desde: string; desdeEtiqueta: string; fecha: string; veces: number } | null;
   notes?: string | null;
   services: { id: number; name: string }[];
   // Solo en el detalle:
@@ -1090,6 +1100,28 @@ export const ORIGEN_OPORTUNIDAD_LABEL: Record<string, string> = {
   CLIENTE_EXISTENTE: 'Nuevo servicio de un cliente',
   HISTORICO: 'Ya era cliente',
   RENOVACION: 'Renovación',
+};
+
+// «Origen» de una oportunidad, en una sola lista (2026-10-22): de dónde vino el contacto
+// (la misma lista de Fuentes de Posibles clientes) y, solo cuando no hay contacto que
+// atribuir, «Renovación» (la crea el sistema) o «Ya era cliente» (servicio anterior al sistema).
+// «Sistema anterior» y lo que no es un canal conocido se muestran como «Ingreso manual».
+// `originType` sigue guardado tal cual: las estadísticas lo usan para separar lo histórico.
+export const ORIGEN_OPORTUNIDAD_ESPECIALES: { clave: string; etiqueta: string }[] = [
+  { clave: 'RENOVACION', etiqueta: 'Renovación' },
+  { clave: 'HISTORICO', etiqueta: 'Ya era cliente' },
+];
+
+export const origenDeOportunidad = (
+  o: { originType: string; source?: string | null },
+  canales: { key: string; label: string }[],
+): { clave: string; etiqueta: string } => {
+  const especial = ORIGEN_OPORTUNIDAD_ESPECIALES.find((e) => e.clave === o.originType);
+  if (especial) return especial;
+  const canal = o.originType === 'MIGRADA' ? undefined : canales.find((c) => c.key === o.source);
+  if (canal) return { clave: canal.key, etiqueta: canal.label };
+  const manual = canales.find((c) => c.key === 'MANUAL');
+  return { clave: 'MANUAL', etiqueta: manual?.label ?? 'Ingreso manual' };
 };
 
 export const getOportunidades = (params?: { etapa?: string; responsableId?: number; clienteId?: number; servicioId?: number; estado?: string; q?: string }): Promise<Oportunidad[]> =>

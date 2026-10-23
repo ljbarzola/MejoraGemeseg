@@ -156,8 +156,7 @@ export default function HistoryModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
-        className="modal"
-        style={{ maxWidth: 1000, width: '96vw' }}
+        className="modal modal-ventas-lg"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

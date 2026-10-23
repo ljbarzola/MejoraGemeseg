@@ -1,29 +1,26 @@
 import { useState, useEffect } from 'react';
 import { Download, Printer } from 'lucide-react';
-import { getVisits, getLeads, ClientVisit, Lead } from '../../services/ventas.service';
+import { getVisits, ClientVisit } from '../../services/ventas.service';
 import DateInput from '../../components/common/DateInput';
+import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import FilterField from '../../components/common/FilterField';
 import { useToast } from '../../contexts/ToastContext';
+import { diaCorto } from '../../utils/contratoComercial';
+import { ESTADO_VISITA_LABEL, RESULTADO_VISITA_LABEL } from '../../utils/visitasVentas';
 
 // Pestaña «Resultados» de VisitasPage (antes era la pantalla «Reportes»): resumen
 // de visitas, monto cotizado y detalle exportable a CSV.
 export default function ResultadosVisitas() {
   const { showToast } = useToast();
   const [visits, setVisits] = useState<ClientVisit[]>([]);
-  const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
   const loadData = () => {
     setLoading(true);
-    Promise.all([
-      getVisits({ startDate, endDate }),
-      getLeads(),
-    ])
-      .then(([vData, lData]) => {
-        setVisits(vData);
-        setLeads(lData);
-      })
+    getVisits({ startDate, endDate })
+      .then(setVisits)
       .catch((err: any) => {
         showToast(err?.response?.data?.message || 'No se pudo cargar el reporte', 'error');
       })
@@ -42,22 +39,19 @@ export default function ResultadosVisitas() {
         : v.checkInResult === 'SIN_GPS' || v.checkInResult === 'SIN_UBICACION' ? 'Sin verificar'
           : v.checkInTime ? 'Check-in anterior (sin comprobar)' : 'Pendiente';
   const totalQuoted = completedVisits.reduce((acc, v) => acc + (v.quotedAmount || 0), 0);
-  const wonLeads = leads.filter((l) => l.status === 'WON');
-  const totalWonMD = wonLeads
-    .filter((l) => l.source !== 'MANUAL')
-    .reduce((acc, l) => acc + (l.closedValue || 0), 0);
 
   const exportCSV = () => {
     const headers = ['Cliente', 'Vendedor', 'Fecha', 'Estado', 'Check_in', 'Oferta_Comercial', 'Monto_Cotizado', 'Resultado'];
     const rows = visits.map((v) => [
       `"${v.clientName.replace(/"/g, '""')}"`,
       `"${(v.user?.fullName || '').replace(/"/g, '""')}"`,
-      `"${v.visitDate ? new Date(v.visitDate).toLocaleDateString('es-EC') : ''}"`,
-      `"${v.status}"`,
+      // El día de la visita se guarda a medianoche UTC: se lee tal cual, sin pasarlo por la zona horaria (salía un día antes).
+      `"${diaCorto(v.visitDate)}"`,
+      `"${ESTADO_VISITA_LABEL[v.status] ?? v.status}"`,
       `"${estadoCheckIn(v).replace(/^[^\p{L}]+/u, '')}"`,
       `"${(v.commercialOffer || '').replace(/"/g, '""')}"`,
       v.quotedAmount || 0,
-      `"${v.outcome || ''}"`,
+      `"${v.outcome ? RESULTADO_VISITA_LABEL[v.outcome] ?? v.outcome : ''}"`,
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
@@ -81,29 +75,19 @@ export default function ResultadosVisitas() {
         </button>
       </div>
 
-      {/* FILTER BAR */}
-      <div className="admin-section no-print" style={{ marginTop: '16px', display: 'flex', gap: '16px', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--azul-oscuro)' }}>Desde:</label>
-          <DateInput
-            value={startDate}
-            onChange={(v) => setStartDate(v)}
-            style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #cbd5e0' }}
-          />
+      {/* Filtros: el mismo patrón de barra que el resto de Ventas */}
+      <div className="filter-bar no-print" style={{ marginTop: 16 }}>
+        <div className="filter-bar-fields filter-bar-fields--etiquetas">
+          <FilterField label="Desde">
+            <DateInput value={startDate} onChange={(v) => { setStartDate(v); if (endDate && v && v > endDate) setEndDate(v); }} max={endDate || undefined} />
+          </FilterField>
+          <FilterField label="Hasta">
+            <DateInput value={endDate} onChange={(v) => { setEndDate(v); if (startDate && v && v < startDate) setStartDate(v); }} min={startDate || undefined} />
+          </FilterField>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--azul-oscuro)' }}>Hasta:</label>
-          <DateInput
-            value={endDate}
-            onChange={(v) => setEndDate(v)}
-            style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #cbd5e0' }}
-          />
+        <div className="filter-bar-actions">
+          <ClearFiltersButton onClear={() => { setStartDate(''); setEndDate(''); }} disabled={!startDate && !endDate} />
         </div>
-        {(startDate || endDate) && (
-          <button className="btn-secondary-sm" onClick={() => { setStartDate(''); setEndDate(''); }}>
-            Limpiar Filtros
-          </button>
-        )}
       </div>
 
       {/* EXECUTIVE SUMMARY */}
@@ -128,13 +112,6 @@ export default function ResultadosVisitas() {
           <div style={{ fontSize: '0.72rem', color: '#718096' }}>en ofertas comerciales</div>
         </div>
 
-        <div className="admin-section" style={{ padding: '14px', background: '#e6fffa' }}>
-          <div style={{ fontSize: '0.78rem', color: '#2c7a7b', fontWeight: 700 }}>RETORNO MARKETING ($MD)</div>
-          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#2c7a7b' }}>
-            ${totalWonMD.toLocaleString('es-EC', { minimumFractionDigits: 2 })}
-          </div>
-          <div style={{ fontSize: '0.72rem', color: '#718096' }}>Cierres desde campañas digitales</div>
-        </div>
       </div>
 
       {/* VISITS DETAIL TABLE */}
@@ -166,11 +143,11 @@ export default function ResultadosVisitas() {
                   <tr key={v.id}>
                     <td style={{ fontWeight: 600 }}>{v.clientName}</td>
                     <td>{v.user?.fullName || '—'}</td>
-                    <td>{v.visitDate ? new Date(v.visitDate).toLocaleDateString('es-EC') : '—'}</td>
+                    <td>{diaCorto(v.visitDate) || '—'}</td>
                     <td>{estadoCheckIn(v)}</td>
                     <td>{v.commercialOffer || '—'}</td>
                     <td style={{ fontWeight: 600 }}>${(v.quotedAmount || 0).toFixed(2)}</td>
-                    <td>{v.outcome || '—'}</td>
+                    <td>{v.outcome ? RESULTADO_VISITA_LABEL[v.outcome] ?? v.outcome : '—'}</td>
                   </tr>
                 ))}
               </tbody>

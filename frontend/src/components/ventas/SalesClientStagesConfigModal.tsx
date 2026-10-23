@@ -153,7 +153,7 @@ export default function SalesClientStagesConfigModal({ onClose, onChanged }: Pro
   return (
     <>
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-ventas-sm" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Etapas de las oportunidades</h3>
           <button className="modal-close" onClick={onClose}><X size={16} /></button>
@@ -181,7 +181,7 @@ export default function SalesClientStagesConfigModal({ onClose, onChanged }: Pro
                         type="color"
                         value={stage.color}
                         onChange={(e) => handleColorChange(stage, e.target.value)}
-                        style={{ width: '28px', height: '28px', border: 'none', padding: 0, background: 'none', cursor: 'pointer' }}
+                        style={{ width: '32px', minWidth: '32px', height: '32px', flex: '0 0 32px', border: 'none', padding: 0, background: 'none', cursor: 'pointer' }}
                         title="Color de la etapa"
                       />
                       <input
@@ -221,7 +221,7 @@ export default function SalesClientStagesConfigModal({ onClose, onChanged }: Pro
                     type="color"
                     value={newColor}
                     onChange={(e) => setNewColor(e.target.value)}
-                    style={{ width: '28px', height: '28px', border: 'none', padding: 0, background: 'none', cursor: 'pointer' }}
+                    style={{ width: '32px', minWidth: '32px', height: '32px', flex: '0 0 32px', border: 'none', padding: 0, background: 'none', cursor: 'pointer' }}
                   />
                   <input
                     type="text"

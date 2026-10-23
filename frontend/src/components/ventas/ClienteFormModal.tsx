@@ -175,7 +175,7 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className={`modal ${soloDatos && !client ? 'modal-ventas-sm' : 'modal-ventas-md'}`} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{client ? 'Editar empresa o persona' : soloDatos ? 'Nueva empresa o persona' : yaEsCliente ? 'Nueva empresa o persona (ya contrata)' : 'Nueva empresa o persona en negociación'}</h3>
           <button className="modal-close" onClick={onClose}>

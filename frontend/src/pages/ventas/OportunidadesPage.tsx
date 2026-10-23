@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Pencil, Trash2, ClipboardList, Workflow, CalendarPlus, UserPlus, UserMinus, Bot } from 'lucide-react';
+import { Plus, Pencil, Trash2, ClipboardList, Workflow, CalendarPlus, UserPlus, UserMinus, Bot, AlertCircle } from 'lucide-react';
 import { abrirChatDeVentas } from '../../services/chat.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import FilterField from '../../components/common/FilterField';
+import FiltroFecha from '../../components/common/FiltroFecha';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import OportunidadModal from '../../components/ventas/OportunidadModal';
@@ -19,8 +20,12 @@ import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import { useSiguientePasoCliente } from '../../hooks/useSiguientePasoCliente';
+import { useCanalesLead } from '../../hooks/useCanalesLead';
+import EtapasAyuda from '../../components/ventas/EtapasAyuda';
+import { SIGNIFICADO_ETAPA, etapaPermitida } from '../../utils/etapasVentas';
 import { getUser } from '../../services/auth.service';
 import { urgenciaDe, hoyISO } from '../../utils/seguimientoVentas';
+import { FILTRO_FECHA_VACIO, diaCortoEcuador, fechaEnRango, filtroFechaDeUrl, hayFiltroFecha, type FiltroFechaValor } from '../../utils/rangoFechas';
 import { useToast } from '../../contexts/ToastContext';
 import {
   getOportunidades,
@@ -31,7 +36,8 @@ import {
   getSalesClientFields,
   getSalesClientStages,
   getServicios,
-  ORIGEN_OPORTUNIDAD_LABEL,
+  ORIGEN_OPORTUNIDAD_ESPECIALES,
+  origenDeOportunidad,
   type Oportunidad,
   type SalesClient,
   type SalesClientField,
@@ -88,7 +94,9 @@ export default function OportunidadesPage() {
   const [filtroResponsable, setFiltroResponsable] = useState('');
   const [filtroServicio, setFiltroServicio] = useState('');
   const [filtroOrigen, setFiltroOrigen] = useState('');
+  const { canales } = useCanalesLead();
   const [filtroMotivo, setFiltroMotivo] = useState('');
+  const [filtroFecha, setFiltroFecha] = useState<FiltroFechaValor>(FILTRO_FECHA_VACIO);
   const [modal, setModal] = useState<ModalState>(null);
   const [cambio, setCambio] = useState<{ oportunidad: Oportunidad; destino: SalesClientStage } | null>(null);
   const [aEliminar, setAEliminar] = useState<Oportunidad | null>(null);
@@ -163,7 +171,10 @@ export default function OportunidadesPage() {
     // ?motivo=Precio: el Dashboard («Motivos de pérdida») lleva a las perdidas por ese motivo.
     const motivoPerdida = searchParams.get('motivo');
     if (motivoPerdida) { setFiltroMotivo(motivoPerdida); setVista('todas'); }
-    if (searchParams.get('nueva') || etapa || ficha || vistaParam || q || resp || origen || motivoPerdida) setSearchParams({}, { replace: true });
+    // ?desde=&hasta=: el periodo que se estaba mirando en el Dashboard; queda a la vista en el filtro «Llegó».
+    const fecha = filtroFechaDeUrl(searchParams.get('desde'), searchParams.get('hasta'));
+    if (fecha) { setFiltroFecha(fecha); setVista('todas'); }
+    if (searchParams.get('nueva') || etapa || ficha || vistaParam || q || resp || origen || motivoPerdida || fecha) setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
 
   const responsables = useMemo(
@@ -202,8 +213,9 @@ export default function OportunidadesPage() {
       if (filtroEtapa === 'none' ? !!o.status : filtroEtapa && o.status !== filtroEtapa) return false;
       if (filtroResponsable === 'none' ? !!o.assignedUserId : filtroResponsable && String(o.assignedUserId) !== filtroResponsable) return false;
       if (filtroServicio && !o.services.some((s) => String(s.id) === filtroServicio)) return false;
-      if (filtroOrigen && o.originType !== filtroOrigen) return false;
+      if (filtroOrigen && origenDeOportunidad(o, canales).clave !== filtroOrigen) return false;
       if (filtroMotivo && o.motivoPerdida?.label !== filtroMotivo) return false;
+      if (!fechaEnRango(o.receivedAt, filtroFecha)) return false;
       if (!q) return true;
       return (
         o.salesClient.name.toLowerCase().includes(q) ||
@@ -211,7 +223,7 @@ export default function OportunidadesPage() {
         o.services.some((s) => s.name.toLowerCase().includes(q))
       );
     });
-  }, [oportunidades, busqueda, filtroEtapa, filtroResponsable, filtroServicio, filtroOrigen, filtroMotivo]);
+  }, [oportunidades, canales, busqueda, filtroEtapa, filtroResponsable, filtroServicio, filtroOrigen, filtroMotivo, filtroFecha]);
 
   const { filas, thProps, SortIcon } = useSortableTable(
     filtradas,
@@ -221,7 +233,7 @@ export default function OportunidadesPage() {
       etapa: (o) => o.stage?.order ?? 999,
       monto: (o) => o.quotedAmount ?? -1,
       responsable: (o) => o.assignedUserName,
-      origen: (o) => ORIGEN_OPORTUNIDAD_LABEL[o.originType] ?? o.originType,
+      origen: (o) => origenDeOportunidad(o, canales).etiqueta,
       llego: (o) => o.receivedAt,
       telefono: (o) => o.salesClient.phone,
       correo: (o) => o.salesClient.email,
@@ -301,9 +313,11 @@ export default function OportunidadesPage() {
       case 'etapa':
         return (
           <>
+          <div className="opp-etapa-linea">
           <select
             value={o.status ?? ''}
             aria-label={`Etapa de ${o.salesClient.name}`}
+            title={o.status ? SIGNIFICADO_ETAPA[o.status] : undefined}
             onChange={(e) => {
               const destino = etapas.find((s) => s.key === e.target.value);
               if (destino && destino.key !== o.status) setCambio({ oportunidad: o, destino });
@@ -314,8 +328,18 @@ export default function OportunidadesPage() {
             }}
           >
             {!o.status && <option value="">Sin etapa</option>}
-            {etapas.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+            {etapas.map((s) => (
+              <option key={s.key} value={s.key} disabled={!etapaPermitida(o, s, etapas)}>{s.label}</option>
+            ))}
           </select>
+          {/* «!»: esta oportunidad estuvo cerrada y se reabrió. */}
+          {o.reabierta && (
+            <span className="opp-reabierta" role="img" aria-label="Oportunidad reabierta"
+              title={`Reabierta${o.reabierta.veces > 1 ? ` ${o.reabierta.veces} veces` : ''}. La última vez fue el ${diaCorto(o.reabierta.fecha)}: estaba en «${o.reabierta.desdeEtiqueta}» y volvió a evaluación.`}>
+              <AlertCircle size={15} />
+            </span>
+          )}
+          </div>
           {/* Una perdida dice por qué: el motivo queda visible sin abrir nada. */}
           {o.outcome === 'PERDIDA' && o.motivoPerdida && (
             <div style={{ fontSize: 11, color: '#718096', marginTop: 3, lineHeight: 1.3 }}
@@ -335,9 +359,9 @@ export default function OportunidadesPage() {
       case 'responsable':
         return o.assignedUserName || <span style={{ color: '#a0aec0' }}>Sin asignar</span>;
       case 'origen':
-        return ORIGEN_OPORTUNIDAD_LABEL[o.originType] ?? o.originType;
+        return origenDeOportunidad(o, canales).etiqueta;
       case 'llego':
-        return diaCorto(o.receivedAt);
+        return diaCortoEcuador(o.receivedAt);
       case 'telefono':
         return o.salesClient.phone || '—';
       case 'correo':
@@ -348,7 +372,7 @@ export default function OportunidadesPage() {
   };
   const columnasVisiblesOpp = columnPrefs.visible.filter((k) => COLUMNAS_OPP.some((c) => c.key === k));
 
-  const hayFiltros = !!busqueda || !!filtroEtapa || !!filtroResponsable || !!filtroServicio || !!filtroOrigen || !!filtroMotivo;
+  const hayFiltros = !!busqueda || !!filtroEtapa || !!filtroResponsable || !!filtroServicio || !!filtroOrigen || !!filtroMotivo || hayFiltroFecha(filtroFecha);
   const motivosDePerdida = useMemo(
     () => [...new Set(oportunidades.map((o) => o.motivoPerdida?.label).filter((m): m is string => !!m))].sort((a, b) => a.localeCompare(b, 'es')),
     [oportunidades],
@@ -430,9 +454,11 @@ export default function OportunidadesPage() {
           <FilterField label="Origen">
             <select className="filter-select" value={filtroOrigen} onChange={(e) => setFiltroOrigen(e.target.value)}>
               <option value="">Todos</option>
-              {Object.entries(ORIGEN_OPORTUNIDAD_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+              {canales.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+              {ORIGEN_OPORTUNIDAD_ESPECIALES.map((e) => <option key={e.clave} value={e.clave}>{e.etiqueta}</option>)}
             </select>
           </FilterField>
+          <FiltroFecha label="Llegó" valor={filtroFecha} onChange={setFiltroFecha} title="Filtra por el día en que llegó la oportunidad (la columna «Llegó»)" />
           </>
           )}
         </div>
@@ -451,7 +477,7 @@ export default function OportunidadesPage() {
             disabledTitle="La pestaña Para hoy tiene columnas fijas; cambia a Todas para elegir las tuyas"
           />
           <ClearFiltersButton
-            onClear={() => { setBusqueda(''); setFiltroEtapa(''); setFiltroResponsable(''); setFiltroServicio(''); setFiltroOrigen(''); setFiltroMotivo(''); setHoyResponsable('mine'); }}
+            onClear={() => { setBusqueda(''); setFiltroEtapa(''); setFiltroResponsable(''); setFiltroServicio(''); setFiltroOrigen(''); setFiltroMotivo(''); setFiltroFecha(FILTRO_FECHA_VACIO); setHoyResponsable('mine'); }}
             disabled={vista === 'hoy' ? !busqueda && hoyResponsable === 'mine' : !hayFiltros}
           />
         </div>
@@ -494,6 +520,7 @@ export default function OportunidadesPage() {
                     return (
                       <th key={k} {...thProps(k)} style={{ width: ANCHO_COLUMNA_OPP[k] }}>
                         {col.label} <SortIcon campo={k} />
+                        {k === 'etapa' && <EtapasAyuda etapas={etapas} />}
                       </th>
                     );
                   })}

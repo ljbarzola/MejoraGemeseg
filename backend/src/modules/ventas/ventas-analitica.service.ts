@@ -14,6 +14,7 @@ import {
   resumirMuestra,
 } from './ventas-metricas.util';
 import { ETAPA_GANADA } from './stage-outcome.util';
+import { KINDS_MOTIVO_PERDIDA, MOTIVO_SIN_INFORMACION } from './motivo-perdida.util';
 import {
   embudoMarketing,
   faseMarketing,
@@ -168,7 +169,7 @@ export class VentasAnaliticaService {
 
     // ---- ciclo de vida ----
     const porCiclo: Record<CicloVida, number> = {
-      PROSPECTO: 0, CLIENTE: 0, EN_RIESGO: 0, EX_CLIENTE: 0, PERDIDO: 0,
+      SOLO_DATOS: 0, PROSPECTO: 0, CLIENTE: 0, EN_RIESGO: 0, EX_CLIENTE: 0, PERDIDO: 0,
     };
     for (const c of clientes) {
       const r = ciclos.get(c.id);
@@ -653,14 +654,49 @@ export class VentasAnaliticaService {
     const leadsDelVendedor = vend === null
       ? []
       : (await this.prisma.salesLead.findMany({ where: { companyId: cid, assignedUserId: vend }, select: { id: true } })).map((l) => l.id);
-    const entradas = await this.prisma.salesReasonEntry.findMany({
+    const registradas = await this.prisma.salesReasonEntry.findMany({
       where: {
         companyId: cid,
         createdAt: { gte: r.desde, lte: r.hastaFin },
         ...(ids ? { OR: [{ salesClientId: { in: ids } }, { leadId: { in: leadsDelVendedor } }] } : {}),
       },
-      select: { kind: true, reasonLabel: true, source: true },
+      select: { kind: true, reasonLabel: true, source: true, opportunityId: true, createdAt: true },
     });
+    // Una oportunidad reabierta ya no está perdida (2026-10-22): su motivo viejo no cuenta, para que la dona siga
+    // sumando lo mismo que el medidor. Y si se perdió dos veces, solo cuenta el último motivo.
+    const entradaDePerdida = (e: { kind: string; opportunityId?: number | null }) =>
+      e.opportunityId != null && KINDS_MOTIVO_PERDIDA.includes(e.kind);
+    const idsConMotivo = [...new Set(registradas.filter(entradaDePerdida).map((e) => e.opportunityId as number))];
+    const siguenPerdidas = idsConMotivo.length
+      ? new Set(
+          (
+            await this.prisma.salesOpportunity.findMany({
+              where: { companyId: cid, id: { in: idsConMotivo }, outcome: 'PERDIDA' },
+              select: { id: true },
+            })
+          ).map((o) => o.id),
+        )
+      : new Set<number>();
+    const ultimoMotivo = new Map<number, number>();
+    for (const e of registradas.filter(entradaDePerdida)) {
+      const t = e.createdAt.getTime();
+      if (t > (ultimoMotivo.get(e.opportunityId as number) ?? 0)) ultimoMotivo.set(e.opportunityId as number, t);
+    }
+    const entradas: { kind: string; reasonLabel: string; source: string | null }[] = registradas.filter(
+      (e) =>
+        !entradaDePerdida(e) ||
+        (siguenPerdidas.has(e.opportunityId as number) && e.createdAt.getTime() === ultimoMotivo.get(e.opportunityId as number)),
+    );
+    // Lo perdido o descartado ANTES de que el sistema pidiera un motivo no tiene registro: cuenta como «Sin información»
+    // para que la dona sume lo mismo que el medidor de Aceptación y que la lista a la que lleva (2026-10-21).
+    const [perdidasSinMotivo, descartadosSinMotivo] = await Promise.all([
+      this.perdidasSinMotivo(cid, ids, r.desde, r.hastaFin),
+      this.descartadosSinMotivo(cid, vend, r.desde, r.hastaFin),
+    ]);
+    entradas.push(
+      ...Array.from({ length: perdidasSinMotivo }, () => ({ kind: 'OPP_PERDIDA', reasonLabel: MOTIVO_SIN_INFORMACION, source: null })),
+      ...Array.from({ length: descartadosSinMotivo }, () => ({ kind: 'LEAD_DESCARTE', reasonLabel: MOTIVO_SIN_INFORMACION, source: null })),
+    );
     const pct = (n: number, t: number) => (t === 0 ? 0 : Math.round((n / t) * 1000) / 10);
     return {
       periodo: { desde: r.desdeStr, hasta: r.hastaStr },
@@ -685,6 +721,45 @@ export class VentasAnaliticaService {
         };
       }),
     };
+  }
+
+  // Oportunidades perdidas en el periodo y dentro del alcance que no tienen ningún motivo registrado.
+  private async perdidasSinMotivo(cid: number, ids: number[] | null, desde: Date, hasta: Date): Promise<number> {
+    const perdidas = await this.prisma.salesOpportunity.findMany({
+      where: {
+        companyId: cid,
+        outcome: 'PERDIDA',
+        closedAt: { gte: desde, lte: hasta },
+        ...(ids ? { salesClientId: { in: ids } } : {}),
+      },
+      select: { id: true },
+    });
+    if (perdidas.length === 0) return 0;
+    const conMotivo = await this.prisma.salesReasonEntry.findMany({
+      where: { companyId: cid, kind: { in: KINDS_MOTIVO_PERDIDA }, opportunityId: { in: perdidas.map((o) => o.id) } },
+      select: { opportunityId: true },
+    });
+    const con = new Set(conMotivo.map((e) => e.opportunityId));
+    return perdidas.filter((o) => !con.has(o.id)).length;
+  }
+
+  // Posibles clientes descartados en el periodo (para un vendedor, los suyos) sin motivo registrado.
+  private async descartadosSinMotivo(cid: number, vend: number | null, desde: Date, hasta: Date): Promise<number> {
+    const descartados = await this.prisma.salesLead.findMany({
+      where: { companyId: cid, status: 'DESCARTADO', ...(vend !== null ? { assignedUserId: vend } : {}) },
+      select: { id: true, triagedAt: true, updatedAt: true },
+    });
+    const delPeriodo = descartados.filter((l) => {
+      const cuando = l.triagedAt ?? l.updatedAt;
+      return cuando >= desde && cuando <= hasta;
+    });
+    if (delPeriodo.length === 0) return 0;
+    const conMotivo = await this.prisma.salesReasonEntry.findMany({
+      where: { companyId: cid, kind: 'LEAD_DESCARTE', leadId: { in: delPeriodo.map((l) => l.id) } },
+      select: { leadId: true },
+    });
+    const con = new Set(conMotivo.map((e) => e.leadId));
+    return delPeriodo.filter((l) => !con.has(l.id)).length;
   }
 
   // ---------------------------------------------------------------------

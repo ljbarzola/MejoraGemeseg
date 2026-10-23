@@ -10,7 +10,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { VentasMotivosService } from './ventas-motivos.service';
 import { hoyEcuador, parseDiaContrato } from './agreement-status.util';
 import { resultadoDeEtapa } from './stage-outcome.util';
-import { KINDS_MOTIVO_PERDIDA, ultimoMotivoPorOportunidad } from './motivo-perdida.util';
+import { validarCambioDeEtapa } from './etapas-sentido.util';
+import { KINDS_MOTIVO_PERDIDA, MOTIVO_SIN_INFORMACION, ultimoMotivoPorOportunidad } from './motivo-perdida.util';
 import { VentasConversionesService } from './ventas-conversiones.service';
 import { VentasAcuerdosService } from './ventas-acuerdos.service';
 import { parseSiguientePaso } from './siguiente-paso.util';
@@ -400,6 +401,38 @@ export class VentasOportunidadesService {
     };
   }
 
+  // Oportunidades que alguna vez se reabrieron (pasaron de una etapa cerrada a una abierta): sale del historial de
+  // cambios de etapa, sin columna nueva. La pantalla las marca con «!».
+  private async reaperturas(
+    cid: number,
+    ids: number[],
+    etapas: Map<string, EtapaInfo>,
+  ): Promise<Map<number, { desde: string; desdeEtiqueta: string; fecha: Date; veces: number }>> {
+    const out = new Map<number, { desde: string; desdeEtiqueta: string; fecha: Date; veces: number }>();
+    const finales = [...etapas.values()].filter((e) => e.isFinal).map((e) => e.key);
+    if (ids.length === 0 || finales.length === 0) return out;
+    const cambios = await this.prisma.salesOpportunityStageChange.findMany({
+      where: { companyId: cid, opportunityId: { in: ids }, fromStatus: { in: finales }, toStatus: { notIn: finales } },
+      orderBy: { createdAt: 'desc' },
+      select: { opportunityId: true, fromStatus: true, createdAt: true },
+    });
+    for (const c of cambios) {
+      const previo = out.get(c.opportunityId);
+      if (previo) {
+        previo.veces += 1;
+        continue;
+      }
+      const desde = c.fromStatus as string;
+      out.set(c.opportunityId, {
+        desde,
+        desdeEtiqueta: etapas.get(desde)?.label ?? desde,
+        fecha: c.createdAt,
+        veces: 1,
+      });
+    }
+    return out;
+  }
+
   // ---------------------------------------------------------------------
   // Consultas
   // ---------------------------------------------------------------------
@@ -457,10 +490,15 @@ export class VentasOportunidadesService {
           }),
         )
       : new Map();
+    const reabiertas = await this.reaperturas(cid, filas.map((o) => o.id), etapas);
     return filas.map((o) => ({
       ...this.formatear(o, etapas, opcionesServicio),
+      reabierta: reabiertas.get(o.id) ?? null,
       assignedUserName: o.assignedUserId ? (nombre.get(o.assignedUserId) ?? null) : null,
-      motivoPerdida: o.outcome === 'PERDIDA' ? (motivos.get(o.id) ?? null) : null,
+      // Una perdida anterior al registro de motivos sale como «Sin información»: así el filtro «Motivo de pérdida» y
+      // la dona del Dashboard cuentan las mismas.
+      motivoPerdida:
+        o.outcome === 'PERDIDA' ? (motivos.get(o.id) ?? { label: MOTIVO_SIN_INFORMACION, comment: null, source: null }) : null,
     }));
   }
 
@@ -481,8 +519,10 @@ export class VentasOportunidadesService {
       orderBy: { createdAt: 'desc' },
     });
     const { stageChanges, ...base } = o;
+    const reabiertas = await this.reaperturas(cid, [id], etapas);
     return {
       ...this.formatear(base as OportunidadConRelaciones, etapas, opcionesServicio),
+      reabierta: reabiertas.get(id) ?? null,
       stageChanges,
       motivos: entradas,
     };
@@ -610,12 +650,22 @@ export class VentasOportunidadesService {
     if (opp.status === dto.toStatus) {
       throw new BadRequestException('La oportunidad ya está en esa etapa');
     }
-    const destino = await this.prisma.salesClientStage.findFirst({
-      where: { companyId: cid, key: dto.toStatus },
+    const etapasEmpresa = await this.prisma.salesClientStage.findMany({
+      where: { companyId: cid },
+      orderBy: { order: 'asc' },
     });
+    const destino = etapasEmpresa.find((e) => e.key === dto.toStatus);
     if (!destino) {
       throw new BadRequestException(`La etapa "${dto.toStatus}" no existe en esta empresa`);
     }
+    // Solo se avanza; una cerrada solo se reabre a «En evaluación» (ver etapas-sentido.util.ts).
+    const sentido = validarCambioDeEtapa(
+      etapasEmpresa.find((e) => e.key === opp.status) ?? null,
+      opp.closedAt !== null,
+      destino,
+      etapasEmpresa,
+    );
+    if (!sentido.ok) throw new BadRequestException(sentido.mensaje);
 
     const { outcome, cerrada } = resultadoDeEtapa(destino.key, destino.isFinal);
 

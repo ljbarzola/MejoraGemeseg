@@ -287,7 +287,7 @@ export default function ContratoResult() {
 
       {cambiandoTipo && (
         <div className="modal-overlay" onClick={() => setCambiandoTipo(false)}>
-          <div className="modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal modal-ventas-sm" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Cambiar el tipo del documento</h3>
               <button className="modal-close" onClick={() => setCambiandoTipo(false)} aria-label="Cerrar">✕</button>

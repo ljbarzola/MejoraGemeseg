@@ -27,8 +27,8 @@ const sinMovimiento = {
 };
 
 describe('calcularCicloVida', () => {
-  it('sin contratos ni oportunidades es prospecto', () => {
-    expect(calcularCicloVida({ ...sinMovimiento, contratos: [] }, ahora).ciclo).toBe('PROSPECTO');
+  it('sin contratos ni oportunidades es «solo datos», no prospecto', () => {
+    expect(calcularCicloVida({ ...sinMovimiento, contratos: [] }, ahora).ciclo).toBe('SOLO_DATOS');
   });
 
   it('con una oportunidad abierta sigue siendo prospecto', () => {

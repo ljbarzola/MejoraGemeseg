@@ -14,6 +14,7 @@ import ClienteFichaPanel from '../../components/ventas/ClienteFichaPanel';
 import ClienteFormModal from '../../components/ventas/ClienteFormModal';
 import PageTabs from '../../components/common/PageTabs';
 import FilterField from '../../components/common/FilterField';
+import { rangoDeAtajo } from '../../utils/rangoFechas';
 import { BarraDestino, Tarjeta } from '../../components/ventas/dashboard/DashboardBits';
 import { AreaGrafico, BarraApilada, EmbudoGrafico, Medidor } from '../../components/ventas/dashboard/DashboardGraficos';
 
@@ -47,26 +48,9 @@ const RANGOS: { value: Rango; label: string }[] = [
   { value: '90', label: 'Últimos 90 días' },
 ];
 
-function rangoFechas(r: Rango): { desde: string; hasta: string } {
-  const hoy = new Date();
-  if (r === 'semana') {
-    const lunes = new Date(hoy);
-    lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
-    return { desde: iso(lunes), hasta: iso(hoy) };
-  }
-  if (r === 'mes_pasado') {
-    return {
-      desde: iso(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)),
-      hasta: iso(new Date(hoy.getFullYear(), hoy.getMonth(), 0)),
-    };
-  }
-  if (r === '90') {
-    const ini = new Date(hoy);
-    ini.setDate(hoy.getDate() - 89);
-    return { desde: iso(ini), hasta: iso(hoy) };
-  }
-  return { desde: iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), hasta: iso(hoy) };
-}
+// Los mismos periodos que el filtro «Fecha» de las listas (utils/rangoFechas.ts): así el botón de una tarjeta abre
+// la lista con exactamente este periodo.
+const rangoFechas = (r: Rango) => rangoDeAtajo(r);
 
 const COLOR_VENCIDO = '#c53030';
 const COLOR_HOY = '#b7791f';
@@ -118,6 +102,12 @@ export default function VentasDashboard() {
   const irAOportunidades = (filtros: Record<string, string>) => {
     const params = new URLSearchParams({ ...filtros, responsable });
     navigate(`/ventas/oportunidades${params.toString() ? `?${params.toString()}` : ''}`);
+  };
+  // Las tarjetas que cuentan por periodo («Nuevos», «Referidos») abren la lista con ESE periodo ya puesto (el
+  // filtro «Fecha» de la lista lo muestra y se puede quitar), para que el número y la lista coincidan.
+  const irConPeriodo = (ruta: string, filtros: Record<string, string> = {}) => {
+    const params = new URLSearchParams({ ...filtros, ...rangoFechas(rango), responsable });
+    navigate(`${ruta}?${params.toString()}`);
   };
 
   const [pestana, setPestana] = useState<Pestana>('resumen');
@@ -262,10 +252,13 @@ export default function VentasDashboard() {
               </div>
             </Tarjeta>
 
-            <Tarjeta titulo="Nuevos clientes y prospectos" hint={`Del ${formatDia(data.alcance.desde)} al ${formatDia(data.alcance.hasta)}, por semana`}>
+            <Tarjeta
+              titulo="Nuevos clientes y prospectos" hint={`Del ${formatDia(data.alcance.desde)} al ${formatDia(data.alcance.hasta)}, por semana`}
+              accion={<button type="button" className="btn-secondary" onClick={() => irConPeriodo('/ventas/clientes')} style={{ padding: '4px 10px', fontSize: '0.78rem' }} title="Ver en el Directorio a quienes se registraron en este periodo">Ver →</button>}
+            >
               <div className="dash-cifra">
                 <strong>{data.nuevos.total}</strong>
-                <span>{data.nuevos.referidos} {data.nuevos.referidos === 1 ? 'vino' : 'vinieron'} por referido</span>
+                <span>{data.nuevos.total === 1 ? 'registrado' : 'registrados'} en el Directorio</span>
               </div>
               <AreaGrafico
                 puntos={data.nuevos.porSemana.map((s) => ({ etiqueta: formatCorto(s.inicio), valor: s.total }))}
@@ -363,13 +356,13 @@ export default function VentasDashboard() {
 
               <Tarjeta
                 titulo="Referidos"
-                hint={`${data.referidos.recibidos} nuevos entre el ${formatDia(data.alcance.desde)} y el ${formatDia(data.alcance.hasta)}`}
-                accion={<button type="button" className="btn-secondary" onClick={() => irAOportunidades({ origen: 'REFERIDO' })} style={{ padding: '4px 10px', fontSize: '0.78rem' }} title="Ver las oportunidades que vinieron por referido">Ver →</button>}
+                hint={`${data.referidos.recibidos} ${data.referidos.recibidos === 1 ? 'referido llegó' : 'referidos llegaron'} entre el ${formatDia(data.alcance.desde)} y el ${formatDia(data.alcance.hasta)}`}
+                accion={<button type="button" className="btn-secondary" onClick={() => irConPeriodo('/ventas/oportunidades', { origen: 'REFERIDO' })} style={{ padding: '4px 10px', fontSize: '0.78rem' }} title="Ver las oportunidades que vinieron por referido en este periodo">Ver →</button>}
               >
                 <BarraApilada
                   vacio="Aún no hay referidos en este periodo."
                   partes={[
-                    { key: 'sin', etiqueta: 'Sin atender', valor: data.referidos.sinAtender, color: COLOR_HOY },
+                    { key: 'curso', etiqueta: 'En curso', valor: data.referidos.enCurso, color: '#2b6cb0' },
                     { key: 'ace', etiqueta: 'Aceptados', valor: data.referidos.aceptados, color: '#2f855a' },
                     { key: 'per', etiqueta: 'Perdidos', valor: data.referidos.rechazados, color: '#94a3b8' },
                   ]}

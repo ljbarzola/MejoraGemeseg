@@ -74,7 +74,7 @@ export default function MotivoCierreModal({
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-ventas-sm" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{titulo}</h3>
           <button className="modal-close" onClick={onCancel} aria-label="Cerrar">✕</button>

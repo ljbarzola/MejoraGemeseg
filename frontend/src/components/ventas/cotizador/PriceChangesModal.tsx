@@ -15,7 +15,7 @@ export default function PriceChangesModal({ changes, canEdit, onKeep, onUseCurre
   return (
     <div className="modal-overlay" onClick={onKeep}>
       <div
-        className="modal modal-xl"
+        className="modal modal-ventas-lg"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

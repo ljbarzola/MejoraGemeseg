@@ -10,7 +10,7 @@ export default function DuplicateQuoteModal({ quoteNumber, canUpdate, onChoose }
   return (
     <div className="modal-overlay" onClick={() => onChoose(null)}>
       <div
-        className="modal"
+        className="modal modal-ventas-sm"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

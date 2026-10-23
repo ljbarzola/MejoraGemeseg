@@ -29,7 +29,7 @@ export default function ProductDetailModal({ product: p, supplierMargins, instal
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
-        className="modal modal-lg"
+        className="modal modal-ventas-md"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

@@ -16,10 +16,10 @@ interface SubItem {
   separadorAntes?: boolean;
 }
 
-// «Planificación y Campo»: en producción sigue en gris («Próximamente») hasta que la usuaria decida
-// encenderla (ver App.tsx, ruta /ventas/visitas). Prendida SOLO en su copia local desde 2026-10-20:
-// al hacer commit, esta constante debe quedar en false.
-const PLANIFICACION_Y_CAMPO_ACTIVA = false;
+// «Planificación y Campo» (visitas de campo): ENCENDIDA el 2026-10-23 por decisión de la usuaria. Hasta entonces
+// estuvo en gris («Próximamente»). Para apagarla otra vez basta ponerla en false (el ítem vuelve a gris y
+// sin clic); la ruta /ventas/visitas de App.tsx queda registrada.
+const PLANIFICACION_Y_CAMPO_ACTIVA = true;
 
 // Mismo corte que el @media (max-width: 768px) de styles.css.
 const MOBILE_QUERY = '(max-width: 768px)';
@@ -118,9 +118,7 @@ export default function Sidebar() {
   // (Leads -> Posibles clientes, Clientes -> Directorio; Documentación se queda
   // igual). Las URLs NO cambiaron (/ventas/leads, /ventas/clientes,
   // /ventas/documentacion): hay notificaciones guardadas que apuntan a ellas.
-  // Planificación y Campo se deja visible como "Próximamente" (gris, sin clic) y NO tiene ruta:
-  // App.tsx redirige esa URL al Dashboard. (El 2026-10-18 se quitó por error de interpretación y
-  // la usuaria pidió dejarlo otra vez en gris: NO volver a quitarlo sin que ella lo pida.)
+  // Planificación y Campo está activa desde 2026-10-23 (ver PLANIFICACION_Y_CAMPO_ACTIVA arriba).
   // «Reportes» se quitó del menú (2026-10-08): sus cifras de visitas viven en la pestaña
   // «Resultados» de VisitasPage y el embudo de marketing, en el Dashboard. Tampoco las conoce el
   // asistente de IA (system-guide.util.ts / ai.processor.ts). Al reactivar uno, hay que
