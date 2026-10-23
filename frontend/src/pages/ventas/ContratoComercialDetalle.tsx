@@ -281,7 +281,7 @@ export default function ContratoComercialDetalle() {
         </div>
 
         <div style={{ marginTop: 16 }}>
-          <div style={etiqueta}>{producto ? 'Productos' : 'Servicios'}</div>
+          <div style={etiqueta}>{producto ? 'Productos o servicios' : 'Servicios'}</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
             {contrato.services.map((s) => (
               <span key={s.id} className="status-badge" style={{ backgroundColor: '#eef2f7', color: '#334155' }}>

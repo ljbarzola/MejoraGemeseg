@@ -523,9 +523,9 @@ export class VentasAcuerdosService {
     if (!cliente) throw new NotFoundException('Cliente no encontrado');
     const producto = dto.kind === 'PRODUCTO';
     if (producto && renovacion) {
-      throw new BadRequestException('Una venta de producto no se renueva.');
+      throw new BadRequestException('Una venta única no se renueva.');
     }
-    // Una venta de producto no tiene fecha de fin: solo la fecha de la venta.
+    // Una venta única no tiene fecha de fin: solo la fecha de la venta.
     const { startDate, endDate } = this.fechasValidas(
       dto.startDate,
       producto ? undefined : dto.endDate,
@@ -671,13 +671,13 @@ export class VentasAcuerdosService {
     if (c.tipo === 'PRODUCTO') {
       if (c.agreementId) {
         throw new BadRequestException(
-          'Una venta de producto o instalación no se suma a un contrato de servicio: se registra como venta nueva.',
+          'Una venta única no se suma a un contrato de servicio: se registra como venta nueva.',
         );
       }
       return;
     }
     if (c.garantiaMeses) {
-      throw new BadRequestException('La garantía solo aplica a productos o instalaciones.');
+      throw new BadRequestException('La garantía solo aplica a ventas únicas.');
     }
     const vigentes = await this.contratosVigentesDeServicio(companyId, opp.salesClientId);
     if (c.agreementId) {
@@ -918,25 +918,25 @@ export class VentasAcuerdosService {
     });
     if (!actual) throw new NotFoundException('Contrato no encontrado');
 
-    // El tipo se puede corregir (2026-10-22): un contrato creado antes de que existiera «Venta de producto» quedaba
+    // El tipo se puede corregir (2026-10-22): un contrato creado antes de que existiera «Venta única» quedaba
     // como servicio sin remedio. `producto` es el tipo con el que queda al terminar de editar.
     const productoActual = esProducto(actual);
     const producto = dto.kind ? dto.kind === 'PRODUCTO' : productoActual;
     const cambiaTipo = producto !== productoActual;
     if (cambiaTipo && producto) {
-      // Una venta de producto no se renueva: un contrato que forma parte de una cadena de renovaciones no puede serlo.
+      // Una venta única no se renueva: un contrato que forma parte de una cadena de renovaciones no puede serlo.
       const [renovadoPor, oportunidadesDeRenovacion] = await Promise.all([
         this.prisma.salesAgreement.count({ where: { renewedFromId: id } }),
         this.prisma.salesOpportunity.count({ where: { renewsAgreementId: id } }),
       ]);
       if (actual.renewedFromId !== null || actual.status === 'RENOVADO' || renovadoPor > 0 || oportunidadesDeRenovacion > 0) {
         throw new BadRequestException(
-          'Este contrato es parte de una renovación y no puede ser una venta de producto, porque los productos no se renuevan.',
+          'Este contrato es parte de una renovación y no puede ser una venta única, porque las ventas únicas no se renuevan.',
         );
       }
     }
     if (producto && (dto.endDate ?? '').trim()) {
-      throw new BadRequestException('Una venta de producto no tiene fecha de fin.');
+      throw new BadRequestException('Una venta única no tiene fecha de fin.');
     }
 
     const data: Prisma.SalesAgreementUpdateInput = {};
@@ -1003,7 +1003,7 @@ export class VentasAcuerdosService {
       );
     }
     if (dto.status !== undefined && producto) {
-      // Venta de producto: Por entregar <-> Entregado (también reactiva un
+      // Venta única: Por entregar <-> Entregado (también reactiva un
       // producto cancelado). Cancelar sigue teniendo su ruta, que pide el motivo.
       if (dto.status !== 'POR_ENTREGAR' && dto.status !== 'ENTREGADO') {
         throw new BadRequestException(
@@ -1080,7 +1080,7 @@ export class VentasAcuerdosService {
             companyId: cid,
             salesClientId: actual.salesClientId,
             type: 'NOTA',
-            text: `Se cambió el tipo del contrato #${id}: de ${productoActual ? 'venta de producto' : 'servicio recurrente'} a ${producto ? 'venta de producto' : 'servicio recurrente'}.`,
+            text: `Se cambió el tipo del contrato #${id}: de ${productoActual ? 'venta única' : 'servicio recurrente'} a ${producto ? 'venta única' : 'servicio recurrente'}.`,
             createdBy: userId,
           },
         });
@@ -1246,7 +1246,7 @@ export class VentasAcuerdosService {
     const anterior = await this.cargarAnterior(cid, id);
     if (esProducto(anterior)) {
       throw new BadRequestException(
-        'Una venta de producto no se renueva. Si el cliente compra otra vez, registra una venta nueva.',
+        'Una venta única no se renueva. Si el cliente compra otra vez, registra una venta nueva.',
       );
     }
     if (anterior.status === 'RENOVADO') {

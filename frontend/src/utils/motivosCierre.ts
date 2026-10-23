@@ -39,7 +39,7 @@ export const GRUPOS_MOTIVOS: GrupoMotivos[] = [
     titulo: 'Por qué terminó un contrato',
     corto: 'Contratos terminados',
     donde: 'Se pide en Contratos: al cancelar uno, al registrar por qué venció sin renovarse y al renovar con menos.',
-    ejemplos: 'Sirve para ver por qué se van los clientes, por ejemplo uno que contrató en enero y un mes después ya no siguió. Aplica sobre todo a servicios: una venta de producto es única y casi no tiene motivo de no renovación.',
+    ejemplos: 'Sirve para ver por qué se van los clientes, por ejemplo uno que contrató en enero y un mes después ya no siguió. Aplica sobre todo a servicios: una venta única se hace una sola vez y casi no tiene motivo de no renovación.',
     kinds: ['CONTRATO_CANCELADO', 'CONTRATO_NO_RENOVADO', 'CONTRATO_REDUCCION'],
   },
 ];

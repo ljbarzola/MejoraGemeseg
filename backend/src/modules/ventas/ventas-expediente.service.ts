@@ -285,7 +285,7 @@ export class VentasExpedienteService {
       }
       if (c.kind === 'PRODUCTO') {
         out.push(
-          `- [#contrato:${c.id}] ${c.title ? `«${c.title}» · ` : ''}VENTA DE PRODUCTO (única, no se renueva) del ${fecha(c.startDate)} · ${estadoTxt}${c.deliveredAt ? ` el ${fecha(c.deliveredAt)}` : ''} · productos: ${servicios.join(', ') || 'ninguno'} · valor total: ${dinero(c.totalValue)}${c.warrantyUntil ? ` · garantía hasta ${fecha(c.warrantyUntil)}` : ''} · documentos: ${c._count.documents}`,
+          `- [#contrato:${c.id}] ${c.title ? `«${c.title}» · ` : ''}VENTA ÚNICA (producto o servicio de una sola vez, no se renueva) del ${fecha(c.startDate)} · ${estadoTxt}${c.deliveredAt ? ` el ${fecha(c.deliveredAt)}` : ''} · productos o servicios: ${servicios.join(', ') || 'ninguno'} · valor total: ${dinero(c.totalValue)}${c.warrantyUntil ? ` · garantía hasta ${fecha(c.warrantyUntil)}` : ''} · documentos: ${c._count.documents}`,
         );
         const msP = motivosPorContrato.get(c.id) ?? [];
         for (const m of msP) out.push(`    · ${lineaMotivo(m)}`);
