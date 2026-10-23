@@ -33,8 +33,8 @@ export class CacaoReceptionsController {
   @Get('qualities')
   @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
   @Section('CACAO', 'view')
-  findQualities() {
-    return this.service.findQualities();
+  findQualities(@Req() req: any) {
+    return this.service.findQualities(req.user.companyId);
   }
 
   @Post()

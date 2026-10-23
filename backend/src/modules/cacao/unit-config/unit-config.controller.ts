@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  ParseIntPipe,
   UseGuards,
   Req,
 } from '@nestjs/common';
@@ -16,6 +17,10 @@ import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
 import { CacaoUnitConfigService } from './unit-config.service';
+import {
+  CreateUnitConfigDto,
+  UpdateUnitConfigDto,
+} from './dto/unit-config.dto';
 
 @Controller('cacao/unit-config')
 export class CacaoUnitConfigController {
@@ -32,32 +37,27 @@ export class CacaoUnitConfigController {
   @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
   @Roles(UserRole.ADMIN)
   @Section('CACAO', 'write')
-  create(
-    @Body()
-    body: {
-      name: string;
-      displayName: string;
-      kgPerUnit: number;
-      isDefault?: boolean;
-    },
-    @Req() req: any,
-  ) {
-    return this.service.create({ ...body, companyId: req.user.companyId });
+  create(@Body() dto: CreateUnitConfigDto, @Req() req: any) {
+    return this.service.create(dto, req.user.companyId);
   }
 
   @Patch(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
   @Roles(UserRole.ADMIN)
   @Section('CACAO', 'write')
-  update(@Param('id') id: string, @Body() body: any, @Req() req: any) {
-    return this.service.update(Number(id), body, req.user.companyId);
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateUnitConfigDto,
+    @Req() req: any,
+  ) {
+    return this.service.update(id, dto, req.user.companyId);
   }
 
   @Delete(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
   @Roles(UserRole.ADMIN)
   @Section('CACAO', 'write')
-  delete(@Param('id') id: string, @Req() req: any) {
-    return this.service.delete(Number(id), req.user.companyId);
+  delete(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.service.delete(id, req.user.companyId);
   }
 }

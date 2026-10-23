@@ -4,6 +4,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { USER_PHONE_DDL } from './user-phone.schema';
 import { CP_CODIGO_TURNO_HORAS_DDL } from './cp-codigo-turno-horas.schema';
 import { CACAO_LIQUIDACIONES_DDL } from './cacao-liquidaciones.schema';
+import { CACAO_CONFIG_DDL } from './cacao-config.schema';
 
 /** Default pg pool size. Cloud SQL db-f1-micro allows ~25 connections; Cloud Run max-instances=10 would blow that with pg's default of 10. */
 const DEFAULT_POOL_MAX = 3;
@@ -85,6 +86,7 @@ export class PrismaService
       ...USER_PHONE_DDL,
       ...CP_CODIGO_TURNO_HORAS_DDL,
       ...CACAO_LIQUIDACIONES_DDL,
+      ...CACAO_CONFIG_DDL,
     ]) {
       try {
         await this.$executeRawUnsafe(ddl);

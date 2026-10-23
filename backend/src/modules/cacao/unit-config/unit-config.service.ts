@@ -1,5 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  CreateUnitConfigDto,
+  UpdateUnitConfigDto,
+} from './dto/unit-config.dto';
+
+const MSG_SIN_SACO =
+  'Falta configurar el peso del saco: ve a Cacao → Configuración → Unidades de medida';
 
 @Injectable()
 export class CacaoUnitConfigService {
@@ -18,102 +29,59 @@ export class CacaoUnitConfigService {
     });
   }
 
-  async create(data: {
-    name: string;
-    displayName: string;
-    kgPerUnit: number;
-    isDefault?: boolean;
-    companyId: number;
-  }) {
-    if (data.isDefault) {
-      await this.prisma.cacaoUnitConfig.updateMany({
-        where: { companyId: data.companyId },
-        data: { isDefault: false },
-      });
-    }
-    return this.prisma.cacaoUnitConfig.create({ data });
-  }
-
-  async update(
-    id: number,
-    data: {
-      name?: string;
-      displayName?: string;
-      kgPerUnit?: number;
-      isDefault?: boolean;
-    },
-    companyId: number,
-  ) {
-    const config = await this.prisma.cacaoUnitConfig.findFirst({
-      where: { id, companyId },
+  async create(dto: CreateUnitConfigDto, companyId: number) {
+    // La primera unidad que se crea queda como la del saco por defecto: sin ella no se
+    // puede registrar nada en sacos.
+    const existentes = await this.prisma.cacaoUnitConfig.count({
+      where: { companyId },
     });
-    if (!config) throw new Error('Configuración no encontrada');
-
-    if (data.isDefault) {
+    const isDefault = dto.isDefault === true || existentes === 0;
+    if (isDefault) {
       await this.prisma.cacaoUnitConfig.updateMany({
         where: { companyId },
         data: { isDefault: false },
       });
     }
-    return this.prisma.cacaoUnitConfig.update({ where: { id }, data });
+    return this.prisma.cacaoUnitConfig.create({
+      data: { ...dto, isDefault, companyId },
+    });
+  }
+
+  async update(id: number, dto: UpdateUnitConfigDto, companyId: number) {
+    const config = await this.prisma.cacaoUnitConfig.findFirst({
+      where: { id, companyId },
+    });
+    if (!config) throw new NotFoundException('Unidad no encontrada');
+
+    if (dto.isDefault === false && config.isDefault) {
+      throw new BadRequestException(
+        'Para cambiar la unidad por defecto, marca otra como por defecto',
+      );
+    }
+    if (dto.isDefault) {
+      await this.prisma.cacaoUnitConfig.updateMany({
+        where: { companyId },
+        data: { isDefault: false },
+      });
+    }
+    return this.prisma.cacaoUnitConfig.update({ where: { id }, data: dto });
   }
 
   async delete(id: number, companyId: number) {
     const config = await this.prisma.cacaoUnitConfig.findFirst({
       where: { id, companyId },
     });
-    if (!config) throw new Error('Configuración no encontrada');
-    if (config.isDefault)
-      throw new Error('No puede eliminar la unidad por defecto');
+    if (!config) throw new NotFoundException('Unidad no encontrada');
+    if (config.isDefault) {
+      throw new BadRequestException('No puedes eliminar la unidad por defecto');
+    }
     return this.prisma.cacaoUnitConfig.delete({ where: { id } });
   }
 
   /**
-   * Convierte un valor de una unidad a kg
-   */
-  async convertToKg(
-    value: number,
-    unit: string,
-    companyId: number,
-  ): Promise<number> {
-    switch (unit) {
-      case 'TON':
-        return value * 1000;
-      case 'KG':
-        return value;
-      case 'SACO': {
-        const config = await this.findDefault(companyId);
-        return value * (config?.kgPerUnit || 69);
-      }
-      default:
-        return value;
-    }
-  }
-
-  /**
-   * Convierte kg a una unidad de medida
-   */
-  async convertFromKg(
-    kg: number,
-    unit: string,
-    companyId: number,
-  ): Promise<number> {
-    switch (unit) {
-      case 'TON':
-        return kg / 1000;
-      case 'KG':
-        return kg;
-      case 'SACO': {
-        const config = await this.findDefault(companyId);
-        return kg / (config?.kgPerUnit || 69);
-      }
-      default:
-        return kg;
-    }
-  }
-
-  /**
-   * Retorna el factor de conversión para una unidad
+   * Kilogramos por unidad de medida. Toneladas y kilogramos son universales; el saco lo
+   * define cada empresa. Si todavía no configuró su saco no se asume ningún peso: se le
+   * pide configurarlo (antes se usaba 69 kg sin avisar).
    */
   async getFactor(unit: string, companyId: number): Promise<number> {
     switch (unit) {
@@ -123,10 +91,29 @@ export class CacaoUnitConfigService {
         return 1;
       case 'SACO': {
         const config = await this.findDefault(companyId);
-        return config?.kgPerUnit || 69;
+        if (!config) throw new BadRequestException(MSG_SIN_SACO);
+        return config.kgPerUnit;
       }
       default:
         return 1;
     }
+  }
+
+  /** Convierte un valor de una unidad a kg. */
+  async convertToKg(
+    value: number,
+    unit: string,
+    companyId: number,
+  ): Promise<number> {
+    return value * (await this.getFactor(unit, companyId));
+  }
+
+  /** Convierte kg a una unidad de medida. */
+  async convertFromKg(
+    kg: number,
+    unit: string,
+    companyId: number,
+  ): Promise<number> {
+    return kg / (await this.getFactor(unit, companyId));
   }
 }

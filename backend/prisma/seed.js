@@ -515,10 +515,9 @@ Si no necesitas datos, responde directamente.`,
 
   const createdLots = [];
   for (const ld of lotData) {
-    const lot = await prisma.cacaoLot.upsert({
-      where: { code: ld.code },
-      update: { differential: ld.differential },
-      create: {
+    const lotExistente = await prisma.cacaoLot.findFirst({ where: { code: ld.code, companyId: 2 } });
+    const lot = lotExistente ? await prisma.cacaoLot.update({ where: { id: lotExistente.id }, data: { differential: ld.differential } }) : await prisma.cacaoLot.create({
+      data: {
         code: ld.code,
         qualityId: qualityMap[ld.quality].id,
         netWeight: ld.netWeight,

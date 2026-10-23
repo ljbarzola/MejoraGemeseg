@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateSettlementDto } from './dto/create-settlement.dto';
+import { CacaoConfigService } from '../config/cacao-config.service';
 
 /** Una liquidación rechazada o anulada deja libre el peso que había tomado del lote. */
 const ESTADOS_QUE_LIBERAN_LOTE = ['REJECTED', 'CANCELLED'];
@@ -39,7 +40,10 @@ export function calcularLoteLiquidacion(
 
 @Injectable()
 export class CacaoSettlementsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: CacaoConfigService,
+  ) {}
 
   async getNextId(companyId: number) {
     const last = await this.prisma.cacaoSettlement.findFirst({
@@ -167,6 +171,9 @@ export class CacaoSettlementsService {
       );
     }
 
+    // Si no se indica plazo, se usa el que la empresa configuró para pagar a sus proveedores.
+    const dueDays = dto.dueDays ?? (await this.config.plazoPago(companyId));
+
     // Todo en una sola transacción: o se guarda la liquidación completa o no se guarda
     // nada (antes podía quedar una liquidación sin lotes o sin deuda a medias).
     return this.prisma.$transaction(async (tx) => {
@@ -261,7 +268,7 @@ export class CacaoSettlementsService {
           totalDeductions,
           finalPrice,
           totalAmount,
-          dueDays: dto.dueDays ?? null,
+          dueDays,
           status: 'PENDING',
           companyId,
           createdBy: userId,

@@ -9,6 +9,7 @@ import {
   calcularLoteLiquidacion,
 } from './settlements.service';
 import type { CreateSettlementDto } from './dto/create-settlement.dto';
+import type { CacaoConfigService } from '../config/cacao-config.service';
 
 describe('calcularLoteLiquidacion', () => {
   it('aplica humedad, impurezas y castigo por kg', () => {
@@ -54,10 +55,13 @@ function armar() {
     cacaoSupplier: { findFirst: jest.fn() },
     cacaoSettlement: { findFirst: jest.fn(), updateMany: jest.fn() },
   };
+  // La empresa configuró 45 días de plazo de pago.
+  const config = { plazoPago: jest.fn().mockResolvedValue(45) };
   const service = new CacaoSettlementsService(
     prisma as unknown as PrismaService,
+    config as unknown as CacaoConfigService,
   );
-  return { tx, prisma, service };
+  return { tx, prisma, config, service };
 }
 
 const lote = {
@@ -175,6 +179,21 @@ describe('CacaoSettlementsService.create', () => {
     // El costo sale del lote, no del navegador.
     expect(resultado.lots.create[0].unitCost).toBe(2.1);
     expect(resultado.lots.create[0].amount).toBe(728);
+  });
+
+  it('si no se indica plazo usa el que configuró la empresa', async () => {
+    const { prisma, tx, config, service } = armar();
+    prisma.cacaoSupplier.findFirst.mockResolvedValue({ id: 5 });
+    tx.cacaoLot.findMany.mockResolvedValue([lote]);
+    tx.cacaoSettlementLot.groupBy.mockResolvedValue([]);
+    tx.cacaoSettlement.create.mockImplementation(
+      (args: { data: unknown }) => args.data,
+    );
+    const r = (await service.create(dto(), 4, 9)) as unknown as {
+      dueDays: number;
+    };
+    expect(config.plazoPago).toHaveBeenCalledWith(4);
+    expect(r.dueDays).toBe(45);
   });
 
   it('bloquea los lotes dentro de la transacción', async () => {
@@ -378,6 +397,7 @@ describe('CacaoSettlementsService.getAvailableLots', () => {
     };
     const service = new CacaoSettlementsService(
       prisma as unknown as PrismaService,
+      {} as unknown as CacaoConfigService,
     );
     const r = await service.getAvailableLots(5, 4);
     expect(r.find((l) => l.id === 1)?.availableKg).toBe(480);
@@ -391,6 +411,7 @@ describe('CacaoSettlementsService.getAvailableLots', () => {
     };
     const service = new CacaoSettlementsService(
       prisma as unknown as PrismaService,
+      {} as unknown as CacaoConfigService,
     );
     await expect(service.getAvailableLots(5, 4)).rejects.toThrow(
       NotFoundException,

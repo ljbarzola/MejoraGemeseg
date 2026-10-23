@@ -400,17 +400,33 @@ model CacaoClient {
 
 model CacaoQuality {
   id               Int        @id @default(autoincrement())
-  name             String     @unique
+  name             String
   fixedPrice       Float?
   humidityDiscount Float      @default(7)
   impurityDiscount Float      @default(1)
   isFixedPrice     Boolean    @default(false)
+  // Cada empresa tiene sus propias calidades (línea blanca). Columna creada al arrancar,
+  // ver cacao-config.schema.ts.
+  companyId        Int?
   lots             CacaoLot[]
+
+  @@unique([companyId, name])
+}
+
+// Ajustes del módulo Cacao por empresa (plazos de pago y cobro). Tabla creada al arrancar.
+model CacaoSetting {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  key       String
+  value     String
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([companyId, key])
 }
 
 model CacaoLot {
   id           Int                  @id @default(autoincrement())
-  code         String               @unique
+  code         String
   qualityId    Int
   netWeight    Float
   averageCost  Float                @default(0)
@@ -425,6 +441,9 @@ model CacaoLot {
   receptions   CacaoReception[]
   settlements  CacaoSettlementLot[]
   shipments    CacaoShipmentLot[]
+
+  // El código (LOTE-AAAA-00001) es único dentro de cada empresa, no en toda la base.
+  @@unique([companyId, code])
 }
 
 model CacaoReception {

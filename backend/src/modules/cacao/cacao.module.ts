@@ -12,6 +12,7 @@ import { CacaoReceivablesModule } from './receivables/receivables.module';
 import { CacaoDashboardModule } from './dashboard/dashboard.module';
 import { CacaoQualitiesModule } from './qualities/qualities.module';
 import { CacaoUnitConfigModule } from './unit-config/unit-config.module';
+import { CacaoConfigModule } from './config/cacao-config.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { CacaoUnitConfigModule } from './unit-config/unit-config.module';
     CacaoReceivablesModule,
     CacaoDashboardModule,
     CacaoUnitConfigModule,
+    CacaoConfigModule,
   ],
 })
 export class CacaoModule {}
