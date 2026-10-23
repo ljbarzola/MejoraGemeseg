@@ -82,6 +82,8 @@ export default function VisitaOfertaModal({ visita, onClose, onDone }: Props) {
         if (!vigente) return;
         setOportunidad(o);
         setServiceIds((prev) => (prev.length ? prev : o.services.map((s) => s.id)));
+        // El monto que ya tiene la oportunidad queda a la vista: al completar se actualiza con lo que haya aquí.
+        setMonto((prev) => prev || (o.quotedAmount ? String(o.quotedAmount) : ''));
       })
       .catch(() => { if (vigente) setOportunidad(null); });
     return () => { vigente = false; };
@@ -102,7 +104,7 @@ export default function VisitaOfertaModal({ visita, onClose, onDone }: Props) {
     if (!visita.salesClientId) return 'Esta visita es de antes del Directorio y no tiene oportunidad: solo se guarda la oferta en la visita.';
     if (!oportunidad) return 'Sin oportunidad, solo se guarda la oferta en la visita. Si hay una negociación, crea la oportunidad aquí y quedará todo conectado.';
     if (!oportunidad.abierta) return 'La oportunidad ya está cerrada: la oferta se guarda en la visita y la oportunidad no cambia.';
-    const suma = 'Se sumarán los productos y servicios y el monto a la oportunidad.';
+    const suma = 'Se agregarán los productos y servicios a la oportunidad y se actualizará su monto cotizado con el de aquí (si lo dejas vacío, el monto no cambia).';
     if (!etapaDestino) return `${suma} Su etapa no cambia.`;
     if (oportunidad.status === etapaDestino.key) return `${suma} Ya está en «${etapaDestino.label}».`;
     if (!puedeMoverEtapa) return `${suma} Ya está más adelante que «${etapaDestino.label}» y las etapas solo avanzan, así que su etapa no cambia.`;
