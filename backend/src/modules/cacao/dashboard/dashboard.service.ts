@@ -32,7 +32,7 @@ export class CacaoDashboardService {
           select: { pendingWeight: true, fixedPrice: true },
         }),
         this.prisma.cacaoPayable.findMany({
-          where: { companyId, status: { not: 'PAID' } },
+          where: { companyId, status: { notIn: ['PAID', 'CANCELLED'] } },
           select: { totalAmount: true, paidAmount: true },
         }),
         this.prisma.cacaoReceivable.findMany({

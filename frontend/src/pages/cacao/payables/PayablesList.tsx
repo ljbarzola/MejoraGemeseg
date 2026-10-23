@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getPayables, payPayable } from '../../../services/cacao.service';
-import { formatDateEc } from '../utils';
-import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
-import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
-import { useColumnFilters } from '../../../hooks/useColumnFilters';
+import { getPayables, payPayable, voidPayment } from '../../../services/cacao.service';
+import { getUser } from '../../../services/auth.service';
+import { formatDateEc, estadoCuenta, apiErrorMessage } from '../utils';
+import ErrorBanner from '../../../components/common/ErrorBanner';
+import PaymentsHistoryModal from '../PaymentsHistoryModal';
 
 export default function PayablesList() {
   const navigate = useNavigate();
@@ -12,41 +12,50 @@ export default function PayablesList() {
   const [payables, setPayables] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [historyId, setHistoryId] = useState<number | null>(null);
   const [payForm, setPayForm] = useState({ amount: '', method: 'TRANSFER', reference: '' });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const canVoid = getUser()?.role === 'ADMIN';
 
   const load = () => {
     setLoading(true);
-    getPayables().then(setPayables).finally(() => setLoading(false));
+    return getPayables().then(setPayables).finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
 
+  const editing = payables.find((p) => p.id === editingId);
+  const remainingOf = (p: any) => Math.round((p.totalAmount - p.paidAmount) * 100) / 100;
+
   function startPay(p: any) {
+    setError('');
     setEditingId(p.id);
-    const remaining = p.totalAmount - p.paidAmount;
-    setPayForm({ amount: remaining.toFixed(2), method: 'TRANSFER', reference: '' });
+    setPayForm({ amount: remainingOf(p).toFixed(2), method: 'TRANSFER', reference: '' });
   }
 
   async function handlePay() {
-    if (!editingId || !payForm.amount) return;
+    if (!editing) return;
+    const amount = Number(payForm.amount);
+    if (!payForm.amount || !(amount > 0)) { setError('El monto debe ser mayor a cero'); return; }
+    if (amount > remainingOf(editing) + 0.005) { setError(`El monto no puede superar el saldo pendiente ($${remainingOf(editing).toFixed(2)})`); return; }
     setSaving(true);
     setError('');
     try {
-      await payPayable(editingId, {
-        amount: Number(payForm.amount),
+      await payPayable(editing.id, {
+        amount,
         method: payForm.method,
-        reference: payForm.reference || undefined,
+        reference: payForm.reference.trim() || undefined,
       });
       setEditingId(null);
       load();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al registrar pago');
+      setError(apiErrorMessage(err, 'No se pudo registrar el pago. Revisa los datos e inténtalo de nuevo.'));
     } finally { setSaving(false); }
   }
 
   const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const history = payables.find((p) => p.id === historyId);
 
   // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas; siguen puestos tras registrar un pago).
   const cf = useColumnFilters<any>(payables, [
@@ -87,7 +96,7 @@ export default function PayablesList() {
         {loading ? (
           <div className="loading-state">Cargando cuentas por pagar...</div>
         ) : payables.length === 0 ? (
-          <div className="empty-state">No hay cuentas por pagar.</div>
+          <div className="empty-state">No hay cuentas por pagar. Se generan cuando se aprueba una liquidación.</div>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table">
@@ -104,31 +113,32 @@ export default function PayablesList() {
                 </tr>
               </thead>
               <tbody>
-                {filas.length === 0 && (
-                  <FilaSinResultados columnas={8} mensaje="No hay cuentas por pagar que coincidan con los filtros." onLimpiar={cf.limpiar} />
-                )}
-                {filas.map((p) => {
-                  const remaining = p.totalAmount - p.paidAmount;
+                {payables.map((p) => {
+                  const remaining = remainingOf(p);
+                  const estado = estadoCuenta(p.status);
+                  const puedePagar = (p.status === 'PENDING' || p.status === 'PARTIAL') && p.settlement?.status === 'APPROVED';
                   return (
                     <tr key={p.id}>
                       <td>{p.supplier?.name || '—'}</td>
-                      <td>{p.settlement?.id ? `#${p.settlement.id}` : '—'}</td>
+                      <td>{p.settlement?.id ? `LIQ-${String(p.settlement.id).padStart(4, '0')}` : '—'}</td>
                       <td>{fmt(p.totalAmount)}</td>
                       <td>{fmt(p.paidAmount)}</td>
-                      <td style={{ fontWeight: 600, color: remaining > 0 ? '#e53e3e' : '#38a169' }}>{fmt(remaining)}</td>
+                      <td style={{ fontWeight: 600, color: p.status === 'CANCELLED' ? '#718096' : remaining > 0 ? '#e53e3e' : '#38a169' }}>
+                        {p.status === 'CANCELLED' ? '—' : fmt(remaining)}
+                      </td>
                       <td>{formatDateEc(p.dueDate)}</td>
                       <td>
-                        <span className="status-badge" style={{
-                          backgroundColor: p.status === 'PAID' ? '#c6f6d5' : p.status === 'PARTIAL' ? '#fefcbf' : '#fed7d7',
-                          color: p.status === 'PAID' ? '#276749' : p.status === 'PARTIAL' ? '#975a16' : '#9b2c2c',
-                        }}>
-                          {p.status === 'PAID' ? 'Pagada' : p.status === 'PARTIAL' ? 'Parcial' : 'Pendiente'}
-                        </span>
+                        <span className="status-badge" style={{ backgroundColor: estado.bg, color: estado.color }}>{estado.label}</span>
                       </td>
                       <td>
-                        {p.status !== 'PAID' && (
-                          <button className="btn-sm-edit" onClick={() => startPay(p)}>Pagar</button>
-                        )}
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          {puedePagar && (
+                            <button className="btn-sm-edit" onClick={() => startPay(p)}>Pagar</button>
+                          )}
+                          {p.payments?.length > 0 && (
+                            <button className="btn-sm-edit" onClick={() => { setError(''); setHistoryId(p.id); }}>Pagos</button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -139,7 +149,7 @@ export default function PayablesList() {
         )}
       </div>
 
-      {editingId && (
+      {editing && (
         <div className="modal-overlay" onClick={() => setEditingId(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -147,10 +157,13 @@ export default function PayablesList() {
               <button className="modal-close" onClick={() => setEditingId(null)}>✕</button>
             </div>
             <div className="modal-body">
-              {error && <div className="auth-error-banner">{error}</div>}
+              <ErrorBanner mensaje={error} />
+              <p style={{ margin: '0 0 12px', color: '#4a5568', fontSize: '13px' }}>
+                {editing.supplier?.name} · Saldo pendiente {fmt(remainingOf(editing))}
+              </p>
               <div className="form-group">
                 <label>Monto ($)</label>
-                <input type="number" step="0.01" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} />
+                <input type="number" step="0.01" min="0" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} />
               </div>
               <div className="form-group">
                 <label>Método de Pago</label>
@@ -162,7 +175,7 @@ export default function PayablesList() {
               </div>
               <div className="form-group">
                 <label>Referencia</label>
-                <input type="text" value={payForm.reference} onChange={(e) => setPayForm({ ...payForm, reference: e.target.value })} placeholder="Nro. comprobante" />
+                <input type="text" maxLength={120} value={payForm.reference} onChange={(e) => setPayForm({ ...payForm, reference: e.target.value })} placeholder="Nro. comprobante" />
               </div>
             </div>
             <div className="modal-actions">
@@ -171,6 +184,17 @@ export default function PayablesList() {
             </div>
           </div>
         </div>
+      )}
+
+      {history && (
+        <PaymentsHistoryModal
+          title={`Pagos de ${history.supplier?.name || 'la cuenta'}`}
+          noun="pago"
+          payments={history.payments || []}
+          canVoid={canVoid}
+          onVoid={async (paymentId, reason) => { await voidPayment(paymentId, reason); await load(); }}
+          onClose={() => setHistoryId(null)}
+        />
       )}
     </div>
   );

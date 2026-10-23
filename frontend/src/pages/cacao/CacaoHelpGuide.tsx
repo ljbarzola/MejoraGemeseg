@@ -34,15 +34,16 @@ const STEPS = [
     title: 'Liquidación de Compra',
     icon: '📋',
     color: '#6b46c1',
-    description: 'Cierra la recepción: aplica descuentos de calidad, calcula el valor neto a pagar al proveedor y genera la cuenta por pagar.',
+    description: 'Cierra la recepción: aplica descuentos de calidad, calcula el valor neto a pagar al proveedor. La cuenta por pagar se genera cuando un gerente aprueba la liquidación.',
     details: [
-      { label: 'Proceso', desc: 'Seleccione el proveedor y el periodo. El sistema muestra los lotes pendientes de liquidar de ese proveedor.' },
-      { label: 'Descuentos', desc: 'Por cada lote se aplican los descuentos de humedad e impurezas definidos en la calidad. Se muestra el desglose completo.' },
-      { label: 'Resultado', desc: 'Peso neto descontado × precio/kg = subtotal por lote. Total = monto a pagar al proveedor. Se genera automáticamente la CxP.' },
-      { label: 'Agrupación', desc: 'Una liquidación puede agrupar varios lotes del mismo proveedor en un periodo determinado.' },
+      { label: 'Proceso', desc: 'Seleccione el proveedor y el periodo. El sistema muestra los lotes de ese proveedor con el peso que aún está pendiente de liquidar; no deja liquidar dos veces el mismo peso.' },
+      { label: 'Descuentos', desc: 'Por cada lote se aplican los descuentos de humedad e impurezas definidos en la calidad, y puede editarlos por lote (también el castigo de calidad en $/kg). Se muestra el desglose completo.' },
+      { label: 'Resultado', desc: 'Peso neto descontado × precio/kg = subtotal por lote. Total = monto a pagar al proveedor, calculado por el sistema al guardar. La liquidación queda "Por aprobar".' },
+      { label: 'Agrupación', desc: 'Una liquidación puede agrupar varios lotes del mismo proveedor en un periodo determinado. También se indica el plazo de pago en días (30 por defecto).' },
+      { label: 'Aprobación', desc: 'Un gerente (o administrador) distinto de quien la creó la aprueba o la rechaza con un motivo. Al aprobarla nace la cuenta por pagar. Si se aprobó por error y aún no tiene pagos, puede anularse.' },
     ],
     path: '/cacao/settlements/new',
-    tip: 'Revise el desglose de descuentos antes de confirmar. Una vez creada, la liquidación genera la CxP automáticamente.',
+    tip: 'Revise el desglose de descuentos antes de confirmar. La cuenta por pagar solo se genera cuando otra persona aprueba la liquidación.',
   },
   {
     num: 4,
@@ -93,10 +94,10 @@ const STEPS = [
     title: 'Cuentas por Pagar (CxP)',
     icon: '📤',
     color: '#c53030',
-    description: 'Generadas automáticamente por las liquidaciones de compra. Controla pagos parciales, saldos y antigüedad.',
+    description: 'Se generan cuando se aprueba una liquidación de compra. Controla pagos parciales, saldos y antigüedad.',
     details: [
-      { label: 'Origen', desc: 'Cada liquidación crea una CxP con el monto total a pagar al proveedor.' },
-      { label: 'Pagos', desc: 'Registre pagos parciales o totales. El sistema actualiza el saldo automáticamente.' },
+      { label: 'Origen', desc: 'Cada liquidación aprobada crea una CxP con el monto total a pagar al proveedor. Una liquidación anulada anula también su CxP.' },
+      { label: 'Pagos', desc: 'Registre pagos parciales o totales (no se puede pagar más que el saldo). El sistema actualiza el saldo automáticamente. El botón "Pagos" muestra el historial y permite anular un pago registrado por error, indicando el motivo.' },
       { label: 'Filtros', desc: 'Puede ver por proveedor, estado (pendiente/pagado), y antigüedad de saldos.' },
     ],
     path: '/cacao/payables',
@@ -110,7 +111,7 @@ const STEPS = [
     description: 'Generadas automáticamente por los embarques/exportaciones. Controla cobros, saldos y antigüedad.',
     details: [
       { label: 'Origen', desc: 'Cada embarque crea una CxC con el monto total a cobrar al cliente.' },
-      { label: 'Cobros', desc: 'Registre cobros parciales o totales. El sistema actualiza el saldo automáticamente.' },
+      { label: 'Cobros', desc: 'Registre cobros parciales o totales (no se puede cobrar más que el saldo). El botón "Cobros" muestra el historial y permite anular un cobro registrado por error, indicando el motivo.' },
       { label: 'Filtros', desc: 'Puede ver por cliente, estado, y antigüedad de saldos.' },
     ],
     path: '/cacao/receivables',
@@ -122,7 +123,7 @@ const FLOW = [
   { from: 'Proveedor', to: 'Recepción', label: 'Entrega cacao', color: '#2b6cb0' },
   { from: 'Recepción', to: 'Lote', label: 'Se genera lote', color: '#2c7a7b' },
   { from: 'Lote', to: 'Liquidación', label: 'Se aplica descuentos', color: '#6b46c1' },
-  { from: 'Liquidación', to: 'CxP', label: 'Se genera deuda', color: '#c53030' },
+  { from: 'Liquidación', to: 'CxP', label: 'Al aprobarla, nace la deuda', color: '#c53030' },
   { from: 'Lote', to: 'Fijación', label: 'Se fija precio', color: '#b7791f' },
   { from: 'Lote', to: 'Embarque', label: 'Se vende/exporta', color: '#2f855a' },
   { from: 'Embarque', to: 'CxC', label: 'Se genera cobro', color: '#276749' },
@@ -155,7 +156,7 @@ export default function CacaoHelpGuide() {
         <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px', marginTop: 0 }}>Bienvenido al Módulo de Cacao</h2>
         <p style={{ fontSize: '14px', lineHeight: 1.7, margin: 0, opacity: 0.9 }}>
           Este sistema controla el flujo completo de inventario de cacao de Mikacao S.A.: desde la recepción del grano del proveedor hasta la exportación al cliente final.
-          Cada paso está conectado: un cambio en recepción afecta el lote, el lote afecta la liquidación, la liquidación genera la CxP, y así sucesivamente.
+          Cada paso está conectado: un cambio en recepción afecta el lote, el lote afecta la liquidación, la liquidación, una vez aprobada, genera la CxP, y así sucesivamente.
         </p>
       </div>
 
@@ -312,8 +313,8 @@ export default function CacaoHelpGuide() {
             { term: 'Costo Promedio', def: 'Costo por kilogramo calculado con el método de promedio ponderado.' },
             { term: 'Diferencial', def: 'Monto pactado ($/T) sobre el precio de referencia del mercado. Se usa en la fijación de precio.' },
             { term: 'Fijación', def: 'Proceso de convertir un precio provisional en precio definitivo usando el mercado de referencia.' },
-            { term: 'Liquidación', def: 'Cierre contable de una recepción: aplica descuentos y calcula lo que se debe al proveedor.' },
-            { term: 'CxP', def: 'Cuenta por Pagar. Deuda con proveedores generada por liquidaciones de compra.' },
+            { term: 'Liquidación', def: 'Cierre contable de una recepción: aplica descuentos y calcula lo que se debe al proveedor. Debe aprobarla un gerente antes de poder pagarse.' },
+            { term: 'CxP', def: 'Cuenta por Pagar. Deuda con proveedores que se genera al aprobar una liquidación de compra.' },
             { term: 'CxC', def: 'Cuenta por Cobrar. Derecho de cobro generado por embarques/exportaciones.' },
             { term: 'Unidad de Medida', def: 'TON (Toneladas = 1000 kg), KG (Kilogramos), SACO (Sacos, configurable, default 90 kg).' },
             { term: 'Guía de Remisión', def: 'Documento fiscal que acompaña al cacao al momento de la entrega. Número único por recepción.' },

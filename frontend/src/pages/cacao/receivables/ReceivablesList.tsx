@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getReceivables, receiveReceivable } from '../../../services/cacao.service';
-import { formatDateEc } from '../utils';
-import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
-import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
-import { useColumnFilters } from '../../../hooks/useColumnFilters';
+import { getReceivables, receiveReceivable, voidReceipt } from '../../../services/cacao.service';
+import { getUser } from '../../../services/auth.service';
+import { formatDateEc, estadoCuenta, apiErrorMessage } from '../utils';
+import ErrorBanner from '../../../components/common/ErrorBanner';
+import PaymentsHistoryModal from '../PaymentsHistoryModal';
 
 export default function ReceivablesList() {
   const navigate = useNavigate();
@@ -12,41 +12,50 @@ export default function ReceivablesList() {
   const [receivables, setReceivables] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [historyId, setHistoryId] = useState<number | null>(null);
   const [receiveForm, setReceiveForm] = useState({ amount: '', method: 'TRANSFER', reference: '' });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const canVoid = getUser()?.role === 'ADMIN';
 
   const load = () => {
     setLoading(true);
-    getReceivables().then(setReceivables).finally(() => setLoading(false));
+    return getReceivables().then(setReceivables).finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
 
+  const editing = receivables.find((r) => r.id === editingId);
+  const remainingOf = (r: any) => Math.round((r.totalAmount - r.receivedAmount) * 100) / 100;
+
   function startReceive(r: any) {
+    setError('');
     setEditingId(r.id);
-    const remaining = r.totalAmount - r.receivedAmount;
-    setReceiveForm({ amount: remaining.toFixed(2), method: 'TRANSFER', reference: '' });
+    setReceiveForm({ amount: remainingOf(r).toFixed(2), method: 'TRANSFER', reference: '' });
   }
 
   async function handleReceive() {
-    if (!editingId || !receiveForm.amount) return;
+    if (!editing) return;
+    const amount = Number(receiveForm.amount);
+    if (!receiveForm.amount || !(amount > 0)) { setError('El monto debe ser mayor a cero'); return; }
+    if (amount > remainingOf(editing) + 0.005) { setError(`El monto no puede superar el saldo pendiente ($${remainingOf(editing).toFixed(2)})`); return; }
     setSaving(true);
     setError('');
     try {
-      await receiveReceivable(editingId, {
-        amount: Number(receiveForm.amount),
+      await receiveReceivable(editing.id, {
+        amount,
         method: receiveForm.method,
-        reference: receiveForm.reference || undefined,
+        reference: receiveForm.reference.trim() || undefined,
       });
       setEditingId(null);
       load();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al registrar cobro');
+      setError(apiErrorMessage(err, 'No se pudo registrar el cobro. Revisa los datos e inténtalo de nuevo.'));
     } finally { setSaving(false); }
   }
 
   const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const history = receivables.find((r) => r.id === historyId);
 
   // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas; siguen puestos tras registrar un cobro).
   const cf = useColumnFilters<any>(receivables, [
@@ -104,11 +113,9 @@ export default function ReceivablesList() {
                 </tr>
               </thead>
               <tbody>
-                {filas.length === 0 && (
-                  <FilaSinResultados columnas={8} mensaje="No hay cuentas por cobrar que coincidan con los filtros." onLimpiar={cf.limpiar} />
-                )}
-                {filas.map((r) => {
-                  const remaining = r.totalAmount - r.receivedAmount;
+                {receivables.map((r) => {
+                  const remaining = remainingOf(r);
+                  const estado = estadoCuenta(r.status);
                   return (
                     <tr key={r.id}>
                       <td>{r.client?.name || '—'}</td>
@@ -118,17 +125,17 @@ export default function ReceivablesList() {
                       <td style={{ fontWeight: 600, color: remaining > 0 ? '#38a169' : '#718096' }}>{fmt(remaining)}</td>
                       <td>{formatDateEc(r.dueDate)}</td>
                       <td>
-                        <span className="status-badge" style={{
-                          backgroundColor: r.status === 'RECEIVED' ? '#c6f6d5' : r.status === 'PARTIAL' ? '#fefcbf' : '#bee3f8',
-                          color: r.status === 'RECEIVED' ? '#276749' : r.status === 'PARTIAL' ? '#975a16' : '#2b6cb0',
-                        }}>
-                          {r.status === 'RECEIVED' ? 'Cobrada' : r.status === 'PARTIAL' ? 'Parcial' : 'Pendiente'}
-                        </span>
+                        <span className="status-badge" style={{ backgroundColor: estado.bg, color: estado.color }}>{estado.label}</span>
                       </td>
                       <td>
-                        {r.status !== 'RECEIVED' && (
-                          <button className="btn-sm-edit" onClick={() => startReceive(r)}>Cobrar</button>
-                        )}
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          {r.status !== 'RECEIVED' && (
+                            <button className="btn-sm-edit" onClick={() => startReceive(r)}>Cobrar</button>
+                          )}
+                          {r.payments?.length > 0 && (
+                            <button className="btn-sm-edit" onClick={() => { setError(''); setHistoryId(r.id); }}>Cobros</button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -139,7 +146,7 @@ export default function ReceivablesList() {
         )}
       </div>
 
-      {editingId && (
+      {editing && (
         <div className="modal-overlay" onClick={() => setEditingId(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -147,10 +154,13 @@ export default function ReceivablesList() {
               <button className="modal-close" onClick={() => setEditingId(null)}>✕</button>
             </div>
             <div className="modal-body">
-              {error && <div className="auth-error-banner">{error}</div>}
+              <ErrorBanner mensaje={error} />
+              <p style={{ margin: '0 0 12px', color: '#4a5568', fontSize: '13px' }}>
+                {editing.client?.name} · Saldo pendiente {fmt(remainingOf(editing))}
+              </p>
               <div className="form-group">
                 <label>Monto ($)</label>
-                <input type="number" step="0.01" value={receiveForm.amount} onChange={(e) => setReceiveForm({ ...receiveForm, amount: e.target.value })} />
+                <input type="number" step="0.01" min="0" value={receiveForm.amount} onChange={(e) => setReceiveForm({ ...receiveForm, amount: e.target.value })} />
               </div>
               <div className="form-group">
                 <label>Método de Cobro</label>
@@ -162,7 +172,7 @@ export default function ReceivablesList() {
               </div>
               <div className="form-group">
                 <label>Referencia</label>
-                <input type="text" value={receiveForm.reference} onChange={(e) => setReceiveForm({ ...receiveForm, reference: e.target.value })} placeholder="Nro. comprobante" />
+                <input type="text" maxLength={120} value={receiveForm.reference} onChange={(e) => setReceiveForm({ ...receiveForm, reference: e.target.value })} placeholder="Nro. comprobante" />
               </div>
             </div>
             <div className="modal-actions">
@@ -171,6 +181,17 @@ export default function ReceivablesList() {
             </div>
           </div>
         </div>
+      )}
+
+      {history && (
+        <PaymentsHistoryModal
+          title={`Cobros de ${history.client?.name || 'la cuenta'}`}
+          noun="cobro"
+          payments={history.payments || []}
+          canVoid={canVoid}
+          onVoid={async (paymentId, reason) => { await voidReceipt(paymentId, reason); await load(); }}
+          onClose={() => setHistoryId(null)}
+        />
       )}
     </div>
   );

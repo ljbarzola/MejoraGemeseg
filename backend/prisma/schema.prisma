@@ -460,25 +460,37 @@ model CacaoSettlement {
   totalDeductions Float                @default(0)
   finalPrice      Float                @default(0)
   totalAmount     Float                @default(0)
+  // PENDING (por aprobar) → APPROVED → PAID; también REJECTED y CANCELLED.
   status          String               @default("PENDING")
   companyId       Int
   createdBy       Int
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
+  // Aprobación (columnas creadas al arrancar, ver cacao-liquidaciones.schema.ts)
+  decidedBy       Int?
+  decidedAt       DateTime?
+  decisionReason  String?
+  dueDays         Int?
   payable         CacaoPayable?
   supplier        CacaoSupplier        @relation(fields: [supplierId], references: [id])
   lots            CacaoSettlementLot[]
 }
 
 model CacaoSettlementLot {
-  id           Int             @id @default(autoincrement())
-  settlementId Int
-  lotId        Int
-  quantity     Float
-  unitCost     Float
-  createdAt    DateTime        @default(now())
-  lot          CacaoLot        @relation(fields: [lotId], references: [id])
-  settlement   CacaoSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  id                Int             @id @default(autoincrement())
+  settlementId      Int
+  lotId             Int
+  quantity          Float
+  unitCost          Float
+  createdAt         DateTime        @default(now())
+  // Desglose que calculó el servidor (columnas creadas al arrancar)
+  humidityPct       Float?
+  impurityPct       Float?
+  qualityPunishment Float?
+  netKg             Float?
+  amount            Float?
+  lot               CacaoLot        @relation(fields: [lotId], references: [id])
+  settlement        CacaoSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
 }
 
 model CacaoKardex {
@@ -593,6 +605,11 @@ model CacaoPayment {
   createdAt    DateTime         @default(now())
   payableId    Int?
   receivableId Int?
+  // Trazabilidad y anulación (columnas creadas al arrancar)
+  createdBy    Int?
+  voidedAt     DateTime?
+  voidedBy     Int?
+  voidReason   String?
   payable      CacaoPayable?    @relation(fields: [payableId], references: [id])
   receivable   CacaoReceivable? @relation(fields: [receivableId], references: [id])
 }

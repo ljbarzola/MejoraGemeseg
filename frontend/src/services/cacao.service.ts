@@ -25,6 +25,11 @@ export const getNextLotCode = () => api.get('/cacao/lots/next-code').then(r => r
 export const getSettlements = () => api.get('/cacao/settlements').then(r => r.data);
 export const getNextSettlementId = () => api.get('/cacao/settlements/next-id').then(r => r.data);
 export const createSettlement = (data: any) => api.post('/cacao/settlements', data).then(r => r.data);
+export const getSettlement = (id: number) => api.get(`/cacao/settlements/${id}`).then(r => r.data);
+export const getAvailableLots = (supplierId: number) => api.get('/cacao/settlements/available-lots', { params: { supplierId } }).then(r => r.data);
+export const approveSettlement = (id: number) => api.post(`/cacao/settlements/${id}/approve`).then(r => r.data);
+export const rejectSettlement = (id: number, reason: string) => api.post(`/cacao/settlements/${id}/reject`, { reason }).then(r => r.data);
+export const cancelSettlement = (id: number, reason: string) => api.post(`/cacao/settlements/${id}/cancel`, { reason }).then(r => r.data);
 
 export const getPriceFixings = () => api.get('/cacao/price-fixings').then(r => r.data);
 export const createPriceFixing = (data: any) => api.post('/cacao/price-fixings', data).then(r => r.data);
@@ -39,9 +44,11 @@ export const createShipment = (data: any) => api.post('/cacao/shipments', data).
 
 export const getPayables = (params?: any) => api.get('/cacao/payables', { params }).then(r => r.data);
 export const payPayable = (id: number, data: any) => api.post(`/cacao/payables/${id}/pay`, data).then(r => r.data);
+export const voidPayment = (paymentId: number, reason: string) => api.post(`/cacao/payables/payments/${paymentId}/void`, { reason }).then(r => r.data);
 
 export const getReceivables = (params?: any) => api.get('/cacao/receivables', { params }).then(r => r.data);
 export const receiveReceivable = (id: number, data: any) => api.post(`/cacao/receivables/${id}/receive`, data).then(r => r.data);
+export const voidReceipt = (paymentId: number, reason: string) => api.post(`/cacao/receivables/payments/${paymentId}/void`, { reason }).then(r => r.data);
 
 export const getDashboard = () => api.get('/cacao/dashboard').then(r => r.data);
 

@@ -1,10 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getSettlements } from '../../../services/cacao.service';
-import { formatDateEc } from '../utils';
-import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
-import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
-import { useColumnFilters } from '../../../hooks/useColumnFilters';
+import { formatDateEc, estadoLiquidacion } from '../utils';
 
 export default function SettlementsList() {
   const navigate = useNavigate();
@@ -62,15 +59,15 @@ export default function SettlementsList() {
             <table className="tasks-table">
               <thead>
                 <tr>
-                  <th>ID<ColumnFilter cf={cf} col="id" orden={cf.ordenDe('id')} /></th>
-                  <th>Fecha<ColumnFilter cf={cf} col="fecha" orden={cf.ordenDe('fecha')} /></th>
-                  <th>Proveedor<ColumnFilter cf={cf} col="proveedor" orden={cf.ordenDe('proveedor')} /></th>
-                  <th>Periodo<ColumnFilter cf={cf} col="periodo" orden={cf.ordenDe('periodo')} /></th>
-                  <th>Peso Neto Total<ColumnFilter cf={cf} col="peso" orden={cf.ordenDe('peso')} /></th>
-                  <th>Deducciones<ColumnFilter cf={cf} col="deducciones" orden={cf.ordenDe('deducciones')} /></th>
-                  <th>Precio Final<ColumnFilter cf={cf} col="precio" orden={cf.ordenDe('precio')} /></th>
-                  <th>Monto Total<ColumnFilter cf={cf} col="monto" orden={cf.ordenDe('monto')} /></th>
-                  <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
+                  <th>ID</th>
+                  <th>Fecha</th>
+                  <th>Proveedor</th>
+                  <th>Periodo</th>
+                  <th>Peso Neto Total</th>
+                  <th>Descuentos</th>
+                  <th>Precio Final</th>
+                  <th>Monto Total</th>
+                  <th>Estado</th>
                   <th className="no-print"></th>
                 </tr>
               </thead>
@@ -85,12 +82,12 @@ export default function SettlementsList() {
                     <td>{s.supplier?.name || '—'}</td>
                     <td>{formatDateEc(s.periodStart)} - {formatDateEc(s.periodEnd)}</td>
                     <td>{s.totalNetWeight.toLocaleString()} kg</td>
-                    <td>${s.totalDeductions.toFixed(2)}</td>
+                    <td>{s.totalDeductions.toLocaleString()} kg</td>
                     <td>${s.finalPrice.toFixed(2)}/kg</td>
                     <td>${s.totalAmount.toFixed(2)}</td>
                     <td>
-                      <span className="status-badge" style={{ backgroundColor: s.status === 'PAID' ? '#c6f6d5' : '#fefcbf', color: s.status === 'PAID' ? '#276749' : '#975a16' }}>
-                        {s.status === 'PAID' ? 'Pagada' : 'Pendiente'}
+                      <span className="status-badge" style={{ backgroundColor: estadoLiquidacion(s.status).bg, color: estadoLiquidacion(s.status).color }}>
+                        {estadoLiquidacion(s.status).label}
                       </span>
                     </td>
                     <td className="no-print">

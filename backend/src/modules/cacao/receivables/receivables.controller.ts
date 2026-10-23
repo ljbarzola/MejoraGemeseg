@@ -16,6 +16,7 @@ import { Roles } from '../../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { UserRole } from '@prisma/client';
 import { CacaoReceivablesService } from './receivables.service';
+import { PaymentDto, VoidPaymentDto } from '../common/payment.dto';
 
 @Controller('cacao/receivables')
 export class CacaoReceivablesController {
@@ -34,15 +35,26 @@ export class CacaoReceivablesController {
   @Section('CACAO', 'write')
   receive(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { amount: number; method: string; reference?: string },
+    @Body() dto: PaymentDto,
     @Req() req: any,
   ) {
-    return this.service.receive(
-      id,
-      body.amount,
-      body.method,
-      body.reference,
+    return this.service.receive(id, dto, req.user.companyId, req.user.userId);
+  }
+
+  @Post('payments/:paymentId/void')
+  @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
+  @Roles(UserRole.ADMIN)
+  @Section('CACAO', 'write')
+  voidReceipt(
+    @Param('paymentId', ParseIntPipe) paymentId: number,
+    @Body() dto: VoidPaymentDto,
+    @Req() req: any,
+  ) {
+    return this.service.voidReceipt(
+      paymentId,
+      dto.reason,
       req.user.companyId,
+      req.user.userId,
     );
   }
 }

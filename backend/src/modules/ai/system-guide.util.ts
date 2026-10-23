@@ -480,7 +480,7 @@ const CACAO = `# Cacao — guía
 - Dashboard: indicadores clicables (Valor Inventario en $ y kg, Exposición Sin Fijar, CxP Pendiente, CxC Pendiente), "Accesos directos" (Recepciones, Lotes, Fijaciones, Liquidaciones, Embarques, CxP, CxC), "Configuración" (Calidades, Proveedores, Clientes) y "Últimos Embarques".
 
 ## Flujo del negocio y cómo se relacionan las pantallas
-Proveedor → Recepción → Lote (se crea solo) → Liquidación → Cuenta por Pagar (se crea sola). En paralelo, Lote → Fijación de precio. Y Lote → Embarque → descuenta del kárdex y crea la Cuenta por Cobrar.
+Proveedor → Recepción → Lote (se crea solo) → Liquidación → aprobación de un gerente → Cuenta por Pagar (se crea al aprobar). En paralelo, Lote → Fijación de precio. Y Lote → Embarque → descuenta del kárdex y crea la Cuenta por Cobrar.
 
 ## Configuración inicial (maestros)
 - Proveedores: Nombre *, Contacto, Teléfono, Banco, Condiciones de Pago.
@@ -490,10 +490,10 @@ Proveedor → Recepción → Lote (se crea solo) → Liquidación → Cuenta por
 ## Pasos
 1. Recepción ("+ Nueva Recepción"): Fecha *, Proveedor *, Nro. Guía de Remisión *, Unidad de entrada * (Toneladas, Kilogramos o Sacos; saco = 90 kg por defecto), Peso Bruto, Tara, Humedad %, Impurezas %, Calidad *, Precio Provisional o Fijo ($/kg), Diferencial Pactado ($/T). Muestra peso neto, descuentos y el lote que se asignará. Al guardar convierte todo a kg, crea el lote (LOTE-AAAA-00001, Abierto) y registra la entrada en el kárdex.
 2. Lotes: Código, Calidad, Peso Neto, Costo Promedio, Valor, Estado (Abierto/Cerrado). "Ver Kardex" muestra entradas, salidas y saldos en kg; "🖨️ Descargar PDF".
-3. Liquidación ("+ Nueva Liquidación"): Fecha *, Proveedor *, Periodo; "+ Agregar Lote" (o "Usar todo"); desglose por lote con descuentos editables; MONTO A PAGAR. Al guardar crea la Cuenta por Pagar (vence a 30 días). Estados: Pendiente, Parcial, Pagada.
+3. Liquidación ("+ Nueva Liquidación"): Fecha *, Proveedor *, Periodo, Plazo de pago (días, 30 por defecto); "+ Agregar Lote" (o "Usar todo", solo muestra el peso que aún falta liquidar de ese proveedor); desglose por lote con descuentos editables (humedad, impurezas y castigo en $/kg); MONTO A PAGAR (estimado: el sistema lo recalcula al guardar). Al guardar queda "Por aprobar": un gerente o administrador distinto de quien la creó entra al detalle y pulsa "Aprobar" (nace la Cuenta por Pagar) o "Rechazar" (pide motivo y libera los lotes). Una liquidación aprobada sin pagos se puede "Anular liquidación" con motivo. Estados: Por aprobar, Aprobada, Pagada, Rechazada, Anulada.
 4. Fijaciones de Precio: "Tabla de Exposición Abierta" (lotes con precio provisional, fecha límite, "Vence hoy"); Precio ICE Cocoa de referencia editable con clic; "Nueva Fijación": Lote *, Precio Fijado ($/kg) *, Fecha Límite (muestra precio sugerido = referencia + diferencial). Estados Abierta → "Fijar" → Fijada.
 5. Embarque ("+ Nuevo Embarque"): Fecha *, Cliente *, Referencia (Contrato) *, Unidad de Venta *, Precio Venta ($/kg) *; "+ Agregar Lote". Muestra peso, costo y margen. Al guardar valida el saldo del lote ("Lote X no tiene suficiente peso"), descuenta y cierra el lote si queda en 0, registra la salida y crea la Cuenta por Cobrar (vence a 60 días).
-6. Cuentas por Pagar: "Pagar" → Monto, Método (Efectivo, Cheque, Transferencia), Referencia. Cuentas por Cobrar: "Cobrar". Se aceptan pagos parciales; no se paga más que el saldo.`;
+6. Cuentas por Pagar: "Pagar" → Monto, Método (Efectivo, Cheque, Transferencia), Referencia; solo para liquidaciones aprobadas. Cuentas por Cobrar: "Cobrar". Se aceptan pagos parciales; no se paga más que el saldo. El botón "Pagos" (o "Cobros") abre el historial y un administrador puede "Anular" un movimiento registrado por error, indicando el motivo: la cuenta recupera ese saldo.`;
 
 const CUSTODIAS = `# Custodias — guía
 
