@@ -1,6 +1,8 @@
 ﻿import { Module } from '@nestjs/common';
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
+import { AgentesAdminController } from './agentes-admin.controller';
+import { AgentesHistorialService } from './agentes-historial.service';
 import { AiProcessor } from './ai.processor';
 import { AiVentasQueries } from './ai-ventas.queries';
 import { AiVentasInvestigacionQueries } from './ai-ventas-investigacion.queries';
@@ -16,9 +18,10 @@ import { GoogleAuthService } from '../../common/services/google-auth.service';
   // VentasModule: AiVentasQueries reutiliza el cálculo del Dashboard y la ficha
   // del cliente de VentasClientesService.
   imports: [PrismaModule, AuthModule, PermissionsModule, VentasModule],
-  controllers: [AiController],
+  controllers: [AiController, AgentesAdminController],
   providers: [
     AiService,
+    AgentesHistorialService,
     AiProcessor,
     AiVentasQueries,
     AiVentasInvestigacionQueries,

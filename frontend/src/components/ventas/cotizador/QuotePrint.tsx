@@ -140,6 +140,9 @@ export default function QuotePrint({ draft, comp, companyName, logoUrl, issuerNa
               <tr>
                 <th style={{ width: 22 }}>#</th>
                 <th>Servicio / Descripción</th>
+                <th className="right" style={{ width: 80 }}>
+                  Costo unit.
+                </th>
                 <th className="center" style={{ width: 40 }}>
                   Cant
                 </th>
@@ -163,6 +166,7 @@ export default function QuotePrint({ draft, comp, companyName, logoUrl, issuerNa
                         </small>
                       )}
                     </td>
+                    <td className="right">{money(l.line.qty > 0 ? l.pvpTotal / l.line.qty : 0)}</td>
                     <td className="center">{l.line.qty}</td>
                     <td className="right">
                       <strong>{money(l.pvpTotal)}</strong>

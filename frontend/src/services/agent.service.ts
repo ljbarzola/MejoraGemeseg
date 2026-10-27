@@ -6,6 +6,9 @@ import type {
   DocumentacionAgente,
   EjecucionAgente,
   ResumenActividadAgentes,
+  PreguntaAgente,
+  ResumenPreguntasAgentes,
+  PromptReal,
 } from '../types/agent';
 
 export async function getAgents(): Promise<UserWithAgent[]> {
@@ -85,5 +88,27 @@ export async function getAgentRuns(filtros: {
 
 export async function getAgentRunsSummary(dias = 30): Promise<ResumenActividadAgentes> {
   const res = await api.get('/admin/agents/runs/summary', { params: { dias } });
+  return res.data;
+}
+
+export async function getAgentHistory(filtros: {
+  agentId?: number;
+  userId?: number;
+  desde?: string;
+  hasta?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ total: number; items: PreguntaAgente[] }> {
+  const res = await api.get('/admin/agents/history', { params: filtros });
+  return res.data;
+}
+
+export async function getAgentHistorySummary(dias = 30): Promise<ResumenPreguntasAgentes> {
+  const res = await api.get('/admin/agents/history/summary', { params: { dias } });
+  return res.data;
+}
+
+export async function getAgentPrompt(agentId: number): Promise<PromptReal> {
+  const res = await api.get(`/admin/agents/prompt/${agentId}`);
   return res.data;
 }

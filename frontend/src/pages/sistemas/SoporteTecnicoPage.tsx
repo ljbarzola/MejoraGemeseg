@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Wrench, Settings, ExternalLink, X } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Settings, ExternalLink, X } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
 import {
   getTicketsSoporte,
   updateTicketSoporteEstado,
@@ -56,7 +57,6 @@ const reportante = (t: TicketSoporte) => t.createdBy?.fullName || t.createdBy?.e
 const totalAdjuntos = (t: TicketSoporte) => (t.attachments?.length ?? 0) + (t.capturaUrl ? 1 : 0);
 
 export default function SoporteTecnicoPage() {
-  const navigate = useNavigate();
   const { showToast } = useToast();
   const [tickets, setTickets] = useState<TicketSoporte[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,8 +66,14 @@ export default function SoporteTecnicoPage() {
   const [detalleId, setDetalleId] = useState<number | null>(null);
 
   const [search, setSearch] = useState('');
-  const [filtroEstado, setFiltroEstado] = useState('');
-  const [filtroTipo, setFiltroTipo] = useState('');
+  // El dashboard de Sistemas manda aquí con ?estado=ABIERTO, ?tipo=ERROR o ?ticket=<id>.
+  const [params] = useSearchParams();
+  const estadoDeUrl = params.get('estado') ?? '';
+  const tipoDeUrl = params.get('tipo') ?? '';
+  const ticketDeUrl = Number(params.get('ticket')) || null;
+  const ticketYaAbierto = useRef(false);
+  const [filtroEstado, setFiltroEstado] = useState(Object.keys(ESTADO_LABEL).includes(estadoDeUrl) ? estadoDeUrl : '');
+  const [filtroTipo, setFiltroTipo] = useState(Object.keys(TIPO_LABEL).includes(tipoDeUrl) ? tipoDeUrl : '');
   const [filtroEmpresa, setFiltroEmpresa] = useState('');
 
   const columnPrefs = useColumnPreferences('soporte-tecnico', COLUMNAS_POR_DEFECTO);
@@ -82,6 +88,13 @@ export default function SoporteTecnicoPage() {
   };
 
   useEffect(load, []);
+
+  // Un ticket pedido por la URL se abre una sola vez, cuando ya cargaron los tickets.
+  useEffect(() => {
+    if (ticketYaAbierto.current || !ticketDeUrl || !tickets.some((t) => t.id === ticketDeUrl)) return;
+    ticketYaAbierto.current = true;
+    setDetalleId(ticketDeUrl);
+  }, [ticketDeUrl, tickets]);
 
   const handleEstadoChange = async (id: number, estado: TicketSoporteEstado) => {
     setSavingId(id);
@@ -186,24 +199,20 @@ export default function SoporteTecnicoPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <button className="back-btn" onClick={() => navigate('/sistemas/dashboard')}>
-          <ArrowLeft size={18} />
-        </button>
-        <h1 style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-          <Wrench size={22} /> Soporte Técnico
-        </h1>
-        <button
-          className="btn-secondary"
-          onClick={() => setShowConfig(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem' }}
-        >
-          <Settings size={15} /> Configurar carpeta
-        </button>
-      </div>
-      <p style={{ margin: '0 0 20px', color: '#718096', fontSize: '0.88rem' }}>
-        Errores, ideas de mejora y solicitudes de permiso reportados desde toda la app.
-      </p>
+      <PageHeader
+        eyebrow="Sistemas"
+        title="Soporte técnico"
+        description="Errores, ideas de mejora y solicitudes de permiso reportados desde toda la app."
+        actions={
+          <button
+            className="btn-secondary"
+            onClick={() => setShowConfig(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Settings size={15} /> Configurar carpeta
+          </button>
+        }
+      />
 
       {error && <div className="form-error" style={{ marginBottom: '14px' }}>{error}</div>}
 

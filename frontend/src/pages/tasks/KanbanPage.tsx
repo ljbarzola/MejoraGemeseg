@@ -4,6 +4,8 @@ import { getTasksByProject, getProject, updateTask } from '../../services/task.s
 import { getUser } from '../../services/auth.service';
 import type { Task, TaskGrouped } from '../../types/task';
 import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_COLORS, STATUS_COLORS } from '../../types/task';
+import TaskDetailModal from '../../components/tasks/TaskDetailModal';
+import CreateTaskModal from '../../components/tasks/CreateTaskModal';
 
 const COLUMNS: (keyof TaskGrouped)[] = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
 
@@ -20,6 +22,8 @@ export default function KanbanPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [tareaAbierta, setTareaAbierta] = useState<number | null>(null);
+  const [creandoTarea, setCreandoTarea] = useState(false);
   const currentUser = getUser();
 
   const isViewer = project?.members?.some(
@@ -90,7 +94,7 @@ export default function KanbanPage() {
         <button
           className={`auth-btn ${isViewer ? 'btn-disabled' : ''}`}
           onClick={() => {
-            if (!isViewer) navigate(`/projects/${projectId}/tasks/new`);
+            if (!isViewer) setCreandoTarea(true);
           }}
           disabled={isViewer}
           title={isViewer ? 'Los observadores no pueden crear tareas' : ''}
@@ -114,7 +118,7 @@ export default function KanbanPage() {
                 <div
                   key={task.id}
                   className="kanban-card"
-                  onClick={() => navigate(`/tasks/${task.id}`)}
+                  onClick={() => setTareaAbierta(task.id)}
                 >
                   <div className="kanban-card-header">
                     <span
@@ -169,6 +173,13 @@ export default function KanbanPage() {
           </div>
         ))}
       </div>
+
+      {tareaAbierta !== null && (
+        <TaskDetailModal taskId={tareaAbierta} onClose={() => setTareaAbierta(null)} onChanged={loadData} />
+      )}
+      {creandoTarea && (
+        <CreateTaskModal projectId={Number(projectId)} onClose={() => setCreandoTarea(false)} onCreated={loadData} />
+      )}
     </div>
   );
 }

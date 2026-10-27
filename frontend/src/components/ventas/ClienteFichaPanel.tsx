@@ -277,8 +277,8 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
         : null;
       contenido = (
         <>
-          <strong>{ev.producto ? 'Venta de producto' : 'Contrato'} {paso} · {ev.title || 'sin título'}</strong>
-          {servicios && <div style={tenue}>{ev.producto ? 'Productos' : 'Servicios'}: {servicios}</div>}
+          <strong>{ev.producto ? 'Venta única' : 'Contrato'} {paso} · {ev.title || 'sin título'}</strong>
+          {servicios && <div style={tenue}>{ev.producto ? 'Productos o servicios' : 'Servicios'}: {servicios}</div>}
           {vigencia && <div style={tenue}>{ev.producto ? 'Fecha' : 'Vigencia'}: {vigencia}</div>}
         </>
       );

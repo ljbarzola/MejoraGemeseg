@@ -227,7 +227,7 @@ export class AiVentasInvestigacionQueries {
     const lineas = sel.slice(0, MAX_LINEAS).map(
       ({ c, estado }) =>
         c.kind === 'PRODUCTO'
-          ? `- ${c.salesClient.name}${c.title ? ` · ${c.title}` : ''} · VENTA DE PRODUCTO (única, no se renueva) · ${ETIQUETA_ESTADO[estado]} · vendido el ${formatoDia(c.startDate)} · ${c.services.map((s) => s.service.name).join(', ') || 'sin productos'} · valor total ${dinero(c.totalValue === null ? null : Number(c.totalValue))}${c.warrantyUntil ? ` · garantía hasta ${formatoDia(c.warrantyUntil)}` : ''} [#contrato:${c.id}]`
+          ? `- ${c.salesClient.name}${c.title ? ` · ${c.title}` : ''} · VENTA ÚNICA (producto o servicio de una sola vez, no se renueva) · ${ETIQUETA_ESTADO[estado]} · vendido el ${formatoDia(c.startDate)} · ${c.services.map((s) => s.service.name).join(', ') || 'sin productos ni servicios'} · valor total ${dinero(c.totalValue === null ? null : Number(c.totalValue))}${c.warrantyUntil ? ` · garantía hasta ${formatoDia(c.warrantyUntil)}` : ''} [#contrato:${c.id}]`
           : `- ${c.salesClient.name}${c.title ? ` · ${c.title}` : ''} · ${ETIQUETA_ESTADO[estado]} · ${formatoDia(c.startDate)} a ${c.endDate ? formatoDia(c.endDate) : 'sin fin'} · ${c.services.map((s) => s.service.name).join(', ') || 'sin servicios'} · ${dinero(c.monthlyValue === null ? null : Number(c.monthlyValue))} [#contrato:${c.id}]`,
     );
     const porEstado = (Object.keys(ETIQUETA_ESTADO) as EstadoContrato[])

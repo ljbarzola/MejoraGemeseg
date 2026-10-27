@@ -161,7 +161,7 @@ export default function ContratosComercialesList() {
     {
       cliente: (c) => c.salesClient.name,
       titulo: (c) => c.title || `Contrato #${c.id}`,
-      tipo: (c) => (c.kind === 'PRODUCTO' ? 'Venta de producto' : 'Servicio recurrente'),
+      tipo: (c) => (c.kind === 'PRODUCTO' ? 'Venta única' : 'Servicio recurrente'),
       servicios: (c) => c.services.map((s) => s.name).join(', '),
       inicio: (c) => c.startDate,
       fin: (c) => c.endDate,
@@ -244,12 +244,12 @@ export default function ContratosComercialesList() {
           </>
         );
       case 'tipo':
-        return c.kind === 'PRODUCTO' ? 'Producto' : 'Servicio';
+        return c.kind === 'PRODUCTO' ? 'Venta única' : 'Servicio recurrente';
       case 'servicios':
         return (
           <>
             {c.services.map((s) => s.name).join(', ') || '—'}
-            {c.kind === 'PRODUCTO' && <div style={{ fontSize: 11, color: '#888' }}>Venta de producto</div>}
+            {c.kind === 'PRODUCTO' && <div style={{ fontSize: 11, color: '#888' }}>Venta única</div>}
           </>
         );
       case 'vigencia':
@@ -337,9 +337,9 @@ export default function ContratosComercialesList() {
           />
           <FilterField label="Tipo">
   <select className="filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
-              <option value="">Servicios y productos</option>
-              <option value="SERVICIO">Solo servicios</option>
-              <option value="PRODUCTO">Solo productos</option>
+              <option value="">Todos los tipos</option>
+              <option value="SERVICIO">Solo servicios recurrentes</option>
+              <option value="PRODUCTO">Solo ventas únicas</option>
             </select>
           </FilterField>
           <FilterField label="Estado">

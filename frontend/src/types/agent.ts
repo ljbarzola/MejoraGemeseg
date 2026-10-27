@@ -74,3 +74,60 @@ export interface ResumenActividadAgentes {
     ultima: string;
   }[];
 }
+
+/** Una pregunta que una persona le hizo a un agente de chat, con su respuesta, tiempo y tokens. */
+export interface PreguntaAgente {
+  id: number;
+  conversationId: number;
+  agentId: number;
+  agentNombre: string;
+  agentScope: string | null;
+  userId: number;
+  userNombre: string;
+  /** Pantalla desde la que se preguntó. */
+  contexto: string;
+  pregunta: string | null;
+  respuesta: string;
+  createdAt: string;
+  duracionMs: number | null;
+  tokens: number | null;
+  modelo: string | null;
+  exito: boolean;
+  error: string | null;
+  /** Consulta de datos que usó el agente (por ejemplo ventas_expediente), si usó alguna. */
+  consulta: string | null;
+  detalle: Record<string, unknown> | null;
+}
+
+export interface ResumenPreguntasAgentes {
+  dias: number;
+  agentes: {
+    agentId: number;
+    agentNombre: string;
+    preguntas: number;
+    personas: number;
+    fallos: number;
+    tokens: number;
+    tokensPorPregunta: number;
+    duracionPromedioMs: number | null;
+    ultima: string;
+  }[];
+  personas: { id: number; nombre: string }[];
+}
+
+/** Un bloque del prompt tal como lo recibe el modelo. */
+export interface ParteDelPrompt {
+  titulo: string;
+  texto: string;
+  /** Quién lo cambia: el texto del agente, el código, cada persona (permisos) o la base de conocimiento de la empresa. */
+  origen: 'agente' | 'codigo' | 'persona' | 'empresa';
+}
+
+export interface PromptReal {
+  agentId: number;
+  nombre: string;
+  scope: string;
+  modelo: string;
+  avisos: string[];
+  partes: ParteDelPrompt[];
+}

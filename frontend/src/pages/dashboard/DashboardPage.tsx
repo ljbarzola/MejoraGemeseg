@@ -1,9 +1,11 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { getUser } from '../../services/auth.service';
-import { getMyTasks } from '../../services/task.service';
+import { getMyTasks, updateTask } from '../../services/task.service';
 import { getProjects } from '../../services/project.service';
 import CreateTaskModal from '../../components/tasks/CreateTaskModal';
+import TaskDetailModal from '../../components/tasks/TaskDetailModal';
+import TaskStatusMenu from '../../components/tasks/TaskStatusMenu';
 import PendingSurveysBanner from '../../components/personal/PendingSurveysBanner';
 import ReferirClienteButton from '../../components/common/ReferirClienteButton';
 import { UserCheck } from 'lucide-react';
@@ -104,8 +106,22 @@ export default function DashboardPage() {
   // proyecto guardado que ya no aplica se descarta ANTES de pedir las tareas.
   const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [showCreateTask, setShowCreateTask] = useState(false);
+  const [tareaAbierta, setTareaAbierta] = useState<number | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const { showToast } = useToast();
+
+  // Mueve la tarea de estado sin abrirla: se pinta al instante y, si el servidor la rechaza
+  // (p. ej. la persona es observadora de ese proyecto), vuelve al estado anterior.
+  async function cambiarEstado(task: Task, nuevo: string) {
+    const anterior = task.status;
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: nuevo as Task['status'] } : t)));
+    try {
+      await updateTask(task.id, { status: nuevo });
+    } catch {
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: anterior } : t)));
+      showToast('No se pudo cambiar el estado de la tarea. Puede que solo tengas permiso de lectura en ese proyecto.', 'error');
+    }
+  }
   const columnPrefs = useColumnPreferences('mis-tareas', COLUMNAS_TAREAS_POR_DEFECTO);
   const columnasVisibles = columnPrefs.visible.filter((k) => COLUMNAS_TAREAS.some((c) => c.key === k));
   const tablaRef = useResizableColumns('mis-tareas', ['title', ...columnasVisibles]);
@@ -167,13 +183,15 @@ export default function DashboardPage() {
           </span>
         );
       case 'status':
-        return (
+        return task.status === 'CANCELLED' ? (
           <span
             className="status-badge"
             style={{ backgroundColor: STATUS_COLORS[task.status] + '22', color: STATUS_COLORS[task.status] }}
           >
             {STATUS_LABELS[task.status]}
           </span>
+        ) : (
+          <TaskStatusMenu status={task.status} onChange={(nuevo) => cambiarEstado(task, nuevo)} />
         );
       case 'priority':
         return (
@@ -330,6 +348,14 @@ export default function DashboardPage() {
           />
         )}
 
+        {tareaAbierta !== null && (
+          <TaskDetailModal
+            taskId={tareaAbierta}
+            onClose={() => setTareaAbierta(null)}
+            onChanged={() => setReloadKey((k) => k + 1)}
+          />
+        )}
+
         <div className="admin-section">
           {loading ? (
             <div className="loading-state">Cargando tareas...</div>
@@ -358,7 +384,7 @@ export default function DashboardPage() {
                     <tr
                       key={task.id}
                       className="tasks-table-row"
-                      onClick={() => navigate(`/tasks/${task.id}`)}
+                      onClick={() => setTareaAbierta(task.id)}
                       style={{ cursor: 'pointer' }}
                     >
                       <td className="tasks-table-title">

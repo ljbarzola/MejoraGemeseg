@@ -1,7 +1,7 @@
 // Estado de un contrato comercial (SalesAgreement). En un SERVICIO solo ACTIVO /
 // RENOVADO / CANCELADO se guardan; el resto se calcula con las fechas para que
 // nunca quede desactualizado (nadie tiene que marcar "vencido" a mano ni hay un
-// proceso nocturno que lo haga). Una venta de PRODUCTO no vence ni se renueva:
+// proceso nocturno que lo haga). Una venta única (PRODUCTO) no vence ni se renueva:
 // guarda POR_ENTREGAR / ENTREGADO / CANCELADO tal cual.
 export const DIAS_POR_VENCER = 30;
 
