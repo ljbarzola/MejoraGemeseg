@@ -10,7 +10,8 @@ import { CreateSettlementDto } from './dto/create-settlement.dto';
 import { CacaoConfigService } from '../config/cacao-config.service';
 
 /** Una liquidación rechazada o anulada deja libre el peso que había tomado del lote. */
-const ESTADOS_QUE_LIBERAN_LOTE = ['REJECTED', 'CANCELLED'];
+/** Una liquidación rechazada o anulada deja libre el peso que había tomado. */
+export const ESTADOS_QUE_LIBERAN_LOTE = ['REJECTED', 'CANCELLED'];
 const TOLERANCIA_KG = 0.001;
 const DIA_MS = 24 * 60 * 60 * 1000;
 const PLAZO_POR_DEFECTO_DIAS = 30;

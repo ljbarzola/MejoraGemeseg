@@ -424,6 +424,20 @@ model CacaoSetting {
   @@unique([companyId, key])
 }
 
+// Motivos de rechazo y anulación por empresa (línea blanca: nace vacío, cada empresa arma el suyo).
+// El motivo elegido se guarda como texto en la liquidación o en el pago, así que borrar uno del
+// catálogo no cambia nada de lo ya registrado. Tabla creada al arrancar, ver cacao-config.schema.ts.
+model CacaoMotivo {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  tipo      String // LIQUIDACION (rechazar o anular una liquidación) | PAGO (anular un pago o un cobro)
+  nombre    String
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([companyId, tipo, nombre])
+}
+
 model CacaoLot {
   id           Int                  @id @default(autoincrement())
   code         String

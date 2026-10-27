@@ -46,4 +46,15 @@ export const CACAO_CONFIG_DDL = [
      CONSTRAINT "CacaoSetting_pkey" PRIMARY KEY ("id")
    )`,
   'CREATE UNIQUE INDEX IF NOT EXISTS "CacaoSetting_companyId_key_key" ON "CacaoSetting" ("companyId", "key")',
+  // Motivos de rechazo y anulación por empresa (2026-10-27). Tabla nueva: solo la lee código nuevo.
+  `CREATE TABLE IF NOT EXISTS "CacaoMotivo" (
+     "id" SERIAL NOT NULL,
+     "companyId" INTEGER NOT NULL,
+     "tipo" TEXT NOT NULL,
+     "nombre" TEXT NOT NULL,
+     "activo" BOOLEAN NOT NULL DEFAULT true,
+     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+     CONSTRAINT "CacaoMotivo_pkey" PRIMARY KEY ("id")
+   )`,
+  'CREATE UNIQUE INDEX IF NOT EXISTS "CacaoMotivo_companyId_tipo_nombre_key" ON "CacaoMotivo" ("companyId", "tipo", "nombre")',
 ];

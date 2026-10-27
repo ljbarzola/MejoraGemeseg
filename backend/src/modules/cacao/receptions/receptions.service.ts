@@ -4,6 +4,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateReceptionDto } from './dto/create-reception.dto';
 import { CacaoUnitConfigService } from '../unit-config/unit-config.service';
 import { CacheService } from '../../cache/cache.service';
+import { ESTADOS_QUE_LIBERAN_LOTE } from '../settlements/settlements.service';
 
 const INTENTOS_CODIGO_DE_LOTE = 5;
 
@@ -31,11 +32,38 @@ export class CacaoReceptionsService {
       if (query.from) where.date.gte = new Date(query.from);
       if (query.to) where.date.lte = new Date(query.to);
     }
-    return this.prisma.cacaoReception.findMany({
+    const recepciones = await this.prisma.cacaoReception.findMany({
       where,
       include: { supplier: true, lot: true },
       orderBy: { date: 'desc' },
     });
+
+    // Cuánto de cada entrega ya se liquidó al proveedor (liquidaciones que no están rechazadas ni
+    // anuladas). Cada recepción forma su propio lote, así que el lote identifica la entrega. La
+    // pantalla lo compara con el peso neto recibido: Sin liquidar / Parcial / Liquidada.
+    const lotIds = recepciones
+      .map((r) => r.lotId)
+      .filter((id): id is number => id !== null);
+    const liquidado = lotIds.length
+      ? await this.prisma.cacaoSettlementLot.groupBy({
+          by: ['lotId'],
+          where: {
+            lotId: { in: lotIds },
+            settlement: {
+              companyId,
+              status: { notIn: ESTADOS_QUE_LIBERAN_LOTE },
+            },
+          },
+          _sum: { quantity: true },
+        })
+      : [];
+    const liquidadoPorLote = new Map(
+      liquidado.map((g) => [g.lotId, g._sum.quantity ?? 0]),
+    );
+    return recepciones.map((r) => ({
+      ...r,
+      liquidadoKg: r.lotId === null ? 0 : (liquidadoPorLote.get(r.lotId) ?? 0),
+    }));
   }
 
   async findQualities(companyId: number) {

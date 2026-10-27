@@ -1,23 +1,25 @@
 import { useSearchParams } from 'react-router-dom';
-import { Star, Scale, CalendarClock } from 'lucide-react';
+import { Star, Scale, CalendarClock, ListChecks } from 'lucide-react';
 import PageHeader from '../../../components/common/PageHeader';
 import PageTabs, { type PageTab } from '../../../components/common/PageTabs';
 import { getUser } from '../../../services/auth.service';
 import CalidadesPanel from './CalidadesPanel';
 import UnidadesPanel from './UnidadesPanel';
 import PlazosPanel from './PlazosPanel';
+import MotivosPanel from './MotivosPanel';
 
-type Pestana = 'calidades' | 'unidades' | 'plazos';
+type Pestana = 'calidades' | 'unidades' | 'plazos' | 'motivos';
 
 const PESTANAS: PageTab<Pestana>[] = [
   { key: 'calidades', label: 'Calidades', icon: Star, title: 'Calidades de cacao y sus descuentos' },
   { key: 'unidades', label: 'Unidades de medida', icon: Scale, title: 'Cuánto pesa un saco en tu empresa' },
   { key: 'plazos', label: 'Plazos', icon: CalendarClock, title: 'Plazos de pago y de cobro' },
+  { key: 'motivos', label: 'Motivos', icon: ListChecks, title: 'Motivos de rechazo y anulación' },
 ];
 
 /**
  * Lo que cambia de una empresa a otra en Cacao (línea blanca): sus calidades, el peso de su saco y
- * sus plazos. Una empresa nueva empieza sin nada de esto y lo configura aquí.
+ * sus plazos y sus motivos de rechazo y anulación. Una empresa nueva empieza sin nada de esto y lo configura aquí.
  */
 export default function ConfiguracionCacaoPage() {
   const [params, setParams] = useSearchParams();
@@ -31,7 +33,7 @@ export default function ConfiguracionCacaoPage() {
       <PageHeader
         eyebrow="Cacao"
         title="Configuración"
-        description="Lo propio de tu empresa: tus calidades de cacao, cuánto pesa tu saco y tus plazos de pago y de cobro."
+        description="Lo propio de tu empresa: tus calidades de cacao, cuánto pesa tu saco y tus plazos de pago y de cobro, y tus motivos de rechazo y anulación."
       />
       {!puedeEditar && (
         <div className="auth-info-banner" style={{ marginBottom: 16 }}>
@@ -42,6 +44,7 @@ export default function ConfiguracionCacaoPage() {
       {pestana === 'calidades' && <CalidadesPanel puedeEditar={puedeEditar} />}
       {pestana === 'unidades' && <UnidadesPanel puedeEditar={puedeEditar} />}
       {pestana === 'plazos' && <PlazosPanel puedeEditar={puedeEditar} />}
+      {pestana === 'motivos' && <MotivosPanel puedeEditar={puedeEditar} />}
     </div>
   );
 }

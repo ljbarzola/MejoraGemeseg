@@ -13,6 +13,7 @@ import { CacaoDashboardModule } from './dashboard/dashboard.module';
 import { CacaoQualitiesModule } from './qualities/qualities.module';
 import { CacaoUnitConfigModule } from './unit-config/unit-config.module';
 import { CacaoConfigModule } from './config/cacao-config.module';
+import { CacaoMotivosModule } from './motivos/motivos.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { CacaoConfigModule } from './config/cacao-config.module';
     CacaoDashboardModule,
     CacaoUnitConfigModule,
     CacaoConfigModule,
+    CacaoMotivosModule,
   ],
 })
 export class CacaoModule {}

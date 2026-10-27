@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import PromptDialog from '../../components/common/PromptDialog';
+import MotivoDialog from './MotivoDialog';
 import ErrorBanner from '../../components/common/ErrorBanner';
 import { apiErrorMessage, formatDateEc, formatMoney, PAYMENT_METHOD_LABEL } from './utils';
 
@@ -89,11 +89,11 @@ export default function PaymentsHistoryModal({ title, noun, payments, canVoid, o
       </div>
 
       {voidingId != null && (
-        <PromptDialog
+        <MotivoDialog
+          tipo="PAGO"
           title={`Anular ${noun}`}
           message={`Indica el motivo. La cuenta recupera el saldo de este ${noun}.`}
           confirmLabel="Anular"
-          required
           onCancel={() => setVoidingId(null)}
           onConfirm={handleVoid}
         />

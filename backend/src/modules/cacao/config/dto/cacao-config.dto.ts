@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsInt, IsNumber, IsOptional, Max, Min } from 'class-validator';
 
 /** Ajustes del módulo Cacao de una empresa. Lo que no se manda no se cambia. */
 export class UpdateCacaoConfigDto {
@@ -15,4 +15,11 @@ export class UpdateCacaoConfigDto {
   @Min(0)
   @Max(365)
   plazoCobroDias?: number;
+
+  /** Precio de referencia ICE en $/T (máx. 2 decimales). `null` lo borra. */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  @Max(1000000)
+  precioIce?: number | null;
 }

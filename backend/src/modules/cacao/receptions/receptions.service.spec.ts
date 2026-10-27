@@ -142,3 +142,50 @@ describe('CacaoReceptionsService.create', () => {
     expect(b.prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('CacaoReceptionsService.findAll (cuánto se liquidó de cada entrega)', () => {
+  function conListado(
+    recepciones: Array<{ id: number; lotId: number | null }>,
+    liquidado: Array<{ lotId: number; _sum: { quantity: number | null } }>,
+  ) {
+    const a = armar();
+    const prismaExtra = a.prisma as unknown as Record<string, unknown>;
+    prismaExtra.cacaoReception = {
+      findMany: jest.fn().mockResolvedValue(recepciones),
+    };
+    const groupBy = jest.fn().mockResolvedValue(liquidado);
+    prismaExtra.cacaoSettlementLot = { groupBy };
+    return { ...a, groupBy };
+  }
+
+  it('suma lo liquidado por entrega e ignora las liquidaciones rechazadas o anuladas', async () => {
+    const { service, groupBy } = conListado(
+      [
+        { id: 1, lotId: 10 },
+        { id: 2, lotId: 11 },
+        { id: 3, lotId: 12 },
+      ],
+      [{ lotId: 10, _sum: { quantity: 480.5 } }],
+    );
+    const lista = await service.findAll(4, {});
+    expect(lista.map((r) => r.liquidadoKg)).toEqual([480.5, 0, 0]);
+    expect(groupBy).toHaveBeenCalledWith({
+      by: ['lotId'],
+      where: {
+        lotId: { in: [10, 11, 12] },
+        settlement: {
+          companyId: 4,
+          status: { notIn: ['REJECTED', 'CANCELLED'] },
+        },
+      },
+      _sum: { quantity: true },
+    });
+  });
+
+  it('una recepción sin lote cuenta como sin liquidar y no consulta liquidaciones si no hay lotes', async () => {
+    const { service, groupBy } = conListado([{ id: 1, lotId: null }], []);
+    const lista = await service.findAll(4, {});
+    expect(lista[0].liquidadoKg).toBe(0);
+    expect(groupBy).not.toHaveBeenCalled();
+  });
+});

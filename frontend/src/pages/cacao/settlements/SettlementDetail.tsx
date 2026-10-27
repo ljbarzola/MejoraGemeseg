@@ -5,7 +5,7 @@ import { getUser } from '../../../services/auth.service';
 import { formatDateEc, estadoLiquidacion, estadoCuenta, apiErrorMessage } from '../utils';
 import { useCompany } from '../../../contexts/ThemeContext';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
-import PromptDialog from '../../../components/common/PromptDialog';
+import MotivoDialog from '../MotivoDialog';
 import ErrorBanner from '../../../components/common/ErrorBanner';
 
 type Accion = 'approve' | 'reject' | 'cancel' | null;
@@ -205,21 +205,21 @@ export default function SettlementDetail() {
         />
       )}
       {accion === 'reject' && (
-        <PromptDialog
+        <MotivoDialog
+          tipo="LIQUIDACION"
           title="Rechazar liquidación"
           message="Indica el motivo del rechazo. Los lotes quedarán libres para liquidarse otra vez."
           confirmLabel="Rechazar"
-          required
           onCancel={() => setAccion(null)}
           onConfirm={(reason) => ejecutar(() => rejectSettlement(settlement.id, reason), 'No se pudo rechazar la liquidación.')}
         />
       )}
       {accion === 'cancel' && (
-        <PromptDialog
+        <MotivoDialog
+          tipo="LIQUIDACION"
           title="Anular liquidación"
           message="Indica el motivo de la anulación. Se anula también la cuenta por pagar y los lotes quedan libres."
           confirmLabel="Anular"
-          required
           onCancel={() => setAccion(null)}
           onConfirm={(reason) => ejecutar(() => cancelSettlement(settlement.id, reason), 'No se pudo anular la liquidación.')}
         />

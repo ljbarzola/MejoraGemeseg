@@ -8,6 +8,15 @@ import { useTablaCacao } from '../useTablaCacao';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 
+/** Cuánto de la entrega ya se le liquidó al proveedor: lo liquidado (sin contar rechazos ni anulaciones) frente al peso neto recibido. */
+function estadoLiquidacionEntrega(r: { netWeight: number; liquidadoKg?: number }) {
+  const liquidado = r.liquidadoKg || 0;
+  // Misma tolerancia de redondeo que usa el servidor al topar la liquidación.
+  if (liquidado <= 0.001) return { orden: 0, label: 'Sin liquidar', bg: '#fefcbf', color: '#975a16' };
+  if (liquidado < r.netWeight - 0.001) return { orden: 1, label: 'Parcial', bg: '#bee3f8', color: '#2b6cb0' };
+  return { orden: 2, label: 'Liquidada', bg: '#c6f6d5', color: '#276749' };
+}
+
 export default function ReceptionsList() {
   const { factor: factorUnidad } = useCacaoUnidades();
   const navigate = useNavigate();
@@ -91,6 +100,20 @@ export default function ReceptionsList() {
           r.lot ? (
             <span className="status-badge" style={{ backgroundColor: '#ebf8ff', color: '#2b6cb0' }}>{r.lot.code}</span>
           ) : '—',
+      },
+      {
+        key: 'liquidacion', ancho: 130,
+        label: 'Liquidación',
+        orden: (r) => estadoLiquidacionEntrega(r).orden,
+        celda: (r) => {
+          const e = estadoLiquidacionEntrega(r);
+          return (
+            <span className="status-badge" style={{ backgroundColor: e.bg, color: e.color }}
+              title={`Liquidado ${(r.liquidadoKg || 0).toLocaleString()} de ${r.netWeight.toLocaleString()} kg`}>
+              {e.label}
+            </span>
+          );
+        },
       },
     ],
   });

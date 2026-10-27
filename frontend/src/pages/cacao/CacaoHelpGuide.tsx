@@ -15,8 +15,9 @@ const STEPS = [
       { label: 'Calidades de cacao', desc: 'Crea las calidades que maneja tu empresa con sus descuentos por humedad e impurezas, y si tienen precio fijo o provisional. Está en Configuración → Calidades.', path: '/cacao/configuracion?tab=calidades' },
       { label: 'Unidades de medida', desc: 'Indica cuánto pesa un saco en tu empresa. Solo hace falta si compras o vendes en sacos; las toneladas y los kilos no necesitan configuración.', path: '/cacao/configuracion?tab=unidades' },
       { label: 'Plazos', desc: 'Define en cuántos días se paga a un proveedor y en cuántos se cobra a un cliente. Cada liquidación y cada embarque puede cambiar el suyo.', path: '/cacao/configuracion?tab=plazos' },
+      { label: 'Motivos (opcional)', desc: 'Arma tu lista de motivos para rechazar o anular liquidaciones y pagos. Si no armas ninguna, el motivo se escribe a mano.', path: '/cacao/configuracion?tab=motivos' },
     ],
-    tip: 'El sistema no trae calidades, pesos ni plazos de fábrica: son los de tu empresa. El Dashboard te muestra qué pasos te faltan.',
+    tip: 'El sistema no trae calidades, pesos, plazos, motivos ni precio ICE de fábrica: son los de tu empresa. El Dashboard te muestra qué pasos te faltan.',
   },
   {
     num: 2,

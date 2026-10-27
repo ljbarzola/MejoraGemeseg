@@ -58,6 +58,15 @@ export const createUnitConfig = (data: any) => api.post('/cacao/unit-config', da
 export const updateUnitConfig = (id: number, data: any) => api.patch(`/cacao/unit-config/${id}`, data).then(r => r.data);
 export const deleteUnitConfig = (id: number) => api.delete(`/cacao/unit-config/${id}`);
 
+// Motivos de rechazo y anulación de la empresa. tipo: LIQUIDACION (rechazar o anular una liquidación)
+// o PAGO (anular un pago o un cobro). `todos` incluye los desactivados (pantalla de Configuración).
+export type TipoMotivo = 'LIQUIDACION' | 'PAGO';
+export const getCacaoMotivos = (tipo?: TipoMotivo, todos?: boolean) =>
+  api.get('/cacao/motivos', { params: { ...(tipo ? { tipo } : {}), ...(todos ? { todos: 1 } : {}) } }).then(r => r.data);
+export const createCacaoMotivo = (data: { tipo: TipoMotivo; nombre: string }) => api.post('/cacao/motivos', data).then(r => r.data);
+export const updateCacaoMotivo = (id: number, data: { nombre?: string; activo?: boolean }) => api.patch(`/cacao/motivos/${id}`, data).then(r => r.data);
+export const deleteCacaoMotivo = (id: number) => api.delete(`/cacao/motivos/${id}`);
+
 // Ajustes de la empresa (plazos de pago y cobro)
 export const getCacaoConfig = () => api.get('/cacao/configuracion').then(r => r.data);
-export const updateCacaoConfig = (data: { plazoPagoDias?: number; plazoCobroDias?: number }) => api.put('/cacao/configuracion', data).then(r => r.data);
+export const updateCacaoConfig = (data: { plazoPagoDias?: number; plazoCobroDias?: number; precioIce?: number | null }) => api.put('/cacao/configuracion', data).then(r => r.data);

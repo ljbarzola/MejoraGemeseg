@@ -14,7 +14,15 @@ export const AJUSTES_INICIALES = {
 
 export type AjustesCacao = {
   -readonly [K in keyof typeof AJUSTES_INICIALES]: number;
+} & {
+  /**
+   * Precio de referencia de la bolsa (ICE) en $/T. No tiene valor inicial: cada empresa lo
+   * escribe, y mientras no lo haga las fijaciones de precio le piden que lo configure.
+   */
+  precioIce: number | null;
 };
+
+const CLAVE_PRECIO_ICE = 'precioIce';
 
 @Injectable()
 export class CacaoConfigService {
@@ -24,8 +32,13 @@ export class CacaoConfigService {
     const filas = await this.prisma.cacaoSetting.findMany({
       where: { companyId },
     });
-    const ajustes: AjustesCacao = { ...AJUSTES_INICIALES };
+    const ajustes: AjustesCacao = { ...AJUSTES_INICIALES, precioIce: null };
     for (const fila of filas) {
+      if (fila.key === CLAVE_PRECIO_ICE) {
+        const n = Number(fila.value);
+        if (Number.isFinite(n) && n > 0) ajustes.precioIce = n;
+        continue;
+      }
       if (fila.key in AJUSTES_INICIALES) {
         const n = Number(fila.value);
         if (Number.isInteger(n) && n >= 0) {
@@ -46,7 +59,7 @@ export class CacaoConfigService {
 
   async update(companyId: number, dto: UpdateCacaoConfigDto) {
     for (const key of Object.keys(AJUSTES_INICIALES) as Array<
-      keyof AjustesCacao
+      keyof typeof AJUSTES_INICIALES
     >) {
       const valor = dto[key];
       if (valor === undefined) continue;
@@ -54,6 +67,22 @@ export class CacaoConfigService {
         where: { companyId_key: { companyId, key } },
         update: { value: String(valor) },
         create: { companyId, key, value: String(valor) },
+      });
+    }
+    // El precio ICE puede quedar sin valor: mandar null lo borra y la empresa vuelve a configurarlo.
+    if (dto.precioIce === null) {
+      await this.prisma.cacaoSetting.deleteMany({
+        where: { companyId, key: CLAVE_PRECIO_ICE },
+      });
+    } else if (dto.precioIce !== undefined) {
+      await this.prisma.cacaoSetting.upsert({
+        where: { companyId_key: { companyId, key: CLAVE_PRECIO_ICE } },
+        update: { value: String(dto.precioIce) },
+        create: {
+          companyId,
+          key: CLAVE_PRECIO_ICE,
+          value: String(dto.precioIce),
+        },
       });
     }
     return this.get(companyId);

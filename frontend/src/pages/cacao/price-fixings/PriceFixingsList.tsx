@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import PageHeader from '../../../components/common/PageHeader';
-import { getPriceFixings, createPriceFixing, fixPrice, getLots } from '../../../services/cacao.service';
-import { formatDateEc } from '../utils';
+import { getPriceFixings, createPriceFixing, fixPrice, getLots, getCacaoConfig, updateCacaoConfig } from '../../../services/cacao.service';
+import { getUser } from '../../../services/auth.service';
+import SoloAdminDialog from '../../../components/common/SoloAdminDialog';
+import { formatDateEc, apiErrorMessage } from '../utils';
 import DateInput from '../../../components/common/DateInput';
 import { useTablaCacao } from '../useTablaCacao';
 
@@ -16,9 +18,19 @@ export default function PriceFixingsList() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const [icePrice, setIcePrice] = useState(8150);
+  // Precio ICE de referencia ($/T): lo escribe y guarda cada empresa (Cacao → Configuración lo
+  // devuelve junto a los plazos). Sin valor de fábrica: null hasta que lo configure.
+  const [precioIce, setPrecioIce] = useState<number | null>(null);
+  const iceConfigurado = precioIce !== null;
+  // Los cálculos solo se muestran con el precio configurado; 0 evita tener `null` por todas partes.
+  const ice = precioIce ?? 0;
   const [editingIce, setEditingIce] = useState(false);
-  const [iceInput, setIceInput] = useState('8150');
+  const [iceInput, setIceInput] = useState('');
+  const [iceError, setIceError] = useState('');
+  const [guardandoIce, setGuardandoIce] = useState(false);
+  const [soloAdmin, setSoloAdmin] = useState<string | null>(null);
+  // El servidor solo deja guardar al administrador; los demás ven el botón y se les explica a quién acudir.
+  const puedeEditarIce = getUser()?.role === 'ADMIN';
 
   const load = () => {
     setLoading(true);
@@ -36,12 +48,38 @@ export default function PriceFixingsList() {
 
   useEffect(() => { load(); }, []);
 
-  function saveIcePrice() {
-    const val = parseFloat(iceInput);
-    if (!isNaN(val) && val > 0) {
-      setIcePrice(val);
+  useEffect(() => {
+    getCacaoConfig()
+      .then((c) => setPrecioIce(c.precioIce ?? null))
+      .catch(() => setIceError('No se pudo cargar el precio ICE de referencia.'));
+  }, []);
+
+  function empezarEdicionIce() {
+    if (!puedeEditarIce) { setSoloAdmin('cambie el precio ICE de referencia'); return; }
+    setIceError('');
+    setIceInput(precioIce !== null ? String(precioIce) : '');
+    setEditingIce(true);
+  }
+
+  async function saveIcePrice() {
+    const val = Number(iceInput);
+    if (iceInput.trim() === '' || !Number.isFinite(val) || val <= 0) {
+      setIceError('Escribe un precio mayor a cero, en dólares por tonelada.');
+      return;
     }
-    setEditingIce(false);
+    if (Math.round(val * 100) !== val * 100 && Math.abs(Math.round(val * 100) - val * 100) > 1e-6) {
+      setIceError('El precio admite como máximo 2 decimales.');
+      return;
+    }
+    setGuardandoIce(true);
+    setIceError('');
+    try {
+      const c = await updateCacaoConfig({ precioIce: val });
+      setPrecioIce(c.precioIce ?? val);
+      setEditingIce(false);
+    } catch (err: any) {
+      setIceError(apiErrorMessage(err, 'No se pudo guardar el precio ICE. Inténtalo de nuevo.'));
+    } finally { setGuardandoIce(false); }
   }
 
   async function handleCreate() {
@@ -51,7 +89,7 @@ export default function PriceFixingsList() {
     try {
       await createPriceFixing({
         lotId: Number(form.lotId),
-        referencePrice: icePrice,
+        referencePrice: ice,
         differential: provisionalLots.find((l: any) => l.id === Number(form.lotId))?.differential
           || provisionalLots.find((l: any) => l.id === Number(form.lotId))?.receptions?.[0]?.differential
           || 0,
@@ -80,7 +118,7 @@ export default function PriceFixingsList() {
     setError('');
     try {
       await fixPrice(editingId, {
-        referencePrice: icePrice,
+        referencePrice: ice,
         fixedPrice: Number(editForm.fixedPrice),
         deadline: editForm.deadline || undefined,
       });
@@ -166,10 +204,10 @@ export default function PriceFixingsList() {
         key: 'referencia', ancho: 130,
         label: 'Precio Ref. Hoy',
         derecha: true,
-        celda: () => (
+        celda: () => !iceConfigurado ? '—' : (
           <span style={{ fontWeight: 600 }}>
-            ${icePrice.toLocaleString()}/T
-            <div style={{ fontSize: '11px', color: '#718096' }}>${(icePrice / 1000).toFixed(4)}/kg</div>
+            ${ice.toLocaleString()}/T
+            <div style={{ fontSize: '11px', color: '#718096' }}>${(ice / 1000).toFixed(4)}/kg</div>
           </span>
         ),
       },
@@ -233,7 +271,7 @@ export default function PriceFixingsList() {
       },
     ],
     acciones: (f) => (
-      <button className="btn-sm-edit" onClick={() => startEdit(f)}>{f.status === 'OPEN' ? 'Fijar' : 'Editar'}</button>
+      <button className="btn-sm-edit" onClick={() => startEdit(f)} disabled={!iceConfigurado} title={iceConfigurado ? undefined : 'Primero configura el precio ICE de referencia'}>{f.status === 'OPEN' ? 'Fijar' : 'Editar'}</button>
     ),
   });
 
@@ -245,7 +283,7 @@ export default function PriceFixingsList() {
         description="Lotes comprados a precio provisional: fija su precio definitivo antes de la fecha límite."
         actions={
           <>
-            <button className="auth-btn" onClick={() => { setError(''); setShowForm(true); }} disabled={provisionalLots.length === 0}>
+            <button className="auth-btn" onClick={() => { setError(''); setShowForm(true); }} disabled={provisionalLots.length === 0 || !iceConfigurado} title={iceConfigurado ? undefined : 'Primero configura el precio ICE de referencia'}>
               + Nueva Fijación
             </button>
           </>
@@ -266,20 +304,26 @@ export default function PriceFixingsList() {
                 value={iceInput}
                 onChange={(e) => setIceInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') saveIcePrice(); if (e.key === 'Escape') setEditingIce(false); }}
+                placeholder="Ej: 8000"
                 autoFocus
                 style={{ fontSize: '20px', fontWeight: 800, color: '#975a16', width: '140px', padding: '4px 8px', border: '2px solid #fbd38d', borderRadius: '6px', backgroundColor: 'white' }}
               />
               <span style={{ fontSize: '14px', color: '#975a16' }}>/T</span>
-              <button onClick={saveIcePrice} style={{ padding: '4px 10px', backgroundColor: '#38a169', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>✓</button>
+              <button onClick={saveIcePrice} disabled={guardandoIce} style={{ padding: '4px 10px', backgroundColor: '#38a169', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>{guardandoIce ? '...' : '✓'}</button>
               <button onClick={() => setEditingIce(false)} style={{ padding: '4px 10px', backgroundColor: '#e2e8f0', color: '#4a5568', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Cancelar</button>
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', cursor: 'pointer' }} onClick={() => { setIceInput(icePrice.toString()); setEditingIce(true); }}>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: '#975a16' }}>${icePrice.toLocaleString()}/T</div>
-              <span style={{ fontSize: '11px', color: '#b7791f', padding: '2px 8px', backgroundColor: '#fefcbf', borderRadius: '4px', border: '1px solid #f6e05e' }}>✏️ Editar</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', cursor: 'pointer' }} onClick={empezarEdicionIce}>
+              <div style={{ fontSize: '24px', fontWeight: 800, color: '#975a16' }}>{iceConfigurado ? `$${ice.toLocaleString()}/T` : 'Sin configurar'}</div>
+              <span style={{ fontSize: '11px', color: '#b7791f', padding: '2px 8px', backgroundColor: '#fefcbf', borderRadius: '4px', border: '1px solid #f6e05e' }}>{iceConfigurado ? '✏️ Editar' : 'Configurar precio'}</span>
             </div>
           )}
-          <div style={{ fontSize: '11px', color: '#b7791f', marginTop: '4px' }}>Precio base para calcular el diferencial. Haz clic para editar.</div>
+          {iceError && <div className="auth-error-banner" style={{ marginTop: '8px' }}>{iceError}</div>}
+          <div style={{ fontSize: '11px', color: '#b7791f', marginTop: '4px' }}>
+            {iceConfigurado
+              ? 'Precio base para calcular el diferencial. Haz clic para editar; se guarda para tu empresa.'
+              : 'Tu empresa aún no tiene precio de referencia. Escríbelo (dólares por tonelada) para poder crear y fijar precios.'}
+          </div>
         </div>
       </div>
 
@@ -295,7 +339,7 @@ export default function PriceFixingsList() {
                   <option value="">Seleccionar lote...</option>
                   {provisionalLots.map((l) => {
                     const dif = l.differential || l.receptions?.[0]?.differential || 0;
-                    const calcPrice = ((icePrice + dif) / 1000).toFixed(2);
+                    const calcPrice = ((ice + dif) / 1000).toFixed(2);
                     return <option key={l.id} value={l.id}>{l.code} ({l.netWeight} kg) — Precio calc: ${calcPrice}/kg</option>;
                   })}
                 </select>
@@ -322,8 +366,8 @@ export default function PriceFixingsList() {
                   </div>
                   <div style={{ marginTop: '8px', padding: '8px 12px', backgroundColor: '#fffbeb', border: '1px solid #f6e05e', borderRadius: '6px' }}>
                     <span style={{ fontWeight: 600, color: '#975a16' }}>Precio sugerido: </span>
-                    <span style={{ fontWeight: 700, color: '#975a16', fontSize: '15px' }}>${(((icePrice + dif) / 1000)).toFixed(4)}/kg</span>
-                    <span style={{ fontSize: '11px', color: '#b7791f', marginLeft: '8px' }}>(ICE ${icePrice.toLocaleString()} + Dif ${dif}) / 1000</span>
+                    <span style={{ fontWeight: 700, color: '#975a16', fontSize: '15px' }}>${(((ice + dif) / 1000)).toFixed(4)}/kg</span>
+                    <span style={{ fontSize: '11px', color: '#b7791f', marginLeft: '8px' }}>(ICE ${ice.toLocaleString()} + Dif ${dif}) / 1000</span>
                   </div>
                 </div>
               );
@@ -401,7 +445,7 @@ export default function PriceFixingsList() {
                     </div>
                     <div style={{ marginTop: '8px', padding: '8px 12px', backgroundColor: '#fffbeb', border: '1px solid #f6e05e', borderRadius: '6px' }}>
                       <span style={{ fontWeight: 600, color: '#975a16' }}>ICE Hoy: </span>
-                      <span style={{ fontWeight: 700, color: '#975a16' }}>${icePrice.toLocaleString()}/T = ${(icePrice / 1000).toFixed(4)}/kg</span>
+                      <span style={{ fontWeight: 700, color: '#975a16' }}>${ice.toLocaleString()}/T = ${(ice / 1000).toFixed(4)}/kg</span>
                     </div>
                   </div>
                 );
@@ -422,6 +466,7 @@ export default function PriceFixingsList() {
           </div>
         </div>
       )}
+      {soloAdmin && <SoloAdminDialog accion={soloAdmin} onClose={() => setSoloAdmin(null)} />}
     </div>
   );
 }
