@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import PageHeader from '../../../components/common/PageHeader';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
 import { getReceivables, receiveReceivable, voidReceipt } from '../../../services/cacao.service';
 import { getUser } from '../../../services/auth.service';
 import { formatDateEc, estadoCuenta, apiErrorMessage } from '../utils';
@@ -56,7 +57,7 @@ export default function ReceivablesList() {
   const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const history = receivables.find((r) => r.id === historyId);
 
-  const { tabla, selectorColumnas } = useTablaCacao<any>({
+  const { tabla, selectorColumnas, buscador, botonExportar, limpiarBusqueda, hayBusqueda } = useTablaCacao<any>({
     clave: 'cuentas-por-cobrar',
     filas: receivables,
     idFila: (r) => r.id,
@@ -64,15 +65,15 @@ export default function ReceivablesList() {
     principal: { key: 'cliente', ancho: 200, label: 'Cliente', orden: (r) => r.client?.name, celda: (r) => r.client?.name || '—' },
     columnas: [
       { key: 'embarque', ancho: 150, label: 'Embarque', orden: (r) => r.shipment?.contractRef, celda: (r) => r.shipment?.contractRef || '—' },
-      { key: 'total', label: 'Monto Total', orden: (r) => r.totalAmount, celda: (r) => fmt(r.totalAmount) },
-      { key: 'cobrado', label: 'Cobrado', orden: (r) => r.receivedAmount, celda: (r) => fmt(r.receivedAmount) },
+      { key: 'total', excel: { tipo: 'moneda', titulo: 'Monto Total ($)' }, label: 'Monto Total', orden: (r) => r.totalAmount, celda: (r) => fmt(r.totalAmount) },
+      { key: 'cobrado', excel: { tipo: 'moneda', titulo: 'Cobrado ($)' }, label: 'Cobrado', orden: (r) => r.receivedAmount, celda: (r) => fmt(r.receivedAmount) },
       {
-        key: 'saldo',
+        key: 'saldo', excel: { tipo: 'moneda', titulo: 'Saldo ($)' },
         label: 'Saldo',
         orden: (r) => remainingOf(r),
         celda: (r) => <span style={{ fontWeight: 600, color: remainingOf(r) > 0 ? '#38a169' : '#718096' }}>{fmt(remainingOf(r))}</span>,
       },
-      { key: 'vence', ancho: 140, label: 'Fecha Vencimiento', orden: (r) => new Date(r.dueDate).getTime(), celda: (r) => formatDateEc(r.dueDate) },
+      { key: 'vence', excel: { tipo: 'fecha' }, ancho: 140, label: 'Fecha Vencimiento', orden: (r) => new Date(r.dueDate).getTime(), celda: (r) => formatDateEc(r.dueDate) },
       {
         key: 'estado', ancho: 120,
         label: 'Estado',
@@ -85,7 +86,7 @@ export default function ReceivablesList() {
     ],
     acciones: (r) => (
       <div style={{ display: 'flex', gap: '6px' }}>
-        {r.status !== 'RECEIVED' && <button className="btn-sm-edit" onClick={() => startReceive(r)}>Cobrar</button>}
+        {r.status !== 'RECEIVED' && r.status !== 'CANCELLED' && <button className="btn-sm-edit" onClick={() => startReceive(r)}>Cobrar</button>}
         {r.payments?.length > 0 && (
           <button className="btn-sm-edit" onClick={() => { setError(''); setHistoryId(r.id); }}>Cobros</button>
         )}
@@ -98,8 +99,12 @@ export default function ReceivablesList() {
       <PageHeader eyebrow="Cacao" title="Cuentas por Cobrar" description="Lo que te deben tus clientes. Cada cuenta nace con un embarque." />
 
       <div className="filter-bar">
-        <div className="filter-bar-fields" />
-        <div className="filter-bar-actions">{selectorColumnas}</div>
+        <div className="filter-bar-fields">{buscador}</div>
+        <div className="filter-bar-actions">
+          {selectorColumnas}
+          {botonExportar}
+          <ClearFiltersButton onClear={limpiarBusqueda} disabled={!hayBusqueda} />
+        </div>
       </div>
 
       <div className="admin-section">

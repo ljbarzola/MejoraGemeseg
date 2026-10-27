@@ -9,7 +9,7 @@ import { apiErrorMessage } from '../utils';
 const FORM_VACIO = { name: '', displayName: '', kgPerUnit: '', isDefault: false };
 
 /**
- * Cuánto pesa un saco en esta empresa. Las toneladas (1000 kg) y los kilos son universales; el saco
+ * Cuánto pesa un saco en esta empresa. Las toneladas (1000 kg), los quintales (100 libras) y los kilos son universales; el saco
  * cambia de una empresa a otra, y sin él no se puede registrar ni embarcar en sacos.
  */
 export default function UnidadesPanel({ puedeEditar }: { puedeEditar: boolean }) {
@@ -93,7 +93,7 @@ export default function UnidadesPanel({ puedeEditar }: { puedeEditar: boolean })
       <div className="config-intro">
         <p>
           Define cuánto pesa un saco en tu empresa. La unidad marcada «Por defecto» es la que se usa al registrar
-          recepciones y embarques en sacos. Las toneladas (1.000 kg) y los kilogramos no necesitan configuración.
+          recepciones y embarques en sacos. Las toneladas (1.000 kg), los quintales (100 libras, 45,36 kg) y los kilogramos no necesitan configuración.
         </p>
         <button className="auth-btn" onClick={() => requiere('cree la unidad de medida', () => { resetForm(); setShowForm(true); })}>+ Nueva unidad</button>
       </div>

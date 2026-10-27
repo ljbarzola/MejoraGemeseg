@@ -131,6 +131,35 @@ describe('CacaoSettlementsService.create', () => {
     expect(tx.cacaoSettlement.create).not.toHaveBeenCalled();
   });
 
+  it('no deja liquidar un lote anulado', async () => {
+    const { prisma, tx, service } = armar();
+    prisma.cacaoSupplier.findFirst.mockResolvedValue({ id: 5 });
+    tx.cacaoLot.findMany.mockResolvedValue([
+      { ...lote, status: 'VOIDED', receptions: [{ netWeight: 1480 }] },
+    ]);
+    tx.cacaoSettlementLot.groupBy.mockResolvedValue([]);
+    await expect(
+      service.create(dto({ lots: [{ lotId: 1, quantity: 100 }] }), 4, 9),
+    ).rejects.toThrow(/fue anulado/);
+    expect(tx.cacaoSettlement.create).not.toHaveBeenCalled();
+  });
+
+  it('no deja liquidar una entrega que se cerró sin liquidar', async () => {
+    const { prisma, tx, service } = armar();
+    prisma.cacaoSupplier.findFirst.mockResolvedValue({ id: 5 });
+    tx.cacaoLot.findMany.mockResolvedValue([
+      {
+        ...lote,
+        receptions: [{ netWeight: 1480, closedAt: new Date('2026-10-20') }],
+      },
+    ]);
+    tx.cacaoSettlementLot.groupBy.mockResolvedValue([]);
+    await expect(
+      service.create(dto({ lots: [{ lotId: 1, quantity: 100 }] }), 4, 9),
+    ).rejects.toThrow(/se cerró sin liquidar/);
+    expect(tx.cacaoSettlement.create).not.toHaveBeenCalled();
+  });
+
   it('rechaza un lote que no tiene recepciones de ese proveedor', async () => {
     const { prisma, tx, service } = armar();
     prisma.cacaoSupplier.findFirst.mockResolvedValue({ id: 5 });
@@ -284,6 +313,51 @@ describe('CacaoSettlementsService.approve', () => {
   });
 });
 
+describe('CacaoSettlementsService.approveMany', () => {
+  it('aprueba las que se puede y explica por qué no las demás, sin detenerse', async () => {
+    const { service } = armar();
+    const approve = jest
+      .spyOn(service, 'approve')
+      .mockImplementation((id: number) => {
+        if (id === 2) {
+          return Promise.reject(
+            new ForbiddenException(
+              'La liquidación debe aprobarla otra persona, no quien la creó',
+            ),
+          );
+        }
+        if (id === 3) {
+          return Promise.reject(new Error('se cayó la base: detalle interno'));
+        }
+        return Promise.resolve({} as never);
+      });
+
+    const r = await service.approveMany([1, 2, 3, 4], 4, 9);
+
+    expect(approve).toHaveBeenCalledTimes(4);
+    expect(approve).toHaveBeenCalledWith(1, 4, 9);
+    expect(r.aprobadas).toEqual([1, 4]);
+    expect(r.omitidas).toEqual([
+      {
+        id: 2,
+        motivo: 'La liquidación debe aprobarla otra persona, no quien la creó',
+      },
+      // un error que no es de negocio no se muestra tal cual
+      { id: 3, motivo: 'No se pudo aprobar. Inténtalo de nuevo.' },
+    ]);
+  });
+
+  it('no repite un mismo id', async () => {
+    const { service } = armar();
+    const approve = jest
+      .spyOn(service, 'approve')
+      .mockResolvedValue({} as never);
+    const r = await service.approveMany([5, 5, 5], 4, 9);
+    expect(approve).toHaveBeenCalledTimes(1);
+    expect(r.aprobadas).toEqual([5]);
+  });
+});
+
 describe('CacaoSettlementsService.reject y cancel', () => {
   it('rechaza solo una liquidación pendiente y guarda el motivo', async () => {
     const { prisma, service } = armar();
@@ -403,6 +477,37 @@ describe('CacaoSettlementsService.getAvailableLots', () => {
     expect(r.find((l) => l.id === 1)?.availableKg).toBe(480);
     // Liquidado de más (dato viejo): nunca negativo.
     expect(r.find((l) => l.id === 2)?.availableKg).toBe(0);
+  });
+
+  it('una entrega cerrada sin liquidar no tiene nada disponible para liquidar', async () => {
+    const prisma = {
+      cacaoSupplier: { findFirst: jest.fn().mockResolvedValue({ id: 5 }) },
+      cacaoLot: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            ...lote,
+            id: 1,
+            status: 'OPEN',
+            receptions: [
+              {
+                netWeight: 1480,
+                date: new Date(),
+                unitOfMeasure: 'KG',
+                closedAt: new Date(),
+              },
+            ],
+          },
+        ]),
+      },
+      cacaoSettlementLot: { groupBy: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new CacaoSettlementsService(
+      prisma as unknown as PrismaService,
+      {} as unknown as CacaoConfigService,
+    );
+    const r = await service.getAvailableLots(5, 4);
+    expect(r[0].availableKg).toBe(0);
+    expect(r[0].closed).toBe(true);
   });
 
   it('falla si el proveedor no es de la empresa', async () => {

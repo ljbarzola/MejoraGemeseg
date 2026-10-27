@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  HttpException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,10 +9,10 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateSettlementDto } from './dto/create-settlement.dto';
 import { CacaoConfigService } from '../config/cacao-config.service';
+import { ESTADOS_QUE_LIBERAN_LOTE } from '../common/liquidado.util';
 
-/** Una liquidación rechazada o anulada deja libre el peso que había tomado del lote. */
-/** Una liquidación rechazada o anulada deja libre el peso que había tomado. */
-export const ESTADOS_QUE_LIBERAN_LOTE = ['REJECTED', 'CANCELLED'];
+// Los estados que dejan libre el peso de un lote viven en ../common/liquidado.util.ts.
+export { ESTADOS_QUE_LIBERAN_LOTE };
 const TOLERANCIA_KG = 0.001;
 const DIA_MS = 24 * 60 * 60 * 1000;
 const PLAZO_POR_DEFECTO_DIAS = 30;
@@ -106,7 +107,11 @@ export class CacaoSettlementsService {
     if (!supplier) throw new NotFoundException('Proveedor no encontrado');
 
     const lots = await this.prisma.cacaoLot.findMany({
-      where: { companyId, receptions: { some: { supplierId } } },
+      where: {
+        companyId,
+        status: { not: 'VOIDED' },
+        receptions: { some: { supplierId } },
+      },
       include: {
         quality: true,
         receptions: { where: { supplierId }, orderBy: { date: 'asc' } },
@@ -136,15 +141,18 @@ export class CacaoSettlementsService {
         0,
       );
       const settledKg = settledByLot.get(lot.id) ?? 0;
+      // Una entrega cerrada sin liquidar no se ofrece al liquidar (se puede reabrir en Recepciones).
+      const cerrada = lot.receptions.some((r) => r.closedAt);
       return {
         id: lot.id,
         code: lot.code,
+        closed: cerrada,
         status: lot.status,
         averageCost: lot.averageCost,
         quality: lot.quality,
         receivedKg,
         settledKg,
-        availableKg: Math.max(0, round4(receivedKg - settledKg)),
+        availableKg: cerrada ? 0 : Math.max(0, round4(receivedKg - settledKg)),
         firstReceptionDate: lot.receptions[0]?.date ?? null,
         unitOfMeasure: lot.receptions[0]?.unitOfMeasure ?? 'KG',
       };
@@ -214,6 +222,16 @@ export class CacaoSettlementsService {
         if (receivedKg <= 0) {
           throw new BadRequestException(
             `El lote ${lot.code} no tiene recepciones de este proveedor`,
+          );
+        }
+        if (lot.status === 'VOIDED') {
+          throw new BadRequestException(
+            `El lote ${lot.code} fue anulado: no se puede liquidar`,
+          );
+        }
+        if (lot.receptions.some((r) => r.closedAt)) {
+          throw new BadRequestException(
+            `La entrega del lote ${lot.code} se cerró sin liquidar: reábrela en Recepciones para liquidarla`,
           );
         }
         const availableKg = receivedKg - (settledByLot.get(lot.id) ?? 0);
@@ -341,6 +359,39 @@ export class CacaoSettlementsService {
       }
     });
     return this.findOne(id, companyId);
+  }
+
+  /**
+   * Aprueba varias liquidaciones de una vez. Cada una pasa por las mismas reglas que la
+   * aprobación individual (pendiente, no la aprueba quien la creó, cuenta por pagar en su
+   * propia transacción): si una no se puede aprobar, las demás siguen y se devuelve por qué.
+   */
+  async approveMany(ids: number[], companyId: number, userId: number) {
+    const aprobadas: number[] = [];
+    const omitidas: { id: number; motivo: string }[] = [];
+    for (const id of [...new Set(ids)]) {
+      try {
+        await this.approve(id, companyId, userId);
+        aprobadas.push(id);
+      } catch (error) {
+        omitidas.push({ id, motivo: this.mensajeDe(error) });
+      }
+    }
+    return { aprobadas, omitidas };
+  }
+
+  /** El texto en español de un error de negocio; otro tipo de error no se detalla. */
+  private mensajeDe(error: unknown): string {
+    if (error instanceof HttpException) {
+      const respuesta = error.getResponse();
+      const texto =
+        typeof respuesta === 'string'
+          ? respuesta
+          : (respuesta as { message?: string | string[] }).message;
+      if (typeof texto === 'string') return texto;
+      if (Array.isArray(texto)) return texto.join('. ');
+    }
+    return 'No se pudo aprobar. Inténtalo de nuevo.';
   }
 
   async reject(id: number, companyId: number, userId: number, reason: string) {

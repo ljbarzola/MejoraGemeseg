@@ -6,7 +6,13 @@ import { useNavigate } from 'react-router-dom';
 import { getLots } from '../../../services/cacao.service';
 import { useTablaCacao } from '../useTablaCacao';
 
-const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
+/** Los tres estados de un lote: con existencia, vendido por completo, o anulado (recepción registrada por error). */
+const estadoLote = (status: string) =>
+  status === 'OPEN' ? { label: 'Abierto', bg: '#c6f6d5', color: '#276749' }
+  : status === 'VOIDED' ? { label: 'Anulado', bg: '#e2e8f0', color: '#4a5568' }
+  : { label: 'Cerrado', bg: '#fed7d7', color: '#9b2c2c' };
+import { ABREVIATURA_UNIDAD as UNIT_ABBR } from '../useCacaoUnidades';
+
 
 export default function LotsList() {
   const { factor: factorUnidad } = useCacaoUnidades();
@@ -40,7 +46,7 @@ export default function LotsList() {
 
   const unidadDe = (l: any): string | null => l.receptions?.[0]?.unitOfMeasure || null;
 
-  const { tabla, selectorColumnas } = useTablaCacao<any>({
+  const { tabla, selectorColumnas, buscador, botonExportar, limpiarBusqueda, hayBusqueda } = useTablaCacao<any>({
     clave: 'lotes',
     filas: lots,
     idFila: (l) => l.id,
@@ -68,7 +74,7 @@ export default function LotsList() {
         },
       },
       {
-        key: 'peso', ancho: 190,
+        key: 'peso', excel: { titulo: 'Peso Neto (kg)' }, ancho: 190,
         label: 'Peso Neto',
         orden: (l) => l.netWeight,
         celda: (l) => {
@@ -81,26 +87,26 @@ export default function LotsList() {
           );
         },
       },
-      { key: 'costo', label: 'Costo Promedio', orden: (l) => l.averageCost, celda: (l) => `$${l.averageCost.toFixed(2)}` },
+      { key: 'costo', excel: { tipo: 'moneda', titulo: 'Costo Promedio ($/kg)' }, label: 'Costo Promedio', orden: (l) => l.averageCost, celda: (l) => `$${l.averageCost.toFixed(2)}` },
       {
-        key: 'valor',
+        key: 'valor', excel: { tipo: 'moneda', titulo: 'Valor ($)' },
         label: 'Valor',
         orden: (l) => l.netWeight * l.averageCost,
         celda: (l) => `$${(l.netWeight * l.averageCost).toFixed(2)}`,
       },
       {
-        key: 'estado', ancho: 110,
+        key: 'estado', excel: { valor: (l) => estadoLote(l.status).label }, ancho: 110,
         label: 'Estado',
         orden: (l) => l.status,
         celda: (l) => (
           <span
             className="status-badge"
             style={{
-              backgroundColor: l.status === 'OPEN' ? '#c6f6d5' : '#fed7d7',
-              color: l.status === 'OPEN' ? '#276749' : '#9b2c2c',
+              backgroundColor: estadoLote(l.status).bg,
+              color: estadoLote(l.status).color,
             }}
           >
-            {l.status === 'OPEN' ? 'Abierto' : 'Cerrado'}
+            {estadoLote(l.status).label}
           </span>
         ),
       },
@@ -114,15 +120,18 @@ export default function LotsList() {
 
       <div className="filter-bar">
         <div className="filter-bar-fields">
+          {buscador}
           <select className="filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">Todos</option>
             <option value="OPEN">Abierto</option>
             <option value="CLOSED">Cerrado</option>
+            <option value="VOIDED">Anulado</option>
           </select>
         </div>
         <div className="filter-bar-actions">
           {selectorColumnas}
-          <ClearFiltersButton onClear={() => setStatusFilter('')} disabled={!statusFilter} />
+          {botonExportar}
+          <ClearFiltersButton onClear={() => { setStatusFilter(''); limpiarBusqueda(); }} disabled={!statusFilter && !hayBusqueda} />
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import PageHeader from '../../../components/common/PageHeader';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
 import { getPayables, payPayable, voidPayment } from '../../../services/cacao.service';
 import { getUser } from '../../../services/auth.service';
 import { formatDateEc, estadoCuenta, apiErrorMessage } from '../utils';
@@ -56,7 +57,7 @@ export default function PayablesList() {
   const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const history = payables.find((p) => p.id === historyId);
 
-  const { tabla, selectorColumnas } = useTablaCacao<any>({
+  const { tabla, selectorColumnas, buscador, botonExportar, limpiarBusqueda, hayBusqueda } = useTablaCacao<any>({
     clave: 'cuentas-por-pagar',
     filas: payables,
     idFila: (p) => p.id,
@@ -64,15 +65,15 @@ export default function PayablesList() {
     principal: { key: 'proveedor', ancho: 200, label: 'Proveedor', orden: (p) => p.supplier?.name, celda: (p) => p.supplier?.name || '—' },
     columnas: [
       {
-        key: 'liquidacion', ancho: 120,
+        key: 'liquidacion', excel: { valor: (p) => (p.settlement?.id ? `LIQ-${String(p.settlement.id).padStart(4, '0')}` : '') }, ancho: 120,
         label: 'Liquidación',
         orden: (p) => p.settlement?.id,
         celda: (p) => (p.settlement?.id ? `LIQ-${String(p.settlement.id).padStart(4, '0')}` : '—'),
       },
-      { key: 'total', label: 'Monto Total', orden: (p) => p.totalAmount, celda: (p) => fmt(p.totalAmount) },
-      { key: 'pagado', label: 'Pagado', orden: (p) => p.paidAmount, celda: (p) => fmt(p.paidAmount) },
+      { key: 'total', excel: { tipo: 'moneda', titulo: 'Monto Total ($)' }, label: 'Monto Total', orden: (p) => p.totalAmount, celda: (p) => fmt(p.totalAmount) },
+      { key: 'pagado', excel: { tipo: 'moneda', titulo: 'Pagado ($)' }, label: 'Pagado', orden: (p) => p.paidAmount, celda: (p) => fmt(p.paidAmount) },
       {
-        key: 'saldo',
+        key: 'saldo', excel: { tipo: 'moneda', titulo: 'Saldo ($)' },
         label: 'Saldo',
         orden: (p) => (p.status === 'CANCELLED' ? null : remainingOf(p)),
         celda: (p) => {
@@ -84,7 +85,7 @@ export default function PayablesList() {
           );
         },
       },
-      { key: 'vence', ancho: 140, label: 'Fecha Vencimiento', orden: (p) => new Date(p.dueDate).getTime(), celda: (p) => formatDateEc(p.dueDate) },
+      { key: 'vence', excel: { tipo: 'fecha' }, ancho: 140, label: 'Fecha Vencimiento', orden: (p) => new Date(p.dueDate).getTime(), celda: (p) => formatDateEc(p.dueDate) },
       {
         key: 'estado', ancho: 120,
         label: 'Estado',
@@ -113,8 +114,12 @@ export default function PayablesList() {
       <PageHeader eyebrow="Cacao" title="Cuentas por Pagar" description="Lo que debes a tus proveedores. Cada cuenta nace cuando se aprueba una liquidación." />
 
       <div className="filter-bar">
-        <div className="filter-bar-fields" />
-        <div className="filter-bar-actions">{selectorColumnas}</div>
+        <div className="filter-bar-fields">{buscador}</div>
+        <div className="filter-bar-actions">
+          {selectorColumnas}
+          {botonExportar}
+          <ClearFiltersButton onClear={limpiarBusqueda} disabled={!hayBusqueda} />
+        </div>
       </div>
 
       <div className="admin-section">

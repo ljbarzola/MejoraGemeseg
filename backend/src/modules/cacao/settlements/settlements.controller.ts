@@ -18,6 +18,7 @@ import { UserRole } from '@prisma/client';
 import { CacaoSettlementsService } from './settlements.service';
 import { CreateSettlementDto } from './dto/create-settlement.dto';
 import { SettlementDecisionDto } from './dto/decision.dto';
+import { ApproveManySettlementsDto } from './dto/approve-many.dto';
 
 @Controller('cacao/settlements')
 export class CacaoSettlementsController {
@@ -60,6 +61,19 @@ export class CacaoSettlementsController {
   @Section('CACAO', 'write')
   create(@Body() dto: CreateSettlementDto, @Req() req: any) {
     return this.service.create(dto, req.user.companyId, req.user.userId);
+  }
+
+  /** Aprueba varias liquidaciones; devuelve cuáles se aprobaron y cuáles no, con el motivo. */
+  @Post('approve-bulk')
+  @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Section('CACAO', 'write')
+  approveBulk(@Body() dto: ApproveManySettlementsDto, @Req() req: any) {
+    return this.service.approveMany(
+      dto.ids,
+      req.user.companyId,
+      req.user.userId,
+    );
   }
 
   @Post(':id/approve')

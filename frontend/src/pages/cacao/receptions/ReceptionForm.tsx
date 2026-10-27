@@ -3,11 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getSuppliers, getQualities, createReception, getNextLotCode, getUnitConfig } from '../../../services/cacao.service';
 import DateInput from '../../../components/common/DateInput';
 import { apiErrorMessage } from '../utils';
+import { ABREVIATURA_UNIDAD as UNIT_ABBR, NOMBRE_UNIDAD as UNIT_FULL, KG_POR_QUINTAL } from '../useCacaoUnidades';
 
-const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
-const UNIT_FULL: Record<string, string> = { TON: 'Toneladas', KG: 'Kilogramos', SACO: 'Sacos' };
-// Toneladas y kilos son universales; el peso del saco es de cada empresa (Cacao → Configuración).
-const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1 };
+// Toneladas, quintales y kilos son universales; el peso del saco es de cada empresa (Cacao → Configuración).
+const UNIT_FACTORS: Record<string, number> = { TON: 1000, QQ: KG_POR_QUINTAL, KG: 1 };
 function round4(n: number) { return Math.round(n * 10000) / 10000; }
 function getTodayLocal() {
   const d = new Date();
@@ -29,6 +28,11 @@ export default function ReceptionForm() {
     supplierId: '',
     guideNumber: '',
     unitOfMeasure: 'KG',
+    // Datos del ticket de pesaje (opcionales)
+    ticketNumber: '',
+    weighingProfile: '',
+    driverName: '',
+    vehiclePlate: '',
     grossWeight: '',
     tare: '',
     humidity: '',
@@ -44,6 +48,7 @@ export default function ReceptionForm() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({});
 
   const supplierRef = useRef<HTMLSelectElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
   const guideRef = useRef<HTMLInputElement>(null);
   const grossWeightRef = useRef<HTMLInputElement>(null);
   const qualityRef = useRef<HTMLSelectElement>(null);
@@ -82,6 +87,11 @@ export default function ReceptionForm() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  // El aviso de error está arriba del formulario: si la persona ya bajó hasta el botón, no lo vería.
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [error]);
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -148,6 +158,10 @@ export default function ReceptionForm() {
         supplierId: Number(form.supplierId),
         guideNumber: form.guideNumber,
         unitOfMeasure: form.unitOfMeasure,
+        ticketNumber: form.ticketNumber.trim() || undefined,
+        weighingProfile: form.weighingProfile || undefined,
+        driverName: form.driverName.trim() || undefined,
+        vehiclePlate: form.vehiclePlate.trim() || undefined,
         grossWeight: grossWeightNum,
         tare: tareNum,
         humidity: Number(form.humidity) || 0,
@@ -179,7 +193,7 @@ export default function ReceptionForm() {
 
       <div className="page-card">
         <div className="cacao-form">
-          {error && <div className="auth-error-banner">{error}</div>}
+          {error && <div ref={errorRef} className="auth-error-banner">{error}</div>}
 
           {/* Lote que se asignara */}
           <div style={{ padding: '16px 20px', backgroundColor: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -216,12 +230,40 @@ export default function ReceptionForm() {
               <select value={form.unitOfMeasure} onChange={(e) => setField('unitOfMeasure', e.target.value)}>
                 <option value="KG">Kilogramos (KG)</option>
                 <option value="TON">Toneladas (T)</option>
+                <option value="QQ">Quintales (100 lb = {KG_POR_QUINTAL.toFixed(2)} kg)</option>
                 {kgPorSaco
                   ? <option value="SACO">Sacos ({kgPorSaco} kg)</option>
                   : <option value="SACO" disabled>Sacos (configura el peso del saco)</option>}
               </select>
             </div>
           </div>
+          <div className="form-section-title">Ticket de pesaje (opcional)</div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Nro. de Ticket</label>
+              <input type="text" maxLength={40} placeholder="El número que imprimió la báscula" value={form.ticketNumber} onChange={(e) => setField('ticketNumber', e.target.value)} />
+              <div style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>No se puede repetir en tu empresa</div>
+            </div>
+            <div className="form-group">
+              <label>Perfil de Pesaje</label>
+              <select value={form.weighingProfile} onChange={(e) => setField('weighingProfile', e.target.value)}>
+                <option value="">Sin especificar</option>
+                <option value="BULTOS">Por bultos (se cuentan y pesan los sacos)</option>
+                <option value="BASCULA">En báscula</option>
+              </select>
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Chofer</label>
+              <input type="text" maxLength={80} placeholder="Nombre de quien transporta" value={form.driverName} onChange={(e) => setField('driverName', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>Placa del Vehículo</label>
+              <input type="text" maxLength={15} placeholder="Ej: ABC-1234" value={form.vehiclePlate} onChange={(e) => setField('vehiclePlate', e.target.value.toUpperCase())} />
+            </div>
+          </div>
+
           <div className="form-row">
             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
               <label>Calidad del Cacao *</label>
@@ -265,12 +307,12 @@ export default function ReceptionForm() {
           <div className="form-row">
             <div className="form-group">
               <label>Peso Bruto ({unitAbbr}) *</label>
-              <input ref={grossWeightRef} type="number" step="0.0001" min="0" value={form.grossWeight} onChange={(e) => { setField('grossWeight', e.target.value); clearFieldError('grossWeight'); }} placeholder={`Ej: ${form.unitOfMeasure === 'TON' ? '1.5' : form.unitOfMeasure === 'SACO' ? '20' : '1500'}`} className={fieldErrors.grossWeight ? 'input-error' : ''} />
+              <input ref={grossWeightRef} type="number" step="0.0001" min="0" value={form.grossWeight} onChange={(e) => { setField('grossWeight', e.target.value); clearFieldError('grossWeight'); }} placeholder={`Ej: ${form.unitOfMeasure === 'TON' ? '1.5' : form.unitOfMeasure === 'QQ' ? '30' : form.unitOfMeasure === 'SACO' ? '20' : '1500'}`} className={fieldErrors.grossWeight ? 'input-error' : ''} />
               {fieldErrors.grossWeight && <span className="field-error">Este campo es requerido</span>}
             </div>
             <div className="form-group">
               <label>Tara ({unitAbbr})</label>
-              <input type="number" step="0.0001" min="0" value={form.tare} onChange={(e) => setField('tare', e.target.value)} placeholder={`Ej: ${form.unitOfMeasure === 'TON' ? '0.05' : form.unitOfMeasure === 'SACO' ? '1' : '50'}`} />
+              <input type="number" step="0.0001" min="0" value={form.tare} onChange={(e) => setField('tare', e.target.value)} placeholder={`Ej: ${form.unitOfMeasure === 'TON' ? '0.05' : form.unitOfMeasure === 'QQ' ? '0.5' : form.unitOfMeasure === 'SACO' ? '1' : '50'}`} />
             </div>
           </div>
 

@@ -16,7 +16,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-export const UNIDADES_EMBARQUE = ['KG', 'TON', 'SACO'] as const;
+export const UNIDADES_EMBARQUE = ['KG', 'TON', 'SACO', 'QQ'] as const;
 
 export class ShipmentLotDto {
   @IsInt()

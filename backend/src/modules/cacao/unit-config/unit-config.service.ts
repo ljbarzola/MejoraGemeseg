@@ -12,6 +12,9 @@ import {
 const MSG_SIN_SACO =
   'Falta configurar el peso del saco: ve a Cacao → Configuración → Unidades de medida';
 
+/** Un quintal son 100 libras (la libra pesa exactamente 0,45359237 kg). Es universal, como la tonelada. */
+export const KG_POR_QUINTAL = 45.359237;
+
 @Injectable()
 export class CacaoUnitConfigService {
   constructor(private readonly prisma: PrismaService) {}
@@ -79,14 +82,16 @@ export class CacaoUnitConfigService {
   }
 
   /**
-   * Kilogramos por unidad de medida. Toneladas y kilogramos son universales; el saco lo
-   * define cada empresa. Si todavía no configuró su saco no se asume ningún peso: se le
-   * pide configurarlo (antes se usaba 69 kg sin avisar).
+   * Kilogramos por unidad de medida. Toneladas, quintales y kilogramos son universales; el
+   * saco lo define cada empresa. Si todavía no configuró su saco no se asume ningún peso: se
+   * le pide configurarlo (antes se usaba 69 kg sin avisar).
    */
   async getFactor(unit: string, companyId: number): Promise<number> {
     switch (unit) {
       case 'TON':
         return 1000;
+      case 'QQ':
+        return KG_POR_QUINTAL;
       case 'KG':
         return 1;
       case 'SACO': {

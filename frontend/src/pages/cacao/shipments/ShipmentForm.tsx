@@ -5,11 +5,10 @@ import { apiErrorMessage } from '../utils';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import DateInput from '../../../components/common/DateInput';
 import { Trash2 } from 'lucide-react';
+import { ABREVIATURA_UNIDAD as UNIT_ABBR, NOMBRE_UNIDAD as UNIT_FULL, KG_POR_QUINTAL } from '../useCacaoUnidades';
 
-const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
-const UNIT_FULL: Record<string, string> = { TON: 'Toneladas', KG: 'Kilogramos', SACO: 'Sacos' };
-// Toneladas y kilos son universales; el peso del saco es de cada empresa (Cacao → Configuración).
-const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1 };
+// Toneladas, quintales y kilos son universales; el peso del saco es de cada empresa (Cacao → Configuración).
+const UNIT_FACTORS: Record<string, number> = { TON: 1000, QQ: KG_POR_QUINTAL, KG: 1 };
 function round4(n: number) { return Math.round(n * 10000) / 10000; }
 function getTodayLocal() {
   const d = new Date();
@@ -248,6 +247,7 @@ export default function ShipmentForm() {
               <select value={form.unitOfMeasure} onChange={(e) => setField('unitOfMeasure', e.target.value)}>
                 <option value="KG">Kilogramos (KG)</option>
                 <option value="TON">Toneladas (T)</option>
+                <option value="QQ">Quintales (100 lb = {KG_POR_QUINTAL.toFixed(2)} kg)</option>
                 {kgPorSaco
                   ? <option value="SACO">Sacos ({kgPorSaco} kg)</option>
                   : <option value="SACO" disabled>Sacos (configura el peso del saco)</option>}

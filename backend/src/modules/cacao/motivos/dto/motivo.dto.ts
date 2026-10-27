@@ -8,14 +8,22 @@ import {
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
-export const TIPOS_MOTIVO = ['LIQUIDACION', 'PAGO'] as const;
+export const TIPOS_MOTIVO = [
+  'LIQUIDACION',
+  'PAGO',
+  'RECEPCION',
+  'ANULACION',
+] as const;
 export type TipoMotivo = (typeof TIPOS_MOTIVO)[number];
 
 const recortar = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
 export class CreateMotivoDto {
-  /** LIQUIDACION: rechazar o anular una liquidación. PAGO: anular un pago o un cobro. */
+  /**
+   * LIQUIDACION: rechazar o anular una liquidación. PAGO: anular un pago o un cobro.
+   * RECEPCION: cerrar una entrega sin liquidarla. ANULACION: anular una recepción o un embarque.
+   */
   @IsIn(TIPOS_MOTIVO, { message: 'El tipo de motivo no es válido' })
   tipo: TipoMotivo;
 

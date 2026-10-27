@@ -28,6 +28,9 @@ export const createSettlement = (data: any) => api.post('/cacao/settlements', da
 export const getSettlement = (id: number) => api.get(`/cacao/settlements/${id}`).then(r => r.data);
 export const getAvailableLots = (supplierId: number) => api.get('/cacao/settlements/available-lots', { params: { supplierId } }).then(r => r.data);
 export const approveSettlement = (id: number) => api.post(`/cacao/settlements/${id}/approve`).then(r => r.data);
+/** Aprueba varias liquidaciones de una vez; devuelve cuáles se aprobaron y cuáles no, con el motivo. */
+export const approveSettlements = (ids: number[]): Promise<{ aprobadas: number[]; omitidas: { id: number; motivo: string }[] }> =>
+  api.post('/cacao/settlements/approve-bulk', { ids }).then(r => r.data);
 export const rejectSettlement = (id: number, reason: string) => api.post(`/cacao/settlements/${id}/reject`, { reason }).then(r => r.data);
 export const cancelSettlement = (id: number, reason: string) => api.post(`/cacao/settlements/${id}/cancel`, { reason }).then(r => r.data);
 
@@ -60,7 +63,7 @@ export const deleteUnitConfig = (id: number) => api.delete(`/cacao/unit-config/$
 
 // Motivos de rechazo y anulación de la empresa. tipo: LIQUIDACION (rechazar o anular una liquidación)
 // o PAGO (anular un pago o un cobro). `todos` incluye los desactivados (pantalla de Configuración).
-export type TipoMotivo = 'LIQUIDACION' | 'PAGO';
+export type TipoMotivo = 'LIQUIDACION' | 'PAGO' | 'RECEPCION' | 'ANULACION';
 export const getCacaoMotivos = (tipo?: TipoMotivo, todos?: boolean) =>
   api.get('/cacao/motivos', { params: { ...(tipo ? { tipo } : {}), ...(todos ? { todos: 1 } : {}) } }).then(r => r.data);
 export const createCacaoMotivo = (data: { tipo: TipoMotivo; nombre: string }) => api.post('/cacao/motivos', data).then(r => r.data);
@@ -70,3 +73,15 @@ export const deleteCacaoMotivo = (id: number) => api.delete(`/cacao/motivos/${id
 // Ajustes de la empresa (plazos de pago y cobro)
 export const getCacaoConfig = () => api.get('/cacao/configuracion').then(r => r.data);
 export const updateCacaoConfig = (data: { plazoPagoDias?: number; plazoCobroDias?: number; precioIce?: number | null }) => api.put('/cacao/configuracion', data).then(r => r.data);
+
+// Cerrar una entrega sin liquidarla (con motivo) y volver a abrirla
+export const closeReception = (id: number, reason: string) => api.post(`/cacao/receptions/${id}/close`, { reason }).then(r => r.data);
+export const reopenReception = (id: number) => api.post(`/cacao/receptions/${id}/reopen`).then(r => r.data);
+
+// Compras de un periodo para el dashboard: `desde` y `hasta` son días AAAA-MM-DD (ambos incluidos)
+export const getDashboardCompras = (desde: string, hasta: string) =>
+  api.get('/cacao/dashboard/compras', { params: { desde, hasta } }).then(r => r.data);
+
+// Anular una recepción o un embarque mal registrados (solo administrador, con motivo)
+export const voidReception = (id: number, reason: string) => api.post(`/cacao/receptions/${id}/void`, { reason }).then(r => r.data);
+export const cancelShipment = (id: number, reason: string) => api.post(`/cacao/shipments/${id}/cancel`, { reason }).then(r => r.data);

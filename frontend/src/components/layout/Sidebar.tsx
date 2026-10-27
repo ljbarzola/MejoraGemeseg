@@ -198,6 +198,7 @@ export default function Sidebar() {
     { label: 'Clientes', path: '/cacao/clients', icon: '🏢', grupo: 'Venta' },
     { label: 'Embarques', path: '/cacao/shipments', icon: '🚢' },
     { label: 'Cuentas por cobrar', path: '/cacao/receivables', icon: '💵' },
+    { label: 'Reportes', path: '/cacao/reportes', icon: '📈', grupo: 'Análisis' },
     { label: 'Configuración', path: '/cacao/configuracion', icon: '⚙️', separadorAntes: true },
     { label: 'Guía del módulo', path: '/cacao/guia', icon: '📖' },
   ];

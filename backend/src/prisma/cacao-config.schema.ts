@@ -57,4 +57,27 @@ export const CACAO_CONFIG_DDL = [
      CONSTRAINT "CacaoMotivo_pkey" PRIMARY KEY ("id")
    )`,
   'CREATE UNIQUE INDEX IF NOT EXISTS "CacaoMotivo_companyId_tipo_nombre_key" ON "CacaoMotivo" ("companyId", "tipo", "nombre")',
+  // Datos del ticket de pesaje en la recepción (2026-10-27). Columnas nuevas, opcionales y sin
+  // valor por defecto: el despliegue anterior sigue funcionando con ellas creadas.
+  'ALTER TABLE IF EXISTS "CacaoReception" ADD COLUMN IF NOT EXISTS "ticketNumber" TEXT',
+  'ALTER TABLE IF EXISTS "CacaoReception" ADD COLUMN IF NOT EXISTS "weighingProfile" TEXT',
+  'ALTER TABLE IF EXISTS "CacaoReception" ADD COLUMN IF NOT EXISTS "driverName" TEXT',
+  'ALTER TABLE IF EXISTS "CacaoReception" ADD COLUMN IF NOT EXISTS "vehiclePlate" TEXT',
+  // Cierre de una entrega sin liquidar (2026-10-27): quién, cuándo y por qué.
+  'ALTER TABLE IF EXISTS "CacaoReception" ADD COLUMN IF NOT EXISTS "closedAt" TIMESTAMP(3)',
+  'ALTER TABLE IF EXISTS "CacaoReception" ADD COLUMN IF NOT EXISTS "closedBy" INTEGER',
+  'ALTER TABLE IF EXISTS "CacaoReception" ADD COLUMN IF NOT EXISTS "closeReason" TEXT',
+  // Anular una recepción y un embarque (2026-10-27): quién, cuándo y por qué.
+  'ALTER TABLE IF EXISTS "CacaoReception" ADD COLUMN IF NOT EXISTS "voidedAt" TIMESTAMP(3)',
+  'ALTER TABLE IF EXISTS "CacaoReception" ADD COLUMN IF NOT EXISTS "voidedBy" INTEGER',
+  'ALTER TABLE IF EXISTS "CacaoReception" ADD COLUMN IF NOT EXISTS "voidReason" TEXT',
+  'ALTER TABLE IF EXISTS "CacaoShipment" ADD COLUMN IF NOT EXISTS "cancelledAt" TIMESTAMP(3)',
+  'ALTER TABLE IF EXISTS "CacaoShipment" ADD COLUMN IF NOT EXISTS "cancelledBy" INTEGER',
+  'ALTER TABLE IF EXISTS "CacaoShipment" ADD COLUMN IF NOT EXISTS "cancelReason" TEXT',
+  // El número de ticket no se repite dentro de una empresa (Postgres deja varias filas con NULL).
+  `DO $$ BEGIN
+     IF to_regclass('"CacaoReception"') IS NOT NULL THEN
+       CREATE UNIQUE INDEX IF NOT EXISTS "CacaoReception_companyId_ticketNumber_key" ON "CacaoReception" ("companyId", "ticketNumber");
+     END IF;
+   END $$`,
 ];

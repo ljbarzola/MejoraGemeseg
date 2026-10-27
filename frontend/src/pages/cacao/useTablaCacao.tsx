@@ -1,17 +1,20 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { Download, Search } from 'lucide-react';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
+import { exportarExcel, type CeldaExcel, type TipoColumnaExcel } from './exportarExcel';
 
 /**
  * Las tablas de listado de Cacao (proveedores, recepciones, lotes, liquidaciones…) comparten
- * la misma receta de la app: botón «Columnas», orden al hacer clic en el encabezado y ancho
- * de columnas que se arrastra. Se arma aquí una sola vez para que las 10 pantallas se
- * comporten igual y no copien 60 líneas cada una.
+ * la misma receta de la app: botón «Columnas», orden al hacer clic en el encabezado, ancho de
+ * columnas que se arrastra, búsqueda y exportación a Excel. Se arma aquí una sola vez para que
+ * las pantallas se comporten igual y no copien 60 líneas cada una.
  *
- * Uso: la pantalla define sus columnas, pone `selectorColumnas` en su barra de filtros y
- * `tabla` donde iba su <table>.
+ * Uso: la pantalla define sus columnas, pone `buscador`, `selectorColumnas` y `botonExportar`
+ * en su barra de filtros y `tabla` donde iba su <table>. `limpiarBusqueda` / `hayBusqueda`
+ * son para su botón de limpiar filtros.
  */
 export interface ColumnaCacao<T> {
   key: string;
@@ -24,8 +27,16 @@ export interface ColumnaCacao<T> {
   clase?: string;
   /** Alinea el encabezado y las celdas a la derecha (cifras). */
   derecha?: boolean;
+  /** Arranca oculta (cada persona la puede mostrar con «Columnas»). */
+  ocultaPorDefecto?: boolean;
   /** Ancho inicial en px (por defecto 110). Con `table-layout: fixed`, una columna sin ancho queda aplastada por las que sí lo tienen. */
   ancho?: number;
+  /**
+   * Cómo sale en el Excel. Sin esto se usa el valor de `orden` (los números como número, el texto
+   * como texto). `tipo: 'fecha'` convierte una marca de tiempo en fecha; `valor` sirve cuando lo
+   * que se ordena no es lo que se quiere ver (un código, una etiqueta). `titulo` agrega la unidad.
+   */
+  excel?: { tipo?: TipoColumnaExcel; titulo?: string; valor?: (fila: T) => CeldaExcel };
 }
 
 const ANCHO_POR_DEFECTO = 110;
@@ -33,6 +44,9 @@ const ANCHO_POR_DEFECTO = 110;
 /** Ancho mínimo para que el encabezado (en mayúsculas, con el icono de orden) no se corte. */
 const anchoDe = (c: { label: string; ancho?: number }) =>
   Math.max(c.ancho ?? ANCHO_POR_DEFECTO, Math.ceil((c.label.length + 2) * 11.2 + 22));
+
+/** Minúsculas y sin tildes, para que «cooperativa» encuentre «Cooperativa» y «rio» encuentre «Río». */
+const normalizar = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 export function useTablaCacao<T>({
   clave,
@@ -62,7 +76,7 @@ export function useTablaCacao<T>({
 }) {
   const columnPrefs = useColumnPreferences(
     `cacao-${clave}`,
-    columnas.map((c) => c.key),
+    columnas.filter((c) => !c.ocultaPorDefecto).map((c) => c.key),
   );
 
   // Las keys guardadas que ya no existen (columna quitada en una versión nueva) se descartan.
@@ -77,16 +91,64 @@ export function useTablaCacao<T>({
     [principal.key, ...visibles.map((c) => c.key), ...(acciones ? ['acciones'] : [])],
   );
 
+  // ─── Búsqueda: texto en cualquier columna (visible o no) cuyo valor sea texto o número ───
+  const [busqueda, setBusqueda] = useState('');
+  const consulta = normalizar(busqueda.trim());
+  const todas = useMemo(() => [principal, ...columnas], [principal, columnas]);
+  const filasBuscadas = useMemo(() => {
+    if (!consulta) return filas;
+    return filas.filter((f) =>
+      todas.some((c) => {
+        if (c.excel?.tipo === 'fecha') return false;
+        const v = c.excel?.valor ? c.excel.valor(f) : c.orden?.(f);
+        return (typeof v === 'string' || typeof v === 'number') && normalizar(String(v)).includes(consulta);
+      }),
+    );
+  }, [filas, consulta, todas]);
+
   const campos: Record<string, (f: T) => string | number | null | undefined> = {};
   for (const c of [principal, ...columnas]) {
     if (c.orden) campos[c.key] = c.orden;
   }
   const { filas: ordenadas, thProps, SortIcon } = useSortableTable(
-    filas,
+    filasBuscadas,
     campos,
     ordenInicial,
     direccionInicial,
   );
+
+  // ─── Exportar a Excel: lo que se ve (columnas elegidas, filtro y orden actuales) ───
+  const [exportando, setExportando] = useState(false);
+  const [falloExportar, setFalloExportar] = useState(false);
+
+  const valorExcel = (c: ColumnaCacao<T>, f: T): CeldaExcel => {
+    if (c.excel?.valor) return c.excel.valor(f);
+    const v = c.orden?.(f);
+    if (c.excel?.tipo === 'fecha' && typeof v === 'number') return new Date(v);
+    return v;
+  };
+
+  async function exportar() {
+    setExportando(true);
+    setFalloExportar(false);
+    try {
+      const cols = [principal, ...visibles];
+      const datos = ordenadas.map((f) => cols.map((c) => valorExcel(c, f)));
+      await exportarExcel({
+        nombre: clave,
+        columnas: cols.map((c, i) => {
+          const primero = datos.map((d) => d[i]).find((v) => v !== null && v !== undefined && v !== '');
+          const inferido: TipoColumnaExcel = typeof primero === 'number' ? 'numero' : primero instanceof Date ? 'fecha' : 'texto';
+          return { titulo: c.excel?.titulo ?? c.label, tipo: c.excel?.tipo ?? inferido };
+        }),
+        filas: datos,
+      });
+    } catch {
+      setFalloExportar(true);
+    } finally {
+      setExportando(false);
+    }
+  }
 
   const encabezado = (c: ColumnaCacao<T>) => {
     const estilo = { ...(c.derecha ? { textAlign: 'right' as const } : {}), width: anchoDe(c) };
@@ -97,6 +159,20 @@ export function useTablaCacao<T>({
     );
   };
 
+  const buscador = (
+    <label style={{ position: 'relative', flex: '1 1 260px', minWidth: 0, maxWidth: 420 }}>
+      <span className="visually-hidden">Buscar en la tabla</span>
+      <Search size={15} aria-hidden style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#a0aec0' }} />
+      <input
+        type="search"
+        value={busqueda}
+        onChange={(e) => setBusqueda(e.target.value)}
+        placeholder="Buscar…"
+        style={{ width: '100%', padding: '10px 14px 10px 34px', border: '2px solid #e2e8f0', borderRadius: 10, fontSize: '0.9rem' }}
+      />
+    </label>
+  );
+
   const selectorColumnas = (
     <ColumnPickerMenu
       columns={columnas.map((c) => ({ key: c.key, label: c.label }))}
@@ -106,6 +182,21 @@ export function useTablaCacao<T>({
       fixedLabel={principal.label}
       onApply={async (keys, fijas) => { await columnPrefs.set(keys, fijas); }}
     />
+  );
+
+  // Siempre visible (no aparece ni desaparece): se desactiva cuando no hay filas que exportar.
+  const botonExportar = (
+    <button
+      type="button"
+      className="btn-secondary"
+      onClick={exportar}
+      disabled={exportando || ordenadas.length === 0}
+      title={falloExportar ? 'No se pudo exportar. Inténtalo de nuevo.' : 'Descarga como Excel lo que ves en la tabla'}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', ...(falloExportar ? { color: '#c53030' } : {}) }}
+    >
+      <Download size={14} aria-hidden />
+      {exportando ? 'Exportando…' : falloExportar ? 'No se pudo exportar' : 'Exportar a Excel'}
+    </button>
   );
 
   const tabla = (
@@ -135,5 +226,16 @@ export function useTablaCacao<T>({
     </div>
   );
 
-  return { tabla, selectorColumnas, filasOrdenadas: ordenadas };
+  return {
+    tabla,
+    selectorColumnas,
+    buscador,
+    botonExportar,
+    /** Quita lo escrito en el buscador (para el botón de limpiar filtros de la pantalla). */
+    limpiarBusqueda: () => setBusqueda(''),
+    hayBusqueda: busqueda.trim() !== '',
+    /** Cuántas filas quedan tras buscar; 0 con filtros activos significa «nada coincide». */
+    filasVisibles: ordenadas.length,
+    filasOrdenadas: ordenadas,
+  };
 }

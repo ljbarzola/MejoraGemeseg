@@ -479,8 +479,24 @@ model CacaoReception {
   updatedAt        DateTime      @updatedAt
   differential     Float?
   unitOfMeasure    String        @default("KG")
+  // Datos del ticket de pesaje (opcionales). Columnas creadas al arrancar, ver cacao-config.schema.ts.
+  ticketNumber     String?
+  weighingProfile  String? // BULTOS | BASCULA
+  driverName       String?
+  vehiclePlate     String?
+  // Cierre sin liquidar (columnas creadas al arrancar, ver cacao-config.schema.ts): la entrega no se
+  // le va a pagar al proveedor y se deja registrado quién, cuándo y por qué.
+  closedAt         DateTime?
+  closedBy         Int?
+  closeReason      String?
+  // Anulación de la recepción (columnas creadas al arrancar): el lote queda anulado y en cero.
+  voidedAt         DateTime?
+  voidedBy         Int?
+  voidReason       String?
   lot              CacaoLot?     @relation(fields: [lotId], references: [id])
   supplier         CacaoSupplier @relation(fields: [supplierId], references: [id])
+
+  @@unique([companyId, ticketNumber])
 }
 
 model CacaoSettlement {
@@ -577,6 +593,10 @@ model CacaoShipment {
   salePricePerKg Float
   totalWeightKg  Float
   unitOfMeasure  String             @default("KG")
+  // Anulación del embarque (columnas creadas al arrancar, ver cacao-config.schema.ts)
+  cancelledAt    DateTime?
+  cancelledBy    Int?
+  cancelReason   String?
   receivable     CacaoReceivable?
   client         CacaoClient        @relation(fields: [clientId], references: [id])
   lots           CacaoShipmentLot[]

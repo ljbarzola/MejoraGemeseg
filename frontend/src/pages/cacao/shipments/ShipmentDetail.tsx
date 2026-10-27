@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { getShipments } from '../../../services/cacao.service';
+import { getShipments, cancelShipment } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
 import { useCompany } from '../../../contexts/ThemeContext';
+import { ABREVIATURA_UNIDAD as UNIT_ABBR } from '../useCacaoUnidades';
+import { getUser } from '../../../services/auth.service';
+import MotivoDialog from '../MotivoDialog';
+import ErrorBanner from '../../../components/common/ErrorBanner';
+import SoloAdminDialog from '../../../components/common/SoloAdminDialog';
+import { apiErrorMessage } from '../utils';
 
-const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 
 export default function ShipmentDetail() {
   const { id } = useParams<{ id: string }>();
@@ -13,13 +18,30 @@ export default function ShipmentDetail() {
   const { theme } = useCompany();
   const [shipment, setShipment] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [anulando, setAnulando] = useState(false);
+  const [error, setError] = useState('');
+  // Quien no es administrador ve el botón igual y, al usarlo, se le explica a quién acudir (no se esconde).
+  const [soloAdmin, setSoloAdmin] = useState<string | null>(null);
+  const esAdmin = getUser()?.role === 'ADMIN';
 
-  useEffect(() => {
-    getShipments().then((data: any[]) => {
-      const found = data.find((s: any) => s.id === Number(id));
-      setShipment(found || null);
-    }).finally(() => setLoading(false));
-  }, [id]);
+  const cargar = () => getShipments().then((data: any[]) => {
+    const found = data.find((s: any) => s.id === Number(id));
+    setShipment(found || null);
+  }).finally(() => setLoading(false));
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { cargar(); }, [id]);
+
+  async function anular(reason: string) {
+    setAnulando(false);
+    setError('');
+    try {
+      await cancelShipment(shipment.id, reason);
+      await cargar();
+    } catch (err: any) {
+      setError(apiErrorMessage(err, 'No se pudo anular el embarque.'));
+    }
+  }
 
   useEffect(() => {
     if (shipment) document.title = `EMB-${String(shipment.id).padStart(4, '0')} — ${theme.name}`;
@@ -31,6 +53,12 @@ export default function ShipmentDetail() {
 
   const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const unitAbbr = UNIT_ABBR[shipment.unitOfMeasure] || 'kg';
+  const anulado = shipment.status === 'CANCELLED';
+  const estado = anulado
+    ? { label: 'Anulado', bg: '#fed7d7', color: '#9b2c2c' }
+    : shipment.status === 'COMPLETED'
+      ? { label: 'Completado', bg: '#c6f6d5', color: '#276749' }
+      : { label: 'Pendiente', bg: '#fefcbf', color: '#975a16' };
 
   return (
     <div className="page-container">
@@ -64,10 +92,24 @@ export default function ShipmentDetail() {
             <h1>Embarque EMB-{String(shipment.id).padStart(4, '0')}</h1>
           </div>
         </div>
-        <button onClick={() => window.print()} style={{ padding: '8px 16px', backgroundColor: '#e53e3e', color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {!anulado && (
+            <button className="btn-secondary" style={{ color: '#c53030' }} onClick={() => (esAdmin ? setAnulando(true) : setSoloAdmin('anule embarques'))}>
+              Anular embarque
+            </button>
+          )}
+          <button onClick={() => window.print()} style={{ padding: '8px 16px', backgroundColor: '#e53e3e', color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
           🖨️ Descargar PDF
-        </button>
+          </button>
+        </div>
       </div>
+
+      <ErrorBanner mensaje={error} />
+      {anulado && (
+        <div className="auth-error-banner no-print" style={{ marginBottom: 16 }}>
+          <strong>Embarque anulado</strong>{shipment.cancelledAt ? ` el ${formatDateEc(shipment.cancelledAt)}` : ''}: {shipment.cancelReason || 'sin motivo'}. Los kilos volvieron a sus lotes y la cuenta por cobrar quedó anulada.
+        </div>
+      )}
 
       <div className="page-card" style={{ marginBottom: '16px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px 32px' }}>
@@ -77,8 +119,8 @@ export default function ShipmentDetail() {
           <div><strong>Referencia:</strong> {shipment.contractRef}</div>
           <div>
             <strong>Estado:</strong>{' '}
-            <span className="status-badge" style={{ backgroundColor: shipment.status === 'COMPLETED' ? '#c6f6d5' : '#fefcbf', color: shipment.status === 'COMPLETED' ? '#276749' : '#975a16' }}>
-              {shipment.status === 'COMPLETED' ? 'Completado' : 'Pendiente'}
+            <span className="status-badge" style={{ backgroundColor: estado.bg, color: estado.color }}>
+              {estado.label}
             </span>
           </div>
         </div>
@@ -133,12 +175,23 @@ export default function ShipmentDetail() {
             <div><strong>Vence:</strong> {formatDateEc(shipment.receivable.dueDate)}</div>
             <div>
               <span className="status-badge" style={{ backgroundColor: shipment.receivable.status === 'RECEIVED' ? '#c6f6d5' : '#fed7d7', color: shipment.receivable.status === 'RECEIVED' ? '#276749' : '#9b2c2c' }}>
-                {shipment.receivable.status === 'RECEIVED' ? 'Cobrada' : shipment.receivable.status === 'PARTIAL' ? 'Parcial' : 'Pendiente'}
+                {shipment.receivable.status === 'RECEIVED' ? 'Cobrada' : shipment.receivable.status === 'CANCELLED' ? 'Anulada' : shipment.receivable.status === 'PARTIAL' ? 'Parcial' : 'Pendiente'}
               </span>
             </div>
           </div>
         </div>
       )}
+      {anulando && (
+        <MotivoDialog
+          tipo="ANULACION"
+          title="Anular embarque"
+          message="Los kilos vuelven a sus lotes y la cuenta por cobrar se anula. Si ya hay cobros registrados, primero hay que anularlos."
+          confirmLabel="Anular embarque"
+          onCancel={() => setAnulando(false)}
+          onConfirm={anular}
+        />
+      )}
+      {soloAdmin && <SoloAdminDialog accion={soloAdmin} onClose={() => setSoloAdmin(null)} />}
     </div>
   );
 }

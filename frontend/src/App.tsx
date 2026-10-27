@@ -55,6 +55,7 @@ const ShipmentDetail = lazy(() => import('./pages/cacao/shipments/ShipmentDetail
 const PayablesList = lazy(() => import('./pages/cacao/payables/PayablesList'));
 const ReceivablesList = lazy(() => import('./pages/cacao/receivables/ReceivablesList'));
 const ConfiguracionCacaoPage = lazy(() => import('./pages/cacao/configuracion/ConfiguracionCacaoPage'));
+const ReportesCacao = lazy(() => import('./pages/cacao/reportes/ReportesCacao'));
 const CustodiasList = lazy(() => import('./pages/custodias/CustodiasList'));
 const CustodiaForm = lazy(() => import('./pages/custodias/CustodiaForm'));
 const NominaPage = lazy(() => import('./pages/custodias/NominaPage'));
@@ -447,6 +448,7 @@ function AppInner() {
           }
         />
         <Route path="/cacao" element={<ProtectedLayout><SectionRoute section="CACAO"><CacaoDashboard /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/reportes" element={<ProtectedLayout><SectionRoute section="CACAO"><ReportesCacao /></SectionRoute></ProtectedLayout>} />
         <Route path="/cacao/guia" element={<ProtectedLayout><SectionRoute section="CACAO"><CacaoHelpGuide /></SectionRoute></ProtectedLayout>} />
         <Route path="/cacao/suppliers" element={<ProtectedLayout><SectionRoute section="CACAO"><SuppliersPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/cacao/clients" element={<ProtectedLayout><SectionRoute section="CACAO"><ClientsPage /></SectionRoute></ProtectedLayout>} />

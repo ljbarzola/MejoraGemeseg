@@ -1,6 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaService } from '../../../prisma/prisma.service';
-import { CacaoUnitConfigService } from './unit-config.service';
+import { CacaoUnitConfigService, KG_POR_QUINTAL } from './unit-config.service';
 
 function armar() {
   const prisma = {
@@ -25,6 +25,16 @@ describe('CacaoUnitConfigService.getFactor', () => {
     const { service } = armar();
     expect(await service.getFactor('TON', 4)).toBe(1000);
     expect(await service.getFactor('KG', 4)).toBe(1);
+  });
+
+  it('el quintal son 100 libras y es universal: no depende de la empresa', async () => {
+    const { prisma, service } = armar();
+    expect(await service.getFactor('QQ', 4)).toBe(KG_POR_QUINTAL);
+    expect(await service.getFactor('QQ', 9)).toBe(45.359237);
+    expect(prisma.cacaoUnitConfig.findFirst).not.toHaveBeenCalled();
+    // 10 quintales = 453,59237 kg, y de vuelta
+    expect(await service.convertToKg(10, 'QQ', 4)).toBeCloseTo(453.59237, 6);
+    expect(await service.convertFromKg(453.59237, 'QQ', 4)).toBeCloseTo(10, 6);
   });
 
   it('el saco lo define cada empresa', async () => {

@@ -222,3 +222,102 @@ describe('CacaoShipmentsService.create', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
+
+describe('CacaoShipmentsService.cancel (anular un embarque)', () => {
+  function conEmbarque(over: Record<string, unknown> = {}, cobros = 0) {
+    const a = armar();
+    const tx = a.tx as unknown as Record<string, Record<string, jest.Mock>>;
+    tx.cacaoShipment.findFirst = jest.fn().mockResolvedValue({
+      id: 8,
+      status: 'PENDING',
+      contractRef: 'EJ-CONT-001',
+      lots: [{ lotId: 2, quantityKg: 500, unitCost: 3.2, unitOfMeasure: 'KG' }],
+      receivable: { id: 15, receivedAmount: 0 },
+      ...over,
+    });
+    tx.cacaoShipment.update = jest.fn().mockResolvedValue({});
+    tx.cacaoPayment = { count: jest.fn().mockResolvedValue(cobros) };
+    tx.cacaoReceivable.update = jest.fn().mockResolvedValue({});
+    tx.cacaoLot.findFirst = jest
+      .fn()
+      .mockResolvedValue({ id: 2, netWeight: 390, averageCost: 3.2 });
+    const prisma = a.prisma as unknown as Record<
+      string,
+      Record<string, jest.Mock>
+    >;
+    prisma.cacaoShipment = {
+      findFirst: jest.fn().mockResolvedValue({ id: 8 }),
+    };
+    return { ...a, tx };
+  }
+
+  it('devuelve los kilos al lote, lo reabre, deja la entrada en el kárdex y cancela la cuenta', async () => {
+    const { service, tx, cache } = conEmbarque();
+    await service.cancel(8, 4, 9, '  Cliente equivocado ');
+
+    // 390 kg que quedaban + 500 devueltos
+    expect(tx.cacaoLot.update).toHaveBeenCalledWith({
+      where: { id: 2 },
+      data: { netWeight: 890, status: 'OPEN' },
+    });
+    const kardex = tx.cacaoKardex.create.mock.calls[0][0] as {
+      data: Record<string, unknown>;
+    };
+    expect(kardex.data).toMatchObject({
+      lotId: 2,
+      type: 'ENTRY',
+      quantity: 500,
+      unitCost: 3.2,
+      totalCost: 1600,
+      reference: 'Anulación embarque EJ-CONT-001',
+      companyId: 4,
+    });
+    // saldo previo del kárdex (890) + 500 devueltos
+    expect(kardex.data.balanceQty).toBe(1390);
+    expect(tx.cacaoShipment.update).toHaveBeenCalledWith({
+      where: { id: 8 },
+      data: {
+        status: 'CANCELLED',
+        cancelledAt: expect.any(Date) as Date,
+        cancelledBy: 9,
+        cancelReason: 'Cliente equivocado',
+      },
+    });
+    expect(tx.cacaoReceivable.update).toHaveBeenCalledWith({
+      where: { id: 15 },
+      data: { status: 'CANCELLED' },
+    });
+    expect(cache.invalidate).toHaveBeenCalled();
+  });
+
+  it('no anula dos veces ni un embarque de otra empresa', async () => {
+    const a = conEmbarque({ status: 'CANCELLED' });
+    await expect(a.service.cancel(8, 4, 9, 'motivo')).rejects.toThrow(
+      /ya está anulado/,
+    );
+    const b = conEmbarque();
+    b.tx.cacaoShipment.findFirst.mockResolvedValue(null);
+    await expect(b.service.cancel(8, 4, 9, 'motivo')).rejects.toThrow(
+      /no encontrado/,
+    );
+  });
+
+  it('con cobros vigentes no se puede anular: primero hay que anular los cobros', async () => {
+    const { service, tx } = conEmbarque({}, 1);
+    await expect(service.cancel(8, 4, 9, 'motivo')).rejects.toThrow(
+      /cobros registrados/,
+    );
+    expect(tx.cacaoLot.update).not.toHaveBeenCalled();
+    expect(tx.cacaoShipment.update).not.toHaveBeenCalled();
+  });
+
+  it('tampoco si la cuenta ya tiene un monto cobrado', async () => {
+    const { service, tx } = conEmbarque({
+      receivable: { id: 15, receivedAmount: 100 },
+    });
+    await expect(service.cancel(8, 4, 9, 'motivo')).rejects.toThrow(
+      /cobros registrados/,
+    );
+    expect(tx.cacaoShipment.update).not.toHaveBeenCalled();
+  });
+});

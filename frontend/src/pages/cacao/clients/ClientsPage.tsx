@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import PageHeader from '../../../components/common/PageHeader';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
 import { getClients, createClient, updateClient, deleteClient } from '../../../services/cacao.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { Trash2, Pencil } from 'lucide-react';
@@ -63,7 +64,7 @@ export default function ClientsPage() {
     try { await deleteClient(id); load(); } catch {}
   }
 
-  const { tabla, selectorColumnas } = useTablaCacao<any>({
+  const { tabla, selectorColumnas, buscador, botonExportar, limpiarBusqueda, hayBusqueda } = useTablaCacao<any>({
     clave: 'clientes',
     filas: clients,
     idFila: (c) => c.id,
@@ -97,8 +98,12 @@ export default function ClientsPage() {
       />
 
       <div className="filter-bar">
-        <div className="filter-bar-fields" />
-        <div className="filter-bar-actions">{selectorColumnas}</div>
+        <div className="filter-bar-fields">{buscador}</div>
+        <div className="filter-bar-actions">
+          {selectorColumnas}
+          {botonExportar}
+          <ClearFiltersButton onClear={limpiarBusqueda} disabled={!hayBusqueda} />
+        </div>
       </div>
 
       {showForm && (

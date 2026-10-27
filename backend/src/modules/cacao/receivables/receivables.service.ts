@@ -47,6 +47,8 @@ export class CacaoReceivablesService {
         throw new NotFoundException('Cuenta por cobrar no encontrada');
       if (receivable.status === 'RECEIVED')
         throw new BadRequestException('Ya está cobrada');
+      if (receivable.status === 'CANCELLED')
+        throw new BadRequestException('La cuenta por cobrar está anulada');
 
       const balance = round2(
         receivable.totalAmount - receivable.receivedAmount,

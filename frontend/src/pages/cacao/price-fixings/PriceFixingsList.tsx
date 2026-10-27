@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import PageHeader from '../../../components/common/PageHeader';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
 import { getPriceFixings, createPriceFixing, fixPrice, getLots, getCacaoConfig, updateCacaoConfig } from '../../../services/cacao.service';
 import { getUser } from '../../../services/auth.service';
 import SoloAdminDialog from '../../../components/common/SoloAdminDialog';
@@ -160,7 +161,7 @@ export default function PriceFixingsList() {
 
   const pendienteDe = (f: any): number => (f.status === 'FIXED' ? 0 : (f.pendingWeight || f.lot?.netWeight || 0));
 
-  const { tabla, selectorColumnas } = useTablaCacao<any>({
+  const { tabla, selectorColumnas, buscador, botonExportar, limpiarBusqueda, hayBusqueda } = useTablaCacao<any>({
     clave: 'fijaciones',
     filas: fixings,
     idFila: (f) => f.id,
@@ -180,7 +181,7 @@ export default function PriceFixingsList() {
         celda: (f) => <span style={{ fontSize: '12px', color: '#718096' }}>{f.lot?.quality?.name || '—'}</span>,
       },
       {
-        key: 'pendiente', ancho: 140,
+        key: 'pendiente', excel: { titulo: 'Cant. Pendiente (kg)' }, ancho: 140,
         label: 'Cant. Pendiente',
         derecha: true,
         orden: (f) => pendienteDe(f),
@@ -194,14 +195,14 @@ export default function PriceFixingsList() {
         },
       },
       {
-        key: 'original', ancho: 130,
+        key: 'original', excel: { titulo: 'Peso Original (kg)' }, ancho: 130,
         label: 'Peso Original',
         derecha: true,
         orden: (f) => f.lot?.netWeight || 0,
         celda: (f) => <span style={{ color: '#718096' }}>{(f.lot?.netWeight || 0).toLocaleString()} kg</span>,
       },
       {
-        key: 'referencia', ancho: 130,
+        key: 'referencia', excel: { tipo: 'moneda', titulo: 'Precio Ref. Hoy ($/T)', valor: () => (iceConfigurado ? ice : null) }, ancho: 130,
         label: 'Precio Ref. Hoy',
         derecha: true,
         celda: () => !iceConfigurado ? '—' : (
@@ -212,7 +213,7 @@ export default function PriceFixingsList() {
         ),
       },
       {
-        key: 'diferencial', ancho: 110,
+        key: 'diferencial', excel: { titulo: 'Diferencial ($/T)' }, ancho: 110,
         label: 'Diferencial',
         derecha: true,
         orden: (f) => f.differential || null,
@@ -224,7 +225,7 @@ export default function PriceFixingsList() {
           ) : '—',
       },
       {
-        key: 'fijado', ancho: 150,
+        key: 'fijado', excel: { tipo: 'moneda', titulo: 'Precio Fijado ($/kg)' }, ancho: 150,
         label: 'Precio Fijado',
         derecha: true,
         orden: (f) => f.fixedPrice || null,
@@ -235,7 +236,7 @@ export default function PriceFixingsList() {
         ),
       },
       {
-        key: 'limite', ancho: 160,
+        key: 'limite', excel: { tipo: 'fecha' }, ancho: 160,
         label: 'Fecha Límite',
         orden: (f) => (f.deadline ? new Date(f.deadline).getTime() : null),
         celda: (f) => {
@@ -257,7 +258,7 @@ export default function PriceFixingsList() {
         },
       },
       {
-        key: 'estado', ancho: 110,
+        key: 'estado', excel: { valor: (f) => (f.status === 'OPEN' ? 'Abierta' : 'Fijada') }, ancho: 110,
         label: 'Estado',
         orden: (f) => f.status,
         celda: (f) => (
@@ -393,8 +394,12 @@ export default function PriceFixingsList() {
       )}
 
       <div className="filter-bar">
-        <div className="filter-bar-fields" />
-        <div className="filter-bar-actions">{selectorColumnas}</div>
+        <div className="filter-bar-fields">{buscador}</div>
+        <div className="filter-bar-actions">
+          {selectorColumnas}
+          {botonExportar}
+          <ClearFiltersButton onClear={limpiarBusqueda} disabled={!hayBusqueda} />
+        </div>
       </div>
 
       {/* Tabla de Exposición Abierta */}

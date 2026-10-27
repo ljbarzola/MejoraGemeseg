@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
@@ -84,7 +88,7 @@ export class CacaoShipmentsService {
         if (!lot) {
           throw new BadRequestException(`Lote ${input.lotId} no encontrado`);
         }
-        const quantityKg = input.quantity * factor;
+        const quantityKg = round4(input.quantity * factor);
         if (lot.netWeight + TOLERANCIA_KG < quantityKg) {
           throw new BadRequestException(
             `Lote ${lot.code} no tiene suficiente peso`,
@@ -190,6 +194,102 @@ export class CacaoShipmentsService {
 
     await this.invalidateCache(companyId);
     return shipment;
+  }
+
+  /**
+   * Anula un embarque mal registrado: devuelve los kilos a cada lote (y lo reabre si se había
+   * vendido por completo), deja una entrada en el kárdex que lo explica y cancela la cuenta por
+   * cobrar. Si ya hay cobros vigentes, primero hay que anularlos. Todo en una transacción con el
+   * lote y la cuenta bloqueados.
+   */
+  async cancel(id: number, companyId: number, userId: number, reason: string) {
+    await this.prisma.$transaction(async (tx) => {
+      // Mismo bloqueo que usa el cobro: no se anula mientras alguien está cobrando.
+      await tx.$queryRaw`SELECT "id" FROM "CacaoReceivable" WHERE "shipmentId" = ${id} FOR UPDATE`;
+
+      const shipment = await tx.cacaoShipment.findFirst({
+        where: { id, companyId },
+        include: { lots: true, receivable: true },
+      });
+      if (!shipment) throw new NotFoundException('Embarque no encontrado');
+      if (shipment.status === 'CANCELLED') {
+        throw new BadRequestException('Este embarque ya está anulado');
+      }
+      const cobrosVigentes = shipment.receivable
+        ? await tx.cacaoPayment.count({
+            where: { receivableId: shipment.receivable.id, voidedAt: null },
+          })
+        : 0;
+      if (
+        cobrosVigentes > 0 ||
+        (shipment.receivable?.receivedAmount ?? 0) > 0
+      ) {
+        throw new BadRequestException(
+          'El embarque tiene cobros registrados: anúlalos antes de anularlo',
+        );
+      }
+
+      const lotIds = shipment.lots.map((l) => l.lotId);
+      await tx.$queryRaw`SELECT "id" FROM "CacaoLot" WHERE "id" IN (${Prisma.join(lotIds)}) FOR UPDATE`;
+
+      for (const linea of shipment.lots) {
+        const lot = await tx.cacaoLot.findFirst({
+          where: { id: linea.lotId, companyId },
+        });
+        if (!lot) continue;
+        const nuevoPeso = round4(lot.netWeight + linea.quantityKg);
+        await tx.cacaoLot.update({
+          where: { id: lot.id },
+          data: { netWeight: nuevoPeso, status: 'OPEN' },
+        });
+        const previo = await tx.cacaoKardex.findFirst({
+          where: { lotId: lot.id, companyId },
+          orderBy: { id: 'desc' },
+        });
+        const costo = round2(linea.quantityKg * linea.unitCost);
+        await tx.cacaoKardex.create({
+          data: {
+            lotId: lot.id,
+            type: 'ENTRY',
+            quantity: linea.quantityKg,
+            unitCost: linea.unitCost,
+            totalCost: costo,
+            balanceQty: round4((previo?.balanceQty ?? 0) + linea.quantityKg),
+            balanceCost: round2((previo?.balanceCost ?? 0) + costo),
+            date: new Date(),
+            reference: `Anulación embarque ${shipment.contractRef}`,
+            referenceUnit: linea.unitOfMeasure,
+            companyId,
+          },
+        });
+      }
+
+      await tx.cacaoShipment.update({
+        where: { id },
+        data: {
+          status: 'CANCELLED',
+          cancelledAt: new Date(),
+          cancelledBy: userId,
+          cancelReason: reason.trim(),
+        },
+      });
+      if (shipment.receivable) {
+        await tx.cacaoReceivable.update({
+          where: { id: shipment.receivable.id },
+          data: { status: 'CANCELLED' },
+        });
+      }
+    });
+
+    await this.invalidateCache(companyId);
+    return this.prisma.cacaoShipment.findFirst({
+      where: { id, companyId },
+      include: {
+        client: true,
+        lots: { include: { lot: true } },
+        receivable: true,
+      },
+    });
   }
 
   async invalidateCache(companyId: number): Promise<void> {

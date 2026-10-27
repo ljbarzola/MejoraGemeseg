@@ -6,8 +6,8 @@ import DateInput from '../../../components/common/DateInput';
 import ErrorBanner from '../../../components/common/ErrorBanner';
 import { apiErrorMessage } from '../utils';
 import { Trash2 } from 'lucide-react';
+import { ABREVIATURA_UNIDAD as UNIT_ABBR } from '../useCacaoUnidades';
 
-const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 function round4(n: number) { return Math.round(n * 10000) / 10000; }
 function round2(n: number) { return Math.round(n * 100) / 100; }
 function getTodayLocal() {
