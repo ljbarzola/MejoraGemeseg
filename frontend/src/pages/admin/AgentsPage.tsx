@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Activity, BookOpen, Trash2, Pencil } from 'lucide-react';
+import { Activity, BookOpen, FileText, MessagesSquare, Trash2, Pencil } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import {
   getAgentCatalog,
@@ -15,6 +15,8 @@ import type { Agent, AgentAssignment, DocumentacionAgente } from '../../types/ag
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import AgenteDocModal from '../../components/sistemas/AgenteDocModal';
 import ActividadAgentes from '../../components/sistemas/ActividadAgentes';
+import HistorialPreguntasAgentes from '../../components/sistemas/HistorialPreguntasAgentes';
+import PromptRealModal from '../../components/sistemas/PromptRealModal';
 
 const SCOPE_OPTIONS = [
   { value: 'GLOBAL', label: 'Global', desc: 'Accede a toda la informacion del sistema' },
@@ -63,6 +65,8 @@ export default function AgentsPage() {
   const [docs, setDocs] = useState<DocumentacionAgente[]>([]);
   const [verDoc, setVerDoc] = useState<DocumentacionAgente | null>(null);
   const [verActividad, setVerActividad] = useState<Agent | null>(null);
+  const [verPreguntas, setVerPreguntas] = useState<Agent | null>(null);
+  const [verPromptDe, setVerPromptDe] = useState<number | null>(null);
 
   const loadData = () => {
     setLoading(true);
@@ -192,7 +196,7 @@ export default function AgentsPage() {
       <PageHeader
         eyebrow="Sistemas"
         title="Agentes de IA"
-        description="Qué agentes hay, a quién está asignado cada uno y qué han hecho los que trabajan solos."
+        description="Qué agentes hay, a quién está asignado cada uno, qué se les ha preguntado, su prompt real y qué han hecho los que trabajan solos."
         actions={
           <>
             <button className="btn-secondary" onClick={openCreateModal}>
@@ -232,6 +236,10 @@ export default function AgentsPage() {
                           <span className="agent-scope-badge">{agent.scope}</span>
                         </div>
                         <div className="tools-actions-cell">
+                          <button className="btn-secondary icon-btn" onClick={() => setVerPromptDe(agent.id)} title="Ver el prompt real" aria-label="Ver el prompt real"><FileText size={14} /></button>
+                          {!ES_TRABAJADOR(agent.scope) && (
+                            <button className="btn-secondary icon-btn" onClick={() => setVerPreguntas(agent)} title="Qué le han preguntado" aria-label="Qué le han preguntado"><MessagesSquare size={14} /></button>
+                          )}
                           {docs.some((d) => d.scope === agent.scope) && (
                             <>
                               <button className="btn-secondary icon-btn" onClick={() => setVerDoc(docs.find((d) => d.scope === agent.scope) ?? null)} title="Qué hace este agente" aria-label="Qué hace este agente"><BookOpen size={14} /></button>
@@ -302,6 +310,10 @@ export default function AgentsPage() {
                   </table>
                 </div>
               )}
+            </div>
+            <div className="tools-section" style={{ marginTop: '32px' }}>
+              <h2 className="tools-section-title">Preguntas a los agentes</h2>
+              <HistorialPreguntasAgentes />
             </div>
             <div className="tools-section" style={{ marginTop: '32px' }}>
               <h2 className="tools-section-title">Actividad de los agentes que trabajan solos</h2>
@@ -381,6 +393,9 @@ export default function AgentsPage() {
               </div>
               <div className="agent-preview">
                 <h4 className="agent-preview-title">Vista previa — Datos incluidos en el prompt</h4>
+                <button type="button" className="btn-secondary" style={{ marginBottom: 8 }} onClick={() => setVerPromptDe(editingAgent.id)}>
+                  <FileText size={14} /> Ver el prompt real completo
+                </button>
                 <div className="agent-preview-items">
                   {previewItems.map((item) => (
                     <span key={item} className="agent-preview-chip">{item}</span>
@@ -419,6 +434,25 @@ export default function AgentsPage() {
             </div>
             <div className="modal-actions">
               <button className="btn-secondary" onClick={() => setVerActividad(null)}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {verPromptDe !== null && <PromptRealModal agentId={verPromptDe} onClose={() => setVerPromptDe(null)} />}
+
+      {verPreguntas && (
+        <div className="modal-overlay" onClick={() => setVerPreguntas(null)}>
+          <div className="modal modal-xl" style={{ maxWidth: 1040 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Qué le han preguntado — {verPreguntas.name}</h3>
+              <button className="modal-close" onClick={() => setVerPreguntas(null)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              <HistorialPreguntasAgentes agentId={verPreguntas.id} />
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setVerPreguntas(null)}>Cerrar</button>
             </div>
           </div>
         </div>

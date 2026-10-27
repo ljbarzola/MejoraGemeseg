@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiProcessor, INTENT_SECTION } from './ai.processor';
+import { AgentesHistorialService } from './agentes-historial.service';
 import { VertexChatClient, ChatTurn } from './vertex-chat.client';
 import {
   ALL_SECTIONS,
@@ -18,6 +19,7 @@ import { parseKnowledgeBase, filterKnowledgeBase } from './knowledge-base.util';
 import { buildCapabilitiesPrompt } from './capabilities-prompt.util';
 import { buildSystemGuide } from './system-guide.util';
 import { esAgenteSinChat } from '../agents/agent-trabajadores.const';
+import { buildBitacoraPrompt } from '../contratacion-publica/bitacoras/bitacora-prompt.util';
 import { SendMessageDto } from './dto/send-message.dto';
 import {
   SCOPE_VENTAS,
@@ -88,6 +90,20 @@ Responde de forma concisa y útil, en español.
 Cuando necesites datos específicos del sistema, indica la intención con el formato [INTENCION: nombre_intencion], usando ÚNICAMENTE los nombres de intención listados en "Lo que puedes hacer" — nunca inventes uno que no esté ahí.
 Si no necesitas datos, responde directamente.`;
 
+// Segunda llamada de Agente Gemeseg (redactar con los datos que devolvió el sistema).
+// "Concisa" a secas hacía que el modelo resumiera listas y omitiera clientes (p. ej.
+// "¿a quién atiendo hoy?" respondía solo uno de tres).
+export const SYSTEM_REDACCION_GENERAL =
+  'Responde de forma clara y breve, en español, basándote en los datos proporcionados. Si los datos traen una lista, menciona TODOS sus elementos (no resumas ni omitas ninguno) y respeta cualquier aviso que incluyan.';
+
+/** Un bloque del prompt que recibe el modelo, para mostrarlo a Sistemas tal cual se envía. */
+export interface ParteDelPrompt {
+  titulo: string;
+  texto: string;
+  /** Quién lo cambia: el texto del agente (Sistemas), la base de conocimiento, el código o se calcula por persona. */
+  origen: 'agente' | 'codigo' | 'persona' | 'empresa';
+}
+
 @Injectable()
 export class AiService implements OnModuleInit {
   private readonly logger = new Logger(AiService.name);
@@ -97,6 +113,8 @@ export class AiService implements OnModuleInit {
     private processor: AiProcessor,
     private vertexChat: VertexChatClient,
     private permissionsService: PermissionsService,
+    // Opcional para que las pruebas que arman AiService a mano no tengan que pasarlo.
+    private historial?: AgentesHistorialService,
   ) {
     if (this.vertexChat.estaConfigurado()) {
       this.logger.log('Usando Google Vertex AI para Agente Gemeseg');
@@ -235,10 +253,12 @@ export class AiService implements OnModuleInit {
     });
 
     const configured = this.vertexChat.estaConfigurado();
+    const inicioRespuesta = Date.now();
 
     let reply: string;
     let tokensUsed = 0;
     let auditoria: Record<string, unknown> | undefined;
+    let errorDeRespuesta: string | null = null;
 
     try {
       if (configured) {
@@ -264,6 +284,7 @@ export class AiService implements OnModuleInit {
       }
     } catch (error) {
       this.logger.error(`Error en chat: ${error.message}`);
+      errorDeRespuesta = String(error.message ?? 'Error desconocido');
       await this.logAi(userId, this.accionLog(agente.perfil), 0, false, error.message, {
         agentId,
         perfil: agente.perfil,
@@ -276,13 +297,14 @@ export class AiService implements OnModuleInit {
       }
     }
 
-    await this.prisma.chatMessage.create({
+    const modeloUsado = configured ? this.vertexModelForLog(agente.perfil) : 'mock';
+    const respuestaGuardada = await this.prisma.chatMessage.create({
       data: {
         conversationId: conversation.id,
         role: 'assistant',
         content: reply,
         tokensUsed,
-        model: configured ? this.vertexModelForLog(agente.perfil) : 'mock',
+        model: modeloUsado,
         sections,
       },
     });
@@ -291,6 +313,24 @@ export class AiService implements OnModuleInit {
       agentId,
       perfil: agente.perfil,
       ...(auditoria ?? {}),
+    });
+
+    // Copia propia de la pregunta y la respuesta para Sistemas → Agentes: sigue ahí aunque la persona
+    // borre luego su conversación. Nunca rompe el chat (registrar() atrapa sus propios errores).
+    await this.historial?.registrar({
+      chatMessageId: respuestaGuardada.id,
+      agentId,
+      userId,
+      companyId,
+      contexto: dto.context ?? null,
+      pregunta: dto.message,
+      respuesta: reply,
+      modelo: modeloUsado,
+      tokens: tokensUsed,
+      duracionMs: Date.now() - inicioRespuesta,
+      exito: errorDeRespuesta === null,
+      error: errorDeRespuesta,
+      detalle: { agentId, perfil: agente.perfil, ...(auditoria ?? {}) },
     });
 
     return {
@@ -389,6 +429,142 @@ export class AiService implements OnModuleInit {
     return filterKnowledgeBase(sections, allowedKeys);
   }
 
+  // Los bloques del prompt de la primera llamada, en el orden en que se envían. Lo usan el chat (los
+  // une con una línea en blanco) y la pantalla Sistemas → Agentes (los muestra), así lo que se ve ahí
+  // es exactamente lo que recibe el modelo.
+  private armarPartesDelPrompt(p: {
+    basePrompt: string;
+    esVentas: boolean;
+    clavesVisibles: string[];
+    ventasAgenteDisponible: boolean;
+    kbContext: string;
+  }): ParteDelPrompt[] {
+    const capabilities = p.esVentas
+      ? `Consultas disponibles (datos reales de Ventas de la empresa):\n${VENTAS_AYUDA}`
+      : buildCapabilitiesPrompt(p.clavesVisibles, {
+          ventasAgenteDisponible: p.ventasAgenteDisponible,
+        });
+    const partes: ParteDelPrompt[] = [
+      {
+        titulo: 'Texto propio del agente',
+        texto: p.basePrompt,
+        origen: 'agente',
+      },
+      {
+        titulo: 'Reglas fijas del Agente de Ventas',
+        texto: p.esVentas ? buildSalesAgentPrompt() : '',
+        origen: 'codigo',
+      },
+      {
+        titulo: p.esVentas
+          ? 'Consultas que puede pedir al sistema'
+          : 'Módulos y consultas disponibles',
+        texto: capabilities,
+        origen: p.esVentas ? 'codigo' : 'persona',
+      },
+      {
+        titulo: 'Manual de uso del sistema',
+        texto: `Manual de uso del sistema (lo que este usuario puede usar):\n\n${buildSystemGuide(p.clavesVisibles)}`,
+        origen: 'persona',
+      },
+      {
+        titulo: 'Base de conocimiento de la empresa',
+        texto: p.kbContext
+          ? `Contexto adicional de la empresa (políticas, procesos internos; complementa el manual):\n${p.kbContext}`
+          : '',
+        origen: 'empresa',
+      },
+    ];
+    return partes.filter((x) => x.texto);
+  }
+
+  /**
+   * El prompt REAL de un agente, para Sistemas → Agentes. Un agente de chat recibe partes que dependen
+   * de quién pregunta (el manual y los módulos salen de sus permisos), así que aquí se arma con TODAS
+   * las secciones: es el caso más completo. El lector de bitácoras no conversa y tiene un prompt fijo.
+   */
+  async promptRealDeAgente(agentId: number, companyId: number | null) {
+    const agente = await this.prisma.agent.findUnique({
+      where: { id: agentId },
+      select: { id: true, name: true, scope: true, isActive: true, instructions: true },
+    });
+    if (!agente) {
+      throw new HttpException('Agente no encontrado', HttpStatus.NOT_FOUND);
+    }
+
+    if (esAgenteSinChat(agente.scope)) {
+      const modelo = this.vertexChat.modeloPara('fuerte');
+      return {
+        agentId: agente.id,
+        nombre: agente.name,
+        scope: agente.scope,
+        modelo,
+        avisos: [
+          'Este agente no conversa: recibe la foto o el PDF de la hoja junto con este texto, en una sola llamada.',
+          'La fecha de hoy que aparece en la regla 3 se completa en cada lectura.',
+          'El bloque «INSTRUCCIONES PROPIAS DE ESTA EMPRESA» sale del texto que se edita en «Editar agente»; todo lo demás está en el código.',
+        ],
+        partes: [
+          {
+            titulo: 'Prompt completo del lector',
+            texto: buildBitacoraPrompt({
+              hoy: new Date().toISOString().slice(0, 10),
+              instruccionesDeLaEmpresa: agente.instructions,
+            }),
+            origen: 'codigo' as const,
+          },
+        ] as ParteDelPrompt[],
+      };
+    }
+
+    const perfil = perfilDeAgente(agente.scope);
+    const esVentas = perfil === 'VENTAS';
+    const todas = ALL_SECTIONS.map((s) => s.key);
+    const clavesVisibles = esVentas ? todas.filter((k) => k === 'VENTAS') : todas;
+    const basePrompt = agente.isActive ? agente.instructions : BASE_SYSTEM_PROMPT;
+    const kbContext = await this.getFilteredKnowledgeBase(
+      companyId,
+      0,
+      clavesVisibles,
+    );
+    const partes = this.armarPartesDelPrompt({
+      basePrompt,
+      esVentas,
+      clavesVisibles,
+      ventasAgenteDisponible: !esVentas,
+      kbContext,
+    });
+    partes.push({
+      titulo: 'Segunda llamada: redactar con los datos del sistema',
+      texto: esVentas ? SYSTEM_REDACCION_VENTAS : SYSTEM_REDACCION_GENERAL,
+      origen: 'codigo',
+    });
+
+    const avisos = [
+      'Cada pregunta viaja así: «[Contexto: pantalla desde la que se pregunta] pregunta de la persona», junto con los últimos mensajes de esa conversación.',
+      'Si la respuesta pide datos del sistema, hay una SEGUNDA llamada al modelo con el último bloque de abajo y los datos que devolvió la consulta («Datos del sistema: … Pregunta original: …»).',
+      'Los bloques «Módulos y consultas» y «Manual de uso» cambian según los permisos de cada persona: aquí se muestran con todas las secciones, que es la versión más completa.',
+    ];
+    if (!agente.isActive && !esVentas) {
+      avisos.push(
+        'Este agente está inactivo: el chat usa el texto base de Agente Gemeseg en lugar del suyo.',
+      );
+    }
+    if (!companyId) {
+      avisos.push(
+        'Con una cuenta sin empresa no se muestra la base de conocimiento (es de cada empresa).',
+      );
+    }
+    return {
+      agentId: agente.id,
+      nombre: agente.name,
+      scope: agente.scope,
+      modelo: this.vertexChat.modeloPara(this.nivelDePerfil(perfil)),
+      avisos,
+      partes,
+    };
+  }
+
   private async callVertexChat(
     message: string,
     context: string,
@@ -414,25 +590,21 @@ export class AiService implements OnModuleInit {
       ? allowedKeys.filter((k) => k === 'VENTAS')
       : allowedKeys;
 
-    const capabilities = esVentas
-      ? `Consultas disponibles (datos reales de Ventas de la empresa):\n${VENTAS_AYUDA}`
-      : buildCapabilitiesPrompt(clavesVisibles, {
-          ventasAgenteDisponible: await this.tieneAgenteVentas(userId, allowedKeys),
-        });
     const kbContext = await this.getFilteredKnowledgeBase(
       companyId,
       userId,
       clavesVisibles,
     );
-    const systemPrompt = [
+    const systemPrompt = this.armarPartesDelPrompt({
       basePrompt,
-      esVentas ? buildSalesAgentPrompt() : '',
-      capabilities,
-      `Manual de uso del sistema (lo que este usuario puede usar):\n\n${buildSystemGuide(clavesVisibles)}`,
-      kbContext &&
-        `Contexto adicional de la empresa (políticas, procesos internos; complementa el manual):\n${kbContext}`,
-    ]
-      .filter(Boolean)
+      esVentas,
+      clavesVisibles,
+      ventasAgenteDisponible: esVentas
+        ? false
+        : await this.tieneAgenteVentas(userId, allowedKeys),
+      kbContext,
+    })
+      .map((p) => p.texto)
       .join('\n\n');
 
     // Abierto desde la ficha de un cliente: su expediente ya se conoce, así que no hace falta que
@@ -551,11 +723,7 @@ export class AiService implements OnModuleInit {
     const historial = esVentas ? historialParaDatos(p.chatHistory) : [];
     try {
       const finalResult = await this.vertexChat.sendChat(
-        esVentas
-          ? SYSTEM_REDACCION_VENTAS
-          : // "Concisa" a secas hacía que el modelo resumiera listas y omitiera
-            // clientes (p. ej. "¿a quién atiendo hoy?" respondía solo uno de tres).
-            'Responde de forma clara y breve, en español, basándote en los datos proporcionados. Si los datos traen una lista, menciona TODOS sus elementos (no resumas ni omitas ninguno) y respeta cualquier aviso que incluyan.',
+        esVentas ? SYSTEM_REDACCION_VENTAS : SYSTEM_REDACCION_GENERAL,
         historial,
         `Datos del sistema:\n${dataResult}\n\nPregunta original: ${message}`,
         esVentas
