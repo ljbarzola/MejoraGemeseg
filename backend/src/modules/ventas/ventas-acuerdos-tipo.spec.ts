@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { VentasAcuerdosService } from './ventas-acuerdos.service';
 import type { VentasMotivosService } from './ventas-motivos.service';
 
-// Cambiar el tipo de un contrato al editarlo (2026-10-22): uno creado antes de que existiera «Venta de producto»
+// Cambiar el tipo de un contrato al editarlo (2026-10-22): uno creado antes de que existiera «Venta única»
 // quedaba como servicio sin remedio.
 describe('VentasAcuerdosService — cambiar el tipo del contrato', () => {
   let prisma: any;

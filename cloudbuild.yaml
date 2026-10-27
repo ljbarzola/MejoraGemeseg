@@ -48,7 +48,12 @@ steps:
       # el endpoint `global` (en us-central1 dan 404): FUERTE = documentos
       # escaneados de RRHH (y el Agente de Ventas cuando se una a main); LIGERO = Agente Gemeseg y extracción de
       # fechas (ver .agents/modules/agents-ai.md punto 4).
-      - '--set-env-vars=NODE_ENV=production,REDIS_HOST=,REDIS_PORT=6379,GOOGLE_VERTEX_PROJECT=agentes-504115,GOOGLE_VERTEX_LOCATION=global,GOOGLE_VERTEX_MODEL_FUERTE=gemini-3.8-flash,GOOGLE_VERTEX_MODEL_LIGERO=gemini-3.5-flash-lite'
+      # GOOGLE_WORKSPACE_ADMIN_EMAIL: administrador de Workspace que se impersona para
+      # leer los informes de inicio de sesión y Drive de la Bitácora del equipo (solo
+      # lectura, con la cuenta de CORREO y su permiso admin.reports.audit.readonly; ver
+      # AGENTS.md, «Bitácora del equipo»). Sin ella, «Leer Google ahora» y el job horario
+      # responden con un mensaje claro y no leen nada.
+      - '--set-env-vars=NODE_ENV=production,REDIS_HOST=,REDIS_PORT=6379,GOOGLE_VERTEX_PROJECT=agentes-504115,GOOGLE_VERTEX_LOCATION=global,GOOGLE_VERTEX_MODEL_FUERTE=gemini-3.8-flash,GOOGLE_VERTEX_MODEL_LIGERO=gemini-3.5-flash-lite,GOOGLE_WORKSPACE_ADMIN_EMAIL=sistemas@gemeseg.com'
       - '--set-secrets=DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,FRONTEND_URL=FRONTEND_URL:latest,SIGNWELL_API_KEY=SIGNWELL_API_KEY:latest,GOOGLE_SERVICE_ACCOUNT_JSON=GOOGLE_SERVICE_ACCOUNT_JSON:latest,GMAIL_SERVICE_ACCOUNT_JSON=GMAIL_SERVICE_ACCOUNT_JSON:latest,CRON_SECRET=CRON_SECRET:latest'
 
   # Build frontend. El intento anterior de desplegarlo vía GitHub Actions

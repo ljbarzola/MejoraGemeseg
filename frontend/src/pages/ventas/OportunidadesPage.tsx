@@ -405,12 +405,12 @@ export default function OportunidadesPage() {
       />
 
       <div className="filter-bar">
-        <div className="filter-bar-fields filter-bar-fields--etiquetas">
+        <div className="filter-bar-fields filter-bar-fields--etiquetas filter-bar-fields--una-linea">
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder={vista === 'hoy' ? 'Buscar por nombre, teléfono o correo...' : 'Buscar por empresa o persona, título o servicio...'}
-            style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
+            style={{ padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
           {vista === 'hoy' ? (
             esManager ? (

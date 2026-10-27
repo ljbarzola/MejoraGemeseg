@@ -2817,6 +2817,36 @@ model AgentRun {
   @@index([companyId, createdAt])
 }
 
+// Historial propio de lo que se les pregunta a los agentes de chat (Sistemas → Agentes). Una fila por
+// pregunta respondida. Sin claves foráneas a propósito: si alguien borra su conversación (o su usuario)
+// la fila se queda. Se crea sola al arrancar (agentes-chat-registro.schema.ts).
+model AgentChatRegistro {
+  id            Int      @id @default(autoincrement())
+  // Id de la respuesta en ChatMessage: evita duplicar al copiar el historial anterior.
+  chatMessageId Int?     @unique
+  agentId       Int?
+  agentNombre   String
+  agentScope    String?
+  companyId     Int?
+  userId        Int?
+  userNombre    String?
+  contexto      String?
+  pregunta      String?
+  respuesta     String
+  modelo        String?
+  tokens        Int?
+  duracionMs    Int?
+  exito         Boolean  @default(true)
+  error         String?
+  consulta      String?
+  detalle       Json?
+  createdAt     DateTime @default(now())
+
+  @@index([agentId, createdAt])
+  @@index([companyId, createdAt])
+  @@index([userId, createdAt])
+}
+
 // ---------------------------------------------------------------------------
 // Leads, oportunidades y motivos (2026-10-07).
 //

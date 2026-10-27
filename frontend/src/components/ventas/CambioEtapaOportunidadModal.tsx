@@ -174,7 +174,7 @@ export default function CambioEtapaOportunidadModal({ oportunidad, etapas, desti
     }
     let contrato: AceptarContratoInput | undefined;
     if (esAceptada && !renueva) {
-      if (!tipo) return setError('Elige si lo que se aceptó es un servicio o un producto/instalación.');
+      if (!tipo) return setError('Elige si lo que se aceptó es un servicio recurrente o una venta única.');
       if (tipo === 'SERVICIO') {
         if (vigentes === null) return setError('Estoy revisando los contratos de este cliente; intenta de nuevo en un momento.');
         if (vigentes.length > 0 && eleccion === '') {
@@ -186,7 +186,7 @@ export default function CambioEtapaOportunidadModal({ oportunidad, etapas, desti
           ...(eleccion === 'nuevo' ? { confirmarNuevo: true } : {}),
         };
       } else {
-        if (garantia === '') return setError('Indica si el producto o la instalación tiene garantía.');
+        if (garantia === '') return setError('Indica si la venta tiene garantía.');
         const mesesNumero = Number(meses);
         if (garantia === 'si' && (!Number.isInteger(mesesNumero) || mesesNumero < 1 || mesesNumero > 120)) {
           return setError('Escribe los meses de garantía (un número entero entre 1 y 120).');
@@ -282,7 +282,7 @@ export default function CambioEtapaOportunidadModal({ oportunidad, etapas, desti
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 400, cursor: 'pointer' }}>
                     <input type="radio" name="tipo" checked={tipo === 'PRODUCTO'} onChange={() => { setTipo('PRODUCTO'); setEleccion(''); }} />
-                    Un producto o una instalación (venta única)
+                    Una venta única (un producto, una instalación o un servicio de una sola vez)
                   </label>
 
                   {tipo === 'SERVICIO' && vigentes === null && (

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Megaphone, Plus, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
 import {
   getNovedades,
   getSeccionesNovedad,
@@ -15,7 +15,6 @@ import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
 
 export default function NovedadesPage() {
-  const navigate = useNavigate();
   const [novedades, setNovedades] = useState<NovedadApp[]>([]);
   const [secciones, setSecciones] = useState<{ key: string; label: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,56 +51,54 @@ export default function NovedadesPage() {
 
   return (
     <div className="page-container">
-      <div className="page-title-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button className="back-btn" onClick={() => navigate('/sistemas/dashboard')}>
-            <ArrowLeft size={18} />
+      <PageHeader
+        eyebrow="Sistemas"
+        title="Novedades de la app"
+        description="Avisa de un cambio en la app. Le llega a la campana de notificaciones (no por correo) a quienes tienen acceso a los módulos que elijas."
+        actions={
+          <button className="auth-btn" onClick={() => setShowForm(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Plus size={16} /> Nueva novedad
           </button>
-          <h1 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Megaphone size={22} /> Novedades de la app
-          </h1>
-        </div>
-        <button className="auth-btn" onClick={() => setShowForm(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Plus size={16} /> Nueva novedad
-        </button>
-      </div>
-      <p style={{ margin: '0 0 20px', color: '#718096', fontSize: '0.88rem' }}>
-        Avisa de un cambio en la app. Le llega a la campana de notificaciones (no por correo) a quienes tienen acceso a los módulos que elijas.
-      </p>
+        }
+      />
 
       {error && <div className="form-error" style={{ marginBottom: '14px' }}>{error}</div>}
 
       {loading ? (
         <div className="loading-state">Cargando novedades...</div>
       ) : novedades.length === 0 ? (
-        <p style={{ color: '#94a3b8' }}>Todavía no se ha publicado ninguna novedad.</p>
+        <div className="admin-section">
+          <div className="empty-state">Todavía no se ha publicado ninguna novedad.</div>
+        </div>
       ) : (
-        <div className="table-container">
-          <table className="tasks-table resizable-table" ref={tablaRef}>
-            <thead>
-              <tr>
-                <th {...thProps('fecha')}>Fecha <SortIcon campo="fecha" /></th>
-                <th {...thProps('titulo')}>Novedad <SortIcon campo="titulo" /></th>
-                <th {...thProps('modulos')}>Módulos <SortIcon campo="modulos" /></th>
-                <th {...thProps('autor')}>Publicada por <SortIcon campo="autor" /></th>
-                <th {...thProps('destinatarios')}>Recibieron <SortIcon campo="destinatarios" /></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filas.map((n) => (
-                <tr key={n.id}>
-                  <td>{new Date(n.createdAt).toLocaleString('es-EC')}</td>
-                  <td>
-                    <strong>{n.titulo}</strong>
-                    <div style={{ fontSize: '0.8rem', color: '#64748b', whiteSpace: 'pre-wrap' }}>{n.descripcion}</div>
-                  </td>
-                  <td>{n.secciones.map(labelDe).join(', ')}</td>
-                  <td>{n.createdByNombre}</td>
-                  <td>{n.destinatarios}</td>
+        <div className="admin-section">
+          <div className="tasks-table-wrapper">
+            <table className="tasks-table resizable-table" ref={tablaRef}>
+              <thead>
+                <tr>
+                  <th {...thProps('fecha')}>Fecha <SortIcon campo="fecha" /></th>
+                  <th {...thProps('titulo')}>Novedad <SortIcon campo="titulo" /></th>
+                  <th {...thProps('modulos')}>Módulos <SortIcon campo="modulos" /></th>
+                  <th {...thProps('autor')}>Publicada por <SortIcon campo="autor" /></th>
+                  <th {...thProps('destinatarios')}>Recibieron <SortIcon campo="destinatarios" /></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filas.map((n) => (
+                  <tr key={n.id}>
+                    <td>{new Date(n.createdAt).toLocaleString('es-EC')}</td>
+                    <td>
+                      <strong>{n.titulo}</strong>
+                      <div style={{ fontSize: '0.8rem', color: '#64748b', whiteSpace: 'pre-wrap' }}>{n.descripcion}</div>
+                    </td>
+                    <td>{n.secciones.map(labelDe).join(', ')}</td>
+                    <td>{n.createdByNombre}</td>
+                    <td>{n.destinatarios}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

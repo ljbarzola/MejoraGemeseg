@@ -62,7 +62,8 @@ export class ProjectsService {
     query: ListProjectsDto,
   ) {
     const page = query.page || 1;
-    const skip = (page - 1) * PAGE_SIZE;
+    const pageSize = query.pageSize || PAGE_SIZE;
+    const skip = (page - 1) * pageSize;
 
     const where: any = {};
 
@@ -91,7 +92,7 @@ export class ProjectsService {
       this.prisma.project.findMany({
         where,
         skip,
-        take: PAGE_SIZE,
+        take: pageSize,
         orderBy: { createdAt: 'desc' },
         include: {
           createdBy: {
@@ -109,9 +110,9 @@ export class ProjectsService {
       data: projects,
       pagination: {
         page,
-        pageSize: PAGE_SIZE,
+        pageSize,
         total,
-        totalPages: Math.ceil(total / PAGE_SIZE),
+        totalPages: Math.ceil(total / pageSize),
       },
     };
   }

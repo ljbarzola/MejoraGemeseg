@@ -47,8 +47,8 @@ const TITULOS: Record<Modo, string> = {
 };
 
 const TITULOS_PRODUCTO: Record<Modo, string> = {
-  crear: 'Nueva venta de producto',
-  editar: 'Editar venta de producto',
+  crear: 'Nueva venta única',
+  editar: 'Editar venta única',
   renovar: 'Renovar contrato',
 };
 
@@ -77,7 +77,7 @@ export default function ContratoComercialModal({
   onCapturar, introRenovar, textoBoton,
 }: Props) {
   const [clienteId, setClienteId] = useState<number | ''>(contrato?.salesClientId ?? clienteIdInicial ?? '');
-  // Servicio recurrente o venta de producto. Se elige al crear y se puede corregir al editar (no al renovar).
+  // Servicio recurrente o venta única. Se elige al crear y se puede corregir al editar (no al renovar).
   const [tipo, setTipo] = useState<TipoContrato>(contrato?.kind ?? 'SERVICIO');
   const producto = tipo === 'PRODUCTO';
   const [valorTotal, setValorTotal] = useState<string>(contrato?.totalValue != null ? String(contrato.totalValue) : '');
@@ -161,7 +161,7 @@ export default function ContratoComercialModal({
     if (modo === 'crear' && !clienteId) return producto ? 'Elige el cliente de la venta.' : 'Elige el cliente del contrato.';
     if (producto) {
       if (!inicio) return 'Indica la fecha de la venta.';
-      if (serviceIds.length === 0) return 'Elige al menos un producto.';
+      if (serviceIds.length === 0) return 'Elige al menos un producto o servicio.';
       if (totalNumero != null && (Number.isNaN(totalNumero) || totalNumero < 0)) return 'El valor total no es válido.';
       if (garantia && garantia < inicio) return 'La garantía no puede terminar antes de la fecha de la venta.';
       return '';
@@ -185,7 +185,7 @@ export default function ContratoComercialModal({
   const guardar = async (motivo?: MotivoInput, cierre?: 'CANCELADO' | 'NO_RENOVADO') => {
     const base: ContratoComercialInput = producto
       ? {
-        // Venta de producto: sin fin, valor mensual ni gracia. Garantía vacía = sin garantía.
+        // Venta única: sin fin, valor mensual ni gracia. Garantía vacía = sin garantía.
         title: titulo.trim(),
         startDate: inicio,
         serviceIds,
@@ -308,18 +308,18 @@ export default function ContratoComercialModal({
                     aria-pressed={tipo === 'PRODUCTO'}
                     onClick={() => { setTipo('PRODUCTO'); if (modo === 'crear') setServiceIds([]); }}
                   >
-                    Venta de producto
+                    Venta única
                   </button>
                 </div>
                 <p style={{ fontSize: 11, color: '#888', margin: '4px 0 0' }}>
                   {producto
-                    ? 'Venta única (por ejemplo, una cámara o un equipo): no vence ni se renueva. Se sigue como «Por entregar» y «Entregado».'
+                    ? 'Venta única de un producto o de un servicio de una sola vez (una cámara, una instalación, una custodia puntual): no vence ni se renueva. Se sigue como «Por entregar» y «Entregado».'
                     : 'Un servicio que se repite en el tiempo: tiene vigencia y se puede renovar.'}
                 </p>
                 {modo === 'editar' && contrato && tipo !== contrato.kind && (
                   <p style={{ fontSize: 12, color: '#744210', background: '#fffbeb', border: '1px solid #f6e05e', borderRadius: 6, padding: '6px 10px', margin: '8px 0 0' }}>
                     {producto
-                      ? 'Al guardar pasa a «Venta de producto»: pierde la fecha de fin, el valor mensual y los días de gracia, y queda «Por entregar» (puedes marcarlo entregado después). No es posible si el contrato forma parte de una renovación.'
+                      ? 'Al guardar pasa a «Venta única»: pierde la fecha de fin, el valor mensual y los días de gracia, y queda «Por entregar» (puedes marcarlo entregado después). No es posible si el contrato forma parte de una renovación.'
                       : 'Al guardar pasa a «Servicio recurrente»: pierde la garantía y el valor total, y queda activo. Revisa el fin, el valor mensual y los días de gracia.'}
                   </p>
                 )}
@@ -369,7 +369,7 @@ export default function ContratoComercialModal({
                   <label>Garantía hasta (opcional)</label>
                   <DateInput value={garantia} onChange={setGarantia} min={inicio || undefined} />
                   <p style={{ fontSize: 11, color: '#888', margin: '4px 0 0' }}>
-                    Déjalo vacío si el producto no tiene garantía. Si lo llenas, se avisa cuando esté por terminar.
+                    Déjalo vacío si no tiene garantía. Si lo llenas, se avisa cuando esté por terminar.
                   </p>
                 </div>
               </>
@@ -435,10 +435,10 @@ export default function ContratoComercialModal({
             )}
 
             <div className="form-group">
-              <label>{producto ? 'Productos vendidos *' : 'Servicios contratados *'}</label>
+              <label>{producto ? 'Productos o servicios vendidos *' : 'Servicios contratados *'}</label>
               {disponibles.length === 0 ? (
                 <p style={{ fontSize: 13, color: '#888', margin: 0 }}>
-                  Aún no hay {producto ? 'productos' : 'servicios'}. Créalos en Ventas → Configuración → Servicios que ofrecemos.
+                  Aún no hay {producto ? 'productos o servicios' : 'servicios'}. Créalos en Ventas → Configuración → Servicios que ofrecemos.
                 </p>
               ) : (
                 // Agrupados por categoría, igual que en «Nueva oportunidad».

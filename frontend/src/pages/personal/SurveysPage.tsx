@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send } from 'lucide-react';
+import { Send, ClipboardList, ArrowRight, PartyPopper } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
 import {
   getPendingSurveys,
   getSurveyToRespond,
@@ -97,12 +98,11 @@ export default function SurveysPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div>
-          <p className="page-eyebrow">RECURSOS HUMANOS</p>
-          <h1>Encuestas</h1>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Recursos Humanos"
+        title="Encuestas"
+        description="Las encuestas que RRHH te asignó y aún no has respondido."
+      />
 
       {doneMsg && (
         <div style={{ background: '#f0fff4', border: '1px solid #9ae6b4', color: '#276749', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>
@@ -116,22 +116,31 @@ export default function SurveysPage() {
         </div>
       )}
 
-      <div className="admin-section" style={{ maxWidth: '640px' }}>
-        <h3 style={{ marginBottom: '12px', color: 'var(--azul-oscuro)' }}>Pendientes por responder</h3>
-        {pending.length === 0 ? (
-          <div className="empty-state">No tienes encuestas pendientes.</div>
-        ) : (
-          pending.map((s) => (
-            <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px 16px', marginBottom: '10px' }}>
-              <div>
-                <div style={{ fontWeight: 700, color: 'var(--azul-oscuro)' }}>{s.title}</div>
-                {s.description && <div style={{ fontSize: '0.78rem', color: '#718096' }}>{s.description}</div>}
+      {pending.length === 0 ? (
+        <div className="admin-section encuestas-vacio">
+          <PartyPopper size={34} />
+          <strong>No tienes encuestas pendientes</strong>
+          <span>Cuando RRHH te asigne una, aparecerá aquí.</span>
+        </div>
+      ) : (
+        <>
+          <div className="encuestas-contador">{pending.length} pendiente{pending.length === 1 ? '' : 's'} por responder</div>
+          <div className="encuestas-grid">
+            {pending.map((s) => (
+              <div key={s.id} className="encuesta-card">
+                <span className="encuesta-card-icono"><ClipboardList size={18} /></span>
+                <div className="encuesta-card-texto">
+                  <div className="encuesta-card-titulo">{s.title}</div>
+                  {s.description && <div className="encuesta-card-desc">{s.description}</div>}
+                </div>
+                <button className="auth-btn" onClick={() => openToAnswer(s.id)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  Responder <ArrowRight size={15} />
+                </button>
               </div>
-              <button className="auth-btn" onClick={() => openToAnswer(s.id)}>Responder</button>
-            </div>
-          ))
-        )}
-      </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {openSurvey && (
         <div className="modal-overlay" onClick={() => setOpenSurvey(null)}>

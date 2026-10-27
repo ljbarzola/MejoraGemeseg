@@ -135,7 +135,7 @@ export class VentasAnaliticaService {
         select: { id: true, name: true },
       }),
       this.prisma.salesAgreement.findMany({
-        // Las ventas de producto no vencen ni se renuevan: no entran en estas cifras.
+        // Las ventas únicas no vencen ni se renuevan: no entran en estas cifras.
         where: { companyId: cid, kind: { not: 'PRODUCTO' }, ...(filtroCliente ? { salesClientId: filtroCliente } : {}) },
         include: { services: { include: { service: { select: { id: true, name: true } } } } },
       }),

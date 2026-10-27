@@ -36,7 +36,7 @@ export const SALES_PIPELINE_DDL: string[] = [
   `ALTER TABLE "SalesAgreement" ADD COLUMN IF NOT EXISTS "graceDays" INTEGER NOT NULL DEFAULT 30`,
   `ALTER TABLE "SalesAgreement" ADD COLUMN IF NOT EXISTS "cancelledAt" TIMESTAMP(3)`,
   `ALTER TABLE "SalesAgreement" ADD COLUMN IF NOT EXISTS "opportunityId" INTEGER`,
-  // Servicio recurrente o venta de producto (2026-10-15). Los contratos que ya
+  // Servicio recurrente o venta única (2026-10-15). Los contratos que ya
   // existen quedan como SERVICIO por el DEFAULT.
   `ALTER TABLE "SalesAgreement" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL DEFAULT 'SERVICIO'`,
   `ALTER TABLE "SalesAgreement" ADD COLUMN IF NOT EXISTS "totalValue" DECIMAL(12,2)`,

@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, BookOpen } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
 import { getKnowledgeBase, updateKnowledgeBase } from '../../services/knowledge-base.service';
 
 const SECCIONES_EJEMPLO = ['CACAO', 'CUSTODIAS', 'RRHH', 'VENTAS', 'CONTRATACION_PUBLICA', 'SISTEMAS'];
 
 export default function KnowledgeBasePage() {
-  const navigate = useNavigate();
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -40,20 +38,18 @@ export default function KnowledgeBasePage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <button className="back-btn" onClick={() => navigate('/sistemas/dashboard')}>
-          <ArrowLeft size={18} />
-        </button>
-        <h1 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <BookOpen size={22} /> Base de conocimiento — Agente Gemeseg
-        </h1>
-      </div>
-      <p style={{ margin: '0 0 20px', color: '#718096', fontSize: '0.88rem' }}>
-        Este texto se usa como contexto para que Agente Gemeseg responda sobre políticas y procesos de la empresa.
-        Escríbelo en Markdown y separa cada tema con un encabezado de nivel 2 exacto, en mayúsculas, como{' '}
-        <code>## RRHH</code> o <code>## VENTAS</code>. Solo se le muestra a un usuario el contenido de las secciones
-        a las que tiene acceso — el resto queda oculto para él aunque esté en este mismo documento.
-      </p>
+      <PageHeader
+        eyebrow="Sistemas"
+        title="Base de conocimiento"
+        description={
+          <>
+            El texto que usa Agente Gemeseg para responder sobre políticas y procesos. Escríbelo en Markdown y separa
+            cada tema con un encabezado en mayúsculas, como <code>## RRHH</code> o <code>## VENTAS</code>: cada persona
+            solo ve los temas de los módulos a los que tiene acceso.
+          </>
+        }
+        actions={<button className="auth-btn" onClick={handleSave} disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</button>}
+      />
 
       <div className="admin-section" style={{ marginBottom: '16px' }}>
         <strong style={{ fontSize: '0.82rem', color: 'var(--azul-oscuro)' }}>
@@ -97,11 +93,6 @@ export default function KnowledgeBasePage() {
             placeholder={'Bienvenida general para cualquier usuario.\n\n## RRHH\nLa política de vacaciones da 15 días al año.\n\n## VENTAS\n...'}
             style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
           />
-        </div>
-        <div className="modal-actions" style={{ justifyContent: 'flex-end' }}>
-          <button className="auth-btn" onClick={handleSave} disabled={saving}>
-            {saving ? 'Guardando...' : 'Guardar'}
-          </button>
         </div>
       </div>
     </div>

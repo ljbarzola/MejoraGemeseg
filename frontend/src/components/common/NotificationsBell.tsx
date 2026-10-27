@@ -82,7 +82,7 @@ export default function NotificationsBell() {
   };
 
   return (
-    <div ref={containerRef} style={{ position: 'fixed', top: '16px', right: '24px', zIndex: 'var(--z-notif-btn)' }}>
+    <div ref={containerRef} style={{ position: 'fixed', top: '10px', right: '14px', zIndex: 'var(--z-notif-btn)' }}>
       <button
         onClick={handleToggle}
         title="Notificaciones"

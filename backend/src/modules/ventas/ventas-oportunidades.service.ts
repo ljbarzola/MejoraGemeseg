@@ -680,7 +680,7 @@ export class VentasOportunidadesService {
     let estadoRenovacion: 'OK' | 'YA_RENOVADO' | undefined;
     if (!renueva && dto.contrato?.tipo === 'RENOVACION') {
       throw new BadRequestException(
-        'Esa oportunidad no es una renovación: elige si fue un servicio o un producto.',
+        'Esa oportunidad no es una renovación: elige si fue un servicio recurrente o una venta única.',
       );
     }
     if (renueva && outcome === 'GANADA') {

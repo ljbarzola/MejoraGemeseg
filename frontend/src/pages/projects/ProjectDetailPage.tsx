@@ -1,7 +1,10 @@
 import { useEffect, useState, useRef, type ReactNode } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { getProject, addMember, removeMember, updateMemberRole, updateProject, deleteProject } from '../../services/project.service';
-import { getTasksByProject } from '../../services/task.service';
+import { getTasksByProject, updateTask } from '../../services/task.service';
+import TaskDetailModal from '../../components/tasks/TaskDetailModal';
+import CreateTaskModal from '../../components/tasks/CreateTaskModal';
+import TaskStatusMenu from '../../components/tasks/TaskStatusMenu';
 import { getUsers } from '../../services/user.service';
 import { getUser } from '../../services/auth.service';
 import type { Task } from '../../types/task';
@@ -70,6 +73,31 @@ export default function ProjectDetailPage() {
   const [actionError, setActionError] = useState('');
   const actionErrorRef = useRef<HTMLDivElement>(null);
   const currentUser = getUser();
+  // La tarea abierta vive en la URL (?tarea=ID): así un enlace de notificación o de correo
+  // (/tasks/ID → aquí) abre la ventana de esa tarea, y «atrás» la cierra.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tareaAbierta = searchParams.get('tarea') ? Number(searchParams.get('tarea')) : null;
+  const [creandoTarea, setCreandoTarea] = useState(false);
+  const abrirTarea = (taskId: number | null) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (taskId === null) next.delete('tarea');
+      else next.set('tarea', String(taskId));
+      return next;
+    }, { replace: true });
+  };
+
+  // Mueve la tarea de estado desde la lista, sin abrirla. Se pinta al instante; si falla, se revierte.
+  async function cambiarEstado(task: Task, nuevo: string) {
+    const anterior = task.status;
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: nuevo as Task['status'] } : t)));
+    try {
+      await updateTask(task.id, { status: nuevo });
+    } catch {
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: anterior } : t)));
+      showToast('No se pudo cambiar el estado de la tarea. Inténtalo de nuevo.', 'error');
+    }
+  }
 
   // Estas tres acciones (quitar miembro, cambiar rol, eliminar proyecto)
   // pueden dispararse desde distintas partes de la página (lista de
@@ -253,7 +281,7 @@ export default function ProjectDetailPage() {
   const celdaTarea = (key: string, task: Task): ReactNode => {
     switch (key) {
       case 'status':
-        return (
+        return task.status === 'CANCELLED' || isViewer ? (
           <span
             className="status-badge"
             style={{
@@ -263,6 +291,8 @@ export default function ProjectDetailPage() {
           >
             {STATUS_LABELS[task.status]}
           </span>
+        ) : (
+          <TaskStatusMenu status={task.status} onChange={(nuevo) => cambiarEstado(task, nuevo)} />
         );
       case 'priority':
         return (
@@ -468,7 +498,7 @@ export default function ProjectDetailPage() {
               <button
                 className={`auth-btn ${isViewer ? 'btn-disabled' : ''}`}
                 onClick={() => {
-                  if (!isViewer) navigate(`/projects/${project.id}/tasks/new`);
+                  if (!isViewer) setCreandoTarea(true);
                 }}
                 disabled={isViewer}
                 title={isViewer ? 'Los observadores no pueden crear tareas' : ''}
@@ -508,7 +538,7 @@ export default function ProjectDetailPage() {
                     <tr
                       key={task.id}
                       className="tasks-table-row"
-                      onClick={() => navigate(`/tasks/${task.id}`)}
+                      onClick={() => abrirTarea(task.id)}
                     >
                       <td className="tasks-table-id">{task.id}</td>
                       <td className="tasks-table-title">{task.title}</td>
@@ -534,6 +564,14 @@ export default function ProjectDetailPage() {
           )}
         </div>
       </div>
+
+      {tareaAbierta !== null && !Number.isNaN(tareaAbierta) && (
+        <TaskDetailModal taskId={tareaAbierta} onClose={() => abrirTarea(null)} onChanged={loadData} />
+      )}
+
+      {creandoTarea && (
+        <CreateTaskModal projectId={project.id} onClose={() => setCreandoTarea(false)} onCreated={loadData} />
+      )}
 
       {showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
