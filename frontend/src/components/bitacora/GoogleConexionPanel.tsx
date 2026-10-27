@@ -97,7 +97,7 @@ export default function GoogleConexionPanel() {
         <li>Solo de las personas con la hoja activada y solo desde el momento en que se les activó. Se pide persona por persona, nunca «todos».</li>
         <li>Es solo lectura: no se envía ni se modifica nada en Google.</li>
         <li>Google puede tardar desde minutos hasta horas en publicar un evento; por eso cada lectura repasa las últimas 48 horas y no duplica lo ya guardado.</li>
-        <li>Por ahora la lectura se hace solo con este botón: la lectura automática cada hora todavía no está programada.</li>
+        <li>Además de este botón, Google se lee solo una vez por hora (a los 30 minutos).</li>
       </ul>
     </>
   );
