@@ -39,6 +39,8 @@ import { PermissionsModule } from '../permissions/permissions.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { MailModule } from '../mail/mail.module';
 import { VentasUbicacionesController } from './ventas-ubicaciones.controller';
+import { VentasExportarController } from './ventas-exportar.controller';
+import { VentasHistorialExportService } from './ventas-historial-export.service';
 import { VentasUbicacionesService } from './ventas-ubicaciones.service';
 
 @Module({
@@ -65,6 +67,7 @@ import { VentasUbicacionesService } from './ventas-ubicaciones.service';
     VentasRenovacionesCronController,
     VentasConfigController,
     VentasUbicacionesController,
+    VentasExportarController,
     CotizadorCatalogoController,
     CotizadorCotizacionesController,
   ],
@@ -86,6 +89,7 @@ import { VentasUbicacionesService } from './ventas-ubicaciones.service';
     GoogleAdsConversionesService,
     VentasConfigService,
     VentasUbicacionesService,
+    VentasHistorialExportService,
     CotizadorCatalogoService,
     CotizadorCotizacionesService,
   ],

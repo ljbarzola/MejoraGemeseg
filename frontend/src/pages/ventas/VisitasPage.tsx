@@ -5,6 +5,7 @@ import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import PageTabs from '../../components/common/PageTabs';
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
+import ExportTableButton from '../../components/common/ExportTableButton';
 import DateInput from '../../components/common/DateInput';
 import FilterField from '../../components/common/FilterField';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
@@ -42,6 +43,14 @@ const COLUMNAS_VISITA = [
 // «Oferta comercial» solo tiene datos al cerrar la visita (y ya está en la pestaña Resultados): se
 // elige con «Columnas» para que Acciones quepa a la vista sin desplazarse.
 const COLUMNAS_POR_DEFECTO = COLUMNAS_VISITA.map((c) => c.key).filter((k) => k !== 'oferta');
+// Lo que se puede exportar: el cliente y las columnas de la tabla, más el lugar, las notas y la oportunidad.
+const COLUMNAS_EXPORTAR_VISITA = [
+  { key: 'cliente', label: 'Cliente' },
+  ...COLUMNAS_VISITA,
+  { key: 'lugar', label: 'Lugar' },
+  { key: 'oportunidad', label: 'Oportunidad' },
+  { key: 'notas', label: 'Notas de la visita' },
+];
 const ANCHO_COLUMNA_VISITA: Record<string, number> = {
   vendedor: 125, fecha: 105, checkin: 165, estado: 112, oferta: 190, resultado: 125,
 };
@@ -308,6 +317,28 @@ export default function VisitasPage() {
     return lista;
   };
 
+  // Valor en texto plano de cada columna, para exportar (la tabla dibuja JSX).
+  const valorExportarVisita = (v: ClientVisit, k: string): string | number => {
+    switch (k) {
+      case 'cliente': return v.cliente?.name ?? v.clientName;
+      case 'vendedor': return v.user?.fullName || '';
+      case 'fecha': return v.visitDate ? new Date(v.visitDate).toLocaleDateString('es-EC', { timeZone: 'UTC' }) : '';
+      case 'checkin': {
+        if (!v.checkInTime) return 'Pendiente';
+        const hora = new Date(v.checkInTime).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
+        const lugar = { EN_SITIO: 'En el sitio', FUERA_DEL_SITIO: 'Fuera del sitio', SIN_GPS: 'Sin verificar', SIN_UBICACION: 'Sin lugar para comparar' }[v.checkInResult ?? 'SIN_UBICACION'];
+        return `${lugar} · ${hora}`;
+      }
+      case 'estado': return (ESTADO_VISITA[v.status] ?? ESTADO_VISITA.PLANNED).label;
+      case 'oferta': return v.commercialOffer ?? '';
+      case 'resultado': return v.outcome ? OUTCOME_LABELS[v.outcome] || v.outcome : '';
+      case 'lugar': return v.location || '';
+      case 'oportunidad': return v.oportunidad ? v.oportunidad.title || `Oportunidad #${v.oportunidad.id}` : '';
+      case 'notas': return v.notes || '';
+      default: return '';
+    }
+  };
+
   const celdaVisita = (k: string, v: ClientVisit) => {
     switch (k) {
       case 'vendedor':
@@ -400,6 +431,14 @@ export default function VisitasPage() {
           <ClearFiltersButton
             onClear={() => { setBusqueda(''); setEstadoFiltro(''); setDesde(''); setHasta(''); }}
             disabled={!hayFiltros}
+          />
+          <ExportTableButton
+            titulo="Visitas"
+            columns={COLUMNAS_EXPORTAR_VISITA}
+            defaultKeys={['cliente', ...columnasVisibles]}
+            rows={filas}
+            getValue={valorExportarVisita}
+            historial={(v) => ({ clienteId: v.salesClientId, oportunidadId: v.opportunityId })}
           />
         </div>
       </div>

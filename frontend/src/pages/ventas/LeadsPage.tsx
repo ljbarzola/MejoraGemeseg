@@ -5,6 +5,7 @@ import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import FilterField from '../../components/common/FilterField';
 import FiltroFecha from '../../components/common/FiltroFecha';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
+import ExportTableButton from '../../components/common/ExportTableButton';
 import ErrorBanner from '../../components/common/ErrorBanner';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import MotivoCierreModal from '../../components/ventas/MotivoCierreModal';
@@ -53,6 +54,14 @@ const COLUMNAS_LEAD = [
   { key: 'consentimiento', label: 'Consentimiento de datos' },
 ];
 const COLUMNAS_LEAD_POR_DEFECTO = ['mensaje', 'canal', 'motivo', 'estado', 'responsable', 'llego'];
+// Lo que se puede exportar: las columnas de la tabla, el contacto desglosado y la fecha completa.
+const COLUMNAS_EXPORTAR_LEAD = [
+  { key: 'contacto', label: 'Nombre' },
+  { key: 'empresa', label: 'Empresa' },
+  { key: 'correo', label: 'Correo' },
+  { key: 'telefono', label: 'Teléfono' },
+  ...COLUMNAS_LEAD,
+];
 const ANCHO_COLUMNA_LEAD: Record<string, number> = {
   mensaje: 220, canal: 130, motivo: 170, estado: 150, responsable: 140, llego: 110, campana: 150, servicio: 150,
   landing: 150, gclid: 170, referidoPor: 150, consentimiento: 150,
@@ -285,6 +294,30 @@ export default function LeadsPage() {
     }
   };
 
+  // Valor en texto plano de cada columna, para exportar (la tabla dibuja JSX).
+  const valorExportarLead = (l: LeadEntrante, key: string): string => {
+    switch (key) {
+      case 'contacto': return l.name;
+      case 'empresa': return l.companyName || '';
+      case 'correo': return l.email || '';
+      case 'telefono': return l.phone || '';
+      case 'mensaje': return l.message || '';
+      case 'canal': return etiquetaCanal(l.channel);
+      case 'motivo': return l.contactReason ? MOTIVO_CONTACTO_LABEL[l.contactReason] : '';
+      case 'estado': return ESTADO_LABEL[l.status];
+      case 'responsable': return l.assignedUserName || 'Sin asignar';
+      case 'llego': return diaCorto(l.createdAt);
+      case 'campana': return l.campaign || '';
+      case 'servicio': case 'landing': case 'gclid': case 'referidoPor': return extraTexto(l, key);
+      case 'consentimiento': {
+        const c = extraTexto(l, 'consentimiento');
+        if (!c) return '';
+        return c === 'SI' ? (extraTexto(l, 'politica') ? `Sí (${extraTexto(l, 'politica')})` : 'Sí') : 'No consta';
+      }
+      default: return '';
+    }
+  };
+
   const correr = async (fn: () => Promise<unknown>, ok: string, falla: string) => {
     try {
       await fn();
@@ -396,6 +429,14 @@ export default function LeadsPage() {
           <ClearFiltersButton
             onClear={() => { setBusqueda(''); setEstado('pendientes'); setMotivo(''); setCanal(''); setMotivoDescarte(''); setSoloResp(''); setFiltroFecha(FILTRO_FECHA_VACIO); }}
             disabled={!hayFiltros}
+          />
+          <ExportTableButton
+            titulo="Posibles clientes"
+            columns={COLUMNAS_EXPORTAR_LEAD}
+            defaultKeys={['contacto', ...columnasVisiblesLead]}
+            rows={filas}
+            getValue={valorExportarLead}
+            historial={(l) => ({ leadId: l.id, oportunidadId: l.convertedOpportunityId, clienteId: l.convertedClientId })}
           />
         </div>
       </div>

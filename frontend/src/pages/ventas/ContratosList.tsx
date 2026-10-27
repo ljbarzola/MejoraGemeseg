@@ -7,6 +7,7 @@ import ConfirmDialog from '../../components/common/ConfirmDialog';
 import FilterField from '../../components/common/FilterField';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
+import ExportTableButton from '../../components/common/ExportTableButton';
 import RowActionsMenu from '../../components/common/RowActionsMenu';
 import TemplateHelpModal from '../../components/ventas/TemplateHelpModal';
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
@@ -189,6 +190,22 @@ export default function ContratosList() {
     }
   };
   const columnasVisibles = columnPrefs.visible.filter((k) => COLUMNAS_DOCS.some((c) => c.key === k));
+  const fechaDoc = (f?: string | null) => (f ? new Date(f).toLocaleDateString('es-EC') : '');
+  // Valor en texto plano de cada columna, para exportar (la tabla dibuja JSX).
+  const valorExportarDoc = (c: SalesContract, key: string): string => {
+    switch (key) {
+      case 'numero': return c.contractNumber || `#${c.id}`;
+      case 'clientName': return c.salesClient?.name || c.clientName;
+      case 'tipo': return etiquetaTipoDocumento(c.documentType, c.documentTypeOther) || '';
+      case 'contrato': return nombreContratoDe(c);
+      case 'template': return c.template?.name || 'Subido (sin plantilla)';
+      case 'status': return statusLabels[c.status] || c.status;
+      case 'createdAt': return fechaDoc(c.createdAt);
+      case 'sentAt': return fechaDoc(c.sentAt);
+      case 'signedAt': return fechaDoc(c.signedAt);
+      default: return '';
+    }
+  };
 
   return (
     <div className="page-container">
@@ -289,6 +306,13 @@ export default function ContratosList() {
             </button>
           )}
           <ClearFiltersButton onClear={() => { setSearch(''); setFilter(''); setFiltroTipo(''); setSoloSinCliente(false); }} disabled={!search && !filter && !filtroTipo && !soloSinCliente} />
+          <ExportTableButton
+            titulo="Documentación"
+            columns={[{ key: 'numero', label: 'Número' }, ...COLUMNAS_DOCS]}
+            defaultKeys={['numero', ...columnasVisibles]}
+            rows={filasOrdenadas}
+            getValue={valorExportarDoc}
+          />
         </div>
       </div>
 

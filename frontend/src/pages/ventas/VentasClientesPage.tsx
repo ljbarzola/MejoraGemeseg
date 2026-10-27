@@ -6,6 +6,7 @@ import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import FilterField from '../../components/common/FilterField';
 import FiltroFecha from '../../components/common/FiltroFecha';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
+import ExportTableButton from '../../components/common/ExportTableButton';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import ClienteFichaPanel from '../../components/ventas/ClienteFichaPanel';
 import CicloVidaBadge from '../../components/ventas/CicloVidaBadge';
@@ -228,6 +229,14 @@ export default function VentasClientesPage() {
           <ClearFiltersButton
             onClear={() => { setSearch(''); setFiltroCiclo(''); setFiltroFecha(FILTRO_FECHA_VACIO); alcanceLista.quitar(); }}
             disabled={!search && !filtroCiclo && !hayFiltroFecha(filtroFecha) && !alcanceLista.alcance}
+          />
+          <ExportTableButton
+            titulo="Directorio"
+            columns={[{ key: 'name', label: 'Nombre / Razón social' }, ...pickableColumns]}
+            defaultKeys={['name', ...visibleColumns.map((c) => c.key)]}
+            rows={filasOrdenadas}
+            getValue={(c, key) => (key === 'name' ? c.name : key === FECHA_COL ? new Date(c.createdAt).toLocaleDateString('es-EC') : cellValue(c, key))}
+            historial={(c) => ({ clienteId: c.id })}
           />
           <button className="auth-btn" onClick={() => { setEditingClient(null); setShowNuevo(true); }}>
             <Plus size={16} /> Nueva empresa o persona
