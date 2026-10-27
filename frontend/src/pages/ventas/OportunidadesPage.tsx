@@ -7,6 +7,7 @@ import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import FilterField from '../../components/common/FilterField';
 import FiltroFecha from '../../components/common/FiltroFecha';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
+import ExportTableButton from '../../components/common/ExportTableButton';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import OportunidadModal from '../../components/ventas/OportunidadModal';
 import CambioEtapaOportunidadModal from '../../components/ventas/CambioEtapaOportunidadModal';
@@ -60,6 +61,14 @@ const COLUMNAS_OPP = [
   { key: 'correo', label: 'Correo' },
 ];
 const COLUMNAS_OPP_POR_DEFECTO = ['servicios', 'etapa', 'monto', 'responsable', 'origen', 'llego'];
+// Lo que se puede exportar: las columnas de la tabla más algunas que no caben en pantalla.
+const COLUMNAS_EXPORTAR_OPP = [
+  { key: 'cliente', label: 'Empresa o persona' },
+  { key: 'titulo', label: 'Título' },
+  ...COLUMNAS_OPP,
+  { key: 'motivoPerdida', label: 'Motivo de pérdida' },
+  { key: 'cotizadoEl', label: 'Fecha de cotización' },
+];
 const ANCHO_COLUMNA_OPP: Record<string, number> = {
   servicios: 230, etapa: 175, monto: 140, responsable: 160, origen: 170, llego: 110, telefono: 130, correo: 200,
 };
@@ -371,6 +380,24 @@ export default function OportunidadesPage() {
     }
   };
   const columnasVisiblesOpp = columnPrefs.visible.filter((k) => COLUMNAS_OPP.some((c) => c.key === k));
+  // Valor en texto plano de cada columna, para exportar (la tabla dibuja JSX).
+  const valorExportarOpp = (o: Oportunidad, key: string): string | number => {
+    switch (key) {
+      case 'cliente': return o.salesClient.name;
+      case 'titulo': return o.title || '';
+      case 'servicios': return o.services.length > 0 ? o.services.map((s) => s.name).join(', ') : o.servicioDeFicha || '';
+      case 'etapa': return o.stage?.label ?? 'Sin etapa';
+      case 'monto': return o.quotedAmount ?? '';
+      case 'responsable': return o.assignedUserName || 'Sin asignar';
+      case 'origen': return ORIGEN_OPORTUNIDAD_LABEL[o.originType] ?? o.originType;
+      case 'llego': return diaCorto(o.receivedAt);
+      case 'telefono': return o.salesClient.phone || '';
+      case 'correo': return o.salesClient.email || '';
+      case 'motivoPerdida': return o.motivoPerdida?.label ?? '';
+      case 'cotizadoEl': return o.quotedAt ? diaCorto(o.quotedAt) : '';
+      default: return '';
+    }
+  };
 
   const hayFiltros = !!busqueda || !!filtroEtapa || !!filtroResponsable || !!filtroServicio || !!filtroOrigen || !!filtroMotivo || hayFiltroFecha(filtroFecha);
   const motivosDePerdida = useMemo(
@@ -479,6 +506,16 @@ export default function OportunidadesPage() {
           <ClearFiltersButton
             onClear={() => { setBusqueda(''); setFiltroEtapa(''); setFiltroResponsable(''); setFiltroServicio(''); setFiltroOrigen(''); setFiltroMotivo(''); setFiltroFecha(FILTRO_FECHA_VACIO); setHoyResponsable('mine'); }}
             disabled={vista === 'hoy' ? !busqueda && hoyResponsable === 'mine' : !hayFiltros}
+          />
+          <ExportTableButton
+            titulo="Oportunidades"
+            columns={COLUMNAS_EXPORTAR_OPP}
+            defaultKeys={['cliente', ...columnasVisiblesOpp]}
+            rows={filas}
+            getValue={valorExportarOpp}
+            historial={(o) => ({ oportunidadId: o.id, clienteId: o.salesClientId })}
+            disabled={vista === 'hoy'}
+            disabledTitle="La pestaña Para hoy no se exporta; cambia a Todas"
           />
         </div>
       </div>

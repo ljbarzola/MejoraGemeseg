@@ -1443,3 +1443,24 @@ export const getAnaliticaMarketing = (p?: RangoParams & { agrupar?: 'channel' | 
 // cuando el Dashboard lleva ahí con «mis clientes» o un vendedor: la lista queda con las mismas filas que la cifra.
 export const getClientesDelAlcance = (alcance: string): Promise<{ ids: number[] | null }> =>
   api.get('/ventas/analitica/clientes-del-alcance', { params: { alcance } }).then(r => r.data);
+
+// Columna «Historial» del exportador: por cada fila, sus cambios de etapa, notas, llamadas y motivos de cierre en texto.
+export interface HistorialFilaPedido {
+  fila: string;
+  leadId?: number | null;
+  oportunidadId?: number | null;
+  clienteId?: number | null;
+}
+export const getHistorialesParaExportar = (filas: HistorialFilaPedido[]): Promise<Record<string, string>> =>
+  api.post('/ventas/exportar-tabla/historial', { filas }).then((r) => r.data);
+
+// Exportar a PDF o Excel lo que muestra una tabla de Ventas (el CSV se arma en el navegador).
+export const exportarTablaVentas = (
+  formato: 'pdf' | 'xlsx',
+  titulo: string,
+  columns: { key: string; label: string }[],
+  rows: Record<string, string | number>[],
+): Promise<Blob> =>
+  api
+    .post('/ventas/exportar-tabla', { formato, titulo, columns, rows }, { responseType: 'blob' })
+    .then((r) => r.data);

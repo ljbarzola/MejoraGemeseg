@@ -6,6 +6,7 @@ import FilterField from '../../components/common/FilterField';
 import FiltroFecha from '../../components/common/FiltroFecha';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
+import ExportTableButton from '../../components/common/ExportTableButton';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import ContratoComercialModal from '../../components/ventas/ContratoComercialModal';
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
@@ -54,6 +55,13 @@ const COLUMNAS_CONTRATOS = [
 // pantalla. El producto se reconoce igual por la etiqueta bajo su nombre; quien quiera la columna
 // la activa en «Columnas».
 const COLUMNAS_CONTRATOS_POR_DEFECTO = ['titulo', 'servicios', 'vigencia', 'valor', 'estado', 'documentos'];
+// Lo que se puede exportar: la empresa o persona y las columnas de la tabla, con la vigencia desglosada.
+const COLUMNAS_EXPORTAR_CONTRATOS = [
+  { key: 'cliente', label: 'Cliente' },
+  ...COLUMNAS_CONTRATOS.filter((c) => c.key !== 'vigencia'),
+  { key: 'inicio', label: 'Inicio' },
+  { key: 'fin', label: 'Fin' },
+];
 const ANCHO_COLUMNA_CONTRATOS: Record<string, number> = {
   titulo: 180, tipo: 110, servicios: 230, vigencia: 140, valor: 140, estado: 160, documentos: 120, gracia: 120,
 };
@@ -311,6 +319,22 @@ export default function ContratosComercialesList() {
     }
   };
   const columnasVisibles = columnPrefs.visible.filter((k) => COLUMNAS_CONTRATOS.some((c) => c.key === k));
+  // Valor en texto plano de cada columna, para exportar (la tabla dibuja JSX).
+  const valorExportarContrato = (c: ContratoComercial, key: string): string | number => {
+    switch (key) {
+      case 'cliente': return c.salesClient.name;
+      case 'titulo': return c.title || `Contrato #${c.id}`;
+      case 'tipo': return c.kind === 'PRODUCTO' ? 'Producto' : 'Servicio';
+      case 'servicios': return c.services.map((s) => s.name).join(', ');
+      case 'inicio': return diaCorto(c.startDate);
+      case 'fin': return c.endDate ? diaCorto(c.endDate) : '';
+      case 'valor': return (c.kind === 'PRODUCTO' ? c.totalValue : c.monthlyValue) ?? '';
+      case 'estado': return ESTADO_CONTRATO_LABEL[c.estado];
+      case 'documentos': return c.documentos;
+      case 'gracia': return c.graceDays != null ? `${c.graceDays} días` : '';
+      default: return '';
+    }
+  };
 
   const hayFiltros = !!(busqueda || filtroEstado || filtroServicio || filtroTipo || filtroMotivo || hayFiltroFecha(filtroFecha));
 
@@ -384,6 +408,14 @@ export default function ContratosComercialesList() {
           <ClearFiltersButton
             onClear={() => { setBusqueda(''); setFiltroEstado(''); setFiltroServicio(''); setFiltroTipo(''); setFiltroMotivo(''); setFiltroFecha(FILTRO_FECHA_VACIO); alcanceLista.quitar(); }}
             disabled={!hayFiltros && !alcanceLista.alcance}
+          />
+          <ExportTableButton
+            titulo="Contratos"
+            columns={COLUMNAS_EXPORTAR_CONTRATOS}
+            defaultKeys={['cliente', ...columnasVisibles.flatMap((k) => (k === 'vigencia' ? ['inicio', 'fin'] : [k]))]}
+            rows={filas}
+            getValue={valorExportarContrato}
+            historial={(c) => ({ clienteId: c.salesClientId })}
           />
         </div>
       </div>
