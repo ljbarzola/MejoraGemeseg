@@ -31,6 +31,10 @@ const ToolsPage = lazy(() => import('./pages/tools/ToolsPage'));
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
 const AgentsPage = lazy(() => import('./pages/admin/AgentsPage'));
 const KnowledgeBasePage = lazy(() => import('./pages/sistemas/KnowledgeBasePage'));
+const BitacoraDashboardPage = lazy(() => import('./pages/bitacora/BitacoraDashboardPage'));
+const BitacoraActividadPage = lazy(() => import('./pages/bitacora/BitacoraActividadPage'));
+const MiHojaPage = lazy(() => import('./pages/bitacora/MiHojaPage'));
+const BitacoraConfiguracionPage = lazy(() => import('./pages/bitacora/BitacoraConfiguracionPage'));
 const SuperAdminPermissions = lazy(() => import('./pages/admin/SuperAdminPermissions'));
 const CompanyAdminPermissions = lazy(() => import('./pages/admin/CompanyAdminPermissions'));
 const CacaoDashboard = lazy(() => import('./pages/cacao/CacaoDashboard'));
@@ -383,6 +387,38 @@ function AppInner() {
           element={
             <ProtectedLayout>
               <CompanyAdminPermissions />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/bitacora"
+          element={
+            <ProtectedLayout>
+              <SectionRoute section="BITACORA"><BitacoraDashboardPage /></SectionRoute>
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/bitacora/actividad"
+          element={
+            <ProtectedLayout>
+              <SectionRoute section="BITACORA"><BitacoraActividadPage /></SectionRoute>
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/bitacora/configuracion"
+          element={
+            <ProtectedLayout>
+              <BitacoraConfiguracionPage />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/bitacora/mi-hoja"
+          element={
+            <ProtectedLayout>
+              <MiHojaPage />
             </ProtectedLayout>
           }
         />

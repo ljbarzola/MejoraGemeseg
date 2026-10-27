@@ -4,6 +4,7 @@ import { getUser, removeToken } from '../../services/auth.service';
 import { useCompany } from '../../contexts/ThemeContext';
 import { usePerm } from '../../contexts/PermissionsContext';
 import { useSidebar } from '../../contexts/SidebarContext';
+import { getBitacoraEstado, type EstadoBitacora } from '../../services/bitacora.service';
 
 interface SubItem {
   label: string;
@@ -40,7 +41,7 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme } = useCompany();
-  const { canView, canWrite, isSuperAdmin, error: permError, reload: reloadPerms } = usePerm();
+  const { canView, canWrite, isSuperAdmin, sections, permissions, error: permError, reload: reloadPerms } = usePerm();
   const user = getUser();
   const isAdmin = user?.role === 'ADMIN';
   const isCompanyAdmin = isAdmin && !!user?.companyId;
@@ -61,8 +62,31 @@ export default function Sidebar() {
   const [custodiasOpen, setCustodiasOpen] = useState(false);
   const [sistemasOpen, setSistemasOpen] = useState(false);
   const [contratacionPublicaOpen, setContratacionPublicaOpen] = useState(false);
+  const [bitacoraOpen, setBitacoraOpen] = useState(false);
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+
+  // Bitácora del equipo: qué ve esta persona en el menú depende de si su empresa la tiene encendida y de si a
+  // ella le activaron la hoja o puede activar hojas. Se vuelve a pedir al entrar a las pantallas de la bitácora
+  // (ahí es donde cambia), no en cada navegación.
+  const bitacoraEnEmpresa = !isSuperAdmin && sections.includes('BITACORA');
+  const enBitacora = location.pathname.startsWith('/bitacora');
+  const [bitacora, setBitacora] = useState<EstadoBitacora | null>(null);
+  useEffect(() => {
+    if (!bitacoraEnEmpresa) {
+      setBitacora(null);
+      return;
+    }
+    let vigente = true;
+    getBitacoraEstado()
+      .then((e) => vigente && setBitacora(e))
+      .catch(() => vigente && setBitacora(null));
+    return () => {
+      vigente = false;
+    };
+  }, [bitacoraEnEmpresa, enBitacora]);
+  // Quien llega a una pantalla de la Bitácora (por un aviso de la campana, por ejemplo) la ve abierta en el menú.
+  useEffect(() => { if (enBitacora) setBitacoraOpen(true); }, [enBitacora]);
 
   const handleLogout = () => {
     removeToken();
@@ -76,6 +100,7 @@ export default function Sidebar() {
   const isCustodiasActive = location.pathname.startsWith('/custodias');
   const isSistemasActive = location.pathname.startsWith('/sistemas');
   const isContratacionPublicaActive = location.pathname.startsWith('/contratacion-publica');
+  const isBitacoraActive = location.pathname.startsWith('/bitacora');
 
   const navItems = [
     { label: 'Inicio', path: '/dashboard', icon: '⌂', show: true },
@@ -88,6 +113,24 @@ export default function Sidebar() {
     { label: 'Cacao', path: '/cacao', icon: '🫘', show: canView('CACAO') },
     { label: 'Permisos', path: '/admin/permissions', icon: '🔐', show: isSuperAdmin },
     { label: 'Permisos Usuarios', path: '/admin/user-permissions', icon: '🔑', show: isCompanyAdmin || isManager },
+  ];
+
+  // Bitácora (2026-10-27): módulo propio con submenú. Por defecto NADIE tiene hoja, y cada persona ve solo lo
+  // suyo: «Dashboard» (métricas) y «Actividad del día» (el detalle de un día) solo quien tenga fila de permiso
+  // con «Ver» (sección cerrada por defecto), «Mi hoja del día» quien la tiene o la tuvo activada, y
+  // «Configuración» los administradores y gerentes. Si no le toca ninguna, el módulo no aparece.
+  const verBitacoraDelEquipo = bitacoraEnEmpresa && !!permissions['BITACORA']?.canView;
+  const bitacoraItems: SubItem[] = [
+    ...(verBitacoraDelEquipo
+      ? [
+          { label: 'Dashboard', path: '/bitacora', icon: '📊' },
+          { label: 'Actividad del día', path: '/bitacora/actividad', icon: '📅' },
+        ]
+      : []),
+    ...(bitacora?.registrada ? [{ label: 'Mi hoja del día', path: '/bitacora/mi-hoja', icon: '🗒️' }] : []),
+    ...(bitacora?.puedeAdministrar
+      ? [{ label: 'Configuración', path: '/bitacora/configuracion', icon: '⚙️', separadorAntes: true }]
+      : []),
   ];
 
   const personalMainItems = [
@@ -440,6 +483,40 @@ export default function Sidebar() {
             {!collapsed && sistemasOpen && (
               <div style={{ marginLeft: '12px', borderLeft: '2px solid #e2e8f0', paddingLeft: '0' }}>
                 {renderSubItems(sistemasSubItems)}
+              </div>
+            )}
+          </>
+        )}
+
+        {bitacoraItems.length > 0 && (
+          <>
+            <button
+              className={`sidebar-link ${isBitacoraActive ? 'sidebar-link-active' : ''}`}
+              onClick={() => {
+                if (collapsed) {
+                  navigate(bitacoraItems[0].path);
+                } else {
+                  setBitacoraOpen(!bitacoraOpen);
+                  if (!bitacoraOpen && !isBitacoraActive) navigate(bitacoraItems[0].path);
+                }
+              }}
+              title={collapsed ? 'Bitácora' : undefined}
+              style={{ justifyContent: 'space-between' }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span className="sidebar-icon">🧭</span>
+                {!collapsed && <span className="sidebar-label">Bitácora</span>}
+              </span>
+              {!collapsed && (
+                <span style={{ fontSize: '0.7rem', transition: 'transform 0.2s', transform: bitacoraOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▶
+                </span>
+              )}
+            </button>
+
+            {!collapsed && bitacoraOpen && (
+              <div style={{ marginLeft: '12px', borderLeft: '2px solid #e2e8f0', paddingLeft: '0' }}>
+                {renderSubItems(bitacoraItems)}
               </div>
             )}
           </>

@@ -56,6 +56,12 @@ En este orden:
 - Qué pasa después: el equipo comercial recibe al cliente en su lista y alguien lo toma para atenderlo. Cada vez que ese cliente avanza de etapa, te llega una notificación en la campana ("Tu referido X pasó a la etapa Y"), solo dentro de la app (no se manda correo); al abrirla se abre directo "Mis Referidos".
 - Consejos: pon al menos celular o correo para que puedan contactarlo; revisa "Mis Referidos" para ver en qué va. Quien refiere no ve montos ni datos comerciales del cliente.
 
+## Mi hoja del día — solo si te la activaron
+- Es un registro automático de tu actividad (lo que haces en app.gemeseg y el inicio de sesión y el uso de Drive de tu cuenta de Google), sin que tengas que escribir nada. Por defecto nadie la tiene: un administrador o gerente de la empresa decide a quién se la activa. Cuando te la activan te llega una notificación en la campana ("Se activó tu hoja del día") y en el menú aparece "Bitácora" → "Mi hoja del día"; si te la desactivan te avisa igual y lo registrado antes sigue disponible ahí.
+- Ahí se elige el día (flechas, calendario o "Hoy") y se ve tu primera y última actividad, los huecos largos sin actividad y la lista de lo registrado, en hora de Ecuador. Es exactamente lo mismo que puede consultar quien tiene permiso para ver la del equipo. Solo se registra desde el momento en que te la activan, nunca lo anterior.
+- No guarda capturas ni lo que escribes: solo qué acción hiciste (por ejemplo "Editó tarea: «Informe»"). Tampoco ve lo que hagas fuera de app.gemeseg y de tu cuenta de Google (Word o Excel en tu computador, otras páginas).
+- Si no ves "Bitácora" → "Mi hoja del día" en el menú, es que todavía no te la han activado.
+
 ## Buzón de Quejas y Sugerencias — cualquier usuario
 - Dónde: menú lateral → "Buzón de Quejas y Sugerencias".
 - Cómo: escribir la "Descripción *" (mínimo 5 caracteres) y llenar los campos adicionales que la empresa haya configurado (los que tienen * son obligatorios) → "Enviar". Aparece "Tu queja o sugerencia fue enviada. El equipo de RRHH la revisará."
@@ -517,6 +523,7 @@ const ADMIN = `# Administración — guía
 - "Permisos Usuarios": elegir el usuario y marcar por sección "Ver" y "Escribir" (Escribir requiere Ver) → "Guardar Permisos". Un usuario nuevo Empleado o Gerente arranca sin secciones (solo lo común); un Administrador arranca con todo.
 - "Módulos visibles para todos" (ícono de tuerca en permisos): marca secciones que ve todo el personal sin permiso individual.
 - "Mi Empresa" (si está habilitada): logo y colores de la empresa, con vista previa.
+- Bitácora → "Configuración" (solo si la empresa tiene la bitácora encendida; la ven administradores y gerentes), con dos pestañas. "Hojas del día": tabla de las personas de la empresa con su Estado ("Activa" o "No activa"), "Registrando desde" y "Último cambio por". Por defecto nadie está activo. El botón "Activar" o "Desactivar" de cada fila pide confirmar: al activar se empieza a registrar su actividad desde ese momento y se le avisa a la persona; al desactivar se deja de registrar, lo ya registrado se conserva y también se le avisa. "Google": muestra si la conexión con Google está "Lista" o "Falta configurar" (y qué falta), cuántas personas se leen y el último evento guardado; el botón "Leer Google ahora" trae en ese momento el inicio de sesión y la actividad en Drive de las personas activadas de la empresa (por ahora la lectura es solo con ese botón). Quien tenga el permiso ve el resultado en Bitácora → "Dashboard"; cada persona activada ve el suyo en "Mi hoja del día".
 - Gerente: ve "Administración", "Mi Empresa" y "Permisos Usuarios" de su empresa en solo lectura. Si intenta crear, editar, guardar o marcar algo, aparece "No tienes permiso para esto": es solo para administradores y debe contactar a un administrador de su empresa para que lo haga.`;
 
 const SISTEMAS = `# Sistemas — guía
@@ -528,6 +535,15 @@ const SISTEMAS = `# Sistemas — guía
 - Agentes: crear agentes de IA con nombre, instrucciones y alcance, y asignarlos a usuarios. Hay agentes que trabajan solos y no conversan, como el Agente Revisor de Bitácoras (lee las fotos de las bitácoras de Contratación Pública): en su tarjeta, el botón del libro explica qué hace, qué decide el sistema y qué límites tiene, y el botón de actividad muestra cada vez que trabajó (quién lo pidió, sobre qué, cuánto tardó, tokens, si falló y por qué). Abajo, "Actividad de los agentes que trabajan solos" resume los últimos 30 días. Se puede editar su texto de instrucciones (cómo es la hoja de la empresa) y desactivarlo; no se asigna a personas ni se crea a mano.
 - Base de conocimiento (menú Sistemas → "Base de Conocimiento"): texto en Markdown que Agente Gemeseg usa además de este manual, para lo propio de la empresa (políticas, contactos, procesos internos). Se divide con encabezados "## CLAVE" exactos en mayúsculas (## GENERAL, ## RRHH, ## VENTAS, ## CACAO, ## CUSTODIAS, ## CONTRATACION_PUBLICA, ## SISTEMAS…). Lo de ## GENERAL o antes del primer encabezado lo recibe cualquier usuario; cada otra sección solo quien tiene acceso a ella. Un encabezado mal escrito no abre sección nueva (se pega a la anterior) y la pantalla avisa al guardar.`;
 
+const BITACORA = `# Bitácora — guía
+
+- Menú "Bitácora" (módulo con submenú). Cada persona ve solo lo que le toca: "Dashboard" y "Actividad del día" (con permiso para ver la bitácora del equipo), "Mi hoja del día" (quien la tiene o la tuvo activada) y "Configuración" (administradores y gerentes).
+- "Dashboard": las métricas del equipo. Arriba, "Período" (Últimos 7, 14 o 30 días). Tarjetas: "Hojas activas", "Personas con actividad" (promedio por día), "Hora media de inicio" y "Hora media de fin" (de la primera y la última actividad de cada día) y "Eventos registrados". Gráficos: "Personas con actividad por día", "Eventos por día" (app.gemeseg y Google), "Actividad por hora del día" (hora de Ecuador) y "Dónde se registra la actividad" (eventos por módulo). Son cifras del equipo, no una evaluación de nadie. Si nadie tiene la hoja activada, la pantalla lo dice y, a quien administra, le ofrece ir a Configuración.
+- "Actividad del día": el detalle completo de un día. Arriba se elige el día (flechas, calendario o "Hoy"). Tarjetas del día ("Hojas activas", "Con actividad", "Sin actividad", "Eventos registrados") y una persona por fila con "Primera", "Última", "En la app", "En Google" y "Mayor hueco"; un clic en un encabezado ordena. Aparecen las personas a las que se les activó la hoja y, aparte, quienes ya no la tienen pero registraron algo ese día, marcadas "Solo historial".
+- Un clic en una persona abre su hoja del día debajo: primera y última actividad, "Huecos sin actividad" (silencios de 1 h o más entre una acción y la siguiente) y una lista con la hora, dónde ("app.gemeseg" con el módulo, o "Google") y qué hizo, con nombres (por ejemplo "Editó tarea: «Informe de custodias»"). Las acciones iguales seguidas se juntan en una fila ("3 veces"). Todas las horas son de Ecuador. Cada consulta de la hoja de una persona queda registrada.
+- Qué cuenta: lo que se guarda, crea, edita o elimina en app.gemeseg, el inicio de sesión en app.gemeseg y, de Google, los inicios de sesión y la actividad en Drive. Mirar pantallas, tener una pestaña abierta o trabajar en Word o Excel en el computador no cuenta, así que quien trabaja ahí aparece con poca actividad: la hoja sirve para saber a quién preguntar, no como prueba. No hay metas, alertas ni sanciones automáticas.
+- Quién aparece y la conexión con Google se manejan en "Configuración" (pestañas "Hojas del día" y "Google"); por defecto nadie tiene hoja. Cada persona ve su propia hoja en "Mi hoja del día".`;
+
 /** Bloques por clave de ALL_SECTIONS. GENERAL no está acá: va siempre. */
 export const SECTION_GUIDES: Record<string, string> = {
   RRHH,
@@ -537,6 +553,7 @@ export const SECTION_GUIDES: Record<string, string> = {
   CUSTODIAS,
   ADMIN,
   SISTEMAS,
+  BITACORA,
 };
 
 export function buildSystemGuide(allowedSectionKeys: string[]): string {

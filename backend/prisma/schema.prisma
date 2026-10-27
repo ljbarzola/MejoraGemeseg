@@ -174,6 +174,11 @@ model User {
   salesClientStageChanges            SalesClientStageChange[]
   salesClientActivities              SalesClientActivity[]
   notifications                      Notification[]
+  bitacoraEventos                    BitacoraEvento[]
+  bitacoraConsultasHechas            BitacoraConsulta[] @relation("BitacoraConsultor")
+  bitacoraConsultasRecibidas         BitacoraConsulta[] @relation("BitacoraPersona")
+  bitacoraActivacion                 BitacoraActivacion?  @relation("BitacoraActivada")
+  bitacoraActivacionesHechas         BitacoraActivacion[] @relation("BitacoraActivadaPor")
 }
 
 model Project {
@@ -1252,6 +1257,64 @@ model NotificationConfig {
   updatedAt        DateTime @updatedAt
 
   @@unique([companyId])
+}
+
+// Bitácora del equipo (2026-10-27): cada acción real de una persona (APP) y los
+// inicios de sesión / actividad en Drive que lee Google Workspace (GOOGLE). Solo
+// guarda el hecho (quién, cuándo, módulo, acción y el nombre del registro), nunca
+// el contenido que se escribió. No se registra nada de una empresa hasta que su
+// sección BITACORA esté encendida. Tabla aparte creada al arrancar (el despliegue
+// no corre migraciones): modules/bitacora/bitacora.schema.ts.
+model BitacoraEvento {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId  Int?
+  // APP | GOOGLE
+  fuente     String
+  modulo     String
+  // CREAR | EDITAR | ELIMINAR (APP) o el nombre del evento de Google (login_success, edit...)
+  accion     String
+  ruta       String?
+  entidadId  Int?
+  nombre     String?
+  // Solo GOOGLE: identificador del evento en Google, para no guardarlo dos veces.
+  externalId String?
+  ocurridoEn DateTime @default(now())
+
+  @@unique([fuente, externalId])
+  @@index([userId, ocurridoEn])
+  @@index([companyId, ocurridoEn])
+}
+
+// A quién se le registra la hoja del día. Por defecto NADIE: sin fila (o con
+// `activa` en false) no se anota ni se lee de Google nada de esa persona. Lo
+// deciden los administradores y gerentes de la empresa, persona por persona.
+// `desde` es el momento de la última activación: nada anterior se registra.
+// Al desactivar se conserva el historial y solo se deja de registrar.
+model BitacoraActivacion {
+  userId        Int      @id
+  user          User     @relation("BitacoraActivada", fields: [userId], references: [id], onDelete: Cascade)
+  activa        Boolean  @default(false)
+  desde         DateTime?
+  activadaPorId Int?
+  activadaPor   User?    @relation("BitacoraActivadaPor", fields: [activadaPorId], references: [id], onDelete: SetNull)
+  actualizadaEn DateTime @default(now())
+}
+
+// Quién consultó la hoja de quién y cuándo (garantía para el equipo: los accesos
+// de Gerencia quedan registrados). Creada al arrancar, igual que BitacoraEvento.
+model BitacoraConsulta {
+  id          Int      @id @default(autoincrement())
+  consultorId Int
+  consultor   User     @relation("BitacoraConsultor", fields: [consultorId], references: [id], onDelete: Cascade)
+  personaId   Int
+  persona     User     @relation("BitacoraPersona", fields: [personaId], references: [id], onDelete: Cascade)
+  // Día consultado (AAAA-MM-DD, hora de Ecuador).
+  fecha       String
+  ocurridoEn  DateTime @default(now())
+
+  @@index([personaId, ocurridoEn])
 }
 
 // Bandeja de notificaciones in-app, genérica (no exclusiva de Referidos) —

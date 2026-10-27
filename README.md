@@ -90,6 +90,9 @@ Agrupa lo tecnico: dashboard, **Herramientas** (inventario y asignacion con audi
 ### Notificaciones
 Ícono de notificaciones (campana) en toda pantalla con aviso de lo no leido. En su Perfil, cada persona elige si los recordatorios de tareas le llegan en las notificaciones de la app y por correo o solo en las notificaciones de la app (los correos llevan el prefijo `[Tareas GEMESEG]` en el asunto). La usan Referidos, Encuestas, Soporte Tecnico y las Novedades de la app. El correo saliente (recuperacion de contrasena, recordatorios) sale por Gmail con delegacion de dominio.
 
+### Bitácora del equipo
+Registro automático de lo que hace cada persona (en app.gemeseg y en su cuenta de Google: inicio de sesión y Drive), para comprobar horario y trabajo en equipos virtuales sin pedir reportes. **En construcción: probada en local, todavía no desplegada ni activada para nadie.** Por defecto nadie tiene hoja: es un módulo propio del menú, «Bitácora», con **Dashboard** (métricas del equipo en 7, 14 o 30 días; con permiso), **Actividad del día** (el detalle de un día y la hoja de cada persona: primera y última actividad, huecos y lista de lo hecho; con permiso), **Mi hoja del día** (cada persona ve la suya) y **Configuración** (administradores y gerentes activan a cada persona, se le avisa, y manejan la lectura de Google). Solo registro, sin metas ni alertas. Ver `AGENTS.md`, «Bitácora del equipo».
+
 ## Credenciales de prueba
 Solo para el entorno local: las crean los seeds (`npm run seed:minimal` deja solo `admin@gemeseg.com`, `sistemas@gemeseg.com` y el super admin; `npm run seed` crea todos los de abajo). Las cuentas de produccion tienen sus propias contrasenas.
 
@@ -217,6 +220,7 @@ MejoraGemeseg/
 │           ├── ventas/                             # CRM y contratos con firma electronica
 │           ├── contratacion-publica/               # Contratos con el sector publico
 │           ├── sistemas/ tools/                    # Soporte tecnico e inventario de herramientas
+│           ├── bitacora/                           # Bitácora del equipo (actividad en la app y en Google)
 │           └── cache/ queue/                       # Redis (opcional) y colas
 ├── frontend/
 │   ├── vite.config.ts
@@ -248,6 +252,7 @@ La API completa se explora en Swagger (`/docs`). El detalle por modulo, con sus 
 | `/ventas/...` | Posibles clientes (`leads`), directorio (`clientes`), referidos, oportunidades, contratos, cotizador, documentacion (plantillas y firma) y dashboard |
 | `/contratacion-publica/...` | Entidades, contratos, puestos, horarios, informes, entregas (revisión con vista previa, historial y bandejas) |
 | `/sistemas/...`, `/tools` | Soporte tecnico e inventario de herramientas |
+| `/bitacora/...` | Bitácora: dashboard de métricas, actividad del día, mi hoja del día y configuración (hojas activadas y Google) |
 
 ## Tecnologia
 - **Frontend**: React 18 + Vite + TypeScript, react-router, React Hook Form + Zod
