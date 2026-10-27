@@ -284,10 +284,11 @@ export default function ShipmentForm() {
                     <option value="">Seleccionar lote...</option>
                     {lots.map((l) => {
                       const recvUnit = l.receptions?.[0]?.unitOfMeasure;
-                      const recvAbbr = recvUnit ? UNIT_ABBR[recvUnit] : null;
+                      // Solo se aclara cuando el lote entró en otra unidad; «= kg» a secas no decía nada.
+                      const recvAbbr = recvUnit && recvUnit !== 'KG' ? UNIT_ABBR[recvUnit] || recvUnit : null;
                       return (
                         <option key={l.id} value={l.id}>
-                          {l.code} ({l.netWeight.toLocaleString()} kg{recvAbbr ? ` = ${recvAbbr}` : ''} - ${l.averageCost.toFixed(2)}/kg){l.quality?.isFixedPrice ? ' [Fijo]' : ''}
+                          {l.code} ({l.netWeight.toLocaleString()} kg{recvAbbr ? `, recibido en ${recvAbbr}` : ''} - ${l.averageCost.toFixed(2)}/kg){l.quality?.isFixedPrice ? ' [Fijo]' : ''}
                         </option>
                       );
                     })}
