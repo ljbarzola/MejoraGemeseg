@@ -5,6 +5,7 @@ import { getUser } from '../../../services/auth.service';
 import { formatDateEc, estadoCuenta, apiErrorMessage } from '../utils';
 import ErrorBanner from '../../../components/common/ErrorBanner';
 import PaymentsHistoryModal from '../PaymentsHistoryModal';
+import { useTablaCacao } from '../useTablaCacao';
 
 export default function ReceivablesList() {
   const [receivables, setReceivables] = useState<any[]>([]);
@@ -55,32 +56,51 @@ export default function ReceivablesList() {
   const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const history = receivables.find((r) => r.id === historyId);
 
-  // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas; siguen puestos tras registrar un cobro).
-  const cf = useColumnFilters<any>(receivables, [
-    { key: 'cliente', etiqueta: 'Cliente', tipo: 'valores', vacio: 'Sin cliente', getValues: (r) => (r.client?.name ? { valor: String(r.client.id ?? r.client.name), etiqueta: r.client.name } : null) },
-    { key: 'embarque', etiqueta: 'Embarque', tipo: 'texto', getValue: (r) => r.shipment?.contractRef },
-    { key: 'total', etiqueta: 'Monto Total', tipo: 'numero', formato: (n) => fmt(n), getValue: (r) => r.totalAmount },
-    { key: 'cobrado', etiqueta: 'Cobrado', tipo: 'numero', formato: (n) => fmt(n), getValue: (r) => r.receivedAmount },
-    { key: 'saldo', etiqueta: 'Saldo', tipo: 'numero', formato: (n) => fmt(n), getValue: (r) => r.totalAmount - r.receivedAmount },
-    { key: 'vence', etiqueta: 'Fecha Vencimiento', tipo: 'fecha', soloDia: true, getValue: (r) => r.dueDate },
-    {
-      key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['PENDING', 'PARTIAL', 'RECEIVED'],
-      getValues: (r) => (r.status === 'RECEIVED' ? { valor: 'RECEIVED', etiqueta: 'Cobrada' } : r.status === 'PARTIAL' ? { valor: 'PARTIAL', etiqueta: 'Parcial' } : { valor: 'PENDING', etiqueta: 'Pendiente' }),
-    },
-  ]);
-  const filas = cf.filas;
+  const { tabla, selectorColumnas } = useTablaCacao<any>({
+    clave: 'cuentas-por-cobrar',
+    filas: receivables,
+    idFila: (r) => r.id,
+    ordenInicial: 'vence',
+    principal: { key: 'cliente', ancho: 200, label: 'Cliente', orden: (r) => r.client?.name, celda: (r) => r.client?.name || '—' },
+    columnas: [
+      { key: 'embarque', ancho: 150, label: 'Embarque', orden: (r) => r.shipment?.contractRef, celda: (r) => r.shipment?.contractRef || '—' },
+      { key: 'total', label: 'Monto Total', orden: (r) => r.totalAmount, celda: (r) => fmt(r.totalAmount) },
+      { key: 'cobrado', label: 'Cobrado', orden: (r) => r.receivedAmount, celda: (r) => fmt(r.receivedAmount) },
+      {
+        key: 'saldo',
+        label: 'Saldo',
+        orden: (r) => remainingOf(r),
+        celda: (r) => <span style={{ fontWeight: 600, color: remainingOf(r) > 0 ? '#38a169' : '#718096' }}>{fmt(remainingOf(r))}</span>,
+      },
+      { key: 'vence', ancho: 140, label: 'Fecha Vencimiento', orden: (r) => new Date(r.dueDate).getTime(), celda: (r) => formatDateEc(r.dueDate) },
+      {
+        key: 'estado', ancho: 120,
+        label: 'Estado',
+        orden: (r) => estadoCuenta(r.status).label,
+        celda: (r) => {
+          const estado = estadoCuenta(r.status);
+          return <span className="status-badge" style={{ backgroundColor: estado.bg, color: estado.color }}>{estado.label}</span>;
+        },
+      },
+    ],
+    acciones: (r) => (
+      <div style={{ display: 'flex', gap: '6px' }}>
+        {r.status !== 'RECEIVED' && <button className="btn-sm-edit" onClick={() => startReceive(r)}>Cobrar</button>}
+        {r.payments?.length > 0 && (
+          <button className="btn-sm-edit" onClick={() => { setError(''); setHistoryId(r.id); }}>Cobros</button>
+        )}
+      </div>
+    ),
+  });
 
   return (
     <div className="page-container">
       <PageHeader eyebrow="Cacao" title="Cuentas por Cobrar" description="Lo que te deben tus clientes. Cada cuenta nace con un embarque." />
 
       <div className="filter-bar">
-        <div className="filter-bar-actions">
-          <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
-        </div>
+        <div className="filter-bar-fields" />
+        <div className="filter-bar-actions">{selectorColumnas}</div>
       </div>
-
-      <ChipsFiltros cf={cf} />
 
       <div className="admin-section">
         {loading ? (
@@ -88,51 +108,7 @@ export default function ReceivablesList() {
         ) : receivables.length === 0 ? (
           <div className="empty-state">No hay cuentas por cobrar.</div>
         ) : (
-          <div className="tasks-table-wrapper">
-            <table className="tasks-table">
-              <thead>
-                <tr>
-                  <th>Cliente<ColumnFilter cf={cf} col="cliente" orden={cf.ordenDe('cliente')} /></th>
-                  <th>Embarque<ColumnFilter cf={cf} col="embarque" orden={cf.ordenDe('embarque')} /></th>
-                  <th>Monto Total<ColumnFilter cf={cf} col="total" orden={cf.ordenDe('total')} /></th>
-                  <th>Cobrado<ColumnFilter cf={cf} col="cobrado" orden={cf.ordenDe('cobrado')} /></th>
-                  <th>Saldo<ColumnFilter cf={cf} col="saldo" orden={cf.ordenDe('saldo')} /></th>
-                  <th>Fecha Vencimiento<ColumnFilter cf={cf} col="vence" orden={cf.ordenDe('vence')} /></th>
-                  <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {receivables.map((r) => {
-                  const remaining = remainingOf(r);
-                  const estado = estadoCuenta(r.status);
-                  return (
-                    <tr key={r.id}>
-                      <td>{r.client?.name || '—'}</td>
-                      <td>{r.shipment?.contractRef || '—'}</td>
-                      <td>{fmt(r.totalAmount)}</td>
-                      <td>{fmt(r.receivedAmount)}</td>
-                      <td style={{ fontWeight: 600, color: remaining > 0 ? '#38a169' : '#718096' }}>{fmt(remaining)}</td>
-                      <td>{formatDateEc(r.dueDate)}</td>
-                      <td>
-                        <span className="status-badge" style={{ backgroundColor: estado.bg, color: estado.color }}>{estado.label}</span>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          {r.status !== 'RECEIVED' && (
-                            <button className="btn-sm-edit" onClick={() => startReceive(r)}>Cobrar</button>
-                          )}
-                          {r.payments?.length > 0 && (
-                            <button className="btn-sm-edit" onClick={() => { setError(''); setHistoryId(r.id); }}>Cobros</button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          tabla
         )}
       </div>
 

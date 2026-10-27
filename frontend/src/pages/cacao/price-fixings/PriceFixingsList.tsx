@@ -3,14 +3,7 @@ import PageHeader from '../../../components/common/PageHeader';
 import { getPriceFixings, createPriceFixing, fixPrice, getLots } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
 import DateInput from '../../../components/common/DateInput';
-import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
-import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
-import { useColumnFilters } from '../../../hooks/useColumnFilters';
-
-// Lo que falta por fijar de una fijación (0 si ya está fijada).
-function pesoPendiente(f: any): number {
-  return f.status === 'FIXED' ? 0 : (f.pendingWeight || f.lot?.netWeight || 0);
-}
+import { useTablaCacao } from '../useTablaCacao';
 
 export default function PriceFixingsList() {
   const [fixings, setFixings] = useState<any[]>([]);
@@ -127,6 +120,123 @@ export default function PriceFixingsList() {
     return '#38a169';
   }
 
+  const pendienteDe = (f: any): number => (f.status === 'FIXED' ? 0 : (f.pendingWeight || f.lot?.netWeight || 0));
+
+  const { tabla, selectorColumnas } = useTablaCacao<any>({
+    clave: 'fijaciones',
+    filas: fixings,
+    idFila: (f) => f.id,
+    ordenInicial: 'limite',
+    estiloFila: (f) => ({ backgroundColor: f.status === 'FIXED' ? '#f0fff4' : 'white' }),
+    principal: {
+      key: 'lote', ancho: 140,
+      label: 'Lote',
+      orden: (f) => f.lot?.code,
+      celda: (f) => <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{f.lot?.code || '—'}</span>,
+    },
+    columnas: [
+      {
+        key: 'calidad', ancho: 130,
+        label: 'Calidad',
+        orden: (f) => f.lot?.quality?.name,
+        celda: (f) => <span style={{ fontSize: '12px', color: '#718096' }}>{f.lot?.quality?.name || '—'}</span>,
+      },
+      {
+        key: 'pendiente', ancho: 140,
+        label: 'Cant. Pendiente',
+        derecha: true,
+        orden: (f) => pendienteDe(f),
+        celda: (f) => {
+          const pendingWeight = pendienteDe(f);
+          return (
+            <span style={{ fontWeight: 700, color: pendingWeight > 0 ? '#b7791f' : '#38a169' }}>
+              {pendingWeight > 0 ? `${pendingWeight.toLocaleString()} kg` : '—'}
+            </span>
+          );
+        },
+      },
+      {
+        key: 'original', ancho: 130,
+        label: 'Peso Original',
+        derecha: true,
+        orden: (f) => f.lot?.netWeight || 0,
+        celda: (f) => <span style={{ color: '#718096' }}>{(f.lot?.netWeight || 0).toLocaleString()} kg</span>,
+      },
+      {
+        key: 'referencia', ancho: 130,
+        label: 'Precio Ref. Hoy',
+        derecha: true,
+        celda: () => (
+          <span style={{ fontWeight: 600 }}>
+            ${icePrice.toLocaleString()}/T
+            <div style={{ fontSize: '11px', color: '#718096' }}>${(icePrice / 1000).toFixed(4)}/kg</div>
+          </span>
+        ),
+      },
+      {
+        key: 'diferencial', ancho: 110,
+        label: 'Diferencial',
+        derecha: true,
+        orden: (f) => f.differential || null,
+        celda: (f) =>
+          f.differential ? (
+            <span style={{ color: f.differential >= 0 ? '#38a169' : '#e53e3e' }}>
+              {f.differential >= 0 ? '+' : ''}${f.differential.toFixed(0)}/T
+            </span>
+          ) : '—',
+      },
+      {
+        key: 'fijado', ancho: 150,
+        label: 'Precio Fijado',
+        derecha: true,
+        orden: (f) => f.fixedPrice || null,
+        celda: (f) => (
+          <span style={{ fontWeight: 700, color: f.fixedPrice ? '#276749' : '#a0aec0' }}>
+            {f.fixedPrice ? `$${f.fixedPrice.toFixed(4)}/kg` : '—'}
+          </span>
+        ),
+      },
+      {
+        key: 'limite', ancho: 160,
+        label: 'Fecha Límite',
+        orden: (f) => (f.deadline ? new Date(f.deadline).getTime() : null),
+        celda: (f) => {
+          if (!f.deadline) return '—';
+          const days = getDaysUntilDeadline(f.deadline);
+          const deadlineColor = getDeadlineColor(days);
+          return (
+            <div>
+              <div style={{ fontSize: '12px', color: deadlineColor, fontWeight: 600 }}>{formatDateEc(f.deadline)}</div>
+              <div style={{ fontSize: '11px', color: deadlineColor, fontWeight: 700 }}>
+                {days !== null && (
+                  days < 0 ? `Vencido hace ${Math.abs(days)}d` :
+                  days === 0 ? 'Vence hoy' :
+                  `${days}d restantes`
+                )}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        key: 'estado', ancho: 110,
+        label: 'Estado',
+        orden: (f) => f.status,
+        celda: (f) => (
+          <span className="status-badge" style={{
+            backgroundColor: f.status === 'OPEN' ? '#fefcbf' : '#c6f6d5',
+            color: f.status === 'OPEN' ? '#975a16' : '#276749',
+          }}>
+            {f.status === 'OPEN' ? 'Abierta' : 'Fijada'}
+          </span>
+        ),
+      },
+    ],
+    acciones: (f) => (
+      <button className="btn-sm-edit" onClick={() => startEdit(f)}>{f.status === 'OPEN' ? 'Fijar' : 'Editar'}</button>
+    ),
+  });
+
   return (
     <div className="page-container">
       <PageHeader
@@ -238,6 +348,11 @@ export default function PriceFixingsList() {
         </div>
       )}
 
+      <div className="filter-bar">
+        <div className="filter-bar-fields" />
+        <div className="filter-bar-actions">{selectorColumnas}</div>
+      </div>
+
       {/* Tabla de Exposición Abierta */}
       <div className="admin-section">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
@@ -259,88 +374,7 @@ export default function PriceFixingsList() {
         ) : fixings.length === 0 ? (
           <div className="empty-state">No hay fijaciones de precio.</div>
         ) : (
-          <div className="tasks-table-wrapper">
-            <table className="tasks-table" style={{ fontSize: '13px' }}>
-              <thead>
-                <tr>
-                  <th>Lote<ColumnFilter cf={cf} col="lote" orden={cf.ordenDe('lote')} /></th>
-                  <th>Calidad</th>
-                  <th style={{ textAlign: 'right' }}>Cant. Pendiente<ColumnFilter cf={cf} col="pendiente" orden={cf.ordenDe('pendiente')} /></th>
-                  <th style={{ textAlign: 'right' }}>Peso Original<ColumnFilter cf={cf} col="original" orden={cf.ordenDe('original')} /></th>
-                  <th style={{ textAlign: 'right' }}>Precio Ref. Hoy</th>
-                  <th style={{ textAlign: 'right' }}>Diferencial<ColumnFilter cf={cf} col="diferencial" orden={cf.ordenDe('diferencial')} /></th>
-                  <th style={{ textAlign: 'right' }}>Precio Fijado<ColumnFilter cf={cf} col="fijado" orden={cf.ordenDe('fijado')} /></th>
-                  <th>Fecha Límite<ColumnFilter cf={cf} col="limite" orden={cf.ordenDe('limite')} /></th>
-                  <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filas.length === 0 && (
-                  <FilaSinResultados columnas={10} mensaje="No hay fijaciones que coincidan con los filtros." onLimpiar={cf.limpiar} />
-                )}
-                {filas.map((f) => {
-                  const days = getDaysUntilDeadline(f.deadline);
-                  const deadlineColor = getDeadlineColor(days);
-                  const lotWeight = f.lot?.netWeight || 0;
-                  const pendingWeight = pesoPendiente(f);
-                  return (
-                    <tr key={f.id} style={{ backgroundColor: f.status === 'FIXED' ? '#f0fff4' : 'white' }}>
-                      <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{f.lot?.code || '—'}</td>
-                      <td style={{ fontSize: '12px', color: '#718096' }}>{f.lot?.quality?.name || '—'}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: pendingWeight > 0 ? '#b7791f' : '#38a169' }}>
-                        {pendingWeight > 0 ? `${pendingWeight.toLocaleString()} kg` : '—'}
-                      </td>
-                      <td style={{ textAlign: 'right', color: '#718096' }}>{lotWeight.toLocaleString()} kg</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>
-                        ${icePrice.toLocaleString()}/T
-                        <div style={{ fontSize: '11px', color: '#718096' }}>${(icePrice / 1000).toFixed(4)}/kg</div>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        {f.differential ? (
-                          <span style={{ color: f.differential >= 0 ? '#38a169' : '#e53e3e' }}>
-                            {f.differential >= 0 ? '+' : ''}${f.differential.toFixed(0)}/T
-                          </span>
-                        ) : '—'}
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: f.fixedPrice ? '#276749' : '#a0aec0' }}>
-                        {f.fixedPrice ? `$${f.fixedPrice.toFixed(4)}/kg` : '—'}
-                      </td>
-                      <td>
-                        {f.deadline ? (
-                          <div>
-                            <div style={{ fontSize: '12px', color: deadlineColor, fontWeight: 600 }}>
-                              {formatDateEc(f.deadline)}
-                            </div>
-                            <div style={{ fontSize: '11px', color: deadlineColor, fontWeight: 700 }}>
-                              {days !== null && (
-                                days < 0 ? `Vencido hace ${Math.abs(days)}d` :
-                                days === 0 ? 'Vence hoy' :
-                                `${days}d restantes`
-                              )}
-                            </div>
-                          </div>
-                        ) : '—'}
-                      </td>
-                      <td>
-                        <span className="status-badge" style={{
-                          backgroundColor: f.status === 'OPEN' ? '#fefcbf' : '#c6f6d5',
-                          color: f.status === 'OPEN' ? '#975a16' : '#276749',
-                        }}>
-                          {f.status === 'OPEN' ? 'Abierta' : 'Fijada'}
-                        </span>
-                      </td>
-                      <td>
-                        <button className="btn-sm-edit" onClick={() => startEdit(f)}>
-                          {f.status === 'OPEN' ? 'Fijar' : 'Editar'}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          tabla
         )}
       </div>
 

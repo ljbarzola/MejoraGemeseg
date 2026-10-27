@@ -5,6 +5,7 @@ import { getUser } from '../../../services/auth.service';
 import { formatDateEc, estadoCuenta, apiErrorMessage } from '../utils';
 import ErrorBanner from '../../../components/common/ErrorBanner';
 import PaymentsHistoryModal from '../PaymentsHistoryModal';
+import { useTablaCacao } from '../useTablaCacao';
 
 export default function PayablesList() {
   const [payables, setPayables] = useState<any[]>([]);
@@ -55,32 +56,66 @@ export default function PayablesList() {
   const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const history = payables.find((p) => p.id === historyId);
 
-  // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas; siguen puestos tras registrar un pago).
-  const cf = useColumnFilters<any>(payables, [
-    { key: 'proveedor', etiqueta: 'Proveedor', tipo: 'valores', vacio: 'Sin proveedor', getValues: (p) => (p.supplier?.name ? { valor: String(p.supplier.id ?? p.supplier.name), etiqueta: p.supplier.name } : null) },
-    { key: 'liquidacion', etiqueta: 'Liquidación', tipo: 'texto', getValue: (p) => (p.settlement?.id ? `#${p.settlement.id}` : '') },
-    { key: 'total', etiqueta: 'Monto Total', tipo: 'numero', formato: (n) => fmt(n), getValue: (p) => p.totalAmount },
-    { key: 'pagado', etiqueta: 'Pagado', tipo: 'numero', formato: (n) => fmt(n), getValue: (p) => p.paidAmount },
-    { key: 'saldo', etiqueta: 'Saldo', tipo: 'numero', formato: (n) => fmt(n), getValue: (p) => p.totalAmount - p.paidAmount },
-    { key: 'vence', etiqueta: 'Fecha Vencimiento', tipo: 'fecha', soloDia: true, getValue: (p) => p.dueDate },
-    {
-      key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['PENDING', 'PARTIAL', 'PAID'],
-      getValues: (p) => (p.status === 'PAID' ? { valor: 'PAID', etiqueta: 'Pagada' } : p.status === 'PARTIAL' ? { valor: 'PARTIAL', etiqueta: 'Parcial' } : { valor: 'PENDING', etiqueta: 'Pendiente' }),
+  const { tabla, selectorColumnas } = useTablaCacao<any>({
+    clave: 'cuentas-por-pagar',
+    filas: payables,
+    idFila: (p) => p.id,
+    ordenInicial: 'vence',
+    principal: { key: 'proveedor', ancho: 200, label: 'Proveedor', orden: (p) => p.supplier?.name, celda: (p) => p.supplier?.name || '—' },
+    columnas: [
+      {
+        key: 'liquidacion', ancho: 120,
+        label: 'Liquidación',
+        orden: (p) => p.settlement?.id,
+        celda: (p) => (p.settlement?.id ? `LIQ-${String(p.settlement.id).padStart(4, '0')}` : '—'),
+      },
+      { key: 'total', label: 'Monto Total', orden: (p) => p.totalAmount, celda: (p) => fmt(p.totalAmount) },
+      { key: 'pagado', label: 'Pagado', orden: (p) => p.paidAmount, celda: (p) => fmt(p.paidAmount) },
+      {
+        key: 'saldo',
+        label: 'Saldo',
+        orden: (p) => (p.status === 'CANCELLED' ? null : remainingOf(p)),
+        celda: (p) => {
+          const remaining = remainingOf(p);
+          return (
+            <span style={{ fontWeight: 600, color: p.status === 'CANCELLED' ? '#718096' : remaining > 0 ? '#e53e3e' : '#38a169' }}>
+              {p.status === 'CANCELLED' ? '—' : fmt(remaining)}
+            </span>
+          );
+        },
+      },
+      { key: 'vence', ancho: 140, label: 'Fecha Vencimiento', orden: (p) => new Date(p.dueDate).getTime(), celda: (p) => formatDateEc(p.dueDate) },
+      {
+        key: 'estado', ancho: 120,
+        label: 'Estado',
+        orden: (p) => estadoCuenta(p.status).label,
+        celda: (p) => {
+          const estado = estadoCuenta(p.status);
+          return <span className="status-badge" style={{ backgroundColor: estado.bg, color: estado.color }}>{estado.label}</span>;
+        },
+      },
+    ],
+    acciones: (p) => {
+      const puedePagar = (p.status === 'PENDING' || p.status === 'PARTIAL') && p.settlement?.status === 'APPROVED';
+      return (
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {puedePagar && <button className="btn-sm-edit" onClick={() => startPay(p)}>Pagar</button>}
+          {p.payments?.length > 0 && (
+            <button className="btn-sm-edit" onClick={() => { setError(''); setHistoryId(p.id); }}>Pagos</button>
+          )}
+        </div>
+      );
     },
-  ]);
-  const filas = cf.filas;
+  });
 
   return (
     <div className="page-container">
       <PageHeader eyebrow="Cacao" title="Cuentas por Pagar" description="Lo que debes a tus proveedores. Cada cuenta nace cuando se aprueba una liquidación." />
 
       <div className="filter-bar">
-        <div className="filter-bar-actions">
-          <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
-        </div>
+        <div className="filter-bar-fields" />
+        <div className="filter-bar-actions">{selectorColumnas}</div>
       </div>
-
-      <ChipsFiltros cf={cf} />
 
       <div className="admin-section">
         {loading ? (
@@ -88,54 +123,7 @@ export default function PayablesList() {
         ) : payables.length === 0 ? (
           <div className="empty-state">No hay cuentas por pagar. Se generan cuando se aprueba una liquidación.</div>
         ) : (
-          <div className="tasks-table-wrapper">
-            <table className="tasks-table">
-              <thead>
-                <tr>
-                  <th>Proveedor<ColumnFilter cf={cf} col="proveedor" orden={cf.ordenDe('proveedor')} /></th>
-                  <th>Liquidación<ColumnFilter cf={cf} col="liquidacion" orden={cf.ordenDe('liquidacion')} /></th>
-                  <th>Monto Total<ColumnFilter cf={cf} col="total" orden={cf.ordenDe('total')} /></th>
-                  <th>Pagado<ColumnFilter cf={cf} col="pagado" orden={cf.ordenDe('pagado')} /></th>
-                  <th>Saldo<ColumnFilter cf={cf} col="saldo" orden={cf.ordenDe('saldo')} /></th>
-                  <th>Fecha Vencimiento<ColumnFilter cf={cf} col="vence" orden={cf.ordenDe('vence')} /></th>
-                  <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payables.map((p) => {
-                  const remaining = remainingOf(p);
-                  const estado = estadoCuenta(p.status);
-                  const puedePagar = (p.status === 'PENDING' || p.status === 'PARTIAL') && p.settlement?.status === 'APPROVED';
-                  return (
-                    <tr key={p.id}>
-                      <td>{p.supplier?.name || '—'}</td>
-                      <td>{p.settlement?.id ? `LIQ-${String(p.settlement.id).padStart(4, '0')}` : '—'}</td>
-                      <td>{fmt(p.totalAmount)}</td>
-                      <td>{fmt(p.paidAmount)}</td>
-                      <td style={{ fontWeight: 600, color: p.status === 'CANCELLED' ? '#718096' : remaining > 0 ? '#e53e3e' : '#38a169' }}>
-                        {p.status === 'CANCELLED' ? '—' : fmt(remaining)}
-                      </td>
-                      <td>{formatDateEc(p.dueDate)}</td>
-                      <td>
-                        <span className="status-badge" style={{ backgroundColor: estado.bg, color: estado.color }}>{estado.label}</span>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          {puedePagar && (
-                            <button className="btn-sm-edit" onClick={() => startPay(p)}>Pagar</button>
-                          )}
-                          {p.payments?.length > 0 && (
-                            <button className="btn-sm-edit" onClick={() => { setError(''); setHistoryId(p.id); }}>Pagos</button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          tabla
         )}
       </div>
 

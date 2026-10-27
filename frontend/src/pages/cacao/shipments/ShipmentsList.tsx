@@ -3,9 +3,14 @@ import PageHeader from '../../../components/common/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { getShipments } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
-import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
-import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
-import { useColumnFilters } from '../../../hooks/useColumnFilters';
+import { useTablaCacao } from '../useTablaCacao';
+
+function getDisplayStatus(s: any) {
+  if (s.receivable?.status === 'RECEIVED') return { label: 'Cobrado', bg: '#c6f6d5', color: '#276749' };
+  if (s.receivable?.status === 'PARTIAL') return { label: 'Parcial', bg: '#fefcbf', color: '#975a16' };
+  if (s.status === 'COMPLETED') return { label: 'Completado', bg: '#c6f6d5', color: '#276749' };
+  return { label: 'Pendiente', bg: '#fefcbf', color: '#975a16' };
+}
 
 export default function ShipmentsList() {
   const navigate = useNavigate();
@@ -16,12 +21,47 @@ export default function ShipmentsList() {
     getShipments().then(setShipments).finally(() => setLoading(false));
   }, []);
 
-  function getDisplayStatus(s: any) {
-    if (s.receivable?.status === 'RECEIVED') return { label: 'Cobrado', bg: '#c6f6d5', color: '#276749' };
-    if (s.receivable?.status === 'PARTIAL') return { label: 'Parcial', bg: '#fefcbf', color: '#975a16' };
-    if (s.status === 'COMPLETED') return { label: 'Completado', bg: '#c6f6d5', color: '#276749' };
-    return { label: 'Pendiente', bg: '#fefcbf', color: '#975a16' };
-  }
+  const { tabla, selectorColumnas } = useTablaCacao<any>({
+    clave: 'embarques',
+    filas: shipments,
+    idFila: (s) => s.id,
+    ordenInicial: 'id',
+    direccionInicial: 'desc',
+    principal: {
+      key: 'id', ancho: 100,
+      label: 'ID',
+      orden: (s) => s.id,
+      celda: (s) => (
+        <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#2f855a' }}>EMB-{String(s.id).padStart(4, '0')}</span>
+      ),
+    },
+    columnas: [
+      { key: 'fecha', label: 'Fecha', orden: (s) => new Date(s.date).getTime(), celda: (s) => formatDateEc(s.date) },
+      { key: 'cliente', ancho: 200, label: 'Cliente', orden: (s) => s.client?.name, celda: (s) => s.client?.name || '—' },
+      { key: 'referencia', ancho: 150, label: 'Referencia', orden: (s) => s.contractRef, celda: (s) => s.contractRef },
+      { key: 'peso', label: 'Peso Total', orden: (s) => s.totalWeight, celda: (s) => `${s.totalWeight.toLocaleString()} kg` },
+      { key: 'costo', label: 'Costo Total', orden: (s) => s.totalCost, celda: (s) => `$${s.totalCost.toFixed(2)}` },
+      { key: 'precio', label: 'Precio Venta', orden: (s) => s.salePrice, celda: (s) => `$${s.salePrice.toFixed(2)}/kg` },
+      {
+        key: 'margen',
+        label: 'Margen',
+        orden: (s) => s.margin,
+        celda: (s) => <span style={{ color: s.margin >= 0 ? '#38a169' : '#e53e3e', fontWeight: 600 }}>{s.margin}%</span>,
+      },
+      {
+        key: 'estado', ancho: 120,
+        label: 'Estado',
+        orden: (s) => getDisplayStatus(s).label,
+        celda: (s) => {
+          const st = getDisplayStatus(s);
+          return <span className="status-badge" style={{ backgroundColor: st.bg, color: st.color }}>{st.label}</span>;
+        },
+      },
+    ],
+    acciones: (s) => (
+      <button className="btn-sm-edit" onClick={() => navigate(`/cacao/shipments/${s.id}`, { state: { from: '/cacao/shipments' } })}>Ver</button>
+    ),
+  });
 
   // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas).
   const cf = useColumnFilters<any>(shipments, [
@@ -51,12 +91,9 @@ export default function ShipmentsList() {
       />
 
       <div className="filter-bar">
-        <div className="filter-bar-actions">
-          <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
-        </div>
+        <div className="filter-bar-fields" />
+        <div className="filter-bar-actions">{selectorColumnas}</div>
       </div>
-
-      <ChipsFiltros cf={cf} />
 
       <div className="admin-section">
         {loading ? (
@@ -64,52 +101,7 @@ export default function ShipmentsList() {
         ) : shipments.length === 0 ? (
           <div className="empty-state">No hay embarques registrados.</div>
         ) : (
-          <div className="tasks-table-wrapper">
-            <table className="tasks-table">
-              <thead>
-                <tr>
-                  <th>ID<ColumnFilter cf={cf} col="id" orden={cf.ordenDe('id')} /></th>
-                  <th>Fecha<ColumnFilter cf={cf} col="fecha" orden={cf.ordenDe('fecha')} /></th>
-                  <th>Cliente<ColumnFilter cf={cf} col="cliente" orden={cf.ordenDe('cliente')} /></th>
-                  <th>Referencia<ColumnFilter cf={cf} col="referencia" orden={cf.ordenDe('referencia')} /></th>
-                  <th>Peso Total<ColumnFilter cf={cf} col="peso" orden={cf.ordenDe('peso')} /></th>
-                  <th>Costo Total<ColumnFilter cf={cf} col="costo" orden={cf.ordenDe('costo')} /></th>
-                  <th>Precio Venta<ColumnFilter cf={cf} col="venta" orden={cf.ordenDe('venta')} /></th>
-                  <th>Margen<ColumnFilter cf={cf} col="margen" orden={cf.ordenDe('margen')} /></th>
-                  <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
-                  <th className="no-print"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filas.length === 0 && (
-                  <FilaSinResultados columnas={10} mensaje="No hay embarques que coincidan con los filtros." onLimpiar={cf.limpiar} />
-                )}
-                {filas.map((s) => {
-                  const st = getDisplayStatus(s);
-                  return (
-                    <tr key={s.id}>
-                      <td style={{ fontFamily: 'monospace', fontWeight: 600, color: '#2f855a' }}>EMB-{String(s.id).padStart(4, '0')}</td>
-                      <td>{formatDateEc(s.date)}</td>
-                      <td>{s.client?.name || '—'}</td>
-                      <td>{s.contractRef}</td>
-                      <td>{s.totalWeight.toLocaleString()} kg</td>
-                      <td>${s.totalCost.toFixed(2)}</td>
-                      <td>${s.salePrice.toFixed(2)}/kg</td>
-                      <td style={{ color: s.margin >= 0 ? '#38a169' : '#e53e3e', fontWeight: 600 }}>{s.margin}%</td>
-                      <td>
-                        <span className="status-badge" style={{ backgroundColor: st.bg, color: st.color }}>
-                          {st.label}
-                        </span>
-                      </td>
-                      <td className="no-print">
-                        <button className="btn-sm-edit" onClick={() => navigate(`/cacao/shipments/${s.id}`, { state: { from: '/cacao/shipments' } })}>Ver</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          tabla
         )}
       </div>
     </div>

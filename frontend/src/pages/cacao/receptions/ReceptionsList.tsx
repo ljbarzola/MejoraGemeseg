@@ -4,9 +4,7 @@ import PageHeader from '../../../components/common/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { getReceptions } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
-import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
-import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
-import { useColumnFilters } from '../../../hooks/useColumnFilters';
+import { useTablaCacao } from '../useTablaCacao';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 
@@ -45,6 +43,58 @@ export default function ReceptionsList() {
     return { value: (kg / factor).toFixed(2), abbr: UNIT_ABBR[unit] || unit };
   }
 
+  const pesoConUnidad = (kg: number, unit: string | null, color: string, negrita?: boolean) => {
+    const orig = getOrigWeight(kg, unit);
+    return (
+      <span style={negrita ? { fontWeight: 700 } : undefined}>
+        {kg.toLocaleString()} kg
+        {orig && <span style={{ fontSize: '11px', color, fontWeight: negrita ? 600 : undefined, marginLeft: '4px' }}>({orig.value} {orig.abbr})</span>}
+      </span>
+    );
+  };
+
+  const { tabla, selectorColumnas } = useTablaCacao<any>({
+    clave: 'recepciones',
+    filas: receptions,
+    idFila: (r) => r.id,
+    ordenInicial: 'fecha',
+    direccionInicial: 'desc',
+    principal: { key: 'fecha', ancho: 100, label: 'Fecha', orden: (r) => new Date(r.date).getTime(), celda: (r) => formatDateEc(r.date) },
+    columnas: [
+      { key: 'proveedor', ancho: 200, label: 'Proveedor', orden: (r) => r.supplier?.name, celda: (r) => r.supplier?.name || '—' },
+      { key: 'guia', ancho: 130, label: 'Guía', orden: (r) => r.guideNumber, celda: (r) => r.guideNumber },
+      {
+        key: 'entrada',
+        label: 'Entrada',
+        orden: (r) => r.unitOfMeasure || 'KG',
+        celda: (r) => (
+          <span className="status-badge" style={{
+            backgroundColor: r.unitOfMeasure === 'KG' ? '#f0fff4' : '#ebf8ff',
+            color: r.unitOfMeasure === 'KG' ? '#276749' : '#2b6cb0',
+            fontSize: '11px',
+          }}>
+            {r.unitOfMeasure || 'KG'}
+          </span>
+        ),
+      },
+      { key: 'bruto', ancho: 170, label: 'Peso Bruto', orden: (r) => r.grossWeight, celda: (r) => pesoConUnidad(r.grossWeight, r.unitOfMeasure, '#718096') },
+      { key: 'tara', ancho: 150, label: 'Tara', orden: (r) => r.tare, celda: (r) => pesoConUnidad(r.tare, r.unitOfMeasure, '#718096') },
+      { key: 'neto', ancho: 170, label: 'Peso Neto', orden: (r) => r.netWeight, celda: (r) => pesoConUnidad(r.netWeight, r.unitOfMeasure, '#2b6cb0', true) },
+      { key: 'humedad', label: 'Humedad %', orden: (r) => r.humidity, celda: (r) => `${r.humidity}%` },
+      { key: 'impurezas', label: 'Impurezas %', orden: (r) => r.impurities, celda: (r) => `${r.impurities}%` },
+      { key: 'precio', label: 'Precio Prov.', orden: (r) => r.provisionalPrice, celda: (r) => `$${r.provisionalPrice.toFixed(2)}` },
+      {
+        key: 'lote', ancho: 150,
+        label: 'Lote',
+        orden: (r) => r.lot?.code,
+        celda: (r) =>
+          r.lot ? (
+            <span className="status-badge" style={{ backgroundColor: '#ebf8ff', color: '#2b6cb0' }}>{r.lot.code}</span>
+          ) : '—',
+      },
+    ],
+  });
+
   return (
     <div className="page-container">
       <PageHeader
@@ -59,12 +109,9 @@ export default function ReceptionsList() {
       />
 
       <div className="filter-bar">
-        <div className="filter-bar-actions">
-          <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
-        </div>
+        <div className="filter-bar-fields" />
+        <div className="filter-bar-actions">{selectorColumnas}</div>
       </div>
-
-      <ChipsFiltros cf={cf} />
 
       <div className="admin-section">
         {loading ? (
@@ -72,73 +119,7 @@ export default function ReceptionsList() {
         ) : receptions.length === 0 ? (
           <div className="empty-state">No hay recepciones registradas.</div>
         ) : (
-          <div className="tasks-table-wrapper">
-            <table className="tasks-table tabla-compacta">
-              <thead>
-                <tr>
-                  <th>Fecha<ColumnFilter cf={cf} col="fecha" orden={cf.ordenDe('fecha')} /></th>
-                  <th>Proveedor<ColumnFilter cf={cf} col="proveedor" orden={cf.ordenDe('proveedor')} /></th>
-                  <th>Guía<ColumnFilter cf={cf} col="guia" orden={cf.ordenDe('guia')} /></th>
-                  <th>Entrada<ColumnFilter cf={cf} col="entrada" orden={cf.ordenDe('entrada')} /></th>
-                  <th>Peso Bruto<ColumnFilter cf={cf} col="bruto" orden={cf.ordenDe('bruto')} /></th>
-                  <th>Tara<ColumnFilter cf={cf} col="tara" orden={cf.ordenDe('tara')} /></th>
-                  <th>Peso Neto<ColumnFilter cf={cf} col="neto" orden={cf.ordenDe('neto')} /></th>
-                  <th>Humedad %<ColumnFilter cf={cf} col="humedad" orden={cf.ordenDe('humedad')} /></th>
-                  <th>Impurezas %<ColumnFilter cf={cf} col="impurezas" orden={cf.ordenDe('impurezas')} /></th>
-                  <th>Precio Prov.<ColumnFilter cf={cf} col="precio" orden={cf.ordenDe('precio')} /></th>
-                  <th>Lote<ColumnFilter cf={cf} col="lote" orden={cf.ordenDe('lote')} /></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filas.length === 0 && (
-                  <FilaSinResultados columnas={11} mensaje="No hay recepciones que coincidan con los filtros." onLimpiar={cf.limpiar} />
-                )}
-                {filas.map((r) => {
-                  const origGross = getOrigWeight(r.grossWeight, r.unitOfMeasure);
-                  const origTare = getOrigWeight(r.tare, r.unitOfMeasure);
-                  const origNet = getOrigWeight(r.netWeight, r.unitOfMeasure);
-                  return (
-                    <tr key={r.id}>
-                      <td>{formatDateEc(r.date)}</td>
-                      <td>{r.supplier?.name || '—'}</td>
-                      <td>{r.guideNumber}</td>
-                      <td>
-                        <span className="status-badge" style={{
-                          backgroundColor: r.unitOfMeasure === 'KG' ? '#f0fff4' : '#ebf8ff',
-                          color: r.unitOfMeasure === 'KG' ? '#276749' : '#2b6cb0',
-                          fontSize: '11px',
-                        }}>
-                          {r.unitOfMeasure || 'KG'}
-                        </span>
-                      </td>
-                      <td>
-                        {r.grossWeight.toLocaleString()} kg
-                        {origGross && <span style={{ fontSize: '11px', color: '#718096', marginLeft: '4px' }}>({origGross.value} {origGross.abbr})</span>}
-                      </td>
-                      <td>
-                        {r.tare.toLocaleString()} kg
-                        {origTare && <span style={{ fontSize: '11px', color: '#718096', marginLeft: '4px' }}>({origTare.value} {origTare.abbr})</span>}
-                      </td>
-                      <td style={{ fontWeight: 700 }}>
-                        {r.netWeight.toLocaleString()} kg
-                        {origNet && <span style={{ fontSize: '11px', color: '#2b6cb0', fontWeight: 600, marginLeft: '4px' }}>({origNet.value} {origNet.abbr})</span>}
-                      </td>
-                      <td>{r.humidity}%</td>
-                      <td>{r.impurities}%</td>
-                      <td>${r.provisionalPrice.toFixed(2)}</td>
-                      <td>
-                        {r.lot ? (
-                          <span className="status-badge" style={{ backgroundColor: '#ebf8ff', color: '#2b6cb0' }}>
-                            {r.lot.code}
-                          </span>
-                        ) : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          tabla
         )}
       </div>
     </div>

@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useCacaoUnidades } from '../useCacaoUnidades';
 import PageHeader from '../../../components/common/PageHeader';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
 import { useNavigate } from 'react-router-dom';
 import { getLots } from '../../../services/cacao.service';
-import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
-import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
-import { useColumnFilters } from '../../../hooks/useColumnFilters';
+import { useTablaCacao } from '../useTablaCacao';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 
@@ -39,6 +38,76 @@ export default function LotsList() {
     return { value: (kg / factor).toFixed(2), abbr: UNIT_ABBR[unit] || unit };
   }
 
+  const unidadDe = (l: any): string | null => l.receptions?.[0]?.unitOfMeasure || null;
+
+  const { tabla, selectorColumnas } = useTablaCacao<any>({
+    clave: 'lotes',
+    filas: lots,
+    idFila: (l) => l.id,
+    ordenInicial: 'codigo',
+    direccionInicial: 'desc',
+    principal: { key: 'codigo', ancho: 160, label: 'Código', clase: 'tasks-table-title', orden: (l) => l.code, celda: (l) => l.code },
+    columnas: [
+      { key: 'calidad', ancho: 160, label: 'Calidad', orden: (l) => l.quality?.name, celda: (l) => l.quality?.name || '—' },
+      {
+        key: 'entrada',
+        label: 'Entrada',
+        orden: (l) => unidadDe(l),
+        celda: (l) => {
+          const unit = unidadDe(l);
+          if (!unit) return null;
+          return (
+            <span className="status-badge" style={{
+              backgroundColor: unit === 'KG' ? '#f0fff4' : '#ebf8ff',
+              color: unit === 'KG' ? '#276749' : '#2b6cb0',
+              fontSize: '11px',
+            }}>
+              {unit}
+            </span>
+          );
+        },
+      },
+      {
+        key: 'peso', ancho: 190,
+        label: 'Peso Neto',
+        orden: (l) => l.netWeight,
+        celda: (l) => {
+          const orig = getOrigWeight(l.netWeight, unidadDe(l));
+          return (
+            <span style={{ fontWeight: 600 }}>
+              {l.netWeight.toLocaleString()} kg
+              {orig && <span style={{ fontSize: '11px', color: '#2b6cb0', marginLeft: '4px' }}>({orig.value} {orig.abbr})</span>}
+            </span>
+          );
+        },
+      },
+      { key: 'costo', label: 'Costo Promedio', orden: (l) => l.averageCost, celda: (l) => `$${l.averageCost.toFixed(2)}` },
+      {
+        key: 'valor',
+        label: 'Valor',
+        orden: (l) => l.netWeight * l.averageCost,
+        celda: (l) => `$${(l.netWeight * l.averageCost).toFixed(2)}`,
+      },
+      {
+        key: 'estado', ancho: 110,
+        label: 'Estado',
+        orden: (l) => l.status,
+        celda: (l) => (
+          <span
+            className="status-badge"
+            style={{
+              backgroundColor: l.status === 'OPEN' ? '#c6f6d5' : '#fed7d7',
+              color: l.status === 'OPEN' ? '#276749' : '#9b2c2c',
+            }}
+          >
+            {l.status === 'OPEN' ? 'Abierto' : 'Cerrado'}
+          </span>
+        ),
+      },
+    ],
+    acciones: (l) => <button className="btn-sm-edit" onClick={() => navigate(`/cacao/lots/${l.id}`)}>Ver Kardex</button>,
+  });
+
   return (
     <div className="page-container">
       <PageHeader eyebrow="Cacao" title="Lotes" description="El inventario de cacao: cada recepción forma un lote que viaja hasta su embarque." />
@@ -50,6 +119,10 @@ export default function LotsList() {
             <option value="OPEN">Abierto</option>
             <option value="CLOSED">Cerrado</option>
           </select>
+        </div>
+        <div className="filter-bar-actions">
+          {selectorColumnas}
+          <ClearFiltersButton onClear={() => setStatusFilter('')} disabled={!statusFilter} />
         </div>
       </div>
 
@@ -67,68 +140,7 @@ export default function LotsList() {
         ) : lots.length === 0 ? (
           <div className="empty-state">No hay lotes registrados.</div>
         ) : (
-          <div className="tasks-table-wrapper">
-            <table className="tasks-table">
-              <thead>
-                <tr>
-                  <th>Código<ColumnFilter cf={cf} col="codigo" orden={cf.ordenDe('codigo')} /></th>
-                  <th>Calidad<ColumnFilter cf={cf} col="calidad" orden={cf.ordenDe('calidad')} /></th>
-                  <th>Entrada<ColumnFilter cf={cf} col="entrada" orden={cf.ordenDe('entrada')} /></th>
-                  <th>Peso Neto<ColumnFilter cf={cf} col="neto" orden={cf.ordenDe('neto')} /></th>
-                  <th>Costo Promedio<ColumnFilter cf={cf} col="costo" orden={cf.ordenDe('costo')} /></th>
-                  <th>Valor<ColumnFilter cf={cf} col="valor" orden={cf.ordenDe('valor')} /></th>
-                  <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filas.length === 0 && (
-                  <FilaSinResultados columnas={8} mensaje="No hay lotes que coincidan con los filtros." onLimpiar={cf.limpiar} />
-                )}
-                {filas.map((l) => {
-                  const receptionUnit = l.receptions?.[0]?.unitOfMeasure || null;
-                  const origWeight = getOrigWeight(l.netWeight, receptionUnit);
-                  return (
-                    <tr key={l.id}>
-                      <td className="tasks-table-title">{l.code}</td>
-                      <td>{l.quality?.name || '—'}</td>
-                      <td>
-                        {receptionUnit && (
-                          <span className="status-badge" style={{
-                            backgroundColor: receptionUnit === 'KG' ? '#f0fff4' : '#ebf8ff',
-                            color: receptionUnit === 'KG' ? '#276749' : '#2b6cb0',
-                            fontSize: '11px',
-                          }}>
-                            {receptionUnit}
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ fontWeight: 600 }}>
-                        {l.netWeight.toLocaleString()} kg
-                        {origWeight && <span style={{ fontSize: '11px', color: '#2b6cb0', marginLeft: '4px' }}>({origWeight.value} {origWeight.abbr})</span>}
-                      </td>
-                      <td>${l.averageCost.toFixed(2)}</td>
-                      <td>${(l.netWeight * l.averageCost).toFixed(2)}</td>
-                      <td>
-                        <span
-                          className="status-badge"
-                          style={{
-                            backgroundColor: l.status === 'OPEN' ? '#c6f6d5' : '#fed7d7',
-                            color: l.status === 'OPEN' ? '#276749' : '#9b2c2c',
-                          }}
-                        >
-                          {l.status === 'OPEN' ? 'Abierto' : 'Cerrado'}
-                        </span>
-                      </td>
-                      <td>
-                        <button className="btn-sm-edit" onClick={() => navigate(`/cacao/lots/${l.id}`)}>Ver Kardex</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          tabla
         )}
       </div>
     </div>

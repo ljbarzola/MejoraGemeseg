@@ -3,9 +3,7 @@ import PageHeader from '../../../components/common/PageHeader';
 import { getClients, createClient, updateClient, deleteClient } from '../../../services/cacao.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { Trash2, Pencil } from 'lucide-react';
-import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
-import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
-import { useColumnFilters } from '../../../hooks/useColumnFilters';
+import { useTablaCacao } from '../useTablaCacao';
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<any[]>([]);
@@ -65,15 +63,25 @@ export default function ClientsPage() {
     try { await deleteClient(id); load(); } catch {}
   }
 
-  // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas).
-  const cf = useColumnFilters<any>(clients, [
-    { key: 'nombre', etiqueta: 'Nombre', tipo: 'texto', getValue: (c) => c.name },
-    { key: 'pais', etiqueta: 'País', tipo: 'valores', vacio: 'Sin país', getValues: (c) => c.country },
-    { key: 'contacto', etiqueta: 'Contacto', tipo: 'texto', getValue: (c) => c.contact },
-    { key: 'email', etiqueta: 'Email', tipo: 'texto', getValue: (c) => c.email },
-    { key: 'telefono', etiqueta: 'Teléfono', tipo: 'texto', getValue: (c) => c.phone },
-  ]);
-  const filas = cf.filas;
+  const { tabla, selectorColumnas } = useTablaCacao<any>({
+    clave: 'clientes',
+    filas: clients,
+    idFila: (c) => c.id,
+    ordenInicial: 'nombre',
+    principal: { key: 'nombre', ancho: 220, label: 'Nombre', clase: 'tasks-table-title', orden: (c) => c.name, celda: (c) => c.name },
+    columnas: [
+      { key: 'pais', ancho: 120, label: 'País', orden: (c) => c.country, celda: (c) => c.country || '—' },
+      { key: 'contacto', ancho: 160, label: 'Contacto', orden: (c) => c.contact, celda: (c) => c.contact || '—' },
+      { key: 'email', ancho: 220, label: 'Email', orden: (c) => c.email, celda: (c) => c.email || '—' },
+      { key: 'telefono', ancho: 130, label: 'Teléfono', orden: (c) => c.phone, celda: (c) => c.phone || '—' },
+    ],
+    acciones: (c) => (
+      <div className="tools-actions-cell">
+        <button className="btn-secondary icon-btn" onClick={() => startEdit(c)} title="Editar" aria-label="Editar"><Pencil size={14} /></button>
+        <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => handleDelete(c.id)} title="Eliminar cliente" aria-label="Eliminar cliente"><Trash2 size={14} /></button>
+      </div>
+    ),
+  });
 
   return (
     <div className="page-container">
@@ -87,6 +95,11 @@ export default function ClientsPage() {
           </>
         }
       />
+
+      <div className="filter-bar">
+        <div className="filter-bar-fields" />
+        <div className="filter-bar-actions">{selectorColumnas}</div>
+      </div>
 
       {showForm && (
         <div className="page-card" style={{ marginBottom: '16px' }}>
@@ -141,40 +154,7 @@ export default function ClientsPage() {
         ) : clients.length === 0 ? (
           <div className="empty-state">No hay clientes registrados.</div>
         ) : (
-          <div className="tasks-table-wrapper">
-            <table className="tasks-table">
-              <thead>
-                <tr>
-                  <th>Nombre<ColumnFilter cf={cf} col="nombre" orden={cf.ordenDe('nombre')} /></th>
-                  <th>País<ColumnFilter cf={cf} col="pais" orden={cf.ordenDe('pais')} /></th>
-                  <th>Contacto<ColumnFilter cf={cf} col="contacto" orden={cf.ordenDe('contacto')} /></th>
-                  <th>Email<ColumnFilter cf={cf} col="email" orden={cf.ordenDe('email')} /></th>
-                  <th>Teléfono<ColumnFilter cf={cf} col="telefono" orden={cf.ordenDe('telefono')} /></th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filas.length === 0 && (
-                  <FilaSinResultados columnas={6} mensaje="No hay clientes que coincidan con los filtros." onLimpiar={cf.limpiar} />
-                )}
-                {filas.map((c) => (
-                  <tr key={c.id}>
-                    <td className="tasks-table-title">{c.name}</td>
-                    <td>{c.country || '—'}</td>
-                    <td>{c.contact || '—'}</td>
-                    <td>{c.email || '—'}</td>
-                    <td>{c.phone || '—'}</td>
-                    <td>
-                      <div className="tools-actions-cell">
-                        <button className="btn-secondary icon-btn" onClick={() => startEdit(c)} title="Editar" aria-label="Editar"><Pencil size={14} /></button>
-                        <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => handleDelete(c.id)} title="Eliminar cliente" aria-label="Eliminar cliente"><Trash2 size={14} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          tabla
         )}
       </div>
 

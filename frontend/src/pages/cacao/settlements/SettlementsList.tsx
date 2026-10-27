@@ -3,6 +3,7 @@ import PageHeader from '../../../components/common/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { getSettlements } from '../../../services/cacao.service';
 import { formatDateEc, estadoLiquidacion } from '../utils';
+import { useTablaCacao } from '../useTablaCacao';
 
 export default function SettlementsList() {
   const navigate = useNavigate();
@@ -13,20 +14,48 @@ export default function SettlementsList() {
     getSettlements().then(setSettlements).finally(() => setLoading(false));
   }, []);
 
-  // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas).
-  const cf = useColumnFilters<any>(settlements, [
-    { key: 'id', etiqueta: 'ID', tipo: 'texto', getValue: (s) => `LIQ-${String(s.id).padStart(4, '0')}` },
-    { key: 'fecha', etiqueta: 'Fecha', tipo: 'fecha', soloDia: true, getValue: (s) => s.date },
-    { key: 'proveedor', etiqueta: 'Proveedor', tipo: 'valores', vacio: 'Sin proveedor', getValues: (s) => (s.supplier?.name ? { valor: String(s.supplier.id ?? s.supplier.name), etiqueta: s.supplier.name } : null) },
-    // Periodo = tramo: la liquidación cuenta si su periodo se solapa con el rango elegido.
-    { key: 'periodo', etiqueta: 'Periodo', tipo: 'fecha', soloDia: true, getValue: (s) => s.periodStart, getFin: (s) => s.periodEnd },
-    { key: 'peso', etiqueta: 'Peso Neto Total', tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (s) => s.totalNetWeight },
-    { key: 'deducciones', etiqueta: 'Deducciones', tipo: 'numero', formato: (n) => `$${n.toFixed(2)}`, getValue: (s) => s.totalDeductions },
-    { key: 'precio', etiqueta: 'Precio Final', tipo: 'numero', formato: (n) => `$${n.toFixed(2)}/kg`, getValue: (s) => s.finalPrice },
-    { key: 'monto', etiqueta: 'Monto Total', tipo: 'numero', formato: (n) => `$${n.toFixed(2)}`, getValue: (s) => s.totalAmount },
-    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['PENDING', 'PAID'], getValues: (s) => (s.status === 'PAID' ? { valor: 'PAID', etiqueta: 'Pagada' } : { valor: 'PENDING', etiqueta: 'Pendiente' }) },
-  ]);
-  const filas = cf.filas;
+  const { tabla, selectorColumnas } = useTablaCacao<any>({
+    clave: 'liquidaciones',
+    filas: settlements,
+    idFila: (s) => s.id,
+    ordenInicial: 'id',
+    direccionInicial: 'desc',
+    principal: {
+      key: 'id', ancho: 100,
+      label: 'ID',
+      orden: (s) => s.id,
+      celda: (s) => (
+        <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#6b46c1' }}>LIQ-{String(s.id).padStart(4, '0')}</span>
+      ),
+    },
+    columnas: [
+      { key: 'fecha', label: 'Fecha', orden: (s) => new Date(s.date).getTime(), celda: (s) => formatDateEc(s.date) },
+      { key: 'proveedor', ancho: 200, label: 'Proveedor', orden: (s) => s.supplier?.name, celda: (s) => s.supplier?.name || '—' },
+      {
+        key: 'periodo', ancho: 210,
+        label: 'Periodo',
+        orden: (s) => new Date(s.periodStart).getTime(),
+        celda: (s) => `${formatDateEc(s.periodStart)} - ${formatDateEc(s.periodEnd)}`,
+      },
+      { key: 'peso', label: 'Peso Neto Total', orden: (s) => s.totalNetWeight, celda: (s) => `${s.totalNetWeight.toLocaleString()} kg` },
+      { key: 'descuentos', label: 'Descuentos', orden: (s) => s.totalDeductions, celda: (s) => `${s.totalDeductions.toLocaleString()} kg` },
+      { key: 'precio', label: 'Precio Final', orden: (s) => s.finalPrice, celda: (s) => `$${s.finalPrice.toFixed(2)}/kg` },
+      { key: 'monto', label: 'Monto Total', orden: (s) => s.totalAmount, celda: (s) => `$${s.totalAmount.toFixed(2)}` },
+      {
+        key: 'estado', ancho: 130,
+        label: 'Estado',
+        orden: (s) => estadoLiquidacion(s.status).label,
+        celda: (s) => (
+          <span className="status-badge" style={{ backgroundColor: estadoLiquidacion(s.status).bg, color: estadoLiquidacion(s.status).color }}>
+            {estadoLiquidacion(s.status).label}
+          </span>
+        ),
+      },
+    ],
+    acciones: (s) => (
+      <button className="btn-sm-edit" onClick={() => navigate(`/cacao/settlements/${s.id}`, { state: { from: '/cacao/settlements' } })}>Ver</button>
+    ),
+  });
 
   return (
     <div className="page-container">
@@ -42,12 +71,9 @@ export default function SettlementsList() {
       />
 
       <div className="filter-bar">
-        <div className="filter-bar-actions">
-          <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
-        </div>
+        <div className="filter-bar-fields" />
+        <div className="filter-bar-actions">{selectorColumnas}</div>
       </div>
-
-      <ChipsFiltros cf={cf} />
 
       <div className="admin-section">
         {loading ? (
@@ -55,49 +81,7 @@ export default function SettlementsList() {
         ) : settlements.length === 0 ? (
           <div className="empty-state">No hay liquidaciones registradas.</div>
         ) : (
-          <div className="tasks-table-wrapper">
-            <table className="tasks-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Fecha</th>
-                  <th>Proveedor</th>
-                  <th>Periodo</th>
-                  <th>Peso Neto Total</th>
-                  <th>Descuentos</th>
-                  <th>Precio Final</th>
-                  <th>Monto Total</th>
-                  <th>Estado</th>
-                  <th className="no-print"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filas.length === 0 && (
-                  <FilaSinResultados columnas={10} mensaje="No hay liquidaciones que coincidan con los filtros." onLimpiar={cf.limpiar} />
-                )}
-                {filas.map((s) => (
-                  <tr key={s.id}>
-                    <td style={{ fontFamily: 'monospace', fontWeight: 600, color: '#6b46c1' }}>LIQ-{String(s.id).padStart(4, '0')}</td>
-                    <td>{formatDateEc(s.date)}</td>
-                    <td>{s.supplier?.name || '—'}</td>
-                    <td>{formatDateEc(s.periodStart)} - {formatDateEc(s.periodEnd)}</td>
-                    <td>{s.totalNetWeight.toLocaleString()} kg</td>
-                    <td>{s.totalDeductions.toLocaleString()} kg</td>
-                    <td>${s.finalPrice.toFixed(2)}/kg</td>
-                    <td>${s.totalAmount.toFixed(2)}</td>
-                    <td>
-                      <span className="status-badge" style={{ backgroundColor: estadoLiquidacion(s.status).bg, color: estadoLiquidacion(s.status).color }}>
-                        {estadoLiquidacion(s.status).label}
-                      </span>
-                    </td>
-                    <td className="no-print">
-                      <button className="btn-sm-edit" onClick={() => navigate(`/cacao/settlements/${s.id}`, { state: { from: '/cacao/settlements' } })}>Ver</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          tabla
         )}
       </div>
     </div>

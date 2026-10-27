@@ -462,9 +462,9 @@ Si no necesitas datos, responde directamente.`,
   ];
   const qualityMap = {};
   for (const qd of qualitiesData) {
-    let quality = await prisma.cacaoQuality.findFirst({ where: { name: qd.name } });
+    let quality = await prisma.cacaoQuality.findFirst({ where: { name: qd.name, companyId: mikacao.id } });
     if (!quality) {
-      quality = await prisma.cacaoQuality.create({ data: qd });
+      quality = await prisma.cacaoQuality.create({ data: { ...qd, companyId: mikacao.id } });
     } else {
       quality = await prisma.cacaoQuality.update({ where: { id: quality.id }, data: qd });
     }
@@ -472,7 +472,7 @@ Si no necesitas datos, responde directamente.`,
   }
   console.log('  ✓ Calidades creadas:', qualitiesData.map(q => q.name).join(', '));
 
-  // Suppliers (Mikacao companyId: 2)
+  // Suppliers (Mikacao companyId: mikacao.id)
   const suppliersData = [
     { name: 'Cooperativa Agraria de Guayas', contact: 'Carlos Mendoza', phone: '0991234567', paymentTerms: '30 días', bank: 'Banco Pichincha' },
     { name: 'Finca El Oro - Los Ríos', contact: 'María Jaramillo', phone: '0987654321', paymentTerms: '15 días', bank: 'Banco del Austro' },
@@ -480,9 +480,9 @@ Si no necesitas datos, responde directamente.`,
   ];
   const supplierMap = {};
   for (const sd of suppliersData) {
-    let supplier = await prisma.cacaoSupplier.findFirst({ where: { name: sd.name, companyId: 2 } });
+    let supplier = await prisma.cacaoSupplier.findFirst({ where: { name: sd.name, companyId: mikacao.id } });
     if (!supplier) {
-      supplier = await prisma.cacaoSupplier.create({ data: { ...sd, companyId: 2 } });
+      supplier = await prisma.cacaoSupplier.create({ data: { ...sd, companyId: mikacao.id } });
     }
     supplierMap[sd.name] = supplier;
   }
@@ -496,9 +496,9 @@ Si no necesitas datos, responde directamente.`,
   ];
   const clientMap = {};
   for (const cd of clientsData) {
-    let client = await prisma.cacaoClient.findFirst({ where: { name: cd.name, companyId: 2 } });
+    let client = await prisma.cacaoClient.findFirst({ where: { name: cd.name, companyId: mikacao.id } });
     if (!client) {
-      client = await prisma.cacaoClient.create({ data: { ...cd, companyId: 2 } });
+      client = await prisma.cacaoClient.create({ data: { ...cd, companyId: mikacao.id } });
     }
     clientMap[cd.name] = client;
   }
@@ -515,7 +515,7 @@ Si no necesitas datos, responde directamente.`,
 
   const createdLots = [];
   for (const ld of lotData) {
-    const lotExistente = await prisma.cacaoLot.findFirst({ where: { code: ld.code, companyId: 2 } });
+    const lotExistente = await prisma.cacaoLot.findFirst({ where: { code: ld.code, companyId: mikacao.id } });
     const lot = lotExistente ? await prisma.cacaoLot.update({ where: { id: lotExistente.id }, data: { differential: ld.differential } }) : await prisma.cacaoLot.create({
       data: {
         code: ld.code,
@@ -524,7 +524,7 @@ Si no necesitas datos, responde directamente.`,
         averageCost: ld.cost,
         differential: ld.differential,
         status: 'OPEN',
-        companyId: 2,
+        companyId: mikacao.id,
       },
     });
     createdLots.push(lot);
@@ -545,7 +545,7 @@ Si no necesitas datos, responde directamente.`,
           provisionalPrice: ld.cost,
           differential: ld.differential,
           lotId: lot.id,
-          companyId: 2,
+          companyId: mikacao.id,
           createdBy: adminMikacao.id,
         },
       });
@@ -565,7 +565,7 @@ Si no necesitas datos, responde directamente.`,
           balanceCost: ld.netWeight * ld.cost,
           date: new Date(ld.date),
           reference: `Recepción ${ld.guide}`,
-          companyId: 2,
+          companyId: mikacao.id,
         },
       });
     }
@@ -584,7 +584,7 @@ Si no necesitas datos, responde directamente.`,
         pendingWeight: 950,
         deadline: new Date('2026-07-20'),
         status: 'OPEN',
-        companyId: 2,
+        companyId: mikacao.id,
         createdBy: adminMikacao.id,
       },
     });
@@ -600,34 +600,34 @@ Si no necesitas datos, responde directamente.`,
         pendingWeight: 800,
         deadline: new Date('2026-07-25'),
         status: 'OPEN',
-        companyId: 2,
+        companyId: mikacao.id,
         createdBy: adminMikacao.id,
       },
     });
   }
   console.log('  ✓ Fijaciones abiertas: 2');
 
-  // Unit Config (Mikacao companyId: 2)
+  // Unit Config (Mikacao companyId: mikacao.id)
   console.log('Creando configuración de unidades...');
-  const existingUnitConfig = await prisma.cacaoUnitConfig.findFirst({ where: { companyId: 2, name: 'SACO_MICHOACAN' } });
+  const existingUnitConfig = await prisma.cacaoUnitConfig.findFirst({ where: { companyId: mikacao.id, name: 'SACO_MICHOACAN' } });
   if (!existingUnitConfig) {
     await prisma.cacaoUnitConfig.create({
-      data: { name: 'SACO_MICHOACAN', displayName: 'Saco Michoacán (90 kg)', kgPerUnit: 90, isDefault: true, companyId: 2 },
+      data: { name: 'SACO_MICHOACAN', displayName: 'Saco Michoacán (90 kg)', kgPerUnit: 90, isDefault: true, companyId: mikacao.id },
     });
     await prisma.cacaoUnitConfig.create({
-      data: { name: 'SACO_ESTANDAR', displayName: 'Saco Estándar (69 kg)', kgPerUnit: 69, isDefault: false, companyId: 2 },
+      data: { name: 'SACO_ESTANDAR', displayName: 'Saco Estándar (69 kg)', kgPerUnit: 69, isDefault: false, companyId: mikacao.id },
     });
     await prisma.cacaoUnitConfig.create({
-      data: { name: 'SACO_PERSONALIZADO', displayName: 'Saco Personalizado', kgPerUnit: 62, isDefault: false, companyId: 2 },
+      data: { name: 'SACO_PERSONALIZADO', displayName: 'Saco Personalizado', kgPerUnit: 62, isDefault: false, companyId: mikacao.id },
     });
     console.log('  ✓ Unidades de medida creadas: 3');
   } else {
     console.log('  ✓ Unidades de medida ya existen');
   }
 
-  // Custodias (Mikacao companyId: 2)
+  // Custodias (Mikacao companyId: mikacao.id)
   console.log('Creando custodias de ejemplo...');
-  const existingCustodia = await prisma.custodia.findFirst({ where: { companyId: 2 } });
+  const existingCustodia = await prisma.custodia.findFirst({ where: { companyId: mikacao.id } });
   if (!existingCustodia) {
     const custodiaExamples = [
       {
@@ -682,16 +682,16 @@ Si no necesitas datos, responde directamente.`,
       },
     ];
     for (const c of custodiaExamples) {
-      await prisma.custodia.create({ data: { ...c, companyId: 2, createdBy: adminMikacao.id } });
+      await prisma.custodia.create({ data: { ...c, companyId: mikacao.id, createdBy: adminMikacao.id } });
     }
     console.log('  ✓ Custodias de ejemplo creadas: 10');
   } else {
     console.log('  ✓ Custodias ya existen');
   }
 
-  // Personal Module (Mikacao companyId: 2)
+  // Personal Module (Mikacao companyId: mikacao.id)
   console.log('Creando datos del módulo Personal...');
-  const existingCertification = await prisma.certification.findFirst({ where: { companyId: 2 } });
+  const existingCertification = await prisma.certification.findFirst({ where: { companyId: mikacao.id } });
   if (!existingCertification) {
     // Certifications (5)
     const now = new Date();
@@ -700,39 +700,39 @@ Si no necesitas datos, responde directamente.`,
     const in25Days = new Date(now.getTime() + 25 * 24 * 60 * 60 * 1000);
     const in45Days = new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000);
     const in90Days = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
-    await prisma.certification.create({ data: { employeeName: 'Roberto Díaz', cedula: '1723456789', type: 'Nivel 1', issueDate: new Date('2025-06-01'), expiryDate: in25Days, companyId: 2, createdBy: adminMikacao.id } });
-    await prisma.certification.create({ data: { employeeName: 'Sandra Luna', cedula: '1308765432', type: 'Reentrenamiento', issueDate: new Date('2025-07-15'), expiryDate: in10Days, companyId: 2, createdBy: adminMikacao.id } });
-    await prisma.certification.create({ data: { employeeName: 'Fernando Castro', cedula: '0501234567', type: 'Examen Ocupacional', issueDate: new Date('2025-01-01'), expiryDate: in45Days, companyId: 2, createdBy: adminMikacao.id } });
-    await prisma.certification.create({ data: { employeeName: 'Eduardo Reyes', cedula: '1809876543', type: 'Nivel 2', issueDate: new Date('2025-03-01'), expiryDate: in3Days, companyId: 2, createdBy: adminMikacao.id } });
-    await prisma.certification.create({ data: { employeeName: 'Patricia Acosta', cedula: '1107654321', type: 'Nivel 1', issueDate: new Date('2025-08-01'), expiryDate: in90Days, companyId: 2, createdBy: adminMikacao.id } });
+    await prisma.certification.create({ data: { employeeName: 'Roberto Díaz', cedula: '1723456789', type: 'Nivel 1', issueDate: new Date('2025-06-01'), expiryDate: in25Days, companyId: mikacao.id, createdBy: adminMikacao.id } });
+    await prisma.certification.create({ data: { employeeName: 'Sandra Luna', cedula: '1308765432', type: 'Reentrenamiento', issueDate: new Date('2025-07-15'), expiryDate: in10Days, companyId: mikacao.id, createdBy: adminMikacao.id } });
+    await prisma.certification.create({ data: { employeeName: 'Fernando Castro', cedula: '0501234567', type: 'Examen Ocupacional', issueDate: new Date('2025-01-01'), expiryDate: in45Days, companyId: mikacao.id, createdBy: adminMikacao.id } });
+    await prisma.certification.create({ data: { employeeName: 'Eduardo Reyes', cedula: '1809876543', type: 'Nivel 2', issueDate: new Date('2025-03-01'), expiryDate: in3Days, companyId: mikacao.id, createdBy: adminMikacao.id } });
+    await prisma.certification.create({ data: { employeeName: 'Patricia Acosta', cedula: '1107654321', type: 'Nivel 1', issueDate: new Date('2025-08-01'), expiryDate: in90Days, companyId: mikacao.id, createdBy: adminMikacao.id } });
     console.log('  ✓ Certificaciones creadas: 5');
 
     // Contract Templates (3) — driveUrl/docxPath se configuran desde la UI
     // ("Plantillas de Contrato"), no traen un .docx de ejemplo en el seed.
-    const tpl1 = await prisma.contractTemplate.create({ data: { name: 'Contrato a Término Indefinido', type: 'TERMINO_INDEFINIDO', companyId: 2, createdBy: adminMikacao.id } });
-    const tpl2 = await prisma.contractTemplate.create({ data: { name: 'Contrato a Término Fijo', type: 'TERMINO_FIJO', companyId: 2, createdBy: adminMikacao.id } });
-    const tpl3 = await prisma.contractTemplate.create({ data: { name: 'Acta de Entrega de Uniformes', type: 'ENTREGA_UNIFORMES', companyId: 2, createdBy: adminMikacao.id } });
+    const tpl1 = await prisma.contractTemplate.create({ data: { name: 'Contrato a Término Indefinido', type: 'TERMINO_INDEFINIDO', companyId: mikacao.id, createdBy: adminMikacao.id } });
+    const tpl2 = await prisma.contractTemplate.create({ data: { name: 'Contrato a Término Fijo', type: 'TERMINO_FIJO', companyId: mikacao.id, createdBy: adminMikacao.id } });
+    const tpl3 = await prisma.contractTemplate.create({ data: { name: 'Acta de Entrega de Uniformes', type: 'ENTREGA_UNIFORMES', companyId: mikacao.id, createdBy: adminMikacao.id } });
     console.log('  ✓ Plantillas de contrato creadas: 3');
 
     // Contracts (3) — identificados por cédula, no por FK (ver comentario en
     // el modelo Contract). Nombres/cédulas fijos en vez de venir de Candidate
     // (tabla eliminada 2026-09-17 junto con el Kanban de Candidatos).
-    await prisma.contract.create({ data: { cedula: '1712345678', nombreGuardia: 'Ana Lucía Vera', templateId: tpl1.id, status: 'SIGNED', companyId: 2, createdBy: adminMikacao.id } });
-    await prisma.contract.create({ data: { cedula: '1804567890', nombreGuardia: 'Luis Fernando Gómez', templateId: tpl2.id, status: 'DRAFT', companyId: 2, createdBy: adminMikacao.id } });
-    await prisma.contract.create({ data: { cedula: '1103456789', nombreGuardia: 'Diana Carolina Torres', templateId: tpl3.id, status: 'DRAFT', companyId: 2, createdBy: adminMikacao.id } });
+    await prisma.contract.create({ data: { cedula: '1712345678', nombreGuardia: 'Ana Lucía Vera', templateId: tpl1.id, status: 'SIGNED', companyId: mikacao.id, createdBy: adminMikacao.id } });
+    await prisma.contract.create({ data: { cedula: '1804567890', nombreGuardia: 'Luis Fernando Gómez', templateId: tpl2.id, status: 'DRAFT', companyId: mikacao.id, createdBy: adminMikacao.id } });
+    await prisma.contract.create({ data: { cedula: '1103456789', nombreGuardia: 'Diana Carolina Torres', templateId: tpl3.id, status: 'DRAFT', companyId: mikacao.id, createdBy: adminMikacao.id } });
     console.log('  ✓ Contratos creados: 3');
 
     // Log Entries (5)
-    const tplIngreso = await prisma.logTemplate.findFirst({ where: { companyId: 2, type: 'PERMISO_INGRESO' } });
-    const tplNovedad = await prisma.logTemplate.findFirst({ where: { companyId: 2, type: 'NOVEDAD_OPERATIVA' } });
-    const tplSalida = await prisma.logTemplate.findFirst({ where: { companyId: 2, type: 'SALIDA_PERSONAL' } });
-    const tplRespuesta = await prisma.logTemplate.findFirst({ where: { companyId: 2, type: 'RESPUESTA_ADMIN_CONTRATO' } });
+    const tplIngreso = await prisma.logTemplate.findFirst({ where: { companyId: mikacao.id, type: 'PERMISO_INGRESO' } });
+    const tplNovedad = await prisma.logTemplate.findFirst({ where: { companyId: mikacao.id, type: 'NOVEDAD_OPERATIVA' } });
+    const tplSalida = await prisma.logTemplate.findFirst({ where: { companyId: mikacao.id, type: 'SALIDA_PERSONAL' } });
+    const tplRespuesta = await prisma.logTemplate.findFirst({ where: { companyId: mikacao.id, type: 'RESPUESTA_ADMIN_CONTRATO' } });
 
-    if (tplIngreso) await prisma.logEntry.create({ data: { title: 'Ingreso de proveedor - Distribuidora Norte', content: 'Se autoriza el ingreso de Juan Carlos Pérez con cédula 1754321678 al área de Bodega. Motivo: Entrega de materia prima para producción.', type: 'PERMISO_INGRESO', templateId: tplIngreso.id, companyId: 2, createdBy: adminMikacao.id } });
-    if (tplNovedad) await prisma.logEntry.create({ data: { title: 'Novedad en línea de producción', content: 'Novedad reportada por Roberto Díaz: Se presentó retraso de 30 minutos en la línea 2 por cambio de molde. Acción tomada: Se reasignó personal temporal.', type: 'NOVEDAD_OPERATIVA', templateId: tplNovedad.id, companyId: 2, createdBy: adminMikacao.id } });
-    if (tplSalida) await prisma.logEntry.create({ data: { title: 'Salida anticipada - Emergencia familiar', content: 'Se autoriza la salida de Sandra Luna del área de Calidad. Hora de salida: 14:30. Motivo: Emergencia familiar comprobada.', type: 'SALIDA_PERSONAL', templateId: tplSalida.id, companyId: 2, createdBy: adminMikacao.id } });
-    if (tplRespuesta) await prisma.logEntry.create({ data: { title: 'Respuesta sobre contrato de prueba', content: 'En respuesta a su solicitud regarding la extensión del período de prueba de Carlos Muñoz, le informamos que se aprueba por 30 días adicionales.', type: 'RESPUESTA_ADMIN_CONTRATO', templateId: tplRespuesta.id, companyId: 2, createdBy: adminMikacao.id } });
-    if (tplIngreso) await prisma.logEntry.create({ data: { title: 'Ingreso de visitante - Auditoría externa', content: 'Se autoriza el ingreso de María Fernanda López con cédula 1765432890 al área de Oficinas. Motivo: Auditoría de calidad programada.', type: 'PERMISO_INGRESO', templateId: tplIngreso.id, companyId: 2, createdBy: adminMikacao.id } });
+    if (tplIngreso) await prisma.logEntry.create({ data: { title: 'Ingreso de proveedor - Distribuidora Norte', content: 'Se autoriza el ingreso de Juan Carlos Pérez con cédula 1754321678 al área de Bodega. Motivo: Entrega de materia prima para producción.', type: 'PERMISO_INGRESO', templateId: tplIngreso.id, companyId: mikacao.id, createdBy: adminMikacao.id } });
+    if (tplNovedad) await prisma.logEntry.create({ data: { title: 'Novedad en línea de producción', content: 'Novedad reportada por Roberto Díaz: Se presentó retraso de 30 minutos en la línea 2 por cambio de molde. Acción tomada: Se reasignó personal temporal.', type: 'NOVEDAD_OPERATIVA', templateId: tplNovedad.id, companyId: mikacao.id, createdBy: adminMikacao.id } });
+    if (tplSalida) await prisma.logEntry.create({ data: { title: 'Salida anticipada - Emergencia familiar', content: 'Se autoriza la salida de Sandra Luna del área de Calidad. Hora de salida: 14:30. Motivo: Emergencia familiar comprobada.', type: 'SALIDA_PERSONAL', templateId: tplSalida.id, companyId: mikacao.id, createdBy: adminMikacao.id } });
+    if (tplRespuesta) await prisma.logEntry.create({ data: { title: 'Respuesta sobre contrato de prueba', content: 'En respuesta a su solicitud regarding la extensión del período de prueba de Carlos Muñoz, le informamos que se aprueba por 30 días adicionales.', type: 'RESPUESTA_ADMIN_CONTRATO', templateId: tplRespuesta.id, companyId: mikacao.id, createdBy: adminMikacao.id } });
+    if (tplIngreso) await prisma.logEntry.create({ data: { title: 'Ingreso de visitante - Auditoría externa', content: 'Se autoriza el ingreso de María Fernanda López con cédula 1765432890 al área de Oficinas. Motivo: Auditoría de calidad programada.', type: 'PERMISO_INGRESO', templateId: tplIngreso.id, companyId: mikacao.id, createdBy: adminMikacao.id } });
     console.log('  ✓ Registros de bitácora creados: 5');
   } else {
     console.log('  ✓ Datos del módulo Personal ya existen');
@@ -740,7 +740,7 @@ Si no necesitas datos, responde directamente.`,
 
   // Document Types (requisitos por defecto)
   console.log('Creando tipos de documentos (requisitos)...');
-  const existingDocType = await prisma.documentType.findFirst({ where: { companyId: 2 } });
+  const existingDocType = await prisma.documentType.findFirst({ where: { companyId: mikacao.id } });
   if (!existingDocType) {
     const custodiasReqs = [
       'Hoja de Vida',
@@ -754,11 +754,11 @@ Si no necesitas datos, responde directamente.`,
       'Reentrenamiento Vigente',
     ];
     for (const name of custodiasReqs) {
-      await prisma.documentType.create({ data: { name, folder: 'CUSTODIAS', required: true, companyId: 2 } });
+      await prisma.documentType.create({ data: { name, folder: 'CUSTODIAS', required: true, companyId: mikacao.id } });
     }
     const personalReqs = ['Hoja de Vida', 'Cédula', 'Contrato'];
     for (const name of personalReqs) {
-      await prisma.documentType.create({ data: { name, folder: 'PERSONAL', required: true, companyId: 2 } });
+      await prisma.documentType.create({ data: { name, folder: 'PERSONAL', required: true, companyId: mikacao.id } });
     }
     console.log('  ✓ Tipos de documentos creados: 9 Custodias + 3 Personal');
   } else {

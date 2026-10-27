@@ -3,9 +3,7 @@ import PageHeader from '../../../components/common/PageHeader';
 import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../../../services/cacao.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { Trash2, Pencil } from 'lucide-react';
-import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
-import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
-import { useColumnFilters } from '../../../hooks/useColumnFilters';
+import { useTablaCacao } from '../useTablaCacao';
 
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -65,15 +63,25 @@ export default function SuppliersPage() {
     try { await deleteSupplier(id); load(); } catch {}
   }
 
-  // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas).
-  const cf = useColumnFilters<any>(suppliers, [
-    { key: 'nombre', etiqueta: 'Nombre', tipo: 'texto', getValue: (s) => s.name },
-    { key: 'contacto', etiqueta: 'Contacto', tipo: 'texto', getValue: (s) => s.contact },
-    { key: 'telefono', etiqueta: 'Teléfono', tipo: 'texto', getValue: (s) => s.phone },
-    { key: 'condiciones', etiqueta: 'Condiciones', tipo: 'valores', vacio: 'Sin condiciones', getValues: (s) => s.paymentTerms },
-    { key: 'banco', etiqueta: 'Banco', tipo: 'valores', vacio: 'Sin banco', getValues: (s) => s.bank },
-  ]);
-  const filas = cf.filas;
+  const { tabla, selectorColumnas } = useTablaCacao<any>({
+    clave: 'proveedores',
+    filas: suppliers,
+    idFila: (s) => s.id,
+    ordenInicial: 'nombre',
+    principal: { key: 'nombre', ancho: 220, label: 'Nombre', clase: 'tasks-table-title', orden: (s) => s.name, celda: (s) => s.name },
+    columnas: [
+      { key: 'contacto', ancho: 160, label: 'Contacto', orden: (s) => s.contact, celda: (s) => s.contact || '—' },
+      { key: 'telefono', ancho: 130, label: 'Teléfono', orden: (s) => s.phone, celda: (s) => s.phone || '—' },
+      { key: 'condiciones', ancho: 160, label: 'Condiciones', orden: (s) => s.paymentTerms, celda: (s) => s.paymentTerms || '—' },
+      { key: 'banco', ancho: 160, label: 'Banco', orden: (s) => s.bank, celda: (s) => s.bank || '—' },
+    ],
+    acciones: (s) => (
+      <div className="tools-actions-cell">
+        <button className="btn-secondary icon-btn" onClick={() => startEdit(s)} title="Editar" aria-label="Editar"><Pencil size={14} /></button>
+        <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => handleDelete(s.id)} title="Eliminar proveedor" aria-label="Eliminar proveedor"><Trash2 size={14} /></button>
+      </div>
+    ),
+  });
 
   return (
     <div className="page-container">
@@ -87,6 +95,11 @@ export default function SuppliersPage() {
           </>
         }
       />
+
+      <div className="filter-bar">
+        <div className="filter-bar-fields" />
+        <div className="filter-bar-actions">{selectorColumnas}</div>
+      </div>
 
       {showForm && (
         <div className="page-card" style={{ marginBottom: '16px' }}>
@@ -141,40 +154,7 @@ export default function SuppliersPage() {
         ) : suppliers.length === 0 ? (
           <div className="empty-state">No hay proveedores registrados.</div>
         ) : (
-          <div className="tasks-table-wrapper">
-            <table className="tasks-table">
-              <thead>
-                <tr>
-                  <th>Nombre<ColumnFilter cf={cf} col="nombre" orden={cf.ordenDe('nombre')} /></th>
-                  <th>Contacto<ColumnFilter cf={cf} col="contacto" orden={cf.ordenDe('contacto')} /></th>
-                  <th>Teléfono<ColumnFilter cf={cf} col="telefono" orden={cf.ordenDe('telefono')} /></th>
-                  <th>Condiciones<ColumnFilter cf={cf} col="condiciones" orden={cf.ordenDe('condiciones')} /></th>
-                  <th>Banco<ColumnFilter cf={cf} col="banco" orden={cf.ordenDe('banco')} /></th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filas.length === 0 && (
-                  <FilaSinResultados columnas={6} mensaje="No hay proveedores que coincidan con los filtros." onLimpiar={cf.limpiar} />
-                )}
-                {filas.map((s) => (
-                  <tr key={s.id}>
-                    <td className="tasks-table-title">{s.name}</td>
-                    <td>{s.contact || '—'}</td>
-                    <td>{s.phone || '—'}</td>
-                    <td>{s.paymentTerms || '—'}</td>
-                    <td>{s.bank || '—'}</td>
-                    <td>
-                      <div className="tools-actions-cell">
-                        <button className="btn-secondary icon-btn" onClick={() => startEdit(s)} title="Editar" aria-label="Editar"><Pencil size={14} /></button>
-                        <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => handleDelete(s.id)} title="Eliminar proveedor" aria-label="Eliminar proveedor"><Trash2 size={14} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          tabla
         )}
       </div>
 
