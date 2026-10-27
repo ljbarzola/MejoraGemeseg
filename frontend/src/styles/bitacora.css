@@ -1,0 +1,152 @@
+/* Bitácora del equipo. Solo las piezas propias; tablas, filtros y encabezado usan las clases comunes. */
+
+.bit-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.bit-kpi {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fff;
+}
+
+.bit-kpi-etiqueta {
+  display: block;
+  font-size: 0.78rem;
+  color: #718096;
+}
+
+.bit-kpi-valor {
+  display: block;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.bit-kpi-detalle {
+  display: block;
+  font-size: 0.75rem;
+  color: #718096;
+}
+
+.bit-huecos {
+  border: 1px solid #fbd38d;
+  background: #fffaf0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 0.88rem;
+  color: #744210;
+}
+
+.bit-huecos ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.bit-fuente {
+  display: inline-block;
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid;
+  white-space: nowrap;
+  margin-right: 6px;
+}
+
+.bit-fuente-app {
+  background: #e6fffa;
+  color: #234e52;
+  border-color: #81e6d9;
+}
+
+.bit-fuente-google {
+  background: #ebf8ff;
+  color: #2a4365;
+  border-color: #90cdf4;
+}
+
+.bit-fuente-inactiva {
+  background: #f7fafc;
+  color: #4a5568;
+  border-color: #cbd5e0;
+}
+
+.bit-fila-click {
+  cursor: pointer;
+}
+
+.bit-fila-click:hover {
+  background: #f7fafc;
+}
+
+.bit-fila-activa,
+.bit-fila-activa:hover {
+  background: #edf2f7;
+}
+
+.bit-nota {
+  font-size: 0.82rem;
+  color: #718096;
+  margin: 12px 0 0;
+}
+
+.bit-vacio {
+  text-align: center;
+  color: #718096;
+  padding: 24px 12px;
+  margin: 0;
+}
+
+.bit-aviso {
+  border: 1px solid #bee3f8;
+  background: #ebf8ff;
+  color: #2a4365;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 0.9rem;
+}
+
+.bit-selector-dia {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* El campo de fecha, los botones de flecha y «Hoy» miden lo mismo (38px) y se alinean por abajo. */
+.bit-fecha-dia {
+  width: 150px;
+}
+
+.bit-selector-dia .filtro-fecha-dia {
+  height: 38px;
+  padding: 0 30px 0 10px;
+  font-size: 0.85rem;
+  width: 100%;
+}
+
+.bit-btn-hoy {
+  height: 38px;
+  padding: 0 16px;
+  font-size: 0.85rem;
+  border-radius: 10px;
+}
+
+.bit-detalle-titulo {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  color: #1a202c;
+}
+
+.bit-detalle-titulo small {
+  display: block;
+  font-weight: 400;
+  font-size: 0.82rem;
+  color: #718096;
+}

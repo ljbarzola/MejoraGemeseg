@@ -29,6 +29,31 @@ describe('buildSystemGuide', () => {
     }
   });
 
+  it('«Mi hoja del día» la conoce todo usuario, pero la bitácora del equipo solo quien la puede ver', () => {
+    const general = buildSystemGuide([]);
+    expect(general).toContain('Mi hoja del día');
+    expect(general).toContain('Por defecto nadie la tiene');
+    expect(general).not.toContain('Bitácora — guía');
+    expect(general).not.toContain('Leer Google ahora');
+    expect(general).not.toContain('Hojas activas');
+
+    const equipo = buildSystemGuide(['BITACORA']);
+    expect(equipo).toContain('Bitácora — guía');
+    expect(equipo).toContain('Hojas activas');
+    expect(equipo).toContain('Actividad del día');
+    expect(equipo).toContain('Últimos 7, 14 o 30 días');
+    expect(equipo).toContain('Solo historial');
+  });
+
+  it('Administración explica la Configuración de la Bitácora: hojas del día y Google, con nadie activo por defecto', () => {
+    const guia = buildSystemGuide(['ADMIN']);
+    expect(guia).toContain('"Configuración"');
+    expect(guia).toContain('"Hojas del día"');
+    expect(guia).toContain('Leer Google ahora');
+    expect(guia).toContain('Por defecto nadie está activo');
+    expect(buildSystemGuide([])).not.toContain('Leer Google ahora');
+  });
+
   it('Ventas explica la relación entre Posibles clientes, Oportunidades, Directorio y Contratos', () => {
     expect(buildSystemGuide(['VENTAS'])).toContain(
       'Relación entre los sub-módulos Posibles clientes, Oportunidades, Directorio y Contratos',

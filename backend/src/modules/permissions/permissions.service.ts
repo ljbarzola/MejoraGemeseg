@@ -48,6 +48,11 @@ export const ALL_SECTIONS = [
   // inalcanzables para toda empresa existente hasta que un super admin
   // activara la sección a mano — que es exactamente lo que pasó al publicarla.
   { key: 'SISTEMAS', label: 'Sistemas', alwaysEnabled: true },
+  // Bitácora del equipo (2026-10-27): apagada por empresa (un super admin la
+  // enciende, y hasta entonces NO se registra nada de esa empresa) y cerrada por
+  // defecto (solo ve la bitácora de todo el equipo quien tenga fila de permiso).
+  // Cada persona ve siempre su propia hoja, sin necesitar permiso.
+  { key: 'BITACORA', label: 'Bitácora del equipo', alwaysEnabled: false },
 ];
 
 /** Secciones que no se pueden negar usuario por usuario (ver ALL_SECTIONS). */
@@ -79,7 +84,7 @@ export function esSeccionSiempreVisible(section: string): boolean {
  * Herramientas es una pantalla de Sistemas, no una sección aparte. Crear un
  * ticket sigue abierto a cualquiera (ese endpoint no usa guard de sección).
  */
-export const SECCIONES_CERRADAS_POR_DEFECTO: string[] = ['SISTEMAS'];
+export const SECCIONES_CERRADAS_POR_DEFECTO: string[] = ['SISTEMAS', 'BITACORA'];
 
 /** ¿Qué pasa con una sección cuando la persona no tiene fila de permiso? */
 export function permiteSinFila(section: string): boolean {

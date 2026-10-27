@@ -122,11 +122,12 @@ describe('PermissionsService', () => {
       expect(result.isSuperAdmin).toBe(false);
       expect(result.sections).toContain('CACAO');
       expect(result.sections).not.toContain('VENTAS');
-      // Sistemas es una sección cerrada por defecto: sin fila se entrega
-      // denegada de forma explícita (ver permiteSinFila).
+      // Sistemas y Bitácora son secciones cerradas por defecto: sin fila se
+      // entregan denegadas de forma explícita (ver permiteSinFila).
       expect(result.permissions).toEqual([
         { section: 'CACAO', canView: true, canWrite: false },
         { section: 'SISTEMAS', canView: false, canWrite: false },
+        { section: 'BITACORA', canView: false, canWrite: false },
       ]);
     });
   });

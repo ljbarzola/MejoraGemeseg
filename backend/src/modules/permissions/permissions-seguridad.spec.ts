@@ -11,9 +11,10 @@ import { SectionPermissionGuard } from '../../common/guards/section-permission.g
 import { PrismaService } from '../../prisma/prisma.service';
 
 describe('permisos: Sistemas cerrado por defecto', () => {
-  it('SISTEMAS está cerrada por defecto y el resto sigue abierto sin fila', () => {
-    expect(SECCIONES_CERRADAS_POR_DEFECTO).toEqual(['SISTEMAS']);
+  it('SISTEMAS y BITACORA están cerradas por defecto y el resto sigue abierto sin fila', () => {
+    expect(SECCIONES_CERRADAS_POR_DEFECTO).toEqual(['SISTEMAS', 'BITACORA']);
     expect(permiteSinFila('SISTEMAS')).toBe(false);
+    expect(permiteSinFila('BITACORA')).toBe(false);
     expect(permiteSinFila('VENTAS')).toBe(true);
     expect(permiteSinFila('RRHH')).toBe(true);
   });

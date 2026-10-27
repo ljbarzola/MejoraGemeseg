@@ -21,6 +21,7 @@ import { VentasModule } from './modules/ventas/ventas.module';
 import { SistemasModule } from './modules/sistemas/sistemas.module';
 import { ContratacionPublicaModule } from './modules/contratacion-publica/contratacion-publica.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { BitacoraModule } from './modules/bitacora/bitacora.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     SistemasModule,
     ContratacionPublicaModule,
     NotificationsModule,
+    BitacoraModule,
   ],
   controllers: [AppController],
   providers: [AppService],
