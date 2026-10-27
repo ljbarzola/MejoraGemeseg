@@ -389,8 +389,8 @@ export default function OportunidadesPage() {
       case 'etapa': return o.stage?.label ?? 'Sin etapa';
       case 'monto': return o.quotedAmount ?? '';
       case 'responsable': return o.assignedUserName || 'Sin asignar';
-      case 'origen': return ORIGEN_OPORTUNIDAD_LABEL[o.originType] ?? o.originType;
-      case 'llego': return diaCorto(o.receivedAt);
+      case 'origen': return origenDeOportunidad(o, canales).etiqueta;
+      case 'llego': return diaCortoEcuador(o.receivedAt);
       case 'telefono': return o.salesClient.phone || '';
       case 'correo': return o.salesClient.email || '';
       case 'motivoPerdida': return o.motivoPerdida?.label ?? '';

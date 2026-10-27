@@ -306,7 +306,7 @@ export default function LeadsPage() {
       case 'motivo': return l.contactReason ? MOTIVO_CONTACTO_LABEL[l.contactReason] : '';
       case 'estado': return ESTADO_LABEL[l.status];
       case 'responsable': return l.assignedUserName || 'Sin asignar';
-      case 'llego': return diaCorto(l.createdAt);
+      case 'llego': return diaCortoEcuador(l.createdAt);
       case 'campana': return l.campaign || '';
       case 'servicio': case 'landing': case 'gclid': case 'referidoPor': return extraTexto(l, key);
       case 'consentimiento': {
