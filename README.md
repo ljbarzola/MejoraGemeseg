@@ -167,7 +167,7 @@ Google Cloud Platform (proyecto: mejora-gemeseg)
   ├── Firebase Hosting            → app.gemeseg.com / mejora-gemeseg.web.app (React)
   ├── Artifact Registry           → imagenes del backend
   ├── Secret Manager              → DATABASE_URL, JWT_SECRET, FRONTEND_URL, claves de SignWell y cuentas de servicio de Google
-  └── Cloud Scheduler + Cloud Build → copia semanal de la base (cloudbuild.weekly-backup.yaml)
+  └── Cloud SQL → copia diaria nativa de la base (el job semanal de cloudbuild.weekly-backup.yaml se borro el 2026-10-23; ver AGENTS.md)
 ```
 
 ### Variables de entorno

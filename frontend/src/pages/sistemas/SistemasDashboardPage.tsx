@@ -150,16 +150,17 @@ function Contenido({ datos }: { datos: Datos }) {
   // La base de conocimiento no guarda fecha de cambio: solo se puede decir si tiene texto y cuántos temas.
   const temas = conocimiento ? [...conocimiento.matchAll(/^## (.+)$/gm)].map((m) => m[1].trim()) : [];
 
-  const irSoporte = () => navigate('/sistemas/soporte');
+  // Cada número, trozo de la dona y ticket lleva a Soporte técnico con su filtro (?estado=, ?tipo= o ?ticket=).
+  const irSoporte = (consulta = '') => navigate(`/sistemas/soporte${consulta}`);
 
   return (
     <div className="dash-pila">
       <KpiFila className="dash-kpis--cuatro">
         {stats && (
           <>
-            <Contador titulo="Tickets abiertos" valor={stats.abiertos} color="#c53030" detalle="Esperan respuesta" onClick={irSoporte} />
-            <Contador titulo="En revisión" valor={stats.enRevision} color="#c05621" detalle="Se están atendiendo" onClick={irSoporte} />
-            <Contador titulo="Resueltos" valor={stats.resueltos} color="#276749" detalle={`${stats.totalMes} reportados este mes`} onClick={irSoporte} />
+            <Contador titulo="Tickets abiertos" valor={stats.abiertos} color="#c53030" detalle="Esperan respuesta" onClick={() => irSoporte('?estado=ABIERTO')} />
+            <Contador titulo="En revisión" valor={stats.enRevision} color="#c05621" detalle="Se están atendiendo" onClick={() => irSoporte('?estado=EN_REVISION')} />
+            <Contador titulo="Resueltos" valor={stats.resueltos} color="#276749" detalle={`${stats.totalMes} reportados este mes`} onClick={() => irSoporte('?estado=RESUELTO')} />
             <Contador
               titulo="Resolución promedio"
               valor={formatearHoras(stats.tiempoPromedioResolucionHoras)}
@@ -195,7 +196,7 @@ function Contenido({ datos }: { datos: Datos }) {
               aria="Tickets de soporte por tipo"
               centroTitulo="tickets"
               segmentos={TIPOS.map((t) => ({
-                key: t.tipo, etiqueta: t.label, color: t.color, valor: stats.porTipo?.[t.tipo] ?? 0, onClick: irSoporte,
+                key: t.tipo, etiqueta: t.label, color: t.color, valor: stats.porTipo?.[t.tipo] ?? 0, onClick: () => irSoporte(`?tipo=${t.tipo}`),
               }))}
             />
           ) : (
@@ -206,7 +207,7 @@ function Contenido({ datos }: { datos: Datos }) {
         <Tarjeta
           titulo="Últimos tickets"
           hint="Los cinco más recientes."
-          accion={<button className="btn-secondary" style={BOTON_TARJETA} onClick={irSoporte}>Ver todos</button>}
+          accion={<button className="btn-secondary" style={BOTON_TARJETA} onClick={() => irSoporte()}>Ver todos</button>}
         >
           {!tickets ? (
             <SinDatos texto="No se pudieron cargar los tickets." />
@@ -220,7 +221,7 @@ function Contenido({ datos }: { datos: Datos }) {
                   <button
                     key={t.id}
                     type="button"
-                    onClick={irSoporte}
+                    onClick={() => irSoporte(`?ticket=${t.id}`)}
                     style={{
                       padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: 10, background: '#fff', textAlign: 'left',
                       cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, fontFamily: 'inherit',

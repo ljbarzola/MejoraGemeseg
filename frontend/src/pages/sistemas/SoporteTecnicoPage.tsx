@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Settings, ExternalLink, X } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import {
@@ -65,8 +66,14 @@ export default function SoporteTecnicoPage() {
   const [detalleId, setDetalleId] = useState<number | null>(null);
 
   const [search, setSearch] = useState('');
-  const [filtroEstado, setFiltroEstado] = useState('');
-  const [filtroTipo, setFiltroTipo] = useState('');
+  // El dashboard de Sistemas manda aquí con ?estado=ABIERTO, ?tipo=ERROR o ?ticket=<id>.
+  const [params] = useSearchParams();
+  const estadoDeUrl = params.get('estado') ?? '';
+  const tipoDeUrl = params.get('tipo') ?? '';
+  const ticketDeUrl = Number(params.get('ticket')) || null;
+  const ticketYaAbierto = useRef(false);
+  const [filtroEstado, setFiltroEstado] = useState(Object.keys(ESTADO_LABEL).includes(estadoDeUrl) ? estadoDeUrl : '');
+  const [filtroTipo, setFiltroTipo] = useState(Object.keys(TIPO_LABEL).includes(tipoDeUrl) ? tipoDeUrl : '');
   const [filtroEmpresa, setFiltroEmpresa] = useState('');
 
   const columnPrefs = useColumnPreferences('soporte-tecnico', COLUMNAS_POR_DEFECTO);
@@ -81,6 +88,13 @@ export default function SoporteTecnicoPage() {
   };
 
   useEffect(load, []);
+
+  // Un ticket pedido por la URL se abre una sola vez, cuando ya cargaron los tickets.
+  useEffect(() => {
+    if (ticketYaAbierto.current || !ticketDeUrl || !tickets.some((t) => t.id === ticketDeUrl)) return;
+    ticketYaAbierto.current = true;
+    setDetalleId(ticketDeUrl);
+  }, [ticketDeUrl, tickets]);
 
   const handleEstadoChange = async (id: number, estado: TicketSoporteEstado) => {
     setSavingId(id);
