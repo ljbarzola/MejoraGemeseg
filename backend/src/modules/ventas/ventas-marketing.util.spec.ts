@@ -12,12 +12,12 @@ const opp = (o: Partial<Parameters<typeof faseMarketing>[0]> = {}) => ({
 });
 
 describe('faseMarketing', () => {
-  it('antes de cotizar está sin procesar', () => {
+  it('mientras nadie la evalúa está sin procesar', () => {
     expect(faseMarketing(opp())).toBe('SIN_PROCESAR');
-    expect(faseMarketing(opp({ status: 'LEIDO' }))).toBe('SIN_PROCESAR');
   });
 
-  it('desde Cotizada es cualificado, también en negociación', () => {
+  it('desde En evaluación es cualificado, también cotizada y en negociación', () => {
+    expect(faseMarketing(opp({ status: 'LEIDO' }))).toBe('CUALIFICADO');
     expect(faseMarketing(opp({ status: 'COTIZADO' }))).toBe('CUALIFICADO');
     expect(faseMarketing(opp({ status: 'NEGOCIACION' }))).toBe('CUALIFICADO');
   });
@@ -26,12 +26,15 @@ describe('faseMarketing', () => {
     expect(faseMarketing(opp({ quotedAt: new Date('2026-10-01') }))).toBe('CUALIFICADO');
   });
 
-  it('perdida después de cotizar sigue siendo cualificado; perdida sin cotizar no', () => {
+  it('perdida después de evaluarse sigue siendo cualificado; perdida sin evaluarse no', () => {
     expect(
       faseMarketing(opp({ outcome: 'PERDIDA', status: 'RECHAZADO', etapasAlcanzadas: ['LEIDO', 'COTIZADO', 'RECHAZADO'] })),
     ).toBe('CUALIFICADO');
     expect(
       faseMarketing(opp({ outcome: 'PERDIDA', status: 'RECHAZADO', etapasAlcanzadas: ['LEIDO', 'RECHAZADO'] })),
+    ).toBe('CUALIFICADO');
+    expect(
+      faseMarketing(opp({ outcome: 'PERDIDA', status: 'RECHAZADO', etapasAlcanzadas: ['RECHAZADO'] })),
     ).toBe('SIN_PROCESAR');
   });
 

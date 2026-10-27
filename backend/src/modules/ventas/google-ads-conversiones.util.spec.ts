@@ -4,7 +4,58 @@ import {
   idTransaccion,
   leerConfigGoogleAds,
   mensajeDeError,
+  veredictoDeDestino,
 } from './google-ads-conversiones.util';
+
+describe('veredictoDeDestino (lo que Google contestó al procesar)', () => {
+  const error = (reason: string, status = 'FAILED') => ({
+    requestStatus: status,
+    errorInfo: { errorCounts: [{ reason, recordCount: '1' }] },
+  });
+
+  it('sin respuesta o procesando todavía: se vuelve a preguntar después', () => {
+    expect(veredictoDeDestino(undefined).estado).toBe('PROCESANDO');
+    expect(veredictoDeDestino({ requestStatus: 'PROCESSING' }).estado).toBe('PROCESANDO');
+  });
+
+  it('SUCCESS es aceptado', () => {
+    expect(veredictoDeDestino({ requestStatus: 'SUCCESS' })).toMatchObject({ estado: 'ACEPTADO', nota: null });
+  });
+
+  it('clic no encontrado o de otra cuenta se rechaza con un motivo en español, sin códigos', () => {
+    const v = veredictoDeDestino(error('PROCESSING_ERROR_REASON_CLICK_NOT_FOUND'));
+    expect(v.estado).toBe('RECHAZADO');
+    expect(v.nota).toMatch(/no encontró el clic/);
+    expect(v.nota).not.toMatch(/PROCESSING|CLICK_NOT_FOUND/);
+    expect(v.razones).toEqual(['CLICK_NOT_FOUND']);
+    expect(veredictoDeDestino(error('PROCESSING_ERROR_OPERATING_ACCOUNT_MISMATCH_FOR_AD_IDENTIFIER')).nota).toMatch(
+      /otra cuenta/,
+    );
+  });
+
+  it('un duplicado cuenta como recibido (Google ya lo tenía)', () => {
+    expect(veredictoDeDestino(error('PROCESSING_ERROR_REASON_DUPLICATE_TRANSACTION_ID'))).toMatchObject({
+      estado: 'ACEPTADO',
+      nota: 'Google ya tenía este aviso.',
+    });
+  });
+
+  it('un clic muy reciente o un error interno de Google se reintenta solo', () => {
+    expect(veredictoDeDestino(error('PROCESSING_ERROR_REASON_TOO_RECENT_CLICK')).estado).toBe('REINTENTAR');
+    expect(veredictoDeDestino(error('PROCESSING_ERROR_REASON_INTERNAL_ERROR')).estado).toBe('REINTENTAR');
+  });
+
+  it('un motivo desconocido no muestra el código crudo', () => {
+    const v = veredictoDeDestino(error('PROCESSING_ERROR_REASON_ALGO_NUEVO'));
+    expect(v.estado).toBe('RECHAZADO');
+    expect(v.nota).not.toMatch(/ALGO_NUEVO/);
+    expect(v.razones).toEqual(['ALGO_NUEVO']);
+  });
+
+  it('éxito parcial queda como parcial', () => {
+    expect(veredictoDeDestino(error('PROCESSING_ERROR_REASON_CLICK_NOT_FOUND', 'PARTIAL_SUCCESS')).estado).toBe('PARCIAL');
+  });
+});
 
 const ENV_COMPLETO = {
   GOOGLE_ADS_CUSTOMER_ID: '123-456-7890',

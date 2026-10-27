@@ -2,13 +2,28 @@ import {
   VIGENCIA_GCLID_DIAS,
   gclidDeLead,
   gclidVigente,
+  hechosAcumulados,
   hechosDeEtapa,
 } from './ventas-conversiones.util';
+import { clavesCualificadas } from './ventas-marketing.util';
 
 describe('hechosDeEtapa', () => {
-  it('cotizar o negociar es cualificado', () => {
+  it('estar En evaluación, cotizar o negociar es cualificado', () => {
+    expect(hechosDeEtapa('LEIDO', null)).toEqual(['CUALIFICADO']);
     expect(hechosDeEtapa('COTIZADO', null)).toEqual(['CUALIFICADO']);
     expect(hechosDeEtapa('NEGOCIACION', null)).toEqual(['CUALIFICADO']);
+  });
+
+  it('una etapa propia de la empresa (intermedia) también es cualificado', () => {
+    const cualificadas = clavesCualificadas([
+      { key: 'RECIBIDO', isInitial: true, isFinal: false },
+      { key: 'PROPUESTA_ENVIADA', isInitial: false, isFinal: false },
+      { key: 'RECHAZADO', isInitial: false, isFinal: true },
+    ]);
+    expect(hechosDeEtapa('PROPUESTA_ENVIADA', null, cualificadas)).toEqual(['CUALIFICADO']);
+    expect(hechosDeEtapa('PROPUESTA_ENVIADA', null)).toEqual([]);
+    expect(hechosDeEtapa('RECIBIDO', null, cualificadas)).toEqual([]);
+    expect(hechosDeEtapa('RECHAZADO', 'PERDIDA', cualificadas)).toEqual([]);
   });
 
   it('aceptar es convertido, y también cualificado (el embudo es acumulado)', () => {
@@ -17,8 +32,19 @@ describe('hechosDeEtapa', () => {
 
   it('las demás etapas, y perder, no avisan nada a Google', () => {
     expect(hechosDeEtapa('RECIBIDO', null)).toEqual([]);
-    expect(hechosDeEtapa('LEIDO', null)).toEqual([]);
     expect(hechosDeEtapa('RECHAZADO', 'PERDIDA')).toEqual([]);
+  });
+});
+
+describe('hechosAcumulados', () => {
+  it('mira todo el camino: pasó por evaluación es cualificado aunque hoy esté perdida', () => {
+    expect(hechosAcumulados(['RECIBIDO', 'LEIDO', 'RECHAZADO'], 'PERDIDA')).toEqual(['CUALIFICADO']);
+    expect(hechosAcumulados(['RECIBIDO'], null)).toEqual([]);
+    expect(hechosAcumulados(['RECIBIDO', 'RECHAZADO'], 'PERDIDA')).toEqual([]);
+  });
+
+  it('ganada es cualificada y convertida', () => {
+    expect(hechosAcumulados(['RECIBIDO', 'ACEPTADO'], 'GANADA')).toEqual(['CUALIFICADO', 'CONVERTIDO']);
   });
 });
 

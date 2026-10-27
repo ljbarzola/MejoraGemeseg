@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { timingSafeEqual } from 'crypto';
 import { GoogleAdsConversionesService } from './google-ads-conversiones.service';
+import { VentasConversionesService } from './ventas-conversiones.service';
 
 /**
  * Punto de entrada para Cloud Scheduler: manda a Google Ads los hechos que
@@ -20,11 +21,14 @@ import { GoogleAdsConversionesService } from './google-ads-conversiones.service'
  */
 @Controller('ventas/conversiones-cron')
 export class VentasConversionesCronController {
-  constructor(private readonly envio: GoogleAdsConversionesService) {}
+  constructor(
+    private readonly envio: GoogleAdsConversionesService,
+    private readonly conversiones: VentasConversionesService,
+  ) {}
 
   @Post('enviar')
   @HttpCode(200)
-  enviar(
+  async enviar(
     @Headers('x-cron-secret') recibido?: string,
     @Query('dryRun') dryRun?: string,
   ) {
@@ -33,7 +37,17 @@ export class VentasConversionesCronController {
     if (!recibido || !this.iguales(recibido, esperado)) {
       throw new UnauthorizedException();
     }
-    return this.envio.enviarPendientes({ dryRun: dryRun === 'true' });
+    const simulacro = dryRun === 'true';
+    // En simulacro no se escribe nada: solo se cuenta lo que se enviaría.
+    if (simulacro) return this.envio.enviarPendientes({ dryRun: true });
+    // 1) se registran los hechos que faltaron (p. ej. oportunidades que ya estaban En evaluación cuando cambió
+    // la regla de «cualificado»); 2) los enviados antes de poder verificarse se vuelven a mandar una vez;
+    // 3) se envía; 4) se le pregunta a Google si procesó o rechazó lo enviado hace más de 30 minutos.
+    const rellenados = await this.conversiones.rellenarFaltantes();
+    const reenviados = await this.envio.reencolarSinVerificar();
+    const envio = await this.envio.enviarPendientes();
+    const verificacion = await this.envio.verificarEnvios();
+    return { ...envio, rellenados: rellenados.creados, reenviados, verificacion };
   }
 
   private iguales(a: string, b: string): boolean {

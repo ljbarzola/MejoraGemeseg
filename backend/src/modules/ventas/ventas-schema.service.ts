@@ -7,6 +7,7 @@ import {
 } from './sales-agreement.schema';
 import { COTIZADOR_DDL } from './cotizador.schema';
 import {
+  SALES_CONVERSION_COLUMNS_DDL,
   SALES_OPPORTUNITY_COLUMNS_DDL,
   SALES_PIPELINE_BACKFILL,
   SALES_PIPELINE_DDL,
@@ -101,6 +102,7 @@ export class VentasSchemaService implements OnModuleInit {
       { nombre: 'SalesContract (tipo de documento)', sentencias: SALES_CONTRACT_COLUMNS_DDL },
       { nombre: 'SalesOpportunity (renovaciones y ubicación)', sentencias: SALES_OPPORTUNITY_COLUMNS_DDL },
       { nombre: 'ClientVisit (cliente y ubicación)', sentencias: SALES_VISIT_COLUMNS_DDL },
+      { nombre: 'SalesConversionEvent (verificación con Google)', sentencias: SALES_CONVERSION_COLUMNS_DDL },
     ];
     for (const { nombre, sentencias } of listas) {
       try {

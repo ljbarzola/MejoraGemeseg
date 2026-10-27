@@ -5,10 +5,15 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   ALCANCE_DATA_MANAGER,
   ESPERA_REINTENTO_MIN,
+  ESPERA_VERIFICACION_MIN,
   MAX_INTENTOS,
+  RETENCION_ESTADO_DIAS,
+  URL_ESTADO,
   URL_INGEST,
   construirSolicitud,
   mensajeDeError,
+  veredictoDeDestino,
+  type DestinoEstadoGoogle,
   type HechoParaEnviar,
 } from './google-ads-conversiones.util';
 import { gclidVigente, type TipoConversion } from './ventas-conversiones.util';
@@ -22,6 +27,15 @@ export interface ResultadoEnvio {
   enviados: number;
   fallidos: number;
   vencidos: number;
+}
+
+export interface ResultadoVerificacion {
+  revisados: number;
+  aceptados: number;
+  rechazados: number;
+  reintentar: number;
+  procesando: number;
+  fallos: number;
 }
 
 // Envía a Google Ads los hechos (lead válido / cualificado / convertido) que
@@ -139,7 +153,8 @@ export class GoogleAdsConversionesService {
           { status: 'FALLO', attempts: { lt: MAX_INTENTOS }, updatedAt: { lt: espera } },
         ],
       },
-      orderBy: { createdAt: 'asc' },
+      // Orden estable: al verificar, los destinos de la solicitud se reconstruyen en este mismo orden.
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: opciones.limite ?? 50,
     });
     base.candidatos = eventos.length;
@@ -184,16 +199,34 @@ export class GoogleAdsConversionesService {
     const ids = hechos.map((h) => h.id);
     try {
       const token = await this.token(config.cuentaDeServicio);
-      await axios.post(URL_INGEST, construirSolicitud(config, hechos.map((h) => h.hecho)), {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        timeout: 30_000,
-      });
+      const respuesta = await axios.post<{ requestId?: string }>(
+        URL_INGEST,
+        construirSolicitud(config, hechos.map((h) => h.hecho)),
+        {
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          timeout: 30_000,
+        },
+      );
       // En modo de validación Google no cuenta nada: se deja todo PENDIENTE.
       if (!config.validateOnly) {
+        // El 200 solo dice «recibido»: Google procesa después y puede rechazar. Se guarda el número de
+        // solicitud para preguntarle (verificarEnvios) si de verdad lo aceptó y por qué si no.
+        const requestId = respuesta.data?.requestId ?? null;
         await this.prisma.salesConversionEvent.updateMany({
           where: { id: { in: ids } },
-          data: { status: 'ENVIADO', sentAt: new Date(), lastError: null, attempts: { increment: 1 } },
+          data: {
+            status: 'ENVIADO',
+            sentAt: new Date(),
+            lastError: null,
+            attempts: { increment: 1 },
+            requestId,
+            googleStatus: null,
+            checkedAt: null,
+          },
         });
+        this.logger.log(
+          `Aviso a Google Ads recibido (empresa ${companyId}, ${ids.length} hecho(s), solicitud ${requestId ?? 'sin número'}).`,
+        );
         base.enviados = ids.length;
       }
     } catch (err) {
@@ -213,5 +246,118 @@ export class GoogleAdsConversionesService {
       base.fallidos = ids.length;
     }
     return base;
+  }
+
+  // Los avisos que se enviaron ANTES de guardar el número de solicitud (2026-10-27) nunca pudieron
+  // comprobarse con Google. Se vuelven a poner PENDIENTES UNA sola vez (con `attempts <= 1`: al reenviarse
+  // ya suman 2 y no vuelven a entrar) para que el reenvío traiga su número y se verifique. No cuenta doble:
+  // cada aviso lleva siempre el mismo `transactionId`, y si Google ya lo tenía contesta «duplicado», que el
+  // CRM entiende como recibido.
+  async reencolarSinVerificar(): Promise<number> {
+    const r = await this.prisma.salesConversionEvent.updateMany({
+      where: { status: 'ENVIADO', requestId: null, googleStatus: null, attempts: { lte: 1 } },
+      data: { status: 'PENDIENTE', lastError: null },
+    });
+    if (r.count > 0) this.logger.log(`Avisos a Google Ads vueltos a enviar para poder verificarlos: ${r.count}`);
+    return r.count;
+  }
+
+  // Le pregunta a Google, por cada solicitud ya enviada (pasados 30 minutos), si procesó los avisos o los
+  // rechazó. Sin esto el CRM da por bueno todo lo que Google «recibió», aunque lo descarte después (el
+  // aviso real del 16/10 llevaba 10 días sin aparecer sin que nadie lo supiera).
+  async verificarEnvios(): Promise<ResultadoVerificacion> {
+    const total: ResultadoVerificacion = {
+      revisados: 0,
+      aceptados: 0,
+      rechazados: 0,
+      reintentar: 0,
+      procesando: 0,
+      fallos: 0,
+    };
+    const ahora = new Date();
+    const eventos = await this.prisma.salesConversionEvent.findMany({
+      where: {
+        status: 'ENVIADO',
+        requestId: { not: null },
+        OR: [{ googleStatus: null }, { googleStatus: 'PROCESANDO' }],
+        sentAt: {
+          lte: new Date(ahora.getTime() - ESPERA_VERIFICACION_MIN * 60_000),
+          gte: new Date(ahora.getTime() - RETENCION_ESTADO_DIAS * 86_400_000),
+        },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: 200,
+    });
+    if (eventos.length === 0) return total;
+
+    const solicitudes = new Map<string, typeof eventos>();
+    for (const e of eventos) {
+      const clave = `${e.companyId}|${e.requestId}`;
+      solicitudes.set(clave, [...(solicitudes.get(clave) ?? []), e]);
+    }
+    const tokens = new Map<number, string | null>();
+    for (const grupo of solicitudes.values()) {
+      const { companyId, requestId } = grupo[0];
+      try {
+        if (!tokens.has(companyId)) {
+          const config = await this.config.configGoogleAds(companyId);
+          tokens.set(companyId, config ? await this.token(config.cuentaDeServicio) : null);
+        }
+        const token = tokens.get(companyId);
+        if (!token) continue;
+        const r = await axios.get<{ requestStatusPerDestination?: DestinoEstadoGoogle[] }>(URL_ESTADO, {
+          params: { requestId },
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: 30_000,
+        });
+        // Google contesta un estado por destino, en el mismo orden en que se mandaron (un destino por tipo).
+        const tipos = [...new Set(grupo.map((e) => e.kind))];
+        const destinos = r.data?.requestStatusPerDestination ?? [];
+        for (const [i, kind] of tipos.entries()) {
+          const v = veredictoDeDestino(destinos[i]);
+          const ids = grupo.filter((e) => e.kind === kind).map((e) => e.id);
+          total.revisados += ids.length;
+          if (v.estado !== 'ACEPTADO' && v.estado !== 'PROCESANDO') {
+            this.logger.warn(
+              `Google Ads no aceptó del todo la solicitud ${requestId} (${kind}): ${v.estado} ${v.razones.join(', ')}`,
+            );
+          }
+          const data = this.datosDeVeredicto(v.estado, v.nota, ahora);
+          await this.prisma.salesConversionEvent.updateMany({ where: { id: { in: ids } }, data });
+          if (v.estado === 'ACEPTADO' || v.estado === 'PARCIAL') total.aceptados += ids.length;
+          else if (v.estado === 'RECHAZADO') total.rechazados += ids.length;
+          else if (v.estado === 'REINTENTAR') total.reintentar += ids.length;
+          else total.procesando += ids.length;
+        }
+      } catch (err) {
+        total.fallos++;
+        this.logger.error(
+          `No se pudo consultar a Google Ads la solicitud ${requestId}: ${
+            axios.isAxiosError(err) ? JSON.stringify(err.response?.data ?? err.message) : (err as Error).message
+          }`,
+        );
+      }
+    }
+    return total;
+  }
+
+  private datosDeVeredicto(
+    estado: 'PROCESANDO' | 'ACEPTADO' | 'PARCIAL' | 'RECHAZADO' | 'REINTENTAR',
+    nota: string | null,
+    ahora: Date,
+  ) {
+    switch (estado) {
+      case 'ACEPTADO':
+        return { googleStatus: 'ACEPTADO', checkedAt: ahora, lastError: nota };
+      case 'PARCIAL':
+        return { googleStatus: 'PARCIAL', checkedAt: ahora, lastError: nota };
+      case 'RECHAZADO':
+        return { status: 'RECHAZADO', googleStatus: 'RECHAZADO', checkedAt: ahora, lastError: nota };
+      case 'REINTENTAR':
+        // Google lo rechazó por algo pasajero: vuelve a la cola para que el envío lo reintente.
+        return { status: 'FALLO', googleStatus: null, requestId: null, checkedAt: ahora, lastError: nota };
+      default:
+        return { googleStatus: 'PROCESANDO', checkedAt: ahora };
+    }
   }
 }

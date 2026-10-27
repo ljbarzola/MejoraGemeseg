@@ -3,7 +3,7 @@
 // sirve. Son las mismas fases del embudo de marketing (ventas-marketing.util.ts)
 // para que las cifras del CRM cuadren con el panel de Google.
 
-import { ETAPAS_COTIZADAS } from './ventas-marketing.util';
+import { ETAPAS_CUALIFICADAS } from './ventas-marketing.util';
 
 // VALIDO (2026-10-18) es el paso INTERMEDIO entre llenar el formulario y cotizar: una persona del
 // equipo revisó el posible cliente y confirmó que es un contacto real de servicio (no empleo,
@@ -13,7 +13,7 @@ export type TipoConversion = 'VALIDO' | 'CUALIFICADO' | 'CONVERTIDO';
 
 export const ETIQUETA_CONVERSION: Record<TipoConversion, string> = {
   VALIDO: 'Lead válido (contacto real de servicio)',
-  CUALIFICADO: 'Lead cualificado (cotizó)',
+  CUALIFICADO: 'Lead cualificado (en evaluación)',
   CONVERTIDO: 'Lead convertido (contrató)',
 };
 
@@ -21,16 +21,31 @@ export const ETIQUETA_CONVERSION: Record<TipoConversion, string> = {
 // conversión al anuncio y rechazaría el envío.
 export const VIGENCIA_GCLID_DIAS = 90;
 
-// Qué hechos produce la oportunidad al entrar a una etapa. Aceptar sin haber
-// cotizado también cuenta como cualificado (el embudo es acumulado: todo
-// convertido fue antes cualificado).
+// Qué hechos produce la oportunidad al entrar a una etapa. Desde 2026-10-27
+// «cualificado» es En evaluación o más adelante (antes era Cotizada). Aceptar
+// sin haber pasado por evaluación también cuenta como cualificado (el embudo es
+// acumulado: todo convertido fue antes cualificado).
+// `cualificadas` son las claves de la empresa (ver clavesCualificadas): incluye sus etapas propias.
 export function hechosDeEtapa(
   destinoKey: string,
   outcome: 'GANADA' | 'PERDIDA' | null,
+  cualificadas: string[] = ETAPAS_CUALIFICADAS,
 ): TipoConversion[] {
   if (outcome === 'GANADA') return ['CUALIFICADO', 'CONVERTIDO'];
-  if (ETAPAS_COTIZADAS.includes(destinoKey)) return ['CUALIFICADO'];
+  if (cualificadas.includes(destinoKey)) return ['CUALIFICADO'];
   return [];
+}
+
+// Lo mismo, pero mirando todo el camino de una oportunidad (etapas por las que
+// pasó + resultado actual). Sirve para rellenar lo que faltó registrar, p. ej.
+// las oportunidades que ya estaban En evaluación cuando cambió la regla.
+export function hechosAcumulados(
+  etapas: string[],
+  outcome: 'GANADA' | 'PERDIDA' | null,
+  cualificadas: string[] = ETAPAS_CUALIFICADAS,
+): TipoConversion[] {
+  if (outcome === 'GANADA') return ['CUALIFICADO', 'CONVERTIDO'];
+  return etapas.some((k) => cualificadas.includes(k)) ? ['CUALIFICADO'] : [];
 }
 
 export const diasEntre = (desde: Date, hasta: Date) =>

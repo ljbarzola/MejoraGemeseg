@@ -1,16 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GoogleAdsConversionesService } from './google-ads-conversiones.service';
 import {
   gclidDeLead,
   gclidVigente,
+  hechosAcumulados,
   hechosDeEtapa,
   VIGENCIA_GCLID_DIAS,
 } from './ventas-conversiones.util';
+import { clavesCualificadas } from './ventas-marketing.util';
 
 // Estados de un hecho: PENDIENTE (falta avisar), ENVIADO, FALLO (se reintenta)
 // y VENCIDO (el clic tiene más de 90 días: Google ya no lo acepta).
-export const ESTADOS_CONVERSION = ['PENDIENTE', 'ENVIADO', 'FALLO', 'VENCIDO'] as const;
+// RECHAZADO (2026-10-27): Google recibió el aviso pero lo rechazó al procesarlo; no se reintenta.
+export const ESTADOS_CONVERSION = ['PENDIENTE', 'ENVIADO', 'FALLO', 'VENCIDO', 'RECHAZADO'] as const;
 
 export interface CambioDeEtapa {
   companyId: number;
@@ -37,7 +41,11 @@ export class VentasConversionesService {
   async registrarPorEtapa(c: CambioDeEtapa): Promise<void> {
     try {
       if (!c.leadId) return;
-      const hechos = hechosDeEtapa(c.destinoKey, c.outcome);
+      const etapas = await this.prisma.salesClientStage.findMany({
+        where: { companyId: c.companyId },
+        select: { key: true, isInitial: true, isFinal: true },
+      });
+      const hechos = hechosDeEtapa(c.destinoKey, c.outcome, clavesCualificadas(etapas));
       if (hechos.length === 0) return;
       const lead = await this.prisma.salesLead.findFirst({
         where: { id: c.leadId, companyId: c.companyId },
@@ -77,6 +85,96 @@ export class VentasConversionesService {
       this.logger.error(
         `No se pudo registrar la conversión de la oportunidad #${c.opportunityId}: ${(err as Error).message}`,
       );
+    }
+  }
+
+  // Rellena lo que faltó registrar (2026-10-27): al pasar «cualificado» de Cotizada a En evaluación, las
+  // oportunidades que ya estaban evaluándose no tenían su hecho. Mira todo el camino de cada oportunidad
+  // (etapas por las que pasó + resultado) de los leads de anuncio que llegaron hace menos de 90 días (más
+  // viejos Google ya no los acepta) y crea los hechos que no existan. Es idempotente (único por oportunidad
+  // y tipo), así que el cron puede correrlo cada hora y también cubre cualquier registro que se haya perdido.
+  async rellenarFaltantes(): Promise<{ creados: number }> {
+    try {
+      const desde = new Date(Date.now() - VIGENCIA_GCLID_DIAS * 86_400_000);
+      const leads = await this.prisma.salesLead.findMany({
+        where: { createdAt: { gte: desde }, convertedOpportunityId: { not: null } },
+        select: { id: true, companyId: true, extra: true, convertedOpportunityId: true },
+      });
+      const conGclid = leads
+        .map((l) => ({ ...l, gclid: gclidDeLead(l.extra) }))
+        .filter((l): l is typeof l & { gclid: string; convertedOpportunityId: number } =>
+          !!l.gclid && l.convertedOpportunityId !== null,
+        );
+      if (conGclid.length === 0) return { creados: 0 };
+
+      const idsOpp = conGclid.map((l) => l.convertedOpportunityId);
+      // Las etapas propias de cada empresa (p. ej. «PROPUESTA_ENVIADA») también cuentan como cualificado.
+      const etapasEmpresas = await this.prisma.salesClientStage.findMany({
+        where: { companyId: { in: [...new Set(conGclid.map((l) => l.companyId))] } },
+        select: { companyId: true, key: true, isInitial: true, isFinal: true },
+      });
+      const cualificadasDe = (companyId: number) =>
+        clavesCualificadas(etapasEmpresas.filter((e) => e.companyId === companyId));
+      const [opps, existentes] = await Promise.all([
+        this.prisma.salesOpportunity.findMany({
+          where: { id: { in: idsOpp } },
+          select: {
+            id: true,
+            status: true,
+            outcome: true,
+            quotedAmount: true,
+            quotedAt: true,
+            closedAt: true,
+            stageChanges: { select: { toStatus: true, createdAt: true }, orderBy: { createdAt: 'asc' } },
+          },
+        }),
+        this.prisma.salesConversionEvent.findMany({
+          where: { opportunityId: { in: idsOpp }, kind: { in: ['CUALIFICADO', 'CONVERTIDO'] } },
+          select: { opportunityId: true, kind: true },
+        }),
+      ]);
+      const yaRegistrado = new Set(existentes.map((e) => `${e.opportunityId}:${e.kind}`));
+      const oppPorId = new Map(opps.map((o) => [o.id, o]));
+
+      const ahora = new Date();
+      const data: Prisma.SalesConversionEventCreateManyInput[] = [];
+      for (const l of conGclid) {
+        const o = oppPorId.get(l.convertedOpportunityId);
+        if (!o) continue;
+        const outcome = o.outcome === 'GANADA' || o.outcome === 'PERDIDA' ? o.outcome : null;
+        // Una fecha de cotización también cuenta (igual que en el embudo del Dashboard, faseMarketing).
+        const etapas = [
+          ...o.stageChanges.map((c) => c.toStatus),
+          ...(o.status ? [o.status] : []),
+          ...(o.quotedAt ? ['COTIZADO'] : []),
+        ];
+        const cualificadas = cualificadasDe(l.companyId);
+        for (const kind of hechosAcumulados(etapas, outcome, cualificadas)) {
+          if (yaRegistrado.has(`${o.id}:${kind}`)) continue;
+          // La fecha del hecho es la del cambio real (el cierre para «convertido»); sin ella, ahora.
+          const cuando =
+            kind === 'CONVERTIDO'
+              ? (o.closedAt ?? ahora)
+              : (o.stageChanges.find((c) => cualificadas.includes(c.toStatus))?.createdAt ?? ahora);
+          data.push({
+            companyId: l.companyId,
+            leadId: l.id,
+            opportunityId: o.id,
+            kind,
+            gclid: l.gclid,
+            occurredAt: cuando,
+            value: kind === 'CONVERTIDO' && o.quotedAmount !== null ? Number(o.quotedAmount) : null,
+            status: 'PENDIENTE',
+          });
+        }
+      }
+      if (data.length === 0) return { creados: 0 };
+      const r = await this.prisma.salesConversionEvent.createMany({ data, skipDuplicates: true });
+      this.logger.log(`Conversiones rellenadas para Google Ads: ${r.count}`);
+      return { creados: r.count };
+    } catch (err) {
+      this.logger.error(`No se pudieron rellenar las conversiones: ${(err as Error).message}`);
+      return { creados: 0 };
     }
   }
 
@@ -130,9 +228,17 @@ export class VentasConversionesService {
   // Conteos por estado y por tipo para la pantalla de Conexiones.
   async resumen(companyId: number | null) {
     if (!companyId) {
-      return { conectado: false, total: 0, porEstado: {}, porTipo: {}, recientes: [] };
+      return {
+        conectado: false,
+        total: 0,
+        porEstado: {},
+        porTipo: {},
+        confirmadosPorGoogle: 0,
+        ultimoRechazo: null,
+        recientes: [],
+      };
     }
-    const [estados, tipos, recientes] = await Promise.all([
+    const [estados, tipos, recientes, confirmados, ultimoRechazo] = await Promise.all([
       this.prisma.salesConversionEvent.groupBy({
         by: ['status'],
         where: { companyId },
@@ -155,7 +261,15 @@ export class VentasConversionesService {
           sentAt: true,
           lastError: true,
           leadId: true,
+          googleStatus: true,
         },
+      }),
+      // Cuántos avisos Google ya confirmó haber procesado bien (no solo «recibido»).
+      this.prisma.salesConversionEvent.count({ where: { companyId, googleStatus: 'ACEPTADO' } }),
+      this.prisma.salesConversionEvent.findFirst({
+        where: { companyId, status: 'RECHAZADO' },
+        orderBy: { checkedAt: 'desc' },
+        select: { lastError: true },
       }),
     ]);
     const porEstado = Object.fromEntries(estados.map((e) => [e.status, e._count._all]));
@@ -166,6 +280,8 @@ export class VentasConversionesService {
       total: estados.reduce((n, e) => n + e._count._all, 0),
       porEstado,
       porTipo,
+      confirmadosPorGoogle: confirmados,
+      ultimoRechazo: ultimoRechazo?.lastError ?? null,
       recientes,
     };
   }

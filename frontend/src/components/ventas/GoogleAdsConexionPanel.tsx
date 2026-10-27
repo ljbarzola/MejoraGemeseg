@@ -58,7 +58,7 @@ export default function GoogleAdsConexionPanel({ inicial, cuentaDeServicio, pued
   return (
     <div>
       <p style={{ fontSize: 13, color: '#666', margin: '0 0 12px' }}>
-        Google Ads llama «leads» a los posibles clientes. Cuando uno que llegó de un anuncio pasa a <strong>Cotizada</strong> o a <strong>Aceptada</strong>, el CRM le avisa a Google Ads para que aprenda qué anuncios traen gente que sí compra. Sin esto Google solo sabe quién llenó el formulario.
+        Google Ads llama «leads» a los posibles clientes. Cuando uno que llegó de un anuncio pasa a <strong>En evaluación</strong> o a <strong>Aceptada</strong>, el CRM le avisa a Google Ads para que aprenda qué anuncios traen gente que sí compra. Sin esto Google solo sabe quién llenó el formulario.
       </p>
       <ErrorBanner mensaje={error} />
       <div className="form-row">
@@ -74,12 +74,12 @@ export default function GoogleAdsConexionPanel({ inicial, cuentaDeServicio, pued
           <label>ID de la conversión «Lead válido» (opcional: cuando lo confirmas como contacto de servicio)</label>
           <input type="text" value={ads.conversionValido ?? ''} disabled={!puedeEditar} inputMode="numeric" placeholder="Déjalo vacío si no la usas"
             onChange={(e) => setAds({ ...ads, conversionValido: e.target.value.replace(/\D/g, '') })} />
-          <small style={{ color: '#718096' }}>Paso intermedio entre el formulario y la cotización: se avisa cuando clasificas al posible cliente como «Servicio» o lo pasas a oportunidad, para que Google distinga a los contactos reales de los que solo llenaron el formulario (empleo, proveedores, spam). Solo cuenta si venía de un anuncio.</small>
+          <small style={{ color: '#718096' }}>Paso intermedio entre el formulario y la evaluación: se avisa cuando clasificas al posible cliente como «Servicio» o lo pasas a oportunidad, para que Google distinga a los contactos reales de los que solo llenaron el formulario (empleo, proveedores, spam). Solo cuenta si venía de un anuncio.</small>
         </div>
       </div>
       <div className="form-row">
         <div className="form-group">
-          <label>ID de la conversión «Lead cualificado» (cuando cotiza)</label>
+          <label>ID de la conversión «Lead cualificado» (cuando pasa a En evaluación)</label>
           <input type="text" value={ads.conversionCualificado} disabled={!puedeEditar} inputMode="numeric"
             onChange={(e) => setAds({ ...ads, conversionCualificado: e.target.value.replace(/\D/g, '') })} />
         </div>
@@ -114,13 +114,19 @@ export default function GoogleAdsConexionPanel({ inicial, cuentaDeServicio, pued
 
       {conversiones && (
         <p style={{ fontSize: 13, color: '#4a5568', margin: '0 0 12px' }}>
-          Hasta ahora:{(conversiones.porTipo.VALIDO ?? 0) > 0 && <> <strong>{conversiones.porTipo.VALIDO}</strong> resultaron contactos válidos,</>} <strong>{conversiones.porTipo.CUALIFICADO ?? 0}</strong> posibles clientes cotizaron y <strong>{conversiones.porTipo.CONVERTIDO ?? 0}</strong> contrataron.
-          {' '}Por avisar: {conversiones.porEstado.PENDIENTE ?? 0} · Enviados: {conversiones.porEstado.ENVIADO ?? 0}
+          Hasta ahora:{(conversiones.porTipo.VALIDO ?? 0) > 0 && <> <strong>{conversiones.porTipo.VALIDO}</strong> resultaron contactos válidos,</>} <strong>{conversiones.porTipo.CUALIFICADO ?? 0}</strong> posibles clientes pasaron a evaluación y <strong>{conversiones.porTipo.CONVERTIDO ?? 0}</strong> contrataron.
+          {' '}Por avisar: {conversiones.porEstado.PENDIENTE ?? 0} · Enviados: {conversiones.porEstado.ENVIADO ?? 0} · Confirmados por Google: {conversiones.confirmadosPorGoogle ?? 0}
+          {(conversiones.porEstado.RECHAZADO ?? 0) > 0 && <strong style={{ color: '#c53030' }}> · Rechazados por Google: {conversiones.porEstado.RECHAZADO}</strong>}
           {(conversiones.porEstado.FALLO ?? 0) > 0 && ` · Con error: ${conversiones.porEstado.FALLO}`}
           {(conversiones.porEstado.VENCIDO ?? 0) > 0 && ` · Vencidos (clic de más de 90 días): ${conversiones.porEstado.VENCIDO}`}
           {conversiones.conectado
             ? (ads.soloValidar ? ' — Envío activo en modo de prueba.' : ' — Envío activo.')
             : ' — Envío apagado o incompleto.'}
+        </p>
+      )}
+      {conversiones?.ultimoRechazo && (
+        <p style={{ fontSize: 13, color: '#c53030', margin: '0 0 12px' }}>
+          Último motivo de rechazo de Google: {conversiones.ultimoRechazo}
         </p>
       )}
       <button className="auth-btn" onClick={guardar} disabled={guardando || !puedeEditar}>

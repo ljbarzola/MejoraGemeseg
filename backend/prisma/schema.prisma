@@ -2935,11 +2935,16 @@ model SalesConversionEvent {
   occurredAt    DateTime
   value         Decimal?  @db.Decimal(12, 2)
   currency      String    @default("USD")
-  // PENDIENTE, ENVIADO, FALLO
+  // PENDIENTE, ENVIADO, FALLO, VENCIDO y (2026-10-27) RECHAZADO: Google lo recibió pero lo rechazó al procesarlo.
   status        String    @default("PENDIENTE")
   attempts      Int       @default(0)
   lastError     String?
   sentAt        DateTime?
+  // 2026-10-27: número de solicitud con que Google recibió el aviso, y lo que dijo después de procesarlo
+  // (PROCESANDO, ACEPTADO, PARCIAL, RECHAZADO). Nulos hasta que se envía / se verifica.
+  requestId     String?
+  googleStatus  String?
+  checkedAt     DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
