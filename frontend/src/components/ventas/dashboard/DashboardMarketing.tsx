@@ -60,20 +60,20 @@ export default function DashboardMarketing({ desde, hasta }: { desde: string; ha
   return (
     <Tarjeta
       titulo="De posible cliente a venta"
-      hint={`De los ${formatoDia(datos.periodo.desde)} al ${formatoDia(datos.periodo.hasta)}: cuántos posibles clientes llenaron un formulario, a cuántos se les cotizó y cuántos terminaron contratando.`}
+      hint={`De los ${formatoDia(datos.periodo.desde)} al ${formatoDia(datos.periodo.hasta)}: cuántos posibles clientes llenaron un formulario, cuántos pasaron a evaluación y cuántos terminaron contratando.`}
     >
       {t.leads === 0 ? (
-        <SinDatos texto="Aún no llegaron posibles clientes (leads) en este periodo. Cuando lleguen por la web o los anuncios, aquí verás cuántos cotizaron y cuántos contrataron." />
+        <SinDatos texto="Aún no llegaron posibles clientes (leads) en este periodo. Cuando lleguen por la web o los anuncios, aquí verás cuántos pasaron a evaluación y cuántos contrataron." />
       ) : (
         <>
           <div className="dash-embudo-fila">
             <div className="dash-embudo-grafico">
               <EmbudoGrafico
                 etiquetaAncho={176} notaAncho={150}
-                aria={`Embudo de marketing: ${t.leads} posibles clientes, ${t.cualificados} cotizaron, ${t.convertidos} contrataron`}
+                aria={`Embudo de marketing: ${t.leads} posibles clientes, ${t.cualificados} en evaluación o más, ${t.convertidos} contrataron`}
                 pasos={[
                   { key: 'leads', etiqueta: 'Llenaron el formulario', valor: t.leads, color: '#12375F', nota: 'posibles clientes' },
-                  { key: 'cotizaron', etiqueta: 'Cotizaron', valor: t.cualificados, color: '#d97706', nota: `${pct(t.pctCualificados)} de los leads` },
+                  { key: 'cualificados', etiqueta: 'En evaluación o más', valor: t.cualificados, color: '#d97706', nota: `${pct(t.pctCualificados)} de los leads` },
                   { key: 'contrataron', etiqueta: 'Contrataron', valor: t.convertidos, color: '#2f855a', nota: `${Math.round((t.convertidos / t.leads) * 1000) / 10}% de los leads` },
                 ]}
               />
@@ -81,7 +81,7 @@ export default function DashboardMarketing({ desde, hasta }: { desde: string; ha
             {t.cualificados > 0 && (
               <div className="dash-embudo-dato">
                 <strong>{Math.round((t.convertidos / t.cualificados) * 100)}%</strong>
-                <span>de los que cotizaron terminó contratando</span>
+                <span>de los que pasaron a evaluación terminó contratando</span>
               </div>
             )}
           </div>
@@ -109,7 +109,7 @@ export default function DashboardMarketing({ desde, hasta }: { desde: string; ha
               <tr>
                 <th {...thProps('clave')}>{colTabla} <SortIcon campo="clave" /></th>
                 <th {...thProps('leads')}>Posibles clientes (leads) <SortIcon campo="leads" /></th>
-                <th {...thProps('cualificados')}>Cotizaron <SortIcon campo="cualificados" /></th>
+                <th {...thProps('cualificados')}>En evaluación o más <SortIcon campo="cualificados" /></th>
                 <th {...thProps('convertidos')}>Contrataron <SortIcon campo="convertidos" /></th>
                 <th {...thProps('pctConvertidos')}>% contrató <SortIcon campo="pctConvertidos" /></th>
               </tr>

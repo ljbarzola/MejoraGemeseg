@@ -18,6 +18,12 @@ export const CUENTA_ADS_POR_DEFECTO =
   'ads-conversiones@mejora-gemeseg.iam.gserviceaccount.com';
 export const ALCANCE_DATA_MANAGER = 'https://www.googleapis.com/auth/datamanager';
 export const URL_INGEST = 'https://datamanager.googleapis.com/v1/events:ingest';
+// Estado de una solicitud ya enviada (`?requestId=`). Google procesa los eventos DESPUÉS de aceptar la
+// solicitud: el 200 de `events:ingest` solo dice «recibido». La guía de Google pide esperar ~30 minutos y
+// conserva el estado unos 50 días.
+export const URL_ESTADO = 'https://datamanager.googleapis.com/v1/requestStatus:retrieve';
+export const ESPERA_VERIFICACION_MIN = 30;
+export const RETENCION_ESTADO_DIAS = 45;
 
 // CUALIFICADO y CONVERTIDO son obligatorios para activar el envío; VALIDO es opcional ('' = no se usa).
 export type ConversionesGoogleAds = Record<Exclude<TipoConversion, 'VALIDO'>, string> & {
@@ -110,6 +116,95 @@ export function mensajeDeError(status: number | undefined): string {
     return 'Google no pudo recibirlo ahora; se reintenta solo.';
   }
   return 'No se pudo enviar a Google; se reintenta solo.';
+}
+
+// ---- Qué dijo Google después de procesar (requestStatus:retrieve) ----
+
+export interface DestinoEstadoGoogle {
+  requestStatus?: string;
+  errorInfo?: { errorCounts?: { reason?: string; recordCount?: string }[] };
+  warningInfo?: { warningCounts?: { reason?: string; recordCount?: string }[] };
+}
+
+export type EstadoVerificado = 'PROCESANDO' | 'ACEPTADO' | 'PARCIAL' | 'RECHAZADO' | 'REINTENTAR';
+
+export interface VeredictoGoogle {
+  estado: EstadoVerificado;
+  // Texto corto y accionable para mostrar (sin códigos internos); null si no hay nada que decir.
+  nota: string | null;
+  // Códigos de Google tal cual: SOLO para el registro del servidor, nunca a la pantalla.
+  razones: string[];
+}
+
+const limpiarRazon = (r: string | undefined): string =>
+  (r ?? '').replace(/^PROCESSING_(ERROR|WARNING)_(REASON_)?/, '');
+
+// Motivos reconocidos (lista de ProcessingErrorReason de la Data Manager API, 2026-10-27).
+const MOTIVOS: { si: RegExp; texto: string; reintentar?: boolean; yaEstaba?: boolean }[] = [
+  { si: /^DUPLICATE_/, texto: 'Google ya tenía este aviso.', yaEstaba: true },
+  {
+    si: /^(INVALID_CLICK|CLICK_NOT_FOUND|INVALID_GCLID|USER_ID_NOT_FOUND_FOR_GCLID|INVALID_AD_IDENTIFIERS)$/,
+    texto: 'Google no encontró el clic de ese anuncio (puede ser un clic de prueba o que no sea de anuncios).',
+  },
+  {
+    si: /^(INVALID_OPERATING_ACCOUNT_FOR_CLICK|OPERATING_ACCOUNT_MISMATCH_FOR_AD_IDENTIFIER)$/,
+    texto: 'El clic es de otra cuenta de Google Ads distinta al ID de cliente guardado.',
+  },
+  {
+    si: /^EXPIRED_CLICK$/,
+    texto: 'El clic es más viejo que la ventana de conversión de esa acción en Google Ads.',
+  },
+  { si: /^EVENT_TOO_OLD$/, texto: 'La conversión es más antigua de lo que Google acepta.' },
+  { si: /^CONVERSION_PRECEDES_CLICK$/, texto: 'La fecha del aviso es anterior a la del clic.' },
+  {
+    si: /CONSENT/,
+    texto: 'Google lo rechazó por el consentimiento de datos publicitarios de la cuenta.',
+  },
+  { si: /^(INVALID_EVENT|INVALID_FORMAT)$/, texto: 'Google no entendió el formato del aviso.' },
+  { si: /^TOO_RECENT_CLICK$/, texto: 'El clic es muy reciente para Google; se reintenta solo.', reintentar: true },
+  {
+    si: /^(DESTINATION_TOO_RECENTLY_CREATED|INTERNAL_ERROR)$/,
+    texto: 'Google no pudo procesarlo ahora; se reintenta solo.',
+    reintentar: true,
+  },
+];
+
+const MOTIVO_DESCONOCIDO =
+  'Google rechazó el aviso por un motivo que no reconocemos; el detalle quedó en el registro del servidor.';
+
+// Traduce lo que Google contestó para UN destino (un tipo de conversión de la solicitud).
+export function veredictoDeDestino(d: DestinoEstadoGoogle | undefined): VeredictoGoogle {
+  const estado = d?.requestStatus;
+  if (!d || !estado || estado === 'PROCESSING' || estado === 'REQUEST_STATUS_UNKNOWN') {
+    return { estado: 'PROCESANDO', nota: null, razones: [] };
+  }
+  const razones = (d.errorInfo?.errorCounts ?? []).map((e) => limpiarRazon(e.reason)).filter(Boolean);
+  const avisos = (d.warningInfo?.warningCounts ?? []).map((w) => limpiarRazon(w.reason)).filter(Boolean);
+
+  if (estado === 'SUCCESS') {
+    return {
+      estado: 'ACEPTADO',
+      nota: avisos.length ? 'Google lo aceptó con avisos; el detalle quedó en el registro del servidor.' : null,
+      razones: avisos,
+    };
+  }
+  if (estado === 'FAILED' || estado === 'PARTIAL_SUCCESS') {
+    const motivos = razones.map((r) => MOTIVOS.find((m) => m.si.test(r)));
+    // Todo lo rechazado era «ya lo tenía»: para el CRM el aviso está recibido.
+    if (razones.length > 0 && motivos.every((m) => m?.yaEstaba)) {
+      return { estado: 'ACEPTADO', nota: 'Google ya tenía este aviso.', razones };
+    }
+    const textos = [...new Set(motivos.map((m) => m?.texto ?? MOTIVO_DESCONOCIDO))];
+    if (estado === 'FAILED' && motivos.length > 0 && motivos.every((m) => m?.reintentar)) {
+      return { estado: 'REINTENTAR', nota: textos.join(' '), razones };
+    }
+    return {
+      estado: estado === 'FAILED' ? 'RECHAZADO' : 'PARCIAL',
+      nota: textos.length ? textos.join(' ') : MOTIVO_DESCONOCIDO,
+      razones,
+    };
+  }
+  return { estado: 'PROCESANDO', nota: null, razones: [] };
 }
 
 // Después de tantos intentos fallidos deja de reintentarse solo.

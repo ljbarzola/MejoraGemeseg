@@ -30,6 +30,17 @@ export const SALES_OPPORTUNITY_COLUMNS_DDL: string[] = [
   `ALTER TABLE "SalesOpportunity" ADD COLUMN IF NOT EXISTS "locationOsmId" TEXT`,
 ];
 
+/**
+ * Columnas nuevas en "SalesConversionEvent" (2026-10-27): el número de solicitud con el que Google recibió el
+ * aviso y lo que Google dijo después de procesarlo. Aditivas y nulas (el despliegue anterior sigue
+ * funcionando); corren ANTES del resto porque Prisma pide toda columna que conoce en cada consulta.
+ */
+export const SALES_CONVERSION_COLUMNS_DDL: string[] = [
+  `ALTER TABLE "SalesConversionEvent" ADD COLUMN IF NOT EXISTS "requestId" TEXT`,
+  `ALTER TABLE "SalesConversionEvent" ADD COLUMN IF NOT EXISTS "googleStatus" TEXT`,
+  `ALTER TABLE "SalesConversionEvent" ADD COLUMN IF NOT EXISTS "checkedAt" TIMESTAMP(3)`,
+];
+
 export const SALES_PIPELINE_DDL: string[] = [
   // ---- Columnas nuevas de SalesAgreement (la tabla aún no está en producción) ----
   `ALTER TABLE "SalesAgreement" ADD COLUMN IF NOT EXISTS "monthlyValue" DECIMAL(12,2)`,
@@ -201,6 +212,8 @@ export const SALES_PIPELINE_DDL: string[] = [
   // oportunidad. Solo se quita el NOT NULL (no se agrega columna ni se borra nada; idempotente) y la
   // unicidad (oportunidad, tipo) sigue igual para los hechos de siempre; la de «válido» se cuida en código.
   `ALTER TABLE "SalesConversionEvent" ALTER COLUMN "opportunityId" DROP NOT NULL`,
+  // 2026-10-27: verificación con Google (se repite aquí solo para una base nueva; es idempotente).
+  ...SALES_CONVERSION_COLUMNS_DDL,
 
   // ---- Ajustes de Ventas por empresa (2026-10-15) ----
   `CREATE TABLE IF NOT EXISTS "SalesSetting" (

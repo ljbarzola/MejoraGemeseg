@@ -42,7 +42,7 @@ const RECORRIDO: Paso[] = [
 
 const GOOGLE: { app: string; google: string; cuando: string }[] = [
   { app: 'Llegó a Posibles clientes', google: 'Lead (formulario enviado)', cuando: 'La persona llenó el formulario.' },
-  { app: 'Cotizó', google: 'Lead cualificado', cuando: 'Su oportunidad llegó a Cotizada o En negociación.' },
+  { app: 'En evaluación', google: 'Lead cualificado', cuando: 'Su oportunidad llegó a En evaluación (o más adelante: Cotizada, En negociación).' },
   { app: 'Contrató', google: 'Lead convertido', cuando: 'Su oportunidad pasó a Aceptada.' },
 ];
 

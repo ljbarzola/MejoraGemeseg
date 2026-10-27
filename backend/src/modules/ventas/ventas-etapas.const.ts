@@ -1,7 +1,7 @@
 // Etapas de fábrica de las OPORTUNIDADES (2026-10-08). Las claves no cambian
 // (están en analítica, expediente, IA y modales); solo las etiquetas, y se suma
 // NEGOCIACION. Quien llena el formulario y no contesta nunca pasa de «Nueva»;
-// desde «Cotizada» cuenta como lead cualificado y «Aceptada» como convertido
+// desde «En evaluación» (2026-10-27; antes «Cotizada») cuenta como lead cualificado y «Aceptada» como convertido
 // (ver ventas-marketing.util.ts). Las empresas que ya tenían las etapas de
 // fábrica sin tocar se actualizan solas al arrancar (VentasSchemaService).
 export const DEFAULT_STAGES = [

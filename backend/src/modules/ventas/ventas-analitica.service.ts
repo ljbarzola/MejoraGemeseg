@@ -16,6 +16,7 @@ import {
 import { ETAPA_GANADA } from './stage-outcome.util';
 import { KINDS_MOTIVO_PERDIDA, MOTIVO_SIN_INFORMACION } from './motivo-perdida.util';
 import {
+  clavesCualificadas,
   embudoMarketing,
   faseMarketing,
   type LeadParaEmbudo,
@@ -891,15 +892,25 @@ export class VentasAnaliticaService {
           },
         })
       : [];
+    // Las etapas propias de la empresa (p. ej. «Propuesta enviada») también cuentan como cualificado.
+    const cualificadas = clavesCualificadas(
+      await this.prisma.salesClientStage.findMany({
+        where: { companyId: cid },
+        select: { key: true, isInitial: true, isFinal: true },
+      }),
+    );
     const fasePorOpp = new Map(
       opps.map((o) => [
         o.id,
-        faseMarketing({
-          outcome: o.outcome,
-          status: o.status,
-          quotedAt: o.quotedAt,
-          etapasAlcanzadas: o.stageChanges.map((c) => c.toStatus),
-        }),
+        faseMarketing(
+          {
+            outcome: o.outcome,
+            status: o.status,
+            quotedAt: o.quotedAt,
+            etapasAlcanzadas: o.stageChanges.map((c) => c.toStatus),
+          },
+          cualificadas,
+        ),
       ]),
     );
     const filasLead: LeadParaEmbudo[] = leads.map((l) => ({

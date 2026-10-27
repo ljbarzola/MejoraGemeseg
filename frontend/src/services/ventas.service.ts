@@ -1251,8 +1251,12 @@ export interface ResumenConversiones {
   // false mientras el envío automático a Google no esté configurado.
   conectado: boolean;
   total: number;
-  porEstado: Partial<Record<'PENDIENTE' | 'ENVIADO' | 'FALLO' | 'VENCIDO', number>>;
+  porEstado: Partial<Record<'PENDIENTE' | 'ENVIADO' | 'FALLO' | 'VENCIDO' | 'RECHAZADO', number>>;
   porTipo: Partial<Record<'VALIDO' | 'CUALIFICADO' | 'CONVERTIDO', number>>;
+  // Avisos que Google ya confirmó haber procesado bien (no solo «recibido»).
+  confirmadosPorGoogle: number;
+  // Motivo (texto corto) del último aviso que Google rechazó, o null.
+  ultimoRechazo: string | null;
 }
 export const getResumenConversiones = (): Promise<ResumenConversiones> =>
   api.get('/ventas/conversiones/resumen').then(r => r.data);
