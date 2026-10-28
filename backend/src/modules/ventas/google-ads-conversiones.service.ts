@@ -16,7 +16,13 @@ import {
   type DestinoEstadoGoogle,
   type HechoParaEnviar,
 } from './google-ads-conversiones.util';
-import { gclidVigente, type TipoConversion } from './ventas-conversiones.util';
+import {
+  MOTIVO_GCLID_INVALIDO,
+  gclidConFormato,
+  gclidVigente,
+  limpiarGclid,
+  type TipoConversion,
+} from './ventas-conversiones.util';
 import { VentasConfigService } from './ventas-config.service';
 
 export interface ResultadoEnvio {
@@ -181,13 +187,25 @@ export class GoogleAdsConversionesService {
         base.vencidos++;
         continue;
       }
+      // Un gclid que no es de verdad (de prueba, recortado) haría que Google rechace (INVALID_GCLID) y dejaría
+      // el envío entero como «parcial»: no se manda, se anota el motivo y queda a la vista en Conexiones.
+      const gclid = limpiarGclid(e.gclid);
+      if (!gclidConFormato(gclid)) {
+        await this.prisma.salesConversionEvent.update({
+          where: { id: e.id },
+          data: { status: 'RECHAZADO', googleStatus: null, lastError: MOTIVO_GCLID_INVALIDO, checkedAt: ahora },
+        });
+        this.logger.warn(`Hecho #${e.id} (${e.kind}) no enviado: su gclid no tiene formato de Google.`);
+        base.fallidos++;
+        continue;
+      }
       hechos.push({
         id: e.id,
         hecho: {
           opportunityId: e.opportunityId,
           leadId: e.leadId,
           kind: e.kind as TipoConversion,
-          gclid: e.gclid,
+          gclid,
           occurredAt: e.occurredAt,
           value: e.value === null ? null : Number(e.value),
           currency: e.currency,
@@ -275,6 +293,9 @@ export class GoogleAdsConversionesService {
       fallos: 0,
     };
     const ahora = new Date();
+    // Los que Google ya marcó como «parcial» (aceptó unos y rechazó otros) y cuyo gclid se ve inválido
+    // pasan a rechazados con su motivo; los demás quedan aceptados.
+    await this.separarInvalidosDeParciales(ahora);
     const eventos = await this.prisma.salesConversionEvent.findMany({
       where: {
         status: 'ENVIADO',
@@ -324,6 +345,11 @@ export class GoogleAdsConversionesService {
           }
           const data = this.datosDeVeredicto(v.estado, v.nota, ahora);
           await this.prisma.salesConversionEvent.updateMany({ where: { id: { in: ids } }, data });
+          if (v.estado === 'PARCIAL') {
+            // Cuántos registros falló cada motivo (Google lo dice en `errorInfo`), solo para el registro.
+            this.logger.warn(`Detalle de lo rechazado (${kind}): ${JSON.stringify(destinos[i]?.errorInfo ?? {})}`);
+            await this.separarInvalidosDeParciales(ahora);
+          }
           if (v.estado === 'ACEPTADO' || v.estado === 'PARCIAL') total.aceptados += ids.length;
           else if (v.estado === 'RECHAZADO') total.rechazados += ids.length;
           else if (v.estado === 'REINTENTAR') total.reintentar += ids.length;
@@ -339,6 +365,25 @@ export class GoogleAdsConversionesService {
       }
     }
     return total;
+  }
+
+  // En un envío «parcial» Google no dice CUÁLES avisos falló. Los de gclid sin formato de Google son casi
+  // seguro los culpables (INVALID_GCLID): se marcan rechazados con el motivo; los demás siguen como «parcial».
+  private async separarInvalidosDeParciales(ahora: Date): Promise<void> {
+    const parciales = await this.prisma.salesConversionEvent.findMany({
+      where: { status: 'ENVIADO', googleStatus: 'PARCIAL' },
+      select: { id: true, gclid: true },
+      take: 500,
+    });
+    if (parciales.length === 0) return;
+    const invalidos = parciales.filter((p) => !gclidConFormato(limpiarGclid(p.gclid))).map((p) => p.id);
+    if (invalidos.length > 0) {
+      await this.prisma.salesConversionEvent.updateMany({
+        where: { id: { in: invalidos } },
+        data: { status: 'RECHAZADO', googleStatus: 'RECHAZADO', lastError: MOTIVO_GCLID_INVALIDO, checkedAt: ahora },
+      });
+      this.logger.warn(`Avisos con gclid sin formato de Google, marcados como rechazados: ${invalidos.length}`);
+    }
   }
 
   private datosDeVeredicto(
