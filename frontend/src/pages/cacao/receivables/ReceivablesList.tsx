@@ -4,7 +4,7 @@ import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
 import { getReceivables, receiveReceivable, voidReceipt } from '../../../services/cacao.service';
 import { getUser } from '../../../services/auth.service';
 import { formatDateEc, estadoCuenta, apiErrorMessage } from '../utils';
-import ErrorBanner from '../../../components/common/ErrorBanner';
+import FormModal from '../../../components/common/FormModal';
 import PaymentsHistoryModal from '../PaymentsHistoryModal';
 import { useTablaCacao } from '../useTablaCacao';
 
@@ -86,9 +86,9 @@ export default function ReceivablesList() {
     ],
     acciones: (r) => (
       <div style={{ display: 'flex', gap: '6px' }}>
-        {r.status !== 'RECEIVED' && r.status !== 'CANCELLED' && <button className="btn-sm-edit" onClick={() => startReceive(r)}>Cobrar</button>}
+        {r.status !== 'RECEIVED' && r.status !== 'CANCELLED' && <button className="btn-sm-edit btn-sm-edit--texto" onClick={() => startReceive(r)}>Cobrar</button>}
         {r.payments?.length > 0 && (
-          <button className="btn-sm-edit" onClick={() => { setError(''); setHistoryId(r.id); }}>Cobros</button>
+          <button className="btn-sm-edit btn-sm-edit--texto" onClick={() => { setError(''); setHistoryId(r.id); }}>Cobros</button>
         )}
       </div>
     ),
@@ -111,47 +111,42 @@ export default function ReceivablesList() {
         {loading ? (
           <div className="loading-state">Cargando cuentas por cobrar...</div>
         ) : receivables.length === 0 ? (
-          <div className="empty-state">No hay cuentas por cobrar.</div>
+          <div className="empty-state">No hay cuentas por cobrar. Se crean solas cuando registras un embarque.</div>
         ) : (
           tabla
         )}
       </div>
 
       {editing && (
-        <div className="modal-overlay" onClick={() => setEditingId(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Registrar Cobro</h3>
-              <button className="modal-close" onClick={() => setEditingId(null)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <ErrorBanner mensaje={error} />
-              <p style={{ margin: '0 0 12px', color: '#4a5568', fontSize: '13px' }}>
-                {editing.client?.name} · Saldo pendiente {fmt(remainingOf(editing))}
-              </p>
-              <div className="form-group">
-                <label>Monto ($)</label>
-                <input type="number" step="0.01" min="0" value={receiveForm.amount} onChange={(e) => setReceiveForm({ ...receiveForm, amount: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label>Método de Cobro</label>
-                <select value={receiveForm.method} onChange={(e) => setReceiveForm({ ...receiveForm, method: e.target.value })}>
-                  <option value="TRANSFER">Transferencia</option>
-                  <option value="CASH">Efectivo</option>
-                  <option value="CHECK">Cheque</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Referencia</label>
-                <input type="text" maxLength={120} value={receiveForm.reference} onChange={(e) => setReceiveForm({ ...receiveForm, reference: e.target.value })} placeholder="Nro. comprobante" />
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setEditingId(null)}>Cancelar</button>
-              <button className="auth-btn" onClick={handleReceive} disabled={saving}>{saving ? 'Guardando...' : 'Registrar Cobro'}</button>
-            </div>
+        <FormModal
+          title="Registrar cobro"
+          descripcion="Anota lo que te pagó el cliente; el saldo de la cuenta baja de inmediato."
+          submitLabel="Registrar cobro"
+          saving={saving}
+          error={error}
+          onClose={() => setEditingId(null)}
+          onSubmit={handleReceive}
+        >
+          <p style={{ margin: 0, color: '#4a5568', fontSize: '13px' }}>
+            <strong>{editing.client?.name}</strong> · Saldo pendiente {fmt(remainingOf(editing))}
+          </p>
+          <div className="form-group">
+            <label htmlFor="cobro-monto">Monto ($) *</label>
+            <input id="cobro-monto" type="number" inputMode="decimal" step="0.01" min="0" value={receiveForm.amount} onChange={(e) => setReceiveForm({ ...receiveForm, amount: e.target.value })} />
           </div>
-        </div>
+          <div className="form-group">
+            <label htmlFor="cobro-metodo">Método de cobro</label>
+            <select id="cobro-metodo" value={receiveForm.method} onChange={(e) => setReceiveForm({ ...receiveForm, method: e.target.value })}>
+              <option value="TRANSFER">Transferencia</option>
+              <option value="CASH">Efectivo</option>
+              <option value="CHECK">Cheque</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label htmlFor="cobro-ref">Referencia</label>
+            <input id="cobro-ref" type="text" maxLength={120} autoComplete="off" value={receiveForm.reference} onChange={(e) => setReceiveForm({ ...receiveForm, reference: e.target.value })} placeholder="Nro. de comprobante o de transferencia" />
+          </div>
+        </FormModal>
       )}
 
       {history && (

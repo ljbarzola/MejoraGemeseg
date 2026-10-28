@@ -104,6 +104,7 @@ export default function ReceptionsList() {
     principal: { key: 'fecha', excel: { tipo: 'fecha' }, ancho: 100, label: 'Fecha', orden: (r) => new Date(r.date).getTime(), celda: (r) => formatDateEc(r.date) },
     columnas: [
       { key: 'proveedor', ancho: 200, label: 'Proveedor', orden: (r) => r.supplier?.name, celda: (r) => r.supplier?.name || '—' },
+      { key: 'punto', ancho: 150, label: 'Punto de acopio', orden: (r) => r.punto?.nombre, celda: (r) => r.punto?.nombre || '—' },
       { key: 'guia', ancho: 130, label: 'Guía', orden: (r) => r.guideNumber, celda: (r) => r.guideNumber },
       { key: 'ticket', ancho: 130, label: 'Ticket', orden: (r) => r.ticketNumber, celda: (r) => r.ticketNumber || '—' },
       { key: 'perfil', excel: { valor: (r) => PERFIL_PESAJE[r.weighingProfile] || '' }, ancho: 130, label: 'Perfil de pesaje', ocultaPorDefecto: true, orden: (r) => r.weighingProfile, celda: (r) => PERFIL_PESAJE[r.weighingProfile] || '—' },
@@ -163,11 +164,11 @@ export default function ReceptionsList() {
       if (r.voidedAt) return null;
       let principal = null;
       if (r.closedAt) {
-        principal = <button className="btn-sm-edit" onClick={() => requiere('reabra entregas cerradas', () => setReabriendo(r))}>Reabrir</button>;
+        principal = <button className="btn-sm-edit btn-sm-edit--texto" onClick={() => requiere('reabra entregas cerradas', () => setReabriendo(r))}>Reabrir</button>;
       } else if (estadoLiquidacionEntrega(r).orden !== 2) {
         principal = (
-          <button className="btn-sm-edit" title="Cerrar sin liquidar" onClick={() => requiere('cierre entregas sin liquidar', () => setCerrando(r))}>
-            Cerrar
+          <button className="btn-sm-edit btn-sm-edit--texto" title="Cerrar sin liquidar" onClick={() => requiere('cierre entregas sin liquidar', () => setCerrando(r))}>
+            Cerrar entrega
           </button>
         );
       }
@@ -215,7 +216,7 @@ export default function ReceptionsList() {
         {loading ? (
           <div className="loading-state">Cargando recepciones...</div>
         ) : receptions.length === 0 ? (
-          <div className="empty-state">No hay recepciones registradas.</div>
+          <div className="empty-state">Todavía no hay recepciones. Cada vez que un proveedor te entregue cacao, regístralo con «+ Nueva Recepción»: se crea su lote y entra al inventario.</div>
         ) : (
           tabla
         )}

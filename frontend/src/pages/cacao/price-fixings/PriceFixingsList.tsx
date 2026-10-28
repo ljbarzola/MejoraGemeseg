@@ -4,6 +4,7 @@ import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
 import { getPriceFixings, createPriceFixing, fixPrice, getLots, getCacaoConfig, updateCacaoConfig } from '../../../services/cacao.service';
 import { getUser } from '../../../services/auth.service';
 import SoloAdminDialog from '../../../components/common/SoloAdminDialog';
+import FormModal from '../../../components/common/FormModal';
 import { formatDateEc, apiErrorMessage } from '../utils';
 import DateInput from '../../../components/common/DateInput';
 import { useTablaCacao } from '../useTablaCacao';
@@ -101,11 +102,12 @@ export default function PriceFixingsList() {
       setForm({ lotId: '', fixedPrice: '', deadline: '' });
       load();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al crear fijación');
+      setError(apiErrorMessage(err, 'No se pudo crear la fijación. Revisa los datos e inténtalo de nuevo.'));
     } finally { setSaving(false); }
   }
 
   function startEdit(f: any) {
+    setError('');
     setEditingId(f.id);
     setEditForm({
       fixedPrice: f.fixedPrice?.toString() || '',
@@ -126,7 +128,7 @@ export default function PriceFixingsList() {
       setEditingId(null);
       load();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al actualizar fijación');
+      setError(apiErrorMessage(err, 'No se pudo fijar el precio. Revisa los datos e inténtalo de nuevo.'));
     } finally { setSaving(false); }
   }
 
@@ -272,7 +274,7 @@ export default function PriceFixingsList() {
       },
     ],
     acciones: (f) => (
-      <button className="btn-sm-edit" onClick={() => startEdit(f)} disabled={!iceConfigurado} title={iceConfigurado ? undefined : 'Primero configura el precio ICE de referencia'}>{f.status === 'OPEN' ? 'Fijar' : 'Editar'}</button>
+      <button className="btn-sm-edit btn-sm-edit--texto" onClick={() => startEdit(f)} disabled={!iceConfigurado} title={iceConfigurado ? undefined : 'Primero configura el precio ICE de referencia'}>{f.status === 'OPEN' ? 'Fijar' : 'Editar'}</button>
     ),
   });
 
@@ -284,8 +286,8 @@ export default function PriceFixingsList() {
         description="Lotes comprados a precio provisional: fija su precio definitivo antes de la fecha límite."
         actions={
           <>
-            <button className="auth-btn" onClick={() => { setError(''); setShowForm(true); }} disabled={provisionalLots.length === 0 || !iceConfigurado} title={iceConfigurado ? undefined : 'Primero configura el precio ICE de referencia'}>
-              + Nueva Fijación
+            <button className="auth-btn" onClick={() => { setError(''); setShowForm(true); }} disabled={provisionalLots.length === 0 || !iceConfigurado} title={!iceConfigurado ? 'Primero configura el precio ICE de referencia' : provisionalLots.length === 0 ? 'No hay lotes con precio provisional por fijar' : undefined}>
+              + Nueva fijación
             </button>
           </>
         }
@@ -314,10 +316,11 @@ export default function PriceFixingsList() {
               <button onClick={() => setEditingIce(false)} style={{ padding: '4px 10px', backgroundColor: '#e2e8f0', color: '#4a5568', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Cancelar</button>
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', cursor: 'pointer' }} onClick={empezarEdicionIce}>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: '#975a16' }}>{iceConfigurado ? `$${ice.toLocaleString()}/T` : 'Sin configurar'}</div>
+            <button type="button" onClick={empezarEdicionIce} aria-label={iceConfigurado ? 'Editar el precio ICE de referencia' : 'Configurar el precio ICE de referencia'}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', cursor: 'pointer', background: 'none', border: 'none', padding: 0, font: 'inherit', textAlign: 'left' }}>
+              <span style={{ fontSize: '24px', fontWeight: 800, color: '#975a16' }}>{iceConfigurado ? `$${ice.toLocaleString()}/T` : 'Sin configurar'}</span>
               <span style={{ fontSize: '11px', color: '#b7791f', padding: '2px 8px', backgroundColor: '#fefcbf', borderRadius: '4px', border: '1px solid #f6e05e' }}>{iceConfigurado ? '✏️ Editar' : 'Configurar precio'}</span>
-            </div>
+            </button>
           )}
           {iceError && <div className="auth-error-banner" style={{ marginTop: '8px' }}>{iceError}</div>}
           <div style={{ fontSize: '11px', color: '#b7791f', marginTop: '4px' }}>
@@ -329,62 +332,61 @@ export default function PriceFixingsList() {
       </div>
 
       {showForm && (
-        <div className="page-card" style={{ marginBottom: '16px' }}>
-          <div className="cacao-form">
-            {error && <div className="auth-error-banner">{error}</div>}
-            <div className="form-section-title">Nueva Fijación</div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Lote (solo precios provisionales) *</label>
-                <select value={form.lotId} onChange={(e) => setForm({ ...form, lotId: e.target.value })}>
-                  <option value="">Seleccionar lote...</option>
-                  {provisionalLots.map((l) => {
-                    const dif = l.differential || l.receptions?.[0]?.differential || 0;
-                    const calcPrice = ((ice + dif) / 1000).toFixed(2);
-                    return <option key={l.id} value={l.id}>{l.code} ({l.netWeight} kg) — Precio calc: ${calcPrice}/kg</option>;
-                  })}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Precio Fijado ($/kg) *</label>
-                <input type="number" step="0.0001" min="0" value={form.fixedPrice} onChange={(e) => setForm({ ...form, fixedPrice: e.target.value })} placeholder="Precio definitivo por kg" />
-              </div>
+        <FormModal
+          title="Nueva fijación"
+          descripcion="Fija el precio definitivo de un lote que compraste a precio provisional."
+          submitLabel="Crear fijación"
+          ancho={640}
+          saving={saving}
+          error={error}
+          onClose={() => { setShowForm(false); setError(''); }}
+          onSubmit={handleCreate}
+        >
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="fij-lote">Lote (solo precios provisionales) *</label>
+              <select id="fij-lote" value={form.lotId} onChange={(e) => setForm({ ...form, lotId: e.target.value })}>
+                <option value="">Seleccionar lote...</option>
+                {provisionalLots.map((l) => {
+                  const dif = l.differential || l.receptions?.[0]?.differential || 0;
+                  const calcPrice = ((ice + dif) / 1000).toFixed(2);
+                  return <option key={l.id} value={l.id}>{l.code} ({l.netWeight} kg) — Precio calc: ${calcPrice}/kg</option>;
+                })}
+              </select>
             </div>
-            {form.lotId && (() => {
-              const selectedLot = provisionalLots.find((l: any) => l.id === Number(form.lotId));
-              if (!selectedLot) return null;
-              const dif = selectedLot.differential || selectedLot.receptions?.[0]?.differential || 0;
-              return (
-                <div style={{ padding: '14px 18px', backgroundColor: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '8px', marginBottom: '16px', fontSize: '13px' }}>
-                  <div style={{ fontWeight: 700, color: '#2b6cb0', marginBottom: '8px', textTransform: 'uppercase', fontSize: '11px' }}>Datos del Lote Seleccionado</div>
-                  <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-                    <div><strong>Código:</strong> {selectedLot.code}</div>
-                    <div><strong>Calidad:</strong> {selectedLot.quality?.name || '—'}</div>
-                    <div><strong>Peso:</strong> {selectedLot.netWeight.toLocaleString()} kg</div>
-                    <div><strong>Costo Promedio:</strong> ${selectedLot.averageCost?.toFixed(2)}/kg</div>
-                    <div><strong>Diferencial:</strong> ${dif}/T</div>
-                    <div><strong>Proveedor:</strong> {selectedLot.receptions?.[0]?.supplier?.name || '—'}</div>
-                  </div>
-                  <div style={{ marginTop: '8px', padding: '8px 12px', backgroundColor: '#fffbeb', border: '1px solid #f6e05e', borderRadius: '6px' }}>
-                    <span style={{ fontWeight: 600, color: '#975a16' }}>Precio sugerido: </span>
-                    <span style={{ fontWeight: 700, color: '#975a16', fontSize: '15px' }}>${(((ice + dif) / 1000)).toFixed(4)}/kg</span>
-                    <span style={{ fontSize: '11px', color: '#b7791f', marginLeft: '8px' }}>(ICE ${ice.toLocaleString()} + Dif ${dif}) / 1000</span>
-                  </div>
-                </div>
-              );
-            })()}
-            <div className="form-row">
-              <div className="form-group" style={{ maxWidth: '50%' }}>
-                <label>Fecha Límite para Fijar</label>
-                <DateInput value={form.deadline} onChange={(v) => setForm({ ...form, deadline: v })} />
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-              <button className="btn-secondary" onClick={() => setShowForm(false)}>Cancelar</button>
-              <button className="auth-btn" onClick={handleCreate} disabled={saving}>{saving ? 'Guardando...' : 'Crear'}</button>
+            <div className="form-group">
+              <label htmlFor="fij-precio">Precio fijado ($/kg) *</label>
+              <input id="fij-precio" type="number" inputMode="decimal" step="0.0001" min="0" value={form.fixedPrice} onChange={(e) => setForm({ ...form, fixedPrice: e.target.value })} placeholder="Precio definitivo por kg" />
             </div>
           </div>
-        </div>
+          {form.lotId && (() => {
+            const selectedLot = provisionalLots.find((l: any) => l.id === Number(form.lotId));
+            if (!selectedLot) return null;
+            const dif = selectedLot.differential || selectedLot.receptions?.[0]?.differential || 0;
+            return (
+              <div style={{ padding: '14px 18px', backgroundColor: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '8px', fontSize: '13px' }}>
+                <div style={{ fontWeight: 700, color: '#2b6cb0', marginBottom: '8px', textTransform: 'uppercase', fontSize: '11px' }}>Datos del lote seleccionado</div>
+                <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+                  <div><strong>Código:</strong> {selectedLot.code}</div>
+                  <div><strong>Calidad:</strong> {selectedLot.quality?.name || '—'}</div>
+                  <div><strong>Peso:</strong> {selectedLot.netWeight.toLocaleString()} kg</div>
+                  <div><strong>Costo promedio:</strong> ${selectedLot.averageCost?.toFixed(2)}/kg</div>
+                  <div><strong>Diferencial:</strong> ${dif}/T</div>
+                  <div><strong>Proveedor:</strong> {selectedLot.receptions?.[0]?.supplier?.name || '—'}</div>
+                </div>
+                <div style={{ marginTop: '8px', padding: '8px 12px', backgroundColor: '#fffbeb', border: '1px solid #f6e05e', borderRadius: '6px' }}>
+                  <span style={{ fontWeight: 600, color: '#975a16' }}>Precio sugerido: </span>
+                  <span style={{ fontWeight: 700, color: '#975a16', fontSize: '15px' }}>${(((ice + dif) / 1000)).toFixed(4)}/kg</span>
+                  <span style={{ fontSize: '11px', color: '#b7791f', marginLeft: '8px' }}>(ICE ${ice.toLocaleString()} + Dif ${dif}) / 1000</span>
+                </div>
+              </div>
+            );
+          })()}
+          <div className="form-group">
+            <label>Fecha límite para fijar</label>
+            <DateInput value={form.deadline} onChange={(v) => setForm({ ...form, deadline: v })} />
+          </div>
+        </FormModal>
       )}
 
       {provisionalLots.length === 0 && !showForm && (
@@ -421,55 +423,51 @@ export default function PriceFixingsList() {
         {loading ? (
           <div className="loading-state">Cargando fijaciones...</div>
         ) : fixings.length === 0 ? (
-          <div className="empty-state">No hay fijaciones de precio.</div>
+          <div className="empty-state">Todavía no hay fijaciones. Cuando compres cacao a precio provisional, aquí fijas su precio definitivo.</div>
         ) : (
           tabla
         )}
       </div>
 
       {editingId && (
-        <div className="modal-overlay" onClick={() => setEditingId(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Fijar Precio — {fixings.find((f) => f.id === editingId)?.lot?.code}</h3>
-              <button className="modal-close" onClick={() => setEditingId(null)}>✕</button>
-            </div>
-            <div className="modal-body">
-              {error && <div className="auth-error-banner">{error}</div>}
-              {(() => {
-                const fixing = fixings.find((f) => f.id === editingId);
-                if (!fixing) return null;
-                return (
-                  <div style={{ padding: '14px 18px', backgroundColor: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '8px', marginBottom: '16px', fontSize: '13px' }}>
-                    <div style={{ fontWeight: 700, color: '#2b6cb0', marginBottom: '8px', textTransform: 'uppercase', fontSize: '11px' }}>Datos del Lote</div>
-                    <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-                      <div><strong>Código:</strong> {fixing.lot?.code}</div>
-                      <div><strong>Calidad:</strong> {fixing.lot?.quality?.name || '—'}</div>
-                      <div><strong>Peso:</strong> {(fixing.pendingWeight || fixing.lot?.netWeight || 0).toLocaleString()} kg</div>
-                      <div><strong>Diferencial:</strong> ${fixing.differential?.toFixed(0) || '0'}/T</div>
-                    </div>
-                    <div style={{ marginTop: '8px', padding: '8px 12px', backgroundColor: '#fffbeb', border: '1px solid #f6e05e', borderRadius: '6px' }}>
-                      <span style={{ fontWeight: 600, color: '#975a16' }}>ICE Hoy: </span>
-                      <span style={{ fontWeight: 700, color: '#975a16' }}>${ice.toLocaleString()}/T = ${(ice / 1000).toFixed(4)}/kg</span>
-                    </div>
-                  </div>
-                );
-              })()}
-              <div className="form-group" style={{ marginBottom: '12px' }}>
-                <label>Precio Fijado ($/kg) *</label>
-                <input type="number" step="0.0001" min="0" value={editForm.fixedPrice} onChange={(e) => setEditForm({ ...editForm, fixedPrice: e.target.value })} placeholder="Precio definitivo por kilogramo" />
+        <FormModal
+          title={`Fijar precio — ${fixings.find((f) => f.id === editingId)?.lot?.code ?? ''}`}
+          descripcion="Escribe el precio definitivo por kilogramo que acordaste con el proveedor."
+          submitLabel="Fijar precio"
+          ancho={560}
+          saving={saving}
+          error={error}
+          onClose={() => { setEditingId(null); setError(''); }}
+          onSubmit={handleUpdate}
+        >
+          {(() => {
+            const fixing = fixings.find((f) => f.id === editingId);
+            if (!fixing) return null;
+            return (
+              <div style={{ padding: '14px 18px', backgroundColor: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '8px', fontSize: '13px' }}>
+                <div style={{ fontWeight: 700, color: '#2b6cb0', marginBottom: '8px', textTransform: 'uppercase', fontSize: '11px' }}>Datos del lote</div>
+                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                  <div><strong>Código:</strong> {fixing.lot?.code}</div>
+                  <div><strong>Calidad:</strong> {fixing.lot?.quality?.name || '—'}</div>
+                  <div><strong>Peso:</strong> {(fixing.pendingWeight || fixing.lot?.netWeight || 0).toLocaleString()} kg</div>
+                  <div><strong>Diferencial:</strong> ${fixing.differential?.toFixed(0) || '0'}/T</div>
+                </div>
+                <div style={{ marginTop: '8px', padding: '8px 12px', backgroundColor: '#fffbeb', border: '1px solid #f6e05e', borderRadius: '6px' }}>
+                  <span style={{ fontWeight: 600, color: '#975a16' }}>ICE hoy: </span>
+                  <span style={{ fontWeight: 700, color: '#975a16' }}>${ice.toLocaleString()}/T = ${(ice / 1000).toFixed(4)}/kg</span>
+                </div>
               </div>
-              <div className="form-group">
-                <label>Fecha Límite</label>
-                <DateInput value={editForm.deadline} onChange={(v) => setEditForm({ ...editForm, deadline: v })} />
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setEditingId(null)}>Cancelar</button>
-              <button className="auth-btn" onClick={handleUpdate} disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</button>
-            </div>
+            );
+          })()}
+          <div className="form-group">
+            <label htmlFor="fij-edit-precio">Precio fijado ($/kg) *</label>
+            <input id="fij-edit-precio" type="number" inputMode="decimal" step="0.0001" min="0" value={editForm.fixedPrice} onChange={(e) => setEditForm({ ...editForm, fixedPrice: e.target.value })} placeholder="Precio definitivo por kilogramo" />
           </div>
-        </div>
+          <div className="form-group">
+            <label>Fecha límite</label>
+            <DateInput value={editForm.deadline} onChange={(v) => setEditForm({ ...editForm, deadline: v })} />
+          </div>
+        </FormModal>
       )}
       {soloAdmin && <SoloAdminDialog accion={soloAdmin} onClose={() => setSoloAdmin(null)} />}
     </div>

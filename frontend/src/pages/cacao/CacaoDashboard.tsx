@@ -9,11 +9,13 @@ import {
 import { AreaGrafico } from '../../components/ventas/dashboard/DashboardGraficos';
 import { useTablaCacao } from './useTablaCacao';
 
-const PASOS_INICIALES: Array<{ clave: 'calidades' | 'saco' | 'proveedores' | 'recepciones'; titulo: string; texto: string; ruta: string }> = [
+// Los pasos opcionales se muestran, pero no mantienen la guía a la vista: solo los obligatorios la hacen aparecer.
+const PASOS_INICIALES: Array<{ clave: 'calidades' | 'saco' | 'puntos' | 'proveedores' | 'recepciones'; titulo: string; texto: string; ruta: string; opcional?: boolean }> = [
   { clave: 'calidades', titulo: 'Crea tus calidades de cacao', texto: 'Define cuánto se descuenta por humedad e impurezas en cada calidad.', ruta: '/cacao/configuracion?tab=calidades' },
-  { clave: 'saco', titulo: 'Configura el peso de tu saco', texto: 'Solo si compras o vendes en sacos; las toneladas, los quintales y los kilos no lo necesitan.', ruta: '/cacao/configuracion?tab=unidades' },
   { clave: 'proveedores', titulo: 'Registra a tus proveedores', texto: 'Las personas y empresas a las que les compras cacao.', ruta: '/cacao/suppliers' },
   { clave: 'recepciones', titulo: 'Registra tu primera recepción', texto: 'Al guardarla se crea su lote y entra al inventario.', ruta: '/cacao/receptions/new' },
+  { clave: 'saco', titulo: 'Configura el peso de tu saco', texto: 'Solo si compras o vendes en sacos; las toneladas, los quintales y los kilos no lo necesitan.', ruta: '/cacao/configuracion?tab=unidades', opcional: true },
+  { clave: 'puntos', titulo: 'Crea tus puntos de acopio', texto: 'Solo si recibes cacao en varias sucursales; así cada recepción dice dónde se recibió.', ruta: '/cacao/configuracion?tab=puntos', opcional: true },
 ];
 
 interface ProveedorCompra {
@@ -62,7 +64,7 @@ export default function CacaoDashboard() {
   if (loading) return <div className="loading-state">Cargando dashboard...</div>;
 
   const setup = data?.setup;
-  const pasosPendientes = setup ? PASOS_INICIALES.filter((p) => !setup[p.clave]) : [];
+  const pasosPendientes = setup ? PASOS_INICIALES.filter((p) => !p.opcional && !setup[p.clave]) : [];
   const porAprobar = data?.pendingApprovalCount || 0;
 
   return (
@@ -78,7 +80,7 @@ export default function CacaoDashboard() {
         <div style={{ marginBottom: '16px', padding: '18px 20px', background: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '10px' }}>
           <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#2c5282', margin: '0 0 4px' }}>Primeros pasos</h2>
           <p style={{ fontSize: '13px', color: '#4a5568', margin: '0 0 12px' }}>
-            Antes de registrar tu primera compra, deja listo lo propio de tu empresa. Estos pasos desaparecen cuando los completes.
+            Antes de registrar tu primera compra, deja listo lo propio de tu empresa. Esta guía desaparece cuando completes los tres primeros pasos; los marcados «opcional» son solo si te aplican.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '10px' }}>
             {PASOS_INICIALES.map((p, i) => {
@@ -90,7 +92,7 @@ export default function CacaoDashboard() {
                   style={{ textAlign: 'left', padding: '12px 14px', background: hecho ? '#f0fff4' : 'white', border: `1px solid ${hecho ? '#c6f6d5' : '#bee3f8'}`, borderRadius: '8px', cursor: 'pointer' }}
                 >
                   <div style={{ fontSize: '13px', fontWeight: 600, color: hecho ? '#276749' : '#2d3748' }}>
-                    {hecho ? '✓' : `${i + 1}.`} {p.titulo}
+                    {hecho ? '✓' : p.opcional ? '•' : `${i + 1}.`} {p.titulo}{p.opcional && !hecho ? ' (opcional)' : ''}
                   </div>
                   <div style={{ fontSize: '12px', color: '#718096', marginTop: '4px', lineHeight: 1.4 }}>{p.texto}</div>
                 </button>

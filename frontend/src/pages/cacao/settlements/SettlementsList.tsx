@@ -120,7 +120,7 @@ export default function SettlementsList() {
       },
     ],
     acciones: (s) => (
-      <button className="btn-sm-edit" onClick={() => navigate(`/cacao/settlements/${s.id}`, { state: { from: '/cacao/settlements' } })}>Ver</button>
+      <button className="btn-sm-edit btn-sm-edit--texto" onClick={() => navigate(`/cacao/settlements/${s.id}`, { state: { from: '/cacao/settlements' } })}>Ver</button>
     ),
   });
 
@@ -187,7 +187,7 @@ export default function SettlementsList() {
         {loading ? (
           <div className="loading-state">Cargando liquidaciones...</div>
         ) : settlements.length === 0 ? (
-          <div className="empty-state">No hay liquidaciones registradas.</div>
+          <div className="empty-state">Todavía no hay liquidaciones. Liquida lo que le debes a un proveedor con «+ Nueva Liquidación»; un gerente la aprueba y recién ahí nace la cuenta por pagar.</div>
         ) : filtradas.length === 0 ? (
           <div className="empty-state">No hay liquidaciones con ese estado.</div>
         ) : (

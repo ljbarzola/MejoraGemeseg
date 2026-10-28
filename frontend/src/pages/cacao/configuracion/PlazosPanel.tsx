@@ -62,14 +62,14 @@ export default function PlazosPanel({ puedeEditar }: { puedeEditar: boolean }) {
         <div className="cacao-form">
           <div className="form-row">
             <div className="form-group">
-              <label>Plazo de pago a proveedores (días)</label>
-              <input type="number" min="0" max="365" step="1" disabled={!puedeEditar} value={form.plazoPagoDias}
+              <label htmlFor="plz-1">Plazo de pago a proveedores (días)</label>
+              <input id="plz-1" type="number" min="0" max="365" step="1" disabled={!puedeEditar} value={form.plazoPagoDias}
                 onChange={(e) => { setGuardado(false); setForm({ ...form, plazoPagoDias: e.target.value }); }} />
               <span style={{ fontSize: '11px', color: '#718096' }}>Se cuenta desde que se aprueba la liquidación</span>
             </div>
             <div className="form-group">
-              <label>Plazo de cobro a clientes (días)</label>
-              <input type="number" min="0" max="365" step="1" disabled={!puedeEditar} value={form.plazoCobroDias}
+              <label htmlFor="plz-2">Plazo de cobro a clientes (días)</label>
+              <input id="plz-2" type="number" min="0" max="365" step="1" disabled={!puedeEditar} value={form.plazoCobroDias}
                 onChange={(e) => { setGuardado(false); setForm({ ...form, plazoCobroDias: e.target.value }); }} />
               <span style={{ fontSize: '11px', color: '#718096' }}>Se cuenta desde la fecha del embarque</span>
             </div>

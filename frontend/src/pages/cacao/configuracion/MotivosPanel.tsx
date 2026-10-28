@@ -26,7 +26,7 @@ export default function MotivosPanel({ puedeEditar }: { puedeEditar: boolean }) 
         </p>
       </div>
       <ListaMotivos tipo="LIQUIDACION" titulo="Liquidaciones" ayuda="Al rechazar o anular una liquidación" puedeEditar={puedeEditar} />
-      <ListaMotivos tipo="PAGO" titulo="Pagos y cobros" ayuda="Al anular un pago o un cobro" puedeEditar={puedeEditar} />
+      <ListaMotivos tipo="PAGO" titulo="Pagos y cobros" ayuda="Al anular un pago o un cobro, o rechazar una solicitud de pago" puedeEditar={puedeEditar} />
       <ListaMotivos tipo="RECEPCION" titulo="Entregas" ayuda="Al cerrar una entrega sin liquidarla" puedeEditar={puedeEditar} />
       <ListaMotivos tipo="ANULACION" titulo="Recepciones y embarques" ayuda="Al anular una recepción o un embarque registrados por error" puedeEditar={puedeEditar} />
     </>

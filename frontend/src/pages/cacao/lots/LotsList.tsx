@@ -111,7 +111,7 @@ export default function LotsList() {
         ),
       },
     ],
-    acciones: (l) => <button className="btn-sm-edit" onClick={() => navigate(`/cacao/lots/${l.id}`)}>Ver Kardex</button>,
+    acciones: (l) => <button className="btn-sm-edit btn-sm-edit--texto" onClick={() => navigate(`/cacao/lots/${l.id}`)}>Ver Kardex</button>,
   });
 
   return (
@@ -147,7 +147,7 @@ export default function LotsList() {
         {loading ? (
           <div className="loading-state">Cargando lotes...</div>
         ) : lots.length === 0 ? (
-          <div className="empty-state">No hay lotes registrados.</div>
+          <div className="empty-state">Todavía no hay lotes. Se crean solos cuando registras una recepción.</div>
         ) : (
           tabla
         )}

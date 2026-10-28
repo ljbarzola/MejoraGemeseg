@@ -35,7 +35,7 @@ export default function PaymentsHistoryModal({ title, noun, payments, canVoid, o
       <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{title}</h3>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Cerrar">✕</button>
         </div>
         <div className="modal-body">
           <ErrorBanner mensaje={error} />
@@ -71,7 +71,7 @@ export default function PaymentsHistoryModal({ title, noun, payments, canVoid, o
                         {canVoid && (
                           <td>
                             {!anulado && (
-                              <button className="btn-sm-edit" onClick={() => setVoidingId(p.id)}>Anular</button>
+                              <button className="btn-sm-edit btn-sm-edit--texto" onClick={() => setVoidingId(p.id)}>Anular</button>
                             )}
                           </td>
                         )}

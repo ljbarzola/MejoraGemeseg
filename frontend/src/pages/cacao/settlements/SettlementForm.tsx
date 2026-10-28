@@ -329,8 +329,8 @@ export default function SettlementForm() {
               <DateInput value={form.date} onChange={(v) => setField('date', v)} />
             </div>
             <div className="form-group">
-              <label>Proveedor *</label>
-              <select value={form.supplierId} onChange={(e) => setField('supplierId', e.target.value)}>
+              <label htmlFor="liq-1">Proveedor *</label>
+              <select id="liq-1" value={form.supplierId} onChange={(e) => setField('supplierId', e.target.value)}>
                 <option value="">Seleccionar proveedor...</option>
                 {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
@@ -348,8 +348,8 @@ export default function SettlementForm() {
               <DateInput value={form.periodEnd} onChange={(v) => setField('periodEnd', v)} />
             </div>
             <div className="form-group">
-              <label>Plazo de pago (días) *</label>
-              <input type="number" min="0" max="365" step="1" value={form.dueDays} onChange={(e) => setField('dueDays', e.target.value)} />
+              <label htmlFor="liq-2">Plazo de pago (días) *</label>
+              <input id="liq-2" type="number" min="0" max="365" step="1" value={form.dueDays} onChange={(e) => setField('dueDays', e.target.value)} />
             </div>
           </div>
 

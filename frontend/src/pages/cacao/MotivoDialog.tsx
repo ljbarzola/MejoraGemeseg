@@ -61,15 +61,15 @@ export default function MotivoDialog({ tipo, title, message, confirmLabel, onCon
         <div className="modal-body">
           <p style={{ margin: '0 0 12px', color: '#2d3748', lineHeight: 1.5 }}>{message}</p>
           <div className="form-group">
-            <label>Motivo *</label>
-            <select value={elegido} onChange={(e) => setElegido(e.target.value)} autoFocus>
+            <label htmlFor="mot-1">Motivo *</label>
+            <select id="mot-1" value={elegido} onChange={(e) => setElegido(e.target.value)} autoFocus>
               <option value="">Selecciona un motivo...</option>
               {motivos.map((m) => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label>Detalle (opcional)</label>
-            <input type="text" maxLength={300} value={detalle} onChange={(e) => setDetalle(e.target.value)}
+            <label htmlFor="mot-2">Detalle (opcional)</label>
+            <input id="mot-2" type="text" maxLength={300} value={detalle} onChange={(e) => setDetalle(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') confirmar(); }} placeholder="Algo que quieras dejar anotado" />
           </div>
         </div>

@@ -29,6 +29,7 @@ const STEPS = [
       { label: 'Datos que registra', desc: 'Fecha, proveedor, guía de remisión, unidad de medida (TON/QQ/KG/SACO), peso bruto, tara, humedad %, impurezas %, calidad, precio provisional y diferencial pactado.' },
       { label: 'Cerrar sin liquidar', desc: 'Si una entrega no se le va a pagar al proveedor, en Recepciones pulsa «Cerrar» e indica el motivo: deja de ofrecerse al liquidar y queda registrado quién, cuándo y por qué. «Reabrir» la devuelve. No se puede cerrar una entrega que ya está liquidada por completo.' },
       { label: 'Anular por error', desc: 'Si registraste mal una recepción, anúlala desde el menú «⋯» de su fila en Recepciones (solo administradores): el lote queda en cero. Solo se puede si no se ha liquidado, embarcado ni fijado su precio. Un embarque mal registrado se anula con «Anular embarque» en su detalle: los kilos vuelven a sus lotes y la cuenta por cobrar se anula (si ya tiene cobros, primero anúlalos).' },
+      { label: 'Punto de acopio', desc: 'Si tu empresa recibe cacao en varias sucursales, créalas en Configuración → Puntos de acopio. Desde ese momento, cada recepción debe decir en cuál se recibió, y Recepciones muestra la columna «Punto de acopio». Sin puntos creados, no se pide.' },
       { label: 'Ticket de pesaje (opcional)', desc: 'Número de ticket (no se repite en tu empresa), perfil de pesaje (por bultos o en báscula), chofer y placa del vehículo. En Recepciones puedes mostrar u ocultar estas columnas con «Columnas».' },
       { label: 'Conversión automática', desc: 'Si registra en Toneladas, Quintales o Sacos, el sistema convierte automáticamente a Kilogramos para el kárdex y el lote (un quintal son 100 libras, 45,36 kg; el saco pesa lo que configuró tu empresa). La unidad original queda registrada para consulta.' },
       { label: 'Lote generado', desc: 'El sistema asigna un código (ej: LOTE-2026-001) que identificará este cacao en liquidaciones, fijaciones, kárdex y embarques.' },
@@ -107,6 +108,7 @@ const STEPS = [
     details: [
       { label: 'Origen', desc: 'Cada liquidación aprobada crea una CxP con el monto total a pagar al proveedor. Una liquidación anulada anula también su CxP.' },
       { label: 'Pagos', desc: 'Registre pagos parciales o totales (no se puede pagar más que el saldo). El sistema actualiza el saldo automáticamente. El botón "Pagos" muestra el historial y permite anular un pago registrado por error, indicando el motivo.' },
+      { label: 'Autorización de pagos (opcional)', desc: 'Si tu empresa lo activa en Configuración → Pagos, pagar tiene tres pasos: alguien SOLICITA el pago (botón «Solicitar»), otra persona lo AUTORIZA (o lo rechaza con motivo; nunca quien lo pidió) y el administrador lo PAGA. Se ven en la pestaña «Solicitudes de pago», con quién hizo cada paso y cuándo. Mientras la autorización esté activa, el pago directo no está disponible.' },
       { label: 'Filtros', desc: 'Puede ver por proveedor, estado (pendiente/pagado), y antigüedad de saldos.' },
     ],
     path: '/cacao/payables',

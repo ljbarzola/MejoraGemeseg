@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getSuppliers, getQualities, createReception, getNextLotCode, getUnitConfig } from '../../../services/cacao.service';
+import { getSuppliers, getQualities, createReception, getNextLotCode, getUnitConfig, getCacaoPuntos } from '../../../services/cacao.service';
 import DateInput from '../../../components/common/DateInput';
 import { apiErrorMessage } from '../utils';
 import { ABREVIATURA_UNIDAD as UNIT_ABBR, NOMBRE_UNIDAD as UNIT_FULL, KG_POR_QUINTAL } from '../useCacaoUnidades';
@@ -19,6 +19,8 @@ export default function ReceptionForm() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [qualities, setQualities] = useState<any[]>([]);
   const [unitConfigs, setUnitConfigs] = useState<any[]>([]);
+  // Puntos de acopio activos: si la empresa tiene alguno, la recepción debe decir en cuál se recibió.
+  const [puntos, setPuntos] = useState<any[]>([]);
   const [nextCode, setNextCode] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -26,6 +28,7 @@ export default function ReceptionForm() {
   const [form, setForm] = useState({
     date: getTodayLocal(),
     supplierId: '',
+    puntoId: '',
     guideNumber: '',
     unitOfMeasure: 'KG',
     // Datos del ticket de pesaje (opcionales)
@@ -48,6 +51,7 @@ export default function ReceptionForm() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({});
 
   const supplierRef = useRef<HTMLSelectElement>(null);
+  const puntoRef = useRef<HTMLSelectElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
   const guideRef = useRef<HTMLInputElement>(null);
   const grossWeightRef = useRef<HTMLInputElement>(null);
@@ -55,6 +59,7 @@ export default function ReceptionForm() {
 
   const fieldRefMap: Record<string, React.RefObject<HTMLElement | null>> = {
     supplierId: supplierRef as any,
+    puntoId: puntoRef as any,
     guideNumber: guideRef as any,
     grossWeight: grossWeightRef as any,
     qualityId: qualityRef as any,
@@ -78,12 +83,15 @@ export default function ReceptionForm() {
   }, []);
 
   useEffect(() => {
-    Promise.all([getSuppliers(), getQualities(), getNextLotCode(), getUnitConfig()])
-      .then(([s, q, lc, uc]) => {
+    Promise.all([getSuppliers(), getQualities(), getNextLotCode(), getUnitConfig(), getCacaoPuntos()])
+      .then(([s, q, lc, uc, p]) => {
         setSuppliers(s);
         setQualities(q);
         setNextCode(lc.code);
         setUnitConfigs(uc);
+        setPuntos(p);
+        // Con un solo punto no hay nada que elegir: queda marcado.
+        if (p.length === 1) setForm((prev) => ({ ...prev, puntoId: String(p[0].id) }));
       })
       .finally(() => setLoading(false));
   }, []);
@@ -138,6 +146,7 @@ export default function ReceptionForm() {
   async function handleSubmit() {
     const errors: Record<string, boolean> = {};
     if (!form.supplierId) errors.supplierId = true;
+    if (puntos.length > 0 && !form.puntoId) errors.puntoId = true;
     if (!form.guideNumber) errors.guideNumber = true;
     if (!form.grossWeight) errors.grossWeight = true;
     if (!form.qualityId) errors.qualityId = true;
@@ -156,6 +165,7 @@ export default function ReceptionForm() {
       await createReception({
         date: form.date,
         supplierId: Number(form.supplierId),
+        puntoId: form.puntoId ? Number(form.puntoId) : undefined,
         guideNumber: form.guideNumber,
         unitOfMeasure: form.unitOfMeasure,
         ticketNumber: form.ticketNumber.trim() || undefined,
@@ -211,23 +221,35 @@ export default function ReceptionForm() {
               <DateInput value={form.date} onChange={(v) => setField('date', v)} />
             </div>
             <div className="form-group">
-              <label>Proveedor *</label>
-              <select ref={supplierRef} value={form.supplierId} onChange={(e) => { setField('supplierId', e.target.value); clearFieldError('supplierId'); }} className={fieldErrors.supplierId ? 'input-error' : ''}>
+              <label htmlFor="rec-1">Proveedor *</label>
+              <select id="rec-1" ref={supplierRef} value={form.supplierId} onChange={(e) => { setField('supplierId', e.target.value); clearFieldError('supplierId'); }} className={fieldErrors.supplierId ? 'input-error' : ''}>
                 <option value="">Seleccionar proveedor...</option>
                 {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
               {fieldErrors.supplierId && <span className="field-error">Este campo es requerido</span>}
             </div>
           </div>
+          {puntos.length > 0 && (
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="rec-2">Punto de acopio *</label>
+                <select id="rec-2" ref={puntoRef} value={form.puntoId} onChange={(e) => { setField('puntoId', e.target.value); clearFieldError('puntoId'); }} className={fieldErrors.puntoId ? 'input-error' : ''}>
+                  <option value="">Seleccionar punto de acopio...</option>
+                  {puntos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </select>
+                {fieldErrors.puntoId && <span className="field-error">Este campo es requerido</span>}
+              </div>
+            </div>
+          )}
           <div className="form-row">
             <div className="form-group">
-              <label>Nro. Guía de Remisión *</label>
-              <input ref={guideRef} type="text" placeholder="Ej: TR-2026-0045" value={form.guideNumber} onChange={(e) => { setField('guideNumber', e.target.value); clearFieldError('guideNumber'); }} className={fieldErrors.guideNumber ? 'input-error' : ''} />
+              <label htmlFor="rec-3">Nro. Guía de Remisión *</label>
+              <input id="rec-3" ref={guideRef} type="text" placeholder="Ej: TR-2026-0045" value={form.guideNumber} onChange={(e) => { setField('guideNumber', e.target.value); clearFieldError('guideNumber'); }} className={fieldErrors.guideNumber ? 'input-error' : ''} />
               {fieldErrors.guideNumber && <span className="field-error">Este campo es requerido</span>}
             </div>
             <div className="form-group">
-              <label>Unidad de Medida de Entrada *</label>
-              <select value={form.unitOfMeasure} onChange={(e) => setField('unitOfMeasure', e.target.value)}>
+              <label htmlFor="rec-4">Unidad de Medida de Entrada *</label>
+              <select id="rec-4" value={form.unitOfMeasure} onChange={(e) => setField('unitOfMeasure', e.target.value)}>
                 <option value="KG">Kilogramos (KG)</option>
                 <option value="TON">Toneladas (T)</option>
                 <option value="QQ">Quintales (100 lb = {KG_POR_QUINTAL.toFixed(2)} kg)</option>
@@ -240,13 +262,13 @@ export default function ReceptionForm() {
           <div className="form-section-title">Ticket de pesaje (opcional)</div>
           <div className="form-row">
             <div className="form-group">
-              <label>Nro. de Ticket</label>
-              <input type="text" maxLength={40} placeholder="El número que imprimió la báscula" value={form.ticketNumber} onChange={(e) => setField('ticketNumber', e.target.value)} />
+              <label htmlFor="rec-5">Nro. de Ticket</label>
+              <input id="rec-5" type="text" maxLength={40} placeholder="El número que imprimió la báscula" value={form.ticketNumber} onChange={(e) => setField('ticketNumber', e.target.value)} />
               <div style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>No se puede repetir en tu empresa</div>
             </div>
             <div className="form-group">
-              <label>Perfil de Pesaje</label>
-              <select value={form.weighingProfile} onChange={(e) => setField('weighingProfile', e.target.value)}>
+              <label htmlFor="rec-6">Perfil de Pesaje</label>
+              <select id="rec-6" value={form.weighingProfile} onChange={(e) => setField('weighingProfile', e.target.value)}>
                 <option value="">Sin especificar</option>
                 <option value="BULTOS">Por bultos (se cuentan y pesan los sacos)</option>
                 <option value="BASCULA">En báscula</option>
@@ -255,19 +277,19 @@ export default function ReceptionForm() {
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label>Chofer</label>
-              <input type="text" maxLength={80} placeholder="Nombre de quien transporta" value={form.driverName} onChange={(e) => setField('driverName', e.target.value)} />
+              <label htmlFor="rec-7">Chofer</label>
+              <input id="rec-7" type="text" maxLength={80} placeholder="Nombre de quien transporta" value={form.driverName} onChange={(e) => setField('driverName', e.target.value)} />
             </div>
             <div className="form-group">
-              <label>Placa del Vehículo</label>
-              <input type="text" maxLength={15} placeholder="Ej: ABC-1234" value={form.vehiclePlate} onChange={(e) => setField('vehiclePlate', e.target.value.toUpperCase())} />
+              <label htmlFor="rec-8">Placa del Vehículo</label>
+              <input id="rec-8" type="text" maxLength={15} placeholder="Ej: ABC-1234" value={form.vehiclePlate} onChange={(e) => setField('vehiclePlate', e.target.value.toUpperCase())} />
             </div>
           </div>
 
           <div className="form-row">
             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-              <label>Calidad del Cacao *</label>
-              <select ref={qualityRef} value={form.qualityId} onChange={(e) => {
+              <label htmlFor="rec-9">Calidad del Cacao *</label>
+              <select id="rec-9" ref={qualityRef} value={form.qualityId} onChange={(e) => {
                 clearFieldError('qualityId');
                 const qId = e.target.value;
                 const q = qualities.find((x) => x.id === Number(qId));
@@ -288,7 +310,7 @@ export default function ReceptionForm() {
               {qualities.length === 0 && (
                 <span style={{ fontSize: '12px', color: '#b7791f' }}>
                   Tu empresa aún no tiene calidades.{' '}
-                  <button type="button" className="btn-sm-edit" onClick={() => navigate('/cacao/configuracion?tab=calidades')}>Crear calidades</button>
+                  <button type="button" className="btn-sm-edit btn-sm-edit--texto" onClick={() => navigate('/cacao/configuracion?tab=calidades')}>Crear calidades</button>
                 </span>
               )}
             </div>
@@ -306,21 +328,21 @@ export default function ReceptionForm() {
           <div className="form-section-title">Pesos (en {UNIT_FULL[form.unitOfMeasure]})</div>
           <div className="form-row">
             <div className="form-group">
-              <label>Peso Bruto ({unitAbbr}) *</label>
-              <input ref={grossWeightRef} type="number" step="0.0001" min="0" value={form.grossWeight} onChange={(e) => { setField('grossWeight', e.target.value); clearFieldError('grossWeight'); }} placeholder={`Ej: ${form.unitOfMeasure === 'TON' ? '1.5' : form.unitOfMeasure === 'QQ' ? '30' : form.unitOfMeasure === 'SACO' ? '20' : '1500'}`} className={fieldErrors.grossWeight ? 'input-error' : ''} />
+              <label htmlFor="rec-10">Peso Bruto ({unitAbbr}) *</label>
+              <input id="rec-10" ref={grossWeightRef} type="number" step="0.0001" min="0" value={form.grossWeight} onChange={(e) => { setField('grossWeight', e.target.value); clearFieldError('grossWeight'); }} placeholder={`Ej: ${form.unitOfMeasure === 'TON' ? '1.5' : form.unitOfMeasure === 'QQ' ? '30' : form.unitOfMeasure === 'SACO' ? '20' : '1500'}`} className={fieldErrors.grossWeight ? 'input-error' : ''} />
               {fieldErrors.grossWeight && <span className="field-error">Este campo es requerido</span>}
             </div>
             <div className="form-group">
-              <label>Tara ({unitAbbr})</label>
-              <input type="number" step="0.0001" min="0" value={form.tare} onChange={(e) => setField('tare', e.target.value)} placeholder={`Ej: ${form.unitOfMeasure === 'TON' ? '0.05' : form.unitOfMeasure === 'QQ' ? '0.5' : form.unitOfMeasure === 'SACO' ? '1' : '50'}`} />
+              <label htmlFor="rec-11">Tara ({unitAbbr})</label>
+              <input id="rec-11" type="number" step="0.0001" min="0" value={form.tare} onChange={(e) => setField('tare', e.target.value)} placeholder={`Ej: ${form.unitOfMeasure === 'TON' ? '0.05' : form.unitOfMeasure === 'QQ' ? '0.5' : form.unitOfMeasure === 'SACO' ? '1' : '50'}`} />
             </div>
           </div>
 
           {/* NETO EN UNIDAD ORIGINAL */}
           <div className="form-row">
             <div className="form-group" style={{ maxWidth: '50%' }}>
-              <label>Peso Neto (en {UNIT_FULL[form.unitOfMeasure]})</label>
-              <input
+              <label htmlFor="rec-12">Peso Neto (en {UNIT_FULL[form.unitOfMeasure]})</label>
+              <input id="rec-12"
                 type="text"
                 value={`${netWeightInUnit.toFixed(2)} ${unitAbbr}`}
                 disabled
@@ -397,25 +419,25 @@ export default function ReceptionForm() {
           <div className="form-section-title">Calidad del Cacao</div>
           <div className="form-row">
             <div className="form-group">
-              <label>Humedad %</label>
-              <input type="number" step="0.0001" min="0" max="30" value={form.humidity} onChange={(e) => setField('humidity', e.target.value)} />
+              <label htmlFor="rec-13">Humedad %</label>
+              <input id="rec-13" type="number" step="0.0001" min="0" max="30" value={form.humidity} onChange={(e) => setField('humidity', e.target.value)} />
             </div>
             <div className="form-group">
-              <label>Impurezas %</label>
-              <input type="number" step="0.0001" min="0" max="20" value={form.impurities} onChange={(e) => setField('impurities', e.target.value)} />
+              <label htmlFor="rec-14">Impurezas %</label>
+              <input id="rec-14" type="number" step="0.0001" min="0" max="20" value={form.impurities} onChange={(e) => setField('impurities', e.target.value)} />
             </div>
           </div>
 
           <div className="form-section-title">Precio y Diferencial</div>
           <div className="form-row">
             <div className="form-group">
-              <label>{priceLabel}</label>
-              <input type="number" step="0.01" min="0" value={form.provisionalPrice} onChange={(e) => setField('provisionalPrice', e.target.value)} disabled={form.isFixedPrice && !!selectedQuality?.fixedPrice} style={form.isFixedPrice ? { backgroundColor: '#f0fff4', fontWeight: 600 } : {}} placeholder={form.isFixedPrice ? '' : 'Opcional - puede fijar después'} />
+              <label htmlFor="rec-15">{priceLabel}</label>
+              <input id="rec-15" type="number" step="0.01" min="0" value={form.provisionalPrice} onChange={(e) => setField('provisionalPrice', e.target.value)} disabled={form.isFixedPrice && !!selectedQuality?.fixedPrice} style={form.isFixedPrice ? { backgroundColor: '#f0fff4', fontWeight: 600 } : {}} placeholder={form.isFixedPrice ? '' : 'Opcional - puede fijar después'} />
               {!form.isFixedPrice && <div style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>Puede dejarlo vacío y fijar el precio después</div>}
             </div>
             <div className="form-group">
-              <label>Diferencial Pactado ($/T)</label>
-              <input type="number" step="0.01" value={form.differential} onChange={(e) => setField('differential', e.target.value)} placeholder="Ej: -200" />
+              <label htmlFor="rec-16">Diferencial Pactado ($/T)</label>
+              <input id="rec-16" type="number" step="0.01" value={form.differential} onChange={(e) => setField('differential', e.target.value)} placeholder="Ej: -200" />
               <div style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>Se usará al fijar el precio definitivo</div>
             </div>
           </div>

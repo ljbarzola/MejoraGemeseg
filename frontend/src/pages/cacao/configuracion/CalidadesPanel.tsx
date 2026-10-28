@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Trash2, Pencil } from 'lucide-react';
 import { getQualities, createQuality, updateQuality, deleteQuality } from '../../../services/cacao.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import FormModal from '../../../components/common/FormModal';
 import ErrorBanner from '../../../components/common/ErrorBanner';
 import SoloAdminDialog from '../../../components/common/SoloAdminDialog';
 import { apiErrorMessage } from '../utils';
@@ -107,48 +108,44 @@ export default function CalidadesPanel({ puedeEditar }: { puedeEditar: boolean }
       {!showForm && <ErrorBanner mensaje={error} />}
 
       {showForm && (
-        <div className="page-card" style={{ marginBottom: '16px' }}>
-          <div className="cacao-form">
-            <ErrorBanner mensaje={error} />
-            <div className="form-section-title">{editingId ? 'Editar calidad' : 'Nueva calidad'}</div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Nombre *</label>
-                <input type="text" maxLength={80} placeholder="Ej: CCN-51, Nacional, Orgánico" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              </div>
+        <FormModal
+          title={editingId ? 'Editar calidad' : 'Nueva calidad'}
+          descripcion="Cuánto se descuenta del peso por humedad e impurezas al liquidar este tipo de cacao."
+          submitLabel={editingId ? 'Guardar cambios' : 'Crear calidad'}
+          saving={saving}
+          error={error}
+          onClose={resetForm}
+          onSubmit={handleSubmit}
+        >
+          <div className="form-group">
+            <label htmlFor="cal-nombre">Nombre *</label>
+            <input id="cal-nombre" type="text" maxLength={80} autoComplete="off" placeholder="Ej: CCN-51, Nacional, Orgánico" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="cal-humedad">Descuento por humedad (%) *</label>
+              <input id="cal-humedad" type="number" inputMode="decimal" step="0.1" min="0" max="100" value={form.humidityDiscount} onChange={(e) => setForm({ ...form, humidityDiscount: e.target.value })} />
+              <span style={{ fontSize: '11px', color: '#718096' }}>Porcentaje que se descuenta del peso por humedad</span>
             </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Descuento por humedad (%) *</label>
-                <input type="number" step="0.1" min="0" max="100" value={form.humidityDiscount} onChange={(e) => setForm({ ...form, humidityDiscount: e.target.value })} />
-                <span style={{ fontSize: '11px', color: '#718096' }}>Porcentaje que se descuenta del peso por humedad</span>
-              </div>
-              <div className="form-group">
-                <label>Descuento por impurezas (%) *</label>
-                <input type="number" step="0.1" min="0" max="100" value={form.impurityDiscount} onChange={(e) => setForm({ ...form, impurityDiscount: e.target.value })} />
-                <span style={{ fontSize: '11px', color: '#718096' }}>Porcentaje que se descuenta del peso por impurezas</span>
-              </div>
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input type="checkbox" checked={form.isFixedPrice} onChange={(e) => setForm({ ...form, isFixedPrice: e.target.checked })} />
-                  Precio fijo (no requiere fijación)
-                </label>
-              </div>
-              {form.isFixedPrice && (
-                <div className="form-group">
-                  <label>Precio fijo ($/kg) *</label>
-                  <input type="number" step="0.01" min="0" value={form.fixedPrice} onChange={(e) => setForm({ ...form, fixedPrice: e.target.value })} />
-                </div>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-              <button className="btn-secondary" onClick={resetForm}>Cancelar</button>
-              <button className="auth-btn" onClick={handleSubmit} disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</button>
+            <div className="form-group">
+              <label htmlFor="cal-impurezas">Descuento por impurezas (%) *</label>
+              <input id="cal-impurezas" type="number" inputMode="decimal" step="0.1" min="0" max="100" value={form.impurityDiscount} onChange={(e) => setForm({ ...form, impurityDiscount: e.target.value })} />
+              <span style={{ fontSize: '11px', color: '#718096' }}>Porcentaje que se descuenta del peso por impurezas</span>
             </div>
           </div>
-        </div>
+          <div className="form-group">
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input type="checkbox" checked={form.isFixedPrice} onChange={(e) => setForm({ ...form, isFixedPrice: e.target.checked })} />
+              Precio fijo (no requiere fijación)
+            </label>
+          </div>
+          {form.isFixedPrice && (
+            <div className="form-group">
+              <label htmlFor="cal-precio">Precio fijo ($/kg) *</label>
+              <input id="cal-precio" type="number" inputMode="decimal" step="0.01" min="0" value={form.fixedPrice} onChange={(e) => setForm({ ...form, fixedPrice: e.target.value })} />
+            </div>
+          )}
+        </FormModal>
       )}
 
       <div className="admin-section">

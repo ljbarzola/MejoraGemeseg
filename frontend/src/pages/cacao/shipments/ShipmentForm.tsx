@@ -230,8 +230,8 @@ export default function ShipmentForm() {
               <DateInput value={form.date} onChange={(v) => setField('date', v)} />
             </div>
             <div className="form-group">
-              <label>Cliente *</label>
-              <select value={form.clientId} onChange={(e) => setField('clientId', e.target.value)}>
+              <label htmlFor="emb-1">Cliente *</label>
+              <select id="emb-1" value={form.clientId} onChange={(e) => setField('clientId', e.target.value)}>
                 <option value="">Seleccionar...</option>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -239,12 +239,12 @@ export default function ShipmentForm() {
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label>Referencia (Contrato) *</label>
-              <input type="text" placeholder="Ej: CNT-2026-005" value={form.contractRef} onChange={(e) => setField('contractRef', e.target.value)} />
+              <label htmlFor="emb-2">Referencia (Contrato) *</label>
+              <input id="emb-2" type="text" placeholder="Ej: CNT-2026-005" value={form.contractRef} onChange={(e) => setField('contractRef', e.target.value)} />
             </div>
             <div className="form-group">
-              <label>Unidad de Venta (salida) *</label>
-              <select value={form.unitOfMeasure} onChange={(e) => setField('unitOfMeasure', e.target.value)}>
+              <label htmlFor="emb-3">Unidad de Venta (salida) *</label>
+              <select id="emb-3" value={form.unitOfMeasure} onChange={(e) => setField('unitOfMeasure', e.target.value)}>
                 <option value="KG">Kilogramos (KG)</option>
                 <option value="TON">Toneladas (T)</option>
                 <option value="QQ">Quintales (100 lb = {KG_POR_QUINTAL.toFixed(2)} kg)</option>
@@ -256,13 +256,13 @@ export default function ShipmentForm() {
           </div>
           <div className="form-row">
             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-              <label>Precio Venta ($/kg) *</label>
-              <input type="number" step="0.0001" min="0" value={form.salePrice} onChange={(e) => setField('salePrice', e.target.value)} />
+              <label htmlFor="emb-4">Precio Venta ($/kg) *</label>
+              <input id="emb-4" type="number" step="0.0001" min="0" value={form.salePrice} onChange={(e) => setField('salePrice', e.target.value)} />
               <div style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>Precio por kilogramo, sin importar la unidad en que se embarca</div>
             </div>
             <div className="form-group">
-              <label>Plazo de cobro (días) *</label>
-              <input type="number" min="0" max="365" step="1" value={form.dueDays} onChange={(e) => setField('dueDays', e.target.value)} />
+              <label htmlFor="emb-5">Plazo de cobro (días) *</label>
+              <input id="emb-5" type="number" min="0" max="365" step="1" value={form.dueDays} onChange={(e) => setField('dueDays', e.target.value)} />
               <div style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>Arranca con el plazo de tu empresa (Cacao → Configuración)</div>
             </div>
           </div>

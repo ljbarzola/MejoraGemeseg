@@ -47,6 +47,13 @@ export const createShipment = (data: any) => api.post('/cacao/shipments', data).
 
 export const getPayables = (params?: any) => api.get('/cacao/payables', { params }).then(r => r.data);
 export const payPayable = (id: number, data: any) => api.post(`/cacao/payables/${id}/pay`, data).then(r => r.data);
+// Pagos con autorización (solo si la empresa lo exige): solicitar → autorizar → pagar
+export const getPaymentRequests = (status?: string) => api.get('/cacao/payables/requests', { params: status ? { status } : {} }).then(r => r.data);
+export const createPaymentRequest = (payableId: number, data: any) => api.post(`/cacao/payables/${payableId}/requests`, data).then(r => r.data);
+export const authorizePaymentRequest = (id: number) => api.post(`/cacao/payables/requests/${id}/authorize`).then(r => r.data);
+export const rejectPaymentRequest = (id: number, reason: string) => api.post(`/cacao/payables/requests/${id}/reject`, { reason }).then(r => r.data);
+export const cancelPaymentRequest = (id: number) => api.post(`/cacao/payables/requests/${id}/cancel`).then(r => r.data);
+export const payPaymentRequest = (id: number) => api.post(`/cacao/payables/requests/${id}/pay`).then(r => r.data);
 export const voidPayment = (paymentId: number, reason: string) => api.post(`/cacao/payables/payments/${paymentId}/void`, { reason }).then(r => r.data);
 
 export const getReceivables = (params?: any) => api.get('/cacao/receivables', { params }).then(r => r.data);
@@ -72,7 +79,7 @@ export const deleteCacaoMotivo = (id: number) => api.delete(`/cacao/motivos/${id
 
 // Ajustes de la empresa (plazos de pago y cobro)
 export const getCacaoConfig = () => api.get('/cacao/configuracion').then(r => r.data);
-export const updateCacaoConfig = (data: { plazoPagoDias?: number; plazoCobroDias?: number; precioIce?: number | null }) => api.put('/cacao/configuracion', data).then(r => r.data);
+export const updateCacaoConfig = (data: { plazoPagoDias?: number; plazoCobroDias?: number; precioIce?: number | null; pagosRequierenAutorizacion?: boolean }) => api.put('/cacao/configuracion', data).then(r => r.data);
 
 // Cerrar una entrega sin liquidarla (con motivo) y volver a abrirla
 export const closeReception = (id: number, reason: string) => api.post(`/cacao/receptions/${id}/close`, { reason }).then(r => r.data);
@@ -85,3 +92,9 @@ export const getDashboardCompras = (desde: string, hasta: string) =>
 // Anular una recepción o un embarque mal registrados (solo administrador, con motivo)
 export const voidReception = (id: number, reason: string) => api.post(`/cacao/receptions/${id}/void`, { reason }).then(r => r.data);
 export const cancelShipment = (id: number, reason: string) => api.post(`/cacao/shipments/${id}/cancel`, { reason }).then(r => r.data);
+
+// Puntos de acopio de la empresa (sucursales donde se recibe el cacao). `todos` incluye los desactivados.
+export const getCacaoPuntos = (todos?: boolean) => api.get('/cacao/puntos', { params: todos ? { todos: 1 } : {} }).then(r => r.data);
+export const createCacaoPunto = (data: { nombre: string; direccion?: string | null }) => api.post('/cacao/puntos', data).then(r => r.data);
+export const updateCacaoPunto = (id: number, data: { nombre?: string; direccion?: string | null; activo?: boolean }) => api.patch(`/cacao/puntos/${id}`, data).then(r => r.data);
+export const deleteCacaoPunto = (id: number) => api.delete(`/cacao/puntos/${id}`);

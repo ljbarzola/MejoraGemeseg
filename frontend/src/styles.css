@@ -3848,6 +3848,15 @@ textarea.chat-input {
   color: var(--azul-claro);
 }
 
+/* Botón de fila con TEXTO («Pagar», «Autorizar», «Ver Kardex»): se ajusta a su texto. Sin esto queda en el
+   cuadrado de 28px de los botones de icono y, con dos botones en la fila, el texto de uno pisa al otro. */
+.btn-sm-edit.btn-sm-edit--texto {
+  width: auto;
+  padding: 0 10px;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
 .btn-sm-audit {
   background: #fef3c7;
   color: #92400e;

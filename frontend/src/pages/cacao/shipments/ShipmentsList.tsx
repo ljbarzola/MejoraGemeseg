@@ -62,7 +62,7 @@ export default function ShipmentsList() {
       },
     ],
     acciones: (s) => (
-      <button className="btn-sm-edit" onClick={() => navigate(`/cacao/shipments/${s.id}`, { state: { from: '/cacao/shipments' } })}>Ver</button>
+      <button className="btn-sm-edit btn-sm-edit--texto" onClick={() => navigate(`/cacao/shipments/${s.id}`, { state: { from: '/cacao/shipments' } })}>Ver</button>
     ),
   });
 
@@ -106,7 +106,7 @@ export default function ShipmentsList() {
         {loading ? (
           <div className="loading-state">Cargando embarques...</div>
         ) : shipments.length === 0 ? (
-          <div className="empty-state">No hay embarques registrados.</div>
+          <div className="empty-state">Todavía no hay embarques. Cuando vendas cacao a un cliente, regístralo con «+ Nuevo Embarque»: descuenta del inventario y crea la cuenta por cobrar.</div>
         ) : (
           tabla
         )}

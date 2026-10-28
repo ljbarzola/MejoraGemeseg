@@ -3,6 +3,9 @@ import PageHeader from '../../../components/common/PageHeader';
 import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
 import { getClients, createClient, updateClient, deleteClient } from '../../../services/cacao.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import FormModal from '../../../components/common/FormModal';
+import ErrorBanner from '../../../components/common/ErrorBanner';
+import { apiErrorMessage } from '../utils';
 import { Trash2, Pencil } from 'lucide-react';
 import { useTablaCacao } from '../useTablaCacao';
 
@@ -15,6 +18,8 @@ export default function ClientsPage() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [confirmandoEliminar, setConfirmandoEliminar] = useState<number | null>(null);
+  // Un error al eliminar (p. ej. el cliente ya tiene embarques) se muestra sobre la lista.
+  const [errorLista, setErrorLista] = useState('');
 
   const load = () => {
     setLoading(true);
@@ -24,6 +29,7 @@ export default function ClientsPage() {
   useEffect(() => { load(); }, []);
 
   function resetForm() {
+    setErrorLista('');
     setForm({ name: '', country: '', contact: '', email: '', phone: '' });
     setEditingId(null);
     setShowForm(false);
@@ -43,13 +49,15 @@ export default function ClientsPage() {
       resetForm();
       load();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al guardar');
+      setError(apiErrorMessage(err, 'No se pudo guardar el cliente. Revisa los datos e inténtalo de nuevo.'));
     } finally { setSaving(false); }
   }
 
   function startEdit(c: any) {
+    setErrorLista('');
     setForm({ name: c.name, country: c.country || '', contact: c.contact || '', email: c.email || '', phone: c.phone || '' });
     setEditingId(c.id);
+    setError('');
     setShowForm(true);
   }
 
@@ -61,7 +69,10 @@ export default function ClientsPage() {
     const id = confirmandoEliminar;
     if (!id) return;
     setConfirmandoEliminar(null);
-    try { await deleteClient(id); load(); } catch {}
+    setErrorLista('');
+    try { await deleteClient(id); load(); } catch (err: any) {
+      setErrorLista(apiErrorMessage(err, 'No se pudo eliminar el cliente. Si ya tiene embarques, no se puede borrar.'));
+    }
   }
 
   const { tabla, selectorColumnas, buscador, botonExportar, limpiarBusqueda, hayBusqueda } = useTablaCacao<any>({
@@ -92,7 +103,7 @@ export default function ClientsPage() {
         description="Los compradores y exportadores a los que les vendes tu cacao."
         actions={
           <>
-            <button className="auth-btn" onClick={() => { resetForm(); setShowForm(true); }}>+ Nuevo Cliente</button>
+            <button className="auth-btn" onClick={() => { resetForm(); setShowForm(true); }}>+ Nuevo cliente</button>
           </>
         }
       />
@@ -106,43 +117,43 @@ export default function ClientsPage() {
         </div>
       </div>
 
+      <ErrorBanner mensaje={errorLista} />
+
       {showForm && (
-        <div className="page-card" style={{ marginBottom: '16px' }}>
-          <div className="cacao-form">
-            {error && <div className="auth-error-banner">{error}</div>}
-            <div className="form-section-title">{editingId ? 'Editar Cliente' : 'Nuevo Cliente'}</div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Nombre *</label>
-                <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label>País</label>
-                <input type="text" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
-              </div>
+        <FormModal
+          title={editingId ? 'Editar cliente' : 'Nuevo cliente'}
+          descripcion="El comprador o exportador al que le vendes cacao. Solo el nombre es obligatorio."
+          submitLabel={editingId ? 'Guardar cambios' : 'Crear cliente'}
+          saving={saving}
+          error={error}
+          onClose={resetForm}
+          onSubmit={handleSubmit}
+        >
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="cli-nombre">Nombre *</label>
+              <input id="cli-nombre" type="text" maxLength={120} autoComplete="off" placeholder="Ej: Chocolates del Mundo S.A." value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Contacto</label>
-                <input type="text" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label>Teléfono</label>
-                <input type="text" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-              </div>
-            </div>
-            <div className="form-row">
-              <div className="form-group" style={{ maxWidth: '50%' }}>
-                <label>Email</label>
-                <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-              <button className="btn-secondary" onClick={resetForm}>Cancelar</button>
-              <button className="auth-btn" onClick={handleSubmit} disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</button>
+            <div className="form-group">
+              <label htmlFor="cli-pais">País</label>
+              <input id="cli-pais" type="text" maxLength={80} autoComplete="off" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
             </div>
           </div>
-        </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="cli-contacto">Persona de contacto</label>
+              <input id="cli-contacto" type="text" maxLength={120} autoComplete="off" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label htmlFor="cli-telefono">Teléfono</label>
+              <input id="cli-telefono" type="tel" inputMode="tel" maxLength={40} autoComplete="off" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label htmlFor="cli-email">Correo electrónico</label>
+            <input id="cli-email" type="email" maxLength={160} autoComplete="off" spellCheck={false} placeholder="nombre@empresa.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </div>
+        </FormModal>
       )}
 
       <div className="filter-bar">
@@ -157,7 +168,7 @@ export default function ClientsPage() {
         {loading ? (
           <div className="loading-state">Cargando clientes...</div>
         ) : clients.length === 0 ? (
-          <div className="empty-state">No hay clientes registrados.</div>
+          <div className="empty-state">Todavía no tienes clientes. Crea el primero con «+ Nuevo cliente» para poder registrar embarques.</div>
         ) : (
           tabla
         )}
@@ -166,7 +177,7 @@ export default function ClientsPage() {
       {confirmandoEliminar !== null && (
         <ConfirmDialog
           title="Eliminar cliente"
-          message="¿Eliminar este cliente?"
+          message={`¿Eliminar a «${clients.find((x) => x.id === confirmandoEliminar)?.name ?? 'este cliente'}»? Solo se puede si no tiene embarques.`}
           confirmLabel="Sí, eliminar"
           danger
           onConfirm={confirmarEliminar}

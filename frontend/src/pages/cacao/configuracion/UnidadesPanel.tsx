@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Trash2, Pencil } from 'lucide-react';
 import { getUnitConfig, createUnitConfig, updateUnitConfig, deleteUnitConfig } from '../../../services/cacao.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import FormModal from '../../../components/common/FormModal';
 import ErrorBanner from '../../../components/common/ErrorBanner';
 import SoloAdminDialog from '../../../components/common/SoloAdminDialog';
 import { apiErrorMessage } from '../utils';
@@ -108,41 +109,39 @@ export default function UnidadesPanel({ puedeEditar }: { puedeEditar: boolean })
       {!showForm && <ErrorBanner mensaje={error} />}
 
       {showForm && (
-        <div className="page-card" style={{ marginBottom: '16px' }}>
-          <div className="cacao-form">
-            <ErrorBanner mensaje={error} />
-            <div className="form-section-title">{editingId ? 'Editar unidad' : 'Nueva unidad'}</div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Nombre *</label>
-                <input type="text" maxLength={80} placeholder="Ej: Saco estándar" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label>Peso por unidad (kg) *</label>
-                <input type="number" step="0.01" min="0" value={form.kgPerUnit} onChange={(e) => setForm({ ...form, kgPerUnit: e.target.value })} />
-              </div>
+        <FormModal
+          title={editingId ? 'Editar unidad' : 'Nueva unidad'}
+          descripcion="Cuánto pesa en kilos la unidad que usas al recibir o embarcar (por ejemplo, un saco)."
+          submitLabel={editingId ? 'Guardar cambios' : 'Crear unidad'}
+          saving={saving}
+          error={error}
+          onClose={resetForm}
+          onSubmit={handleSubmit}
+        >
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="uni-nombre">Nombre *</label>
+              <input id="uni-nombre" type="text" maxLength={80} autoComplete="off" placeholder="Ej: Saco estándar" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} />
             </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input type="checkbox" checked={form.isDefault} onChange={(e) => setForm({ ...form, isDefault: e.target.checked })} />
-                  Usar como unidad por defecto
-                </label>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-              <button className="btn-secondary" onClick={resetForm}>Cancelar</button>
-              <button className="auth-btn" onClick={handleSubmit} disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</button>
+            <div className="form-group">
+              <label htmlFor="uni-peso">Peso por unidad (kg) *</label>
+              <input id="uni-peso" type="number" inputMode="decimal" step="0.01" min="0" placeholder="Ej: 70" value={form.kgPerUnit} onChange={(e) => setForm({ ...form, kgPerUnit: e.target.value })} />
             </div>
           </div>
-        </div>
+          <div className="form-group">
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input type="checkbox" checked={form.isDefault} onChange={(e) => setForm({ ...form, isDefault: e.target.checked })} />
+              Usar como unidad por defecto
+            </label>
+          </div>
+        </FormModal>
       )}
 
       <div className="admin-section">
         {loading ? (
           <div className="loading-state">Cargando unidades...</div>
         ) : unidades.length === 0 ? (
-          <div className="empty-state">Aún no hay unidades configuradas.</div>
+          <div className="empty-state">Aún no hay unidades configuradas. Si recibes o vendes en sacos, crea una con lo que pesa tu saco (por ejemplo 70 kg).</div>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table">
@@ -163,7 +162,7 @@ export default function UnidadesPanel({ puedeEditar }: { puedeEditar: boolean })
                       {u.isDefault ? (
                         <span className="status-badge" style={{ backgroundColor: '#c6f6d5', color: '#276749' }}>Por defecto</span>
                       ) : (
-                        <button className="btn-sm-edit" onClick={() => requiere('cambie la unidad por defecto', () => marcarPorDefecto(u.id))}>Marcar por defecto</button>
+                        <button className="btn-sm-edit btn-sm-edit--texto" onClick={() => requiere('cambie la unidad por defecto', () => marcarPorDefecto(u.id))}>Marcar por defecto</button>
                       )}
                     </td>
                     <td className="col-acciones">
