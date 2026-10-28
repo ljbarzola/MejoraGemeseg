@@ -1,8 +1,13 @@
 import { Fragment } from 'react';
+import { Phone } from 'lucide-react';
 import type { ProductComputation, QuoteComputation } from '../../../utils/cotizador/pricing';
 import type { QuoteDraft } from '../../../utils/cotizador/draft';
-import { isoToDMY, money, splitConditionLine } from '../../../utils/cotizador/format';
+import { money, splitConditionLine } from '../../../utils/cotizador/format';
 import QuoteTotals from './QuoteTotals';
+
+// Logo de GEMESEG en sus colores originales (letras oscuras sobre blanco), el mismo del cotizador original.
+// El logo que guarda la empresa en la app es el claro, pensado para el menú oscuro: no sirve sobre papel blanco.
+const LOGO_GEMESEG_SOBRE_BLANCO = '/resources/logo-gemeseg-bgwhite.png';
 
 interface Props {
   draft: QuoteDraft;
@@ -11,35 +16,40 @@ interface Props {
   logoUrl?: string | null;
   issuerName: string;
   issuerRole: string;
-  issuerContact: string;
   /** Teléfono de quien emite (ya con el de respaldo aplicado). */
   issuerPhone: string;
 }
 
 // Lo que se imprime / guarda como PDF. NUNCA muestra el costo del proveedor, la ganancia ni el nombre del
 // proveedor: "Costo unit." y "Costo total" son los precios de venta (sin IVA), igual que el cotizador original.
-export default function QuotePrint({ draft, comp, companyName, logoUrl, issuerName, issuerRole, issuerContact, issuerPhone }: Props) {
+// El formato (encabezado, datos en columna, cuadro de totales oscuro, firmas) sigue al PDF del original.
+export default function QuotePrint({ draft, comp, companyName, logoUrl, issuerName, issuerRole, issuerPhone }: Props) {
   const kits = comp.lines.filter((l) => l.kind === 'kit');
   const prods = comp.lines.filter((l) => l.kind === 'product');
   const installs = comp.lines.filter((l) => l.kind === 'install');
   let n = 0;
+
+  const esGemeseg = /gemeseg/i.test(companyName);
+  const logo = esGemeseg ? LOGO_GEMESEG_SOBRE_BLANCO : logoUrl;
 
   const row = (c: ProductComputation, key: string) => {
     if (c.missing || !c.item || !c.price) return null;
     n++;
     return (
       <tr key={key}>
-        <td>{n}</td>
+        <td className="num">{n}</td>
         <td>
-          <strong>{c.item.name}</strong>
-          <br />
+          <span className="desc">{c.item.name}</span>
           <small>{c.item.code}</small>
         </td>
-        <td className="center">{c.item.isService ? 'servicio' : ''}</td>
+        <td className="center und">{c.item.unit || '—'}</td>
         <td className="right">{money(c.price.priceBeforeIva)}</td>
         <td className="center">{c.line.qty}</td>
         <td className="right">
           <strong>{money(c.pvpTotal)}</strong>
+        </td>
+        <td className="center">
+          {c.item.hasInstalacion ? <span className={`inst-box${c.line.installActive ? ' on' : ''}`} /> : '—'}
         </td>
       </tr>
     );
@@ -50,11 +60,15 @@ export default function QuotePrint({ draft, comp, companyName, logoUrl, issuerNa
   return (
     <div className="cot-print-only" aria-hidden="true">
       <div className="cot-print-header">
-        <div className="cot-print-logo">{logoUrl && <img src={logoUrl} alt={companyName} />}</div>
+        <div className={`cot-print-logo${esGemeseg ? '' : ' en-caja'}`}>{logo && <img src={logo} alt={companyName} />}</div>
         <div>
           <div className="cot-print-title">Cotizador {companyName}</div>
-          {issuerPhone && <div className="cot-print-sub">Tel. {issuerPhone}</div>}
-          {issuerContact && <div className="cot-print-sub">{issuerContact}</div>}
+          {issuerPhone && (
+            <div className="cot-print-sub">
+              <Phone size={11} fill="currentColor" strokeWidth={1.5} className="cot-print-phone" />
+              {issuerPhone}
+            </div>
+          )}
         </div>
       </div>
 
@@ -63,7 +77,7 @@ export default function QuotePrint({ draft, comp, companyName, logoUrl, issuerNa
           <span className="label">N° Cotización:</span> <strong>{draft.quoteNumber || '—'}</strong>
         </div>
         <div>
-          <span className="label">Fecha emisión:</span> <strong>{isoToDMY(draft.quoteDate) || '—'}</strong>
+          <span className="label">Fecha emisión:</span> <strong>{draft.quoteDate || '—'}</strong>
         </div>
         <div>
           <span className="label">Validez:</span> <strong>15 días</strong>
@@ -97,19 +111,22 @@ export default function QuotePrint({ draft, comp, companyName, logoUrl, issuerNa
         <table className="cot-print-table">
           <thead>
             <tr>
-              <th style={{ width: 22 }}>#</th>
+              <th style={{ width: 24 }}>#</th>
               <th>Nombre</th>
-              <th className="center" style={{ width: 50 }}>
+              <th className="center" style={{ width: 40 }}>
                 Und
               </th>
-              <th className="right" style={{ width: 70 }}>
+              <th className="right" style={{ width: 84 }}>
                 Costo unit.
               </th>
               <th className="center" style={{ width: 40 }}>
                 Cant
               </th>
-              <th className="right" style={{ width: 80 }}>
+              <th className="right" style={{ width: 96 }}>
                 Costo total
+              </th>
+              <th className="center" style={{ width: 36 }}>
+                Inst
               </th>
             </tr>
           </thead>
@@ -119,7 +136,7 @@ export default function QuotePrint({ draft, comp, companyName, logoUrl, issuerNa
                 <Fragment key={`k${i}`}>
                   <tr className="kit">
                     <td>📦</td>
-                    <td colSpan={5}>
+                    <td colSpan={6}>
                       {l.line.kitName} <small>x{l.line.qty}</small>
                     </td>
                   </tr>
@@ -138,15 +155,15 @@ export default function QuotePrint({ draft, comp, companyName, logoUrl, issuerNa
           <table className="cot-print-table">
             <thead>
               <tr>
-                <th style={{ width: 22 }}>#</th>
+                <th style={{ width: 24 }}>#</th>
                 <th>Servicio / Descripción</th>
-                <th className="right" style={{ width: 80 }}>
+                <th className="right" style={{ width: 84 }}>
                   Costo unit.
                 </th>
                 <th className="center" style={{ width: 40 }}>
                   Cant
                 </th>
-                <th className="right" style={{ width: 90 }}>
+                <th className="right" style={{ width: 96 }}>
                   Precio total
                 </th>
               </tr>
@@ -155,9 +172,9 @@ export default function QuotePrint({ draft, comp, companyName, logoUrl, issuerNa
               {installs.map((l, i) =>
                 l.kind === 'install' ? (
                   <tr key={`i${i}`}>
-                    <td>{i + 1}</td>
+                    <td className="num">{i + 1}</td>
                     <td>
-                      <strong>{l.line.description}</strong>
+                      <span className="desc">{l.line.description}</span>
                       {(l.line.category || l.line.subcategory) && (
                         <small>
                           {' '}

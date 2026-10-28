@@ -24,6 +24,8 @@ import { usePerm } from '../../contexts/PermissionsContext';
 import { useToast } from '../../contexts/ToastContext';
 import { getUser } from '../../services/auth.service';
 import { getMe } from '../../services/user.service';
+import { getSalesContacts, type SalesClient, type SalesContact } from '../../services/ventas.service';
+import ClienteDirectorioInput from '../../components/ventas/cotizador/ClienteDirectorioInput';
 import { TELEFONO_POR_DEFECTO } from '../../utils/telefono';
 import {
   changeCotQuoteStatus,
@@ -374,6 +376,29 @@ export default function CotizadorPage() {
   const [errorGuardar, setErrorGuardar] = useState('');
   const clientRefs = useRef<Partial<Record<ClientField, HTMLInputElement | null>>>({});
 
+  // Eligió a alguien del Directorio: se rellenan todos los datos del cliente (reemplazan lo anterior para no
+  // dejar mezclados los de otro cliente). Contacto = primera persona de la ficha; si el cliente no tiene teléfono
+  // o correo propios, se usan los de esa persona.
+  const traerDelDirectorio = async (c: SalesClient) => {
+    let persona: SalesContact | undefined;
+    try {
+      persona = (await getSalesContacts(c.id))[0];
+    } catch {
+      // Sin acceso a los contactos: se rellena lo demás
+    }
+    patch({
+      client: {
+        name: c.name,
+        ruc: c.ruc ?? '',
+        phone: c.phone || persona?.phones?.[0]?.value || '',
+        address: c.address ?? '',
+        contact: persona ? [persona.name, persona.role].filter(Boolean).join(' - ') : '',
+        email: c.email || persona?.emails?.[0]?.value || '',
+      },
+    });
+    setClientErrors({});
+  };
+
   const preguntarDuplicado = (numero: string, canUpdate: boolean) =>
     new Promise<'update' | 'create_new' | null>((resolver) => setDuplicado({ numero, canUpdate, resolver }));
 
@@ -474,12 +499,11 @@ export default function CotizadorPage() {
     setConfirmNueva(false);
   };
 
-  // El nombre del PDF sale del título de la pestaña: "COT-... - Cliente"
+  // El nombre del PDF sale del título de la pestaña: "COT-... - Cliente" (o solo el número si aún no hay cliente)
   useEffect(() => {
     const antes = () => {
-      if (draft.client.name.trim()) {
-        document.title = (draft.quoteNumber ? draft.quoteNumber + ' - ' : '') + draft.client.name.trim();
-      }
+      const nombre = [draft.quoteNumber.trim(), draft.client.name.trim()].filter(Boolean).join(' - ');
+      if (nombre) document.title = nombre;
     };
     const titulo = document.title;
     const despues = () => {
@@ -680,18 +704,19 @@ export default function CotizadorPage() {
                   <label htmlFor="cot-c-name">
                     Cliente / Razón social <span className="req">*</span>
                   </label>
-                  <input
+                  <ClienteDirectorioInput
                     id="cot-c-name"
-                    ref={(el) => {
+                    inputRef={(el) => {
                       clientRefs.current.name = el;
                     }}
                     className={clientErrors.name ? 'input-error' : ''}
                     value={draft.client.name}
                     disabled={readOnly}
-                    onChange={(e) => {
-                      patch({ client: { ...draft.client, name: e.target.value } });
+                    onType={(texto) => {
+                      patch({ client: { ...draft.client, name: texto } });
                       setClientErrors((er) => ({ ...er, name: false }));
                     }}
+                    onPick={traerDelDirectorio}
                     placeholder="Nombre o razón social"
                   />
                   {clientErrors.name && <span className="field-error">Escribe el cliente</span>}
@@ -913,7 +938,6 @@ export default function CotizadorPage() {
         issuerName={draft.ownerName || user?.fullName || ''}
         issuerRole={cargoEmisor}
         issuerPhone={telefonoEmisor}
-        issuerContact={!draft.ownerName || draft.ownerName === user?.fullName ? (user?.email ?? '') : ''}
       />
 
       {verHistorial && (
