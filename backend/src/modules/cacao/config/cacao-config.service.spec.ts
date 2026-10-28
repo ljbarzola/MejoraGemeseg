@@ -20,6 +20,7 @@ describe('CacaoConfigService', () => {
     expect(await service.get(4)).toEqual({
       ...AJUSTES_INICIALES,
       precioIce: null,
+      pagosRequierenAutorizacion: false,
     });
     expect(prisma.cacaoSetting.findMany).toHaveBeenCalledWith({
       where: { companyId: 4 },
@@ -46,6 +47,7 @@ describe('CacaoConfigService', () => {
     expect(await service.get(4)).toEqual({
       ...AJUSTES_INICIALES,
       precioIce: null,
+      pagosRequierenAutorizacion: false,
     });
   });
 
@@ -68,6 +70,31 @@ describe('CacaoConfigService', () => {
     expect(prisma.cacaoSetting.upsert).toHaveBeenCalledWith(
       expect.objectContaining({ update: { value: '0' } }),
     );
+  });
+
+  describe('autorización de pagos', () => {
+    it('una empresa nueva paga directo (no exige autorización)', async () => {
+      const { prisma, service } = armar();
+      prisma.cacaoSetting.findMany.mockResolvedValue([]);
+      expect(await service.pagosRequierenAutorizacion(4)).toBe(false);
+    });
+
+    it('lee lo que la empresa activó y lo guarda como 1 o 0', async () => {
+      const { prisma, service } = armar();
+      prisma.cacaoSetting.findMany.mockResolvedValue([
+        { key: 'pagosRequierenAutorizacion', value: '1' },
+      ]);
+      expect(await service.pagosRequierenAutorizacion(4)).toBe(true);
+
+      await service.update(4, { pagosRequierenAutorizacion: false });
+      expect(prisma.cacaoSetting.upsert).toHaveBeenCalledWith({
+        where: {
+          companyId_key: { companyId: 4, key: 'pagosRequierenAutorizacion' },
+        },
+        update: { value: '0' },
+        create: { companyId: 4, key: 'pagosRequierenAutorizacion', value: '0' },
+      });
+    });
   });
 
   describe('precio ICE', () => {

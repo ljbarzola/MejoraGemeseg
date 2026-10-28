@@ -1,4 +1,11 @@
-import { IsInt, IsNumber, IsOptional, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  Max,
+  Min,
+} from 'class-validator';
 
 /** Ajustes del módulo Cacao de una empresa. Lo que no se manda no se cambia. */
 export class UpdateCacaoConfigDto {
@@ -22,4 +29,9 @@ export class UpdateCacaoConfigDto {
   @Min(0.01)
   @Max(1000000)
   precioIce?: number | null;
+
+  /** Si los pagos a proveedores deben solicitarse y autorizarse antes de pagarse. */
+  @IsOptional()
+  @IsBoolean()
+  pagosRequierenAutorizacion?: boolean;
 }

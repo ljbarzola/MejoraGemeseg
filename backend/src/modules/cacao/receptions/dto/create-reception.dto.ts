@@ -99,6 +99,14 @@ export class CreateReceptionDto {
   @IsIn(PERFILES_PESAJE, { message: 'El perfil de pesaje no es válido' })
   weighingProfile?: (typeof PERFILES_PESAJE)[number];
 
+  /**
+   * Punto de acopio donde se recibió la entrega. Es obligatorio apenas la empresa tiene algún
+   * punto activo; mientras no tenga ninguno, no se pide.
+   */
+  @IsOptional()
+  @IsInt({ message: 'Selecciona el punto de acopio' })
+  puntoId?: number;
+
   /** Quién transportó la entrega. */
   @IsOptional()
   @Transform(textoOpcional)

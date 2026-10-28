@@ -40,10 +40,16 @@ export class CacaoReceptionsService {
 
   async findAll(
     companyId: number,
-    query: { supplierId?: string; from?: string; to?: string },
+    query: {
+      supplierId?: string;
+      puntoId?: string;
+      from?: string;
+      to?: string;
+    },
   ) {
     const where: Prisma.CacaoReceptionWhereInput = { companyId };
     if (query.supplierId) where.supplierId = Number(query.supplierId);
+    if (query.puntoId) where.puntoId = Number(query.puntoId);
     if (query.from || query.to) {
       where.date = {};
       if (query.from) where.date.gte = new Date(query.from);
@@ -51,7 +57,7 @@ export class CacaoReceptionsService {
     }
     const recepciones = await this.prisma.cacaoReception.findMany({
       where,
-      include: { supplier: true, lot: true },
+      include: { supplier: true, lot: true, punto: true },
       orderBy: { date: 'desc' },
     });
 
@@ -251,6 +257,29 @@ export class CacaoReceptionsService {
     });
     if (!quality) throw new BadRequestException('Calidad no encontrada');
 
+    // Punto de acopio: si la empresa ya armó los suyos, la recepción dice en cuál se recibió.
+    let puntoId: number | null = null;
+    if (dto.puntoId !== undefined) {
+      const punto = await this.prisma.cacaoPunto.findFirst({
+        where: { id: dto.puntoId, companyId },
+      });
+      if (!punto)
+        throw new BadRequestException('Punto de acopio no encontrado');
+      if (!punto.activo) {
+        throw new BadRequestException(
+          'Ese punto de acopio está desactivado: elige otro',
+        );
+      }
+      puntoId = punto.id;
+    } else {
+      const puntosActivos = await this.prisma.cacaoPunto.count({
+        where: { companyId, activo: true },
+      });
+      if (puntosActivos > 0) {
+        throw new BadRequestException('Selecciona el punto de acopio');
+      }
+    }
+
     // El número de ticket identifica el comprobante de pesaje: no se registra dos veces.
     if (dto.ticketNumber) {
       const repetido = await this.prisma.cacaoReception.findFirst({
@@ -309,6 +338,7 @@ export class CacaoReceptionsService {
               weighingProfile: dto.weighingProfile ?? null,
               driverName: dto.driverName ?? null,
               vehiclePlate: dto.vehiclePlate ?? null,
+              puntoId,
               grossWeight: grossWeightKg,
               tare: tareKg,
               netWeight: netWeightKg,
@@ -321,7 +351,7 @@ export class CacaoReceptionsService {
               companyId,
               createdBy: userId,
             },
-            include: { supplier: true, lot: true },
+            include: { supplier: true, lot: true, punto: true },
           });
 
           // El kárdex siempre va en kg

@@ -14,6 +14,7 @@ import { CacaoQualitiesModule } from './qualities/qualities.module';
 import { CacaoUnitConfigModule } from './unit-config/unit-config.module';
 import { CacaoConfigModule } from './config/cacao-config.module';
 import { CacaoMotivosModule } from './motivos/motivos.module';
+import { CacaoPuntosModule } from './puntos/puntos.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { CacaoMotivosModule } from './motivos/motivos.module';
     CacaoUnitConfigModule,
     CacaoConfigModule,
     CacaoMotivosModule,
+    CacaoPuntosModule,
   ],
 })
 export class CacaoModule {}

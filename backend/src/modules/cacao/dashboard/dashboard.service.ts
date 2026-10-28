@@ -99,6 +99,7 @@ export class CacaoDashboardService {
       proveedores,
       recepciones,
       saco,
+      puntos,
     ] = await Promise.all([
       this.prisma.cacaoLot.findMany({
         where: { companyId, status: 'OPEN' },
@@ -135,6 +136,7 @@ export class CacaoDashboardService {
       this.prisma.cacaoUnitConfig.count({
         where: { companyId, isDefault: true },
       }),
+      this.prisma.cacaoPunto.count({ where: { companyId, activo: true } }),
     ]);
 
     const totalInventoryKg = lots.reduce((sum, l) => sum + l.netWeight, 0);
@@ -176,6 +178,7 @@ export class CacaoDashboardService {
         saco: saco > 0,
         proveedores: proveedores > 0,
         recepciones: recepciones > 0,
+        puntos: puntos > 0,
       },
     };
   }

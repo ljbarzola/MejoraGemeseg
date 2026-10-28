@@ -74,6 +74,41 @@ export const CACAO_CONFIG_DDL = [
   'ALTER TABLE IF EXISTS "CacaoShipment" ADD COLUMN IF NOT EXISTS "cancelledAt" TIMESTAMP(3)',
   'ALTER TABLE IF EXISTS "CacaoShipment" ADD COLUMN IF NOT EXISTS "cancelledBy" INTEGER',
   'ALTER TABLE IF EXISTS "CacaoShipment" ADD COLUMN IF NOT EXISTS "cancelReason" TEXT',
+  // Puntos de acopio (2026-10-28). Tabla nueva y columna opcional en la recepción: el despliegue
+  // anterior sigue funcionando con ellas creadas.
+  `CREATE TABLE IF NOT EXISTS "CacaoPunto" (
+     "id" SERIAL NOT NULL,
+     "companyId" INTEGER NOT NULL,
+     "nombre" TEXT NOT NULL,
+     "direccion" TEXT,
+     "activo" BOOLEAN NOT NULL DEFAULT true,
+     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+     CONSTRAINT "CacaoPunto_pkey" PRIMARY KEY ("id")
+   )`,
+  'CREATE UNIQUE INDEX IF NOT EXISTS "CacaoPunto_companyId_nombre_key" ON "CacaoPunto" ("companyId", "nombre")',
+  'ALTER TABLE IF EXISTS "CacaoReception" ADD COLUMN IF NOT EXISTS "puntoId" INTEGER',
+  // Solicitudes de pago con autorización (2026-10-28). Tabla nueva: solo la lee código nuevo.
+  `CREATE TABLE IF NOT EXISTS "CacaoPaymentRequest" (
+     "id" SERIAL NOT NULL,
+     "companyId" INTEGER NOT NULL,
+     "payableId" INTEGER NOT NULL,
+     "amount" DOUBLE PRECISION NOT NULL,
+     "method" TEXT NOT NULL DEFAULT 'TRANSFER',
+     "reference" TEXT,
+     "status" TEXT NOT NULL DEFAULT 'REQUESTED',
+     "requestedBy" INTEGER NOT NULL,
+     "decidedBy" INTEGER,
+     "decidedAt" TIMESTAMP(3),
+     "decisionReason" TEXT,
+     "paymentId" INTEGER,
+     "paidBy" INTEGER,
+     "paidAt" TIMESTAMP(3),
+     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+     CONSTRAINT "CacaoPaymentRequest_pkey" PRIMARY KEY ("id")
+   )`,
+  'CREATE INDEX IF NOT EXISTS "CacaoPaymentRequest_companyId_status_idx" ON "CacaoPaymentRequest" ("companyId", "status")',
+  'CREATE INDEX IF NOT EXISTS "CacaoPaymentRequest_payableId_idx" ON "CacaoPaymentRequest" ("payableId")',
   // El número de ticket no se repite dentro de una empresa (Postgres deja varias filas con NULL).
   `DO $$ BEGIN
      IF to_regclass('"CacaoReception"') IS NOT NULL THEN

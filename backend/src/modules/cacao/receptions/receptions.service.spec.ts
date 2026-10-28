@@ -20,6 +20,10 @@ function armar() {
     cacaoSupplier: { findFirst: jest.fn().mockResolvedValue({ id: 5 }) },
     cacaoQuality: { findFirst: jest.fn().mockResolvedValue({ id: 2 }) },
     cacaoReception: { findFirst: jest.fn().mockResolvedValue(null) },
+    cacaoPunto: {
+      findFirst: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
+    },
   };
   const unitConfig = { getFactor: jest.fn().mockResolvedValue(1) };
   const cache = { invalidate: jest.fn() };
@@ -48,6 +52,53 @@ function dto(over: Partial<CreateReceptionDto> = {}): CreateReceptionDto {
     ...over,
   };
 }
+
+describe('CacaoReceptionsService.create: punto de acopio', () => {
+  it('sin puntos configurados no pide punto y guarda la recepción sin él', async () => {
+    const a = armar();
+    await a.service.create(dto(), 4, 9);
+    const datos = a.tx.cacaoReception.create.mock.calls[0][0] as {
+      data: { puntoId: number | null };
+    };
+    expect(datos.data.puntoId).toBeNull();
+  });
+
+  it('con algún punto activo, la recepción debe decir dónde se recibió', async () => {
+    const a = armar();
+    a.prisma.cacaoPunto.count.mockResolvedValue(2);
+    await expect(a.service.create(dto(), 4, 9)).rejects.toThrow(
+      /Selecciona el punto de acopio/,
+    );
+    expect(a.tx.cacaoReception.create).not.toHaveBeenCalled();
+  });
+
+  it('guarda el punto elegido', async () => {
+    const a = armar();
+    a.prisma.cacaoPunto.findFirst.mockResolvedValue({ id: 8, activo: true });
+    await a.service.create(dto({ puntoId: 8 }), 4, 9);
+    const datos = a.tx.cacaoReception.create.mock.calls[0][0] as {
+      data: { puntoId: number };
+    };
+    expect(datos.data.puntoId).toBe(8);
+    const filtro = a.prisma.cacaoPunto.findFirst.mock.calls[0][0] as {
+      where: { companyId: number };
+    };
+    expect(filtro.where.companyId).toBe(4);
+  });
+
+  it('rechaza un punto de otra empresa o desactivado', async () => {
+    const a = armar();
+    a.prisma.cacaoPunto.findFirst.mockResolvedValue(null);
+    await expect(a.service.create(dto({ puntoId: 8 }), 4, 9)).rejects.toThrow(
+      /Punto de acopio no encontrado/,
+    );
+    const b = armar();
+    b.prisma.cacaoPunto.findFirst.mockResolvedValue({ id: 8, activo: false });
+    await expect(b.service.create(dto({ puntoId: 8 }), 4, 9)).rejects.toThrow(
+      /desactivado/,
+    );
+  });
+});
 
 describe('CacaoReceptionsService.create', () => {
   it('rechaza un proveedor o una calidad que no son de la empresa', async () => {

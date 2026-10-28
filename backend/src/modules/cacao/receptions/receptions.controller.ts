@@ -29,7 +29,13 @@ export class CacaoReceptionsController {
   @Section('CACAO', 'view')
   findAll(
     @Req() req: any,
-    @Query() query: { supplierId?: string; from?: string; to?: string },
+    @Query()
+    query: {
+      supplierId?: string;
+      puntoId?: string;
+      from?: string;
+      to?: string;
+    },
   ) {
     return this.service.findAll(req.user.companyId, query);
   }

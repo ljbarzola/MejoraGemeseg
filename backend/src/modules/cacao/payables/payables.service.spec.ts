@@ -17,6 +17,7 @@ function armar() {
       update: jest.fn(),
     },
     cacaoSettlement: { update: jest.fn() },
+    cacaoPaymentRequest: { updateMany: jest.fn() },
   };
   const prisma = {
     $transaction: jest.fn((fn: (t: typeof tx) => unknown) => fn(tx)),
@@ -112,6 +113,38 @@ describe('CacaoPayablesService.pay', () => {
     await service.pay(1, pago, 4, 9);
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CacaoPayablesService.pay desde una solicitud autorizada', () => {
+  it('deja la solicitud pagada y enlazada al pago, en la misma transacción', async () => {
+    const { tx, service } = armar();
+    tx.cacaoPayable.findFirst.mockResolvedValue(cuenta);
+    tx.cacaoPayment.create.mockResolvedValue({ id: 55 });
+    tx.cacaoPaymentRequest.updateMany.mockResolvedValue({ count: 1 });
+    await service.pay(1, pago, 4, 9, 12);
+    expect(tx.cacaoPaymentRequest.updateMany).toHaveBeenCalledWith({
+      where: { id: 12, companyId: 4, status: 'AUTHORIZED' },
+      data: {
+        status: 'PAID',
+        paymentId: 55,
+        paidBy: 9,
+        paidAt: expect.any(Date) as Date,
+      },
+    });
+  });
+
+  it('si la solicitud ya no está autorizada, el pago no se registra', async () => {
+    const { tx, prisma, service } = armar();
+    tx.cacaoPayable.findFirst.mockResolvedValue(cuenta);
+    tx.cacaoPayment.create.mockResolvedValue({ id: 55 });
+    tx.cacaoPaymentRequest.updateMany.mockResolvedValue({ count: 0 });
+    await expect(service.pay(1, pago, 4, 9, 12)).rejects.toThrow(
+      /ya no está autorizada/,
+    );
+    // El lanzamiento dentro de la transacción la revierte: la cuenta no se actualiza.
+    expect(tx.cacaoPayable.update).not.toHaveBeenCalled();
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 });
 

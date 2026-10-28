@@ -438,6 +438,43 @@ model CacaoMotivo {
   @@unique([companyId, tipo, nombre])
 }
 
+// Puntos de acopio de la empresa (sucursales donde se recibe el cacao). Línea blanca: nace vacío y
+// cada empresa arma los suyos. Tabla creada al arrancar, ver cacao-config.schema.ts.
+model CacaoPunto {
+  id         Int              @id @default(autoincrement())
+  companyId  Int
+  nombre     String
+  direccion  String?
+  activo     Boolean          @default(true)
+  createdAt  DateTime         @default(now())
+  receptions CacaoReception[]
+
+  @@unique([companyId, nombre])
+}
+
+// Solicitud de pago a un proveedor: se pide, otra persona la autoriza y recién ahí se paga.
+// Solo se usa si la empresa lo exige (CacaoSetting `pagosRequierenAutorizacion`).
+// REQUESTED → AUTHORIZED → PAID; también REJECTED y CANCELLED. Tabla creada al arrancar.
+model CacaoPaymentRequest {
+  id             Int          @id @default(autoincrement())
+  companyId      Int
+  payableId      Int
+  amount         Float
+  method         String       @default("TRANSFER")
+  reference      String?
+  status         String       @default("REQUESTED")
+  requestedBy    Int
+  decidedBy      Int?
+  decidedAt      DateTime?
+  decisionReason String?
+  paymentId      Int?
+  paidBy         Int?
+  paidAt         DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  payable        CacaoPayable @relation(fields: [payableId], references: [id])
+}
+
 model CacaoLot {
   id           Int                  @id @default(autoincrement())
   code         String
@@ -493,8 +530,11 @@ model CacaoReception {
   voidedAt         DateTime?
   voidedBy         Int?
   voidReason       String?
+  // Punto de acopio donde se recibió (columna creada al arrancar, ver cacao-config.schema.ts).
+  puntoId          Int?
   lot              CacaoLot?     @relation(fields: [lotId], references: [id])
   supplier         CacaoSupplier @relation(fields: [supplierId], references: [id])
+  punto            CacaoPunto?   @relation(fields: [puntoId], references: [id])
 
   @@unique([companyId, ticketNumber])
 }
@@ -630,6 +670,7 @@ model CacaoPayable {
   settlement   CacaoSettlement @relation(fields: [settlementId], references: [id])
   supplier     CacaoSupplier   @relation(fields: [supplierId], references: [id])
   payments     CacaoPayment[]
+  requests     CacaoPaymentRequest[]
 }
 
 model CacaoReceivable {

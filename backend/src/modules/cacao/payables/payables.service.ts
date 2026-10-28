@@ -20,6 +20,11 @@ export class CacaoPayablesService {
         supplier: true,
         settlement: true,
         payments: { orderBy: { createdAt: 'asc' } },
+        // Lo que ya está pedido o autorizado y aún no se pagó: la pantalla lo descuenta del saldo.
+        requests: {
+          where: { status: { in: ['REQUESTED', 'AUTHORIZED'] } },
+          select: { id: true, amount: true, status: true },
+        },
       },
       orderBy: { dueDate: 'asc' },
     });
@@ -29,7 +34,13 @@ export class CacaoPayablesService {
    * Registra un pago. Todo ocurre en una transacción con la cuenta bloqueada: dos pagos
    * simultáneos ya no pueden superar el saldo, y si algo falla no queda un pago suelto.
    */
-  async pay(id: number, dto: PaymentDto, companyId: number, userId: number) {
+  async pay(
+    id: number,
+    dto: PaymentDto,
+    companyId: number,
+    userId: number,
+    solicitudId?: number,
+  ) {
     const amount = round2(dto.amount);
 
     await this.prisma.$transaction(async (tx) => {
@@ -59,7 +70,7 @@ export class CacaoPayablesService {
       const newPaid = round2(payable.paidAmount + amount);
       const fullyPaid = newPaid >= payable.totalAmount - TOLERANCIA_MONTO;
 
-      await tx.cacaoPayment.create({
+      const pago = await tx.cacaoPayment.create({
         data: {
           type: 'PAYMENT',
           payableId: id,
@@ -70,6 +81,24 @@ export class CacaoPayablesService {
           createdBy: userId,
         },
       });
+      // Si el pago sale de una solicitud autorizada, esa solicitud queda pagada en la misma
+      // transacción: dos personas que paguen la misma solicitud a la vez no la duplican.
+      if (solicitudId !== undefined) {
+        const pagada = await tx.cacaoPaymentRequest.updateMany({
+          where: { id: solicitudId, companyId, status: 'AUTHORIZED' },
+          data: {
+            status: 'PAID',
+            paymentId: pago.id,
+            paidBy: userId,
+            paidAt: new Date(),
+          },
+        });
+        if (pagada.count === 0) {
+          throw new BadRequestException(
+            'La solicitud ya no está autorizada o ya se pagó',
+          );
+        }
+      }
       await tx.cacaoPayable.update({
         where: { id },
         data: {
