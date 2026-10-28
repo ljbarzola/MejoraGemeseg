@@ -1,9 +1,11 @@
 import {
   VIGENCIA_GCLID_DIAS,
+  gclidConFormato,
   gclidDeLead,
   gclidVigente,
   hechosAcumulados,
   hechosDeEtapa,
+  limpiarGclid,
 } from './ventas-conversiones.util';
 import { clavesCualificadas } from './ventas-marketing.util';
 
@@ -60,6 +62,26 @@ describe('gclidVigente', () => {
   it('pasados los 90 días ya no vale', () => {
     const tarde = new Date(llegada.getTime() + (VIGENCIA_GCLID_DIAS + 1) * 86_400_000);
     expect(gclidVigente(llegada, tarde)).toBe(false);
+  });
+});
+
+describe('gclid: limpieza y formato (INVALID_GCLID)', () => {
+  const real = 'Cj0KCQiAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx_-BwE';
+
+  it('quita el prefijo de las cookies de Google y la codificación de URL', () => {
+    expect(limpiarGclid(`GCL.1700000000.${real}`)).toBe(real);
+    expect(limpiarGclid(`1.1700000000.${real}`)).toBe(real);
+    expect(limpiarGclid(` ${real} `)).toBe(real);
+    expect(limpiarGclid('abc%2Ddef')).toBe('abc-def');
+  });
+
+  it('acepta un gclid real y rechaza los de ejemplo, de prueba, recortados o con basura', () => {
+    expect(gclidConFormato(real)).toBe(true);
+    expect(gclidConFormato('EJEMPLO_GCLID_001')).toBe(false);
+    expect(gclidConFormato('TeSter-1234567890abcdefghij')).toBe(false);
+    expect(gclidConFormato('[gclid]')).toBe(false);
+    expect(gclidConFormato('Cj0KCQ')).toBe(false);
+    expect(gclidConFormato('Cj0KCQiA con espacios en medio 1234')).toBe(false);
   });
 });
 

@@ -57,9 +57,31 @@ export function gclidVigente(llegadaDelLead: Date, ahora: Date = new Date()): bo
   return diasEntre(llegadaDelLead, ahora) <= VIGENCIA_GCLID_DIAS;
 }
 
+// Deja el gclid como Google lo espera (2026-10-28): sin espacios, sin codificación de URL y sin el prefijo
+// que ponen las cookies de Google (`_gcl_aw` = «GCL.<fecha>.<gclid>», `_gac_*` = «1.<fecha>.<gclid>»).
+export function limpiarGclid(raw: string): string {
+  let t = (raw ?? '').trim();
+  try {
+    t = decodeURIComponent(t);
+  } catch {
+    // no venía codificado: se deja tal cual
+  }
+  return t.replace(/^(?:GCL|1)\.\d{9,11}\./i, '').trim();
+}
+
+// ¿Tiene pinta de gclid de verdad? Google responde INVALID_GCLID («el identificador de clic no se pudo
+// decodificar») cuando no: un gclid real es texto largo de letras, números, «-» y «_». Los de ejemplo
+// («EJEMPLO_GCLID_001»), los de la prueba de Google («TeSter-…») o los que llegan recortados no pasan.
+export function gclidConFormato(gclid: string): boolean {
+  return /^[A-Za-z0-9_-]{20,255}$/.test(gclid) && !/^(tester|ejemplo|example|test[-_])/i.test(gclid);
+}
+
+export const MOTIVO_GCLID_INVALIDO =
+  'El identificador de clic no es válido (parece de prueba o llegó incompleto): Google no puede reconocerlo.';
+
 // El gclid de un lead (viene de la landing o de Google Ads), o null.
 export function gclidDeLead(extra: unknown): string | null {
   const v = (extra as Record<string, unknown> | null | undefined)?.['gclid'];
-  const t = typeof v === 'string' ? v.trim() : '';
+  const t = typeof v === 'string' ? limpiarGclid(v) : '';
   return t ? t.slice(0, 300) : null;
 }
