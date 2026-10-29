@@ -1,15 +1,18 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Download, Search } from 'lucide-react';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
+import type { ColumnaFiltro } from '../../utils/columnFilters';
 import { exportarExcel, type CeldaExcel, type TipoColumnaExcel } from './exportarExcel';
 
 /**
  * Las tablas de listado de Cacao (proveedores, recepciones, lotes, liquidaciones…) comparten
- * la misma receta de la app: botón «Columnas», orden al hacer clic en el encabezado, ancho de
- * columnas que se arrastra, búsqueda y exportación a Excel. Se arma aquí una sola vez para que
+ * la misma receta de la app: botón «Columnas», botón único de ordenar y filtrar en cada encabezado
+ * (`filtro`), ancho de columnas que se arrastra, búsqueda y exportación a Excel. Se arma aquí una sola vez para que
  * las pantallas se comporten igual y no copien 60 líneas cada una.
  *
  * Uso: la pantalla define sus columnas, pone `buscador`, `selectorColumnas` y `botonExportar`
@@ -21,6 +24,12 @@ export interface ColumnaCacao<T> {
   label: string;
   /** Valor por el que se ordena al pulsar el encabezado. Sin él, la columna no ordena. */
   orden?: (fila: T) => string | number | null | undefined;
+  /**
+   * Filtro de la columna en su encabezado (el botón único de ordenar y filtrar, igual que en las demás tablas
+   * de la app). Se declara como en `useColumnFilters` sin `key` ni `etiqueta`: salen de la columna. Sin él, la
+   * columna solo ordena (si tiene `orden`).
+   */
+  filtro?: Omit<ColumnaFiltro<T>, 'key' | 'etiqueta'>;
   /** Lo que se pinta en la celda. */
   celda: (fila: T) => ReactNode;
   /** Clase extra de la celda (p. ej. `tasks-table-title` en la columna principal). */
@@ -106,12 +115,18 @@ export function useTablaCacao<T>({
     );
   }, [filas, consulta, todas]);
 
+  // ─── Filtros por columna (botón único de ordenar y filtrar): primero se filtra, luego se ordena ───
+  const cf = useColumnFilters<T>(
+    filasBuscadas,
+    todas.filter((c) => c.filtro).map((c) => ({ key: c.key, etiqueta: c.label, ...c.filtro! }) as ColumnaFiltro<T>),
+  );
+
   const campos: Record<string, (f: T) => string | number | null | undefined> = {};
   for (const c of [principal, ...columnas]) {
     if (c.orden) campos[c.key] = c.orden;
   }
-  const { filas: ordenadas, thProps, SortIcon } = useSortableTable(
-    filasBuscadas,
+  const { filas: ordenadas, thProps, ordenDe } = useSortableTable(
+    cf.filas,
     campos,
     ordenInicial,
     direccionInicial,
@@ -153,9 +168,11 @@ export function useTablaCacao<T>({
   const encabezado = (c: ColumnaCacao<T>) => {
     const estilo = { ...(c.derecha ? { textAlign: 'right' as const } : {}), width: anchoDe(c) };
     return c.orden ? (
-      <th key={c.key} {...thProps(c.key)} style={estilo}>{c.label} <SortIcon campo={c.key} /></th>
+      <th key={c.key} {...thProps(c.key)} style={estilo}>
+        {c.label} <ColumnFilter cf={cf} col={c.key} etiqueta={c.label} orden={ordenDe(c.key)} />
+      </th>
     ) : (
-      <th key={c.key} style={estilo}>{c.label}</th>
+      <th key={c.key} style={estilo}>{c.label} {c.filtro && <ColumnFilter cf={cf} col={c.key} etiqueta={c.label} />}</th>
     );
   };
 
@@ -199,7 +216,12 @@ export function useTablaCacao<T>({
     </button>
   );
 
+  const hayFiltrosActivos = consulta !== '' || cf.hayFiltros;
+  const columnasTotales = 1 + visibles.length + (acciones ? 1 : 0);
+
   const tabla = (
+    <>
+    <ChipsFiltros cf={cf} />
     <div className="tasks-table-wrapper">
       <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
         <thead>
@@ -212,6 +234,13 @@ export function useTablaCacao<T>({
           </tr>
         </thead>
         <tbody>
+          {ordenadas.length === 0 && filas.length > 0 && hayFiltrosActivos && (
+            <FilaSinResultados
+              columnas={columnasTotales}
+              mensaje="Ningún registro coincide con la búsqueda y los filtros."
+              onLimpiar={() => { setBusqueda(''); cf.limpiar(); }}
+            />
+          )}
           {ordenadas.map((f) => (
             <tr key={idFila(f)} style={estiloFila?.(f)}>
               <td className={principal.clase} style={principal.derecha ? { textAlign: 'right' } : undefined}>{principal.celda(f)}</td>
@@ -224,6 +253,7 @@ export function useTablaCacao<T>({
         </tbody>
       </table>
     </div>
+    </>
   );
 
   return {
@@ -231,9 +261,10 @@ export function useTablaCacao<T>({
     selectorColumnas,
     buscador,
     botonExportar,
-    /** Quita lo escrito en el buscador (para el botón de limpiar filtros de la pantalla). */
-    limpiarBusqueda: () => setBusqueda(''),
-    hayBusqueda: busqueda.trim() !== '',
+    /** Quita lo escrito en el buscador y los filtros de columna (para el botón de limpiar filtros de la pantalla). */
+    limpiarBusqueda: () => { setBusqueda(''); cf.limpiar(); },
+    /** ¿Hay algo escrito en el buscador o algún filtro de columna puesto? */
+    hayBusqueda: busqueda.trim() !== '' || cf.hayFiltros,
     /** Cuántas filas quedan tras buscar; 0 con filtros activos significa «nada coincide». */
     filasVisibles: ordenadas.length,
     filasOrdenadas: ordenadas,

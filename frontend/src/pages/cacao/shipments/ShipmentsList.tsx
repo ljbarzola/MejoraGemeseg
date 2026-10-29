@@ -30,7 +30,7 @@ export default function ShipmentsList() {
     ordenInicial: 'id',
     direccionInicial: 'desc',
     principal: {
-      key: 'id', excel: { valor: (s) => `EMB-${String(s.id).padStart(4, '0')}` }, ancho: 100,
+      key: 'id', filtro: { tipo: 'texto', getValue: (s) => `EMB-${String(s.id).padStart(4, '0')}` }, excel: { valor: (s) => `EMB-${String(s.id).padStart(4, '0')}` }, ancho: 100,
       label: 'ID',
       orden: (s) => s.id,
       celda: (s) => (
@@ -38,21 +38,21 @@ export default function ShipmentsList() {
       ),
     },
     columnas: [
-      { key: 'fecha', excel: { tipo: 'fecha' }, label: 'Fecha', orden: (s) => new Date(s.date).getTime(), celda: (s) => formatDateEc(s.date) },
-      { key: 'cliente', ancho: 200, label: 'Cliente', orden: (s) => s.client?.name, celda: (s) => s.client?.name || '—' },
-      { key: 'referencia', ancho: 150, label: 'Referencia', orden: (s) => s.contractRef, celda: (s) => s.contractRef },
+      { key: 'fecha', filtro: { tipo: 'fecha', soloDia: true, getValue: (s) => s.date }, excel: { tipo: 'fecha' }, label: 'Fecha', orden: (s) => new Date(s.date).getTime(), celda: (s) => formatDateEc(s.date) },
+      { key: 'cliente', filtro: { tipo: 'valores', vacio: 'Sin cliente', getValues: (s) => (s.client?.name ? { valor: String(s.client.id ?? s.client.name), etiqueta: s.client.name } : null) }, ancho: 200, label: 'Cliente', orden: (s) => s.client?.name, celda: (s) => s.client?.name || '—' },
+      { key: 'referencia', filtro: { tipo: 'texto', getValue: (s) => s.contractRef }, ancho: 150, label: 'Referencia', orden: (s) => s.contractRef, celda: (s) => s.contractRef },
       // `totalWeight` está en la unidad del embarque (sacos, quintales…); los kilos van en `totalWeightKg`.
-      { key: 'peso', excel: { titulo: 'Peso Total (kg)' }, label: 'Peso Total', orden: (s) => s.totalWeightKg ?? s.totalWeight, celda: (s) => `${(s.totalWeightKg ?? s.totalWeight).toLocaleString()} kg` },
-      { key: 'costo', excel: { tipo: 'moneda', titulo: 'Costo Total ($)' }, label: 'Costo Total', orden: (s) => s.totalCost, celda: (s) => `$${s.totalCost.toFixed(2)}` },
-      { key: 'precio', excel: { tipo: 'moneda', titulo: 'Precio Venta ($/kg)' }, label: 'Precio Venta', orden: (s) => s.salePrice, celda: (s) => `$${s.salePrice.toFixed(2)}/kg` },
+      { key: 'peso', filtro: { tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (s) => s.totalWeightKg ?? s.totalWeight }, excel: { titulo: 'Peso Total (kg)' }, label: 'Peso Total', orden: (s) => s.totalWeightKg ?? s.totalWeight, celda: (s) => `${(s.totalWeightKg ?? s.totalWeight).toLocaleString()} kg` },
+      { key: 'costo', filtro: { tipo: 'numero', formato: (n) => `$${n.toFixed(2)}`, getValue: (s) => s.totalCost }, excel: { tipo: 'moneda', titulo: 'Costo Total ($)' }, label: 'Costo Total', orden: (s) => s.totalCost, celda: (s) => `$${s.totalCost.toFixed(2)}` },
+      { key: 'precio', filtro: { tipo: 'numero', formato: (n) => `$${n.toFixed(2)}/kg`, getValue: (s) => s.salePrice }, excel: { tipo: 'moneda', titulo: 'Precio Venta ($/kg)' }, label: 'Precio Venta', orden: (s) => s.salePrice, celda: (s) => `$${s.salePrice.toFixed(2)}/kg` },
       {
-        key: 'margen', excel: { tipo: 'porcentaje', titulo: 'Margen (%)' },
+        key: 'margen', filtro: { tipo: 'numero', formato: (n) => `${n}%`, getValue: (s) => s.margin }, excel: { tipo: 'porcentaje', titulo: 'Margen (%)' },
         label: 'Margen',
         orden: (s) => s.margin,
         celda: (s) => <span style={{ color: s.margin >= 0 ? '#38a169' : '#e53e3e', fontWeight: 600 }}>{s.margin}%</span>,
       },
       {
-        key: 'estado', ancho: 120,
+        key: 'estado', filtro: { tipo: 'valores', orden: ['Pendiente', 'Parcial', 'Completado', 'Cobrado'], getValues: (s) => getDisplayStatus(s).label }, ancho: 120,
         label: 'Estado',
         orden: (s) => getDisplayStatus(s).label,
         celda: (s) => {
@@ -65,20 +65,6 @@ export default function ShipmentsList() {
       <button className="btn-sm-edit btn-sm-edit--texto" onClick={() => navigate(`/cacao/shipments/${s.id}`, { state: { from: '/cacao/shipments' } })}>Ver</button>
     ),
   });
-
-  // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas).
-  const cf = useColumnFilters<any>(shipments, [
-    { key: 'id', etiqueta: 'ID', tipo: 'texto', getValue: (s) => `EMB-${String(s.id).padStart(4, '0')}` },
-    { key: 'fecha', etiqueta: 'Fecha', tipo: 'fecha', soloDia: true, getValue: (s) => s.date },
-    { key: 'cliente', etiqueta: 'Cliente', tipo: 'valores', vacio: 'Sin cliente', getValues: (s) => (s.client?.name ? { valor: String(s.client.id ?? s.client.name), etiqueta: s.client.name } : null) },
-    { key: 'referencia', etiqueta: 'Referencia', tipo: 'texto', getValue: (s) => s.contractRef },
-    { key: 'peso', etiqueta: 'Peso Total', tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (s) => s.totalWeight },
-    { key: 'costo', etiqueta: 'Costo Total', tipo: 'numero', formato: (n) => `$${n.toFixed(2)}`, getValue: (s) => s.totalCost },
-    { key: 'venta', etiqueta: 'Precio Venta', tipo: 'numero', formato: (n) => `$${n.toFixed(2)}/kg`, getValue: (s) => s.salePrice },
-    { key: 'margen', etiqueta: 'Margen', tipo: 'numero', formato: (n) => `${n}%`, getValue: (s) => s.margin },
-    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['Pendiente', 'Parcial', 'Completado', 'Cobrado'], getValues: (s) => getDisplayStatus(s).label },
-  ]);
-  const filas = cf.filas;
 
   return (
     <div className="page-container">

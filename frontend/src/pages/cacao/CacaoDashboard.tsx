@@ -4,10 +4,35 @@ import { getDashboard, getDashboardCompras } from '../../services/cacao.service'
 import PageHeader from '../../components/common/PageHeader';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import {
-  Tarjeta, KpiFila, Contador, BarraH, SinDatos, SelectorPeriodo, periodoDesdeDias, dinero,
+  Tarjeta, KpiFila, Contador, BarraH, SinDatos, dinero, iso,
 } from '../../components/ventas/dashboard/DashboardBits';
 import { AreaGrafico } from '../../components/ventas/dashboard/DashboardGraficos';
 import { useTablaCacao } from './useTablaCacao';
+
+// El dashboard de Ventas pasó a un periodo único con calendario; el de Compras de Cacao conserva su selector de
+// «últimos N días» (se movió aquí desde DashboardBits, donde ya no lo usa nadie más).
+const PERIODOS = [
+  { dias: 30, label: 'Últimos 30 días' },
+  { dias: 90, label: 'Últimos 90 días' },
+  { dias: 180, label: 'Últimos 6 meses' },
+  { dias: 365, label: 'Último año' },
+];
+
+/** Últimos N días contando hoy, en hora local de quien mira. */
+function periodoDesdeDias(dias: number): { desde: string; hasta: string } {
+  const hoy = new Date();
+  const ini = new Date(hoy);
+  ini.setDate(hoy.getDate() - (dias - 1));
+  return { desde: iso(ini), hasta: iso(hoy) };
+}
+
+function SelectorPeriodo({ dias, onChange }: { dias: number; onChange: (d: number) => void }) {
+  return (
+    <select className="filter-select" value={dias} onChange={(e) => onChange(Number(e.target.value))} aria-label="Periodo">
+      {PERIODOS.map((p) => <option key={p.dias} value={p.dias}>{p.label}</option>)}
+    </select>
+  );
+}
 
 // Los pasos opcionales se muestran, pero no mantienen la guía a la vista: solo los obligatorios la hacen aparecer.
 const PASOS_INICIALES: Array<{ clave: 'calidades' | 'saco' | 'puntos' | 'proveedores' | 'recepciones'; titulo: string; texto: string; ruta: string; opcional?: boolean }> = [

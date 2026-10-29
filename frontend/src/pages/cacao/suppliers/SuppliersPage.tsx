@@ -80,12 +80,12 @@ export default function SuppliersPage() {
     filas: suppliers,
     idFila: (s) => s.id,
     ordenInicial: 'nombre',
-    principal: { key: 'nombre', ancho: 220, label: 'Nombre', clase: 'tasks-table-title', orden: (s) => s.name, celda: (s) => s.name },
+    principal: { key: 'nombre', filtro: { tipo: 'texto', getValue: (s) => s.name }, ancho: 220, label: 'Nombre', clase: 'tasks-table-title', orden: (s) => s.name, celda: (s) => s.name },
     columnas: [
-      { key: 'contacto', ancho: 160, label: 'Contacto', orden: (s) => s.contact, celda: (s) => s.contact || '—' },
-      { key: 'telefono', ancho: 130, label: 'Teléfono', orden: (s) => s.phone, celda: (s) => s.phone || '—' },
-      { key: 'condiciones', ancho: 160, label: 'Condiciones', orden: (s) => s.paymentTerms, celda: (s) => s.paymentTerms || '—' },
-      { key: 'banco', ancho: 160, label: 'Banco', orden: (s) => s.bank, celda: (s) => s.bank || '—' },
+      { key: 'contacto', filtro: { tipo: 'texto', getValue: (s) => s.contact }, ancho: 160, label: 'Contacto', orden: (s) => s.contact, celda: (s) => s.contact || '—' },
+      { key: 'telefono', filtro: { tipo: 'texto', getValue: (s) => s.phone }, ancho: 130, label: 'Teléfono', orden: (s) => s.phone, celda: (s) => s.phone || '—' },
+      { key: 'condiciones', filtro: { tipo: 'valores', vacio: 'Sin condiciones', getValues: (s) => s.paymentTerms }, ancho: 160, label: 'Condiciones', orden: (s) => s.paymentTerms, celda: (s) => s.paymentTerms || '—' },
+      { key: 'banco', filtro: { tipo: 'valores', vacio: 'Sin banco', getValues: (s) => s.bank }, ancho: 160, label: 'Banco', orden: (s) => s.bank, celda: (s) => s.bank || '—' },
     ],
     acciones: (s) => (
       <div className="tools-actions-cell">
@@ -155,14 +155,6 @@ export default function SuppliersPage() {
           </div>
         </FormModal>
       )}
-
-      <div className="filter-bar">
-        <div className="filter-bar-actions">
-          <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
-        </div>
-      </div>
-
-      <ChipsFiltros cf={cf} />
 
       <div className="admin-section">
         {loading ? (

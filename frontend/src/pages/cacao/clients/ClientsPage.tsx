@@ -80,12 +80,12 @@ export default function ClientsPage() {
     filas: clients,
     idFila: (c) => c.id,
     ordenInicial: 'nombre',
-    principal: { key: 'nombre', ancho: 220, label: 'Nombre', clase: 'tasks-table-title', orden: (c) => c.name, celda: (c) => c.name },
+    principal: { key: 'nombre', filtro: { tipo: 'texto', getValue: (c) => c.name }, ancho: 220, label: 'Nombre', clase: 'tasks-table-title', orden: (c) => c.name, celda: (c) => c.name },
     columnas: [
-      { key: 'pais', ancho: 120, label: 'País', orden: (c) => c.country, celda: (c) => c.country || '—' },
-      { key: 'contacto', ancho: 160, label: 'Contacto', orden: (c) => c.contact, celda: (c) => c.contact || '—' },
-      { key: 'email', ancho: 220, label: 'Email', orden: (c) => c.email, celda: (c) => c.email || '—' },
-      { key: 'telefono', ancho: 130, label: 'Teléfono', orden: (c) => c.phone, celda: (c) => c.phone || '—' },
+      { key: 'pais', filtro: { tipo: 'valores', vacio: 'Sin país', getValues: (c) => c.country }, ancho: 120, label: 'País', orden: (c) => c.country, celda: (c) => c.country || '—' },
+      { key: 'contacto', filtro: { tipo: 'texto', getValue: (c) => c.contact }, ancho: 160, label: 'Contacto', orden: (c) => c.contact, celda: (c) => c.contact || '—' },
+      { key: 'email', filtro: { tipo: 'texto', getValue: (c) => c.email }, ancho: 220, label: 'Email', orden: (c) => c.email, celda: (c) => c.email || '—' },
+      { key: 'telefono', filtro: { tipo: 'texto', getValue: (c) => c.phone }, ancho: 130, label: 'Teléfono', orden: (c) => c.phone, celda: (c) => c.phone || '—' },
     ],
     acciones: (c) => (
       <div className="tools-actions-cell">
@@ -155,14 +155,6 @@ export default function ClientsPage() {
           </div>
         </FormModal>
       )}
-
-      <div className="filter-bar">
-        <div className="filter-bar-actions">
-          <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
-        </div>
-      </div>
-
-      <ChipsFiltros cf={cf} />
 
       <div className="admin-section">
         {loading ? (

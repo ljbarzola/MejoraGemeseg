@@ -132,19 +132,6 @@ export default function PriceFixingsList() {
     } finally { setSaving(false); }
   }
 
-  // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas). «Precio Ref. Hoy» no se filtra:
-  // es el mismo precio ICE en todas las filas, y «Calidad» tampoco: la API no trae la calidad del lote en las fijaciones (la columna sale vacía).
-  const cf = useColumnFilters<any>(fixings, [
-    { key: 'lote', etiqueta: 'Lote', tipo: 'texto', getValue: (f) => f.lot?.code },
-    { key: 'pendiente', etiqueta: 'Cant. Pendiente', tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (f) => pesoPendiente(f) },
-    { key: 'original', etiqueta: 'Peso Original', tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (f) => f.lot?.netWeight || 0 },
-    { key: 'diferencial', etiqueta: 'Diferencial', tipo: 'numero', formato: (n) => `$${n.toFixed(0)}/T`, getValue: (f) => f.differential || 0 },
-    { key: 'fijado', etiqueta: 'Precio Fijado', tipo: 'numero', formato: (n) => `$${n.toFixed(4)}/kg`, getValue: (f) => f.fixedPrice },
-    { key: 'limite', etiqueta: 'Fecha Límite', tipo: 'fecha', soloDia: true, getValue: (f) => f.deadline },
-    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['OPEN', 'FIXED'], getValues: (f) => ({ valor: f.status === 'OPEN' ? 'OPEN' : 'FIXED', etiqueta: f.status === 'OPEN' ? 'Abierta' : 'Fijada' }) },
-  ]);
-  const filas = cf.filas;
-
   function getDaysUntilDeadline(deadline: string | null) {
     if (!deadline) return null;
     const now = new Date();
@@ -170,20 +157,20 @@ export default function PriceFixingsList() {
     ordenInicial: 'limite',
     estiloFila: (f) => ({ backgroundColor: f.status === 'FIXED' ? '#f0fff4' : 'white' }),
     principal: {
-      key: 'lote', ancho: 140,
+      key: 'lote', filtro: { tipo: 'texto', getValue: (f) => f.lot?.code }, ancho: 140,
       label: 'Lote',
       orden: (f) => f.lot?.code,
       celda: (f) => <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{f.lot?.code || '—'}</span>,
     },
     columnas: [
       {
-        key: 'calidad', ancho: 130,
+        key: 'calidad', filtro: { tipo: 'valores', vacio: 'Sin calidad', getValues: (f) => f.lot?.quality?.name }, ancho: 130,
         label: 'Calidad',
         orden: (f) => f.lot?.quality?.name,
         celda: (f) => <span style={{ fontSize: '12px', color: '#718096' }}>{f.lot?.quality?.name || '—'}</span>,
       },
       {
-        key: 'pendiente', excel: { titulo: 'Cant. Pendiente (kg)' }, ancho: 140,
+        key: 'pendiente', filtro: { tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (f) => pendienteDe(f) }, excel: { titulo: 'Cant. Pendiente (kg)' }, ancho: 140,
         label: 'Cant. Pendiente',
         derecha: true,
         orden: (f) => pendienteDe(f),
@@ -197,7 +184,7 @@ export default function PriceFixingsList() {
         },
       },
       {
-        key: 'original', excel: { titulo: 'Peso Original (kg)' }, ancho: 130,
+        key: 'original', filtro: { tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (f) => f.lot?.netWeight || 0 }, excel: { titulo: 'Peso Original (kg)' }, ancho: 130,
         label: 'Peso Original',
         derecha: true,
         orden: (f) => f.lot?.netWeight || 0,
@@ -215,7 +202,7 @@ export default function PriceFixingsList() {
         ),
       },
       {
-        key: 'diferencial', excel: { titulo: 'Diferencial ($/T)' }, ancho: 110,
+        key: 'diferencial', filtro: { tipo: 'numero', formato: (n) => `$${n.toFixed(0)}/T`, getValue: (f) => f.differential || 0 }, excel: { titulo: 'Diferencial ($/T)' }, ancho: 110,
         label: 'Diferencial',
         derecha: true,
         orden: (f) => f.differential || null,
@@ -227,7 +214,7 @@ export default function PriceFixingsList() {
           ) : '—',
       },
       {
-        key: 'fijado', excel: { tipo: 'moneda', titulo: 'Precio Fijado ($/kg)' }, ancho: 150,
+        key: 'fijado', filtro: { tipo: 'numero', formato: (n) => `$${n.toFixed(4)}/kg`, getValue: (f) => f.fixedPrice }, excel: { tipo: 'moneda', titulo: 'Precio Fijado ($/kg)' }, ancho: 150,
         label: 'Precio Fijado',
         derecha: true,
         orden: (f) => f.fixedPrice || null,
@@ -238,7 +225,7 @@ export default function PriceFixingsList() {
         ),
       },
       {
-        key: 'limite', excel: { tipo: 'fecha' }, ancho: 160,
+        key: 'limite', filtro: { tipo: 'fecha', soloDia: true, getValue: (f) => f.deadline }, excel: { tipo: 'fecha' }, ancho: 160,
         label: 'Fecha Límite',
         orden: (f) => (f.deadline ? new Date(f.deadline).getTime() : null),
         celda: (f) => {
@@ -260,7 +247,7 @@ export default function PriceFixingsList() {
         },
       },
       {
-        key: 'estado', excel: { valor: (f) => (f.status === 'OPEN' ? 'Abierta' : 'Fijada') }, ancho: 110,
+        key: 'estado', filtro: { tipo: 'valores', orden: ['OPEN', 'FIXED'], getValues: (f) => ({ valor: f.status === 'OPEN' ? 'OPEN' : 'FIXED', etiqueta: f.status === 'OPEN' ? 'Abierta' : 'Fijada' }) }, excel: { valor: (f) => (f.status === 'OPEN' ? 'Abierta' : 'Fijada') }, ancho: 110,
         label: 'Estado',
         orden: (f) => f.status,
         celda: (f) => (
@@ -412,14 +399,6 @@ export default function PriceFixingsList() {
             Control de riesgo de precio
           </span>
         </div>
-        <div className="filter-bar">
-          <div className="filter-bar-actions">
-            <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
-          </div>
-        </div>
-
-        <ChipsFiltros cf={cf} />
-
         {loading ? (
           <div className="loading-state">Cargando fijaciones...</div>
         ) : fixings.length === 0 ? (

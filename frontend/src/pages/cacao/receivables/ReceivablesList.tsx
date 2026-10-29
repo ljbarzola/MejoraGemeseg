@@ -62,20 +62,20 @@ export default function ReceivablesList() {
     filas: receivables,
     idFila: (r) => r.id,
     ordenInicial: 'vence',
-    principal: { key: 'cliente', ancho: 200, label: 'Cliente', orden: (r) => r.client?.name, celda: (r) => r.client?.name || '—' },
+    principal: { key: 'cliente', filtro: { tipo: 'valores', vacio: 'Sin cliente', getValues: (r) => (r.client?.name ? { valor: String(r.client.id ?? r.client.name), etiqueta: r.client.name } : null) }, ancho: 200, label: 'Cliente', orden: (r) => r.client?.name, celda: (r) => r.client?.name || '—' },
     columnas: [
-      { key: 'embarque', ancho: 150, label: 'Embarque', orden: (r) => r.shipment?.contractRef, celda: (r) => r.shipment?.contractRef || '—' },
-      { key: 'total', excel: { tipo: 'moneda', titulo: 'Monto Total ($)' }, label: 'Monto Total', orden: (r) => r.totalAmount, celda: (r) => fmt(r.totalAmount) },
-      { key: 'cobrado', excel: { tipo: 'moneda', titulo: 'Cobrado ($)' }, label: 'Cobrado', orden: (r) => r.receivedAmount, celda: (r) => fmt(r.receivedAmount) },
+      { key: 'embarque', filtro: { tipo: 'texto', getValue: (r) => r.shipment?.contractRef }, ancho: 150, label: 'Embarque', orden: (r) => r.shipment?.contractRef, celda: (r) => r.shipment?.contractRef || '—' },
+      { key: 'total', filtro: { tipo: 'numero', formato: (n) => fmt(n), getValue: (r) => r.totalAmount }, excel: { tipo: 'moneda', titulo: 'Monto Total ($)' }, label: 'Monto Total', orden: (r) => r.totalAmount, celda: (r) => fmt(r.totalAmount) },
+      { key: 'cobrado', filtro: { tipo: 'numero', formato: (n) => fmt(n), getValue: (r) => r.receivedAmount }, excel: { tipo: 'moneda', titulo: 'Cobrado ($)' }, label: 'Cobrado', orden: (r) => r.receivedAmount, celda: (r) => fmt(r.receivedAmount) },
       {
-        key: 'saldo', excel: { tipo: 'moneda', titulo: 'Saldo ($)' },
+        key: 'saldo', filtro: { tipo: 'numero', formato: (n) => fmt(n), getValue: (r) => remainingOf(r) }, excel: { tipo: 'moneda', titulo: 'Saldo ($)' },
         label: 'Saldo',
         orden: (r) => remainingOf(r),
         celda: (r) => <span style={{ fontWeight: 600, color: remainingOf(r) > 0 ? '#38a169' : '#718096' }}>{fmt(remainingOf(r))}</span>,
       },
-      { key: 'vence', excel: { tipo: 'fecha' }, ancho: 140, label: 'Fecha Vencimiento', orden: (r) => new Date(r.dueDate).getTime(), celda: (r) => formatDateEc(r.dueDate) },
+      { key: 'vence', filtro: { tipo: 'fecha', soloDia: true, getValue: (r) => r.dueDate }, excel: { tipo: 'fecha' }, ancho: 140, label: 'Fecha Vencimiento', orden: (r) => new Date(r.dueDate).getTime(), celda: (r) => formatDateEc(r.dueDate) },
       {
-        key: 'estado', ancho: 120,
+        key: 'estado', filtro: { tipo: 'valores', getValues: (r) => ({ valor: r.status, etiqueta: estadoCuenta(r.status).label }) }, ancho: 120,
         label: 'Estado',
         orden: (r) => estadoCuenta(r.status).label,
         celda: (r) => {

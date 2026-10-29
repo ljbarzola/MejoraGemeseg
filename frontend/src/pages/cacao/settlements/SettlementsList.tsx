@@ -81,7 +81,7 @@ export default function SettlementsList() {
     ordenInicial: 'id',
     direccionInicial: 'desc',
     principal: {
-      key: 'id', excel: { valor: (s) => codigoLiq(s.id) }, ancho: 130,
+      key: 'id', filtro: { tipo: 'texto', getValue: (s) => codigoLiq(s.id) }, excel: { valor: (s) => codigoLiq(s.id) }, ancho: 130,
       label: 'ID',
       orden: (s) => s.id,
       celda: (s) => (
@@ -96,20 +96,20 @@ export default function SettlementsList() {
       ),
     },
     columnas: [
-      { key: 'fecha', excel: { tipo: 'fecha' }, label: 'Fecha', orden: (s) => new Date(s.date).getTime(), celda: (s) => formatDateEc(s.date) },
-      { key: 'proveedor', ancho: 200, label: 'Proveedor', orden: (s) => s.supplier?.name, celda: (s) => s.supplier?.name || '—' },
+      { key: 'fecha', filtro: { tipo: 'fecha', soloDia: true, getValue: (s) => s.date }, excel: { tipo: 'fecha' }, label: 'Fecha', orden: (s) => new Date(s.date).getTime(), celda: (s) => formatDateEc(s.date) },
+      { key: 'proveedor', filtro: { tipo: 'valores', vacio: 'Sin proveedor', getValues: (s) => (s.supplier?.name ? { valor: String(s.supplier.id ?? s.supplier.name), etiqueta: s.supplier.name } : null) }, ancho: 200, label: 'Proveedor', orden: (s) => s.supplier?.name, celda: (s) => s.supplier?.name || '—' },
       {
-        key: 'periodo', excel: { valor: (s) => `${formatDateEc(s.periodStart)} - ${formatDateEc(s.periodEnd)}` }, ancho: 210,
+        key: 'periodo', filtro: { tipo: 'fecha', soloDia: true, getValue: (s) => s.periodStart, getFin: (s) => s.periodEnd }, excel: { valor: (s) => `${formatDateEc(s.periodStart)} - ${formatDateEc(s.periodEnd)}` }, ancho: 210,
         label: 'Periodo',
         orden: (s) => new Date(s.periodStart).getTime(),
         celda: (s) => `${formatDateEc(s.periodStart)} - ${formatDateEc(s.periodEnd)}`,
       },
-      { key: 'peso', excel: { titulo: 'Peso Neto Total (kg)' }, label: 'Peso Neto Total', orden: (s) => s.totalNetWeight, celda: (s) => `${s.totalNetWeight.toLocaleString()} kg` },
-      { key: 'descuentos', excel: { titulo: 'Descuentos (kg)' }, label: 'Descuentos', orden: (s) => s.totalDeductions, celda: (s) => `${s.totalDeductions.toLocaleString()} kg` },
-      { key: 'precio', excel: { tipo: 'moneda', titulo: 'Precio Final ($/kg)' }, label: 'Precio Final', orden: (s) => s.finalPrice, celda: (s) => `$${s.finalPrice.toFixed(2)}/kg` },
-      { key: 'monto', excel: { tipo: 'moneda', titulo: 'Monto Total ($)' }, label: 'Monto Total', orden: (s) => s.totalAmount, celda: (s) => `$${s.totalAmount.toFixed(2)}` },
+      { key: 'peso', filtro: { tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (s) => s.totalNetWeight }, excel: { titulo: 'Peso Neto Total (kg)' }, label: 'Peso Neto Total', orden: (s) => s.totalNetWeight, celda: (s) => `${s.totalNetWeight.toLocaleString()} kg` },
+      { key: 'descuentos', filtro: { tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (s) => s.totalDeductions }, excel: { titulo: 'Descuentos (kg)' }, label: 'Descuentos', orden: (s) => s.totalDeductions, celda: (s) => `${s.totalDeductions.toLocaleString()} kg` },
+      { key: 'precio', filtro: { tipo: 'numero', formato: (n) => `$${n.toFixed(2)}/kg`, getValue: (s) => s.finalPrice }, excel: { tipo: 'moneda', titulo: 'Precio Final ($/kg)' }, label: 'Precio Final', orden: (s) => s.finalPrice, celda: (s) => `$${s.finalPrice.toFixed(2)}/kg` },
+      { key: 'monto', filtro: { tipo: 'numero', formato: (n) => `$${n.toFixed(2)}`, getValue: (s) => s.totalAmount }, excel: { tipo: 'moneda', titulo: 'Monto Total ($)' }, label: 'Monto Total', orden: (s) => s.totalAmount, celda: (s) => `$${s.totalAmount.toFixed(2)}` },
       {
-        key: 'estado', ancho: 130,
+        key: 'estado', filtro: { tipo: 'valores', getValues: (s) => ({ valor: s.status, etiqueta: estadoLiquidacion(s.status).label }) }, ancho: 130,
         label: 'Estado',
         orden: (s) => estadoLiquidacion(s.status).label,
         celda: (s) => (

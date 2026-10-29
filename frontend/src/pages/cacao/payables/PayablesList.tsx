@@ -103,18 +103,18 @@ function PayablesView({ exigeAutorizacion }: { exigeAutorizacion: boolean }) {
     filas: payables,
     idFila: (p) => p.id,
     ordenInicial: 'vence',
-    principal: { key: 'proveedor', ancho: 200, label: 'Proveedor', orden: (p) => p.supplier?.name, celda: (p) => p.supplier?.name || '—' },
+    principal: { key: 'proveedor', filtro: { tipo: 'valores', vacio: 'Sin proveedor', getValues: (p) => (p.supplier?.name ? { valor: String(p.supplier.id ?? p.supplier.name), etiqueta: p.supplier.name } : null) }, ancho: 200, label: 'Proveedor', orden: (p) => p.supplier?.name, celda: (p) => p.supplier?.name || '—' },
     columnas: [
       {
-        key: 'liquidacion', excel: { valor: (p) => (p.settlement?.id ? `LIQ-${String(p.settlement.id).padStart(4, '0')}` : '') }, ancho: 120,
+        key: 'liquidacion', filtro: { tipo: 'texto', getValue: (p) => (p.settlement?.id ? `LIQ-${String(p.settlement.id).padStart(4, '0')}` : '') }, excel: { valor: (p) => (p.settlement?.id ? `LIQ-${String(p.settlement.id).padStart(4, '0')}` : '') }, ancho: 120,
         label: 'Liquidación',
         orden: (p) => p.settlement?.id,
         celda: (p) => (p.settlement?.id ? `LIQ-${String(p.settlement.id).padStart(4, '0')}` : '—'),
       },
-      { key: 'total', excel: { tipo: 'moneda', titulo: 'Monto Total ($)' }, label: 'Monto Total', orden: (p) => p.totalAmount, celda: (p) => fmt(p.totalAmount) },
-      { key: 'pagado', excel: { tipo: 'moneda', titulo: 'Pagado ($)' }, label: 'Pagado', orden: (p) => p.paidAmount, celda: (p) => fmt(p.paidAmount) },
+      { key: 'total', filtro: { tipo: 'numero', formato: (n) => fmt(n), getValue: (p) => p.totalAmount }, excel: { tipo: 'moneda', titulo: 'Monto Total ($)' }, label: 'Monto Total', orden: (p) => p.totalAmount, celda: (p) => fmt(p.totalAmount) },
+      { key: 'pagado', filtro: { tipo: 'numero', formato: (n) => fmt(n), getValue: (p) => p.paidAmount }, excel: { tipo: 'moneda', titulo: 'Pagado ($)' }, label: 'Pagado', orden: (p) => p.paidAmount, celda: (p) => fmt(p.paidAmount) },
       {
-        key: 'saldo', excel: { tipo: 'moneda', titulo: 'Saldo ($)' },
+        key: 'saldo', filtro: { tipo: 'numero', formato: (n) => fmt(n), getValue: (p) => (p.status === 'CANCELLED' ? null : remainingOf(p)) }, excel: { tipo: 'moneda', titulo: 'Saldo ($)' },
         label: 'Saldo',
         orden: (p) => (p.status === 'CANCELLED' ? null : remainingOf(p)),
         celda: (p) => {
@@ -127,16 +127,16 @@ function PayablesView({ exigeAutorizacion }: { exigeAutorizacion: boolean }) {
         },
       },
       {
-        key: 'tramite', excel: { tipo: 'moneda', titulo: 'En trámite ($)', valor: (p) => comprometidoDe(p) }, ancho: 130, label: 'En trámite',
+        key: 'tramite', filtro: { tipo: 'numero', formato: (n) => fmt(n), getValue: (p) => comprometidoDe(p) }, excel: { tipo: 'moneda', titulo: 'En trámite ($)', valor: (p) => comprometidoDe(p) }, ancho: 130, label: 'En trámite',
         ocultaPorDefecto: !exigeAutorizacion,
         orden: (p) => comprometidoDe(p),
         celda: (p) => (comprometidoDe(p) > 0
           ? <span title="Pedido o autorizado, todavía sin pagar" style={{ color: '#2b6cb0', fontWeight: 600 }}>{fmt(comprometidoDe(p))}</span>
           : '—'),
       },
-      { key: 'vence', excel: { tipo: 'fecha' }, ancho: 140, label: 'Fecha Vencimiento', orden: (p) => new Date(p.dueDate).getTime(), celda: (p) => formatDateEc(p.dueDate) },
+      { key: 'vence', filtro: { tipo: 'fecha', soloDia: true, getValue: (p) => p.dueDate }, excel: { tipo: 'fecha' }, ancho: 140, label: 'Fecha Vencimiento', orden: (p) => new Date(p.dueDate).getTime(), celda: (p) => formatDateEc(p.dueDate) },
       {
-        key: 'estado', ancho: 120,
+        key: 'estado', filtro: { tipo: 'valores', getValues: (p) => ({ valor: p.status, etiqueta: estadoCuenta(p.status).label }) }, ancho: 120,
         label: 'Estado',
         orden: (p) => estadoCuenta(p.status).label,
         celda: (p) => {

@@ -59,23 +59,6 @@ export default function ReceptionsList() {
     }
   }
 
-  // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas).
-  const kg = (n: number) => `${n.toLocaleString()} kg`;
-  const cf = useColumnFilters<any>(receptions, [
-    { key: 'fecha', etiqueta: 'Fecha', tipo: 'fecha', soloDia: true, getValue: (r) => r.date },
-    { key: 'proveedor', etiqueta: 'Proveedor', tipo: 'valores', vacio: 'Sin proveedor', getValues: (r) => (r.supplier?.name ? { valor: String(r.supplier.id ?? r.supplier.name), etiqueta: r.supplier.name } : null) },
-    { key: 'guia', etiqueta: 'Guía', tipo: 'texto', getValue: (r) => r.guideNumber },
-    { key: 'entrada', etiqueta: 'Entrada', tipo: 'valores', orden: ['KG', 'TON', 'SACO'], getValues: (r) => r.unitOfMeasure || 'KG' },
-    { key: 'bruto', etiqueta: 'Peso Bruto', tipo: 'numero', formato: kg, getValue: (r) => r.grossWeight },
-    { key: 'tara', etiqueta: 'Tara', tipo: 'numero', formato: kg, getValue: (r) => r.tare },
-    { key: 'neto', etiqueta: 'Peso Neto', tipo: 'numero', formato: kg, getValue: (r) => r.netWeight },
-    { key: 'humedad', etiqueta: 'Humedad %', tipo: 'numero', formato: (n) => `${n}%`, getValue: (r) => r.humidity },
-    { key: 'impurezas', etiqueta: 'Impurezas %', tipo: 'numero', formato: (n) => `${n}%`, getValue: (r) => r.impurities },
-    { key: 'precio', etiqueta: 'Precio Prov.', tipo: 'numero', formato: (n) => `$${n.toFixed(2)}`, getValue: (r) => r.provisionalPrice },
-    { key: 'lote', etiqueta: 'Lote', tipo: 'valores', vacio: 'Sin lote', getValues: (r) => r.lot?.code },
-  ]);
-  const filas = cf.filas;
-
   function getOrigWeight(kg: number, unit: string | null) {
     if (!unit || unit === 'KG') return null;
     // El peso del saco es el de la empresa; si aún no lo configuró no se inventa una conversión.
@@ -101,17 +84,17 @@ export default function ReceptionsList() {
     estiloFila: (r) => (r.voidedAt ? { opacity: 0.55 } : undefined),
     ordenInicial: 'fecha',
     direccionInicial: 'desc',
-    principal: { key: 'fecha', excel: { tipo: 'fecha' }, ancho: 100, label: 'Fecha', orden: (r) => new Date(r.date).getTime(), celda: (r) => formatDateEc(r.date) },
+    principal: { key: 'fecha', filtro: { tipo: 'fecha', soloDia: true, getValue: (r) => r.date }, excel: { tipo: 'fecha' }, ancho: 100, label: 'Fecha', orden: (r) => new Date(r.date).getTime(), celda: (r) => formatDateEc(r.date) },
     columnas: [
-      { key: 'proveedor', ancho: 200, label: 'Proveedor', orden: (r) => r.supplier?.name, celda: (r) => r.supplier?.name || '—' },
-      { key: 'punto', ancho: 150, label: 'Punto de acopio', orden: (r) => r.punto?.nombre, celda: (r) => r.punto?.nombre || '—' },
-      { key: 'guia', ancho: 130, label: 'Guía', orden: (r) => r.guideNumber, celda: (r) => r.guideNumber },
-      { key: 'ticket', ancho: 130, label: 'Ticket', orden: (r) => r.ticketNumber, celda: (r) => r.ticketNumber || '—' },
-      { key: 'perfil', excel: { valor: (r) => PERFIL_PESAJE[r.weighingProfile] || '' }, ancho: 130, label: 'Perfil de pesaje', ocultaPorDefecto: true, orden: (r) => r.weighingProfile, celda: (r) => PERFIL_PESAJE[r.weighingProfile] || '—' },
-      { key: 'chofer', ancho: 170, label: 'Chofer', ocultaPorDefecto: true, orden: (r) => r.driverName, celda: (r) => r.driverName || '—' },
-      { key: 'placa', ancho: 110, label: 'Placa', ocultaPorDefecto: true, orden: (r) => r.vehiclePlate, celda: (r) => r.vehiclePlate || '—' },
+      { key: 'proveedor', filtro: { tipo: 'valores', vacio: 'Sin proveedor', getValues: (r) => (r.supplier?.name ? { valor: String(r.supplier.id ?? r.supplier.name), etiqueta: r.supplier.name } : null) }, ancho: 200, label: 'Proveedor', orden: (r) => r.supplier?.name, celda: (r) => r.supplier?.name || '—' },
+      { key: 'punto', filtro: { tipo: 'valores', vacio: 'Sin punto', getValues: (r) => r.punto?.nombre }, ancho: 150, label: 'Punto de acopio', orden: (r) => r.punto?.nombre, celda: (r) => r.punto?.nombre || '—' },
+      { key: 'guia', filtro: { tipo: 'texto', getValue: (r) => r.guideNumber }, ancho: 130, label: 'Guía', orden: (r) => r.guideNumber, celda: (r) => r.guideNumber },
+      { key: 'ticket', filtro: { tipo: 'texto', getValue: (r) => r.ticketNumber }, ancho: 130, label: 'Ticket', orden: (r) => r.ticketNumber, celda: (r) => r.ticketNumber || '—' },
+      { key: 'perfil', filtro: { tipo: 'valores', vacio: 'Sin perfil', getValues: (r) => PERFIL_PESAJE[r.weighingProfile] }, excel: { valor: (r) => PERFIL_PESAJE[r.weighingProfile] || '' }, ancho: 130, label: 'Perfil de pesaje', ocultaPorDefecto: true, orden: (r) => r.weighingProfile, celda: (r) => PERFIL_PESAJE[r.weighingProfile] || '—' },
+      { key: 'chofer', filtro: { tipo: 'texto', getValue: (r) => r.driverName }, ancho: 170, label: 'Chofer', ocultaPorDefecto: true, orden: (r) => r.driverName, celda: (r) => r.driverName || '—' },
+      { key: 'placa', filtro: { tipo: 'texto', getValue: (r) => r.vehiclePlate }, ancho: 110, label: 'Placa', ocultaPorDefecto: true, orden: (r) => r.vehiclePlate, celda: (r) => r.vehiclePlate || '—' },
       {
-        key: 'entrada',
+        key: 'entrada', filtro: { tipo: 'valores', orden: ['KG', 'TON', 'SACO'], getValues: (r) => r.unitOfMeasure || 'KG' },
         label: 'Entrada',
         orden: (r) => r.unitOfMeasure || 'KG',
         celda: (r) => (
@@ -124,14 +107,14 @@ export default function ReceptionsList() {
           </span>
         ),
       },
-      { key: 'bruto', excel: { titulo: 'Peso Bruto (kg)' }, ancho: 170, label: 'Peso Bruto', orden: (r) => r.grossWeight, celda: (r) => pesoConUnidad(r.grossWeight, r.unitOfMeasure, '#718096') },
-      { key: 'tara', excel: { titulo: 'Tara (kg)' }, ancho: 150, label: 'Tara', orden: (r) => r.tare, celda: (r) => pesoConUnidad(r.tare, r.unitOfMeasure, '#718096') },
-      { key: 'neto', excel: { titulo: 'Peso Neto (kg)' }, ancho: 170, label: 'Peso Neto', orden: (r) => r.netWeight, celda: (r) => pesoConUnidad(r.netWeight, r.unitOfMeasure, '#2b6cb0', true) },
-      { key: 'humedad', excel: { tipo: 'porcentaje', titulo: 'Humedad (%)' }, label: 'Humedad %', orden: (r) => r.humidity, celda: (r) => `${r.humidity}%` },
-      { key: 'impurezas', excel: { tipo: 'porcentaje', titulo: 'Impurezas (%)' }, label: 'Impurezas %', orden: (r) => r.impurities, celda: (r) => `${r.impurities}%` },
-      { key: 'precio', excel: { tipo: 'moneda', titulo: 'Precio Prov. ($/kg)' }, label: 'Precio Prov.', orden: (r) => r.provisionalPrice, celda: (r) => `$${r.provisionalPrice.toFixed(2)}` },
+      { key: 'bruto', filtro: { tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (r) => r.grossWeight }, excel: { titulo: 'Peso Bruto (kg)' }, ancho: 170, label: 'Peso Bruto', orden: (r) => r.grossWeight, celda: (r) => pesoConUnidad(r.grossWeight, r.unitOfMeasure, '#718096') },
+      { key: 'tara', filtro: { tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (r) => r.tare }, excel: { titulo: 'Tara (kg)' }, ancho: 150, label: 'Tara', orden: (r) => r.tare, celda: (r) => pesoConUnidad(r.tare, r.unitOfMeasure, '#718096') },
+      { key: 'neto', filtro: { tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (r) => r.netWeight }, excel: { titulo: 'Peso Neto (kg)' }, ancho: 170, label: 'Peso Neto', orden: (r) => r.netWeight, celda: (r) => pesoConUnidad(r.netWeight, r.unitOfMeasure, '#2b6cb0', true) },
+      { key: 'humedad', filtro: { tipo: 'numero', formato: (n) => `${n}%`, getValue: (r) => r.humidity }, excel: { tipo: 'porcentaje', titulo: 'Humedad (%)' }, label: 'Humedad %', orden: (r) => r.humidity, celda: (r) => `${r.humidity}%` },
+      { key: 'impurezas', filtro: { tipo: 'numero', formato: (n) => `${n}%`, getValue: (r) => r.impurities }, excel: { tipo: 'porcentaje', titulo: 'Impurezas (%)' }, label: 'Impurezas %', orden: (r) => r.impurities, celda: (r) => `${r.impurities}%` },
+      { key: 'precio', filtro: { tipo: 'numero', formato: (n) => `$${n.toFixed(2)}`, getValue: (r) => r.provisionalPrice }, excel: { tipo: 'moneda', titulo: 'Precio Prov. ($/kg)' }, label: 'Precio Prov.', orden: (r) => r.provisionalPrice, celda: (r) => `$${r.provisionalPrice.toFixed(2)}` },
       {
-        key: 'lote', ancho: 150,
+        key: 'lote', filtro: { tipo: 'valores', vacio: 'Sin lote', getValues: (r) => r.lot?.code }, ancho: 150,
         label: 'Lote',
         orden: (r) => r.lot?.code,
         celda: (r) =>
@@ -140,7 +123,7 @@ export default function ReceptionsList() {
           ) : '—',
       },
       {
-        key: 'liquidacion', excel: { valor: (r) => estadoLiquidacionEntrega(r).label }, ancho: 130,
+        key: 'liquidacion', filtro: { tipo: 'valores', getValues: (r) => estadoLiquidacionEntrega(r).label }, excel: { valor: (r) => estadoLiquidacionEntrega(r).label }, ancho: 130,
         label: 'Liquidación',
         orden: (r) => estadoLiquidacionEntrega(r).orden,
         celda: (r) => {

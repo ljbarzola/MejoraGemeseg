@@ -19,22 +19,13 @@ export default function LotsList() {
   const navigate = useNavigate();
   const [lots, setLots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('');
 
   useEffect(() => {
-    getLots().then(setLots).finally(() => setLoading(false));
-  }, []);
-
-  // El estado ya no se pide al servidor: la API devuelve todos los lotes y se filtra en la cabecera de la columna.
-  const cf = useColumnFilters<any>(lots, [
-    { key: 'codigo', etiqueta: 'Código', tipo: 'texto', getValue: (l) => l.code },
-    { key: 'calidad', etiqueta: 'Calidad', tipo: 'valores', vacio: 'Sin calidad', getValues: (l) => l.quality?.name },
-    { key: 'entrada', etiqueta: 'Entrada', tipo: 'valores', vacio: 'Sin dato', orden: ['KG', 'TON', 'SACO'], getValues: (l) => l.receptions?.[0]?.unitOfMeasure },
-    { key: 'neto', etiqueta: 'Peso Neto', tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (l) => l.netWeight },
-    { key: 'costo', etiqueta: 'Costo Promedio', tipo: 'numero', formato: (n) => `$${n.toFixed(2)}`, getValue: (l) => l.averageCost },
-    { key: 'valor', etiqueta: 'Valor', tipo: 'numero', formato: (n) => `$${n.toFixed(2)}`, getValue: (l) => l.netWeight * l.averageCost },
-    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['OPEN', 'CLOSED'], getValues: (l) => ({ valor: l.status, etiqueta: l.status === 'OPEN' ? 'Abierto' : 'Cerrado' }) },
-  ]);
-  const filas = cf.filas;
+    getLots(statusFilter ? { status: statusFilter } : undefined)
+      .then(setLots)
+      .finally(() => setLoading(false));
+  }, [statusFilter]);
 
   function getOrigWeight(kg: number, unit: string | null) {
     if (!unit || unit === 'KG') return null;
@@ -52,11 +43,11 @@ export default function LotsList() {
     idFila: (l) => l.id,
     ordenInicial: 'codigo',
     direccionInicial: 'desc',
-    principal: { key: 'codigo', ancho: 160, label: 'Código', clase: 'tasks-table-title', orden: (l) => l.code, celda: (l) => l.code },
+    principal: { key: 'codigo', filtro: { tipo: 'texto', getValue: (l) => l.code }, ancho: 160, label: 'Código', clase: 'tasks-table-title', orden: (l) => l.code, celda: (l) => l.code },
     columnas: [
-      { key: 'calidad', ancho: 160, label: 'Calidad', orden: (l) => l.quality?.name, celda: (l) => l.quality?.name || '—' },
+      { key: 'calidad', filtro: { tipo: 'valores', vacio: 'Sin calidad', getValues: (l) => l.quality?.name }, ancho: 160, label: 'Calidad', orden: (l) => l.quality?.name, celda: (l) => l.quality?.name || '—' },
       {
-        key: 'entrada',
+        key: 'entrada', filtro: { tipo: 'valores', vacio: 'Sin dato', orden: ['KG', 'TON', 'SACO'], getValues: (l) => unidadDe(l) },
         label: 'Entrada',
         orden: (l) => unidadDe(l),
         celda: (l) => {
@@ -74,7 +65,7 @@ export default function LotsList() {
         },
       },
       {
-        key: 'peso', excel: { titulo: 'Peso Neto (kg)' }, ancho: 190,
+        key: 'peso', filtro: { tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (l) => l.netWeight }, excel: { titulo: 'Peso Neto (kg)' }, ancho: 190,
         label: 'Peso Neto',
         orden: (l) => l.netWeight,
         celda: (l) => {
@@ -87,15 +78,15 @@ export default function LotsList() {
           );
         },
       },
-      { key: 'costo', excel: { tipo: 'moneda', titulo: 'Costo Promedio ($/kg)' }, label: 'Costo Promedio', orden: (l) => l.averageCost, celda: (l) => `$${l.averageCost.toFixed(2)}` },
+      { key: 'costo', filtro: { tipo: 'numero', formato: (n) => `$${n.toFixed(2)}`, getValue: (l) => l.averageCost }, excel: { tipo: 'moneda', titulo: 'Costo Promedio ($/kg)' }, label: 'Costo Promedio', orden: (l) => l.averageCost, celda: (l) => `$${l.averageCost.toFixed(2)}` },
       {
-        key: 'valor', excel: { tipo: 'moneda', titulo: 'Valor ($)' },
+        key: 'valor', filtro: { tipo: 'numero', formato: (n) => `$${n.toFixed(2)}`, getValue: (l) => l.netWeight * l.averageCost }, excel: { tipo: 'moneda', titulo: 'Valor ($)' },
         label: 'Valor',
         orden: (l) => l.netWeight * l.averageCost,
         celda: (l) => `$${(l.netWeight * l.averageCost).toFixed(2)}`,
       },
       {
-        key: 'estado', excel: { valor: (l) => estadoLote(l.status).label }, ancho: 110,
+        key: 'estado', filtro: { tipo: 'valores', orden: ['OPEN', 'CLOSED'], getValues: (l) => ({ valor: l.status, etiqueta: estadoLote(l.status).label }) }, excel: { valor: (l) => estadoLote(l.status).label }, ancho: 110,
         label: 'Estado',
         orden: (l) => l.status,
         celda: (l) => (
@@ -134,14 +125,6 @@ export default function LotsList() {
           <ClearFiltersButton onClear={() => { setStatusFilter(''); limpiarBusqueda(); }} disabled={!statusFilter && !hayBusqueda} />
         </div>
       </div>
-
-      <div className="filter-bar">
-        <div className="filter-bar-actions">
-          <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
-        </div>
-      </div>
-
-      <ChipsFiltros cf={cf} />
 
       <div className="admin-section">
         {loading ? (
