@@ -4,12 +4,14 @@ import { api } from './auth.service';
 export interface FilaHoja {
   desde: string;
   hasta: string;
-  /** APP (lo que se hizo en app.gemeseg) o GOOGLE (inicio de sesión y Drive). */
+  /** APP (lo que se hizo en app.gemeseg), GOOGLE (inicio de sesión y Drive) o EXTENSION (sitios web). */
   fuente: string;
   modulo: string;
   moduloEtiqueta: string;
   texto: string;
   veces: number;
+  /** Solo sitios web: minutos sumados en esa fila. */
+  minutos?: number;
 }
 
 export interface HuecoHoja {
@@ -62,6 +64,8 @@ export interface ResumenPersona {
   totalEventos: number;
   accionesApp: number;
   eventosGoogle: number;
+  /** Minutos en sitios web que reportó la extensión del navegador. */
+  minutosWeb: number;
   huecosLargos: number;
   mayorHuecoMinutos: number;
 }
@@ -86,7 +90,13 @@ export interface Metricas {
     horaMediaFin: string | null;
     diasConActividad: number;
   };
-  porDia: { fecha: string; personasConActividad: number; eventosApp: number; eventosGoogle: number }[];
+  porDia: {
+    fecha: string;
+    personasConActividad: number;
+    eventosApp: number;
+    eventosGoogle: number;
+    eventosWeb: number;
+  }[];
   /** Eventos por hora del día de Ecuador (24 valores). */
   porHora: number[];
   porModulo: { modulo: string; etiqueta: string; eventos: number }[];
@@ -140,6 +150,37 @@ export const getEstadoGoogle = (): Promise<EstadoGoogle> =>
 
 export const sincronizarGoogleAhora = (): Promise<ResultadoSincronizacion> =>
   api.post('/bitacora/google/sincronizar').then((r) => r.data);
+
+/** Días y horas en los que la extensión del navegador registra (hora de Ecuador). */
+export interface HorarioBitacora {
+  /** Si la empresa ya guardó un horario; sin él la extensión no registra nada. */
+  configurado: boolean;
+  /** 1 = lunes ... 7 = domingo. */
+  dias: number[];
+  inicio: string;
+  fin: string;
+}
+
+export const getHorarioBitacora = (): Promise<HorarioBitacora> =>
+  api.get('/bitacora/horario').then((r) => r.data);
+
+export const guardarHorarioBitacora = (
+  horario: Pick<HorarioBitacora, 'dias' | 'inicio' | 'fin'>,
+): Promise<HorarioBitacora> => api.put('/bitacora/horario', horario).then((r) => r.data);
+
+export interface EstadoExtension {
+  vinculada: boolean;
+  dispositivos: { id: number; nombreEquipo: string | null; creadoEn: string; ultimoUso: string | null }[];
+}
+
+export const getEstadoExtension = (): Promise<EstadoExtension> =>
+  api.get('/bitacora/extension').then((r) => r.data);
+
+export const crearCodigoExtension = (): Promise<{ codigo: string; expiraEn: string }> =>
+  api.post('/bitacora/extension/codigo').then((r) => r.data);
+
+export const desvincularExtensiones = (): Promise<EstadoExtension> =>
+  api.delete('/bitacora/extension').then((r) => r.data);
 
 /**
  * Mensaje corto para mostrar a la persona. Solo se muestran los textos que el

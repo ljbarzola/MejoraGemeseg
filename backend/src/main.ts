@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { ForbiddenException, ValidationPipe } from '@nestjs/common';
+import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -39,29 +40,43 @@ async function bootstrap() {
   // https://mejora-gemeseg--<canal>-<hash>.web.app
   const previewChannel = /^https:\/\/mejora-gemeseg--[a-z0-9-]+\.web\.app$/;
 
-  app.enableCors({
-    origin: (
-      origin: string | undefined,
-      callback: (err: Error | null, allow?: boolean) => void,
+  // La extensión del navegador de la Bitácora (Chrome y Edge, mismo formato de
+  // origen) solo puede llamar a sus propias rutas, /api/bitacora/ext/...; a
+  // cualquier otra ruta sigue aplicándose la lista de arriba.
+  const extensionOrigin = /^chrome-extension:\/\/[a-p]{32}$/;
+  const extensionRoute = /^\/api\/bitacora\/ext\//;
+
+  app.enableCors(
+    (
+      req: { headers: { origin?: string }; originalUrl?: string; url?: string },
+      callback: (err: Error | null, options: CorsOptions) => void,
     ) => {
+      const origin = req.headers.origin;
       const isLocalDev =
         process.env.NODE_ENV !== 'production' &&
         !!origin &&
         origin.startsWith('http://localhost:');
+      const isExtension =
+        !!origin &&
+        extensionOrigin.test(origin) &&
+        extensionRoute.test(req.originalUrl ?? req.url ?? '');
 
       if (
         !origin ||
         isLocalDev ||
+        isExtension ||
         allowedOrigins.includes(origin) ||
         previewChannel.test(origin)
       ) {
-        callback(null, true);
+        callback(null, { origin: true, credentials: true });
       } else {
-        callback(new ForbiddenException(`Origin ${origin} not allowed by CORS`));
+        callback(
+          new ForbiddenException(`Origin ${origin} not allowed by CORS`),
+          { origin: false },
+        );
       }
     },
-    credentials: true,
-  });
+  );
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -89,7 +104,11 @@ async function bootstrap() {
     const indexHtml = join(publicPath, 'index.html');
 
     app.use((req: any, res: any, next: any) => {
-      if (req.path.startsWith('/api/') || req.path === '/health' || req.path.startsWith('/docs')) {
+      if (
+        req.path.startsWith('/api/') ||
+        req.path === '/health' ||
+        req.path.startsWith('/docs')
+      ) {
         return next();
       }
       if (existsSync(indexHtml)) {

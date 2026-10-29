@@ -18,6 +18,8 @@ export interface DiaMetrica {
   personasConActividad: number;
   eventosApp: number;
   eventosGoogle: number;
+  /** Tramos de sitios web que reportó la extensión del navegador. */
+  eventosWeb: number;
 }
 
 export interface ModuloMetrica {
@@ -94,6 +96,7 @@ export function calcularMetricas(
       personasConActividad: 0,
       eventosApp: 0,
       eventosGoogle: 0,
+      eventosWeb: 0,
     });
     personasPorDia.set(fecha, new Set());
   }
@@ -108,6 +111,7 @@ export function calcularMetricas(
     const celda = porDia.get(fecha);
     if (!celda) continue; // fuera del período
     if (e.fuente === 'GOOGLE') celda.eventosGoogle++;
+    else if (e.fuente === 'EXTENSION') celda.eventosWeb++;
     else celda.eventosApp++;
     personasPorDia.get(fecha)?.add(e.userId);
 
@@ -129,11 +133,11 @@ export function calcularMetricas(
     personasConActividad: personasPorDia.get(d.fecha)?.size ?? 0,
   }));
   const totalEventos = lista.reduce(
-    (s, d) => s + d.eventosApp + d.eventosGoogle,
+    (s, d) => s + d.eventosApp + d.eventosGoogle + d.eventosWeb,
     0,
   );
   const diasConActividad = lista.filter(
-    (d) => d.eventosApp + d.eventosGoogle > 0,
+    (d) => d.eventosApp + d.eventosGoogle + d.eventosWeb > 0,
   ).length;
   const sumaPersonas = lista.reduce((s, d) => s + d.personasConActividad, 0);
   const pares = [...extremos.values()];

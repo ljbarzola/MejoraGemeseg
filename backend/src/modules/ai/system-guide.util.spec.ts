@@ -33,6 +33,9 @@ describe('buildSystemGuide', () => {
     const general = buildSystemGuide([]);
     expect(general).toContain('Mi hoja del día');
     expect(general).toContain('Por defecto nadie la tiene');
+    expect(general).toContain('Extensión del navegador');
+    expect(general).toContain('Vincular extensión');
+    expect(general).toContain('nunca la dirección completa');
     expect(general).not.toContain('Bitácora — guía');
     expect(general).not.toContain('Leer Google ahora');
     expect(general).not.toContain('Hojas activas');
@@ -50,6 +53,8 @@ describe('buildSystemGuide', () => {
     expect(guia).toContain('"Configuración"');
     expect(guia).toContain('"Hojas del día"');
     expect(guia).toContain('Leer Google ahora');
+    expect(guia).toContain('"Horario"');
+    expect(guia).toContain('Guardar horario');
     expect(guia).toContain('Por defecto nadie está activo');
     expect(buildSystemGuide([])).not.toContain('Leer Google ahora');
   });

@@ -27,6 +27,7 @@ const PERIODOS = [7, 14, 30];
 const SERIES_EVENTOS: SerieBarras[] = [
   { nombre: 'app.gemeseg', color: '#319795' },
   { nombre: 'Google', color: '#3182ce' },
+  { nombre: 'Navegador', color: '#805ad5' },
 ];
 const SERIE_PERSONAS: SerieBarras[] = [{ nombre: 'Personas', color: '#319795' }];
 const SERIE_HORAS: SerieBarras[] = [{ nombre: 'Eventos', color: '#319795' }];
@@ -163,12 +164,15 @@ export default function BitacoraDashboardPage() {
                 />
               </Tarjeta>
 
-              <Tarjeta titulo="Eventos por día" hint="Acciones en app.gemeseg y eventos de Google.">
+              <Tarjeta titulo="Eventos por día" hint="Acciones en app.gemeseg, eventos de Google y tramos de sitios web del navegador.">
                 <BarrasVerticales
-                  aria="Eventos por día, en app.gemeseg y en Google"
+                  aria="Eventos por día, en app.gemeseg, en Google y en el navegador"
                   series={SERIES_EVENTOS}
                   cadaEtiqueta={Math.ceil(m.porDia.length / 10)}
-                  datos={m.porDia.map((d) => ({ etiqueta: diaMes(d.fecha), valores: [d.eventosApp, d.eventosGoogle] }))}
+                  datos={m.porDia.map((d) => ({
+                    etiqueta: diaMes(d.fecha),
+                    valores: [d.eventosApp, d.eventosGoogle, d.eventosWeb],
+                  }))}
                 />
                 <LeyendaSeries series={SERIES_EVENTOS} />
               </Tarjeta>

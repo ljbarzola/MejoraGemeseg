@@ -1,6 +1,7 @@
 import {
   describirAccion,
   describirEvento,
+  duracionCorta,
   moduloEtiqueta,
   EventoDescribible,
 } from './bitacora-etiquetas.util';
@@ -22,6 +23,8 @@ export interface FilaHoja {
   moduloEtiqueta: string;
   texto: string;
   veces: number;
+  /** Solo sitios web: minutos sumados en esa fila. */
+  minutos?: number;
 }
 
 export interface HuecoHoja {
@@ -56,26 +59,26 @@ export function construirHoja(
     (a, b) => a.ocurridoEn.getTime() - b.ocurridoEn.getTime(),
   );
 
+  // Un tramo de navegador ocupa varios minutos: el silencio empieza cuando termina, no cuando empieza.
+  let finMayor = orden.length ? finDe(orden[0]) : 0;
   const huecos: HuecoHoja[] = [];
   for (let i = 1; i < orden.length; i++) {
-    const minutos = Math.floor(
-      (orden[i].ocurridoEn.getTime() - orden[i - 1].ocurridoEn.getTime()) / MIN,
-    );
+    const inicio = orden[i].ocurridoEn.getTime();
+    const minutos = Math.floor((inicio - finMayor) / MIN);
     if (minutos >= huecoMinimo) {
       huecos.push({
-        desde: orden[i - 1].ocurridoEn.toISOString(),
+        desde: new Date(finMayor).toISOString(),
         hasta: orden[i].ocurridoEn.toISOString(),
         minutos,
       });
     }
+    finMayor = Math.max(finMayor, finDe(orden[i]));
   }
 
   return {
     fecha,
     primera: orden.length ? orden[0].ocurridoEn.toISOString() : null,
-    ultima: orden.length
-      ? orden[orden.length - 1].ocurridoEn.toISOString()
-      : null,
+    ultima: orden.length ? new Date(finMayor).toISOString() : null,
     totalEventos: orden.length,
     huecoMinimoMinutos: huecoMinimo,
     huecos,
@@ -83,8 +86,17 @@ export function construirHoja(
   };
 }
 
+/** Cuándo termina el evento: los sitios web duran sus minutos, el resto es un instante. */
+function finDe(e: EventoHoja): number {
+  const extra =
+    e.fuente === 'EXTENSION' ? Math.max(0, (e.minutos ?? 1) - 1) * MIN : 0;
+  return e.ocurridoEn.getTime() + extra;
+}
+
 function claveGrupo(e: EventoHoja): string {
-  return `${e.fuente}|${e.modulo}|${e.accion}|${e.ruta ?? ''}`;
+  // Dos sitios web distintos nunca se juntan en una fila.
+  const sitio = e.fuente === 'EXTENSION' ? (e.nombre ?? '') : '';
+  return `${e.fuente}|${e.modulo}|${e.accion}|${e.ruta ?? ''}|${sitio}`;
 }
 
 function agrupar(orden: EventoHoja[]): FilaHoja[] {
@@ -109,6 +121,23 @@ function agrupar(orden: EventoHoja[]): FilaHoja[] {
 function filaDeGrupo(g: EventoHoja[]): FilaHoja {
   const primero = g[0];
   const ultimo = g[g.length - 1];
+  if (primero.fuente === 'EXTENSION') {
+    const minutos = g.reduce((s, e) => s + (e.minutos ?? 0), 0);
+    return {
+      desde: primero.ocurridoEn.toISOString(),
+      // El último tramo dura sus propios minutos: la fila termina cuando ese tramo termina.
+      hasta: new Date(
+        ultimo.ocurridoEn.getTime() +
+          Math.max(0, (ultimo.minutos ?? 1) - 1) * MIN,
+      ).toISOString(),
+      fuente: primero.fuente,
+      modulo: primero.modulo,
+      moduloEtiqueta: moduloEtiqueta(primero.modulo),
+      texto: `${describirAccion(primero)}: ${primero.nombre ?? ''} (${duracionCorta(minutos)})`,
+      veces: g.length,
+      minutos,
+    };
+  }
   const texto = g.length === 1 ? describirEvento(primero) : textoGrupo(g);
   return {
     desde: primero.ocurridoEn.toISOString(),

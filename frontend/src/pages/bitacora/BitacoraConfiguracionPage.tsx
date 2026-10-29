@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Globe, Users } from 'lucide-react';
+import { Clock, Globe, Users } from 'lucide-react';
 import BitacoraPageHeader from '../../components/bitacora/BitacoraPageHeader';
 import ActivacionHojasPanel from '../../components/bitacora/ActivacionHojasPanel';
 import GoogleConexionPanel from '../../components/bitacora/GoogleConexionPanel';
+import HorarioPanel from '../../components/bitacora/HorarioPanel';
 import PageTabs from '../../components/common/PageTabs';
 import { getBitacoraEstado, type EstadoBitacora } from '../../services/bitacora.service';
 import '../../styles/bitacora.css';
 
-type Pestana = 'hojas' | 'google';
+type Pestana = 'hojas' | 'horario' | 'google';
 
-/** Configuración de la Bitácora (administradores y gerentes): quién tiene hoja del día y cómo se lee Google. */
+/** Configuración de la Bitácora (administradores y gerentes): quién tiene hoja del día, el horario del navegador y cómo se lee Google. */
 export default function BitacoraConfiguracionPage() {
   const [pestana, setPestana] = useState<Pestana>('hojas');
   const [estado, setEstado] = useState<EstadoBitacora | null>(null);
@@ -30,7 +31,7 @@ export default function BitacoraConfiguracionPage() {
     <div className="page-container">
       <BitacoraPageHeader
         title="Configuración"
-        description="A quién se le registra la hoja del día y cómo se lee la actividad de Google."
+        description="A quién se le registra la hoja del día, en qué horario registra la extensión del navegador y cómo se lee la actividad de Google."
       />
 
       {sinAcceso ? (
@@ -49,11 +50,18 @@ export default function BitacoraConfiguracionPage() {
             onChange={setPestana}
             tabs={[
               { key: 'hojas', label: 'Hojas del día', icon: Users },
+              { key: 'horario', label: 'Horario', icon: Clock },
               { key: 'google', label: 'Google', icon: Globe },
             ]}
           />
           <div className="admin-section">
-            {pestana === 'hojas' ? <ActivacionHojasPanel /> : <GoogleConexionPanel />}
+            {pestana === 'hojas' ? (
+              <ActivacionHojasPanel />
+            ) : pestana === 'horario' ? (
+              <HorarioPanel />
+            ) : (
+              <GoogleConexionPanel />
+            )}
           </div>
         </>
       )}
