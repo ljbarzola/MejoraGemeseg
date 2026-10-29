@@ -8,8 +8,7 @@ import {
   type ResumenMuestra,
 } from '../../../services/ventas.service';
 import DashboardMarketing from './DashboardMarketing';
-import { BarraH, Cargando, Contador, Muestra, SelectorPeriodo, SinDatos, Tarjeta, formatoDia, periodoDesdeDias, EnBarra, KpiFila } from './DashboardBits';
-import FilterField from '../../common/FilterField';
+import { BarraH, Cargando, Contador, Muestra, SinDatos, Tarjeta, formatoDia, KpiFila } from './DashboardBits';
 
 const dias = (v: number | null) => (v === null ? '—' : `${v} ${v === 1 ? 'día' : 'días'}`);
 
@@ -29,9 +28,9 @@ function Velocidad({ titulo, detalle, m }: { titulo: string; detalle: string; m:
 
 function TablaAceptacion({ titulo, filas, hint }: { titulo: string; filas: GrupoAceptacion[]; hint?: string }) {
   return (
-    <Tarjeta titulo={titulo} hint={hint ?? 'De las oportunidades que se cerraron en el periodo, cuántas se ganaron y cuántas se perdieron.'}>
+    <Tarjeta titulo={titulo} hint={hint ?? 'De las oportunidades que llegaron en el periodo y ya se cerraron, cuántas se ganaron y cuántas se perdieron.'}>
       {filas.length === 0 ? (
-        <SinDatos texto="Sin cierres en el periodo." />
+        <SinDatos texto="Ninguna oportunidad que llegó en el periodo se ha cerrado." />
       ) : (
         <div className="tasks-table-wrapper">
           <table className="tasks-table">
@@ -59,17 +58,15 @@ function TablaAceptacion({ titulo, filas, hint }: { titulo: string; filas: Grupo
 
 // Embudo, velocidad y qué funciona. Todo sale del historial de cambios de etapa
 // de las oportunidades (existe desde el 30/09/2026): por eso cada cifra dice en
-// cuántas oportunidades se midió.
-export default function DashboardEmbudo({ alcance }: { alcance: string }) {
+// cuántas oportunidades se midió. Todo se cuenta sobre las oportunidades que LLEGARON en el periodo (columna «Llegó»).
+export default function DashboardEmbudo({ alcance, desde, hasta }: { alcance: string; desde: string; hasta: string }) {
   const [embudo, setEmbudo] = useState<AnaliticaEmbudo | null>(null);
   const [aceptacion, setAceptacion] = useState<AnaliticaAceptacion | null>(null);
-  const [periodo, setPeriodo] = useState(90);
   const [error, setError] = useState(false);
 
   const cargar = useCallback(async () => {
     setError(false);
     try {
-      const { desde, hasta } = periodoDesdeDias(periodo);
       const [e, a] = await Promise.all([
         getAnaliticaEmbudo({ alcance, desde, hasta }),
         getAnaliticaAceptacion({ alcance, desde, hasta }),
@@ -79,7 +76,7 @@ export default function DashboardEmbudo({ alcance }: { alcance: string }) {
     } catch {
       setError(true);
     }
-  }, [alcance, periodo]);
+  }, [alcance, desde, hasta]);
   useEffect(() => { cargar(); }, [cargar]);
 
   if (!embudo || !aceptacion) return <Cargando error={error} onReintentar={cargar} />;
@@ -87,21 +84,12 @@ export default function DashboardEmbudo({ alcance }: { alcance: string }) {
 
   return (
     <div className="dash-pila">
-      <EnBarra>
-        <FilterField label="Periodo">
-          <SelectorPeriodo dias={periodo} onChange={setPeriodo} />
-        </FilterField>
-        <p className="dash-barra-nota">
-          {embudo.oportunidades} oportunidades llegaron del {formatoDia(embudo.periodo.desde)} al {formatoDia(embudo.periodo.hasta)}.
-        </p>
-      </EnBarra>
-
       <div>
-        <DashboardMarketing desde={embudo.periodo.desde.slice(0, 10)} hasta={embudo.periodo.hasta.slice(0, 10)} />
+        <DashboardMarketing desde={desde} hasta={hasta} />
       </div>
 
       <div>
-        <p className="dash-seccion">Qué tan rápido trabajamos</p>
+        <p className="dash-seccion">Qué tan rápido trabajamos <span style={{ fontWeight: 400, color: '#718096', fontSize: '0.78rem' }}>· en las oportunidades que llegaron en el periodo</span></p>
       <KpiFila>
         <Velocidad titulo="Tiempo de respuesta" detalle="De llegar a la primera revisión" m={embudo.velocidad.respuestaDias} />
         <Velocidad titulo="Tiempo de cotización" detalle="De llegar a cotizar" m={embudo.velocidad.cotizacionDias} />
@@ -112,7 +100,7 @@ export default function DashboardEmbudo({ alcance }: { alcance: string }) {
       </div>
 
       <div className="dash-grid dash-grid--2">
-        <Tarjeta titulo="Conversión entre etapas" hint="Cuántas llegaron a cada etapa y cuántas pasaron a la siguiente">
+        <Tarjeta titulo="Conversión entre etapas" hint="De las oportunidades que llegaron en el periodo, cuántas llegaron a cada etapa y cuántas pasaron a la siguiente">
           {embudo.oportunidades === 0 ? (
             <SinDatos texto="No llegaron oportunidades en este periodo." />
           ) : (
@@ -125,7 +113,7 @@ export default function DashboardEmbudo({ alcance }: { alcance: string }) {
           )}
         </Tarjeta>
 
-        <Tarjeta titulo="Tiempo en cada etapa" hint="Mediana de días entre entrar a una etapa y salir de ella">
+        <Tarjeta titulo="Tiempo en cada etapa" hint="Mediana de días entre entrar a una etapa y salir de ella, en las oportunidades que llegaron en el periodo">
           <div className="tasks-table-wrapper">
             <table className="tasks-table">
               <thead><tr><th>Etapa</th><th>Mediana</th><th>El 75%</th><th>Casos</th></tr></thead>

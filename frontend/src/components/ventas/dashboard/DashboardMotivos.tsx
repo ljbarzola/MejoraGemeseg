@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAnaliticaMotivos, type AnaliticaMotivos } from '../../../services/ventas.service';
-import { Cargando, EnBarra, SelectorPeriodo, Tarjeta, formatoDia, periodoDesdeDias } from './DashboardBits';
+import { Cargando, Tarjeta } from './DashboardBits';
 import { Dona, type SegmentoDona } from './DashboardGraficos';
-import FilterField from '../../common/FilterField';
 
 type Cierre = AnaliticaMotivos['porCierre'][number];
 
@@ -30,21 +29,19 @@ function unir(cierres: Cierre[]): { total: number; items: { label: string; count
 // Motivos de pérdida: por qué se pierde lo que se pierde, en tres cierres distintos. Cada dona es UNO de ellos, dice qué
 // contiene y cada motivo lleva a la pantalla donde están esos casos. Cada tarjeta dice cuánto de lo registrado es «sin
 // información» y cuánto es solo la suposición del vendedor: sin eso, la dona parecería más segura de lo que es.
-export default function DashboardMotivos({ alcance }: { alcance: string }) {
+export default function DashboardMotivos({ alcance, desde, hasta }: { alcance: string; desde: string; hasta: string }) {
   const navigate = useNavigate();
   const [datos, setDatos] = useState<AnaliticaMotivos | null>(null);
-  const [periodo, setPeriodo] = useState(180);
   const [error, setError] = useState(false);
 
   const cargar = useCallback(async () => {
     setError(false);
     try {
-      const { desde, hasta } = periodoDesdeDias(periodo);
       setDatos(await getAnaliticaMotivos({ alcance, desde, hasta }));
     } catch {
       setError(true);
     }
-  }, [alcance, periodo]);
+  }, [alcance, desde, hasta]);
   useEffect(() => { cargar(); }, [cargar]);
 
   if (!datos) return <Cargando error={error} onReintentar={cargar} />;
@@ -67,19 +64,10 @@ export default function DashboardMotivos({ alcance }: { alcance: string }) {
 
   return (
     <div className="dash-pila">
-      <EnBarra>
-        <FilterField label="Periodo">
-          <SelectorPeriodo dias={periodo} onChange={setPeriodo} />
-        </FilterField>
-        <p className="dash-barra-nota">
-          Motivos registrados del {formatoDia(datos.periodo.desde)} al {formatoDia(datos.periodo.hasta)}. Al pulsar un motivo se abre la lista con todos los casos de ese motivo.
-        </p>
-      </EnBarra>
-
       <div className="dash-grid dash-grid--3">
         <Tarjeta
           titulo={`Posibles clientes descartados (${lead?.total ?? 0})`}
-          hint="Contactos que llegaron por la web, los anuncios o a mano y se descartaron sin pasar a oportunidad: spam, empleo, proveedores o sin interés."
+          hint="Contactos que llegaron por la web, los anuncios o a mano y se descartaron en el periodo sin pasar a oportunidad: spam, empleo, proveedores o sin interés. Pulsa un motivo para ver esos casos (la lista no se limita al periodo)."
         >
           <Dona
             aria={`Motivos de descarte de posibles clientes: ${(lead?.items ?? []).map((i) => `${i.label} ${i.count}`).join(', ') || 'sin datos'}`}
@@ -91,7 +79,7 @@ export default function DashboardMotivos({ alcance }: { alcance: string }) {
 
         <Tarjeta
           titulo={`Oportunidades perdidas (${opp?.total ?? 0})`}
-          hint="Negociaciones que ya eran una oportunidad y se cerraron sin venta: el cliente dijo que no o no se pudo concretar."
+          hint="Negociaciones que ya eran una oportunidad y se cerraron sin venta en el periodo: el cliente dijo que no o no se pudo concretar. Pulsa un motivo para ver esos casos (la lista no se limita al periodo)."
         >
           <Dona
             aria={`Motivos de oportunidades perdidas: ${(opp?.items ?? []).map((i) => `${i.label} ${i.count}`).join(', ') || 'sin datos'}`}
@@ -103,7 +91,7 @@ export default function DashboardMotivos({ alcance }: { alcance: string }) {
 
         <Tarjeta
           titulo={`Contratos que se pierden (${contratos.total})`}
-          hint="Contratos que se cancelaron o que vencieron sin renovarse."
+          hint="Contratos que se cancelaron o que vencieron sin renovarse, con el motivo que se registró en el periodo. Pulsa un motivo para ver esos casos (la lista no se limita al periodo)."
         >
           <Dona
             aria={`Motivos por los que se pierden contratos: ${contratos.items.map((i) => `${i.label} ${i.count}`).join(', ') || 'sin datos'}`}

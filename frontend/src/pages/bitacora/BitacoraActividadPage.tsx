@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BitacoraPageHeader from '../../components/bitacora/BitacoraPageHeader';
 import ErrorBanner from '../../components/common/ErrorBanner';
+import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 import HojaDelDia from '../../components/bitacora/HojaDelDia';
 import Kpi from '../../components/bitacora/Kpi';
 import SelectorDia from '../../components/bitacora/SelectorDia';
@@ -50,7 +53,15 @@ export default function BitacoraActividadPage() {
   const [errorDetalle, setErrorDetalle] = useState('');
   const detalleRef = useRef<HTMLDivElement>(null);
   const tablaRef = useResizableColumns('bitacora-equipo');
-  const { filas, thProps, SortIcon } = useSortableTable(personas, CAMPOS_ORDEN, 'nombre');
+  // Filtros en la cabecera de cada columna (las filas del día ya vienen todas del servidor). Primera y Última
+  // son horas del mismo día: no tienen filtro.
+  const cf = useColumnFilters<ResumenPersona>(personas, [
+    { key: 'nombre', etiqueta: 'Persona', tipo: 'texto', getValue: (p) => [p.nombre, p.cargo].filter(Boolean).join(' ') },
+    { key: 'app', etiqueta: 'En la app', tipo: 'numero', getValue: (p) => p.accionesApp },
+    { key: 'google', etiqueta: 'En Google', tipo: 'numero', getValue: (p) => p.eventosGoogle },
+    { key: 'huecos', etiqueta: 'Mayor hueco (min)', tipo: 'numero', getValue: (p) => p.mayorHuecoMinutos ?? 0 },
+  ]);
+  const { filas, thProps, ordenDe } = useSortableTable(cf.filas, CAMPOS_ORDEN, 'nombre');
 
   useEffect(() => {
     getBitacoraEstado()
@@ -112,7 +123,12 @@ export default function BitacoraActividadPage() {
 
       <div className="filter-bar">
         <SelectorDia fecha={fecha} onChange={setFecha} />
+        <div className="filter-bar-actions">
+          <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+        </div>
       </div>
+
+      <ChipsFiltros cf={cf} />
 
       <div className="admin-section">
         {cargando ? (
@@ -148,15 +164,18 @@ export default function BitacoraActividadPage() {
               <table className="tasks-table resizable-table" ref={tablaRef}>
                 <thead>
                   <tr>
-                    <th {...thProps('nombre')}>Persona <SortIcon campo="nombre" /></th>
-                    <th {...thProps('primera')} title="Primera actividad del día">Primera <SortIcon campo="primera" /></th>
-                    <th {...thProps('ultima')} title="Última actividad del día">Última <SortIcon campo="ultima" /></th>
-                    <th {...thProps('app')} title="Acciones en app.gemeseg">En la app <SortIcon campo="app" /></th>
-                    <th {...thProps('google')} title="Eventos de Google (inicio de sesión y Drive)">En Google <SortIcon campo="google" /></th>
-                    <th {...thProps('huecos')} title="Mayor silencio entre dos acciones seguidas">Mayor hueco <SortIcon campo="huecos" /></th>
+                    <th {...thProps('nombre')}>Persona <ColumnFilter cf={cf} col="nombre" orden={ordenDe('nombre')} /></th>
+                    <th {...thProps('primera')} title="Primera actividad del día">Primera <ColumnFilter cf={cf} col="primera" etiqueta="Primera" orden={ordenDe('primera')} /></th>
+                    <th {...thProps('ultima')} title="Última actividad del día">Última <ColumnFilter cf={cf} col="ultima" etiqueta="Última" orden={ordenDe('ultima')} /></th>
+                    <th {...thProps('app')} title="Acciones en app.gemeseg">En la app <ColumnFilter cf={cf} col="app" orden={ordenDe('app')} /></th>
+                    <th {...thProps('google')} title="Eventos de Google (inicio de sesión y Drive)">En Google <ColumnFilter cf={cf} col="google" orden={ordenDe('google')} /></th>
+                    <th {...thProps('huecos')} title="Mayor silencio entre dos acciones seguidas">Mayor hueco <ColumnFilter cf={cf} col="huecos" orden={ordenDe('huecos')} /></th>
                   </tr>
                 </thead>
                 <tbody>
+                  {filas.length === 0 && (
+                    <FilaSinResultados columnas={6} mensaje="No hay personas que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                  )}
                   {filas.map((p) => (
                     <tr
                       key={p.userId}

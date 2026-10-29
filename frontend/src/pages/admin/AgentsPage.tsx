@@ -13,6 +13,9 @@ import {
 } from '../../services/agent.service';
 import type { Agent, AgentAssignment, DocumentacionAgente } from '../../types/agent';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 import AgenteDocModal from '../../components/sistemas/AgenteDocModal';
 import ActividadAgentes from '../../components/sistemas/ActividadAgentes';
 import HistorialPreguntasAgentes from '../../components/sistemas/HistorialPreguntasAgentes';
@@ -46,8 +49,7 @@ export default function AgentsPage() {
   const [catalog, setCatalog] = useState<(Agent & { _count: { userLinks: number } })[]>([]);
   const [assignments, setAssignments] = useState<AgentAssignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [agentFilter, setAgentFilter] = useState('');
-  const [userFilter, setUserFilter] = useState('');
+  const [busqueda, setBusqueda] = useState('');
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -78,11 +80,25 @@ export default function AgentsPage() {
   useEffect(() => { loadData(); }, []);
   useEffect(() => { getAgentDocs().then(setDocs).catch(() => setDocs([])); }, []);
 
-  const filteredAssignments = assignments.filter((a) => {
-    if (agentFilter && !a.agent.name.toLowerCase().includes(agentFilter.toLowerCase())) return false;
-    if (userFilter && !a.user.fullName.toLowerCase().includes(userFilter.toLowerCase()) && !a.user.email.toLowerCase().includes(userFilter.toLowerCase())) return false;
-    return true;
+  // Los filtros de las asignaciones viven en la cabecera de cada columna; el buscador general mira usuario y agente.
+  const cf = useColumnFilters<AgentAssignment>(assignments, [
+    { key: 'usuario', etiqueta: 'Usuario', tipo: 'valores', getValues: (a) => ({ valor: String(a.user.id), etiqueta: a.user.fullName }) },
+    { key: 'agente', etiqueta: 'Agente', tipo: 'valores', getValues: (a) => ({ valor: String(a.agent.id), etiqueta: a.agent.name }) },
+    {
+      key: 'alcance', etiqueta: 'Alcance', tipo: 'valores',
+      orden: SCOPE_OPTIONS.map((o) => o.value),
+      getValues: (a) => ({ valor: a.agent.scope, etiqueta: a.agent.scope }),
+    },
+    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['1', '0'], getValues: (a) => ({ valor: a.agent.isActive ? '1' : '0', etiqueta: a.agent.isActive ? 'Activo' : 'Inactivo' }) },
+    { key: 'fecha', etiqueta: 'Fecha', tipo: 'fecha', getValue: (a) => a.createdAt },
+  ]);
+  const filteredAssignments = cf.filas.filter((a) => {
+    const q = busqueda.toLowerCase().trim();
+    if (!q) return true;
+    return a.agent.name.toLowerCase().includes(q) || a.user.fullName.toLowerCase().includes(q) || a.user.email.toLowerCase().includes(q);
   });
+  const hayFiltros = !!busqueda || cf.hayFiltros;
+  const limpiarTodo = () => { setBusqueda(''); cf.limpiar(); };
 
   const allUserOptions = (() => {
     const seen = new Set<number>();
@@ -209,13 +225,6 @@ export default function AgentsPage() {
         }
       />
 
-      <div className="filter-bar">
-        <div className="filter-bar-fields">
-          <input type="text" placeholder="Buscar por agente..." value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className="admin-search" />
-          <input type="text" placeholder="Buscar por usuario..." value={userFilter} onChange={(e) => setUserFilter(e.target.value)} className="admin-search" />
-        </div>
-      </div>
-
       <div className="admin-section">
         {loading ? (
           <div className="loading-state">Cargando agentes...</div>
@@ -265,22 +274,35 @@ export default function AgentsPage() {
 
             <div className="tools-section" style={{ marginTop: '32px' }}>
               <h2 className="tools-section-title">Asignaciones ({filteredAssignments.length})</h2>
-              {filteredAssignments.length === 0 ? (
+              {assignments.length === 0 ? (
                 <div className="empty-state">No hay asignaciones registradas</div>
               ) : (
+                <>
+                <div className="filter-bar">
+                  <div className="filter-bar-fields">
+                    <input type="text" placeholder="Buscar por agente o usuario..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="admin-search" />
+                  </div>
+                  <div className="filter-bar-actions">
+                    <ClearFiltersButton onClear={limpiarTodo} disabled={!hayFiltros} />
+                  </div>
+                </div>
+                <ChipsFiltros cf={cf} />
                 <div className="tasks-table-wrapper">
                   <table className="tasks-table">
                     <thead>
                       <tr>
-                        <th>Usuario</th>
-                        <th>Agente</th>
-                        <th>Alcance</th>
-                        <th>Estado</th>
-                        <th>Fecha</th>
+                        <th>Usuario<ColumnFilter cf={cf} col="usuario" orden={cf.ordenDe('usuario')} /></th>
+                        <th>Agente<ColumnFilter cf={cf} col="agente" orden={cf.ordenDe('agente')} /></th>
+                        <th>Alcance<ColumnFilter cf={cf} col="alcance" orden={cf.ordenDe('alcance')} /></th>
+                        <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
+                        <th>Fecha<ColumnFilter cf={cf} col="fecha" orden={cf.ordenDe('fecha')} /></th>
                         <th>Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
+                      {filteredAssignments.length === 0 && (
+                        <FilaSinResultados columnas={6} mensaje="No hay asignaciones que coincidan con los filtros." onLimpiar={hayFiltros ? limpiarTodo : undefined} />
+                      )}
                       {filteredAssignments.map((a) => (
                         <tr key={a.id}>
                           <td>
@@ -309,6 +331,7 @@ export default function AgentsPage() {
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
             </div>
             <div className="tools-section" style={{ marginTop: '32px' }}>

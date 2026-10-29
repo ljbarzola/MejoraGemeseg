@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getReceivables, receiveReceivable } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
+import { useColumnFilters } from '../../../hooks/useColumnFilters';
 
 export default function ReceivablesList() {
   const navigate = useNavigate();
@@ -45,6 +48,21 @@ export default function ReceivablesList() {
 
   const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas; siguen puestos tras registrar un cobro).
+  const cf = useColumnFilters<any>(receivables, [
+    { key: 'cliente', etiqueta: 'Cliente', tipo: 'valores', vacio: 'Sin cliente', getValues: (r) => (r.client?.name ? { valor: String(r.client.id ?? r.client.name), etiqueta: r.client.name } : null) },
+    { key: 'embarque', etiqueta: 'Embarque', tipo: 'texto', getValue: (r) => r.shipment?.contractRef },
+    { key: 'total', etiqueta: 'Monto Total', tipo: 'numero', formato: (n) => fmt(n), getValue: (r) => r.totalAmount },
+    { key: 'cobrado', etiqueta: 'Cobrado', tipo: 'numero', formato: (n) => fmt(n), getValue: (r) => r.receivedAmount },
+    { key: 'saldo', etiqueta: 'Saldo', tipo: 'numero', formato: (n) => fmt(n), getValue: (r) => r.totalAmount - r.receivedAmount },
+    { key: 'vence', etiqueta: 'Fecha Vencimiento', tipo: 'fecha', soloDia: true, getValue: (r) => r.dueDate },
+    {
+      key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['PENDING', 'PARTIAL', 'RECEIVED'],
+      getValues: (r) => (r.status === 'RECEIVED' ? { valor: 'RECEIVED', etiqueta: 'Cobrada' } : r.status === 'PARTIAL' ? { valor: 'PARTIAL', etiqueta: 'Parcial' } : { valor: 'PENDING', etiqueta: 'Pendiente' }),
+    },
+  ]);
+  const filas = cf.filas;
+
   return (
     <div className="page-container">
       <div className="page-header-row">
@@ -57,6 +75,14 @@ export default function ReceivablesList() {
         </div>
       </div>
 
+      <div className="filter-bar">
+        <div className="filter-bar-actions">
+          <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+        </div>
+      </div>
+
+      <ChipsFiltros cf={cf} />
+
       <div className="admin-section">
         {loading ? (
           <div className="loading-state">Cargando cuentas por cobrar...</div>
@@ -67,18 +93,21 @@ export default function ReceivablesList() {
             <table className="tasks-table">
               <thead>
                 <tr>
-                  <th>Cliente</th>
-                  <th>Embarque</th>
-                  <th>Monto Total</th>
-                  <th>Cobrado</th>
-                  <th>Saldo</th>
-                  <th>Fecha Vencimiento</th>
-                  <th>Estado</th>
+                  <th>Cliente<ColumnFilter cf={cf} col="cliente" orden={cf.ordenDe('cliente')} /></th>
+                  <th>Embarque<ColumnFilter cf={cf} col="embarque" orden={cf.ordenDe('embarque')} /></th>
+                  <th>Monto Total<ColumnFilter cf={cf} col="total" orden={cf.ordenDe('total')} /></th>
+                  <th>Cobrado<ColumnFilter cf={cf} col="cobrado" orden={cf.ordenDe('cobrado')} /></th>
+                  <th>Saldo<ColumnFilter cf={cf} col="saldo" orden={cf.ordenDe('saldo')} /></th>
+                  <th>Fecha Vencimiento<ColumnFilter cf={cf} col="vence" orden={cf.ordenDe('vence')} /></th>
+                  <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {receivables.map((r) => {
+                {filas.length === 0 && (
+                  <FilaSinResultados columnas={8} mensaje="No hay cuentas por cobrar que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                )}
+                {filas.map((r) => {
                   const remaining = r.totalAmount - r.receivedAmount;
                   return (
                     <tr key={r.id}>

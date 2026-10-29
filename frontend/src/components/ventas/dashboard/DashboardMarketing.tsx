@@ -9,7 +9,7 @@ import { useSortableTable } from '../../../hooks/useSortableTable';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
 import { EmbudoGrafico } from './DashboardGraficos';
 import FilterField from '../../common/FilterField';
-import { Cargando, SinDatos, Tarjeta, formatoDia, pct } from './DashboardBits';
+import { Cargando, SinDatos, Tarjeta, pct } from './DashboardBits';
 
 type Agrupar = 'channel' | 'campana' | 'landing';
 const AGRUPACIONES: { value: Agrupar; label: string; columna: string; explica: string }[] = [
@@ -60,7 +60,7 @@ export default function DashboardMarketing({ desde, hasta }: { desde: string; ha
   return (
     <Tarjeta
       titulo="De posible cliente a venta"
-      hint={`De los ${formatoDia(datos.periodo.desde)} al ${formatoDia(datos.periodo.hasta)}: cuántos posibles clientes llenaron un formulario, cuántos pasaron a evaluación y cuántos terminaron contratando.`}
+      hint="De los posibles clientes que llegaron en el periodo: cuántos llenaron un formulario, cuántos pasaron a evaluación y cuántos terminaron contratando."
     >
       {t.leads === 0 ? (
         <SinDatos texto="Aún no llegaron posibles clientes (leads) en este periodo. Cuando lleguen por la web o los anuncios, aquí verás cuántos pasaron a evaluación y cuántos contrataron." />

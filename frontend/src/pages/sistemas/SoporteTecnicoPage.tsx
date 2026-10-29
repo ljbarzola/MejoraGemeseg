@@ -14,10 +14,13 @@ import {
 import { extractDriveFolderId, buildDriveFolderLink } from '../../utils/driveLink';
 import OpenFolderButton from '../../components/common/OpenFolderButton';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
+import { filtroDeValores, listaDeUrl, type FiltrosColumna } from '../../utils/columnFilters';
 import { useToast } from '../../contexts/ToastContext';
 import { getUser } from '../../services/auth.service';
 import { getCompanies, type Company } from '../../services/company.service';
@@ -66,18 +69,51 @@ export default function SoporteTecnicoPage() {
   const [detalleId, setDetalleId] = useState<number | null>(null);
 
   const [search, setSearch] = useState('');
-  // El dashboard de Sistemas manda aquí con ?estado=ABIERTO, ?tipo=ERROR o ?ticket=<id>.
-  const [params] = useSearchParams();
-  const estadoDeUrl = params.get('estado') ?? '';
-  const tipoDeUrl = params.get('tipo') ?? '';
+  // El dashboard de Sistemas manda aquí con ?estado=ABIERTO, ?tipo=ERROR o ?ticket=<id>. Estado y tipo se vuelven
+  // el filtro de su columna (chip visible) y salen de la URL; el ticket se abre una sola vez.
+  const [params, setParams] = useSearchParams();
   const ticketDeUrl = Number(params.get('ticket')) || null;
   const ticketYaAbierto = useRef(false);
-  const [filtroEstado, setFiltroEstado] = useState(Object.keys(ESTADO_LABEL).includes(estadoDeUrl) ? estadoDeUrl : '');
-  const [filtroTipo, setFiltroTipo] = useState(Object.keys(TIPO_LABEL).includes(tipoDeUrl) ? tipoDeUrl : '');
-  const [filtroEmpresa, setFiltroEmpresa] = useState('');
+
+  // Los filtros viven en la cabecera de cada columna.
+  const cf = useColumnFilters<TicketSoporte>(tickets, [
+    { key: 'titulo', etiqueta: 'Título', tipo: 'texto', getValue: (t) => t.titulo },
+    { key: 'tipo', etiqueta: 'Tipo', tipo: 'valores', orden: Object.keys(TIPO_LABEL), getValues: (t) => ({ valor: t.tipo, etiqueta: TIPO_LABEL[t.tipo] || t.tipo }) },
+    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: Object.keys(ESTADO_LABEL), getValues: (t) => ({ valor: t.estado, etiqueta: ESTADO_LABEL[t.estado] }) },
+    { key: 'descripcion', etiqueta: 'Descripción', tipo: 'texto', getValue: (t) => t.descripcion },
+    {
+      key: 'reportadoPor', etiqueta: 'Reportado por', tipo: 'valores', vacio: 'Sin dato',
+      getValues: (t) => (t.createdBy ? { valor: String(t.createdBy.id), etiqueta: reportante(t) || `Usuario ${t.createdBy.id}` } : null),
+    },
+    { key: 'empresa', etiqueta: 'Empresa', tipo: 'valores', vacio: 'Sin empresa', getValues: (t) => (t.company ? { valor: String(t.company.id), etiqueta: t.company.name } : null) },
+    { key: 'createdAt', etiqueta: 'Fecha', tipo: 'fecha', getValue: (t) => t.createdAt },
+    { key: 'adjuntos', etiqueta: 'Adjuntos', tipo: 'numero', getValue: (t) => totalAdjuntos(t), formato: (n) => String(n) },
+  ]);
+  const { fijarVarios } = cf;
+  useEffect(() => {
+    const filtros: FiltrosColumna = {};
+    const estado = listaDeUrl(params.get('estado')).filter((e) => e in ESTADO_LABEL);
+    if (estado.length > 0) filtros.estado = filtroDeValores(estado);
+    const tipo = listaDeUrl(params.get('tipo')).filter((t) => t in TIPO_LABEL);
+    if (tipo.length > 0) filtros.tipo = filtroDeValores(tipo);
+    fijarVarios(filtros);
+    if (params.has('estado') || params.has('tipo')) {
+      const resto = new URLSearchParams(params);
+      resto.delete('estado');
+      resto.delete('tipo');
+      setParams(resto, { replace: true });
+    }
+  }, [params, setParams, fijarVarios]);
 
   const columnPrefs = useColumnPreferences('soporte-tecnico', COLUMNAS_POR_DEFECTO);
-  const tablaRef = useResizableColumns('soporte-tecnico', ['titulo', ...columnPrefs.visible]);
+  // Una columna oculta con filtro activo se muestra igual, para que se vea qué está filtrando.
+  const columnasVisibles = useMemo(() => {
+    const elegidas = columnPrefs.visible.filter((k) => COLUMNAS.some((c) => c.key === k));
+    const extra = COLUMNAS.map((c) => c.key).filter((k) => !elegidas.includes(k) && cf.filtro(k));
+    return [...elegidas, ...extra];
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cf.filtro lee los filtros de ese momento; se recalcula cuando cambian.
+  }, [columnPrefs.visible, cf.filtros]);
+  const tablaRef = useResizableColumns('soporte-tecnico', ['titulo', ...columnasVisibles]);
 
   const load = () => {
     setLoading(true);
@@ -109,34 +145,20 @@ export default function SoporteTecnicoPage() {
     }
   };
 
-  // Empresas que aparecen en los tickets cargados (el filtro no necesita otra llamada).
-  const empresas = useMemo(() => {
-    const mapa = new Map<number, string>();
-    tickets.forEach((t) => { if (t.company) mapa.set(t.company.id, t.company.name); });
-    return Array.from(mapa, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'es'));
-  }, [tickets]);
-  const hayTicketsSinEmpresa = tickets.some((t) => !t.company);
-
-  const filtrados = tickets.filter((t) => {
-    if (filtroEstado && t.estado !== filtroEstado) return false;
-    if (filtroTipo && t.tipo !== filtroTipo) return false;
-    if (filtroEmpresa === 'sin') {
-      if (t.company) return false;
-    } else if (filtroEmpresa && String(t.company?.id ?? '') !== filtroEmpresa) {
-      return false;
-    }
+  // Los filtros de columna ya se aplicaron (cf.filas); aquí solo falta el buscador general.
+  const filtrados = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return true;
-    return (
+    if (!q) return cf.filas;
+    return cf.filas.filter((t) => (
       t.titulo.toLowerCase().includes(q) ||
       t.descripcion.toLowerCase().includes(q) ||
       (t.createdBy?.fullName || '').toLowerCase().includes(q) ||
       (t.createdBy?.email || '').toLowerCase().includes(q) ||
       (t.company?.name || '').toLowerCase().includes(q)
-    );
-  });
+    ));
+  }, [cf.filas, search]);
 
-  const { filas, thProps, SortIcon } = useSortableTable(
+  const { filas, thProps, ordenDe } = useSortableTable(
     filtrados,
     {
       titulo: (t) => t.titulo,
@@ -152,8 +174,8 @@ export default function SoporteTecnicoPage() {
     'desc',
   );
 
-  const columnasVisibles = columnPrefs.visible.filter((k) => COLUMNAS.some((c) => c.key === k));
-  const hayFiltros = !!(search || filtroEstado || filtroTipo || filtroEmpresa);
+  const hayFiltros = !!search || cf.hayFiltros;
+  const limpiarTodo = () => { setSearch(''); cf.limpiar(); };
   const detalle = detalleId != null ? tickets.find((t) => t.id === detalleId) ?? null : null;
 
   const celda = (key: string, t: TicketSoporte): ReactNode => {
@@ -224,25 +246,6 @@ export default function SoporteTecnicoPage() {
             placeholder="Buscar por título, descripción, persona o empresa..."
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
-          <select className="filter-select" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
-            <option value="">Todos los estados</option>
-            {(Object.keys(ESTADO_LABEL) as TicketSoporteEstado[]).map((e) => (
-              <option key={e} value={e}>{ESTADO_LABEL[e]}</option>
-            ))}
-          </select>
-          <select className="filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
-            <option value="">Todos los tipos</option>
-            {Object.entries(TIPO_LABEL).map(([k, label]) => (
-              <option key={k} value={k}>{label}</option>
-            ))}
-          </select>
-          <select className="filter-select" value={filtroEmpresa} onChange={(e) => setFiltroEmpresa(e.target.value)}>
-            <option value="">Todas las empresas</option>
-            {empresas.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-            {hayTicketsSinEmpresa && <option value="sin">Sin empresa</option>}
-          </select>
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu
@@ -257,36 +260,43 @@ export default function SoporteTecnicoPage() {
             }}
           />
           <ClearFiltersButton
-            onClear={() => { setSearch(''); setFiltroEstado(''); setFiltroTipo(''); setFiltroEmpresa(''); }}
+            onClear={limpiarTodo}
             disabled={!hayFiltros}
           />
         </div>
       </div>
 
+      <ChipsFiltros cf={cf} />
+
       {loading ? (
         <div className="loading-state">Cargando tickets...</div>
       ) : tickets.length === 0 ? (
         <p style={{ color: '#94a3b8' }}>No hay tickets todavía.</p>
-      ) : filas.length === 0 ? (
-        <p style={{ color: '#888', fontSize: 13 }}>No hay tickets que coincidan con los filtros.</p>
       ) : (
         <div className="admin-section">
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
-                  <th {...thProps('titulo')}>Título <SortIcon campo="titulo" /></th>
+                  <th {...thProps('titulo')}>Título <ColumnFilter cf={cf} col="titulo" orden={ordenDe('titulo')} /></th>
                   {columnasVisibles.map((k) => {
                     const col = COLUMNAS.find((c) => c.key === k)!;
                     return (
                       <th key={k} {...thProps(k)}>
-                        {col.label} <SortIcon campo={k} />
+                        {col.label} <ColumnFilter cf={cf} col={k} orden={ordenDe(k)} />
                       </th>
                     );
                   })}
                 </tr>
               </thead>
               <tbody>
+                {filas.length === 0 && (
+                  <FilaSinResultados
+                    columnas={columnasVisibles.length + 1}
+                    mensaje="No hay tickets que coincidan con los filtros."
+                    onLimpiar={hayFiltros ? limpiarTodo : undefined}
+                  />
+                )}
                 {filas.map((t) => (
                   <tr key={t.id} onClick={() => setDetalleId(t.id)} style={{ cursor: 'pointer' }}>
                     <td style={{ fontWeight: 600, color: 'var(--azul-oscuro)' }}>{t.titulo}</td>

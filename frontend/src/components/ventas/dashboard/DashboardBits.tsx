@@ -1,5 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import type { ReactNode } from 'react';
 
 // Piezas visuales compartidas por las pestañas del dashboard de Ventas. Sin
 // librería de gráficos a propósito (igual que el resumen): barras hechas con
@@ -7,14 +6,6 @@ import { createPortal } from 'react-dom';
 
 export const iso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-// Últimos N días contando hoy, en hora local de quien mira.
-export function periodoDesdeDias(dias: number): { desde: string; hasta: string } {
-  const hoy = new Date();
-  const ini = new Date(hoy);
-  ini.setDate(hoy.getDate() - (dias - 1));
-  return { desde: iso(ini), hasta: iso(hoy) };
-}
 
 export const dinero = (v: number | null | undefined): string =>
   v === null || v === undefined
@@ -29,13 +20,13 @@ export const formatoDia = (s: string) => s.slice(0, 10).split('-').reverse().joi
  * Tarjeta ESTÁNDAR del dashboard (2026-10-21): blanca, con borde fino, título y una línea de ayuda. Todas las
  * pestañas usan esta misma pieza para que el tablero se lea igual en todas partes.
  */
-export function Tarjeta({ titulo, hint, children, accion, className }: { titulo: string; hint?: ReactNode; children: ReactNode; accion?: ReactNode; className?: string }) {
+export function Tarjeta({ titulo, hint, children, accion, className, hoy }: { titulo: string; hint?: ReactNode; children: ReactNode; accion?: ReactNode; className?: string; hoy?: boolean }) {
   return (
     // data-tablas-vivas="off": una tabla dentro de una tarjeta no lleva su propio scroll (ver utils/tablasVivas.ts).
     <section className={`dash-card${className ? ` ${className}` : ''}`} data-tablas-vivas="off">
       <header className="dash-card-cab">
         <div>
-          <h3>{titulo}</h3>
+          <h3>{titulo}{hoy && <EtiquetaHoy />}</h3>
           {hint && <p className="dash-card-hint">{hint}</p>}
         </div>
         {accion}
@@ -43,6 +34,14 @@ export function Tarjeta({ titulo, hint, children, accion, className }: { titulo:
       {children}
     </section>
   );
+}
+
+/**
+ * Marca de las tarjetas que son «de hoy»: muestran cómo está todo AHORA y no cambian con el periodo de la barra de
+ * arriba. Es la única excepción al periodo único del dashboard, y siempre se rotula así (2026-10-28).
+ */
+export function EtiquetaHoy() {
+  return <span className="dash-etiqueta-hoy" title="Esta tarjeta muestra cómo está todo hoy: no cambia al cambiar el periodo">Hoy · no depende del periodo</span>;
 }
 
 /** Franja de cifras: UNA sola tarjeta partida en celdas finas (no una tarjeta alta por cifra). */
@@ -69,17 +68,6 @@ export function Contador({
   );
 }
 
-/**
- * La barra de filtros del dashboard es UNA: la arma VentasDashboard con «Cifras de» y, cuando la pestaña tiene
- * un periodo propio, esa pestaña lo mete en la misma barra con <EnBarra> (así nunca hay una segunda fila de
- * filtros suelta más abajo).
- */
-export const BarraDestino = createContext<HTMLElement | null>(null);
-export function EnBarra({ children }: { children: ReactNode }) {
-  const destino = useContext(BarraDestino);
-  return destino ? createPortal(children, destino) : null;
-}
-
 export function BarraH({
   etiqueta, valor, max, color = '#2b6cb0', detalle,
 }: { etiqueta: string; valor: number; max: number; color?: string; detalle?: string }) {
@@ -98,21 +86,6 @@ export function BarraH({
 
 export function SinDatos({ texto }: { texto: string }) {
   return <p style={{ margin: 0, color: '#a0aec0', fontSize: 13 }}>{texto}</p>;
-}
-
-const PERIODOS = [
-  { dias: 30, label: 'Últimos 30 días' },
-  { dias: 90, label: 'Últimos 90 días' },
-  { dias: 180, label: 'Últimos 6 meses' },
-  { dias: 365, label: 'Último año' },
-];
-
-export function SelectorPeriodo({ dias, onChange }: { dias: number; onChange: (d: number) => void }) {
-  return (
-    <select className="filter-select" value={dias} onChange={(e) => onChange(Number(e.target.value))} aria-label="Periodo">
-      {PERIODOS.map((p) => <option key={p.dias} value={p.dias}>{p.label}</option>)}
-    </select>
-  );
 }
 
 // Aviso de «pocas muestras» que acompaña a toda cifra calculada con menos de 5 casos.

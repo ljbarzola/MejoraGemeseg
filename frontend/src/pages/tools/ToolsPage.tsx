@@ -13,6 +13,10 @@ import {
 import type { Tool, UserWithTools, ToolAssignment, ToolAuditLog } from '../../types/tool';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import PageHeader from '../../components/common/PageHeader';
+import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
+import { normalizar } from '../../utils/columnFilters';
 import { Trash2, Pencil, ClipboardList } from 'lucide-react';
 
 export default function ToolsPage() {
@@ -20,8 +24,7 @@ export default function ToolsPage() {
   const [tools, setTools] = useState<Tool[]>([]);
   const [assignments, setAssignments] = useState<ToolAssignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userFilter, setUserFilter] = useState('');
-  const [toolFilter, setToolFilter] = useState('');
+  const [busqueda, setBusqueda] = useState('');
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showToolModal, setShowToolModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -39,16 +42,28 @@ export default function ToolsPage() {
 
   const loadData = () => {
     setLoading(true);
-    Promise.all([getUsersWithTools(), getTools(), getAssignments(toolFilter || undefined, userFilter || undefined)])
+    Promise.all([getUsersWithTools(), getTools(), getAssignments()])
       .then(([u, t, a]) => { setUsers(u); setTools(t); setAssignments(a); })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { loadData(); }, []);
 
-  useEffect(() => {
-    getAssignments(toolFilter || undefined, userFilter || undefined).then(setAssignments).catch(() => {});
-  }, [toolFilter, userFilter]);
+  // Las asignaciones llegan todas del servidor; los filtros viven en la cabecera de cada columna y el buscador.
+  const cf = useColumnFilters<ToolAssignment>(assignments, [
+    { key: 'usuario', etiqueta: 'Usuario', tipo: 'texto', getValue: (a) => `${a.user.fullName} ${a.user.email}` },
+    { key: 'herramienta', etiqueta: 'Herramienta', tipo: 'valores', getValues: (a) => a.tool.name },
+    { key: 'categoria', etiqueta: 'Categoría', tipo: 'valores', vacio: 'Sin categoría', getValues: (a) => a.tool.category },
+    { key: 'version', etiqueta: 'Versión', tipo: 'valores', vacio: 'Sin versión', getValues: (a) => a.version },
+    { key: 'fecha', etiqueta: 'Fecha', tipo: 'fecha', getValue: (a) => a.createdAt },
+  ]);
+  const asignacionesVisibles = (() => {
+    const q = normalizar(busqueda.trim());
+    if (!q) return cf.filas;
+    return cf.filas.filter((a) => normalizar(`${a.user.fullName} ${a.user.email} ${a.tool.name} ${a.tool.category ?? ''}`).includes(q));
+  })();
+  const hayFiltros = !!busqueda.trim() || cf.hayFiltros;
+  const limpiarFiltros = () => { setBusqueda(''); cf.limpiar(); };
 
   function toggleUser(userId: number) {
     setAssignForm((prev) => {
@@ -196,18 +211,14 @@ export default function ToolsPage() {
         <div className="filter-bar-fields">
           <input
             type="text"
-            placeholder="Buscar por nombre de usuario..."
-            value={userFilter}
-            onChange={(e) => setUserFilter(e.target.value)}
+            placeholder="Buscar por usuario, herramienta o categoría..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
             className="admin-search"
           />
-          <input
-            type="text"
-            placeholder="Buscar por herramienta..."
-            value={toolFilter}
-            onChange={(e) => setToolFilter(e.target.value)}
-            className="admin-search"
-          />
+        </div>
+        <div className="filter-bar-actions">
+          <ClearFiltersButton onClear={limpiarFiltros} disabled={!hayFiltros} />
         </div>
       </div>
 
@@ -279,6 +290,7 @@ export default function ToolsPage() {
 
             <div className="tools-section" style={{ marginTop: '32px' }}>
               <h2 className="tools-section-title">Asignaciones ({assignments.length})</h2>
+              <ChipsFiltros cf={cf} />
               {assignments.length === 0 ? (
                 <div className="empty-state">No hay asignaciones registradas</div>
               ) : (
@@ -286,17 +298,20 @@ export default function ToolsPage() {
                   <table className="tasks-table">
                     <thead>
                       <tr>
-                        <th>Usuario</th>
-                        <th>Herramienta</th>
-                        <th>Categoría</th>
-                        <th>Versión</th>
+                        <th>Usuario<ColumnFilter cf={cf} col="usuario" orden={cf.ordenDe('usuario')} /></th>
+                        <th>Herramienta<ColumnFilter cf={cf} col="herramienta" orden={cf.ordenDe('herramienta')} /></th>
+                        <th>Categoría<ColumnFilter cf={cf} col="categoria" orden={cf.ordenDe('categoria')} /></th>
+                        <th>Versión<ColumnFilter cf={cf} col="version" orden={cf.ordenDe('version')} /></th>
                         <th>Licencia</th>
-                        <th>Fecha</th>
+                        <th>Fecha<ColumnFilter cf={cf} col="fecha" orden={cf.ordenDe('fecha')} /></th>
                         <th>Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {assignments.map((a) => (
+                      {asignacionesVisibles.length === 0 && (
+                        <FilaSinResultados columnas={7} mensaje="No hay asignaciones que coincidan con los filtros." onLimpiar={limpiarFiltros} />
+                      )}
+                      {asignacionesVisibles.map((a) => (
                         <tr key={a.id}>
                           <td>
                             <div className="tasks-table-assignee-item">

@@ -9,8 +9,7 @@ import {
   type AnaliticaRetencion,
   type CicloVida,
 } from '../../../services/ventas.service';
-import FilterField from '../../common/FilterField';
-import { BarraH, Cargando, SelectorPeriodo, SinDatos, Tarjeta, dinero, formatoDia, pct, periodoDesdeDias } from './DashboardBits';
+import { BarraH, Cargando, SinDatos, Tarjeta, dinero, formatoDia, pct } from './DashboardBits';
 import { Contador, KpiFila } from './DashboardBits';
 import { Dona } from './DashboardGraficos';
 
@@ -18,48 +17,46 @@ const COLOR_ALERTA = '#c53030';
 const COLOR_AVISO = '#d97706';
 
 // Cartera y contratos: cuántos prospectos, clientes, en riesgo e inactivos hay,
-// qué contratos vencen o ya vencieron sin renovarse, cuánto valen y cuánto se
-// retiene. Es una foto de HOY (salvo la retención, que mira un periodo).
-export default function DashboardCartera({ alcance }: { alcance: string }) {
+// qué contratos están en pie, cuánto valen y cuánto se retiene, todo dentro del periodo único del dashboard.
+// Solo «Renovaciones próximas» y «Vencidos sin renovar» son de HOY (llevan su etiqueta).
+export default function DashboardCartera({ alcance, desde, hasta }: { alcance: string; desde: string; hasta: string }) {
   const navigate = useNavigate();
   const [cartera, setCartera] = useState<AnaliticaCartera | null>(null);
   const [retencion, setRetencion] = useState<AnaliticaRetencion | null>(null);
-  const [dias, setDias] = useState(365);
   const [error, setError] = useState(false);
 
   const cargar = useCallback(async () => {
     setError(false);
     try {
-      const { desde, hasta } = periodoDesdeDias(dias);
-      const [c, r] = await Promise.all([getAnaliticaCartera(alcance), getAnaliticaRetencion({ alcance, desde, hasta })]);
+      const [c, r] = await Promise.all([getAnaliticaCartera({ alcance, desde, hasta }), getAnaliticaRetencion({ alcance, desde, hasta })]);
       setCartera(c);
       setRetencion(r);
     } catch {
       setError(true);
     }
-  }, [alcance, dias]);
+  }, [alcance, desde, hasta]);
   useEffect(() => { cargar(); }, [cargar]);
 
   if (!cartera || !retencion) return <Cargando error={error} onReintentar={cargar} />;
-  const { ciclo, contratos, renovaciones, vencidos, servicios, reducciones, bajasDelMes } = cartera;
+  const { ciclo, contratos, renovaciones, vencidos, servicios, reducciones, bajas } = cartera;
   const maxServicio = Math.max(1, ...servicios.masContratados.map((s) => s.contratos));
 
   return (
     <div className="dash-pila">
       <div className="dash-grid">
-        <Tarjeta className="dash-span2" titulo="Clientes y prospectos por relación" hint="Cómo se reparte el directorio. Pulsa una relación para verla">
+        <Tarjeta className="dash-span2" titulo="Clientes y prospectos por relación" hint="De las empresas y personas registradas en el Directorio en el periodo, cómo se reparten hoy por relación. Pulsa una relación para verla">
           <Dona
             aria={`Directorio por relación: ${(Object.keys(CICLO_LABEL) as CicloVida[]).map((k) => `${CICLO_LABEL[k]} ${ciclo[k]}`).join(', ')}`}
-            centroTitulo="en el directorio"
-            vacio="El directorio está vacío."
+            centroTitulo="registrados"
+            vacio="No se registró nadie en el Directorio en este periodo."
             segmentos={(Object.keys(CICLO_LABEL) as CicloVida[]).map((k) => ({
               key: k, etiqueta: CICLO_LABEL[k], valor: ciclo[k], color: CICLO_COLOR[k],
-              onClick: () => navigate(`/ventas/clientes?ciclo=${k}&responsable=${alcance}`),
+              onClick: () => navigate(`/ventas/clientes?ciclo=${k}&responsable=${alcance}&desde=${desde}&hasta=${hasta}`),
             }))}
           />
         </Tarjeta>
 
-        <Tarjeta titulo="Contratos" hint="Cómo están hoy">
+        <Tarjeta titulo="Contratos" hint="Contratos que estuvieron en pie en algún momento del periodo, según su estado de hoy">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, textAlign: 'center' }}>
             {[
               { n: contratos.vigentes, t: 'Vigentes', c: '#2f855a', estado: 'EN_CURSO' },
@@ -68,7 +65,7 @@ export default function DashboardCartera({ alcance }: { alcance: string }) {
               { n: contratos.cancelados, t: 'Cancelados', c: '#718096', estado: 'CANCELADO' },
             ].map((x) => (
               <button
-                key={x.t} type="button" onClick={() => navigate(`/ventas/contratos?estado=${x.estado}&responsable=${alcance}`)}
+                key={x.t} type="button" onClick={() => navigate(`/ventas/contratos?estado=${x.estado}&responsable=${alcance}&desde=${desde}&hasta=${hasta}`)}
                 title="Ver estos contratos en Contratos" disabled={x.n === 0}
                 style={{ background: 'none', border: 0, padding: '4px 0', font: 'inherit', cursor: x.n === 0 ? 'default' : 'pointer' }}
               >
@@ -85,7 +82,7 @@ export default function DashboardCartera({ alcance }: { alcance: string }) {
           </p>
         </Tarjeta>
 
-        <Tarjeta titulo="Renovaciones próximas" hint="Contratos vigentes que terminan pronto">
+        <Tarjeta hoy titulo="Renovaciones próximas" hint="Contratos vigentes que terminan pronto">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, textAlign: 'center', marginBottom: 10 }}>
             {[['30 días', renovaciones.d30], ['60 días', renovaciones.d60], ['90 días', renovaciones.d90]].map(([t, n]) => (
               <div key={t as string}>
@@ -111,7 +108,7 @@ export default function DashboardCartera({ alcance }: { alcance: string }) {
           )}
         </Tarjeta>
 
-        <Tarjeta titulo="Vencidos sin renovar" hint="Dentro de la gracia aún pueden renovar; pasada, el cliente ya está inactivo">
+        <Tarjeta hoy titulo="Vencidos sin renovar" hint="Dentro de la gracia aún pueden renovar; pasada, el cliente ya está inactivo">
           {vencidos.length === 0 ? (
             <SinDatos texto="No hay contratos vencidos sin renovar." />
           ) : (
@@ -132,7 +129,7 @@ export default function DashboardCartera({ alcance }: { alcance: string }) {
           )}
         </Tarjeta>
 
-        <Tarjeta titulo="Servicios más contratados" hint="En contratos vigentes">
+        <Tarjeta titulo="Servicios más contratados" hint="En los contratos que estuvieron en pie en el periodo (una renovación no cuenta doble)">
           {servicios.masContratados.length === 0 ? (
             <SinDatos texto="Aún no hay contratos vigentes con servicios." />
           ) : (
@@ -145,13 +142,13 @@ export default function DashboardCartera({ alcance }: { alcance: string }) {
           </p>
         </Tarjeta>
 
-        <Tarjeta titulo="Bajas y reducciones" hint="Clientes que dejan de estar cubiertos y contratos que renovaron con menos">
+        <Tarjeta titulo="Bajas y reducciones" hint="Clientes que dejaron de estar cubiertos en el periodo y contratos que se renovaron con menos">
           <p style={{ margin: '0 0 8px', fontSize: 13 }}>
-            Dejaron de estar cubiertos este mes: <strong>{bajasDelMes.total}</strong>
-            {bajasDelMes.clientes.length > 0 && <span style={{ color: '#718096' }}> ({bajasDelMes.clientes.map((b) => b.cliente).join(', ')})</span>}
+            Dejaron de estar cubiertos: <strong>{bajas.total}</strong>
+            {bajas.clientes.length > 0 && <span style={{ color: '#718096' }}> ({bajas.clientes.map((b) => b.cliente).join(', ')})</span>}
           </p>
           <p style={{ margin: '0 0 6px', fontSize: 13 }}>
-            Renovaron con menos servicios o menor valor (90 días): <strong>{reducciones.ultimos90Dias}</strong>
+            Renovaron con menos servicios o menor valor: <strong>{reducciones.total}</strong>
           </p>
           {reducciones.recientes.slice(0, 5).map((r) => (
             <div key={r.id} style={{ fontSize: 12.5, borderTop: '1px solid #edf2f7', padding: '5px 0' }}>
@@ -163,8 +160,7 @@ export default function DashboardCartera({ alcance }: { alcance: string }) {
         </Tarjeta>
 
         <Tarjeta
-          className="dash-span2" titulo="Retención" hint={`Del ${formatoDia(retencion.periodo.desde)} al ${formatoDia(retencion.periodo.hasta)}`}
-          accion={<FilterField label="Periodo"><SelectorPeriodo dias={dias} onChange={setDias} /></FilterField>}
+          className="dash-span2" titulo="Retención" hint="De los clientes cubiertos por un contrato el primer día del periodo, cuántos lo siguen estando el último"
         >
           <KpiFila className="dash-kpis--cuatro">
             <Contador titulo="Clientes retenidos" valor={pct(retencion.clientes.tasa)} color="#2f855a"

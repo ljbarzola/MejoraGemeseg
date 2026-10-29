@@ -3,8 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Plus, Settings2, Pencil, Trash2, ClipboardList } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
-import FilterField from '../../components/common/FilterField';
-import FiltroFecha from '../../components/common/FiltroFecha';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import ExportTableButton from '../../components/common/ExportTableButton';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
@@ -18,8 +17,10 @@ import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useClientesDelAlcance } from '../../hooks/useClientesDelAlcance';
-import ChipAlcance from '../../components/ventas/ChipAlcance';
-import { FILTRO_FECHA_VACIO, diaCortoEcuador, fechaEnRango, filtroFechaDeUrl, hayFiltroFecha, type FiltroFechaValor } from '../../utils/rangoFechas';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
+import { diaCortoEcuador } from '../../utils/rangoFechas';
+import { filtrosDeUrlClientes } from '../../utils/ventasFiltrosUrl';
+import type { ColumnaFiltro } from '../../utils/columnFilters';
 import {
   getSalesClients,
   deleteSalesClient,
@@ -62,8 +63,6 @@ export default function VentasClientesPage() {
   const [fields, setFields] = useState<SalesClientField[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filtroCiclo, setFiltroCiclo] = useState<CicloVida | ''>('');
-  const [filtroFecha, setFiltroFecha] = useState<FiltroFechaValor>(FILTRO_FECHA_VACIO);
   const [editingClient, setEditingClient] = useState<SalesClient | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showNuevo, setShowNuevo] = useState(false);
@@ -112,19 +111,6 @@ export default function VentasClientesPage() {
     const resp = searchParams.get('responsable');
     if (resp) aplicarAlcance(resp);
   }, [searchParams, aplicarAlcance]);
-  useEffect(() => {
-    // Llegadas desde otras pantallas: /ventas/clientes?nuevo=1 (Documentación →
-    // «Ir al Directorio»), ?ciclo=PROSPECTO (tarjetas del Dashboard) y ?ficha=12.
-    if (searchParams.get('nuevo') === '1') { setEditingClient(null); setShowNuevo(true); }
-    const ciclo = searchParams.get('ciclo');
-    if (ciclo && ciclo in CICLO_LABEL) setFiltroCiclo(ciclo as CicloVida);
-    const ficha = Number(searchParams.get('ficha'));
-    if (ficha) setFichaId(ficha);
-    // ?desde=&hasta=: el periodo que se miraba en el Dashboard; queda a la vista en el filtro «Ingresó».
-    const fecha = filtroFechaDeUrl(searchParams.get('desde'), searchParams.get('hasta'));
-    if (fecha) setFiltroFecha(fecha);
-  }, [searchParams]);
-
   const coincideBusqueda = (c: SalesClient) => {
     const q = search.toLowerCase().trim();
     if (!q) return true;
@@ -137,12 +123,6 @@ export default function VentasClientesPage() {
     );
   };
 
-  const filtered = clients
-    .filter(coincideBusqueda)
-    .filter((c) => !filtroCiclo || c.ciclo === filtroCiclo)
-    .filter((c) => fechaEnRango(c.createdAt, filtroFecha))
-    .filter((c) => !alcanceLista.ids || alcanceLista.ids.has(c.id));
-
   const cellValue = (client: SalesClient, key: string): string => {
     if (key === CICLO_COL) return client.ciclo ? CICLO_LABEL[client.ciclo] : '';
     if (key === FECHA_COL) return client.createdAt;
@@ -152,10 +132,47 @@ export default function VentasClientesPage() {
     return salesClientValue(client, key);
   };
 
+  // Filtros en la cabecera de cada columna. Los campos de la empresa que son una lista (SELECT) se eligen con
+  // casillas; el resto se filtra escribiendo («contiene»).
+  const cf = useColumnFilters<SalesClient>(clients, [
+    { key: 'name', etiqueta: 'Nombre', tipo: 'texto', getValue: (c) => c.name },
+    {
+      key: CICLO_COL, etiqueta: 'Relación', tipo: 'valores', orden: CICLOS_FILTRO,
+      getValues: (c) => (c.ciclo ? { valor: c.ciclo, etiqueta: CICLO_LABEL[c.ciclo] } : null), vacio: 'Sin relación',
+    },
+    { key: FECHA_COL, etiqueta: 'Fecha de ingreso', tipo: 'fecha', getValue: (c) => c.createdAt },
+    ...fields.filter((f) => f.key !== 'name' && f.key !== SUBSERVICIOS_KEY).map((f): ColumnaFiltro<SalesClient> =>
+      f.fieldType === 'SELECT' || f.fieldType === LISTA_SUBOPCIONES
+        ? {
+          key: f.key, etiqueta: f.label, tipo: 'valores', vacio: 'Sin dato',
+          orden: f.options?.map((o) => o.key),
+          getValues: (c) => { const raw = salesClientValue(c, f.key); return raw ? { valor: raw, etiqueta: salesClientSelectLabel(c, f) } : null; },
+        }
+        : { key: f.key, etiqueta: f.label, tipo: 'texto', getValue: (c) => cellValue(c, f.key) }),
+  ]);
+
+  // Llegadas desde otras pantallas: /ventas/clientes?nuevo=1 (Documentación → «Ir al Directorio»),
+  // ?ciclo=PROSPECTO (tarjetas del Dashboard) y ?ficha=12. ?desde=&hasta= es el periodo que se miraba en el
+  // Dashboard; ciclo y periodo quedan como filtros de su columna (chips).
+  const { fijarVarios } = cf;
+  useEffect(() => {
+    if (searchParams.get('nuevo') === '1') { setEditingClient(null); setShowNuevo(true); }
+    const ficha = Number(searchParams.get('ficha'));
+    if (ficha) setFichaId(ficha);
+    fijarVarios(filtrosDeUrlClientes(searchParams, Object.keys(CICLO_LABEL), FECHA_COL));
+  }, [searchParams, fijarVarios]);
+
+  // Los filtros de columna ya se aplicaron (cf.filas); aquí faltan el buscador general y el alcance del Dashboard.
+  const filtered = cf.filas
+    .filter(coincideBusqueda)
+    .filter((c) => !alcanceLista.ids || alcanceLista.ids.has(c.id));
+  const hayFiltros = !!search || cf.hayFiltros || !!alcanceLista.alcance;
+  const limpiarTodo = () => { setSearch(''); cf.limpiar(); alcanceLista.quitar(); };
+
   const sortCampos: Record<string, (c: SalesClient) => string | number | null | undefined> = { name: (c) => c.name };
   for (const col of pickableColumns) sortCampos[col.key] = (c) => cellValue(c, col.key);
 
-  const { filas: filasOrdenadas, thProps, SortIcon } = useSortableTable(filtered, sortCampos, 'name');
+  const { filas: filasOrdenadas, thProps, ordenDe } = useSortableTable(filtered, sortCampos, 'name');
 
   const renderCell = (client: SalesClient, key: string) => {
     if (key === CICLO_COL) return <CicloVidaBadge ciclo={client.ciclo} razones={client.cicloRazones} />;
@@ -198,22 +215,13 @@ export default function VentasClientesPage() {
       />
 
       <div className="filter-bar">
-        <div className="filter-bar-fields filter-bar-fields--etiquetas">
+        <div className="filter-bar-fields">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nombre, RUC, teléfono, correo o dirección..."
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
-          <FilterField label="Relación">
-            <select className="filter-select" value={filtroCiclo} onChange={(e) => setFiltroCiclo(e.target.value as CicloVida | '')}>
-              <option value="">Todas</option>
-              {CICLOS_FILTRO.map((k) => (
-                <option key={k} value={k}>{CICLO_LABEL[k]}</option>
-              ))}
-            </select>
-          </FilterField>
-          <FiltroFecha label="Ingresó" valor={filtroFecha} onChange={setFiltroFecha} title="Filtra por el día en que se registró la empresa o persona (la columna «Fecha de ingreso»)" />
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu
@@ -226,10 +234,7 @@ export default function VentasClientesPage() {
               if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
             }}
           />
-          <ClearFiltersButton
-            onClear={() => { setSearch(''); setFiltroCiclo(''); setFiltroFecha(FILTRO_FECHA_VACIO); alcanceLista.quitar(); }}
-            disabled={!search && !filtroCiclo && !hayFiltroFecha(filtroFecha) && !alcanceLista.alcance}
-          />
+          <ClearFiltersButton onClear={limpiarTodo} disabled={!hayFiltros} />
           <ExportTableButton
             titulo="Directorio"
             columns={[{ key: 'name', label: 'Nombre / Razón social' }, ...pickableColumns]}
@@ -244,31 +249,36 @@ export default function VentasClientesPage() {
         </div>
       </div>
 
+      <ChipsFiltros
+        cf={cf}
+        extra={alcanceLista.alcance ? [{
+          id: 'alcance', etiqueta: 'Responsable',
+          texto: alcanceLista.alcance === 'mine' ? 'tus clientes' : 'los de ese vendedor',
+          onQuitar: alcanceLista.quitar,
+        }] : []}
+      />
+
       <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#718096' }}>
         Los datos de cada empresa o persona (en Zoho: Cuentas y Contactos). La «Relación» se calcula sola. Las negociaciones, su etapa y su responsable están en{' '}
         <Link to="/ventas/oportunidades" className="enlace-tabla">Oportunidades</Link>; los acuerdos, en{' '}
         <Link to="/ventas/contratos" className="enlace-tabla">Contratos</Link>.
       </p>
 
-      <ChipAlcance alcance={alcanceLista.alcance} total={filtered.length} onQuitar={alcanceLista.quitar} />
-
       <div className="admin-section">
         {loading ? (
           <p style={{ color: '#888' }}>Cargando...</p>
-        ) : filtered.length === 0 ? (
+        ) : clients.length === 0 ? (
           <p style={{ color: '#888', fontSize: 13 }}>
-            {clients.length === 0
-              ? 'Aún no hay nadie en el directorio. Se agregan cuando un posible cliente pasa a oportunidad; también puedes registrar a alguien con «Nueva empresa o persona».'
-              : 'No hay nadie que coincida con la búsqueda, la relación o la fecha elegidas.'}
+            Aún no hay nadie en el directorio. Se agregan cuando un posible cliente pasa a oportunidad; también puedes registrar a alguien con «Nueva empresa o persona».
           </p>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
-                  <th {...thProps('name')}>Nombre / Razón social <SortIcon campo="name" /></th>
+                  <th {...thProps('name')}>Nombre / Razón social <ColumnFilter cf={cf} col="name" orden={ordenDe('name')} /></th>
                   {visibleColumns.map((col) => (
-                    <th key={col.key} {...thProps(col.key)}>{col.label} <SortIcon campo={col.key} /></th>
+                    <th key={col.key} {...thProps(col.key)}>{col.label} <ColumnFilter cf={cf} col={col.key} orden={ordenDe(col.key)} /></th>
                   ))}
                   <th className="col-acciones" title="Acciones">
                     <span className="visually-hidden">Acciones</span>
@@ -276,6 +286,13 @@ export default function VentasClientesPage() {
                 </tr>
               </thead>
               <tbody>
+                {filasOrdenadas.length === 0 && (
+                  <FilaSinResultados
+                    columnas={visibleColumns.length + 2}
+                    mensaje="No hay nadie que coincida con la búsqueda y los filtros."
+                    onLimpiar={hayFiltros ? limpiarTodo : undefined}
+                  />
+                )}
                 {filasOrdenadas.map((c) => (
                   <tr key={c.id}>
                     <td style={{ fontWeight: 600 }}>{c.name}</td>

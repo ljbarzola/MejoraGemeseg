@@ -18,9 +18,11 @@ import { getUser } from '../../services/auth.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import SoloAdminDialog from '../../components/common/SoloAdminDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import RowActionsMenu from '../../components/common/RowActionsMenu';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 
 const NUEVA_UBICACION = '__nueva__';
 
@@ -64,8 +66,6 @@ export default function AdminDashboardPage() {
   const [locations, setLocations] = useState<CompanyLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
-  const [locationFilter, setLocationFilter] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [formData, setFormData] = useState({
@@ -133,26 +133,33 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const filteredUsers = users.filter((u) => {
-    if (search) {
-      const q = search.toLowerCase();
-      if (!u.fullName.toLowerCase().includes(q) && !u.email.toLowerCase().includes(q)) {
-        return false;
-      }
-    }
-    if (roleFilter && u.role !== roleFilter) return false;
-    if (locationFilter && String(u.locationId ?? '') !== locationFilter) return false;
-    return true;
+  // Los filtros viven en la cabecera de cada columna; aquí solo falta el buscador general (nombre o correo).
+  const cf = useColumnFilters<AdminUser>(users, [
+    { key: 'fullName', etiqueta: 'Nombre', tipo: 'texto', getValue: (u) => u.fullName },
+    { key: 'email', etiqueta: 'Email', tipo: 'texto', getValue: (u) => u.email },
+    { key: 'role', etiqueta: 'Rol sistema', tipo: 'valores', orden: Object.keys(ROLE_LABELS), getValues: (u) => ({ valor: u.role, etiqueta: ROLE_LABELS[u.role] || u.role }) },
+    { key: 'position', etiqueta: 'Cargo', tipo: 'valores', vacio: 'Sin cargo', getValues: (u) => u.position },
+    { key: 'phone', etiqueta: 'Teléfono', tipo: 'texto', getValue: (u) => u.phone },
+    {
+      key: 'location', etiqueta: 'Ubicación', tipo: 'valores', vacio: 'Sin ubicación',
+      getValues: (u) => (u.location ? { valor: String(u.location.id), etiqueta: u.location.nombre } : null),
+    },
+    { key: 'isActive', etiqueta: 'Estado', tipo: 'valores', orden: ['1', '0'], getValues: (u) => ({ valor: u.isActive ? '1' : '0', etiqueta: u.isActive ? 'Activo' : 'Inactivo' }) },
+    { key: 'proyectos', etiqueta: 'Proyectos', tipo: 'numero', getValue: (u) => u._count.createdProjects + u._count.projectMemberships, formato: (n) => String(n) },
+  ]);
+  const filteredUsers = cf.filas.filter((u) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
   });
 
-  const hayFiltrosUsuarios = !!(search || roleFilter || locationFilter);
+  const hayFiltrosUsuarios = !!search || cf.hayFiltros;
   const limpiarFiltrosUsuarios = () => {
     setSearch('');
-    setRoleFilter('');
-    setLocationFilter('');
+    cf.limpiar();
   };
 
-  const { filas: filasUsuarios, thProps, SortIcon } = useSortableTable(
+  const { filas: filasUsuarios, thProps, ordenDe } = useSortableTable(
     filteredUsers,
     {
       fullName: (u) => u.fullName,
@@ -371,26 +378,6 @@ export default function AdminDashboardPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="admin-search"
               />
-              <select
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-                className="filter-select"
-              >
-                <option value="">Todos los roles</option>
-                <option value="ADMIN">Administrador</option>
-                <option value="MANAGER">Gerente</option>
-                <option value="EMPLOYEE">Empleado</option>
-              </select>
-              <select
-                value={locationFilter}
-                onChange={(e) => setLocationFilter(e.target.value)}
-                className="filter-select"
-              >
-                <option value="">Todas las ubicaciones</option>
-                {locations.map((l) => (
-                  <option key={l.id} value={l.id}>{l.nombre}</option>
-                ))}
-              </select>
             </div>
             <div className="filter-bar-actions">
               <ClearFiltersButton onClear={limpiarFiltrosUsuarios} disabled={!hayFiltrosUsuarios} />
@@ -403,6 +390,8 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
+          <ChipsFiltros cf={cf} />
+
           {loading ? (
             <div className="loading-state">Cargando...</div>
           ) : (
@@ -410,18 +399,25 @@ export default function AdminDashboardPage() {
               <table className="tasks-table resizable-table" ref={tablaRef}>
                 <thead>
                   <tr>
-                    <th {...thProps('fullName')}>Nombre <SortIcon campo="fullName" /></th>
-                    <th {...thProps('email')}>Email <SortIcon campo="email" /></th>
-                    <th {...thProps('role')}>Rol sistema <SortIcon campo="role" /></th>
-                    <th {...thProps('position')}>Cargo <SortIcon campo="position" /></th>
-                    <th {...thProps('phone')}>Teléfono <SortIcon campo="phone" /></th>
-                    <th {...thProps('location')}>Ubicación <SortIcon campo="location" /></th>
-                    <th {...thProps('isActive')}>Estado <SortIcon campo="isActive" /></th>
-                    <th {...thProps('proyectos')}>Proyectos <SortIcon campo="proyectos" /></th>
+                    <th {...thProps('fullName')}>Nombre <ColumnFilter cf={cf} col="fullName" orden={ordenDe('fullName')} /></th>
+                    <th {...thProps('email')}>Email <ColumnFilter cf={cf} col="email" orden={ordenDe('email')} /></th>
+                    <th {...thProps('role')}>Rol sistema <ColumnFilter cf={cf} col="role" orden={ordenDe('role')} /></th>
+                    <th {...thProps('position')}>Cargo <ColumnFilter cf={cf} col="position" orden={ordenDe('position')} /></th>
+                    <th {...thProps('phone')}>Teléfono <ColumnFilter cf={cf} col="phone" orden={ordenDe('phone')} /></th>
+                    <th {...thProps('location')}>Ubicación <ColumnFilter cf={cf} col="location" orden={ordenDe('location')} /></th>
+                    <th {...thProps('isActive')}>Estado <ColumnFilter cf={cf} col="isActive" orden={ordenDe('isActive')} /></th>
+                    <th {...thProps('proyectos')}>Proyectos <ColumnFilter cf={cf} col="proyectos" orden={ordenDe('proyectos')} /></th>
                     <th className="col-acciones" title="Acciones"><span className="visually-hidden">Acciones</span></th>
                   </tr>
                 </thead>
                 <tbody>
+                  {filasUsuarios.length === 0 && (
+                    <FilaSinResultados
+                      columnas={9}
+                      mensaje="No se encontraron usuarios"
+                      onLimpiar={hayFiltrosUsuarios ? limpiarFiltrosUsuarios : undefined}
+                    />
+                  )}
                   {filasUsuarios.map((u) => (
                     <tr key={u.id} className="tasks-table-row">
                       <td className="tasks-table-title">{u.fullName}</td>
@@ -467,9 +463,6 @@ export default function AdminDashboardPage() {
                   ))}
                 </tbody>
               </table>
-              {filasUsuarios.length === 0 && (
-                <div className="empty-state">No se encontraron usuarios</div>
-              )}
             </div>
           )}
         </div>

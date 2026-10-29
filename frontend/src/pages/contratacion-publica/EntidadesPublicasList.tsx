@@ -29,10 +29,13 @@ import type {
 import { formatFechaHoraSync } from '../../utils/formatFechaHora';
 import { usePerm } from '../../contexts/PermissionsContext';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
+import { filtroDeValores, type ColumnaFiltro } from '../../utils/columnFilters';
 import CamposEntidadModal from './CamposEntidadModal';
 
 // La revisión de Drive es una sola consulta, pero no hace falta repetirla si la
@@ -99,7 +102,6 @@ export default function EntidadesPublicasList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const [verArchivadas, setVerArchivadas] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<CPEntidadPublica | null>(null);
@@ -129,15 +131,15 @@ export default function EntidadesPublicasList() {
   const load = (silencioso = false) => {
     if (!silencioso) setLoading(true);
     setError('');
-    getEntidadesPublicas(verArchivadas)
+    // Siempre se piden también las archivadas: el filtro «Estado» de la cabecera decide cuáles se ven.
+    getEntidadesPublicas(true)
       .then(setEntidades)
       .catch((err) => setError(mensaje(err, 'No se pudieron cargar las entidades públicas.')))
       .finally(() => setLoading(false));
   };
 
-  // Se recarga al marcar o desmarcar "Mostrar archivadas".
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => load(), [verArchivadas]);
+  useEffect(() => load(), []);
 
   useEffect(() => {
     getCamposEntidad().then(setCampos).catch(() => setCampos([]));
@@ -208,13 +210,42 @@ export default function EntidadesPublicasList() {
     return campo ? textoValor(campo, e.camposExtra?.[String(campo.id)]) : '';
   };
 
-  const filtered = entidades.filter((e) => {
+  // Filtros en la cabecera de cada columna. Al abrir la pantalla solo se ven las activas (como antes con
+  // «Mostrar archivadas» sin marcar); quitar el filtro de «Estado» muestra también las archivadas.
+  const columnasFiltro: ColumnaFiltro<CPEntidadPublica>[] = [
+    { key: 'nombre', etiqueta: 'Nombre', tipo: 'texto', getValue: (e) => e.nombre },
+    {
+      key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['ACTIVA', 'ARCHIVADA'],
+      getValues: (e) => ({ valor: e.archivada ? 'ARCHIVADA' : 'ACTIVA', etiqueta: e.archivada ? 'Archivada' : 'Activa' }),
+    },
+    { key: COL_RUC, etiqueta: 'RUC', tipo: 'texto', getValue: (e) => e.ruc },
+    { key: COL_DIRECCION, etiqueta: 'Dirección', tipo: 'texto', getValue: (e) => e.direccion },
+    ...camposActivos.map((c): ColumnaFiltro<CPEntidadPublica> => {
+      const key = claveColumnaCampo(c.id);
+      const dato = (e: CPEntidadPublica) => e.camposExtra?.[String(c.id)];
+      if (c.tipo === 'LISTA') return { key, etiqueta: c.nombre, tipo: 'valores', vacio: 'Sin dato', getValues: (e) => { const v = dato(e); return v === undefined || v === null ? null : String(v); } };
+      if (c.tipo === 'NUMERO') return { key, etiqueta: c.nombre, tipo: 'numero', getValue: (e) => { const v = dato(e); return v === undefined || v === null || v === '' ? null : Number(v); } };
+      if (c.tipo === 'FECHA') return { key, etiqueta: c.nombre, tipo: 'fecha', soloDia: true, getValue: (e) => { const v = dato(e); return v === undefined || v === null || v === '' ? null : String(v); } };
+      return { key, etiqueta: c.nombre, tipo: 'texto', getValue: (e) => { const v = dato(e); return v === undefined || v === null ? null : String(v); } };
+    }),
+  ];
+  const cf = useColumnFilters<CPEntidadPublica>(entidades, columnasFiltro, { inicial: { estado: filtroDeValores(['ACTIVA']) } });
+
+  // Una columna oculta que tiene filtro activo se muestra, para que se vea qué está filtrando.
+  for (const c of columnasElegibles) {
+    if (cf.filtro(c.key) && !columnasVisibles.some((v) => v.key === c.key)) columnasVisibles.push(c);
+  }
+
+  const filtered = cf.filas.filter((e) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return e.nombre.toLowerCase().includes(q) || (e.ruc || '').toLowerCase().includes(q);
   });
 
-  const { filas, thProps, SortIcon } = useSortableTable(
+  const hayFiltros = !!search || cf.hayFiltros;
+  const limpiarTodo = () => { setSearch(''); cf.limpiar(); };
+
+  const { filas, thProps, ordenDe } = useSortableTable(
     filtered,
     {
       nombre: (e) => e.nombre,
@@ -498,11 +529,6 @@ export default function EntidadesPublicasList() {
             placeholder="Buscar por nombre o RUC..."
             style={{ flex: '1 1 280px', minWidth: 0, padding: '10px 14px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.9rem' }}
           />
-          {/* Siempre visible (no aparece ni desaparece), ver LAYOUT ESTABLE en styles.css. */}
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.88rem', whiteSpace: 'nowrap', cursor: 'pointer' }}>
-            <input type="checkbox" checked={verArchivadas} onChange={(e) => setVerArchivadas(e.target.checked)} />
-            Mostrar archivadas
-          </label>
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu
@@ -515,34 +541,39 @@ export default function EntidadesPublicasList() {
               if (!guardado) setError('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.');
             }}
           />
-          <ClearFiltersButton onClear={() => { setSearch(''); setVerArchivadas(false); }} disabled={!search && !verArchivadas} />
+          <ClearFiltersButton onClear={limpiarTodo} disabled={!hayFiltros} />
         </div>
       </div>
+
+      <ChipsFiltros cf={cf} />
 
       <div className="admin-section">
         {loading ? (
           <div className="loading-state">Cargando entidades públicas...</div>
-        ) : filas.length === 0 ? (
+        ) : entidades.length === 0 ? (
           <div className="empty-state">
-            {entidades.length === 0 ? (
-              <>No hay entidades públicas creadas. Haz clic en <strong>"+ Nueva Entidad"</strong> para registrar la primera.</>
-            ) : (
-              'No hay entidades que coincidan con la búsqueda.'
-            )}
+            No hay entidades públicas creadas. Haz clic en <strong>"+ Nueva Entidad"</strong> para registrar la primera.
           </div>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
-                  <th {...thProps('nombre')}>Nombre <SortIcon campo="nombre" /></th>
+                  <th {...thProps('nombre')}>Nombre <ColumnFilter cf={cf} col="nombre" orden={ordenDe('nombre')} /><ColumnFilter cf={cf} col="estado" segundo /></th>
                   {columnasVisibles.map((c) => (
-                    <th key={c.key} {...thProps(c.key)}>{c.label} <SortIcon campo={c.key} /></th>
+                    <th key={c.key} {...thProps(c.key)}>{c.label} <ColumnFilter cf={cf} col={c.key} orden={ordenDe(c.key)} /></th>
                   ))}
                   <th className="col-acciones col-acciones--ancha"><span className="visually-hidden">Acciones</span></th>
                 </tr>
               </thead>
               <tbody>
+                {filas.length === 0 && (
+                  <FilaSinResultados
+                    columnas={columnasVisibles.length + 2}
+                    mensaje="No hay entidades que coincidan con los filtros."
+                    onLimpiar={hayFiltros ? limpiarTodo : undefined}
+                  />
+                )}
                 {filas.map((e) => (
                   <tr key={e.id} onClick={() => navigate(`/contratacion-publica/entidades/${e.id}`)} style={{ cursor: 'pointer' }}>
                     <td style={{ fontWeight: 700, color: 'var(--azul-oscuro)' }}>

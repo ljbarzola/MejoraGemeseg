@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Building2, Eye, Pencil, Trash2 } from 'lucide-react';
-import { getContratos, deleteContrato, getEntidadesPublicas } from '../../../services/contratacion-publica.service';
-import type { CPContrato, CPEntidadPublica } from '../../../types/contratacion-publica';
+import { getContratos, deleteContrato } from '../../../services/contratacion-publica.service';
+import type { CPContrato } from '../../../types/contratacion-publica';
 import { usePerm } from '../../../contexts/PermissionsContext';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
+import { useColumnFilters } from '../../../hooks/useColumnFilters';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
 import { useSortableTable } from '../../../hooks/useSortableTable';
 
@@ -27,29 +29,34 @@ export default function ContratosList() {
   const tablaRef = useResizableColumns('cp-contratos');
 
   const [contratos, setContratos] = useState<CPContrato[]>([]);
-  const [entidades, setEntidades] = useState<CPEntidadPublica[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const [filtroEstado, setFiltroEstado] = useState('');
-  const [filtroEntidad, setFiltroEntidad] = useState('');
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
   const load = () => {
     setLoading(true);
     setError('');
-    const params: any = {};
-    if (filtroEstado) params.estado = filtroEstado;
-    if (filtroEntidad) params.entidadId = Number(filtroEntidad);
-    Promise.all([getContratos(params), getEntidadesPublicas()])
-      .then(([c, e]) => { setContratos(c); setEntidades(e); })
+    getContratos()
+      .then(setContratos)
       .catch((err) => setError(err.response?.data?.message || 'No se pudieron cargar los contratos.'))
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [filtroEstado, filtroEntidad]);
+  useEffect(load, []);
 
-  const filtered = contratos.filter((c) => {
+  // Filtros en la cabecera de cada columna (antes eran dos selects que pedían la lista filtrada al servidor).
+  const cf = useColumnFilters<CPContrato>(contratos, [
+    { key: 'numero', etiqueta: 'Número', tipo: 'texto', getValue: (c) => c.numero },
+    { key: 'entidad', etiqueta: 'Entidad', tipo: 'valores', vacio: 'Sin entidad', getValues: (c) => (c.entidad ? { valor: String(c.entidadId), etiqueta: c.entidad.nombre } : null) },
+    { key: 'objeto', etiqueta: 'Objeto', tipo: 'texto', getValue: (c) => c.objeto },
+    { key: 'puestos', etiqueta: 'Puestos', tipo: 'numero', getValue: (c) => c._count?.puestos ?? 0 },
+    // «Vigente en»: el contrato cuenta si estuvo en pie en algún momento del periodo.
+    { key: 'fechaFin', etiqueta: 'Vigente en', tipo: 'fecha', getValue: (c) => c.fechaInicio, getFin: (c) => c.fechaFin },
+    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: Object.keys(ESTADO_LABEL), getValues: (c) => ({ valor: c.estado, etiqueta: ESTADO_LABEL[c.estado] || c.estado }) },
+  ]);
+
+  const filtered = cf.filas.filter((c) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return (
@@ -59,12 +66,13 @@ export default function ContratosList() {
     );
   });
 
-  const { filas, thProps, SortIcon } = useSortableTable(
+  const { filas, thProps, ordenDe } = useSortableTable(
     filtered,
     {
       numero: (c) => c.numero,
       entidad: (c) => c.entidad?.nombre,
       objeto: (c) => c.objeto,
+      puestos: (c) => c._count?.puestos ?? 0,
       fechaFin: (c) => c.fechaFin,
       estado: (c) => ESTADO_LABEL[c.estado] || c.estado,
     },
@@ -84,7 +92,8 @@ export default function ContratosList() {
     }
   };
 
-  const hayFiltros = !!(search || filtroEstado || filtroEntidad);
+  const hayFiltros = !!search || cf.hayFiltros;
+  const limpiarTodo = () => { setSearch(''); cf.limpiar(); };
 
   return (
     <div className="page-container">
@@ -117,45 +126,41 @@ export default function ContratosList() {
             placeholder="Buscar por número, objeto o entidad..."
             style={{ flex: '1 1 280px', minWidth: 0, padding: '10px 14px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.9rem' }}
           />
-          <select className="filter-select" value={filtroEntidad} onChange={(e) => setFiltroEntidad(e.target.value)}>
-            <option value="">Todas las entidades</option>
-            {entidades.map((e) => (
-              <option key={e.id} value={e.id}>{e.nombre}</option>
-            ))}
-          </select>
-          <select className="filter-select" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
-            <option value="">Todos los estados</option>
-            <option value="ACTIVO">Activo</option>
-            <option value="FINALIZADO">Finalizado</option>
-          </select>
         </div>
         <div className="filter-bar-actions">
-          <ClearFiltersButton onClear={() => { setSearch(''); setFiltroEstado(''); setFiltroEntidad(''); }} disabled={!hayFiltros} />
+          <ClearFiltersButton onClear={limpiarTodo} disabled={!hayFiltros} />
         </div>
       </div>
+
+      <ChipsFiltros cf={cf} />
 
       <div className="admin-section">
         {loading ? (
           <div className="loading-state">Cargando contratos...</div>
         ) : contratos.length === 0 ? (
           <div className="empty-state">No hay contratos registrados.</div>
-        ) : filas.length === 0 ? (
-          <p style={{ color: '#888', fontSize: 13 }}>No hay contratos que coincidan con la búsqueda.</p>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th {...thProps('numero')}>Número <SortIcon campo="numero" /></th>
-                  <th {...thProps('entidad')}>Entidad <SortIcon campo="entidad" /></th>
-                  <th {...thProps('objeto')}>Objeto <SortIcon campo="objeto" /></th>
-                  <th>Puestos</th>
-                  <th {...thProps('fechaFin')}>Vigencia <SortIcon campo="fechaFin" /></th>
-                  <th {...thProps('estado')}>Estado <SortIcon campo="estado" /></th>
+                  <th {...thProps('numero')}>Número <ColumnFilter cf={cf} col="numero" orden={ordenDe('numero')} /></th>
+                  <th {...thProps('entidad')}>Entidad <ColumnFilter cf={cf} col="entidad" orden={ordenDe('entidad')} /></th>
+                  <th {...thProps('objeto')}>Objeto <ColumnFilter cf={cf} col="objeto" orden={ordenDe('objeto')} /></th>
+                  <th {...thProps('puestos')}>Puestos <ColumnFilter cf={cf} col="puestos" orden={ordenDe('puestos')} /></th>
+                  <th {...thProps('fechaFin')}>Vigencia <ColumnFilter cf={cf} col="fechaFin" orden={ordenDe('fechaFin')} /></th>
+                  <th {...thProps('estado')}>Estado <ColumnFilter cf={cf} col="estado" orden={ordenDe('estado')} /></th>
                   <th className="col-acciones col-acciones--ancha" title="Acciones"><span className="visually-hidden">Acciones</span></th>
                 </tr>
               </thead>
               <tbody>
+                {filas.length === 0 && (
+                  <FilaSinResultados
+                    columnas={7}
+                    mensaje="No hay contratos que coincidan con los filtros."
+                    onLimpiar={hayFiltros ? limpiarTodo : undefined}
+                  />
+                )}
                 {filas.map((c) => (
                   <tr key={c.id} onClick={() => navigate(`/contratacion-publica/contratos/${c.id}`)} style={{ cursor: 'pointer' }}>
                     <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#2b6cb0' }}>{c.numero}</td>

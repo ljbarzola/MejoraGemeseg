@@ -4,7 +4,7 @@
 // Los días son los de Ecuador (UTC-5 todo el año): un posible cliente que llega a las 20:00 de
 // Guayaquil ya es «mañana» en UTC y no debe contarse en otro día. El servidor usa la misma regla.
 
-export type AtajoFecha = '' | 'hoy' | 'semana' | 'mes' | 'mes_pasado' | '90' | 'personalizado';
+export type AtajoFecha = '' | 'hoy' | 'semana' | 'mes' | 'mes_pasado' | '90' | 'anio' | 'personalizado';
 
 export interface FiltroFechaValor {
   atajo: AtajoFecha;
@@ -20,6 +20,7 @@ export const ATAJOS_FECHA: { value: Exclude<AtajoFecha, '' | 'personalizado'>; l
   { value: 'mes', label: 'Este mes' },
   { value: 'mes_pasado', label: 'Mes pasado' },
   { value: '90', label: 'Últimos 90 días' },
+  { value: 'anio', label: 'Este año' },
 ];
 
 const HORAS_ECUADOR = 5 * 3600 * 1000;
@@ -57,6 +58,7 @@ export function rangoDeAtajo(
     };
   }
   if (atajo === '90') return { desde: aISO(new Date(h.getTime() - 89 * DIA_MS)), hasta: hoy };
+  if (atajo === 'anio') return { desde: `${hoy.slice(0, 4)}-01-01`, hasta: hoy };
   return { desde: `${hoy.slice(0, 8)}01`, hasta: hoy };
 }
 

@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getReceptions } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
+import { useColumnFilters } from '../../../hooks/useColumnFilters';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
@@ -15,6 +18,23 @@ export default function ReceptionsList() {
   useEffect(() => {
     getReceptions().then(setReceptions).finally(() => setLoading(false));
   }, []);
+
+  // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas).
+  const kg = (n: number) => `${n.toLocaleString()} kg`;
+  const cf = useColumnFilters<any>(receptions, [
+    { key: 'fecha', etiqueta: 'Fecha', tipo: 'fecha', soloDia: true, getValue: (r) => r.date },
+    { key: 'proveedor', etiqueta: 'Proveedor', tipo: 'valores', vacio: 'Sin proveedor', getValues: (r) => (r.supplier?.name ? { valor: String(r.supplier.id ?? r.supplier.name), etiqueta: r.supplier.name } : null) },
+    { key: 'guia', etiqueta: 'Guía', tipo: 'texto', getValue: (r) => r.guideNumber },
+    { key: 'entrada', etiqueta: 'Entrada', tipo: 'valores', orden: ['KG', 'TON', 'SACO'], getValues: (r) => r.unitOfMeasure || 'KG' },
+    { key: 'bruto', etiqueta: 'Peso Bruto', tipo: 'numero', formato: kg, getValue: (r) => r.grossWeight },
+    { key: 'tara', etiqueta: 'Tara', tipo: 'numero', formato: kg, getValue: (r) => r.tare },
+    { key: 'neto', etiqueta: 'Peso Neto', tipo: 'numero', formato: kg, getValue: (r) => r.netWeight },
+    { key: 'humedad', etiqueta: 'Humedad %', tipo: 'numero', formato: (n) => `${n}%`, getValue: (r) => r.humidity },
+    { key: 'impurezas', etiqueta: 'Impurezas %', tipo: 'numero', formato: (n) => `${n}%`, getValue: (r) => r.impurities },
+    { key: 'precio', etiqueta: 'Precio Prov.', tipo: 'numero', formato: (n) => `$${n.toFixed(2)}`, getValue: (r) => r.provisionalPrice },
+    { key: 'lote', etiqueta: 'Lote', tipo: 'valores', vacio: 'Sin lote', getValues: (r) => r.lot?.code },
+  ]);
+  const filas = cf.filas;
 
   function getOrigWeight(kg: number, unit: string | null) {
     if (!unit || unit === 'KG') return null;
@@ -35,6 +55,14 @@ export default function ReceptionsList() {
         <button className="auth-btn" onClick={() => navigate('/cacao/receptions/new')}>+ Nueva Recepción</button>
       </div>
 
+      <div className="filter-bar">
+        <div className="filter-bar-actions">
+          <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+        </div>
+      </div>
+
+      <ChipsFiltros cf={cf} />
+
       <div className="admin-section">
         {loading ? (
           <div className="loading-state">Cargando recepciones...</div>
@@ -42,24 +70,27 @@ export default function ReceptionsList() {
           <div className="empty-state">No hay recepciones registradas.</div>
         ) : (
           <div className="tasks-table-wrapper">
-            <table className="tasks-table">
+            <table className="tasks-table tabla-compacta">
               <thead>
                 <tr>
-                  <th>Fecha</th>
-                  <th>Proveedor</th>
-                  <th>Guía</th>
-                  <th>Entrada</th>
-                  <th>Peso Bruto</th>
-                  <th>Tara</th>
-                  <th>Peso Neto</th>
-                  <th>Humedad %</th>
-                  <th>Impurezas %</th>
-                  <th>Precio Prov.</th>
-                  <th>Lote</th>
+                  <th>Fecha<ColumnFilter cf={cf} col="fecha" orden={cf.ordenDe('fecha')} /></th>
+                  <th>Proveedor<ColumnFilter cf={cf} col="proveedor" orden={cf.ordenDe('proveedor')} /></th>
+                  <th>Guía<ColumnFilter cf={cf} col="guia" orden={cf.ordenDe('guia')} /></th>
+                  <th>Entrada<ColumnFilter cf={cf} col="entrada" orden={cf.ordenDe('entrada')} /></th>
+                  <th>Peso Bruto<ColumnFilter cf={cf} col="bruto" orden={cf.ordenDe('bruto')} /></th>
+                  <th>Tara<ColumnFilter cf={cf} col="tara" orden={cf.ordenDe('tara')} /></th>
+                  <th>Peso Neto<ColumnFilter cf={cf} col="neto" orden={cf.ordenDe('neto')} /></th>
+                  <th>Humedad %<ColumnFilter cf={cf} col="humedad" orden={cf.ordenDe('humedad')} /></th>
+                  <th>Impurezas %<ColumnFilter cf={cf} col="impurezas" orden={cf.ordenDe('impurezas')} /></th>
+                  <th>Precio Prov.<ColumnFilter cf={cf} col="precio" orden={cf.ordenDe('precio')} /></th>
+                  <th>Lote<ColumnFilter cf={cf} col="lote" orden={cf.ordenDe('lote')} /></th>
                 </tr>
               </thead>
               <tbody>
-                {receptions.map((r) => {
+                {filas.length === 0 && (
+                  <FilaSinResultados columnas={11} mensaje="No hay recepciones que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                )}
+                {filas.map((r) => {
                   const origGross = getOrigWeight(r.grossWeight, r.unitOfMeasure);
                   const origTare = getOrigWeight(r.tare, r.unitOfMeasure);
                   const origNet = getOrigWeight(r.netWeight, r.unitOfMeasure);

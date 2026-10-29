@@ -1045,6 +1045,8 @@ export interface OportunidadInput {
   quotedAt?: string | null;
   notes?: string;
   assignedUserId?: number | null;
+  // Día en que llegó la OPORTUNIDAD ('YYYY-MM-DD', día de Ecuador, no futuro). Sin enviar: al crear = ahora; al editar no se toca.
+  receivedAt?: string;
   // Sin enviar no se toca; null la quita.
   ubicacion?: UbicacionOportunidad | null;
 }
@@ -1314,8 +1316,8 @@ export interface AnaliticaCartera {
   renovaciones: { d30: number; d60: number; d90: number; proximas: { id: number; clienteId: number; cliente: string; titulo?: string | null; fin: string; dias: number; valorMensual: number | null }[] };
   vencidos: { id: number; clienteId: number; cliente: string; titulo?: string | null; fin: string; diasVencido: number; enGracia: boolean; valorMensual: number | null; motivoCierre: string | null }[];
   servicios: { masContratados: { servicio: string; contratos: number; clientes: number }[]; clientesConUnServicio: number; clientesConVarios: number };
-  reducciones: { ultimos90Dias: number; recientes: { id: number; cliente: string; motivo: string; source?: string | null; detail?: any; fecha: string }[] };
-  bajasDelMes: { total: number; clientes: { id: number; cliente: string; fin: string }[] };
+  reducciones: { total: number; recientes: { id: number; cliente: string; motivo: string; source?: string | null; detail?: any; fecha: string }[] };
+  bajas: { total: number; clientes: { id: number; cliente: string; fin: string }[] };
 }
 
 export interface AnaliticaRetencion {
@@ -1356,8 +1358,8 @@ export interface AnaliticaActividad {
 }
 
 type RangoParams = { desde?: string; hasta?: string; alcance?: string };
-export const getAnaliticaCartera = (alcance?: string): Promise<AnaliticaCartera> =>
-  api.get('/ventas/analitica/cartera', { params: { alcance } }).then(r => r.data);
+export const getAnaliticaCartera = (p?: RangoParams): Promise<AnaliticaCartera> =>
+  api.get('/ventas/analitica/cartera', { params: p }).then(r => r.data);
 export const getAnaliticaRetencion = (p?: RangoParams): Promise<AnaliticaRetencion> =>
   api.get('/ventas/analitica/retencion', { params: p }).then(r => r.data);
 export const getAnaliticaEmbudo = (p?: RangoParams): Promise<AnaliticaEmbudo> =>
@@ -1390,11 +1392,12 @@ export interface AnaliticaMapa {
   sinUbicacion: number;
   puntos: PuntoMapa[];
   // Cada oportunidad con ubicación por separado (mapa de calor y puntos).
-  oportunidades: { lat: number; lng: number; monto: number; lugar: string | null; ciudad: string | null; provincia: string; estado: 'abierta' | 'aceptada' | 'perdida' }[];
+  oportunidades: { id: number | null; lat: number; lng: number; monto: number; lugar: string | null; ciudad: string | null; provincia: string; estado: 'abierta' | 'aceptada' | 'perdida' }[];
   provincias: { provincia: string; total: number; montoCotizado: number }[];
   provinciasSinOportunidades: string[];
 }
-export const getAnaliticaMapa = (p: { alcance?: string; vista?: VistaMapa }): Promise<AnaliticaMapa> =>
+// `desde`/`hasta` ('YYYY-MM-DD', días de Ecuador): solo las oportunidades que llegaron en ese periodo.
+export const getAnaliticaMapa = (p: { alcance?: string; vista?: VistaMapa; desde?: string; hasta?: string }): Promise<AnaliticaMapa> =>
   api.get('/ventas/analitica/mapa', { params: p }).then(r => r.data);
 
 // Buscador de lugares (OpenStreetMap, a través del servidor) para el cuadro «Ubicación».
