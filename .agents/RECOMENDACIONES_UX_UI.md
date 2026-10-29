@@ -310,7 +310,21 @@ Agregado el 2026-10-22 (ver también `CLAUDE.md`, «Frontend layout rules»):
 
 ---
 
+## 25. Tablas: un solo botón por columna para ordenar y filtrar
+
+Agregado el 2026-10-28 (ver también `CLAUDE.md`, «Frontend layout rules», y `ventas-contratos.md` sección 43):
+
+- **Toda tabla de listado lleva, en cada cabecera, UN solo botón** (`<ColumnFilter cf={cf} col="x" orden={…} />`, dentro del `<th>`) a la derecha del título. Abre un panel con «Ordenar» en una línea (dos direcciones lado a lado; pulsar la activa quita el orden) y, debajo, el filtro de esa columna. Nada de un `⇅` suelto más un embudo aparte: en cabeceras estrechas se perdía el de ordenar.
+- **El botón cuenta el estado de la columna:** flecha azul si ordena, embudo naranja (con punto o contador) si filtra, las dos si hace ambas, flecha hacia abajo tenue si no hace nada.
+- **Cómo pedir el orden:** en una pantalla simple, `orden={cf.ordenDe('columna')}` (el hook de filtros ordena con el valor que la columna ya declaró para filtrar); si la pantalla ya usa `useSortableTable` (clic en el título, orden inicial, columnas calculadas), `orden={ordenDe('columna')}` de ese hook. No mezclar las dos en una misma tabla.
+- **Reglas de orden:** texto con `localeCompare(…, 'es')` (tildes y ñ en su sitio), números como números, fechas por fecha, estados en su orden lógico (nombres «Orden lógico / Orden inverso») y las celdas vacías SIEMPRE al final.
+- **El panel es corto:** «Ordenar» es una sola línea, para no obligar a bajar hasta el filtro; no se le ponen títulos de sección.
+- **Una columna que solo ordena** (sin filtro) lleva el mismo botón con `etiqueta` y solo muestra «Ordenar»; no se deja el `⇅` junto a columnas que ya tienen el botón.
+
+---
+
 ## Versión
+- v2.2 - Octubre 2026 (tablas: botón único por columna para ordenar y filtrar)
 - v2.1 - Octubre 2026 (marco de pantalla, estado desde la lista, tarea como ventana)
 - v1.9 - Octubre 2026 (todo cierre se explica con `MotivoCierreModal`)
 - v2.0 - Octubre 2026 (filtros que se recuerdan: validarlos contra las opciones; escoba en barras de campos, no en Inicio)
