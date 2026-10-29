@@ -143,6 +143,36 @@ Hasta hoy un error de registro no tenia arreglo (en las pruebas hubo que borrar 
 - **Motivos: cuarto tipo `ANULACION`** (Configuracion → Motivos → «Recepciones y embarques»); sin catalogo se escribe a mano.
 - **Probado en navegador y por API (admin y gerente de Mikacao):** anular una recepcion limpia (lote en 0, `VOIDED`, kardex con saldo 0); anularla dos veces, con embarque, con liquidacion o con fijacion → rechazada con su mensaje; anular un embarque con cobro → rechazada; anular el cobro y luego el embarque → los kilos vuelven (1000 kg, lote abierto), kardex con la entrada de anulacion, cuenta anulada y no cobrable; despues se puede anular la recepcion; un lote anulado no se liquida ni se ofrece; el dashboard y los reportes siguen cuadrando; el gerente ve la explicacion de «solo administradores». Lo creado se borro. 141 pruebas del backend de Cacao en total.
 
+## Que falta para que Cacao sea funcional de punta a punta — 2026-10-28
+
+Estado: el flujo completo existe y esta probado en local (proveedor → recepcion → lote → liquidacion con aprobacion → cuenta por pagar con pago o con autorizacion; fijaciones; embarque → cuenta por cobrar; reportes, Excel, anulaciones, quintal, ticket, puntos de acopio). Lo que sigue sin hacerse, ordenado por quien lo puede desbloquear.
+
+**1. Lo puede hacer Claude solo (sin datos externos)**
+- Punto de acopio en la liquidacion («Punto de liquidacion» de Agrosoft) y desglose de compras por punto en el dashboard y en Reportes.
+- Llevar a ventana (o decidir que se queden como pantalla) la recepcion, la liquidacion y el embarque; unificar mayusculas de los botones («Nueva Recepción» / «Nuevo proveedor»).
+- Probar a mano en el navegador las ventanas de Clientes, Unidades, Fijaciones, pago y cobro (usan el mismo `FormModal` y compilan, pero solo se abrieron Proveedores, Calidades y Puntos) y a ancho de movil.
+- Preparar el PR con base `fix/dashboard-alcance-empleados` (no a `main`: la rama arrastra 45 commits de otras funciones); actualizar las lineas de Cacao de `AGENTS.md`, `README.md` y `CLAUDE.md`; recompilar el `dist/` del backend de la carpeta principal.
+- Antes de desplegar: receta de «Proceso de despliegue de Ventas» (copia de prod en solo lectura, backup, verificacion). Las tablas y columnas nuevas se crean al arrancar; el seed de ejemplo NO se sube (trae contrasena, repo publico).
+- No hay pruebas automaticas del frontend de Cacao (solo `reportes.util`); el lint del backend con tipos se queda sin memoria en carpetas grandes (se reviso archivo por archivo).
+
+**2. Necesita una decision de Leidy o de la empresa**
+- Permisos: hoy cerrar/reabrir entrega y aprobar = ADMIN o MANAGER; anular recepcion/embarque, pagar, anular pagos y escribir configuracion = ADMIN. ¿Es lo que quiere Mikacao?
+- Pagos con autorizacion: ¿quien paga debe ser distinto de quien autorizo («cuatro ojos»)? Hoy no. ¿Se activa en Mikacao?
+- Dashboard de compras: ¿«compra» a costo del lote (hoy) o a lo liquidado?
+- Perfil de pesaje: 2 valores fijos (por bultos / bascula) o un catalogo por empresa.
+- Libra como unidad de entrada (Mikacao pesa en libras): pequeno, falta el ok.
+- Ticket de pesaje imprimible con QR: falta saber que lleva el QR.
+- Uso real: ¿Mikacao trabaja solo aqui o hay que importar el historial de Agrosoft? Hoy el modulo no tiene datos reales.
+
+**3. Depende de datos de afuera (no se resuelve mirando pantallas ni programando)**
+- **SRI y facturacion (decidido: todo aqui, el trabajo mas grande):** reglas tributarias de contabilidad (liquidacion de compra electronica, retenciones si es agente, topes de efectivo y formas de pago), firma electronica `.p12` y su clave (Secret Manager, nunca por chat), RUC, establecimientos y secuencias, ambiente de pruebas del SRI, RIDE en PDF.
+- **Archivo para el banco:** falta el formato (un archivo de ejemplo o la especificacion del banco). Es el siguiente paso natural de los pagos con autorizacion.
+- **Contabilizar liquidaciones** (diario, plan de cuentas), **cupo de productor y consolidacion de deudas:** ligado a contabilidad/SRI.
+- **Exportaciones (orden de corte, plan de embarque con aprobacion, booking, factura de exportacion por DAE) y bascula (¿digitada o de un equipo?):** hay que volver a ver Agrosoft en Claude en Chrome, solo mirando (nunca crear ni editar, nunca anotar datos de Mikacao).
+- **Cajas con apertura y cierre diario:** probablemente no; solo si quien opera el acopio dice que las usan.
+
+**4. Fuera de Cacao pero parecido:** los formularios pegados sobre la tabla existen tambien en Ventas, RRHH y otros modulos; `FormModal` ya esta para reutilizarlo.
+
 ## Crear y editar en ventana, revision de claridad para un usuario nuevo — 2026-10-28
 
 Leidy vio el formulario de Proveedores pegado encima de la tabla y pidio que crear/editar sea una ventana (modal) y que se revise como lo haria alguien que no conoce el sistema, con las skills de Vercel (`vercel-labs/agent-skills`: se instalaron `web-design-guidelines`, `react-best-practices` y `composition-patterns` en `~/.claude/skills`; son solo texto, sin scripts; la de diseno web baja sus reglas de un URL de Vercel en cada revision). Sin commit.
