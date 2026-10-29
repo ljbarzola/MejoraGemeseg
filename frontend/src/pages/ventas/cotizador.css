@@ -1247,9 +1247,21 @@
     display: none !important;
   }
 
+  /* La hoja sale sobre papel blanco: sin el fondo gris, el marco ni el margen del menú lateral de la app */
+  html:has(.cot-page),
+  body:has(.cot-page),
+  body:has(.cot-page) .main-content {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
   .cot-page {
-    padding: 0;
+    padding: 0 !important;
     max-width: none;
+    border-radius: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
   }
 
   .cot-print-only {
