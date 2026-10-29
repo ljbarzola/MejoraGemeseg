@@ -11,6 +11,9 @@ import {
   type NovedadApp,
 } from '../../services/sistemas.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
 
@@ -23,8 +26,19 @@ export default function NovedadesPage() {
 
   const tablaRef = useResizableColumns('sistemas-novedades');
   const labelDe = (key: string) => secciones.find((s) => s.key === key)?.label || key;
-  const { filas, thProps, SortIcon } = useSortableTable(
-    novedades,
+  // Los filtros viven en la cabecera de cada columna. Una novedad puede avisar de varios módulos a la vez.
+  const cf = useColumnFilters<NovedadApp>(novedades, [
+    { key: 'fecha', etiqueta: 'Fecha', tipo: 'fecha', getValue: (n) => n.createdAt },
+    { key: 'titulo', etiqueta: 'Novedad', tipo: 'texto', getValue: (n) => `${n.titulo} ${n.descripcion}` },
+    {
+      key: 'modulos', etiqueta: 'Módulos', tipo: 'valores', vacio: 'Sin módulo',
+      getValues: (n) => n.secciones.map((s) => ({ valor: s, etiqueta: labelDe(s) })),
+    },
+    { key: 'autor', etiqueta: 'Publicada por', tipo: 'valores', vacio: 'Sin dato', getValues: (n) => n.createdByNombre },
+    { key: 'destinatarios', etiqueta: 'Recibieron', tipo: 'numero', getValue: (n) => n.destinatarios, formato: (n) => String(n) },
+  ]);
+  const { filas, thProps, ordenDe } = useSortableTable(
+    cf.filas,
     {
       fecha: (n) => new Date(n.createdAt).getTime(),
       titulo: (n) => n.titulo,
@@ -71,19 +85,30 @@ export default function NovedadesPage() {
           <div className="empty-state">Todavía no se ha publicado ninguna novedad.</div>
         </div>
       ) : (
+        <>
+        <div className="filter-bar">
+          <div className="filter-bar-fields" />
+          <div className="filter-bar-actions">
+            <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+          </div>
+        </div>
+        <ChipsFiltros cf={cf} />
         <div className="admin-section">
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th {...thProps('fecha')}>Fecha <SortIcon campo="fecha" /></th>
-                  <th {...thProps('titulo')}>Novedad <SortIcon campo="titulo" /></th>
-                  <th {...thProps('modulos')}>Módulos <SortIcon campo="modulos" /></th>
-                  <th {...thProps('autor')}>Publicada por <SortIcon campo="autor" /></th>
-                  <th {...thProps('destinatarios')}>Recibieron <SortIcon campo="destinatarios" /></th>
+                  <th {...thProps('fecha')}>Fecha <ColumnFilter cf={cf} col="fecha" orden={ordenDe('fecha')} /></th>
+                  <th {...thProps('titulo')}>Novedad <ColumnFilter cf={cf} col="titulo" orden={ordenDe('titulo')} /></th>
+                  <th {...thProps('modulos')}>Módulos <ColumnFilter cf={cf} col="modulos" orden={ordenDe('modulos')} /></th>
+                  <th {...thProps('autor')}>Publicada por <ColumnFilter cf={cf} col="autor" orden={ordenDe('autor')} /></th>
+                  <th {...thProps('destinatarios')}>Recibieron <ColumnFilter cf={cf} col="destinatarios" orden={ordenDe('destinatarios')} /></th>
                 </tr>
               </thead>
               <tbody>
+                {filas.length === 0 && (
+                  <FilaSinResultados columnas={5} mensaje="No hay novedades que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                )}
                 {filas.map((n) => (
                   <tr key={n.id}>
                     <td>{new Date(n.createdAt).toLocaleString('es-EC')}</td>
@@ -100,6 +125,7 @@ export default function NovedadesPage() {
             </table>
           </div>
         </div>
+        </>
       )}
 
       {showForm && (

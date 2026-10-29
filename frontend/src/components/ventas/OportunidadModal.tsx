@@ -5,6 +5,7 @@ import UbicacionCampo from './UbicacionCampo';
 import FlujoComercialPasos from './FlujoComercialPasos';
 import ErrorBanner from '../common/ErrorBanner';
 import DateInput from '../common/DateInput';
+import { diaEcuador } from '../../utils/rangoFechas';
 import {
   createOportunidad,
   updateOportunidad,
@@ -40,6 +41,9 @@ export default function OportunidadModal({
   const [monto, setMonto] = useState(oportunidad?.quotedAmount != null ? String(oportunidad.quotedAmount) : '');
   const [cotizadaEl, setCotizadaEl] = useState(oportunidad?.quotedAt ? oportunidad.quotedAt.slice(0, 10) : '');
   const [notas, setNotas] = useState(oportunidad?.notes ?? '');
+  // «Fecha en que llegó» es de la OPORTUNIDAD (no la de ingreso de la empresa o persona): al crear arranca en hoy.
+  const hoy = diaEcuador();
+  const [llegoEl, setLlegoEl] = useState(oportunidad?.receivedAt ? diaEcuador(oportunidad.receivedAt) : hoy);
   const [ubicacion, setUbicacion] = useState<UbicacionOportunidad | null>(oportunidad?.ubicacion ?? null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
@@ -56,9 +60,12 @@ export default function OportunidadModal({
     if (montoNumero !== null && (Number.isNaN(montoNumero) || montoNumero < 0)) {
       return setError('El monto cotizado no es válido.');
     }
+    if (!llegoEl) return setError('Indica la fecha en que llegó la oportunidad.');
+    if (llegoEl > hoy) return setError('La fecha en que llegó no puede ser futura.');
     setGuardando(true);
     try {
       const datos = {
+        receivedAt: llegoEl,
         title: titulo.trim(),
         serviceIds,
         quotedAmount: montoNumero,
@@ -135,6 +142,14 @@ export default function OportunidadModal({
             ) : (
               <ServiciosPorCategoria servicios={disponibles} seleccionados={serviceIds} onToggle={alternar} marcarDesactivados />
             )}
+          </div>
+
+          <div className="form-group">
+            <label>Fecha en que llegó *</label>
+            <DateInput value={llegoEl} onChange={setLlegoEl} max={hoy} />
+            <small style={{ display: 'block', marginTop: 4, fontSize: 12, color: '#718096' }}>
+              Es la fecha de esta oportunidad{modo === 'crear' ? ' (hoy, si recién llegó)' : ''}, no la de ingreso de la empresa o persona. De aquí se miden los tiempos de respuesta y de cierre.
+            </small>
           </div>
 
           {/* Al crear no se pide: la oportunidad nace en «Nueva» y el monto se registra al pasarla a «Cotizada». */}

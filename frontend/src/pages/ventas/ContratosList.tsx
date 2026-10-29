@@ -4,7 +4,7 @@ import { FileText, Plus, FolderOpen, HelpCircle, Link2, Trash2, Upload } from 'l
 import { getContracts, deleteContract, getVentasDriveConfig, vincularDocumentosSinCliente, SalesContract } from '../../services/ventas.service';
 import { buildDriveFolderLink } from '../../utils/driveLink';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
-import FilterField from '../../components/common/FilterField';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import ExportTableButton from '../../components/common/ExportTableButton';
@@ -16,8 +16,9 @@ import DocumentacionProximamente from '../../components/ventas/DocumentacionProx
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 import { useToast } from '../../contexts/ToastContext';
-import { TIPOS_DOCUMENTO, etiquetaTipoDocumento } from '../../utils/documentoTipos';
+import { etiquetaTipoDocumento } from '../../utils/documentoTipos';
 
 // Columnas elegibles de la tabla (además de Número y Acciones, que son fijas).
 const COLUMNAS_DOCS = [
@@ -43,12 +44,7 @@ export default function ContratosList() {
   const [contracts, setContracts] = useState<SalesContract[]>([]);
   // Mientras carga no se muestra «No hay documentos aún» (parecía que la lista estaba vacía).
   const [cargando, setCargando] = useState(true);
-  const [filter, setFilter] = useState('');
-  const [filtroTipo, setFiltroTipo] = useState('');
-  const [soloSinCliente, setSoloSinCliente] = useState(false);
   const [confirmarVincular, setConfirmarVincular] = useState(false);
-  // Cuántos documentos no tienen cliente. «Vincular clientes» y el filtro «Sin cliente asignado» solo existen si hay alguno.
-  const [sinClienteTotal, setSinClienteTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [driveFolderUrl, setDriveFolderUrl] = useState('');
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
@@ -59,10 +55,7 @@ export default function ContratosList() {
   const columnPrefs = useColumnPreferences('ventas-documentacion', COLUMNAS_DOCS_POR_DEFECTO);
   const tablaRef = useResizableColumns('ventas-contratos', ['contractNumber', ...columnPrefs.visible, 'acciones']);
 
-  useEffect(() => { loadContracts(); }, [filter, soloSinCliente]);
-
-  // Si ya no queda ninguno sin cliente, el filtro que los mostraba deja de tener sentido.
-  useEffect(() => { if (sinClienteTotal === 0 && soloSinCliente) setSoloSinCliente(false); }, [sinClienteTotal, soloSinCliente]);
+  useEffect(() => { loadContracts(); }, []);
 
   useEffect(() => {
     getVentasDriveConfig()
@@ -78,10 +71,8 @@ export default function ContratosList() {
 
   const loadContracts = async () => {
     try {
-      const data = await getContracts({ ...(filter ? { status: filter } : {}), ...(soloSinCliente ? { sinCliente: true } : {}) });
-      setContracts(data);
-      // Aparte del filtro actual: ¿queda algún documento sin cliente?
-      getContracts({ sinCliente: true }).then((l: SalesContract[]) => setSinClienteTotal(l.length)).catch(() => {});
+      // Se traen todos: el estado, el tipo y el cliente se filtran en la cabecera de cada columna.
+      setContracts(await getContracts());
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudieron cargar los documentos', 'error');
     } finally {
@@ -111,8 +102,38 @@ export default function ContratosList() {
     SENT: 'Enviado', SIGNED: 'Firmado', CANCELLED: 'Cancelado',
   };
 
-  const filteredContracts = contracts.filter((c) => {
-    if (filtroTipo === 'SIN_TIPO' ? !!c.documentType : filtroTipo && c.documentType !== filtroTipo) return false;
+  // Cuántos documentos no tienen cliente: «Vincular clientes» solo existe si hay alguno.
+  const sinClienteTotal = contracts.filter((c) => !c.salesClientId).length;
+
+  // Filtros en la cabecera de cada columna (useColumnFilters).
+  const cf = useColumnFilters<SalesContract>(contracts, [
+    { key: 'contractNumber', etiqueta: 'Número', tipo: 'texto', getValue: (c) => c.contractNumber || `#${c.id}` },
+    {
+      key: 'clientName', etiqueta: 'Cliente', tipo: 'valores', orden: ['sin'],
+      getValues: (c) => (c.salesClientId
+        ? { valor: `c${c.salesClientId}`, etiqueta: c.salesClient?.name || c.clientName }
+        : { valor: 'sin', etiqueta: 'Sin cliente asignado' }),
+    },
+    {
+      key: 'tipo', etiqueta: 'Tipo', tipo: 'valores', vacio: 'Sin tipo',
+      getValues: (c) => (c.documentType ? { valor: c.documentType, etiqueta: etiquetaTipoDocumento(c.documentType, c.documentTypeOther) || c.documentType } : null),
+    },
+    {
+      key: 'contrato', etiqueta: 'Contrato', tipo: 'valores', vacio: 'Sin contrato',
+      getValues: (c) => (c.agreementLink ? { valor: String(c.agreementLink.agreement.id), etiqueta: nombreContratoDe(c) } : null),
+    },
+    {
+      key: 'template', etiqueta: 'Plantilla', tipo: 'valores',
+      getValues: (c) => (c.template ? { valor: String(c.template.id ?? c.template.name), etiqueta: c.template.name } : { valor: 'subido', etiqueta: 'Subido (sin plantilla)' }),
+    },
+    { key: 'status', etiqueta: 'Estado', tipo: 'valores', orden: Object.keys(statusLabels), getValues: (c) => ({ valor: c.status, etiqueta: statusLabels[c.status] || c.status }) },
+    { key: 'createdAt', etiqueta: 'Fecha', tipo: 'fecha', getValue: (c) => c.createdAt },
+    { key: 'sentAt', etiqueta: 'Enviado', tipo: 'fecha', getValue: (c) => c.sentAt },
+    { key: 'signedAt', etiqueta: 'Firmado', tipo: 'fecha', getValue: (c) => c.signedAt },
+  ]);
+
+  // Los filtros de columna ya se aplicaron (cf.filas); aquí solo falta el buscador general.
+  const filteredContracts = cf.filas.filter((c) => {
     const q = search.toLowerCase().trim();
     if (!q) return true;
     return (
@@ -125,8 +146,9 @@ export default function ContratosList() {
       (c.template?.name || '').toLowerCase().includes(q)
     );
   });
+  const hayFiltros = !!search || cf.hayFiltros;
 
-  const { filas: filasOrdenadas, thProps, SortIcon } = useSortableTable(
+  const { filas: filasOrdenadas, thProps, ordenDe } = useSortableTable(
     filteredContracts,
     {
       contractNumber: (c) => c.contractNumber || `#${c.id}`,
@@ -250,38 +272,13 @@ export default function ContratosList() {
       <DocumentacionProximamente />
 
       <div className="filter-bar">
-        <div className="filter-bar-fields filter-bar-fields--etiquetas">
+        <div className="filter-bar-fields">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por número, cliente, contrato o tipo..."
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
-          <FilterField label="Estado">
-  <select className="filter-select" value={filter} onChange={(e) => setFilter(e.target.value)}>
-              <option value="">Todos los estados</option>
-              {(['DRAFT', 'READY', 'SENT', 'SIGNED'] as const).map((s) => (
-                <option key={s} value={s}>{statusLabels[s]}</option>
-              ))}
-            </select>
-          </FilterField>
-          <FilterField label="Tipo de documento">
-  <select className="filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} aria-label="Filtrar por tipo de documento">
-              <option value="">Todos los tipos</option>
-              {TIPOS_DOCUMENTO.map((t) => (
-                <option key={t.key} value={t.key}>{t.label}</option>
-              ))}
-              <option value="SIN_TIPO">Sin tipo</option>
-            </select>
-          </FilterField>
-          {sinClienteTotal > 0 && (
-            <FilterField label="Cliente">
-  <select className="filter-select" value={soloSinCliente ? 'sin' : ''} onChange={(e) => setSoloSinCliente(e.target.value === 'sin')}>
-                <option value="">Todos los clientes</option>
-                <option value="sin">Sin cliente asignado ({sinClienteTotal})</option>
-              </select>
-            </FilterField>
-          )}
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu
@@ -305,7 +302,7 @@ export default function ContratosList() {
               <Link2 size={16} /> Vincular clientes ({sinClienteTotal})
             </button>
           )}
-          <ClearFiltersButton onClear={() => { setSearch(''); setFilter(''); setFiltroTipo(''); setSoloSinCliente(false); }} disabled={!search && !filter && !filtroTipo && !soloSinCliente} />
+          <ClearFiltersButton onClear={() => { setSearch(''); cf.limpiar(); }} disabled={!hayFiltros} />
           <ExportTableButton
             titulo="Documentación"
             columns={[{ key: 'numero', label: 'Número' }, ...COLUMNAS_DOCS]}
@@ -316,6 +313,8 @@ export default function ContratosList() {
         </div>
       </div>
 
+      <ChipsFiltros cf={cf} />
+
       <div className="admin-section">
         {cargando ? (
           <p style={{ color: '#888', fontSize: 13 }}>Cargando...</p>
@@ -324,19 +323,17 @@ export default function ContratosList() {
             <div style={{ fontSize: 36, marginBottom: 8 }}>📄</div>
             <div>No hay documentos aún. Sube uno con «Subir documento», o desde un contrato en Contratos: los documentos que subas a un contrato aparecen aquí solos, con su tipo.</div>
           </div>
-        ) : filasOrdenadas.length === 0 ? (
-          <p style={{ color: '#888', fontSize: 13 }}>No hay documentos que coincidan con los filtros.</p>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
-                  <th {...thProps('contractNumber')}>Número <SortIcon campo="contractNumber" /></th>
+                  <th {...thProps('contractNumber')}>Número <ColumnFilter cf={cf} col="contractNumber" orden={ordenDe('contractNumber')} /></th>
                   {columnasVisibles.map((k) => {
                     const col = COLUMNAS_DOCS.find((c) => c.key === k)!;
                     return (
                       <th key={k} {...thProps(k)}>
-                        {col.label} <SortIcon campo={k} />
+                        {col.label} <ColumnFilter cf={cf} col={k} orden={ordenDe(k)} />
                       </th>
                     );
                   })}
@@ -344,6 +341,13 @@ export default function ContratosList() {
                 </tr>
               </thead>
               <tbody>
+                {filasOrdenadas.length === 0 && (
+                  <FilaSinResultados
+                    columnas={columnasVisibles.length + 2}
+                    mensaje="No hay documentos que coincidan con los filtros."
+                    onLimpiar={hayFiltros ? () => { setSearch(''); cf.limpiar(); } : undefined}
+                  />
+                )}
                 {filasOrdenadas.map((c) => (
                   <tr key={c.id} onClick={() => navigate(`/ventas/documentacion/${c.id}`)} style={{ cursor: 'pointer' }}>
                     <td style={{ fontWeight: 600 }}>{c.contractNumber || `#${c.id}`}</td>

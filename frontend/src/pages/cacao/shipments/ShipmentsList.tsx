@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getShipments } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
+import { useColumnFilters } from '../../../hooks/useColumnFilters';
 
 export default function ShipmentsList() {
   const navigate = useNavigate();
@@ -20,6 +23,20 @@ export default function ShipmentsList() {
     return { label: 'Pendiente', bg: '#fefcbf', color: '#975a16' };
   }
 
+  // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas).
+  const cf = useColumnFilters<any>(shipments, [
+    { key: 'id', etiqueta: 'ID', tipo: 'texto', getValue: (s) => `EMB-${String(s.id).padStart(4, '0')}` },
+    { key: 'fecha', etiqueta: 'Fecha', tipo: 'fecha', soloDia: true, getValue: (s) => s.date },
+    { key: 'cliente', etiqueta: 'Cliente', tipo: 'valores', vacio: 'Sin cliente', getValues: (s) => (s.client?.name ? { valor: String(s.client.id ?? s.client.name), etiqueta: s.client.name } : null) },
+    { key: 'referencia', etiqueta: 'Referencia', tipo: 'texto', getValue: (s) => s.contractRef },
+    { key: 'peso', etiqueta: 'Peso Total', tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (s) => s.totalWeight },
+    { key: 'costo', etiqueta: 'Costo Total', tipo: 'numero', formato: (n) => `$${n.toFixed(2)}`, getValue: (s) => s.totalCost },
+    { key: 'venta', etiqueta: 'Precio Venta', tipo: 'numero', formato: (n) => `$${n.toFixed(2)}/kg`, getValue: (s) => s.salePrice },
+    { key: 'margen', etiqueta: 'Margen', tipo: 'numero', formato: (n) => `${n}%`, getValue: (s) => s.margin },
+    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['Pendiente', 'Parcial', 'Completado', 'Cobrado'], getValues: (s) => getDisplayStatus(s).label },
+  ]);
+  const filas = cf.filas;
+
   return (
     <div className="page-container">
       <div className="page-header-row">
@@ -33,6 +50,14 @@ export default function ShipmentsList() {
         <button className="auth-btn" onClick={() => navigate('/cacao/shipments/new')}>+ Nuevo Embarque</button>
       </div>
 
+      <div className="filter-bar">
+        <div className="filter-bar-actions">
+          <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+        </div>
+      </div>
+
+      <ChipsFiltros cf={cf} />
+
       <div className="admin-section">
         {loading ? (
           <div className="loading-state">Cargando embarques...</div>
@@ -43,20 +68,23 @@ export default function ShipmentsList() {
             <table className="tasks-table">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Fecha</th>
-                  <th>Cliente</th>
-                  <th>Referencia</th>
-                  <th>Peso Total</th>
-                  <th>Costo Total</th>
-                  <th>Precio Venta</th>
-                  <th>Margen</th>
-                  <th>Estado</th>
+                  <th>ID<ColumnFilter cf={cf} col="id" orden={cf.ordenDe('id')} /></th>
+                  <th>Fecha<ColumnFilter cf={cf} col="fecha" orden={cf.ordenDe('fecha')} /></th>
+                  <th>Cliente<ColumnFilter cf={cf} col="cliente" orden={cf.ordenDe('cliente')} /></th>
+                  <th>Referencia<ColumnFilter cf={cf} col="referencia" orden={cf.ordenDe('referencia')} /></th>
+                  <th>Peso Total<ColumnFilter cf={cf} col="peso" orden={cf.ordenDe('peso')} /></th>
+                  <th>Costo Total<ColumnFilter cf={cf} col="costo" orden={cf.ordenDe('costo')} /></th>
+                  <th>Precio Venta<ColumnFilter cf={cf} col="venta" orden={cf.ordenDe('venta')} /></th>
+                  <th>Margen<ColumnFilter cf={cf} col="margen" orden={cf.ordenDe('margen')} /></th>
+                  <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
                   <th className="no-print"></th>
                 </tr>
               </thead>
               <tbody>
-                {shipments.map((s) => {
+                {filas.length === 0 && (
+                  <FilaSinResultados columnas={10} mensaje="No hay embarques que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                )}
+                {filas.map((s) => {
                   const st = getDisplayStatus(s);
                   return (
                     <tr key={s.id}>

@@ -4,7 +4,9 @@ import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import RowActionsMenu from '../../components/common/RowActionsMenu';
-import { getSurveys, closeSurvey, reopenSurvey, deleteSurvey, setSurveyPublicLink, publishSurvey, type Survey, type SurveyStatus } from '../../services/personal.service';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
+import { getSurveys, closeSurvey, reopenSurvey, deleteSurvey, setSurveyPublicLink, publishSurvey, type Survey } from '../../services/personal.service';
 import { buildPublicSurveyUrl } from '../../services/publicSurvey.service';
 import { usePerm } from '../../contexts/PermissionsContext';
 import SurveyBuilderModal from '../../components/personal/SurveyBuilderModal';
@@ -25,8 +27,6 @@ export default function SurveyManagementPage() {
   const tablaRef = useResizableColumns('encuestas');
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [search, setSearch] = useState('');
-  const [filtroEstado, setFiltroEstado] = useState<SurveyStatus | 'TODOS'>('TODOS');
-  const [filtroCanal, setFiltroCanal] = useState<'TODOS' | 'APP' | 'ENLACE'>('TODOS');
   const [loading, setLoading] = useState(true);
   const [showBuilder, setShowBuilder] = useState(false);
   const [resultsId, setResultsId] = useState<number | null>(null);
@@ -148,12 +148,24 @@ export default function SurveyManagementPage() {
     }
   };
 
-  // Filtrado en memoria: son pocas encuestas por empresa, no hace falta
-  // pedirle al servidor que filtre.
-  const filtradas = surveys.filter((s) => {
-    if (filtroEstado !== 'TODOS' && s.status !== filtroEstado) return false;
-    if (filtroCanal === 'ENLACE' && !s.publicEnabled) return false;
-    if (filtroCanal === 'APP' && (s._count?.recipients ?? 0) === 0) return false;
+  // Filtrado en memoria: son pocas encuestas por empresa, no hace falta pedirle al servidor que filtre.
+  // Los filtros viven en la cabecera de cada columna (useColumnFilters); el buscador general se suma después.
+  const cf = useColumnFilters<Survey>(surveys, [
+    { key: 'titulo', etiqueta: 'Encuesta', tipo: 'texto', getValue: (s) => `${s.title} ${s.description || ''}` },
+    {
+      key: 'canal', etiqueta: 'Llega por', tipo: 'valores', orden: ['APP', 'ENLACE'], vacio: 'Ninguno',
+      getValues: (s) => [
+        ...((s._count?.recipients ?? 0) > 0 ? [{ valor: 'APP', etiqueta: 'App (con destinatarios)' }] : []),
+        ...(s.publicEnabled ? [{ valor: 'ENLACE', etiqueta: 'Enlace público' }] : []),
+      ],
+    },
+    {
+      key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['PUBLISHED', 'CLOSED', 'DRAFT'],
+      getValues: (s) => ({ valor: s.status, etiqueta: STATUS_LABEL[s.status] ?? s.status }),
+    },
+    { key: 'respuestas', etiqueta: 'Respuestas', tipo: 'numero', getValue: (s) => s._count?.responses ?? 0, formato: (n) => String(n) },
+  ]);
+  const filtradas = cf.filas.filter((s) => {
     const term = search.trim().toLowerCase();
     if (!term) return true;
     return (
@@ -161,9 +173,10 @@ export default function SurveyManagementPage() {
       (s.description || '').toLowerCase().includes(term)
     );
   });
-  const hayFiltros = Boolean(search) || filtroEstado !== 'TODOS' || filtroCanal !== 'TODOS';
+  const hayFiltros = Boolean(search) || cf.hayFiltros;
+  const limpiarTodo = () => { setSearch(''); cf.limpiar(); };
 
-  const { filas: filasOrdenadas, thProps, SortIcon } = useSortableTable(
+  const { filas: filasOrdenadas, thProps, ordenDe } = useSortableTable(
     filtradas,
     {
       titulo: (s) => s.title,
@@ -224,46 +237,35 @@ export default function SurveyManagementPage() {
               onChange={(e) => setSearch(e.target.value)}
               style={{ flex: '1 1 200px', minWidth: 0, padding: '10px 14px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.9rem' }}
             />
-            <select className="filter-select" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value as SurveyStatus | 'TODOS')}>
-              <option value="TODOS">Todos los estados</option>
-              <option value="PUBLISHED">Publicadas</option>
-              <option value="CLOSED">Cerradas</option>
-              <option value="DRAFT">Borrador</option>
-            </select>
-            <select className="filter-select" value={filtroCanal} onChange={(e) => setFiltroCanal(e.target.value as 'TODOS' | 'APP' | 'ENLACE')}>
-              <option value="TODOS">Cualquier medio</option>
-              <option value="ENLACE">Con enlace público</option>
-              <option value="APP">Con destinatarios en la app</option>
-            </select>
           </div>
           <div className="filter-bar-actions">
-            <ClearFiltersButton
-              onClear={() => { setSearch(''); setFiltroEstado('TODOS'); setFiltroCanal('TODOS'); }}
-              disabled={!hayFiltros}
-            />
+            <ClearFiltersButton onClear={limpiarTodo} disabled={!hayFiltros} />
             <span style={{ fontSize: '0.78rem', color: '#718096', whiteSpace: 'nowrap' }}>
               {filtradas.length} de {surveys.length}
             </span>
           </div>
         </div>
 
+        <ChipsFiltros cf={cf} />
+
         {surveys.length === 0 ? (
           <div className="empty-state">No hay encuestas creadas todavía.</div>
-        ) : filtradas.length === 0 ? (
-          <div className="empty-state">Ninguna encuesta coincide con estos filtros.</div>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th {...thProps('titulo')}>Encuesta <SortIcon campo="titulo" /></th>
-                  <th {...thProps('canal')}>Llega por <SortIcon campo="canal" /></th>
-                  <th {...thProps('estado')}>Estado <SortIcon campo="estado" /></th>
-                  <th {...thProps('respuestas')}>Respuestas <SortIcon campo="respuestas" /></th>
+                  <th {...thProps('titulo')}>Encuesta <ColumnFilter cf={cf} col="titulo" orden={ordenDe('titulo')} /></th>
+                  <th {...thProps('canal')}>Llega por <ColumnFilter cf={cf} col="canal" orden={ordenDe('canal')} /></th>
+                  <th {...thProps('estado')}>Estado <ColumnFilter cf={cf} col="estado" orden={ordenDe('estado')} /></th>
+                  <th {...thProps('respuestas')}>Respuestas <ColumnFilter cf={cf} col="respuestas" orden={ordenDe('respuestas')} /></th>
                   <th style={{ textAlign: 'right' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
+                {filasOrdenadas.length === 0 && (
+                  <FilaSinResultados columnas={5} mensaje="Ninguna encuesta coincide con estos filtros." onLimpiar={limpiarTodo} />
+                )}
                 {filasOrdenadas.map((s) => (
                   <tr key={s.id}>
                     <td>

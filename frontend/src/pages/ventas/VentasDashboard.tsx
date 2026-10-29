@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardClientes, getSalesClient, getSalesClientFields, type DashboardClientes, type SalesClient, type SalesClientField } from '../../services/ventas.service';
 import { useToast } from '../../contexts/ToastContext';
@@ -14,8 +14,9 @@ import ClienteFichaPanel from '../../components/ventas/ClienteFichaPanel';
 import ClienteFormModal from '../../components/ventas/ClienteFormModal';
 import PageTabs from '../../components/common/PageTabs';
 import FilterField from '../../components/common/FilterField';
-import { rangoDeAtajo } from '../../utils/rangoFechas';
-import { BarraDestino, Tarjeta } from '../../components/ventas/dashboard/DashboardBits';
+import FiltroFecha from '../../components/common/FiltroFecha';
+import { rangoDeAtajo, type FiltroFechaValor } from '../../utils/rangoFechas';
+import { Tarjeta } from '../../components/ventas/dashboard/DashboardBits';
 import { AreaGrafico, BarraApilada, EmbudoGrafico, Medidor } from '../../components/ventas/dashboard/DashboardGraficos';
 
 // El mapa (Leaflet) pesa: se descarga solo al abrir el Resumen.
@@ -40,17 +41,10 @@ const iso = (d: Date) =>
 const formatDia = (s: string) => s.split('-').reverse().join('/');
 const formatCorto = (s: string) => s.split('-').reverse().slice(0, 2).join('/');
 
-type Rango = 'semana' | 'mes' | 'mes_pasado' | '90';
-const RANGOS: { value: Rango; label: string }[] = [
-  { value: 'semana', label: 'Esta semana' },
-  { value: 'mes', label: 'Este mes' },
-  { value: 'mes_pasado', label: 'Mes pasado' },
-  { value: '90', label: 'Últimos 90 días' },
-];
-
-// Los mismos periodos que el filtro «Fecha» de las listas (utils/rangoFechas.ts): así el botón de una tarjeta abre
-// la lista con exactamente este periodo.
-const rangoFechas = (r: Rango) => rangoDeAtajo(r);
+// UN solo periodo para todo el dashboard (2026-10-28), con el mismo selector que el filtro «Fecha» de las listas
+// (components/common/FiltroFecha + utils/rangoFechas.ts): así el botón de una tarjeta abre la lista con exactamente
+// este periodo. Por defecto, «Este mes». Solo las tarjetas rotuladas «Hoy» ignoran el periodo.
+const PERIODO_INICIAL: FiltroFechaValor = { atajo: 'mes', ...rangoDeAtajo('mes') };
 
 const COLOR_VENCIDO = '#c53030';
 const COLOR_HOY = '#b7791f';
@@ -64,7 +58,14 @@ export default function VentasDashboard() {
   const [error, setError] = useState(false);
   // 'mine' | 'all' | id de un vendedor (solo Admin/Manager)
   const [responsable, setResponsable] = useState('mine');
-  const [rango, setRango] = useState<Rango>('mes');
+  const [periodo, setPeriodo] = useState<FiltroFechaValor>(PERIODO_INICIAL);
+  // Mientras se editan las fechas sueltas puede faltar una o quedar al revés: se sigue usando el último periodo válido.
+  const ultimoValido = useRef({ desde: PERIODO_INICIAL.desde, hasta: PERIODO_INICIAL.hasta });
+  if (periodo.desde && periodo.hasta && periodo.desde <= periodo.hasta) {
+    ultimoValido.current = { desde: periodo.desde, hasta: periodo.hasta };
+  }
+  const { desde, hasta } = ultimoValido.current;
+  const rango = { desde, hasta };
   // La ficha de un cliente se abre AQUÍ, a la derecha, sin cambiar de pestaña ni de pantalla.
   const [fichaCliente, setFichaCliente] = useState<SalesClient | null>(null);
   const [editarCliente, setEditarCliente] = useState<SalesClient | null>(null);
@@ -78,20 +79,18 @@ export default function VentasDashboard() {
       showToast(err?.response?.data?.message || 'No se pudo abrir la ficha', 'error');
     }
   };
-  // Hueco de la barra de filtros donde cada pestaña mete su propio periodo (ver EnBarra).
-  const [barraEl, setBarraEl] = useState<HTMLDivElement | null>(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
     setError(false);
     try {
-      setData(await getDashboardClientes({ ...rangoFechas(rango), responsable, hoy: iso(new Date()) }));
+      setData(await getDashboardClientes({ desde, hasta, responsable, hoy: iso(new Date()) }));
     } catch {
       setError(true);
     } finally {
       setLoading(false);
     }
-  }, [responsable, rango]);
+  }, [responsable, desde, hasta]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -106,9 +105,12 @@ export default function VentasDashboard() {
   // Las tarjetas que cuentan por periodo («Nuevos», «Referidos») abren la lista con ESE periodo ya puesto (el
   // filtro «Fecha» de la lista lo muestra y se puede quitar), para que el número y la lista coincidan.
   const irConPeriodo = (ruta: string, filtros: Record<string, string> = {}) => {
-    const params = new URLSearchParams({ ...filtros, ...rangoFechas(rango), responsable });
+    const params = new URLSearchParams({ ...filtros, ...rango, responsable });
     navigate(`${ruta}?${params.toString()}`);
   };
+
+  // El embudo y la aceptación cuentan las oportunidades que llegaron en el periodo: su botón abre la lista con ese mismo periodo.
+  const irAOportunidadesDelPeriodo = (filtros: Record<string, string>) => irAOportunidades({ ...filtros, ...rango });
 
   const [pestana, setPestana] = useState<Pestana>('resumen');
   // Si la persona nunca tocó el alcance, al pasar a una pestaña nueva un gerente ve
@@ -180,17 +182,14 @@ export default function VentasDashboard() {
             )}
           </select>
         </FilterField>
-        {pestana === 'resumen' && (
-          <FilterField label="Periodo">
-            <select className="filter-select" value={rango} onChange={(e) => setRango(e.target.value as Rango)}>
-              {RANGOS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
-          </FilterField>
-        )}
-        <div className="dash-barra-extra" ref={setBarraEl} />
-        {pestana === 'resumen' && (
-          <p className="dash-barra-nota">El periodo solo cambia «Nuevos» y «Referidos»; lo demás es cómo está todo hoy.</p>
-        )}
+        <FiltroFecha
+          label="Periodo" valor={periodo} onChange={setPeriodo} sinVacio etiquetaPersonalizado="Personalizado"
+          atajos={['semana', 'mes', 'mes_pasado', '90', 'anio']}
+          title="Un solo periodo para todas las pestañas. Las tarjetas marcadas «Hoy» muestran cómo está todo ahora y no lo usan"
+        />
+        <p className="dash-barra-rango" title="Periodo que están usando todas las pestañas">
+          <strong>{formatDia(desde)} – {formatDia(hasta)}</strong>
+        </p>
       </div>
 
       {sinNadaMio && (
@@ -205,15 +204,14 @@ export default function VentasDashboard() {
         </div>
       )}
 
-      <BarraDestino.Provider value={barraEl}>
       {pestana === 'cartera' ? (
-        <DashboardCartera alcance={responsable} />
+        <DashboardCartera alcance={responsable} desde={desde} hasta={hasta} />
       ) : pestana === 'embudo' ? (
-        <DashboardEmbudo alcance={responsable} />
+        <DashboardEmbudo alcance={responsable} desde={desde} hasta={hasta} />
       ) : pestana === 'motivos' ? (
-        <DashboardMotivos alcance={responsable} />
+        <DashboardMotivos alcance={responsable} desde={desde} hasta={hasta} />
       ) : pestana === 'equipo' ? (
-        <DashboardEquipo alcance={responsable} />
+        <DashboardEquipo alcance={responsable} desde={desde} hasta={hasta} />
       ) : error ? (
         <div className="dash-card">
           <p style={{ margin: 0, color: '#718096' }}>No se pudo cargar el dashboard.</p>
@@ -225,7 +223,7 @@ export default function VentasDashboard() {
         <div className="dash-pila" style={{ opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s' }}>
           {/* Fila 1: qué atender, aceptación y nuevos */}
           <div className="dash-grid dash-grid--3">
-            <Tarjeta titulo="Qué atender" hint="Seguimientos de las oportunidades que siguen abiertas">
+            <Tarjeta hoy titulo="Qué atender" hint="Seguimientos de las oportunidades que siguen abiertas">
               <BarraApilada
                 vacio="No hay oportunidades abiertas."
                 partes={[
@@ -236,24 +234,24 @@ export default function VentasDashboard() {
               />
             </Tarjeta>
 
-            <Tarjeta titulo="Aceptación" hint="De las oportunidades ya cerradas, cuántas se ganaron">
+            <Tarjeta titulo="Aceptación" hint="De las oportunidades que llegaron en el periodo y ya se cerraron, cuántas se ganaron">
               <Medidor
                 valor={data.aceptacion.tasa} color="#2f855a"
                 titulo={data.aceptacion.tasa === null ? 'Aún no hay cerradas' : 'de aceptación'}
                 aria={`Aceptación: ${data.aceptacion.tasa === null ? 'sin datos' : `${data.aceptacion.tasa}%`}`}
               />
               <div className="dash-cierres" style={{ justifyContent: 'center' }}>
-                <button type="button" className="dash-cierre" onClick={() => irAOportunidades({ etapa: 'ACEPTADO' })} title="Ver las aceptadas en Oportunidades">
+                <button type="button" className="dash-cierre" onClick={() => irAOportunidadesDelPeriodo({ etapa: 'ACEPTADO' })} title="Ver las aceptadas en Oportunidades">
                   <i style={{ background: '#2f855a' }} /><b>{data.aceptacion.aceptados}</b> aceptadas
                 </button>
-                <button type="button" className="dash-cierre" onClick={() => irAOportunidades({ etapa: 'RECHAZADO' })} title="Ver las perdidas en Oportunidades">
+                <button type="button" className="dash-cierre" onClick={() => irAOportunidadesDelPeriodo({ etapa: 'RECHAZADO' })} title="Ver las perdidas en Oportunidades">
                   <i style={{ background: '#94a3b8' }} /><b>{data.aceptacion.rechazados}</b> perdidas
                 </button>
               </div>
             </Tarjeta>
 
             <Tarjeta
-              titulo="Nuevos clientes y prospectos" hint={`Del ${formatDia(data.alcance.desde)} al ${formatDia(data.alcance.hasta)}, por semana`}
+              titulo="Nuevos clientes y prospectos" hint="Empresas y personas que se registraron en el Directorio, por semana"
               accion={<button type="button" className="btn-secondary" onClick={() => irConPeriodo('/ventas/clientes')} style={{ padding: '4px 10px', fontSize: '0.78rem' }} title="Ver en el Directorio a quienes se registraron en este periodo">Ver →</button>}
             >
               <div className="dash-cifra">
@@ -269,20 +267,20 @@ export default function VentasDashboard() {
 
           {/* Fila 2: el embudo y lo que se está quedando atrás */}
           <div className="dash-grid dash-grid--3">
-            <Tarjeta className="dash-span2" titulo="Oportunidades por etapa" hint="El número es cuántas hay ahora en la etapa; el ancho, cuántas han llegado hasta ahí o más lejos. Pulsa una etapa para verla en Oportunidades">
+            <Tarjeta className="dash-span2" titulo="Oportunidades por etapa" hint="De las oportunidades que llegaron en el periodo: el número es cuántas están hoy en cada etapa; el ancho, cuántas han llegado hasta ahí o más lejos. Pulsa una etapa para verla en Oportunidades">
               <EmbudoGrafico
                 aria={`Por etapa: ${activasEmbudo.map((e) => `${e.label} ${e.count}`).join(', ')}`}
                 pasos={pasosEmbudo}
-                onPaso={(key) => irAOportunidades({ etapa: key })}
+                onPaso={(key) => irAOportunidadesDelPeriodo({ etapa: key })}
               />
               <div className="dash-cierres">
                 {sinEtapa > 0 && (
-                  <button type="button" className="dash-cierre" onClick={() => irAOportunidades({ etapa: 'none' })} title="Ver en Oportunidades">
+                  <button type="button" className="dash-cierre" onClick={() => irAOportunidadesDelPeriodo({ etapa: 'none' })} title="Ver en Oportunidades">
                     <i style={{ background: '#cbd5e1' }} /><b>{sinEtapa}</b> sin etapa
                   </button>
                 )}
                 {data.embudo.filter((e) => e.isFinal).map((e) => (
-                  <button key={e.key ?? 'final'} type="button" className="dash-cierre" onClick={() => irAOportunidades({ etapa: e.key ?? 'none' })} title="Ver en Oportunidades">
+                  <button key={e.key ?? 'final'} type="button" className="dash-cierre" onClick={() => irAOportunidadesDelPeriodo({ etapa: e.key ?? 'none' })} title="Ver en Oportunidades">
                     <i style={{ background: e.color }} /><b>{e.count}</b> {e.label.toLowerCase()}
                   </button>
                 ))}
@@ -290,6 +288,7 @@ export default function VentasDashboard() {
             </Tarjeta>
 
             <Tarjeta
+              hoy
               titulo="Estancados"
               hint={`Más de ${data.estancados.dias} días en la misma etapa (aproximado: el historial de etapas se guarda desde el 30/09/2026)`}
             >
@@ -329,11 +328,11 @@ export default function VentasDashboard() {
           {/* Fila 3: dónde se cotiza, documentos y referidos */}
           <div className="dash-grid dash-grid--3">
             <Suspense fallback={null}>
-              <DashboardMapa alcance={responsable} className="dash-span2" />
+              <DashboardMapa alcance={responsable} desde={desde} hasta={hasta} className="dash-span2" />
             </Suspense>
 
             <div className="dash-pila">
-              <Tarjeta titulo="Documentos de estos clientes" hint="Cómo están ahora">
+              <Tarjeta titulo="Documentos de estos clientes" hint="Documentos creados en el periodo y cómo están hoy">
                 <BarraApilada
                   vacio="Todavía no hay documentos."
                   partes={[
@@ -356,7 +355,7 @@ export default function VentasDashboard() {
 
               <Tarjeta
                 titulo="Referidos"
-                hint={`${data.referidos.recibidos} ${data.referidos.recibidos === 1 ? 'referido llegó' : 'referidos llegaron'} entre el ${formatDia(data.alcance.desde)} y el ${formatDia(data.alcance.hasta)}`}
+                hint="Oportunidades de origen «Referido» que llegaron en el periodo"
                 accion={<button type="button" className="btn-secondary" onClick={() => irConPeriodo('/ventas/oportunidades', { origen: 'REFERIDO' })} style={{ padding: '4px 10px', fontSize: '0.78rem' }} title="Ver las oportunidades que vinieron por referido en este periodo">Ver →</button>}
               >
                 <BarraApilada
@@ -383,7 +382,7 @@ export default function VentasDashboard() {
 
           {/* Por responsable (solo cuando se mira más de uno) */}
           {alcanceTodos && (
-            <Tarjeta titulo="Oportunidades por responsable" hint="Quién lleva cuántas oportunidades abiertas (Activos), a cuántas se les venció el seguimiento (Vencidos) y cuántas ganó (Aceptados). Las que no tienen responsable están en la primera fila">
+            <Tarjeta titulo="Oportunidades por responsable" hint="De las oportunidades que llegaron en el periodo: quién lleva cuántas abiertas (Activos), a cuántas se les venció el seguimiento (Vencidos, un estado de hoy) y cuántas ganó (Aceptados). Las que no tienen responsable están en la primera fila">
               <div className="tasks-table-wrapper">
                 <table className="tasks-table resizable-table" ref={tablaRespRef}>
                   <thead>
@@ -412,7 +411,6 @@ export default function VentasDashboard() {
           )}
         </div>
       )}
-      </BarraDestino.Provider>
 
       {fichaCliente && camposFicha && (
         <ClienteFichaPanel

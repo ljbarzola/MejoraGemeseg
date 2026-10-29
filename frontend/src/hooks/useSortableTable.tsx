@@ -3,6 +3,18 @@ import { useMemo, useState, type ReactNode } from 'react';
 export type SortDirection = 'asc' | 'desc';
 
 /**
+ * El orden de UNA columna, en la forma que lee el botón único de la cabecera (`<ColumnFilter orden={ordenDe('x')} />`):
+ * qué dirección tiene hoy (o ninguna), cómo cambiarla y, si el A→Z no se entiende en esa columna (una etapa, un
+ * estado), cómo se llaman las dos direcciones.
+ */
+export interface ControlOrden {
+  campo: string;
+  activo: SortDirection | null;
+  fijar: (dir: SortDirection | null) => void;
+  etiquetas?: [string, string];
+}
+
+/**
  * Ordenamiento por columna para tablas de listado. Estándar de la app: toda
  * tabla de listado debería poder ordenarse haciendo clic en su encabezado,
  * igual que el listado de tareas del Inicio (de donde viene este patrón).
@@ -40,6 +52,22 @@ export function useSortableTable<T>(
       setDireccion('asc');
     }
   };
+
+  /** Fija el orden de una columna a una dirección, o lo quita (null) si era la que estaba ordenando. */
+  const fijarOrden = (c: string, dir: SortDirection | null) => {
+    if (dir === null) {
+      if (campo === c) setCampo(null);
+      return;
+    }
+    setCampo(c);
+    setDireccion(dir);
+  };
+  const ordenDe = (c: string, etiquetas?: [string, string]): ControlOrden => ({
+    campo: c,
+    activo: campo === c ? direccion : null,
+    fijar: (dir) => fijarOrden(c, dir),
+    etiquetas,
+  });
 
   const filas = useMemo(() => {
     if (!campo || !campos[campo]) return filasOriginales;
@@ -89,5 +117,5 @@ export function useSortableTable<T>(
     },
   });
 
-  return { filas, thProps, SortIcon, campo, direccion };
+  return { filas, thProps, SortIcon, campo, direccion, ordenDe };
 }

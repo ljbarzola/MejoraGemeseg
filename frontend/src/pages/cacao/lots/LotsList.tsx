@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getLots } from '../../../services/cacao.service';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
+import { useColumnFilters } from '../../../hooks/useColumnFilters';
 
 const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
@@ -10,13 +13,22 @@ export default function LotsList() {
   const location = useLocation();
   const [lots, setLots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('');
 
   useEffect(() => {
-    getLots(statusFilter ? { status: statusFilter } : undefined)
-      .then(setLots)
-      .finally(() => setLoading(false));
-  }, [statusFilter]);
+    getLots().then(setLots).finally(() => setLoading(false));
+  }, []);
+
+  // El estado ya no se pide al servidor: la API devuelve todos los lotes y se filtra en la cabecera de la columna.
+  const cf = useColumnFilters<any>(lots, [
+    { key: 'codigo', etiqueta: 'Código', tipo: 'texto', getValue: (l) => l.code },
+    { key: 'calidad', etiqueta: 'Calidad', tipo: 'valores', vacio: 'Sin calidad', getValues: (l) => l.quality?.name },
+    { key: 'entrada', etiqueta: 'Entrada', tipo: 'valores', vacio: 'Sin dato', orden: ['KG', 'TON', 'SACO'], getValues: (l) => l.receptions?.[0]?.unitOfMeasure },
+    { key: 'neto', etiqueta: 'Peso Neto', tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (l) => l.netWeight },
+    { key: 'costo', etiqueta: 'Costo Promedio', tipo: 'numero', formato: (n) => `$${n.toFixed(2)}`, getValue: (l) => l.averageCost },
+    { key: 'valor', etiqueta: 'Valor', tipo: 'numero', formato: (n) => `$${n.toFixed(2)}`, getValue: (l) => l.netWeight * l.averageCost },
+    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['OPEN', 'CLOSED'], getValues: (l) => ({ valor: l.status, etiqueta: l.status === 'OPEN' ? 'Abierto' : 'Cerrado' }) },
+  ]);
+  const filas = cf.filas;
 
   function getOrigWeight(kg: number, unit: string | null) {
     if (!unit || unit === 'KG') return null;
@@ -34,12 +46,15 @@ export default function LotsList() {
             <h1>Lotes</h1>
           </div>
         </div>
-        <select className="filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="">Todos</option>
-          <option value="OPEN">Abierto</option>
-          <option value="CLOSED">Cerrado</option>
-        </select>
       </div>
+
+      <div className="filter-bar">
+        <div className="filter-bar-actions">
+          <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+        </div>
+      </div>
+
+      <ChipsFiltros cf={cf} />
 
       <div className="admin-section">
         {loading ? (
@@ -51,18 +66,21 @@ export default function LotsList() {
             <table className="tasks-table">
               <thead>
                 <tr>
-                  <th>Código</th>
-                  <th>Calidad</th>
-                  <th>Entrada</th>
-                  <th>Peso Neto</th>
-                  <th>Costo Promedio</th>
-                  <th>Valor</th>
-                  <th>Estado</th>
+                  <th>Código<ColumnFilter cf={cf} col="codigo" orden={cf.ordenDe('codigo')} /></th>
+                  <th>Calidad<ColumnFilter cf={cf} col="calidad" orden={cf.ordenDe('calidad')} /></th>
+                  <th>Entrada<ColumnFilter cf={cf} col="entrada" orden={cf.ordenDe('entrada')} /></th>
+                  <th>Peso Neto<ColumnFilter cf={cf} col="neto" orden={cf.ordenDe('neto')} /></th>
+                  <th>Costo Promedio<ColumnFilter cf={cf} col="costo" orden={cf.ordenDe('costo')} /></th>
+                  <th>Valor<ColumnFilter cf={cf} col="valor" orden={cf.ordenDe('valor')} /></th>
+                  <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {lots.map((l) => {
+                {filas.length === 0 && (
+                  <FilaSinResultados columnas={8} mensaje="No hay lotes que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                )}
+                {filas.map((l) => {
                   const receptionUnit = l.receptions?.[0]?.unitOfMeasure || null;
                   const origWeight = getOrigWeight(l.netWeight, receptionUnit);
                   return (

@@ -3,6 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../../../services/cacao.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { Trash2, Pencil } from 'lucide-react';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
+import { useColumnFilters } from '../../../hooks/useColumnFilters';
 
 export default function SuppliersPage() {
   const navigate = useNavigate();
@@ -64,6 +67,16 @@ export default function SuppliersPage() {
     try { await deleteSupplier(id); load(); } catch {}
   }
 
+  // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas).
+  const cf = useColumnFilters<any>(suppliers, [
+    { key: 'nombre', etiqueta: 'Nombre', tipo: 'texto', getValue: (s) => s.name },
+    { key: 'contacto', etiqueta: 'Contacto', tipo: 'texto', getValue: (s) => s.contact },
+    { key: 'telefono', etiqueta: 'Teléfono', tipo: 'texto', getValue: (s) => s.phone },
+    { key: 'condiciones', etiqueta: 'Condiciones', tipo: 'valores', vacio: 'Sin condiciones', getValues: (s) => s.paymentTerms },
+    { key: 'banco', etiqueta: 'Banco', tipo: 'valores', vacio: 'Sin banco', getValues: (s) => s.bank },
+  ]);
+  const filas = cf.filas;
+
   return (
     <div className="page-container">
       <div className="page-header-row">
@@ -116,6 +129,14 @@ export default function SuppliersPage() {
         </div>
       )}
 
+      <div className="filter-bar">
+        <div className="filter-bar-actions">
+          <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+        </div>
+      </div>
+
+      <ChipsFiltros cf={cf} />
+
       <div className="admin-section">
         {loading ? (
           <div className="loading-state">Cargando proveedores...</div>
@@ -126,16 +147,19 @@ export default function SuppliersPage() {
             <table className="tasks-table">
               <thead>
                 <tr>
-                  <th>Nombre</th>
-                  <th>Contacto</th>
-                  <th>Teléfono</th>
-                  <th>Condiciones</th>
-                  <th>Banco</th>
+                  <th>Nombre<ColumnFilter cf={cf} col="nombre" orden={cf.ordenDe('nombre')} /></th>
+                  <th>Contacto<ColumnFilter cf={cf} col="contacto" orden={cf.ordenDe('contacto')} /></th>
+                  <th>Teléfono<ColumnFilter cf={cf} col="telefono" orden={cf.ordenDe('telefono')} /></th>
+                  <th>Condiciones<ColumnFilter cf={cf} col="condiciones" orden={cf.ordenDe('condiciones')} /></th>
+                  <th>Banco<ColumnFilter cf={cf} col="banco" orden={cf.ordenDe('banco')} /></th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {suppliers.map((s) => (
+                {filas.length === 0 && (
+                  <FilaSinResultados columnas={6} mensaje="No hay proveedores que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                )}
+                {filas.map((s) => (
                   <tr key={s.id}>
                     <td className="tasks-table-title">{s.name}</td>
                     <td>{s.contact || '—'}</td>

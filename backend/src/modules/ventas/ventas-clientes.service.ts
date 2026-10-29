@@ -39,7 +39,7 @@ import { KINDS_MOTIVO_PERDIDA, motivoPorCambioDeEtapa } from './motivo-perdida.u
 // cuántos días en la misma etapa hacen a un cliente "estancado".
 const DIAS_ESTANCADO = 7;
 const MAX_ESTANCADOS_LISTADOS = 10;
-const MAX_SEMANAS_SERIE = 12;
+const MAX_SEMANAS_SERIE = 54; // un año y un poco más: «Este año» o un periodo largo se dibuja entero
 const DIA_MS = 24 * 60 * 60 * 1000;
 
 const esDiaValido = (s?: string): s is string =>
@@ -1001,8 +1001,10 @@ export class VentasClientesService {
       },
       include: CLIENT_INCLUDE,
       });
-      // El cliente nace con su primera oportunidad (misma fecha de ingreso,
-      // mismo responsable y mismos servicios que eligió en la ficha).
+      // El cliente nace con su primera oportunidad (mismo responsable y mismos servicios que eligió en la ficha).
+      // Aquí, Y SOLO AQUÍ, las dos fechas coinciden a propósito: la empresa se crea junto con su primera
+      // negociación, así que su «fecha de ingreso» es la llegada de esa oportunidad. Después son independientes:
+      // cambiar la fecha de ingreso de la ficha NO mueve la de sus oportunidades (ver fecha-llegada.util.ts).
       if (this.esquema.isReady() && !soloDatos) {
         await this.oportunidades.crearInicial(tx, {
           companyId,
@@ -1527,8 +1529,10 @@ export class VentasClientesService {
   // consulta es ADMIN/MANAGER; para el resto equivale a 'mine'. `hoy` es el
   // día local de quien consulta ('YYYY-MM-DD'): nextActionDate es solo-día y
   // compararlo contra el "hoy" del servidor (UTC) correría los vencimientos.
-  // El rango desde/hasta solo afecta a "nuevos" y "referidos"; el resto es
-  // una foto de cómo está todo ahora.
+  // El rango desde/hasta (el periodo único del Dashboard) afecta a TODO salvo lo que es «de hoy» (seguimientos y
+  // estancados). Las OPORTUNIDADES se cuentan por el día en que LLEGARON (receivedAt, la columna «Llegó»), en la etapa
+  // en que están hoy: embudo por etapa, aceptación, referidos y el bloque por responsable. Los eventos, por su
+  // fecha: nuevos del Directorio (createdAt) y documentos (createdAt).
   async getDashboard(
     companyId: number | null,
     user: { userId: number; role: string },
@@ -1647,11 +1651,14 @@ export class VentasClientesService {
         // Una empresa solo de datos (sin oportunidades ni etapa) no es parte del embudo.
         if (!c.status) continue;
         if (alcanceUsuario !== null && c.assignedUserId !== alcanceUsuario) continue;
+        if (c.createdAt < desdeFecha || c.createdAt >= hastaExclusivo) continue;
         etapasContadas.push(c.status);
         continue;
       }
       for (const o of suyas) {
         if (alcanceUsuario !== null && o.assignedUserId !== alcanceUsuario) continue;
+        // Solo las que llegaron dentro del periodo (la misma fecha «Llegó» de la lista de Oportunidades).
+        if (o.receivedAt < desdeFecha || o.receivedAt >= hastaExclusivo) continue;
         etapasContadas.push(o.status);
       }
     }
@@ -1678,7 +1685,8 @@ export class VentasClientesService {
     // Por responsable: se cuenta por el responsable de cada OPORTUNIDAD (abiertas = activos, ganadas =
     // aceptados). Una empresa que todavía no tiene oportunidades (solo datos, o del sistema anterior)
     // se cuenta, como antes, por el responsable de la empresa. Con un vendedor elegido (o «mis clientes»)
-    // solo se cuentan SUS oportunidades.
+    // solo se cuentan SUS oportunidades. Es una cohorte: solo las oportunidades que LLEGARON en el periodo (y, de las
+    // empresas sin oportunidades, las registradas en él); «vencidos» es un estado de hoy, dentro de esa cohorte.
     const idsResponsables = [...new Set(oportunidades.map((o) => o.assignedUserId).filter((x): x is number => x !== null))];
     const nombreResponsable = new Map(
       (idsResponsables.length
@@ -1696,6 +1704,7 @@ export class VentasClientesService {
       const suyas = oportunidadesPorCliente.get(c.id) ?? [];
       if (suyas.length === 0) {
         if (alcanceUsuario !== null && c.assignedUserId !== alcanceUsuario) continue;
+        if (c.createdAt < desdeFecha || c.createdAt >= hastaExclusivo) continue;
         const fila = filaDe(c.assignedUserId ?? null, c.assignedUser?.fullName ?? 'Sin responsable');
         if (esActivo(c.status)) {
           fila.activos++;
@@ -1706,6 +1715,7 @@ export class VentasClientesService {
       }
       for (const o of suyas) {
         if (alcanceUsuario !== null && o.assignedUserId !== alcanceUsuario) continue;
+        if (o.receivedAt < desdeFecha || o.receivedAt >= hastaExclusivo) continue;
         const k = o.assignedUserId ?? null;
         const fila = filaDe(k, k === null ? 'Sin responsable' : (nombreResponsable.get(k) ?? 'Sin nombre'));
         if (o.closedAt === null) {
@@ -1814,25 +1824,41 @@ export class VentasClientesService {
       .filter((c) => c.dias >= DIAS_ESTANCADO)
       .sort((a, b) => b.dias - a.dias);
 
-    // Aceptación (foto actual, no por rango: sin historial confiable)
+    // Aceptación: de las oportunidades que llegaron en el periodo, en qué etapa final están hoy
     const nGanados = ganada ? etapasContadas.filter((e) => e === ganada).length : 0;
     const nPerdidos = perdida ? etapasContadas.filter((e) => e === perdida).length : 0;
 
-    // Contratos de estos clientes
+    // Documentos de estos clientes: los CREADOS en el periodo (con su estado de hoy). «Aceptados sin documento» son
+    // los clientes cuya oportunidad llegó en el periodo (o, sin oportunidades, que se registraron en él).
+    const creadoEnPeriodo = { gte: desdeFecha, lt: hastaExclusivo };
     const clientesFiltro: Prisma.SalesContractWhereInput = clausulaAlcance
       ? { salesClient: { is: clausulaAlcance } }
       : { salesClientId: { not: null } };
     const [contratosPorEstado, aceptadosSinContrato, sinClienteVinculado] = await Promise.all([
       this.prisma.salesContract.groupBy({
         by: ['status'],
-        where: { companyId, ...clientesFiltro },
+        where: { companyId, createdAt: creadoEnPeriodo, ...clientesFiltro },
         _count: { _all: true },
       }),
       ganada
-        ? this.prisma.salesClient.count({ where: { ...where, status: ganada, contracts: { none: {} } } })
+        ? this.prisma.salesClient.count({
+            where: {
+              ...where,
+              status: ganada,
+              contracts: { none: {} },
+              AND: [
+                {
+                  OR: [
+                    { opportunities: { some: { receivedAt: creadoEnPeriodo } } },
+                    { opportunities: { none: {} }, createdAt: creadoEnPeriodo },
+                  ],
+                },
+              ],
+            },
+          })
         : Promise.resolve(0),
       this.prisma.salesContract.count({
-        where: { companyId, salesClientId: null, status: { not: 'CANCELLED' } },
+        where: { companyId, salesClientId: null, status: { not: 'CANCELLED' }, createdAt: creadoEnPeriodo },
       }),
     ]);
     const nContratos = (...estados: string[]) =>

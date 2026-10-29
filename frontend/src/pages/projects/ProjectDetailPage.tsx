@@ -13,6 +13,9 @@ import { STATUS_LABELS, PRIORITY_LABELS, PRIORITY_COLORS, STATUS_COLORS, STATUS_
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import DateInput from '../../components/common/DateInput';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
+import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
@@ -121,10 +124,27 @@ export default function ProjectDetailPage() {
   // tempranos de más abajo.
   const { showToast } = useToast();
   const columnPrefs = useColumnPreferences('proyecto-tareas', COLUMNAS_TAREAS_POR_DEFECTO, { columnasBase: 2 });
-  const columnasVisibles = columnPrefs.visible.filter((k) => COLUMNAS_TAREAS.some((c) => c.key === k));
+  // Filtros en la cabecera de cada columna (las tareas del proyecto ya vienen todas del servidor).
+  const cf = useColumnFilters<Task>(tasks, [
+    { key: 'title', etiqueta: 'Título', tipo: 'texto', getValue: (t) => t.title },
+    { key: 'status', etiqueta: 'Estado', tipo: 'valores', orden: Object.keys(STATUS_LABELS), getValues: (t) => ({ valor: t.status, etiqueta: STATUS_LABELS[t.status] || t.status }) },
+    { key: 'priority', etiqueta: 'Prioridad', tipo: 'valores', orden: ['URGENT', 'HIGH', 'MEDIUM', 'LOW'], getValues: (t) => ({ valor: t.priority, etiqueta: PRIORITY_LABELS[t.priority] || t.priority }) },
+    {
+      key: 'assignee', etiqueta: 'Asignado', tipo: 'valores', vacio: 'Sin asignar',
+      getValues: (t) => t.assignees.map((a) => ({ valor: String(a.user.id), etiqueta: a.user.fullName })),
+    },
+    { key: 'startDate', etiqueta: 'Fecha inicio', tipo: 'fecha', getValue: (t) => t.startDate },
+    { key: 'endDate', etiqueta: 'Fecha fin', tipo: 'fecha', getValue: (t) => t.endDate },
+  ]);
+  // Una columna oculta con filtro activo se muestra igual: si no, la tabla quedaría filtrada por algo que no se ve.
+  const columnasVisibles = (() => {
+    const elegidas = columnPrefs.visible.filter((k) => COLUMNAS_TAREAS.some((c) => c.key === k));
+    const forzadas = COLUMNAS_TAREAS.map((c) => c.key).filter((k) => cf.filtro(k) && !elegidas.includes(k));
+    return [...elegidas, ...forzadas];
+  })();
   const tablaRef = useResizableColumns('proyecto-tareas', ['id', 'title', ...columnasVisibles]);
-  const { filas: tareasOrdenadas, thProps, SortIcon } = useSortableTable(
-    tasks,
+  const { filas: tareasOrdenadas, thProps, ordenDe } = useSortableTable(
+    cf.filas,
     {
       id: (t) => t.id,
       title: (t) => t.title,
@@ -489,6 +509,7 @@ export default function ProjectDetailPage() {
                   if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
                 }}
               />
+              <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
               <button
                 className="btn-secondary"
                 onClick={() => navigate(`/projects/${project.id}/tasks`)}
@@ -508,6 +529,8 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
+          <ChipsFiltros cf={cf} />
+
           {tasks.length === 0 ? (
             <div className="empty-state" style={{ padding: '32px' }}>
               <p>No hay tareas en este proyecto</p>
@@ -518,22 +541,25 @@ export default function ProjectDetailPage() {
                 <thead>
                   <tr>
                     <th {...thProps('id')} className="sortable-th tasks-table-id">
-                      # <SortIcon campo="id" />
+                      # <ColumnFilter cf={cf} col="id" etiqueta="#" orden={ordenDe('id')} />
                     </th>
                     <th {...thProps('title')}>
-                      Título <SortIcon campo="title" />
+                      Título <ColumnFilter cf={cf} col="title" orden={ordenDe('title')} />
                     </th>
                     {columnasVisibles.map((k) => {
                       const col = COLUMNAS_TAREAS.find((c) => c.key === k)!;
                       return (
                         <th key={k} {...thProps(k)}>
-                          {col.label} <SortIcon campo={k} />
+                          {col.label} <ColumnFilter cf={cf} col={k} orden={ordenDe(k)} />
                         </th>
                       );
                     })}
                   </tr>
                 </thead>
                 <tbody>
+                  {tareasOrdenadas.length === 0 && (
+                    <FilaSinResultados columnas={columnasVisibles.length + 2} mensaje="No hay tareas que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                  )}
                   {tareasOrdenadas.map((task) => (
                     <tr
                       key={task.id}

@@ -38,6 +38,9 @@ import {
   tituloMes,
 } from '../../../utils/entregasCp';
 import ColumnPickerMenu from '../../../components/common/ColumnPickerMenu';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
+import { useColumnFilters } from '../../../hooks/useColumnFilters';
 import { useColumnPreferences } from '../../../hooks/useColumnPreferences';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
 import { useSortableTable } from '../../../hooks/useSortableTable';
@@ -157,8 +160,20 @@ export default function EntidadDetail() {
   );
 
   // ---- tabla de documentos ----
-  const { filas: filasDocs, thProps: thDocs, SortIcon: SortDocs } = useSortableTable(
-    solicitud?.entregas ?? [],
+  const entregasMes = useMemo(() => solicitud?.entregas ?? [], [solicitud]);
+  // Filtros en la cabecera de cada columna de los documentos del mes. Cada mes empieza sin filtros.
+  const cfDocs = useColumnFilters<CPEntregaDocumento>(entregasMes, [
+    { key: 'nombre', etiqueta: 'Documento', tipo: 'texto', getValue: (e) => e.nombre },
+    { key: 'area', etiqueta: 'Área', tipo: 'valores', vacio: 'Sin área', getValues: (e) => (e.departmentId != null && e.departmentName ? { valor: String(e.departmentId), etiqueta: e.departmentName } : null) },
+    { key: 'responsables', etiqueta: 'Responsable', tipo: 'valores', vacio: 'Sin responsable', getValues: (e) => e.responsables.map((r) => ({ valor: String(r.id), etiqueta: r.nombre })) },
+    { key: 'fechaLimite', etiqueta: 'Fecha límite', tipo: 'fecha', soloDia: true, getValue: (e) => e.fechaLimite },
+    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: Object.keys(ESTADO_LABEL), getValues: (e) => ({ valor: e.estado, etiqueta: ESTADO_LABEL[e.estado] }) },
+  ]);
+  const { limpiar: limpiarFiltrosDocs } = cfDocs;
+  useEffect(() => { limpiarFiltrosDocs(); }, [solicitudId, limpiarFiltrosDocs]);
+
+  const { filas: filasDocs, thProps: thDocs, ordenDe: ordenDocs } = useSortableTable(
+    cfDocs.filas,
     {
       nombre: (e: CPEntregaDocumento) => e.nombre,
       area: (e) => e.departmentName,
@@ -171,6 +186,10 @@ export default function EntidadDetail() {
 
   const columnPrefs = useColumnPreferences('cp-entregas-docs', COLUMNAS_DOCUMENTO_VISIBLES);
   const columnasDoc = columnPrefs.visible.filter((k) => COLUMNAS_DOCUMENTO.some((c) => c.key === k));
+  // Una columna oculta con filtro activo se muestra, para que se vea qué está filtrando.
+  for (const c of COLUMNAS_DOCUMENTO) {
+    if (cfDocs.filtro(c.key) && !columnasDoc.includes(c.key)) columnasDoc.push(c.key);
+  }
 
   // ---- diálogos ----
   const [mostrarNueva, setMostrarNueva] = useState(false);
@@ -430,6 +449,9 @@ export default function EntidadDetail() {
                       }}
                     />
                   )}
+                  {solicitud.entregas.length > 0 && (
+                    <ClearFiltersButton onClear={cfDocs.limpiar} disabled={!cfDocs.hayFiltros} />
+                  )}
                   {canEdit && (
                     <>
                       <button className="btn-secondary" onClick={() => setDocModal({ editando: null })}>
@@ -460,6 +482,8 @@ export default function EntidadDetail() {
                 </div>
               )}
 
+              {solicitud.entregas.length > 0 && <ChipsFiltros cf={cfDocs} />}
+
               {solicitud.entregas.length === 0 ? (
                 <div className="empty-state">
                   {canEdit
@@ -471,20 +495,27 @@ export default function EntidadDetail() {
                   <table className="tasks-table resizable-table" ref={tablaDocsRef} data-fijas={columnPrefs.fijas}>
                     <thead>
                       <tr>
-                        <th {...thDocs('nombre')} style={{ width: '22%' }}>Documento <SortDocs campo="nombre" /></th>
+                        <th {...thDocs('nombre')} style={{ width: '22%' }}>Documento <ColumnFilter cf={cfDocs} col="nombre" orden={ordenDocs('nombre')} /></th>
                         {columnasDoc.map((key) => {
                           const etiqueta = COLUMNAS_DOCUMENTO.find((c) => c.key === key)?.label ?? key;
                           // "Entrega" no se ordena: es un botón con datos de quién y cuándo.
                           return key === 'entrega' ? (
                             <th key={key} style={{ width: ANCHO_COLUMNA_DOCUMENTO[key] }}>{etiqueta}</th>
                           ) : (
-                            <th key={key} {...thDocs(key)} style={{ width: ANCHO_COLUMNA_DOCUMENTO[key] }}>{etiqueta} <SortDocs campo={key} /></th>
+                            <th key={key} {...thDocs(key)} style={{ width: ANCHO_COLUMNA_DOCUMENTO[key] }}>{etiqueta} <ColumnFilter cf={cfDocs} col={key} orden={ordenDocs(key)} /></th>
                           );
                         })}
                         <th className="col-acciones col-acciones--iconos"><span className="visually-hidden">Acciones</span></th>
                       </tr>
                     </thead>
                     <tbody>
+                      {filasDocs.length === 0 && (
+                        <FilaSinResultados
+                          columnas={columnasDoc.length + 2}
+                          mensaje="No hay documentos que coincidan con los filtros."
+                          onLimpiar={cfDocs.limpiar}
+                        />
+                      )}
                       {filasDocs.map((e) => {
                         const acciones = accionesDocumento(e);
                         return (

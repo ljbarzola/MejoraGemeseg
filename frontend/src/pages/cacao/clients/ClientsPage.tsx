@@ -3,6 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getClients, createClient, updateClient, deleteClient } from '../../../services/cacao.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { Trash2, Pencil } from 'lucide-react';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
+import { useColumnFilters } from '../../../hooks/useColumnFilters';
 
 export default function ClientsPage() {
   const navigate = useNavigate();
@@ -64,6 +67,16 @@ export default function ClientsPage() {
     try { await deleteClient(id); load(); } catch {}
   }
 
+  // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas).
+  const cf = useColumnFilters<any>(clients, [
+    { key: 'nombre', etiqueta: 'Nombre', tipo: 'texto', getValue: (c) => c.name },
+    { key: 'pais', etiqueta: 'País', tipo: 'valores', vacio: 'Sin país', getValues: (c) => c.country },
+    { key: 'contacto', etiqueta: 'Contacto', tipo: 'texto', getValue: (c) => c.contact },
+    { key: 'email', etiqueta: 'Email', tipo: 'texto', getValue: (c) => c.email },
+    { key: 'telefono', etiqueta: 'Teléfono', tipo: 'texto', getValue: (c) => c.phone },
+  ]);
+  const filas = cf.filas;
+
   return (
     <div className="page-container">
       <div className="page-header-row">
@@ -116,6 +129,14 @@ export default function ClientsPage() {
         </div>
       )}
 
+      <div className="filter-bar">
+        <div className="filter-bar-actions">
+          <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+        </div>
+      </div>
+
+      <ChipsFiltros cf={cf} />
+
       <div className="admin-section">
         {loading ? (
           <div className="loading-state">Cargando clientes...</div>
@@ -126,16 +147,19 @@ export default function ClientsPage() {
             <table className="tasks-table">
               <thead>
                 <tr>
-                  <th>Nombre</th>
-                  <th>País</th>
-                  <th>Contacto</th>
-                  <th>Email</th>
-                  <th>Teléfono</th>
+                  <th>Nombre<ColumnFilter cf={cf} col="nombre" orden={cf.ordenDe('nombre')} /></th>
+                  <th>País<ColumnFilter cf={cf} col="pais" orden={cf.ordenDe('pais')} /></th>
+                  <th>Contacto<ColumnFilter cf={cf} col="contacto" orden={cf.ordenDe('contacto')} /></th>
+                  <th>Email<ColumnFilter cf={cf} col="email" orden={cf.ordenDe('email')} /></th>
+                  <th>Teléfono<ColumnFilter cf={cf} col="telefono" orden={cf.ordenDe('telefono')} /></th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {clients.map((c) => (
+                {filas.length === 0 && (
+                  <FilaSinResultados columnas={6} mensaje="No hay clientes que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                )}
+                {filas.map((c) => (
                   <tr key={c.id}>
                     <td className="tasks-table-title">{c.name}</td>
                     <td>{c.country || '—'}</td>

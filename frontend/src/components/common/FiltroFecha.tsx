@@ -14,12 +14,19 @@ interface Props {
   onChange: (v: FiltroFechaValor) => void;
   /** Explica en un título qué fecha filtra (aparece al pasar el mouse). */
   title?: string;
+  /** Sin la opción «Cualquier fecha»: el periodo siempre existe (Dashboard comercial). */
+  sinVacio?: boolean;
+  /** Solo estos periodos, en este orden (por defecto, todos los atajos). */
+  atajos?: Exclude<AtajoFecha, '' | 'personalizado'>[];
+  /** Nombre de la opción de fechas sueltas (por defecto «Rango»). */
+  etiquetaPersonalizado?: string;
 }
 
 // El filtro «Fecha» de las listas de Ventas: un selector con atajos y, si se elige «Rango»
 // (o se llega desde el Dashboard con un periodo suelto), dos fechas. Usa los mismos periodos que el
 // Dashboard (utils/rangoFechas.ts) para que una tarjeta y su lista cuenten lo mismo.
-export default function FiltroFecha({ label, valor, onChange, title }: Props) {
+export default function FiltroFecha({ label, valor, onChange, title, sinVacio, atajos, etiquetaPersonalizado = 'Rango' }: Props) {
+  const lista = atajos ? atajos.map((v) => ATAJOS_FECHA.find((a) => a.value === v)!) : ATAJOS_FECHA;
   const elegir = (atajo: AtajoFecha) => {
     if (atajo === '') return onChange(FILTRO_FECHA_VACIO);
     if (atajo === 'personalizado') return onChange({ ...valor, atajo });
@@ -31,10 +38,10 @@ export default function FiltroFecha({ label, valor, onChange, title }: Props) {
     <>
       <FilterField label={label}>
         <select className="filter-select" value={valor.atajo} onChange={(e) => elegir(e.target.value as AtajoFecha)} title={title}>
-          <option value="">Cualquier fecha</option>
-          {ATAJOS_FECHA.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+          {!sinVacio && <option value="">Cualquier fecha</option>}
+          {lista.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
           {/* Corto a propósito: al elegirlo salen «Desde» y «Hasta» y la barra de una línea no deja más ancho. */}
-          <option value="personalizado">Rango</option>
+          <option value="personalizado">{etiquetaPersonalizado}</option>
         </select>
       </FilterField>
       {valor.atajo === 'personalizado' && (

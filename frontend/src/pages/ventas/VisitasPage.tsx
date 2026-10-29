@@ -6,12 +6,12 @@ import PageTabs from '../../components/common/PageTabs';
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import ExportTableButton from '../../components/common/ExportTableButton';
-import DateInput from '../../components/common/DateInput';
-import FilterField from '../../components/common/FilterField';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 import { getVisits, checkInVisit, cancelVisit, deleteVisit, getSalesClient, getSalesClientFields, ClientVisit, type CheckInPorConfirmar, type SalesClient, type SalesClientField } from '../../services/ventas.service';
 import VisitaModal from '../../components/ventas/VisitaModal';
 import VisitaOfertaModal from '../../components/ventas/VisitaOfertaModal';
@@ -65,6 +65,18 @@ function lugarDeVisita(v: ClientVisit): string {
   }
   return v.clientAddress ?? '';
 }
+
+// Qué pasó con el check-in, para filtrar: «Pendiente» si aún no se hizo.
+const ESTADO_CHECKIN: Record<string, string> = {
+  PENDIENTE: 'Pendiente',
+  EN_SITIO: 'En el sitio',
+  FUERA_DEL_SITIO: 'Fuera del sitio',
+  SIN_GPS: 'Sin verificar (sin ubicación)',
+  SIN_UBICACION: 'Sin verificar (visita sin lugar)',
+  ANTERIOR: 'Check-in anterior',
+};
+const claveCheckIn = (v: ClientVisit): string =>
+  !v.checkInTime ? 'PENDIENTE' : v.checkInResult && v.checkInResult in ESTADO_CHECKIN ? v.checkInResult : 'ANTERIOR';
 
 // «850 m» o «2,3 km».
 const distanciaLegible = (m: number) =>
@@ -257,29 +269,37 @@ export default function VisitasPage() {
 
   // ---- Lista: filtros, orden, columnas y acciones de cada visita ----
   const [busqueda, setBusqueda] = useState('');
-  const [estadoFiltro, setEstadoFiltro] = useState('');
-  // Fecha o rango de fechas de la visita (AAAA-MM-DD). Con solo «Desde» se filtra ese día en adelante; con solo «Hasta», hasta ese día.
-  const [desde, setDesde] = useState('');
-  const [hasta, setHasta] = useState('');
   const columnPrefs = useColumnPreferences('ventas-visitas', COLUMNAS_POR_DEFECTO);
   const columnasVisibles = columnPrefs.visible.filter((k) => COLUMNAS_VISITA.some((c) => c.key === k));
   const tablaRef = useResizableColumns('ventas-visitas', ['cliente', ...columnasVisibles, 'acciones']);
-  const hayFiltros = !!busqueda || !!estadoFiltro || !!desde || !!hasta;
 
+  // Filtros en la cabecera de cada columna (useColumnFilters). La fecha agendada es un día sin hora: no se corre por zona horaria.
+  const cf = useColumnFilters<ClientVisit>(visits, [
+    {
+      key: 'cliente', etiqueta: 'Cliente', tipo: 'valores',
+      getValues: (v) => (v.cliente ? { valor: `c${v.cliente.id}`, etiqueta: v.cliente.name } : { valor: `n${v.clientName}`, etiqueta: v.clientName }),
+    },
+    { key: 'vendedor', etiqueta: 'Vendedor', tipo: 'valores', vacio: 'Sin vendedor', getValues: (v) => (v.user ? { valor: String(v.user.id), etiqueta: v.user.fullName } : null) },
+    { key: 'fecha', etiqueta: 'Fecha agendada', tipo: 'fecha', soloDia: true, getValue: (v) => v.visitDate },
+    { key: 'checkin', etiqueta: 'Check-in', tipo: 'valores', orden: Object.keys(ESTADO_CHECKIN), getValues: (v) => { const k = claveCheckIn(v); return { valor: k, etiqueta: ESTADO_CHECKIN[k] }; } },
+    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: Object.keys(ESTADO_VISITA), getValues: (v) => ({ valor: v.status, etiqueta: (ESTADO_VISITA[v.status] ?? ESTADO_VISITA.PLANNED).label }) },
+    { key: 'oferta', etiqueta: 'Oferta', tipo: 'numero', formato: (n) => `$${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`, getValue: (v) => v.quotedAmount },
+    { key: 'resultado', etiqueta: 'Resultado', tipo: 'valores', vacio: 'Sin resultado', getValues: (v) => (v.outcome ? { valor: v.outcome, etiqueta: OUTCOME_LABELS[v.outcome] || v.outcome } : null) },
+  ]);
+  const hayFiltros = !!busqueda || cf.hayFiltros;
+  const limpiarTodo = () => { setBusqueda(''); cf.limpiar(); };
+
+  // Los filtros de columna ya se aplicaron (cf.filas); aquí solo falta el buscador general.
   const filtradas = useMemo(() => {
     const q = sinTildes(busqueda.trim());
-    return visits.filter((v) => {
-      if (estadoFiltro && v.status !== estadoFiltro) return false;
-      const dia = (v.visitDate ?? '').slice(0, 10);
-      if (desde && dia < desde) return false;
-      if (hasta && dia > hasta) return false;
-      if (!q) return true;
+    if (!q) return cf.filas;
+    return cf.filas.filter((v) => {
       const texto = [v.cliente?.name ?? v.clientName, lugarDeVisita(v), v.user?.fullName, v.oportunidad?.title].filter(Boolean).join(' ');
       return sinTildes(texto).includes(q);
     });
-  }, [visits, busqueda, estadoFiltro, desde, hasta]);
+  }, [cf.filas, busqueda]);
 
-  const { filas, thProps, SortIcon } = useSortableTable(filtradas, {
+  const { filas, thProps, ordenDe } = useSortableTable(filtradas, {
     cliente: (v) => v.cliente?.name ?? v.clientName,
     vendedor: (v) => v.user?.fullName,
     fecha: (v) => v.visitDate,
@@ -396,25 +416,13 @@ export default function VisitasPage() {
       {deleteError && <div ref={deleteErrorRef} className="form-error" style={{ marginTop: '16px' }}>{deleteError}</div>}
 
       <div className="filter-bar" style={{ marginTop: 16 }}>
-        <div className="filter-bar-fields filter-bar-fields--etiquetas">
+        <div className="filter-bar-fields">
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por cliente, lugar, vendedor u oportunidad..."
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
-          <FilterField label="Estado">
-            <select className="filter-select" value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value)}>
-              <option value="">Todas</option>
-              {Object.entries(ESTADO_VISITA).map(([k, e]) => <option key={k} value={k}>{e.label}</option>)}
-            </select>
-          </FilterField>
-          <FilterField label="Desde">
-            <DateInput value={desde} onChange={(v) => { setDesde(v); if (hasta && v && v > hasta) setHasta(v); }} max={hasta || undefined} />
-          </FilterField>
-          <FilterField label="Hasta">
-            <DateInput value={hasta} onChange={(v) => { setHasta(v); if (desde && v && v < desde) setDesde(v); }} min={desde || undefined} />
-          </FilterField>
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu
@@ -428,10 +436,7 @@ export default function VisitasPage() {
               if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
             }}
           />
-          <ClearFiltersButton
-            onClear={() => { setBusqueda(''); setEstadoFiltro(''); setDesde(''); setHasta(''); }}
-            disabled={!hayFiltros}
-          />
+          <ClearFiltersButton onClear={limpiarTodo} disabled={!hayFiltros} />
           <ExportTableButton
             titulo="Visitas"
             columns={COLUMNAS_EXPORTAR_VISITA}
@@ -443,6 +448,8 @@ export default function VisitasPage() {
         </div>
       </div>
 
+      <ChipsFiltros cf={cf} />
+
       <div className="admin-section">
         {loading ? (
           <p style={{ color: '#888', fontSize: 13 }}>Cargando visitas...</p>
@@ -451,19 +458,17 @@ export default function VisitasPage() {
             <div style={{ fontSize: 36, marginBottom: 8 }}>📍</div>
             <div>No hay visitas agendadas. Planifica las visitas de tu semana desde «Nueva visita».</div>
           </div>
-        ) : filas.length === 0 ? (
-          <p style={{ color: '#888', fontSize: 13 }}>No hay visitas que coincidan con los filtros.</p>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
-                  <th {...thProps('cliente')} style={{ width: 220 }}>Cliente <SortIcon campo="cliente" /></th>
+                  <th {...thProps('cliente')} style={{ width: 220 }}>Cliente <ColumnFilter cf={cf} col="cliente" orden={ordenDe('cliente')} /></th>
                   {columnasVisibles.map((k) => {
                     const col = COLUMNAS_VISITA.find((c) => c.key === k)!;
                     return (
                       <th key={k} {...thProps(k)} style={{ width: ANCHO_COLUMNA_VISITA[k] }}>
-                        {col.label} <SortIcon campo={k} />
+                        {col.label} <ColumnFilter cf={cf} col={k} orden={ordenDe(k)} />
                       </th>
                     );
                   })}
@@ -471,6 +476,13 @@ export default function VisitasPage() {
                 </tr>
               </thead>
               <tbody>
+                {filas.length === 0 && (
+                  <FilaSinResultados
+                    columnas={columnasVisibles.length + 2}
+                    mensaje="No hay visitas que coincidan con los filtros."
+                    onLimpiar={hayFiltros ? limpiarTodo : undefined}
+                  />
+                )}
                 {filas.map((v) => {
                   const principal = accionPrincipal(v);
                   return (

@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import ClearFiltersButton from '../../common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../common/ColumnFilter';
 import ColumnPickerMenu from '../../common/ColumnPickerMenu';
 import ConfirmDialog from '../../common/ConfirmDialog';
 import ErrorBanner from '../../common/ErrorBanner';
 import RowActionsMenu from '../../common/RowActionsMenu';
 import SoloAdminDialog from '../../common/SoloAdminDialog';
+import { useColumnFilters } from '../../../hooks/useColumnFilters';
 import { useColumnPreferences } from '../../../hooks/useColumnPreferences';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
 import { useSortableTable } from '../../../hooks/useSortableTable';
@@ -224,29 +226,51 @@ function ProductsTab({
   onDelete: (p: CotProduct) => void;
 }) {
   const [q, setQ] = useState('');
-  const [tipo, setTipo] = useState('');
-  const [sub, setSub] = useState('');
+  // Los filtros de tipo, subcategoría, unidad, proveedor… viven en la cabecera de cada columna.
+  const cf = useColumnFilters<CotProduct>(products, [
+    { key: 'codigo', etiqueta: 'Código', tipo: 'texto', getValue: (p) => p.code },
+    { key: 'tipo', etiqueta: 'Tipo', tipo: 'valores', orden: Object.keys(KIND_LABEL), getValues: (p) => ({ valor: p.kind, etiqueta: KIND_LABEL[p.kind] }) },
+    { key: 'nombre', etiqueta: 'Nombre', tipo: 'texto', getValue: (p) => p.name },
+    { key: 'modelo', etiqueta: 'Modelo', tipo: 'texto', getValue: (p) => p.model },
+    { key: 'subcategoria', etiqueta: 'Subcategoría', tipo: 'valores', vacio: 'Sin subcategoría', getValues: (p) => p.subcategory },
+    { key: 'unidad', etiqueta: 'Unidad', tipo: 'valores', vacio: 'Sin unidad', getValues: (p) => p.unit },
+    {
+      key: 'costo', etiqueta: 'Costo', tipo: 'numero',
+      getValue: (p) => (p.kind === 'SERVICIO' ? serviceCost(p) : p.unitCost), formato: money,
+    },
+    {
+      key: 'margenes', etiqueta: 'Márgenes', tipo: 'valores', vacio: 'No aplica (servicio)', orden: ['ganancia', 'instalacion', 'sin'],
+      getValues: (p) => {
+        if (p.kind === 'SERVICIO') return null;
+        const v = [];
+        if (p.hasProfit) v.push({ valor: 'ganancia', etiqueta: 'Ganancia' });
+        if (p.hasInstall) v.push({ valor: 'instalacion', etiqueta: 'Instalación' });
+        return v.length > 0 ? v : { valor: 'sin', etiqueta: 'Sin margen' };
+      },
+    },
+    { key: 'proveedor', etiqueta: 'Proveedor', tipo: 'valores', vacio: 'Sin proveedor', getValues: (p) => p.supplier },
+  ]);
   const prefs = useColumnPreferences('cotizador-catalogo', DEF_PROD);
-  const visibles = prefs.visible.filter((k) => COLS_PROD.some((c) => c.key === k));
+  // Una columna oculta con filtro activo se muestra igual, para que se vea qué está filtrando.
+  const visibles = useMemo(() => {
+    const elegidas = prefs.visible.filter((k) => COLS_PROD.some((c) => c.key === k));
+    return [...elegidas, ...COLS_PROD.map((c) => c.key).filter((k) => !elegidas.includes(k) && cf.filtro(k))];
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cf.filtro lee los filtros de ese momento; se recalcula cuando cambian.
+  }, [prefs.visible, cf.filtros]);
   const tablaRef = useResizableColumns('cotizador-catalogo', ['codigo', ...visibles, 'acciones']);
 
-  const subs = useMemo(
-    () =>
-      [...new Set(products.filter((p) => !tipo || p.kind === tipo).map((p) => p.subcategory).filter(Boolean))].sort((a, b) =>
-        a.localeCompare(b, 'es'),
-      ),
-    [products, tipo],
-  );
-
+  // Los filtros de columna ya se aplicaron (cf.filas); aquí solo falta el buscador general.
   const filtrados = useMemo(() => {
     const t = q.toLowerCase().trim();
-    return products.filter(
-      (p) =>
-        (!tipo || p.kind === tipo) &&
-        (!sub || p.subcategory === sub) &&
-        (!t || p.code.toLowerCase().includes(t) || p.name.toLowerCase().includes(t) || p.model.toLowerCase().includes(t)),
+    return cf.filas.filter(
+      (p) => !t || p.code.toLowerCase().includes(t) || p.name.toLowerCase().includes(t) || p.model.toLowerCase().includes(t),
     );
-  }, [products, q, tipo, sub]);
+  }, [cf.filas, q]);
+  const hayFiltros = !!q || cf.hayFiltros;
+  const limpiarTodo = () => {
+    setQ('');
+    cf.limpiar();
+  };
 
   const campos = useMemo(
     () => ({
@@ -263,11 +287,11 @@ function ProductsTab({
     [],
   );
   const ordenados = useMemo(() => [...filtrados].sort((a, b) => compareCodes(a.code, b.code)), [filtrados]);
-  const { filas, thProps, SortIcon } = useSortableTable(ordenados, campos, 'codigo');
+  const { filas, thProps, ordenDe } = useSortableTable(ordenados, campos, 'codigo');
 
   const th = (key: string, label: string) => (
     <th {...thProps(key)} style={{ width: ANCHO_PROD[key] }}>
-      {label} <SortIcon campo={key} />
+      {label} <ColumnFilter cf={cf} col={key} orden={ordenDe(key)} />
     </th>
   );
 
@@ -282,51 +306,21 @@ function ProductsTab({
             aria-label="Buscar en el catálogo"
             style={{ flex: '1 1 220px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}
           />
-          <select
-            className="filter-select"
-            value={tipo}
-            onChange={(e) => {
-              setTipo(e.target.value);
-              setSub('');
-            }}
-            aria-label="Filtrar por tipo"
-          >
-            <option value="">Todos los tipos</option>
-            {(Object.keys(KIND_LABEL) as CotProduct['kind'][]).map((k) => (
-              <option key={k} value={k}>
-                {KIND_LABEL[k]}
-              </option>
-            ))}
-          </select>
-          <select className="filter-select" value={sub} onChange={(e) => setSub(e.target.value)} aria-label="Filtrar por subcategoría">
-            <option value="">Todas las subcategorías</option>
-            {subs.map((s) => (
-              <option key={s} value={s}>
-                {s.length > 35 ? s.slice(0, 35) + '…' : s}
-              </option>
-            ))}
-          </select>
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu columns={COLS_PROD} visible={visibles} fixedLabel="Código" onApply={(k) => prefs.set(k)} />
-          <ClearFiltersButton
-            disabled={!q && !tipo && !sub}
-            onClear={() => {
-              setQ('');
-              setTipo('');
-              setSub('');
-            }}
-          />
+          <ClearFiltersButton disabled={!hayFiltros} onClear={limpiarTodo} />
           <button type="button" className="auth-btn" onClick={onNew}>
             <Plus size={15} /> Nuevo producto
           </button>
         </div>
       </div>
+      <ChipsFiltros cf={cf} />
       <p className="cot-muted">{filas.length} productos</p>
-      {filas.length === 0 ? (
+      {products.length === 0 ? (
         <div className="cot-empty">
           <div className="cot-empty-icon">📦</div>
-          {products.length === 0 ? 'Aún no hay productos en el catálogo.' : 'No hay productos con esos filtros.'}
+          Aún no hay productos en el catálogo.
         </div>
       ) : (
         <div className="tasks-table-wrapper" style={{ maxHeight: '55vh', overflowY: 'auto' }}>
@@ -341,6 +335,13 @@ function ProductsTab({
               </tr>
             </thead>
             <tbody>
+              {filas.length === 0 && (
+                <FilaSinResultados
+                  columnas={visibles.length + 2}
+                  mensaje="No hay productos con esos filtros."
+                  onLimpiar={hayFiltros ? limpiarTodo : undefined}
+                />
+              )}
               {filas.map((p) => (
                 <tr key={p.id}>
                   <td className="cot-mono" style={{ fontSize: 12 }}>
@@ -428,14 +429,30 @@ function InstallsTab({
   onDelete: (i: CotInstall) => void;
 }) {
   const [q, setQ] = useState('');
+  const cf = useColumnFilters<CotInstall>(installs, [
+    { key: 'codigo', etiqueta: 'Código', tipo: 'texto', getValue: (i) => i.code },
+    { key: 'nombre', etiqueta: 'Servicio', tipo: 'texto', getValue: (i) => i.name },
+    { key: 'categoria', etiqueta: 'Categoría', tipo: 'valores', vacio: 'Sin categoría', getValues: (i) => i.category },
+    { key: 'subcategoria', etiqueta: 'Subcategoría', tipo: 'valores', vacio: 'Sin subcategoría', getValues: (i) => i.subcategory },
+    { key: 'costo', etiqueta: 'Costo', tipo: 'numero', getValue: (i) => i.unitCost, formato: money },
+  ]);
   const prefs = useColumnPreferences('cotizador-instalaciones', COLS_INST.map((c) => c.key));
-  const visibles = prefs.visible.filter((k) => COLS_INST.some((c) => c.key === k));
+  const visibles = useMemo(() => {
+    const elegidas = prefs.visible.filter((k) => COLS_INST.some((c) => c.key === k));
+    return [...elegidas, ...COLS_INST.map((c) => c.key).filter((k) => !elegidas.includes(k) && cf.filtro(k))];
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cf.filtro lee los filtros de ese momento; se recalcula cuando cambian.
+  }, [prefs.visible, cf.filtros]);
   const tablaRef = useResizableColumns('cotizador-instalaciones', ['codigo', ...visibles, 'acciones']);
 
   const filtradas = useMemo(() => {
     const t = q.toLowerCase().trim();
-    return installs.filter((i) => !t || i.code.toLowerCase().includes(t) || i.name.toLowerCase().includes(t));
-  }, [installs, q]);
+    return cf.filas.filter((i) => !t || i.code.toLowerCase().includes(t) || i.name.toLowerCase().includes(t));
+  }, [cf.filas, q]);
+  const hayFiltros = !!q || cf.hayFiltros;
+  const limpiarTodo = () => {
+    setQ('');
+    cf.limpiar();
+  };
 
   const campos = useMemo(
     () => ({
@@ -447,10 +464,10 @@ function InstallsTab({
     }),
     [],
   );
-  const { filas, thProps, SortIcon } = useSortableTable(filtradas, campos, 'codigo');
+  const { filas, thProps, ordenDe } = useSortableTable(filtradas, campos, 'codigo');
   const th = (key: string, label: string) => (
     <th {...thProps(key)} style={{ width: ANCHO_INST[key] }}>
-      {label} <SortIcon campo={key} />
+      {label} <ColumnFilter cf={cf} col={key} orden={ordenDe(key)} />
     </th>
   );
 
@@ -468,16 +485,17 @@ function InstallsTab({
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu columns={COLS_INST} visible={visibles} fixedLabel="Código" onApply={(k) => prefs.set(k)} />
-          <ClearFiltersButton disabled={!q} onClear={() => setQ('')} />
+          <ClearFiltersButton disabled={!hayFiltros} onClear={limpiarTodo} />
           <button type="button" className="auth-btn" onClick={onNew}>
             <Plus size={15} /> Nuevo servicio
           </button>
         </div>
       </div>
-      {filas.length === 0 ? (
+      <ChipsFiltros cf={cf} />
+      {installs.length === 0 ? (
         <div className="cot-empty">
           <div className="cot-empty-icon">🔧</div>
-          {installs.length === 0 ? 'Aún no hay servicios de instalación.' : 'No hay servicios con ese filtro.'}
+          Aún no hay servicios de instalación.
         </div>
       ) : (
         <div className="tasks-table-wrapper" style={{ maxHeight: '55vh', overflowY: 'auto' }}>
@@ -492,6 +510,13 @@ function InstallsTab({
               </tr>
             </thead>
             <tbody>
+              {filas.length === 0 && (
+                <FilaSinResultados
+                  columnas={visibles.length + 2}
+                  mensaje="No hay servicios con ese filtro."
+                  onLimpiar={hayFiltros ? limpiarTodo : undefined}
+                />
+              )}
               {filas.map((i) => (
                 <tr key={i.id}>
                   <td className="cot-mono" style={{ fontSize: 12 }}>

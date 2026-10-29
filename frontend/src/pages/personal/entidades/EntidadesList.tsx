@@ -22,6 +22,10 @@ import {
 } from '../../../services/entidades.service';
 import { usePerm } from '../../../contexts/PermissionsContext';
 import { conUnidad } from '../../../utils/plural';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
+import { useColumnFilters } from '../../../hooks/useColumnFilters';
+import { filtroDeValores } from '../../../utils/columnFilters';
 
 const DURACION_SINGULAR: Record<DuracionUnidad, string> = { DIAS: 'día', MESES: 'mes', ANIOS: 'año' };
 const DURACION_PLURAL: Record<DuracionUnidad, string> = { DIAS: 'días', MESES: 'meses', ANIOS: 'años' };
@@ -196,7 +200,6 @@ export default function EntidadesList() {
   const [entidades, setEntidades] = useState<Entidad[]>([]);
   const [requisitos, setRequisitos] = useState<RequisitoDocumento[]>([]);
   const [loading, setLoading] = useState(true);
-  const [mostrarInactivas, setMostrarInactivas] = useState(false);
   const [error, setError] = useState('');
 
   // Cambiar estado activo/inactivo de una entidad
@@ -289,9 +292,18 @@ export default function EntidadesList() {
     return map;
   }, [requisitos]);
 
-  const entidadesActivas = entidades.filter((e) => e.activo);
-  const visibleEntidades = mostrarInactivas ? entidades : entidadesActivas;
-  const entidadesInactivas = entidades.filter((e) => !e.activo);
+  // Los filtros viven en la cabecera de cada columna (useColumnFilters). Igual que antes, la tabla abre mostrando
+  // solo las entidades activas: el filtro «Estado: Activa» reemplaza al botón «Mostrar inactivas».
+  const cf = useColumnFilters<Entidad>(entidades, [
+    { key: 'nombre', etiqueta: 'Entidad', tipo: 'texto', getValue: (e) => e.nombre },
+    { key: 'tipo', etiqueta: 'Tipo', tipo: 'valores', orden: ['PUBLICA', 'PRIVADA'], getValues: (e) => ({ valor: e.tipo, etiqueta: TIPO_LABEL[e.tipo] }) },
+    {
+      key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['ACTIVA', 'INACTIVA'],
+      getValues: (e) => (e.activo ? { valor: 'ACTIVA', etiqueta: 'Activa' } : { valor: 'INACTIVA', etiqueta: 'Inactiva' }),
+    },
+    { key: 'requisitos', etiqueta: 'Requisitos específicos', tipo: 'numero', getValue: (e) => requisitosPorEntidad.get(e.id)?.length || 0, formato: (n) => String(n) },
+  ], { inicial: { estado: filtroDeValores(['ACTIVA']) } });
+  const visibleEntidades = cf.filas;
 
   const resetEntidadForm = () => {
     setFormNombre('');
@@ -544,11 +556,7 @@ export default function EntidadesList() {
             <Building2 size={16} /> Catálogo de Entidades ({visibleEntidades.length})
           </h2>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            {entidadesInactivas.length > 0 && (
-              <button onClick={() => setMostrarInactivas((v) => !v)} className="btn-secondary" style={{ padding: '6px 14px', fontSize: '0.78rem' }}>
-                {mostrarInactivas ? 'Ocultar inactivas' : `Mostrar inactivas (${entidadesInactivas.length})`}
-              </button>
-            )}
+            <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
             {canEdit && (
               <button className="auth-btn" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', fontSize: '0.78rem' }} onClick={openCreateEntidad}>
                 <Plus size={15} /> Nueva Entidad
@@ -557,29 +565,30 @@ export default function EntidadesList() {
           </div>
         </div>
 
+        <ChipsFiltros cf={cf} />
+
         {loading ? (
           <div className="loading-state">Cargando entidades...</div>
-        ) : visibleEntidades.length === 0 ? (
+        ) : entidades.length === 0 ? (
           <div className="empty-state">
-            {entidades.length === 0 ? (
-              <>No hay entidades creadas. Haz clic en <strong>"+ Nueva Entidad"</strong> para registrar la primera.</>
-            ) : (
-              'No hay entidades activas. Activa "Mostrar inactivas" para ver las anteriores.'
-            )}
+            No hay entidades creadas. Haz clic en <strong>"+ Nueva Entidad"</strong> para registrar la primera.
           </div>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table">
               <thead>
                 <tr>
-                  <th>Entidad</th>
-                  <th>Tipo</th>
-                  <th>Estado</th>
-                  <th>Requisitos específicos</th>
+                  <th>Entidad<ColumnFilter cf={cf} col="nombre" orden={cf.ordenDe('nombre')} /></th>
+                  <th>Tipo<ColumnFilter cf={cf} col="tipo" orden={cf.ordenDe('tipo')} /></th>
+                  <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
+                  <th>Requisitos específicos<ColumnFilter cf={cf} col="requisitos" orden={cf.ordenDe('requisitos')} /></th>
                   <th style={{ textAlign: 'right' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
+                {visibleEntidades.length === 0 && (
+                  <FilaSinResultados columnas={5} mensaje="No hay entidades que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                )}
                 {visibleEntidades.map((e) => {
                   const reqCount = requisitosPorEntidad.get(e.id)?.length || 0;
                   return (

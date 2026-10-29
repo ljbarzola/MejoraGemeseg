@@ -3,6 +3,14 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getPriceFixings, createPriceFixing, fixPrice, getLots } from '../../../services/cacao.service';
 import { formatDateEc } from '../utils';
 import DateInput from '../../../components/common/DateInput';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
+import { useColumnFilters } from '../../../hooks/useColumnFilters';
+
+// Lo que falta por fijar de una fijación (0 si ya está fijada).
+function pesoPendiente(f: any): number {
+  return f.status === 'FIXED' ? 0 : (f.pendingWeight || f.lot?.netWeight || 0);
+}
 
 export default function PriceFixingsList() {
   const navigate = useNavigate();
@@ -91,6 +99,19 @@ export default function PriceFixingsList() {
       setError(err.response?.data?.message || 'Error al actualizar fijación');
     } finally { setSaving(false); }
   }
+
+  // Filtros en la cabecera de cada columna (se aplican a las filas ya cargadas). «Precio Ref. Hoy» no se filtra:
+  // es el mismo precio ICE en todas las filas, y «Calidad» tampoco: la API no trae la calidad del lote en las fijaciones (la columna sale vacía).
+  const cf = useColumnFilters<any>(fixings, [
+    { key: 'lote', etiqueta: 'Lote', tipo: 'texto', getValue: (f) => f.lot?.code },
+    { key: 'pendiente', etiqueta: 'Cant. Pendiente', tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (f) => pesoPendiente(f) },
+    { key: 'original', etiqueta: 'Peso Original', tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (f) => f.lot?.netWeight || 0 },
+    { key: 'diferencial', etiqueta: 'Diferencial', tipo: 'numero', formato: (n) => `$${n.toFixed(0)}/T`, getValue: (f) => f.differential || 0 },
+    { key: 'fijado', etiqueta: 'Precio Fijado', tipo: 'numero', formato: (n) => `$${n.toFixed(4)}/kg`, getValue: (f) => f.fixedPrice },
+    { key: 'limite', etiqueta: 'Fecha Límite', tipo: 'fecha', soloDia: true, getValue: (f) => f.deadline },
+    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['OPEN', 'FIXED'], getValues: (f) => ({ valor: f.status === 'OPEN' ? 'OPEN' : 'FIXED', etiqueta: f.status === 'OPEN' ? 'Abierta' : 'Fijada' }) },
+  ]);
+  const filas = cf.filas;
 
   function getDaysUntilDeadline(deadline: string | null) {
     if (!deadline) return null;
@@ -227,6 +248,14 @@ export default function PriceFixingsList() {
             Control de riesgo de precio
           </span>
         </div>
+        <div className="filter-bar">
+          <div className="filter-bar-actions">
+            <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+          </div>
+        </div>
+
+        <ChipsFiltros cf={cf} />
+
         {loading ? (
           <div className="loading-state">Cargando fijaciones...</div>
         ) : fixings.length === 0 ? (
@@ -236,24 +265,27 @@ export default function PriceFixingsList() {
             <table className="tasks-table" style={{ fontSize: '13px' }}>
               <thead>
                 <tr>
-                  <th>Lote</th>
+                  <th>Lote<ColumnFilter cf={cf} col="lote" orden={cf.ordenDe('lote')} /></th>
                   <th>Calidad</th>
-                  <th style={{ textAlign: 'right' }}>Cant. Pendiente</th>
-                  <th style={{ textAlign: 'right' }}>Peso Original</th>
+                  <th style={{ textAlign: 'right' }}>Cant. Pendiente<ColumnFilter cf={cf} col="pendiente" orden={cf.ordenDe('pendiente')} /></th>
+                  <th style={{ textAlign: 'right' }}>Peso Original<ColumnFilter cf={cf} col="original" orden={cf.ordenDe('original')} /></th>
                   <th style={{ textAlign: 'right' }}>Precio Ref. Hoy</th>
-                  <th style={{ textAlign: 'right' }}>Diferencial</th>
-                  <th style={{ textAlign: 'right' }}>Precio Fijado</th>
-                  <th>Fecha Límite</th>
-                  <th>Estado</th>
+                  <th style={{ textAlign: 'right' }}>Diferencial<ColumnFilter cf={cf} col="diferencial" orden={cf.ordenDe('diferencial')} /></th>
+                  <th style={{ textAlign: 'right' }}>Precio Fijado<ColumnFilter cf={cf} col="fijado" orden={cf.ordenDe('fijado')} /></th>
+                  <th>Fecha Límite<ColumnFilter cf={cf} col="limite" orden={cf.ordenDe('limite')} /></th>
+                  <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {fixings.map((f) => {
+                {filas.length === 0 && (
+                  <FilaSinResultados columnas={10} mensaje="No hay fijaciones que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                )}
+                {filas.map((f) => {
                   const days = getDaysUntilDeadline(f.deadline);
                   const deadlineColor = getDeadlineColor(days);
                   const lotWeight = f.lot?.netWeight || 0;
-                  const pendingWeight = f.status === 'FIXED' ? 0 : (f.pendingWeight || lotWeight);
+                  const pendingWeight = pesoPendiente(f);
                   return (
                     <tr key={f.id} style={{ backgroundColor: f.status === 'FIXED' ? '#f0fff4' : 'white' }}>
                       <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{f.lot?.code || '—'}</td>

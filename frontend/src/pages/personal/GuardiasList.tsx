@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { RefreshCw, Settings, Settings2, X, Users, Building2, Landmark, UserX, LogOut, IdCard, ArrowRightLeft } from 'lucide-react';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
+import { VACIO, filtroDeValores, type FiltrosColumna } from '../../utils/columnFilters';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import {
@@ -90,12 +93,15 @@ export default function GuardiasList() {
   const [search, setSearch] = useState('');
   // Permite llegar aquí con un filtro ya aplicado (ej. desde el KPI "Guardias
   // sin asignación" del Dashboard de Personal), en vez de solo mostrar el
-  // número — ver PersonalDashboard.tsx.
-  const [filtroEntidad, setFiltroEntidad] = useState<number | 'TODAS' | 'SIN_ASIGNAR'>(
-    (location.state as any)?.filtroEntidad || 'TODAS',
-  );
-  const [filtroTipo, setFiltroTipo] = useState<EntidadTipo | 'TODOS'>('TODOS');
-  const [mostrarFuera, setMostrarFuera] = useState(false);
+  // número — ver PersonalDashboard.tsx. Se traduce al filtro de la columna «Entidad actual».
+  // Igual que antes, la tabla abre sin los guardias que ya salieron: el filtro «Situación: En servicio».
+  const [filtrosIniciales] = useState<FiltrosColumna>(() => {
+    const inicial: FiltrosColumna = { situacion: filtroDeValores(['EN_SERVICIO']) };
+    const pedido = (location.state as any)?.filtroEntidad;
+    if (pedido === 'SIN_ASIGNAR') inicial.entidad = filtroDeValores([VACIO]);
+    else if (pedido && pedido !== 'TODAS') inicial.entidad = filtroDeValores([String(pedido)]);
+    return inicial;
+  });
 
   const [fichaGuardia, setFichaGuardia] = useState<{ name: string; cedula: string } | null>(null);
   const [salidaEnCurso, setSalidaEnCurso] = useState<string | null>(null);
@@ -353,7 +359,6 @@ export default function GuardiasList() {
   );
 
   const rowsEnServicio = useMemo(() => rows.filter((r) => !r.fuera), [rows]);
-  const cantidadFuera = rows.length - rowsEnServicio.length;
 
   const kpis = useMemo(() => {
     const activos = rowsEnServicio.filter((r) => r.asignacion).length;
@@ -363,18 +368,34 @@ export default function GuardiasList() {
     return { activos, publicas, privadas, sinAsignar };
   }, [rowsEnServicio]);
 
-  const filtered = (mostrarFuera ? rows : rowsEnServicio).filter((r) => {
-    const matchesSearch =
-      r.name.toLowerCase().includes(search.toLowerCase()) || (r.cedula && r.cedula.includes(search));
-    if (!matchesSearch) return false;
-    if (filtroEntidad === 'SIN_ASIGNAR') return !r.asignacion;
-    if (filtroEntidad !== 'TODAS' && r.asignacion?.entidadId !== filtroEntidad) return false;
-    if (filtroTipo !== 'TODOS' && r.entidad?.tipo !== filtroTipo) return false;
-    return true;
-  });
+  // Los filtros viven en la cabecera de cada columna (useColumnFilters); el buscador general se suma después.
+  const cf = useColumnFilters<GuardiaRow>(rows, [
+    { key: 'apellidos', etiqueta: 'Apellidos', tipo: 'texto', getValue: (r) => r.apellidos },
+    {
+      key: 'situacion', etiqueta: 'Situación', tipo: 'valores', orden: ['EN_SERVICIO', 'FUERA'],
+      getValues: (r) => (r.fuera ? { valor: 'FUERA', etiqueta: 'Fuera (ya salió)' } : { valor: 'EN_SERVICIO', etiqueta: 'En servicio' }),
+    },
+    { key: 'nombres', etiqueta: 'Nombres', tipo: 'texto', getValue: (r) => r.nombres },
+    { key: 'cedula', etiqueta: 'Cédula', tipo: 'texto', getValue: (r) => cedulaVisible(r.cedula) },
+    {
+      key: 'entidad', etiqueta: 'Entidad actual', tipo: 'valores', vacio: 'Sin asignación',
+      getValues: (r) => (r.asignacion
+        ? { valor: String(r.asignacion.entidadId), etiqueta: r.entidad?.nombre ?? `Entidad ${r.asignacion.entidadId}` }
+        : null),
+    },
+    {
+      key: 'tipo', etiqueta: 'Tipo', tipo: 'valores', orden: ['PUBLICA', 'PRIVADA'], vacio: 'Sin entidad',
+      getValues: (r) => (r.entidad ? { valor: r.entidad.tipo, etiqueta: TIPO_LABEL[r.entidad.tipo] } : null),
+    },
+  ], { inicial: filtrosIniciales });
+
+  const filtered = cf.filas.filter((r) =>
+    r.name.toLowerCase().includes(search.toLowerCase()) || (r.cedula && r.cedula.includes(search)));
+  const hayFiltros = !!search || cf.hayFiltros;
+  const limpiarTodo = () => { setSearch(''); cf.limpiar(); };
 
   // Ordenar por cualquier columna, igual que el listado de tareas del Inicio.
-  const { filas: filasOrdenadas, thProps, SortIcon } = useSortableTable(
+  const { filas: filasOrdenadas, thProps, ordenDe } = useSortableTable(
     filtered,
     {
       apellidos: (r) => r.apellidos,
@@ -576,58 +597,39 @@ export default function GuardiasList() {
               onChange={(e) => setSearch(e.target.value)}
               style={{ flex: '1 1 200px', minWidth: 0, padding: '10px 14px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.9rem' }}
             />
-            <select className="filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value as EntidadTipo | 'TODOS')}>
-              <option value="TODOS">Todos los tipos</option>
-              <option value="PUBLICA">Pública</option>
-              <option value="PRIVADA">Privada</option>
-            </select>
-            <select
-              className="filter-select"
-              value={String(filtroEntidad)}
-              onChange={(e) => setFiltroEntidad(e.target.value === 'TODAS' || e.target.value === 'SIN_ASIGNAR' ? e.target.value : Number(e.target.value))}
-            >
-              <option value="TODAS">Todas las entidades</option>
-              <option value="SIN_ASIGNAR">Sin asignación</option>
-              {entidades.map((e) => (
-                <option key={e.id} value={e.id}>{e.nombre}</option>
-              ))}
-            </select>
           </div>
 
           <div className="filter-bar-actions">
-            <ClearFiltersButton
-              onClear={() => { setSearch(''); setFiltroTipo('TODOS'); setFiltroEntidad('TODAS'); }}
-              disabled={!search && filtroTipo === 'TODOS' && filtroEntidad === 'TODAS'}
-            />
-            {cantidadFuera > 0 && (
-              <button className="btn-secondary" onClick={() => setMostrarFuera((v) => !v)} style={{ padding: '8px 14px', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
-                {mostrarFuera ? 'Ocultar fuera' : `Mostrar fuera (${cantidadFuera})`}
-              </button>
-            )}
+            <ClearFiltersButton onClear={limpiarTodo} disabled={!hayFiltros} />
             <button className="btn-secondary" onClick={() => setShowExportModal(true)} disabled={filtered.length === 0} style={{ whiteSpace: 'nowrap' }}>
               📤 Exportar
             </button>
           </div>
         </div>
 
+        <ChipsFiltros cf={cf} />
+
         {loading ? (
           <div className="loading-state">Cargando guardias...</div>
-        ) : filtered.length === 0 ? (
-          <div className="empty-state">No se encontraron guardias con estos filtros.</div>
+        ) : rows.length === 0 ? (
+          <div className="empty-state">No se encontraron guardias.</div>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th {...thProps('apellidos')}>Apellidos <SortIcon campo="apellidos" /></th>
-                  <th {...thProps('nombres')}>Nombres <SortIcon campo="nombres" /></th>
-                  <th {...thProps('cedula')}>Cédula <SortIcon campo="cedula" /></th>
-                  <th {...thProps('entidad')}>Entidad actual <SortIcon campo="entidad" /></th>
-                  <th {...thProps('tipo')}>Tipo <SortIcon campo="tipo" /></th>
+                  <th {...thProps('apellidos')}>Apellidos <ColumnFilter cf={cf} col="situacion" segundo /><ColumnFilter cf={cf} col="apellidos" orden={ordenDe('apellidos')} /></th>
+                  <th {...thProps('nombres')}>Nombres <ColumnFilter cf={cf} col="nombres" orden={ordenDe('nombres')} /></th>
+                  <th {...thProps('cedula')}>Cédula <ColumnFilter cf={cf} col="cedula" orden={ordenDe('cedula')} /></th>
+                  <th {...thProps('entidad')}>Entidad actual <ColumnFilter cf={cf} col="entidad" orden={ordenDe('entidad')} /></th>
+                  <th {...thProps('tipo')}>Tipo <ColumnFilter cf={cf} col="tipo" orden={ordenDe('tipo')} /></th>
                   <th style={{ textAlign: 'right' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
+                {filasOrdenadas.length === 0 && (
+                  <FilaSinResultados columnas={6} mensaje="No se encontraron guardias con estos filtros." onLimpiar={hayFiltros ? limpiarTodo : undefined} />
+                )}
                 {filasOrdenadas.map((r) => (
                   <tr key={r.cedula || r.name} style={{ opacity: r.fuera ? 0.6 : 1 }}>
                     <td>

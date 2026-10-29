@@ -9,6 +9,9 @@ import {
 } from '../../../services/contratacion-publica.service';
 import type { CPInformeMensual, CPContrato } from '../../../types/contratacion-publica';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
+import { useColumnFilters } from '../../../hooks/useColumnFilters';
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
@@ -34,6 +37,13 @@ export default function InformesList() {
   };
 
   useEffect(load, [contratoId]);
+
+  // Filtros en la cabecera de cada columna.
+  const cf = useColumnFilters<CPInformeMensual>(informes, [
+    { key: 'periodo', etiqueta: 'Periodo', tipo: 'fecha', soloDia: true, getValue: (i) => `${i.anio}-${String(i.mes).padStart(2, '0')}-01` },
+    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['BORRADOR', 'GENERADO'], getValues: (i) => ({ valor: i.estado === 'GENERADO' ? 'GENERADO' : 'BORRADOR', etiqueta: i.estado === 'GENERADO' ? 'Generado' : 'Borrador' }) },
+    { key: 'pdf', etiqueta: 'PDF', tipo: 'valores', orden: ['CON', 'SIN'], getValues: (i) => (i.generatedPdfPath ? { valor: 'CON', etiqueta: 'Con PDF' } : { valor: 'SIN', etiqueta: 'Sin PDF' }) },
+  ]);
 
   const confirmarEliminar = async () => {
     const inf = confirmandoEliminar;
@@ -78,6 +88,18 @@ export default function InformesList() {
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{error}</div>
       )}
 
+      {informes.length > 0 && (
+        <>
+          <div className="filter-bar">
+            <div className="filter-bar-fields" />
+            <div className="filter-bar-actions">
+              <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+            </div>
+          </div>
+          <ChipsFiltros cf={cf} />
+        </>
+      )}
+
       <div className="admin-section">
         {loading ? (
           <div className="loading-state">Cargando informes...</div>
@@ -87,10 +109,18 @@ export default function InformesList() {
           <div className="tasks-table-wrapper">
             <table className="tasks-table">
               <thead>
-                <tr><th>Periodo</th><th>Estado</th><th>PDF</th><th style={{ textAlign: 'right' }}>Acciones</th></tr>
+                <tr>
+                  <th>Periodo<ColumnFilter cf={cf} col="periodo" orden={cf.ordenDe('periodo')} /></th>
+                  <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
+                  <th>PDF<ColumnFilter cf={cf} col="pdf" orden={cf.ordenDe('pdf')} /></th>
+                  <th style={{ textAlign: 'right' }}>Acciones</th>
+                </tr>
               </thead>
               <tbody>
-                {informes.map((inf) => (
+                {cf.filas.length === 0 && (
+                  <FilaSinResultados columnas={4} mensaje="No hay informes que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                )}
+                {cf.filas.map((inf) => (
                   <tr key={inf.id}>
                     <td style={{ fontWeight: 600 }}>{MESES[inf.mes - 1]} {inf.anio}</td>
                     <td><span className="status-badge">{inf.estado === 'GENERADO' ? 'Generado' : 'Borrador'}</span></td>

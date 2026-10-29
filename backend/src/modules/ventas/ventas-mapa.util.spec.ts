@@ -65,12 +65,28 @@ describe('agruparMapa', () => {
     expect(r.puntos[0].ciudad).toBeNull();
   });
 
-  it('sin ciudad agrupa por cuadro de ~1 km', () => {
+  it('sin ciudad agrupa por provincia (el mismo corte que el filtro Provincia + «Sin ciudad» de la lista)', () => {
     const r = agruparMapa([
       fila({ locationLat: -2.171, locationLng: -79.921, locationProvince: 'Guayas' }),
       fila({ locationLat: -2.172, locationLng: -79.922, locationProvince: 'Guayas' }),
       fila({ locationLat: -2.4, locationLng: -79.9, locationProvince: 'Guayas' }),
+      fila({ locationLat: -0.18, locationLng: -78.47, locationProvince: 'Pichincha' }),
     ]);
-    expect(r.puntos.map((p) => p.total)).toEqual([2, 1]);
+    expect(r.puntos.map((p) => [p.provincia, p.ciudad, p.total])).toEqual([['Guayas', null, 3], ['Pichincha', null, 1]]);
+  });
+
+  it('el total de cada burbuja es la suma de sus oportunidades y cuadra con el de su provincia', () => {
+    const r = agruparMapa([
+      fila({ locationLat: -2.17, locationLng: -79.92, locationCity: 'Guayaquil', locationProvince: 'Guayas' }),
+      fila({ locationLat: -2.2, locationLng: -79.9, locationCity: 'Daule', locationProvince: 'Guayas' }),
+      fila({ locationLat: -2.3, locationLng: -79.8, locationProvince: 'Guayas' }),
+    ]);
+    const guayas = r.provincias.find((p) => p.provincia === 'Guayas')!;
+    expect(r.puntos.filter((p) => p.provincia === 'Guayas').reduce((n, p) => n + p.total, 0)).toBe(guayas.total);
+  });
+
+  it('cada oportunidad lleva su id (para abrirla en la lista)', () => {
+    const r = agruparMapa([fila({ id: 42, locationLat: -2.17, locationLng: -79.92, locationProvince: 'Guayas' })]);
+    expect(r.oportunidades[0].id).toBe(42);
   });
 });

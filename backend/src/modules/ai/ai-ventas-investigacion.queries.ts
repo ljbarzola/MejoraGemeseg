@@ -114,11 +114,11 @@ export class AiVentasInvestigacionQueries {
       lineas.push(`- Servicios más contratados: ${c.servicios.masContratados.slice(0, 5).map((s) => `${s.servicio} (${s.contratos})`).join(', ')}.`);
     }
     lineas.push(`- Venta cruzada: ${c.servicios.clientesConUnServicio} clientes con un solo servicio y ${c.servicios.clientesConVarios} con varios.`);
-    lineas.push(`- Contratos renovados con menos servicios o menor valor en los últimos 90 días: ${c.reducciones.ultimos90Dias}.`);
+    lineas.push(`- Contratos renovados con menos servicios o menor valor en los últimos 90 días: ${c.reducciones.total}.`);
     for (const r of c.reducciones.recientes.slice(0, 5)) {
       lineas.push(`   · ${formatoDia(r.fecha)} ${r.cliente} — ${r.motivo}${r.source ? ` (${r.source === 'CLIENTE' ? 'lo dijo el cliente' : 'suposición del vendedor'})` : ''}`);
     }
-    lineas.push(`- Clientes que dejaron de estar cubiertos este mes: ${c.bajasDelMes.total}${c.bajasDelMes.clientes.length ? ` (${c.bajasDelMes.clientes.slice(0, 5).map((b) => b.cliente).join(', ')})` : ''}.`);
+    lineas.push(`- Clientes que dejaron de estar cubiertos este mes: ${c.bajas.total}${c.bajas.clientes.length ? ` (${c.bajas.clientes.slice(0, 5).map((b) => b.cliente).join(', ')})` : ''}.`);
     return lineas.join('\n');
   }
 

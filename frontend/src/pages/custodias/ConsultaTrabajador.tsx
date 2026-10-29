@@ -1,5 +1,10 @@
 import { useState } from 'react';
 import { getTrabajadorByCedula } from '../../services/custodia.service';
+import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
+
+const HISTORIAL_VACIO: any[] = [];
 
 function formatFechaHora(date: string) {
   if (!date) return '—';
@@ -16,6 +21,18 @@ export default function ConsultaTrabajador() {
   const [error, setError] = useState('');
   const [searched, setSearched] = useState(false);
 
+  // Filtros en la cabecera de cada columna del historial (las filas ya vienen todas del servidor).
+  const cf = useColumnFilters<any>(data?.historial ?? HISTORIAL_VACIO, [
+    { key: 'guia', etiqueta: 'Guía', tipo: 'texto', getValue: (v) => v.numero_guia },
+    { key: 'tipo', etiqueta: 'Tipo', tipo: 'valores', getValues: (v) => v.tipo_custodia },
+    { key: 'rol', etiqueta: 'Rol desempeñado', tipo: 'valores', getValues: (v) => v.rol },
+    { key: 'cliente', etiqueta: 'Cliente', tipo: 'valores', vacio: 'Sin cliente', getValues: (v) => v.cliente },
+    { key: 'placa', etiqueta: 'Placa', tipo: 'texto', getValue: (v) => v.placa },
+    { key: 'ruta', etiqueta: 'Ruta', tipo: 'texto', getValue: (v) => `${v.direccion_salida || ''} ${v.direccion_llegada || ''}` },
+    { key: 'salida', etiqueta: 'Fecha / hora de salida', tipo: 'fecha', getValue: (v) => v.fecha_hora_salida },
+    { key: 'monto', etiqueta: 'Monto (USD)', tipo: 'numero', getValue: (v) => v.monto_usd, formato: (n) => `$${n.toFixed(2)}` },
+  ]);
+
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -28,6 +45,7 @@ export default function ConsultaTrabajador() {
     setSearched(true);
     try {
       const res = await getTrabajadorByCedula(cedula.trim(), mes || undefined);
+      cf.limpiar();
       setData(res);
     } catch (err: any) {
       setError(err.response?.data?.message || err.response?.data?.error || 'No se encontraron viajes para la cédula dada.');
@@ -106,6 +124,14 @@ export default function ConsultaTrabajador() {
           </div>
 
           {/* HISTORY TABLE */}
+          {data.historial?.length > 0 && (
+            <div className="filter-bar">
+              <div className="filter-bar-actions">
+                <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+              </div>
+            </div>
+          )}
+          <ChipsFiltros cf={cf} />
           {data.historial?.length === 0 ? (
             <div className="empty-state">No se registraron viajes finalizados en este período.</div>
           ) : (
@@ -113,18 +139,21 @@ export default function ConsultaTrabajador() {
               <table className="tasks-table">
                 <thead>
                   <tr>
-                    <th>Guía</th>
-                    <th>Tipo</th>
-                    <th>Rol Desempeñado</th>
-                    <th>Cliente</th>
-                    <th>Placa</th>
-                    <th>Ruta (Salida ➔ Llegada)</th>
-                    <th>Fecha / Hora Salida</th>
-                    <th style={{ textAlign: 'right' }}>Monto (USD)</th>
+                    <th>Guía<ColumnFilter cf={cf} col="guia" orden={cf.ordenDe('guia')} /></th>
+                    <th>Tipo<ColumnFilter cf={cf} col="tipo" orden={cf.ordenDe('tipo')} /></th>
+                    <th>Rol Desempeñado<ColumnFilter cf={cf} col="rol" orden={cf.ordenDe('rol')} /></th>
+                    <th>Cliente<ColumnFilter cf={cf} col="cliente" orden={cf.ordenDe('cliente')} /></th>
+                    <th>Placa<ColumnFilter cf={cf} col="placa" orden={cf.ordenDe('placa')} /></th>
+                    <th>Ruta (Salida ➔ Llegada)<ColumnFilter cf={cf} col="ruta" orden={cf.ordenDe('ruta')} /></th>
+                    <th>Fecha / Hora Salida<ColumnFilter cf={cf} col="salida" orden={cf.ordenDe('salida')} /></th>
+                    <th style={{ textAlign: 'right' }}>Monto (USD)<ColumnFilter cf={cf} col="monto" orden={cf.ordenDe('monto')} /></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.historial.map((v: any) => (
+                  {cf.filas.length === 0 && (
+                    <FilaSinResultados columnas={8} mensaje="No hay viajes que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                  )}
+                  {cf.filas.map((v: any) => (
                     <tr key={v.id || v.numero_guia}>
                       <td style={{ fontFamily: 'monospace', fontWeight: 600, color: '#2b6cb0' }}>{v.numero_guia}</td>
                       <td>

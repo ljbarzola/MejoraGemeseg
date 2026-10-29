@@ -52,6 +52,9 @@ const RevisionArchivosModal = lazy(
 );
 import { REVIEW_COLORS } from '../../components/personal/reviewStatus';
 import { cedulaVisible, validarDatosPostulacion, valorCampoPostulacion } from '../../utils/postulacionValidacion';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
+import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 
 interface CampoRequerido {
   nombre: string;
@@ -897,12 +900,31 @@ export default function ReclutamientoPage() {
     }
   };
 
-  const filteredCandidates = candidatos.filter(
+  // Los filtros viven en la cabecera de cada columna de «Candidatos postulados» (useColumnFilters);
+  // el buscador general se suma después.
+  const cf = useColumnFilters<Candidate>(candidatos, [
+    { key: 'candidato', etiqueta: 'Candidato', tipo: 'texto', getValue: (c) => c.nombre },
+    { key: 'cedula', etiqueta: 'Cédula', tipo: 'texto', getValue: (c) => cedulaVisible(c.cedula) },
+    { key: 'puesto', etiqueta: 'Puesto aplicado', tipo: 'valores', vacio: 'Sin puesto', getValues: (c) => c.puestoAplicado },
+    { key: 'documentos', etiqueta: 'Documentos (% completo)', tipo: 'numero', getValue: (c) => c.completitudPercent, formato: (n) => `${n}%` },
+    {
+      key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['RECHAZADOS', 'POR_REVISAR', 'COMPLETO', 'SIN_ESTADO'],
+      getValues: (c) => (
+        c.documentosRechazados > 0 ? { valor: 'RECHAZADOS', etiqueta: 'Con rechazados' }
+          : c.documentosPendientesRevision > 0 ? { valor: 'POR_REVISAR', etiqueta: 'Por revisar' }
+            : c.completitudPercent === 100 ? { valor: 'COMPLETO', etiqueta: 'Completo' }
+              : { valor: 'SIN_ESTADO', etiqueta: 'Sin novedad (—)' }
+      ),
+    },
+  ]);
+  const filteredCandidates = cf.filas.filter(
     (c) =>
       c.nombre.toLowerCase().includes(search.toLowerCase()) ||
       c.cedula.includes(search) ||
       c.puestoAplicado.toLowerCase().includes(search.toLowerCase())
   );
+  const hayFiltrosCandidatos = search.trim() !== '' || cf.hayFiltros;
+  const limpiarCandidatos = () => { setSearch(''); cf.limpiar(); };
 
   const vacantesAbiertas = puestos.filter((p) => p.estado !== 'CERRADA');
   const vacantesCerradas = puestos.filter((p) => p.estado === 'CERRADA');
@@ -1101,16 +1123,21 @@ export default function ReclutamientoPage() {
       <div className="admin-section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem', fontWeight: 700, color: 'var(--azul-oscuro)', margin: 0 }}>
-            <Users size={16} /> Candidatos Postulados ({search.trim() ? `${filteredCandidates.length} de ${candidatos.length}` : candidatos.length})
+            <Users size={16} /> Candidatos Postulados ({hayFiltrosCandidatos ? `${filteredCandidates.length} de ${candidatos.length}` : candidatos.length})
           </h2>
-          <input
-            type="text"
-            placeholder="Buscar por nombre, cédula o puesto..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ padding: '8px 14px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.85rem', width: '280px' }}
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input
+              type="text"
+              placeholder="Buscar por nombre, cédula o puesto..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ padding: '8px 14px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.85rem', width: '280px' }}
+            />
+            <ClearFiltersButton onClear={limpiarCandidatos} disabled={!hayFiltrosCandidatos} />
+          </div>
         </div>
+
+        <ChipsFiltros cf={cf} />
 
         {syncing ? (
           <div className="loading-state">Sincronizando carpetas de candidatos desde Google Drive Reclutamiento...</div>
@@ -1121,26 +1148,27 @@ export default function ReclutamientoPage() {
               <RefreshCw size={16} /> Sincronizar ahora
             </button>
           </div>
-        ) : filteredCandidates.length === 0 ? (
+        ) : candidatos.length === 0 ? (
           <div className="empty-state">
-            {search.trim()
-              ? 'Ningún candidato coincide con la búsqueda.'
-              : 'No hay candidatos postulados en la carpeta Reclutamiento de Google Drive.'}
+            No hay candidatos postulados en la carpeta Reclutamiento de Google Drive.
           </div>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table">
               <thead>
                 <tr>
-                  <th>Candidato</th>
-                  <th>Cédula</th>
-                  <th>Puesto Aplicado</th>
-                  <th style={{ minWidth: '150px' }}>Documentos</th>
-                  <th>Estado</th>
+                  <th>Candidato<ColumnFilter cf={cf} col="candidato" orden={cf.ordenDe('candidato')} /></th>
+                  <th>Cédula<ColumnFilter cf={cf} col="cedula" orden={cf.ordenDe('cedula')} /></th>
+                  <th>Puesto Aplicado<ColumnFilter cf={cf} col="puesto" orden={cf.ordenDe('puesto')} /></th>
+                  <th style={{ minWidth: '150px' }}>Documentos<ColumnFilter cf={cf} col="documentos" orden={cf.ordenDe('documentos')} /></th>
+                  <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
                   <th style={{ textAlign: 'right' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
+                {filteredCandidates.length === 0 && (
+                  <FilaSinResultados columnas={6} mensaje="Ningún candidato coincide con la búsqueda o los filtros." onLimpiar={hayFiltrosCandidatos ? limpiarCandidatos : undefined} />
+                )}
                 {filteredCandidates.map((c) => (
                   <tr key={c.id || c.cedula}>
                     <td>

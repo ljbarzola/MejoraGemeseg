@@ -3,27 +3,44 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { RefreshCw, AlertTriangle, Hourglass, ClipboardCheck, Info, Settings } from 'lucide-react';
 import {
   getComplianceOverview,
-  getEntidades,
   type ComplianceOverviewItem,
-  type Entidad,
 } from '../../../services/entidades.service';
 import GuardiaComplianceModal from '../../../components/personal/GuardiaComplianceModal';
 import NotificationConfigModal from '../../../components/personal/NotificationConfigModal';
 import { cedulaVisible } from '../../../utils/postulacionValidacion';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
+import { useColumnFilters } from '../../../hooks/useColumnFilters';
 
 const TIPO_COLOR: Record<string, { bg: string; fg: string }> = {
   PUBLICA: { bg: '#bfdbfe', fg: '#1d4ed8' },
   PRIVADA: { bg: '#e9d8fd', fg: '#6b46c1' },
 };
 
-type FiltroEstado = 'TODOS' | 'VENCIDO' | 'POR_VENCER' | 'FALTANTE' | 'AL_DIA';
+// Las alertas de un guardia (columna «Alertas»): un guardia puede tener varias a la vez; sin ninguna está «Al día».
+const ALERTAS_ORDEN = ['VENCIDO', 'POR_VENCER', 'FALTANTE', 'AL_DIA'];
+const ALERTAS_ETIQUETA: Record<string, string> = {
+  VENCIDO: 'Con algo vencido',
+  POR_VENCER: 'Con algo por vencer',
+  FALTANTE: 'Con algo faltante',
+  AL_DIA: 'Al día',
+};
+const alertasDe = (item: ComplianceOverviewItem): { valor: string; etiqueta: string }[] => {
+  const claves: string[] = [];
+  if (item.requisitosVencidos.length > 0) claves.push('VENCIDO');
+  if (item.requisitosPorVencer.length > 0) claves.push('POR_VENCER');
+  if (item.requisitosFaltantes.length > 0) claves.push('FALTANTE');
+  if (claves.length === 0) claves.push('AL_DIA');
+  return claves.map((k) => ({ valor: k, etiqueta: ALERTAS_ETIQUETA[k] }));
+};
+const porcentajeCumplido = (item: ComplianceOverviewItem) =>
+  item.totalRequisitos > 0 ? Math.round((item.cumplidos / item.totalRequisitos) * 100) : 0;
 
 export default function CumplimientoEntidades() {
   const navigate = useNavigate();
   const location = useLocation();
 
   const [overview, setOverview] = useState<ComplianceOverviewItem[]>([]);
-  const [entidades, setEntidades] = useState<Entidad[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -31,17 +48,12 @@ export default function CumplimientoEntidades() {
   const [showConfigModal, setShowConfigModal] = useState(false);
 
   const [search, setSearch] = useState('');
-  const [filtroEntidad, setFiltroEntidad] = useState<number | 'TODAS'>('TODAS');
-  const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>('TODOS');
 
   const load = () => {
     setLoading(true);
     setError('');
-    Promise.all([getComplianceOverview(), getEntidades()])
-      .then(([o, e]) => {
-        setOverview(o || []);
-        setEntidades(e || []);
-      })
+    getComplianceOverview()
+      .then((o) => setOverview(o || []))
       .catch((err: any) => setError(err.response?.data?.message || 'No se pudo cargar el cumplimiento.'))
       .finally(() => setLoading(false));
   };
@@ -51,33 +63,30 @@ export default function CumplimientoEntidades() {
   const openDetail = (cedula: string) => setSelectedCedula(cedula);
   const closeDetail = () => setSelectedCedula(null);
 
+  // Los filtros viven en la cabecera de cada columna (useColumnFilters); aquí solo falta el buscador general.
+  const cf = useColumnFilters<ComplianceOverviewItem>(overview, [
+    { key: 'guardia', etiqueta: 'Guardia', tipo: 'texto', getValue: (i) => `${i.asignacion.nombreGuardia} ${cedulaVisible(i.asignacion.cedula)}` },
+    {
+      key: 'entidad', etiqueta: 'Entidad', tipo: 'valores',
+      getValues: (i) => ({ valor: String(i.entidad.id), etiqueta: i.entidad.nombre }),
+    },
+    { key: 'cumplimiento', etiqueta: 'Cumplimiento (%)', tipo: 'numero', getValue: porcentajeCumplido, formato: (n) => `${n}%` },
+    { key: 'alertas', etiqueta: 'Alertas', tipo: 'valores', orden: ALERTAS_ORDEN, getValues: alertasDe },
+  ]);
+
   const filtered = useMemo(() => {
-    return overview.filter((item) => {
-      const matchesSearch =
-        !search.trim() ||
-        item.asignacion.nombreGuardia.toLowerCase().includes(search.toLowerCase()) ||
-        item.asignacion.cedula.includes(search) ||
-        item.requisitosFaltantes.some((r) => r.requisito.nombre.toLowerCase().includes(search.toLowerCase())) ||
-        item.requisitosVencidos.some((r) => r.requisito.nombre.toLowerCase().includes(search.toLowerCase())) ||
-        item.requisitosPorVencer.some((r) => r.requisito.nombre.toLowerCase().includes(search.toLowerCase()));
-      if (!matchesSearch) return false;
+    const q = search.trim().toLowerCase();
+    if (!q) return cf.filas;
+    return cf.filas.filter((item) =>
+      item.asignacion.nombreGuardia.toLowerCase().includes(search.toLowerCase()) ||
+      item.asignacion.cedula.includes(search) ||
+      item.requisitosFaltantes.some((r) => r.requisito.nombre.toLowerCase().includes(search.toLowerCase())) ||
+      item.requisitosVencidos.some((r) => r.requisito.nombre.toLowerCase().includes(search.toLowerCase())) ||
+      item.requisitosPorVencer.some((r) => r.requisito.nombre.toLowerCase().includes(search.toLowerCase())));
+  }, [cf.filas, search]);
 
-      if (filtroEntidad !== 'TODAS' && item.entidad.id !== filtroEntidad) return false;
-
-      if (filtroEstado === 'VENCIDO' && item.requisitosVencidos.length === 0) return false;
-      if (filtroEstado === 'POR_VENCER' && item.requisitosPorVencer.length === 0) return false;
-      if (filtroEstado === 'FALTANTE' && item.requisitosFaltantes.length === 0) return false;
-      if (
-        filtroEstado === 'AL_DIA' &&
-        (item.requisitosFaltantes.length > 0 || item.requisitosVencidos.length > 0 || item.requisitosPorVencer.length > 0)
-      )
-        return false;
-
-      return true;
-    });
-  }, [overview, search, filtroEntidad, filtroEstado]);
-
-  const hayFiltrosActivos = search.trim() !== '' || filtroEntidad !== 'TODAS' || filtroEstado !== 'TODOS';
+  const hayFiltrosActivos = search.trim() !== '' || cf.hayFiltros;
+  const limpiarTodo = () => { setSearch(''); cf.limpiar(); };
 
   return (
     <div className="page-container">
@@ -138,49 +147,31 @@ export default function CumplimientoEntidades() {
             onChange={(e) => setSearch(e.target.value)}
             style={{ flex: '1 1 240px', minWidth: '200px', padding: '10px 14px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.9rem' }}
           />
-          <select
-            value={String(filtroEntidad)}
-            onChange={(e) => setFiltroEntidad(e.target.value === 'TODAS' ? 'TODAS' : Number(e.target.value))}
-            style={{ padding: '10px 12px', borderRadius: '10px', border: '2px solid #e2e8f0' }}
-          >
-            <option value="TODAS">Todas las entidades</option>
-            {entidades.map((e) => (
-              <option key={e.id} value={e.id}>{e.nombre}</option>
-            ))}
-          </select>
-          <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value as FiltroEstado)} style={{ padding: '10px 12px', borderRadius: '10px', border: '2px solid #e2e8f0' }}>
-            <option value="TODOS">Cualquier estado</option>
-            <option value="VENCIDO">Con algo vencido</option>
-            <option value="POR_VENCER">Con algo por vencer</option>
-            <option value="FALTANTE">Con algo faltante</option>
-            <option value="AL_DIA">Al día</option>
-          </select>
-          {hayFiltrosActivos && (
-            <button className="btn-secondary" onClick={() => { setSearch(''); setFiltroEntidad('TODAS'); setFiltroEstado('TODOS'); }}>
-              Limpiar filtros
-            </button>
-          )}
+          <ClearFiltersButton onClear={limpiarTodo} disabled={!hayFiltrosActivos} />
         </div>
+
+        <ChipsFiltros cf={cf} />
 
         {loading ? (
           <div className="loading-state">Cargando cumplimiento...</div>
         ) : overview.length === 0 ? (
           <div className="empty-state">No hay guardias con una asignación activa a una entidad todavía.</div>
-        ) : filtered.length === 0 ? (
-          <div className="empty-state">Ningún guardia coincide con estos filtros.</div>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table">
               <thead>
                 <tr>
-                  <th>Guardia</th>
-                  <th>Entidad</th>
-                  <th style={{ minWidth: '160px' }}>Cumplimiento</th>
-                  <th>Alertas</th>
+                  <th>Guardia<ColumnFilter cf={cf} col="guardia" orden={cf.ordenDe('guardia')} /></th>
+                  <th>Entidad<ColumnFilter cf={cf} col="entidad" orden={cf.ordenDe('entidad')} /></th>
+                  <th style={{ minWidth: '160px' }}>Cumplimiento<ColumnFilter cf={cf} col="cumplimiento" orden={cf.ordenDe('cumplimiento')} /></th>
+                  <th>Alertas<ColumnFilter cf={cf} col="alertas" orden={cf.ordenDe('alertas')} /></th>
                   <th style={{ textAlign: 'right' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
+                {filtered.length === 0 && (
+                  <FilaSinResultados columnas={5} mensaje="Ningún guardia coincide con estos filtros." onLimpiar={limpiarTodo} />
+                )}
                 {filtered.map((item) => {
                   const faltantes = item.requisitosFaltantes.length;
                   const vencidos = item.requisitosVencidos.length;

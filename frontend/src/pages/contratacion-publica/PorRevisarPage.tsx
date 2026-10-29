@@ -8,10 +8,12 @@ import {
 } from '../../services/contratacion-publica.service';
 import type { CPDocumentoBandeja } from '../../types/contratacion-publica';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import RevisionPanel, { type DocumentoRevisable } from '../../components/contratacion-publica/RevisionPanel';
 import { usePerm } from '../../contexts/PermissionsContext';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 import { formatFechaHoraSync } from '../../utils/formatFechaHora';
 import { formatoFecha, mensajeError, tituloMes } from '../../utils/entregasCp';
 
@@ -59,7 +61,17 @@ export default function PorRevisarPage() {
   };
   useEffect(() => { if (canEdit) load(); }, [canEdit]);
 
-  const filtradas = filas.filter((f) => {
+  // Filtros en la cabecera de cada columna.
+  const cf = useColumnFilters<CPDocumentoBandeja>(filas, [
+    { key: 'nombre', etiqueta: 'Documento', tipo: 'texto', getValue: (f) => f.nombre },
+    { key: 'entidad', etiqueta: 'Entidad', tipo: 'valores', getValues: (f) => ({ valor: String(f.entidadId), etiqueta: f.entidadNombre }) },
+    { key: 'mes', etiqueta: 'Mes', tipo: 'fecha', soloDia: true, getValue: (f) => `${f.anio}-${String(f.mes).padStart(2, '0')}-01` },
+    { key: 'entregadoPor', etiqueta: 'Entregó', tipo: 'valores', vacio: 'Sin dato', getValues: (f) => f.entregadoPorNombre },
+    { key: 'entregadoAt', etiqueta: 'Entregado', tipo: 'fecha', getValue: (f) => f.entregadoAt },
+    { key: 'fechaLimite', etiqueta: 'Fecha límite', tipo: 'fecha', soloDia: true, getValue: (f) => f.fechaLimite },
+  ]);
+
+  const filtradas = cf.filas.filter((f) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return (
@@ -69,7 +81,7 @@ export default function PorRevisarPage() {
     );
   });
 
-  const { filas: ordenadas, thProps, SortIcon } = useSortableTable(
+  const { filas: ordenadas, thProps, ordenDe } = useSortableTable(
     filtradas,
     {
       nombre: (f) => f.nombre,
@@ -81,6 +93,9 @@ export default function PorRevisarPage() {
     },
     'entregadoAt',
   );
+
+  const hayFiltros = !!search || cf.hayFiltros;
+  const limpiarTodo = () => { setSearch(''); cf.limpiar(); };
 
   // Solo el personal de Contratación Pública revisa; el resto tiene su propia bandeja.
   if (!canEdit) return <Navigate to="/contratacion-publica/mis-documentos" replace />;
@@ -131,31 +146,38 @@ export default function PorRevisarPage() {
           />
         </div>
         <div className="filter-bar-actions">
-          <ClearFiltersButton onClear={() => setSearch('')} disabled={!search} />
+          <ClearFiltersButton onClear={limpiarTodo} disabled={!hayFiltros} />
         </div>
       </div>
+
+      <ChipsFiltros cf={cf} />
 
       <div className="admin-section">
         {loading ? (
           <div className="loading-state">Cargando lo que falta aprobar...</div>
-        ) : ordenadas.length === 0 ? (
-          <div className="empty-state">
-            {filas.length === 0 ? 'No hay documentos por aprobar. Todo lo entregado ya fue revisado.' : 'No hay documentos que coincidan con la búsqueda.'}
-          </div>
+        ) : filas.length === 0 ? (
+          <div className="empty-state">No hay documentos por aprobar. Todo lo entregado ya fue revisado.</div>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th {...thProps('nombre')} style={{ width: '24%' }}>Documento <SortIcon campo="nombre" /></th>
-                  <th {...thProps('entidad')} style={{ width: '20%' }}>Entidad <SortIcon campo="entidad" /></th>
-                  <th {...thProps('mes')} style={{ width: '12%' }}>Mes <SortIcon campo="mes" /></th>
-                  <th {...thProps('entregadoAt')} style={{ width: '20%' }}>Entregado <SortIcon campo="entregadoAt" /></th>
-                  <th {...thProps('fechaLimite')} style={{ width: '12%' }}>Fecha límite <SortIcon campo="fechaLimite" /></th>
+                  <th {...thProps('nombre')} style={{ width: '24%' }}>Documento <ColumnFilter cf={cf} col="nombre" orden={ordenDe('nombre')} /></th>
+                  <th {...thProps('entidad')} style={{ width: '20%' }}>Entidad <ColumnFilter cf={cf} col="entidad" orden={ordenDe('entidad')} /></th>
+                  <th {...thProps('mes')} style={{ width: '12%' }}>Mes <ColumnFilter cf={cf} col="mes" orden={ordenDe('mes')} /></th>
+                  <th {...thProps('entregadoAt')} style={{ width: '20%' }}>Entregado <ColumnFilter cf={cf} col="entregadoAt" orden={ordenDe('entregadoAt')} /><ColumnFilter cf={cf} col="entregadoPor" segundo /></th>
+                  <th {...thProps('fechaLimite')} style={{ width: '12%' }}>Fecha límite <ColumnFilter cf={cf} col="fechaLimite" orden={ordenDe('fechaLimite')} /></th>
                   <th style={{ textAlign: 'right', width: '12%' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
+                {ordenadas.length === 0 && (
+                  <FilaSinResultados
+                    columnas={6}
+                    mensaje="No hay documentos que coincidan con los filtros."
+                    onLimpiar={hayFiltros ? limpiarTodo : undefined}
+                  />
+                )}
                 {ordenadas.map((f) => (
                   <tr key={f.id} onClick={() => abrirPanel(f.id)} style={{ cursor: 'pointer' }}>
                     <td>

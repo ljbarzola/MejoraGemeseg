@@ -1,6 +1,10 @@
+import { useEffect } from 'react';
 import type { FilaHoja, HojaDia } from '../../services/bitacora.service';
 import { duracion, hora } from '../../utils/bitacoraFechas';
 import Kpi from './Kpi';
+import ClearFiltersButton from '../common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../common/ColumnFilter';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 import '../../styles/bitacora.css';
 
 const CLASE_FUENTE: Record<string, string> = {
@@ -23,6 +27,17 @@ function rangoHora(f: FilaHoja): string {
 /** Hoja de un día: primera y última actividad, huecos largos y la lista de lo que quedó registrado. */
 export default function HojaDelDia({ hoja }: { hoja: HojaDia }) {
   const largo = hoja.huecos.reduce((m, h) => Math.max(m, h.minutos), 0);
+  // Una hoja puede tener decenas de movimientos: filtros en la cabecera de «Dónde» y «Qué hizo».
+  const cf = useColumnFilters<FilaHoja>(hoja.filas, [
+    {
+      key: 'donde', etiqueta: 'Dónde', tipo: 'valores',
+      getValues: (f) => (f.fuente === 'GOOGLE' ? { valor: 'Google', etiqueta: 'Google' } : { valor: `app:${f.moduloEtiqueta ?? ''}`, etiqueta: f.moduloEtiqueta ? `app.gemeseg · ${f.moduloEtiqueta}` : 'app.gemeseg' }),
+    },
+    { key: 'texto', etiqueta: 'Qué hizo', tipo: 'texto', getValue: (f) => f.texto },
+  ]);
+  // Otra persona u otro día: los filtros de la hoja anterior no valen.
+  const { limpiar } = cf;
+  useEffect(() => { limpiar(); }, [hoja.filas, limpiar]);
   return (
     <>
       <div className="bit-kpis">
@@ -56,17 +71,27 @@ export default function HojaDelDia({ hoja }: { hoja: HojaDia }) {
       {hoja.filas.length === 0 ? (
         <p className="bit-vacio">No hay actividad registrada este día.</p>
       ) : (
+        <>
+        <div className="filter-bar">
+          <div className="filter-bar-actions">
+            <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+          </div>
+        </div>
+        <ChipsFiltros cf={cf} />
         <div className="tasks-table-wrapper">
           <table className="tasks-table">
             <thead>
               <tr>
                 <th>Hora</th>
-                <th>Dónde</th>
-                <th>Qué hizo</th>
+                <th>Dónde<ColumnFilter cf={cf} col="donde" orden={cf.ordenDe('donde')} /></th>
+                <th>Qué hizo<ColumnFilter cf={cf} col="texto" orden={cf.ordenDe('texto')} /></th>
               </tr>
             </thead>
             <tbody>
-              {hoja.filas.map((f) => (
+              {cf.filas.length === 0 && (
+                <FilaSinResultados columnas={3} mensaje="No hay movimientos que coincidan con los filtros." onLimpiar={cf.limpiar} />
+              )}
+              {cf.filas.map((f) => (
                 <tr key={`${f.desde}-${f.fuente}-${f.texto}`} className="tasks-table-row">
                   <td className="tasks-table-title">{rangoHora(f)}</td>
                   <td>
@@ -81,6 +106,7 @@ export default function HojaDelDia({ hoja }: { hoja: HojaDia }) {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <p className="bit-nota">
