@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getSuppliers, getLots, createSettlement, getNextSettlementId } from '../../../services/cacao.service';
+import { getSuppliers, getAvailableLots, createSettlement, getNextSettlementId, getCacaoConfig } from '../../../services/cacao.service';
+import { useCacaoUnidades } from '../useCacaoUnidades';
 import DateInput from '../../../components/common/DateInput';
+import ErrorBanner from '../../../components/common/ErrorBanner';
+import { apiErrorMessage } from '../utils';
 import { Trash2 } from 'lucide-react';
+import { ABREVIATURA_UNIDAD as UNIT_ABBR } from '../useCacaoUnidades';
 
-const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
-const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
 function round4(n: number) { return Math.round(n * 10000) / 10000; }
+function round2(n: number) { return Math.round(n * 100) / 100; }
 function getTodayLocal() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -21,6 +24,7 @@ interface LotSelection {
 }
 
 export default function SettlementForm() {
+  const { factor: factorUnidad } = useCacaoUnidades();
   const navigate = useNavigate();
   const location = useLocation();
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -36,6 +40,7 @@ export default function SettlementForm() {
     supplierId: '',
     periodStart: '',
     periodEnd: '',
+    dueDays: '',
   });
   const [selectedLots, setSelectedLots] = useState<LotSelection[]>([]);
   const isDirty = useRef(false);
@@ -43,22 +48,46 @@ export default function SettlementForm() {
   const pendingNav = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    Promise.all([getSuppliers(), getLots(), getNextSettlementId()])
-      .then(([s, l, nid]) => { setSuppliers(s); setAllLots(l); setNextIdCode(nid.code); })
+    Promise.all([getSuppliers(), getNextSettlementId(), getCacaoConfig()])
+      .then(([s, nid, cfg]) => {
+        setSuppliers(s);
+        setNextIdCode(nid.code);
+        // El plazo de pago arranca con el que la empresa configuró; esta liquidación puede cambiarlo.
+        setForm((prev) => ({ ...prev, dueDays: String(cfg.plazoPagoDias) }));
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  // Al elegir proveedor se traen sus lotes con el peso que aún está pendiente de liquidar
+  // (lo recibido menos lo ya liquidado); el servidor es quien lo calcula.
+  useEffect(() => {
+    setSelectedLots([]);
+    if (!form.supplierId) { setAllLots([]); return; }
+    let cancelled = false;
+    getAvailableLots(Number(form.supplierId))
+      .then((data: any[]) => {
+        if (cancelled) return;
+        setAllLots(data.map((l) => ({
+          id: l.id,
+          code: l.code,
+          status: l.status,
+          netWeight: l.availableKg,
+          averageCost: l.averageCost,
+          quality: l.quality,
+          receptions: [{ date: l.firstReceptionDate, unitOfMeasure: l.unitOfMeasure }],
+        })));
+      })
+      .catch((err) => { if (!cancelled) { setAllLots([]); setError(apiErrorMessage(err, 'No se pudieron cargar los lotes del proveedor')); } });
+    return () => { cancelled = true; };
+  }, [form.supplierId]);
 
   useEffect(() => {
     if (!form.supplierId) {
       setAvailableLots([]);
       return;
     }
-    const sId = Number(form.supplierId);
-    let filtered = allLots.filter((lot: any) => {
-      if (lot.status !== 'OPEN') return false;
-      if (!lot.receptions?.some((r: any) => r.supplierId === sId)) return false;
-      return true;
-    });
+    // Se le paga al proveedor lo que entregó, aunque el lote ya se haya embarcado (y esté cerrado).
+    let filtered = allLots.filter((lot: any) => lot.netWeight > 0);
     if (form.periodStart && form.periodEnd) {
       const start = new Date(form.periodStart);
       const end = new Date(form.periodEnd);
@@ -146,12 +175,12 @@ export default function SettlementForm() {
     const avgCost = lot.averageCost || 0;
     const punishment = sl.qualityPunishment || 0;
     const effectiveCost = Math.max(0, avgCost - punishment);
-    const lotAmount = round4(netWeightAfterDiscount * effectiveCost);
+    const lotAmount = round2(netWeightAfterDiscount * effectiveCost);
     const receptionUnit = lot.receptions?.[0]?.unitOfMeasure || null;
     let origQty = null;
     if (receptionUnit && receptionUnit !== 'KG') {
-      const factor = UNIT_FACTORS[receptionUnit] || 1;
-      origQty = { value: (qty / factor).toFixed(2), abbr: UNIT_ABBR[receptionUnit] || receptionUnit };
+      const factor = factorUnidad(receptionUnit);
+      if (factor) origQty = { value: (qty / factor).toFixed(2), abbr: UNIT_ABBR[receptionUnit] || receptionUnit };
     }
     return {
       code: lot.code,
@@ -184,11 +213,17 @@ export default function SettlementForm() {
   const totalGrossWeight = selectedLotBreakdowns.reduce((sum, x) => sum + (x.breakdown?.grossWeight || 0), 0);
   const totalDiscountKg = selectedLotBreakdowns.reduce((sum, x) => sum + (x.breakdown?.totalDiscountKg || 0), 0);
   const totalNetWeight = selectedLotBreakdowns.reduce((sum, x) => sum + (x.breakdown?.netWeightAfterDiscount || 0), 0);
-  const totalAmount = selectedLotBreakdowns.reduce((sum, x) => sum + (x.breakdown?.lotAmount || 0), 0);
+  const totalAmount = round2(selectedLotBreakdowns.reduce((sum, x) => sum + (x.breakdown?.lotAmount || 0), 0));
 
   async function handleSubmit() {
     if (!form.supplierId) { setError('El proveedor es requerido'); return; }
     if (!form.periodStart || !form.periodEnd) { setError('El periodo es requerido'); return; }
+    if (form.periodStart > form.periodEnd) { setError('La fecha de inicio del periodo no puede ser posterior a la fecha fin'); return; }
+    const dueDays = Number(form.dueDays);
+    if (form.dueDays === '' || !Number.isInteger(dueDays) || dueDays < 0 || dueDays > 365) {
+      setError('El plazo de pago debe ser un número entero de días entre 0 y 365');
+      return;
+    }
     if (selectedLots.length === 0 || selectedLots.every(sl => !sl.lotId)) {
       setError('Debe tener al menos un lote seleccionado');
       return;
@@ -210,28 +245,26 @@ export default function SettlementForm() {
     setSaving(true);
     setError('');
     try {
+      // Los totales y el monto los calcula el servidor; aquí solo se envía qué lotes y qué
+      // descuentos se aplican a cada uno.
       const result = await createSettlement({
         date: form.date,
         supplierId: Number(form.supplierId),
         periodStart: form.periodStart,
         periodEnd: form.periodEnd,
-        totalNetWeight,
-        totalDeductions: totalDiscountKg,
-        finalPrice: 0,
-        totalAmount,
-        lots: selectedLots.filter(sl => sl.lotId && Number(sl.quantity) > 0).map(sl => {
-          const breakdown = getLotBreakdown(sl);
-          return {
-            lotId: sl.lotId,
-            quantity: Number(sl.quantity),
-            unitCost: breakdown?.avgCost || 0,
-          };
-        }),
+        dueDays,
+        lots: selectedLots.filter(sl => sl.lotId && Number(sl.quantity) > 0).map(sl => ({
+          lotId: sl.lotId,
+          quantity: Number(sl.quantity),
+          humidityPct: sl.humidityPct ?? undefined,
+          impurityPct: sl.impurityPct ?? undefined,
+          qualityPunishment: sl.qualityPunishment || 0,
+        })),
       });
       isDirty.current = false;
       setCreatedId(result.id);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al crear liquidación');
+      setError(apiErrorMessage(err, 'No se pudo crear la liquidación. Revisa los datos e inténtalo de nuevo.'));
     } finally { setSaving(false); }
   }
 
@@ -252,7 +285,8 @@ export default function SettlementForm() {
         <div className="page-card" style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
           <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#276749', marginBottom: '8px' }}>Liquidación creada exitosamente</h2>
-          <div style={{ fontSize: '28px', fontWeight: 800, color: '#6b46c1', fontFamily: 'monospace', marginBottom: '24px' }}>LIQ-{String(createdId).padStart(4, '0')}</div>
+          <div style={{ fontSize: '28px', fontWeight: 800, color: '#6b46c1', fontFamily: 'monospace', marginBottom: '12px' }}>LIQ-{String(createdId).padStart(4, '0')}</div>
+          <p style={{ fontSize: '13px', color: '#718096', marginBottom: '24px' }}>Queda por aprobar. La cuenta por pagar se genera cuando un gerente la apruebe.</p>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
             <button className="btn-secondary" onClick={() => navigate('/cacao/settlements')}>Ver Liquidaciones</button>
             <button className="auth-btn" onClick={() => navigate(`/cacao/settlements/${createdId}`, { state: { from: '/cacao/settlements' } })}>Ver Detalle</button>
@@ -276,7 +310,7 @@ export default function SettlementForm() {
 
       <div className="page-card">
         <div className="cacao-form">
-          {error && <div className="auth-error-banner">{error}</div>}
+          <ErrorBanner mensaje={error} />
 
           {nextIdCode && (
             <div style={{ padding: '16px 20px', backgroundColor: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
@@ -295,8 +329,8 @@ export default function SettlementForm() {
               <DateInput value={form.date} onChange={(v) => setField('date', v)} />
             </div>
             <div className="form-group">
-              <label>Proveedor *</label>
-              <select value={form.supplierId} onChange={(e) => setField('supplierId', e.target.value)}>
+              <label htmlFor="liq-1">Proveedor *</label>
+              <select id="liq-1" value={form.supplierId} onChange={(e) => setField('supplierId', e.target.value)}>
                 <option value="">Seleccionar proveedor...</option>
                 {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
@@ -312,6 +346,10 @@ export default function SettlementForm() {
             <div className="form-group">
               <label>Fecha Fin *</label>
               <DateInput value={form.periodEnd} onChange={(v) => setField('periodEnd', v)} />
+            </div>
+            <div className="form-group">
+              <label htmlFor="liq-2">Plazo de pago (días) *</label>
+              <input id="liq-2" type="number" min="0" max="365" step="1" value={form.dueDays} onChange={(e) => setField('dueDays', e.target.value)} />
             </div>
           </div>
 
@@ -339,7 +377,7 @@ export default function SettlementForm() {
                       {availableLots
                         .filter((l: any) => !selectedLots.some((s, si) => si !== i && s.lotId === l.id))
                         .map((l: any) => (
-                          <option key={l.id} value={l.id}>{l.code} ({l.netWeight} kg - ${l.averageCost.toFixed(2)}/kg)</option>
+                          <option key={l.id} value={l.id}>{l.code} ({l.netWeight} kg por liquidar - ${l.averageCost.toFixed(2)}/kg)</option>
                         ))}
                     </select>
                     <input type="number" step="0.0001" min="0" max={lot?.netWeight || 99999} placeholder="Cantidad kg" value={sl.quantity} onChange={(e) => updateLot(i, 'quantity', e.target.value)} style={{ flex: 1, borderColor: exceeds ? '#e53e3e' : undefined }} />
@@ -474,7 +512,7 @@ export default function SettlementForm() {
               <div style={{ fontSize: '18px', fontWeight: 700 }}>{totalNetWeight.toFixed(1)} kg</div>
             </div>
             <div style={{ color: '#fff', fontSize: '14px' }}>
-              <div>MONTO A PAGAR</div>
+              <div>MONTO A PAGAR (estimado)</div>
               <div style={{ fontSize: '32px', fontWeight: 900, color: '#68d391' }}>${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
             </div>
           </div>

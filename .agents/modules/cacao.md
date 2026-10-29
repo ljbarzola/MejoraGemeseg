@@ -1,43 +1,223 @@
 # Modulo: Cacao
 
 ## Descripcion
-Sistema completo de inventario de cacao para Mikacao S.A.
-Flujo: Recepcion → Liquidacion → Fijacion → Kardex → Embarque → CxP/CxC
+Back-office de comercio de cacao para cualquier empresa del sistema (linea blanca, ver mas abajo). La primera empresa que lo uso fue Mikacao S.A., pero **nada del modulo esta atado a ella**.
+Flujo: Recepcion → Liquidacion → Aprobacion → Fijacion → Kardex → Embarque → CxP/CxC
+(la CxP nace al aprobar la liquidacion, no al crearla; ver "Liquidaciones, aprobacion y pagos")
 
-## Empresa
-- **Mikacao S.A.** - Produccion y comercializacion de cacao desde 2010
-- Productos: CCN-51 (convencional), Nacional (fino de aroma), Procesados
-- Ubicaciones: Matriz (Los Rios), Sucursal 1 (Manabi), Sucursal 2 (Guayas)
+## Reglas de este modulo (las tres pautas fijas de la usuaria, 2026-10-23)
+1. **Linea blanca:** ninguna empresa hereda datos, textos ni valores de otra; cada una configura lo suyo y empieza vacia.
+2. **Submodulos:** Cacao es un menu desplegable en `Sidebar.tsx`, no una sola entrada.
+3. **El Dashboard es el primer submodulo.**
+(Quedan guardadas tambien en la memoria de la usuaria; aplican a todo modulo nuevo o reformado.)
 
-## Submodulos
-1. **Suppliers** - Registro de proveedores
-2. **Clients** - Registro de clientes
-3. **Qualities** - Calidades con reglas de descuento
-4. **Receptions** - Entradas de cacao (auto-crea lotes)
-5. **Lots** - Inventario de lotes (cada lote viaja por el sistema)
-6. **Settlements** - Liquidaciones a proveedores (LIQ-XXXX)
-7. **PriceFixings** - Fijaciones de precio (provisional → definitivo)
-8. **Shipments** - Embarques/exportaciones (EMB-XXXX)
-9. **Payables** - Cuentas por pagar (auto desde liquidaciones)
-10. **Receivables** - Cuentas por cobrar (auto desde embarques)
-11. **Payments** - Registros de pagos
-12. **Kardex** - Libro de inventario (siempre en kg)
-13. **UnitConfig** - Unidades de medida configurables
+## Submodulos (menu lateral, en este orden)
+Dashboard · **Compra:** Proveedores, Recepciones, Lotes, Fijaciones de precio, Liquidaciones, Cuentas por pagar · **Venta:** Clientes, Embarques, Cuentas por cobrar · (bajo una linea) Configuracion (Calidades, Unidades de medida, Plazos, Motivos) y Guia del modulo.
+
+Piezas internas: `Suppliers`, `Clients`, `Qualities` (por empresa), `Receptions` (auto-crea el lote), `Lots` (cada lote viaja por el sistema), `Settlements` (`LIQ-XXXX`), `PriceFixings`, `Shipments` (`EMB-XXXX`), `Payables` (nacen al aprobar la liquidacion), `Receivables` (nacen del embarque), `Payments`, `Kardex` (siempre en kg), `UnitConfig` y `CacaoSetting` (ajustes por empresa).
 
 ## Unidades
-- Buy: TON, KG, SACO
-- Sell: SACO
-- Kardex always stores in kg
-- Default sack: SACO_MICHOACAN (90 kg)
-- Configurable: SACO_ESTANDAR (69 kg), SACO_PERSONALIZADO (62 kg)
+- Entrada y venta: TON, QQ (quintal), KG, SACO. El kardex siempre guarda kg.
+- Toneladas (1000 kg), quintales (100 libras = 45,359237 kg) y kilos son universales. **El peso del saco lo define cada empresa** en Configuracion → Unidades de medida (`CacaoUnitConfig`, la unidad `isDefault`). No hay peso de fabrica: sin saco configurado el servidor responde «Falta configurar el peso del saco» y las pantallas muestran kg en vez de inventar una conversion (`useCacaoUnidades`).
 
 ## IDs Formato
-- Settlements: `LIQ-XXXX`
+- Settlements: `LIQ-XXXX` (derivado del id)
 - Shipments: `EMB-XXXX`
-- Lots: `LOTE-YYYY-00001`
+- Lots: `LOTE-YYYY-00001`, **unico por empresa** (antes era unico en toda la base)
 
 ## Convenciones
 - Decimal control: max 4 decimales, `round4()` helper
 - Tolerance: `+ 0.001` kg para rounding
 - Date format: DD/MM/YYYY via `formatDateEc()` (UTC methods)
 - Form layout: `.page-card` max-width 900px
+- Pantallas del menu: `<PageHeader eyebrow="Cacao">` (cabecera estandar, sin «← Volver»); detalle y formularios de segundo nivel conservan «Volver».
+- Errores al usuario: `apiErrorMessage()` (`pages/cacao/utils.ts`); un 403 se muestra como «No tienes permiso para hacer esto…».
+
+## Liquidaciones, aprobacion y pagos — 2026-10-23
+
+Revision del dinero del modulo (liquidaciones, CxP, CxC). Leidy confirmo ese dia que el modulo **no tiene datos ni uso real**, por eso no hubo backfill ni migracion de liquidaciones existentes. Aprobado por ella en local el mismo dia (commit `02dd776` en `feature/cacao-liquidaciones-aprobacion`).
+
+### Decisiones
+- **Aprobacion (pedido de Leidy: «alguien con rol de gerente»).** Una liquidacion nace `PENDING` y **no** crea CxP. `POST /cacao/settlements/:id/approve` (ADMIN o MANAGER, nunca quien la creo: `createdBy` ≠ quien aprueba) la pasa a `APPROVED` y recien ahi crea la CxP (vence a `dueDays` dias desde la aprobacion). `reject` (solo `PENDING`) y `cancel` (solo `APPROVED` sin pagos vigentes) piden motivo obligatorio en texto libre (`decisionReason`; no usa el catalogo de motivos de Ventas, `MotivoCierreModal` es de Ventas, ver `RECOMENDACIONES_UX_UI.md` §22). Una empresa con un solo administrador y sin gerente no puede aprobar lo que ella misma crea: es intencional.
+- **Estados.** Liquidacion: `PENDING → APPROVED → PAID`, mas `REJECTED` y `CANCELLED`. CxP: `PENDING/PARTIAL/PAID/CANCELLED`. Antes `PAID` solo se mostraba en pantalla pero el servidor nunca lo asignaba; ahora lo asigna al saldar la CxP y vuelve a `APPROVED` si se anula un pago.
+- **Los totales los calcula el servidor.** La pantalla ya no manda `totalAmount`/`totalNetWeight`/etc. (siguen aceptados y se ignoran por compatibilidad); manda por lote `humidityPct`, `impurityPct` y `qualityPunishment`. Formula en `calcularLoteLiquidacion` (`settlements.service.ts`): neto = cantidad − humedad% − impurezas%; costo efectivo = max(0, costo promedio del lote − castigo); monto por lote redondeado a 2 decimales; `finalPrice` = monto / neto. El costo por kg sale del lote en la BD, no de lo que mande el navegador.
+- **Tope por lote = lo recibido del proveedor, no `CacaoLot.netWeight`.** Cada recepcion crea su propio lote y los embarques **bajan** `netWeight` (es existencias), asi que no sirve para saber cuanto se le debe al proveedor. Pendiente de liquidar = suma de `CacaoReception.netWeight` de ese proveedor en el lote − suma de `CacaoSettlementLot.quantity` de liquidaciones que no estan `REJECTED`/`CANCELLED`. Rechazar o anular libera el peso. Se bloquean los lotes con `SELECT … FOR UPDATE` dentro de la transaccion para que dos liquidaciones simultaneas no tomen el mismo peso. `GET /cacao/settlements/available-lots?supplierId=` devuelve eso ya calculado y lo usa el formulario.
+- **Una transaccion.** Crear liquidacion (cabecera + lotes) es atomico. Aprobar crea la CxP en la misma transaccion con `updateMany … where status = PENDING` (si dos personas aprueban a la vez, una recibe «ya fue decidida»).
+- **Pagos y cobros.** `POST …/pay` y `…/receive` usan DTO (`common/payment.dto.ts`): monto > 0 con maximo 2 decimales, metodo `TRANSFER|CASH|CHECK`, referencia ≤ 120. **Antes el cuerpo era un tipo en linea y `ValidationPipe` no lo validaba** (montos negativos o texto pasaban). Se bloquea la fila de la cuenta (`FOR UPDATE`) y todo ocurre en una transaccion; ya no se puede superar el saldo con dos pagos simultaneos. Solo se paga una CxP cuya liquidacion esta `APPROVED`. El pago guarda `createdBy`; el embarque pasa a `COMPLETED` dentro de la misma transaccion al saldar la CxC.
+- **Anular pagos/cobros.** `POST /cacao/payables/payments/:id/void` y `/cacao/receivables/payments/:id/void` (solo ADMIN, motivo obligatorio). No se borra: `voidedAt/voidedBy/voidReason`; la cuenta recupera el saldo. El historial se ve en el boton «Pagos»/«Cobros» de cada lista.
+- **Seguridad entre empresas.** Crear una liquidacion comprueba que proveedor y lotes sean de la empresa del usuario (antes no se comprobaba).
+- **Dashboard.** Las CxP `CANCELLED` no cuentan en «CxP Pendiente»; hay una tarjeta «Liquidaciones por aprobar» (cuantas y cuanto), que es lo que mira un gerente.
+- **Lotes ya embarcados se pueden liquidar (2026-10-23).** La pantalla ofrecia solo lotes `OPEN`, y un lote vendido por completo (`CLOSED`) no se podia liquidar al proveedor aunque no se le hubiera pagado. Decision tomada por Claude al aplicar «procede con el resto de mejoras»: **se paga lo que el proveedor entrego, este el lote abierto o cerrado**. Si la usuaria prefiere lo contrario, es un solo filtro en `SettlementForm.tsx`.
+
+### Columnas nuevas (todas opcionales; se crean al arrancar)
+`CacaoSettlement`: `decidedBy`, `decidedAt`, `decisionReason`, `dueDays`. `CacaoSettlementLot`: `humidityPct`, `impurityPct`, `qualityPunishment`, `netKg`, `amount`. `CacaoPayment`: `createdBy`, `voidedAt`, `voidedBy`, `voidReason`. Se anaden en `src/prisma/cacao-liquidaciones.schema.ts` (via `PrismaService.asegurarColumnas`, con `ALTER TABLE IF EXISTS … ADD COLUMN IF NOT EXISTS`) porque el despliegue no corre migraciones; `prisma/migrations/20261023_cacao_liquidaciones/migration.sql` es solo registro.
+
+## Linea blanca, submodulos y Dashboard primero — 2026-10-23
+
+Pedido de Leidy: tratar Cacao como siempre pide (1. linea blanca, 2. con submodulos, 3. Dashboard como primer submodulo) y seguir con el resto de mejoras. Rama `feature/cacao-liquidaciones-aprobacion` (commit `7f418b2` el backend).
+
+### Que se encontro atado a una empresa o compartido entre empresas
+- **`CacaoQuality` no tenia `companyId`:** `GET /cacao/qualities` devolvia las calidades de todas las empresas y crear/editar/borrar no filtraba por empresa (cualquier administrador podia borrar la calidad de otra). El nombre era unico en toda la base. Ahora es **por empresa**: `@@unique([companyId, name])`, sin repetir nombre (sin importar mayusculas) y no se elimina una calidad que ya tiene lotes. `qualities.service.ts` + DTOs validados.
+- **`CacaoLot.code` era unico en toda la base** y cada empresa numera desde `LOTE-AAAA-00001`: dos empresas chocaban en su primer lote del año. Ahora `@@unique([companyId, code])`.
+- **Peso del saco escrito a mano (69 kg) en 7 lugares** y sin pantalla para configurarlo (el CRUD del backend ya existia). Ahora sale de la unidad por defecto de la empresa; sin ella se pide configurarla. La primera unidad que se crea queda como por defecto; no se puede quitar «por defecto» sin elegir otra ni eliminar la que lo es.
+- **Plazos fijos** (CxC a 60 dias, CxP a 30): ahora `CacaoSetting` por empresa (`plazoPagoDias`, `plazoCobroDias`, valores iniciales 30 y 60 que la pantalla muestra y la empresa cambia). Cada liquidacion y cada embarque puede traer el suyo (`dueDays`).
+- **Precio de venta sugerido = precio fijo de la calidad + 15 %** en `ShipmentForm`: era una regla de negocio de alguien en particular; se quito, la persona escribe su precio.
+- **Calidad por defecto escondida:** `qualityId || 1` al registrar una recepcion. Ahora la calidad es obligatoria y debe ser de la empresa.
+- **Textos:** la guia de la app decia «Mikacao S.A.» y «el sistema viene con 5 calidades predefinidas» (nunca fue cierto); ahora usa el nombre de la empresa del usuario y explica que el sistema no trae nada de fabrica.
+- **Resuelto el 2026-10-27:** (b) `seed.js` ya usa el id real de la empresa Mikacao que crea (`mikacao.id`, no `2` a mano) y sus calidades llevan empresa; (c) las 9 listas de Cacao (proveedores, clientes, recepciones, lotes, fijaciones, liquidaciones, CxP, embarques, CxC) usan `useTablaCacao.tsx` (`pages/cacao/`): botón «Columnas» por persona (con columna fijada), orden por encabezado y ancho arrastrable. Kardex queda aparte: es un libro mayor por lote, no un listado. Cada columna lleva un ancho inicial (`ancho`, minimo calculado por el largo de su titulo para que no se corte con el icono de orden): con `table-layout: fixed`, una columna sin ancho queda aplastada por las que si lo tienen. Los anchos arrastrados se guardan por clave de columna, no por posicion, porque las columnas cambian con «Columnas». Probado en navegador el 2026-10-27 a 1530x740 con el gerente de prueba: orden asc/desc, ocultar columnas (se recuerda al recargar), arrastrar ancho y acciones de fila; algunas tablas anchas (recepciones, liquidaciones, fijaciones) llevan scroll horizontal con la primera columna fija.
+- **Pendiente de linea blanca (anotado, sin cambiar):** (d) los catalogos de medidas `TON`/`KG`/`SACO` son fijos (suficiente para cacao, pero otro producto necesitaria otras unidades). Los puntos (a) motivos de rechazo/anulacion y (e) precio ICE fijo en 8150 se resolvieron el 2026-10-27, ver «Motivos, precio ICE y estado de liquidacion de las entregas».
+- **Codigo LIQ (mejora H del analisis):** no hace falta cambiarlo. El codigo mostrado sale del `id` de la liquidacion, que no cambia nunca; solo la vista previa de «siguiente numero» es aproximada si hay creaciones simultaneas.
+- **Probado a mano el 2026-10-27 como administrador de Mikacao:** Configuracion (las tres pestañas; la primera unidad creada queda «por defecto») y un embarque en sacos (5 sacos x 70 kg = 350 kg: costo, margen, CxC a 60 dias, salida de kardex y bajada del lote cuadraron). Lo creado para la prueba se borro. El selector de lotes del embarque ya no dice «= kg» a secas: solo aclara «recibido en sacos/toneladas» cuando el lote entro en otra unidad.
+
+### Recepciones y embarques (misma clase de problema que las liquidaciones)
+- **Recepcion:** lote + recepcion + kardex en una sola transaccion; reintenta (hasta 5) si dos recepciones piden el mismo codigo de lote (`P2002`). DTO validado (peso bruto > 0, tara ≥ 0, porcentajes 0–100, neto > 0). Limpia el cache del dashboard.
+- **Embarque:** embarque + descuento de lotes + kardex + CxC en una sola transaccion con los lotes bloqueados. **El precio de venta es en $/kg, como dice la pantalla;** el servidor lo trataba como «por unidad» y la pantalla mandaba el costo multiplicado por el factor de la unidad, asi que con sacos o toneladas la salida del kardex y la CxC salian mal (con kilos coincidia). Ahora el servidor recalcula todo con el costo promedio de cada lote: `unitCost` guardado es $/kg, `saleAmount` = kg × precio, `margin` = (venta / costo − 1) × 100 con un decimal, CxC = venta total. La pantalla ya no manda costos ni margen (siguen aceptados y se ignoran).
+
+### Pantallas
+- **Menu (`Sidebar.tsx`):** «Cacao» es un desplegable; se abre solo si se entra directo a una URL de Cacao. Ya no esta en el listado plano. Las URLs no cambiaron; `/cacao/qualities` redirige a `/cacao/configuracion?tab=calidades` (hay enlaces guardados).
+- **Dashboard (`/cacao`, primero del menu):** tarjetas clicables (inventario, exposicion sin fijar, liquidaciones por aprobar, CxP, CxC) y ultimos embarques. Se quitaron los «Accesos directos» y el bloque «Configuracion» porque repetian el menu. Para una empresa nueva muestra **«Primeros pasos»** (calidades, peso del saco, proveedores, primera recepcion) con lo que ya esta hecho marcado; desaparece al completarlos. El dashboard del servidor devuelve `setup` y `pendingApproval*`.
+- **Configuracion (`/cacao/configuracion?tab=calidades|unidades|plazos`):** tres pestañas con `<PageTabs>`. **Solo el administrador de la empresa guarda**; el gerente ve la pantalla en solo lectura con un aviso y, si pulsa un boton, se abre `SoloAdminDialog` (regla §21 de `RECOMENDACIONES_UX_UI.md`: el boton se muestra y se explica, no se esconde).
+- Cabecera estandar `<PageHeader eyebrow="Cacao">` en todas las pantallas del menu; el filtro de Lotes paso a una barra de filtros. Sin «← Volver» en las que se abren desde el menu.
+- Calidades: se corrigio que un descuento de `0` se guardaba como 7 (`|| 7`) y que un error al eliminar se tragaba en silencio; los porcentajes ya no traen valores de fabrica (se piden).
+
+### Tablas y columnas nuevas (se crean al arrancar)
+`CacaoQuality.companyId` (con relleno: la empresa de los lotes que la usan; las que nadie usa pasan a la unica empresa con Cacao habilitado, si hay una sola), `CacaoSetting` (tabla), indices unicos por empresa de calidad y lote (se elimina el unico global de cada uno). Todo idempotente en `src/prisma/cacao-config.schema.ts`, registrado en `PrismaService.asegurarColumnas`; `prisma/migrations/20261023_cacao_linea_blanca/migration.sql` es solo registro. **Es el unico cambio no aditivo:** reemplaza dos indices unicos globales por unos por empresa, que son mas permisivos (un despliegue anterior sigue funcionando).
+
+### Endpoints nuevos o cambiados
+`GET|PUT /cacao/configuracion` (PUT solo ADMIN; incluye `precioIce`) · `/cacao/motivos` (catalogo de motivos; escribe solo ADMIN) · `/cacao/qualities` (GET por empresa; POST/PATCH/DELETE solo ADMIN, con DTO) · `/cacao/unit-config` (con DTO; errores en español) · `POST /cacao/receptions` (calidad obligatoria) · `POST /cacao/shipments` (`salePrice` en $/kg, `dueDays`, lotes con `lotId` y `quantity`).
+
+### Rutas frontend
+`/cacao` (Dashboard), `/cacao/suppliers`, `/cacao/receptions`, `/cacao/receptions/new`, `/cacao/lots`, `/cacao/lots/:id`, `/cacao/price-fixings`, `/cacao/settlements`, `/cacao/settlements/new`, `/cacao/settlements/:id`, `/cacao/payables`, `/cacao/clients`, `/cacao/shipments`, `/cacao/shipments/new`, `/cacao/shipments/:id`, `/cacao/receivables`, `/cacao/configuracion`, `/cacao/guia`.
+
+### Decisiones abiertas
+- «Deducciones» de la liquidacion se guarda en **kg** (como siempre), no en dolares; la lista lo mostraba como `$` y se corrigio la etiqueta.
+- Las unidades de las recepciones/embarques ya hechos se muestran con el peso de saco **actual** de la empresa: si cambia, cambia como se ve el historico (el dato guardado, en kg, no cambia).
+
+### Endpoints (liquidaciones, CxP, CxC)
+`GET /cacao/settlements`, `GET /cacao/settlements/next-id`, `GET /cacao/settlements/available-lots?supplierId=`, `GET /cacao/settlements/:id`, `POST /cacao/settlements` (ADMIN), `POST /cacao/settlements/:id/approve|reject|cancel` (ADMIN o MANAGER). `GET /cacao/payables`, `POST /cacao/payables/:id/pay` (ADMIN), `POST /cacao/payables/payments/:paymentId/void` (ADMIN). `GET /cacao/receivables`, `POST /cacao/receivables/:id/receive` (ADMIN), `POST /cacao/receivables/payments/:paymentId/void` (ADMIN).
+
+## Motivos, precio ICE y estado de liquidacion de las entregas — 2026-10-27
+
+Leidy aprobo («apruebo todo lo que sea para mejor») y se hicieron las tres mejoras que no dependian de datos externos. En la rama `feature/cacao-liquidaciones-aprobacion`, sin commit hasta que ella lo vea en local.
+
+- **Catalogo de motivos por empresa.** Tabla `CacaoMotivo` (`companyId`, `tipo` LIQUIDACION|PAGO, `nombre`, `activo`; unica por empresa+tipo+nombre; creada al arrancar en `cacao-config.schema.ts`, registro en `prisma/migrations/20261027_cacao_motivos/`). API `/cacao/motivos` (GET para ver; POST/PATCH/DELETE solo ADMIN; `?tipo=` y `?todos=1`). Pantalla: Configuracion → pestaña **Motivos** (`MotivosPanel.tsx`: agregar, renombrar, desactivar, eliminar; el gerente lo ve y, si pulsa, `SoloAdminDialog`). Al rechazar o anular una liquidacion, o al anular un pago o cobro, `MotivoDialog.tsx` ofrece los motivos de la empresa (mas un detalle opcional) y, **si la empresa no armo ninguno, pide texto libre como antes**. Nace vacio (linea blanca). El servidor sigue guardando el motivo como texto (`decisionReason`, `voidReason`, max. 500): renombrar o borrar uno del catalogo no cambia lo ya registrado.
+- **Precio ICE por empresa.** Se guarda en `CacaoSetting` con la clave `precioIce` (sin columna nueva), se lee y escribe por `GET|PUT /cacao/configuracion` (`precioIce`, hasta 2 decimales; `null` lo borra; solo ADMIN escribe). **No hay valor de fabrica** (antes era 8150 escrito en `PriceFixingsList.tsx` y solo vivia en pantalla): una empresa nueva ve «Sin configurar», «+ Nueva Fijacion» y «Fijar» quedan bloqueados con una explicacion y el precio de referencia de la tabla sale como «—». La caja del precio se edita ahi mismo (donde se usa); no hay pestaña aparte en Configuracion.
+- **Liquidacion de cada entrega en Recepciones.** `GET /cacao/receptions` devuelve `liquidadoKg` por recepcion (suma de `CacaoSettlementLot.quantity` de su lote en liquidaciones que no estan rechazadas ni anuladas; el lote identifica la entrega porque cada recepcion crea el suyo). La lista muestra la columna **Liquidacion**: *Sin liquidar*, *Parcial* o *Liquidada* (frente al peso neto recibido, tolerancia 0.001 kg) con «Liquidado X de Y kg» al pasar el cursor. Es lo mas cercano a «cerrar tickets» de Mikacao sin pedir un paso manual: el estado sale solo de las liquidaciones.
+- **Probado en navegador (1530x740, admin y gerente de prueba de Mikacao):** precio ICE (sin configurar → guardar → persiste al recargar → borrar), pestaña Motivos (agregar), dialogo de rechazo con el motivo del catalogo (boton bloqueado hasta elegir; se cancelo, la liquidacion sigue «Por aprobar»), anular un pago sin motivos de pagos (pide texto libre) y la columna Liquidacion con los datos de ejemplo. Todo lo creado para probar se borro. Pruebas automaticas: 9 suites de Cacao, 98 pruebas.
+
+## Quintal y ticket de pesaje en la recepcion — 2026-10-27
+
+Pedido de Leidy tras revisar el modulo de Acopio de Agrosoft/Mikacao (estructura en la seccion 9 de `Analisis-Agrosoft-Mikacao.md`): Mikacao compra y liquida en quintales y registra un ticket de pesaje con chofer, placa y perfil. Rama `feature/cacao-liquidaciones-aprobacion`, sin commit hasta que ella lo vea en local.
+
+- **Quintal (`QQ`) como unidad universal.** 1 qq = 100 libras = **45,359237 kg** (`KG_POR_QUINTAL`, en `unit-config.service.ts` y `useCacaoUnidades.ts`); no lo configura la empresa, como la tonelada. Disponible al recibir y al embarcar (`UNIDADES_RECEPCION`, `UNIDADES_EMBARQUE`). Mikacao usa 0,022046 qq/kg (45,3597 kg/qq, redondeado); aqui se usa la definicion exacta. **Los pesos en kg se guardan a 4 decimales** (con un factor de 6 decimales los productos arrastraban ruido; recepciones y la cantidad de cada linea de embarque). Las etiquetas de unidad (`ABREVIATURA_UNIDAD`, `NOMBRE_UNIDAD`) ya salen de una sola fuente en `useCacaoUnidades.ts` en vez de copiarse en 8 pantallas. El precio sigue siendo $/kg.
+- **Datos del ticket de pesaje en `CacaoReception` (opcionales):** `ticketNumber` (unico por empresa: indice unico `companyId + ticketNumber`, el servidor avisa «Ya hay una recepcion con ese numero de ticket» antes de crear y tambien si dos personas lo registran a la vez), `weighingProfile` (`BULTOS` por bultos | `BASCULA` en bascula; dato informativo, no cambia ningun calculo; lo eligio Claude con dos valores genericos para no inventar un catalogo), `driverName` (hasta 80) y `vehiclePlate` (hasta 15, en mayusculas). Columnas creadas al arrancar en `cacao-config.schema.ts` (`ADD COLUMN IF NOT EXISTS`, nulas; registro en `prisma/migrations/20261027_cacao_ticket_pesaje/`).
+- **Pantallas.** Nueva recepcion: seccion «Ticket de pesaje (opcional)» y la unidad Quintales; el aviso de error ahora se desplaza hasta verse (regla del proyecto para formularios largos). Recepciones: columna **Ticket** visible; **Perfil de pesaje, Chofer y Placa** arrancan ocultas (`ocultaPorDefecto` de `useTablaCacao`) y se muestran con «Columnas». Detalle del lote: muestra ticket, perfil, chofer y placa. Corregidos dos fallos previos: el bloque «Proveedor / Guia / Fecha» del detalle del lote **nunca se mostraba** (buscaba `lot.reception` y el servidor devuelve la lista `receptions`) y la lista de Embarques ponia «kg» a la cantidad en la unidad del embarque (5 sacos salian como «5 kg»; ahora usa `totalWeightKg`).
+- **Probado en navegador (admin de Mikacao, 1530x740):** recepcion de 20 qq con tara 0,5 qq → bruto 907,18 kg, neto 884,51 kg, con ticket, perfil, chofer y placa (la placa se pasa a mayusculas); columna Ticket en la lista; ticket repetido rechazado aun con espacios; perfil invalido y textos largos rechazados con el mensaje generico; embarque en quintales (2 qq → salida de 90,7185 kg del kardex); detalle del lote con «Se recibio en: Quintales». Lo creado se borro. 107 pruebas automaticas de Cacao.
+
+## Aprobacion en bloque y cierre de entregas sin liquidar — 2026-10-27
+
+Segunda tanda de lo sacado de la revision del Acopio de Mikacao (aprobacion en bloque y «Cerrar Tickets»). Rama `feature/cacao-liquidaciones-aprobacion`, sin commit hasta que Leidy lo vea en local.
+
+- **Aprobar varias liquidaciones a la vez.** `POST /cacao/settlements/approve-bulk` (`{ ids }`, hasta 100; ADMIN o MANAGER). Cada liquidacion pasa por el mismo `approve()` de siempre (pendiente, **no la aprueba quien la creo**, cuenta por pagar en su propia transaccion): si una falla las demas siguen y la respuesta trae `{ aprobadas, omitidas: [{ id, motivo }] }` (un error que no es de negocio no se detalla). Pantalla de Liquidaciones: casilla en cada pendiente que el usuario puede aprobar (ya no aparece en las que creo el mismo), botones **Seleccionar por aprobar** y **Aprobar seleccionadas (n)** (siempre visibles; a quien no puede decidir se le explica con `SoloAdminDialog`), confirmacion con la cantidad y el total, y un aviso con el resultado (se desplaza hasta verse). Tambien se agrego un **filtro por estado**.
+- **Cerrar una entrega sin liquidar** (lo que en Mikacao es «Cerrar Tickets»: un ticket que no se va a liquidar, con motivo, usuario y fecha). `POST /cacao/receptions/:id/close` (`{ reason }`) y `/reopen` (ADMIN o MANAGER). Columnas nuevas en `CacaoReception`, creadas al arrancar: `closedAt`, `closedBy`, `closeReason` (registro en `prisma/migrations/20261027_cacao_cierre_entrega/`). Reglas: no se cierra una entrega **ya liquidada por completo**; una liquidada en parte si (lo ya liquidado queda como esta); no se cierra dos veces ni una de otra empresa (el cierre es condicional, si dos personas lo hacen a la vez gana la primera). Una entrega cerrada **no se ofrece al liquidar** (`available-lots` devuelve `availableKg: 0` y `closed: true`) y `POST /cacao/settlements` la rechaza con «se cerro sin liquidar: reabrela en Recepciones». El inventario no cambia: es una decision sobre el pago, no sobre el cacao. Recepciones: la columna Liquidacion suma el estado **Cerrada** (con el motivo y la fecha al pasar el cursor) y cada fila tiene el boton **Cerrar** (o **Reabrir** si ya esta cerrada; no aparece en las liquidadas por completo).
+- **Motivos: tercer tipo `RECEPCION`.** Configuracion → Motivos tiene ahora la lista «Entregas»; al cerrar una entrega se elige de ahi (con detalle opcional) y, si la empresa no armo ninguno, se escribe a mano (mismo `MotivoDialog`).
+- **Probado en navegador (gerente y admin de Mikacao, 1530x740):** el admin intenta aprobar sus propias liquidaciones y todas se omiten con el motivo; el gerente marca 2, confirma y se aprueban con su cuenta por pagar (las de ejemplo no se tocan); cerrar una entrega con texto libre y con motivo del catalogo; la liquidacion de una entrega cerrada se rechaza y `available-lots` da 0; no se cierra dos veces; reabrir la deja «Sin liquidar». Lo creado para probar se borro. 118 pruebas automaticas de Cacao.
+
+## Dashboard de compras, reportes, busqueda y Excel — 2026-10-27
+
+Tercera tanda de lo sacado de la revision del Acopio de Mikacao (su «Dashboard PAD» y sus reportes con Excel). Rama `feature/cacao-liquidaciones-aprobacion`, sin commit hasta que Leidy lo vea en local.
+
+- **Buscar y exportar a Excel en todas las listas.** `useTablaCacao.tsx` ahora devuelve `buscador` (texto en cualquier columna, sin importar mayusculas ni tildes), `botonExportar` y `limpiarBusqueda`/`hayBusqueda`. **«Exportar a Excel» descarga lo que se ve**: las columnas elegidas, con el filtro y el orden aplicados. Se arma en el navegador con `exceljs` (dependencia nueva del frontend, misma version que el backend), que se carga solo al exportar (chunk aparte de ~940 KB; el resto de la app no pesa mas). Cada columna puede declarar `excel: { tipo: 'fecha'|'moneda'|'porcentaje'|…, titulo, valor }` para que salga como fecha, dinero o con su unidad en el titulo. Archivo `cacao-<lista>-AAAA-MM-DD.xlsx` con encabezado fijo, autofiltro, formatos y anchos. No se pagina: la «tabla viva» ya se desplaza por dentro con el encabezado fijo.
+- **Dashboard.** Arriba, las cinco cifras de siempre (inventario, exposicion sin fijar, liquidaciones por aprobar, CxP, CxC) como franja de cifras estandar. Nueva seccion **Compras** con selector de periodo (`GET /cacao/dashboard/compras?desde&hasta`, dias AAAA-MM-DD incluidos, maximo 400): peso neto comprado (qq y kg), compra total, **precio promedio por quintal**, entregas, **sin liquidar** (cuenta y %) y cerradas sin liquidar; **Top 5 proveedores**, **compra por calidad**, grafico del **precio promedio por quintal** (por dia, o por semana si el periodo pasa de 35 dias) y la tabla **Detalle por proveedor** (con buscar/ordenar/Excel). La «compra» de cada entrega es su peso neto por el costo de su lote (el precio ya fijado o el provisional), no lo liquidado. Calculo puro en `dashboard/compras.util.ts`; `common/liquidado.util.ts` es ahora la unica fuente de «kilos ya liquidados por lote» (la usan Recepciones y el Dashboard).
+- **Reportes** (`/cacao/reportes`, menu → grupo «Analisis»; solo usa lo que ya devuelve el servidor, calculos en `reportes/reportes.util.ts` con 11 pruebas de vitest): **Cuentas por pagar** y **Cuentas por cobrar** (antiguedad del saldo por proveedor o cliente: al dia, vencido 1–30, 31–60, 61–90 y +90 dias; lo anulado no cuenta), **Ventas por cliente** (venta = kilos × precio $/kg, costo del embarque, margen y %; selector de periodo) e **Inventario** (lotes abiertos por calidad: kg, qq, costo promedio ponderado y valor). Cada pestaña lleva su franja de cifras, buscador, columnas y Excel.
+- **Probado en navegador (1530x740):** busqueda (9 lotes → 3 con «nacional»); un Excel real descargado y abierto por dentro (solo las filas filtradas, encabezados con unidad, numeros reales, formato de moneda, fila fija y autofiltro); el dashboard y los cuatro reportes **cuadran entre si** (CxP $3,302.73 y CxC $3,304.00 iguales en el dashboard y en su reporte; inventario $20,482.55 y 8,880 kg iguales; el detalle por proveedor suma lo mismo que los totales). Build de produccion correcto. 131 pruebas del backend de Cacao en ese momento y 68 del frontend (11 son de los reportes).
+
+## Anular recepciones y embarques registrados por error — 2026-10-27
+
+Hasta hoy un error de registro no tenia arreglo (en las pruebas hubo que borrar a mano en la base). Rama `feature/cacao-liquidaciones-aprobacion`, sin commit hasta que Leidy lo vea en local.
+
+- **Anular un embarque** — `POST /cacao/shipments/:id/cancel` (`{ reason }`, solo ADMIN). En una transaccion, con la cuenta por cobrar y los lotes bloqueados: devuelve los kilos a cada lote y lo **reabre** (si se habia vendido por completo), deja una **entrada en el kardex** («Anulacion embarque X», al mismo costo), pone el embarque `CANCELLED` y la cuenta por cobrar `CANCELLED`. **Con cobros vigentes no se puede**: primero se anulan los cobros. Una cuenta anulada ya no se cobra (`receive` la rechaza). Columnas nuevas en `CacaoShipment`: `cancelledAt`, `cancelledBy`, `cancelReason`.
+- **Anular una recepcion** — `POST /cacao/receptions/:id/void` (`{ reason }`, solo ADMIN). El lote queda en **cero y con estado `VOIDED`** («Anulado»), con una **salida en el kardex** («Anulacion recepcion X») y el saldo vuelve a 0; no se borra nada. Solo si el lote **no se uso**: sin liquidaciones vigentes (las rechazadas o anuladas no cuentan), sin embarques vigentes (los anulados no cuentan) y sin fijaciones de precio. Columnas nuevas en `CacaoReception`: `voidedAt`, `voidedBy`, `voidReason`. Un lote anulado no se liquida (`create` lo rechaza y `available-lots` no lo ofrece).
+- **Lo anulado no cuenta:** el dashboard (CxC, embarques recientes, compras del periodo) y los reportes lo excluyen; el inventario solo suma lotes abiertos; el reporte de ventas ignora embarques anulados.
+- **Pantallas.** Recepciones: la columna Liquidacion suma **Anulada** (fila atenuada y sin botones) y cada fila tiene un menu «⋯» con **Anular recepcion** (a quien no es administrador se le explica con `SoloAdminDialog`). Detalle del embarque: boton **Anular embarque**, aviso con la fecha y el motivo, y la cuenta por cobrar como «Anulada». Lotes: estado **Anulado** y filtro. Cuentas por cobrar: una cuenta anulada no ofrece «Cobrar».
+- **Motivos: cuarto tipo `ANULACION`** (Configuracion → Motivos → «Recepciones y embarques»); sin catalogo se escribe a mano.
+- **Probado en navegador y por API (admin y gerente de Mikacao):** anular una recepcion limpia (lote en 0, `VOIDED`, kardex con saldo 0); anularla dos veces, con embarque, con liquidacion o con fijacion → rechazada con su mensaje; anular un embarque con cobro → rechazada; anular el cobro y luego el embarque → los kilos vuelven (1000 kg, lote abierto), kardex con la entrada de anulacion, cuenta anulada y no cobrable; despues se puede anular la recepcion; un lote anulado no se liquida ni se ofrece; el dashboard y los reportes siguen cuadrando; el gerente ve la explicacion de «solo administradores». Lo creado se borro. 141 pruebas del backend de Cacao en total.
+
+## Que falta para que Cacao sea funcional de punta a punta — 2026-10-28
+
+Estado: el flujo completo existe y esta probado en local (proveedor → recepcion → lote → liquidacion con aprobacion → cuenta por pagar con pago o con autorizacion; fijaciones; embarque → cuenta por cobrar; reportes, Excel, anulaciones, quintal, ticket, puntos de acopio). Lo que sigue sin hacerse, ordenado por quien lo puede desbloquear.
+
+**1. Lo puede hacer Claude solo (sin datos externos)**
+- Punto de acopio en la liquidacion («Punto de liquidacion» de Agrosoft) y desglose de compras por punto en el dashboard y en Reportes.
+- Llevar a ventana (o decidir que se queden como pantalla) la recepcion, la liquidacion y el embarque; unificar mayusculas de los botones («Nueva Recepción» / «Nuevo proveedor»).
+- Probar a mano en el navegador las ventanas de Clientes, Unidades, Fijaciones, pago y cobro (usan el mismo `FormModal` y compilan, pero solo se abrieron Proveedores, Calidades y Puntos) y a ancho de movil.
+- Preparar el PR con base `fix/dashboard-alcance-empleados` (no a `main`: la rama arrastra 45 commits de otras funciones); actualizar las lineas de Cacao de `AGENTS.md`, `README.md` y `CLAUDE.md`; recompilar el `dist/` del backend de la carpeta principal.
+- Antes de desplegar: receta de «Proceso de despliegue de Ventas» (copia de prod en solo lectura, backup, verificacion). Las tablas y columnas nuevas se crean al arrancar; el seed de ejemplo NO se sube (trae contrasena, repo publico).
+- No hay pruebas automaticas del frontend de Cacao (solo `reportes.util`); el lint del backend con tipos se queda sin memoria en carpetas grandes (se reviso archivo por archivo).
+
+**2. Necesita una decision de Leidy o de la empresa**
+- Permisos: hoy cerrar/reabrir entrega y aprobar = ADMIN o MANAGER; anular recepcion/embarque, pagar, anular pagos y escribir configuracion = ADMIN. ¿Es lo que quiere Mikacao?
+- Pagos con autorizacion: ¿quien paga debe ser distinto de quien autorizo («cuatro ojos»)? Hoy no. ¿Se activa en Mikacao?
+- Dashboard de compras: ¿«compra» a costo del lote (hoy) o a lo liquidado?
+- Perfil de pesaje: 2 valores fijos (por bultos / bascula) o un catalogo por empresa.
+- Libra como unidad de entrada (Mikacao pesa en libras): pequeno, falta el ok.
+- Ticket de pesaje imprimible con QR: falta saber que lleva el QR.
+- Uso real: ¿Mikacao trabaja solo aqui o hay que importar el historial de Agrosoft? Hoy el modulo no tiene datos reales.
+
+**3. Depende de datos de afuera (no se resuelve mirando pantallas ni programando)**
+- **SRI y facturacion (decidido: todo aqui, el trabajo mas grande):** reglas tributarias de contabilidad (liquidacion de compra electronica, retenciones si es agente, topes de efectivo y formas de pago), firma electronica `.p12` y su clave (Secret Manager, nunca por chat), RUC, establecimientos y secuencias, ambiente de pruebas del SRI, RIDE en PDF.
+- **Archivo para el banco:** falta el formato (un archivo de ejemplo o la especificacion del banco). Es el siguiente paso natural de los pagos con autorizacion.
+- **Contabilizar liquidaciones** (diario, plan de cuentas), **cupo de productor y consolidacion de deudas:** ligado a contabilidad/SRI.
+- **Exportaciones (orden de corte, plan de embarque con aprobacion, booking, factura de exportacion por DAE) y bascula (¿digitada o de un equipo?):** hay que volver a ver Agrosoft en Claude en Chrome, solo mirando (nunca crear ni editar, nunca anotar datos de Mikacao).
+- **Cajas con apertura y cierre diario:** probablemente no; solo si quien opera el acopio dice que las usan.
+
+**4. Fuera de Cacao pero parecido:** los formularios pegados sobre la tabla existen tambien en Ventas, RRHH y otros modulos; `FormModal` ya esta para reutilizarlo.
+
+## Crear y editar en ventana, revision de claridad para un usuario nuevo — 2026-10-28
+
+Leidy vio el formulario de Proveedores pegado encima de la tabla y pidio que crear/editar sea una ventana (modal) y que se revise como lo haria alguien que no conoce el sistema, con las skills de Vercel (`vercel-labs/agent-skills`: se instalaron `web-design-guidelines`, `react-best-practices` y `composition-patterns` en `~/.claude/skills`; son solo texto, sin scripts; la de diseno web baja sus reglas de un URL de Vercel en cada revision). Sin commit.
+
+- **`components/common/FormModal.tsx`** (nuevo, reutilizable): ventana con titulo, frase de ayuda, error dentro (con `ErrorBanner`, que se trae a la vista), foco en el primer campo, **Enter guarda, Escape cierra**, `role="dialog"`, boton de cerrar con `aria-label`. Los campos van dentro como `.form-group` / `.form-row`.
+- **Ahora en ventana:** Proveedores, Clientes, Calidades, Unidades de medida, Puntos de acopio (crear y editar), Nueva fijacion y Fijar precio, Registrar pago/Solicitar pago y Registrar cobro. Recepcion, Liquidacion y Embarque siguen siendo pantalla completa a proposito (documentos largos con calculos y aviso de cambios sin guardar). Los motivos siguen con su fila de «agregar» (una sola caja de texto).
+- **Errores que antes se tragaban o salian crudos:** eliminar un proveedor o cliente con movimientos no mostraba nada (se ignoraba el error) y el servidor intentaba borrar igual y fallaba por la base; ahora el servidor responde 409 con «ya tiene recepciones o liquidaciones / embarques» y la pantalla lo muestra. Fijaciones mostraba `err.response.data.message` crudo: ahora `apiErrorMessage`.
+- **Claridad:** campos con `id` y etiquetas asociadas (clic en la etiqueta enfoca el campo; antes solo en las ventanas nuevas), tipos y `autocomplete` correctos (telefono, correo), `inputMode` decimal en montos, confirmacion de eliminar con el nombre, listas vacias que dicen que hacer, boton «Cerrar entrega» (antes «Cerrar»), la tarjeta del precio ICE paso de `div` clicable a boton, y la guia de Primeros pasos: el peso del saco y los puntos de acopio son **opcionales** (antes la guia no se iba nunca si la empresa no usaba sacos).
+- **No hecho / por decidir:** el resto de la app (Ventas, RRHH…) tiene formularios con el mismo problema; no se toco. Los textos de los botones principales mezclan «Nueva Recepción» y «Nuevo proveedor» (mayusculas): sin unificar.
+
+## Puntos de acopio y pagos con autorizacion — 2026-10-28
+
+Dos de las decisiones de Leidy del dia anterior (varios puntos de acopio; pagos con aprobacion). Rama `feature/cacao-liquidaciones-aprobacion`, sin commit hasta que Leidy lo vea en local.
+
+- **Puntos de acopio** (`CacaoPunto`: nombre, direccion opcional, activo; unico por empresa sin importar mayusculas; tabla creada al arrancar). API `GET|POST|PATCH|DELETE /cacao/puntos` (ver `?todos=1` para incluir los desactivados; escribir es solo ADMIN). `CacaoReception.puntoId` (columna nueva, opcional, sin FK en la base). **Regla:** mientras la empresa no tenga ningun punto activo, la recepcion no pide punto; apenas tiene uno, `POST /cacao/receptions` exige `puntoId` (del punto de su empresa y activo). Con un solo punto el formulario lo deja marcado. Un punto con recepciones no se borra (409): se desactiva. Recepciones: columna «Punto de acopio» (con «Columnas» y Excel) y `?puntoId=` en la API. Configuracion → pestana «Puntos de acopio». **No hecho:** punto en la liquidacion («Punto de liquidacion» de Agrosoft), ni desglose del dashboard de compras por punto.
+- **Pagos con autorizacion** (`CacaoPaymentRequest`; tabla creada al arrancar). Ajuste por empresa `pagosRequierenAutorizacion` en `CacaoSetting` (nace apagado: asi funcionaba antes; Configuracion → pestana «Pagos»). **Apagado**: igual que siempre, el ADMIN paga directo. **Encendido**: `POST /cacao/payables/:id/pay` responde 400 y el pago sale en tres pasos: `POST /payables/:id/requests` (ADMIN o MANAGER; monto <= saldo menos lo ya pedido/autorizado, con la cuenta bloqueada) → `POST /payables/requests/:id/authorize` o `/reject` (ADMIN o MANAGER, **distinto de quien la pidio**, igual que aprobar una liquidacion; rechazar lleva motivo) → `POST /payables/requests/:id/pay` (solo ADMIN: llama al mismo `pay` de siempre y, en la MISMA transaccion, deja la solicitud `PAID` con el id del pago; dos pagos simultaneos de la misma solicitud no la duplican). `POST /payables/requests/:id/cancel` (quien la pidio o un ADMIN; si ya estaba autorizada, pierde la autorizacion). Estados: REQUESTED → AUTHORIZED → PAID; tambien REJECTED y CANCELLED. Quien paga no tiene que ser distinto de quien autorizo (decision de Claude; si Leidy quiere cuatro ojos, es una linea). Anular el pago despues (`void`) NO reabre la solicitud: se pide otra. Rechazar usa el catalogo de motivos tipo `PAGO`.
+- **Pantallas.** Cuentas por Pagar: con la autorizacion encendida aparecen dos pestanas, «Cuentas» (el boton de la fila pasa a «Solicitar» y hay una columna «En trámite») y «Solicitudes de pago» (filtro por estado, «Autorizar»/«Pagar» como paso siguiente y «⋯» con Rechazar y Cancelar; cada paso muestra quien y cuando). Quien no puede hacer un paso ve el boton y recibe `SoloAdminDialog`; quien intenta autorizar lo suyo recibe el aviso de que debe hacerlo otra persona. La pantalla espera a conocer el ajuste antes de armar sus columnas.
+- **Aparte (CSS):** los botones de texto de las filas (`btn-sm-edit`: «Pagar», «Cerrar», «Ver Kardex»…) estaban en un cuadrado de 28px y, con dos en la fila, el texto de uno pisaba al otro; ahora `btn-sm-edit--texto` los ajusta a su texto (aplicado a todas las listas de Cacao).
+- **Probado por API (admin y gerente) y en navegador:** punto: crear, repetir nombre (409), gerente no crea (403), recepcion sin punto con puntos activos (400), punto de otra empresa/inexistente/desactivado (400), borrar con recepciones (409), recepcion con punto y filtro; pagos: solicitar con la autorizacion apagada (400), pago directo con ella encendida (400), solicitar de mas (400), autorizarse a si mismo (403), pagar sin autorizar (400), autorizar dos veces (400), gerente no paga (403), pagar actualiza la cuenta (PARTIAL) y deja la solicitud PAID, pagar dos veces (400), rechazar con motivo, cancelar. 175 pruebas del backend de Cacao. Lo creado se borro de la base local.
+
+## Decisiones de Leidy y pendientes (2026-10-27, al cerrar el dia)
+
+Leidy **no es la duena de Mikacao** ni conoce el negocio a fondo: decide lo que puede y el resto hay que confirmarlo con la empresa (duena, contabilidad, quien opera el acopio). Su «estructura recomendada» (libro maestro: maestros, recepcion, liquidacion, fijaciones, kardex, salida/exportacion, CxP, CxC, dashboard) fue de **lo primero que le enviaron**: se tomo como guia general, **no como especificacion**; el modulo ya la cubre.
+
+**Decididas**
+1. **SRI y facturacion: se hacen aqui** (ya no en Agrosoft). Es el trabajo mas grande que queda; ver «Plan del SRI» abajo.
+2. **Pagos con aprobacion: adelante → HECHO el 2026-10-28 (ver arriba).** (Leidy no sabia que era el «tercer paso»: hoy la liquidacion la aprueba otra persona y la paga un administrador; el tercer paso seria **solicitar el pago → alguien lo autoriza → recien ahi se paga**.) Disenar con el mismo estilo que la aprobacion de liquidaciones.
+3. **Cajas con apertura y cierre diario: probablemente no.** Dejarlo anotado por si acaso; no construir.
+4. **Acopio en varios puntos: si, son varios** → puntos de acopio en la recepcion HECHOS el 2026-10-28 (ver arriba). Falta lo de Agrosoft: Punto de Liquidacion y relaciones sucursal-punto.
+5. **Bascula: no se sabe** si el peso se digita o viene de un equipo. **Anotado para la proxima vez que se pueda revisar Agrosoft** (pistas ya vistas: columna «Tipo de registro» y KPI «tickets manuales» del Dashboard PAD, y una pantalla «Dispositivos» con 1 equipo registrado).
+
+**Plan del SRI (por confirmar con contabilidad)**: liquidacion de compra electronica (y retenciones si la empresa es agente de retencion; en Agrosoft el parametro «agente de retencion» esta en NO). Requiere: firma electronica (.p12) de la empresa y su clave (**nunca por chat: va a Secret Manager**), RUC, establecimientos y puntos de emision con sus secuencias, clave de acceso, XML firmado, envio al SRI (ambiente de pruebas primero) y RIDE en PDF. Las reglas tributarias (tarifas, topes de efectivo por documento y por proveedor, formas de pago) las debe confirmar contabilidad: no se asumen.
+
+**Sin decidir / dependen de datos externos**
+- Archivo para el banco: falta el formato del banco (un archivo de ejemplo sirve).
+- Exportaciones (orden de corte, plan de embarque con aprobacion, booking, factura de exportacion por DAE): falta verlas en Agrosoft.
+- Cupo de productor y consolidacion de deudas; contabilizar liquidaciones (diario contable, plan de cuentas): ligado a la decision del SRI/contabilidad.
+- Libra como unidad de entrada (Mikacao pesa en libras): pequeno; falta el ok.
+- Ticket de pesaje imprimible con QR: falta saber que lleva el QR.
+- Importar el historial de Agrosoft si Mikacao pasa a trabajar solo aqui.
+
+Detalle y comparacion completa en `G:\My Drive\SISTEMAS\MIKACAO\Analisis-Agrosoft-Mikacao.md`.
+
+## Filtros por columna en las listas y integración con el resto de la app — 2026-10-29
+
+- **Qué cambió.** Las 9 listas de Cacao (proveedores, clientes, recepciones, lotes, fijaciones, liquidaciones, cuentas por pagar, embarques, cuentas por cobrar) ahora llevan en cada encabezado el **botón único de ordenar y filtrar** que ya usan las demás tablas de la app (`ColumnFilter`, `useColumnFilters`; ver `RECOMENDACIONES_UX_UI.md` y `CLAUDE.md`, «Frontend layout rules»). Se arma una sola vez en `useTablaCacao.tsx`: cada columna declara `filtro` (`tipo: 'texto' | 'valores' | 'numero' | 'fecha'`, igual que en `useColumnFilters` pero sin `key` ni `etiqueta`, que salen de la columna). Las columnas con `orden` y sin `filtro` solo ordenan. Debajo de la barra salen los chips de los filtros puestos, y el botón de limpiar de cada pantalla (`limpiarBusqueda` / `hayBusqueda`) limpia buscador y filtros de columna a la vez. «Exportar a Excel» descarga lo ya filtrado y ordenado.
+- **Por qué así.** El PR de tablas con filtros por columna (periodo único del Dashboard) y Cacao se hicieron en paralelo y tocaban las mismas 9 pantallas; en vez de elegir uno, se conservó todo: de Cacao, «Columnas», ancho, búsqueda y Excel; del otro, el filtro por columna. Los filtros de cada columna se tomaron de lo que ese PR ya había definido y se completaron con las columnas que Cacao agregó después (punto de acopio, ticket, perfil de pesaje, chofer, placa, en trámite, estado de liquidación de la entrega).
+- **Dashboard de Compras.** El periodo único del Dashboard de Ventas quitó `SelectorPeriodo` y `periodoDesdeDias` de `DashboardBits.tsx`. El Dashboard de Cacao conserva su selector de «últimos 30 / 90 días, 6 meses, último año» como piezas locales de `CacaoDashboard.tsx`; si más adelante se quiere un periodo con calendario como el de Ventas, es una decisión aparte.

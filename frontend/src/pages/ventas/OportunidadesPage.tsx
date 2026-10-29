@@ -5,7 +5,7 @@ import { abrirChatDeVentas } from '../../services/chat.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import FilterField from '../../components/common/FilterField';
-import FiltroFecha from '../../components/common/FiltroFecha';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import ExportTableButton from '../../components/common/ExportTableButton';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
@@ -20,13 +20,14 @@ import PageTabs from '../../components/common/PageTabs';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 import { useSiguientePasoCliente } from '../../hooks/useSiguientePasoCliente';
 import { useCanalesLead } from '../../hooks/useCanalesLead';
 import EtapasAyuda from '../../components/ventas/EtapasAyuda';
 import { SIGNIFICADO_ETAPA, etapaPermitida } from '../../utils/etapasVentas';
 import { getUser } from '../../services/auth.service';
 import { urgenciaDe, hoyISO } from '../../utils/seguimientoVentas';
-import { FILTRO_FECHA_VACIO, diaCortoEcuador, fechaEnRango, filtroFechaDeUrl, hayFiltroFecha, type FiltroFechaValor } from '../../utils/rangoFechas';
+import { diaCortoEcuador } from '../../utils/rangoFechas';
 import { useToast } from '../../contexts/ToastContext';
 import {
   getOportunidades,
@@ -46,6 +47,8 @@ import {
   type SalesServicio,
 } from '../../services/ventas.service';
 import { diaCorto } from '../../utils/contratoComercial';
+import { ESTADOS_LISTA, SIN_CIUDAD, claveCiudad, claveProvincia, esVentaNueva, estadosDeOportunidad, textoUbicacion } from '../../utils/oportunidadesMapa';
+import { VENTAS_SOLO_NUEVAS, filtrosDeUrlOportunidades } from '../../utils/ventasFiltrosUrl';
 
 type ModalState = { modo: 'crear'; clienteId?: number } | { modo: 'editar'; oportunidad: Oportunidad } | null;
 
@@ -56,22 +59,26 @@ const COLUMNAS_OPP = [
   { key: 'monto', label: 'Monto cotizado' },
   { key: 'responsable', label: 'Responsable' },
   { key: 'origen', label: 'Origen' },
+  { key: 'ubicacion', label: 'Ubicación' },
   { key: 'llego', label: 'Llegó' },
   { key: 'telefono', label: 'Teléfono' },
   { key: 'correo', label: 'Correo' },
+  // Solo tiene dato en las perdidas. Se muestra sola al filtrar por ella (p. ej. desde el Dashboard).
+  { key: 'motivoPerdida', label: 'Motivo de pérdida' },
 ];
-const COLUMNAS_OPP_POR_DEFECTO = ['servicios', 'etapa', 'monto', 'responsable', 'origen', 'llego'];
+const COLUMNAS_OPP_POR_DEFECTO = ['servicios', 'etapa', 'monto', 'responsable', 'origen', 'ubicacion', 'llego'];
 // Lo que se puede exportar: las columnas de la tabla más algunas que no caben en pantalla.
 const COLUMNAS_EXPORTAR_OPP = [
   { key: 'cliente', label: 'Empresa o persona' },
   { key: 'titulo', label: 'Título' },
   ...COLUMNAS_OPP,
-  { key: 'motivoPerdida', label: 'Motivo de pérdida' },
   { key: 'cotizadoEl', label: 'Fecha de cotización' },
 ];
 const ANCHO_COLUMNA_OPP: Record<string, number> = {
-  servicios: 230, etapa: 175, monto: 140, responsable: 160, origen: 170, llego: 110, telefono: 130, correo: 200,
+  servicios: 230, etapa: 175, monto: 140, responsable: 160, origen: 170, ubicacion: 200, llego: 110, telefono: 130, correo: 200, motivoPerdida: 170,
 };
+// Qué filtros de columna tiene cada columna de la tabla (Ubicación tiene dos: provincia y ciudad).
+const FILTROS_DE_COLUMNA: Record<string, string[]> = { ubicacion: ['provincia', 'ciudad'] };
 
 const dinero = (v?: number | null) =>
   v == null ? '—' : `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -99,20 +106,13 @@ export default function OportunidadesPage() {
   const [editarCliente, setEditarCliente] = useState<SalesClient | null>(null);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
-  const [filtroEtapa, setFiltroEtapa] = useState('');
-  const [filtroResponsable, setFiltroResponsable] = useState('');
-  const [filtroServicio, setFiltroServicio] = useState('');
-  const [filtroOrigen, setFiltroOrigen] = useState('');
   const { canales } = useCanalesLead();
-  const [filtroMotivo, setFiltroMotivo] = useState('');
-  const [filtroFecha, setFiltroFecha] = useState<FiltroFechaValor>(FILTRO_FECHA_VACIO);
   const [modal, setModal] = useState<ModalState>(null);
   const [cambio, setCambio] = useState<{ oportunidad: Oportunidad; destino: SalesClientStage } | null>(null);
   const [aEliminar, setAEliminar] = useState<Oportunidad | null>(null);
   // Columnas que cada persona elige ver (preferencia en su cuenta). «Cliente» y
   // las acciones van siempre.
   const columnPrefs = useColumnPreferences('ventas-oportunidades', COLUMNAS_OPP_POR_DEFECTO);
-  const tablaRef = useResizableColumns('ventas-oportunidades', ['cliente', ...columnPrefs.visible, 'acciones']);
 
   const cargar = async () => {
     try {
@@ -135,6 +135,54 @@ export default function OportunidadesPage() {
     }
   };
   useEffect(() => { cargar(); }, []);
+
+  // Los filtros viven en la cabecera de cada columna (useColumnFilters), como en Posibles clientes. El origen sale de los
+  // canales (que cargan aparte): la copia fuerza a recalcular el filtro cuando llegan, para que un enlace con ?origen=… funcione.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `canales` no se lee dentro: es justo el motivo de la copia.
+  const filasBase = useMemo(() => oportunidades.slice(), [oportunidades, canales]);
+  const cf = useColumnFilters<Oportunidad>(filasBase, [
+    { key: 'cliente', etiqueta: 'Empresa o persona', tipo: 'texto', getValue: (o) => [o.salesClient.name, o.title].filter(Boolean).join(' ') },
+    { key: 'servicios', etiqueta: 'Servicios', tipo: 'valores', vacio: 'Sin servicio', getValues: (o) => o.services.map((s) => ({ valor: String(s.id), etiqueta: s.name })) },
+    {
+      key: 'etapa', etiqueta: 'Etapa', tipo: 'valores', vacio: 'Sin etapa', orden: etapas.map((e) => e.key),
+      etiquetasConocidas: Object.fromEntries(etapas.map((e) => [e.key, e.label])),
+      getValues: (o) => (o.status ? { valor: o.status, etiqueta: o.stage?.label ?? etapas.find((e) => e.key === o.status)?.label ?? o.status } : null),
+    },
+    { key: 'monto', etiqueta: 'Monto cotizado', tipo: 'numero', formato: dinero, getValue: (o) => o.quotedAmount },
+    {
+      key: 'responsable', etiqueta: 'Responsable', tipo: 'valores', vacio: 'Sin asignar',
+      getValues: (o) => (o.assignedUserId ? { valor: String(o.assignedUserId), etiqueta: o.assignedUserName || `Usuario ${o.assignedUserId}` } : null),
+    },
+    {
+      key: 'origen', etiqueta: 'Origen', tipo: 'valores',
+      orden: [...canales.map((c) => c.key), ...ORIGEN_OPORTUNIDAD_ESPECIALES.map((e) => e.clave)],
+      getValues: (o) => { const og = origenDeOportunidad(o, canales); return { valor: og.clave, etiqueta: og.etiqueta }; },
+    },
+    // Ubicación: dos filtros (provincia y ciudad), con las claves sin tildes que usa el mapa del Dashboard. La ciudad solo
+    // ofrece las de la provincia elegida: las casillas cuentan las filas que pasan los demás filtros.
+    {
+      key: 'provincia', etiqueta: 'Provincia', tipo: 'valores', vacio: 'Sin ubicación',
+      getValues: (o) => { const k = claveProvincia(o); return k ? { valor: k, etiqueta: o.ubicacion?.province?.trim() || 'Sin provincia' } : null; },
+    },
+    {
+      key: 'ciudad', etiqueta: 'Ciudad', tipo: 'valores', vacio: 'Sin ubicación', etiquetasConocidas: { [SIN_CIUDAD]: 'Sin ciudad' },
+      getValues: (o) => { const k = claveCiudad(o); return k ? { valor: k, etiqueta: o.ubicacion?.city?.trim() || 'Sin ciudad' } : null; },
+    },
+    { key: 'llego', etiqueta: 'Llegó', tipo: 'fecha', getValue: (o) => o.receivedAt },
+    { key: 'telefono', etiqueta: 'Teléfono', tipo: 'texto', getValue: (o) => o.salesClient.phone },
+    { key: 'correo', etiqueta: 'Correo', tipo: 'texto', getValue: (o) => o.salesClient.email },
+    { key: 'motivoPerdida', etiqueta: 'Motivo de pérdida', tipo: 'valores', vacio: 'Sin motivo', getValues: (o) => o.motivoPerdida?.label },
+    // Columnas OCULTAS, sin embudo: solo las activan los enlaces del Dashboard y del mapa, y se quitan desde su chip.
+    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', getValues: estadosDeOportunidad, etiquetasConocidas: Object.fromEntries(ESTADOS_LISTA.map((e) => [e.value, e.label])) },
+    {
+      key: 'ventas', etiqueta: 'Origen', tipo: 'valores',
+      getValues: (o) => (esVentaNueva(o) ? { valor: VENTAS_SOLO_NUEVAS, etiqueta: 'solo ventas nuevas (sin renovaciones ni «Ya era cliente»)' } : null),
+    },
+    {
+      key: 'oportunidad', etiqueta: 'Solo una oportunidad', tipo: 'valores',
+      getValues: (o) => ({ valor: String(o.id), etiqueta: `#${o.id} · ${o.salesClient.name}` }),
+    },
+  ]);
   const { abrirSiguientePaso, siguientePasoModal } = useSiguientePasoCliente(cargar);
 
   // La ficha se abre también para un prospecto que Clientes oculta: si no está
@@ -152,39 +200,38 @@ export default function OportunidadesPage() {
     setFichaId(id);
   };
 
-  // Llegadas desde otras pantallas: ?nueva=1&clienteId=N abre el formulario;
-  // ?etapa=X y ?seguimiento=... vienen del tablero.
+  // Llegadas desde otras pantallas: ?nueva=1&clienteId=N abre el formulario; ?ficha=N abre la ficha.
+  // Los demás parámetros (el Dashboard, el mapa, la ficha del Directorio) se vuelven filtros de columna y quedan a la
+  // vista como chip (ver filtrosDeUrlOportunidades). ?vista=hoy abre «Para hoy» y ?q=nombre deja escrita la búsqueda.
+  const { fijarVarios, quitar } = cf;
   useEffect(() => {
     if (searchParams.get('nueva') === '1') {
       setModal({ modo: 'crear', clienteId: Number(searchParams.get('clienteId')) || undefined });
     }
-    const etapa = searchParams.get('etapa');
-    if (etapa) setFiltroEtapa(etapa);
     const ficha = Number(searchParams.get('ficha'));
     if (ficha) abrirFicha(ficha);
-    // ?vista=hoy (cifras de seguimiento del Dashboard) y ?q=nombre (desde la
-    // ficha del Directorio: todas las oportunidades de esa empresa o persona).
     const vistaParam = searchParams.get('vista');
     if (vistaParam === 'hoy') setVista('hoy');
     const q = searchParams.get('q');
     if (q) { setBusqueda(q); setVista('todas'); }
-    // ?responsable=mine|all|<id> y ?origen=REFERIDO: el dashboard manda aquí con el mismo alcance que se estaba mirando.
-    // «mine» = quien tiene la sesión; «all» = sin filtro. En «Para hoy» el alcance tiene su propio selector.
+    // ?responsable=mine|all|<id>: el Dashboard manda aquí con el mismo alcance que se estaba mirando. «mine» = quien tiene
+    // la sesión; «all» = sin filtro. En «Para hoy» el alcance tiene su propio selector.
+    const filtros = filtrosDeUrlOportunidades(searchParams, currentUser?.id);
     const resp = searchParams.get('responsable');
-    if (resp) {
-      if (vistaParam === 'hoy') setHoyResponsable(resp);
-      else setFiltroResponsable(resp === 'all' ? '' : resp === 'mine' ? String(currentUser?.id ?? '') : resp);
+    if (resp && vistaParam === 'hoy') {
+      setHoyResponsable(resp);
+      delete filtros.responsable;
+    } else if (resp === 'all') {
+      quitar('responsable');
     }
-    const origen = searchParams.get('origen');
-    if (origen) { setFiltroOrigen(origen); setVista('todas'); }
-    // ?motivo=Precio: el Dashboard («Motivos de pérdida») lleva a las perdidas por ese motivo.
-    const motivoPerdida = searchParams.get('motivo');
-    if (motivoPerdida) { setFiltroMotivo(motivoPerdida); setVista('todas'); }
-    // ?desde=&hasta=: el periodo que se estaba mirando en el Dashboard; queda a la vista en el filtro «Llegó».
-    const fecha = filtroFechaDeUrl(searchParams.get('desde'), searchParams.get('hasta'));
-    if (fecha) { setFiltroFecha(fecha); setVista('todas'); }
-    if (searchParams.get('nueva') || etapa || ficha || vistaParam || q || resp || origen || motivoPerdida || fecha) setSearchParams({}, { replace: true });
-  }, [searchParams, setSearchParams]);
+    fijarVarios(filtros);
+    // Lo que pide origen, motivo, periodo, ubicación, estado o una oportunidad solo se ve en «Todas».
+    if (['origen', 'ventas', 'motivoPerdida', 'llego', 'provincia', 'ciudad', 'estado', 'oportunidad'].some((k) => k in filtros)) setVista('todas');
+    if (['nueva', 'etapa', 'ficha', 'vista', 'q', 'responsable', 'origen', 'motivo', 'desde', 'hasta', 'provincia', 'ciudad', 'estado', 'oportunidad'].some((k) => searchParams.get(k))) {
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- usuario no cambia mientras la pantalla está abierta.
+  }, [searchParams, setSearchParams, fijarVarios, quitar]);
 
   const responsables = useMemo(
     () => Array.from(new Map(oportunidades.filter((o) => o.assignedUserId && o.assignedUserName).map((o) => [o.assignedUserId!, o.assignedUserName!])).entries())
@@ -216,25 +263,18 @@ export default function OportunidadesPage() {
     });
   }, [clientes, oportunidades, busqueda, hoyResponsable, esManager, currentUser?.id, hoy]);
 
+  // Los filtros de columna ya se aplicaron (cf.filas); aquí solo falta el buscador general.
   const filtradas = useMemo(() => {
     const q = busqueda.toLowerCase().trim();
-    return oportunidades.filter((o) => {
-      if (filtroEtapa === 'none' ? !!o.status : filtroEtapa && o.status !== filtroEtapa) return false;
-      if (filtroResponsable === 'none' ? !!o.assignedUserId : filtroResponsable && String(o.assignedUserId) !== filtroResponsable) return false;
-      if (filtroServicio && !o.services.some((s) => String(s.id) === filtroServicio)) return false;
-      if (filtroOrigen && origenDeOportunidad(o, canales).clave !== filtroOrigen) return false;
-      if (filtroMotivo && o.motivoPerdida?.label !== filtroMotivo) return false;
-      if (!fechaEnRango(o.receivedAt, filtroFecha)) return false;
-      if (!q) return true;
-      return (
-        o.salesClient.name.toLowerCase().includes(q) ||
-        (o.title || '').toLowerCase().includes(q) ||
-        o.services.some((s) => s.name.toLowerCase().includes(q))
-      );
-    });
-  }, [oportunidades, canales, busqueda, filtroEtapa, filtroResponsable, filtroServicio, filtroOrigen, filtroMotivo, filtroFecha]);
+    if (!q) return cf.filas;
+    return cf.filas.filter((o) => (
+      o.salesClient.name.toLowerCase().includes(q) ||
+      (o.title || '').toLowerCase().includes(q) ||
+      o.services.some((s) => s.name.toLowerCase().includes(q))
+    ));
+  }, [cf.filas, busqueda]);
 
-  const { filas, thProps, SortIcon } = useSortableTable(
+  const { filas, thProps, ordenDe } = useSortableTable(
     filtradas,
     {
       cliente: (o) => o.salesClient.name,
@@ -243,9 +283,11 @@ export default function OportunidadesPage() {
       monto: (o) => o.quotedAmount ?? -1,
       responsable: (o) => o.assignedUserName,
       origen: (o) => origenDeOportunidad(o, canales).etiqueta,
+      ubicacion: (o) => textoUbicacion(o),
       llego: (o) => o.receivedAt,
       telefono: (o) => o.salesClient.phone,
       correo: (o) => o.salesClient.email,
+      motivoPerdida: (o) => o.motivoPerdida?.label,
     },
     'llego',
     'desc',
@@ -369,17 +411,32 @@ export default function OportunidadesPage() {
         return o.assignedUserName || <span style={{ color: '#a0aec0' }}>Sin asignar</span>;
       case 'origen':
         return origenDeOportunidad(o, canales).etiqueta;
+      case 'ubicacion': {
+        const t = textoUbicacion(o);
+        return t ? <span className="truncate" title={o.ubicacion?.address || t}>{t}</span> : <span style={{ color: '#a0aec0' }}>—</span>;
+      }
       case 'llego':
         return diaCortoEcuador(o.receivedAt);
       case 'telefono':
         return o.salesClient.phone || '—';
       case 'correo':
         return o.salesClient.email || '—';
+      case 'motivoPerdida':
+        return o.motivoPerdida?.label || '—';
       default:
         return null;
     }
   };
-  const columnasVisiblesOpp = columnPrefs.visible.filter((k) => COLUMNAS_OPP.some((c) => c.key === k));
+  // Una columna con filtro activo siempre se ve (p. ej. «Motivo de pérdida» al llegar del Dashboard), aunque no esté elegida.
+  const columnasVisiblesOpp = useMemo(() => {
+    const elegidas = columnPrefs.visible.filter((k) => COLUMNAS_OPP.some((c) => c.key === k));
+    const filtradasOcultas = COLUMNAS_OPP
+      .filter((c) => !elegidas.includes(c.key) && (FILTROS_DE_COLUMNA[c.key] ?? [c.key]).some((f) => !!cf.filtro(f)))
+      .map((c) => c.key);
+    return [...elegidas, ...filtradasOcultas];
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cf.filtro lee los filtros de ese momento; se recalcula cuando cambian.
+  }, [columnPrefs.visible, cf.filtros]);
+  const tablaRef = useResizableColumns('ventas-oportunidades', ['cliente', ...columnasVisiblesOpp, 'acciones']);
   // Valor en texto plano de cada columna, para exportar (la tabla dibuja JSX).
   const valorExportarOpp = (o: Oportunidad, key: string): string | number => {
     switch (key) {
@@ -390,6 +447,7 @@ export default function OportunidadesPage() {
       case 'monto': return o.quotedAmount ?? '';
       case 'responsable': return o.assignedUserName || 'Sin asignar';
       case 'origen': return origenDeOportunidad(o, canales).etiqueta;
+      case 'ubicacion': return textoUbicacion(o);
       case 'llego': return diaCortoEcuador(o.receivedAt);
       case 'telefono': return o.salesClient.phone || '';
       case 'correo': return o.salesClient.email || '';
@@ -399,11 +457,8 @@ export default function OportunidadesPage() {
     }
   };
 
-  const hayFiltros = !!busqueda || !!filtroEtapa || !!filtroResponsable || !!filtroServicio || !!filtroOrigen || !!filtroMotivo || hayFiltroFecha(filtroFecha);
-  const motivosDePerdida = useMemo(
-    () => [...new Set(oportunidades.map((o) => o.motivoPerdida?.label).filter((m): m is string => !!m))].sort((a, b) => a.localeCompare(b, 'es')),
-    [oportunidades],
-  );
+  const hayFiltros = !!busqueda || cf.hayFiltros;
+  const limpiarTodo = () => { setBusqueda(''); cf.limpiar(); setHoyResponsable('mine'); };
 
   return (
     <div className="page-container">
@@ -437,7 +492,7 @@ export default function OportunidadesPage() {
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder={vista === 'hoy' ? 'Buscar por nombre, teléfono o correo...' : 'Buscar por empresa o persona, título o servicio...'}
-            style={{ padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
+            style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
           {vista === 'hoy' ? (
             esManager ? (
@@ -449,45 +504,7 @@ export default function OportunidadesPage() {
                 </select>
               </FilterField>
             ) : null
-          ) : (
-          <>
-          <FilterField label="Etapa">
-            <select className="filter-select" value={filtroEtapa} onChange={(e) => setFiltroEtapa(e.target.value)}>
-              <option value="">Todas</option>
-              {etapas.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-          </FilterField>
-          <FilterField label="Responsable">
-            <select className="filter-select" value={filtroResponsable} onChange={(e) => setFiltroResponsable(e.target.value)}>
-              <option value="">Todos</option>
-              <option value="none">Sin responsable</option>
-              {responsables.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
-            </select>
-          </FilterField>
-          <FilterField label="Servicio">
-            <select className="filter-select" value={filtroServicio} onChange={(e) => setFiltroServicio(e.target.value)}>
-              <option value="">Todos</option>
-              {servicios.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </FilterField>
-          {(filtroEtapa === 'RECHAZADO' || !!filtroMotivo) && (
-            <FilterField label="Motivo de pérdida">
-              <select className="filter-select" value={filtroMotivo} onChange={(e) => setFiltroMotivo(e.target.value)}>
-                <option value="">Todos</option>
-                {motivosDePerdida.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </FilterField>
-          )}
-          <FilterField label="Origen">
-            <select className="filter-select" value={filtroOrigen} onChange={(e) => setFiltroOrigen(e.target.value)}>
-              <option value="">Todos</option>
-              {canales.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-              {ORIGEN_OPORTUNIDAD_ESPECIALES.map((e) => <option key={e.clave} value={e.clave}>{e.etiqueta}</option>)}
-            </select>
-          </FilterField>
-          <FiltroFecha label="Llegó" valor={filtroFecha} onChange={setFiltroFecha} title="Filtra por el día en que llegó la oportunidad (la columna «Llegó»)" />
-          </>
-          )}
+          ) : null}
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu
@@ -504,7 +521,7 @@ export default function OportunidadesPage() {
             disabledTitle="La pestaña Para hoy tiene columnas fijas; cambia a Todas para elegir las tuyas"
           />
           <ClearFiltersButton
-            onClear={() => { setBusqueda(''); setFiltroEtapa(''); setFiltroResponsable(''); setFiltroServicio(''); setFiltroOrigen(''); setFiltroMotivo(''); setFiltroFecha(FILTRO_FECHA_VACIO); setHoyResponsable('mine'); }}
+            onClear={limpiarTodo}
             disabled={vista === 'hoy' ? !busqueda && hoyResponsable === 'mine' : !hayFiltros}
           />
           <ExportTableButton
@@ -519,6 +536,9 @@ export default function OportunidadesPage() {
           />
         </div>
       </div>
+
+      {/* Los filtros de columna (incluidos los que llegan del Dashboard y del mapa) se repiten aquí, quitables uno a uno. */}
+      {vista === 'todas' && <ChipsFiltros cf={cf} />}
 
       <div className="admin-section">
         {cargando ? (
@@ -544,19 +564,28 @@ export default function OportunidadesPage() {
               accionesFila={accionesHoy}
             />
           )
-        ) : filas.length === 0 ? (
-          <p style={{ color: '#888', fontSize: 13 }}>No hay negociaciones que coincidan con los filtros.</p>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
-                  <th {...thProps('cliente')} style={{ width: 200 }}>Empresa o persona <SortIcon campo="cliente" /></th>
+                  <th {...thProps('cliente')} style={{ width: 200 }}>Empresa o persona <ColumnFilter cf={cf} col="cliente" orden={ordenDe('cliente')} /></th>
                   {columnasVisiblesOpp.map((k) => {
                     const col = COLUMNAS_OPP.find((c) => c.key === k)!;
                     return (
                       <th key={k} {...thProps(k)} style={{ width: ANCHO_COLUMNA_OPP[k] }}>
-                        {col.label} <SortIcon campo={k} />
+                        {col.label}{' '}
+                        {k === 'ubicacion' ? (
+                          <>
+                            <ColumnFilter cf={cf} col="provincia" segundo />
+                            <ColumnFilter cf={cf} col="ciudad" orden={ordenDe('ubicacion')} />
+                          </>
+                        ) : (
+                          <ColumnFilter
+                            cf={cf} col={k} etiqueta={col.label}
+                            orden={ordenDe(k, k === 'etapa' ? ['Primeras', 'Últimas'] : undefined)}
+                          />
+                        )}
                         {k === 'etapa' && <EtapasAyuda etapas={etapas} />}
                       </th>
                     );
@@ -565,6 +594,13 @@ export default function OportunidadesPage() {
                 </tr>
               </thead>
               <tbody>
+                {filas.length === 0 && (
+                  <FilaSinResultados
+                    columnas={columnasVisiblesOpp.length + 2}
+                    mensaje="No hay negociaciones que coincidan con los filtros."
+                    onLimpiar={hayFiltros ? limpiarTodo : undefined}
+                  />
+                )}
                 {filas.map((o) => (
                   <tr key={o.id}>
                     <td>

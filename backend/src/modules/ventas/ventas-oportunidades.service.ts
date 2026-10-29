@@ -15,6 +15,7 @@ import { KINDS_MOTIVO_PERDIDA, MOTIVO_SIN_INFORMACION, ultimoMotivoPorOportunida
 import { VentasConversionesService } from './ventas-conversiones.service';
 import { VentasAcuerdosService } from './ventas-acuerdos.service';
 import { parseSiguientePaso } from './siguiente-paso.util';
+import { errorDeLlegada, llegadaParaCrear, llegadaParaEditar } from './fecha-llegada.util';
 import {
   columnasDeUbicacion,
   limpiarUbicacion,
@@ -546,6 +547,9 @@ export class VentasOportunidadesService {
     const quotedAmount = this.validarMonto(dto.quotedAmount);
     const quotedAt = this.parseDia(dto.quotedAt, 'La fecha de cotización');
     const ubicacion = dto.ubicacion ? limpiarUbicacion(dto.ubicacion) : null;
+    // La fecha de llegada es de la OPORTUNIDAD: sin elegir, es ahora; jamás la fecha de ingreso de la empresa
+    // o persona del Directorio (una empresa vieja puede abrir hoy una negociación nueva).
+    const receivedAt = llegadaParaCrear(dto.receivedAt);
     const existentes = await this.prisma.salesOpportunity.count({
       where: { salesClientId: cliente.id },
     });
@@ -562,6 +566,7 @@ export class VentasOportunidadesService {
         assignedUserId: dto.assignedUserId === undefined ? userId : dto.assignedUserId,
         source: fuente,
         originType: existentes > 0 ? 'CLIENTE_EXISTENTE' : 'MANUAL',
+        receivedAt,
         serviceIds,
         title: this.texto(dto.title, MAX_TITULO, 'El título'),
         notes: this.texto(dto.notes, MAX_NOTAS, 'Las notas'),
@@ -579,10 +584,26 @@ export class VentasOportunidadesService {
     const cid = this.requireCompany(companyId);
     const actual = await this.prisma.salesOpportunity.findFirst({
       where: { id, companyId: cid },
-      select: { id: true },
+      select: { id: true, receivedAt: true, closedAt: true },
     });
     if (!actual) throw new NotFoundException('Oportunidad no encontrada');
     const data: Prisma.SalesOpportunityUpdateInput = {};
+    // «Fecha en que llegó»: solo se reescribe si cambió el día. Como los tiempos de respuesta, cotización y ciclo
+    // se miden desde ahí, no puede quedar después del primer cambio de etapa ni del cierre.
+    const llegada = llegadaParaEditar(dto.receivedAt, actual.receivedAt);
+    if (llegada) {
+      const primerCambio = await this.prisma.salesOpportunityStageChange.findFirst({
+        where: { opportunityId: id },
+        orderBy: { createdAt: 'asc' },
+        select: { createdAt: true },
+      });
+      const problema = errorDeLlegada(llegada, {
+        primerCambioDeEtapa: primerCambio?.createdAt ?? null,
+        cerradaEl: actual.closedAt,
+      });
+      if (problema) throw new BadRequestException(problema);
+      data.receivedAt = llegada;
+    }
     if (dto.title !== undefined) data.title = this.texto(dto.title, MAX_TITULO, 'El título');
     if (dto.notes !== undefined) data.notes = this.texto(dto.notes, MAX_NOTAS, 'Las notas');
     if (dto.quotedAmount !== undefined) data.quotedAmount = this.validarMonto(dto.quotedAmount);

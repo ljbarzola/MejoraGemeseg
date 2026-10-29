@@ -16,33 +16,26 @@ import { Section } from '../../../common/decorators/section.decorator';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { UserRole } from '@prisma/client';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { CacaoQualitiesService } from './qualities.service';
+import { CreateQualityDto, UpdateQualityDto } from './dto/quality.dto';
 
 @Controller('cacao/qualities')
 export class CacaoQualitiesController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly service: CacaoQualitiesService) {}
 
   @Get()
   @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
   @Section('CACAO', 'view')
-  findAll() {
-    return this.prisma.cacaoQuality.findMany({ orderBy: { name: 'asc' } });
+  findAll(@Req() req: any) {
+    return this.service.findAll(req.user.companyId);
   }
 
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
   @Roles(UserRole.ADMIN)
   @Section('CACAO', 'write')
-  create(
-    @Body()
-    dto: {
-      name: string;
-      humidityDiscount?: number;
-      impurityDiscount?: number;
-      isFixedPrice?: boolean;
-    },
-  ) {
-    return this.prisma.cacaoQuality.create({ data: dto });
+  create(@Body() dto: CreateQualityDto, @Req() req: any) {
+    return this.service.create(dto, req.user.companyId);
   }
 
   @Patch(':id')
@@ -51,22 +44,17 @@ export class CacaoQualitiesController {
   @Section('CACAO', 'write')
   update(
     @Param('id', ParseIntPipe) id: number,
-    @Body()
-    dto: {
-      name?: string;
-      humidityDiscount?: number;
-      impurityDiscount?: number;
-      isFixedPrice?: boolean;
-    },
+    @Body() dto: UpdateQualityDto,
+    @Req() req: any,
   ) {
-    return this.prisma.cacaoQuality.update({ where: { id }, data: dto });
+    return this.service.update(id, dto, req.user.companyId);
   }
 
   @Delete(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
   @Roles(UserRole.ADMIN)
   @Section('CACAO', 'write')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.prisma.cacaoQuality.delete({ where: { id } });
+  remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.service.remove(id, req.user.companyId);
   }
 }

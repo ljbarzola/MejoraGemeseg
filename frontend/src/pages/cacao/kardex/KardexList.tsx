@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getKardex, getLots } from '../../../services/cacao.service';
 import { formatDateEc, formatMoney, formatKg } from '../utils';
+import { ABREVIATURA_UNIDAD as UNIT_ABBR } from '../useCacaoUnidades';
 
-const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
 
 interface KardexEntry {
   id: number;

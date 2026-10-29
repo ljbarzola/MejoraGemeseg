@@ -20,6 +20,9 @@ import {
 import { usePerm } from '../../contexts/PermissionsContext';
 import { buildDriveFolderLink } from '../../utils/driveLink';
 import FileOrLinkInput from '../../components/common/FileOrLinkInput';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
+import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 
 const DRIVE_FOLDER_TYPE = 'CAPACITACIONES';
 const EMPTY_FORM = { name: '', type: 'INDUCCION', customType: '', description: '', dueDate: '', isAnnualPlan: false };
@@ -471,6 +474,22 @@ export default function TrainingsPage() {
     }
   };
 
+  // Los filtros viven en la cabecera de cada columna (useColumnFilters). Va antes del return de «Cargando…»
+  // para que los hooks se llamen siempre en el mismo orden.
+  const cf = useColumnFilters<Training>(trainings, [
+    { key: 'nombre', etiqueta: 'Capacitación', tipo: 'texto', getValue: (t) => `${t.name} ${t.description || ''}` },
+    { key: 'tipo', etiqueta: 'Tipo', tipo: 'valores', orden: TRAINING_TYPES.map((x) => x.value), getValues: (t) => ({ valor: t.type, etiqueta: typeLabel(t.type) }) },
+    {
+      key: 'plan', etiqueta: 'Plan', tipo: 'valores', orden: ['ANUAL', 'PUNTUAL'],
+      getValues: (t) => (t.isAnnualPlan ? { valor: 'ANUAL', etiqueta: 'Plan anual' } : { valor: 'PUNTUAL', etiqueta: 'Puntual' }),
+    },
+    { key: 'fecha', etiqueta: 'Fecha límite', tipo: 'fecha', getValue: (t) => t.dueDate },
+    {
+      key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['PENDIENTE', 'COMPLETADA'],
+      getValues: (t) => (t.completed ? { valor: 'COMPLETADA', etiqueta: 'Completada' } : { valor: 'PENDIENTE', etiqueta: 'Pendiente' }),
+    },
+  ]);
+
   if (loading || loadingConfig) return <div className="loading-state">Cargando capacitaciones...</div>;
 
   const editDocs = (editingTraining?.attachments || []).filter((a) => a.kind === 'DOCUMENTO');
@@ -520,6 +539,17 @@ export default function TrainingsPage() {
       {revertError && <div ref={revertErrorRef} className="form-error" style={{ marginBottom: '16px' }}>{revertError}</div>}
 
       <div className="admin-section">
+        {trainings.length > 0 && (
+          <>
+            <div className="filter-bar" style={{ marginBottom: '8px' }}>
+              <div className="filter-bar-fields" />
+              <div className="filter-bar-actions">
+                <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+              </div>
+            </div>
+            <ChipsFiltros cf={cf} />
+          </>
+        )}
         {trainings.length === 0 ? (
           <div className="empty-state">No hay capacitaciones registradas todavía.</div>
         ) : (
@@ -527,15 +557,18 @@ export default function TrainingsPage() {
             <table className="tasks-table">
               <thead>
                 <tr>
-                  <th>Capacitación</th>
-                  <th>Tipo</th>
-                  <th>Fecha límite</th>
-                  <th>Estado</th>
+                  <th>Capacitación<ColumnFilter cf={cf} col="nombre" orden={cf.ordenDe('nombre')} /></th>
+                  <th>Tipo<ColumnFilter cf={cf} col="plan" segundo /><ColumnFilter cf={cf} col="tipo" orden={cf.ordenDe('tipo')} /></th>
+                  <th>Fecha límite<ColumnFilter cf={cf} col="fecha" orden={cf.ordenDe('fecha')} /></th>
+                  <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
                   <th style={{ textAlign: 'right' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {trainings.map((t) => (
+                {cf.filas.length === 0 && (
+                  <FilaSinResultados columnas={5} mensaje="No hay capacitaciones que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                )}
+                {cf.filas.map((t) => (
                   <tr key={t.id}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

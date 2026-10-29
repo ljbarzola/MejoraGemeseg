@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
@@ -33,6 +37,15 @@ export class CacaoClientsService {
       where: { id, companyId },
     });
     if (!client) throw new NotFoundException('Cliente no encontrado');
+    // Con embarques a su nombre no se borra: se perdería el rastro de lo vendido.
+    const embarques = await this.prisma.cacaoShipment.count({
+      where: { clientId: id },
+    });
+    if (embarques > 0) {
+      throw new ConflictException(
+        'Este cliente ya tiene embarques registrados, por eso no se puede eliminar',
+      );
+    }
     return this.prisma.cacaoClient.delete({ where: { id } });
   }
 }

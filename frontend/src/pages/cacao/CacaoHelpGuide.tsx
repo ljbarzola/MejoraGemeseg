@@ -1,18 +1,23 @@
 import { useNavigate } from 'react-router-dom';
+import { useCompany } from '../../contexts/ThemeContext';
+import PageHeader from '../../components/common/PageHeader';
 
 const STEPS = [
   {
     num: 1,
-    title: 'Maestros (Configuración Inicial)',
+    title: 'Configuración inicial',
     icon: '⚙️',
     color: '#4a5568',
-    description: 'Antes de usar el sistema, configure los catálogos base que alimentarán todos los demás módulos.',
+    description: 'Tu empresa empieza sin nada cargado: antes de registrar la primera compra, deja listo lo propio de tu empresa.',
     details: [
       { label: 'Proveedores', desc: 'Registre cada proveedor con nombre, RUC, condición de pago y datos bancarios. Los proveedores aparecerán al crear recepciones y liquidaciones.', path: '/cacao/suppliers' },
       { label: 'Clientes / Exportadores', desc: 'Registre los destinos de exportación: nombre, país, contacto. Se usarán al crear embarques.', path: '/cacao/clients' },
-      { label: 'Calidades de Cacao', desc: 'Defina las calidades (Convencional, Orgánico, Fino de Aroma, etc.) con sus descuentos por humedad e impurezas, y si tienen precio fijo o provisional.', path: '/cacao/qualities' },
+      { label: 'Calidades de cacao', desc: 'Crea las calidades que maneja tu empresa con sus descuentos por humedad e impurezas, y si tienen precio fijo o provisional. Está en Configuración → Calidades.', path: '/cacao/configuracion?tab=calidades' },
+      { label: 'Unidades de medida', desc: 'Indica cuánto pesa un saco en tu empresa. Solo hace falta si compras o vendes en sacos; las toneladas, los quintales (100 libras) y los kilos no necesitan configuración.', path: '/cacao/configuracion?tab=unidades' },
+      { label: 'Plazos', desc: 'Define en cuántos días se paga a un proveedor y en cuántos se cobra a un cliente. Cada liquidación y cada embarque puede cambiar el suyo.', path: '/cacao/configuracion?tab=plazos' },
+      { label: 'Motivos (opcional)', desc: 'Arma tu lista de motivos para rechazar o anular liquidaciones y pagos, cerrar entregas sin liquidar y anular recepciones y embarques. Si no armas ninguna, el motivo se escribe a mano.', path: '/cacao/configuracion?tab=motivos' },
     ],
-    tip: 'Registre primero los proveedores y calidades. El sistema viene con 5 calidades predefinidas.',
+    tip: 'El Dashboard y Reportes (en el menú, «Análisis») resumen lo comprado, lo vendido y lo que vence; las listas se pueden buscar y descargar en Excel. El sistema no trae calidades, pesos, plazos, motivos ni precio ICE de fábrica: son los de tu empresa. El Dashboard te muestra qué pasos te faltan.',
   },
   {
     num: 2,
@@ -21,8 +26,12 @@ const STEPS = [
     color: '#2b6cb0',
     description: 'Cada vez que un proveedor entrega cacao, registre una recepción. El sistema generará automáticamente un lote que viajará por todo el sistema.',
     details: [
-      { label: 'Datos que registra', desc: 'Fecha, proveedor, guía de remisión, unidad de medida (TON/KG/SACO), peso bruto, tara, humedad %, impurezas %, calidad, precio provisional y diferencial pactado.' },
-      { label: 'Conversión automática', desc: 'Si registra en Toneladas o Sacos, el sistema convierte automáticamente a Kilogramos para el kárdex y el lote. La unidad original queda registrada para consulta.' },
+      { label: 'Datos que registra', desc: 'Fecha, proveedor, guía de remisión, unidad de medida (TON/QQ/KG/SACO), peso bruto, tara, humedad %, impurezas %, calidad, precio provisional y diferencial pactado.' },
+      { label: 'Cerrar sin liquidar', desc: 'Si una entrega no se le va a pagar al proveedor, en Recepciones pulsa «Cerrar» e indica el motivo: deja de ofrecerse al liquidar y queda registrado quién, cuándo y por qué. «Reabrir» la devuelve. No se puede cerrar una entrega que ya está liquidada por completo.' },
+      { label: 'Anular por error', desc: 'Si registraste mal una recepción, anúlala desde el menú «⋯» de su fila en Recepciones (solo administradores): el lote queda en cero. Solo se puede si no se ha liquidado, embarcado ni fijado su precio. Un embarque mal registrado se anula con «Anular embarque» en su detalle: los kilos vuelven a sus lotes y la cuenta por cobrar se anula (si ya tiene cobros, primero anúlalos).' },
+      { label: 'Punto de acopio', desc: 'Si tu empresa recibe cacao en varias sucursales, créalas en Configuración → Puntos de acopio. Desde ese momento, cada recepción debe decir en cuál se recibió, y Recepciones muestra la columna «Punto de acopio». Sin puntos creados, no se pide.' },
+      { label: 'Ticket de pesaje (opcional)', desc: 'Número de ticket (no se repite en tu empresa), perfil de pesaje (por bultos o en báscula), chofer y placa del vehículo. En Recepciones puedes mostrar u ocultar estas columnas con «Columnas».' },
+      { label: 'Conversión automática', desc: 'Si registra en Toneladas, Quintales o Sacos, el sistema convierte automáticamente a Kilogramos para el kárdex y el lote (un quintal son 100 libras, 45,36 kg; el saco pesa lo que configuró tu empresa). La unidad original queda registrada para consulta.' },
       { label: 'Lote generado', desc: 'El sistema asigna un código (ej: LOTE-2026-001) que identificará este cacao en liquidaciones, fijaciones, kárdex y embarques.' },
       { label: 'Precio', desc: 'Si la calidad tiene precio fijo, se asigna automáticamente. Si es provisional, puede dejarlo vacío y fijarlo después.' },
     ],
@@ -34,15 +43,17 @@ const STEPS = [
     title: 'Liquidación de Compra',
     icon: '📋',
     color: '#6b46c1',
-    description: 'Cierra la recepción: aplica descuentos de calidad, calcula el valor neto a pagar al proveedor y genera la cuenta por pagar.',
+    description: 'Cierra la recepción: aplica descuentos de calidad, calcula el valor neto a pagar al proveedor. La cuenta por pagar se genera cuando un gerente aprueba la liquidación.',
     details: [
-      { label: 'Proceso', desc: 'Seleccione el proveedor y el periodo. El sistema muestra los lotes pendientes de liquidar de ese proveedor.' },
-      { label: 'Descuentos', desc: 'Por cada lote se aplican los descuentos de humedad e impurezas definidos en la calidad. Se muestra el desglose completo.' },
-      { label: 'Resultado', desc: 'Peso neto descontado × precio/kg = subtotal por lote. Total = monto a pagar al proveedor. Se genera automáticamente la CxP.' },
-      { label: 'Agrupación', desc: 'Una liquidación puede agrupar varios lotes del mismo proveedor en un periodo determinado.' },
+      { label: 'Proceso', desc: 'Seleccione el proveedor y el periodo. El sistema muestra los lotes de ese proveedor con el peso que aún está pendiente de liquidar; no deja liquidar dos veces el mismo peso.' },
+      { label: 'Descuentos', desc: 'Por cada lote se aplican los descuentos de humedad e impurezas definidos en la calidad, y puede editarlos por lote (también el castigo de calidad en $/kg). Se muestra el desglose completo.' },
+      { label: 'Resultado', desc: 'Peso neto descontado × precio/kg = subtotal por lote. Total = monto a pagar al proveedor, calculado por el sistema al guardar. La liquidación queda "Por aprobar".' },
+      { label: 'Agrupación', desc: 'Una liquidación puede agrupar varios lotes del mismo proveedor en un periodo determinado. También se indica el plazo de pago en días (30 por defecto).' },
+      { label: 'Aprobar varias a la vez', desc: 'En la lista de Liquidaciones marca las casillas de las pendientes (o usa «Seleccionar por aprobar») y pulsa «Aprobar seleccionadas». Cada una sigue la misma regla: no la aprueba quien la creó. Al terminar te dice cuáles se aprobaron y cuáles no, y por qué.' },
+      { label: 'Aprobación', desc: 'Un gerente (o administrador) distinto de quien la creó la aprueba o la rechaza con un motivo. Al aprobarla nace la cuenta por pagar. Si se aprobó por error y aún no tiene pagos, puede anularse.' },
     ],
     path: '/cacao/settlements/new',
-    tip: 'Revise el desglose de descuentos antes de confirmar. Una vez creada, la liquidación genera la CxP automáticamente.',
+    tip: 'Revise el desglose de descuentos antes de confirmar. La cuenta por pagar solo se genera cuando otra persona aprueba la liquidación.',
   },
   {
     num: 4,
@@ -93,10 +104,11 @@ const STEPS = [
     title: 'Cuentas por Pagar (CxP)',
     icon: '📤',
     color: '#c53030',
-    description: 'Generadas automáticamente por las liquidaciones de compra. Controla pagos parciales, saldos y antigüedad.',
+    description: 'Se generan cuando se aprueba una liquidación de compra. Controla pagos parciales, saldos y antigüedad.',
     details: [
-      { label: 'Origen', desc: 'Cada liquidación crea una CxP con el monto total a pagar al proveedor.' },
-      { label: 'Pagos', desc: 'Registre pagos parciales o totales. El sistema actualiza el saldo automáticamente.' },
+      { label: 'Origen', desc: 'Cada liquidación aprobada crea una CxP con el monto total a pagar al proveedor. Una liquidación anulada anula también su CxP.' },
+      { label: 'Pagos', desc: 'Registre pagos parciales o totales (no se puede pagar más que el saldo). El sistema actualiza el saldo automáticamente. El botón "Pagos" muestra el historial y permite anular un pago registrado por error, indicando el motivo.' },
+      { label: 'Autorización de pagos (opcional)', desc: 'Si tu empresa lo activa en Configuración → Pagos, pagar tiene tres pasos: alguien SOLICITA el pago (botón «Solicitar»), otra persona lo AUTORIZA (o lo rechaza con motivo; nunca quien lo pidió) y el administrador lo PAGA. Se ven en la pestaña «Solicitudes de pago», con quién hizo cada paso y cuándo. Mientras la autorización esté activa, el pago directo no está disponible.' },
       { label: 'Filtros', desc: 'Puede ver por proveedor, estado (pendiente/pagado), y antigüedad de saldos.' },
     ],
     path: '/cacao/payables',
@@ -110,7 +122,7 @@ const STEPS = [
     description: 'Generadas automáticamente por los embarques/exportaciones. Controla cobros, saldos y antigüedad.',
     details: [
       { label: 'Origen', desc: 'Cada embarque crea una CxC con el monto total a cobrar al cliente.' },
-      { label: 'Cobros', desc: 'Registre cobros parciales o totales. El sistema actualiza el saldo automáticamente.' },
+      { label: 'Cobros', desc: 'Registre cobros parciales o totales (no se puede cobrar más que el saldo). El botón "Cobros" muestra el historial y permite anular un cobro registrado por error, indicando el motivo.' },
       { label: 'Filtros', desc: 'Puede ver por cliente, estado, y antigüedad de saldos.' },
     ],
     path: '/cacao/receivables',
@@ -122,7 +134,7 @@ const FLOW = [
   { from: 'Proveedor', to: 'Recepción', label: 'Entrega cacao', color: '#2b6cb0' },
   { from: 'Recepción', to: 'Lote', label: 'Se genera lote', color: '#2c7a7b' },
   { from: 'Lote', to: 'Liquidación', label: 'Se aplica descuentos', color: '#6b46c1' },
-  { from: 'Liquidación', to: 'CxP', label: 'Se genera deuda', color: '#c53030' },
+  { from: 'Liquidación', to: 'CxP', label: 'Al aprobarla, nace la deuda', color: '#c53030' },
   { from: 'Lote', to: 'Fijación', label: 'Se fija precio', color: '#b7791f' },
   { from: 'Lote', to: 'Embarque', label: 'Se vende/exporta', color: '#2f855a' },
   { from: 'Embarque', to: 'CxC', label: 'Se genera cobro', color: '#276749' },
@@ -131,18 +143,16 @@ const FLOW = [
 
 export default function CacaoHelpGuide() {
   const navigate = useNavigate();
+  const { theme } = useCompany();
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/cacao')}>← Volver</button>
-          <div>
-            <p className="page-eyebrow">CACAO</p>
-            <h1>Guía del Sistema de Inventario</h1>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Cacao"
+        title="Guía del módulo"
+        description="Cómo se conectan las pantallas de Cacao, de la compra al proveedor hasta el cobro al cliente."
+        actions={<button className="btn-secondary" onClick={() => navigate('/cacao')}>Ir al Dashboard</button>}
+      />
 
       {/* Intro */}
       <div style={{
@@ -154,8 +164,8 @@ export default function CacaoHelpGuide() {
       }}>
         <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px', marginTop: 0 }}>Bienvenido al Módulo de Cacao</h2>
         <p style={{ fontSize: '14px', lineHeight: 1.7, margin: 0, opacity: 0.9 }}>
-          Este sistema controla el flujo completo de inventario de cacao de Mikacao S.A.: desde la recepción del grano del proveedor hasta la exportación al cliente final.
-          Cada paso está conectado: un cambio en recepción afecta el lote, el lote afecta la liquidación, la liquidación genera la CxP, y así sucesivamente.
+          Este módulo controla el flujo completo del cacao de {theme.name}: desde la recepción del grano del proveedor hasta la exportación al cliente final.
+          Cada paso está conectado: un cambio en recepción afecta el lote, el lote afecta la liquidación, la liquidación, una vez aprobada, genera la CxP, y así sucesivamente.
         </p>
       </div>
 
@@ -312,10 +322,10 @@ export default function CacaoHelpGuide() {
             { term: 'Costo Promedio', def: 'Costo por kilogramo calculado con el método de promedio ponderado.' },
             { term: 'Diferencial', def: 'Monto pactado ($/T) sobre el precio de referencia del mercado. Se usa en la fijación de precio.' },
             { term: 'Fijación', def: 'Proceso de convertir un precio provisional en precio definitivo usando el mercado de referencia.' },
-            { term: 'Liquidación', def: 'Cierre contable de una recepción: aplica descuentos y calcula lo que se debe al proveedor.' },
-            { term: 'CxP', def: 'Cuenta por Pagar. Deuda con proveedores generada por liquidaciones de compra.' },
+            { term: 'Liquidación', def: 'Cierre contable de una recepción: aplica descuentos y calcula lo que se debe al proveedor. Debe aprobarla un gerente antes de poder pagarse.' },
+            { term: 'CxP', def: 'Cuenta por Pagar. Deuda con proveedores que se genera al aprobar una liquidación de compra.' },
             { term: 'CxC', def: 'Cuenta por Cobrar. Derecho de cobro generado por embarques/exportaciones.' },
-            { term: 'Unidad de Medida', def: 'TON (Toneladas = 1000 kg), KG (Kilogramos), SACO (Sacos, configurable, default 90 kg).' },
+            { term: 'Unidad de Medida', def: 'TON (Toneladas = 1000 kg), QQ (Quintales = 100 libras = 45,36 kg), KG (Kilogramos), SACO (Sacos: el peso lo defines tú en Configuración → Unidades de medida).' },
             { term: 'Guía de Remisión', def: 'Documento fiscal que acompaña al cacao al momento de la entrega. Número único por recepción.' },
           ].map((g, i) => (
             <div key={i} style={{ fontSize: '13px' }}>

@@ -400,17 +400,84 @@ model CacaoClient {
 
 model CacaoQuality {
   id               Int        @id @default(autoincrement())
-  name             String     @unique
+  name             String
   fixedPrice       Float?
   humidityDiscount Float      @default(7)
   impurityDiscount Float      @default(1)
   isFixedPrice     Boolean    @default(false)
+  // Cada empresa tiene sus propias calidades (línea blanca). Columna creada al arrancar,
+  // ver cacao-config.schema.ts.
+  companyId        Int?
   lots             CacaoLot[]
+
+  @@unique([companyId, name])
+}
+
+// Ajustes del módulo Cacao por empresa (plazos de pago y cobro). Tabla creada al arrancar.
+model CacaoSetting {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  key       String
+  value     String
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([companyId, key])
+}
+
+// Motivos de rechazo y anulación por empresa (línea blanca: nace vacío, cada empresa arma el suyo).
+// El motivo elegido se guarda como texto en la liquidación o en el pago, así que borrar uno del
+// catálogo no cambia nada de lo ya registrado. Tabla creada al arrancar, ver cacao-config.schema.ts.
+model CacaoMotivo {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  tipo      String // LIQUIDACION (rechazar o anular una liquidación) | PAGO (anular un pago o un cobro)
+  nombre    String
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([companyId, tipo, nombre])
+}
+
+// Puntos de acopio de la empresa (sucursales donde se recibe el cacao). Línea blanca: nace vacío y
+// cada empresa arma los suyos. Tabla creada al arrancar, ver cacao-config.schema.ts.
+model CacaoPunto {
+  id         Int              @id @default(autoincrement())
+  companyId  Int
+  nombre     String
+  direccion  String?
+  activo     Boolean          @default(true)
+  createdAt  DateTime         @default(now())
+  receptions CacaoReception[]
+
+  @@unique([companyId, nombre])
+}
+
+// Solicitud de pago a un proveedor: se pide, otra persona la autoriza y recién ahí se paga.
+// Solo se usa si la empresa lo exige (CacaoSetting `pagosRequierenAutorizacion`).
+// REQUESTED → AUTHORIZED → PAID; también REJECTED y CANCELLED. Tabla creada al arrancar.
+model CacaoPaymentRequest {
+  id             Int          @id @default(autoincrement())
+  companyId      Int
+  payableId      Int
+  amount         Float
+  method         String       @default("TRANSFER")
+  reference      String?
+  status         String       @default("REQUESTED")
+  requestedBy    Int
+  decidedBy      Int?
+  decidedAt      DateTime?
+  decisionReason String?
+  paymentId      Int?
+  paidBy         Int?
+  paidAt         DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  payable        CacaoPayable @relation(fields: [payableId], references: [id])
 }
 
 model CacaoLot {
   id           Int                  @id @default(autoincrement())
-  code         String               @unique
+  code         String
   qualityId    Int
   netWeight    Float
   averageCost  Float                @default(0)
@@ -425,6 +492,9 @@ model CacaoLot {
   receptions   CacaoReception[]
   settlements  CacaoSettlementLot[]
   shipments    CacaoShipmentLot[]
+
+  // El código (LOTE-AAAA-00001) es único dentro de cada empresa, no en toda la base.
+  @@unique([companyId, code])
 }
 
 model CacaoReception {
@@ -446,8 +516,27 @@ model CacaoReception {
   updatedAt        DateTime      @updatedAt
   differential     Float?
   unitOfMeasure    String        @default("KG")
+  // Datos del ticket de pesaje (opcionales). Columnas creadas al arrancar, ver cacao-config.schema.ts.
+  ticketNumber     String?
+  weighingProfile  String? // BULTOS | BASCULA
+  driverName       String?
+  vehiclePlate     String?
+  // Cierre sin liquidar (columnas creadas al arrancar, ver cacao-config.schema.ts): la entrega no se
+  // le va a pagar al proveedor y se deja registrado quién, cuándo y por qué.
+  closedAt         DateTime?
+  closedBy         Int?
+  closeReason      String?
+  // Anulación de la recepción (columnas creadas al arrancar): el lote queda anulado y en cero.
+  voidedAt         DateTime?
+  voidedBy         Int?
+  voidReason       String?
+  // Punto de acopio donde se recibió (columna creada al arrancar, ver cacao-config.schema.ts).
+  puntoId          Int?
   lot              CacaoLot?     @relation(fields: [lotId], references: [id])
   supplier         CacaoSupplier @relation(fields: [supplierId], references: [id])
+  punto            CacaoPunto?   @relation(fields: [puntoId], references: [id])
+
+  @@unique([companyId, ticketNumber])
 }
 
 model CacaoSettlement {
@@ -460,25 +549,37 @@ model CacaoSettlement {
   totalDeductions Float                @default(0)
   finalPrice      Float                @default(0)
   totalAmount     Float                @default(0)
+  // PENDING (por aprobar) → APPROVED → PAID; también REJECTED y CANCELLED.
   status          String               @default("PENDING")
   companyId       Int
   createdBy       Int
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
+  // Aprobación (columnas creadas al arrancar, ver cacao-liquidaciones.schema.ts)
+  decidedBy       Int?
+  decidedAt       DateTime?
+  decisionReason  String?
+  dueDays         Int?
   payable         CacaoPayable?
   supplier        CacaoSupplier        @relation(fields: [supplierId], references: [id])
   lots            CacaoSettlementLot[]
 }
 
 model CacaoSettlementLot {
-  id           Int             @id @default(autoincrement())
-  settlementId Int
-  lotId        Int
-  quantity     Float
-  unitCost     Float
-  createdAt    DateTime        @default(now())
-  lot          CacaoLot        @relation(fields: [lotId], references: [id])
-  settlement   CacaoSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  id                Int             @id @default(autoincrement())
+  settlementId      Int
+  lotId             Int
+  quantity          Float
+  unitCost          Float
+  createdAt         DateTime        @default(now())
+  // Desglose que calculó el servidor (columnas creadas al arrancar)
+  humidityPct       Float?
+  impurityPct       Float?
+  qualityPunishment Float?
+  netKg             Float?
+  amount            Float?
+  lot               CacaoLot        @relation(fields: [lotId], references: [id])
+  settlement        CacaoSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
 }
 
 model CacaoKardex {
@@ -532,6 +633,10 @@ model CacaoShipment {
   salePricePerKg Float
   totalWeightKg  Float
   unitOfMeasure  String             @default("KG")
+  // Anulación del embarque (columnas creadas al arrancar, ver cacao-config.schema.ts)
+  cancelledAt    DateTime?
+  cancelledBy    Int?
+  cancelReason   String?
   receivable     CacaoReceivable?
   client         CacaoClient        @relation(fields: [clientId], references: [id])
   lots           CacaoShipmentLot[]
@@ -565,6 +670,7 @@ model CacaoPayable {
   settlement   CacaoSettlement @relation(fields: [settlementId], references: [id])
   supplier     CacaoSupplier   @relation(fields: [supplierId], references: [id])
   payments     CacaoPayment[]
+  requests     CacaoPaymentRequest[]
 }
 
 model CacaoReceivable {
@@ -593,6 +699,11 @@ model CacaoPayment {
   createdAt    DateTime         @default(now())
   payableId    Int?
   receivableId Int?
+  // Trazabilidad y anulación (columnas creadas al arrancar)
+  createdBy    Int?
+  voidedAt     DateTime?
+  voidedBy     Int?
+  voidReason   String?
   payable      CacaoPayable?    @relation(fields: [payableId], references: [id])
   receivable   CacaoReceivable? @relation(fields: [receivableId], references: [id])
 }

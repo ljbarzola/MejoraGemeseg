@@ -9,6 +9,9 @@ import {
 } from '../../../services/contratacion-publica.service';
 import type { CPHorarioMensual, CPContrato } from '../../../types/contratacion-publica';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
+import { useColumnFilters } from '../../../hooks/useColumnFilters';
 
 function formatFechaCorta(fechaIso: string): string {
   const [anio, mes, dia] = fechaIso.slice(0, 10).split('-');
@@ -50,6 +53,12 @@ export default function HorarioMensualList() {
   };
 
   useEffect(load, [contratoId]);
+
+  // Filtros en la cabecera de cada columna. «Periodo» es un tramo: sale el horario que cubre algún día del rango.
+  const cf = useColumnFilters<CPHorarioMensual>(horarios, [
+    { key: 'periodo', etiqueta: 'Periodo', tipo: 'fecha', getValue: (h) => h.fechaInicio, getFin: (h) => h.fechaFin },
+    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['BORRADOR', 'ENVIADO', 'APROBADO', 'RECHAZADO'], getValues: (h) => ({ valor: h.estado, etiqueta: h.estado }) },
+  ]);
 
   const handleCrear = async (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -123,6 +132,18 @@ export default function HorarioMensualList() {
         </form>
       )}
 
+      {horarios.length > 0 && (
+        <>
+          <div className="filter-bar">
+            <div className="filter-bar-fields" />
+            <div className="filter-bar-actions">
+              <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+            </div>
+          </div>
+          <ChipsFiltros cf={cf} />
+        </>
+      )}
+
       <div className="admin-section">
         {loading ? (
           <div className="loading-state">Cargando horarios...</div>
@@ -132,10 +153,17 @@ export default function HorarioMensualList() {
           <div className="tasks-table-wrapper">
             <table className="tasks-table">
               <thead>
-                <tr><th>Periodo</th><th>Estado</th><th style={{ textAlign: 'right' }}>Acciones</th></tr>
+                <tr>
+                  <th>Periodo<ColumnFilter cf={cf} col="periodo" orden={cf.ordenDe('periodo')} /></th>
+                  <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
+                  <th style={{ textAlign: 'right' }}>Acciones</th>
+                </tr>
               </thead>
               <tbody>
-                {horarios.map((h) => (
+                {cf.filas.length === 0 && (
+                  <FilaSinResultados columnas={3} mensaje="No hay horarios que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                )}
+                {cf.filas.map((h) => (
                   <tr key={h.id}>
                     <td style={{ fontWeight: 600 }}>{formatFechaCorta(h.fechaInicio)} – {formatFechaCorta(h.fechaFin)}</td>
                     <td>

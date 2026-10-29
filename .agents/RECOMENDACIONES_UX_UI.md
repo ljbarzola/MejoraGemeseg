@@ -310,7 +310,22 @@ Agregado el 2026-10-22 (ver también `CLAUDE.md`, «Frontend layout rules»):
 
 ---
 
+## 25. Módulo en Línea Blanca: Submódulos, Dashboard Primero y «Primeros Pasos»
+
+### Regla: Todo Módulo Nuevo Empieza Vacío para Cada Empresa, Vive en un Menú Desplegable y su Primera Pantalla es el Dashboard
+
+Agregado el 2026-10-23 con Cacao (las tres pautas fijas de la usuaria; ver `.agents/modules/cacao.md`):
+
+- **Línea blanca.** Ningún dato, texto ni valor de fábrica de una empresa (Gemeseg, Mikacao) puede estar en el módulo: ni catálogos sembrados, ni un peso de saco, ni un plazo, ni un margen sugerido. Cada empresa configura lo suyo y una empresa nueva empieza con todo vacío. Toda tabla de datos propios lleva `companyId` y las claves únicas (nombres, códigos) lo incluyen.
+- **Lo configurable vive en UNA pantalla «Configuración»** del módulo (con `<PageTabs>`), al final del menú y bajo una línea. Quien no puede editar ve los botones y el aviso de solo lectura (§21).
+- **Submódulos.** El módulo es un menú desplegable en `Sidebar.tsx` (`SubItem[]`, con `grupo` para agrupar por etapa y `separadorAntes`), no una entrada suelta desde la que se navega todo. Se abre solo si se entra directo a una de sus URLs.
+- **El Dashboard es el primer submódulo.** No repite el menú con «accesos directos»: muestra cifras clicables y, si a la empresa le falta configurar algo para empezar, una tarjeta **«Primeros pasos»** con cada paso marcado cuando está hecho, que desaparece al completarlos. El servidor entrega ese avance en el propio dashboard (`setup`).
+- Las pantallas del menú usan `<PageHeader eyebrow="…">` y no llevan «← Volver»; el detalle y los formularios de segundo nivel sí.
+
+---
+
 ## Versión
+- v2.2 - Octubre 2026 (módulo en línea blanca: submódulos, Dashboard primero y «Primeros pasos»)
 - v2.1 - Octubre 2026 (marco de pantalla, estado desde la lista, tarea como ventana)
 - v1.9 - Octubre 2026 (todo cierre se explica con `MotivoCierreModal`)
 - v2.0 - Octubre 2026 (filtros que se recuerdan: validarlos contra las opciones; escoba en barras de campos, no en Inicio)

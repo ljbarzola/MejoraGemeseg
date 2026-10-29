@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Eye, Pencil, RefreshCw, Trash2, Ban, PackageCheck } from 'lucide-react';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
-import FilterField from '../../components/common/FilterField';
-import FiltroFecha from '../../components/common/FiltroFecha';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import ExportTableButton from '../../components/common/ExportTableButton';
@@ -15,8 +14,8 @@ import EstadoContratoBadge from '../../components/ventas/EstadoContratoBadge';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useClientesDelAlcance } from '../../hooks/useClientesDelAlcance';
-import ChipAlcance from '../../components/ventas/ChipAlcance';
 import { useSortableTable } from '../../hooks/useSortableTable';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 import { useToast } from '../../contexts/ToastContext';
 import {
   getContratosComerciales,
@@ -28,12 +27,11 @@ import {
   ESTADO_CONTRATO_LABEL,
   GARANTIA_LABEL,
   type ContratoComercial,
-  type EstadoContrato,
   type SalesClient,
   type SalesServicio,
 } from '../../services/ventas.service';
 import { diaCorto, describirContrato } from '../../utils/contratoComercial';
-import { FILTRO_FECHA_VACIO, fechaEnRango, filtroFechaDeUrl, hayFiltroFecha, type FiltroFechaValor } from '../../utils/rangoFechas';
+import { filtrosDeUrlContratos } from '../../utils/ventasFiltrosUrl';
 
 type ModalState =
   | { modo: 'crear'; clienteId?: number }
@@ -50,6 +48,8 @@ const COLUMNAS_CONTRATOS = [
   { key: 'estado', label: 'Estado' },
   { key: 'documentos', label: 'Documentos' },
   { key: 'gracia', label: 'Días de gracia' },
+  // Solo tiene dato en los contratos vencidos o cancelados. Se muestra sola al filtrar por ella (p. ej. desde el Dashboard).
+  { key: 'motivoCierre', label: 'Motivo de cierre' },
 ];
 // «Tipo» no va por defecto: con ella la tabla se pasa del ancho visible y «Estado» queda fuera de
 // pantalla. El producto se reconoce igual por la etiqueta bajo su nombre; quien quiera la columna
@@ -63,7 +63,7 @@ const COLUMNAS_EXPORTAR_CONTRATOS = [
   { key: 'fin', label: 'Fin' },
 ];
 const ANCHO_COLUMNA_CONTRATOS: Record<string, number> = {
-  titulo: 180, tipo: 110, servicios: 230, vigencia: 140, valor: 140, estado: 160, documentos: 120, gracia: 120,
+  titulo: 180, tipo: 110, servicios: 230, vigencia: 140, valor: 140, estado: 160, documentos: 120, gracia: 120, motivoCierre: 150,
 };
 // Clave de ordenamiento de cada columna (la vigencia ordena por fecha de inicio).
 const ORDEN_COLUMNA_CONTRATOS: Record<string, string> = { vigencia: 'inicio' };
@@ -80,18 +80,12 @@ export default function ContratosComercialesList() {
   const [servicios, setServicios] = useState<SalesServicio[]>([]);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
-  const [filtroEstado, setFiltroEstado] = useState('');
-  const [filtroServicio, setFiltroServicio] = useState('');
-  const [filtroTipo, setFiltroTipo] = useState('');
-  const [filtroMotivo, setFiltroMotivo] = useState('');
-  const [filtroFecha, setFiltroFecha] = useState<FiltroFechaValor>(FILTRO_FECHA_VACIO);
   const [modal, setModal] = useState<ModalState>(null);
   const [aCancelar, setACancelar] = useState<ContratoComercial | null>(null);
   const [aEliminar, setAEliminar] = useState<ContratoComercial | null>(null);
   // Columnas que cada persona elige ver (preferencia en su cuenta). «Cliente» y
   // las acciones van siempre.
   const columnPrefs = useColumnPreferences('ventas-contratos-comerciales', COLUMNAS_CONTRATOS_POR_DEFECTO);
-  const tablaRef = useResizableColumns('ventas-contratos-comerciales', ['cliente', ...columnPrefs.visible, 'acciones']);
 
   const cargar = async () => {
     try {
@@ -107,31 +101,45 @@ export default function ContratosComercialesList() {
   };
   useEffect(() => { cargar(); }, []);
 
+  // Filtros en la cabecera de cada columna (useColumnFilters).
+  const cf = useColumnFilters<ContratoComercial>(contratos, [
+    { key: 'cliente', etiqueta: 'Cliente', tipo: 'valores', getValues: (c) => ({ valor: String(c.salesClientId), etiqueta: c.salesClient.name }) },
+    { key: 'titulo', etiqueta: 'Contrato', tipo: 'texto', getValue: (c) => c.title || `Contrato #${c.id}` },
+    {
+      key: 'tipo', etiqueta: 'Tipo', tipo: 'valores', orden: ['SERVICIO', 'PRODUCTO'],
+      getValues: (c) => ({ valor: c.kind, etiqueta: c.kind === 'PRODUCTO' ? 'Venta única' : 'Servicio recurrente' }),
+    },
+    { key: 'servicios', etiqueta: 'Servicio', tipo: 'valores', vacio: 'Sin servicio', getValues: (c) => c.services.map((x) => ({ valor: String(x.id), etiqueta: x.name })) },
+    // «Vigente en»: el contrato cuenta si estuvo en pie en algún momento del periodo (así coincide con las cifras del Dashboard).
+    { key: 'vigencia', etiqueta: 'Vigente en', tipo: 'fecha', soloDia: true, getValue: (c) => c.startDate, getFin: (c) => c.endDate },
+    { key: 'valor', etiqueta: 'Valor', tipo: 'numero', formato: (n) => `$${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`, getValue: (c) => (c.kind === 'PRODUCTO' ? c.totalValue : c.monthlyValue) },
+    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: Object.keys(ESTADO_CONTRATO_LABEL), getValues: (c) => ({ valor: c.estado, etiqueta: ESTADO_CONTRATO_LABEL[c.estado] }) },
+    { key: 'documentos', etiqueta: 'Documentos', tipo: 'numero', getValue: (c) => c.documentos },
+    { key: 'gracia', etiqueta: 'Días de gracia', tipo: 'numero', getValue: (c) => c.graceDays },
+    { key: 'motivoCierre', etiqueta: 'Motivo de cierre', tipo: 'valores', vacio: 'Sin motivo', getValues: (c) => c.motivoCierre },
+  ]);
+
   // Llegar con ?nuevo=1&clienteId=N (desde la ficha del cliente) abre el
   // formulario con ese cliente ya elegido.
   // Llegar con ?q=nombre (desde la ficha del Directorio) deja escrita la búsqueda.
   // Llega del Dashboard con «mis clientes» (o un vendedor): la lista se limita a ese alcance, con aviso y «Quitar».
   const alcanceLista = useClientesDelAlcance();
   const { aplicar: aplicarAlcance } = alcanceLista;
+  const { fijarVarios } = cf;
   useEffect(() => {
     const resp = searchParams.get('responsable');
     if (resp) aplicarAlcance(resp);
-    // ?motivo=Precio: el Dashboard («Motivos de pérdida») lleva a los contratos que terminaron por ese motivo.
-    const motivoCierre = searchParams.get('motivo');
-    if (motivoCierre) setFiltroMotivo(motivoCierre);
+    // ?estado=VIGENTE|POR_VENCER|VENCIDO|CANCELADO|EN_CURSO (Dashboard, pestaña Cartera), ?motivo=Precio («Motivos de
+    // pérdida») y ?desde=&hasta= (el periodo que se miraba): cada uno es el filtro de su columna y queda a la vista como chip.
+    const filtros = filtrosDeUrlContratos(searchParams);
+    fijarVarios(filtros);
     const q = searchParams.get('q');
-    // ?estado=VIGENTE|POR_VENCER|VENCIDO|CANCELADO: lo manda el Dashboard (pestaña Cartera) para ver esos contratos.
-    const estado = searchParams.get('estado');
-    if (estado) setFiltroEstado(estado);
-    // ?desde=&hasta=: el periodo que se miraba en el Dashboard; queda a la vista en el filtro «Empieza».
-    const fecha = filtroFechaDeUrl(searchParams.get('desde'), searchParams.get('hasta'));
-    if (fecha) setFiltroFecha(fecha);
     if (q) {
       setBusqueda(q);
       setSearchParams({}, { replace: true });
       return;
     }
-    if (estado || resp || motivoCierre || fecha) {
+    if (Object.keys(filtros).length > 0 || resp) {
       setSearchParams({}, { replace: true });
       return;
     }
@@ -139,18 +147,13 @@ export default function ContratosComercialesList() {
     const cid = Number(searchParams.get('clienteId')) || undefined;
     setModal({ modo: 'crear', clienteId: cid });
     setSearchParams({}, { replace: true });
-  }, [searchParams, setSearchParams, aplicarAlcance]);
+  }, [searchParams, setSearchParams, aplicarAlcance, fijarVarios]);
 
+  // Los filtros de columna ya se aplicaron (cf.filas); aquí faltan el buscador general y el alcance del Dashboard.
   const filtrados = useMemo(() => {
     const q = busqueda.toLowerCase().trim();
-    return contratos.filter((c) => {
-      // «En curso» agrupa lo que el Dashboard cuenta como vigente: vigentes, por vencer y por iniciar.
-      if (filtroEstado === 'EN_CURSO' ? !['VIGENTE', 'POR_VENCER', 'POR_INICIAR'].includes(c.estado) : filtroEstado && c.estado !== filtroEstado) return false;
-      if (filtroTipo && c.kind !== filtroTipo) return false;
-      if (filtroMotivo && c.motivoCierre !== filtroMotivo) return false;
+    return cf.filas.filter((c) => {
       if (alcanceLista.ids && !alcanceLista.ids.has(c.salesClientId)) return false;
-      if (!fechaEnRango(c.startDate, filtroFecha, true)) return false;
-      if (filtroServicio && !c.services.some((s) => String(s.id) === filtroServicio)) return false;
       if (!q) return true;
       return (
         c.salesClient.name.toLowerCase().includes(q) ||
@@ -158,13 +161,8 @@ export default function ContratosComercialesList() {
         c.services.some((s) => s.name.toLowerCase().includes(q))
       );
     });
-  }, [contratos, busqueda, filtroEstado, filtroServicio, filtroTipo, filtroMotivo, filtroFecha, alcanceLista.ids]);
-  const motivosDeCierre = useMemo(
-    () => [...new Set(contratos.map((c) => c.motivoCierre).filter((m): m is string => !!m))].sort((a, b) => a.localeCompare(b, 'es')),
-    [contratos],
-  );
-
-  const { filas, thProps, SortIcon } = useSortableTable(
+  }, [cf.filas, busqueda, alcanceLista.ids]);
+  const { filas, thProps, ordenDe } = useSortableTable(
     filtrados,
     {
       cliente: (c) => c.salesClient.name,
@@ -177,6 +175,7 @@ export default function ContratosComercialesList() {
       valor: (c) => (c.kind === 'PRODUCTO' ? c.totalValue : c.monthlyValue) ?? -1,
       documentos: (c) => c.documentos,
       gracia: (c) => c.graceDays,
+      motivoCierre: (c) => c.motivoCierre,
     },
     'inicio',
     'desc',
@@ -314,11 +313,16 @@ export default function ContratosComercialesList() {
         return c.documentos;
       case 'gracia':
         return c.graceDays != null ? `${c.graceDays} días` : '—';
+      case 'motivoCierre':
+        return c.motivoCierre || '—';
       default:
         return null;
     }
   };
+  // Filtrar por «Motivo de cierre» muestra esa columna aunque no se haya elegido.
   const columnasVisibles = columnPrefs.visible.filter((k) => COLUMNAS_CONTRATOS.some((c) => c.key === k));
+  if (cf.filtro('motivoCierre') && !columnasVisibles.includes('motivoCierre')) columnasVisibles.push('motivoCierre');
+  const tablaRef = useResizableColumns('ventas-contratos-comerciales', ['cliente', ...columnasVisibles, 'acciones']);
   // Valor en texto plano de cada columna, para exportar (la tabla dibuja JSX).
   const valorExportarContrato = (c: ContratoComercial, key: string): string | number => {
     switch (key) {
@@ -332,11 +336,13 @@ export default function ContratosComercialesList() {
       case 'estado': return ESTADO_CONTRATO_LABEL[c.estado];
       case 'documentos': return c.documentos;
       case 'gracia': return c.graceDays != null ? `${c.graceDays} días` : '';
+      case 'motivoCierre': return c.motivoCierre || '';
       default: return '';
     }
   };
 
-  const hayFiltros = !!(busqueda || filtroEstado || filtroServicio || filtroTipo || filtroMotivo || hayFiltroFecha(filtroFecha));
+  const hayFiltros = !!busqueda || cf.hayFiltros || !!alcanceLista.alcance;
+  const limpiarTodo = () => { setBusqueda(''); cf.limpiar(); alcanceLista.quitar(); };
 
   return (
     <div className="page-container">
@@ -352,46 +358,13 @@ export default function ContratosComercialesList() {
       />
 
       <div className="filter-bar">
-        <div className="filter-bar-fields filter-bar-fields--etiquetas">
+        <div className="filter-bar-fields">
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por cliente, título o servicio..."
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
-          <FilterField label="Tipo">
-  <select className="filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
-              <option value="">Todos los tipos</option>
-              <option value="SERVICIO">Solo servicios recurrentes</option>
-              <option value="PRODUCTO">Solo ventas únicas</option>
-            </select>
-          </FilterField>
-          <FilterField label="Estado">
-  <select className="filter-select" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
-              <option value="">Todos los estados</option>
-            <option value="EN_CURSO">En curso (vigentes, por vencer y por iniciar)</option>
-              {(Object.keys(ESTADO_CONTRATO_LABEL) as EstadoContrato[]).map((e) => (
-                <option key={e} value={e}>{ESTADO_CONTRATO_LABEL[e]}</option>
-              ))}
-            </select>
-          </FilterField>
-          <FilterField label="Servicio">
-            <select className="filter-select" value={filtroServicio} onChange={(e) => setFiltroServicio(e.target.value)}>
-              <option value="">Todos los servicios y productos</option>
-              {servicios.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </FilterField>
-          <FiltroFecha label="Empieza" valor={filtroFecha} onChange={setFiltroFecha} title="Filtra por el día en que empieza la vigencia del contrato" />
-          {motivosDeCierre.length > 0 && (
-            <FilterField label="Motivo de cierre">
-              <select className="filter-select" value={filtroMotivo} onChange={(e) => setFiltroMotivo(e.target.value)}>
-                <option value="">Todos</option>
-                {motivosDeCierre.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </FilterField>
-          )}
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu
@@ -405,10 +378,7 @@ export default function ContratosComercialesList() {
               if (!guardado) showToast('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.', 'error');
             }}
           />
-          <ClearFiltersButton
-            onClear={() => { setBusqueda(''); setFiltroEstado(''); setFiltroServicio(''); setFiltroTipo(''); setFiltroMotivo(''); setFiltroFecha(FILTRO_FECHA_VACIO); alcanceLista.quitar(); }}
-            disabled={!hayFiltros && !alcanceLista.alcance}
-          />
+          <ClearFiltersButton onClear={limpiarTodo} disabled={!hayFiltros} />
           <ExportTableButton
             titulo="Contratos"
             columns={COLUMNAS_EXPORTAR_CONTRATOS}
@@ -420,7 +390,14 @@ export default function ContratosComercialesList() {
         </div>
       </div>
 
-      <ChipAlcance alcance={alcanceLista.alcance} total={filtrados.length} onQuitar={alcanceLista.quitar} />
+      <ChipsFiltros
+        cf={cf}
+        extra={alcanceLista.alcance ? [{
+          id: 'alcance', etiqueta: 'Responsable',
+          texto: alcanceLista.alcance === 'mine' ? 'tus clientes' : 'los de ese vendedor',
+          onQuitar: alcanceLista.quitar,
+        }] : []}
+      />
 
       <div className="admin-section">
         {cargando ? (
@@ -430,20 +407,18 @@ export default function ContratosComercialesList() {
             <div style={{ fontSize: 36, marginBottom: 8 }}>📑</div>
             <div>Aún no hay contratos. Crea el primero para un cliente, o registra los que la empresa ya tenía antes de usar la app (con sus fechas reales y por qué terminaron).</div>
           </div>
-        ) : filas.length === 0 ? (
-          <p style={{ color: '#888', fontSize: 13 }}>No hay contratos que coincidan con los filtros.</p>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
-                  <th {...thProps('cliente')} style={{ width: 190 }}>Cliente <SortIcon campo="cliente" /></th>
+                  <th {...thProps('cliente')} style={{ width: 190 }}>Cliente <ColumnFilter cf={cf} col="cliente" orden={ordenDe('cliente')} /></th>
                   {columnasVisibles.map((k) => {
                     const col = COLUMNAS_CONTRATOS.find((c) => c.key === k)!;
                     const orden = ORDEN_COLUMNA_CONTRATOS[k] ?? k;
                     return (
                       <th key={k} {...thProps(orden)} style={{ width: ANCHO_COLUMNA_CONTRATOS[k] }}>
-                        {col.label} <SortIcon campo={orden} />
+                        {col.label} <ColumnFilter cf={cf} col={k} orden={ordenDe(orden)} />
                       </th>
                     );
                   })}
@@ -451,6 +426,13 @@ export default function ContratosComercialesList() {
                 </tr>
               </thead>
               <tbody>
+                {filas.length === 0 && (
+                  <FilaSinResultados
+                    columnas={columnasVisibles.length + 2}
+                    mensaje="No hay contratos que coincidan con los filtros."
+                    onLimpiar={hayFiltros ? limpiarTodo : undefined}
+                  />
+                )}
                 {filas.map((c) => (
                   <tr key={c.id} onClick={() => navigate(`/ventas/contratos/${c.id}`)} style={{ cursor: 'pointer' }}>
                     <td style={{ fontWeight: 600 }}><span className="truncate">{c.salesClient.name}</span></td>

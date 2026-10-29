@@ -54,7 +54,8 @@ const ShipmentForm = lazy(() => import('./pages/cacao/shipments/ShipmentForm'));
 const ShipmentDetail = lazy(() => import('./pages/cacao/shipments/ShipmentDetail'));
 const PayablesList = lazy(() => import('./pages/cacao/payables/PayablesList'));
 const ReceivablesList = lazy(() => import('./pages/cacao/receivables/ReceivablesList'));
-const QualitiesPage = lazy(() => import('./pages/cacao/qualities/QualitiesPage'));
+const ConfiguracionCacaoPage = lazy(() => import('./pages/cacao/configuracion/ConfiguracionCacaoPage'));
+const ReportesCacao = lazy(() => import('./pages/cacao/reportes/ReportesCacao'));
 const CustodiasList = lazy(() => import('./pages/custodias/CustodiasList'));
 const CustodiaForm = lazy(() => import('./pages/custodias/CustodiaForm'));
 const NominaPage = lazy(() => import('./pages/custodias/NominaPage'));
@@ -447,6 +448,7 @@ function AppInner() {
           }
         />
         <Route path="/cacao" element={<ProtectedLayout><SectionRoute section="CACAO"><CacaoDashboard /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/reportes" element={<ProtectedLayout><SectionRoute section="CACAO"><ReportesCacao /></SectionRoute></ProtectedLayout>} />
         <Route path="/cacao/guia" element={<ProtectedLayout><SectionRoute section="CACAO"><CacaoHelpGuide /></SectionRoute></ProtectedLayout>} />
         <Route path="/cacao/suppliers" element={<ProtectedLayout><SectionRoute section="CACAO"><SuppliersPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/cacao/clients" element={<ProtectedLayout><SectionRoute section="CACAO"><ClientsPage /></SectionRoute></ProtectedLayout>} />
@@ -463,7 +465,9 @@ function AppInner() {
         <Route path="/cacao/shipments/:id" element={<ProtectedLayout><SectionRoute section="CACAO"><ShipmentDetail /></SectionRoute></ProtectedLayout>} />
         <Route path="/cacao/payables" element={<ProtectedLayout><SectionRoute section="CACAO"><PayablesList /></SectionRoute></ProtectedLayout>} />
         <Route path="/cacao/receivables" element={<ProtectedLayout><SectionRoute section="CACAO"><ReceivablesList /></SectionRoute></ProtectedLayout>} />
-        <Route path="/cacao/qualities" element={<ProtectedLayout><SectionRoute section="CACAO"><QualitiesPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/cacao/configuracion" element={<ProtectedLayout><SectionRoute section="CACAO"><ConfiguracionCacaoPage /></SectionRoute></ProtectedLayout>} />
+        {/* La pantalla de calidades pasó a Configuración (2026-10-23); la URL vieja sigue funcionando. */}
+        <Route path="/cacao/qualities" element={<ProtectedLayout><SectionRoute section="CACAO"><Navigate to="/cacao/configuracion?tab=calidades" replace /></SectionRoute></ProtectedLayout>} />
         <Route path="/custodias" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><CustodiasList /></SectionRoute></ProtectedLayout>} />
         <Route path="/custodias/dashboard" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><CustodiasDashboard /></SectionRoute></ProtectedLayout>} />
         <Route path="/custodias/new" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><CustodiaForm /></SectionRoute></ProtectedLayout>} />

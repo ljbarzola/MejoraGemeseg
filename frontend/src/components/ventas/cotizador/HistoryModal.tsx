@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Copy, FolderOpen, Share2, Trash2 } from 'lucide-react';
 import ClearFiltersButton from '../../common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../common/ColumnFilter';
 import ColumnPickerMenu from '../../common/ColumnPickerMenu';
 import ConfirmDialog from '../../common/ConfirmDialog';
-import DateInput from '../../common/DateInput';
 import ErrorBanner from '../../common/ErrorBanner';
 import RowActionsMenu, { type RowAction } from '../../common/RowActionsMenu';
+import { useColumnFilters } from '../../../hooks/useColumnFilters';
 import { useColumnPreferences } from '../../../hooks/useColumnPreferences';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
 import { useSortableTable } from '../../../hooks/useSortableTable';
@@ -69,17 +70,9 @@ export default function HistoryModal({
   onShare,
   onCopy,
 }: Props) {
-  const [cliente, setCliente] = useState('');
-  const [vendedor, setVendedor] = useState('');
-  const [desde, setDesde] = useState('');
-  const [hasta, setHasta] = useState('');
-  const [estado, setEstado] = useState('');
+  const [busqueda, setBusqueda] = useState('');
   const [aEliminar, setAEliminar] = useState<CotQuote | null>(null);
   const [errorLocal, setErrorLocal] = useState('');
-
-  const columnPrefs = useColumnPreferences('cotizador-historial', POR_DEFECTO);
-  const visibles = columnPrefs.visible.filter((k) => COLUMNAS.some((c) => c.key === k));
-  const tablaRef = useResizableColumns('cotizador-historial', ['numero', ...visibles, 'acciones']);
 
   const conTotal = useMemo(
     () =>
@@ -97,18 +90,38 @@ export default function HistoryModal({
     [quotes, byCode],
   );
 
+  // Los filtros viven en la cabecera de cada columna; el buscador general mira número, cliente y vendedor.
+  const cf = useColumnFilters<(typeof conTotal)[number]>(conTotal, [
+    { key: 'numero', etiqueta: 'Número', tipo: 'texto', getValue: (r) => r.q.quoteNumber },
+    { key: 'fecha', etiqueta: 'Fecha', tipo: 'fecha', soloDia: true, getValue: (r) => r.q.quoteDate },
+    { key: 'cliente', etiqueta: 'Cliente', tipo: 'texto', getValue: (r) => r.q.client.name },
+    { key: 'vendedor', etiqueta: 'Vendedor', tipo: 'valores', vacio: 'Sin vendedor', getValues: (r) => r.q.vendorName },
+    {
+      key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: COT_STATUS_ORDER,
+      getValues: (r) => ({ valor: r.q.status, etiqueta: COT_STATUS_LABEL[r.q.status] }),
+    },
+    { key: 'total', etiqueta: 'Total', tipo: 'numero', getValue: (r) => r.total, formato: money },
+  ]);
+
+  const columnPrefs = useColumnPreferences('cotizador-historial', POR_DEFECTO);
+  // Una columna oculta con filtro activo se muestra igual, para que se vea qué está filtrando.
+  const visibles = useMemo(() => {
+    const elegidas = columnPrefs.visible.filter((k) => COLUMNAS.some((c) => c.key === k));
+    return [...elegidas, ...COLUMNAS.map((c) => c.key).filter((k) => !elegidas.includes(k) && cf.filtro(k))];
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cf.filtro lee los filtros de ese momento; se recalcula cuando cambian.
+  }, [columnPrefs.visible, cf.filtros]);
+  const tablaRef = useResizableColumns('cotizador-historial', ['numero', ...visibles, 'acciones']);
+
+  // Los filtros de columna ya se aplicaron (cf.filas); aquí solo falta el buscador general.
   const filtradas = useMemo(() => {
-    const c = cliente.toLowerCase().trim();
-    const v = vendedor.toLowerCase().trim();
-    return conTotal.filter(({ q }) => {
-      if (c && !(q.client.name || '').toLowerCase().includes(c)) return false;
-      if (v && !(q.vendorName || '').toLowerCase().includes(v)) return false;
-      if (estado && q.status !== estado) return false;
-      if (desde && q.quoteDate < desde) return false;
-      if (hasta && q.quoteDate > hasta) return false;
-      return true;
-    });
-  }, [conTotal, cliente, vendedor, estado, desde, hasta]);
+    const t = busqueda.toLowerCase().trim();
+    if (!t) return cf.filas;
+    return cf.filas.filter(({ q }) => (
+      q.quoteNumber.toLowerCase().includes(t) ||
+      (q.client.name || '').toLowerCase().includes(t) ||
+      (q.vendorName || '').toLowerCase().includes(t)
+    ));
+  }, [cf.filas, busqueda]);
 
   const campos = useMemo(
     () => ({
@@ -122,9 +135,13 @@ export default function HistoryModal({
     }),
     [],
   );
-  const { filas, thProps, SortIcon } = useSortableTable(filtradas, campos, 'creada', 'desc');
+  const { filas, thProps, ordenDe } = useSortableTable(filtradas, campos, 'creada', 'desc');
 
-  const hayFiltros = !!(cliente || vendedor || desde || hasta || estado);
+  const hayFiltros = !!busqueda || cf.hayFiltros;
+  const limpiarTodo = () => {
+    setBusqueda('');
+    cf.limpiar();
+  };
   const sumaTotal = filtradas.reduce((s, r) => s + r.total, 0);
   const porEstado = (s: CotStatus) => filtradas.filter((r) => r.q.status === s).length;
 
@@ -149,7 +166,8 @@ export default function HistoryModal({
 
   const th = (key: string, label: string) => (
     <th {...thProps(key)} style={{ width: ANCHO[key] }}>
-      {label} <SortIcon campo={key} />
+      {label} 
+      <ColumnFilter cf={cf} col={key} orden={ordenDe(key)} />
     </th>
   );
 
@@ -191,29 +209,12 @@ export default function HistoryModal({
           <div className="filter-bar">
             <div className="filter-bar-fields">
               <input
-                value={cliente}
-                onChange={(e) => setCliente(e.target.value)}
-                placeholder="Buscar cliente..."
-                aria-label="Filtrar por cliente"
-                style={{ flex: '1 1 160px', minWidth: 140, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar por número, cliente o vendedor..."
+                aria-label="Buscar en el historial"
+                style={{ flex: '1 1 220px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}
               />
-              <input
-                value={vendedor}
-                onChange={(e) => setVendedor(e.target.value)}
-                placeholder="Buscar vendedor..."
-                aria-label="Filtrar por vendedor"
-                style={{ flex: '1 1 160px', minWidth: 140, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}
-              />
-              <DateInput value={desde} onChange={setDesde} placeholder="Desde" />
-              <DateInput value={hasta} onChange={setHasta} placeholder="Hasta" />
-              <select className="filter-select" value={estado} onChange={(e) => setEstado(e.target.value)} aria-label="Filtrar por estado">
-                <option value="">Todos los estados</option>
-                {COT_STATUS_ORDER.map((s) => (
-                  <option key={s} value={s}>
-                    {COT_STATUS_LABEL[s]}
-                  </option>
-                ))}
-              </select>
             </div>
             <div className="filter-bar-actions">
               <ColumnPickerMenu
@@ -222,28 +223,21 @@ export default function HistoryModal({
                 fixedLabel="Número"
                 onApply={(keys) => columnPrefs.set(keys)}
               />
-              <ClearFiltersButton
-                disabled={!hayFiltros}
-                onClear={() => {
-                  setCliente('');
-                  setVendedor('');
-                  setDesde('');
-                  setHasta('');
-                  setEstado('');
-                }}
-              />
+              <ClearFiltersButton disabled={!hayFiltros} onClear={limpiarTodo} />
             </div>
           </div>
 
+          <ChipsFiltros cf={cf} />
+
           {loading && <p className="cot-muted">Cargando cotizaciones...</p>}
-          {!loading && filas.length === 0 && (
+          {!loading && quotes.length === 0 && (
             <div className="cot-empty">
               <div className="cot-empty-icon">📂</div>
-              {quotes.length === 0 ? 'Aún no hay cotizaciones guardadas.' : 'No hay cotizaciones con esos filtros.'}
+              Aún no hay cotizaciones guardadas.
             </div>
           )}
 
-          {filas.length > 0 && (
+          {quotes.length > 0 && (
             <div className="tasks-table-wrapper">
               <table className="tasks-table resizable-table" ref={tablaRef}>
                 <thead>
@@ -256,6 +250,13 @@ export default function HistoryModal({
                   </tr>
                 </thead>
                 <tbody>
+                  {filas.length === 0 && (
+                    <FilaSinResultados
+                      columnas={visibles.length + 2}
+                      mensaje="No hay cotizaciones con esos filtros."
+                      onLimpiar={hayFiltros ? limpiarTodo : undefined}
+                    />
+                  )}
                   {filas.map(({ q, total }) => (
                     <tr key={q.id}>
                       <td>

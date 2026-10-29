@@ -4,9 +4,11 @@ import { Upload } from 'lucide-react';
 import { getMisDocumentos } from '../../services/contratacion-publica.service';
 import type { CPDocumentoBandeja } from '../../types/contratacion-publica';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import EntregarModal from '../../components/contratacion-publica/EntregarModal';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 import { ESTADO_COLOR, ESTADO_LABEL, formatoFecha, mensajeError, tituloMes } from '../../utils/entregasCp';
 
 // Rechazados primero, luego vencidos, luego el resto por fecha límite.
@@ -38,13 +40,22 @@ export default function MisDocumentosPage() {
   };
   useEffect(() => load(), []);
 
-  const filtradas = filas.filter((f) => {
+  // Filtros en la cabecera de cada columna.
+  const cf = useColumnFilters<CPDocumentoBandeja>(filas, [
+    { key: 'nombre', etiqueta: 'Documento', tipo: 'texto', getValue: (f) => f.nombre },
+    { key: 'entidad', etiqueta: 'Entidad', tipo: 'valores', getValues: (f) => ({ valor: String(f.entidadId), etiqueta: f.entidadNombre }) },
+    { key: 'mes', etiqueta: 'Mes', tipo: 'fecha', soloDia: true, getValue: (f) => `${f.anio}-${String(f.mes).padStart(2, '0')}-01` },
+    { key: 'fechaLimite', etiqueta: 'Fecha límite', tipo: 'fecha', soloDia: true, getValue: (f) => f.fechaLimite },
+    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: Object.keys(ESTADO_LABEL), getValues: (f) => ({ valor: f.estado, etiqueta: ESTADO_LABEL[f.estado] }) },
+  ]);
+
+  const filtradas = cf.filas.filter((f) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return f.nombre.toLowerCase().includes(q) || f.entidadNombre.toLowerCase().includes(q);
   });
 
-  const { filas: ordenadas, thProps, SortIcon } = useSortableTable(
+  const { filas: ordenadas, thProps, ordenDe } = useSortableTable(
     filtradas,
     {
       nombre: (f) => f.nombre,
@@ -55,6 +66,9 @@ export default function MisDocumentosPage() {
     },
     'prioridad',
   );
+
+  const hayFiltros = !!search || cf.hayFiltros;
+  const limpiarTodo = () => { setSearch(''); cf.limpiar(); };
 
   const rechazados = filas.filter((f) => f.estado === 'RECHAZADO').length;
   const vencidos = filas.filter((f) => f.vencida).length;
@@ -91,31 +105,38 @@ export default function MisDocumentosPage() {
           />
         </div>
         <div className="filter-bar-actions">
-          <ClearFiltersButton onClear={() => setSearch('')} disabled={!search} />
+          <ClearFiltersButton onClear={limpiarTodo} disabled={!hayFiltros} />
         </div>
       </div>
+
+      <ChipsFiltros cf={cf} />
 
       <div className="admin-section">
         {loading ? (
           <div className="loading-state">Cargando tus documentos...</div>
-        ) : ordenadas.length === 0 ? (
-          <div className="empty-state">
-            {filas.length === 0 ? 'No tienes documentos pendientes por entregar.' : 'No hay documentos que coincidan con la búsqueda.'}
-          </div>
+        ) : filas.length === 0 ? (
+          <div className="empty-state">No tienes documentos pendientes por entregar.</div>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th {...thProps('nombre')} style={{ width: '24%' }}>Documento <SortIcon campo="nombre" /></th>
-                  <th {...thProps('entidad')} style={{ width: '21%' }}>Entidad <SortIcon campo="entidad" /></th>
-                  <th {...thProps('mes')} style={{ width: '14%' }}>Mes <SortIcon campo="mes" /></th>
-                  <th {...thProps('fechaLimite')} style={{ width: '12%' }}>Fecha límite <SortIcon campo="fechaLimite" /></th>
-                  <th {...thProps('prioridad')} style={{ width: '16%' }}>Estado <SortIcon campo="prioridad" /></th>
+                  <th {...thProps('nombre')} style={{ width: '24%' }}>Documento <ColumnFilter cf={cf} col="nombre" orden={ordenDe('nombre')} /></th>
+                  <th {...thProps('entidad')} style={{ width: '21%' }}>Entidad <ColumnFilter cf={cf} col="entidad" orden={ordenDe('entidad')} /></th>
+                  <th {...thProps('mes')} style={{ width: '14%' }}>Mes <ColumnFilter cf={cf} col="mes" orden={ordenDe('mes')} /></th>
+                  <th {...thProps('fechaLimite')} style={{ width: '12%' }}>Fecha límite <ColumnFilter cf={cf} col="fechaLimite" orden={ordenDe('fechaLimite')} /></th>
+                  <th {...thProps('prioridad')} style={{ width: '16%' }}>Estado <ColumnFilter cf={cf} col="estado" orden={ordenDe('prioridad')} /></th>
                   <th style={{ textAlign: 'right', width: '13%' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
+                {ordenadas.length === 0 && (
+                  <FilaSinResultados
+                    columnas={6}
+                    mensaje="No hay documentos que coincidan con los filtros."
+                    onLimpiar={hayFiltros ? limpiarTodo : undefined}
+                  />
+                )}
                 {ordenadas.map((f) => (
                   <tr key={f.id}>
                     <td>

@@ -3848,6 +3848,15 @@ textarea.chat-input {
   color: var(--azul-claro);
 }
 
+/* Botón de fila con TEXTO («Pagar», «Autorizar», «Ver Kardex»): se ajusta a su texto. Sin esto queda en el
+   cuadrado de 28px de los botones de icono y, con dos botones en la fila, el texto de uno pisa al otro. */
+.btn-sm-edit.btn-sm-edit--texto {
+  width: auto;
+  padding: 0 10px;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
 .btn-sm-audit {
   background: #fef3c7;
   color: #92400e;
@@ -3918,6 +3927,23 @@ textarea.chat-input {
     width: 40px;
     height: 40px;
   }
+}
+
+/* Cacao: texto que explica una pestaña de configuración, con su botón principal a la derecha */
+.config-intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 4px 0 16px;
+}
+.config-intro p {
+  margin: 0;
+  max-width: 760px;
+  color: #4a5568;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 /* Cacao forms */

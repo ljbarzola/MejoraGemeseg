@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, UserPlus, UserMinus, XCircle, ClipboardList, ArrowRightCircle } from 'lucide-react';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
-import FilterField from '../../components/common/FilterField';
-import FiltroFecha from '../../components/common/FiltroFecha';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
 import ExportTableButton from '../../components/common/ExportTableButton';
 import ErrorBanner from '../../components/common/ErrorBanner';
@@ -11,10 +10,10 @@ import RowActionsMenu, { type RowAction } from '../../components/common/RowActio
 import MotivoCierreModal from '../../components/ventas/MotivoCierreModal';
 import ConvertirLeadModal from '../../components/ventas/ConvertirLeadModal';
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
-import ChipAlcance from '../../components/ventas/ChipAlcance';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useSortableTable } from '../../hooks/useSortableTable';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 import { useToast } from '../../contexts/ToastContext';
 import { getUser } from '../../services/auth.service';
 import {
@@ -34,7 +33,9 @@ import {
 } from '../../services/ventas.service';
 import { useCanalesLead } from '../../hooks/useCanalesLead';
 import FlujoComercialPasos from '../../components/ventas/FlujoComercialPasos';
-import { FILTRO_FECHA_VACIO, diaCortoEcuador, fechaEnRango, filtroFechaDeUrl, hayFiltroFecha, type FiltroFechaValor } from '../../utils/rangoFechas';
+import { diaCortoEcuador } from '../../utils/rangoFechas';
+import { filtroDeValores } from '../../utils/columnFilters';
+import { ESTADOS_LEAD_PENDIENTES, filtrosDeUrlLeads } from '../../utils/ventasFiltrosUrl';
 
 // Columnas elegibles (además de Contacto y Acciones, que son fijas). Las
 // últimas son datos propios de cada fuente (campaña, gclid, landing, quién
@@ -52,6 +53,8 @@ const COLUMNAS_LEAD = [
   { key: 'gclid', label: 'gclid (Google)' },
   { key: 'referidoPor', label: 'Referido por' },
   { key: 'consentimiento', label: 'Consentimiento de datos' },
+  // Solo tiene dato en los descartados. Se muestra sola al filtrar por ella (p. ej. desde el Dashboard).
+  { key: 'motivoDescarte', label: 'Motivo del descarte' },
 ];
 const COLUMNAS_LEAD_POR_DEFECTO = ['mensaje', 'canal', 'motivo', 'estado', 'responsable', 'llego'];
 // Lo que se puede exportar: las columnas de la tabla, el contacto desglosado y la fecha completa.
@@ -64,7 +67,7 @@ const COLUMNAS_EXPORTAR_LEAD = [
 ];
 const ANCHO_COLUMNA_LEAD: Record<string, number> = {
   mensaje: 220, canal: 130, motivo: 170, estado: 150, responsable: 140, llego: 110, campana: 150, servicio: 150,
-  landing: 150, gclid: 170, referidoPor: 150, consentimiento: 150,
+  landing: 150, gclid: 170, referidoPor: 150, consentimiento: 150, motivoDescarte: 160,
 };
 // Qué columna corresponde a cada dato propio de una fuente.
 const COLUMNA_DE_CAMPO: Record<string, string> = {
@@ -109,28 +112,46 @@ export default function LeadsPage() {
   const [servicios, setServicios] = useState<SalesServicio[]>([]);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
-  const [estado, setEstado] = useState('pendientes');
-  const [motivo, setMotivo] = useState('');
-  const [canal, setCanal] = useState('');
-  // Llegan del Dashboard («Motivos de pérdida»): ?estado=DESCARTADO&motivoDescarte=…&responsable=mine|<id>.
-  const [motivoDescarte, setMotivoDescarte] = useState('');
-  const [soloResp, setSoloResp] = useState('');
-  const [filtroFecha, setFiltroFecha] = useState<FiltroFechaValor>(FILTRO_FECHA_VACIO);
+  // Los filtros viven en la cabecera de cada columna (useColumnFilters). Abre mostrando solo los pendientes
+  // (sin procesar y contactados): se ve como el chip «Estado» y se cambia o se quita desde ahí.
+  const cf = useColumnFilters<LeadEntrante>(leads, [
+    { key: 'contacto', etiqueta: 'Contacto', tipo: 'texto', getValue: (l) => [l.name, l.companyName, l.email, l.phone].filter(Boolean).join(' ') },
+    { key: 'mensaje', etiqueta: 'Mensaje', tipo: 'texto', getValue: (l) => l.message },
+    { key: 'canal', etiqueta: 'Fuente', tipo: 'valores', orden: canales.map((c) => c.key), getValues: (l) => ({ valor: l.channel, etiqueta: etiquetaCanal(l.channel) }) },
+    {
+      key: 'motivo', etiqueta: 'Tipo de contacto', tipo: 'valores', vacio: 'Sin clasificar', orden: Object.keys(MOTIVO_CONTACTO_LABEL),
+      getValues: (l) => (l.contactReason ? { valor: l.contactReason, etiqueta: MOTIVO_CONTACTO_LABEL[l.contactReason] } : null),
+    },
+    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: Object.keys(ESTADO_LABEL), getValues: (l) => ({ valor: l.status, etiqueta: ESTADO_LABEL[l.status] }) },
+    {
+      key: 'responsable', etiqueta: 'Responsable', tipo: 'valores', vacio: 'Sin asignar',
+      getValues: (l) => (l.assignedUserId ? { valor: String(l.assignedUserId), etiqueta: l.assignedUserName || `Usuario ${l.assignedUserId}` } : null),
+    },
+    { key: 'llego', etiqueta: 'Llegó', tipo: 'fecha', getValue: (l) => l.createdAt },
+    { key: 'campana', etiqueta: 'Campaña', tipo: 'valores', vacio: 'Sin campaña', getValues: (l) => l.campaign },
+    { key: 'servicio', etiqueta: 'Servicio pedido', tipo: 'valores', vacio: 'Sin dato', getValues: (l) => extraTexto(l, 'servicio') },
+    { key: 'landing', etiqueta: 'Landing', tipo: 'valores', vacio: 'Sin dato', getValues: (l) => extraTexto(l, 'landing') },
+    { key: 'gclid', etiqueta: 'gclid', tipo: 'texto', getValue: (l) => extraTexto(l, 'gclid') },
+    { key: 'referidoPor', etiqueta: 'Referido por', tipo: 'valores', vacio: 'Nadie', getValues: (l) => extraTexto(l, 'referidoPor') },
+    {
+      key: 'consentimiento', etiqueta: 'Consentimiento', tipo: 'valores', vacio: 'Sin dato',
+      getValues: (l) => { const c = extraTexto(l, 'consentimiento'); return c ? { valor: c, etiqueta: c === 'SI' ? 'Sí' : 'No consta' } : null; },
+    },
+    { key: 'motivoDescarte', etiqueta: 'Motivo del descarte', tipo: 'valores', vacio: 'Sin motivo', getValues: (l) => l.motivoDescarte },
+  ], { inicial: { estado: filtroDeValores(ESTADOS_LEAD_PENDIENTES) } });
+
   const [searchParams, setSearchParams] = useSearchParams();
+  const { fijarVarios } = cf;
   useEffect(() => {
-    const e = searchParams.get('estado');
-    const m = searchParams.get('motivoDescarte');
-    const r = searchParams.get('responsable');
-    if (e) setEstado(e);
-    if (m) setMotivoDescarte(m);
-    if (r && r !== 'all') setSoloResp(r);
-    // ?desde=&hasta=: el periodo que se miraba en el Dashboard; queda a la vista en el filtro «Llegó».
-    const fecha = filtroFechaDeUrl(searchParams.get('desde'), searchParams.get('hasta'));
-    if (fecha) setFiltroFecha(fecha);
+    // Llegan del Dashboard («Motivos de pérdida», tarjetas…): ?estado=DESCARTADO&motivoDescarte=…&responsable=mine|<id>
+    // &desde=&hasta=. Cada uno se vuelve el filtro de su columna y queda a la vista como chip.
+    const filtros = filtrosDeUrlLeads(searchParams, usuario?.id);
+    fijarVarios(filtros);
     // ?nuevo=1: «Nueva oportunidad» manda aquí a quien apenas escribió y todavía no es oportunidad.
     if (searchParams.get('nuevo') === '1') setNuevo(true);
-    if (e || m || r || fecha || searchParams.get('nuevo')) setSearchParams({}, { replace: true });
-  }, [searchParams, setSearchParams]);
+    if (Object.keys(filtros).length > 0 || searchParams.get('nuevo')) setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- usuario no cambia mientras la pantalla está abierta.
+  }, [searchParams, setSearchParams, fijarVarios]);
   const [nuevo, setNuevo] = useState(false);
   const [convirtiendo, setConvirtiendo] = useState<LeadEntrante | null>(null);
   const [descartando, setDescartando] = useState<LeadEntrante | null>(null);
@@ -140,11 +161,16 @@ export default function LeadsPage() {
   // esa fuente (p. ej. gclid en Google Ads), aunque no las haya elegido.
   const columnasVisiblesLead = useMemo(() => {
     const elegidas = columnPrefs.visible.filter((k) => COLUMNAS_LEAD.some((c) => c.key === k));
+    const filtroCanal = cf.filtro('canal');
+    const canal = filtroCanal?.tipo === 'valores' && filtroCanal.incluir.length === 1 ? filtroCanal.incluir[0] : '';
     const propias = (canales.find((c) => c.key === canal)?.campos ?? [])
       .map((c) => COLUMNA_DE_CAMPO[c.key])
       .filter((k): k is string => !!k && !elegidas.includes(k));
+    // Filtrar por «Motivo del descarte» muestra esa columna aunque no se haya elegido.
+    if (cf.filtro('motivoDescarte') && !elegidas.includes('motivoDescarte')) propias.push('motivoDescarte');
     return [...elegidas, ...propias];
-  }, [columnPrefs.visible, canales, canal]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cf.filtro lee los filtros de ese momento; se recalcula cuando cambian.
+  }, [columnPrefs.visible, canales, cf.filtros]);
   const tablaRef = useResizableColumns('ventas-leads', ['contacto', ...columnasVisiblesLead, 'acciones']);
 
   const cargar = async () => {
@@ -160,37 +186,20 @@ export default function LeadsPage() {
   };
   useEffect(() => { cargar(); }, []);
 
-  // Todo menos la fuente: de aquí salen los totales por fuente del resumen.
-  const sinFiltroDeFuente = useMemo(() => {
+  // Los filtros de columna ya se aplicaron (cf.filas); aquí solo falta el buscador general.
+  const filtrados = useMemo(() => {
     const q = busqueda.toLowerCase().trim();
-    return leads.filter((l) => {
-      if (estado === 'pendientes' && (l.status === 'CONVERTIDO' || l.status === 'DESCARTADO')) return false;
-      if (estado && estado !== 'pendientes' && l.status !== estado) return false;
-      if (motivo === 'SIN_CLASIFICAR' ? !!l.contactReason : motivo && l.contactReason !== motivo) return false;
-      if (motivoDescarte && l.motivoDescarte !== motivoDescarte) return false;
-      if (soloResp && String(l.assignedUserId ?? '') !== (soloResp === 'mine' ? String(usuario?.id ?? '') : soloResp)) return false;
-      if (!fechaEnRango(l.createdAt, filtroFecha)) return false;
-      if (!q) return true;
-      return (
-        l.name.toLowerCase().includes(q) ||
-        (l.email || '').toLowerCase().includes(q) ||
-        (l.phone || '').includes(q) ||
-        (l.companyName || '').toLowerCase().includes(q) ||
-        (l.message || '').toLowerCase().includes(q)
-      );
-    });
-  }, [leads, busqueda, estado, motivo, motivoDescarte, soloResp, filtroFecha, usuario?.id]);
-  const filtrados = useMemo(
-    () => (canal ? sinFiltroDeFuente.filter((l) => l.channel === canal) : sinFiltroDeFuente),
-    [sinFiltroDeFuente, canal],
-  );
-  const totalesPorFuente = useMemo(() => {
-    const t = new Map<string, number>();
-    for (const l of sinFiltroDeFuente) t.set(l.channel, (t.get(l.channel) ?? 0) + 1);
-    return t;
-  }, [sinFiltroDeFuente]);
+    if (!q) return cf.filas;
+    return cf.filas.filter((l) => (
+      l.name.toLowerCase().includes(q) ||
+      (l.email || '').toLowerCase().includes(q) ||
+      (l.phone || '').includes(q) ||
+      (l.companyName || '').toLowerCase().includes(q) ||
+      (l.message || '').toLowerCase().includes(q)
+    ));
+  }, [cf.filas, busqueda]);
 
-  const { filas, thProps, SortIcon } = useSortableTable(
+  const { filas, thProps, ordenDe } = useSortableTable(
     filtrados,
     {
       contacto: (l) => l.name,
@@ -206,6 +215,7 @@ export default function LeadsPage() {
       gclid: (l) => extraTexto(l, 'gclid'),
       referidoPor: (l) => extraTexto(l, 'referidoPor'),
       consentimiento: (l) => extraTexto(l, 'consentimiento'),
+      motivoDescarte: (l) => l.motivoDescarte,
     },
     'llego',
     'desc',
@@ -284,6 +294,8 @@ export default function LeadsPage() {
           : '—';
       case 'referidoPor':
         return extraTexto(l, 'referidoPor') || '—';
+      case 'motivoDescarte':
+        return l.motivoDescarte || '—';
       case 'consentimiento': {
         const c = extraTexto(l, 'consentimiento');
         if (!c) return '—';
@@ -309,6 +321,7 @@ export default function LeadsPage() {
       case 'llego': return diaCortoEcuador(l.createdAt);
       case 'campana': return l.campaign || '';
       case 'servicio': case 'landing': case 'gclid': case 'referidoPor': return extraTexto(l, key);
+      case 'motivoDescarte': return l.motivoDescarte || '';
       case 'consentimiento': {
         const c = extraTexto(l, 'consentimiento');
         if (!c) return '';
@@ -354,11 +367,7 @@ export default function LeadsPage() {
     return lista;
   };
 
-  const hayFiltros = !!busqueda || estado !== 'pendientes' || !!motivo || !!canal || !!motivoDescarte || !!soloResp || hayFiltroFecha(filtroFecha);
-  const motivosDeDescarte = useMemo(
-    () => [...new Set(leads.map((l) => l.motivoDescarte).filter((m): m is string => !!m))].sort((a, b) => a.localeCompare(b, 'es')),
-    [leads],
-  );
+  const hayFiltros = !!busqueda || cf.hayFiltros;
   const sinClasificar = leads.filter((l) => abiertos(l) && !l.contactReason).length;
 
   return (
@@ -374,45 +383,13 @@ export default function LeadsPage() {
       />
 
       <div className="filter-bar">
-        <div className="filter-bar-fields filter-bar-fields--etiquetas">
+        <div className="filter-bar-fields">
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por nombre, correo, teléfono o mensaje..."
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
-          <FilterField label="Estado">
-            <select className="filter-select" value={estado} onChange={(e) => setEstado(e.target.value)}>
-              <option value="pendientes">Pendientes</option>
-              <option value="">Todos</option>
-              <option value="NUEVO">Sin procesar</option>
-              <option value="EN_SEGUIMIENTO">Contactados</option>
-              <option value="CONVERTIDO">Pasaron a oportunidad</option>
-              <option value="DESCARTADO">Descartados</option>
-            </select>
-          </FilterField>
-          <FilterField label="Tipo de contacto">
-            <select className="filter-select" value={motivo} onChange={(e) => setMotivo(e.target.value)}>
-              <option value="">Todos</option>
-              <option value="SIN_CLASIFICAR">Sin clasificar</option>
-              {(Object.keys(MOTIVO_CONTACTO_LABEL) as MotivoContacto[]).map((k) => <option key={k} value={k}>{MOTIVO_CONTACTO_LABEL[k]}</option>)}
-            </select>
-          </FilterField>
-          {estado === 'DESCARTADO' && (
-            <FilterField label="Motivo del descarte">
-              <select className="filter-select" value={motivoDescarte} onChange={(e) => setMotivoDescarte(e.target.value)}>
-                <option value="">Todos</option>
-                {motivosDeDescarte.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </FilterField>
-          )}
-          <FilterField label="Fuente">
-            <select className="filter-select" value={canal} onChange={(e) => setCanal(e.target.value)}>
-              <option value="">Todas ({sinFiltroDeFuente.length})</option>
-              {canales.map((c) => <option key={c.key} value={c.key}>{c.label} ({totalesPorFuente.get(c.key) ?? 0})</option>)}
-            </select>
-          </FilterField>
-          <FiltroFecha label="Llegó" valor={filtroFecha} onChange={setFiltroFecha} title="Filtra por el día en que llegó el posible cliente (la columna «Llegó»)" />
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu
@@ -427,7 +404,7 @@ export default function LeadsPage() {
             }}
           />
           <ClearFiltersButton
-            onClear={() => { setBusqueda(''); setEstado('pendientes'); setMotivo(''); setCanal(''); setMotivoDescarte(''); setSoloResp(''); setFiltroFecha(FILTRO_FECHA_VACIO); }}
+            onClear={() => { setBusqueda(''); cf.limpiar(); }}
             disabled={!hayFiltros}
           />
           <ExportTableButton
@@ -441,7 +418,7 @@ export default function LeadsPage() {
         </div>
       </div>
 
-      <ChipAlcance alcance={soloResp || null} que="posibles clientes" total={filtrados.length} onQuitar={() => setSoloResp('')} />
+      <ChipsFiltros cf={cf} />
 
       <div className="admin-section">
         {cargando ? (
@@ -451,19 +428,17 @@ export default function LeadsPage() {
             <div style={{ fontSize: 36, marginBottom: 8 }}>📥</div>
             <div>Aún no hay posibles clientes. Llegan solos desde la web y las landings (ver Configuración → Cómo llegan los posibles clientes) o se ingresan a mano.</div>
           </div>
-        ) : filas.length === 0 ? (
-          <p style={{ color: '#888', fontSize: 13 }}>No hay posibles clientes que coincidan con los filtros.</p>
         ) : (
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
-                  <th {...thProps('contacto')} style={{ width: 240 }}>Contacto <SortIcon campo="contacto" /></th>
+                  <th {...thProps('contacto')} style={{ width: 240 }}>Contacto <ColumnFilter cf={cf} col="contacto" orden={ordenDe('contacto')} /></th>
                   {columnasVisiblesLead.map((k) => {
                     const col = COLUMNAS_LEAD.find((c) => c.key === k)!;
                     return (
                       <th key={k} {...thProps(k)} style={{ width: ANCHO_COLUMNA_LEAD[k] }}>
-                        {col.label} <SortIcon campo={k} />
+                        {col.label} <ColumnFilter cf={cf} col={k} orden={ordenDe(k)} />
                       </th>
                     );
                   })}
@@ -471,6 +446,13 @@ export default function LeadsPage() {
                 </tr>
               </thead>
               <tbody>
+                {filas.length === 0 && (
+                  <FilaSinResultados
+                    columnas={columnasVisiblesLead.length + 2}
+                    mensaje="No hay posibles clientes que coincidan con los filtros."
+                    onLimpiar={hayFiltros ? () => { setBusqueda(''); cf.limpiar(); } : undefined}
+                  />
+                )}
                 {filas.map((l) => (
                   <tr key={l.id}>
                     <td>

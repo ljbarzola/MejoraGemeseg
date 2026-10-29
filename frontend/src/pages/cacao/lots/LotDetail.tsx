@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
+import { useCacaoUnidades } from '../useCacaoUnidades';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getLotById } from '../../../services/cacao.service';
 import { formatDateEc, formatMoney } from '../utils';
 import { useCompany } from '../../../contexts/ThemeContext';
+import { ABREVIATURA_UNIDAD as UNIT_ABBR, NOMBRE_UNIDAD as UNIT_FULL } from '../useCacaoUnidades';
 
-const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
-const UNIT_FULL: Record<string, string> = { TON: 'Toneladas', KG: 'Kilogramos', SACO: 'Sacos' };
-const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
 
 export default function LotDetail() {
+  const { factor: factorUnidad } = useCacaoUnidades();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -29,14 +29,17 @@ export default function LotDetail() {
 
   function getOrigWeight(kg: number, unit: string | null) {
     if (!unit || unit === 'KG') return null;
-    const factor = UNIT_FACTORS[unit] || 1;
+    const factor = factorUnidad(unit);
+    if (!factor) return null;
     return { value: (kg / factor).toFixed(2), abbr: UNIT_ABBR[unit] || unit, full: UNIT_FULL[unit] || unit };
   }
 
   if (loading) return <div className="loading-state">Cargando lote...</div>;
   if (!lot) return <div className="empty-state">Lote no encontrado.</div>;
 
-  const receptionUnit = lot.receptions?.[0]?.unitOfMeasure || null;
+  // El servidor devuelve la lista `receptions` (cada recepción forma su propio lote, así que es una).
+  const recepcion = lot.receptions?.[0] || null;
+  const receptionUnit = recepcion?.unitOfMeasure || null;
   const origWeight = getOrigWeight(lot.netWeight, receptionUnit);
   const unitAbbr = UNIT_ABBR[receptionUnit] || 'kg';
 
@@ -127,7 +130,7 @@ export default function LotDetail() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px' }}>
               <span>Se recibió en: <strong>{UNIT_FULL[receptionUnit]}</strong></span>
               <span>Peso original: <strong>{origWeight?.value} {unitAbbr}</strong></span>
-              <span>Factor de conversión: <strong>1 {unitAbbr} = {UNIT_FACTORS[receptionUnit]} kg</strong></span>
+              <span>Factor de conversión: <strong>1 {unitAbbr} = {factorUnidad(receptionUnit) ?? '—'} kg</strong></span>
             </div>
             <div style={{ marginTop: '6px', color: '#718096', fontSize: '12px' }}>
               El lote almacena en kilogramos. El kárdex también está en kg.
@@ -135,11 +138,15 @@ export default function LotDetail() {
           </div>
         )}
 
-        {lot.reception && (
+        {recepcion && (
           <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px 32px', fontSize: '14px' }}>
-            <div><strong>Proveedor:</strong> {lot.reception.supplier?.name || '—'}</div>
-            <div><strong>Guía:</strong> {lot.reception.guideNumber}</div>
-            <div><strong>Fecha Recepción:</strong> {formatDateEc(lot.reception.date)}</div>
+            <div><strong>Proveedor:</strong> {recepcion.supplier?.name || '—'}</div>
+            <div><strong>Guía:</strong> {recepcion.guideNumber}</div>
+            <div><strong>Fecha Recepción:</strong> {formatDateEc(recepcion.date)}</div>
+            {recepcion.ticketNumber && <div><strong>Ticket:</strong> {recepcion.ticketNumber}</div>}
+            {recepcion.weighingProfile && <div><strong>Perfil de pesaje:</strong> {recepcion.weighingProfile === 'BULTOS' ? 'Por bultos' : 'En báscula'}</div>}
+            {recepcion.driverName && <div><strong>Chofer:</strong> {recepcion.driverName}</div>}
+            {recepcion.vehiclePlate && <div><strong>Placa:</strong> {recepcion.vehiclePlate}</div>}
           </div>
         )}
       </div>

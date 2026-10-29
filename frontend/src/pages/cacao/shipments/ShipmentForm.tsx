@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getClients, getLots, createShipment, getUnitConfig, getNextShipmentId } from '../../../services/cacao.service';
+import { getClients, getLots, createShipment, getUnitConfig, getNextShipmentId, getCacaoConfig } from '../../../services/cacao.service';
+import { apiErrorMessage } from '../utils';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import DateInput from '../../../components/common/DateInput';
 import { Trash2 } from 'lucide-react';
+import { ABREVIATURA_UNIDAD as UNIT_ABBR, NOMBRE_UNIDAD as UNIT_FULL, KG_POR_QUINTAL } from '../useCacaoUnidades';
 
-const UNIT_ABBR: Record<string, string> = { TON: 'T', KG: 'kg', SACO: 'sacos' };
-const UNIT_FULL: Record<string, string> = { TON: 'Toneladas', KG: 'Kilogramos', SACO: 'Sacos' };
-const UNIT_FACTORS: Record<string, number> = { TON: 1000, KG: 1, SACO: 69 };
+// Toneladas, quintales y kilos son universales; el peso del saco es de cada empresa (Cacao → Configuración).
+const UNIT_FACTORS: Record<string, number> = { TON: 1000, QQ: KG_POR_QUINTAL, KG: 1 };
 function round4(n: number) { return Math.round(n * 10000) / 10000; }
 function getTodayLocal() {
   const d = new Date();
@@ -31,6 +32,7 @@ export default function ShipmentForm() {
     contractRef: '',
     unitOfMeasure: 'KG',
     salePrice: '',
+    dueDays: '',
   });
   const [selectedLots, setSelectedLots] = useState<{ lotId: number; quantity: string; unitCost: number }[]>([]);
   const isDirty = useRef(false);
@@ -39,17 +41,14 @@ export default function ShipmentForm() {
   const [confirmandoMargenNegativo, setConfirmandoMargenNegativo] = useState(false);
 
   useEffect(() => {
-    Promise.all([getClients(), getLots({ status: 'OPEN' }), getUnitConfig(), getNextShipmentId()])
-      .then(([c, l, uc, nid]) => {
+    Promise.all([getClients(), getLots({ status: 'OPEN' }), getUnitConfig(), getNextShipmentId(), getCacaoConfig()])
+      .then(([c, l, uc, nid, cfg]) => {
         setClients(c);
         setLots(l);
         setUnitConfigs(uc);
         setNextIdCode(nid.code);
-        const lotWithFixedPrice = l.find((lot: any) => lot.quality?.isFixedPrice && lot.quality?.fixedPrice);
-        if (lotWithFixedPrice && !form.salePrice) {
-          const defaultSale = (lotWithFixedPrice.quality.fixedPrice * 1.15).toFixed(2);
-          setForm(prev => ({ ...prev, salePrice: defaultSale }));
-        }
+        // El plazo de cobro arranca con el que la empresa configuró; este embarque puede cambiarlo.
+        setForm(prev => ({ ...prev, dueDays: String(cfg.plazoCobroDias) }));
       })
       .finally(() => setLoading(false));
   }, []);
@@ -76,10 +75,9 @@ export default function ShipmentForm() {
     }
   }
 
+  const kgPorSaco: number | null = unitConfigs.find((c: any) => c.isDefault)?.kgPerUnit ?? null;
   const getUnitFactor = () => {
-    if (form.unitOfMeasure === 'SACO') {
-      return unitConfigs.find((c: any) => c.isDefault)?.kgPerUnit || 69;
-    }
+    if (form.unitOfMeasure === 'SACO') return kgPorSaco ?? 1;
     return UNIT_FACTORS[form.unitOfMeasure] || 1;
   };
 
@@ -104,10 +102,6 @@ export default function ShipmentForm() {
       const lot = lots.find((l) => l.id === Number(value));
       if (lot) {
         updated[index].unitCost = lot.averageCost;
-        if (!form.salePrice && lot.quality?.isFixedPrice && lot.quality?.fixedPrice) {
-          const defaultSale = (lot.quality.fixedPrice * 1.15).toFixed(2);
-          setForm(prev => ({ ...prev, salePrice: defaultSale }));
-        }
       }
     } else {
       (updated[index] as any)[field] = value;
@@ -125,6 +119,8 @@ export default function ShipmentForm() {
     if (!form.contractRef.trim()) { setError('La referencia del contrato es requerida'); return; }
     if (!form.salePrice || Number(form.salePrice) <= 0) { setError('El precio de venta debe ser mayor a 0'); return; }
     if (selectedLots.length === 0) { setError('Debe agregar al menos un lote'); return; }
+    const dueDays = Number(form.dueDays);
+    if (form.dueDays === '' || !Number.isInteger(dueDays) || dueDays < 0 || dueDays > 365) { setError('El plazo de cobro debe ser un número entero de días entre 0 y 365'); return; }
 
     for (const sl of selectedLots) {
       if (!sl.lotId) { setError('Debe seleccionar un lote en todas las filas'); return; }
@@ -156,21 +152,18 @@ export default function ShipmentForm() {
         clientId: Number(form.clientId),
         contractRef: form.contractRef,
         unitOfMeasure: form.unitOfMeasure,
-        totalWeight: totalWeightInUnit,
-        totalCost,
         salePrice,
-        margin: Number(margin),
+        dueDays: Number(form.dueDays),
+        // El costo, el monto y el margen los calcula el servidor con el costo de cada lote.
         lots: selectedLots.map((sl) => ({
           lotId: sl.lotId,
           quantity: Number(sl.quantity),
-          unitCost: sl.unitCost * unitFactor,
-          saleAmount: Number(sl.quantity) * salePrice * unitFactor,
         })),
       });
       isDirty.current = false;
       setCreatedId(result.id);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al crear embarque');
+      setError(apiErrorMessage(err, 'No se pudo crear el embarque. Revisa los datos e inténtalo de nuevo.'));
     } finally { setSaving(false); }
   }
 
@@ -237,8 +230,8 @@ export default function ShipmentForm() {
               <DateInput value={form.date} onChange={(v) => setField('date', v)} />
             </div>
             <div className="form-group">
-              <label>Cliente *</label>
-              <select value={form.clientId} onChange={(e) => setField('clientId', e.target.value)}>
+              <label htmlFor="emb-1">Cliente *</label>
+              <select id="emb-1" value={form.clientId} onChange={(e) => setField('clientId', e.target.value)}>
                 <option value="">Seleccionar...</option>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -246,23 +239,31 @@ export default function ShipmentForm() {
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label>Referencia (Contrato) *</label>
-              <input type="text" placeholder="Ej: CNT-2026-005" value={form.contractRef} onChange={(e) => setField('contractRef', e.target.value)} />
+              <label htmlFor="emb-2">Referencia (Contrato) *</label>
+              <input id="emb-2" type="text" placeholder="Ej: CNT-2026-005" value={form.contractRef} onChange={(e) => setField('contractRef', e.target.value)} />
             </div>
             <div className="form-group">
-              <label>Unidad de Venta (salida) *</label>
-              <select value={form.unitOfMeasure} onChange={(e) => setField('unitOfMeasure', e.target.value)}>
+              <label htmlFor="emb-3">Unidad de Venta (salida) *</label>
+              <select id="emb-3" value={form.unitOfMeasure} onChange={(e) => setField('unitOfMeasure', e.target.value)}>
                 <option value="KG">Kilogramos (KG)</option>
                 <option value="TON">Toneladas (T)</option>
-                <option value="SACO">Sacos ({unitConfigs.find((c: any) => c.isDefault)?.kgPerUnit || 69} kg)</option>
+                <option value="QQ">Quintales (100 lb = {KG_POR_QUINTAL.toFixed(2)} kg)</option>
+                {kgPorSaco
+                  ? <option value="SACO">Sacos ({kgPorSaco} kg)</option>
+                  : <option value="SACO" disabled>Sacos (configura el peso del saco)</option>}
               </select>
             </div>
           </div>
           <div className="form-row">
             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-              <label>Precio Venta ($/kg) * <span style={{ fontSize: '11px', color: '#718096', fontWeight: 400 }}>(calculado, editable)</span></label>
-              <input type="number" step="0.0001" min="0" value={form.salePrice} onChange={(e) => setField('salePrice', e.target.value)} />
-              <div style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>Se auto-calcula del precio fijo + margen, pero puede editarlo</div>
+              <label htmlFor="emb-4">Precio Venta ($/kg) *</label>
+              <input id="emb-4" type="number" step="0.0001" min="0" value={form.salePrice} onChange={(e) => setField('salePrice', e.target.value)} />
+              <div style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>Precio por kilogramo, sin importar la unidad en que se embarca</div>
+            </div>
+            <div className="form-group">
+              <label htmlFor="emb-5">Plazo de cobro (días) *</label>
+              <input id="emb-5" type="number" min="0" max="365" step="1" value={form.dueDays} onChange={(e) => setField('dueDays', e.target.value)} />
+              <div style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>Arranca con el plazo de tu empresa (Cacao → Configuración)</div>
             </div>
           </div>
 
@@ -283,10 +284,11 @@ export default function ShipmentForm() {
                     <option value="">Seleccionar lote...</option>
                     {lots.map((l) => {
                       const recvUnit = l.receptions?.[0]?.unitOfMeasure;
-                      const recvAbbr = recvUnit ? UNIT_ABBR[recvUnit] : null;
+                      // Solo se aclara cuando el lote entró en otra unidad; «= kg» a secas no decía nada.
+                      const recvAbbr = recvUnit && recvUnit !== 'KG' ? UNIT_ABBR[recvUnit] || recvUnit : null;
                       return (
                         <option key={l.id} value={l.id}>
-                          {l.code} ({l.netWeight.toLocaleString()} kg{recvAbbr ? ` = ${recvAbbr}` : ''} - ${l.averageCost.toFixed(2)}/kg){l.quality?.isFixedPrice ? ' [Fijo]' : ''}
+                          {l.code} ({l.netWeight.toLocaleString()} kg{recvAbbr ? `, recibido en ${recvAbbr}` : ''} - ${l.averageCost.toFixed(2)}/kg){l.quality?.isFixedPrice ? ' [Fijo]' : ''}
                         </option>
                       );
                     })}

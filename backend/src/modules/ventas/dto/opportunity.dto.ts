@@ -186,6 +186,12 @@ export class UbicacionDto {
 }
 
 export class CreateOpportunityDto {
+  // Día en que llegó la OPORTUNIDAD ('YYYY-MM-DD', día de Ecuador, no futuro). Sin enviar: al crear = ahora; al editar no se toca.
+  // Es de la oportunidad, no de la empresa o persona del Directorio (ver fecha-llegada.util.ts).
+  @IsOptional()
+  @IsString()
+  receivedAt?: string;
+
   @IsInt()
   salesClientId: number;
 
@@ -223,6 +229,12 @@ export class CreateOpportunityDto {
 }
 
 export class UpdateOpportunityDto {
+  // Día en que llegó la OPORTUNIDAD ('YYYY-MM-DD', día de Ecuador, no futuro). Sin enviar: al crear = ahora; al editar no se toca.
+  // Es de la oportunidad, no de la empresa o persona del Directorio (ver fecha-llegada.util.ts).
+  @IsOptional()
+  @IsString()
+  receivedAt?: string;
+
   @IsOptional()
   @ValidateNested()
   @Type(() => UbicacionDto)

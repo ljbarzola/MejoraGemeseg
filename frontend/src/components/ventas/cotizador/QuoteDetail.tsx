@@ -94,7 +94,7 @@ function ProductRow({
         {it.supplier && <small className="cot-screen-only"> · {it.supplier}</small>}
       </td>
       <td className="center" style={{ fontSize: 11, fontWeight: 600 }}>
-        {it.isService ? 'servicio' : ''}
+        {it.unit || (it.isService ? 'servicio' : '—')}
       </td>
       <td className="right">{money(c.price.baseCost)}</td>
       <td className="center">

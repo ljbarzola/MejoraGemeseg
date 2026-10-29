@@ -5,6 +5,19 @@ import { getContracts, getContractTemplates, deleteContractTemplate, deleteContr
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { cedulaVisible } from '../../../utils/postulacionValidacion';
 import { usePerm } from '../../../contexts/PermissionsContext';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
+import { useColumnFilters } from '../../../hooks/useColumnFilters';
+
+// Cómo se llama cada estado de un documento generado (lo que se ve en la tabla y en el filtro).
+const ESTADO_DOCUMENTO: Record<string, string> = {
+  DRAFT: 'Borrador',
+  GENERATING: 'Generando',
+  READY: 'Listo',
+  SENT: 'Enviado',
+  SIGNED: 'Firmado',
+  CANCELLED: 'Cancelado',
+};
 
 export default function ContractsList() {
   const navigate = useNavigate();
@@ -45,6 +58,18 @@ export default function ContractsList() {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Los filtros viven en la cabecera de cada columna de «Documentos generados» (useColumnFilters).
+  const cf = useColumnFilters<any>(contracts, [
+    { key: 'guardia', etiqueta: 'Guardia', tipo: 'texto', getValue: (c) => c.nombreGuardia },
+    { key: 'cedula', etiqueta: 'Cédula', tipo: 'texto', getValue: (c) => cedulaVisible(c.cedula) },
+    { key: 'plantilla', etiqueta: 'Plantilla', tipo: 'valores', vacio: 'Sin plantilla', getValues: (c) => c.template?.name },
+    {
+      key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: Object.keys(ESTADO_DOCUMENTO),
+      getValues: (c) => ({ valor: c.status, etiqueta: ESTADO_DOCUMENTO[c.status as string] || c.status }),
+    },
+    { key: 'fecha', etiqueta: 'Fecha', tipo: 'fecha', getValue: (c) => c.createdAt },
+  ]);
 
   const handleDeleteTemplate = (id: number) => {
     setDeleteTemplateError('');
@@ -141,6 +166,17 @@ export default function ContractsList() {
         </div>
 
         <h3 style={{ marginBottom: '12px' }}>Documentos Generados</h3>
+        {!loading && contracts.length > 0 && (
+          <>
+            <div className="filter-bar">
+              <div className="filter-bar-fields" />
+              <div className="filter-bar-actions">
+                <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+              </div>
+            </div>
+            <ChipsFiltros cf={cf} />
+          </>
+        )}
         {loading ? (
           <div className="loading-state">Cargando...</div>
         ) : contracts.length === 0 ? (
@@ -150,16 +186,19 @@ export default function ContractsList() {
             <table className="tasks-table">
               <thead>
                 <tr>
-                  <th>Guardia</th>
-                  <th>Cédula</th>
-                  <th>Plantilla</th>
-                  <th>Estado</th>
-                  <th>Fecha</th>
+                  <th>Guardia<ColumnFilter cf={cf} col="guardia" orden={cf.ordenDe('guardia')} /></th>
+                  <th>Cédula<ColumnFilter cf={cf} col="cedula" orden={cf.ordenDe('cedula')} /></th>
+                  <th>Plantilla<ColumnFilter cf={cf} col="plantilla" orden={cf.ordenDe('plantilla')} /></th>
+                  <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
+                  <th>Fecha<ColumnFilter cf={cf} col="fecha" orden={cf.ordenDe('fecha')} /></th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {contracts.map((c) => (
+                {cf.filas.length === 0 && (
+                  <FilaSinResultados columnas={6} mensaje="No hay documentos que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                )}
+                {cf.filas.map((c) => (
                   <tr key={c.id}>
                     <td style={{ fontWeight: 600 }}>{c.nombreGuardia}</td>
                     <td style={{ fontFamily: 'monospace' }}>{cedulaVisible(c.cedula)}</td>
@@ -169,14 +208,7 @@ export default function ContractsList() {
                         backgroundColor: c.status === 'DRAFT' ? '#fefcbf' : '#c6f6d5',
                         color: c.status === 'DRAFT' ? '#975a16' : '#276749',
                       }}>
-                        {{
-                          DRAFT: 'Borrador',
-                          GENERATING: 'Generando',
-                          READY: 'Listo',
-                          SENT: 'Enviado',
-                          SIGNED: 'Firmado',
-                          CANCELLED: 'Cancelado',
-                        }[c.status as string] || c.status}
+                        {ESTADO_DOCUMENTO[c.status as string] || c.status}
                       </span>
                     </td>
                     <td>{new Date(c.createdAt).toLocaleDateString('es-EC')}</td>

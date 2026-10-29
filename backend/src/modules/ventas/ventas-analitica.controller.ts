@@ -26,15 +26,26 @@ export class VentasAnaliticaController {
 
   @Get('cartera')
   @Section('VENTAS', 'view')
-  cartera(@Req() req: any, @Query('alcance') alcance?: string) {
-    return this.analitica.cartera(req.user.companyId, this.alcance(req, alcance));
+  cartera(
+    @Req() req: any,
+    @Query('alcance') alcance?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+  ) {
+    return this.analitica.cartera(req.user.companyId, this.alcance(req, alcance), desde, hasta);
   }
 
   // Mapa de Ecuador del Dashboard: dónde están las oportunidades que tienen Ubicación.
   @Get('mapa')
   @Section('VENTAS', 'view')
-  mapa(@Req() req: any, @Query('alcance') alcance?: string, @Query('vista') vista?: string) {
-    return this.analitica.mapa(req.user.companyId, this.alcance(req, alcance), vista);
+  mapa(
+    @Req() req: any,
+    @Query('alcance') alcance?: string,
+    @Query('vista') vista?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+  ) {
+    return this.analitica.mapa(req.user.companyId, this.alcance(req, alcance), vista, desde, hasta);
   }
 
   @Get('retencion')

@@ -20,6 +20,9 @@ import AdministrativeStaffConfigModal from '../../components/personal/Administra
 import NuevoPersonalAdministrativoModal from '../../components/personal/NuevoPersonalAdministrativoModal';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import OpenFolderButton from '../../components/common/OpenFolderButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
+import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 
 interface StaffRow {
   employeeName: string;
@@ -176,14 +179,29 @@ export default function AdministrativeStaff() {
     }
   };
 
+  // Los filtros viven en la cabecera de cada columna (useColumnFilters); se filtra primero y luego se ordena.
+  const cf = useColumnFilters<StaffRow>(staff, [
+    { key: 'nombre', etiqueta: 'Nombre', tipo: 'texto', getValue: (e) => e.employeeName },
+    { key: 'puesto', etiqueta: 'Puesto', tipo: 'valores', vacio: 'Sin puesto', getValues: (e) => e.puesto },
+    { key: 'departamento', etiqueta: 'Departamento', tipo: 'valores', vacio: 'Sin departamento', getValues: (e) => e.ficha?.departamento },
+    { key: 'ingreso', etiqueta: 'Fecha de ingreso', tipo: 'fecha', getValue: (e) => e.ficha?.fechaIngreso },
+    {
+      key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['ACTIVO', 'INACTIVO'],
+      getValues: (e) => ((e.ficha?.activo ?? true) ? { valor: 'ACTIVO', etiqueta: 'Activo' } : { valor: 'INACTIVO', etiqueta: 'Inactivo' }),
+    },
+    { key: 'cumplimiento', etiqueta: 'Archivos', tipo: 'numero', getValue: (e) => e.documentCount, formato: (n) => String(n) },
+  ]);
+
   // Ordenar por cualquier columna, igual que el listado de tareas del Inicio.
-  const { filas: filasOrdenadas, thProps, SortIcon } = useSortableTable(
-    staff,
+  const { filas: filasOrdenadas, thProps, ordenDe } = useSortableTable(
+    cf.filas,
     {
       nombre: (e) => e.employeeName,
       puesto: (e) => e.puesto,
       departamento: (e) => e.ficha?.departamento,
       ingreso: (e) => e.ficha?.fechaIngreso,
+      estado: (e) => ((e.ficha?.activo ?? true) ? 0 : 1),
+      cumplimiento: (e) => e.documentCount,
     },
     'nombre',
   );
@@ -254,6 +272,18 @@ export default function AdministrativeStaff() {
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginTop: '16px', fontSize: '0.85rem' }}>{syncError}</div>
       )}
 
+      {!loading && staff.length > 0 && (
+        <>
+          <div className="filter-bar" style={{ marginTop: '20px' }}>
+            <div className="filter-bar-fields" />
+            <div className="filter-bar-actions">
+              <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+            </div>
+          </div>
+          <ChipsFiltros cf={cf} />
+        </>
+      )}
+
       <div className="admin-section" style={{ marginTop: '20px' }}>
         {loading ? (
           <div className="loading-state">Cargando...</div>
@@ -270,16 +300,19 @@ export default function AdministrativeStaff() {
             <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th {...thProps('nombre')}>Nombre <SortIcon campo="nombre" /></th>
-                  <th {...thProps('puesto')}>Puesto <SortIcon campo="puesto" /></th>
-                  <th {...thProps('departamento')}>Departamento <SortIcon campo="departamento" /></th>
-                  <th {...thProps('ingreso')}>Fecha de ingreso <SortIcon campo="ingreso" /></th>
-                  <th>Estado</th>
-                  <th>Cumplimiento</th>
+                  <th {...thProps('nombre')}>Nombre <ColumnFilter cf={cf} col="nombre" orden={ordenDe('nombre')} /></th>
+                  <th {...thProps('puesto')}>Puesto <ColumnFilter cf={cf} col="puesto" orden={ordenDe('puesto')} /></th>
+                  <th {...thProps('departamento')}>Departamento <ColumnFilter cf={cf} col="departamento" orden={ordenDe('departamento')} /></th>
+                  <th {...thProps('ingreso')}>Fecha de ingreso <ColumnFilter cf={cf} col="ingreso" orden={ordenDe('ingreso')} /></th>
+                  <th {...thProps('estado')}>Estado <ColumnFilter cf={cf} col="estado" orden={ordenDe('estado', ['Activos primero', 'Inactivos primero'])} /></th>
+                  <th {...thProps('cumplimiento')}>Cumplimiento <ColumnFilter cf={cf} col="cumplimiento" orden={ordenDe('cumplimiento')} /></th>
                   <th style={{ textAlign: 'right' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
+                {filasOrdenadas.length === 0 && (
+                  <FilaSinResultados columnas={7} mensaje="No hay personal que coincida con los filtros." onLimpiar={cf.limpiar} />
+                )}
                 {filasOrdenadas.map((emp) => (
                   <tr key={emp.cedula}>
                     <td style={{ fontWeight: 700, color: 'var(--azul-oscuro)' }}>

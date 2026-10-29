@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import ErrorBanner from '../common/ErrorBanner';
 import ConfirmDialog from '../common/ConfirmDialog';
+import ClearFiltersButton from '../common/ClearFiltersButton';
+import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../common/ColumnFilter';
+import { useColumnFilters } from '../../hooks/useColumnFilters';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import {
@@ -32,7 +35,17 @@ export default function ActivacionHojasPanel() {
   const [pendiente, setPendiente] = useState<{ persona: ActivacionPersona; activar: boolean } | null>(null);
   const [guardando, setGuardando] = useState(false);
   const tablaRef = useResizableColumns('bitacora-activacion');
-  const { filas, thProps, SortIcon } = useSortableTable(personas, CAMPOS_ORDEN, 'nombre');
+  // Filtros en la cabecera de cada columna (la lista de personas ya viene completa del servidor).
+  const cf = useColumnFilters<ActivacionPersona>(personas, [
+    { key: 'nombre', etiqueta: 'Persona', tipo: 'texto', getValue: (p) => [p.nombre, p.cargo, p.email].filter(Boolean).join(' ') },
+    {
+      key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['activa', 'no'],
+      getValues: (p) => (p.activa ? { valor: 'activa', etiqueta: 'Activa' } : { valor: 'no', etiqueta: 'No activa' }),
+    },
+    { key: 'desde', etiqueta: 'Registrando desde', tipo: 'fecha', getValue: (p) => (p.activa ? p.desde : null) },
+    { key: 'cambiadaPor', etiqueta: 'Último cambio por', tipo: 'valores', vacio: 'Nadie', getValues: (p) => p.cambiadaPor },
+  ]);
+  const { filas, thProps, ordenDe } = useSortableTable(cf.filas, CAMPOS_ORDEN, 'nombre');
 
   useEffect(() => {
     let vigente = true;
@@ -84,20 +97,29 @@ export default function ActivacionHojasPanel() {
               ? 'Ninguna persona tiene la hoja activada.'
               : `${activas} de ${personas.length} ${activas === 1 ? 'persona tiene' : 'personas tienen'} la hoja activada.`}
           </p>
+          <div className="filter-bar">
+            <div className="filter-bar-actions">
+              <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+            </div>
+          </div>
+          <ChipsFiltros cf={cf} />
           <div className="tasks-table-wrapper">
             <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th {...thProps('nombre')}>Persona <SortIcon campo="nombre" /></th>
-                  <th {...thProps('estado')}>Estado <SortIcon campo="estado" /></th>
-                  <th {...thProps('desde')}>Registrando desde <SortIcon campo="desde" /></th>
-                  <th {...thProps('cambiadaPor')}>Último cambio por <SortIcon campo="cambiadaPor" /></th>
+                  <th {...thProps('nombre')}>Persona <ColumnFilter cf={cf} col="nombre" orden={ordenDe('nombre')} /></th>
+                  <th {...thProps('estado')}>Estado <ColumnFilter cf={cf} col="estado" orden={ordenDe('estado')} /></th>
+                  <th {...thProps('desde')}>Registrando desde <ColumnFilter cf={cf} col="desde" orden={ordenDe('desde')} /></th>
+                  <th {...thProps('cambiadaPor')}>Último cambio por <ColumnFilter cf={cf} col="cambiadaPor" orden={ordenDe('cambiadaPor')} /></th>
                   <th className="col-acciones col-acciones--ancha">
                     <span className="visually-hidden">Acciones</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
+                {filas.length === 0 && (
+                  <FilaSinResultados columnas={5} mensaje="No hay personas que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                )}
                 {filas.map((p) => (
                   <tr key={p.userId} className="tasks-table-row">
                     <td className="tasks-table-title">

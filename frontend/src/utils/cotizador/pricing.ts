@@ -35,6 +35,8 @@ export interface PriceItem {
   hasGanancia: boolean;
   hasInstalacion: boolean;
   isService: boolean;
+  /** Unidad de venta del catálogo (u, m, mes...); sale en la columna «Und». */
+  unit?: string;
   supplier: string;
   /** Copia con el precio guardado en la cotización (distinto al actual del catálogo). */
   frozen?: boolean;
@@ -57,6 +59,7 @@ export function toPriceItem(p: CotProduct): PriceItem {
     hasGanancia: isService ? false : p.hasProfit,
     hasInstalacion: isService ? false : p.hasInstall,
     isService,
+    unit: p.unit || '',
     // Solo los equipos tienen proveedor (igual que el original)
     supplier: p.kind === 'EQUIPO' ? p.supplier || '' : '',
   };

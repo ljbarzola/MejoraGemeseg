@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { getPriceFixings, createPriceFixing, fixPrice, getLots } from '../../../services/cacao.service';
-import { formatDateEc } from '../utils';
+import PageHeader from '../../../components/common/PageHeader';
+import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
+import { getPriceFixings, createPriceFixing, fixPrice, getLots, getCacaoConfig, updateCacaoConfig } from '../../../services/cacao.service';
+import { getUser } from '../../../services/auth.service';
+import SoloAdminDialog from '../../../components/common/SoloAdminDialog';
+import FormModal from '../../../components/common/FormModal';
+import { formatDateEc, apiErrorMessage } from '../utils';
 import DateInput from '../../../components/common/DateInput';
+import { useTablaCacao } from '../useTablaCacao';
 
 export default function PriceFixingsList() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const [fixings, setFixings] = useState<any[]>([]);
   const [provisionalLots, setProvisionalLots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,9 +20,19 @@ export default function PriceFixingsList() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const [icePrice, setIcePrice] = useState(8150);
+  // Precio ICE de referencia ($/T): lo escribe y guarda cada empresa (Cacao → Configuración lo
+  // devuelve junto a los plazos). Sin valor de fábrica: null hasta que lo configure.
+  const [precioIce, setPrecioIce] = useState<number | null>(null);
+  const iceConfigurado = precioIce !== null;
+  // Los cálculos solo se muestran con el precio configurado; 0 evita tener `null` por todas partes.
+  const ice = precioIce ?? 0;
   const [editingIce, setEditingIce] = useState(false);
-  const [iceInput, setIceInput] = useState('8150');
+  const [iceInput, setIceInput] = useState('');
+  const [iceError, setIceError] = useState('');
+  const [guardandoIce, setGuardandoIce] = useState(false);
+  const [soloAdmin, setSoloAdmin] = useState<string | null>(null);
+  // El servidor solo deja guardar al administrador; los demás ven el botón y se les explica a quién acudir.
+  const puedeEditarIce = getUser()?.role === 'ADMIN';
 
   const load = () => {
     setLoading(true);
@@ -37,12 +50,38 @@ export default function PriceFixingsList() {
 
   useEffect(() => { load(); }, []);
 
-  function saveIcePrice() {
-    const val = parseFloat(iceInput);
-    if (!isNaN(val) && val > 0) {
-      setIcePrice(val);
+  useEffect(() => {
+    getCacaoConfig()
+      .then((c) => setPrecioIce(c.precioIce ?? null))
+      .catch(() => setIceError('No se pudo cargar el precio ICE de referencia.'));
+  }, []);
+
+  function empezarEdicionIce() {
+    if (!puedeEditarIce) { setSoloAdmin('cambie el precio ICE de referencia'); return; }
+    setIceError('');
+    setIceInput(precioIce !== null ? String(precioIce) : '');
+    setEditingIce(true);
+  }
+
+  async function saveIcePrice() {
+    const val = Number(iceInput);
+    if (iceInput.trim() === '' || !Number.isFinite(val) || val <= 0) {
+      setIceError('Escribe un precio mayor a cero, en dólares por tonelada.');
+      return;
     }
-    setEditingIce(false);
+    if (Math.round(val * 100) !== val * 100 && Math.abs(Math.round(val * 100) - val * 100) > 1e-6) {
+      setIceError('El precio admite como máximo 2 decimales.');
+      return;
+    }
+    setGuardandoIce(true);
+    setIceError('');
+    try {
+      const c = await updateCacaoConfig({ precioIce: val });
+      setPrecioIce(c.precioIce ?? val);
+      setEditingIce(false);
+    } catch (err: any) {
+      setIceError(apiErrorMessage(err, 'No se pudo guardar el precio ICE. Inténtalo de nuevo.'));
+    } finally { setGuardandoIce(false); }
   }
 
   async function handleCreate() {
@@ -52,7 +91,7 @@ export default function PriceFixingsList() {
     try {
       await createPriceFixing({
         lotId: Number(form.lotId),
-        referencePrice: icePrice,
+        referencePrice: ice,
         differential: provisionalLots.find((l: any) => l.id === Number(form.lotId))?.differential
           || provisionalLots.find((l: any) => l.id === Number(form.lotId))?.receptions?.[0]?.differential
           || 0,
@@ -63,11 +102,12 @@ export default function PriceFixingsList() {
       setForm({ lotId: '', fixedPrice: '', deadline: '' });
       load();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al crear fijación');
+      setError(apiErrorMessage(err, 'No se pudo crear la fijación. Revisa los datos e inténtalo de nuevo.'));
     } finally { setSaving(false); }
   }
 
   function startEdit(f: any) {
+    setError('');
     setEditingId(f.id);
     setEditForm({
       fixedPrice: f.fixedPrice?.toString() || '',
@@ -81,14 +121,14 @@ export default function PriceFixingsList() {
     setError('');
     try {
       await fixPrice(editingId, {
-        referencePrice: icePrice,
+        referencePrice: ice,
         fixedPrice: Number(editForm.fixedPrice),
         deadline: editForm.deadline || undefined,
       });
       setEditingId(null);
       load();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al actualizar fijación');
+      setError(apiErrorMessage(err, 'No se pudo fijar el precio. Revisa los datos e inténtalo de nuevo.'));
     } finally { setSaving(false); }
   }
 
@@ -108,20 +148,137 @@ export default function PriceFixingsList() {
     return '#38a169';
   }
 
+  const pendienteDe = (f: any): number => (f.status === 'FIXED' ? 0 : (f.pendingWeight || f.lot?.netWeight || 0));
+
+  const { tabla, selectorColumnas, buscador, botonExportar, limpiarBusqueda, hayBusqueda } = useTablaCacao<any>({
+    clave: 'fijaciones',
+    filas: fixings,
+    idFila: (f) => f.id,
+    ordenInicial: 'limite',
+    estiloFila: (f) => ({ backgroundColor: f.status === 'FIXED' ? '#f0fff4' : 'white' }),
+    principal: {
+      key: 'lote', filtro: { tipo: 'texto', getValue: (f) => f.lot?.code }, ancho: 140,
+      label: 'Lote',
+      orden: (f) => f.lot?.code,
+      celda: (f) => <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{f.lot?.code || '—'}</span>,
+    },
+    columnas: [
+      {
+        key: 'calidad', filtro: { tipo: 'valores', vacio: 'Sin calidad', getValues: (f) => f.lot?.quality?.name }, ancho: 130,
+        label: 'Calidad',
+        orden: (f) => f.lot?.quality?.name,
+        celda: (f) => <span style={{ fontSize: '12px', color: '#718096' }}>{f.lot?.quality?.name || '—'}</span>,
+      },
+      {
+        key: 'pendiente', filtro: { tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (f) => pendienteDe(f) }, excel: { titulo: 'Cant. Pendiente (kg)' }, ancho: 140,
+        label: 'Cant. Pendiente',
+        derecha: true,
+        orden: (f) => pendienteDe(f),
+        celda: (f) => {
+          const pendingWeight = pendienteDe(f);
+          return (
+            <span style={{ fontWeight: 700, color: pendingWeight > 0 ? '#b7791f' : '#38a169' }}>
+              {pendingWeight > 0 ? `${pendingWeight.toLocaleString()} kg` : '—'}
+            </span>
+          );
+        },
+      },
+      {
+        key: 'original', filtro: { tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (f) => f.lot?.netWeight || 0 }, excel: { titulo: 'Peso Original (kg)' }, ancho: 130,
+        label: 'Peso Original',
+        derecha: true,
+        orden: (f) => f.lot?.netWeight || 0,
+        celda: (f) => <span style={{ color: '#718096' }}>{(f.lot?.netWeight || 0).toLocaleString()} kg</span>,
+      },
+      {
+        key: 'referencia', excel: { tipo: 'moneda', titulo: 'Precio Ref. Hoy ($/T)', valor: () => (iceConfigurado ? ice : null) }, ancho: 130,
+        label: 'Precio Ref. Hoy',
+        derecha: true,
+        celda: () => !iceConfigurado ? '—' : (
+          <span style={{ fontWeight: 600 }}>
+            ${ice.toLocaleString()}/T
+            <div style={{ fontSize: '11px', color: '#718096' }}>${(ice / 1000).toFixed(4)}/kg</div>
+          </span>
+        ),
+      },
+      {
+        key: 'diferencial', filtro: { tipo: 'numero', formato: (n) => `$${n.toFixed(0)}/T`, getValue: (f) => f.differential || 0 }, excel: { titulo: 'Diferencial ($/T)' }, ancho: 110,
+        label: 'Diferencial',
+        derecha: true,
+        orden: (f) => f.differential || null,
+        celda: (f) =>
+          f.differential ? (
+            <span style={{ color: f.differential >= 0 ? '#38a169' : '#e53e3e' }}>
+              {f.differential >= 0 ? '+' : ''}${f.differential.toFixed(0)}/T
+            </span>
+          ) : '—',
+      },
+      {
+        key: 'fijado', filtro: { tipo: 'numero', formato: (n) => `$${n.toFixed(4)}/kg`, getValue: (f) => f.fixedPrice }, excel: { tipo: 'moneda', titulo: 'Precio Fijado ($/kg)' }, ancho: 150,
+        label: 'Precio Fijado',
+        derecha: true,
+        orden: (f) => f.fixedPrice || null,
+        celda: (f) => (
+          <span style={{ fontWeight: 700, color: f.fixedPrice ? '#276749' : '#a0aec0' }}>
+            {f.fixedPrice ? `$${f.fixedPrice.toFixed(4)}/kg` : '—'}
+          </span>
+        ),
+      },
+      {
+        key: 'limite', filtro: { tipo: 'fecha', soloDia: true, getValue: (f) => f.deadline }, excel: { tipo: 'fecha' }, ancho: 160,
+        label: 'Fecha Límite',
+        orden: (f) => (f.deadline ? new Date(f.deadline).getTime() : null),
+        celda: (f) => {
+          if (!f.deadline) return '—';
+          const days = getDaysUntilDeadline(f.deadline);
+          const deadlineColor = getDeadlineColor(days);
+          return (
+            <div>
+              <div style={{ fontSize: '12px', color: deadlineColor, fontWeight: 600 }}>{formatDateEc(f.deadline)}</div>
+              <div style={{ fontSize: '11px', color: deadlineColor, fontWeight: 700 }}>
+                {days !== null && (
+                  days < 0 ? `Vencido hace ${Math.abs(days)}d` :
+                  days === 0 ? 'Vence hoy' :
+                  `${days}d restantes`
+                )}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        key: 'estado', filtro: { tipo: 'valores', orden: ['OPEN', 'FIXED'], getValues: (f) => ({ valor: f.status === 'OPEN' ? 'OPEN' : 'FIXED', etiqueta: f.status === 'OPEN' ? 'Abierta' : 'Fijada' }) }, excel: { valor: (f) => (f.status === 'OPEN' ? 'Abierta' : 'Fijada') }, ancho: 110,
+        label: 'Estado',
+        orden: (f) => f.status,
+        celda: (f) => (
+          <span className="status-badge" style={{
+            backgroundColor: f.status === 'OPEN' ? '#fefcbf' : '#c6f6d5',
+            color: f.status === 'OPEN' ? '#975a16' : '#276749',
+          }}>
+            {f.status === 'OPEN' ? 'Abierta' : 'Fijada'}
+          </span>
+        ),
+      },
+    ],
+    acciones: (f) => (
+      <button className="btn-sm-edit btn-sm-edit--texto" onClick={() => startEdit(f)} disabled={!iceConfigurado} title={iceConfigurado ? undefined : 'Primero configura el precio ICE de referencia'}>{f.status === 'OPEN' ? 'Fijar' : 'Editar'}</button>
+    ),
+  });
+
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/cacao')}>← Volver</button>
-          <div>
-            <p className="page-eyebrow">CACAO</p>
-            <h1>Fijaciones de Precio</h1>
-          </div>
-        </div>
-        <button className="auth-btn" onClick={() => { setError(''); setShowForm(true); }} disabled={provisionalLots.length === 0}>
-          + Nueva Fijación
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Cacao"
+        title="Fijaciones de Precio"
+        description="Lotes comprados a precio provisional: fija su precio definitivo antes de la fecha límite."
+        actions={
+          <>
+            <button className="auth-btn" onClick={() => { setError(''); setShowForm(true); }} disabled={provisionalLots.length === 0 || !iceConfigurado} title={!iceConfigurado ? 'Primero configura el precio ICE de referencia' : provisionalLots.length === 0 ? 'No hay lotes con precio provisional por fijar' : undefined}>
+              + Nueva fijación
+            </button>
+          </>
+        }
+      />
 
       {/* Precio ICE Cocoa - Editable */}
       <div style={{ padding: '14px 20px', backgroundColor: '#fffbeb', border: '1px solid #fbd38d', borderRadius: '10px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
@@ -137,80 +294,86 @@ export default function PriceFixingsList() {
                 value={iceInput}
                 onChange={(e) => setIceInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') saveIcePrice(); if (e.key === 'Escape') setEditingIce(false); }}
+                placeholder="Ej: 8000"
                 autoFocus
                 style={{ fontSize: '20px', fontWeight: 800, color: '#975a16', width: '140px', padding: '4px 8px', border: '2px solid #fbd38d', borderRadius: '6px', backgroundColor: 'white' }}
               />
               <span style={{ fontSize: '14px', color: '#975a16' }}>/T</span>
-              <button onClick={saveIcePrice} style={{ padding: '4px 10px', backgroundColor: '#38a169', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>✓</button>
+              <button onClick={saveIcePrice} disabled={guardandoIce} style={{ padding: '4px 10px', backgroundColor: '#38a169', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>{guardandoIce ? '...' : '✓'}</button>
               <button onClick={() => setEditingIce(false)} style={{ padding: '4px 10px', backgroundColor: '#e2e8f0', color: '#4a5568', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Cancelar</button>
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', cursor: 'pointer' }} onClick={() => { setIceInput(icePrice.toString()); setEditingIce(true); }}>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: '#975a16' }}>${icePrice.toLocaleString()}/T</div>
-              <span style={{ fontSize: '11px', color: '#b7791f', padding: '2px 8px', backgroundColor: '#fefcbf', borderRadius: '4px', border: '1px solid #f6e05e' }}>✏️ Editar</span>
-            </div>
+            <button type="button" onClick={empezarEdicionIce} aria-label={iceConfigurado ? 'Editar el precio ICE de referencia' : 'Configurar el precio ICE de referencia'}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', cursor: 'pointer', background: 'none', border: 'none', padding: 0, font: 'inherit', textAlign: 'left' }}>
+              <span style={{ fontSize: '24px', fontWeight: 800, color: '#975a16' }}>{iceConfigurado ? `$${ice.toLocaleString()}/T` : 'Sin configurar'}</span>
+              <span style={{ fontSize: '11px', color: '#b7791f', padding: '2px 8px', backgroundColor: '#fefcbf', borderRadius: '4px', border: '1px solid #f6e05e' }}>{iceConfigurado ? '✏️ Editar' : 'Configurar precio'}</span>
+            </button>
           )}
-          <div style={{ fontSize: '11px', color: '#b7791f', marginTop: '4px' }}>Precio base para calcular el diferencial. Haz clic para editar.</div>
+          {iceError && <div className="auth-error-banner" style={{ marginTop: '8px' }}>{iceError}</div>}
+          <div style={{ fontSize: '11px', color: '#b7791f', marginTop: '4px' }}>
+            {iceConfigurado
+              ? 'Precio base para calcular el diferencial. Haz clic para editar; se guarda para tu empresa.'
+              : 'Tu empresa aún no tiene precio de referencia. Escríbelo (dólares por tonelada) para poder crear y fijar precios.'}
+          </div>
         </div>
       </div>
 
       {showForm && (
-        <div className="page-card" style={{ marginBottom: '16px' }}>
-          <div className="cacao-form">
-            {error && <div className="auth-error-banner">{error}</div>}
-            <div className="form-section-title">Nueva Fijación</div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Lote (solo precios provisionales) *</label>
-                <select value={form.lotId} onChange={(e) => setForm({ ...form, lotId: e.target.value })}>
-                  <option value="">Seleccionar lote...</option>
-                  {provisionalLots.map((l) => {
-                    const dif = l.differential || l.receptions?.[0]?.differential || 0;
-                    const calcPrice = ((icePrice + dif) / 1000).toFixed(2);
-                    return <option key={l.id} value={l.id}>{l.code} ({l.netWeight} kg) — Precio calc: ${calcPrice}/kg</option>;
-                  })}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Precio Fijado ($/kg) *</label>
-                <input type="number" step="0.0001" min="0" value={form.fixedPrice} onChange={(e) => setForm({ ...form, fixedPrice: e.target.value })} placeholder="Precio definitivo por kg" />
-              </div>
+        <FormModal
+          title="Nueva fijación"
+          descripcion="Fija el precio definitivo de un lote que compraste a precio provisional."
+          submitLabel="Crear fijación"
+          ancho={640}
+          saving={saving}
+          error={error}
+          onClose={() => { setShowForm(false); setError(''); }}
+          onSubmit={handleCreate}
+        >
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="fij-lote">Lote (solo precios provisionales) *</label>
+              <select id="fij-lote" value={form.lotId} onChange={(e) => setForm({ ...form, lotId: e.target.value })}>
+                <option value="">Seleccionar lote...</option>
+                {provisionalLots.map((l) => {
+                  const dif = l.differential || l.receptions?.[0]?.differential || 0;
+                  const calcPrice = ((ice + dif) / 1000).toFixed(2);
+                  return <option key={l.id} value={l.id}>{l.code} ({l.netWeight} kg) — Precio calc: ${calcPrice}/kg</option>;
+                })}
+              </select>
             </div>
-            {form.lotId && (() => {
-              const selectedLot = provisionalLots.find((l: any) => l.id === Number(form.lotId));
-              if (!selectedLot) return null;
-              const dif = selectedLot.differential || selectedLot.receptions?.[0]?.differential || 0;
-              return (
-                <div style={{ padding: '14px 18px', backgroundColor: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '8px', marginBottom: '16px', fontSize: '13px' }}>
-                  <div style={{ fontWeight: 700, color: '#2b6cb0', marginBottom: '8px', textTransform: 'uppercase', fontSize: '11px' }}>Datos del Lote Seleccionado</div>
-                  <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-                    <div><strong>Código:</strong> {selectedLot.code}</div>
-                    <div><strong>Calidad:</strong> {selectedLot.quality?.name || '—'}</div>
-                    <div><strong>Peso:</strong> {selectedLot.netWeight.toLocaleString()} kg</div>
-                    <div><strong>Costo Promedio:</strong> ${selectedLot.averageCost?.toFixed(2)}/kg</div>
-                    <div><strong>Diferencial:</strong> ${dif}/T</div>
-                    <div><strong>Proveedor:</strong> {selectedLot.receptions?.[0]?.supplier?.name || '—'}</div>
-                  </div>
-                  <div style={{ marginTop: '8px', padding: '8px 12px', backgroundColor: '#fffbeb', border: '1px solid #f6e05e', borderRadius: '6px' }}>
-                    <span style={{ fontWeight: 600, color: '#975a16' }}>Precio sugerido: </span>
-                    <span style={{ fontWeight: 700, color: '#975a16', fontSize: '15px' }}>${(((icePrice + dif) / 1000)).toFixed(4)}/kg</span>
-                    <span style={{ fontSize: '11px', color: '#b7791f', marginLeft: '8px' }}>(ICE ${icePrice.toLocaleString()} + Dif ${dif}) / 1000</span>
-                  </div>
-                </div>
-              );
-            })()}
-            <div className="form-row">
-              <div className="form-group" style={{ maxWidth: '50%' }}>
-                <label>Fecha Límite para Fijar</label>
-                <DateInput value={form.deadline} onChange={(v) => setForm({ ...form, deadline: v })} />
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-              <button className="btn-secondary" onClick={() => setShowForm(false)}>Cancelar</button>
-              <button className="auth-btn" onClick={handleCreate} disabled={saving}>{saving ? 'Guardando...' : 'Crear'}</button>
+            <div className="form-group">
+              <label htmlFor="fij-precio">Precio fijado ($/kg) *</label>
+              <input id="fij-precio" type="number" inputMode="decimal" step="0.0001" min="0" value={form.fixedPrice} onChange={(e) => setForm({ ...form, fixedPrice: e.target.value })} placeholder="Precio definitivo por kg" />
             </div>
           </div>
-        </div>
+          {form.lotId && (() => {
+            const selectedLot = provisionalLots.find((l: any) => l.id === Number(form.lotId));
+            if (!selectedLot) return null;
+            const dif = selectedLot.differential || selectedLot.receptions?.[0]?.differential || 0;
+            return (
+              <div style={{ padding: '14px 18px', backgroundColor: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '8px', fontSize: '13px' }}>
+                <div style={{ fontWeight: 700, color: '#2b6cb0', marginBottom: '8px', textTransform: 'uppercase', fontSize: '11px' }}>Datos del lote seleccionado</div>
+                <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+                  <div><strong>Código:</strong> {selectedLot.code}</div>
+                  <div><strong>Calidad:</strong> {selectedLot.quality?.name || '—'}</div>
+                  <div><strong>Peso:</strong> {selectedLot.netWeight.toLocaleString()} kg</div>
+                  <div><strong>Costo promedio:</strong> ${selectedLot.averageCost?.toFixed(2)}/kg</div>
+                  <div><strong>Diferencial:</strong> ${dif}/T</div>
+                  <div><strong>Proveedor:</strong> {selectedLot.receptions?.[0]?.supplier?.name || '—'}</div>
+                </div>
+                <div style={{ marginTop: '8px', padding: '8px 12px', backgroundColor: '#fffbeb', border: '1px solid #f6e05e', borderRadius: '6px' }}>
+                  <span style={{ fontWeight: 600, color: '#975a16' }}>Precio sugerido: </span>
+                  <span style={{ fontWeight: 700, color: '#975a16', fontSize: '15px' }}>${(((ice + dif) / 1000)).toFixed(4)}/kg</span>
+                  <span style={{ fontSize: '11px', color: '#b7791f', marginLeft: '8px' }}>(ICE ${ice.toLocaleString()} + Dif ${dif}) / 1000</span>
+                </div>
+              </div>
+            );
+          })()}
+          <div className="form-group">
+            <label>Fecha límite para fijar</label>
+            <DateInput value={form.deadline} onChange={(v) => setForm({ ...form, deadline: v })} />
+          </div>
+        </FormModal>
       )}
 
       {provisionalLots.length === 0 && !showForm && (
@@ -218,6 +381,15 @@ export default function PriceFixingsList() {
           No hay lotes con precio provisional disponible para fijar. Los lotes con precio fijo no requieren fijación.
         </div>
       )}
+
+      <div className="filter-bar">
+        <div className="filter-bar-fields">{buscador}</div>
+        <div className="filter-bar-actions">
+          {selectorColumnas}
+          {botonExportar}
+          <ClearFiltersButton onClear={limpiarBusqueda} disabled={!hayBusqueda} />
+        </div>
+      </div>
 
       {/* Tabla de Exposición Abierta */}
       <div className="admin-section">
@@ -230,134 +402,53 @@ export default function PriceFixingsList() {
         {loading ? (
           <div className="loading-state">Cargando fijaciones...</div>
         ) : fixings.length === 0 ? (
-          <div className="empty-state">No hay fijaciones de precio.</div>
+          <div className="empty-state">Todavía no hay fijaciones. Cuando compres cacao a precio provisional, aquí fijas su precio definitivo.</div>
         ) : (
-          <div className="tasks-table-wrapper">
-            <table className="tasks-table" style={{ fontSize: '13px' }}>
-              <thead>
-                <tr>
-                  <th>Lote</th>
-                  <th>Calidad</th>
-                  <th style={{ textAlign: 'right' }}>Cant. Pendiente</th>
-                  <th style={{ textAlign: 'right' }}>Peso Original</th>
-                  <th style={{ textAlign: 'right' }}>Precio Ref. Hoy</th>
-                  <th style={{ textAlign: 'right' }}>Diferencial</th>
-                  <th style={{ textAlign: 'right' }}>Precio Fijado</th>
-                  <th>Fecha Límite</th>
-                  <th>Estado</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fixings.map((f) => {
-                  const days = getDaysUntilDeadline(f.deadline);
-                  const deadlineColor = getDeadlineColor(days);
-                  const lotWeight = f.lot?.netWeight || 0;
-                  const pendingWeight = f.status === 'FIXED' ? 0 : (f.pendingWeight || lotWeight);
-                  return (
-                    <tr key={f.id} style={{ backgroundColor: f.status === 'FIXED' ? '#f0fff4' : 'white' }}>
-                      <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{f.lot?.code || '—'}</td>
-                      <td style={{ fontSize: '12px', color: '#718096' }}>{f.lot?.quality?.name || '—'}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: pendingWeight > 0 ? '#b7791f' : '#38a169' }}>
-                        {pendingWeight > 0 ? `${pendingWeight.toLocaleString()} kg` : '—'}
-                      </td>
-                      <td style={{ textAlign: 'right', color: '#718096' }}>{lotWeight.toLocaleString()} kg</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>
-                        ${icePrice.toLocaleString()}/T
-                        <div style={{ fontSize: '11px', color: '#718096' }}>${(icePrice / 1000).toFixed(4)}/kg</div>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        {f.differential ? (
-                          <span style={{ color: f.differential >= 0 ? '#38a169' : '#e53e3e' }}>
-                            {f.differential >= 0 ? '+' : ''}${f.differential.toFixed(0)}/T
-                          </span>
-                        ) : '—'}
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: f.fixedPrice ? '#276749' : '#a0aec0' }}>
-                        {f.fixedPrice ? `$${f.fixedPrice.toFixed(4)}/kg` : '—'}
-                      </td>
-                      <td>
-                        {f.deadline ? (
-                          <div>
-                            <div style={{ fontSize: '12px', color: deadlineColor, fontWeight: 600 }}>
-                              {formatDateEc(f.deadline)}
-                            </div>
-                            <div style={{ fontSize: '11px', color: deadlineColor, fontWeight: 700 }}>
-                              {days !== null && (
-                                days < 0 ? `Vencido hace ${Math.abs(days)}d` :
-                                days === 0 ? 'Vence hoy' :
-                                `${days}d restantes`
-                              )}
-                            </div>
-                          </div>
-                        ) : '—'}
-                      </td>
-                      <td>
-                        <span className="status-badge" style={{
-                          backgroundColor: f.status === 'OPEN' ? '#fefcbf' : '#c6f6d5',
-                          color: f.status === 'OPEN' ? '#975a16' : '#276749',
-                        }}>
-                          {f.status === 'OPEN' ? 'Abierta' : 'Fijada'}
-                        </span>
-                      </td>
-                      <td>
-                        <button className="btn-sm-edit" onClick={() => startEdit(f)}>
-                          {f.status === 'OPEN' ? 'Fijar' : 'Editar'}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          tabla
         )}
       </div>
 
       {editingId && (
-        <div className="modal-overlay" onClick={() => setEditingId(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Fijar Precio — {fixings.find((f) => f.id === editingId)?.lot?.code}</h3>
-              <button className="modal-close" onClick={() => setEditingId(null)}>✕</button>
-            </div>
-            <div className="modal-body">
-              {error && <div className="auth-error-banner">{error}</div>}
-              {(() => {
-                const fixing = fixings.find((f) => f.id === editingId);
-                if (!fixing) return null;
-                return (
-                  <div style={{ padding: '14px 18px', backgroundColor: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '8px', marginBottom: '16px', fontSize: '13px' }}>
-                    <div style={{ fontWeight: 700, color: '#2b6cb0', marginBottom: '8px', textTransform: 'uppercase', fontSize: '11px' }}>Datos del Lote</div>
-                    <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-                      <div><strong>Código:</strong> {fixing.lot?.code}</div>
-                      <div><strong>Calidad:</strong> {fixing.lot?.quality?.name || '—'}</div>
-                      <div><strong>Peso:</strong> {(fixing.pendingWeight || fixing.lot?.netWeight || 0).toLocaleString()} kg</div>
-                      <div><strong>Diferencial:</strong> ${fixing.differential?.toFixed(0) || '0'}/T</div>
-                    </div>
-                    <div style={{ marginTop: '8px', padding: '8px 12px', backgroundColor: '#fffbeb', border: '1px solid #f6e05e', borderRadius: '6px' }}>
-                      <span style={{ fontWeight: 600, color: '#975a16' }}>ICE Hoy: </span>
-                      <span style={{ fontWeight: 700, color: '#975a16' }}>${icePrice.toLocaleString()}/T = ${(icePrice / 1000).toFixed(4)}/kg</span>
-                    </div>
-                  </div>
-                );
-              })()}
-              <div className="form-group" style={{ marginBottom: '12px' }}>
-                <label>Precio Fijado ($/kg) *</label>
-                <input type="number" step="0.0001" min="0" value={editForm.fixedPrice} onChange={(e) => setEditForm({ ...editForm, fixedPrice: e.target.value })} placeholder="Precio definitivo por kilogramo" />
+        <FormModal
+          title={`Fijar precio — ${fixings.find((f) => f.id === editingId)?.lot?.code ?? ''}`}
+          descripcion="Escribe el precio definitivo por kilogramo que acordaste con el proveedor."
+          submitLabel="Fijar precio"
+          ancho={560}
+          saving={saving}
+          error={error}
+          onClose={() => { setEditingId(null); setError(''); }}
+          onSubmit={handleUpdate}
+        >
+          {(() => {
+            const fixing = fixings.find((f) => f.id === editingId);
+            if (!fixing) return null;
+            return (
+              <div style={{ padding: '14px 18px', backgroundColor: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '8px', fontSize: '13px' }}>
+                <div style={{ fontWeight: 700, color: '#2b6cb0', marginBottom: '8px', textTransform: 'uppercase', fontSize: '11px' }}>Datos del lote</div>
+                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                  <div><strong>Código:</strong> {fixing.lot?.code}</div>
+                  <div><strong>Calidad:</strong> {fixing.lot?.quality?.name || '—'}</div>
+                  <div><strong>Peso:</strong> {(fixing.pendingWeight || fixing.lot?.netWeight || 0).toLocaleString()} kg</div>
+                  <div><strong>Diferencial:</strong> ${fixing.differential?.toFixed(0) || '0'}/T</div>
+                </div>
+                <div style={{ marginTop: '8px', padding: '8px 12px', backgroundColor: '#fffbeb', border: '1px solid #f6e05e', borderRadius: '6px' }}>
+                  <span style={{ fontWeight: 600, color: '#975a16' }}>ICE hoy: </span>
+                  <span style={{ fontWeight: 700, color: '#975a16' }}>${ice.toLocaleString()}/T = ${(ice / 1000).toFixed(4)}/kg</span>
+                </div>
               </div>
-              <div className="form-group">
-                <label>Fecha Límite</label>
-                <DateInput value={editForm.deadline} onChange={(v) => setEditForm({ ...editForm, deadline: v })} />
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setEditingId(null)}>Cancelar</button>
-              <button className="auth-btn" onClick={handleUpdate} disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</button>
-            </div>
+            );
+          })()}
+          <div className="form-group">
+            <label htmlFor="fij-edit-precio">Precio fijado ($/kg) *</label>
+            <input id="fij-edit-precio" type="number" inputMode="decimal" step="0.0001" min="0" value={editForm.fixedPrice} onChange={(e) => setEditForm({ ...editForm, fixedPrice: e.target.value })} placeholder="Precio definitivo por kilogramo" />
           </div>
-        </div>
+          <div className="form-group">
+            <label>Fecha límite</label>
+            <DateInput value={editForm.deadline} onChange={(v) => setEditForm({ ...editForm, deadline: v })} />
+          </div>
+        </FormModal>
       )}
+      {soloAdmin && <SoloAdminDialog accion={soloAdmin} onClose={() => setSoloAdmin(null)} />}
     </div>
   );
 }

@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowRight } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { getAnaliticaMapa, type AnaliticaMapa, type PuntoMapa, type VistaMapa } from '../../../services/ventas.service';
 import { LIMITES_ECUADOR, capaBase } from '../mapa/mapa-comun';
-import { BarraH, SinDatos, Tarjeta, dinero } from './DashboardBits';
+import { SinDatos, Tarjeta, dinero } from './DashboardBits';
+import { urlOportunidadesDelMapa } from '../../../utils/oportunidadesMapa';
 
 const VISTAS: { value: VistaMapa; label: string }[] = [
   { value: 'todas', label: 'Todas las oportunidades' },
@@ -41,6 +44,20 @@ const textoPunto = (p: PuntoMapa) =>
   (p.montoCotizado > 0 ? `<br/>Cotizado: ${esc(dinero(p.montoCotizado))}` : '') +
   (p.lugares.length ? `<br/><span style="color:#718096">${p.lugares.map(esc).join(' · ')}</span>` : '');
 
+// Popup de un punto o una ciudad: su texto y el botón que abre Oportunidades con lo mismo que se contó.
+// Es un elemento (no un texto HTML) para poder escuchar el clic sin depender de eventos globales del mapa.
+function popupConBoton(html: string, etiqueta: string, ir: () => void): HTMLElement {
+  const caja = document.createElement('div');
+  caja.innerHTML = html;
+  const boton = document.createElement('button');
+  boton.type = 'button';
+  boton.className = 'mapa-ver-opp';
+  boton.textContent = `${etiqueta} →`;
+  boton.addEventListener('click', ir);
+  caja.appendChild(boton);
+  return caja;
+}
+
 // $1.2k, $15k, $1.5M: cabe dentro de una burbuja.
 const dineroCorto = (v: number) =>
   v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `$${Math.round(v / 100) / 10}k` : `$${Math.round(v)}`;
@@ -59,7 +76,12 @@ function cargarCalor(): Promise<void> {
 // Mapa de Ecuador del Dashboard (Resumen): dónde están las oportunidades que tienen «Ubicación», en tres
 // vistas (burbujas por ciudad, mapa de calor y puntos sueltos), contando por cantidad o por monto cotizado.
 // Al lado va el ranking por provincia y las provincias donde todavía no hay nada.
-export default function DashboardMapa({ alcance, className }: { alcance: string; className?: string }) {
+// `desde`/`hasta` ('YYYY-MM-DD', días de Ecuador) son el periodo del Dashboard: cuentan solo las oportunidades que
+// LLEGARON en ese periodo, igual que el filtro «Llegó» de Oportunidades a donde lleva cada botón «Ver en oportunidades».
+// Paridad: el mapa no cuenta renovaciones ni clientes que ya contrataban («Ventas nuevas»); el botón abre la lista
+// con ese origen puesto, para que el número del mapa sea el de las filas.
+export default function DashboardMapa({ alcance, className, desde, hasta }: { alcance: string; className?: string; desde?: string; hasta?: string }) {
+  const navigate = useNavigate();
   const contenedor = useRef<HTMLDivElement>(null);
   const mapa = useRef<L.Map | null>(null);
   const capa = useRef<L.LayerGroup | null>(null);
@@ -73,11 +95,11 @@ export default function DashboardMapa({ alcance, className }: { alcance: string;
   const cargar = useCallback(async () => {
     setError(false);
     try {
-      setDatos(await getAnaliticaMapa({ alcance, vista }));
+      setDatos(await getAnaliticaMapa({ alcance, vista, desde, hasta }));
     } catch {
       setError(true);
     }
-  }, [alcance, vista]);
+  }, [alcance, vista, desde, hasta]);
   useEffect(() => { void cargar(); }, [cargar]);
 
   useEffect(() => {
@@ -86,6 +108,13 @@ export default function DashboardMapa({ alcance, className }: { alcance: string;
     cargarCalor().then(() => { if (vigente) setCalorCargado(true); }).catch(() => { calorListo = null; });
     return () => { vigente = false; };
   }, [tipo]);
+
+  // Lleva a Oportunidades con lo que el mapa estaba contando (alcance, periodo y vista incluidos).
+  const urlLista = useCallback(
+    (p: { provincia?: string | null; ciudad?: string | null; oportunidadId?: number | null }) =>
+      urlOportunidadesDelMapa({ ...p, alcance, desde, hasta, vista }),
+    [alcance, desde, hasta, vista],
+  );
 
   // El mapa se crea una vez que el contenedor existe y se destruye al salir.
   useEffect(() => {
@@ -120,7 +149,11 @@ export default function DashboardMapa({ alcance, className }: { alcance: string;
         // Área proporcional al valor: el radio crece con la raíz. Sin monto, una burbuja mínima.
         const radio = 8 + 22 * Math.sqrt(v / max);
         L.circleMarker([p.lat, p.lng], { radius: radio, color, fillColor: color, fillOpacity: 0.45, weight: 2 })
-          .bindPopup(textoPunto(p))
+          .bindPopup(() => popupConBoton(
+            textoPunto(p),
+            `Ver en oportunidades (${p.total})`,
+            () => navigate(urlLista({ provincia: p.provincia, ciudad: p.ciudad })),
+          ))
           .bindTooltip(metrica === 'monto' ? dineroCorto(v) : String(v), { permanent: true, direction: 'center', className: 'mapa-burbuja-numero' })
           .addTo(g);
       }
@@ -128,10 +161,13 @@ export default function DashboardMapa({ alcance, className }: { alcance: string;
       for (const o of datos.oportunidades) {
         const c = COLOR_ESTADO[o.estado];
         L.circleMarker([o.lat, o.lng], { radius: 7, color: '#fff', weight: 1.5, fillColor: c, fillOpacity: 0.9 })
-          .bindPopup(
+          .bindPopup(() => popupConBoton(
             `<strong>${esc(o.lugar ?? o.ciudad ?? o.provincia)}</strong><br/>${esc([o.ciudad, o.provincia].filter(Boolean).join(', '))}` +
             `<br/>${ETIQUETA_ESTADO[o.estado]}${o.monto > 0 ? ` · ${esc(dinero(o.monto))}` : ''}`,
-          )
+            'Ver en oportunidades',
+            // Con id: abre solo esa oportunidad; sin él (no debería pasar) la ciudad.
+            () => navigate(urlLista(o.id ? { oportunidadId: o.id, provincia: o.provincia } : { provincia: o.provincia, ciudad: o.ciudad })),
+          ))
           .addTo(g);
       }
     } else if (calorCargado) {
@@ -149,8 +185,14 @@ export default function DashboardMapa({ alcance, className }: { alcance: string;
         : Math.max(1, 0.3 * Math.max(...datos.puntos.map((p) => p.total), 0));
       L.heatLayer(puntos, { radius: 38, blur: 26, maxZoom: 8, max: tope, minOpacity: 0.4 }).addTo(g);
     }
-  }, [datos, tipo, metrica, calorCargado]);
+  }, [datos, tipo, metrica, calorCargado, navigate, urlLista]);
 
+  const abrirProvincia = (e: React.MouseEvent, provincia: string) => {
+    // Clic normal: navegación sin recargar. Con Ctrl/Cmd o la rueda se deja al navegador abrirlo en otra pestaña.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    navigate(urlLista({ provincia }));
+  };
   const maxProv = Math.max(1, ...(datos?.provincias.map((p) => (metrica === 'monto' ? p.montoCotizado : p.total)) ?? [1]));
   const ayuda = TIPOS.find((t) => t.value === tipo)?.ayuda;
 
@@ -224,14 +266,32 @@ export default function DashboardMapa({ alcance, className }: { alcance: string;
               ) : (
                 [...datos.provincias]
                   .sort((a, b) => (metrica === 'monto' ? b.montoCotizado - a.montoCotizado : b.total - a.total))
-                  .map((p) => (
-                    <BarraH key={p.provincia} etiqueta={p.provincia} valor={metrica === 'monto' ? p.montoCotizado : p.total} max={maxProv}
-                      color={COLOR[datos.vista]}
-                      detalle={p.montoCotizado > 0 ? `${p.total} · ${dinero(p.montoCotizado)}` : String(p.total)} />
-                  ))
+                  .map((p) => {
+                    const valor = metrica === 'monto' ? p.montoCotizado : p.total;
+                    return (
+                      <a key={p.provincia} className="mapa-prov-fila" href={urlLista({ provincia: p.provincia })}
+                        onClick={(e) => abrirProvincia(e, p.provincia)}
+                        title={`Ver las ${p.total} ${p.total === 1 ? 'oportunidad' : 'oportunidades'} de ${p.provincia} en Oportunidades`}>
+                        <span className="mapa-prov-cab">
+                          <span className="mapa-prov-nombre">{p.provincia}</span>
+                          <strong>{p.montoCotizado > 0 ? `${p.total} · ${dinero(p.montoCotizado)}` : String(p.total)}</strong>
+                          <ArrowRight size={14} className="mapa-prov-flecha" aria-hidden="true" />
+                        </span>
+                        <span className="mapa-prov-barra">
+                          <span style={{ width: `${maxProv > 0 ? Math.max(2, Math.round((valor / maxProv) * 100)) : 0}%`, background: COLOR[datos.vista] }} />
+                        </span>
+                      </a>
+                    );
+                  })
+              )}
+              {datos.conUbicacion > 0 && (
+                <p style={{ margin: '8px 0 0', fontSize: 11.5, color: '#718096' }}>
+                  Pulsa una provincia o un punto del mapa para ver esas oportunidades en la lista. El mapa cuenta solo ventas nuevas (no renovaciones ni clientes que ya contrataban); la lista se abre con ese filtro.
+                </p>
               )}
               <p style={{ margin: '10px 0 0', fontSize: 11.5, color: '#a0aec0' }}>
-                {datos.conUbicacion} con ubicación · {datos.sinUbicacion} sin ubicación (de {datos.total}).
+                {datos.conUbicacion} con ubicación · {datos.sinUbicacion} sin ubicación (de {datos.total}
+                {desde || hasta ? `, las que llegaron${desde ? ` desde el ${desde.split('-').reverse().join('/')}` : ''}${hasta ? ` hasta el ${hasta.split('-').reverse().join('/')}` : ''}` : ''}).
               </p>
               {datos.conUbicacion > 0 && datos.provinciasSinOportunidades.length > 0 && (
                 <p style={{ margin: '8px 0 0', fontSize: 11.5, color: '#718096' }}>

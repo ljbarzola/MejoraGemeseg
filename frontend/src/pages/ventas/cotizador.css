@@ -1247,9 +1247,21 @@
     display: none !important;
   }
 
+  /* La hoja sale sobre papel blanco: sin el fondo gris, el marco ni el margen del men� lateral de la app */
+  html:has(.cot-page),
+  body:has(.cot-page),
+  body:has(.cot-page) .main-content {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
   .cot-page {
-    padding: 0;
+    padding: 0 !important;
     max-width: none;
+    border-radius: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
   }
 
   .cot-print-only {
@@ -1272,82 +1284,106 @@
   }
 }
 
+/* Mismo formato que el PDF del cotizador original: Montserrat, encabezado con línea oscura, datos en columna,
+   tabla clara con Und en negrita y casilla Inst, cuadro de totales oscuro con descuento y línea en rojo. */
+.cot-print-only {
+  font-family: 'Montserrat', 'Segoe UI', Arial, sans-serif;
+  line-height: 1.35;
+}
+
 .cot-print-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 6px;
-  padding-bottom: 6px;
-  border-bottom: 3px solid var(--azul-oscuro);
+  padding-bottom: 4px;
+  border-bottom: 3px solid #100f31;
 }
 
 .cot-print-logo {
-  /* El logo de la empresa suele ser claro (para el menú oscuro): sobre fondo de marca se lee en el PDF */
-  padding: 5px 12px;
-  border-radius: 6px;
-  background: var(--azul-oscuro);
+  flex-shrink: 0;
   line-height: 0;
 }
 
 .cot-print-logo img {
-  height: 28px;
+  height: 30px;
   width: auto;
   display: block;
+}
+
+/* Logo de otra empresa (solo existe la versión clara): va sobre una caja de marca para que se lea */
+.cot-print-logo.en-caja {
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: #100f31;
 }
 
 .cot-print-title {
   font-size: 16px;
   font-weight: 700;
-  color: var(--azul-oscuro);
+  color: #100f31;
+  line-height: 1.2;
   text-align: right;
 }
 
 .cot-print-sub {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 2px;
   font-size: 10px;
-  color: #64748b;
-  text-align: right;
+  color: #4b5563;
+}
+
+.cot-print-phone {
+  color: #ee3b1b;
+  flex-shrink: 0;
 }
 
 .cot-print-info {
-  display: flex;
-  justify-content: space-between;
-  margin: 8px 0;
-  font-size: 11px;
+  margin: 14px 0 12px;
+  font-size: 12px;
+  line-height: 1.7;
 }
 
 .cot-print-info .label {
-  font-weight: 600;
-  color: #64748b;
-  text-transform: uppercase;
   font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #4b5563;
 }
 
 .cot-print-client {
-  padding: 6px 10px;
-  margin-bottom: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
   background: #f8fafc;
   border: 1px solid #cbd5e1;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
 .cot-print-client-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 2px 20px;
+  gap: 6px 20px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #0f172a;
 }
 
 .cot-print-client .label {
   font-size: 10px;
   font-weight: 700;
-  color: #475569;
   text-transform: uppercase;
+  color: #475569;
 }
 
 .cot-print-table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 8px;
+  margin-bottom: 14px;
   font-size: 11px;
 }
 
@@ -1357,15 +1393,31 @@
   font-weight: 700;
   text-align: left;
   text-transform: uppercase;
+  white-space: nowrap;
   background: #f1f5f9;
   color: #1e293b;
   border-bottom: 2px solid #cbd5e1;
 }
 
 .cot-print-table td {
-  padding: 4px 6px;
+  padding: 6px;
   border-bottom: 1px solid #e2e8f0;
-  vertical-align: top;
+  vertical-align: middle;
+}
+
+.cot-print-table .num {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.cot-print-table .desc {
+  display: block;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.cot-print-table .und {
+  font-weight: 700;
 }
 
 .cot-print-table .right {
@@ -1376,6 +1428,7 @@
 }
 
 .cot-print-table small {
+  display: block;
   color: #64748b;
   font-size: 9px;
 }
@@ -1385,6 +1438,22 @@
   font-weight: 600;
 }
 
+/* Casilla "Inst": vacía si no se instala, marcada si sí */
+.inst-box {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 1px solid #94a3b8;
+  border-radius: 3px;
+  background: #fff;
+  vertical-align: middle;
+}
+
+.inst-box.on {
+  border-color: #100f31;
+  background: #100f31 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.4 2.4 4.6-5' fill='none' stroke='white' stroke-width='1.8'/%3E%3C/svg%3E") center / 100% no-repeat;
+}
+
 .cot-print-section-title {
   margin: 8px 0 4px;
   font-size: 11px;
@@ -1392,32 +1461,140 @@
   color: #1e293b;
 }
 
-.cot-print-cond {
-  margin-top: 8px;
-  padding: 6px 8px;
-  font-size: 9px;
-  line-height: 1.4;
+/* Cuadro de totales de la hoja impresa */
+.cot-print-only .cot-totals {
+  margin-top: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.25);
   page-break-inside: avoid;
+}
+
+.cot-print-only .cot-totals .row {
+  padding: 3px 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.cot-print-only .cot-totals .row.detail {
+  padding-left: 16px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.cot-print-only .cot-totals .row.base {
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.cot-print-only .cot-totals .row.discount {
+  color: #ee3b1b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.cot-print-only .cot-totals .row.total {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 2px solid #ee3b1b;
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.cot-print-cond {
+  margin-top: 14px;
+  padding: 0 10px;
+  font-size: 8px;
+  line-height: 1.45;
+  color: #1f2937;
+  page-break-inside: avoid;
+}
+
+.cot-print-cond strong {
+  color: #100f31;
 }
 
 .cot-print-sign {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-top: 14px;
+  gap: 20px;
+  margin-top: 16px;
   font-size: 10px;
   page-break-inside: avoid;
 }
 
 .cot-print-sign .block {
-  padding-top: 24px;
-  border-top: 1px solid #0f172a;
+  padding-top: 20px;
+  border-top: 1px solid #100f31;
   text-align: center;
+}
+
+.cot-print-sign small {
+  font-size: 8px;
 }
 
 .cot-print-legal {
   margin-top: 8px;
-  font-size: 8px;
-  color: #475569;
+  font-size: 7px;
+  font-style: italic;
+  text-align: justify;
+  color: #4b5563;
   page-break-inside: avoid;
+}
+
+/* ============================================================================
+   Campo «Cliente» con lista del Directorio de Ventas (pantalla)
+   ============================================================================ */
+.cot-combo {
+  position: relative;
+}
+
+.cot-combo-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  margin: 0;
+  padding: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+}
+
+.cot-combo-list li[role='option'] {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.cot-combo-list li[role='option'] small {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.cot-combo-list li.activa {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.cot-combo-pie {
+  padding: 6px 10px 4px;
+  margin-top: 2px;
+  border-top: 1px solid rgba(100, 116, 139, 0.25);
+  font-size: 11px;
+  color: #64748b;
 }

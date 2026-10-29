@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { SectionPermissionGuard } from '../../../common/guards/section-permission.guard';
 import { Section } from '../../../common/decorators/section.decorator';
@@ -7,6 +16,7 @@ import { RolesGuard } from '../../../common/guards/roles.guard';
 import { UserRole } from '@prisma/client';
 import { CacaoShipmentsService } from './shipments.service';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
+import { ReasonDto } from '../common/reason.dto';
 
 @Controller('cacao/shipments')
 export class CacaoShipmentsController {
@@ -32,5 +42,23 @@ export class CacaoShipmentsController {
   @Section('CACAO', 'write')
   create(@Body() dto: CreateShipmentDto, @Req() req: any) {
     return this.service.create(dto, req.user.companyId, req.user.userId);
+  }
+
+  /** Anula un embarque con motivo (solo administrador): devuelve los kilos a sus lotes. */
+  @Post(':id/cancel')
+  @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
+  @Roles(UserRole.ADMIN)
+  @Section('CACAO', 'write')
+  cancel(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ReasonDto,
+    @Req() req: any,
+  ) {
+    return this.service.cancel(
+      id,
+      req.user.companyId,
+      req.user.userId,
+      dto.reason,
+    );
   }
 }
