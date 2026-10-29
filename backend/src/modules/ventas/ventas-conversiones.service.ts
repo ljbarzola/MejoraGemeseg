@@ -267,7 +267,8 @@ export class VentasConversionesService {
       // Cuántos avisos Google ya confirmó haber procesado bien (no solo «recibido»).
       this.prisma.salesConversionEvent.count({ where: { companyId, googleStatus: 'ACEPTADO' } }),
       this.prisma.salesConversionEvent.findFirst({
-        where: { companyId, status: 'RECHAZADO' },
+        // También los «parciales»: Google aceptó unos avisos y rechazó otros, y su motivo debe verse.
+        where: { companyId, OR: [{ status: 'RECHAZADO' }, { googleStatus: 'PARCIAL' }] },
         orderBy: { checkedAt: 'desc' },
         select: { lastError: true },
       }),
