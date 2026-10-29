@@ -1270,7 +1270,7 @@ model BitacoraEvento {
   userId     Int
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   companyId  Int?
-  // APP | GOOGLE
+  // APP | GOOGLE | EXTENSION (sitios web que reporta la extensión del navegador)
   fuente     String
   modulo     String
   // CREAR | EDITAR | ELIMINAR (APP) o el nombre del evento de Google (login_success, edit...)
@@ -1278,13 +1278,51 @@ model BitacoraEvento {
   ruta       String?
   entidadId  Int?
   nombre     String?
-  // Solo GOOGLE: identificador del evento en Google, para no guardarlo dos veces.
+  // GOOGLE y EXTENSION: identificador del evento, para no guardarlo dos veces.
   externalId String?
+  // Solo EXTENSION: minutos que duró el tramo en ese sitio (el dominio va en `nombre`).
+  minutos    Int?
   ocurridoEn DateTime @default(now())
 
   @@unique([fuente, externalId])
   @@index([userId, ocurridoEn])
   @@index([companyId, ocurridoEn])
+}
+
+// Días y horas dentro de los cuales la extensión del navegador registra, por
+// empresa (hora de Ecuador). Sin fila no se registra nada. `dias` va como
+// «1,2,3,4,5» (1 = lunes ... 7 = domingo) e `inicio`/`fin` como «HH:MM». Creada
+// al arrancar, igual que BitacoraEvento; sin relaciones para no tocar User.
+model BitacoraHorario {
+  companyId        Int      @id
+  dias             String
+  inicio           String
+  fin              String
+  actualizadoEn    DateTime @default(now())
+  actualizadoPorId Int?
+}
+
+// Código de un solo uso (10 minutos) con el que una persona vincula la extensión
+// desde «Mi hoja del día». Solo se guarda su hash. Una fila por persona.
+model BitacoraExtensionCodigo {
+  userId     Int      @id
+  codigoHash String   @unique
+  expiraEn   DateTime
+}
+
+// Una extensión vinculada a una persona. El token que recibe la extensión solo
+// vale para enviar sitios web de esa persona; se guarda su hash. Se revoca desde
+// la propia extensión o desde «Mi hoja del día».
+model BitacoraExtensionVinculo {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  tokenHash    String    @unique
+  nombreEquipo String?
+  creadoEn     DateTime  @default(now())
+  ultimoUso    DateTime?
+  revocadoEn   DateTime?
+
+  @@index([userId])
 }
 
 // A quién se le registra la hoja del día. Por defecto NADIE: sin fila (o con

@@ -1,0 +1,13 @@
+{
+  "name": "bitacora-gemeseg-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Extensión de Chrome y Edge de la Bitácora del equipo de app.gemeseg",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:dev": "node build.mjs --dev http://localhost:3100/api",
+    "iconos": "node scripts/crear-iconos.mjs",
+    "test": "node --test"
+  }
+}

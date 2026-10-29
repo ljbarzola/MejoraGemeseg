@@ -56,14 +56,48 @@ describe('calcularMetricas', () => {
         personasConActividad: 2,
         eventosApp: 2,
         eventosGoogle: 1,
+        eventosWeb: 0,
       },
       {
         fecha: '2026-10-27',
         personasConActividad: 1,
         eventosApp: 1,
         eventosGoogle: 0,
+        eventosWeb: 0,
       },
     ]);
+  });
+
+  it('los sitios web de la extensión se cuentan aparte y también cuentan como actividad', () => {
+    const conWeb = calcularMetricas(
+      [
+        ev(1, '2026-10-26T13:00:00Z'),
+        ev(2, '2026-10-26T14:00:00Z', 'EXTENSION', 'web'),
+        ev(2, '2026-10-26T14:05:00Z', 'EXTENSION', 'web'),
+        ev(3, '2026-10-27T15:00:00Z', 'EXTENSION', 'web'),
+      ],
+      '2026-10-26',
+      2,
+      3,
+    );
+    expect(conWeb.porDia[0]).toMatchObject({
+      personasConActividad: 2,
+      eventosApp: 1,
+      eventosGoogle: 0,
+      eventosWeb: 2,
+    });
+    // Una persona que solo navegó ese día también cuenta como «con actividad».
+    expect(conWeb.porDia[1]).toMatchObject({
+      personasConActividad: 1,
+      eventosWeb: 1,
+    });
+    expect(conWeb.resumen.eventos).toBe(4);
+    expect(conWeb.resumen.diasConActividad).toBe(2);
+    expect(conWeb.porModulo[0]).toEqual({
+      modulo: 'web',
+      etiqueta: 'Navegador',
+      eventos: 3,
+    });
   });
 
   it('ignora lo que cae fuera del período', () => {

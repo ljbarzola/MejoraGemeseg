@@ -72,6 +72,94 @@ describe('construirHoja', () => {
     });
   });
 
+  describe('sitios web de la extensión', () => {
+    const sitio = (min: number, nombre: string, minutos: number) =>
+      ev(min, {
+        fuente: 'EXTENSION',
+        modulo: 'web',
+        accion: 'SITIO',
+        ruta: null,
+        nombre,
+        minutos,
+      });
+
+    it('tramos seguidos del mismo sitio son una sola fila con los minutos sumados', () => {
+      const hoja = construirHoja('2026-10-27', [
+        sitio(0, 'ejemplo.com', 5),
+        sitio(5, 'ejemplo.com', 5),
+        sitio(10, 'ejemplo.com', 3),
+      ]);
+      expect(hoja.filas).toHaveLength(1);
+      expect(hoja.filas[0]).toMatchObject({
+        fuente: 'EXTENSION',
+        moduloEtiqueta: 'Navegador',
+        texto: 'Sitio web: ejemplo.com (13 min)',
+        veces: 3,
+        minutos: 13,
+        desde: en(0).toISOString(),
+        // El último tramo dura 3 minutos: termina en el minuto 12.
+        hasta: en(12).toISOString(),
+      });
+    });
+
+    it('dos sitios distintos nunca se juntan en una fila', () => {
+      const hoja = construirHoja('2026-10-27', [
+        sitio(0, 'ejemplo.com', 5),
+        sitio(5, 'wikipedia.org', 3),
+        sitio(8, 'ejemplo.com', 2),
+      ]);
+      expect(hoja.filas.map((f) => f.texto)).toEqual([
+        'Sitio web: ejemplo.com (5 min)',
+        'Sitio web: wikipedia.org (3 min)',
+        'Sitio web: ejemplo.com (2 min)',
+      ]);
+    });
+
+    it('la última actividad es cuando termina el último tramo, no cuando empieza', () => {
+      const hoja = construirHoja('2026-10-27', [
+        ev(0),
+        sitio(30, 'ejemplo.com', 10),
+      ]);
+      expect(hoja.primera).toBe(en(0).toISOString());
+      expect(hoja.ultima).toBe(en(39).toISOString());
+    });
+
+    it('un tramo largo no deja un hueco falso: el silencio empieza cuando termina', () => {
+      // Tramo de 10 min desde el 0; siguiente acción en el 65 → silencio real de 56 min, no de 65.
+      const sinHueco = construirHoja('2026-10-27', [
+        sitio(0, 'ejemplo.com', 10),
+        ev(65),
+      ]);
+      expect(sinHueco.huecos).toEqual([]);
+      const conHueco = construirHoja('2026-10-27', [
+        sitio(0, 'ejemplo.com', 10),
+        ev(70),
+      ]);
+      expect(conHueco.huecos).toEqual([
+        {
+          desde: en(9).toISOString(),
+          hasta: en(70).toISOString(),
+          minutos: 61,
+        },
+      ]);
+    });
+
+    it('un tramo que cubre una acción posterior no crea hueco con lo que sigue', () => {
+      const hoja = construirHoja('2026-10-27', [
+        sitio(0, 'ejemplo.com', 10),
+        ev(5),
+        ev(100),
+      ]);
+      expect(hoja.huecos).toEqual([
+        {
+          desde: en(9).toISOString(),
+          hasta: en(100).toISOString(),
+          minutos: 91,
+        },
+      ]);
+    });
+  });
+
   describe('agrupación de filas', () => {
     const drive = (min: number, nombre: string) =>
       ev(min, {

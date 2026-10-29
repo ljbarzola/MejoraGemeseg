@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PermissionsService } from '../permissions/permissions.service';
 import { BitacoraController } from './bitacora.controller';
+import { BitacoraExtensionService } from './bitacora-extension.service';
 import { BitacoraGoogleService } from './bitacora-google.service';
 import { BitacoraService, UsuarioBitacora } from './bitacora.service';
 
@@ -50,6 +51,7 @@ describe('BitacoraController', () => {
     controller = new BitacoraController(
       bitacora as unknown as BitacoraService,
       google as unknown as BitacoraGoogleService,
+      {} as unknown as BitacoraExtensionService,
       permisos as unknown as PermissionsService,
     );
   });

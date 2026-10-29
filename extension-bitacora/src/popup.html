@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bitácora Gemeseg</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Bitácora Gemeseg</h1>
+      <span id="estado" class="estado" hidden></span>
+    </header>
+
+    <main>
+      <section id="vistaVincular" hidden>
+        <p>
+          Para empezar, entra a <strong>app.gemeseg → Bitácora → Mi hoja del día</strong>, pulsa
+          «Vincular extensión» y escribe aquí el código.
+        </p>
+        <label for="codigo">Código de vinculación</label>
+        <input id="codigo" type="text" inputmode="text" autocomplete="off" spellcheck="false" maxlength="9" placeholder="XXXX-XXXX" />
+        <button id="vincular" type="button">Vincular</button>
+      </section>
+
+      <section id="vistaVinculada" hidden>
+        <p id="saludo" class="saludo"></p>
+        <p id="detalle" class="detalle"></p>
+        <p id="horario" class="detalle"></p>
+        <p id="envio" class="detalle"></p>
+        <div class="botones">
+          <button id="abrirHoja" type="button">Ver mi hoja del día</button>
+          <button id="desvincular" type="button" class="secundario">Desvincular</button>
+        </div>
+      </section>
+
+      <p id="mensaje" class="mensaje" hidden role="alert"></p>
+
+      <details class="privacidad">
+        <summary>Qué registra</summary>
+        <ul>
+          <li>Solo el <strong>dominio</strong> del sitio (por ejemplo «ejemplo.com»), nunca la dirección completa, el título ni el contenido.</li>
+          <li>Solo dentro del horario de la empresa, con la ventana del navegador al frente y tú activo.</li>
+          <li>No registra ventanas privadas, lo que escribes, contraseñas ni capturas.</li>
+          <li>Puedes desvincularla cuando quieras, aquí o en «Mi hoja del día».</li>
+        </ul>
+      </details>
+    </main>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

@@ -3,6 +3,17 @@ import { duracion, hora } from '../../utils/bitacoraFechas';
 import Kpi from './Kpi';
 import '../../styles/bitacora.css';
 
+const CLASE_FUENTE: Record<string, string> = {
+  APP: 'bit-fuente-app',
+  GOOGLE: 'bit-fuente-google',
+  EXTENSION: 'bit-fuente-web',
+};
+const ETIQUETA_FUENTE: Record<string, string> = {
+  APP: 'app.gemeseg',
+  GOOGLE: 'Google',
+  EXTENSION: 'Navegador',
+};
+
 function rangoHora(f: FilaHoja): string {
   const inicio = hora(f.desde);
   const fin = hora(f.hasta);
@@ -59,10 +70,10 @@ export default function HojaDelDia({ hoja }: { hoja: HojaDia }) {
                 <tr key={`${f.desde}-${f.fuente}-${f.texto}`} className="tasks-table-row">
                   <td className="tasks-table-title">{rangoHora(f)}</td>
                   <td>
-                    <span className={`bit-fuente ${f.fuente === 'GOOGLE' ? 'bit-fuente-google' : 'bit-fuente-app'}`}>
-                      {f.fuente === 'GOOGLE' ? 'Google' : 'app.gemeseg'}
+                    <span className={`bit-fuente ${CLASE_FUENTE[f.fuente] ?? 'bit-fuente-app'}`}>
+                      {ETIQUETA_FUENTE[f.fuente] ?? 'app.gemeseg'}
                     </span>
-                    {f.fuente === 'GOOGLE' ? '' : f.moduloEtiqueta}
+                    {f.fuente === 'APP' ? f.moduloEtiqueta : ''}
                   </td>
                   <td>{f.texto}</td>
                 </tr>
@@ -73,8 +84,9 @@ export default function HojaDelDia({ hoja }: { hoja: HojaDia }) {
       )}
 
       <p className="bit-nota">
-        Solo aparece lo que se hace en app.gemeseg (crear, editar o eliminar) y lo que Google registra de la cuenta
-        (inicio de sesión y Drive). El trabajo en otros programas o fuera de línea no queda en esta hoja.
+        Solo aparece lo que se hace en app.gemeseg (crear, editar o eliminar), lo que Google registra de la cuenta
+        (inicio de sesión y Drive) y, si la persona vinculó la extensión, los sitios web (solo el dominio) y el
+        tiempo en el navegador dentro del horario. El trabajo en otros programas o fuera de línea no queda en esta hoja.
       </p>
     </>
   );

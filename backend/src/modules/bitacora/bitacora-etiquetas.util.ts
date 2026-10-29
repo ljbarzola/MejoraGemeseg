@@ -10,6 +10,16 @@ export interface EventoDescribible {
   accion: string;
   ruta: string | null;
   nombre: string | null;
+  /** Solo EXTENSION: minutos que duró el tramo en el sitio. */
+  minutos?: number | null;
+}
+
+/** «25 min», «1 h», «1 h 5 min». */
+export function duracionCorta(minutos: number): string {
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  if (h === 0) return `${m} min`;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }
 
 const MODULOS: Record<string, string> = {
@@ -31,6 +41,7 @@ const MODULOS: Record<string, string> = {
   auth: 'Sesión',
   drive: 'Drive',
   login: 'Google',
+  web: 'Navegador',
 };
 
 const RECURSOS: Record<string, string> = {
@@ -112,6 +123,7 @@ function tramosDeRuta(ruta: string | null): string[] {
 
 /** «Editó tarea», sin el nombre del registro. */
 export function describirAccion(e: EventoDescribible): string {
+  if (e.fuente === 'EXTENSION') return 'Sitio web';
   if (e.fuente === 'GOOGLE') {
     return EVENTOS_GOOGLE[e.accion] ?? `Actividad en Google (${e.accion})`;
   }
@@ -133,5 +145,9 @@ export function describirAccion(e: EventoDescribible): string {
 /** «Editó tarea: «Informe de custodias»». */
 export function describirEvento(e: EventoDescribible): string {
   const base = describirAccion(e);
+  if (e.fuente === 'EXTENSION') {
+    const sitio = e.nombre ? `${base}: ${e.nombre}` : base;
+    return e.minutos ? `${sitio} (${duracionCorta(e.minutos)})` : sitio;
+  }
   return e.nombre ? `${base}: «${e.nombre}»` : base;
 }

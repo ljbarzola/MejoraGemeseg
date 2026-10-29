@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   Param,
@@ -18,7 +19,9 @@ import { Section } from '../../common/decorators/section.decorator';
 import { PermissionsService } from '../permissions/permissions.service';
 import { BitacoraService, UsuarioBitacora } from './bitacora.service';
 import { BitacoraGoogleService } from './bitacora-google.service';
+import { BitacoraExtensionService } from './bitacora-extension.service';
 import { CambiarActivacionDto } from './dto/cambiar-activacion.dto';
+import { GuardarHorarioDto } from './dto/guardar-horario.dto';
 
 interface Autenticado {
   user: UsuarioBitacora;
@@ -37,6 +40,7 @@ export class BitacoraController {
   constructor(
     private readonly bitacora: BitacoraService,
     private readonly google: BitacoraGoogleService,
+    private readonly extension: BitacoraExtensionService,
     private readonly permisos: PermissionsService,
   ) {}
 
@@ -71,6 +75,35 @@ export class BitacoraController {
     @Body() dto: CambiarActivacionDto,
   ) {
     return this.bitacora.cambiarActivacion(req.user, userId, dto.activa);
+  }
+
+  /** Días y horas en los que la extensión del navegador registra. Administradores y gerentes. */
+  @Get('horario')
+  horario(@Req() req: Autenticado) {
+    return this.extension.obtenerHorario(req.user);
+  }
+
+  @Put('horario')
+  guardarHorario(@Req() req: Autenticado, @Body() dto: GuardarHorarioDto) {
+    return this.extension.guardarHorario(req.user, dto);
+  }
+
+  /** Extensiones vinculadas a la persona que consulta. */
+  @Get('extension')
+  estadoExtension(@Req() req: Autenticado) {
+    return this.extension.estadoPersona(req.user);
+  }
+
+  /** Código de un solo uso (10 minutos) para vincular la extensión. */
+  @Post('extension/codigo')
+  codigoExtension(@Req() req: Autenticado) {
+    return this.extension.crearCodigo(req.user);
+  }
+
+  /** La persona desvincula todas sus extensiones. */
+  @Delete('extension')
+  desvincularExtension(@Req() req: Autenticado) {
+    return this.extension.revocarTodas(req.user);
   }
 
   @Get('equipo')

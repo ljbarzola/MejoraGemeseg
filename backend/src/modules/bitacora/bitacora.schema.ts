@@ -23,6 +23,9 @@ export const BITACORA_DDL: string[] = [
     "ocurridoEn" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "BitacoraEvento_pkey" PRIMARY KEY ("id")
   )`,
+  // 2026-10-29: tramos de la extensión del navegador. Columna nueva, nula y aditiva:
+  // un servidor anterior sigue funcionando sin ella (es una tabla propia de la Bitácora).
+  `ALTER TABLE "BitacoraEvento" ADD COLUMN IF NOT EXISTS "minutos" INTEGER`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "BitacoraEvento_fuente_externalId_key" ON "BitacoraEvento"("fuente", "externalId")`,
   `CREATE INDEX IF NOT EXISTS "BitacoraEvento_userId_ocurridoEn_idx" ON "BitacoraEvento"("userId", "ocurridoEn")`,
   `CREATE INDEX IF NOT EXISTS "BitacoraEvento_companyId_ocurridoEn_idx" ON "BitacoraEvento"("companyId", "ocurridoEn")`,
@@ -70,6 +73,47 @@ export const BITACORA_DDL: string[] = [
   `DO $$ BEGIN
     ALTER TABLE "BitacoraConsulta" ADD CONSTRAINT "BitacoraConsulta_personaId_fkey"
       FOREIGN KEY ("personaId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  EXCEPTION
+    WHEN duplicate_object THEN NULL;
+  END $$`,
+  // Extensión del navegador: horario por empresa, código de vinculación y vínculos.
+  `CREATE TABLE IF NOT EXISTS "BitacoraHorario" (
+    "companyId" INTEGER NOT NULL,
+    "dias" TEXT NOT NULL,
+    "inicio" TEXT NOT NULL,
+    "fin" TEXT NOT NULL,
+    "actualizadoEn" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "actualizadoPorId" INTEGER,
+    CONSTRAINT "BitacoraHorario_pkey" PRIMARY KEY ("companyId")
+  )`,
+  `CREATE TABLE IF NOT EXISTS "BitacoraExtensionCodigo" (
+    "userId" INTEGER NOT NULL,
+    "codigoHash" TEXT NOT NULL,
+    "expiraEn" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "BitacoraExtensionCodigo_pkey" PRIMARY KEY ("userId")
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "BitacoraExtensionCodigo_codigoHash_key" ON "BitacoraExtensionCodigo"("codigoHash")`,
+  `DO $$ BEGIN
+    ALTER TABLE "BitacoraExtensionCodigo" ADD CONSTRAINT "BitacoraExtensionCodigo_userId_fkey"
+      FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  EXCEPTION
+    WHEN duplicate_object THEN NULL;
+  END $$`,
+  `CREATE TABLE IF NOT EXISTS "BitacoraExtensionVinculo" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "tokenHash" TEXT NOT NULL,
+    "nombreEquipo" TEXT,
+    "creadoEn" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "ultimoUso" TIMESTAMP(3),
+    "revocadoEn" TIMESTAMP(3),
+    CONSTRAINT "BitacoraExtensionVinculo_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "BitacoraExtensionVinculo_tokenHash_key" ON "BitacoraExtensionVinculo"("tokenHash")`,
+  `CREATE INDEX IF NOT EXISTS "BitacoraExtensionVinculo_userId_idx" ON "BitacoraExtensionVinculo"("userId")`,
+  `DO $$ BEGIN
+    ALTER TABLE "BitacoraExtensionVinculo" ADD CONSTRAINT "BitacoraExtensionVinculo_userId_fkey"
+      FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
   EXCEPTION
     WHEN duplicate_object THEN NULL;
   END $$`,

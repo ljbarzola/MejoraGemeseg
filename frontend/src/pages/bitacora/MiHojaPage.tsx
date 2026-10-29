@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import BitacoraPageHeader from '../../components/bitacora/BitacoraPageHeader';
 import ErrorBanner from '../../components/common/ErrorBanner';
+import ExtensionPanel from '../../components/bitacora/ExtensionPanel';
 import HojaDelDia from '../../components/bitacora/HojaDelDia';
 import SelectorDia from '../../components/bitacora/SelectorDia';
 import { getMiHoja, mensajeErrorBitacora, type EstadoBitacora, type HojaDia } from '../../services/bitacora.service';
@@ -44,7 +45,7 @@ export default function MiHojaPage() {
     <div className="page-container">
       <BitacoraPageHeader
         title="Mi hoja del día"
-        description="Lo que quedó registrado de tu actividad en app.gemeseg y en tu cuenta de Google. Aquí ves exactamente lo mismo que Gerencia puede consultar de ti."
+        description="Lo que quedó registrado de tu actividad en app.gemeseg, en tu cuenta de Google y en el navegador (si vinculas la extensión). Aquí ves exactamente lo mismo que Gerencia puede consultar de ti."
       />
 
       <ErrorBanner mensaje={error} />
@@ -74,6 +75,8 @@ export default function MiHojaPage() {
             <HojaDelDia hoja={hoja} />
           </>
         ) : null}
+
+        {estado?.activa && <ExtensionPanel />}
       </div>
     </div>
   );

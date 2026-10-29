@@ -76,6 +76,8 @@ export interface ResumenPersona {
   totalEventos: number;
   accionesApp: number;
   eventosGoogle: number;
+  /** Minutos en sitios web que reportó la extensión del navegador. */
+  minutosWeb: number;
   huecosLargos: number;
   mayorHuecoMinutos: number;
 }
@@ -312,7 +314,7 @@ export class BitacoraService implements OnModuleInit {
           ? 'Se activó tu hoja del día'
           : 'Se desactivó tu hoja del día',
         message: activa
-          ? 'Desde ahora se registra tu actividad en app.gemeseg y en tu cuenta de Google. En «Mi hoja del día» ves exactamente qué se registra.'
+          ? 'Desde ahora se registra tu actividad en app.gemeseg y en tu cuenta de Google, y en el navegador si vinculas la extensión. En «Mi hoja del día» ves exactamente qué se registra.'
           : 'Ya no se registra tu actividad. Lo registrado antes sigue disponible en «Mi hoja del día».',
         link: '/bitacora/mi-hoja',
       });
@@ -435,6 +437,7 @@ export class BitacoraService implements OnModuleInit {
         accion: true,
         ruta: true,
         nombre: true,
+        minutos: true,
         ocurridoEn: true,
       },
     });
@@ -485,6 +488,7 @@ export class BitacoraService implements OnModuleInit {
           accion: true,
           ruta: true,
           nombre: true,
+          minutos: true,
           ocurridoEn: true,
         },
       }),
@@ -522,6 +526,9 @@ export class BitacoraService implements OnModuleInit {
         totalEventos: hoja.totalEventos,
         accionesApp: propios.filter((e) => e.fuente === 'APP').length,
         eventosGoogle: propios.filter((e) => e.fuente === 'GOOGLE').length,
+        minutosWeb: propios
+          .filter((e) => e.fuente === 'EXTENSION')
+          .reduce((s, e) => s + (e.minutos ?? 0), 0),
         huecosLargos: hoja.huecos.length,
         mayorHuecoMinutos: hoja.huecos.reduce(
           (m, h) => Math.max(m, h.minutos),

@@ -24,6 +24,7 @@ const CAMPOS_ORDEN = {
   ultima: (p: ResumenPersona) => p.ultima,
   app: (p: ResumenPersona) => p.accionesApp,
   google: (p: ResumenPersona) => p.eventosGoogle,
+  web: (p: ResumenPersona) => p.minutosWeb,
   huecos: (p: ResumenPersona) => p.mayorHuecoMinutos,
 };
 
@@ -105,7 +106,7 @@ export default function BitacoraActividadPage() {
     <div className="page-container">
       <BitacoraPageHeader
         title="Actividad del día"
-        description="El detalle completo de un día: qué hizo cada persona con la hoja activada en app.gemeseg y en su cuenta de Google. Elige a una persona para ver su hoja del día con todo lo registrado."
+        description="El detalle completo de un día: qué hizo cada persona con la hoja activada en app.gemeseg, en su cuenta de Google y en el navegador (si vinculó la extensión). Elige a una persona para ver su hoja del día con todo lo registrado."
       />
 
       <ErrorBanner mensaje={error} />
@@ -153,6 +154,7 @@ export default function BitacoraActividadPage() {
                     <th {...thProps('ultima')} title="Última actividad del día">Última <SortIcon campo="ultima" /></th>
                     <th {...thProps('app')} title="Acciones en app.gemeseg">En la app <SortIcon campo="app" /></th>
                     <th {...thProps('google')} title="Eventos de Google (inicio de sesión y Drive)">En Google <SortIcon campo="google" /></th>
+                    <th {...thProps('web')} title="Tiempo en sitios web que reporta la extensión del navegador">En el navegador <SortIcon campo="web" /></th>
                     <th {...thProps('huecos')} title="Mayor silencio entre dos acciones seguidas">Mayor hueco <SortIcon campo="huecos" /></th>
                   </tr>
                 </thead>
@@ -176,6 +178,7 @@ export default function BitacoraActividadPage() {
                       <td>{p.ultima ? hora(p.ultima) : '—'}</td>
                       <td>{p.accionesApp}</td>
                       <td>{p.eventosGoogle}</td>
+                      <td>{p.minutosWeb ? duracion(p.minutosWeb) : '—'}</td>
                       <td>{p.mayorHuecoMinutos ? duracion(p.mayorHuecoMinutos) : '—'}</td>
                     </tr>
                   ))}
