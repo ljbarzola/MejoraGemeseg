@@ -23,6 +23,7 @@ import {
 } from './ventas-marketing.util';
 import { ETIQUETA_KIND, MOTIVO_KINDS } from './ventas-motivos.service';
 import { agruparMapa, vistaValida } from './ventas-mapa.util';
+import { rangoDiasEcuador } from './fecha-llegada.util';
 import { Prisma } from '@prisma/client';
 
 // Desde cuándo existe el historial de cambios de etapa (SalesClientStageChange
@@ -31,7 +32,10 @@ import { Prisma } from '@prisma/client';
 export const FECHA_INICIO_HISTORIAL = '2026-09-30';
 
 const DIA_MS = 24 * 60 * 60 * 1000;
+const HORAS_ECUADOR_MS = 5 * 60 * 60 * 1000;
 const dia = (d: Date) => d.toISOString().slice(0, 10);
+// El día de Ecuador (UTC-5) de un instante: lo que muestran las columnas «Llegó», «Creado»... de las listas.
+const diaEc = (d: Date) => dia(new Date(d.getTime() - HORAS_ECUADOR_MS));
 const diaUtc = (s: string) => new Date(`${s}T00:00:00.000Z`);
 const sumarDiasStr = (s: string, n: number) =>
   dia(new Date(diaUtc(s).getTime() + n * DIA_MS));
@@ -78,20 +82,27 @@ export class VentasAnaliticaService {
     return Number.isInteger(id) && id > 0 ? id : null;
   }
 
-  private rango(desde?: string, hasta?: string, diasPorDefecto = 90) {
+  // Periodo del tablero (2026-10-28): UN solo periodo para todas las pestañas. Sin fechas, es el mes en curso
+  // (del 1 a hoy), el mismo «Este mes» que el frontend elige por defecto. Los días son los de Ecuador (UTC-5):
+  // `desde` y `hastaFin` son INSTANTES (inicio del primer día y último milisegundo del último, hora de Ecuador),
+  // para comparar contra columnas con hora (receivedAt, createdAt...); `desdeStr`/`hastaStr` son los días tal cual,
+  // para columnas de solo-día (inicio y fin de los contratos).
+  private rango(desde?: string, hasta?: string, diasPorDefecto?: number) {
     const hoy = hoyEcuador();
     const fin = hasta ? parseDiaContrato(hasta) : diaUtc(hoy);
     if (hasta && !fin) throw new BadRequestException('La fecha «hasta» no es válida.');
-    const ini = desde ? parseDiaContrato(desde) : diaUtc(sumarDiasStr(hoy, -diasPorDefecto));
+    const ini = desde
+      ? parseDiaContrato(desde)
+      : diaUtc(diasPorDefecto === undefined ? `${hoy.slice(0, 8)}01` : sumarDiasStr(hoy, -diasPorDefecto));
     if (desde && !ini) throw new BadRequestException('La fecha «desde» no es válida.');
     if (ini!.getTime() > fin!.getTime()) {
       throw new BadRequestException('La fecha «desde» no puede ser posterior a «hasta».');
     }
     // `hasta` incluye todo ese día.
     return {
-      desde: ini!,
+      desde: new Date(ini!.getTime() + HORAS_ECUADOR_MS),
       hasta: fin!,
-      hastaFin: new Date(fin!.getTime() + DIA_MS - 1),
+      hastaFin: new Date(fin!.getTime() + DIA_MS + HORAS_ECUADOR_MS - 1),
       desdeStr: dia(ini!),
       hastaStr: dia(fin!),
     };
@@ -120,20 +131,32 @@ export class VentasAnaliticaService {
   }
 
   // ---------------------------------------------------------------------
-  // Cartera y contratos (foto de hoy)
+  // Cartera y contratos
   // ---------------------------------------------------------------------
 
-  async cartera(companyId: number | null, a: AlcanceAnalitica) {
+  // Con periodo (desde/hasta, lo que manda el Dashboard) cada cifra usa la fecha que le corresponde:
+  //  · Clientes por relación: las empresas o personas REGISTRADAS en el Directorio en el periodo (su relación de hoy).
+  //  · Contratos y Servicios más contratados: los contratos que estuvieron en pie en algún momento del periodo
+  //    (se solapan con él), con su estado de hoy. En Servicios una renovación no cuenta doble con el contrato que reemplaza.
+  //  · Bajas y reducciones: las que ocurrieron en el periodo (fin de cobertura / fecha del motivo registrado).
+  //  · «Renovaciones próximas» y «Vencidos sin renovar» son de HOY: no dependen del periodo.
+  // Sin periodo (la investigación del Agente de Ventas pide la foto completa) todo es la foto de hoy: Directorio
+  // entero, todos los contratos, reducciones de los últimos 90 días y bajas del mes en curso.
+  async cartera(companyId: number | null, a: AlcanceAnalitica, desdeRaw?: string, hastaRaw?: string) {
     const cid = this.requireCompany(companyId);
     const ids = await this.idsClientes(cid, this.vendedor(a));
     const filtroCliente = ids ? { in: ids } : undefined;
     const hoy = hoyEcuador();
     const hoyD = diaUtc(hoy);
+    const conPeriodo = !!(desdeRaw || hastaRaw);
+    const per = conPeriodo ? this.rango(desdeRaw, hastaRaw) : null;
+    const reduccionesDesde = per ? per.desde : new Date(hoyD.getTime() - 90 * DIA_MS);
+    const reduccionesHasta = per ? per.hastaFin : undefined;
 
     const [clientes, contratos, entradas, reducciones, ciclos] = await Promise.all([
       this.prisma.salesClient.findMany({
         where: { companyId: cid, ...(filtroCliente ? { id: filtroCliente } : {}) },
-        select: { id: true, name: true },
+        select: { id: true, name: true, createdAt: true },
       }),
       this.prisma.salesAgreement.findMany({
         // Las ventas únicas no vencen ni se renuevan: no entran en estas cifras.
@@ -153,7 +176,7 @@ export class VentasAnaliticaService {
         where: {
           companyId: cid,
           kind: 'CONTRATO_REDUCCION',
-          createdAt: { gte: new Date(hoyD.getTime() - 90 * DIA_MS) },
+          createdAt: { gte: reduccionesDesde, ...(reduccionesHasta ? { lte: reduccionesHasta } : {}) },
           ...(filtroCliente ? { salesClientId: filtroCliente } : {}),
         },
         orderBy: { createdAt: 'desc' },
@@ -172,21 +195,35 @@ export class VentasAnaliticaService {
     const porCiclo: Record<CicloVida, number> = {
       SOLO_DATOS: 0, PROSPECTO: 0, CLIENTE: 0, EN_RIESGO: 0, EX_CLIENTE: 0, PERDIDO: 0,
     };
-    for (const c of clientes) {
-      const r = ciclos.get(c.id);
-      if (r) porCiclo[r.ciclo]++;
+    const registradosEnPeriodo = clientes.filter(
+      (c) => !per || (c.createdAt >= per.desde && c.createdAt <= per.hastaFin),
+    );
+    for (const c of registradosEnPeriodo) {
+      const rel = ciclos.get(c.id);
+      if (rel) porCiclo[rel.ciclo]++;
     }
 
     // ---- contratos ----
+    // Todos (con su estado de hoy): de aquí salen las cifras «de hoy» (renovaciones próximas, vencidos sin renovar).
     const conEstado = contratos.map((c) => ({ c, estado: calcularEstadoContrato(c) }));
-    const vigentes = conEstado.filter((x) => VIGENTES.includes(x.estado));
-    const enCurso = conEstado.filter((x) => x.estado === 'VIGENTE' || x.estado === 'POR_VENCER');
+    // Los del periodo: los que estuvieron en pie en algún momento de él (un cancelado cubre hasta su cancelación).
+    const estuvoEnPie = (c: (typeof contratos)[number]) => {
+      if (!per) return true;
+      if (dia(c.startDate) > per.hastaStr) return false;
+      const fin = c.status === 'CANCELADO' ? dia(c.cancelledAt ?? c.startDate) : c.endDate ? dia(c.endDate) : null;
+      return fin === null || fin >= per.desdeStr;
+    };
+    const delPeriodo = conEstado.filter((x) => estuvoEnPie(x.c));
+    const vigentes = delPeriodo.filter((x) => VIGENTES.includes(x.estado));
+    const enCurso = delPeriodo.filter((x) => x.estado === 'VIGENTE' || x.estado === 'POR_VENCER');
     const valorMensual = enCurso.reduce((s, x) => s + (x.c.monthlyValue ? Number(x.c.monthlyValue) : 0), 0);
     const sinValor = enCurso.filter((x) => x.c.monthlyValue === null).length;
 
     // ---- renovaciones próximas ----
     const diasHasta = (fin: Date) => Math.round((fin.getTime() - hoyD.getTime()) / DIA_MS);
-    const proximas = enCurso
+    // Son de HOY: salen de todos los contratos en curso, no solo de los del periodo.
+    const proximas = conEstado
+      .filter((x) => x.estado === 'VIGENTE' || x.estado === 'POR_VENCER')
       .filter((x) => x.c.endDate && diasHasta(x.c.endDate) >= 0 && diasHasta(x.c.endDate) <= 90)
       .map((x) => ({
         id: x.c.id,
@@ -227,7 +264,9 @@ export class VentasAnaliticaService {
     // ---- servicios y venta cruzada ----
     const porServicio = new Map<string, { contratos: number; clientes: Set<number> }>();
     const serviciosPorCliente = new Map<number, Set<number>>();
-    for (const x of vigentes) {
+    // Un contrato renovado dentro del periodo no cuenta doble: se omite el que reemplaza la renovación que también cae en él.
+    const reemplazados = new Set(delPeriodo.map((x) => x.c.renewedFromId).filter((id): id is number => id !== null));
+    for (const x of delPeriodo.filter((y) => !reemplazados.has(y.c.id))) {
       for (const s of x.c.services) {
         const e = porServicio.get(s.service.name) ?? { contratos: 0, clientes: new Set<number>() };
         e.contratos++;
@@ -245,19 +284,20 @@ export class VentasAnaliticaService {
     const conUno = [...serviciosPorCliente.values()].filter((s) => s.size === 1).length;
     const conVarios = [...serviciosPorCliente.values()].filter((s) => s.size > 1).length;
 
-    // ---- bajas del mes ----
-    const inicioMes = `${hoy.slice(0, 8)}01`;
+    // ---- bajas: clientes cuya cobertura terminó dentro del periodo (sin periodo, en el mes en curso) ----
+    const bajasDesde = per ? per.desdeStr : `${hoy.slice(0, 8)}01`;
+    const bajasHasta = per ? per.hastaStr : hoy;
     const bajas = this.bajasDeClientes(contratos, hoy).filter(
-      (b) => b.fin >= inicioMes && b.fin < hoy,
+      (b) => b.fin >= bajasDesde && b.fin <= bajasHasta && b.fin < hoy,
     );
 
     return {
-      ciclo: { ...porCiclo, total: clientes.length },
+      ciclo: { ...porCiclo, total: registradosEnPeriodo.length },
       contratos: {
         vigentes: vigentes.length,
-        porVencer: conEstado.filter((x) => x.estado === 'POR_VENCER').length,
-        vencidosSinRenovar: vencidos.length,
-        cancelados: conEstado.filter((x) => x.estado === 'CANCELADO').length,
+        porVencer: delPeriodo.filter((x) => x.estado === 'POR_VENCER').length,
+        vencidosSinRenovar: delPeriodo.filter((x) => x.estado === 'VENCIDO').length,
+        cancelados: delPeriodo.filter((x) => x.estado === 'CANCELADO').length,
         valorMensualVigente: valorMensual,
         sinValor,
       },
@@ -265,7 +305,7 @@ export class VentasAnaliticaService {
       vencidos: vencidos.slice(0, 30),
       servicios: { masContratados, clientesConUnServicio: conUno, clientesConVarios: conVarios },
       reducciones: {
-        ultimos90Dias: reducciones.length,
+        total: reducciones.length,
         recientes: reducciones.slice(0, 10).map((r) => ({
           id: r.id,
           cliente: r.salesClientId ? (nombre.get(r.salesClientId) ?? '—') : '—',
@@ -275,7 +315,7 @@ export class VentasAnaliticaService {
           fecha: dia(r.createdAt),
         })),
       },
-      bajasDelMes: {
+      bajas: {
         total: bajas.length,
         clientes: bajas.slice(0, 10).map((b) => ({
           id: b.clienteId,
@@ -320,7 +360,7 @@ export class VentasAnaliticaService {
     hastaRaw?: string,
   ) {
     const cid = this.requireCompany(companyId);
-    const r = this.rango(desdeRaw, hastaRaw, 365);
+    const r = this.rango(desdeRaw, hastaRaw);
     const ids = await this.idsClientes(cid, this.vendedor(a));
     const contratos = await this.prisma.salesAgreement.findMany({
       where: { companyId: cid, kind: { not: 'PRODUCTO' }, ...(ids ? { salesClientId: { in: ids } } : {}) },
@@ -409,7 +449,7 @@ export class VentasAnaliticaService {
     hastaRaw?: string,
   ) {
     const cid = this.requireCompany(companyId);
-    const r = this.rango(desdeRaw, hastaRaw, 90);
+    const r = this.rango(desdeRaw, hastaRaw);
     const vend = this.vendedor(a);
     const [etapas, opps] = await Promise.all([
       this.prisma.salesClientStage.findMany({ where: { companyId: cid }, orderBy: { order: 'asc' } }),
@@ -520,14 +560,26 @@ export class VentasAnaliticaService {
   // Las oportunidades que tienen Ubicación, agrupadas por ciudad y provincia. Las renovaciones (las abre
   // sola el sistema) y los clientes históricos no son demanda nueva, así que no cuentan. Quien no es
   // ADMIN/MANAGER solo ve las suyas (por el responsable de la oportunidad, como el resto del Resumen).
-  async mapa(companyId: number | null, a: AlcanceAnalitica, vistaRaw?: string) {
+  // `desde`/`hasta` ('YYYY-MM-DD', días de Ecuador, opcionales): solo las que LLEGARON en ese periodo
+  // (`receivedAt`), igual que el filtro «Llegó» de la lista de Oportunidades a la que lleva cada botón del mapa.
+  // Paridad con esa lista: el mapa deja fuera RENOVACION e HISTORICO; la lista los trae, así que el botón
+  // «Ver en oportunidades» abre la lista con el origen «Ventas nuevas» (todo menos esos dos) ya puesto.
+  async mapa(
+    companyId: number | null,
+    a: AlcanceAnalitica,
+    vistaRaw?: string,
+    desde?: string,
+    hasta?: string,
+  ) {
     const cid = this.requireCompany(companyId);
     const vend = this.vendedor(a);
     const vista = vistaValida(vistaRaw);
+    const llegada = rangoDiasEcuador(desde, hasta);
     const where: Prisma.SalesOpportunityWhereInput = {
       companyId: cid,
       originType: { notIn: ['HISTORICO', 'RENOVACION'] },
       ...(vend !== null ? { assignedUserId: vend } : {}),
+      ...(llegada.gte || llegada.lte ? { receivedAt: llegada } : {}),
     };
     if (vista === 'abiertas') where.closedAt = null;
     else if (vista === 'aceptadas') where.outcome = 'GANADA';
@@ -537,6 +589,7 @@ export class VentasAnaliticaService {
     const filas = await this.prisma.salesOpportunity.findMany({
       where,
       select: {
+        id: true,
         locationName: true,
         locationLat: true,
         locationLng: true,
@@ -579,13 +632,15 @@ export class VentasAnaliticaService {
     hastaRaw?: string,
   ) {
     const cid = this.requireCompany(companyId);
-    const r = this.rango(desdeRaw, hastaRaw, 180);
+    const r = this.rango(desdeRaw, hastaRaw);
     const vend = this.vendedor(a);
+    // Cohorte: las oportunidades que LLEGARON en el periodo (la misma fecha «Llegó» de la lista de Oportunidades y la
+    // misma regla del Resumen) y que hoy están cerradas, ganadas o perdidas. Antes se contaba por la fecha de cierre.
     const cerradas = await this.prisma.salesOpportunity.findMany({
       where: {
         companyId: cid,
         outcome: { in: ['GANADA', 'PERDIDA'] },
-        closedAt: { gte: r.desde, lte: r.hastaFin },
+        receivedAt: { gte: r.desde, lte: r.hastaFin },
         originType: { not: 'HISTORICO' },
         ...(vend !== null ? { assignedUserId: vend } : {}),
       },
@@ -647,7 +702,7 @@ export class VentasAnaliticaService {
     hastaRaw?: string,
   ) {
     const cid = this.requireCompany(companyId);
-    const r = this.rango(desdeRaw, hastaRaw, 180);
+    const r = this.rango(desdeRaw, hastaRaw);
     const vend = this.vendedor(a);
     const ids = await this.idsClientes(cid, vend);
     // Un posible cliente descartado aún no es una empresa del Directorio (no tiene salesClientId): para un vendedor
@@ -774,7 +829,7 @@ export class VentasAnaliticaService {
     hastaRaw?: string,
   ) {
     const cid = this.requireCompany(companyId);
-    const r = this.rango(desdeRaw, hastaRaw, 56);
+    const r = this.rango(desdeRaw, hastaRaw);
     const vend = this.vendedor(a);
     const [actividades, cambios, usuarios] = await Promise.all([
       this.prisma.salesClientActivity.findMany({
@@ -816,13 +871,13 @@ export class VentasAnaliticaService {
     for (const x of actividades) {
       const f = fila(x.createdBy);
       f.actividades++;
-      const s = lunesDe(dia(x.createdAt));
+      const s = lunesDe(diaEc(x.createdAt));
       if (s in f.porSemana) f.porSemana[s]++;
     }
     for (const x of cambios) {
       const f = fila(x.changedBy);
       f.cambios++;
-      const s = lunesDe(dia(x.createdAt));
+      const s = lunesDe(diaEc(x.createdAt));
       if (s in f.porSemana) f.porSemana[s]++;
     }
     return {
@@ -856,7 +911,7 @@ export class VentasAnaliticaService {
     canal?: string,
   ) {
     const cid = this.requireCompany(companyId);
-    const r = this.rango(desdeRaw, hastaRaw, 90);
+    const r = this.rango(desdeRaw, hastaRaw);
     const vend = this.vendedor(a);
     const campo: 'channel' | 'campaign' | 'landing' =
       agrupar === 'campana' ? 'campaign' : agrupar === 'landing' ? 'landing' : 'channel';

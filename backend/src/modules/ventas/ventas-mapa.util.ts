@@ -14,6 +14,8 @@ export const VISTAS_MAPA: VistaMapa[] = [
 ];
 
 export interface FilaMapa {
+  // Opcional: cuando viene, cada oportunidad del mapa de puntos puede llevar directo a su fila en la lista.
+  id?: number;
   locationName: string | null;
   locationLat: number | null;
   locationLng: number | null;
@@ -39,6 +41,7 @@ export interface PuntoMapa {
 
 // Una oportunidad con ubicación, tal cual (para el mapa de calor y los puntos sueltos).
 export interface OportunidadMapa {
+  id: number | null;
   lat: number;
   lng: number;
   monto: number;
@@ -95,8 +98,10 @@ export function agruparMapa(filas: FilaMapa[]): ResumenMapa {
     const provincia = f.locationProvince ?? 'Sin provincia';
     const ciudad = f.locationCity?.trim() || null;
     const monto = f.quotedAmount ?? 0;
-    // Con ciudad se agrupa por ciudad; sin ella, por cuadro de ~1 km, para no perder el punto.
-    const clave = `${provincia}|${ciudad ? sinTildes(ciudad) : `${lat.toFixed(2)},${lng.toFixed(2)}`}`;
+    // Con ciudad se agrupa por ciudad; sin ella, todas las de esa provincia juntas («sin ciudad»). Así el número
+    // de cada burbuja es el mismo que da el filtro Provincia + Ciudad de la lista de Oportunidades (antes se
+    // partía en cuadros de ~1 km, y ningún filtro de la lista podía reproducir ese corte).
+    const clave = `${provincia}|${ciudad ? sinTildes(ciudad) : ''}`;
     let g = grupos.get(clave);
     if (!g) {
       g = {
@@ -157,6 +162,7 @@ export function agruparMapa(filas: FilaMapa[]): ResumenMapa {
     );
 
   const oportunidades: OportunidadMapa[] = conPunto.slice(0, MAX_OPORTUNIDADES_MAPA).map((f) => ({
+    id: f.id ?? null,
     lat: f.locationLat as number,
     lng: f.locationLng as number,
     monto: f.quotedAmount ?? 0,
