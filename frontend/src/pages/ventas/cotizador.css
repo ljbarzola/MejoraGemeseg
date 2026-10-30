@@ -719,14 +719,16 @@
   font-weight: 700;
 }
 
+/* Descuento y TOTAL con el naranja de la marca (el azul del fondo ya es el de la marca). */
 .cot-totals .row.discount {
-  color: #fc8181;
+  color: var(--naranja);
+  font-weight: 700;
 }
 
 .cot-totals .row.total {
-  margin-top: 6px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.25);
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 2px solid var(--naranja);
   font-size: 20px;
   font-weight: 800;
   color: #fff;
@@ -1598,3 +1600,102 @@
   font-size: 11px;
   color: #64748b;
 }
+
+/* ============================================================================
+   CATALOGO DEL COTIZADOR (2026-10-29): compacto, con lineas y columnas alineadas.
+   El modal es una columna de alto fijo: titulo, pestanas y barra ocupan lo justo y
+   la tabla se queda con el resto, con UN solo scroll (el de la tabla). Las columnas
+   fijas funcionan porque el wrapper lleva data-viva-en-modal (utils/tablasVivas.ts).
+   ============================================================================ */
+.modal.cot-cat-modal {
+  display: flex;
+  flex-direction: column;
+  height: min(90vh, 880px);
+  overflow: hidden;
+}
+.cot-cat-modal .modal-header { padding: 14px 24px; flex: 0 0 auto; }
+.cot-cat-modal .modal-actions { flex: 0 0 auto; padding: 10px 24px; }
+.cot-cat-body.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px 24px 4px;
+  gap: 8px;
+  overflow: hidden;
+}
+.cot-cat-body .cot-tabs { margin-bottom: 0; flex: 0 0 auto; }
+.cot-cat-body .cot-tab { padding: 9px 10px 8px; font-size: 13.5px; }
+.cot-cat-body .filter-bar { margin-bottom: 0; flex: 0 0 auto; align-items: center; }
+.cot-cat-body .filter-bar-fields { flex-wrap: nowrap; gap: 12px; }
+.cot-cat-body .filter-bar-actions { align-self: center; }
+.cot-cat-body .cf-chips { margin: 0; flex: 0 0 auto; }
+
+.cot-cat-body input.cot-cat-search {
+  flex: 1 1 220px;
+  min-width: 160px;
+  height: 36px;
+  padding: 0 12px;
+  border-width: 1px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+}
+.cot-cat-count {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: #718096;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.cot-cat-body .auth-btn.cot-cat-new {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 0.88rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.cot-cat-body .filter-bar-actions .icon-btn { width: 36px; height: 36px; }
+
+/* Tabla: un solo scroll, con rejilla suave (lineas entre filas y entre columnas, como el original). */
+.tasks-table-wrapper.cot-cat-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid #dbe2ea;
+  border-radius: 10px;
+  background: #fff;
+}
+.cot-cat-wrap .tasks-table { font-size: 0.84rem; line-height: 1.3; min-width: 100%; }
+.cot-cat-wrap .tasks-table th {
+  padding: 8px 34px 8px 10px;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid #cbd5e1;
+  border-right: 1px solid #e2e8f0;
+  background: #f1f5f9;
+}
+.cot-cat-wrap .tasks-table td {
+  padding: 5px 10px;
+  white-space: nowrap;
+  border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #eef2f7;
+  vertical-align: middle;
+}
+.cot-cat-wrap .tasks-table th:last-child,
+.cot-cat-wrap .tasks-table td:last-child { border-right: 0; }
+.cot-cat-wrap .tasks-table tbody tr:nth-child(even) td { background: #fafbfd; }
+.cot-cat-wrap .tasks-table tbody tr:hover td { background: #eef4ff; }
+.cot-cat-wrap .tasks-table td .truncate { max-width: none; }
+/* .truncate es display:block: puesta en un <td> lo saca de la tabla y apila las celdas (causa del desalineo). */
+.cot-cat-wrap .tasks-table td.truncate { display: table-cell; max-width: none; }
+.cot-cat-wrap .tasks-table .cf-btn { right: 6px; }
+/* Cifras: cabecera y celda se alinean a la derecha, con el mismo margen interior. */
+.cot-cat-wrap .tasks-table th.cot-num { text-align: right; }
+.cot-cat-wrap .tasks-table td.cot-num { text-align: right; padding-right: 34px; font-variant-numeric: tabular-nums; }
+.cot-cat-wrap .tasks-table th.col-acciones,
+.cot-cat-wrap .tasks-table td.col-acciones { padding: 2px 6px; text-align: center; }
+/* Los dos margenes en una sola linea. */
+.cot-cat-margenes { display: flex; flex-wrap: nowrap; gap: 4px; align-items: center; }
+/* Columnas fijas: las celdas fijas conservan la rejilla y el fondo de la fila. */
+.cot-cat-wrap.tabla-viva .tasks-table tbody tr:nth-child(even) td:is(:nth-child(1), :nth-child(2)) { background: #fafbfd; }
+.cot-cat-wrap.tabla-viva .tasks-table tbody tr:hover td:is(:nth-child(1), :nth-child(2)) { background: #eef4ff; }

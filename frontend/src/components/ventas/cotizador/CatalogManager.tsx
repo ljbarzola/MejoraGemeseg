@@ -32,9 +32,9 @@ const COLS_PROD = [
   { key: 'margenes', label: 'Márgenes' },
   { key: 'proveedor', label: 'Proveedor' },
 ];
-const DEF_PROD = ['tipo', 'nombre', 'subcategoria', 'costo', 'margenes', 'proveedor'];
+const DEF_PROD = ['tipo', 'nombre', 'subcategoria', 'costo', 'unidad', 'proveedor'];
 const ANCHO_PROD: Record<string, number> = {
-  codigo: 100, tipo: 100, nombre: 320, modelo: 140, subcategoria: 160, unidad: 80, costo: 100, margenes: 150, proveedor: 130, acciones: 64,
+  codigo: 108, tipo: 96, nombre: 290, modelo: 140, subcategoria: 160, unidad: 90, costo: 104, margenes: 168, proveedor: 140, acciones: 64,
 };
 
 interface Props {
@@ -88,7 +88,7 @@ export default function CatalogManager({ products, installs, kits, byCode, canWr
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
-        className="modal modal-ventas-xl"
+        className="modal modal-ventas-xl cot-cat-modal"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -100,7 +100,7 @@ export default function CatalogManager({ products, installs, kits, byCode, canWr
             ✕
           </button>
         </div>
-        <div className="modal-body">
+        <div className="modal-body cot-cat-body">
           <ErrorBanner mensaje={error} />
           <div className="cot-tabs">
             <button type="button" className={`cot-tab ${tab === 'productos' ? 'active' : ''}`} onClick={() => setTab('productos')}>
@@ -290,7 +290,7 @@ function ProductsTab({
   const { filas, thProps, ordenDe } = useSortableTable(ordenados, campos, 'codigo');
 
   const th = (key: string, label: string) => (
-    <th {...thProps(key)} style={{ width: ANCHO_PROD[key] }}>
+    <th {...thProps(key)} className={`sortable-th${NUMERICAS.has(key) ? ' cot-num' : ''}`} style={{ width: ANCHO_PROD[key] }}>
       {label} <ColumnFilter cf={cf} col={key} orden={ordenDe(key)} />
     </th>
   );
@@ -304,27 +304,39 @@ function ProductsTab({
             onChange={(e) => setQ(e.target.value)}
             placeholder="Buscar por código, modelo o nombre..."
             aria-label="Buscar en el catálogo"
-            style={{ flex: '1 1 220px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}
+            className="cot-cat-search"
           />
+          <span className="cot-cat-count">{filas.length} productos</span>
         </div>
         <div className="filter-bar-actions">
-          <ColumnPickerMenu columns={COLS_PROD} visible={visibles} fixedLabel="Código" onApply={(k) => prefs.set(k)} />
+          <ColumnPickerMenu
+            columns={COLS_PROD}
+            visible={visibles}
+            fixedLabel="Código"
+            pinned={prefs.pinned}
+            maxPinned={prefs.maxPinned}
+            onApply={(k, fijas) => prefs.set(k, fijas)}
+          />
           <ClearFiltersButton disabled={!hayFiltros} onClear={limpiarTodo} />
-          <button type="button" className="auth-btn" onClick={onNew}>
+          <button type="button" className="auth-btn cot-cat-new" onClick={onNew}>
             <Plus size={15} /> Nuevo producto
           </button>
         </div>
       </div>
       <ChipsFiltros cf={cf} />
-      <p className="cot-muted">{filas.length} productos</p>
       {products.length === 0 ? (
         <div className="cot-empty">
           <div className="cot-empty-icon">📦</div>
           Aún no hay productos en el catálogo.
         </div>
       ) : (
-        <div className="tasks-table-wrapper" style={{ maxHeight: '55vh', overflowY: 'auto' }}>
-          <table className="tasks-table resizable-table" ref={tablaRef}>
+        <div className="tasks-table-wrapper cot-cat-wrap" data-viva-en-modal="">
+          <table
+            className="tasks-table resizable-table"
+            ref={tablaRef}
+            data-fijas={prefs.fijas}
+            style={{ minWidth: sumaAnchos(ANCHO_PROD, ['codigo', ...visibles, 'acciones']) }}
+          >
             <thead>
               <tr>
                 {th('codigo', 'Código')}
@@ -365,7 +377,7 @@ function ProductsTab({
                         return <td key={k}>{p.unit}</td>;
                       case 'costo':
                         return (
-                          <td key={k} style={{ textAlign: 'right' }}>
+                          <td key={k} className="cot-num">
                             {money(p.kind === 'SERVICIO' ? serviceCost(p) : p.unitCost)}
                           </td>
                         );
@@ -375,11 +387,11 @@ function ProductsTab({
                             {p.kind === 'SERVICIO' ? (
                               '—'
                             ) : (
-                              <>
-                                {p.hasProfit && <span className="cot-chip sup">Ganancia</span>}{' '}
+                              <span className="cot-cat-margenes">
+                                {p.hasProfit && <span className="cot-chip sup">Ganancia</span>}
                                 {p.hasInstall && <span className="cot-chip inst">Instalación</span>}
                                 {!p.hasProfit && !p.hasInstall && <span className="cot-chip none">Sin margen</span>}
-                              </>
+                              </span>
                             )}
                           </td>
                         );
@@ -415,7 +427,10 @@ const COLS_INST = [
   { key: 'subcategoria', label: 'Subcategoría' },
   { key: 'costo', label: 'Costo' },
 ];
-const ANCHO_INST: Record<string, number> = { codigo: 100, nombre: 320, categoria: 160, subcategoria: 180, costo: 100, acciones: 64 };
+const ANCHO_INST: Record<string, number> = { codigo: 108, nombre: 360, categoria: 170, subcategoria: 190, costo: 104, acciones: 64 };
+const NUMERICAS = new Set(['costo']);
+// Suma de los anchos declarados: la tabla nunca se encoge por debajo (así cabecera y contenido siguen alineados).
+const sumaAnchos = (anchos: Record<string, number>, keys: string[]) => keys.reduce((t, k) => t + (anchos[k] ?? 120), 0);
 
 function InstallsTab({
   installs,
@@ -466,7 +481,7 @@ function InstallsTab({
   );
   const { filas, thProps, ordenDe } = useSortableTable(filtradas, campos, 'codigo');
   const th = (key: string, label: string) => (
-    <th {...thProps(key)} style={{ width: ANCHO_INST[key] }}>
+    <th {...thProps(key)} className={`sortable-th${NUMERICAS.has(key) ? ' cot-num' : ''}`} style={{ width: ANCHO_INST[key] }}>
       {label} <ColumnFilter cf={cf} col={key} orden={ordenDe(key)} />
     </th>
   );
@@ -480,13 +495,21 @@ function InstallsTab({
             onChange={(e) => setQ(e.target.value)}
             placeholder="Buscar servicio..."
             aria-label="Buscar servicio de instalación"
-            style={{ flex: '1 1 220px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}
+            className="cot-cat-search"
           />
+          <span className="cot-cat-count">{filas.length} servicios</span>
         </div>
         <div className="filter-bar-actions">
-          <ColumnPickerMenu columns={COLS_INST} visible={visibles} fixedLabel="Código" onApply={(k) => prefs.set(k)} />
+          <ColumnPickerMenu
+            columns={COLS_INST}
+            visible={visibles}
+            fixedLabel="Código"
+            pinned={prefs.pinned}
+            maxPinned={prefs.maxPinned}
+            onApply={(k, fijas) => prefs.set(k, fijas)}
+          />
           <ClearFiltersButton disabled={!hayFiltros} onClear={limpiarTodo} />
-          <button type="button" className="auth-btn" onClick={onNew}>
+          <button type="button" className="auth-btn cot-cat-new" onClick={onNew}>
             <Plus size={15} /> Nuevo servicio
           </button>
         </div>
@@ -498,8 +521,13 @@ function InstallsTab({
           Aún no hay servicios de instalación.
         </div>
       ) : (
-        <div className="tasks-table-wrapper" style={{ maxHeight: '55vh', overflowY: 'auto' }}>
-          <table className="tasks-table resizable-table" ref={tablaRef}>
+        <div className="tasks-table-wrapper cot-cat-wrap" data-viva-en-modal="">
+          <table
+            className="tasks-table resizable-table"
+            ref={tablaRef}
+            data-fijas={prefs.fijas}
+            style={{ minWidth: sumaAnchos(ANCHO_INST, ['codigo', ...visibles, 'acciones']) }}
+          >
             <thead>
               <tr>
                 {th('codigo', 'Código')}
@@ -526,7 +554,7 @@ function InstallsTab({
                     if (k === 'nombre') return <td key={k} className="truncate" title={i.name}>{i.name}</td>;
                     if (k === 'categoria') return <td key={k} className="truncate">{i.category}</td>;
                     if (k === 'subcategoria') return <td key={k} className="truncate">{i.subcategory}</td>;
-                    return <td key={k} style={{ textAlign: 'right' }}>{money(i.unitCost)}</td>;
+                    return <td key={k} className="cot-num">{money(i.unitCost)}</td>;
                   })}
                   <td className="col-acciones">
                     <RowActionsMenu
@@ -568,7 +596,7 @@ function KitsTab({
       <div className="filter-bar">
         <div className="filter-bar-fields" />
         <div className="filter-bar-actions">
-          <button type="button" className="auth-btn" onClick={onNew}>
+          <button type="button" className="auth-btn cot-cat-new" onClick={onNew}>
             <Plus size={15} /> Nuevo kit
           </button>
         </div>

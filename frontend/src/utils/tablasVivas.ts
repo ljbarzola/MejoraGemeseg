@@ -20,6 +20,11 @@
  * Quedan fuera las tablas dentro de un modal o diálogo (ahí ya hay un scroll
  * propio y anidar otro sería confuso) y las de una zona marcada con
  * `data-tablas-vivas="off"`.
+ *
+ * Excepción (2026-10-29): un wrapper con `data-viva-en-modal` SÍ se activa dentro de
+ * un modal, para tablas grandes que ocupan el modal entero (el catálogo del Cotizador).
+ * Ahí el alto no lo calcula este script: lo manda el CSS del propio modal (flex), así
+ * que solo se instalan columnas fijas, arrastre y marcas de desplazamiento.
  */
 const WRAPPER = '.tasks-table-wrapper';
 // `[data-tablas-vivas="off"]`: zona que ya tiene su propio scroll o solo lista catálogos cortos
@@ -33,6 +38,7 @@ const UMBRAL_ARRASTRE = 4;
 const vivas = new Set<HTMLElement>();
 
 function ajustarAlto(w: HTMLElement) {
+  if (w.hasAttribute('data-viva-en-modal')) return;
   const arriba = w.getBoundingClientRect().top + window.scrollY;
   const alto = Math.max(ALTO_MINIMO, window.innerHeight - arriba - MARGEN_INFERIOR);
   w.style.setProperty('--tabla-alto', `${Math.round(alto)}px`);
@@ -91,7 +97,8 @@ function medirFijas(tabla: HTMLTableElement) {
 }
 
 function activar(w: HTMLElement) {
-  if (w.hasAttribute('data-viva') || w.closest(EN_MODAL)) return;
+  if (w.hasAttribute('data-viva')) return;
+  if (w.closest(EN_MODAL) && !w.hasAttribute('data-viva-en-modal')) return;
   w.setAttribute('data-viva', '');
   w.classList.add('tabla-viva');
   vivas.add(w);
