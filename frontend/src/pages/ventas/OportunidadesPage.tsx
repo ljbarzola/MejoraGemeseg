@@ -26,7 +26,7 @@ import { useCanalesLead } from '../../hooks/useCanalesLead';
 import EtapasAyuda from '../../components/ventas/EtapasAyuda';
 import { SIGNIFICADO_ETAPA, etapaPermitida } from '../../utils/etapasVentas';
 import { getUser } from '../../services/auth.service';
-import { urgenciaDe, hoyISO } from '../../utils/seguimientoVentas';
+import { urgenciaDe, hoyISO, ordenarPorUrgencia, diaDe } from '../../utils/seguimientoVentas';
 import { diaCortoEcuador } from '../../utils/rangoFechas';
 import { useToast } from '../../contexts/ToastContext';
 import {
@@ -263,6 +263,24 @@ export default function OportunidadesPage() {
     });
   }, [clientes, oportunidades, busqueda, hoyResponsable, esManager, currentUser?.id, hoy]);
 
+  // «Para hoy» también ordena y filtra por columna. Los filtros se arman sobre la lista YA ordenada por urgencia (vencidos,
+  // hoy, sin fecha): ese es el orden hasta que alguien ordene por otra columna.
+  const hoyOrdenados = useMemo(() => ordenarPorUrgencia(hoyClientes, hoy), [hoyClientes, hoy]);
+  const cfHoy = useColumnFilters<SalesClient>(hoyOrdenados, [
+    { key: 'name', etiqueta: 'Nombre', tipo: 'texto', getValue: (c) => c.name },
+    { key: 'siguiente', etiqueta: 'Siguiente paso', tipo: 'texto', getValue: (c) => c.nextActionText },
+    { key: 'para', etiqueta: 'Para cuándo', tipo: 'fecha', soloDia: true, getValue: (c) => diaDe(c) },
+    {
+      key: 'etapa', etiqueta: 'Etapa', tipo: 'valores', vacio: 'Sin etapa',
+      getValues: (c) => (c.stage ? { valor: c.stage.key, etiqueta: c.stage.label } : null),
+    },
+    { key: 'phone', etiqueta: 'Teléfono', tipo: 'texto', getValue: (c) => c.phone },
+    {
+      key: 'responsable', etiqueta: 'Responsable', tipo: 'valores', vacio: 'Sin asignar',
+      getValues: (c) => (c.assignedUser ? { valor: String(c.assignedUser.id), etiqueta: c.assignedUser.fullName } : null),
+    },
+  ]);
+
   // Los filtros de columna ya se aplicaron (cf.filas); aquí solo falta el buscador general.
   const filtradas = useMemo(() => {
     const q = busqueda.toLowerCase().trim();
@@ -458,7 +476,7 @@ export default function OportunidadesPage() {
   };
 
   const hayFiltros = !!busqueda || cf.hayFiltros;
-  const limpiarTodo = () => { setBusqueda(''); cf.limpiar(); setHoyResponsable('mine'); };
+  const limpiarTodo = () => { setBusqueda(''); cf.limpiar(); cfHoy.limpiar(); setHoyResponsable('mine'); };
 
   return (
     <div className="page-container">
@@ -522,7 +540,7 @@ export default function OportunidadesPage() {
           />
           <ClearFiltersButton
             onClear={limpiarTodo}
-            disabled={vista === 'hoy' ? !busqueda && hoyResponsable === 'mine' : !hayFiltros}
+            disabled={vista === 'hoy' ? !busqueda && hoyResponsable === 'mine' && !cfHoy.hayFiltros : !hayFiltros}
           />
           <ExportTableButton
             titulo="Oportunidades"
@@ -539,6 +557,7 @@ export default function OportunidadesPage() {
 
       {/* Los filtros de columna (incluidos los que llegan del Dashboard y del mapa) se repiten aquí, quitables uno a uno. */}
       {vista === 'todas' && <ChipsFiltros cf={cf} />}
+      {vista === 'hoy' && <ChipsFiltros cf={cfHoy} />}
 
       <div className="admin-section">
         {cargando ? (
@@ -562,6 +581,8 @@ export default function OportunidadesPage() {
               onEditar={(c) => abrirSiguientePaso(c, 'editar')}
               onAbrirFicha={(c) => abrirFicha(c.id)}
               accionesFila={accionesHoy}
+              cf={cfHoy}
+              onLimpiarFiltros={limpiarTodo}
             />
           )
         ) : (
