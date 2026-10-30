@@ -94,6 +94,12 @@ Pedido de Leidy tras comparar el PDF del original (`COT-…`) con el de la app: 
 - Cotizaciones: `GET cotizaciones`, `GET cotizaciones/siguiente-numero`, `GET cotizaciones/verificar-numero`, `POST cotizaciones`, `GET/PATCH/DELETE cotizaciones/:id`, `PATCH cotizaciones/:id/estado`, `POST cotizaciones/:id/copiar`.
 - Compartir: `GET cotizaciones/:id/compartidos`, `POST cotizaciones/:id/compartir`, `DELETE cotizaciones/:id/compartir/:userId`, `GET usuarios`, `GET/POST accesos-edicion`, `DELETE accesos-edicion/:userId`.
 
+## Catálogo, totales e importación del original (2026-10-30)
+
+- **Catálogo (modal):** columnas por defecto Tipo, Nombre, Subcategoría, Costo, Unidad y Proveedor (Márgenes sigue en «Columnas»; cada usuario conserva la suya). El modal ocupa la pantalla con la tabla dentro (`cot-cat-*`), con columna fija elegible. `tablasVivas.ts` tiene una excepción: un wrapper con `data-viva-en-modal` sí se activa dentro de un modal y su alto lo manda el CSS, no el script.
+- **Totales en pantalla:** el descuento y la línea sobre el TOTAL usan el naranja de la marca (`--naranja`) sobre el degradado azul de la marca, igual que ya hacía la hoja impresa.
+- **Importar catálogo del Cotizador original (hecho 2026-10-30 en producción):** el original manda en las colisiones de código (dos sistemas asignan «último + 1» y chocaron el 28/10). Lo de Mejora que ocupaba el código pasa al siguiente libre y **hay que reescribir las referencias guardadas** en `CotQuote.items`, `CotTemplate.items` y `CotKit.components` (las líneas apuntan al producto por código; las de instalación, por `id`). Se hace en una sola transacción, con respaldo de Cloud SQL antes y comprobando que ninguna línea queda sin producto. Esa vez: EQ-0422→EQ-0430, EQ-0423→EQ-0431, SV-0036→SV-0039, INST-058→INST-059, más 9 productos nuevos, 4 cambios de costo del original y 71 productos sin nombre ni referencias borrados (quedan 6 sin nombre a decidir). No hay endpoint ni pantalla para esto: fue un script puntual.
+
 ## Rutas frontend
 
 - `/ventas/cotizador` (`SectionRoute section="VENTAS"`), página `pages/ventas/CotizadorPage.tsx`, componentes en `components/ventas/cotizador/`, lógica pura en `utils/cotizador/` (`types`, `pricing`, `quoteState`, `format`, `draft`), servicio `services/cotizador.service.ts`.
