@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { RefreshCw, Settings, Settings2, X, Users, Building2, Landmark, UserX, LogOut, IdCard, ArrowRightLeft } from 'lucide-react';
+import RrhhPageHeader from '../../components/personal/RrhhPageHeader';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import { useColumnFilters } from '../../hooks/useColumnFilters';
@@ -464,47 +465,42 @@ export default function GuardiasList() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">RECURSOS HUMANOS</p>
-            <h1>Guardias</h1>
-          </div>
-
-          {canEdit && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-              <div className="header-actions">
-                <button className="btn-secondary" onClick={handleSync} disabled={syncing}>
-                  <RefreshCw size={16} className={syncing ? 'spin' : undefined} /> {syncing ? 'Sincronizando...' : 'Sincronizar Drive'}
-                </button>
-                <button
-                  type="button"
-                  className="btn-icon-toolbar"
-                  onClick={() => setShowFieldsConfig(true)}
-                  title="Campos de la ficha personal"
-                  aria-label="Campos de la ficha personal"
-                >
-                  <Settings2 size={18} />
-                </button>
-                <button
-                  type="button"
-                  className="btn-icon-toolbar"
-                  onClick={openConfigModal}
-                  title="Carpeta de Drive"
-                  aria-label="Carpeta de Drive"
-                >
-                  <Settings size={18} />
-                </button>
-              </div>
-              {ultimaSincronizacion && (
-                <span style={{ fontSize: '0.75rem', color: '#718096' }}>
-                  Última sincronización: {formatFechaHoraSync(ultimaSincronizacion)}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+      <RrhhPageHeader
+        title="Guardias"
+        description="Lista de los guardias de seguridad con su ficha, sus documentos y la entidad donde trabajan."
+        actions={
+          canEdit ? (
+            <>
+              <button
+                type="button"
+                className="btn-icon-toolbar"
+                onClick={() => setShowFieldsConfig(true)}
+                title="Campos de la ficha personal"
+                aria-label="Campos de la ficha personal"
+              >
+                <Settings2 size={18} />
+              </button>
+              <button
+                type="button"
+                className="btn-icon-toolbar"
+                onClick={openConfigModal}
+                title="Carpeta de Drive"
+                aria-label="Carpeta de Drive"
+              >
+                <Settings size={18} />
+              </button>
+              <button className="btn-secondary" onClick={handleSync} disabled={syncing}>
+                <RefreshCw size={16} className={syncing ? 'spin' : undefined} /> {syncing ? 'Sincronizando...' : 'Sincronizar Drive'}
+              </button>
+            </>
+          ) : undefined
+        }
+      />
+      {canEdit && ultimaSincronizacion && (
+        <p style={{ fontSize: '0.75rem', color: '#718096', textAlign: 'right', margin: '4px 0 0' }}>
+          Última sincronización: {formatFechaHoraSync(ultimaSincronizacion)}
+        </p>
+      )}
 
       {error && (
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{error}</div>

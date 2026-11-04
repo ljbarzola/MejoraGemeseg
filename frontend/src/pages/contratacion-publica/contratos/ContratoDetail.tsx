@@ -21,6 +21,7 @@ import type {
   CPInformeMensual,
 } from '../../../types/contratacion-publica';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import CPPageHeader from '../../../components/contratacion-publica/CPPageHeader';
 import DateInput from '../../../components/common/DateInput';
 import PuestoFormModal from '../puestos/PuestoFormModal';
 
@@ -215,20 +216,20 @@ export default function ContratoDetail() {
         <button className="cacao-back-btn" onClick={() => navigate('/contratacion-publica/contratos')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">CONTRATACIÓN PÚBLICA · {contrato.entidad?.nombre}</p>
-            <h1>Contrato {contrato.numero}</h1>
-          </div>
-          <div className="header-actions">
-            <button className="btn-secondary" onClick={() => navigate(`/contratacion-publica/contratos/${contratoId}/editar`)}>
-              <Pencil size={16} /> Editar
-            </button>
-            <button className="btn-secondary" onClick={() => setShowRenovarForm(true)}>
-              <RefreshCw size={16} /> Renovar
-            </button>
-          </div>
-        </div>
+        <CPPageHeader
+          title={`Contrato ${contrato.numero}`}
+          description={`Contrato con ${contrato.entidad?.nombre ?? 'la entidad'}: sus puestos y guardias, adendas, adjuntos, horarios e informes.`}
+          actions={
+            <>
+              <button className="btn-secondary" onClick={() => navigate(`/contratacion-publica/contratos/${contratoId}/editar`)}>
+                <Pencil size={16} /> Editar
+              </button>
+              <button className="btn-secondary" onClick={() => setShowRenovarForm(true)}>
+                <RefreshCw size={16} /> Renovar
+              </button>
+            </>
+          }
+        />
       </div>
 
       {error && (

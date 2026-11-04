@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Upload, Link as LinkIcon, CheckCircle2 } from 'lucide-react';
+import RrhhPageHeader from '../../../components/personal/RrhhPageHeader';
 import {
   getContractTemplate,
   createContractTemplate,
@@ -245,12 +246,10 @@ export default function ContractTemplateConfig() {
         <button className="cacao-back-btn" onClick={() => navigate('/rrhh/contracts')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">RECURSOS HUMANOS · DOCUMENTACIÓN</p>
-            <h1>Configuración de Plantilla</h1>
-          </div>
-        </div>
+        <RrhhPageHeader
+          title="Configuración de Plantilla"
+          description="Documentación: carga o enlaza el documento Word, detecta sus variables y define qué dato lleva cada campo."
+        />
       </div>
 
       <div style={{ display: 'flex', gap: 8, margin: '16px 0 24px' }}>

@@ -115,3 +115,99 @@ export function embudoMarketing(
     .sort((a, b) => b.leads - a.leads || a.clave.localeCompare(b.clave, 'es'));
   return { total: fila('Total', leads), filas };
 }
+
+// ---------------------------------------------------------------------------
+// Embudo de los clics de WhatsApp de las landings (2026-10-30)
+// ---------------------------------------------------------------------------
+// Clic → Conversación (alguien escribió y el operador anotó el código del mensaje al crear el posible
+// cliente) → En evaluación o más → Contrataron. Un clic NO es un lead: por eso va aparte del embudo de arriba
+// y nunca se suma a «Posibles clientes». Las dos últimas fases salen de la oportunidad del posible cliente.
+// Etapas en las que ya hubo cotización (la guía de medición separa «calificado» de «cotización enviada»). Incluye
+// «Propuesta enviada», la etapa propia que Gemeseg agregó entre En evaluación y En negociación.
+export const ETAPAS_DE_COTIZACION = [...ETAPAS_COTIZADAS, 'PROPUESTA_ENVIADA'];
+
+// ¿La oportunidad llegó a cotizarse? Tiene fecha de cotización, está o pasó por una etapa de cotización, o ya se
+// aceptó (una venta siempre pasó por una cotización, aunque nadie llenara la fecha).
+export function cotizoOportunidad(o: OportunidadParaFase): boolean {
+  return (
+    o.outcome === 'GANADA' ||
+    o.quotedAt !== null ||
+    (o.status !== null && ETAPAS_DE_COTIZACION.includes(o.status)) ||
+    (o.etapasAlcanzadas ?? []).some((k) => ETAPAS_DE_COTIZACION.includes(k))
+  );
+}
+
+export interface ClicParaEmbudo {
+  source: string;
+  campaign: string | null;
+  landing: string | null;
+  // Hubo conversación: el clic quedó enlazado a un posible cliente.
+  conversacion: boolean;
+  // Fase de la oportunidad a la que pasó ese posible cliente, o null si aún no pasó a ninguna.
+  fase: FaseMarketing | null;
+  // La oportunidad llegó a cotizarse (ver cotizoOportunidad).
+  cotizo: boolean;
+  // Monto cotizado de la oportunidad si se ganó; 0 en cualquier otro caso.
+  vendido: number;
+}
+
+export interface FilaEmbudoWhatsapp {
+  clave: string;
+  clics: number;
+  conversaciones: number;
+  cualificados: number;
+  cotizaciones: number;
+  convertidos: number;
+  // Suma del monto cotizado de las oportunidades ganadas (base del ROAS por campaña).
+  vendido: number;
+  // % sobre el paso anterior (null si el anterior es 0).
+  pctConversaciones: number | null;
+  pctCualificados: number | null;
+  pctCotizaciones: number | null;
+  pctConvertidos: number | null;
+}
+
+const filaWhatsapp = (clave: string, clics: ClicParaEmbudo[]): FilaEmbudoWhatsapp => {
+  const conversaciones = clics.filter((c) => c.conversacion).length;
+  const cualificados = clics.filter((c) => c.fase && ORDEN[c.fase] >= 1).length;
+  const cotizaciones = clics.filter((c) => c.cotizo).length;
+  const convertidos = clics.filter((c) => c.fase && ORDEN[c.fase] >= 2).length;
+  return {
+    clave,
+    clics: clics.length,
+    conversaciones,
+    cualificados,
+    cotizaciones,
+    convertidos,
+    vendido: Math.round(clics.reduce((suma, c) => suma + c.vendido, 0) * 100) / 100,
+    pctConversaciones: pct(conversaciones, clics.length),
+    pctCualificados: pct(cualificados, conversaciones),
+    pctCotizaciones: pct(cotizaciones, cualificados),
+    pctConvertidos: pct(convertidos, cotizaciones),
+  };
+};
+
+// Sin UTM el script guarda direct / none / none: se muestran como «Directo» y «Sin dato».
+const claveDeClic = (c: ClicParaEmbudo, por: 'channel' | 'campaign' | 'landing'): string => {
+  if (por === 'channel') {
+    const s = (c.source ?? '').trim().toLowerCase();
+    return !s || s === 'direct' ? 'Directo' : s;
+  }
+  const v = ((por === 'campaign' ? c.campaign : c.landing) ?? '').trim();
+  return !v || v.toLowerCase() === 'none' ? 'Sin dato' : v;
+};
+
+export function embudoWhatsapp(
+  clics: ClicParaEmbudo[],
+  agruparPor: 'channel' | 'campaign' | 'landing',
+): { total: FilaEmbudoWhatsapp; filas: FilaEmbudoWhatsapp[] } {
+  const grupos = new Map<string, ClicParaEmbudo[]>();
+  for (const c of clics) {
+    const clave = claveDeClic(c, agruparPor);
+    grupos.set(clave, [...(grupos.get(clave) ?? []), c]);
+  }
+  const filas = [...grupos.entries()]
+    .map(([clave, cs]) => filaWhatsapp(clave, cs))
+    .sort((a, b) => b.clics - a.clics || a.clave.localeCompare(b.clave, 'es'));
+  return { total: filaWhatsapp('Total', clics), filas };
+}

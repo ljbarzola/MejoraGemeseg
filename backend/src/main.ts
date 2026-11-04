@@ -6,6 +6,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { origenesDeLanding } from './modules/ventas/whatsapp-clics.util';
 import helmet from 'helmet';
 import { join } from 'path';
 import { existsSync } from 'fs';
@@ -46,6 +47,10 @@ async function bootstrap() {
   const extensionOrigin = /^chrome-extension:\/\/[a-p]{32}$/;
   const extensionRoute = /^\/api\/bitacora\/ext\//;
 
+  // Las landings (gemeseg.com) solo pueden registrar el clic de WhatsApp: esa única ruta pública.
+  const landingOrigins = origenesDeLanding();
+  const landingRoute = /^\/api\/ventas\/whatsapp\/clic(\?|$)/;
+
   app.enableCors(
     (
       req: { headers: { origin?: string }; originalUrl?: string; url?: string },
@@ -61,10 +66,16 @@ async function bootstrap() {
         extensionOrigin.test(origin) &&
         extensionRoute.test(req.originalUrl ?? req.url ?? '');
 
+      const isLanding =
+        !!origin &&
+        landingOrigins.includes(origin) &&
+        landingRoute.test(req.originalUrl ?? req.url ?? '');
+
       if (
         !origin ||
         isLocalDev ||
         isExtension ||
+        isLanding ||
         allowedOrigins.includes(origin) ||
         previewChannel.test(origin)
       ) {

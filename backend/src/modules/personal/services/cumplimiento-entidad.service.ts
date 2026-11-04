@@ -6,18 +6,8 @@ import { MovimientoPersonalService } from './movimiento-personal.service';
 export type RequisitoEstado =
   'CUMPLIDO' | 'FALTANTE' | 'VENCIDO' | 'POR_VENCER';
 
-// Factores de conversión a días — DIAS es exacto, SEMANAS es exacto (7 días
-// calendario), MESES usa 30 como aproximación (alcanza para decidir si ya se
-// entró en la "ventana" de aviso, no se necesita precisión calendario real).
-const ANTICIPACION_DIAS_POR_UNIDAD: Record<string, number> = {
-  DIAS: 1,
-  SEMANAS: 7,
-  MESES: 30,
-};
-
-function anticipacionEnDias(valor: number, unidad: string): number {
-  return valor * (ANTICIPACION_DIAS_POR_UNIDAD[unidad] ?? 1);
-}
+// Plazo por defecto (días) desde el que un documento pasa a «por vencer» si la empresa no configuró plazos de aviso.
+const VENTANA_POR_VENCER_POR_DEFECTO = 30;
 
 export interface RequisitoConEstado {
   requisito: unknown;
@@ -62,7 +52,27 @@ export class CumplimientoEntidadService {
     });
   }
 
-  async getComplianceForGuardia(companyId: number, cedula: string) {
+  /**
+   * Desde cuántos días antes un documento pasa a «por vencer» (amarillo): el plazo MÁS LEJANO de los avisos de
+   * vencimientos que RRHH configuró (Configuración → Avisos de vencimientos; 30 si no hay). Es una sola regla
+   * para el semáforo y para la primera notificación, ya no una anticipación distinta por requisito. Si la
+   * tabla de configuración todavía no existe, usa el valor por defecto en vez de romper Cumplimiento.
+   */
+  async ventanaPorVencerDias(companyId: number): Promise<number> {
+    try {
+      const fila = await this.prisma.rrhhVigilanteConfig.findUnique({
+        where: { companyId },
+        select: { avisarDias: true },
+      });
+      if (!fila || fila.avisarDias.length === 0) return VENTANA_POR_VENCER_POR_DEFECTO;
+      return Math.max(...fila.avisarDias);
+    } catch {
+      return VENTANA_POR_VENCER_POR_DEFECTO;
+    }
+  }
+
+  async getComplianceForGuardia(companyId: number, cedula: string, ventanaDias?: number) {
+    const ventanaAviso = ventanaDias ?? (await this.ventanaPorVencerDias(companyId));
     const asignacion = await this.prisma.asignacionGuardia.findFirst({
       where: { companyId, cedula, fechaFin: null },
       include: { entidad: true },
@@ -112,10 +122,6 @@ export class CumplimientoEntidadService {
           (documento.expiryDate.getTime() - now.getTime()) /
             (1000 * 60 * 60 * 24),
         );
-        const ventanaAviso = anticipacionEnDias(
-          requisito.anticipacionValor,
-          requisito.anticipacionUnidad,
-        );
         estado = diasParaVencer <= ventanaAviso ? 'POR_VENCER' : 'CUMPLIDO';
       } else {
         estado = 'CUMPLIDO';
@@ -152,7 +158,8 @@ export class CumplimientoEntidadService {
   // casos primero (más faltantes+vencidos primero), mismo criterio de
   // "peor primero" con desempates en cascada que ya usa
   // DriveService.syncReclutamientoCandidates para priorizar candidatos.
-  async getComplianceOverview(companyId: number) {
+  // Asignaciones vigentes de guardias que siguen trabajando.
+  private async asignacionesVisibles(companyId: number) {
     const [asignacionesActivas, cedulasFuera] = await Promise.all([
       this.prisma.asignacionGuardia.findMany({
         where: { companyId, fechaFin: null },
@@ -165,15 +172,72 @@ export class CumplimientoEntidadService {
     // aunque el sync de Drive todavía no haya cerrado su AsignacionGuardia
     // (ej. su carpeta sigue en Drive pero ya no trabaja para la empresa).
     const fueraSet = new Set(cedulasFuera);
-    const asignacionesVisibles = asignacionesActivas.filter(
-      (a) => !fueraSet.has(a.cedula),
-    );
+    return asignacionesActivas.filter((a) => !fueraSet.has(a.cedula));
+  }
+
+  /** Empresas que tienen al menos un guardia con asignación vigente (las que vigila el vigilante). */
+  async companiesConGuardias(): Promise<number[]> {
+    const filas = await this.prisma.asignacionGuardia.findMany({
+      where: { fechaFin: null },
+      select: { companyId: true },
+      distinct: ['companyId'],
+    });
+    return filas.map((f) => f.companyId);
+  }
+
+  /**
+   * Para el vigilante de vencimientos: cada documento que vence (requisito con duración) y que el
+   * guardia ya entregó, con su fecha de vencimiento (null = falta cargarla), y aparte los
+   * requisitos que todavía no entregó (`faltantes`).
+   */
+  async getDocumentosVigilados(companyId: number) {
+    const asignaciones = await this.asignacionesVisibles(companyId);
+    const documentos: {
+      cedula: string;
+      guardia: string;
+      entidad: string;
+      documento: string;
+      vence: Date | null;
+    }[] = [];
+    const faltantes: { cedula: string; guardia: string; entidad: string; documento: string }[] = [];
+    // Uno por uno: el pool de conexiones de producción es chico.
+    const ventana = await this.ventanaPorVencerDias(companyId);
+    for (const asignacion of asignaciones) {
+      const compliance = await this.getComplianceForGuardia(companyId, asignacion.cedula, ventana);
+      for (const r of compliance.requisitos) {
+        const requisito = r.requisito as { nombre: string; duracionValor: number | null };
+        if (!r.documento) {
+          faltantes.push({
+            cedula: asignacion.cedula,
+            guardia: asignacion.nombreGuardia,
+            entidad: asignacion.entidad.nombre,
+            documento: requisito.nombre,
+          });
+          continue;
+        }
+        if (!requisito.duracionValor) continue;
+        documentos.push({
+          cedula: asignacion.cedula,
+          guardia: asignacion.nombreGuardia,
+          entidad: asignacion.entidad.nombre,
+          documento: requisito.nombre,
+          vence: r.documento.expiryDate,
+        });
+      }
+    }
+    return { documentos, faltantes };
+  }
+
+  async getComplianceOverview(companyId: number) {
+    const asignacionesVisibles = await this.asignacionesVisibles(companyId);
+    const ventana = await this.ventanaPorVencerDias(companyId);
 
     const overview = await Promise.all(
       asignacionesVisibles.map(async (asignacion) => {
         const compliance = await this.getComplianceForGuardia(
           companyId,
           asignacion.cedula,
+          ventana,
         );
 
         const requisitosFaltantes = compliance.requisitos.filter(

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import RrhhPageHeader from '../../../components/personal/RrhhPageHeader';
 import {
   getContractTemplates,
   getContractAutofill,
@@ -189,12 +190,10 @@ export default function GenerarDocumento() {
         <button className="cacao-back-btn" onClick={() => navigate('/rrhh/contracts')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">RECURSOS HUMANOS · DOCUMENTACIÓN</p>
-            <h1>Generar Documento</h1>
-          </div>
-        </div>
+        <RrhhPageHeader
+          title="Generar Documento"
+          description="Documentación: elige para quién es y el tipo de documento, completa los datos y obtén el PDF listo para imprimir."
+        />
       </div>
 
       {error && (

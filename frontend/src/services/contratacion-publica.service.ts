@@ -271,6 +271,10 @@ export const deleteCodigoTurno = (id: number) => api.delete(`${BASE}/codigos-tur
 
 // ==================== HORARIOS MENSUALES ====================
 
+/** Horarios de todos los contratos (con el número de contrato y la entidad). */
+export const getHorarios = (): Promise<CPHorarioMensual[]> =>
+  api.get(`${BASE}/horarios`).then((r) => r.data);
+
 export const getHorariosByContrato = (contratoId: number): Promise<CPHorarioMensual[]> =>
   api.get(`${BASE}/horarios`, { params: { contratoId } }).then((r) => r.data);
 

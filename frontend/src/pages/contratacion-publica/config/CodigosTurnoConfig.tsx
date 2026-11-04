@@ -103,26 +103,17 @@ export default function CodigosTurnoConfig() {
   };
 
   return (
-    <div className="page-container">
-      <div className="page-header-row">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">CONTRATACIÓN PÚBLICA · CONFIGURACIÓN</p>
-            <h1>Códigos de Turno</h1>
-          </div>
-          <div className="header-actions">
-            {canEdit && (
-              <button className="auth-btn" onClick={openCreate}>
-                <Plus size={16} /> Nuevo Código
-              </button>
-            )}
-          </div>
-        </div>
+    <div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+        <p style={{ fontSize: '0.88rem', color: '#4a5568', margin: 0, maxWidth: 760 }}>
+          Catálogo por empresa usado en la grilla del horario y en las bitácoras (ej. D = Día, N = Noche, L = Libre). El color se usa para pintar la celda correspondiente.
+        </p>
+        {canEdit && (
+          <button className="auth-btn" onClick={openCreate}>
+            <Plus size={16} /> Nuevo código
+          </button>
+        )}
       </div>
-
-      <p style={{ fontSize: '0.85rem', color: '#718096', marginTop: 0 }}>
-        Catálogo por empresa usado en la matriz del horario mensual (ej. D = Día, N = Noche, L = Libre). El color se usa para pintar la celda correspondiente.
-      </p>
 
       {error && <div className="form-error" style={{ marginBottom: '16px' }}>{error}</div>}
 

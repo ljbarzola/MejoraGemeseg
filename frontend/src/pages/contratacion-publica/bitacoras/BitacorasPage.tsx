@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Bot, Camera, Clock, Eye, Trash2 } from 'lucide-react';
+import { Bot, Camera, Eye, Trash2 } from 'lucide-react';
+import CPPageHeader from '../../../components/contratacion-publica/CPPageHeader';
+import MovidoAConfiguracion from '../../../components/common/MovidoAConfiguracion';
+import PageTabs from '../../../components/common/PageTabs';
 import {
   eliminarBitacora,
   getAgenteBitacoras,
@@ -32,7 +35,6 @@ import {
 } from '../../../utils/bitacoras';
 import { mensajeError } from '../../../utils/entregasCp';
 import BitacorasResumen from './BitacorasResumen';
-import HorasTurnoModal from './HorasTurnoModal';
 import SubirBitacoraModal from './SubirBitacoraModal';
 
 type Vista = 'resumen' | 'lista';
@@ -85,7 +87,6 @@ export default function BitacorasPage() {
   const [error, setError] = useState('');
 
   const [subiendo, setSubiendo] = useState(false);
-  const [horasAbierto, setHorasAbierto] = useState(false);
   const [sinPermiso, setSinPermiso] = useState('');
   const [borrando, setBorrando] = useState<BitacoraResumen | null>(null);
 
@@ -168,25 +169,26 @@ export default function BitacorasPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">CONTRATACIÓN PÚBLICA · OPERACIONES</p>
-            <h1>Bitácoras</h1>
-          </div>
-          <div className="header-actions">
-            <button className="btn-secondary" onClick={() => setHorasAbierto(true)}>
-              <Clock size={16} /> Horario de los turnos
-            </button>
-            <button className="auth-btn" onClick={pedirSubir}>
-              <Camera size={16} /> Subir bitácora
-            </button>
-          </div>
-        </div>
-        <p style={{ margin: 0, fontSize: '0.88rem', color: '#4a5568', maxWidth: 820 }}>
-          Sube la foto de la hoja que llenan los guardias. El agente la lee y la compara con el horario del puesto: avisa si quien aparece no es quien debía estar, o si faltan guardias u horas.
-        </p>
-      </div>
+      <CPPageHeader
+        pantalla="bitacoras"
+        title="Bitácoras"
+        description="Sube la foto de la hoja que llenan los guardias. El agente la lee y la compara con el horario del puesto: avisa si quien aparece no es quien debía estar, o si faltan guardias u horas."
+        actions={
+          <button className="auth-btn" onClick={pedirSubir}>
+            <Camera size={16} /> Subir bitácora
+          </button>
+        }
+      />
+      <MovidoAConfiguracion to="/contratacion-publica/configuracion?pestana=horas" enlace="Ir a Horario de los turnos">
+        «Horario de los turnos» se movió a Configuración.
+      </MovidoAConfiguracion>
+
+      <PageTabs
+        label="Vista de las bitácoras"
+        tabs={[{ key: 'resumen' as Vista, label: 'Resumen' }, { key: 'lista' as Vista, label: 'Hojas subidas' }]}
+        value={vista}
+        onChange={cambiarVista}
+      />
 
       {agente && (!agente.activo || !agente.iaConfigurada) && (
         <div style={{ background: '#fffaf0', border: '1px solid #fbd38d', color: '#7b341e', borderRadius: 10, padding: '10px 14px', margin: '12px 0', fontSize: '0.85rem', display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -201,7 +203,7 @@ export default function BitacorasPage() {
 
       {error && <div className="form-error" style={{ margin: '12px 0' }}>{error}</div>}
 
-      <div className="filter-bar" style={{ marginTop: 14 }}>
+      <div className="filter-bar">
         <div className="filter-bar-fields">
           <select className="filter-select" value={filtros.puestoId ?? ''} onChange={(e) => cambiarFiltro({ puestoId: e.target.value })} aria-label="Puesto">
             <option value="">Todos los puestos</option>
@@ -233,11 +235,6 @@ export default function BitacorasPage() {
           )}
           <ClearFiltersButton onClear={() => { setPagina(1); setFiltros({}); }} disabled={!hayFiltros} />
         </div>
-      </div>
-
-      <div className="admin-tabs" style={{ marginTop: 14 }}>
-        <button className={`admin-tab ${vista === 'resumen' ? 'active' : ''}`} onClick={() => cambiarVista('resumen')}>Resumen</button>
-        <button className={`admin-tab ${vista === 'lista' ? 'active' : ''}`} onClick={() => cambiarVista('lista')}>Hojas subidas</button>
       </div>
 
       {vista === 'resumen' ? (
@@ -334,7 +331,6 @@ export default function BitacorasPage() {
           onSubida={(id) => navigate(`/contratacion-publica/bitacoras/${id}`)}
         />
       )}
-      {horasAbierto && <HorasTurnoModal puedeEditar={puedeEscribir} onClose={() => setHorasAbierto(false)} />}
       {borrando && (
         <ConfirmDialog
           title="Eliminar bitácora"

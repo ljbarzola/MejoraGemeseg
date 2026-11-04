@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { RefreshCw, AlertTriangle, Hourglass, ClipboardCheck, Info, Settings } from 'lucide-react';
+import { RefreshCw, AlertTriangle, Hourglass, ClipboardCheck, Info } from 'lucide-react';
 import {
   getComplianceOverview,
   type ComplianceOverviewItem,
 } from '../../../services/entidades.service';
 import GuardiaComplianceModal from '../../../components/personal/GuardiaComplianceModal';
-import NotificationConfigModal from '../../../components/personal/NotificationConfigModal';
+import RrhhPageHeader from '../../../components/personal/RrhhPageHeader';
+import MovidoAConfiguracion from '../../../components/common/MovidoAConfiguracion';
 import { cedulaVisible } from '../../../utils/postulacionValidacion';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
 import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
@@ -45,7 +46,6 @@ export default function CumplimientoEntidades() {
   const [error, setError] = useState('');
 
   const [selectedCedula, setSelectedCedula] = useState<string | null>(null);
-  const [showConfigModal, setShowConfigModal] = useState(false);
 
   const [search, setSearch] = useState('');
 
@@ -90,29 +90,18 @@ export default function CumplimientoEntidades() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">RECURSOS HUMANOS · CUMPLIMIENTO</p>
-            <h1>Cumplimiento</h1>
-          </div>
-
-          <div className="header-actions">
-            <button className="btn-secondary" onClick={load} disabled={loading}>
-              <RefreshCw size={16} className={loading ? 'spin' : undefined} /> {loading ? 'Cargando...' : 'Actualizar'}
-            </button>
-            <button
-              type="button"
-              className="btn-icon-toolbar"
-              onClick={() => setShowConfigModal(true)}
-              title="Notificaciones"
-              aria-label="Notificaciones"
-            >
-              <Settings size={18} />
-            </button>
-          </div>
-        </div>
-      </div>
+      <RrhhPageHeader
+        title="Cumplimiento"
+        description="Cada guardia con sus documentos al día, por vencer, vencidos o faltantes. Abre un guardia para aprobar documentos o enviarle un recordatorio."
+        actions={
+          <button className="btn-secondary" onClick={load} disabled={loading}>
+            <RefreshCw size={16} className={loading ? 'spin' : undefined} /> {loading ? 'Cargando...' : 'Actualizar'}
+          </button>
+        }
+      />
+      <MovidoAConfiguracion to="/rrhh/configuracion?pestana=correo" enlace="Ir a Configuración">
+        El engranaje «Notificaciones» se movió: el correo de envío y los avisos de vencimientos ahora se ajustan en Configuración.
+      </MovidoAConfiguracion>
 
       {error && (
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{error}</div>
@@ -247,9 +236,6 @@ export default function CumplimientoEntidades() {
 
       {/* MODAL DETALLE DE CUMPLIMIENTO (pieza compartida con GuardiasList.tsx) */}
       <GuardiaComplianceModal cedula={selectedCedula} onClose={closeDetail} onChanged={load} />
-      {showConfigModal && (
-        <NotificationConfigModal onClose={() => setShowConfigModal(false)} />
-      )}
     </div>
   );
 }

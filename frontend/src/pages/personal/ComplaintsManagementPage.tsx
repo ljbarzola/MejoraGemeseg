@@ -12,6 +12,7 @@ import {
   type ComplaintStage,
 } from '../../services/personal.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import RrhhPageHeader from '../../components/personal/RrhhPageHeader';
 import { usePerm } from '../../contexts/PermissionsContext';
 import ComplaintFieldsConfigModal from '../../components/personal/ComplaintFieldsConfigModal';
 import ComplaintStagesConfigModal from '../../components/personal/ComplaintStagesConfigModal';
@@ -167,13 +168,11 @@ export default function ComplaintsManagementPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">RECURSOS HUMANOS</p>
-            <h1>Gestión de Quejas y Sugerencias</h1>
-          </div>
-          <div className="header-actions">
+      <RrhhPageHeader
+        title="Gestión de Quejas y Sugerencias"
+        description="Da seguimiento a las quejas y sugerencias del personal: arrastra una tarjeta entre columnas para avanzar su etapa, o haz click para ver el detalle y el historial."
+        actions={
+          <>
             <button
               type="button"
               className="btn-icon-toolbar"
@@ -192,9 +191,9 @@ export default function ComplaintsManagementPage() {
             >
               <Settings2 size={18} />
             </button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {showFieldsConfig && <ComplaintFieldsConfigModal onClose={() => setShowFieldsConfig(false)} />}
       {showStagesConfig && (
@@ -207,10 +206,6 @@ export default function ComplaintsManagementPage() {
       {moverQuejaError && (
         <div ref={moverQuejaErrorRef} style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{moverQuejaError}</div>
       )}
-
-      <p style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '16px' }}>
-        Arrastra una tarjeta entre columnas para avanzar su etapa, o haz click para ver el detalle y el historial.
-      </p>
 
       {stages.length === 0 ? (
         <p style={{ fontSize: '0.85rem', color: '#a0aec0' }}>

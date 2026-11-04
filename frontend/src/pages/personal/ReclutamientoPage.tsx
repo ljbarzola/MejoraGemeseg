@@ -3,6 +3,7 @@ import { buildDriveFolderLink } from '../../utils/driveLink';
 import { formatFechaHoraSync } from '../../utils/formatFechaHora';
 import { getUser } from '../../services/auth.service';
 import CopyLinkButton from '../../components/common/CopyLinkButton';
+import RrhhPageHeader from '../../components/personal/RrhhPageHeader';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import {
   
@@ -932,43 +933,38 @@ export default function ReclutamientoPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">RECURSOS HUMANOS</p>
-            <h1>Reclutamiento y Vacantes</h1>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-            <div className="header-actions">
-              <button className="btn-secondary" onClick={handleSyncAll} disabled={syncing}>
-                <RefreshCw size={16} className={syncing ? 'spin' : undefined} />
-                {syncing ? 'Sincronizando...' : 'Sincronizar'}
-              </button>
-              {driveFolderUrl && (
-                <a
-                  className="btn-secondary"
-                  href={driveFolderUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Abrir la carpeta de postulantes en Google Drive"
-                >
-                  <FolderOpen size={16} /> Ver carpeta
-                </a>
-              )}
-            </div>
-            {/* La lista de candidatos se guarda localmente al sincronizar, así
-                que recargar la página o volver a entrar no la borra ni obliga
-                a sincronizar de nuevo — este texto es lo que le dice a RRHH
-                qué tan vieja es la lista que está viendo. */}
-            {ultimaSincronizacion && (
-              <span style={{ fontSize: '0.75rem', color: '#718096' }}>
-                Última sincronización: {formatFechaHoraSync(ultimaSincronizacion)}
-              </span>
+      <RrhhPageHeader
+        title="Reclutamiento y Vacantes"
+        description="Las vacantes abiertas y los candidatos que se postulan, para seguir cada proceso de selección."
+        actions={
+          <>
+            <button className="btn-secondary" onClick={handleSyncAll} disabled={syncing}>
+              <RefreshCw size={16} className={syncing ? 'spin' : undefined} />
+              {syncing ? 'Sincronizando...' : 'Sincronizar'}
+            </button>
+            {driveFolderUrl && (
+              <a
+                className="btn-secondary"
+                href={driveFolderUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Abrir la carpeta de postulantes en Google Drive"
+              >
+                <FolderOpen size={16} /> Ver carpeta
+              </a>
             )}
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
+      {/* La lista de candidatos se guarda localmente al sincronizar, así
+          que recargar la página o volver a entrar no la borra ni obliga
+          a sincronizar de nuevo — este texto es lo que le dice a RRHH
+          qué tan vieja es la lista que está viendo. */}
+      {ultimaSincronizacion && (
+        <p style={{ fontSize: '0.75rem', color: '#718096', textAlign: 'right', margin: '4px 0 0' }}>
+          Última sincronización: {formatFechaHoraSync(ultimaSincronizacion)}
+        </p>
+      )}
 
       {syncError && (
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{syncError}</div>

@@ -14,6 +14,7 @@ import { VentasMotivosService, type MotivoInput } from './ventas-motivos.service
 import { VentasOportunidadesService } from './ventas-oportunidades.service';
 import { MOTIVO_SIN_INFORMACION } from './motivo-perdida.util';
 import { VentasSchemaService } from './ventas-schema.service';
+import { VentasWhatsappClicsService } from './ventas-whatsapp-clics.service';
 import { VentasConversionesService } from './ventas-conversiones.service';
 import {
   MOTIVOS_CONTACTO,
@@ -79,6 +80,8 @@ export class VentasLeadsService {
     private readonly esquema: VentasSchemaService,
     // Opcional para no romper quien arma este servicio a mano (pruebas): sin él, «lead válido» no se registra.
     @Optional() private readonly conversiones?: VentasConversionesService,
+    // «Código del mensaje» de WhatsApp al crear un posible cliente a mano.
+    @Optional() private readonly clics?: VentasWhatsappClicsService,
   ) {}
 
   private requireCompany(companyId: number | null): number {
@@ -362,6 +365,8 @@ export class VentasLeadsService {
         { phone: { contains: q } },
         { companyName: { contains: q, mode: 'insensitive' } },
         { message: { contains: q, mode: 'insensitive' } },
+        // Código de seguimiento de WhatsApp (GMS-WA-XXXXXX), guardado en extra.trackingId.
+        { extra: { path: ['trackingId'], string_contains: q } },
       ];
     }
     const [filas, clientes, usuarios] = await Promise.all([
@@ -457,6 +462,7 @@ export class VentasLeadsService {
       channel?: string;
       campaign?: string;
       extra?: Record<string, string>;
+      codigoMensaje?: string;
     },
   ) {
     const cid = this.requireCompany(companyId);
@@ -468,8 +474,14 @@ export class VentasLeadsService {
         'Elige cómo llegó el lead (Google Ads, Referido, WhatsApp, llamada…).',
       );
     }
+    // Con el código del mensaje de WhatsApp el posible cliente nace con la atribución del clic.
+    const codigo = recortar(dto.codigoMensaje, 40);
+    if (codigo && canal.key !== 'WHATSAPP') {
+      throw new BadRequestException('El código del mensaje solo aplica cuando la fuente es WhatsApp.');
+    }
+    const clic = codigo && this.clics ? await this.clics.atribucionDeCodigo(cid, codigo) : null;
     // Solo se guardan los datos propios que ese canal declara en el registro.
-    const extra: Record<string, unknown> = {};
+    const extra: Record<string, unknown> = { ...(clic?.extra ?? {}) };
     for (const campo of canal.campos) {
       if (campo.key === 'campaign') continue;
       if (campo.usuario) {
@@ -496,13 +508,16 @@ export class VentasLeadsService {
       email: dto.email,
       phone: dto.phone,
       companyName: dto.companyName,
-      message: dto.message,
+      message: dto.message || (clic ? `Escribió por WhatsApp desde la landing. Código ${clic.trackingId}.` : dto.message),
       direccion: dto.direccion,
-      campaign: dto.campaign,
+      campaign: dto.campaign || clic?.campaign,
       channel: canal.key,
+      // El mismo código es su identificador externo: crear dos posibles clientes con él no es posible.
+      externalId: clic?.trackingId,
       extra,
       createdBy: userId,
     });
+    if (clic && this.clics && r.nuevo) await this.clics.vincular(cid, clic.clicId, r.lead.id, userId);
     return this.get(cid, r.lead.id);
   }
 

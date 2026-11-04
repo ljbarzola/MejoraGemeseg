@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, Eye, EyeOff, MessageSquareText, Handshake, CircleCheckBig } from 'lucide-react';
 import { createComplaint, getComplaintFields, type ComplaintFieldDefinition } from '../../services/personal.service';
-import PageHeader from '../../components/common/PageHeader';
+import RrhhPageHeader from '../../components/personal/RrhhPageHeader';
 
 // Pantalla de envío únicamente — accesible a cualquier empleado autenticado
 // (ver App.tsx, esta ruta no exige el permiso de sección RRHH). No muestra
@@ -51,8 +51,7 @@ export default function ComplaintsPage() {
 
   return (
     <div className="page-container">
-      <PageHeader
-        eyebrow="Recursos Humanos"
+      <RrhhPageHeader
         title="Buzón de Quejas y Sugerencias"
         description="Cuéntanos lo que no está funcionando o lo que se puede mejorar. Puedes enviarlo identificado o de forma anónima."
       />

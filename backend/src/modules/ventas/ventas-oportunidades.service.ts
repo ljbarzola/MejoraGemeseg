@@ -133,6 +133,14 @@ export interface NuevaOportunidadInicial {
   closedAt?: Date | null;
 }
 
+// Código de seguimiento de WhatsApp que acompaña a la oportunidad (viene del posible cliente que la originó).
+export interface CodigoWhatsappOportunidad {
+  codigo: string;
+  campana: string | null;
+  landing: string | null;
+  servicio: string | null;
+}
+
 @Injectable()
 export class VentasOportunidadesService {
   private readonly logger = new Logger(VentasOportunidadesService.name);
@@ -402,6 +410,35 @@ export class VentasOportunidadesService {
     };
   }
 
+  // El código de WhatsApp (GMS-WA-XXXXXX) acompaña a la oportunidad desde el clic en la landing hasta que se gana o
+  // se pierde (guía de medición, punto 11). Vive en el posible cliente del que nació (`leadId`); aquí se lee, no se
+  // copia, así nunca se desincroniza. Null si no vino de un clic de WhatsApp.
+  private async whatsappDeLeads(
+    cid: number,
+    leadIds: (number | null)[],
+  ): Promise<Map<number, CodigoWhatsappOportunidad>> {
+    const out = new Map<number, CodigoWhatsappOportunidad>();
+    const ids = [...new Set(leadIds.filter((x): x is number => x !== null))];
+    if (ids.length === 0) return out;
+    const leads = await this.prisma.salesLead.findMany({
+      where: { companyId: cid, id: { in: ids } },
+      select: { id: true, extra: true },
+    });
+    for (const l of leads) {
+      const extra = (l.extra ?? {}) as Record<string, unknown>;
+      const codigo = typeof extra['trackingId'] === 'string' ? extra['trackingId'] : '';
+      if (!codigo) continue;
+      const texto = (k: string) => (typeof extra[k] === 'string' && extra[k] ? (extra[k] as string) : null);
+      out.set(l.id, {
+        codigo,
+        campana: texto('utm_campaign'),
+        landing: texto('landing'),
+        servicio: texto('servicio'),
+      });
+    }
+    return out;
+  }
+
   // Oportunidades que alguna vez se reabrieron (pasaron de una etapa cerrada a una abierta): sale del historial de
   // cambios de etapa, sin columna nueva. La pantalla las marca con «!».
   private async reaperturas(
@@ -492,9 +529,11 @@ export class VentasOportunidadesService {
         )
       : new Map();
     const reabiertas = await this.reaperturas(cid, filas.map((o) => o.id), etapas);
+    const whatsapp = await this.whatsappDeLeads(cid, filas.map((o) => o.leadId));
     return filas.map((o) => ({
       ...this.formatear(o, etapas, opcionesServicio),
       reabierta: reabiertas.get(o.id) ?? null,
+      whatsapp: o.leadId !== null ? (whatsapp.get(o.leadId) ?? null) : null,
       assignedUserName: o.assignedUserId ? (nombre.get(o.assignedUserId) ?? null) : null,
       // Una perdida anterior al registro de motivos sale como «Sin información»: así el filtro «Motivo de pérdida» y
       // la dona del Dashboard cuentan las mismas.
@@ -521,9 +560,11 @@ export class VentasOportunidadesService {
     });
     const { stageChanges, ...base } = o;
     const reabiertas = await this.reaperturas(cid, [id], etapas);
+    const whatsapp = await this.whatsappDeLeads(cid, [o.leadId]);
     return {
       ...this.formatear(base as OportunidadConRelaciones, etapas, opcionesServicio),
       reabierta: reabiertas.get(id) ?? null,
+      whatsapp: o.leadId !== null ? (whatsapp.get(o.leadId) ?? null) : null,
       stageChanges,
       motivos: entradas,
     };

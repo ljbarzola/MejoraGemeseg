@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building2, Eye, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Eye, Pencil, Trash2 } from 'lucide-react';
 import { getContratos, deleteContrato } from '../../../services/contratacion-publica.service';
 import type { CPContrato } from '../../../types/contratacion-publica';
 import { usePerm } from '../../../contexts/PermissionsContext';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import CPPageHeader from '../../../components/contratacion-publica/CPPageHeader';
 import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
 import { useColumnFilters } from '../../../hooks/useColumnFilters';
@@ -97,22 +98,18 @@ export default function ContratosList() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div>
-          <p className="page-eyebrow">CONTRATACIÓN PÚBLICA</p>
-          <h1>Contratos</h1>
-        </div>
-        <div className="header-actions">
-          <button className="btn-secondary" onClick={() => navigate('/contratacion-publica/entidades')}>
-            <Building2 size={16} /> Entidades
-          </button>
-          {canEdit && (
+      <CPPageHeader
+        pantalla="contratos"
+        title="Contratos"
+        description="Los contratos de seguridad con cada entidad. Dentro de cada uno están sus puestos con los guardias, adendas, adjuntos, horarios e informes."
+        actions={
+          canEdit && (
             <button className="auth-btn" onClick={() => navigate('/contratacion-publica/contratos/nuevo')}>
               <Plus size={16} /> Nuevo Contrato
             </button>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
 
       {error && (
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{error}</div>

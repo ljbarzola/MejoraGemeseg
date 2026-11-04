@@ -19,9 +19,12 @@ interface Fila {
 export default function HorasTurnoModal({
   puedeEditar,
   onClose,
+  embebido = false,
 }: {
   puedeEditar: boolean;
-  onClose: () => void;
+  onClose?: () => void;
+  /** true = sin ventana: es una sección de la pantalla Configuración. */
+  embebido?: boolean;
 }) {
   const [filas, setFilas] = useState<Fila[] | null>(null);
   const [error, setError] = useState('');
@@ -73,14 +76,8 @@ export default function HorasTurnoModal({
     }
   };
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 600 }} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>Horario de los turnos</h3>
-          <button className="modal-close" onClick={onClose} aria-label="Cerrar"><X size={16} /></button>
-        </div>
-        <div className="modal-body">
+  const cuerpo = (
+        <>
           <p style={{ margin: '0 0 14px', fontSize: '0.88rem', color: '#4a5568' }}>
             Con el horario de cada turno, el revisor de bitácoras también compara las horas que el guardia anotó (se toleran 30 minutos).
             Si lo dejas vacío, solo se compara quién estuvo. Un turno de noche que termina de madrugada se escribe, por ejemplo, de 19:00 a 07:00.
@@ -97,7 +94,7 @@ export default function HorasTurnoModal({
           ) : filas.length === 0 ? (
             <div className="empty-state">
               Todavía no hay códigos de turno de trabajo. Créalos primero en{' '}
-              <Link to="/contratacion-publica/config/codigos-turno" onClick={onClose} className="enlace-tabla">Códigos de turno</Link>.
+              <Link to="/contratacion-publica/configuracion?pestana=codigos" onClick={onClose} className="enlace-tabla">Códigos de turno</Link>.
             </div>
           ) : (
             <div className="tasks-table-wrapper">
@@ -125,14 +122,36 @@ export default function HorasTurnoModal({
             </div>
           )}
           {guardado && <p style={{ color: '#276749', fontWeight: 600, fontSize: '0.88rem', marginTop: 12 }}>Horarios guardados. Las próximas revisiones los usan; para las bitácoras ya subidas, guarda su lectura de nuevo.</p>}
+        </>
+  );
+
+  const botonGuardar = puedeEditar && filas && filas.length > 0 && (
+    <button type="button" className="auth-btn" disabled={guardando || !filas.some(cambio)} onClick={() => void guardar()}>
+      {guardando ? 'Guardando…' : 'Guardar horarios'}
+    </button>
+  );
+
+  // Dentro de Configuración se muestra como una sección más; desde un botón, como ventana.
+  if (embebido) {
+    return (
+      <div className="admin-section">
+        {cuerpo}
+        {botonGuardar && <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>{botonGuardar}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 600 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Horario de los turnos</h3>
+          <button className="modal-close" onClick={onClose} aria-label="Cerrar"><X size={16} /></button>
         </div>
+        <div className="modal-body">{cuerpo}</div>
         <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '0 24px 20px' }}>
           <button type="button" className="btn-secondary" onClick={onClose}>Cerrar</button>
-          {puedeEditar && filas && filas.length > 0 && (
-            <button type="button" className="auth-btn" disabled={guardando || !filas.some(cambio)} onClick={() => void guardar()}>
-              {guardando ? 'Guardando…' : 'Guardar horarios'}
-            </button>
-          )}
+          {botonGuardar}
         </div>
       </div>
     </div>

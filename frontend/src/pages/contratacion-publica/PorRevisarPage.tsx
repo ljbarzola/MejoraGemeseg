@@ -8,6 +8,7 @@ import {
 } from '../../services/contratacion-publica.service';
 import type { CPDocumentoBandeja } from '../../types/contratacion-publica';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import CPPageHeader from '../../components/contratacion-publica/CPPageHeader';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import RevisionPanel, { type DocumentoRevisable } from '../../components/contratacion-publica/RevisionPanel';
 import { usePerm } from '../../contexts/PermissionsContext';
@@ -112,25 +113,26 @@ export default function PorRevisarPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">CONTRATACIÓN PÚBLICA</p>
-            <h1>Por aprobar</h1>
-          </div>
-          <div className="header-actions">
-            <button className="auth-btn" disabled={ordenadas.length === 0} onClick={() => ordenadas[0] && abrirPanel(ordenadas[0].id)}>
-              <Search size={16} /> Revisar uno tras otro
-            </button>
-          </div>
-        </div>
-        {!loading && filas.length > 0 && (
-          <p style={{ margin: 0, fontSize: '0.85rem', color: '#4a5568' }}>
-            {filas.length} documento(s) esperando tu aprobación
-            {filas.some((f) => f.vencida) && <> · <strong style={{ color: '#c53030' }}>{filas.filter((f) => f.vencida).length} vencido(s)</strong></>}
-          </p>
-        )}
-      </div>
+      <CPPageHeader
+        pantalla="por-aprobar"
+        title="Por aprobar"
+        description={
+          <>
+            Los documentos que otras áreas entregaron y esperan tu decisión: míralos, apruébalos o recházalos con un motivo.
+            {!loading && filas.length > 0 && (
+              <>
+                {' '}<strong>{filas.length} esperando tu aprobación</strong>
+                {filas.some((f) => f.vencida) && <> · <strong style={{ color: '#c53030' }}>{filas.filter((f) => f.vencida).length} vencido(s)</strong></>}
+              </>
+            )}
+          </>
+        }
+        actions={
+          <button className="auth-btn" disabled={ordenadas.length === 0} onClick={() => ordenadas[0] && abrirPanel(ordenadas[0].id)}>
+            <Search size={16} /> Revisar uno tras otro
+          </button>
+        }
+      />
 
       {error && (
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{error}</div>

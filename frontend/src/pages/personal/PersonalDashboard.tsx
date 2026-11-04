@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { HelpCircle } from 'lucide-react';
 import { getPersonalDashboard, getPersonalAlerts, type PersonalAlerts } from '../../services/personal.service';
 import RrhhHelpModal from '../../components/personal/RrhhHelpModal';
+import RrhhPageHeader from '../../components/personal/RrhhPageHeader';
 
 function KpiCard({
   icon, value, label, color, bg, onClick,
@@ -101,12 +102,10 @@ export default function PersonalDashboard() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div>
-          <p className="page-eyebrow">RECURSOS HUMANOS</p>
-          <h1>Dashboard de Personal</h1>
-        </div>
-        <div className="header-actions">
+      <RrhhPageHeader
+        title="Dashboard de Personal"
+        description="Lo que requiere tu atención en Recursos Humanos y accesos directos a cada área."
+        actions={
           <button
             type="button"
             className="btn-icon-toolbar"
@@ -116,8 +115,8 @@ export default function PersonalDashboard() {
           >
             <HelpCircle size={18} />
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {showHelp && <RrhhHelpModal onClose={() => setShowHelp(false)} />}
 

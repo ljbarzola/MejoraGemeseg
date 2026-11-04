@@ -15,6 +15,7 @@ import {
 import { SALES_CONTACT_DDL } from './sales-contact.schema';
 import { SALES_VISIT_COLUMNS_DDL } from './sales-visit.schema';
 import { SALES_AGREEMENT_INCIDENT_DDL } from './sales-agreement-incident.schema';
+import { SALES_WHATSAPP_CLICK_DDL } from './whatsapp-clics.schema';
 import { LANDINGS } from './lead-landing.util';
 import {
   DEFAULT_STAGES,
@@ -74,6 +75,7 @@ export class VentasSchemaService implements OnModuleInit {
             ...SALES_PIPELINE_BACKFILL,
             ...SALES_CONTACT_DDL,
             ...SALES_AGREEMENT_INCIDENT_DDL,
+            ...SALES_WHATSAPP_CLICK_DDL,
             ...COTIZADOR_DDL,
           ]) {
             await tx.$executeRawUnsafe(sql);

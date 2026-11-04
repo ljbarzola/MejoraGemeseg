@@ -37,11 +37,14 @@ export class CPHorariosController {
 
   @Get()
   @Section('CONTRATACION_PUBLICA', 'view')
-  findAllByContrato(
-    @Query('contratoId', ParseIntPipe) contratoId: number,
+  findAll(
+    @Query('contratoId', new ParseIntPipe({ optional: true })) contratoId: number | undefined,
     @Req() req: any,
   ) {
-    return this.service.findAllByContrato(contratoId, req.user.companyId);
+    // Sin contrato: los horarios de todos los contratos (pantalla «Horarios» del menú).
+    return contratoId === undefined
+      ? this.service.findAll(req.user.companyId)
+      : this.service.findAllByContrato(contratoId, req.user.companyId);
   }
 
   @Get(':id')

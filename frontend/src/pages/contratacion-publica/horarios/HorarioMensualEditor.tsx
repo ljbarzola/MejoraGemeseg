@@ -18,6 +18,7 @@ import type {
   CPCodigoTurno,
 } from '../../../types/contratacion-publica';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import CPPageHeader from '../../../components/contratacion-publica/CPPageHeader';
 import GeneradorPatronModal from './GeneradorPatronModal';
 
 // Inicial del día de la semana en español, lunes primero (fila de encabezado).
@@ -283,12 +284,11 @@ export default function HorarioMensualEditor() {
         <button className="cacao-back-btn" onClick={() => navigate(`/contratacion-publica/contratos/${horario.contratoId}`)} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver al contrato
         </button>
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">CONTRATACIÓN PÚBLICA · HORARIO</p>
-            <h1>{formatFechaCorta(horario.fechaInicio)} al {formatFechaCorta(horario.fechaFin)}</h1>
-          </div>
-          <div className="header-actions">
+        <CPPageHeader
+          title={`Horario del ${formatFechaCorta(horario.fechaInicio)} al ${formatFechaCorta(horario.fechaFin)}`}
+          description={`Contrato ${horario.contrato?.numero ?? `n.º ${horario.contratoId}`}${horario.contrato?.entidad ? ` · ${horario.contrato.entidad.nombre}` : ''}. Quién cubre cada puesto, día por día.`}
+          actions={
+          <>
             <span className="status-badge" style={{ background: ESTADO_COLOR[horario.estado]?.bg, color: ESTADO_COLOR[horario.estado]?.fg }}>
               {horario.estado}
             </span>
@@ -323,8 +323,9 @@ export default function HorarioMensualEditor() {
                 <RotateCcw size={16} /> Volver a Borrador
               </button>
             )}
-          </div>
-        </div>
+          </>
+          }
+        />
       </div>
 
       {error && (

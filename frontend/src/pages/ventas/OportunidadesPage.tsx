@@ -59,6 +59,8 @@ const COLUMNAS_OPP = [
   { key: 'monto', label: 'Monto cotizado' },
   { key: 'responsable', label: 'Responsable' },
   { key: 'origen', label: 'Origen' },
+  // GMS-WA-XXXXXX: el código del clic de WhatsApp que originó la negociación; la acompaña hasta que se gana o se pierde.
+  { key: 'codigo', label: 'Código WhatsApp' },
   { key: 'ubicacion', label: 'Ubicación' },
   { key: 'llego', label: 'Llegó' },
   { key: 'telefono', label: 'Teléfono' },
@@ -75,7 +77,7 @@ const COLUMNAS_EXPORTAR_OPP = [
   { key: 'cotizadoEl', label: 'Fecha de cotización' },
 ];
 const ANCHO_COLUMNA_OPP: Record<string, number> = {
-  servicios: 230, etapa: 175, monto: 140, responsable: 160, origen: 170, ubicacion: 200, llego: 110, telefono: 130, correo: 200, motivoPerdida: 170,
+  servicios: 230, etapa: 175, monto: 140, responsable: 160, origen: 170, codigo: 150, ubicacion: 200, llego: 110, telefono: 130, correo: 200, motivoPerdida: 170,
 };
 // Qué filtros de columna tiene cada columna de la tabla (Ubicación tiene dos: provincia y ciudad).
 const FILTROS_DE_COLUMNA: Record<string, string[]> = { ubicacion: ['provincia', 'ciudad'] };
@@ -158,6 +160,7 @@ export default function OportunidadesPage() {
       orden: [...canales.map((c) => c.key), ...ORIGEN_OPORTUNIDAD_ESPECIALES.map((e) => e.clave)],
       getValues: (o) => { const og = origenDeOportunidad(o, canales); return { valor: og.clave, etiqueta: og.etiqueta }; },
     },
+    { key: 'codigo', etiqueta: 'Código WhatsApp', tipo: 'texto', getValue: (o) => o.whatsapp?.codigo },
     // Ubicación: dos filtros (provincia y ciudad), con las claves sin tildes que usa el mapa del Dashboard. La ciudad solo
     // ofrece las de la provincia elegida: las casillas cuentan las filas que pasan los demás filtros.
     {
@@ -301,6 +304,7 @@ export default function OportunidadesPage() {
       monto: (o) => o.quotedAmount ?? -1,
       responsable: (o) => o.assignedUserName,
       origen: (o) => origenDeOportunidad(o, canales).etiqueta,
+      codigo: (o) => o.whatsapp?.codigo,
       ubicacion: (o) => textoUbicacion(o),
       llego: (o) => o.receivedAt,
       telefono: (o) => o.salesClient.phone,
@@ -429,6 +433,13 @@ export default function OportunidadesPage() {
         return o.assignedUserName || <span style={{ color: '#a0aec0' }}>Sin asignar</span>;
       case 'origen':
         return origenDeOportunidad(o, canales).etiqueta;
+      case 'codigo':
+        return o.whatsapp ? (
+          <>
+            <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{o.whatsapp.codigo}</span>
+            {o.whatsapp.campana && o.whatsapp.campana !== 'none' && <div style={{ fontSize: 11, color: '#888' }} className="truncate" title={o.whatsapp.campana}>{o.whatsapp.campana}</div>}
+          </>
+        ) : <span style={{ color: '#a0aec0' }}>—</span>;
       case 'ubicacion': {
         const t = textoUbicacion(o);
         return t ? <span className="truncate" title={o.ubicacion?.address || t}>{t}</span> : <span style={{ color: '#a0aec0' }}>—</span>;
@@ -465,6 +476,7 @@ export default function OportunidadesPage() {
       case 'monto': return o.quotedAmount ?? '';
       case 'responsable': return o.assignedUserName || 'Sin asignar';
       case 'origen': return origenDeOportunidad(o, canales).etiqueta;
+      case 'codigo': return o.whatsapp?.codigo ?? '';
       case 'ubicacion': return textoUbicacion(o);
       case 'llego': return diaCortoEcuador(o.receivedAt);
       case 'telefono': return o.salesClient.phone || '';

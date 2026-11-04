@@ -18,6 +18,11 @@ import { VentasAnaliticaService } from './ventas-analitica.service';
 import { VentasLeadsService } from './ventas-leads.service';
 import { VentasExpedienteService } from './ventas-expediente.service';
 import { VentasLeadsController } from './ventas-leads.controller';
+import {
+  VentasWhatsappClicPublicoController,
+  VentasWhatsappClicsController,
+} from './ventas-whatsapp-clics.controller';
+import { VentasWhatsappClicsService } from './ventas-whatsapp-clics.service';
 import { VentasConversionesService } from './ventas-conversiones.service';
 import { VentasConversionesController } from './ventas-conversiones.controller';
 import { VentasConversionesCronController } from './ventas-conversiones-cron.controller';
@@ -68,6 +73,8 @@ import { VentasUbicacionesService } from './ventas-ubicaciones.service';
     VentasConfigController,
     VentasUbicacionesController,
     VentasExportarController,
+    VentasWhatsappClicPublicoController,
+    VentasWhatsappClicsController,
     CotizadorCatalogoController,
     CotizadorCotizacionesController,
   ],
@@ -90,6 +97,7 @@ import { VentasUbicacionesService } from './ventas-ubicaciones.service';
     VentasConfigService,
     VentasUbicacionesService,
     VentasHistorialExportService,
+    VentasWhatsappClicsService,
     CotizadorCatalogoService,
     CotizadorCotizacionesService,
   ],

@@ -6,6 +6,7 @@ import type { CPDocumentoBandeja } from '../../types/contratacion-publica';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import EntregarModal from '../../components/contratacion-publica/EntregarModal';
+import CPPageHeader from '../../components/contratacion-publica/CPPageHeader';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import { useColumnFilters } from '../../hooks/useColumnFilters';
@@ -75,21 +76,22 @@ export default function MisDocumentosPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">CONTRATACIÓN PÚBLICA</p>
-            <h1>Por entregar</h1>
-          </div>
-        </div>
-        {!loading && filas.length > 0 && (
-          <p style={{ margin: 0, fontSize: '0.85rem', color: '#4a5568' }}>
-            {filas.length} por entregar
-            {rechazados > 0 && <> · <strong style={{ color: '#c53030' }}>{rechazados} rechazado(s)</strong></>}
-            {vencidos > 0 && <> · <strong style={{ color: '#c53030' }}>{vencidos} vencido(s)</strong></>}
-          </p>
-        )}
-      </div>
+      <CPPageHeader
+        pantalla="por-entregar"
+        title="Por entregar"
+        description={
+          <>
+            Los documentos que te asignaron, de cualquier entidad, con su fecha límite. Entrégalos con un archivo o un enlace.
+            {!loading && filas.length > 0 && (
+              <>
+                {' '}<strong>{filas.length} por entregar</strong>
+                {rechazados > 0 && <> · <strong style={{ color: '#c53030' }}>{rechazados} rechazado(s)</strong></>}
+                {vencidos > 0 && <> · <strong style={{ color: '#c53030' }}>{vencidos} vencido(s)</strong></>}
+              </>
+            )}
+          </>
+        }
+      />
 
       {error && (
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{error}</div>
