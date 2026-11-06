@@ -109,9 +109,10 @@ export class VentasAnaliticaController {
     @Req() req: any,
     @Query('alcance') alcance?: string,
     @Query('agrupar') agrupar?: string,
-    @Query('canal') canal?: string,
     @Query('desde') desde?: string,
     @Query('hasta') hasta?: string,
+    @Query('origen') origen?: string,
+    @Query('servicio') servicio?: string,
   ) {
     return this.analitica.marketing(
       req.user.companyId,
@@ -119,7 +120,8 @@ export class VentasAnaliticaController {
       agrupar,
       desde,
       hasta,
-      canal,
+      origen,
+      servicio,
     );
   }
 }

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   calcularEstadoContrato,
@@ -16,11 +16,20 @@ import {
 import { ETAPA_GANADA } from './stage-outcome.util';
 import { KINDS_MOTIVO_PERDIDA, MOTIVO_SIN_INFORMACION } from './motivo-perdida.util';
 import {
+  AGRUPACIONES_EMBUDO,
+  canalDeClic,
   clavesCualificadas,
-  embudoMarketing,
+  cotizoOportunidad,
+  embudoUnico,
   faseMarketing,
-  type LeadParaEmbudo,
+  serviciosDelEmbudo,
+  type AgruparEmbudo,
+  type ClicParaEmbudo,
+  type ContactoParaEmbudo,
+  type FaseMarketing,
+  type OrigenEmbudo,
 } from './ventas-marketing.util';
+import { VentasWhatsappClicsService, type ClicDeLead } from './ventas-whatsapp-clics.service';
 import { ETIQUETA_KIND, MOTIVO_KINDS } from './ventas-motivos.service';
 import { agruparMapa, vistaValida } from './ventas-mapa.util';
 import { rangoDiasEcuador } from './fecha-llegada.util';
@@ -64,6 +73,8 @@ export class VentasAnaliticaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ciclos: VentasCicloService,
+    // Opcional para no romper quien arma este servicio a mano (pruebas): sin él no hay tramo de WhatsApp.
+    @Optional() private readonly clics?: VentasWhatsappClicsService,
   ) {}
 
   private requireCompany(companyId: number | null): number {
@@ -898,43 +909,110 @@ export class VentasAnaliticaService {
   // Embudo de marketing por canal, campaña o landing (2026-10-08)
   // ---------------------------------------------------------------------
 
-  // Leads -> Cotizaron -> Contrataron, con los mismos nombres del panel de
-  // Google Ads. «Interacciones» (las visitas a la página) no existe en el CRM:
-  // solo lo ve Google. Un lead cuenta como cualificado/convertido según la
-  // oportunidad a la que pasó (ver ventas-marketing.util.ts).
+  // Un solo embudo (2026-11-06): contactos -> en evaluación -> cotización -> contrataron, con los clics del botón de
+  // WhatsApp aparte. Un contacto es un posible cliente que llegó en el periodo (formulario, anuncio o WhatsApp con
+  // su código) y cuenta según la oportunidad a la que pasó (ver ventas-marketing.util.ts). «Interacciones» (las
+  // visitas a la página) no existe en el CRM: solo lo ve Google.
   async marketing(
     companyId: number | null,
     a: AlcanceAnalitica,
-    agrupar: string | undefined,
+    agruparRaw: string | undefined,
     desdeRaw?: string,
     hastaRaw?: string,
-    canal?: string,
+    origenRaw?: string,
+    servicioRaw?: string,
   ) {
     const cid = this.requireCompany(companyId);
     const r = this.rango(desdeRaw, hastaRaw);
     const vend = this.vendedor(a);
-    const campo: 'channel' | 'campaign' | 'landing' =
-      agrupar === 'campana' ? 'campaign' : agrupar === 'landing' ? 'landing' : 'channel';
+    const agrupar: AgruparEmbudo = (AGRUPACIONES_EMBUDO as string[]).includes(agruparRaw ?? '')
+      ? (agruparRaw as AgruparEmbudo)
+      : 'channel';
+    const origen: OrigenEmbudo = origenRaw === 'whatsapp' || origenRaw === 'otros' ? origenRaw : 'todos';
+    const servicio = (servicioRaw ?? '').trim() || null;
     const leads = await this.prisma.salesLead.findMany({
       where: {
         companyId: cid,
         createdAt: { gte: r.desde, lte: r.hastaFin },
-        ...(canal ? { channel: canal } : {}),
         // Un lead de servicio es el que cuenta para marketing; spam, empleo y
         // proveedores no son clientes potenciales.
         OR: [{ contactReason: null }, { contactReason: 'SERVICIO' }],
         ...(vend !== null ? { assignedUserId: vend } : {}),
       },
       select: {
+        id: true,
         channel: true,
         campaign: true,
         extra: true,
         convertedOpportunityId: true,
       },
     });
-    const idsOpp = [
-      ...new Set(leads.map((l) => l.convertedOpportunityId).filter((x): x is number => x !== null)),
-    ];
+    const clicPorLead = new Map<number, ClicDeLead>();
+    for (const c of (await this.clics?.clicsDeLeads(cid, leads.map((l) => l.id))) ?? []) {
+      if (!clicPorLead.has(c.leadId)) clicPorLead.set(c.leadId, c);
+    }
+    const fasePorOpp = await this.fasesDeOportunidades(
+      cid,
+      leads.map((l) => l.convertedOpportunityId),
+    );
+    const contactos: ContactoParaEmbudo[] = leads.map((l) => {
+      const extra = (l.extra ?? {}) as Record<string, unknown>;
+      const texto = (k: string) => extra[k]?.toString() ?? null;
+      const clic = clicPorLead.get(l.id);
+      const o = l.convertedOpportunityId !== null ? fasePorOpp.get(l.convertedOpportunityId) : undefined;
+      // Quien llegó por el botón de WhatsApp conserva la atribución de su clic (guía §11).
+      const atributos = clic
+        ? {
+            canal: canalDeClic(clic),
+            campana: clic.utmCampaign || l.campaign,
+            landing: clic.landingPage,
+            servicio: clic.serviceName,
+            grupo: clic.serviceGroup,
+          }
+        : {
+            canal: l.channel,
+            campana: l.campaign,
+            landing: texto('landing'),
+            servicio: texto('servicio') ?? texto('servicio_requerido'),
+            grupo: texto('lineaComercial'),
+          };
+      return {
+        ...atributos,
+        porClic: !!clic,
+        fase: o?.fase ?? null,
+        cotizo: o?.cotizo ?? false,
+        vendido: o?.vendido ?? 0,
+      };
+    });
+    // Los clics no tienen vendedor: al ver «lo mío» o a otra persona no se muestra este tramo.
+    const conClics = vend === null && !!this.clics;
+    const clicsDelPeriodo = conClics ? await this.clics!.clicsDelPeriodo(cid, r.desde, r.hastaFin) : [];
+    const clics: ClicParaEmbudo[] = clicsDelPeriodo.map((c) => ({
+      canal: canalDeClic(c),
+      campana: c.utmCampaign,
+      landing: c.landingPage,
+      servicio: c.serviceName,
+      grupo: c.serviceGroup,
+      escribio: c.leadId !== null,
+    }));
+    return {
+      periodo: { desde: r.desdeStr, hasta: r.hastaStr },
+      agrupadoPor: agrupar,
+      origen,
+      servicio,
+      servicios: serviciosDelEmbudo(contactos, clics),
+      conClics,
+      ...embudoUnico(contactos, clics, agrupar, { origen, servicio }),
+    };
+  }
+
+  // Fase de marketing (sin procesar / cualificado / convertido) de cada oportunidad, si llegó a cotizarse y,
+  // si se ganó, su monto cotizado.
+  private async fasesDeOportunidades(
+    cid: number,
+    ids: (number | null)[],
+  ): Promise<Map<number, { fase: FaseMarketing; cotizo: boolean; vendido: number }>> {
+    const idsOpp = [...new Set(ids.filter((x): x is number => x !== null))];
     const opps = idsOpp.length
       ? await this.prisma.salesOpportunity.findMany({
           where: { companyId: cid, id: { in: idsOpp } },
@@ -943,6 +1021,7 @@ export class VentasAnaliticaService {
             outcome: true,
             status: true,
             quotedAt: true,
+            quotedAmount: true,
             stageChanges: { select: { toStatus: true } },
           },
         })
@@ -954,31 +1033,23 @@ export class VentasAnaliticaService {
         select: { key: true, isInitial: true, isFinal: true },
       }),
     );
-    const fasePorOpp = new Map(
-      opps.map((o) => [
-        o.id,
-        faseMarketing(
+    return new Map(
+      opps.map((o) => {
+        const base = {
+          outcome: o.outcome,
+          status: o.status,
+          quotedAt: o.quotedAt,
+          etapasAlcanzadas: o.stageChanges.map((c) => c.toStatus),
+        };
+        return [
+          o.id,
           {
-            outcome: o.outcome,
-            status: o.status,
-            quotedAt: o.quotedAt,
-            etapasAlcanzadas: o.stageChanges.map((c) => c.toStatus),
+            fase: faseMarketing(base, cualificadas),
+            cotizo: cotizoOportunidad(base),
+            vendido: o.outcome === 'GANADA' ? Number(o.quotedAmount ?? 0) : 0,
           },
-          cualificadas,
-        ),
-      ]),
+        ];
+      }),
     );
-    const filasLead: LeadParaEmbudo[] = leads.map((l) => ({
-      channel: l.channel,
-      campaign: l.campaign,
-      landing: ((l.extra ?? {}) as Record<string, unknown>)['landing']?.toString() ?? null,
-      fase: l.convertedOpportunityId !== null ? (fasePorOpp.get(l.convertedOpportunityId) ?? null) : null,
-    }));
-    const resultado = embudoMarketing(filasLead, campo);
-    return {
-      periodo: { desde: r.desdeStr, hasta: r.hastaStr },
-      agrupadoPor: campo === 'campaign' ? 'campana' : campo,
-      ...resultado,
-    };
   }
 }

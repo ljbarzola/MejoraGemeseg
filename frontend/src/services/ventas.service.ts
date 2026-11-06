@@ -1019,6 +1019,9 @@ export interface Oportunidad {
   source?: string | null;
   referredByUserId?: number | null;
   leadId?: number | null;
+  // Código de seguimiento de WhatsApp (GMS-WA-XXXXXX) con su campaña y landing: viene del posible cliente que la originó
+  // y la acompaña hasta que se gana o se pierde. Null si no vino de un clic de WhatsApp.
+  whatsapp?: { codigo: string; campana: string | null; landing: string | null; servicio: string | null; fechaClic: string | null } | null;
   originType: string;
   // Fase 4: contrato de servicio que esta oportunidad renueva (originType RENOVACION).
   renewsAgreementId?: number | null;
@@ -1235,7 +1238,7 @@ export const getLeadsEntrantes = (params?: { estado?: string; canal?: string; mo
   api.get('/ventas/entrantes', { params }).then(r => r.data);
 export const getLeadEntrante = (id: number): Promise<LeadEntrante> =>
   api.get(`/ventas/entrantes/${id}`).then(r => r.data);
-export const createLeadEntrante = (data: { name?: string; email?: string; phone?: string; companyName?: string; message?: string; direccion?: string; channel?: string; campaign?: string; extra?: Record<string, string> }): Promise<LeadEntrante> =>
+export const createLeadEntrante = (data: { name?: string; email?: string; phone?: string; companyName?: string; message?: string; direccion?: string; channel?: string; campaign?: string; extra?: Record<string, string>; codigoMensaje?: string }): Promise<LeadEntrante> =>
   api.post('/ventas/entrantes', data).then(r => r.data);
 export const updateLeadEntrante = (id: number, data: Partial<{ name: string; email: string | null; phone: string | null; companyName: string | null; message: string | null; direccion: string | null; contactReason: MotivoContacto | null }>): Promise<LeadEntrante> =>
   api.patch(`/ventas/entrantes/${id}`, data).then(r => r.data);
@@ -1422,24 +1425,45 @@ export const crearIncidenteContrato = (
 export const borrarIncidenteContrato = (id: number, incidenteId: number): Promise<ContratoComercial> =>
   api.delete(`/ventas/acuerdos/${id}/incidentes/${incidenteId}`).then(r => r.data);
 
-// ---------- Embudo de marketing (Leads -> Cotizaron -> Contrataron) ----------
-// Mismos pasos que el panel «Embudo de conversión de clientes potenciales» de
-// Google Ads. «Interacciones» (visitas a la página) solo las ve Google.
-export interface FilaEmbudoMarketing {
+// ---------- Embudo de marketing: un solo embudo (contactos -> evaluación -> cotización -> contrataron) ----------
+// Un contacto es un posible cliente que llegó en el periodo (formulario, anuncio o WhatsApp con su código). Los
+// clics del botón de WhatsApp de las landings van aparte: un clic no es un contacto hasta que la persona escribe.
+// «Interacciones» (visitas a la página) solo las ve Google.
+export interface FilaEmbudoUnico {
   clave: string;
-  leads: number;
+  // Solo en las agrupaciones de dos niveles (canal › servicio, campaña › servicio).
+  subclave?: string;
+  clics: number;
+  contactos: number;
   cualificados: number;
+  cotizaciones: number;
   convertidos: number;
+  // Suma del monto cotizado de las oportunidades ganadas.
+  vendido: number;
+}
+export interface TotalEmbudoUnico extends FilaEmbudoUnico {
+  escribieron: number;
+  porWhatsapp: number;
+  pctEscribieron: number | null;
   pctCualificados: number | null;
+  pctCotizaciones: number | null;
   pctConvertidos: number | null;
 }
+export type AgruparEmbudoUnico =
+  | 'channel' | 'campana' | 'landing' | 'servicio' | 'grupo' | 'channel_servicio' | 'campana_servicio';
 export interface AnaliticaMarketing {
   periodo: { desde: string; hasta: string };
-  agrupadoPor: 'channel' | 'campana' | 'landing';
-  total: FilaEmbudoMarketing;
-  filas: FilaEmbudoMarketing[];
+  agrupadoPor: AgruparEmbudoUnico;
+  origen: 'todos' | 'whatsapp' | 'otros';
+  servicio: string | null;
+  // Servicios que hay en el periodo, para el filtro «Servicio».
+  servicios: string[];
+  // false al mirar «lo mío» o a un vendedor: los clics no tienen vendedor.
+  conClics: boolean;
+  total: TotalEmbudoUnico;
+  filas: FilaEmbudoUnico[];
 }
-export const getAnaliticaMarketing = (p?: RangoParams & { agrupar?: 'channel' | 'campana' | 'landing'; canal?: string }): Promise<AnaliticaMarketing> =>
+export const getAnaliticaMarketing = (p?: RangoParams & { agrupar?: AgruparEmbudoUnico; origen?: 'whatsapp' | 'otros'; servicio?: string }): Promise<AnaliticaMarketing> =>
   api.get('/ventas/analitica/marketing', { params: p }).then(r => r.data);
 
 // Ids de las empresas o personas del alcance del Dashboard (null = toda la empresa). Lo usan el Directorio y Contratos
@@ -1467,3 +1491,55 @@ export const exportarTablaVentas = (
   api
     .post('/ventas/exportar-tabla', { formato, titulo, columns, rows }, { responseType: 'blob' })
     .then((r) => r.data);
+
+// ==================== CLICS DE WHATSAPP (landings) ====================
+// Un clic en el botón de WhatsApp de una landing NO es un posible cliente: queda guardado con su código
+// (GMS-WA-XXXXXX) hasta que el vendedor ve llegar el mensaje y pulsa «Escribió» (o escribe el «Código del mensaje» al
+// crear el posible cliente). Es el mismo clic de principio a fin: su punto del recorrido se calcula, no se marca.
+export type FaseClicWhatsapp = 'CLIC' | 'ESCRIBIO' | 'OPORTUNIDAD' | 'VENTA' | 'PERDIDA' | 'DESCARTADO';
+
+export interface ClicWhatsapp {
+  id: number;
+  trackingId: string;
+  fase: FaseClicWhatsapp;
+  // Etapa de la oportunidad, cuando ya existe.
+  etapa: string | null;
+  utmSource: string;
+  utmMedium: string;
+  utmCampaign: string;
+  utmContent: string | null;
+  utmTerm: string | null;
+  landingPage: string | null;
+  serviceName: string | null;
+  serviceGroup: string | null;
+  gclid: string | null;
+  leadId: number | null;
+  leadName: string | null;
+  opportunityId: number | null;
+  clickedAt: string;
+  conversationAt: string | null;
+}
+
+export const getClicsWhatsapp = (): Promise<ClicWhatsapp[]> =>
+  api.get('/ventas/whatsapp-clics').then(r => r.data);
+// «Llegó un WhatsApp»: el clic de un código (sin límite de antigüedad). Error 400/404 si el código no es válido o no existe.
+export const buscarClicWhatsapp = (codigo: string): Promise<ClicWhatsapp> =>
+  api.get('/ventas/whatsapp-clics/buscar', { params: { codigo } }).then(r => r.data);
+export const marcarEscribioWhatsapp = (
+  id: number,
+  data: { name?: string; phone?: string; email?: string; companyName?: string; message?: string },
+): Promise<{ success: boolean; leadId: number }> =>
+  api.post(`/ventas/whatsapp-clics/${id}/escribio`, data).then(r => r.data);
+
+// «Enlazar código»: un posible cliente que ya existe y el código que apareció después.
+export const enlazarCodigoWhatsapp = (leadId: number, codigo: string): Promise<{ success: boolean; leadId: number; trackingId: string }> =>
+  api.post('/ventas/whatsapp-clics/enlazar', { leadId, codigo }).then(r => r.data);
+
+// Configuración → Conexiones: la clave pública del script y cuántos clics llegaron.
+export interface ResumenLandingWhatsapp {
+  siteKey: string;
+  clics: number;
+  ultimoClic: string | null;
+}
+export const getClaveLandingWhatsapp = (): Promise<ResumenLandingWhatsapp> =>
+  api.get('/ventas/whatsapp-clics/clave').then(r => r.data);

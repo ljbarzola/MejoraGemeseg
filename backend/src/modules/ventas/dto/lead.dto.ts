@@ -25,6 +25,9 @@ export class CreateLeadDto {
   @IsOptional() @IsString() campaign?: string;
   // Datos propios de la fuente elegida (gclid, quién refirió, landing...).
   @IsOptional() @IsObject() extra?: Record<string, string>;
+  // WhatsApp: el código GMS-WA-XXXXXX que llegó en el mensaje del cliente. Trae la campaña, la landing, el
+  // servicio y el gclid del clic que lo originó.
+  @IsOptional() @IsString() codigoMensaje?: string;
 }
 
 export class UpdateLeadDto {

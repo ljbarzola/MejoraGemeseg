@@ -73,6 +73,8 @@ const COLUMNAS_EXPORTAR_OPP = [
   { key: 'titulo', label: 'Título' },
   ...COLUMNAS_OPP,
   { key: 'cotizadoEl', label: 'Fecha de cotización' },
+  // El código del clic de WhatsApp no es columna de la tabla (solo aplica a un origen): se ve en la ficha, se busca y se exporta.
+  { key: 'codigoWhatsapp', label: 'Código WhatsApp' },
 ];
 const ANCHO_COLUMNA_OPP: Record<string, number> = {
   servicios: 230, etapa: 175, monto: 140, responsable: 160, origen: 170, ubicacion: 200, llego: 110, telefono: 130, correo: 200, motivoPerdida: 170,
@@ -288,7 +290,8 @@ export default function OportunidadesPage() {
     return cf.filas.filter((o) => (
       o.salesClient.name.toLowerCase().includes(q) ||
       (o.title || '').toLowerCase().includes(q) ||
-      o.services.some((s) => s.name.toLowerCase().includes(q))
+      o.services.some((s) => s.name.toLowerCase().includes(q)) ||
+      (o.whatsapp?.codigo || '').toLowerCase().includes(q)
     ));
   }, [cf.filas, busqueda]);
 
@@ -465,6 +468,7 @@ export default function OportunidadesPage() {
       case 'monto': return o.quotedAmount ?? '';
       case 'responsable': return o.assignedUserName || 'Sin asignar';
       case 'origen': return origenDeOportunidad(o, canales).etiqueta;
+      case 'codigoWhatsapp': return o.whatsapp?.codigo ?? '';
       case 'ubicacion': return textoUbicacion(o);
       case 'llego': return diaCortoEcuador(o.receivedAt);
       case 'telefono': return o.salesClient.phone || '';
@@ -509,7 +513,7 @@ export default function OportunidadesPage() {
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder={vista === 'hoy' ? 'Buscar por nombre, teléfono o correo...' : 'Buscar por empresa o persona, título o servicio...'}
+            placeholder={vista === 'hoy' ? 'Buscar por nombre, teléfono o correo...' : 'Buscar por empresa o persona, título, servicio o código de WhatsApp...'}
             style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
           />
           {vista === 'hoy' ? (

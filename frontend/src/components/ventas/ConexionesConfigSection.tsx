@@ -5,16 +5,19 @@ import CopyLinkButton from '../common/CopyLinkButton';
 import ErrorBanner from '../common/ErrorBanner';
 import GoogleAdsConexionPanel, { googleAdsActivo } from './GoogleAdsConexionPanel';
 import LandingsConfigPanel from './LandingsConfigPanel';
+import WhatsappLandingsPanel from './WhatsappLandingsPanel';
 import {
   cambiarClaveConexion,
   createClaveConexion,
   crearConexionPropia,
   deleteClaveConexion,
   getActividadCanalesLead,
+  getClaveLandingWhatsapp,
   getClavesConexion,
   quitarConexionPropia,
   type ActividadCanalLead,
   type ClaveConexion,
+  type ResumenLandingWhatsapp,
   type ConfiguracionVentas,
   type SalesServicio,
 } from '../../services/ventas.service';
@@ -82,7 +85,7 @@ interface Props {
   onRecargar: () => void;
 }
 
-type Abierta = 'GOOGLE_ADS' | 'META_ADS' | 'LINKEDIN_ADS' | 'WEB_FORM' | 'NUEVA' | `c:${string}` | null;
+type Abierta = 'GOOGLE_ADS' | 'META_ADS' | 'LINKEDIN_ADS' | 'WEB_FORM' | 'WHATSAPP' | 'NUEVA' | `c:${string}` | null;
 
 // Pestaña «Conexiones»: una fila de botones (nombre + punto de estado) y, debajo, la
 // configuración de la conexión tocada. Todas arrancan cerradas. Las cuatro básicas siempre
@@ -93,12 +96,14 @@ type Abierta = 'GOOGLE_ADS' | 'META_ADS' | 'LINKEDIN_ADS' | 'WEB_FORM' | 'NUEVA'
 //    (ajuste «activo» + ID de cliente + las dos conversiones). Gris si no.
 //  · Formulario web: verde si hay al menos una clave de conexión ACTIVA. Gris si no hay
 //    ninguna o están todas desactivadas.
+//  · WhatsApp de las landings: verde si ya llegó al menos un clic desde una landing. Gris si no.
 //  · Meta Ads y LinkedIn Ads: gris siempre, no tienen conexión propia todavía.
 //  · Conexión añadida: verde si su clave existe y está activa; gris si no.
 export default function ConexionesConfigSection({ config, servicios, puedeEditar, onRecargar }: Props) {
   const [abierta, setAbierta] = useState<Abierta>(null);
   const [claves, setClaves] = useState<ClaveConexion[]>([]);
   const [actividad, setActividad] = useState<ActividadCanalLead[] | null>(null);
+  const [whatsapp, setWhatsapp] = useState<ResumenLandingWhatsapp | null>(null);
   const [error, setError] = useState('');
   const [verClave, setVerClave] = useState<number | null>(null);
   const [nombreClaveWeb, setNombreClaveWeb] = useState('');
@@ -118,6 +123,7 @@ export default function ConexionesConfigSection({ config, servicios, puedeEditar
   };
   useEffect(() => { cargarClaves(); }, []);
   useEffect(() => { getActividadCanalesLead().then(setActividad).catch(() => setActividad(null)); }, []);
+  useEffect(() => { getClaveLandingWhatsapp().then(setWhatsapp).catch(() => setWhatsapp(null)); }, []);
 
   const correr = async (fn: () => Promise<unknown>, falla: string) => {
     setError('');
@@ -156,6 +162,15 @@ export default function ConexionesConfigSection({ config, servicios, puedeEditar
     {
       id: 'WEB_FORM', nombre: 'Formulario web', activa: webActiva,
       estado: webActiva ? 'Activa' : 'Desactivada', resumen: resumenActividad('WEB_FORM'),
+    },
+    {
+      id: 'WHATSAPP', nombre: 'WhatsApp de las landings', activa: (whatsapp?.clics ?? 0) > 0,
+      estado: (whatsapp?.clics ?? 0) > 0 ? 'Activa' : 'Sin clics todavía',
+      resumen: whatsapp
+        ? (whatsapp.clics === 0
+          ? 'Mide los clics al botón de WhatsApp'
+          : `${whatsapp.clics} ${whatsapp.clics === 1 ? 'clic' : 'clics'}${whatsapp.ultimoClic ? ` · el último ${hace(whatsapp.ultimoClic)}` : ''}`)
+        : '',
     },
     ...propias.map((c) => {
       const activa = !!claves.find((k) => k.id === c.apiKeyId)?.isActive;
@@ -203,6 +218,10 @@ export default function ConexionesConfigSection({ config, servicios, puedeEditar
           <GoogleAdsConexionPanel inicial={config.googleAds} cuentaDeServicio={config.cuentaDeServicio} puedeEditar={puedeEditar} onGuardado={onRecargar} />
         </div>
       );
+    }
+
+    if (id === 'WHATSAPP') {
+      return <WhatsappLandingsPanel clave={whatsapp?.siteKey ?? ''} />;
     }
 
     if (id === 'META_ADS' || id === 'LINKEDIN_ADS') {

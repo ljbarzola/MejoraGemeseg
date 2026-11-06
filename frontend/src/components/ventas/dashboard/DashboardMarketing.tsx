@@ -2,132 +2,189 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   getAnaliticaMarketing,
   type AnaliticaMarketing,
-  type FilaEmbudoMarketing,
+  type FilaEmbudoUnico,
 } from '../../../services/ventas.service';
 import { useCanalesLead } from '../../../hooks/useCanalesLead';
 import { useSortableTable } from '../../../hooks/useSortableTable';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
 import { EmbudoGrafico } from './DashboardGraficos';
 import FilterField from '../../common/FilterField';
+import ClearFiltersButton from '../../common/ClearFiltersButton';
+import ClicsWhatsappModal from '../ClicsWhatsappModal';
 import { Cargando, SinDatos, Tarjeta, pct } from './DashboardBits';
 
-type Agrupar = 'channel' | 'campana' | 'landing';
-const AGRUPACIONES: { value: Agrupar; label: string; columna: string; explica: string }[] = [
-  { value: 'channel', label: 'Canal', columna: 'Canal', explica: 'Canal = por dónde llegó el contacto: Google Ads, Meta, el sitio web, un referido, WhatsApp…' },
-  { value: 'campana', label: 'Campaña', columna: 'Campaña', explica: 'Campaña = el anuncio o la promoción concreta que lo trajo (el nombre que le pusiste en Google Ads o Meta).' },
-  { value: 'landing', label: 'Landing', columna: 'Landing', explica: 'Landing = la página web donde llenó el formulario (por ejemplo, la de monitoreo de alarmas).' },
+type Agrupar = AnaliticaMarketing['agrupadoPor'];
+type Origen = AnaliticaMarketing['origen'];
+
+// Un solo selector «Agrupar por»: las dos últimas opciones cruzan el canal o la campaña con el servicio, así no
+// hace falta un segundo selector para responder «¿qué servicio trajo cada canal?».
+const AGRUPACIONES: { value: Agrupar; label: string; col: string; col2?: string; explica: string }[] = [
+  { value: 'channel', label: 'Canal', col: 'Canal', explica: 'Canal = por dónde llegó el contacto: Google Ads, Meta, el formulario web, un referido… Quien tocó el botón de WhatsApp de una landing cuenta en el canal del anuncio que lo trajo.' },
+  { value: 'campana', label: 'Campaña', col: 'Campaña', explica: 'Campaña = el anuncio o la promoción concreta que lo trajo (el nombre que le pusiste en Google Ads o Meta).' },
+  { value: 'landing', label: 'Landing', col: 'Landing', explica: 'Landing = la página web donde llenó el formulario o tocó WhatsApp (por ejemplo, la de monitoreo de alarmas).' },
+  { value: 'servicio', label: 'Servicio', col: 'Servicio', explica: 'Servicio = lo que pedía la persona, según la landing. Si el contacto no lo trae, sale como «Sin dato».' },
+  { value: 'grupo', label: 'Grupo de servicio', col: 'Grupo de servicio', explica: 'Grupo de servicio = la familia del servicio (por ejemplo, seguridad física o monitoreo).' },
+  { value: 'channel_servicio', label: 'Canal › Servicio', col: 'Canal', col2: 'Servicio', explica: 'Cada canal se parte por servicio: qué servicio trajo cada canal.' },
+  { value: 'campana_servicio', label: 'Campaña › Servicio', col: 'Campaña', col2: 'Servicio', explica: 'Cada campaña se parte por servicio: qué servicio trajo cada anuncio.' },
 ];
 
-// Mismo recorrido que el panel de Google Ads, pero contado desde el formulario:
-// Leads (llenaron el formulario) -> Cotizaron (oportunidad cotizada o en
-// negociación) -> Contrataron (oportunidad aceptada).
+const ORIGENES: { value: Origen; label: string }[] = [
+  { value: 'todos', label: 'Todos' },
+  { value: 'whatsapp', label: 'Botón de WhatsApp de la landing' },
+  { value: 'otros', label: 'Formulario y otros canales' },
+];
+
+const dinero = (v: number) =>
+  v > 0 ? `$${v.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+
+// Un solo embudo para todo lo que llega: quien llenó el formulario y quien escribió por WhatsApp desde una landing
+// (una persona cuenta una sola vez). Los clics del botón de WhatsApp van aparte: un clic no es un contacto hasta
+// que escribe (guía de medición de WhatsApp, §12).
 export default function DashboardMarketing({ desde, hasta }: { desde: string; hasta: string }) {
   const [agrupar, setAgrupar] = useState<Agrupar>('channel');
+  const [origen, setOrigen] = useState<Origen>('todos');
+  const [servicio, setServicio] = useState('');
   const [datos, setDatos] = useState<AnaliticaMarketing | null>(null);
   const [error, setError] = useState(false);
+  const [verClics, setVerClics] = useState(false);
   const { etiquetaCanal } = useCanalesLead();
 
   const cargar = useCallback(async () => {
     setError(false);
     try {
-      setDatos(await getAnaliticaMarketing({ desde, hasta, agrupar }));
+      setDatos(await getAnaliticaMarketing({
+        desde,
+        hasta,
+        agrupar,
+        origen: origen === 'todos' ? undefined : origen,
+        servicio: servicio || undefined,
+      }));
     } catch {
       setError(true);
     }
-  }, [desde, hasta, agrupar]);
+  }, [desde, hasta, agrupar, origen, servicio]);
   useEffect(() => { cargar(); }, [cargar]);
 
-  const etiquetaClave = (clave: string) => (agrupar === 'channel' ? etiquetaCanal(clave) : clave);
+  const conCanal = agrupar === 'channel' || agrupar === 'channel_servicio';
+  const etiquetaClave = (clave: string) => (conCanal ? etiquetaCanal(clave) : clave);
 
+  // Sin orden inicial: el servidor ya entrega las filas con lo más grande primero y las del mismo canal juntas.
   const { filas, thProps, SortIcon } = useSortableTable(
     datos?.filas ?? [],
     {
-      clave: (f: FilaEmbudoMarketing) => etiquetaClave(f.clave),
-      leads: (f: FilaEmbudoMarketing) => f.leads,
-      cualificados: (f: FilaEmbudoMarketing) => f.cualificados,
-      convertidos: (f: FilaEmbudoMarketing) => f.convertidos,
-      pctConvertidos: (f: FilaEmbudoMarketing) => f.pctConvertidos,
+      clave: (f: FilaEmbudoUnico) => etiquetaClave(f.clave),
+      subclave: (f: FilaEmbudoUnico) => f.subclave ?? '',
+      clics: (f: FilaEmbudoUnico) => f.clics,
+      contactos: (f: FilaEmbudoUnico) => f.contactos,
+      cualificados: (f: FilaEmbudoUnico) => f.cualificados,
+      cotizaciones: (f: FilaEmbudoUnico) => f.cotizaciones,
+      convertidos: (f: FilaEmbudoUnico) => f.convertidos,
+      vendido: (f: FilaEmbudoUnico) => f.vendido,
     },
-    'leads',
-    'desc',
   );
-  const tablaRef = useResizableColumns('ventas-dashboard-marketing');
+  const tablaRef = useResizableColumns('ventas-dashboard-embudo-unico');
+
+  const hayFiltros = origen !== 'todos' || servicio !== '';
+  const limpiar = () => { setOrigen('todos'); setServicio(''); };
 
   if (!datos) return <Cargando error={error} onReintentar={cargar} />;
   const t = datos.total;
-  const colTabla = AGRUPACIONES.find((a) => a.value === agrupar)!.columna;
+  const agr = AGRUPACIONES.find((a) => a.value === agrupar)!;
+  const sinNada = t.contactos === 0 && t.clics === 0 && !hayFiltros;
 
   return (
-    <Tarjeta
-      titulo="De posible cliente a venta"
-      hint="De los posibles clientes que llegaron en el periodo: cuántos llenaron un formulario, cuántos pasaron a evaluación y cuántos terminaron contratando."
-    >
-      {t.leads === 0 ? (
-        <SinDatos texto="Aún no llegaron posibles clientes (leads) en este periodo. Cuando lleguen por la web o los anuncios, aquí verás cuántos pasaron a evaluación y cuántos contrataron." />
-      ) : (
-        <>
-          <div className="dash-embudo-fila">
-            <div className="dash-embudo-grafico">
-              <EmbudoGrafico
-                etiquetaAncho={176} notaAncho={150}
-                aria={`Embudo de marketing: ${t.leads} posibles clientes, ${t.cualificados} en evaluación o más, ${t.convertidos} contrataron`}
-                pasos={[
-                  { key: 'leads', etiqueta: 'Llenaron el formulario', valor: t.leads, color: '#12375F', nota: 'posibles clientes' },
-                  { key: 'cualificados', etiqueta: 'En evaluación o más', valor: t.cualificados, color: '#d97706', nota: `${pct(t.pctCualificados)} de los leads` },
-                  { key: 'contrataron', etiqueta: 'Contrataron', valor: t.convertidos, color: '#2f855a', nota: `${Math.round((t.convertidos / t.leads) * 1000) / 10}% de los leads` },
-                ]}
-              />
+    <>
+      <Tarjeta
+        titulo="De posible cliente a venta"
+        accion={datos.conClics ? <button type="button" className="btn-secondary" onClick={() => setVerClics(true)}>Ver clics</button> : undefined}
+        hint="Las personas que llegaron en el periodo, ya sea porque llenaron un formulario o porque escribieron por WhatsApp desde una landing con su código (cada una cuenta una sola vez): cuántas pasaron a evaluación, cuántas recibieron cotización y cuántas contrataron. Los clics en el botón de WhatsApp se cuentan aparte: un clic no es un contacto hasta que la persona escribe. «Vendido» suma el monto cotizado de las oportunidades ganadas."
+      >
+        {sinNada ? (
+          <SinDatos texto="Aún no llegaron contactos en este periodo. Cuando lleguen por el formulario, los anuncios o el botón de WhatsApp de una landing, aquí verás cuántos pasaron a evaluación y cuántos contrataron." />
+        ) : (
+          <>
+            <div className="dash-ver-por">
+              <FilterField label="Origen">
+                <select id="origen-embudo" className="filter-select" value={origen} onChange={(e) => setOrigen(e.target.value as Origen)}>
+                  {ORIGENES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </FilterField>
+              <FilterField label="Servicio">
+                <select id="servicio-embudo" className="filter-select" value={servicio} onChange={(e) => setServicio(e.target.value)}>
+                  <option value="">Todos</option>
+                  {datos.servicios.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </FilterField>
+              <ClearFiltersButton onClear={limpiar} disabled={!hayFiltros} />
+              <FilterField label="Agrupar por">
+                <select id="agrupar-embudo" className="filter-select" value={agrupar} onChange={(e) => setAgrupar(e.target.value as Agrupar)}>
+                  {AGRUPACIONES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+                </select>
+              </FilterField>
             </div>
-            {t.cualificados > 0 && (
-              <div className="dash-embudo-dato">
-                <strong>{Math.round((t.convertidos / t.cualificados) * 100)}%</strong>
-                <span>de los que pasaron a evaluación terminó contratando</span>
+            <p className="dash-notas" style={{ margin: '0 0 12px' }}>{agr.explica}</p>
+
+            {t.contactos === 0 ? (
+              <SinDatos texto="Ningún contacto coincide con estos filtros en este periodo." />
+            ) : (
+              <div className="dash-embudo-fila">
+                <div className="dash-embudo-grafico">
+                  <EmbudoGrafico
+                    etiquetaAncho={176} notaAncho={170}
+                    aria={`Embudo: ${t.contactos} contactos, ${t.cualificados} en evaluación o más, ${t.cotizaciones} cotizaciones, ${t.convertidos} contrataron`}
+                    pasos={[
+                      { key: 'contactos', etiqueta: 'Contactos', valor: t.contactos, color: '#12375F', nota: `${t.porWhatsapp} por WhatsApp · ${t.contactos - t.porWhatsapp} otros` },
+                      { key: 'cualificados', etiqueta: 'En evaluación o más', valor: t.cualificados, color: '#d97706', nota: `${pct(t.pctCualificados)} de los contactos` },
+                      { key: 'cotizaciones', etiqueta: 'Recibieron cotización', valor: t.cotizaciones, color: '#6b46c1', nota: `${pct(t.pctCotizaciones)} de los evaluados` },
+                      { key: 'contrataron', etiqueta: 'Contrataron', valor: t.convertidos, color: '#2f855a', nota: `${pct(t.pctConvertidos)} de los cotizados` },
+                    ]}
+                  />
+                </div>
+                {datos.conClics && t.clics > 0 && (
+                  <div className="dash-embudo-dato">
+                    <strong>{t.clics}</strong>
+                    <span>clics en el botón de WhatsApp: {t.escribieron} escribieron ({pct(t.pctEscribieron)}). Quien escribe sin que se anote su código no se cuenta como conversación.</span>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        </>
-      )}
-      <p style={{ margin: '6px 0 12px', fontSize: 12, color: '#a0aec0' }}>
-        Las visitas a la página (interacciones) solo las ve Google Ads; aquí contamos desde que llenan el formulario.
-      </p>
 
-      <div className="dash-ver-por">
-        <FilterField label="Ver por">
-          <select id="agrupar-marketing" className="filter-select" value={agrupar} onChange={(e) => setAgrupar(e.target.value as Agrupar)}>
-            {AGRUPACIONES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
-          </select>
-        </FilterField>
-        <p className="dash-notas">{AGRUPACIONES.find((a) => a.value === agrupar)?.explica}</p>
-      </div>
-
-      {filas.length === 0 ? (
-        <SinDatos texto="Sin posibles clientes para agrupar en este periodo." />
-      ) : (
-        <div className="tasks-table-wrapper">
-          <table className="tasks-table resizable-table" ref={tablaRef}>
-            <thead>
-              <tr>
-                <th {...thProps('clave')}>{colTabla} <SortIcon campo="clave" /></th>
-                <th {...thProps('leads')}>Posibles clientes (leads) <SortIcon campo="leads" /></th>
-                <th {...thProps('cualificados')}>En evaluación o más <SortIcon campo="cualificados" /></th>
-                <th {...thProps('convertidos')}>Contrataron <SortIcon campo="convertidos" /></th>
-                <th {...thProps('pctConvertidos')}>% contrató <SortIcon campo="pctConvertidos" /></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filas.map((f) => (
-                <tr key={f.clave}>
-                  <td><span className="truncate">{etiquetaClave(f.clave)}</span></td>
-                  <td>{f.leads}</td>
-                  <td>{f.cualificados} <span style={{ fontSize: 11, color: '#a0aec0' }}>({pct(f.pctCualificados)})</span></td>
-                  <td>{f.convertidos}</td>
-                  <td>{pct(f.pctConvertidos)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Tarjeta>
+            {filas.length > 0 && (
+              <div className="tasks-table-wrapper">
+                <table className="tasks-table resizable-table dash-wa-tabla" ref={tablaRef}>
+                  <thead>
+                    <tr>
+                      <th {...thProps('clave')}>{agr.col} <SortIcon campo="clave" /></th>
+                      {agr.col2 && <th {...thProps('subclave')}>{agr.col2} <SortIcon campo="subclave" /></th>}
+                      {datos.conClics && <th {...thProps('clics')} title="Veces que tocaron el botón de WhatsApp. Un clic no es un contacto hasta que escriben.">Clics WhatsApp <SortIcon campo="clics" /></th>}
+                      <th {...thProps('contactos')} title="Personas que llenaron el formulario o escribieron por WhatsApp con su código">Contactos <SortIcon campo="contactos" /></th>
+                      <th {...thProps('cualificados')}>En evaluación o más <SortIcon campo="cualificados" /></th>
+                      <th {...thProps('cotizaciones')}>Cotizaciones <SortIcon campo="cotizaciones" /></th>
+                      <th {...thProps('convertidos')}>Contrataron <SortIcon campo="convertidos" /></th>
+                      <th {...thProps('vendido')} title="Suma del monto cotizado de las oportunidades ganadas">Vendido <SortIcon campo="vendido" /></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filas.map((f) => (
+                      <tr key={`${f.clave}|${f.subclave ?? ''}`}>
+                        <td><span className="truncate">{etiquetaClave(f.clave)}</span></td>
+                        {agr.col2 && <td><span className="truncate">{f.subclave}</span></td>}
+                        {datos.conClics && <td>{f.clics}</td>}
+                        <td>{f.contactos}</td>
+                        <td>{f.cualificados}</td>
+                        <td>{f.cotizaciones}</td>
+                        <td>{f.convertidos}</td>
+                        <td>{dinero(f.vendido)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </Tarjeta>
+      {verClics && <ClicsWhatsappModal onClose={() => setVerClics(false)} />}
+    </>
   );
 }

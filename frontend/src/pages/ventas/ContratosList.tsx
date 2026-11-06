@@ -235,9 +235,9 @@ export default function ContratosList() {
         title="Documentación"
         description="Genera documentos desde tus plantillas o sube uno que ya tienes hecho, por ejemplo un contrato firmado en PDF."
         ayuda={
-          <button type="button" className="btn-secondary" onClick={() => setShowHelp(true)}
-            title="Cómo funciona Documentación" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <HelpCircle size={15} /> Cómo funciona
+          <button type="button" className="btn-secondary btn-icon-toolbar" onClick={() => setShowHelp(true)}
+            title="Cómo funciona Documentación" aria-label="Cómo funciona Documentación">
+            <HelpCircle size={18} />
           </button>
         }
         actions={
