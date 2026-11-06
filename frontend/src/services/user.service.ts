@@ -85,6 +85,7 @@ export async function updateUser(
   data: {
     fullName?: string;
     email?: string;
+    password?: string;
     role?: string;
     documentNumber?: string;
     position?: string;

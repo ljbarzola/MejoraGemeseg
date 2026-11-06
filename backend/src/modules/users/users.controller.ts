@@ -129,7 +129,7 @@ export class UsersController {
     if (req.user.companyId && user.companyId !== req.user.companyId) {
       throw new ForbiddenException('No puedes editar usuarios de otra empresa');
     }
-    return this.usersService.update(id, dto);
+    return this.usersService.update(id, dto, req.user.userId);
   }
 
   @Delete(':id')
