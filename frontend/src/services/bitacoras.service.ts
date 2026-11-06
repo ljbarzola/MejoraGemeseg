@@ -38,7 +38,9 @@ export const subirBitacora = (puestoId: number, archivo: File | null): Promise<B
   const fd = new FormData();
   fd.append('puestoId', String(puestoId));
   if (archivo) fd.append('archivo', archivo);
-  return api.post(BASE, fd, { timeout: 120000 }).then((r) => r.data);
+  // El cliente axios manda JSON por defecto: sin este encabezado serializaba el FormData como JSON y el
+  // servidor rechazaba la subida («Hay datos no válidos en la solicitud»).
+  return api.post(BASE, fd, { timeout: 120000, headers: { 'Content-Type': 'multipart/form-data' } }).then((r) => r.data);
 };
 
 export const guardarLecturaBitacora = (id: number, lectura: LecturaParaGuardar): Promise<BitacoraDetalle> =>

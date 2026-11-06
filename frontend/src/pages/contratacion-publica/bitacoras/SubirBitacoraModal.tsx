@@ -167,7 +167,8 @@ export default function SubirBitacoraModal({
           </button>
           <div style={{ display: 'flex', gap: 10 }}>
             <button type="button" className="btn-secondary" disabled={enviando} onClick={onClose}>Cancelar</button>
-            <button type="button" className="auth-btn" disabled={enviando || !puestoId || !archivo} onClick={() => void enviar(true)}>
+            {/* Siempre activo: si falta el puesto o la foto, `enviar` dice cuál (un botón gris no explica nada). */}
+            <button type="button" className="auth-btn" disabled={enviando} onClick={() => void enviar(true)}>
               {enviando ? 'Leyendo…' : 'Subir y leer'}
             </button>
           </div>

@@ -3390,3 +3390,24 @@ model CotEditGrant {
   @@unique([ownerId, editorId])
   @@index([companyId, editorId])
 }
+
+// ---------------------------------------------------------------------------
+// Vigilante de vencimientos de RRHH (2026-10-30): configuración por empresa de los
+// avisos diarios de documentos de guardias. Sin relaciones (tabla de arranque, como
+// CPBitacora): la crea RrhhVigilanteService al arrancar.
+// ---------------------------------------------------------------------------
+model RrhhVigilanteConfig {
+  id                 Int      @id @default(autoincrement())
+  companyId          Int      @unique
+  // false = no se avisa nada.
+  activo             Boolean  @default(true)
+  // Se avisa cuando faltan exactamente estos días (0 = el día que vence).
+  avisarDias         Int[]    @default([30, 7, 0])
+  // Mientras siga vencido, repetir el aviso cada N días (0 = no repetir).
+  repetirVencidoDias Int      @default(7)
+  // Cada lunes, resumen de todo lo pendiente aunque hoy no cruce ningún plazo.
+  resumenLunes       Boolean  @default(true)
+  updatedBy          Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}

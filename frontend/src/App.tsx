@@ -73,7 +73,7 @@ const CPHorarioMensualList = lazy(() => import('./pages/contratacion-publica/hor
 const CPHorarioMensualEditor = lazy(() => import('./pages/contratacion-publica/horarios/HorarioMensualEditor'));
 const CPInformesList = lazy(() => import('./pages/contratacion-publica/informes/InformesList'));
 const CPInformeForm = lazy(() => import('./pages/contratacion-publica/informes/InformeForm'));
-const CPCodigosTurnoConfig = lazy(() => import('./pages/contratacion-publica/config/CodigosTurnoConfig'));
+const CPConfiguracion = lazy(() => import('./pages/contratacion-publica/config/ConfiguracionPage'));
 const CPTextosInstitucionalesConfig = lazy(() => import('./pages/contratacion-publica/config/TextosInstitucionalesConfig'));
 const CPBitacoras = lazy(() => import('./pages/contratacion-publica/bitacoras/BitacorasPage'));
 const CPBitacoraDetalle = lazy(() => import('./pages/contratacion-publica/bitacoras/BitacoraDetallePage'));
@@ -90,6 +90,7 @@ const CP_MOSTRAR_SUBMODULOS_OCULTOS = false;
 // poder cargar contratos, puestos y horarios no hay contra qué comparar. Informes y
 // Textos Institucionales siguen ocultos (los controla la bandera de arriba).
 const CP_MOSTRAR_OPERACIONES = true;
+const ConfiguracionRrhh = lazy(() => import('./pages/personal/ConfiguracionRrhhPage'));
 const PersonalDashboard = lazy(() => import('./pages/personal/PersonalDashboard'));
 const ReclutamientoPage = lazy(() => import('./pages/personal/ReclutamientoPage'));
 const GuardiasList = lazy(() => import('./pages/personal/GuardiasList'));
@@ -480,6 +481,9 @@ function AppInner() {
         <Route path="/contratacion-publica/por-revisar" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPPorRevisar /></SectionRoute></ProtectedLayout>} />
         <Route path="/contratacion-publica/bitacoras" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPBitacoras /></SectionRoute></ProtectedLayout>} />
         <Route path="/contratacion-publica/bitacoras/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPBitacoraDetalle /></SectionRoute></ProtectedLayout>} />
+        {/* Configuración (2026-10-30): códigos de turno, su horario, campos de la entidad y carpeta de Drive. */}
+        <Route path="/contratacion-publica/configuracion" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPConfiguracion /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/config/codigos-turno" element={<Navigate to="/contratacion-publica/configuracion?pestana=codigos" replace />} />
         {CP_MOSTRAR_OPERACIONES && (
           <>
             <Route path="/contratacion-publica/contratos" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratosList /></SectionRoute></ProtectedLayout>} />
@@ -488,7 +492,6 @@ function AppInner() {
             <Route path="/contratacion-publica/contratos/:id/editar" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPContratoForm /></SectionRoute></ProtectedLayout>} />
             <Route path="/contratacion-publica/horarios" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPHorarioMensualList /></SectionRoute></ProtectedLayout>} />
             <Route path="/contratacion-publica/horarios/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPHorarioMensualEditor /></SectionRoute></ProtectedLayout>} />
-            <Route path="/contratacion-publica/config/codigos-turno" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPCodigosTurnoConfig /></SectionRoute></ProtectedLayout>} />
           </>
         )}
         {CP_MOSTRAR_SUBMODULOS_OCULTOS && (
@@ -512,6 +515,7 @@ function AppInner() {
         <Route path="/rrhh/contracts/generar" element={<ProtectedLayout><SectionRoute section="RRHH"><GenerarDocumento /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/entidades" element={<ProtectedLayout><SectionRoute section="RRHH"><EntidadesList /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/cumplimiento" element={<ProtectedLayout><SectionRoute section="RRHH"><CumplimientoEntidades /></SectionRoute></ProtectedLayout>} />
+        <Route path="/rrhh/configuracion" element={<ProtectedLayout><SectionRoute section="RRHH"><ConfiguracionRrhh /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/historial" element={<ProtectedLayout><SectionRoute section="RRHH"><HistorialGuardia /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/capacitaciones" element={<ProtectedLayout><SectionRoute section="RRHH"><TrainingsPage /></SectionRoute></ProtectedLayout>} />
         {/* Sin SectionRoute("RRHH") a propósito: cualquier empleado autenticado

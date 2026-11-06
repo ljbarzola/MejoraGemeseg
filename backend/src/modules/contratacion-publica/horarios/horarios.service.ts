@@ -38,6 +38,19 @@ export class CPHorariosService {
     private readonly patronRotacionService: CPPatronRotacionService,
   ) {}
 
+  /** Horarios de todos los contratos de la empresa, con el número del contrato y su entidad. */
+  async findAll(companyId: number) {
+    return this.prisma.cPHorarioMensual.findMany({
+      where: { companyId },
+      orderBy: [{ fechaInicio: 'desc' }],
+      include: {
+        contrato: {
+          select: { id: true, numero: true, entidad: { select: { id: true, nombre: true } } },
+        },
+      },
+    });
+  }
+
   async findAllByContrato(contratoId: number, companyId: number) {
     await this.assertContrato(contratoId, companyId);
     return this.prisma.cPHorarioMensual.findMany({

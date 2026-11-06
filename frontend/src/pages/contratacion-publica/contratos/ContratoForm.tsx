@@ -9,6 +9,7 @@ import {
 } from '../../../services/contratacion-publica.service';
 import type { CPEntidadPublica } from '../../../types/contratacion-publica';
 import DateInput from '../../../components/common/DateInput';
+import CPPageHeader from '../../../components/contratacion-publica/CPPageHeader';
 
 export default function ContratoForm() {
   const navigate = useNavigate();
@@ -96,12 +97,10 @@ export default function ContratoForm() {
         <button className="cacao-back-btn" onClick={() => navigate(location.state?.from || '/contratacion-publica/contratos')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">CONTRATACIÓN PÚBLICA</p>
-            <h1>{editingId ? 'Editar Contrato' : 'Nuevo Contrato'}</h1>
-          </div>
-        </div>
+        <CPPageHeader
+          title={editingId ? 'Editar Contrato' : 'Nuevo Contrato'}
+          description={editingId ? 'Cambia los datos del contrato.' : 'Registra un contrato de seguridad con una entidad pública.'}
+        />
       </div>
 
       <div className="admin-section" style={{ maxWidth: '720px' }}>

@@ -27,6 +27,7 @@ import { MESES_ES } from '../../../types/contratacion-publica';
 import { usePerm } from '../../../contexts/PermissionsContext';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import ErrorBanner from '../../../components/common/ErrorBanner';
+import CPPageHeader from '../../../components/contratacion-publica/CPPageHeader';
 import EntregarModal from '../../../components/contratacion-publica/EntregarModal';
 import RevisionPanel, { type DocumentoRevisable } from '../../../components/contratacion-publica/RevisionPanel';
 import { formatFechaHoraSync } from '../../../utils/formatFechaHora';
@@ -340,36 +341,36 @@ export default function EntidadDetail() {
         <button className="cacao-back-btn" onClick={() => navigate('/contratacion-publica/entidades')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">CONTRATACIÓN PÚBLICA · ENTIDAD</p>
-            <h1>{lista?.entidad.nombre ?? 'Entidad pública'}</h1>
-          </div>
-          <div className="header-actions">
-            {canEdit && lista && (
-              lista.entidad.driveFolderId ? (
-                <a
-                  className="btn-secondary"
-                  href={`https://drive.google.com/drive/folders/${lista.entidad.driveFolderId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ textDecoration: 'none' }}
-                >
-                  <FolderOpen size={16} /> Carpeta en Drive
-                </a>
-              ) : (
-                <button className="btn-secondary" disabled title="Esta entidad todavía no tiene carpeta. Créala desde Entidades Públicas → Sincronizar.">
-                  <FolderOpen size={16} /> Sin carpeta en Drive
+        <CPPageHeader
+          title={lista?.entidad.nombre ?? 'Entidad pública'}
+          description="Los documentos que otras áreas deben entregar cada mes para esta entidad, con su responsable y su fecha límite."
+          actions={
+            <>
+              {canEdit && lista && (
+                lista.entidad.driveFolderId ? (
+                  <a
+                    className="btn-secondary"
+                    href={`https://drive.google.com/drive/folders/${lista.entidad.driveFolderId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ textDecoration: 'none' }}
+                  >
+                    <FolderOpen size={16} /> Carpeta en Drive
+                  </a>
+                ) : (
+                  <button className="btn-secondary" disabled title="Esta entidad todavía no tiene carpeta. Créala desde Entidades Públicas → Sincronizar.">
+                    <FolderOpen size={16} /> Sin carpeta en Drive
+                  </button>
+                )
+              )}
+              {canEdit && lista && (
+                <button className="auth-btn" onClick={() => setMostrarNueva(true)}>
+                  <Plus size={16} /> Nueva solicitud
                 </button>
-              )
-            )}
-            {canEdit && lista && (
-              <button className="auth-btn" onClick={() => setMostrarNueva(true)}>
-                <Plus size={16} /> Nueva solicitud
-              </button>
-            )}
-          </div>
-        </div>
+              )}
+            </>
+          }
+        />
       </div>
 
       {error && (

@@ -213,20 +213,21 @@ export default function Sidebar() {
   ];
 
   // Contratación Pública: Entidades Públicas con sus entregas de documentos, y desde
-  // 2026-10-18 las Operaciones (Contratos, Horarios, Códigos de turno y Bitácoras, que
-  // compara las hojas de los guardias con el horario). Informes y Textos Institucionales
+  // 2026-10-18 las Operaciones (Contratos, Horarios y Bitácoras, que compara las hojas de
+  // los guardias con el horario). Los códigos de turno son parte de Configuración (2026-10-30). Informes y Textos Institucionales
   // siguen ocultos (ver CP_MOSTRAR_SUBMODULOS_OCULTOS y CP_MOSTRAR_OPERACIONES en App.tsx).
   const contratacionPublicaItems = [
-    { label: 'Entidades Públicas', path: '/contratacion-publica/entidades', icon: '🏛️' },
+    { label: 'Entidades Públicas', path: '/contratacion-publica/entidades', icon: '🏛️', grupo: 'Documentos' },
     // Solo el personal de Contratación Pública aprueba; el resto tiene "Por entregar".
     ...(canWrite('CONTRATACION_PUBLICA')
       ? [{ label: 'Por aprobar', path: '/contratacion-publica/por-revisar', icon: '🔎' }]
       : []),
     { label: 'Por entregar', path: '/contratacion-publica/mis-documentos', icon: '📥' },
-    { label: 'Contratos', path: '/contratacion-publica/contratos', icon: '📑' },
+    { label: 'Contratos', path: '/contratacion-publica/contratos', icon: '📑', grupo: 'Operaciones' },
     { label: 'Horarios', path: '/contratacion-publica/horarios', icon: '🗓️' },
-    { label: 'Códigos de turno', path: '/contratacion-publica/config/codigos-turno', icon: '🏷️' },
     { label: 'Bitácoras', path: '/contratacion-publica/bitacoras', icon: '📒' },
+    // Los códigos de turno, el campo de las entidades y la carpeta de Drive viven aquí (2026-10-30).
+    { label: 'Configuración', path: '/contratacion-publica/configuracion', icon: '⚙️', separadorAntes: true },
   ];
 
   const sistemasSubItems = [
@@ -370,6 +371,8 @@ export default function Sidebar() {
                   </span>
                 </button>
                 {custodiosOpen && renderSubItems(custodiosItems, 1)}
+                {/* Los avisos de vencimientos, el correo de envío y los requisitos generales viven aquí (2026-10-30). */}
+                {renderSubItems([{ label: 'Configuración', path: '/rrhh/configuracion', icon: '⚙️', separadorAntes: true }])}
               </div>
             )}
           </>

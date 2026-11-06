@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Plus, X, CheckCircle2, RotateCcw, Paperclip, Trash2, FolderOpen } from 'lucide-react';
+import RrhhPageHeader from '../../components/personal/RrhhPageHeader';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import DateInput from '../../components/common/DateInput';
 import {
@@ -497,18 +498,11 @@ export default function TrainingsPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">RECURSOS HUMANOS</p>
-            <h1>Capacitaciones</h1>
-          </div>
-          <div className="header-actions">
-            {canEdit && (
-              <button className="auth-btn" onClick={openCreate}>
-                <Plus size={16} /> Nueva capacitación
-              </button>
-            )}
+      <RrhhPageHeader
+        title="Capacitaciones"
+        description="Registro de las capacitaciones del personal, con sus fechas, archivos y vencimientos."
+        actions={
+          <>
             {driveFolderUrl && (
               <a
                 className="btn-secondary"
@@ -520,9 +514,14 @@ export default function TrainingsPage() {
                 <FolderOpen size={16} /> Ver carpeta
               </a>
             )}
-          </div>
-        </div>
-      </div>
+            {canEdit && (
+              <button className="auth-btn" onClick={openCreate}>
+                <Plus size={16} /> Nueva capacitación
+              </button>
+            )}
+          </>
+        }
+      />
 
       {canEdit && !loadingConfig && !driveConfig && (
         <div style={{ background: '#fffaf0', border: '1px solid #fbd38d', color: '#975a16', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '0.85rem' }}>

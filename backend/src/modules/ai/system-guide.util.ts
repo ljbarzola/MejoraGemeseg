@@ -186,7 +186,7 @@ Los guardias de este padrón son los mismos que se eligen como personal en otros
 ## Entidades y Requisitos
 - Las entidades se crean solas al sincronizar el Listado de Guardias; aquí se corrigen nombre, tipo y requisitos. "+ Nueva Entidad": "Nombre de la Entidad *" y "Tipo *" (Pública/Privada). "Mostrar inactivas". Estado "● Activa/Inactiva" con clic. ⚠ si el nombre no empieza por una provincia.
 - "Requisitos Generales" en tres niveles: "Globales" (todas las entidades), "Entidades Públicas" y "Entidades Privadas"; además requisitos específicos por entidad (botón "n requisitos").
-- Cada requisito: "Nombre del requisito", "Duración del certificado" (días/semanas/meses/años; vacío = sin vencimiento, nunca vence) y con cuánta anticipación avisar antes de que venza.
+- Cada requisito: "Nombre del requisito" y "¿Cada cuánto vence?" (días, meses o años; vacío = sin vencimiento, nunca vence). Cuándo se avisa no se elige por requisito: es una sola regla para toda la empresa, en Configuración → "Avisos de vencimientos" (el plazo más lejano, 30 días por defecto, es también desde cuándo un documento sale en amarillo "por vencer" en Cumplimiento).
 - "Fusionar cédulas duplicadas" (solo Administrador): cédula de origen (la que se descarta) y de destino (la real) → "Ver vista previa" → "Confirmar fusión". Es irreversible.
 
 ## Cumplimiento
@@ -194,6 +194,7 @@ Los guardias de este padrón son los mismos que se eligen como personal en otros
 - Ícono "Notificaciones": "Correo de envío" (buzón real del dominio, se valida al guardar), "Nombre del remitente"; WhatsApp está en "Próximamente".
 - "Detalle de Cumplimiento" (clic en un guardia): aprobar/rechazar cada documento con motivo (queda historial), "Definir fecha de vencimiento" / "Editar fecha", "Leer con IA" (propone fechas de emisión/vencimiento de un PDF con texto; siempre revisar y guardar; si no puede, ingresar la fecha a mano), asignar archivos no reconocidos a un requisito.
 - "Enviar recordatorio a este guardia": correo consolidado con lo faltante, vencido o por vencer. Es manual, guardia por guardia; no hay envíos automáticos ni masivos. Si está al día responde que no hay nada pendiente.
+- Menú RRHH → "Configuración" (al final): pestañas "Avisos de vencimientos", "Correo de envío" (antes el engranaje "Notificaciones" de Cumplimiento) y "Requisitos generales" (documentos mínimos Globales, Públicos y Privados). En "Avisos de vencimientos": cada día el sistema revisa los documentos de los guardias y le deja UNA notificación en la app a todo el personal de RRHH con permiso de escribir (por vencer, vencidos, sin fecha de vencimiento cargada y faltantes). RRHH elige cuándo avisa: los plazos en días antes de vencer (por defecto 30, 7 y el día que vence), cada cuántos días repetir si ya venció (7) y el resumen de los lunes. "Probar ahora" te manda una notificación de prueba en la app solo a ti. No manda correos a los guardias.
 
 ## Historial
 - Muestra las asignaciones de puesto y las entradas/salidas de cada guardia. Ícono "Sistemas de ingreso y salida" para configurar el catálogo (IsyPlus, IESS, SUT, SICOSEP: nombre, link del portal, activo). "Mostrar todos".

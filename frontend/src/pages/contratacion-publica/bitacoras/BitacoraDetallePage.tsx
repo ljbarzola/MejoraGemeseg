@@ -16,6 +16,7 @@ import type {
   HallazgoBitacora,
 } from '../../../types/bitacoras';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import CPPageHeader from '../../../components/contratacion-publica/CPPageHeader';
 import DateInput from '../../../components/common/DateInput';
 import FilePreview from '../../../components/common/FilePreview';
 import PromptDialog from '../../../components/common/PromptDialog';
@@ -229,27 +230,24 @@ export default function BitacoraDetallePage() {
         <button className="cacao-back-btn" onClick={() => navigate('/contratacion-publica/bitacoras?vista=lista')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">{det.entidadNombre.toUpperCase()} · CONTRATO {det.contratoNumero.toUpperCase()}</p>
-            <h1>Bitácora n.º {det.id} · {det.puestoNombre}</h1>
-            <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: '#718096' }}>
-              {periodoBitacora(det.fechaDesde, det.fechaHasta)} · subida por {det.subidoPorNombre} el {formatFechaHoraSync(det.createdAt)} · {textoOrigen(det.origenLectura, det.estadoLectura)}
-            </p>
-          </div>
-          <div className="header-actions">
-            {tieneArchivo && (
-              <button className="btn-secondary" disabled={bloquear} onClick={() => setConfirmando('releer')} title="El agente vuelve a leer la foto. Reemplaza lo leído y lo que corrigiste.">
-                <RefreshCw size={16} className={ocupado === 'releer' ? 'spin' : undefined} /> {ocupado === 'releer' ? 'Leyendo…' : 'Volver a leer con el agente'}
-              </button>
-            )}
-            {puedeEscribir && (
-              <button className="btn-secondary btn-icon-toolbar" style={{ color: '#c53030' }} disabled={ocupado !== null} onClick={() => setConfirmando('borrar')} title="Eliminar la bitácora" aria-label="Eliminar la bitácora">
-                <Trash2 size={16} />
-              </button>
-            )}
-          </div>
-        </div>
+        <CPPageHeader
+          title={`Bitácora n.º ${det.id} · ${det.puestoNombre}`}
+          description={`${det.entidadNombre} · Contrato ${det.contratoNumero} · ${periodoBitacora(det.fechaDesde, det.fechaHasta)} · subida por ${det.subidoPorNombre} el ${formatFechaHoraSync(det.createdAt)} · ${textoOrigen(det.origenLectura, det.estadoLectura)}`}
+          actions={
+            <>
+              {tieneArchivo && (
+                <button className="btn-secondary" disabled={bloquear} onClick={() => setConfirmando('releer')} title="El agente vuelve a leer la foto. Reemplaza lo leído y lo que corrigiste.">
+                  <RefreshCw size={16} className={ocupado === 'releer' ? 'spin' : undefined} /> {ocupado === 'releer' ? 'Leyendo…' : 'Volver a leer con el agente'}
+                </button>
+              )}
+              {puedeEscribir && (
+                <button className="btn-secondary btn-icon-toolbar" style={{ color: '#c53030' }} disabled={ocupado !== null} onClick={() => setConfirmando('borrar')} title="Eliminar la bitácora" aria-label="Eliminar la bitácora">
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </>
+          }
+        />
       </div>
 
       {error && <div className="form-error" style={{ margin: '12px 0' }}>{error}</div>}
