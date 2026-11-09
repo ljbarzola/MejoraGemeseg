@@ -233,6 +233,7 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
   // «3 oportunidades» / «—» si no se pudieron cargar.
   const cuenta = (lista: unknown[] | null, error: boolean) => (lista === null ? '…' : error ? '—' : String(lista.length));
 
+  const conWhatsapp = (oportunidades ?? []).filter((o) => o.whatsapp);
   const dato = (label: string, value?: string | null) =>
     value ? (
       <div>
@@ -457,6 +458,31 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
                 {servicioField && dato(servicioField.label, salesClientListaSubopcionesLabel(client, servicioField))}
                 {dato('Observaciones', client.observaciones)}
               </div>
+
+              {/* WhatsApp: solo si alguna oportunidad nació de un clic de una landing. El código acompaña a la
+                  negociación hasta que se gana o se pierde; aquí está su detalle (no es columna de ninguna tabla). */}
+              {conWhatsapp.length > 0 && (
+                <div style={{ ...tarjetaStyle, marginBottom: 12 }}>
+                  <strong style={{ fontSize: 13.5 }}>WhatsApp de la landing</strong>
+                  {conWhatsapp.map((o) => (
+                    <div key={o.id} style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e2e8f0' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
+                        <div>
+                          <span style={labelStyle}>Código</span>
+                          <span style={{ fontSize: 13, fontFamily: 'monospace', fontWeight: 600, color: '#2d3748' }}>{o.whatsapp!.codigo}</span>
+                        </div>
+                        {dato('Tocó el botón', o.whatsapp!.fechaClic ? formatCuando(o.whatsapp!.fechaClic) : null)}
+                        {dato('Campaña', o.whatsapp!.campana && o.whatsapp!.campana !== 'none' ? o.whatsapp!.campana : null)}
+                        {dato('Landing', o.whatsapp!.landing)}
+                        {dato('Servicio', o.whatsapp!.servicio)}
+                      </div>
+                      {conWhatsapp.length > 1 && (
+                        <div style={tenue}>Oportunidad: {o.title || o.services.map((s) => s.name).join(', ') || `#${o.id}`}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Las oportunidades y los contratos NO se muestran aquí: se trabajan en su pantalla. */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

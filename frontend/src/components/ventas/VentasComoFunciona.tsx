@@ -18,7 +18,7 @@ const RECORRIDO: Paso[] = [
   {
     pantalla: '1. Posibles clientes',
     texto:
-      'Llega alguien (formulario de la web, un anuncio, un referido, una llamada…). Todavía no sabemos si quiere contratar. Ventas lo clasifica por «Tipo de contacto»: Servicio, Empleo, Proveedor, Otro o Spam. Solo los de Servicio avanzan; los demás se descartan con su motivo y no se borran. (En Google Ads a un posible cliente se le llama «lead».)',
+      'Llega alguien (formulario de la web, un anuncio, un referido, una llamada…). Todavía no sabemos si quiere contratar. Ventas lo clasifica por «Tipo de contacto»: Servicio, Empleo, Proveedor, Otro o Spam. Solo los de Servicio avanzan; los demás se descartan con su motivo y no se borran. (En Google Ads a un posible cliente se le llama «lead».) Si escribió por WhatsApp desde una landing, su mensaje trae un código al final (GMS-WA-XXXXXX): con «Llegó un WhatsApp» lo escribes y el posible cliente queda con el anuncio y la landing de los que vino.',
   },
   {
     pantalla: '2. Oportunidades',
@@ -77,6 +77,7 @@ const GLOSARIO: { palabra: string; significa: string }[] = [
   { palabra: 'Fuente', significa: 'Por dónde llegó el contacto: Formulario web, Google Ads, Meta Ads, Referido, WhatsApp, Llamada…' },
   { palabra: 'Campaña', significa: 'Qué anuncio concreto lo trajo, dentro de Google Ads o Meta.' },
   { palabra: 'Landing', significa: 'La página de la web donde llenó el formulario; indica qué servicio pidió.' },
+  { palabra: 'Clic de WhatsApp', significa: 'Alguien tocó el botón de WhatsApp de una landing. Todavía no es un posible cliente: lo es cuando escribe y su código se anota en «Llegó un WhatsApp».' },
   { palabra: 'Tipo de contacto', significa: 'Qué busca quien escribió: Servicio, Empleo, Proveedor, Otro o Spam.' },
   { palabra: 'Motivo de cierre', significa: 'Por qué se perdió una venta, se descartó un posible cliente o se canceló un contrato.' },
 ];
@@ -209,12 +210,12 @@ export default function VentasComoFunciona() {
     <>
       <button
         type="button"
-        className="btn-secondary"
+        className="btn-secondary btn-icon-toolbar"
         onClick={() => setAbierto(true)}
-        title="Cómo se conectan Posibles clientes, Oportunidades, Directorio y Contratos"
-        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        title="Cómo funciona: cómo se conectan Posibles clientes, Oportunidades, Directorio y Contratos"
+        aria-label="Cómo funciona Ventas y CRM"
       >
-        <HelpCircle size={15} /> Cómo funciona
+        <HelpCircle size={18} />
       </button>
       {abierto && <Modal onClose={() => setAbierto(false)} />}
     </>

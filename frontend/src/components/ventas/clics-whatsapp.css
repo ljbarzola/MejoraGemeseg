@@ -1,0 +1,98 @@
+/* ============================================================================
+   LISTA DE CLICS DE WHATSAPP (ventana, 2026-11-05). Mismo criterio que el catálogo del Cotizador:
+   la ventana es una columna de alto fijo; el título, el buscador y los filtros ocupan lo justo y la
+   tabla se queda con el resto, con UN solo scroll (el de la tabla), encabezado fijo y columna del
+   código fija (el wrapper lleva data-viva-en-modal, ver utils/tablasVivas.ts).
+   ============================================================================ */
+.modal.clics-wa-modal {
+  display: flex;
+  flex-direction: column;
+  height: min(88vh, 780px);
+  overflow: hidden;
+}
+.clics-wa-modal .modal-header { padding: 12px 24px; flex: 0 0 auto; }
+.clics-wa-body.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px 24px 16px;
+  gap: 8px;
+  overflow: hidden;
+}
+.clics-wa-page {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.clics-wa-page .filter-bar { margin-bottom: 0; flex: 0 0 auto; align-items: center; }
+.clics-wa-page .filter-bar-fields { flex-wrap: nowrap; gap: 12px; }
+.clics-wa-page .filter-bar-actions { align-self: center; }
+.clics-wa-page .filter-bar-actions .icon-btn { width: 36px; height: 36px; }
+.clics-wa-page .cf-chips { margin: 0; flex: 0 0 auto; }
+.clics-wa-body input.clics-wa-search {
+  flex: 1 1 220px;
+  min-width: 160px;
+  height: 36px;
+  padding: 0 12px;
+  border-width: 1px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+}
+
+/* Las tres bandejas y su explicación, en una sola franja. */
+.clics-wa-bandejas { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; flex: 0 0 auto; }
+.clics-wa-bandejas .fuente-chips { gap: 6px; }
+.clics-wa-bandejas .fuente-chip { padding: 5px 12px; border-width: 1px; font-size: 0.82rem; }
+.clics-wa-ayuda { font-size: 12px; color: #718096; flex: 1 1 260px; min-width: 0; }
+
+.clics-wa-vacio { color: #718096; font-size: 13px; padding: 8px 2px; }
+
+/* Tabla: un solo scroll, rejilla suave, filas compactas. */
+.tasks-table-wrapper.clics-wa-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid #dbe2ea;
+  border-radius: 10px;
+  background: #fff;
+}
+.clics-wa-wrap .tasks-table { font-size: 0.84rem; line-height: 1.3; min-width: 100%; }
+.clics-wa-wrap .tasks-table th {
+  padding: 8px 34px 8px 10px;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid #cbd5e1;
+  border-right: 1px solid #e2e8f0;
+  background: #f1f5f9;
+}
+.clics-wa-wrap .tasks-table td {
+  padding: 5px 10px;
+  white-space: nowrap;
+  border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #eef2f7;
+  vertical-align: middle;
+}
+.clics-wa-wrap .tasks-table th:last-child,
+.clics-wa-wrap .tasks-table td:last-child { border-right: 0; }
+.clics-wa-wrap .tasks-table tbody tr:nth-child(even) td { background: #fafbfd; }
+.clics-wa-wrap .tasks-table tbody tr:hover td { background: #eef4ff; }
+.clics-wa-wrap .tasks-table .cf-btn { right: 6px; }
+.clics-wa-wrap .tasks-table th.col-acciones,
+.clics-wa-wrap .tasks-table td.col-acciones { padding: 2px 6px; text-align: center; }
+.clics-wa-wrap .clics-wa-hace { color: #94a3b8; font-size: 11px; margin-left: 6px; }
+.clics-wa-wrap .clics-wa-celda {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clics-wa-wrap .clics-wa-acciones { display: flex; justify-content: center; align-items: center; gap: 6px; }
+.clics-wa-wrap .clics-wa-acciones .icon-btn { width: 30px; height: 30px; }
+
+/* Tabla de WhatsApp del Dashboard de marketing (8 columnas): los títulos pasan a dos líneas en vez de cortarse con «...». */
+.tasks-table.dash-wa-tabla th { white-space: normal; line-height: 1.25; vertical-align: bottom; }
+/* Con «Desglosar por» la tabla pasa a 9 columnas iguales: menos margen lateral para que «Cotizaciones» y «Contrataron» no se corten. */
+.tasks-table.dash-wa-tabla th,
+.tasks-table.dash-wa-tabla td { padding-left: 10px; padding-right: 10px; }
+.clics-wa-wrap .clics-wa-numero { display: block; color: #94a3b8; font-size: 11px; }

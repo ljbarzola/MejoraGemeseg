@@ -1,3 +1,5 @@
+import { atribuirCanal } from './lead-atribucion.util';
+
 // Fases de marketing de un contacto, tal como las usa quien maneja Google Ads
 // (panel «Embudo de conversión de clientes potenciales»):
 //
@@ -66,52 +68,315 @@ const ORDEN: Record<FaseMarketing, number> = {
   CONVERTIDO: 2,
 };
 
-export interface LeadParaEmbudo {
-  channel: string;
-  campaign: string | null;
-  landing: string | null;
-  // Fase de la oportunidad a la que pasó, o null si no pasó a ninguna.
-  fase: FaseMarketing | null;
+// ---------------------------------------------------------------------------
+// Embudo único del Dashboard de marketing (2026-11-06)
+// ---------------------------------------------------------------------------
+// UN solo embudo para todo lo que llega: quien llenó el formulario y quien escribió por WhatsApp desde una landing
+// con su código (una persona cuenta una sola vez). Los clics del botón de WhatsApp van aparte, como columna y como
+// una línea bajo el embudo: un clic NO es un contacto hasta que la persona escribe (guía de medición, §12).
+// A quien llegó por un clic se le atribuye el canal, la campaña, la landing y el servicio DEL CLIC, no «WhatsApp»
+// (guía §11: la fuente se mantiene durante todo el proceso comercial).
+
+// Etapas en las que ya hubo cotización (la guía de medición separa «calificado» de «cotización enviada»). Incluye
+// «Propuesta enviada», la etapa propia que Gemeseg agregó entre En evaluación y En negociación.
+export const ETAPAS_DE_COTIZACION = [...ETAPAS_COTIZADAS, 'PROPUESTA_ENVIADA'];
+
+// ¿La oportunidad llegó a cotizarse? Tiene fecha de cotización, está o pasó por una etapa de cotización, o ya se
+// aceptó (una venta siempre pasó por una cotización, aunque nadie llenara la fecha).
+export function cotizoOportunidad(o: OportunidadParaFase): boolean {
+  return (
+    o.outcome === 'GANADA' ||
+    o.quotedAt !== null ||
+    (o.status !== null && ETAPAS_DE_COTIZACION.includes(o.status)) ||
+    (o.etapasAlcanzadas ?? []).some((k) => ETAPAS_DE_COTIZACION.includes(k))
+  );
 }
 
-export interface FilaEmbudoMarketing {
+export type AgruparEmbudo =
+  | 'channel'
+  | 'campana'
+  | 'landing'
+  | 'servicio'
+  | 'grupo'
+  | 'channel_servicio'
+  | 'campana_servicio';
+export const AGRUPACIONES_EMBUDO: AgruparEmbudo[] = [
+  'channel',
+  'campana',
+  'landing',
+  'servicio',
+  'grupo',
+  'channel_servicio',
+  'campana_servicio',
+];
+
+// todos | whatsapp = quien llegó por el botón de una landing (con código) | otros = formulario y demás canales.
+export type OrigenEmbudo = 'todos' | 'whatsapp' | 'otros';
+
+interface Atributos {
+  canal: string;
+  campana: string | null;
+  landing: string | null;
+  servicio: string | null;
+  grupo: string | null;
+}
+
+// Una persona que llegó en el periodo (un posible cliente) con la atribución que le toca.
+export interface ContactoParaEmbudo extends Atributos {
+  // Llegó por el botón de WhatsApp de una landing: su código quedó enlazado a un clic.
+  porClic: boolean;
+  // Fase de la oportunidad a la que pasó, o null si aún no pasó a ninguna.
+  fase: FaseMarketing | null;
+  // La oportunidad llegó a cotizarse (ver cotizoOportunidad).
+  cotizo: boolean;
+  // Monto cotizado de la oportunidad si se ganó; 0 en cualquier otro caso.
+  vendido: number;
+}
+
+export interface ClicParaEmbudo extends Atributos {
+  // El clic quedó enlazado a un posible cliente (la persona escribió y se anotó su código).
+  escribio: boolean;
+}
+
+export interface FilaEmbudo {
   clave: string;
-  leads: number;
+  // Solo en las agrupaciones de dos niveles (canal › servicio, campaña › servicio): el segundo nivel.
+  subclave?: string;
+  clics: number;
+  contactos: number;
   cualificados: number;
+  cotizaciones: number;
   convertidos: number;
+  // Suma del monto cotizado de las oportunidades ganadas.
+  vendido: number;
+}
+
+export interface TotalEmbudo extends FilaEmbudo {
+  // Clics que terminaron en conversación, y contactos que llegaron por el botón de WhatsApp.
+  escribieron: number;
+  porWhatsapp: number;
   // % sobre el paso anterior (null si el anterior es 0).
+  pctEscribieron: number | null;
   pctCualificados: number | null;
+  pctCotizaciones: number | null;
   pctConvertidos: number | null;
 }
+
+export const SIN_DATO = 'Sin dato';
 
 const pct = (parte: number, total: number) =>
   total > 0 ? Math.round((parte / total) * 1000) / 10 : null;
 
-const fila = (clave: string, leads: LeadParaEmbudo[]): FilaEmbudoMarketing => {
-  const cualificados = leads.filter((l) => l.fase && ORDEN[l.fase] >= 1).length;
-  const convertidos = leads.filter((l) => l.fase && ORDEN[l.fase] >= 2).length;
-  return {
-    clave,
-    leads: leads.length,
-    cualificados,
-    convertidos,
-    pctCualificados: pct(cualificados, leads.length),
-    pctConvertidos: pct(convertidos, cualificados),
-  };
+const lleno = (v: string | null | undefined): string | null => {
+  const t = (v ?? '').toString().trim();
+  return !t || t.toLowerCase() === 'none' ? null : t;
 };
 
-// Embudo acumulado: todo convertido cuenta también como cualificado.
-export function embudoMarketing(
-  leads: LeadParaEmbudo[],
-  agruparPor: 'channel' | 'campaign' | 'landing',
-): { total: FilaEmbudoMarketing; filas: FilaEmbudoMarketing[] } {
-  const grupos = new Map<string, LeadParaEmbudo[]>();
-  for (const l of leads) {
-    const clave = (l[agruparPor] ?? '').trim() || 'Sin dato';
-    grupos.set(clave, [...(grupos.get(clave) ?? []), l]);
+// «monitoreo_vehiculos» y «Monitoreo vehiculos» son lo mismo: sin guiones bajos, con la primera en mayúscula.
+export function textoDeServicio(v: string | null | undefined): string | null {
+  const t = lleno(v);
+  if (!t) return null;
+  const limpio = t.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+  return limpio.charAt(0).toUpperCase() + limpio.slice(1);
+}
+
+const sinTildes = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+const PALABRAS_VACIAS = ['de', 'del', 'la', 'el', 'los', 'las', 'para', 'con', 'y', 'en'];
+
+// «Monitoreo de Vehículos» (el nombre de la tabla de landings) y «monitoreo_vehiculos» (el que manda el script de la
+// landing) son el mismo servicio: se comparan sin tildes, mayúsculas, guiones bajos ni palabras como «de» o «para».
+const claveDeNombre = (t: string) =>
+  sinTildes(t)
+    .replace(/_/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w && !PALABRAS_VACIAS.includes(w))
+    .join(' ');
+
+// Para cada nombre repetido deja el más completo (el más largo y, a igual largo, el que lleva tildes).
+function etiquetasUnificadas(valores: (string | null | undefined)[]): (v: string | null | undefined) => string | null {
+  const mejor = new Map<string, string>();
+  // Una letra con tilde se descompone en dos al normalizar; sin tildes el largo no cambia.
+  const tilde = (t: string) => t.normalize('NFD').length !== t.length;
+  for (const v of valores) {
+    const t = textoDeServicio(v);
+    if (!t) continue;
+    const k = claveDeNombre(t);
+    const actual = mejor.get(k);
+    if (!actual || t.length > actual.length || (t.length === actual.length && tilde(t) && !tilde(actual))) {
+      mejor.set(k, t);
+    }
   }
-  const filas = [...grupos.entries()]
-    .map(([clave, ls]) => fila(clave, ls))
-    .sort((a, b) => b.leads - a.leads || a.clave.localeCompare(b.clave, 'es'));
-  return { total: fila('Total', leads), filas };
+  return (v) => {
+    const t = textoDeServicio(v);
+    return t ? (mejor.get(claveDeNombre(t)) ?? t) : null;
+  };
+}
+
+// Los contactos y clics con el servicio y el grupo ya unificados (la lista del filtro y la tabla usan los mismos).
+function conNombresUnificados<A extends Atributos, B extends Atributos>(cs: A[], ks: B[]): { cs: A[]; ks: B[] } {
+  const todos = [...cs, ...ks];
+  const servicio = etiquetasUnificadas(todos.map((x) => x.servicio));
+  const grupo = etiquetasUnificadas(todos.map((x) => x.grupo));
+  const unir = <T extends Atributos>(x: T): T => ({ ...x, servicio: servicio(x.servicio), grupo: grupo(x.grupo) });
+  return { cs: cs.map(unir), ks: ks.map(unir) };
+}
+
+// El clic guarda la ruta («/landing/monitoreo-vehiculos/») y el formulario solo el nombre
+// («monitoreo-vehiculos»): las dos se comparan por el último tramo.
+export function landingLimpia(v: string | null | undefined): string | null {
+  const t = lleno(v);
+  if (!t) return null;
+  const ruta = t.split(/[?#]/)[0].replace(/\/+$/, '');
+  return ruta.split('/').filter(Boolean).pop() ?? null;
+}
+
+// El canal de un clic sale con la misma regla que el de un formulario (gclid, fbclid, utm). Sin anuncio detrás
+// (visita directa, búsqueda orgánica) el contacto es de «WhatsApp», no de «Formulario web».
+export function canalDeClic(c: {
+  utmSource: string | null;
+  utmMedium: string | null;
+  gclid?: string | null;
+  fbclid?: string | null;
+}): string {
+  const canal = atribuirCanal({
+    utm_source: c.utmSource,
+    utm_medium: c.utmMedium,
+    gclid: c.gclid,
+    fbclid: c.fbclid,
+  });
+  return canal === 'WEB_FORM' ? 'WHATSAPP' : canal;
+}
+
+type Dimension = 'channel' | 'campana' | 'landing' | 'servicio' | 'grupo';
+const NIVELES: Record<AgruparEmbudo, Dimension[]> = {
+  channel: ['channel'],
+  campana: ['campana'],
+  landing: ['landing'],
+  servicio: ['servicio'],
+  grupo: ['grupo'],
+  channel_servicio: ['channel', 'servicio'],
+  campana_servicio: ['campana', 'servicio'],
+};
+
+const valorDe = (x: Atributos, d: Dimension): string => {
+  switch (d) {
+    case 'channel':
+      return lleno(x.canal) ?? SIN_DATO;
+    case 'campana':
+      return lleno(x.campana) ?? SIN_DATO;
+    case 'landing':
+      return landingLimpia(x.landing) ?? SIN_DATO;
+    case 'servicio':
+      return textoDeServicio(x.servicio) ?? SIN_DATO;
+    case 'grupo':
+      return textoDeServicio(x.grupo) ?? SIN_DATO;
+  }
+};
+
+const metricas = (cs: ContactoParaEmbudo[], ks: ClicParaEmbudo[]) => ({
+  clics: ks.length,
+  contactos: cs.length,
+  cualificados: cs.filter((c) => c.fase && ORDEN[c.fase] >= 1).length,
+  cotizaciones: cs.filter((c) => c.cotizo).length,
+  convertidos: cs.filter((c) => c.fase && ORDEN[c.fase] >= 2).length,
+  vendido: Math.round(cs.reduce((suma, c) => suma + c.vendido, 0) * 100) / 100,
+});
+
+// Servicios que aparecen en los contactos y en los clics (para el filtro «Servicio»), con «Sin dato» al final.
+export function serviciosDelEmbudo(contactos: Atributos[], clics: Atributos[]): string[] {
+  const nombres = new Set<string>();
+  let sinDato = false;
+  const u = conNombresUnificados(contactos, clics);
+  for (const x of [...u.cs, ...u.ks]) {
+    const s = textoDeServicio(x.servicio);
+    if (s) nombres.add(s);
+    else sinDato = true;
+  }
+  const lista = [...nombres].sort((a, b) => a.localeCompare(b, 'es'));
+  return sinDato ? [...lista, SIN_DATO] : lista;
+}
+
+export function embudoUnico(
+  contactos: ContactoParaEmbudo[],
+  clics: ClicParaEmbudo[],
+  agrupar: AgruparEmbudo,
+  filtros: { origen: OrigenEmbudo; servicio: string | null },
+): { total: TotalEmbudo; filas: FilaEmbudo[] } {
+  // Los nombres se unifican con TODO lo del periodo, antes de filtrar: así el filtro de servicio y la tabla coinciden.
+  const unido = conNombresUnificados(contactos, clics);
+  let cs = unido.cs;
+  let ks = unido.ks;
+  if (filtros.origen === 'whatsapp') {
+    cs = cs.filter((c) => c.porClic);
+  } else if (filtros.origen === 'otros') {
+    // Un clic siempre es del botón de WhatsApp: no entra en «formulario y otros».
+    cs = cs.filter((c) => !c.porClic);
+    ks = [];
+  }
+  if (filtros.servicio) {
+    const s = filtros.servicio;
+    const delServicio = (x: Atributos) => (textoDeServicio(x.servicio) ?? SIN_DATO) === s;
+    cs = cs.filter(delServicio);
+    ks = ks.filter(delServicio);
+  }
+
+  const niveles = NIVELES[agrupar];
+  const SEP = '\u0001';
+  const grupos = new Map<string, { cs: ContactoParaEmbudo[]; ks: ClicParaEmbudo[] }>();
+  const grupo = (x: Atributos) => {
+    const k = niveles.map((d) => valorDe(x, d)).join(SEP);
+    let g = grupos.get(k);
+    if (!g) {
+      g = { cs: [], ks: [] };
+      grupos.set(k, g);
+    }
+    return g;
+  };
+  for (const c of cs) grupo(c).cs.push(c);
+  for (const k of ks) grupo(k).ks.push(k);
+
+  const filas = [...grupos.entries()].map(([k, g]) => {
+    const [clave, subclave] = k.split(SEP);
+    const fila: FilaEmbudo = { clave, ...metricas(g.cs, g.ks) };
+    if (subclave !== undefined) fila.subclave = subclave;
+    return fila;
+  });
+  // Lo más grande primero; con dos niveles, las filas del mismo primer nivel quedan juntas.
+  const pesoDe = new Map<string, { contactos: number; clics: number }>();
+  for (const f of filas) {
+    const p = pesoDe.get(f.clave) ?? { contactos: 0, clics: 0 };
+    p.contactos += f.contactos;
+    p.clics += f.clics;
+    pesoDe.set(f.clave, p);
+  }
+  filas.sort((a, b) => {
+    const pa = pesoDe.get(a.clave)!;
+    const pb = pesoDe.get(b.clave)!;
+    return (
+      pb.contactos - pa.contactos ||
+      pb.clics - pa.clics ||
+      a.clave.localeCompare(b.clave, 'es') ||
+      b.contactos - a.contactos ||
+      b.clics - a.clics ||
+      (a.subclave ?? '').localeCompare(b.subclave ?? '', 'es')
+    );
+  });
+
+  const m = metricas(cs, ks);
+  const escribieron = ks.filter((k) => k.escribio).length;
+  const total: TotalEmbudo = {
+    clave: 'Total',
+    ...m,
+    escribieron,
+    porWhatsapp: cs.filter((c) => c.porClic).length,
+    pctEscribieron: pct(escribieron, m.clics),
+    pctCualificados: pct(m.cualificados, m.contactos),
+    pctCotizaciones: pct(m.cotizaciones, m.cualificados),
+    pctConvertidos: pct(m.convertidos, m.cotizaciones),
+  };
+  return { total, filas };
 }

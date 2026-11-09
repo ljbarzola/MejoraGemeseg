@@ -100,6 +100,10 @@ Pedido de Leidy tras comparar el PDF del original (`COT-…`) con el de la app: 
 - **Totales en pantalla:** el descuento y la línea sobre el TOTAL usan el naranja de la marca (`--naranja`) sobre el degradado azul de la marca, igual que ya hacía la hoja impresa.
 - **Importar catálogo del Cotizador original (hecho 2026-10-30 en producción):** el original manda en las colisiones de código (dos sistemas asignan «último + 1» y chocaron el 28/10). Lo de Mejora que ocupaba el código pasa al siguiente libre y **hay que reescribir las referencias guardadas** en `CotQuote.items`, `CotTemplate.items` y `CotKit.components` (las líneas apuntan al producto por código; las de instalación, por `id`). Se hace en una sola transacción, con respaldo de Cloud SQL antes y comprobando que ninguna línea queda sin producto. Esa vez: EQ-0422→EQ-0430, EQ-0423→EQ-0431, SV-0036→SV-0039, INST-058→INST-059, más 9 productos nuevos, 4 cambios de costo del original y 71 productos sin nombre ni referencias borrados (quedan 6 sin nombre a decidir). No hay endpoint ni pantalla para esto: fue un script puntual.
 
+## Historial de cotizaciones: tabla (2026-11-06)
+
+La tabla del historial tenía las celdas de cliente y vendedor apiladas en una sola columna: usaban `className="truncate"` en el `<td>`, y esa clase es `display: block`, así que sacaba la celda de la tabla (la misma causa que ya se había arreglado en el catálogo). El recorte va en un `<span className="truncate" title=...>` dentro del `<td>`. El Total se alinea a la derecha (`cot-num`), las cifras de arriba dicen «borradores» (no «borradors») y los anchos de columna suman menos que el ancho útil de la ventana `lg` (920 px) para que no salga barra horizontal; el estilo compacto es el del catálogo (`.cot-hist-wrap` en `cotizador.css`; ese archivo está en Latin-1, editarlo en binario).
+
 ## Rutas frontend
 
 - `/ventas/cotizador` (`SectionRoute section="VENTAS"`), página `pages/ventas/CotizadorPage.tsx`, componentes en `components/ventas/cotizador/`, lógica pura en `utils/cotizador/` (`types`, `pricing`, `quoteState`, `format`, `draft`), servicio `services/cotizador.service.ts`.

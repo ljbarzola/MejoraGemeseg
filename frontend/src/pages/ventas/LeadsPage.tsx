@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, UserPlus, UserMinus, XCircle, ClipboardList, ArrowRightCircle } from 'lucide-react';
+import { Plus, UserPlus, UserMinus, XCircle, ClipboardList, ArrowRightCircle, MessageCircle, Link2 } from 'lucide-react';
+import ClicsWhatsappModal from '../../components/ventas/ClicsWhatsappModal';
+import LlegoWhatsappModal from '../../components/ventas/LlegoWhatsappModal';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
@@ -24,6 +26,7 @@ import {
   tomarLeadEntrante,
   soltarLeadEntrante,
   descartarLeadEntrante,
+  enlazarCodigoWhatsapp,
   getServicios,
   MOTIVO_CONTACTO_LABEL,
   type CanalLeadDef,
@@ -51,6 +54,8 @@ const COLUMNAS_LEAD = [
   { key: 'servicio', label: 'Servicio pedido' },
   { key: 'landing', label: 'Landing' },
   { key: 'gclid', label: 'gclid (Google)' },
+  // GMS-WA-XXXXXX: el mismo código sigue al cliente desde el clic en la landing hasta la venta.
+  { key: 'codigo', label: 'Código WhatsApp' },
   { key: 'referidoPor', label: 'Referido por' },
   { key: 'consentimiento', label: 'Consentimiento de datos' },
   // Solo tiene dato en los descartados. Se muestra sola al filtrar por ella (p. ej. desde el Dashboard).
@@ -67,7 +72,7 @@ const COLUMNAS_EXPORTAR_LEAD = [
 ];
 const ANCHO_COLUMNA_LEAD: Record<string, number> = {
   mensaje: 220, canal: 130, motivo: 170, estado: 150, responsable: 140, llego: 110, campana: 150, servicio: 150,
-  landing: 150, gclid: 170, referidoPor: 150, consentimiento: 150, motivoDescarte: 160,
+  landing: 150, gclid: 170, codigo: 150, referidoPor: 150, consentimiento: 150, motivoDescarte: 160,
 };
 // Qué columna corresponde a cada dato propio de una fuente.
 const COLUMNA_DE_CAMPO: Record<string, string> = {
@@ -132,6 +137,7 @@ export default function LeadsPage() {
     { key: 'servicio', etiqueta: 'Servicio pedido', tipo: 'valores', vacio: 'Sin dato', getValues: (l) => extraTexto(l, 'servicio') },
     { key: 'landing', etiqueta: 'Landing', tipo: 'valores', vacio: 'Sin dato', getValues: (l) => extraTexto(l, 'landing') },
     { key: 'gclid', etiqueta: 'gclid', tipo: 'texto', getValue: (l) => extraTexto(l, 'gclid') },
+    { key: 'codigo', etiqueta: 'Código WhatsApp', tipo: 'texto', getValue: (l) => extraTexto(l, 'trackingId') },
     { key: 'referidoPor', etiqueta: 'Referido por', tipo: 'valores', vacio: 'Nadie', getValues: (l) => extraTexto(l, 'referidoPor') },
     {
       key: 'consentimiento', etiqueta: 'Consentimiento', tipo: 'valores', vacio: 'Sin dato',
@@ -145,16 +151,23 @@ export default function LeadsPage() {
   useEffect(() => {
     // Llegan del Dashboard («Motivos de pérdida», tarjetas…): ?estado=DESCARTADO&motivoDescarte=…&responsable=mine|<id>
     // &desde=&hasta=. Cada uno se vuelve el filtro de su columna y queda a la vista como chip.
+    // ?q=GMS-WA-XXXXXX: «Ver posible cliente» de la lista de clics de WhatsApp. Se busca ese código con los filtros
+    // limpios (el posible cliente puede estar descartado o convertido y el filtro de estado lo ocultaría).
+    const q = searchParams.get('q');
+    if (q) { cf.limpiar(); setBusqueda(q); }
     const filtros = filtrosDeUrlLeads(searchParams, usuario?.id);
     fijarVarios(filtros);
     // ?nuevo=1: «Nueva oportunidad» manda aquí a quien apenas escribió y todavía no es oportunidad.
     if (searchParams.get('nuevo') === '1') setNuevo(true);
-    if (Object.keys(filtros).length > 0 || searchParams.get('nuevo')) setSearchParams({}, { replace: true });
+    if (Object.keys(filtros).length > 0 || searchParams.get('nuevo') || q) setSearchParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- usuario no cambia mientras la pantalla está abierta.
   }, [searchParams, setSearchParams, fijarVarios]);
   const [nuevo, setNuevo] = useState(false);
   const [convirtiendo, setConvirtiendo] = useState<LeadEntrante | null>(null);
   const [descartando, setDescartando] = useState<LeadEntrante | null>(null);
+  const [enlazando, setEnlazando] = useState<LeadEntrante | null>(null);
+  const [llegoWhatsapp, setLlegoWhatsapp] = useState(false);
+  const [verClics, setVerClics] = useState(false);
   // Columnas que cada persona elige ver (preferencia en su cuenta).
   const columnPrefs = useColumnPreferences('ventas-leads', COLUMNAS_LEAD_POR_DEFECTO);
   // Al filtrar por una fuente se suman las columnas con los datos propios de
@@ -195,7 +208,8 @@ export default function LeadsPage() {
       (l.email || '').toLowerCase().includes(q) ||
       (l.phone || '').includes(q) ||
       (l.companyName || '').toLowerCase().includes(q) ||
-      (l.message || '').toLowerCase().includes(q)
+      (l.message || '').toLowerCase().includes(q) ||
+      extraTexto(l, 'trackingId').toLowerCase().includes(q)
     ));
   }, [cf.filas, busqueda]);
 
@@ -213,6 +227,7 @@ export default function LeadsPage() {
       servicio: (l) => extraTexto(l, 'servicio'),
       landing: (l) => extraTexto(l, 'landing'),
       gclid: (l) => extraTexto(l, 'gclid'),
+      codigo: (l) => extraTexto(l, 'trackingId'),
       referidoPor: (l) => extraTexto(l, 'referidoPor'),
       consentimiento: (l) => extraTexto(l, 'consentimiento'),
       motivoDescarte: (l) => l.motivoDescarte,
@@ -292,6 +307,8 @@ export default function LeadsPage() {
         return extraTexto(l, 'gclid')
           ? <span title={extraTexto(l, 'gclid')} className="truncate" style={{ display: 'block', fontSize: 11 }}>{extraTexto(l, 'gclid')}</span>
           : '—';
+      case 'codigo':
+        return extraTexto(l, 'trackingId') || '—';
       case 'referidoPor':
         return extraTexto(l, 'referidoPor') || '—';
       case 'motivoDescarte':
@@ -321,6 +338,7 @@ export default function LeadsPage() {
       case 'llego': return diaCortoEcuador(l.createdAt);
       case 'campana': return l.campaign || '';
       case 'servicio': case 'landing': case 'gclid': case 'referidoPor': return extraTexto(l, key);
+      case 'codigo': return extraTexto(l, 'trackingId');
       case 'motivoDescarte': return l.motivoDescarte || '';
       case 'consentimiento': {
         const c = extraTexto(l, 'consentimiento');
@@ -356,6 +374,10 @@ export default function LeadsPage() {
     if (l.status === 'CONVERTIDO' && (l.convertedOpportunityId || l.convertedClientId)) {
       lista.push({ label: 'Ver la oportunidad', icon: <ClipboardList size={14} />, onClick: () => navigate('/ventas/oportunidades') });
     }
+    // El código apareció después de crear el posible cliente (o el cliente lo había borrado del mensaje).
+    if (l.channel === 'WHATSAPP' && !extraTexto(l, 'trackingId')) {
+      lista.push({ label: 'Enlazar código de WhatsApp', icon: <Link2 size={14} />, onClick: () => setEnlazando(l) });
+    }
     if (abiertos(l)) {
       if (!l.assignedUserId) {
         lista.push({ label: 'Tomar este posible cliente', icon: <UserPlus size={14} />, onClick: () => correr(() => tomarLeadEntrante(l.id), 'Posible cliente tomado', 'No se pudo tomar el posible cliente') });
@@ -376,12 +398,19 @@ export default function LeadsPage() {
         title="Posibles clientes"
         description={<>Contactos que llegan por la web, los anuncios o a mano (en Google Ads: leads). Solo los de servicio pasan a oportunidad. {sinClasificar > 0 && <strong>{sinClasificar} sin clasificar.</strong>}</>}
         actions={
-          <button className="auth-btn" onClick={() => setNuevo(true)}>
-            <Plus size={16} /> Nuevo posible cliente
-          </button>
+          <>
+            <button className="btn-secondary" onClick={() => setLlegoWhatsapp(true)}
+              title="Te llegó un mensaje de WhatsApp con código: escríbelo para crear el posible cliente con su campaña y landing">
+              <MessageCircle size={16} /> Llegó un WhatsApp
+            </button>
+            <button className="auth-btn" onClick={() => setNuevo(true)}>
+              <Plus size={16} /> Nuevo posible cliente
+            </button>
+          </>
         }
       />
 
+      <>
       <div className="filter-bar">
         <div className="filter-bar-fields">
           <input
@@ -496,6 +525,7 @@ export default function LeadsPage() {
           </div>
         )}
       </div>
+      </>
 
       {nuevo && (
         <NuevoLeadModal
@@ -520,6 +550,21 @@ export default function LeadsPage() {
           }}
         />
       )}
+      {verClics && <ClicsWhatsappModal onClose={() => setVerClics(false)} />}
+      {llegoWhatsapp && (
+        <LlegoWhatsappModal
+          onClose={() => setLlegoWhatsapp(false)}
+          onVerClics={() => { setLlegoWhatsapp(false); setVerClics(true); }}
+          onDone={() => { setLlegoWhatsapp(false); showToast('Posible cliente creado, con fuente WhatsApp, su campaña y su landing', 'success'); cargar(); }}
+        />
+      )}
+      {enlazando && (
+        <EnlazarCodigoModal
+          lead={enlazando}
+          onClose={() => setEnlazando(null)}
+          onDone={() => { setEnlazando(null); showToast('Código enlazado: el posible cliente ya trae su campaña y su landing', 'success'); cargar(); }}
+        />
+      )}
       {descartando && (
         <MotivoCierreModal
           kind="LEAD_DESCARTE"
@@ -536,6 +581,59 @@ export default function LeadsPage() {
           onCancel={() => setDescartando(null)}
         />
       )}
+    </div>
+  );
+}
+
+// «Enlazar código»: el código del mensaje de WhatsApp apareció después de crear el posible cliente. Copia campaña,
+// landing, servicio y gclid solo donde el posible cliente no tenía dato.
+function EnlazarCodigoModal({ lead, onClose, onDone }: { lead: LeadEntrante; onClose: () => void; onDone: () => void }) {
+  const [codigo, setCodigo] = useState('');
+  const [error, setError] = useState('');
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    setError('');
+    if (!codigo.trim()) return setError('Escribe el código que llegó en el mensaje (GMS-WA-XXXXXX).');
+    setGuardando(true);
+    try {
+      await enlazarCodigoWhatsapp(lead.id, codigo.trim());
+      onDone();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message;
+      setError((Array.isArray(msg) ? msg[0] : msg) || 'No se pudo enlazar el código. Intenta de nuevo.');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal modal-ventas-sm" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Enlazar código de WhatsApp</h3>
+          <button className="modal-close" onClick={onClose} aria-label="Cerrar">✕</button>
+        </div>
+        <div className="modal-body">
+          <ErrorBanner mensaje={error} />
+          <div className="form-ayuda">
+            <p>
+              Para <strong>{lead.name}</strong>. Si el mensaje de WhatsApp llegó desde una landing, trae un código al final. Al enlazarlo,
+              {' '}el posible cliente recibe la campaña, la landing, el servicio y el gclid de ese clic, solo en lo que todavía no tenía.
+            </p>
+          </div>
+          <div className="form-group">
+            <label>Código del mensaje</label>
+            <input type="text" value={codigo} maxLength={20} placeholder="GMS-WA-XXXXXX" autoFocus
+              style={{ fontFamily: 'monospace', textTransform: 'uppercase' }}
+              onChange={(e) => setCodigo(e.target.value)} />
+          </div>
+        </div>
+        <div className="modal-actions">
+          <button className="btn-secondary" onClick={onClose}>Cancelar</button>
+          <button className="auth-btn" onClick={guardar} disabled={guardando}>{guardando ? 'Enlazando...' : 'Enlazar código'}</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -611,7 +709,7 @@ function CampoReferidor({ campo, propios, setPropios }: {
 function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const navigate = useNavigate();
   const { canales } = useCanalesLead();
-  const [datos, setDatos] = useState({ name: '', email: '', phone: '', companyName: '', direccion: '', message: '', channel: '' });
+  const [datos, setDatos] = useState({ name: '', email: '', phone: '', companyName: '', direccion: '', message: '', channel: '', codigoMensaje: '' });
   const [propios, setPropios] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -620,6 +718,7 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
 
   const elegirFuente = (key: string) => {
     set('channel', key);
+    set('codigoMensaje', '');
     setPropios({});
   };
 
@@ -636,7 +735,7 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
       const { campaign, ...extra } = propios;
       // «Otra persona» es solo una opción del selector, no un usuario: no viaja al servidor.
       for (const k of Object.keys(extra)) if (extra[k] === OTRA_PERSONA) delete extra[k];
-      await createLeadEntrante({ ...datos, campaign, extra });
+      await createLeadEntrante({ ...datos, codigoMensaje: datos.channel === 'WHATSAPP' ? datos.codigoMensaje.trim() : '', campaign, extra });
       onSaved();
     } catch (err: any) {
       const msg = err?.response?.data?.message;
@@ -712,6 +811,17 @@ function NuevoLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
                   {campo.ayuda && <small style={{ color: '#718096' }}>{campo.ayuda}</small>}
                 </div>
               ))}
+            </div>
+          )}
+          {datos.channel === 'WHATSAPP' && (
+            <div className="form-group">
+              <label>Código del mensaje (opcional)</label>
+              <input type="text" value={datos.codigoMensaje} maxLength={20} placeholder="GMS-WA-XXXXXX"
+                style={{ fontFamily: 'monospace', textTransform: 'uppercase' }}
+                onChange={(e) => set('codigoMensaje', e.target.value)} />
+              <small style={{ color: '#718096' }}>
+                Si el mensaje de WhatsApp llegó desde una landing, trae un código al final. Al escribirlo, el posible cliente nace con la campaña, la landing, el servicio y el gclid de ese clic.
+              </small>
             </div>
           )}
           <div className="form-group">

@@ -1699,3 +1699,32 @@
 /* Columnas fijas: las celdas fijas conservan la rejilla y el fondo de la fila. */
 .cot-cat-wrap.tabla-viva .tasks-table tbody tr:nth-child(even) td:is(:nth-child(1), :nth-child(2)) { background: #fafbfd; }
 .cot-cat-wrap.tabla-viva .tasks-table tbody tr:hover td:is(:nth-child(1), :nth-child(2)) { background: #eef4ff; }
+
+/* Historial de cotizaciones: mismas reglas que el catalogo (cifras a la derecha, filtro de columna sin tapar el texto). */
+.cot-hist-wrap .tasks-table td .truncate { max-width: none; }
+.cot-hist-wrap .tasks-table .cf-btn { right: 6px; }
+.cot-hist-wrap .tasks-table th.cot-num { text-align: right; }
+.cot-hist-wrap .tasks-table td.cot-num { text-align: right; padding-right: 34px; font-variant-numeric: tabular-nums; }
+.cot-hist-wrap .tasks-table th.col-acciones,
+.cot-hist-wrap .tasks-table td.col-acciones { padding: 2px 6px; text-align: center; }
+.tasks-table-wrapper.cot-hist-wrap { border: 1px solid #dbe2ea; border-radius: 10px; background: #fff; }
+.cot-hist-wrap .tasks-table { font-size: 0.84rem; line-height: 1.3; min-width: 100%; }
+.cot-hist-wrap .tasks-table th {
+  padding: 8px 34px 8px 10px;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid #cbd5e1;
+  border-right: 1px solid #e2e8f0;
+  background: #f1f5f9;
+}
+.cot-hist-wrap .tasks-table td {
+  padding: 5px 10px;
+  white-space: nowrap;
+  border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #eef2f7;
+  vertical-align: middle;
+}
+.cot-hist-wrap .tasks-table th:last-child,
+.cot-hist-wrap .tasks-table td:last-child { border-right: 0; }
+.cot-hist-wrap .tasks-table tbody tr:nth-child(even) td { background: #fafbfd; }
+.cot-hist-wrap .tasks-table tbody tr:hover td { background: #eef4ff; }

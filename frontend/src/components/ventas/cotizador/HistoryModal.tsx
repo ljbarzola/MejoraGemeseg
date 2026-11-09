@@ -30,13 +30,20 @@ const COLUMNAS = [
 ];
 const POR_DEFECTO = ['fecha', 'cliente', 'vendedor', 'estado', 'total'];
 const ANCHO: Record<string, number> = {
-  numero: 170,
+  numero: 160,
   fecha: 100,
-  cliente: 220,
-  vendedor: 150,
-  estado: 130,
-  total: 110,
+  cliente: 190,
+  vendedor: 193,
+  estado: 115,
+  total: 95,
   acciones: 64,
+};
+
+// Plural de cada estado en las cifras de arriba («borradores», no «borradors»).
+const PLURAL_ESTADO: Partial<Record<CotStatus, string>> = {
+  borrador: 'borradores',
+  enviada: 'enviadas',
+  aceptada: 'aceptadas',
 };
 
 const ACCESO_ETIQUETA: Record<string, string> = {
@@ -165,8 +172,8 @@ export default function HistoryModal({
   };
 
   const th = (key: string, label: string) => (
-    <th {...thProps(key)} style={{ width: ANCHO[key] }}>
-      {label} 
+    <th {...thProps(key)} className={`sortable-th${key === 'total' ? ' cot-num' : ''}`} style={{ width: ANCHO[key] }}>
+      {label}
       <ColumnFilter cf={cf} col={key} orden={ordenDe(key)} />
     </th>
   );
@@ -201,7 +208,7 @@ export default function HistoryModal({
             {(['borrador', 'enviada', 'aceptada'] as CotStatus[]).map((s) => (
               <div className="cot-stat" key={s}>
                 <strong>{porEstado(s)}</strong>
-                <span>{COT_STATUS_LABEL[s].toLowerCase()}s</span>
+                <span>{PLURAL_ESTADO[s] ?? `${COT_STATUS_LABEL[s].toLowerCase()}s`}</span>
               </div>
             ))}
           </div>
@@ -238,7 +245,7 @@ export default function HistoryModal({
           )}
 
           {quotes.length > 0 && (
-            <div className="tasks-table-wrapper">
+            <div className="tasks-table-wrapper cot-hist-wrap">
               <table className="tasks-table resizable-table" ref={tablaRef}>
                 <thead>
                   <tr>
@@ -278,9 +285,10 @@ export default function HistoryModal({
                       </td>
                       {visibles.map((k) => {
                         if (k === 'fecha') return <td key={k}>{isoToDMY(q.quoteDate)}</td>;
-                        if (k === 'cliente') return <td key={k} className="truncate">{q.client.name}</td>;
-                        if (k === 'vendedor') return <td key={k} className="truncate">{q.vendorName}</td>;
-                        if (k === 'total') return <td key={k} style={{ textAlign: 'right' }}>{money(total)}</td>;
+                        // El recorte va en un <span>: la clase .truncate es display:block y, puesta en el <td>, lo saca de la tabla.
+                        if (k === 'cliente') return <td key={k}><span className="truncate" title={q.client.name}>{q.client.name}</span></td>;
+                        if (k === 'vendedor') return <td key={k}><span className="truncate" title={q.vendorName}>{q.vendorName}</span></td>;
+                        if (k === 'total') return <td key={k} className="cot-num">{money(total)}</td>;
                         // estado
                         return (
                           <td key={k}>
