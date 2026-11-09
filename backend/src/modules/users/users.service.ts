@@ -206,7 +206,10 @@ export class UsersService implements OnModuleInit {
     return user;
   }
 
-  async update(id: number, dto: UpdateUserDto) {
+  // `actorId` = quien edita. Si un administrador cambia la contraseña de OTRA
+  // persona se cierran las sesiones abiertas de esa persona; si se la cambia a
+  // sí mismo no, para no sacarlo de la app en medio del formulario.
+  async update(id: number, dto: UpdateUserDto, actorId?: number) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) {
       throw new NotFoundException(`Usuario con id ${id} no encontrado`);
@@ -252,7 +255,7 @@ export class UsersService implements OnModuleInit {
       data.password = await bcrypt.hash(dto.password, 10);
     }
 
-    return this.prisma.user.update({
+    const actualizado = await this.prisma.user.update({
       where: { id },
       data,
       include: {
@@ -261,6 +264,30 @@ export class UsersService implements OnModuleInit {
         location: true,
       },
     });
+
+    if (dto.password && actorId !== id) {
+      await this.cerrarSesionesDe(id);
+    }
+
+    return actualizado;
+  }
+
+  // Misma tabla que usa SessionCutoffService (auth): los tokens emitidos antes
+  // de este instante dejan de valer. Falla abierto: si no se puede guardar, la
+  // contraseña ya cambió y solo se pierde el cierre de sesiones.
+  private async cerrarSesionesDe(userId: number) {
+    try {
+      const validAfter = new Date(Math.floor(Date.now() / 1000) * 1000);
+      await this.prisma.userSessionCutoff.upsert({
+        where: { userId },
+        create: { userId, validAfter },
+        update: { validAfter },
+      });
+    } catch (err) {
+      this.logger.error(
+        `No se pudieron cerrar las sesiones del usuario ${userId}: ${(err as Error).message}`,
+      );
+    }
   }
 
   async remove(id: number) {

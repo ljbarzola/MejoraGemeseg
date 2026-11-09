@@ -257,6 +257,14 @@ export default function AdminDashboardPage() {
           phone: formData.phone.trim() || null,
           locationId: formData.locationId,
         };
+        if (formData.password) {
+          if (formData.password.length < 6) {
+            setFormError('La nueva contraseña debe tener al menos 6 caracteres');
+            setFormLoading(false);
+            return;
+          }
+          data.password = formData.password;
+        }
         await updateUser(editingUser.id, data);
       } else {
         if (!formData.password) {
@@ -601,7 +609,7 @@ export default function AdminDashboardPage() {
                     required
                   />
                 </div>
-                {!editingUser && (
+                {!editingUser ? (
                   <div className="form-group">
                     <label>Contraseña *</label>
                     <input
@@ -611,6 +619,21 @@ export default function AdminDashboardPage() {
                       placeholder="Ingresa una contraseña"
                       required
                     />
+                  </div>
+                ) : (
+                  <div className="form-group">
+                    <label>Nueva contraseña</label>
+                    <input
+                      type="password"
+                      value={formData.password}
+                      autoComplete="new-password"
+                      minLength={6}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="Déjala vacía para no cambiarla"
+                    />
+                    <small style={{ color: 'var(--text-muted, #6b7280)' }}>
+                      Mínimo 6 caracteres. Si la cambias, se cierran las sesiones abiertas de esta persona.
+                    </small>
                   </div>
                 )}
                 <div className="form-row">
