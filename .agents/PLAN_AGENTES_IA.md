@@ -59,8 +59,14 @@ Tipos: **IA** (modelo de lenguaje), **Reglas** (código determinista), **Job** (
 | 8 | Reporte gerencial mensual | Reglas + algo de IA | Los 11 pasos de copiar de Isyplus | Cómo exporta Isyplus | En espera |
 | 9 | Cruce de débitos Loja y Machala | Reglas | Lista de rezagados sin 1,5 a 2 h de trabajo manual | Formato de los archivos de cada banco | En espera |
 | 10 | Avisos de Custodias y Cacao | Job | Viajes que no cierran, nómina con huecos, lotes abiertos, cuentas por cobrar vencidas | Definir umbrales | Después |
-| 11 | Inventario con kardex y control de municiones | Módulo nuevo | Sin herramienta hoy | Decidir qué se controla | Después |
+| 11 | Inventario con kardex y control de municiones y armas | Reglas | Entradas, entregas, devoluciones, bajas, saldo, mínimos y permisos de armas | Movimientos que registra una persona | **Construido en local (2026-11-06)**, sin desplegar; falta que Operaciones confirme qué se controla |
 | 12 | Mejora del motor (llamadas nativas a herramientas) | Técnico | Que los agentes encadenen consultas | Aplazado | Pendiente |
+| 13 | Reemplazo sugerido ante una falta (Operaciones) | Reglas | Cuando la bitácora dice «no aparece», propone quién del contrato tenía descanso o ningún turno | Horario aprobado del contrato | **Construido en local (2026-11-05)**, sin desplegar |
+| 14 | Aviso por la campana de bitácoras con errores (Operaciones) | Reglas | Que nadie tenga que abrir la lista para enterarse | Permiso de escribir en Operaciones | **Construido en local (2026-11-05)**, sin desplegar |
+| 18 | «Hoy en los puestos» en el Resumen de Operaciones | Reglas | Quién debe estar hoy, cobertura mínima y bitácoras sin subir de la última semana | Horarios aprobados y bitácoras | **Construido en local (2026-11-05)**, sin desplegar |
+| 15 | Parte del turno (el guardia escribe o dicta y la IA lo ordena por categorías) | IA | Reemplaza el informe de novedades manual | Quién lo llena y por qué canal (preguntas de Operaciones) | En espera |
+| 16 | Horas cubiertas contra contrato y factura | Reglas | La facturación incompleta de inicio de mes | Cómo exporta Isyplus la facturación | En espera |
+| 17 | Rondas y supervisión verificadas (QR o GPS) | Reglas | Comprobar que la ronda se hizo | Qué se hace hoy con Softguard y Vigicontrol | En espera |
 
 ### Ventajas, desventajas y precio de los dos primeros
 
@@ -91,7 +97,7 @@ Con `gemini-3.8-flash`: unos 2.000 tokens de entrada, 1.300 a 1.450 de salida, 1
 - El informe de Grok Bot recomienda solo un piloto pequeño (desde USD 30 al mes), sin datos del personal ni credenciales del Estado. No se adoptó.
 
 ## 6. Pendientes y preguntas abiertas
-- **Operaciones** (lista de 20 preguntas ya preparada; las prioritarias son cuántos grupos de chat usan, cuántas novedades hay por día, la hoja de supervisión, la hoja de ruta, los KPIs actuales y qué pasó con Vigicontrol).
+- **Operaciones** (desde 2026-11-05 es un módulo propio, ver `.agents/modules/operaciones.md`; lista de 20 preguntas ya preparada; las prioritarias son cuántos grupos de chat usan, cuántas novedades hay por día, la hoja de supervisión, la hoja de ruta, los KPIs actuales y qué pasó con Vigicontrol).
 - **Isyplus:** cómo exporta ventas, compras, nómina y débitos.
 - **Privacidad:** si los chats incluyen cédulas o direcciones, decidir si pueden salir a un servicio externo de IA.
 - Confirmar la tarifa actual de Gemini 3.x y la residencia de datos del endpoint `global` (no verificadas).
