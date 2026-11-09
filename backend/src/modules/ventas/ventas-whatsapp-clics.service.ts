@@ -43,6 +43,8 @@ export interface ClicFila {
   landingPage: string | null;
   serviceName: string | null;
   serviceGroup: string | null;
+  // Número de WhatsApp (del vendedor) al que fue el clic; null en los clics anteriores a guardarlo.
+  whatsappNumber: string | null;
   gclid: string | null;
   leadId: number | null;
   leadName: string | null;
@@ -158,11 +160,11 @@ export class VentasWhatsappClicsService {
     await this.prisma.$executeRawUnsafe(
       `INSERT INTO "SalesWhatsappClick"
         ("companyId","trackingId","utmSource","utmMedium","utmCampaign","utmContent","utmTerm",
-         "gclid","fbclid","landingPage","serviceName","serviceGroup","pageUrl")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+         "gclid","fbclid","landingPage","serviceName","serviceGroup","pageUrl","whatsappNumber")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        ON CONFLICT ("companyId","trackingId") DO NOTHING`,
       companyId, c.trackingId, c.utmSource, c.utmMedium, c.utmCampaign, c.utmContent, c.utmTerm,
-      c.gclid, c.fbclid, c.landingPage, c.serviceName, c.serviceGroup, c.pageUrl,
+      c.gclid, c.fbclid, c.landingPage, c.serviceName, c.serviceGroup, c.pageUrl, c.whatsappNumber,
     );
     return { success: true, trackingId: c.trackingId };
   }
@@ -186,7 +188,7 @@ export class VentasWhatsappClicsService {
            ELSE 'ESCRIBIO'
          END AS "fase",
          s."label" AS "etapa",
-         c."utmSource", c."utmMedium", c."utmCampaign", c."utmContent", c."utmTerm", c."landingPage", c."serviceName", c."serviceGroup",
+         c."utmSource", c."utmMedium", c."utmCampaign", c."utmContent", c."utmTerm", c."landingPage", c."serviceName", c."serviceGroup", c."whatsappNumber",
          c."gclid", c."leadId", l."name" AS "leadName", o."id" AS "opportunityId",
          c."clickedAt", c."conversationAt"
        FROM "SalesWhatsappClick" c

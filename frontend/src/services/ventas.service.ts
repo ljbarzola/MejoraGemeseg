@@ -1512,6 +1512,8 @@ export interface ClicWhatsapp {
   landingPage: string | null;
   serviceName: string | null;
   serviceGroup: string | null;
+  // Número de WhatsApp (del vendedor) al que fue el clic.
+  whatsappNumber: string | null;
   gclid: string | null;
   leadId: number | null;
   leadName: string | null;

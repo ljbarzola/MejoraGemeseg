@@ -39,6 +39,14 @@ export interface ClicEntrada {
   serviceName: string | null;
   serviceGroup: string | null;
   pageUrl: string | null;
+  // Solo dígitos con código de país (593969135744); null si no llegó o no parece un teléfono.
+  whatsappNumber: string | null;
+}
+
+// Un número de WhatsApp válido tiene entre 8 y 15 dígitos (E.164). Cualquier otra cosa no se guarda.
+export function numeroLimpio(valor: unknown): string | null {
+  const digitos = (valor ?? '').toString().replace(/\D/g, '');
+  return digitos.length >= 8 && digitos.length <= 15 ? digitos : null;
 }
 
 // Devuelve null si el código no tiene el formato GMS-WA-XXXXXX (no se guarda nada).
@@ -59,6 +67,7 @@ export function limpiarClic(body: Record<string, unknown> | null | undefined): C
     serviceGroup: clave(body?.service_group, 100),
     // Solo la dirección sin parámetros: nunca se guardan los UTM dos veces ni datos que viajen en la URL.
     pageUrl: recortar((body?.page_url ?? '').toString().split(/[?#]/)[0], 300),
+    whatsappNumber: numeroLimpio(body?.whatsapp_number),
   };
 }
 

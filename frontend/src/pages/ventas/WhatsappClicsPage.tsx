@@ -8,6 +8,7 @@ import { useColumnFilters } from '../../hooks/useColumnFilters';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useToast } from '../../contexts/ToastContext';
 import { getClicsWhatsapp, type ClicWhatsapp } from '../../services/ventas.service';
+import { numeroLegible } from '../../utils/numeroWhatsapp';
 
 // La pestaña es una bandeja: solo dice si el clic todavía puede escribir, si ya pasó el plazo sin mensaje o si ya
 // escribió. El avance de la venta (En evaluación, Cotizada, Ganada…) se ve en Oportunidades y en el Dashboard.
@@ -60,6 +61,7 @@ const COLUMNAS_EXPORTAR = [
   { key: 'campana', label: 'Campaña' },
   { key: 'landing', label: 'Landing' },
   { key: 'servicio', label: 'Servicio' },
+  { key: 'numero', label: 'Número de WhatsApp' },
   { key: 'grupo', label: 'Grupo de servicio' },
   { key: 'gclid', label: 'gclid' },
   { key: 'contacto', label: 'Posible cliente' },
@@ -115,6 +117,7 @@ export default function WhatsappClicsPage({ version, onEscribio }: { version: nu
         c.trackingId.toLowerCase().includes(q) ||
         c.utmCampaign.toLowerCase().includes(q) ||
         (c.landingPage || '').toLowerCase().includes(q) ||
+        (c.whatsappNumber || '').includes(q.replace(/\D/g, '') || '\u0000') ||
         (c.leadName || '').toLowerCase().includes(q)
       ));
     }
@@ -138,6 +141,7 @@ export default function WhatsappClicsPage({ version, onEscribio }: { version: nu
       case 'campana': return c.utmCampaign;
       case 'landing': return c.landingPage || '';
       case 'servicio': return servicioLegible(c.serviceName);
+      case 'numero': return numeroLegible(c.whatsappNumber);
       case 'grupo': return c.serviceGroup || '';
       case 'gclid': return c.gclid || '';
       case 'contacto': return c.leadName || '';
@@ -242,7 +246,10 @@ export default function WhatsappClicsPage({ version, onEscribio }: { version: nu
                     </span>
                   </td>
                   <td><span className="clics-wa-celda" title={c.utmCampaign}>{c.utmCampaign}</span></td>
-                  <td><span className="clics-wa-celda" title={c.landingPage || ''}>{c.landingPage || '—'}</span></td>
+                  <td>
+                    <span className="clics-wa-celda" title={c.landingPage || ''}>{c.landingPage || '—'}</span>
+                    {c.whatsappNumber && <span className="clics-wa-numero" title="Número de WhatsApp al que fue el clic">{numeroLegible(c.whatsappNumber)}</span>}
+                  </td>
                   <td>{servicioLegible(c.serviceName) || '—'}</td>
                   <td><span className="clics-wa-celda" title={c.leadName || ''}>{c.leadName || '—'}</span></td>
                   <td className="col-acciones">

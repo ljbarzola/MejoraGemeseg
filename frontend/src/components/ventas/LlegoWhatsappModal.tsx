@@ -7,6 +7,7 @@ import {
   type ClicWhatsapp,
 } from '../../services/ventas.service';
 
+import { numeroLegible } from '../../utils/numeroWhatsapp';
 const servicioLegible = (s: string | null) => (s ? s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) : '');
 const fechaHora = (iso: string) =>
   new Date(iso).toLocaleString('es-EC', { timeZone: 'America/Guayaquil', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -120,7 +121,8 @@ export default function LlegoWhatsappModal({ clicInicial, onClose, onDone, onVer
                   Código <strong style={{ fontFamily: 'monospace' }}>{clic.trackingId}</strong> · tocó el botón el <strong>{fechaHora(clic.clickedAt)}</strong>
                   {clic.landingPage ? <> · landing <strong>{clic.landingPage}</strong></> : null}
                   {clic.utmCampaign !== 'none' ? <> · campaña <strong>{clic.utmCampaign}</strong></> : null}
-                  {clic.serviceName ? <> · servicio <strong>{servicioLegible(clic.serviceName)}</strong></> : null}.
+                  {clic.serviceName ? <> · servicio <strong>{servicioLegible(clic.serviceName)}</strong></> : null}
+                  {clic.whatsappNumber ? <> · al WhatsApp <strong>{numeroLegible(clic.whatsappNumber)}</strong></> : null}.
                   {' '}Con los datos de quien escribió se crea el posible cliente; la fuente y el código quedan guardados.
                 </p>
                 {!clicInicial && (

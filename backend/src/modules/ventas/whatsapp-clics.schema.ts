@@ -26,6 +26,7 @@ export const SALES_WHATSAPP_CLICK_DDL: string[] = [
     "serviceName" TEXT,
     "serviceGroup" TEXT,
     "pageUrl" TEXT,
+    "whatsappNumber" TEXT,
     "leadId" INTEGER,
     "clickedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "conversationAt" TIMESTAMP(3),
@@ -33,6 +34,9 @@ export const SALES_WHATSAPP_CLICK_DDL: string[] = [
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "SalesWhatsappClick_pkey" PRIMARY KEY ("id")
   )`,
+  // A qué número de WhatsApp (de qué vendedor) fue el clic. Columna añadida antes del primer despliegue: el ALTER
+  // cubre las bases locales que ya tenían la tabla.
+  `ALTER TABLE "SalesWhatsappClick" ADD COLUMN IF NOT EXISTS "whatsappNumber" TEXT`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "SalesWhatsappClick_companyId_trackingId_key" ON "SalesWhatsappClick"("companyId", "trackingId")`,
   `CREATE INDEX IF NOT EXISTS "SalesWhatsappClick_companyId_clickedAt_idx" ON "SalesWhatsappClick"("companyId", "clickedAt")`,
   `CREATE INDEX IF NOT EXISTS "SalesWhatsappClick_leadId_idx" ON "SalesWhatsappClick"("leadId")`,
