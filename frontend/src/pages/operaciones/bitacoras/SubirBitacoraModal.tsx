@@ -104,7 +104,7 @@ export default function SubirBitacoraModal({
 
           {opciones !== null && opciones.length === 0 && !error && (
             <div className="form-error" style={{ background: '#fffaf0', borderColor: '#fbd38d', color: '#7b341e' }}>
-              No hay puestos de servicio para elegir. Crea un contrato con sus puestos en Contratos (Contratación Pública).
+              No hay puestos de servicio para elegir. Crea un contrato con sus puestos en Contratos (Operaciones).
             </div>
           )}
 

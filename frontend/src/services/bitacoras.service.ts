@@ -7,6 +7,7 @@ import type {
   LecturaParaGuardar,
   ListaBitacoras,
   OpcionPuestoBitacora,
+  PuestosDelDia,
   ResumenBitacoras,
 } from '../types/bitacoras';
 import type { CPCodigoTurno } from '../types/contratacion-publica';
@@ -29,6 +30,10 @@ export const getBitacoras = (
 
 export const getResumenBitacoras = (filtros: FiltrosBitacoras): Promise<ResumenBitacoras> =>
   api.get(`${BASE}/dashboard`, { params: limpiar(filtros) }).then((r) => r.data);
+
+/** Hoy en los puestos: quién debe estar, si la cobertura se cumple y qué bitácoras faltan por subir. */
+export const getPuestosHoy = (): Promise<PuestosDelDia> =>
+  api.get(`${BASE}/hoy`).then((r) => r.data);
 
 export const getBitacora = (id: number): Promise<BitacoraDetalle> =>
   api.get(`${BASE}/${id}`).then((r) => r.data);

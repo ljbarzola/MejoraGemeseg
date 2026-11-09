@@ -59,6 +59,7 @@ export const CAPABILITY_MODULES: CapabilityModule[] = [
     intents: [],
   },
   { section: 'CONTRATACION_PUBLICA', titulo: 'Contratación Pública', intents: [] },
+  { section: 'OPERACIONES', titulo: 'Operaciones', intents: [] },
 ];
 
 export interface OpcionesCapacidades {

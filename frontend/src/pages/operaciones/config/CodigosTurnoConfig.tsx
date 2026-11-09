@@ -14,7 +14,7 @@ const COLOR_DEFAULT = '#3b82f6';
 
 export default function CodigosTurnoConfig() {
   const { canWrite } = usePerm();
-  const canEdit = canWrite('CONTRATACION_PUBLICA');
+  const canEdit = canWrite('OPERACIONES');
 
   const [codigos, setCodigos] = useState<CPCodigoTurno[]>([]);
   const [loading, setLoading] = useState(true);

@@ -11,7 +11,7 @@ const segundos = (ms: number | null) => (ms === null ? '—' : ms < 1000 ? `${ms
 
 /** A dónde lleva «sobre qué trabajó» el agente, si hay una pantalla para verlo. */
 function enlaceDe(r: EjecucionAgente): string | null {
-  return r.entidadTipo === 'CPBitacora' && r.entidadId ? `/contratacion-publica/bitacoras/${r.entidadId}` : null;
+  return r.entidadTipo === 'CPBitacora' && r.entidadId ? `/operaciones/bitacoras/${r.entidadId}` : null;
 }
 
 /**

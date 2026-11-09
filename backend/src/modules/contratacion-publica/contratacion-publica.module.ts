@@ -8,11 +8,13 @@ import { CPInformesModule } from './informes/informes.module';
 import { CPTextosInstitucionalesModule } from './textos-institucionales/textos-institucionales.module';
 import { CPEntregasModule } from './entregas/entregas.module';
 import { CPBitacorasModule } from './bitacoras/bitacoras.module';
+import { CPAusenciasModule } from './ausencias/ausencias.module';
 
 @Module({
   imports: [
     CPEntregasModule,
     CPBitacorasModule,
+    CPAusenciasModule,
     CPEntidadesModule,
     CPContratosModule,
     CPPuestosModule,

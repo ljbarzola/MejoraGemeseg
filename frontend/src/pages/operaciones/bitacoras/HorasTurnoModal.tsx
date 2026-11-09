@@ -85,7 +85,7 @@ export default function HorasTurnoModal({
           {error && <div className="form-error">{error}</div>}
           {!puedeEditar && (
             <div className="form-error" style={{ background: '#fffaf0', borderColor: '#fbd38d', color: '#7b341e' }}>
-              Tu usuario solo puede ver estos horarios. Pide a alguien de Contratación Pública con permiso de escribir que los cambie.
+              Tu usuario solo puede ver estos horarios. Pide a alguien de Operaciones con permiso de escribir que los cambie.
             </div>
           )}
 
@@ -94,7 +94,7 @@ export default function HorasTurnoModal({
           ) : filas.length === 0 ? (
             <div className="empty-state">
               Todavía no hay códigos de turno de trabajo. Créalos primero en{' '}
-              <Link to="/contratacion-publica/configuracion?pestana=codigos" onClick={onClose} className="enlace-tabla">Códigos de turno</Link>.
+              <Link to="/operaciones/configuracion?pestana=codigos" onClick={onClose} className="enlace-tabla">Códigos de turno</Link>.
             </div>
           ) : (
             <div className="tasks-table-wrapper">

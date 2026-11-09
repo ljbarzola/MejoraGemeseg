@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Bot, Camera, Eye, Trash2 } from 'lucide-react';
-import CPPageHeader from '../../../components/contratacion-publica/CPPageHeader';
+import OperacionesPageHeader from '../../../components/operaciones/OperacionesPageHeader';
 import MovidoAConfiguracion from '../../../components/common/MovidoAConfiguracion';
-import PageTabs from '../../../components/common/PageTabs';
 import {
   eliminarBitacora,
   getAgenteBitacoras,
@@ -34,10 +33,7 @@ import {
   textoOrigen,
 } from '../../../utils/bitacoras';
 import { mensajeError } from '../../../utils/entregasCp';
-import BitacorasResumen from './BitacorasResumen';
 import SubirBitacoraModal from './SubirBitacoraModal';
-
-type Vista = 'resumen' | 'lista';
 
 const COL_ENTIDAD = 'entidad';
 const COL_CONTRATO = 'contrato';
@@ -60,22 +56,15 @@ const PAGE_SIZE = 50;
 /**
  * Bitácoras de guardianía: la foto de la hoja que llenan los guardias se sube
  * aquí, el agente revisor la lee y el sistema la compara con el horario del
- * puesto. Dos vistas: el Resumen (novedades y cumplimiento) y la Lista de hojas.
+ * puesto. Aquí está la lista de hojas; las novedades y el cumplimiento están en
+ * el Resumen de Operaciones.
  */
 export default function BitacorasPage() {
   const navigate = useNavigate();
-  const [params, setParams] = useSearchParams();
   const { canWrite } = usePerm();
-  const puedeEscribir = canWrite('CONTRATACION_PUBLICA');
+  const puedeEscribir = canWrite('OPERACIONES');
   const tablaRef = useResizableColumns('cp-bitacoras');
   const columnPrefs = useColumnPreferences('cp-bitacoras', DEFAULT_VISIBLE);
-
-  const vista: Vista = params.get('vista') === 'lista' ? 'lista' : 'resumen';
-  const cambiarVista = (v: Vista) => {
-    const p = new URLSearchParams(params);
-    p.set('vista', v);
-    setParams(p, { replace: true });
-  };
 
   const [opciones, setOpciones] = useState<OpcionPuestoBitacora[]>([]);
   const [agente, setAgente] = useState<EstadoAgenteBitacoras | null>(null);
@@ -108,8 +97,8 @@ export default function BitacorasPage() {
   }, [filtros, pagina]);
 
   useEffect(() => {
-    if (vista === 'lista') cargar();
-  }, [vista, cargar]);
+    cargar();
+  }, [cargar]);
 
   const hayFiltros = Object.values(filtros).some(Boolean);
   const cambiarFiltro = (parcial: Partial<FiltrosBitacoras>) => {
@@ -169,7 +158,7 @@ export default function BitacorasPage() {
 
   return (
     <div className="page-container">
-      <CPPageHeader
+      <OperacionesPageHeader
         pantalla="bitacoras"
         title="Bitácoras"
         description="Sube la foto de la hoja que llenan los guardias. El agente la lee y la compara con el horario del puesto: avisa si quien aparece no es quien debía estar, o si faltan guardias u horas."
@@ -179,16 +168,9 @@ export default function BitacorasPage() {
           </button>
         }
       />
-      <MovidoAConfiguracion to="/contratacion-publica/configuracion?pestana=horas" enlace="Ir a Horario de los turnos">
+      <MovidoAConfiguracion to="/operaciones/configuracion?pestana=horas" enlace="Ir a Horario de los turnos">
         «Horario de los turnos» se movió a Configuración.
       </MovidoAConfiguracion>
-
-      <PageTabs
-        label="Vista de las bitácoras"
-        tabs={[{ key: 'resumen' as Vista, label: 'Resumen' }, { key: 'lista' as Vista, label: 'Hojas subidas' }]}
-        value={vista}
-        onChange={cambiarVista}
-      />
 
       {agente && (!agente.activo || !agente.iaConfigurada) && (
         <div style={{ background: '#fffaf0', border: '1px solid #fbd38d', color: '#7b341e', borderRadius: 10, padding: '10px 14px', margin: '12px 0', fontSize: '0.85rem', display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -209,11 +191,9 @@ export default function BitacorasPage() {
             <option value="">Todos los puestos</option>
             {puestosFiltro.map((p) => <option key={p.id} value={p.id}>{p.texto}</option>)}
           </select>
-          {vista === 'lista' && (
-            <select className="filter-select" value={filtros.resultado ?? ''} onChange={(e) => cambiarFiltro({ resultado: e.target.value })} aria-label="Resultado">
-              {OPCIONES_RESULTADO.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          )}
+          <select className="filter-select" value={filtros.resultado ?? ''} onChange={(e) => cambiarFiltro({ resultado: e.target.value })} aria-label="Resultado">
+            {OPCIONES_RESULTADO.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
           <div style={{ minWidth: 150 }}>
             <DateInput value={filtros.desde ?? ''} onChange={(v) => cambiarFiltro({ desde: v })} placeholder="Desde" max={filtros.hasta || undefined} />
           </div>
@@ -222,24 +202,20 @@ export default function BitacorasPage() {
           </div>
         </div>
         <div className="filter-bar-actions">
-          {vista === 'lista' && (
-            <ColumnPickerMenu
-              columns={COLUMNAS}
-              visible={columnPrefs.visible}
-              fixedLabel="Hoja"
-              onApply={async (keys) => {
-                const guardado = await columnPrefs.set(keys);
-                if (!guardado) setError('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.');
-              }}
-            />
-          )}
+          <ColumnPickerMenu
+            columns={COLUMNAS}
+            visible={columnPrefs.visible}
+            fixedLabel="Hoja"
+            onApply={async (keys) => {
+              const guardado = await columnPrefs.set(keys);
+              if (!guardado) setError('Se aplicó en este navegador, pero no se pudo guardar en tu cuenta.');
+            }}
+          />
           <ClearFiltersButton onClear={() => { setPagina(1); setFiltros({}); }} disabled={!hayFiltros} />
         </div>
       </div>
 
-      {vista === 'resumen' ? (
-        <BitacorasResumen filtros={filtros} />
-      ) : (
+      {(
         <div className="admin-section">
           {loading ? (
             <div className="loading-state">Cargando bitácoras…</div>
@@ -270,9 +246,9 @@ export default function BitacorasPage() {
                   </thead>
                   <tbody>
                     {ordenadas.map((b) => (
-                      <tr key={b.id} onClick={() => navigate(`/contratacion-publica/bitacoras/${b.id}`)} style={{ cursor: 'pointer' }}>
+                      <tr key={b.id} onClick={() => navigate(`/operaciones/bitacoras/${b.id}`)} style={{ cursor: 'pointer' }}>
                         <td>
-                          <Link to={`/contratacion-publica/bitacoras/${b.id}`} className="enlace-tabla truncate" onClick={(e) => e.stopPropagation()} style={{ fontWeight: 700 }}>
+                          <Link to={`/operaciones/bitacoras/${b.id}`} className="enlace-tabla truncate" onClick={(e) => e.stopPropagation()} style={{ fontWeight: 700 }}>
                             {periodoBitacora(b.fechaDesde, b.fechaHasta)}
                           </Link>
                           <div style={{ fontSize: '0.72rem', color: '#718096' }}>n.º {b.id} · {textoOrigen(b.origenLectura, b.estadoLectura)}</div>
@@ -299,7 +275,7 @@ export default function BitacorasPage() {
                         </td>
                         <td className="col-acciones col-acciones--ancha" onClick={(e) => e.stopPropagation()}>
                           <div className="acciones-iconos">
-                            <Link to={`/contratacion-publica/bitacoras/${b.id}`} className="btn-secondary icon-btn" title="Abrir la bitácora" aria-label="Abrir la bitácora"><Eye size={16} /></Link>
+                            <Link to={`/operaciones/bitacoras/${b.id}`} className="btn-secondary icon-btn" title="Abrir la bitácora" aria-label="Abrir la bitácora"><Eye size={16} /></Link>
                             {puedeEscribir ? (
                               <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Eliminar la bitácora" aria-label="Eliminar la bitácora" onClick={() => setBorrando(b)}>
                                 <Trash2 size={16} />
@@ -328,7 +304,7 @@ export default function BitacorasPage() {
         <SubirBitacoraModal
           puestoInicial={filtros.puestoId ? Number(filtros.puestoId) : undefined}
           onClose={() => setSubiendo(false)}
-          onSubida={(id) => navigate(`/contratacion-publica/bitacoras/${id}`)}
+          onSubida={(id) => navigate(`/operaciones/bitacoras/${id}`)}
         />
       )}
       {borrando && (
@@ -346,7 +322,7 @@ export default function BitacorasPage() {
           title="No tienes permiso para esto"
           hideCancel
           confirmLabel="Entendido"
-          message={`Tu usuario solo puede ver las bitácoras. Pide a alguien de Contratación Pública con permiso de escribir que te lo dé para poder ${sinPermiso}.`}
+          message={`Tu usuario solo puede ver las bitácoras. Pide a alguien de Operaciones con permiso de escribir que te lo dé para poder ${sinPermiso}.`}
           onConfirm={() => setSinPermiso('')}
           onCancel={() => setSinPermiso('')}
         />

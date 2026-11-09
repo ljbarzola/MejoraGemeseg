@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import ContratoFormModal from './ContratoFormModal';
+import { fechaCorta } from '../../../utils/bitacoras';
 import { ArrowLeft, Pencil, Plus, Trash2, Upload, Download, RefreshCw, FileSignature } from 'lucide-react';
 import {
   getContrato,
@@ -21,7 +23,7 @@ import type {
   CPInformeMensual,
 } from '../../../types/contratacion-publica';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
-import CPPageHeader from '../../../components/contratacion-publica/CPPageHeader';
+import OperacionesPageHeader from '../../../components/operaciones/OperacionesPageHeader';
 import DateInput from '../../../components/common/DateInput';
 import PuestoFormModal from '../puestos/PuestoFormModal';
 
@@ -44,10 +46,7 @@ const ESTADO_HORARIO_COLOR: Record<string, { bg: string; fg: string }> = {
   RECHAZADO: { bg: '#fed7d7', fg: '#c53030' },
 };
 
-function formatFecha(date: string) {
-  if (!date) return '—';
-  return new Date(date).toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
+const formatFecha = (date: string) => fechaCorta(date);
 
 export default function ContratoDetail() {
   const navigate = useNavigate();
@@ -62,6 +61,17 @@ export default function ContratoDetail() {
   const [error, setError] = useState('');
   const errorRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>('PUESTOS');
+  // Editar abre una ventana; `?editar=1` la abre sola (es lo que hace la dirección vieja `/:id/editar`).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [editandoContrato, setEditandoContrato] = useState(searchParams.get('editar') === '1');
+  const cerrarEdicion = () => {
+    setEditandoContrato(false);
+    if (searchParams.has('editar')) {
+      const resto = new URLSearchParams(searchParams);
+      resto.delete('editar');
+      setSearchParams(resto, { replace: true });
+    }
+  };
 
   const [showPuestoModal, setShowPuestoModal] = useState(false);
   const [editingPuesto, setEditingPuesto] = useState<CPPuestoServicio | null>(null);
@@ -195,7 +205,7 @@ export default function ContratoDetail() {
         fechaInicio: renovarFechaInicio,
         fechaFin: renovarFechaFin,
       });
-      navigate(`/contratacion-publica/contratos/${nuevo.id}`);
+      navigate(`/operaciones/contratos/${nuevo.id}`);
     } catch (err: any) {
       setError(err.response?.data?.message || 'No se pudo renovar el contrato.');
     } finally {
@@ -213,15 +223,15 @@ export default function ContratoDetail() {
   return (
     <div className="page-container">
       <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate('/contratacion-publica/contratos')} style={{ alignSelf: 'flex-start' }}>
+        <button className="cacao-back-btn" onClick={() => navigate('/operaciones/contratos')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <CPPageHeader
+        <OperacionesPageHeader
           title={`Contrato ${contrato.numero}`}
           description={`Contrato con ${contrato.entidad?.nombre ?? 'la entidad'}: sus puestos y guardias, adendas, adjuntos, horarios e informes.`}
           actions={
             <>
-              <button className="btn-secondary" onClick={() => navigate(`/contratacion-publica/contratos/${contratoId}/editar`)}>
+              <button className="btn-secondary" onClick={() => setEditandoContrato(true)}>
                 <Pencil size={16} /> Editar
               </button>
               <button className="btn-secondary" onClick={() => setShowRenovarForm(true)}>
@@ -252,7 +262,7 @@ export default function ContratoDetail() {
           </div>
           <div>
             <div style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 700 }}>VALOR TOTAL</div>
-            <div style={{ fontSize: '0.9rem' }}>{contrato.valorTotal != null ? `$${contrato.valorTotal.toFixed(2)}` : '—'}</div>
+            <div style={{ fontSize: '0.9rem' }}>{contrato.valorTotal != null ? `$${Number(contrato.valorTotal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</div>
           </div>
           <div>
             <div style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 700 }}>ESTADO</div>
@@ -442,7 +452,7 @@ export default function ContratoDetail() {
         {tab === 'HORARIOS' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '14px' }}>
-              <button className="auth-btn" onClick={() => navigate(`/contratacion-publica/horarios?contratoId=${contratoId}`)}>
+              <button className="auth-btn" onClick={() => navigate(`/operaciones/horarios?contratoId=${contratoId}`)}>
                 <Plus size={16} /> Gestionar Horarios
               </button>
             </div>
@@ -464,7 +474,7 @@ export default function ContratoDetail() {
                           </span>
                         </td>
                         <td style={{ textAlign: 'right' }}>
-                          <button className="btn-secondary" onClick={() => navigate(`/contratacion-publica/horarios/${h.id}`)}>Abrir</button>
+                          <button className="btn-secondary" onClick={() => navigate(`/operaciones/horarios/${h.id}`)}>Abrir</button>
                         </td>
                       </tr>
                     ))}
@@ -507,6 +517,14 @@ export default function ContratoDetail() {
           </div>
         )}
       </div>
+
+      {editandoContrato && (
+        <ContratoFormModal
+          contrato={contrato}
+          onClose={cerrarEdicion}
+          onSaved={() => { cerrarEdicion(); load(); }}
+        />
+      )}
 
       {showPuestoModal && (
         <PuestoFormModal

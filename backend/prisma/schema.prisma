@@ -3411,3 +3411,130 @@ model RrhhVigilanteConfig {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }
+
+// ── Inventario de Operaciones (2026-11-06): uniformes, implementos, municiones y armas ──
+// Tablas creadas al arrancar (operaciones-inventario/inventario.schema.ts). El saldo de cada
+// artículo se calcula siempre desde sus movimientos; nunca se guarda.
+model InvArticulo {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  // UNIFORME | IMPLEMENTO | MUNICION
+  tipo        String
+  nombre      String
+  // Talla, calibre... Vacío si no aplica (no es null para que la restricción única funcione).
+  variante    String   @default("")
+  unidad      String   @default("unidad")
+  stockMinimo Int      @default(0)
+  stockMaximo Int?
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  movimientos InvMovimiento[]
+
+  @@unique([companyId, tipo, nombre, variante])
+  @@index([companyId, tipo])
+}
+
+model InvMovimiento {
+  id             Int      @id @default(autoincrement())
+  companyId      Int
+  articuloId     Int
+  // ENTRADA | ENTREGA | DEVOLUCION | BAJA | AJUSTE
+  tipo           String
+  cantidad       Int
+  fecha          DateTime @db.Date
+  puestoId       Int?
+  puestoNombre   String?
+  guardiaCedula  String?
+  guardiaNombre  String?
+  // En una devolución: NUEVO | USADO | DANADO
+  estadoDevuelto String?
+  motivo         String?
+  documento      String?
+  porId          Int
+  porNombre      String
+  createdAt      DateTime @default(now())
+
+  articulo InvArticulo @relation(fields: [articuloId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, fecha])
+  @@index([articuloId])
+}
+
+model InvArma {
+  id            Int       @id @default(autoincrement())
+  companyId     Int
+  serie         String
+  // PISTOLA | REVOLVER | ESCOPETA | OTRA
+  clase         String    @default("PISTOLA")
+  marca         String?
+  modelo        String?
+  calibre       String?
+  // DISPONIBLE | ASIGNADA | MANTENIMIENTO | BAJA
+  estado        String    @default("DISPONIBLE")
+  puestoId      Int?
+  puestoNombre  String?
+  guardiaCedula String?
+  guardiaNombre String?
+  asignadaAt    DateTime?
+  permisoNumero String?
+  permisoVence  DateTime? @db.Date
+  notas         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  eventos InvArmaEvento[]
+
+  @@unique([companyId, serie])
+  @@index([companyId, estado])
+}
+
+model InvArmaEvento {
+  id            Int      @id @default(autoincrement())
+  armaId        Int
+  // ALTA | ASIGNACION | DEVOLUCION | MANTENIMIENTO | REACTIVACION | BAJA | EDICION
+  tipo          String
+  detalle       String?
+  puestoNombre  String?
+  guardiaNombre String?
+  porNombre     String
+  createdAt     DateTime @default(now())
+
+  arma InvArma @relation(fields: [armaId], references: [id], onDelete: Cascade)
+
+  @@index([armaId])
+}
+
+// ── Faltas de guardias registradas al momento (2026-11-06): «No llegó» desde Hoy en los puestos ──
+// Tabla creada al arrancar (contratacion-publica/ausencias/ausencias.schema.ts). No depende de la bitácora:
+// la hoja que llegue después se compara con lo registrado aquí.
+model CPAusencia {
+  id                  Int      @id @default(autoincrement())
+  companyId           Int
+  puestoId            Int
+  puestoNombre        String
+  contratoId          Int
+  contratoNumero      String
+  entidadNombre       String
+  fecha               DateTime @db.Date
+  cedula              String
+  guardiaNombre       String
+  // NO_AVISO | ENFERMEDAD | PERMISO | OTRO
+  motivo              String
+  // Hora (HH:mm) a la que se notó la falta.
+  hora                String?
+  nota                String?
+  // POR_CUBRIR | CUBIERTA | ANULADA
+  estado              String   @default("POR_CUBRIR")
+  reemplazoCedula     String?
+  reemplazoNombre     String?
+  anulacionNota       String?
+  registradaPorId     Int
+  registradaPorNombre String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([companyId, fecha])
+  @@index([puestoId, fecha])
+}

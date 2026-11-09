@@ -78,26 +78,65 @@ export const OPCIONES_RESULTADO: { value: ResultadoBitacora | ''; label: string 
 
 export const ARCHIVOS_BITACORA = 'image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf';
 
-/** 'AAAA-MM-DD' → 'DD/MM/AAAA'. */
+// Fechas legibles de Operaciones (2026-11-06). Antes eran «02/11/2026», que cuesta leer de corrido y
+// se confunde entre día y mes. Las fechas llegan como texto 'AAAA-MM-DD' y NUNCA se pasan por `new Date`
+// local: en Ecuador (UTC-5) eso las corría un día atrás.
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+const partes = (iso: string) => {
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  return { y: Number(y), m: Number(m) - 1, d: Number(d) };
+};
+/** Año de hoy en Ecuador (UTC-5), para no repetir el año de las fechas de este año. */
+const anioActual = () => new Date(Date.now() - 5 * 3600000).getUTCFullYear();
+
+/** 'AAAA-MM-DD' → '2 de noviembre de 2026'. */
 export const fechaLarga = (iso: string | null | undefined) => {
   if (!iso) return '—';
-  const [y, m, d] = iso.slice(0, 10).split('-');
-  return `${d}/${m}/${y}`;
+  const { y, m, d } = partes(iso);
+  return `${d} de ${MESES[m]} de ${y}`;
 };
 
-const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-/** 'AAAA-MM-DD' → 'lunes 12/10/2026'. */
+/** 'AAAA-MM-DD' → '2 nov 2026'. Para tablas y listas. */
+export const fechaCorta = (iso: string | null | undefined) => {
+  if (!iso) return '—';
+  const { y, m, d } = partes(iso);
+  return `${d} ${MESES_CORTOS[m]} ${y}`;
+};
+
+/** 'AAAA-MM-DD' → '2 nov'. Para listas de días dentro de un periodo ya conocido. */
+export const diaMes = (iso: string) => {
+  const { m, d } = partes(iso);
+  return `${d} ${MESES_CORTOS[m]}`;
+};
+
+/** 'AAAA-MM-DD' → 'lunes 2 de noviembre' (con el año si no es el de hoy). */
 export const fechaConDia = (iso: string) => {
-  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
-  return `${DIAS[d.getUTCDay()]} ${fechaLarga(iso)}`;
+  const { y, m, d } = partes(iso);
+  const dia = DIAS[new Date(`${iso.slice(0, 10)}T00:00:00Z`).getUTCDay()];
+  return `${dia} ${d} de ${MESES[m]}${y === anioActual() ? '' : ` de ${y}`}`;
 };
 
-/** El período que cubre una hoja: un día o un rango. */
+/** 'del 9 de agosto al 6 de noviembre de 2026' (el año una sola vez si es el mismo). */
+export const rangoLargo = (desde: string, hasta: string) => {
+  const a = partes(desde);
+  const b = partes(hasta);
+  if (desde.slice(0, 10) === hasta.slice(0, 10)) return `el ${fechaLarga(desde)}`;
+  const inicio = a.y === b.y ? `${a.d} de ${MESES[a.m]}` : fechaLarga(desde);
+  return `del ${inicio} al ${fechaLarga(hasta)}`;
+};
+
+/** El período que cubre una hoja: un día o un rango corto («2 nov 2026», «1 – 4 nov 2026»). */
 export const periodoBitacora = (desde: string | null, hasta: string | null) => {
   if (!desde) return 'Sin fecha leída';
-  return !hasta || desde.slice(0, 10) === hasta.slice(0, 10)
-    ? fechaLarga(desde)
-    : `${fechaLarga(desde)} al ${fechaLarga(hasta)}`;
+  if (!hasta || desde.slice(0, 10) === hasta.slice(0, 10)) return fechaCorta(desde);
+  const a = partes(desde);
+  const b = partes(hasta);
+  if (a.y === b.y && a.m === b.m) return `${a.d} – ${b.d} ${MESES_CORTOS[b.m]} ${b.y}`;
+  if (a.y === b.y) return `${a.d} ${MESES_CORTOS[a.m]} – ${b.d} ${MESES_CORTOS[b.m]} ${b.y}`;
+  return `${fechaCorta(desde)} – ${fechaCorta(hasta)}`;
 };
 
 export const OPCIONES_ORIGEN: Record<string, string> = {

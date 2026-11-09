@@ -15,8 +15,9 @@ import type {
   EstadoHallazgo,
   HallazgoBitacora,
 } from '../../../types/bitacoras';
+import { MOTIVO_AUSENCIA_LABEL } from '../../../types/bitacoras';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
-import CPPageHeader from '../../../components/contratacion-publica/CPPageHeader';
+import OperacionesPageHeader from '../../../components/operaciones/OperacionesPageHeader';
 import DateInput from '../../../components/common/DateInput';
 import FilePreview from '../../../components/common/FilePreview';
 import PromptDialog from '../../../components/common/PromptDialog';
@@ -30,7 +31,7 @@ import {
   SEVERIDAD_LABEL,
   TIPO_HALLAZGO_LABEL,
   fechaConDia,
-  fechaLarga,
+  fechaCorta,
   periodoBitacora,
   textoOrigen,
 } from '../../../utils/bitacoras';
@@ -75,7 +76,7 @@ export default function BitacoraDetallePage() {
   const bitacoraId = Number(id);
   const navigate = useNavigate();
   const { canWrite } = usePerm();
-  const puedeEscribir = canWrite('CONTRATACION_PUBLICA');
+  const puedeEscribir = canWrite('OPERACIONES');
 
   const [det, setDet] = useState<BitacoraDetalle | null>(null);
   const [error, setError] = useState('');
@@ -183,7 +184,7 @@ export default function BitacoraDetallePage() {
     setConfirmando(null);
     try {
       await eliminarBitacora(det.id);
-      navigate('/contratacion-publica/bitacoras?vista=lista', { replace: true });
+      navigate('/operaciones/bitacoras?vista=lista', { replace: true });
     } catch (err) {
       setError(mensajeError(err, 'No se pudo eliminar la bitácora.'));
     }
@@ -212,7 +213,7 @@ export default function BitacoraDetallePage() {
     return (
       <div className="page-container">
         {error ? <div className="form-error">{error}</div> : <div className="loading-state">Cargando bitácora…</div>}
-        <button className="cacao-back-btn" onClick={() => navigate('/contratacion-publica/bitacoras?vista=lista')}>
+        <button className="cacao-back-btn" onClick={() => navigate('/operaciones/bitacoras?vista=lista')}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
       </div>
@@ -227,10 +228,10 @@ export default function BitacoraDetallePage() {
   return (
     <div className="page-container">
       <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate('/contratacion-publica/bitacoras?vista=lista')} style={{ alignSelf: 'flex-start' }}>
+        <button className="cacao-back-btn" onClick={() => navigate('/operaciones/bitacoras?vista=lista')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <CPPageHeader
+        <OperacionesPageHeader
           title={`Bitácora n.º ${det.id} · ${det.puestoNombre}`}
           description={`${det.entidadNombre} · Contrato ${det.contratoNumero} · ${periodoBitacora(det.fechaDesde, det.fechaHasta)} · subida por ${det.subidoPorNombre} el ${formatFechaHoraSync(det.createdAt)} · ${textoOrigen(det.origenLectura, det.estadoLectura)}`}
           actions={
@@ -279,7 +280,7 @@ export default function BitacoraDetallePage() {
       )}
       {!puedeEscribir && (
         <div style={{ background: '#fffaf0', border: '1px solid #fbd38d', color: '#7b341e', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: '0.88rem' }}>
-          Tu usuario solo puede ver esta bitácora. Para corregir lo leído o resolver hallazgos hace falta permiso de escribir en Contratación Pública.
+          Tu usuario solo puede ver esta bitácora. Para corregir lo leído o resolver hallazgos hace falta permiso de escribir en Operaciones.
         </div>
       )}
 
@@ -300,6 +301,25 @@ export default function BitacoraDetallePage() {
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
+          {/* ------------------------------------------------------------ faltas registradas con «No llegó» */}
+          {det.ausencias && det.ausencias.length > 0 && (
+            <div className="admin-section" style={{ background: '#f0fff4', border: '1px solid #c6f6d5' }}>
+              <h3 style={{ margin: '0 0 6px', fontSize: '1rem', color: '#276749' }}>Faltas ya registradas en estos días</h3>
+              <p style={{ margin: '0 0 8px', fontSize: '0.82rem', color: '#4a5568' }}>
+                Se registraron con «No llegó» antes de esta hoja. La revisión las toma en cuenta: quien cubrió ocupa el turno de quien faltó.
+              </p>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.88rem' }}>
+                {det.ausencias.map((a) => (
+                  <li key={a.id}>
+                    <strong>{a.guardiaNombre}</strong> no llegó el {fechaCorta(a.fecha)} ({MOTIVO_AUSENCIA_LABEL[a.motivo].toLowerCase()}{a.hora ? `, ${a.hora}` : ''}).{' '}
+                    {a.estado === 'CUBIERTA' ? `Lo cubrió ${a.reemplazoNombre}.` : 'Nadie lo cubrió.'}{' '}
+                    <span style={{ color: '#718096' }}>Registró {a.registradaPorNombre}.</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* ------------------------------------------------------------ hallazgos */}
           <div className="admin-section">
             <h3 style={{ margin: '0 0 4px', fontSize: '1rem', color: 'var(--azul-oscuro)' }}>Qué encontró la revisión</h3>
@@ -320,6 +340,25 @@ export default function BitacoraDetallePage() {
                       {h.estado !== 'ABIERTO' && <span className="status-badge" style={{ background: '#e2e8f0', color: '#4a5568' }}>{ESTADO_HALLAZGO_LABEL[h.estado]}</span>}
                     </div>
                     <div style={{ fontSize: '0.88rem' }}>{h.mensaje}</div>
+                    {h.estado === 'ABIERTO' && h.tipo === 'GUARDIA_AUSENTE' && det.sugerenciasReemplazo?.[h.id] && (
+                      <div style={{ marginTop: 8, fontSize: '0.82rem', color: '#2d3748' }}>
+                        {det.sugerenciasReemplazo[h.id].length === 0 ? (
+                          <span style={{ color: '#718096' }}>Ningún guardia del contrato tenía descanso o estaba sin turno ese día.</span>
+                        ) : (
+                          <>
+                            <strong>Quién podría cubrir ese día:</strong>
+                            <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                              {det.sugerenciasReemplazo[h.id].map((s) => (
+                                <li key={s.cedula}>
+                                  {s.nombre} · {s.mismoPuesto ? 'de este puesto' : `de ${s.puestoNombre}`} · {s.motivo}.
+                                  {s.aviso && <span style={{ color: '#975a16' }}> Ojo: {s.aviso}.</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
+                      </div>
+                    )}
                     {h.estado !== 'ABIERTO' && h.nota && (
                       <div style={{ fontSize: '0.8rem', color: '#4a5568', marginTop: 6 }}>
                         «{h.nota}» — {h.resueltoPorNombre ?? 'alguien'}{h.resueltoAt ? `, ${formatFechaHoraSync(h.resueltoAt)}` : ''}
@@ -365,9 +404,9 @@ export default function BitacoraDetallePage() {
                   const enUso = registros.some((r) => r.fecha === f) || novedades.some((n) => n.fecha === f);
                   return (
                     <span key={f} className="status-badge" style={{ background: '#e2e8f0', color: '#2d3748', textTransform: 'none', letterSpacing: 0 }}>
-                      {fechaLarga(f)}
+                      {fechaCorta(f)}
                       {puedeEscribir && !enUso && (
-                        <button type="button" aria-label={`Quitar ${fechaLarga(f)}`} onClick={() => { setFechasExtra((fs) => fs.filter((x) => x !== f)); marcar(); }} style={{ border: 'none', background: 'none', cursor: 'pointer', marginLeft: 4, padding: 0 }}><X size={12} /></button>
+                        <button type="button" aria-label={`Quitar ${fechaCorta(f)}`} onClick={() => { setFechasExtra((fs) => fs.filter((x) => x !== f)); marcar(); }} style={{ border: 'none', background: 'none', cursor: 'pointer', marginLeft: 4, padding: 0 }}><X size={12} /></button>
                       )}
                     </span>
                   );

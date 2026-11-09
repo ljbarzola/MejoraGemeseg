@@ -115,6 +115,11 @@ export class ListarBitacorasQueryDto {
   @IsOptional() @IsInt() @Min(1) @Type(() => Number) pageSize?: number;
 }
 
+export class PuestosHoyQueryDto {
+  /** Día a mirar (por defecto, hoy en Ecuador). */
+  @IsOptional() @Matches(FECHA, { message: MSG_FECHA }) fecha?: string;
+}
+
 export class DashboardBitacorasQueryDto {
   @IsOptional() @IsString() entidadId?: string;
   @IsOptional() @IsString() contratoId?: string;

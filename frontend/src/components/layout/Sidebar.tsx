@@ -64,6 +64,7 @@ export default function Sidebar() {
   const [custodiasOpen, setCustodiasOpen] = useState(false);
   const [sistemasOpen, setSistemasOpen] = useState(false);
   const [contratacionPublicaOpen, setContratacionPublicaOpen] = useState(false);
+  const [operacionesOpen, setOperacionesOpen] = useState(false);
   const [bitacoraOpen, setBitacoraOpen] = useState(false);
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
@@ -103,6 +104,7 @@ export default function Sidebar() {
   const isCustodiasActive = location.pathname.startsWith('/custodias');
   const isSistemasActive = location.pathname.startsWith('/sistemas');
   const isContratacionPublicaActive = location.pathname.startsWith('/contratacion-publica');
+  const isOperacionesActive = location.pathname.startsWith('/operaciones');
   const isBitacoraActive = location.pathname.startsWith('/bitacora');
 
   const navItems = [
@@ -212,10 +214,9 @@ export default function Sidebar() {
     { label: 'Asistente GEME-BOT', path: '/custodias/gemebot', icon: '🤖' },
   ];
 
-  // Contratación Pública: Entidades Públicas con sus entregas de documentos, y desde
-  // 2026-10-18 las Operaciones (Contratos, Horarios y Bitácoras, que compara las hojas de
-  // los guardias con el horario). Los códigos de turno son parte de Configuración (2026-10-30). Informes y Textos Institucionales
-  // siguen ocultos (ver CP_MOSTRAR_SUBMODULOS_OCULTOS y CP_MOSTRAR_OPERACIONES en App.tsx).
+  // Contratación Pública: Entidades Públicas con sus entregas de documentos y su Configuración (campos de la
+  // entidad y carpeta de Drive). Informes y Textos Institucionales siguen ocultos (ver
+  // CP_MOSTRAR_SUBMODULOS_OCULTOS en App.tsx). Contratos, Horarios y Bitácoras pasaron a Operaciones (2026-11-05).
   const contratacionPublicaItems = [
     { label: 'Entidades Públicas', path: '/contratacion-publica/entidades', icon: '🏛️', grupo: 'Documentos' },
     // Solo el personal de Contratación Pública aprueba; el resto tiene "Por entregar".
@@ -223,11 +224,17 @@ export default function Sidebar() {
       ? [{ label: 'Por aprobar', path: '/contratacion-publica/por-revisar', icon: '🔎' }]
       : []),
     { label: 'Por entregar', path: '/contratacion-publica/mis-documentos', icon: '📥' },
-    { label: 'Contratos', path: '/contratacion-publica/contratos', icon: '📑', grupo: 'Operaciones' },
-    { label: 'Horarios', path: '/contratacion-publica/horarios', icon: '🗓️' },
-    { label: 'Bitácoras', path: '/contratacion-publica/bitacoras', icon: '📒' },
-    // Los códigos de turno, el campo de las entidades y la carpeta de Drive viven aquí (2026-10-30).
     { label: 'Configuración', path: '/contratacion-publica/configuracion', icon: '⚙️', separadorAntes: true },
+  ];
+
+  // Operaciones (2026-11-05): lo que hacen los guardias en cada puesto. El Resumen va primero, como en los demás módulos.
+  const operacionesItems = [
+    { label: 'Resumen', path: '/operaciones', icon: '📊' },
+    { label: 'Contratos', path: '/operaciones/contratos', icon: '📑', grupo: 'Puestos y horarios' },
+    { label: 'Horarios', path: '/operaciones/horarios', icon: '🗓️' },
+    { label: 'Bitácoras', path: '/operaciones/bitacoras', icon: '📒', grupo: 'Seguimiento' },
+    { label: 'Inventario', path: '/operaciones/inventario', icon: '🎒', grupo: 'Material' },
+    { label: 'Configuración', path: '/operaciones/configuracion', icon: '⚙️', separadorAntes: true },
   ];
 
   const sistemasSubItems = [
@@ -474,6 +481,40 @@ export default function Sidebar() {
             {!collapsed && cacaoOpen && (
               <div style={{ marginLeft: '12px', borderLeft: '2px solid #e2e8f0', paddingLeft: '0' }}>
                 {renderSubItems(cacaoItems)}
+              </div>
+            )}
+          </>
+        )}
+
+        {canView('OPERACIONES') && (
+          <>
+            <button
+              className={`sidebar-link ${isOperacionesActive ? 'sidebar-link-active' : ''}`}
+              onClick={() => {
+                if (collapsed) {
+                  navigate('/operaciones');
+                } else {
+                  setOperacionesOpen(!operacionesOpen);
+                  if (!operacionesOpen) navigate('/operaciones');
+                }
+              }}
+              title={collapsed ? 'Operaciones' : undefined}
+              style={{ justifyContent: 'space-between' }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span className="sidebar-icon">🔰</span>
+                {!collapsed && <span className="sidebar-label">Operaciones</span>}
+              </span>
+              {!collapsed && (
+                <span style={{ fontSize: '0.7rem', transition: 'transform 0.2s', transform: operacionesOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▶
+                </span>
+              )}
+            </button>
+
+            {!collapsed && operacionesOpen && (
+              <div style={{ marginLeft: '12px', borderLeft: '2px solid #e2e8f0', paddingLeft: '0' }}>
+                {renderSubItems(operacionesItems)}
               </div>
             )}
           </>

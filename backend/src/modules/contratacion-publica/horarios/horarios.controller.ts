@@ -36,7 +36,7 @@ export class CPHorariosController {
   ) {}
 
   @Get()
-  @Section('CONTRATACION_PUBLICA', 'view')
+  @Section('OPERACIONES', 'view')
   findAll(
     @Query('contratoId', new ParseIntPipe({ optional: true })) contratoId: number | undefined,
     @Req() req: any,
@@ -48,25 +48,25 @@ export class CPHorariosController {
   }
 
   @Get(':id')
-  @Section('CONTRATACION_PUBLICA', 'view')
+  @Section('OPERACIONES', 'view')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.service.findOne(id, req.user.companyId);
   }
 
   @Post()
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   create(@Body() dto: CreateHorarioDto, @Req() req: any) {
     return this.service.create(dto, req.user.companyId, req.user.userId);
   }
 
   @Delete(':id')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.service.remove(id, req.user.companyId);
   }
 
   @Post(':id/celdas')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   upsertCelda(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpsertCeldaDto,
@@ -76,7 +76,7 @@ export class CPHorariosController {
   }
 
   @Post(':id/celdas/reemplazar-puesto')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   reemplazarCeldasPuesto(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ReemplazarCeldasPuestoDto,
@@ -86,7 +86,7 @@ export class CPHorariosController {
   }
 
   @Post(':id/generar-patron')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   generarPatron(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: GenerarPatronDto,
@@ -96,7 +96,7 @@ export class CPHorariosController {
   }
 
   @Post(':id/intercambiar-turno')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   intercambiarTurno(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: IntercambiarTurnoDto,
@@ -106,7 +106,7 @@ export class CPHorariosController {
   }
 
   @Patch(':id/estado')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   cambiarEstado(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CambiarEstadoHorarioDto,
@@ -116,7 +116,7 @@ export class CPHorariosController {
   }
 
   @Get(':id/pdf')
-  @Section('CONTRATACION_PUBLICA', 'view')
+  @Section('OPERACIONES', 'view')
   async exportarPdf(
     @Param('id', ParseIntPipe) id: number,
     @Req() req: any,
@@ -136,7 +136,7 @@ export class CPHorariosController {
   }
 
   @Get(':id/excel')
-  @Section('CONTRATACION_PUBLICA', 'view')
+  @Section('OPERACIONES', 'view')
   async exportarExcel(
     @Param('id', ParseIntPipe) id: number,
     @Req() req: any,

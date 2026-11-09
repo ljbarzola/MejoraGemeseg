@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Eye, Pencil, Trash2 } from 'lucide-react';
+import ContratoFormModal from './ContratoFormModal';
+import { fechaCorta } from '../../../utils/bitacoras';
 import { getContratos, deleteContrato } from '../../../services/contratacion-publica.service';
 import type { CPContrato } from '../../../types/contratacion-publica';
 import { usePerm } from '../../../contexts/PermissionsContext';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
-import CPPageHeader from '../../../components/contratacion-publica/CPPageHeader';
+import OperacionesPageHeader from '../../../components/operaciones/OperacionesPageHeader';
 import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
 import { useColumnFilters } from '../../../hooks/useColumnFilters';
@@ -18,15 +20,12 @@ const ESTADO_COLOR: Record<string, { bg: string; fg: string }> = {
   FINALIZADO: { bg: '#e2e8f0', fg: '#4a5568' },
 };
 
-function formatFecha(date: string) {
-  if (!date) return '—';
-  return new Date(date).toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
+const formatFecha = (date: string) => fechaCorta(date);
 
 export default function ContratosList() {
   const navigate = useNavigate();
   const { canWrite } = usePerm();
-  const canEdit = canWrite('CONTRATACION_PUBLICA');
+  const canEdit = canWrite('OPERACIONES');
   const tablaRef = useResizableColumns('cp-contratos');
 
   const [contratos, setContratos] = useState<CPContrato[]>([]);
@@ -34,6 +33,20 @@ export default function ContratosList() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  // Ventana de crear/editar. `?nuevo=1` la abre sola (es lo que hace la dirección vieja `/contratos/nuevo`).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [formAbierto, setFormAbierto] = useState(searchParams.get('nuevo') === '1');
+  const [editando, setEditando] = useState<CPContrato | null>(null);
+
+  const cerrarForm = () => {
+    setFormAbierto(false);
+    setEditando(null);
+    if (searchParams.has('nuevo')) {
+      const resto = new URLSearchParams(searchParams);
+      resto.delete('nuevo');
+      setSearchParams(resto, { replace: true });
+    }
+  };
 
   const load = () => {
     setLoading(true);
@@ -98,13 +111,13 @@ export default function ContratosList() {
 
   return (
     <div className="page-container">
-      <CPPageHeader
+      <OperacionesPageHeader
         pantalla="contratos"
         title="Contratos"
         description="Los contratos de seguridad con cada entidad. Dentro de cada uno están sus puestos con los guardias, adendas, adjuntos, horarios e informes."
         actions={
           canEdit && (
-            <button className="auth-btn" onClick={() => navigate('/contratacion-publica/contratos/nuevo')}>
+            <button className="auth-btn" onClick={() => setFormAbierto(true)}>
               <Plus size={16} /> Nuevo Contrato
             </button>
           )
@@ -159,7 +172,7 @@ export default function ContratosList() {
                   />
                 )}
                 {filas.map((c) => (
-                  <tr key={c.id} onClick={() => navigate(`/contratacion-publica/contratos/${c.id}`)} style={{ cursor: 'pointer' }}>
+                  <tr key={c.id} onClick={() => navigate(`/operaciones/contratos/${c.id}`)} style={{ cursor: 'pointer' }}>
                     <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#2b6cb0' }}>{c.numero}</td>
                     <td><span className="truncate">{c.entidad?.nombre || '—'}</span></td>
                     <td><span className="truncate">{c.objeto}</span></td>
@@ -172,12 +185,12 @@ export default function ContratosList() {
                     </td>
                     <td className="col-acciones col-acciones--ancha" onClick={(e) => e.stopPropagation()}>
                       <div className="acciones-iconos">
-                        <button type="button" className="btn-secondary icon-btn" title="Ver detalle" aria-label="Ver detalle" onClick={() => navigate(`/contratacion-publica/contratos/${c.id}`)}>
+                        <button type="button" className="btn-secondary icon-btn" title="Ver detalle" aria-label="Ver detalle" onClick={() => navigate(`/operaciones/contratos/${c.id}`)}>
                           <Eye size={16} />
                         </button>
                         {canEdit && (
                           <>
-                            <button type="button" className="btn-secondary icon-btn" title="Editar" aria-label="Editar" onClick={() => navigate(`/contratacion-publica/contratos/${c.id}/editar`)}>
+                            <button type="button" className="btn-secondary icon-btn" title="Editar" aria-label="Editar" onClick={() => setEditando(c)}>
                               <Pencil size={16} />
                             </button>
                             <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Eliminar" aria-label="Eliminar" onClick={() => setPendingDeleteId(c.id)}>
@@ -194,6 +207,20 @@ export default function ContratosList() {
           </div>
         )}
       </div>
+
+      {(formAbierto || editando) && (
+        <ContratoFormModal
+          contrato={editando}
+          onClose={cerrarForm}
+          onSaved={(guardado) => {
+            const eraNuevo = !editando;
+            cerrarForm();
+            // Un contrato nuevo se abre para agregarle puestos; uno editado solo recarga la lista.
+            if (eraNuevo) navigate(`/operaciones/contratos/${guardado.id}`);
+            else load();
+          }}
+        />
+      )}
 
       {pendingDeleteId != null && (
         <ConfirmDialog

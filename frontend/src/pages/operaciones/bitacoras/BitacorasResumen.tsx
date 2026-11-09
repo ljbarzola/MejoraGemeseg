@@ -4,7 +4,7 @@ import { AlertTriangle, ClipboardCheck, FileText, ShieldCheck } from 'lucide-rea
 import DonutChart from '../../../components/common/DonutChart';
 import { getResumenBitacoras } from '../../../services/bitacoras.service';
 import type { FiltrosBitacoras, ResumenBitacoras } from '../../../types/bitacoras';
-import { COLOR_CATEGORIA, SEVERIDAD_COLOR, SEVERIDAD_LABEL, TIPO_HALLAZGO_LABEL, fechaConDia, fechaLarga } from '../../../utils/bitacoras';
+import { COLOR_CATEGORIA, SEVERIDAD_COLOR, SEVERIDAD_LABEL, TIPO_HALLAZGO_LABEL, fechaConDia, fechaCorta, fechaLarga, rangoLargo } from '../../../utils/bitacoras';
 import { mensajeError } from '../../../utils/entregasCp';
 
 /** Tarjeta de KPI: ícono a la izquierda, en la misma fila que el valor (UX §18). */
@@ -91,7 +91,7 @@ export default function BitacorasResumen({ filtros }: { filtros: FiltrosBitacora
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <p style={{ margin: 0, fontSize: '0.85rem', color: '#718096' }}>
-        Del {fechaLarga(datos.desde)} al {fechaLarga(datos.hasta)}.
+        Datos {rangoLargo(datos.desde, datos.hasta)}.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14 }}>
@@ -167,10 +167,10 @@ export default function BitacorasResumen({ filtros }: { filtros: FiltrosBitacora
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {datos.novedadesGraves.map((n) => (
-                <Link key={n.id} to={`/contratacion-publica/bitacoras/${n.bitacoraId}`} className="enlace-tabla" style={{ display: 'block' }}>
+                <Link key={n.id} to={`/operaciones/bitacoras/${n.bitacoraId}`} className="enlace-tabla" style={{ display: 'block' }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <span className="status-badge" style={{ background: SEVERIDAD_COLOR[n.gravedad].bg, color: SEVERIDAD_COLOR[n.gravedad].fg }}>{SEVERIDAD_LABEL[n.gravedad]}</span>
-                    <span style={{ fontSize: '0.8rem', color: '#718096' }}>{fechaLarga(n.fecha)}{n.hora ? ` ${n.hora}` : ''} · {n.puestoNombre}</span>
+                    <span style={{ fontSize: '0.8rem', color: '#718096' }}>{fechaCorta(n.fecha)}{n.hora ? ` ${n.hora}` : ''} · {n.puestoNombre}</span>
                   </div>
                   <div style={{ fontSize: '0.88rem', marginTop: 2 }}>{n.texto}</div>
                 </Link>

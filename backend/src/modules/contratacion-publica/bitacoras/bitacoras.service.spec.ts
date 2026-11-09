@@ -68,6 +68,7 @@ function montar(opciones: {
     cPHorarioMensual: { findMany: jest.fn().mockResolvedValue([]) },
     cPHorarioCelda: { findMany: jest.fn().mockResolvedValue([]) },
     cPCodigoTurno: { findMany: jest.fn().mockResolvedValue([]) },
+    cPAusencia: { findMany: jest.fn().mockResolvedValue([]) },
     cPBitacoraRegistro: {
       deleteMany: jest.fn(),
       createMany: jest.fn(),
@@ -103,12 +104,18 @@ function montar(opciones: {
     ),
     registrar: jest.fn().mockResolvedValue(undefined),
   };
+  const notifications = { create: jest.fn().mockResolvedValue(undefined) };
+  const permissions = {
+    getCompanyUserIdsWithWriteAccess: jest.fn().mockResolvedValue([]),
+  };
   const servicio = new BitacorasService(
     prisma as unknown as PrismaService,
     lector as any,
     agentRuns as any,
+    notifications as any,
+    permissions as any,
   );
-  return { servicio, prisma, lector, agentRuns };
+  return { servicio, prisma, lector, agentRuns, notifications, permissions };
 }
 
 const foto = {

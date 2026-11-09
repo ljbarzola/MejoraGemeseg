@@ -266,6 +266,8 @@ Origen: al recorrer el módulo se pidió arreglar el borrado de entidades, que l
 - **Hallazgo (2026-10-06)**: los cambios del 2026-10-05 estaban en un `git stash` (`WIP on feature/cp-revision-entregas-y-cambios-pendientes: 974be83`) que nadie reaplicó; se restauraron con `git stash apply` (el stash se dejó como respaldo). Se aplicaron sobre el mismo commit, sin conflictos. **Actualización 2026-10-14:** ese stash y los otros 4 del repositorio se exportaron como parches fuera del repo y se borraron; casi todo su contenido ya estaba en `main`. No dejar trabajo en stashes de largo plazo: crear una rama y subirla.
 
 ## Operaciones y Bitácoras de guardianía (2026-10-18)
+> **2026-11-05: estas pantallas pasaron al módulo Operaciones** (`.agents/modules/operaciones.md`). La API, las tablas y las reglas de abajo no cambiaron; sí cambian las rutas del front (`/operaciones/...`), la sección de permisos (`OPERACIONES`) y que el Resumen es una pantalla propia. Donde abajo diga «Contratación Pública» para estas pantallas, léase Operaciones.
+
 Origen (pedido de la usuaria): los guardias llenan a mano una **bitácora** en cada puesto. Se quiere subir una **foto**, que un **agente** identifique nombres, fechas, horarios y novedades, y que eso se **cruce con el resto de Contratación Pública** (horarios, personal): si el 28 el horario decía Juan y la bitácora trae a Pedro, es un error que debe avisarse. Las novedades alimentan un dashboard (la novedad que más se repite, qué día, en qué puesto). Más adelante, un agente parecido para revisar documentos de Contratación Pública (no construido).
 
 **Decisiones del pedido y de diseño** (no re-proponer lo contrario):
@@ -294,6 +296,8 @@ Origen (pedido de la usuaria): los guardias llenan a mano una **bitácora** en c
 **Pendiente / ideas**: probar con fotos reales y ajustar `Agent.instructions`; guardar la foto reducida si pesan mucho; el agente revisor de documentos de Contratación Pública; avisar por campana cuando una bitácora salga «Con errores»; el cruce con Informes (hoy ocultos); `SoloAdminDialog`-style para quien solo ve (hoy un aviso simple).
 
 ## Menú, encabezados y Configuración unificados (2026-10-30)
+> **2026-11-05:** Contratos, Horarios y Bitácoras (el grupo «Operaciones» de este menú) y las pestañas «Códigos de turno» y «Horario de los turnos» de esta Configuración pasaron al módulo Operaciones. Aquí queda Entidades Públicas, Por aprobar, Por entregar y Configuración (campos de la entidad y carpeta de Drive).
+
 Pedido de la usuaria al recorrer el módulo: botones mal ubicados, títulos y subtítulos sin estándar, y «Códigos de turno» tratado como submódulo cuando es configuración.
 
 **Decisiones** (no re-proponer lo contrario):

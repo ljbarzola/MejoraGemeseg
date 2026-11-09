@@ -1,9 +1,12 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { asegurarSeccionOperaciones } from './operaciones-seccion.schema';
 
 // `alwaysEnabled`  = la EMPRESA la tiene activa siempre (no hace falta que un
 //                     super admin la encienda).
@@ -38,6 +41,10 @@ export const ALL_SECTIONS = [
     label: 'Contratación Pública',
     alwaysEnabled: false,
   },
+  // Operaciones (2026-11-05): lo que antes colgaba de Contratación Pública (contratos, horarios,
+  // bitácoras de guardianía) y sirve a cualquier cliente, público o privado. Las empresas que ya
+  // tenían Contratación Pública la reciben encendida una sola vez (operaciones-seccion.schema.ts).
+  { key: 'OPERACIONES', label: 'Operaciones', alwaysEnabled: false },
   // Herramientas ya NO es una sección (2026-10-06): quedó huérfana al fusionarse
   // en Sistemas y seguía apareciendo en Permisos usuarios sin gobernar nada. Las
   // filas UserPermission 'TOOLS' que ya existan en la base se ignoran.
@@ -92,8 +99,31 @@ export function permiteSinFila(section: string): boolean {
 }
 
 @Injectable()
-export class PermissionsService {
+export class PermissionsService implements OnModuleInit {
+  private readonly logger = new Logger(PermissionsService.name);
+
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Enciende OPERACIONES (una sola vez) donde ya estaba Contratación Pública. Si falla no tumba el
+   * servidor —no es indispensable para arrancar—, pero se deja en el registro porque sin él
+   * Operaciones queda apagada hasta que un super administrador la encienda.
+   */
+  async onModuleInit(): Promise<void> {
+    try {
+      const hecho = await asegurarSeccionOperaciones(
+        this.prisma as unknown as Parameters<typeof asegurarSeccionOperaciones>[0],
+      );
+      if (hecho) {
+        this.logger.log('Sección OPERACIONES encendida donde ya estaba Contratación Pública.');
+      }
+    } catch (err) {
+      this.logger.error(
+        'No se pudo preparar la sección OPERACIONES; hay que encenderla por empresa en Permisos.',
+        err instanceof Error ? err.stack : String(err),
+      );
+    }
+  }
 
   isSuperAdmin(user: any): boolean {
     return user.role === 'ADMIN' && !user.companyId;

@@ -18,7 +18,7 @@ import type {
   CPCodigoTurno,
 } from '../../../types/contratacion-publica';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
-import CPPageHeader from '../../../components/contratacion-publica/CPPageHeader';
+import OperacionesPageHeader from '../../../components/operaciones/OperacionesPageHeader';
 import GeneradorPatronModal from './GeneradorPatronModal';
 
 // Inicial del día de la semana en español, lunes primero (fila de encabezado).
@@ -281,10 +281,10 @@ export default function HorarioMensualEditor() {
   return (
     <div className="page-container">
       <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate(`/contratacion-publica/contratos/${horario.contratoId}`)} style={{ alignSelf: 'flex-start' }}>
+        <button className="cacao-back-btn" onClick={() => navigate(`/operaciones/contratos/${horario.contratoId}`)} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver al contrato
         </button>
-        <CPPageHeader
+        <OperacionesPageHeader
           title={`Horario del ${formatFechaCorta(horario.fechaInicio)} al ${formatFechaCorta(horario.fechaFin)}`}
           description={`Contrato ${horario.contrato?.numero ?? `n.º ${horario.contratoId}`}${horario.contrato?.entidad ? ` · ${horario.contrato.entidad.nombre}` : ''}. Quién cubre cada puesto, día por día.`}
           actions={

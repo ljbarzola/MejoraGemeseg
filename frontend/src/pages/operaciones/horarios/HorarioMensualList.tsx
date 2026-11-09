@@ -10,19 +10,17 @@ import {
   getContratos,
 } from '../../../services/contratacion-publica.service';
 import type { CPHorarioMensual, CPContrato } from '../../../types/contratacion-publica';
+import { fechaCorta } from '../../../utils/bitacoras';
 import { usePerm } from '../../../contexts/PermissionsContext';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
-import CPPageHeader from '../../../components/contratacion-publica/CPPageHeader';
+import OperacionesPageHeader from '../../../components/operaciones/OperacionesPageHeader';
 import MovidoAConfiguracion from '../../../components/common/MovidoAConfiguracion';
 import { useColumnFilters } from '../../../hooks/useColumnFilters';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
 
-function formatFechaCorta(fechaIso: string): string {
-  const [anio, mes, dia] = fechaIso.slice(0, 10).split('-');
-  return `${dia}/${mes}/${anio}`;
-}
+const formatFechaCorta = (fechaIso: string): string => fechaCorta(fechaIso);
 
 const ESTADO_COLOR: Record<string, { bg: string; fg: string }> = {
   BORRADOR: { bg: '#fefcbf', fg: '#975a16' },
@@ -38,7 +36,7 @@ const ESTADO_COLOR: Record<string, { bg: string; fg: string }> = {
 export default function HorarioMensualList() {
   const navigate = useNavigate();
   const { canWrite } = usePerm();
-  const canEdit = canWrite('CONTRATACION_PUBLICA');
+  const canEdit = canWrite('OPERACIONES');
   const [searchParams] = useSearchParams();
   const contratoId = Number(searchParams.get('contratoId')) || 0;
   const tablaRef = useResizableColumns('cp-horarios');
@@ -89,7 +87,7 @@ export default function HorarioMensualList() {
     setError('');
     try {
       const creado = await createHorario({ contratoId: destino, fechaInicio, fechaFin });
-      navigate(`/contratacion-publica/horarios/${creado.id}`);
+      navigate(`/operaciones/horarios/${creado.id}`);
     } catch (err: any) {
       setError(err.response?.data?.message || 'No se pudo crear el horario mensual.');
     } finally {
@@ -114,11 +112,11 @@ export default function HorarioMensualList() {
   return (
     <div className="page-container">
       {contratoId > 0 && (
-        <button className="cacao-back-btn" onClick={() => navigate(`/contratacion-publica/contratos/${contratoId}`)} style={{ alignSelf: 'flex-start', marginBottom: 10 }}>
+        <button className="cacao-back-btn" onClick={() => navigate(`/operaciones/contratos/${contratoId}`)} style={{ alignSelf: 'flex-start', marginBottom: 10 }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver al contrato
         </button>
       )}
-      <CPPageHeader
+      <OperacionesPageHeader
         pantalla="horarios"
         title={contrato ? `Horarios · Contrato ${contrato.numero}` : 'Horarios'}
         description="Quién cubre cada puesto, día por día, para un rango de fechas. Se arma en borrador, se envía y se aprueba; al enviarlo se valida que cada puesto tenga los guardias mínimos."
@@ -130,7 +128,7 @@ export default function HorarioMensualList() {
           )
         }
       />
-      <MovidoAConfiguracion to="/contratacion-publica/configuracion?pestana=codigos" enlace="Ir a Códigos de turno">
+      <MovidoAConfiguracion to="/operaciones/configuracion?pestana=codigos" enlace="Ir a Códigos de turno">
         «Códigos de turno» se movió del menú a Configuración.
       </MovidoAConfiguracion>
 
@@ -209,7 +207,7 @@ export default function HorarioMensualList() {
                     </td>
                     <td>
                       <div className="acciones-iconos" style={{ alignItems: 'center' }}>
-                        <button type="button" className="btn-secondary" onClick={() => navigate(`/contratacion-publica/horarios/${h.id}`)}>Abrir</button>
+                        <button type="button" className="btn-secondary" onClick={() => navigate(`/operaciones/horarios/${h.id}`)}>Abrir</button>
                         {canEdit && h.estado === 'BORRADOR' ? (
                           <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Eliminar horario" aria-label="Eliminar horario" onClick={() => setConfirmandoEliminar(h)}>
                             <Trash2 size={16} />
