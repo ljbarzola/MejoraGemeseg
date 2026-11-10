@@ -101,7 +101,8 @@ export type AgruparEmbudo =
   | 'channel_servicio'
   | 'campana_servicio'
   | 'ciudad'
-  | 'ciudad_campana';
+  | 'ciudad_campana'
+  | 'responsable';
 export const AGRUPACIONES_EMBUDO: AgruparEmbudo[] = [
   'channel',
   'campana',
@@ -112,6 +113,7 @@ export const AGRUPACIONES_EMBUDO: AgruparEmbudo[] = [
   'campana_servicio',
   'ciudad',
   'ciudad_campana',
+  'responsable',
 ];
 
 // todos | whatsapp = quien llegó por el botón de una landing (con código) | otros = formulario y demás canales.
@@ -125,6 +127,8 @@ interface Atributos {
   grupo: string | null;
   // Ciudad del número de WhatsApp al que fue el clic (según la tabla de ciudades); los contactos de formulario no la tienen.
   ciudad?: string | null;
+  // Responsable de la ciudad o de la campaña (nombre de la persona), según la tabla de ciudades.
+  responsable?: string | null;
 }
 
 // Una persona que llegó en el periodo (un posible cliente) con la atribución que le toca.
@@ -257,7 +261,7 @@ export function canalDeClic(c: {
   return canal === 'WEB_FORM' ? 'WHATSAPP' : canal;
 }
 
-type Dimension = 'channel' | 'campana' | 'landing' | 'servicio' | 'grupo' | 'ciudad';
+type Dimension = 'channel' | 'campana' | 'landing' | 'servicio' | 'grupo' | 'ciudad' | 'responsable';
 const NIVELES: Record<AgruparEmbudo, Dimension[]> = {
   channel: ['channel'],
   campana: ['campana'],
@@ -268,6 +272,7 @@ const NIVELES: Record<AgruparEmbudo, Dimension[]> = {
   campana_servicio: ['campana', 'servicio'],
   ciudad: ['ciudad'],
   ciudad_campana: ['ciudad', 'campana'],
+  responsable: ['responsable'],
 };
 
 const valorDe = (x: Atributos, d: Dimension): string => {
@@ -284,6 +289,8 @@ const valorDe = (x: Atributos, d: Dimension): string => {
       return textoDeServicio(x.grupo) ?? SIN_DATO;
     case 'ciudad':
       return lleno(x.ciudad) ?? SIN_DATO;
+    case 'responsable':
+      return lleno(x.responsable) ?? SIN_DATO;
   }
 };
 

@@ -1,4 +1,4 @@
-import { ciudadDeNumero, limpiarClic, numeroLegible, numeroLimpio } from './whatsapp-clics.util';
+import { ciudadDeNumero, responsableDe, limpiarClic, numeroLegible, numeroLimpio } from './whatsapp-clics.util';
 
 describe('numeroLimpio', () => {
   it('deja solo los dígitos del número', () => {
@@ -38,5 +38,19 @@ describe('ciudadDeNumero', () => {
   it('un número sin ciudad se ve como «Sin ciudad», y sin número devuelve null', () => {
     expect(ciudadDeNumero('593969135744', {})).toBe(`Sin ciudad (${numeroLegible('593969135744')})`);
     expect(ciudadDeNumero(null, { x: 'y' })).toBeNull();
+  });
+});
+
+describe('responsableDe', () => {
+  const r = { porCiudad: { Loja: 'Erika' }, porCampana: { 'loja-camaras-ia': 'David' } };
+
+  it('la campaña con responsable propio manda sobre la ciudad', () => {
+    expect(responsableDe('Loja', 'Loja-Camaras-IA', r)).toBe('David');
+  });
+
+  it('sin responsable de campaña usa el de la ciudad, y sin ninguno devuelve null', () => {
+    expect(responsableDe('Loja', 'otra', r)).toBe('Erika');
+    expect(responsableDe('Guayaquil', 'otra', r)).toBeNull();
+    expect(responsableDe(null, null, r)).toBeNull();
   });
 });

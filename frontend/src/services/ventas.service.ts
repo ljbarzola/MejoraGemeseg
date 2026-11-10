@@ -1450,7 +1450,7 @@ export interface TotalEmbudoUnico extends FilaEmbudoUnico {
   pctConvertidos: number | null;
 }
 export type AgruparEmbudoUnico =
-  | 'channel' | 'campana' | 'landing' | 'servicio' | 'grupo' | 'channel_servicio' | 'campana_servicio' | 'ciudad' | 'ciudad_campana';
+  | 'channel' | 'campana' | 'landing' | 'servicio' | 'grupo' | 'channel_servicio' | 'campana_servicio' | 'ciudad' | 'ciudad_campana' | 'responsable';
 export interface AnaliticaMarketing {
   periodo: { desde: string; hasta: string };
   agrupadoPor: AgruparEmbudoUnico;
@@ -1555,10 +1555,17 @@ export const getClaveLandingWhatsapp = (): Promise<ResumenLandingWhatsapp> =>
 // todavía no están en ninguna ciudad vienen en `sinCiudad`.
 export interface NumeroDeCiudad { numero: string; clics: number; ultimoClic: string | null }
 export interface CiudadesWhatsapp {
-  ciudades: { nombre: string; numeros: NumeroDeCiudad[] }[];
+  ciudades: { nombre: string; responsableId: number | null; numeros: NumeroDeCiudad[] }[];
+  // Campañas con responsable propio (manda sobre el de la ciudad).
+  campanas: { campana: string; responsableId: number }[];
   sinCiudad: NumeroDeCiudad[];
+  // Personas de la empresa que se pueden elegir como responsable.
+  usuarios: { id: number; nombre: string }[];
 }
 export const getCiudadesWhatsapp = (): Promise<CiudadesWhatsapp> =>
   api.get('/ventas/whatsapp-clics/ciudades').then(r => r.data);
-export const guardarCiudadesWhatsapp = (ciudades: { nombre: string; numeros: string[] }[]): Promise<CiudadesWhatsapp> =>
-  api.put('/ventas/whatsapp-clics/ciudades', { ciudades }).then(r => r.data);
+export const guardarCiudadesWhatsapp = (
+  ciudades: { nombre: string; numeros: string[]; responsableId: number | null }[],
+  campanas: { campana: string; responsableId: number }[],
+): Promise<CiudadesWhatsapp> =>
+  api.put('/ventas/whatsapp-clics/ciudades', { ciudades, campanas }).then(r => r.data);

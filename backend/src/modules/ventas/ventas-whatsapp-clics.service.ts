@@ -143,40 +143,64 @@ export class VentasWhatsappClicsService {
   }
 
   // ---------------------------------------------------------------------
-  // Tabla de ciudades: cada ciudad (Guayaquil, Loja...) tiene uno o varios números de WhatsApp. Los números cambian
-  // con el tiempo (otro vendedor, otro chip): se agrega el nuevo a la misma ciudad y las cifras siguen juntas.
+  // Tabla de ciudades: cada ciudad (Guayaquil, Loja...) tiene uno o varios números de WhatsApp y, si se quiere, un
+  // responsable. Los números cambian con el tiempo (otro vendedor, otro chip): se agrega el nuevo a la misma ciudad
+  // y las cifras siguen juntas. Una campaña concreta también puede tener su responsable, que manda sobre el de la ciudad.
   // ---------------------------------------------------------------------
 
-  // [{ nombre: 'Loja', numeros: ['593998246418'] }] guardado en SalesSetting (clave `whatsapp_ciudades`).
-  async ciudadesConfiguradas(companyId: number): Promise<{ nombre: string; numeros: string[] }[]> {
+  // { ciudades: [{ nombre, numeros, responsableId }], campanas: [{ campana, responsableId }] } en SalesSetting (`whatsapp_ciudades`).
+  async configuracionDeCiudades(companyId: number): Promise<{
+    ciudades: { nombre: string; numeros: string[]; responsableId: number | null }[];
+    campanas: { campana: string; responsableId: number }[];
+  }> {
     const fila = await this.prisma.salesSetting.findUnique({
       where: { companyId_key: { companyId, key: CLAVE_CIUDADES } },
     });
-    const bruto = ((fila?.value as { ciudades?: unknown } | null)?.ciudades ?? []) as { nombre?: unknown; numeros?: unknown }[];
+    const valor = (fila?.value ?? {}) as { ciudades?: unknown; campanas?: unknown };
+    const idValido = (v: unknown): number | null => (Number.isInteger(v) && (v as number) > 0 ? (v as number) : null);
     const vistos = new Set<string>();
-    const ciudades: { nombre: string; numeros: string[] }[] = [];
-    for (const c of Array.isArray(bruto) ? bruto : []) {
+    const ciudades: { nombre: string; numeros: string[]; responsableId: number | null }[] = [];
+    for (const c of (Array.isArray(valor.ciudades) ? valor.ciudades : []) as { nombre?: unknown; numeros?: unknown; responsableId?: unknown }[]) {
       const nombre = (c?.nombre ?? '').toString().trim().slice(0, 60);
       if (!nombre) continue;
       const numeros = (Array.isArray(c?.numeros) ? c.numeros : [])
         .map((n) => numeroLimpio(n))
         .filter((n): n is string => !!n && !vistos.has(n));
       numeros.forEach((n) => vistos.add(n));
-      ciudades.push({ nombre, numeros });
+      ciudades.push({ nombre, numeros, responsableId: idValido(c?.responsableId) });
     }
-    return ciudades;
+    const campanas: { campana: string; responsableId: number }[] = [];
+    for (const c of (Array.isArray(valor.campanas) ? valor.campanas : []) as { campana?: unknown; responsableId?: unknown }[]) {
+      const campana = (c?.campana ?? '').toString().trim().slice(0, 120);
+      const responsableId = idValido(c?.responsableId);
+      if (campana && responsableId) campanas.push({ campana, responsableId });
+    }
+    return { ciudades, campanas };
   }
 
   // { '593998246418': 'Loja' }: para saber a qué ciudad pertenece el número de cada clic.
   async ciudadPorNumero(companyId: number): Promise<Record<string, string>> {
     const mapa: Record<string, string> = {};
-    for (const c of await this.ciudadesConfiguradas(companyId)) for (const n of c.numeros) mapa[n] = c.nombre;
+    for (const c of (await this.configuracionDeCiudades(companyId)).ciudades) for (const n of c.numeros) mapa[n] = c.nombre;
     return mapa;
   }
 
-  // Las ciudades con sus números y los números que ya recibieron clics pero no están en ninguna ciudad.
+  // Quién es el responsable de cada ciudad y de cada campaña (por nombre de la persona), para las cifras del Dashboard.
+  async responsablesDeCiudades(companyId: number): Promise<{ porCiudad: Record<string, string>; porCampana: Record<string, string> }> {
+    const cfg = await this.configuracionDeCiudades(companyId);
+    const usuarios = await this.prisma.user.findMany({ where: { companyId }, select: { id: true, fullName: true } });
+    const nombre = new Map(usuarios.map((u) => [u.id, u.fullName]));
+    const porCiudad: Record<string, string> = {};
+    for (const c of cfg.ciudades) if (c.responsableId && nombre.get(c.responsableId)) porCiudad[c.nombre] = nombre.get(c.responsableId)!;
+    const porCampana: Record<string, string> = {};
+    for (const c of cfg.campanas) if (nombre.get(c.responsableId)) porCampana[c.campana.toLowerCase()] = nombre.get(c.responsableId)!;
+    return { porCiudad, porCampana };
+  }
+
+  // Las ciudades con sus números y responsable, las campañas con responsable, los números con clics que aún no están
+  // en ninguna ciudad y las personas que se pueden elegir como responsable.
   async ciudadesDeLanding(companyId: number) {
-    const ciudades = await this.ciudadesConfiguradas(companyId);
+    const cfg = await this.configuracionDeCiudades(companyId);
     const vistos = new Map<string, { clics: number; ultimoClic: Date | null }>();
     if (this.esquema.isReady()) {
       const filas = await this.prisma.$queryRawUnsafe<{ numero: string; clics: number; ultimo: Date | null }[]>(
@@ -189,20 +213,38 @@ export class VentasWhatsappClicsService {
       for (const f of filas) vistos.set(f.numero, { clics: f.clics, ultimoClic: f.ultimo });
     }
     const dato = (numero: string) => ({ numero, clics: vistos.get(numero)?.clics ?? 0, ultimoClic: vistos.get(numero)?.ultimoClic ?? null });
-    const asignados = new Set(ciudades.flatMap((c) => c.numeros));
+    const asignados = new Set(cfg.ciudades.flatMap((c) => c.numeros));
+    const usuarios = await this.prisma.user.findMany({
+      where: { companyId },
+      select: { id: true, fullName: true },
+      orderBy: { fullName: 'asc' },
+    });
     return {
-      ciudades: ciudades.map((c) => ({ nombre: c.nombre, numeros: c.numeros.map(dato) })),
+      ciudades: cfg.ciudades.map((c) => ({ nombre: c.nombre, responsableId: c.responsableId, numeros: c.numeros.map(dato) })),
+      campanas: cfg.campanas,
       sinCiudad: [...vistos.keys()].filter((n) => !asignados.has(n)).map(dato).sort((a, b) => b.clics - a.clics),
+      usuarios: usuarios.map((u) => ({ id: u.id, nombre: u.fullName })),
     };
   }
 
-  async guardarCiudades(companyId: number, entrada: unknown) {
+  async guardarCiudades(companyId: number, entrada: unknown, campanasEntrada?: unknown) {
     if (!Array.isArray(entrada)) throw new BadRequestException('No se entendió la lista de ciudades.');
     if (entrada.length > 50) throw new BadRequestException('Son demasiadas ciudades.');
+    if (campanasEntrada !== undefined && (!Array.isArray(campanasEntrada) || campanasEntrada.length > 200)) {
+      throw new BadRequestException('No se entendió la lista de campañas.');
+    }
+    const usuarios = new Set(
+      (await this.prisma.user.findMany({ where: { companyId }, select: { id: true } })).map((u) => u.id),
+    );
+    const responsable = (v: unknown, para: string): number | null => {
+      if (v === null || v === undefined || v === '') return null;
+      if (!Number.isInteger(v) || !usuarios.has(v as number)) throw new BadRequestException(`El responsable de «${para}» no es una persona de la empresa.`);
+      return v as number;
+    };
     const nombresVistos = new Set<string>();
     const numerosVistos = new Map<string, string>();
-    const ciudades: { nombre: string; numeros: string[] }[] = [];
-    for (const e of entrada as { nombre?: unknown; numeros?: unknown }[]) {
+    const ciudades: { nombre: string; numeros: string[]; responsableId: number | null }[] = [];
+    for (const e of entrada as { nombre?: unknown; numeros?: unknown; responsableId?: unknown }[]) {
       const nombre = (e?.nombre ?? '').toString().trim().slice(0, 60);
       if (!nombre) throw new BadRequestException('Cada ciudad necesita un nombre.');
       if (nombresVistos.has(nombre.toLowerCase())) throw new BadRequestException(`La ciudad «${nombre}» está repetida.`);
@@ -216,12 +258,26 @@ export class VentasWhatsappClicsService {
         if (!numerosVistos.has(d)) numeros.push(d);
         numerosVistos.set(d, nombre);
       }
-      ciudades.push({ nombre, numeros });
+      ciudades.push({ nombre, numeros, responsableId: responsable(e?.responsableId, nombre) });
+    }
+    // Si no mandan campañas se conservan las que ya había (así un cliente viejo no las borra sin querer).
+    let campanas = (await this.configuracionDeCiudades(companyId)).campanas;
+    if (Array.isArray(campanasEntrada)) {
+      const vistas = new Set<string>();
+      campanas = [];
+      for (const c of campanasEntrada as { campana?: unknown; responsableId?: unknown }[]) {
+        const campana = (c?.campana ?? '').toString().trim().slice(0, 120);
+        if (!campana) continue;
+        if (vistas.has(campana.toLowerCase())) throw new BadRequestException(`La campaña «${campana}» está repetida.`);
+        vistas.add(campana.toLowerCase());
+        const id = responsable(c?.responsableId, campana);
+        if (id) campanas.push({ campana, responsableId: id });
+      }
     }
     await this.prisma.salesSetting.upsert({
       where: { companyId_key: { companyId, key: CLAVE_CIUDADES } },
-      create: { companyId, key: CLAVE_CIUDADES, value: { ciudades } as Prisma.InputJsonValue },
-      update: { value: { ciudades } as Prisma.InputJsonValue },
+      create: { companyId, key: CLAVE_CIUDADES, value: { ciudades, campanas } as Prisma.InputJsonValue },
+      update: { value: { ciudades, campanas } as Prisma.InputJsonValue },
     });
     return this.ciudadesDeLanding(companyId);
   }

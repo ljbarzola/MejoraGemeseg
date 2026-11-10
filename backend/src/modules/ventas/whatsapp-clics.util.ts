@@ -65,6 +65,16 @@ export function ciudadDeNumero(numero: string | null | undefined, ciudadPorNumer
   return ciudadPorNumero[d] || `Sin ciudad (${numeroLegible(d)})`;
 }
 
+// Responsable de un contacto o clic: el de su campaña si la campaña tiene uno propio, si no el de su ciudad.
+export function responsableDe(
+  ciudad: string | null | undefined,
+  campana: string | null | undefined,
+  r: { porCiudad: Record<string, string>; porCampana: Record<string, string> },
+): string | null {
+  const c = (campana || '').trim().toLowerCase();
+  return (c && r.porCampana[c]) || (ciudad && r.porCiudad[ciudad]) || null;
+}
+
 // Devuelve null si el código no tiene el formato GMS-WA-XXXXXX (no se guarda nada).
 export function limpiarClic(body: Record<string, unknown> | null | undefined): ClicEntrada | null {
   const trackingId = (body?.tracking_id ?? '').toString().trim().toUpperCase();

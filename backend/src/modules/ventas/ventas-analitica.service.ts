@@ -31,7 +31,7 @@ import {
   type OrigenEmbudo,
 } from './ventas-marketing.util';
 import { VentasWhatsappClicsService, type ClicDeLead } from './ventas-whatsapp-clics.service';
-import { ciudadDeNumero } from './whatsapp-clics.util';
+import { ciudadDeNumero, responsableDe } from './whatsapp-clics.util';
 import { ETIQUETA_KIND, MOTIVO_KINDS } from './ventas-motivos.service';
 import { agruparMapa, vistaValida } from './ventas-mapa.util';
 import { rangoDiasEcuador } from './fecha-llegada.util';
@@ -936,6 +936,7 @@ export class VentasAnaliticaService {
     const ciudad = (ciudadRaw ?? '').trim() || null;
     // Ciudad de cada número de WhatsApp (varios números pueden ser de una misma ciudad).
     const ciudadPorNumero = (await this.clics?.ciudadPorNumero(cid)) ?? {};
+    const responsables = (await this.clics?.responsablesDeCiudades(cid)) ?? { porCiudad: {}, porCampana: {} };
     const leads = await this.prisma.salesLead.findMany({
       where: {
         companyId: cid,
@@ -987,6 +988,7 @@ export class VentasAnaliticaService {
           };
       return {
         ...atributos,
+        responsable: responsableDe(atributos.ciudad, atributos.campana, responsables),
         porClic: !!clic,
         fase: o?.fase ?? null,
         cotizo: o?.cotizo ?? false,
@@ -1003,6 +1005,7 @@ export class VentasAnaliticaService {
       servicio: c.serviceName,
       grupo: c.serviceGroup,
       ciudad: ciudadDeNumero(c.whatsappNumber, ciudadPorNumero),
+      responsable: responsableDe(ciudadDeNumero(c.whatsappNumber, ciudadPorNumero), c.utmCampaign, responsables),
       escribio: c.leadId !== null,
     }));
     return {

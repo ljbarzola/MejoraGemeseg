@@ -3,7 +3,8 @@ import { useToast } from '../../contexts/ToastContext';
 import { getCiudadesWhatsapp, guardarCiudadesWhatsapp, type CiudadesWhatsapp } from '../../services/ventas.service';
 import { numeroLegible } from '../../utils/numeroWhatsapp';
 
-interface CiudadEditable { nombre: string; numeros: string[] }
+interface CiudadEditable { nombre: string; numeros: string[]; responsableId: number | null }
+interface CampanaEditable { campana: string; responsableId: number }
 
 // Lo que se pega en cada landing para medir los clics al botón de WhatsApp. La clave es PÚBLICA: va en la
 // etiqueta <script> y cualquiera puede verla en la página; solo sirve para registrar clics anónimos, nunca
@@ -13,6 +14,9 @@ export default function WhatsappLandingsPanel({ clave, puedeEditar = true }: { c
   const { showToast } = useToast();
   const [ciudades, setCiudades] = useState<CiudadEditable[] | null>(null);
   const [sinCiudad, setSinCiudad] = useState<string[]>([]);
+  const [campanas, setCampanas] = useState<CampanaEditable[]>([]);
+  const [usuarios, setUsuarios] = useState<{ id: number; nombre: string }[]>([]);
+  const [nuevaCampana, setNuevaCampana] = useState('');
   const [clicsPorNumero, setClicsPorNumero] = useState<Record<string, number>>({});
   const [guardando, setGuardando] = useState(false);
   const [sucio, setSucio] = useState(false);
@@ -20,7 +24,9 @@ export default function WhatsappLandingsPanel({ clave, puedeEditar = true }: { c
   const [nuevoNumero, setNuevoNumero] = useState<Record<number, string>>({});
 
   const aplicar = (r: CiudadesWhatsapp) => {
-    setCiudades(r.ciudades.map((c) => ({ nombre: c.nombre, numeros: c.numeros.map((n) => n.numero) })));
+    setCiudades(r.ciudades.map((c) => ({ nombre: c.nombre, responsableId: c.responsableId, numeros: c.numeros.map((n) => n.numero) })));
+    setCampanas(r.campanas);
+    setUsuarios(r.usuarios);
     setSinCiudad(r.sinCiudad.map((n) => n.numero));
     setClicsPorNumero(Object.fromEntries([...r.ciudades.flatMap((c) => c.numeros), ...r.sinCiudad].map((n) => [n.numero, n.clics])));
     setSucio(false);
@@ -36,7 +42,7 @@ export default function WhatsappLandingsPanel({ clave, puedeEditar = true }: { c
     const nombre = nuevaCiudad.trim();
     if (!nombre) return;
     if ((ciudades ?? []).some((c) => c.nombre.toLowerCase() === nombre.toLowerCase())) { showToast('Esa ciudad ya está en la lista.', 'error'); return; }
-    cambiar((c) => [...c, { nombre, numeros: [] }]);
+    cambiar((c) => [...c, { nombre, numeros: [], responsableId: null }]);
     setNuevaCiudad('');
   };
 
@@ -58,7 +64,7 @@ export default function WhatsappLandingsPanel({ clave, puedeEditar = true }: { c
   const guardar = async () => {
     setGuardando(true);
     try {
-      aplicar(await guardarCiudadesWhatsapp(ciudades ?? []));
+      aplicar(await guardarCiudadesWhatsapp(ciudades ?? [], campanas));
       showToast('Ciudades guardadas', 'success');
     } catch (e: any) {
       showToast(e?.response?.data?.message && typeof e.response.data.message === 'string' ? e.response.data.message : 'No se pudieron guardar las ciudades. Intenta de nuevo.', 'error');
@@ -106,6 +112,11 @@ export default function WhatsappLandingsPanel({ clave, puedeEditar = true }: { c
             <div key={`${c.nombre}-${i}`} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', marginBottom: 10, maxWidth: 620 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <strong style={{ fontSize: 14 }}>{c.nombre}</strong>
+                <select className="filter-select" aria-label={`Responsable de ${c.nombre}`} disabled={!puedeEditar}
+                  value={c.responsableId ?? ''} onChange={(e) => cambiar((x) => x.map((y, j) => (j === i ? { ...y, responsableId: e.target.value ? Number(e.target.value) : null } : y)))}>
+                  <option value="">Sin responsable</option>
+                  {usuarios.map((u) => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+                </select>
                 {puedeEditar && (
                   <button type="button" className="btn-secondary" style={{ marginLeft: 'auto', padding: '2px 10px', fontSize: 12 }}
                     onClick={() => { cambiar((x) => x.filter((_, j) => j !== i)); setSinCiudad((s) => [...s, ...c.numeros]); }}>
@@ -137,6 +148,33 @@ export default function WhatsappLandingsPanel({ clave, puedeEditar = true }: { c
               )}
             </div>
           ))}
+
+          <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', marginBottom: 10, maxWidth: 620 }}>
+            <strong style={{ fontSize: 14 }}>Responsable por campaña (opcional)</strong>
+            <p style={{ fontSize: 12, color: '#718096', margin: '2px 0 6px' }}>Si una campaña tiene su propio responsable, manda sobre el de la ciudad. Escribe el nombre tal como está en la campaña de Google Ads (el mismo que va en utm_campaign).</p>
+            {campanas.map((c, i) => (
+              <div key={c.campana} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '2px 0' }}>
+                <span style={{ flex: 1 }}>{c.campana}</span>
+                <select className="filter-select" aria-label={`Responsable de la campaña ${c.campana}`} disabled={!puedeEditar} value={c.responsableId}
+                  onChange={(e) => { setCampanas(campanas.map((x, j) => (j === i ? { ...x, responsableId: Number(e.target.value) } : x))); setSucio(true); }}>
+                  {usuarios.map((u) => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+                </select>
+                {puedeEditar && <button type="button" className="btn-secondary" style={{ padding: '1px 8px', fontSize: 12 }} onClick={() => { setCampanas(campanas.filter((_, j) => j !== i)); setSucio(true); }}>Quitar</button>}
+              </div>
+            ))}
+            {puedeEditar && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                <input className="filter-select" style={{ width: 260 }} maxLength={120} placeholder="Nombre de la campaña (ej. loja-camaras-ia-busqueda)" aria-label="Nombre de la campaña"
+                  value={nuevaCampana} onChange={(e) => setNuevaCampana(e.target.value)} />
+                <button type="button" className="btn-secondary" disabled={!nuevaCampana.trim() || usuarios.length === 0}
+                  onClick={() => {
+                    const campana = nuevaCampana.trim();
+                    if (campanas.some((x) => x.campana.toLowerCase() === campana.toLowerCase())) { showToast('Esa campaña ya está en la lista.', 'error'); return; }
+                    setCampanas([...campanas, { campana, responsableId: usuarios[0].id }]); setSucio(true); setNuevaCampana('');
+                  }}>Agregar campaña</button>
+              </div>
+            )}
+          </div>
 
           {sinCiudad.length > 0 && (
             <div style={{ border: '1px dashed #d69e2e', background: '#fffaf0', borderRadius: 8, padding: '10px 12px', marginBottom: 10, maxWidth: 620 }}>
