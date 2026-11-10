@@ -53,6 +53,8 @@ export interface ClicFila {
   opportunityId: number | null;
   clickedAt: Date;
   conversationAt: Date | null;
+  // Clic de prueba: su campaña empieza por «prueba» o «test». No cuenta en el Dashboard.
+  esPrueba: boolean;
 }
 
 // Un clic del periodo, con la oportunidad del posible cliente enlazado (si lo hay), para el embudo del Dashboard.
@@ -278,7 +280,8 @@ export class VentasWhatsappClicsService {
          s."label" AS "etapa",
          c."utmSource", c."utmMedium", c."utmCampaign", c."utmContent", c."utmTerm", c."landingPage", c."serviceName", c."serviceGroup", c."whatsappNumber",
          c."gclid", c."leadId", l."name" AS "leadName", o."id" AS "opportunityId",
-         c."clickedAt", c."conversationAt"
+         c."clickedAt", c."conversationAt",
+         (c."utmCampaign" ~* '^(prueba|test)') AS "esPrueba"
        FROM "SalesWhatsappClick" c
        LEFT JOIN "SalesLead" l ON l."id" = c."leadId"
        LEFT JOIN "SalesOpportunity" o ON o."id" = l."convertedOpportunityId"
@@ -435,7 +438,8 @@ export class VentasWhatsappClicsService {
          FROM "SalesWhatsappClick" c
          LEFT JOIN "SalesLead" l ON l."id" = c."leadId"
         WHERE c."companyId" = $1
-          AND c."clickedAt" >= $2::timestamp AND c."clickedAt" <= $3::timestamp`,
+          AND c."clickedAt" >= $2::timestamp AND c."clickedAt" <= $3::timestamp
+          AND c."utmCampaign" !~* '^(prueba|test)'`,
       companyId,
       desde.toISOString(),
       hasta.toISOString(),

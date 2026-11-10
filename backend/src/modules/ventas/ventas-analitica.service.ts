@@ -982,6 +982,8 @@ export class VentasAnaliticaService {
             landing: texto('landing'),
             servicio: texto('servicio') ?? texto('servicio_requerido'),
             grupo: texto('lineaComercial'),
+            // El formulario trae la ciudad (`sede`) desde el plugin de la web; sin ella queda «Sin dato».
+            ciudad: texto('sede'),
           };
       return {
         ...atributos,

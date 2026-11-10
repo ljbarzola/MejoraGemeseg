@@ -76,7 +76,11 @@ export function datosDeLanding(
   body: Record<string, unknown> | null | undefined,
   landings: LandingDef[] = LANDINGS,
 ): DatosLanding {
-  const slug = limpiarSlug(body?.landing);
+  // Las landings de Loja viajan como «loja-<servicio>» (así las envía el tema de WordPress): la sede es Loja y el
+  // servicio sale de la landing sin el prefijo.
+  const slugBruto = limpiarSlug(body?.landing);
+  const esLoja = !!slugBruto && slugBruto.startsWith('loja-');
+  const slug = slugBruto && esLoja ? slugBruto.slice('loja-'.length) : slugBruto;
   const conocida = slug ? landingDe(slug, landings) : undefined;
   const extra: Record<string, string> = {};
   if (slug) extra.landing = slug;
@@ -87,6 +91,9 @@ export function datosDeLanding(
   if (conocida) extra.lineaComercial = conocida.linea;
   const pageUrl = texto(body?.pageUrl, 300);
   if (pageUrl) extra.pageUrl = pageUrl;
+  // Ciudad desde la que se pidió: la manda el plugin (`sede`); si no llega, la deduce el prefijo de Loja.
+  const sede = texto(body?.sede, 40) ?? (esLoja ? 'Loja' : undefined);
+  if (sede) extra.sede = sede;
   // El formulario la llama `necesidad`; el plugin de WordPress la reenvía como `tipo`.
   const necesidad = texto(body?.necesidad ?? body?.tipo, 200);
   if (necesidad) extra.necesidad = necesidad;

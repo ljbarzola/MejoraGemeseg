@@ -84,3 +84,17 @@ describe('datosDeLanding', () => {
     expect(datosDeLanding({ landing: 'seguridad-vip' }).extra.consentimiento).toBe('NO_CONSTA');
   });
 });
+
+describe('datosDeLanding: sede de Loja', () => {
+  it('una landing «loja-<servicio>» es de Loja y conserva el servicio', () => {
+    const r = datosDeLanding({ landing: 'loja-camaras-ia' });
+    expect(r.extra.sede).toBe('Loja');
+    expect(r.extra.landing).toBe('camaras-ia');
+    expect(r.extra.servicio).toBeTruthy();
+  });
+
+  it('usa la sede que manda el plugin y, sin ella ni prefijo, no inventa ciudad', () => {
+    expect(datosDeLanding({ landing: 'camaras-ia', sede: 'Guayaquil' }).extra.sede).toBe('Guayaquil');
+    expect(datosDeLanding({ landing: 'camaras-ia' }).extra.sede).toBeUndefined();
+  });
+});

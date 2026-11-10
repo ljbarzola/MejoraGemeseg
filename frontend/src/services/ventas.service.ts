@@ -1523,6 +1523,8 @@ export interface ClicWhatsapp {
   opportunityId: number | null;
   clickedAt: string;
   conversationAt: string | null;
+  // Clic de prueba (campaña «prueba…» o «test…»): no cuenta en el Dashboard.
+  esPrueba: boolean;
 }
 
 export const getClicsWhatsapp = (): Promise<ClicWhatsapp[]> =>
