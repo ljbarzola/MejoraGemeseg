@@ -192,3 +192,38 @@ describe('embudoUnico', () => {
     expect(serviciosDelEmbudo([contacto()], clics)).toEqual(['Camaras ia', 'Monitoreo vehiculos', 'Sin dato']);
   });
 });
+
+describe('embudoUnico por ciudad', () => {
+  const base = { canal: 'GOOGLE_ADS', campana: 'prueba', landing: 'camaras-ia', servicio: null, grupo: null };
+  const contacto = (ciudad: string | null): ContactoParaEmbudo => ({
+    ...base, ciudad, porClic: !!ciudad, fase: null, cotizo: false, vendido: 0,
+  });
+  const clic = (ciudad: string | null): ClicParaEmbudo => ({ ...base, ciudad, escribio: false });
+  const todos = { origen: 'todos' as const, servicio: null };
+
+  it('separa Loja y Guayaquil, y el formulario queda en «Sin dato»', () => {
+    const r = embudoUnico(
+      [contacto('Loja'), contacto(null)],
+      [clic('Loja'), clic('Guayaquil'), clic('Guayaquil')],
+      'ciudad',
+      todos,
+    );
+    const por = Object.fromEntries(r.filas.map((f) => [f.clave, f]));
+    expect(por['Guayaquil'].clics).toBe(2);
+    expect(por['Loja'].clics).toBe(1);
+    expect(por['Loja'].contactos).toBe(1);
+    expect(por['Sin dato'].contactos).toBe(1);
+  });
+
+  it('el filtro de ciudad deja solo lo de esa ciudad', () => {
+    const r = embudoUnico(
+      [contacto('Loja'), contacto(null)],
+      [clic('Loja'), clic('Guayaquil')],
+      'ciudad_campana',
+      { ...todos, ciudad: 'Loja' },
+    );
+    expect(r.total.clics).toBe(1);
+    expect(r.total.contactos).toBe(1);
+    expect(r.filas[0].subclave).toBe('prueba');
+  });
+});

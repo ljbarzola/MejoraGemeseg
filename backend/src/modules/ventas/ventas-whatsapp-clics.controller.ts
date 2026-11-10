@@ -6,6 +6,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -89,6 +90,19 @@ export class VentasWhatsappClicsController {
   @Section('VENTAS', 'write')
   enlazar(@Req() req: any, @Body() dto: EnlazarCodigoDto) {
     return this.clics.enlazarALead(req.user.companyId, req.user.userId, dto.leadId, dto.codigo);
+  }
+
+  // Las ciudades (Guayaquil, Loja...) con sus números de WhatsApp, y los números con clics que aún no tienen ciudad.
+  @Get('ciudades')
+  @Section('VENTAS', 'view')
+  ciudades(@Req() req: any) {
+    return this.clics.ciudadesDeLanding(req.user.companyId);
+  }
+
+  @Put('ciudades')
+  @Section('VENTAS', 'write')
+  guardarCiudades(@Req() req: any, @Body() body: { ciudades?: unknown }) {
+    return this.clics.guardarCiudades(req.user.companyId, body?.ciudades);
   }
 
   // La clave se crea la primera vez que se pide.

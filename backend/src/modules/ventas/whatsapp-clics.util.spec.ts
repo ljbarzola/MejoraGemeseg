@@ -1,4 +1,4 @@
-import { limpiarClic, numeroLimpio } from './whatsapp-clics.util';
+import { ciudadDeNumero, limpiarClic, numeroLegible, numeroLimpio } from './whatsapp-clics.util';
 
 describe('numeroLimpio', () => {
   it('deja solo los dígitos del número', () => {
@@ -25,5 +25,18 @@ describe('limpiarClic y el número de WhatsApp', () => {
     const c = limpiarClic({ tracking_id: 'GMS-WA-ABC234' });
     expect(c).not.toBeNull();
     expect(c?.whatsappNumber).toBeNull();
+  });
+});
+
+describe('ciudadDeNumero', () => {
+  it('varios números de una ciudad dan la misma ciudad', () => {
+    const mapa = { '593998246418': 'Loja', '593991111111': 'Loja' };
+    expect(ciudadDeNumero('593998246418', mapa)).toBe('Loja');
+    expect(ciudadDeNumero('593991111111', mapa)).toBe('Loja');
+  });
+
+  it('un número sin ciudad se ve como «Sin ciudad», y sin número devuelve null', () => {
+    expect(ciudadDeNumero('593969135744', {})).toBe(`Sin ciudad (${numeroLegible('593969135744')})`);
+    expect(ciudadDeNumero(null, { x: 'y' })).toBeNull();
   });
 });

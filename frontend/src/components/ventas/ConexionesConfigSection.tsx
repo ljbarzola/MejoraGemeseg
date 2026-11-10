@@ -221,7 +221,7 @@ export default function ConexionesConfigSection({ config, servicios, puedeEditar
     }
 
     if (id === 'WHATSAPP') {
-      return <WhatsappLandingsPanel clave={whatsapp?.siteKey ?? ''} />;
+      return <WhatsappLandingsPanel clave={whatsapp?.siteKey ?? ''} puedeEditar={puedeEditar} />;
     }
 
     if (id === 'META_ADS' || id === 'LINKEDIN_ADS') {

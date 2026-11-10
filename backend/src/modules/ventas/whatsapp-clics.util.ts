@@ -49,6 +49,22 @@ export function numeroLimpio(valor: unknown): string | null {
   return digitos.length >= 8 && digitos.length <= 15 ? digitos : null;
 }
 
+// 593969135744 -> «+593 96 913 5744» (Ecuador); otros países se muestran como +<dígitos>.
+export function numeroLegible(numero: string | null | undefined): string {
+  const d = (numero || '').replace(/\D/g, '');
+  if (!d) return '';
+  const ec = /^593(\d{2})(\d{3})(\d{4})$/.exec(d);
+  return ec ? `+593 ${ec[1]} ${ec[2]} ${ec[3]}` : `+${d}`;
+}
+
+// La ciudad de un número de WhatsApp según la tabla de ciudades (un número solo está en una ciudad). Un número que
+// aún no está en ninguna sale como «Sin ciudad (+593 …)» para que se vea cuál falta asignar; sin número, null.
+export function ciudadDeNumero(numero: string | null | undefined, ciudadPorNumero: Record<string, string>): string | null {
+  const d = (numero || '').replace(/\D/g, '');
+  if (!d) return null;
+  return ciudadPorNumero[d] || `Sin ciudad (${numeroLegible(d)})`;
+}
+
 // Devuelve null si el código no tiene el formato GMS-WA-XXXXXX (no se guarda nada).
 export function limpiarClic(body: Record<string, unknown> | null | undefined): ClicEntrada | null {
   const trackingId = (body?.tracking_id ?? '').toString().trim().toUpperCase();
