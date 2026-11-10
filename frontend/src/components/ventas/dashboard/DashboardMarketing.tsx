@@ -28,6 +28,7 @@ const AGRUPACIONES: { value: Agrupar; label: string; col: string; col2?: string;
   { value: 'campana_servicio', label: 'Campaña › Servicio', col: 'Campaña', col2: 'Servicio', explica: 'Cada campaña se parte por servicio: qué servicio trajo cada anuncio.' },
   { value: 'ciudad', label: 'Ciudad', col: 'Ciudad', explica: 'Ciudad = a qué ciudad fue el clic del botón de WhatsApp (cada ciudad tiene su número o sus números, que se configuran en Configuración → Conexiones → WhatsApp de las landings). Quien llegó por el formulario no tiene ciudad: sale como «Sin dato».' },
   { value: 'ciudad_campana', label: 'Ciudad › Campaña', col: 'Ciudad', col2: 'Campaña', explica: 'Cada ciudad se parte por campaña: qué anuncios trajeron clientes a cada ciudad.' },
+  { value: 'responsable', label: 'Responsable', col: 'Responsable', explica: 'Responsable = la persona a cargo de la ciudad o de la campaña (se elige en Configuración → Conexiones → WhatsApp de las landings; si la campaña tiene responsable propio, manda sobre el de la ciudad). Lo que no tiene responsable asignado sale como «Sin dato».' },
 ];
 
 const ORIGENES: { value: Origen; label: string }[] = [

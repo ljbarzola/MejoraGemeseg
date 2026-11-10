@@ -227,3 +227,13 @@ describe('embudoUnico por ciudad', () => {
     expect(r.filas[0].subclave).toBe('prueba');
   });
 });
+
+describe('embudoUnico por responsable', () => {
+  const base = { canal: 'GOOGLE_ADS', campana: 'x', landing: null, servicio: null, grupo: null, ciudad: 'Loja' };
+  it('agrupa por la persona a cargo y deja «Sin dato» a lo que no tiene', () => {
+    const clic = (responsable: string | null): ClicParaEmbudo => ({ ...base, responsable, escribio: false });
+    const r = embudoUnico([], [clic('Erika'), clic('Erika'), clic(null)], 'responsable', { origen: 'todos', servicio: null });
+    const por = Object.fromEntries(r.filas.map((f) => [f.clave, f.clics]));
+    expect(por).toEqual({ Erika: 2, 'Sin dato': 1 });
+  });
+});

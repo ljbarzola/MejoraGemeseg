@@ -101,8 +101,8 @@ export class VentasWhatsappClicsController {
 
   @Put('ciudades')
   @Section('VENTAS', 'write')
-  guardarCiudades(@Req() req: any, @Body() body: { ciudades?: unknown }) {
-    return this.clics.guardarCiudades(req.user.companyId, body?.ciudades);
+  guardarCiudades(@Req() req: any, @Body() body: { ciudades?: unknown; campanas?: unknown }) {
+    return this.clics.guardarCiudades(req.user.companyId, body?.ciudades, body?.campanas);
   }
 
   // La clave se crea la primera vez que se pide.
