@@ -26,6 +26,8 @@ const AGRUPACIONES: { value: Agrupar; label: string; col: string; col2?: string;
   { value: 'grupo', label: 'Grupo de servicio', col: 'Grupo de servicio', explica: 'Grupo de servicio = la familia del servicio (por ejemplo, seguridad física o monitoreo).' },
   { value: 'channel_servicio', label: 'Canal › Servicio', col: 'Canal', col2: 'Servicio', explica: 'Cada canal se parte por servicio: qué servicio trajo cada canal.' },
   { value: 'campana_servicio', label: 'Campaña › Servicio', col: 'Campaña', col2: 'Servicio', explica: 'Cada campaña se parte por servicio: qué servicio trajo cada anuncio.' },
+  { value: 'ciudad', label: 'Ciudad', col: 'Ciudad', explica: 'Ciudad = a qué ciudad fue el clic del botón de WhatsApp (cada ciudad tiene su número o sus números, que se configuran en Configuración → Conexiones → WhatsApp de las landings). Quien llegó por el formulario no tiene ciudad: sale como «Sin dato».' },
+  { value: 'ciudad_campana', label: 'Ciudad › Campaña', col: 'Ciudad', col2: 'Campaña', explica: 'Cada ciudad se parte por campaña: qué anuncios trajeron clientes a cada ciudad.' },
 ];
 
 const ORIGENES: { value: Origen; label: string }[] = [
@@ -44,6 +46,7 @@ export default function DashboardMarketing({ desde, hasta }: { desde: string; ha
   const [agrupar, setAgrupar] = useState<Agrupar>('channel');
   const [origen, setOrigen] = useState<Origen>('todos');
   const [servicio, setServicio] = useState('');
+  const [ciudad, setCiudad] = useState('');
   const [datos, setDatos] = useState<AnaliticaMarketing | null>(null);
   const [error, setError] = useState(false);
   const [verClics, setVerClics] = useState(false);
@@ -58,11 +61,12 @@ export default function DashboardMarketing({ desde, hasta }: { desde: string; ha
         agrupar,
         origen: origen === 'todos' ? undefined : origen,
         servicio: servicio || undefined,
+        ciudad: ciudad || undefined,
       }));
     } catch {
       setError(true);
     }
-  }, [desde, hasta, agrupar, origen, servicio]);
+  }, [desde, hasta, agrupar, origen, servicio, ciudad]);
   useEffect(() => { cargar(); }, [cargar]);
 
   const conCanal = agrupar === 'channel' || agrupar === 'channel_servicio';
@@ -84,8 +88,8 @@ export default function DashboardMarketing({ desde, hasta }: { desde: string; ha
   );
   const tablaRef = useResizableColumns('ventas-dashboard-embudo-unico');
 
-  const hayFiltros = origen !== 'todos' || servicio !== '';
-  const limpiar = () => { setOrigen('todos'); setServicio(''); };
+  const hayFiltros = origen !== 'todos' || servicio !== '' || ciudad !== '';
+  const limpiar = () => { setOrigen('todos'); setServicio(''); setCiudad(''); };
 
   if (!datos) return <Cargando error={error} onReintentar={cargar} />;
   const t = datos.total;
@@ -113,6 +117,12 @@ export default function DashboardMarketing({ desde, hasta }: { desde: string; ha
                 <select id="servicio-embudo" className="filter-select" value={servicio} onChange={(e) => setServicio(e.target.value)}>
                   <option value="">Todos</option>
                   {datos.servicios.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </FilterField>
+              <FilterField label="Ciudad">
+                <select id="ciudad-embudo" className="filter-select" value={ciudad} onChange={(e) => setCiudad(e.target.value)}>
+                  <option value="">Todas</option>
+                  {datos.ciudades.map((n) => <option key={n} value={n}>{n}</option>)}
                 </select>
               </FilterField>
               <ClearFiltersButton onClear={limpiar} disabled={!hayFiltros} />

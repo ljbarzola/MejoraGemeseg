@@ -120,7 +120,7 @@ export default function LlegoWhatsappModal({ clicInicial, onClose, onDone, onVer
                 <p>
                   Código <strong style={{ fontFamily: 'monospace' }}>{clic.trackingId}</strong> · tocó el botón el <strong>{fechaHora(clic.clickedAt)}</strong>
                   {clic.landingPage ? <> · landing <strong>{clic.landingPage}</strong></> : null}
-                  {clic.utmCampaign !== 'none' ? <> · campaña <strong>{clic.utmCampaign}</strong></> : null}
+                  {clic.utmCampaign !== 'none' ? <> · campaña <strong>{clic.utmCampaign}</strong>{clic.esPrueba ? ' (clic de prueba)' : ''}</> : null}
                   {clic.serviceName ? <> · servicio <strong>{servicioLegible(clic.serviceName)}</strong></> : null}
                   {clic.whatsappNumber ? <> · al WhatsApp <strong>{numeroLegible(clic.whatsappNumber)}</strong></> : null}.
                   {' '}Con los datos de quien escribió se crea el posible cliente; la fuente y el código quedan guardados.

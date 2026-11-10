@@ -23,6 +23,7 @@ import {
   embudoUnico,
   faseMarketing,
   serviciosDelEmbudo,
+  ciudadesDelEmbudo,
   type AgruparEmbudo,
   type ClicParaEmbudo,
   type ContactoParaEmbudo,
@@ -30,6 +31,7 @@ import {
   type OrigenEmbudo,
 } from './ventas-marketing.util';
 import { VentasWhatsappClicsService, type ClicDeLead } from './ventas-whatsapp-clics.service';
+import { ciudadDeNumero } from './whatsapp-clics.util';
 import { ETIQUETA_KIND, MOTIVO_KINDS } from './ventas-motivos.service';
 import { agruparMapa, vistaValida } from './ventas-mapa.util';
 import { rangoDiasEcuador } from './fecha-llegada.util';
@@ -921,6 +923,7 @@ export class VentasAnaliticaService {
     hastaRaw?: string,
     origenRaw?: string,
     servicioRaw?: string,
+    ciudadRaw?: string,
   ) {
     const cid = this.requireCompany(companyId);
     const r = this.rango(desdeRaw, hastaRaw);
@@ -930,6 +933,9 @@ export class VentasAnaliticaService {
       : 'channel';
     const origen: OrigenEmbudo = origenRaw === 'whatsapp' || origenRaw === 'otros' ? origenRaw : 'todos';
     const servicio = (servicioRaw ?? '').trim() || null;
+    const ciudad = (ciudadRaw ?? '').trim() || null;
+    // Ciudad de cada número de WhatsApp (varios números pueden ser de una misma ciudad).
+    const ciudadPorNumero = (await this.clics?.ciudadPorNumero(cid)) ?? {};
     const leads = await this.prisma.salesLead.findMany({
       where: {
         companyId: cid,
@@ -968,6 +974,7 @@ export class VentasAnaliticaService {
             landing: clic.landingPage,
             servicio: clic.serviceName,
             grupo: clic.serviceGroup,
+            ciudad: ciudadDeNumero(clic.whatsappNumber, ciudadPorNumero),
           }
         : {
             canal: l.channel,
@@ -975,6 +982,8 @@ export class VentasAnaliticaService {
             landing: texto('landing'),
             servicio: texto('servicio') ?? texto('servicio_requerido'),
             grupo: texto('lineaComercial'),
+            // El formulario trae la ciudad (`sede`) desde el plugin de la web; sin ella queda «Sin dato».
+            ciudad: texto('sede'),
           };
       return {
         ...atributos,
@@ -993,6 +1002,7 @@ export class VentasAnaliticaService {
       landing: c.landingPage,
       servicio: c.serviceName,
       grupo: c.serviceGroup,
+      ciudad: ciudadDeNumero(c.whatsappNumber, ciudadPorNumero),
       escribio: c.leadId !== null,
     }));
     return {
@@ -1001,8 +1011,10 @@ export class VentasAnaliticaService {
       origen,
       servicio,
       servicios: serviciosDelEmbudo(contactos, clics),
+      ciudad,
+      ciudades: ciudadesDelEmbudo(contactos, clics),
       conClics,
-      ...embudoUnico(contactos, clics, agrupar, { origen, servicio }),
+      ...embudoUnico(contactos, clics, agrupar, { origen, servicio, ciudad }),
     };
   }
 

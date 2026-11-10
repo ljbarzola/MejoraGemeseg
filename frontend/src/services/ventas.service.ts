@@ -1450,7 +1450,7 @@ export interface TotalEmbudoUnico extends FilaEmbudoUnico {
   pctConvertidos: number | null;
 }
 export type AgruparEmbudoUnico =
-  | 'channel' | 'campana' | 'landing' | 'servicio' | 'grupo' | 'channel_servicio' | 'campana_servicio';
+  | 'channel' | 'campana' | 'landing' | 'servicio' | 'grupo' | 'channel_servicio' | 'campana_servicio' | 'ciudad' | 'ciudad_campana';
 export interface AnaliticaMarketing {
   periodo: { desde: string; hasta: string };
   agrupadoPor: AgruparEmbudoUnico;
@@ -1458,12 +1458,15 @@ export interface AnaliticaMarketing {
   servicio: string | null;
   // Servicios que hay en el periodo, para el filtro «Servicio».
   servicios: string[];
+  ciudad: string | null;
+  // Ciudades que hay en el periodo (según la tabla de ciudades), para el filtro «Ciudad».
+  ciudades: string[];
   // false al mirar «lo mío» o a un vendedor: los clics no tienen vendedor.
   conClics: boolean;
   total: TotalEmbudoUnico;
   filas: FilaEmbudoUnico[];
 }
-export const getAnaliticaMarketing = (p?: RangoParams & { agrupar?: AgruparEmbudoUnico; origen?: 'whatsapp' | 'otros'; servicio?: string }): Promise<AnaliticaMarketing> =>
+export const getAnaliticaMarketing = (p?: RangoParams & { agrupar?: AgruparEmbudoUnico; origen?: 'whatsapp' | 'otros'; servicio?: string; ciudad?: string }): Promise<AnaliticaMarketing> =>
   api.get('/ventas/analitica/marketing', { params: p }).then(r => r.data);
 
 // Ids de las empresas o personas del alcance del Dashboard (null = toda la empresa). Lo usan el Directorio y Contratos
@@ -1520,6 +1523,8 @@ export interface ClicWhatsapp {
   opportunityId: number | null;
   clickedAt: string;
   conversationAt: string | null;
+  // Clic de prueba (campaña «prueba…» o «test…»): no cuenta en el Dashboard.
+  esPrueba: boolean;
 }
 
 export const getClicsWhatsapp = (): Promise<ClicWhatsapp[]> =>
@@ -1545,3 +1550,15 @@ export interface ResumenLandingWhatsapp {
 }
 export const getClaveLandingWhatsapp = (): Promise<ResumenLandingWhatsapp> =>
   api.get('/ventas/whatsapp-clics/clave').then(r => r.data);
+
+// Tabla de ciudades: cada ciudad (Guayaquil, Loja...) con uno o varios números de WhatsApp. Los números con clics que
+// todavía no están en ninguna ciudad vienen en `sinCiudad`.
+export interface NumeroDeCiudad { numero: string; clics: number; ultimoClic: string | null }
+export interface CiudadesWhatsapp {
+  ciudades: { nombre: string; numeros: NumeroDeCiudad[] }[];
+  sinCiudad: NumeroDeCiudad[];
+}
+export const getCiudadesWhatsapp = (): Promise<CiudadesWhatsapp> =>
+  api.get('/ventas/whatsapp-clics/ciudades').then(r => r.data);
+export const guardarCiudadesWhatsapp = (ciudades: { nombre: string; numeros: string[] }[]): Promise<CiudadesWhatsapp> =>
+  api.put('/ventas/whatsapp-clics/ciudades', { ciudades }).then(r => r.data);

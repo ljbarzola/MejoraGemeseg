@@ -9,11 +9,13 @@ import { randomBytes } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VentasSchemaService } from './ventas-schema.service';
-import { limpiarClic, PATRON_TRACKING_ID } from './whatsapp-clics.util';
+import { limpiarClic, numeroLimpio, PATRON_TRACKING_ID } from './whatsapp-clics.util';
 
 // Clave guardada en SalesSetting: { siteKey } es la clave PÚBLICA que lleva el script de las landings.
 // No es la X-API-KEY de los webhooks (esa es secreta): esta solo permite registrar clics anónimos.
 const CLAVE_AJUSTE = 'whatsapp';
+// Ciudades con sus números de WhatsApp (Guayaquil, Loja...) para separar las cifras en el Dashboard.
+const CLAVE_CIUDADES = 'whatsapp_ciudades';
 
 // «monitoreo_vehiculos» → «monitoreo vehiculos»: sirve de texto para sugerir el servicio del catálogo.
 const textoDeServicio = (s: string | null) => (s ? s.replace(/_/g, ' ') : null);
@@ -51,6 +53,8 @@ export interface ClicFila {
   opportunityId: number | null;
   clickedAt: Date;
   conversationAt: Date | null;
+  // Clic de prueba: su campaña empieza por «prueba» o «test». No cuenta en el Dashboard.
+  esPrueba: boolean;
 }
 
 // Un clic del periodo, con la oportunidad del posible cliente enlazado (si lo hay), para el embudo del Dashboard.
@@ -63,6 +67,7 @@ export interface ClicDelPeriodo {
   landingPage: string | null;
   serviceName: string | null;
   serviceGroup: string | null;
+  whatsappNumber: string | null;
   leadId: number | null;
   opportunityId: number | null;
 }
@@ -78,6 +83,7 @@ export interface ClicDeLead {
   landingPage: string | null;
   serviceName: string | null;
   serviceGroup: string | null;
+  whatsappNumber: string | null;
 }
 
 // Los clics NO se gestionan en una pantalla: son datos de medición (decisión de Leidy, 2026-10-30). Aquí se
@@ -136,6 +142,90 @@ export class VentasWhatsappClicsService {
     return { siteKey, clics, ultimoClic };
   }
 
+  // ---------------------------------------------------------------------
+  // Tabla de ciudades: cada ciudad (Guayaquil, Loja...) tiene uno o varios números de WhatsApp. Los números cambian
+  // con el tiempo (otro vendedor, otro chip): se agrega el nuevo a la misma ciudad y las cifras siguen juntas.
+  // ---------------------------------------------------------------------
+
+  // [{ nombre: 'Loja', numeros: ['593998246418'] }] guardado en SalesSetting (clave `whatsapp_ciudades`).
+  async ciudadesConfiguradas(companyId: number): Promise<{ nombre: string; numeros: string[] }[]> {
+    const fila = await this.prisma.salesSetting.findUnique({
+      where: { companyId_key: { companyId, key: CLAVE_CIUDADES } },
+    });
+    const bruto = ((fila?.value as { ciudades?: unknown } | null)?.ciudades ?? []) as { nombre?: unknown; numeros?: unknown }[];
+    const vistos = new Set<string>();
+    const ciudades: { nombre: string; numeros: string[] }[] = [];
+    for (const c of Array.isArray(bruto) ? bruto : []) {
+      const nombre = (c?.nombre ?? '').toString().trim().slice(0, 60);
+      if (!nombre) continue;
+      const numeros = (Array.isArray(c?.numeros) ? c.numeros : [])
+        .map((n) => numeroLimpio(n))
+        .filter((n): n is string => !!n && !vistos.has(n));
+      numeros.forEach((n) => vistos.add(n));
+      ciudades.push({ nombre, numeros });
+    }
+    return ciudades;
+  }
+
+  // { '593998246418': 'Loja' }: para saber a qué ciudad pertenece el número de cada clic.
+  async ciudadPorNumero(companyId: number): Promise<Record<string, string>> {
+    const mapa: Record<string, string> = {};
+    for (const c of await this.ciudadesConfiguradas(companyId)) for (const n of c.numeros) mapa[n] = c.nombre;
+    return mapa;
+  }
+
+  // Las ciudades con sus números y los números que ya recibieron clics pero no están en ninguna ciudad.
+  async ciudadesDeLanding(companyId: number) {
+    const ciudades = await this.ciudadesConfiguradas(companyId);
+    const vistos = new Map<string, { clics: number; ultimoClic: Date | null }>();
+    if (this.esquema.isReady()) {
+      const filas = await this.prisma.$queryRawUnsafe<{ numero: string; clics: number; ultimo: Date | null }[]>(
+        `SELECT "whatsappNumber" AS "numero", COUNT(*)::int AS "clics", MAX("clickedAt") AS "ultimo"
+           FROM "SalesWhatsappClick"
+          WHERE "companyId" = $1 AND "whatsappNumber" IS NOT NULL
+          GROUP BY "whatsappNumber"`,
+        companyId,
+      );
+      for (const f of filas) vistos.set(f.numero, { clics: f.clics, ultimoClic: f.ultimo });
+    }
+    const dato = (numero: string) => ({ numero, clics: vistos.get(numero)?.clics ?? 0, ultimoClic: vistos.get(numero)?.ultimoClic ?? null });
+    const asignados = new Set(ciudades.flatMap((c) => c.numeros));
+    return {
+      ciudades: ciudades.map((c) => ({ nombre: c.nombre, numeros: c.numeros.map(dato) })),
+      sinCiudad: [...vistos.keys()].filter((n) => !asignados.has(n)).map(dato).sort((a, b) => b.clics - a.clics),
+    };
+  }
+
+  async guardarCiudades(companyId: number, entrada: unknown) {
+    if (!Array.isArray(entrada)) throw new BadRequestException('No se entendió la lista de ciudades.');
+    if (entrada.length > 50) throw new BadRequestException('Son demasiadas ciudades.');
+    const nombresVistos = new Set<string>();
+    const numerosVistos = new Map<string, string>();
+    const ciudades: { nombre: string; numeros: string[] }[] = [];
+    for (const e of entrada as { nombre?: unknown; numeros?: unknown }[]) {
+      const nombre = (e?.nombre ?? '').toString().trim().slice(0, 60);
+      if (!nombre) throw new BadRequestException('Cada ciudad necesita un nombre.');
+      if (nombresVistos.has(nombre.toLowerCase())) throw new BadRequestException(`La ciudad «${nombre}» está repetida.`);
+      nombresVistos.add(nombre.toLowerCase());
+      const numeros: string[] = [];
+      for (const n of Array.isArray(e?.numeros) ? e.numeros : []) {
+        const d = numeroLimpio(n);
+        if (!d) throw new BadRequestException(`En «${nombre}» hay un número que no es válido (solo dígitos con el código de país, por ejemplo 593998246418).`);
+        const otra = numerosVistos.get(d);
+        if (otra && otra !== nombre) throw new BadRequestException(`El número ${d} está en «${otra}» y en «${nombre}»: un número solo puede ser de una ciudad.`);
+        if (!numerosVistos.has(d)) numeros.push(d);
+        numerosVistos.set(d, nombre);
+      }
+      ciudades.push({ nombre, numeros });
+    }
+    await this.prisma.salesSetting.upsert({
+      where: { companyId_key: { companyId, key: CLAVE_CIUDADES } },
+      create: { companyId, key: CLAVE_CIUDADES, value: { ciudades } as Prisma.InputJsonValue },
+      update: { value: { ciudades } as Prisma.InputJsonValue },
+    });
+    return this.ciudadesDeLanding(companyId);
+  }
+
   private async empresaDeClavePublica(siteKey: string): Promise<number> {
     const fila = siteKey
       ? await this.prisma.salesSetting.findFirst({
@@ -190,7 +280,8 @@ export class VentasWhatsappClicsService {
          s."label" AS "etapa",
          c."utmSource", c."utmMedium", c."utmCampaign", c."utmContent", c."utmTerm", c."landingPage", c."serviceName", c."serviceGroup", c."whatsappNumber",
          c."gclid", c."leadId", l."name" AS "leadName", o."id" AS "opportunityId",
-         c."clickedAt", c."conversationAt"
+         c."clickedAt", c."conversationAt",
+         (c."utmCampaign" ~* '^(prueba|test)') AS "esPrueba"
        FROM "SalesWhatsappClick" c
        LEFT JOIN "SalesLead" l ON l."id" = c."leadId"
        LEFT JOIN "SalesOpportunity" o ON o."id" = l."convertedOpportunityId"
@@ -342,12 +433,13 @@ export class VentasWhatsappClicsService {
   async clicsDelPeriodo(companyId: number, desde: Date, hasta: Date): Promise<ClicDelPeriodo[]> {
     if (!this.esquema.isReady()) return [];
     return this.prisma.$queryRawUnsafe<ClicDelPeriodo[]>(
-      `SELECT c."utmSource", c."utmMedium", c."utmCampaign", c."gclid", c."fbclid", c."landingPage", c."serviceName", c."serviceGroup", c."leadId",
+      `SELECT c."utmSource", c."utmMedium", c."utmCampaign", c."gclid", c."fbclid", c."landingPage", c."serviceName", c."serviceGroup", c."whatsappNumber", c."leadId",
               l."convertedOpportunityId" AS "opportunityId"
          FROM "SalesWhatsappClick" c
          LEFT JOIN "SalesLead" l ON l."id" = c."leadId"
         WHERE c."companyId" = $1
-          AND c."clickedAt" >= $2::timestamp AND c."clickedAt" <= $3::timestamp`,
+          AND c."clickedAt" >= $2::timestamp AND c."clickedAt" <= $3::timestamp
+          AND c."utmCampaign" !~* '^(prueba|test)'`,
       companyId,
       desde.toISOString(),
       hasta.toISOString(),
@@ -359,7 +451,7 @@ export class VentasWhatsappClicsService {
     if (!this.esquema.isReady() || leadIds.length === 0) return [];
     return this.prisma.$queryRawUnsafe<ClicDeLead[]>(
       `SELECT c."leadId", c."utmSource", c."utmMedium", c."utmCampaign", c."gclid", c."fbclid", c."landingPage",
-              c."serviceName", c."serviceGroup"
+              c."serviceName", c."serviceGroup", c."whatsappNumber"
          FROM "SalesWhatsappClick" c
         WHERE c."companyId" = $1 AND c."leadId" = ANY($2::int[])
         ORDER BY c."clickedAt" ASC`,

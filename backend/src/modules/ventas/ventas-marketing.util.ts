@@ -99,7 +99,9 @@ export type AgruparEmbudo =
   | 'servicio'
   | 'grupo'
   | 'channel_servicio'
-  | 'campana_servicio';
+  | 'campana_servicio'
+  | 'ciudad'
+  | 'ciudad_campana';
 export const AGRUPACIONES_EMBUDO: AgruparEmbudo[] = [
   'channel',
   'campana',
@@ -108,6 +110,8 @@ export const AGRUPACIONES_EMBUDO: AgruparEmbudo[] = [
   'grupo',
   'channel_servicio',
   'campana_servicio',
+  'ciudad',
+  'ciudad_campana',
 ];
 
 // todos | whatsapp = quien llegó por el botón de una landing (con código) | otros = formulario y demás canales.
@@ -119,6 +123,8 @@ interface Atributos {
   landing: string | null;
   servicio: string | null;
   grupo: string | null;
+  // Ciudad del número de WhatsApp al que fue el clic (según la tabla de ciudades); los contactos de formulario no la tienen.
+  ciudad?: string | null;
 }
 
 // Una persona que llegó en el periodo (un posible cliente) con la atribución que le toca.
@@ -251,7 +257,7 @@ export function canalDeClic(c: {
   return canal === 'WEB_FORM' ? 'WHATSAPP' : canal;
 }
 
-type Dimension = 'channel' | 'campana' | 'landing' | 'servicio' | 'grupo';
+type Dimension = 'channel' | 'campana' | 'landing' | 'servicio' | 'grupo' | 'ciudad';
 const NIVELES: Record<AgruparEmbudo, Dimension[]> = {
   channel: ['channel'],
   campana: ['campana'],
@@ -260,6 +266,8 @@ const NIVELES: Record<AgruparEmbudo, Dimension[]> = {
   grupo: ['grupo'],
   channel_servicio: ['channel', 'servicio'],
   campana_servicio: ['campana', 'servicio'],
+  ciudad: ['ciudad'],
+  ciudad_campana: ['ciudad', 'campana'],
 };
 
 const valorDe = (x: Atributos, d: Dimension): string => {
@@ -274,6 +282,8 @@ const valorDe = (x: Atributos, d: Dimension): string => {
       return textoDeServicio(x.servicio) ?? SIN_DATO;
     case 'grupo':
       return textoDeServicio(x.grupo) ?? SIN_DATO;
+    case 'ciudad':
+      return lleno(x.ciudad) ?? SIN_DATO;
   }
 };
 
@@ -300,11 +310,24 @@ export function serviciosDelEmbudo(contactos: Atributos[], clics: Atributos[]): 
   return sinDato ? [...lista, SIN_DATO] : lista;
 }
 
+// Ciudades que aparecen en los contactos y en los clics (para el filtro «Ciudad»), con «Sin dato» al final.
+export function ciudadesDelEmbudo(contactos: Atributos[], clics: Atributos[]): string[] {
+  const nombres = new Set<string>();
+  let sinDato = false;
+  for (const x of [...contactos, ...clics]) {
+    const n = lleno(x.ciudad);
+    if (n) nombres.add(n);
+    else sinDato = true;
+  }
+  const lista = [...nombres].sort((a, b) => a.localeCompare(b, 'es'));
+  return sinDato ? [...lista, SIN_DATO] : lista;
+}
+
 export function embudoUnico(
   contactos: ContactoParaEmbudo[],
   clics: ClicParaEmbudo[],
   agrupar: AgruparEmbudo,
-  filtros: { origen: OrigenEmbudo; servicio: string | null },
+  filtros: { origen: OrigenEmbudo; servicio: string | null; ciudad?: string | null },
 ): { total: TotalEmbudo; filas: FilaEmbudo[] } {
   // Los nombres se unifican con TODO lo del periodo, antes de filtrar: así el filtro de servicio y la tabla coinciden.
   const unido = conNombresUnificados(contactos, clics);
@@ -322,6 +345,12 @@ export function embudoUnico(
     const delServicio = (x: Atributos) => (textoDeServicio(x.servicio) ?? SIN_DATO) === s;
     cs = cs.filter(delServicio);
     ks = ks.filter(delServicio);
+  }
+  if (filtros.ciudad) {
+    const n = filtros.ciudad;
+    const delaCiudad = (x: Atributos) => (lleno(x.ciudad) ?? SIN_DATO) === n;
+    cs = cs.filter(delaCiudad);
+    ks = ks.filter(delaCiudad);
   }
 
   const niveles = NIVELES[agrupar];

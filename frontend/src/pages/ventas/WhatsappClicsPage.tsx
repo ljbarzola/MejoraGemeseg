@@ -245,7 +245,7 @@ export default function WhatsappClicsPage({ version, onEscribio }: { version: nu
                       {c.utmSource}{c.utmMedium !== 'none' ? ` / ${c.utmMedium}` : ''}
                     </span>
                   </td>
-                  <td><span className="clics-wa-celda" title={c.utmCampaign}>{c.utmCampaign}</span></td>
+                  <td><span className="clics-wa-celda" title={c.utmCampaign}>{c.utmCampaign}</span>{c.esPrueba && <span className="clics-wa-numero" title="Su campaña empieza por «prueba» o «test»: no cuenta en el Dashboard">Prueba</span>}</td>
                   <td>
                     <span className="clics-wa-celda" title={c.landingPage || ''}>{c.landingPage || '—'}</span>
                     {c.whatsappNumber && <span className="clics-wa-numero" title="Número de WhatsApp al que fue el clic">{numeroLegible(c.whatsappNumber)}</span>}

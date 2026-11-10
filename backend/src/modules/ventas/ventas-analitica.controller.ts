@@ -113,6 +113,7 @@ export class VentasAnaliticaController {
     @Query('hasta') hasta?: string,
     @Query('origen') origen?: string,
     @Query('servicio') servicio?: string,
+    @Query('ciudad') ciudad?: string,
   ) {
     return this.analitica.marketing(
       req.user.companyId,
@@ -122,6 +123,7 @@ export class VentasAnaliticaController {
       hasta,
       origen,
       servicio,
+      ciudad,
     );
   }
 }
