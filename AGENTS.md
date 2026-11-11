@@ -36,7 +36,7 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 ### Infraestructura
 
 #### Desarrollo (local)
-- **DB:** PostgreSQL 17 (Docker)
+- **DB:** PostgreSQL 16 (Docker, `postgres:16-alpine`)
 - **Backend:** http://localhost:3000
 - **Frontend:** http://localhost:5173
 
@@ -46,8 +46,8 @@ Este documento esta destinado a agentes de desarrollo, asistentes de codigo y pi
 - **Backend:** Cloud Run (`mejora-gemeseg-backend`, us-central1)
 - **Frontend:** Firebase Hosting (`mejora-gemeseg.web.app`)
 - **Registry:** Artifact Registry (`us-central1-docker.pkg.dev/mejora-gemeseg/gemeseg-repo`)
-- **Secrets:** Secret Manager (`DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, `SIGNWELL_API_KEY`, `GOOGLE_SERVICE_ACCOUNT_JSON`) — `SIGNWELL_API_KEY` reemplaza a `BOLDSIGN_API_KEY` (2026-09-17); hay que crear ese secreto nuevo en Secret Manager antes del próximo deploy o `cloudbuild.yaml` fallará al desplegar el backend
-- **Deploy:** `firebase deploy --only hosting` (frontend), Cloud Build / `gcloud run deploy` (backend)
+- **Secrets:** Secret Manager (`DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, `SIGNWELL_API_KEY`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `GMAIL_SERVICE_ACCOUNT_JSON`, `CRON_SECRET`, `MEJORA_CONTINUA_KEY`, `MEJORA_CONTINUA_DECISION_KEY`) — la lista que manda es la de `--set-secrets` en `cloudbuild.yaml`. Un secreto nuevo se crea en Secret Manager ANTES de añadirlo ahí o el despliegue del backend falla
+- **Deploy:** Cloud Build (`cloudbuild.yaml`), que se dispara al empujar a `main`: despliega el backend en Cloud Run y el frontend en Firebase Hosting en el mismo build. No se despliega a mano con `firebase deploy` ni con `gcloud run deploy`
 
 ## Convenciones de Codigo
 
@@ -416,7 +416,7 @@ Todo el correo del sistema sale por `GmailMailService` (`backend/src/modules/mai
   - **Gotcha de axios/Express con este endpoint específico:** el body original mandaba `null` (`api.post(url, null, {...})`), que axios serializa como el texto literal `"null"`. El `body-parser` de Express en modo estricto (el default) solo acepta objeto o array como JSON de nivel superior, así que rechazaba con 400 `Unexpected token 'n', "null" is not valid JSON` **antes** de llegar al controller — un bug invisible por curl sin body, solo reproducible mandando ese body exacto. Corregido mandando `{}` en vez de `null` desde `personal.service.ts`.
 - `POST /personal/reclutamiento/candidatos/:folderId/aplicar-analisis` - RRHH confirmó/corrigió: parte el PDF en un archivo por documento (nombrados `"<Requisito> - <original>"`, el formato que reconoce `findMatchingFile`), conservando el original. Recibe **una lista de páginas** por documento, no un rango — la pantalla de revisión etiqueta miniatura por miniatura, así que un documento puede formarse con páginas no consecutivas (anverso/reverso separados) y aun así salir como un solo archivo. La traza va a `analisis-ia.json`, **nunca** a `candidato.json` (el portal de postulación lo reescribe desde cero y la borraría).
 - `GET /personal/reclutamiento/candidatos/:folderId/pdf/:driveFileId` - Proxy del PDF para el visor del navegador; valida que el archivo pertenezca a esa carpeta.
-- Requiere `GOOGLE_VERTEX_PROJECT` (+ `GOOGLE_VERTEX_LOCATION`, `GOOGLE_VERTEX_MODEL`). **Vertex AI no acepta API keys** — usa la misma service account de Drive con scope `cloud-platform`. Vacío = función deshabilitada, Reclutamiento sigue a mano. En producción las tres van en `cloudbuild.yaml`: `GOOGLE_VERTEX_PROJECT=agentes-504115`, `GOOGLE_VERTEX_LOCATION=us-central1`, `GOOGLE_VERTEX_MODEL=gemini-2.5-flash`. Ponerlas solo en la consola de Cloud Run no dura: `--set-env-vars` reemplaza todas las variables planas en cada deploy, y hasta el 2026-09-23 el yaml no las incluía, así que `app.gemeseg.com` volvía a "falta GOOGLE_VERTEX_PROJECT" después de cada subida.
+- Requiere `GOOGLE_VERTEX_PROJECT` (+ `GOOGLE_VERTEX_LOCATION`, `GOOGLE_VERTEX_MODEL_FUERTE`, `GOOGLE_VERTEX_MODEL_LIGERO`). **Vertex AI no acepta API keys** — usa la misma service account de Drive con scope `cloud-platform`. Vacío = función deshabilitada, Reclutamiento sigue a mano. En producción (desde 2026-10-14) van en `cloudbuild.yaml`: `GOOGLE_VERTEX_PROJECT=agentes-504115`, `GOOGLE_VERTEX_LOCATION=global`, `GOOGLE_VERTEX_MODEL_FUERTE=gemini-3.8-flash` y `GOOGLE_VERTEX_MODEL_LIGERO=gemini-3.5-flash-lite` (Gemini 2.5 ya está retirado; ver `.agents/modules/agents-ai.md`, punto 4). Ponerlas solo en la consola de Cloud Run no dura: `--set-env-vars` reemplaza todas las variables planas en cada deploy, y hasta el 2026-09-23 el yaml no las incluía, así que `app.gemeseg.com` volvía a "falta GOOGLE_VERTEX_PROJECT" después de cada subida.
 - **Verificado contra Vertex real el 2026-09-16** (auth + PDF embebido + JSON estructurado, ubicó bien los documentos, y también en navegador real con Playwright: login → sync → abrir candidato → clic en ambos puntos de entrada → miniaturas renderizadas → 0 errores de consola). Modelo: `gemini-2.5-flash`, el más nuevo al que `agentes-504115` tiene acceso — **toda la serie Gemini 3.x devuelve 404 NOT_FOUND ahí**. ⚠️ **Google retira los Gemini 2.5 el 16/10/2026**: antes de esa fecha hay que conseguir acceso a 3.x y mover `GOOGLE_VERTEX_MODEL`.
 - **Gotcha de entorno (recurrente en este repo, backend Y frontend):** al vivir bajo `Documents`/OneDrive, tanto `nest --watch` como el watcher de Vite pueden dejar de detectar cambios en archivos ya abiertos, sirviendo código viejo sin avisar. Si un fix "no aparece" (o un endpoint se comporta distinto a lo que dice el código), comparar el mtime de los archivos tocados contra la hora de arranque del proceso (`Get-Process -Id <pid> | select StartTime`) antes de sospechar del código — y reiniciar el proceso correspondiente si el archivo es más nuevo.
 
@@ -557,6 +557,7 @@ Sección `SISTEMAS` (`alwaysEnabled`, se puede negar por usuario). Soporte Técn
 - **Soporte Técnico como tabla con búsqueda y filtros (2026-10-14)** — `SoporteTecnicoPage.tsx` pasó de tarjetas a tabla (pedido del usuario: "búsqueda y filtros igual que otras tablas"). Búsqueda por título, descripción, persona o empresa; filtros Estado/Tipo/Empresa; "Columnas" (`columnas:soporte-tecnico`), orden y ancho. **Todo se filtra en el navegador**: `GET /sistemas/tickets` sigue devolviendo todos los tickets sin paginar ni parámetros (sin cambios de backend); si el volumen crece habrá que filtrar en servidor. El estado se cambia con el selector de la propia columna Estado y el detalle completo (descripción larga, adjuntos) se abre al hacer clic en la fila.
 
 - **Dashboard de Sistemas y diseño unificado (2026-10-22, solo frontend).** `/sistemas/dashboard` deja de ser solo tickets: franja de cifras (abiertos, en revision, resueltos, resolucion promedio, trabajos de agentes en 30 dias, herramientas asignadas, cada una abre su pantalla) y seis tarjetas (soporte por tipo, ultimos tickets, Agentes de IA, Herramientas, Novedades, Base de conocimiento). Usa las piezas del dashboard de Ventas (`Tarjeta`, `KpiFila`, `Contador`, `BarraH`, `Dona`) y llama a los endpoints que ya existian (`/sistemas/dashboard/stats`, `/sistemas/tickets`, `/admin/agents/runs/summary`, `/tools`, `/tools/assignments`, `/sistemas/novedades`, `/company-knowledge-base`) con `Promise.allSettled`: si uno falla o la persona no tiene permiso, esa tarjeta dice que no se pudo cargar y las demas se ven. Se quito la lista de "Accesos rapidos" (repetia el menu; cada tarjeta trae su boton). **Limites honestos:** no hay licencias "por vencer" porque `ToolAssignment` no guarda fecha de vencimiento (se muestra cuantas asignaciones no tienen clave de licencia) y la Base de conocimiento no guarda fecha de cambio (se muestra cuantos temas `## X` tiene y su tamano). Las cinco pantallas (Soporte, Herramientas, Agentes, Novedades, Base de conocimiento) usan ahora `<PageHeader eyebrow="Sistemas">` (sin flecha "atras" ni el "GEMESEG" suelto), la barra de filtros estandar y el panel `admin-section`; el boton Guardar de la Base de conocimiento subio al encabezado. Decision de la usuaria: Dashboard y subpantallas con el encabezado estandar, sin bloque azul (ese es solo de Inicio). **Todo lo clicable lleva a su lista con el filtro puesto (2026-10-27):** los contadores de tickets abren Soporte con `?estado=ABIERTO|EN_REVISION|RESUELTO`, los segmentos de la dona con `?tipo=<tipo>` y una fila de «Ultimos tickets» con `?ticket=<id>` (abre su ventana una sola vez); `SoporteTecnicoPage` lee esos parametros de la URL y los valida contra sus listas.
+- **Mejora continua (2026-11-11, `/sistemas/mejora-continua`).** Agente de «propone el lunes, cierra el viernes»: dos rutinas de Claude leen los .md del repo en GitHub, la memoria de decisiones y datos agregados de uso, y dejan propuestas (automatizar lo actual e ideas nuevas) en la tabla `AgentPropuesta`. Una persona de Sistemas aprueba el plan, pide cambios o rechaza con motivo; máximo 2 aprobadas a la vez; con el plan aprobado se copia un brief para abrir una sesión de Claude. Las rutinas usan `MEJORA_CONTINUA_KEY` (no pueden aprobar) y las decisiones desde Claude `MEJORA_CONTINUA_DECISION_KEY` (nunca se le da a una rutina). Detalle completo, prompts y pasos de activación en `.agents/modules/mejora-continua.md`.
 
 ### Bitácora del equipo (`/bitacora`) — 2026-10-27
 Registro automático de la actividad de cada persona del equipo, para comprobar horario y trabajo en equipos virtuales sin pedir reportes. En el menú es el módulo **«Bitácora»** (con submenú, como Ventas o Sistemas); la sección de permisos se llama «Bitácora del equipo» (`BITACORA`). **En producción desde 2026-10-27 (PR #52); piloto solo con la usuaria (2026-10-28), nadie más está activado.** Desde 2026-10-29 suma la **extensión del navegador** (Chrome y Edge, carpeta `extension-bitacora/`, ver más abajo). Es **solo registro**: sin metas, semáforo ni alertas (decisión de la usuaria; pueden venir después).
@@ -639,20 +640,19 @@ Registro automático de la actividad de cada persona del equipo, para comprobar 
 
 ## Credenciales de prueba
 
-> ⚠️ Solo para la base **local** (las crea `seed.js`). El repositorio es **público**: estas contraseñas no deben existir en producción. Antes de cada despliegue, comprobar que las cuentas reales (sobre todo `admin@general.com`) tienen otra contraseña y que `JWT_SECRET` de Secret Manager no coincide con ningún ejemplo de la documentación.
+> ⚠️ Solo para la base **local** (las crean los seeds en `backend/prisma/`). El repositorio es **público**: aquí NO se escribe ninguna contraseña por defecto, y las cuentas de seed no deben existir en producción con una contraseña de seed. Antes de cada despliegue, comprobar que las cuentas reales (sobre todo `admin@general.com`) tienen otra contraseña y que `JWT_SECRET` de Secret Manager no coincide con ningún ejemplo de la documentación.
 
 ### Super Admin (todas las empresas)
-- Contrasena: `admin2026`
 - Super Admin: `admin@general.com` (ADMIN, companyId: null)
 
-### GEMESEG (contrasena: `gemeseg2026`)
+### GEMESEG
 - Admin: `admin@gemeseg.com` (ADMIN)
 - Manager: `hugo@gemeseg.com` (MANAGER - Gerente General)
 - Employee: `marketing@gemeseg.com` (EMPLOYEE - Marketing Digital)
 - Employee: `nayelli@gemeseg.com` (EMPLOYEE - Recursos Humanos)
 - Employee: `sistemas@gemeseg.com` (EMPLOYEE - Sistemas, Leidy Barzola)
 
-### Mikacao S.A. (contrasena: `mikacao2026`)
+### Mikacao S.A.
 - Admin: `admin@mikacao.com` (ADMIN)
 
 ## LO QUE NO DEBES HACER

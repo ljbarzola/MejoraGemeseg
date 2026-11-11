@@ -125,6 +125,7 @@ const ContratoResult = lazy(() => import('./pages/ventas/ContratoResult'));
 const CompletarContrato = lazy(() => import('./pages/ventas/CompletarContrato'));
 const SoporteTecnicoPage = lazy(() => import('./pages/sistemas/SoporteTecnicoPage'));
 const SistemasDashboardPage = lazy(() => import('./pages/sistemas/SistemasDashboardPage'));
+const MejoraContinuaPage = lazy(() => import('./pages/sistemas/MejoraContinuaPage'));
 const NovedadesPage = lazy(() => import('./pages/sistemas/NovedadesPage'));
 
 // Redirección que conserva los parámetros de la ruta (":id" del destino se
@@ -564,6 +565,7 @@ function AppInner() {
         <Route path="/sistemas/dashboard" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><SistemasDashboardPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/sistemas/herramientas" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><ToolsPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/sistemas/agentes" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><AgentsPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/sistemas/mejora-continua" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><MejoraContinuaPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/sistemas/base-conocimiento" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><KnowledgeBasePage /></SectionRoute></ProtectedLayout>} />
         <Route path="/sistemas/soporte" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><SoporteTecnicoPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/sistemas/novedades" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><NovedadesPage /></SectionRoute></ProtectedLayout>} />

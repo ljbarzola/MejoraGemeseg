@@ -233,6 +233,7 @@ export default function Sidebar() {
     { label: 'Dashboard', path: '/sistemas/dashboard', icon: '📊' },
     { label: 'Herramientas', path: '/sistemas/herramientas', icon: '🔧' },
     { label: 'Agentes', path: '/sistemas/agentes', icon: '🤖' },
+    { label: 'Mejora continua', path: '/sistemas/mejora-continua', icon: '🔄' },
     { label: 'Base de Conocimiento', path: '/sistemas/base-conocimiento', icon: '📚' },
     { label: 'Soporte Técnico', path: '/sistemas/soporte', icon: '🛠️' },
     { label: 'Novedades', path: '/sistemas/novedades', icon: '📣' },

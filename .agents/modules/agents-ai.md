@@ -71,7 +71,7 @@ Un documento Markdown por empresa (`CompanyKnowledgeBase.content`, único por `c
 ### Pendiente / fuera de alcance de esta migración
 - **Streaming de respuestas**: no implementado, `vertexChat.sendChat` es un solo request/response por turno. Mejora futura si la latencia de Vertex lo justifica.
 - ~~`document-extraction.service.ts` (RRHH, "Leer con IA") sigue en GitHub Models~~ — resuelto: ya corre en Vertex AI, ver el aviso ✅ de arriba.
-- ~~Retiro de Gemini 2.5 (Vertex: 20-oct-2026, no el 16)~~: migrado en código el 2026-10-14, ver el punto 4. **Falta para producción:** poner en `cloudbuild.yaml` `GOOGLE_VERTEX_LOCATION=global` y las dos variables de nivel (el flag `--set-env-vars` reemplaza TODAS las variables: copiar las actuales completas).
+- ~~Retiro de Gemini 2.5 (Vertex: 20-oct-2026, no el 16)~~: migrado en código el 2026-10-14, ver el punto 4. **Hecho en `cloudbuild.yaml`:** `GOOGLE_VERTEX_LOCATION=global`, `GOOGLE_VERTEX_MODEL_FUERTE=gemini-3.8-flash` y `GOOGLE_VERTEX_MODEL_LIGERO=gemini-3.5-flash-lite` (el flag `--set-env-vars` reemplaza TODAS las variables: al tocarlo, copiar las actuales completas).
 
 ### 4. Dos niveles de modelo y endpoint `global` (2026-10-14, solo local, sin desplegar)
 - `common/utils/vertex-endpoint.util.ts`: `vertexUrl()` (el host de `global` **no lleva prefijo de región**: `aiplatform.googleapis.com`) y `modeloVertex(nivel)`. Los 3.x solo responden por `global` en `agentes-504115`; en `us-central1` dan 404. El endpoint regional además es ~10 % más caro (página de precios de Google, desde el 1/07/2026).
