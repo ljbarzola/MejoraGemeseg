@@ -167,9 +167,33 @@ export interface Complaint {
   isAnonymous: boolean;
   status: ComplaintStatus;
   customFieldValues: Record<string, string>;
+  // 'INTERNA' = personal con cuenta (buzón de la app); 'EXTERNA' = formulario público
+  // de la inducción (quejas.gemeseg.com). Los datos de abajo solo vienen en las externas.
+  origen: 'INTERNA' | 'EXTERNA';
+  tipo?: string | null;
+  sede?: string | null;
+  fechaInduccion?: string | null;
+  personasInvolucradas?: string | null;
+  contactoNombre?: string | null;
+  contactoEmail?: string | null;
+  contactoTelefono?: string | null;
   createdAt: string;
   submitter?: { id: number; fullName: string; email: string } | null;
   stageChanges?: ComplaintStageChange[];
+}
+
+export interface ComplaintPublicOption {
+  id: number;
+  kind: 'TIPO' | 'SEDE';
+  label: string;
+  order: number;
+}
+
+export interface ComplaintPublicConfig {
+  enabled: boolean;
+  otraEmpresaActiva: boolean;
+  tipos: ComplaintPublicOption[];
+  sedes: ComplaintPublicOption[];
 }
 
 export interface ComplaintFieldDefinition {
@@ -201,6 +225,15 @@ export const changeComplaintStage = (id: number, data: { toStatus: ComplaintStat
 export const replyComplaint = (id: number, notes: string): Promise<Complaint> =>
   api.post(`/personal/complaints/${id}/reply`, { notes }).then(r => r.data);
 export const deleteComplaint = (id: number) => api.delete(`/personal/complaints/${id}`).then(r => r.data);
+
+export const getComplaintPublicConfig = (): Promise<ComplaintPublicConfig> =>
+  api.get('/personal/complaints-externas/config').then(r => r.data);
+export const setComplaintPublicEnabled = (enabled: boolean): Promise<ComplaintPublicConfig> =>
+  api.patch('/personal/complaints-externas/config', { enabled }).then(r => r.data);
+export const addComplaintPublicOption = (data: { kind: 'TIPO' | 'SEDE'; label: string }): Promise<ComplaintPublicOption> =>
+  api.post('/personal/complaints-externas/opciones', data).then(r => r.data);
+export const deleteComplaintPublicOption = (id: number) =>
+  api.delete(`/personal/complaints-externas/opciones/${id}`).then(r => r.data);
 
 export const getComplaintFields = (): Promise<ComplaintFieldDefinition[]> =>
   api.get('/personal/complaint-fields').then(r => r.data);

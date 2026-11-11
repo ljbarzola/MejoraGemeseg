@@ -1,0 +1,255 @@
+/* Formulario público de quejas de la inducción (quejas.gemeseg.com; se abre desde un QR en el celular).
+   El PROTAGONISTA es el formulario: una tarjeta grande y centrada, con título y descripción. Los detalles de la
+   empresa ya están en la web gemeseg.com, así que aquí solo van el logo arriba, una foto real casi perdida de fondo
+   (desenfocada y muy tenue) y el mismo pie de la web. Colores de la marca: #12375F, #100F31 / #0A0924, #EE3B1B.
+   Prefijo .qj- para no chocar con los estilos de la app. */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+.qj-page {
+  --qj-azul: #12375F;
+  --qj-navy: #100F31;
+  --qj-profundo: #0A0924;
+  --qj-naranja: #EE3B1B;
+  --qj-naranja-os: #C22F13;
+  --qj-texto: #1a2033;
+  --qj-gris: #5b6478;
+  --qj-borde: #cdd3df;
+  --qj-linea: rgba(230, 230, 230, 0.12);
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  color: #fff;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: linear-gradient(180deg, var(--qj-azul) 0%, var(--qj-navy) 100%);
+  isolation: isolate;
+}
+.qj-page *, .qj-page *::before, .qj-page *::after { box-sizing: border-box; }
+
+/* Foto de fondo: real, desenfocada y muy tenue (se nota solo como textura) */
+.qj-fondo {
+  position: fixed;
+  inset: -20px;
+  z-index: -1;
+  background: url('/resources/quejas/hero-apreton.jpg') center / cover no-repeat;
+  filter: blur(5px) saturate(0.7);
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+/* ---------- Logo ---------- */
+.qj-cab { padding: 26px 20px 4px; text-align: center; }
+.qj-logo { display: block; width: 170px; max-width: 56%; height: auto; margin: 0 auto; }
+
+/* ---------- Formulario: el centro de la pantalla ---------- */
+.qj-centro { flex: 1; display: flex; justify-content: center; align-items: flex-start; padding: 18px 14px 40px; }
+.qj-card {
+  width: 100%;
+  max-width: 760px;
+  overflow: hidden;
+  background: #fff;
+  color: var(--qj-texto);
+  border-radius: 16px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 28px 70px rgba(4, 10, 24, 0.55);
+}
+.qj-card-cab { padding: 22px 22px 18px; text-align: left; background: var(--qj-navy); color: #fff; border-bottom: 4px solid var(--qj-naranja); }
+.qj-card-cab h1 { margin: 0 0 6px; font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 1.45rem; font-weight: 700; line-height: 1.15; text-wrap: balance; }
+.qj-card-cab p { margin: 0; font-size: 0.92rem; line-height: 1.5; color: #d3d9e8; max-width: 62ch; }
+.qj-card-cuerpo { padding: 22px 22px 24px; }
+.qj-card h2.qj-aparte { margin: 0 0 8px; font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 1.3rem; font-weight: 700; color: var(--qj-navy); text-align: center; }
+.qj-sub { margin: 0; color: var(--qj-gris); font-size: 0.92rem; line-height: 1.5; text-align: center; }
+
+.qj-campo { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.qj-campo > label { font-size: 0.86rem; font-weight: 600; color: var(--qj-texto); }
+.qj-doble { display: grid; grid-template-columns: 1fr; gap: 0 14px; }
+
+.qj-card input[type='text'],
+.qj-card input[type='email'],
+.qj-card input[type='tel'],
+.qj-card input[type='date'],
+.qj-card select,
+.qj-card textarea {
+  width: 100%;
+  min-height: 50px;
+  padding: 11px 13px;
+  font: inherit;
+  font-size: 16px; /* 16px evita que iOS haga zoom al tocar el campo */
+  color: var(--qj-texto);
+  background: #f4f6fa;
+  border: 1.5px solid var(--qj-borde);
+  border-radius: 10px;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.qj-card textarea { min-height: 120px; resize: vertical; line-height: 1.5; }
+.qj-card input:focus-visible,
+.qj-card select:focus-visible,
+.qj-card textarea:focus-visible {
+  outline: none;
+  background: #fff;
+  border-color: var(--qj-naranja);
+  box-shadow: 0 0 0 3px rgba(238, 59, 27, 0.2);
+}
+
+/* Cómo enviarla */
+.qj-grupo { margin: 0 0 14px; padding: 0; border: 0; min-width: 0; }
+.qj-grupo > legend { padding: 0; margin: 0 0 8px; font-size: 0.86rem; font-weight: 600; color: var(--qj-texto); }
+.qj-opciones { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 14px; }
+.qj-opcion {
+  position: relative;
+  display: block;
+  padding: 13px 14px 13px 46px;
+  border: 1.5px solid var(--qj-borde);
+  border-radius: 12px;
+  cursor: pointer;
+  background: #fff;
+  transition: border-color 0.15s, background 0.15s;
+}
+.qj-opcion input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.qj-opcion::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 16px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--qj-borde);
+  background: #fff;
+}
+.qj-opcion strong { display: block; font-size: 0.95rem; color: var(--qj-navy); }
+.qj-opcion span { display: block; margin-top: 2px; font-size: 0.8rem; line-height: 1.45; color: var(--qj-gris); }
+.qj-opcion:has(input:checked) { border-color: var(--qj-naranja); background: #fff5f3; }
+.qj-opcion:has(input:checked)::before { border-color: var(--qj-naranja); background: radial-gradient(circle, var(--qj-naranja) 0 5px, #fff 6px); }
+.qj-opcion:has(input:focus-visible) { box-shadow: 0 0 0 3px rgba(238, 59, 27, 0.25); }
+.qj-contacto { margin: 0 0 6px; }
+.qj-nota { color: var(--qj-gris); font-size: 0.78rem; }
+
+.qj-error {
+  margin: 0 0 16px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: #fff3f1;
+  border: 1px solid #f5b8ad;
+  color: #a42312;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.qj-acepto { display: flex; align-items: flex-start; gap: 10px; margin: 4px 0 16px; font-size: 0.86rem; line-height: 1.4; color: var(--qj-texto); cursor: pointer; }
+.qj-acepto input { flex: none; width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--qj-naranja); cursor: pointer; }
+.qj-acepto a { color: var(--qj-azul); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.qj-aviso { margin: 12px 0 0; text-align: center; font-size: 0.78rem; line-height: 1.5; color: var(--qj-gris); }
+
+.qj-enviar {
+  width: 100%;
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: inherit;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--qj-naranja);
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.qj-enviar:hover:not(:disabled) { background: var(--qj-naranja-os); }
+.qj-enviar:focus-visible { outline: 3px solid var(--qj-navy); outline-offset: 3px; }
+.qj-enviar:disabled { opacity: 0.75; cursor: progress; }
+
+.qj-ok { text-align: center; padding: 8px 0 4px; }
+.qj-ok-icono {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e8f6ee;
+  color: #1f7a45;
+}
+.qj-ok p { margin: 0 auto 18px; max-width: 44ch; color: var(--qj-gris); font-size: 0.96rem; line-height: 1.55; }
+.qj-secundario {
+  min-height: 46px;
+  padding: 0 22px;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--qj-navy);
+  background: #fff;
+  border: 2px solid var(--qj-navy);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.qj-secundario:hover { background: #f1f3f8; }
+.qj-secundario:focus-visible { outline: 3px solid var(--qj-naranja); outline-offset: 2px; }
+
+/* ---------- Pie: el mismo de gemeseg.com ---------- */
+.qj-pie { background: var(--qj-profundo); box-shadow: 0 -1px 0 var(--qj-linea); padding: 36px 20px 18px; }
+.qj-pie-inner { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 26px; text-align: center; }
+.qj-pie-logo { display: block; width: 150px; height: auto; margin: 0 auto 16px; }
+.qj-redes { display: flex; justify-content: center; gap: 10px; }
+.qj-redes a {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--qj-linea);
+  border-radius: 50%;
+  transition: background 0.15s, border-color 0.15s;
+}
+.qj-redes a:hover { background: var(--qj-naranja); border-color: var(--qj-naranja); }
+.qj-contacto-pie { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; width: fit-content; max-width: 100%; margin: 0 auto; }
+.qj-contacto-pie a, .qj-contacto-pie span {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: #d6d9e8;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  text-decoration: none;
+  text-align: left;
+}
+.qj-contacto-pie a:hover { color: #fff; }
+.qj-contacto-pie svg { flex: none; margin-top: 2px; color: var(--qj-naranja); }
+.qj-pie a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.qj-copy { max-width: 1100px; margin: 26px auto 0; padding-top: 16px; border-top: 1px solid var(--qj-linea); text-align: center; font-size: 0.8rem; line-height: 1.6; color: #9aa0bb; }
+.qj-copy a { color: #d6d9e8; text-decoration: underline; }
+
+/* ---------- Pantallas más anchas ---------- */
+@media (min-width: 720px) {
+  .qj-cab { padding: 18px 20px 0; }
+  .qj-logo { width: 150px; }
+  .qj-centro { padding: 14px 24px 54px; }
+  .qj-card-cab { padding: 20px 32px 16px; }
+  .qj-card-cab h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  .qj-card-cab p { font-size: 0.88rem; line-height: 1.45; }
+  .qj-card-cuerpo { padding: 20px 32px 22px; }
+  .qj-campo { gap: 5px; margin-bottom: 12px; }
+  .qj-card textarea { min-height: 88px; }
+  .qj-grupo { margin-bottom: 10px; }
+  .qj-opciones { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .qj-opcion { padding-top: 10px; padding-bottom: 10px; }
+  .qj-opcion::before { top: 13px; }
+  .qj-acepto { margin: 2px 0 12px; }
+  .qj-enviar { min-height: 52px; }
+  .qj-aviso { margin-top: 10px; }
+  .qj-doble { grid-template-columns: 1fr 1fr; }
+  .qj-pie-inner { flex-direction: row; justify-content: space-between; align-items: flex-start; text-align: left; }
+  .qj-pie-marca .qj-pie-logo { margin-left: 0; }
+  .qj-pie-marca .qj-redes { justify-content: flex-start; }
+  .qj-contacto-pie { margin: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qj-page * { transition: none !important; }
+}

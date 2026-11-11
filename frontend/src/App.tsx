@@ -23,6 +23,7 @@ import { PermissionsProvider } from './contexts/PermissionsContext';
 import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import { usePermissions } from './hooks/usePermissions';
 import { isAuthenticated } from './services/auth.service';
+import { esDominioDeQuejas } from './services/publicComplaint.service';
 
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
 const CompaniesPage = lazy(() => import('./pages/admin/CompaniesPage'));
@@ -115,6 +116,7 @@ const ComplaintsPage = lazy(() => import('./pages/personal/ComplaintsPage'));
 const ComplaintsManagementPage = lazy(() => import('./pages/personal/ComplaintsManagementPage'));
 const SurveysPage = lazy(() => import('./pages/personal/SurveysPage'));
 const PublicSurveyPage = lazy(() => import('./pages/personal/PublicSurveyPage'));
+const PublicComplaintPage = lazy(() => import('./pages/personal/PublicComplaintPage'));
 const SurveyManagementPage = lazy(() => import('./pages/personal/SurveyManagementPage'));
 const VentasDashboard = lazy(() => import('./pages/ventas/VentasDashboard'));
 const VentasClientesPage = lazy(() => import('./pages/ventas/VentasClientesPage'));
@@ -259,6 +261,8 @@ function LoadingFallback() {
 // /dashboard fijo (ver SectionRoute).
 function RootRedirect() {
   const { loading, landingRoute } = usePerm();
+  // quejas.gemeseg.com (QR de la inducción) abre directo el formulario público, sin login.
+  if (esDominioDeQuejas()) return <Navigate to="/quejas" replace />;
   if (!isAuthenticated()) return <Navigate to="/login" replace />;
   if (loading) return <LoadingFallback />;
   if (!landingRoute) {
@@ -274,6 +278,8 @@ function RootRedirect() {
 function AppInner() {
   const perms = usePermissions();
   const [chatOpen, setChatOpen] = useState(false);
+  // En el formulario público de quejas (QR de la inducción) no se muestra el chat del agente.
+  const enFormularioPublico = useLocation().pathname === '/quejas';
 
   // «Preguntar al agente» desde la ficha de un cliente (chat.service.ts → abrirChatDeVentas):
   // abre el cajón del chat; ChatDrawer se encarga de elegir al Agente de Ventas y mandar la pregunta.
@@ -298,6 +304,9 @@ function AppInner() {
             desde el celular), por eso va fuera de ProtectedLayout y sin
             SectionRoute. El token de la URL es la única credencial. */}
         <Route path="/encuesta/:token" element={<PublicSurveyPage />} />
+        {/* Quejas de la inducción (personal nuevo o en reinducción, sin cuenta): se llega con el QR a
+            quejas.gemeseg.com, que abre esta misma pantalla. */}
+        <Route path="/quejas" element={<PublicComplaintPage />} />
         <Route
           path="/dashboard"
           element={
@@ -598,7 +607,7 @@ function AppInner() {
       </Routes>
       </Suspense>
 
-      {isAuthenticated() && (
+      {isAuthenticated() && !enFormularioPublico && (
         <>
           <ChatFloatingButton onClick={() => setChatOpen(true)} />
           <ChatDrawer isOpen={chatOpen} onClose={() => setChatOpen(false)} />

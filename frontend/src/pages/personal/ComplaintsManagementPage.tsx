@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Settings2, ListOrdered, Trash2 } from 'lucide-react';
+import { X, Settings2, ListOrdered, Trash2, QrCode } from 'lucide-react';
 import {
   getAllComplaints,
   changeComplaintStage,
@@ -16,6 +16,29 @@ import RrhhPageHeader from '../../components/personal/RrhhPageHeader';
 import { usePerm } from '../../contexts/PermissionsContext';
 import ComplaintFieldsConfigModal from '../../components/personal/ComplaintFieldsConfigModal';
 import ComplaintStagesConfigModal from '../../components/personal/ComplaintStagesConfigModal';
+import ComplaintPublicConfigModal from '../../components/personal/ComplaintPublicConfigModal';
+
+// Etiqueta «Interna» / «Externa»: de dónde llegó la queja.
+function EtiquetaOrigen({ origen }: { origen: Complaint['origen'] }) {
+  const externa = origen === 'EXTERNA';
+  return (
+    <span
+      style={{
+        display: 'inline-block', padding: '1px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 700,
+        background: externa ? '#fefcbf' : '#e2e8f0', color: externa ? '#744210' : '#4a5568',
+      }}
+    >
+      {externa ? 'Externa' : 'Interna'}
+    </span>
+  );
+}
+
+// «Anónima» o el nombre que dejó (las externas no tienen usuario).
+function autorDe(c: Complaint) {
+  if (c.isAnonymous) return 'Anónima';
+  if (c.origen === 'EXTERNA') return c.contactoNombre || c.contactoEmail || c.contactoTelefono || 'Sin nombre';
+  return c.submitter?.fullName || 'Empleado';
+}
 
 // Drag-and-drop HTML5 nativo (sin librería). Desde la Fase 5 las columnas ya
 // no son fijas: se cargan como ComplaintStage[] configurable por empresa
@@ -35,6 +58,8 @@ export default function ComplaintsManagementPage() {
   const [savingStage, setSavingStage] = useState(false);
   const [showFieldsConfig, setShowFieldsConfig] = useState(false);
   const [showStagesConfig, setShowStagesConfig] = useState(false);
+  const [showPublicConfig, setShowPublicConfig] = useState(false);
+  const [filtroOrigen, setFiltroOrigen] = useState<'TODAS' | 'INTERNA' | 'EXTERNA'>('TODAS');
   const [moverQuejaError, setMoverQuejaError] = useState('');
   const moverQuejaErrorRef = useRef<HTMLDivElement>(null);
   const [avanzarEtapaError, setAvanzarEtapaError] = useState('');
@@ -65,7 +90,8 @@ export default function ComplaintsManagementPage() {
 
   useEffect(load, []);
 
-  const getComplaintsForStage = (key: string) => complaints.filter((c) => c.status === key);
+  const visibles = complaints.filter((c) => filtroOrigen === 'TODAS' || c.origen === filtroOrigen);
+  const getComplaintsForStage = (key: string) => visibles.filter((c) => c.status === key);
   const stageLabel = (key: string) => stages.find((s) => s.key === key)?.label || key;
 
   const handleDragStart = (e: React.DragEvent, complaint: Complaint) => {
@@ -176,6 +202,15 @@ export default function ComplaintsManagementPage() {
             <button
               type="button"
               className="btn-icon-toolbar"
+              onClick={() => setShowPublicConfig(true)}
+              title="Formulario público de la inducción (QR)"
+              aria-label="Formulario público de la inducción (QR)"
+            >
+              <QrCode size={18} />
+            </button>
+            <button
+              type="button"
+              className="btn-icon-toolbar"
               onClick={() => setShowStagesConfig(true)}
               title="Etapas del tablero"
               aria-label="Etapas del tablero"
@@ -196,6 +231,24 @@ export default function ComplaintsManagementPage() {
       />
 
       {showFieldsConfig && <ComplaintFieldsConfigModal onClose={() => setShowFieldsConfig(false)} />}
+      {showPublicConfig && <ComplaintPublicConfigModal onClose={() => setShowPublicConfig(false)} />}
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }} role="group" aria-label="Filtrar por origen">
+        {([['TODAS', 'Todas'], ['INTERNA', 'Internas'], ['EXTERNA', 'Externas']] as const).map(([valor, texto]) => {
+          const n = valor === 'TODAS' ? complaints.length : complaints.filter((c) => c.origen === valor).length;
+          return (
+            <button
+              key={valor}
+              type="button"
+              className={filtroOrigen === valor ? 'auth-btn' : 'btn-secondary'}
+              onClick={() => setFiltroOrigen(valor)}
+              style={{ padding: '6px 14px', fontSize: '0.82rem' }}
+            >
+              {texto} ({n})
+            </button>
+          );
+        })}
+      </div>
       {showStagesConfig && (
         <ComplaintStagesConfigModal
           onClose={() => setShowStagesConfig(false)}
@@ -242,8 +295,9 @@ export default function ComplaintsManagementPage() {
                       border: '1px solid #e2e8f0', cursor: 'grab',
                     }}
                   >
-                    <div style={{ fontSize: '0.78rem', color: '#a0aec0', marginBottom: '4px' }}>
-                      {c.isAnonymous ? 'Anónima' : c.submitter?.fullName || 'Empleado'} · {new Date(c.createdAt).toLocaleDateString('es-EC')}
+                    <div style={{ fontSize: '0.78rem', color: '#a0aec0', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <EtiquetaOrigen origen={c.origen} />
+                      <span>{autorDe(c)} · {new Date(c.createdAt).toLocaleDateString('es-EC')}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                       <div style={{ fontSize: '0.85rem', color: 'var(--azul-oscuro)', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', flex: 1 }}>
@@ -281,16 +335,34 @@ export default function ComplaintsManagementPage() {
               <button className="modal-close" onClick={() => setDetail(null)}><X size={16} /></button>
             </div>
             <div className="modal-body">
-              <div style={{ fontSize: '0.78rem', color: '#a0aec0', marginBottom: '8px' }}>
-                {detail.isAnonymous ? 'Anónima' : detail.submitter?.fullName || 'Empleado'} · {new Date(detail.createdAt).toLocaleDateString('es-EC')}
+              <div style={{ fontSize: '0.78rem', color: '#a0aec0', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <EtiquetaOrigen origen={detail.origen} />
+                <span>{autorDe(detail)} · {new Date(detail.createdAt).toLocaleDateString('es-EC')}</span>
               </div>
+              {detail.origen === 'EXTERNA' && (
+                <div style={{ fontSize: '0.8rem', color: '#4a5568', background: '#f7fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 10px', marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <span><strong>Tipo:</strong> {detail.tipo || '—'}</span>
+                  <span><strong>Sede:</strong> {detail.sede || '—'}</span>
+                  <span><strong>Fecha de la inducción:</strong> {detail.fechaInduccion ? detail.fechaInduccion.split('-').reverse().join('/') : '—'}</span>
+                  {detail.personasInvolucradas && <span><strong>Personas involucradas:</strong> {detail.personasInvolucradas}</span>}
+                  {detail.isAnonymous ? (
+                    <span><strong>Contacto:</strong> anónima, no dejó datos</span>
+                  ) : (
+                    <>
+                      {detail.contactoNombre && <span><strong>Nombre:</strong> {detail.contactoNombre}</span>}
+                      {detail.contactoEmail && <span><strong>Correo:</strong> {detail.contactoEmail}</span>}
+                      {detail.contactoTelefono && <span><strong>Teléfono:</strong> {detail.contactoTelefono}</span>}
+                    </>
+                  )}
+                </div>
+              )}
               <p style={{ fontSize: '0.9rem', color: 'var(--azul-oscuro)' }}>{detail.description}</p>
 
               {avanzarEtapaError && (
                 <div ref={avanzarEtapaErrorRef} className="form-error" style={{ marginBottom: '10px' }}>{avanzarEtapaError}</div>
               )}
 
-              {fields.length > 0 && (
+              {fields.length > 0 && detail.origen !== 'EXTERNA' && (
                 <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   {fields.map((f) => (
                     <div key={f.id} style={{ fontSize: '0.8rem', color: '#718096' }}>

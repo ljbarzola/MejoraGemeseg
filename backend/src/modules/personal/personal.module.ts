@@ -32,6 +32,8 @@ import { PersonalAlertsService } from './services/personal-alerts.service';
 import { ComplaintService } from './services/complaint.service';
 import { ComplaintFieldDefinitionService } from './services/complaint-field-definition.service';
 import { ComplaintStageService } from './services/complaint-stage.service';
+import { ComplaintExternaService } from './services/complaint-externa.service';
+import { PublicComplaintController } from './public-complaint.controller';
 import { SurveyService } from './services/survey.service';
 import { NotificationConfigService } from './services/notification-config.service';
 import { NotificationConfigController } from './notification-config.controller';
@@ -54,6 +56,7 @@ import { VigilanteController, VigilanteCronController } from './vigilante/vigila
     CedulaMergeController,
     SurveyController,
     PublicSurveyController,
+    PublicComplaintController,
     NotificationConfigController,
     VigilanteController,
     VigilanteCronController,
@@ -83,6 +86,7 @@ import { VigilanteController, VigilanteCronController } from './vigilante/vigila
     ComplaintService,
     ComplaintFieldDefinitionService,
     ComplaintStageService,
+    ComplaintExternaService,
     SurveyService,
     NotificationConfigService,
     WhatsAppService,
