@@ -83,6 +83,57 @@ describe('CacaoQualitiesService', () => {
     expect(prisma.cacaoQuality.delete).not.toHaveBeenCalled();
   });
 
+  describe('rango de precio', () => {
+    it('guarda el rango opcional de precio al crear', async () => {
+      const { prisma, service } = armar();
+      prisma.cacaoQuality.findFirst.mockResolvedValue(null);
+      await service.create({ name: 'Nacional', minPrice: 2, maxPrice: 4 }, 4);
+      expect(prisma.cacaoQuality.create).toHaveBeenCalledWith({
+        data: { name: 'Nacional', minPrice: 2, maxPrice: 4, companyId: 4 },
+      });
+    });
+
+    it('rechaza un mínimo mayor que el máximo (al crear y al editar)', async () => {
+      const { prisma, service } = armar();
+      prisma.cacaoQuality.findFirst.mockResolvedValue(null);
+      await expect(
+        service.create({ name: 'X', minPrice: 5, maxPrice: 3 }, 4),
+      ).rejects.toThrow(/mínimo no puede ser mayor/);
+      expect(prisma.cacaoQuality.create).not.toHaveBeenCalled();
+
+      prisma.cacaoQuality.findFirst.mockResolvedValue({ id: 3 });
+      await expect(
+        service.update(3, { minPrice: 5, maxPrice: 3 }, 4),
+      ).rejects.toThrow(/mínimo no puede ser mayor/);
+      expect(prisma.cacaoQuality.update).not.toHaveBeenCalled();
+    });
+
+    it('al editar solo un extremo, lo compara con el que la calidad ya tenía', async () => {
+      const { prisma, service } = armar();
+      // Ya tiene mínimo 2: bajar el máximo a 1 lo dejaría invertido.
+      prisma.cacaoQuality.findFirst.mockResolvedValue({
+        id: 3,
+        minPrice: 2,
+        maxPrice: 4,
+      });
+      await expect(service.update(3, { maxPrice: 1 }, 4)).rejects.toThrow(
+        /mínimo no puede ser mayor/,
+      );
+    });
+
+    it('permite quitar un extremo con null y aceptar mínimo igual al máximo', async () => {
+      const { prisma, service } = armar();
+      prisma.cacaoQuality.findFirst.mockResolvedValue({
+        id: 3,
+        minPrice: 2,
+        maxPrice: 4,
+      });
+      await service.update(3, { minPrice: null }, 4);
+      await service.update(3, { minPrice: 4 }, 4); // 4 = 4: un precio único esperado
+      expect(prisma.cacaoQuality.update).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('elimina una calidad sin lotes', async () => {
     const { prisma, service } = armar();
     prisma.cacaoQuality.findFirst.mockResolvedValue({ id: 3 });

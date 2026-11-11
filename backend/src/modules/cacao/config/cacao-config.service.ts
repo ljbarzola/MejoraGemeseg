@@ -25,9 +25,15 @@ export type AjustesCacao = {
    * autoriza y recién entonces se paga. Nace en false (como funcionaba antes) y la empresa lo activa.
    */
   pagosRequierenAutorizacion: boolean;
+  /**
+   * Monto (en $) desde el cual una liquidación solo la puede aprobar un administrador: por debajo
+   * de él la aprueba también un gerente. Sin valor, un gerente puede aprobar cualquiera (como antes).
+   */
+  montoAprobacionAdmin: number | null;
 };
 
 const CLAVE_PRECIO_ICE = 'precioIce';
+const CLAVE_MONTO_APROBACION_ADMIN = 'montoAprobacionAdmin';
 const CLAVE_AUTORIZACION_PAGOS = 'pagosRequierenAutorizacion';
 
 @Injectable()
@@ -42,8 +48,14 @@ export class CacaoConfigService {
       ...AJUSTES_INICIALES,
       precioIce: null,
       pagosRequierenAutorizacion: false,
+      montoAprobacionAdmin: null,
     };
     for (const fila of filas) {
+      if (fila.key === CLAVE_MONTO_APROBACION_ADMIN) {
+        const n = Number(fila.value);
+        if (Number.isFinite(n) && n > 0) ajustes.montoAprobacionAdmin = n;
+        continue;
+      }
       if (fila.key === CLAVE_AUTORIZACION_PAGOS) {
         ajustes.pagosRequierenAutorizacion = fila.value === '1';
         continue;
@@ -75,6 +87,10 @@ export class CacaoConfigService {
     return (await this.get(companyId)).pagosRequierenAutorizacion;
   }
 
+  async montoAprobacionAdmin(companyId: number): Promise<number | null> {
+    return (await this.get(companyId)).montoAprobacionAdmin;
+  }
+
   async update(companyId: number, dto: UpdateCacaoConfigDto) {
     for (const key of Object.keys(AJUSTES_INICIALES) as Array<
       keyof typeof AJUSTES_INICIALES
@@ -93,6 +109,24 @@ export class CacaoConfigService {
         where: { companyId_key: { companyId, key: CLAVE_AUTORIZACION_PAGOS } },
         update: { value },
         create: { companyId, key: CLAVE_AUTORIZACION_PAGOS, value },
+      });
+    }
+    // El monto de aprobación de administrador también puede quedar sin valor: null lo borra.
+    if (dto.montoAprobacionAdmin === null) {
+      await this.prisma.cacaoSetting.deleteMany({
+        where: { companyId, key: CLAVE_MONTO_APROBACION_ADMIN },
+      });
+    } else if (dto.montoAprobacionAdmin !== undefined) {
+      await this.prisma.cacaoSetting.upsert({
+        where: {
+          companyId_key: { companyId, key: CLAVE_MONTO_APROBACION_ADMIN },
+        },
+        update: { value: String(dto.montoAprobacionAdmin) },
+        create: {
+          companyId,
+          key: CLAVE_MONTO_APROBACION_ADMIN,
+          value: String(dto.montoAprobacionAdmin),
+        },
       });
     }
     // El precio ICE puede quedar sin valor: mandar null lo borra y la empresa vuelve a configurarlo.

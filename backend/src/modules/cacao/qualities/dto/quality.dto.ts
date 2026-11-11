@@ -38,6 +38,18 @@ export class CreateQualityDto {
   @IsNumber()
   @Min(0)
   fixedPrice?: number | null;
+
+  /** Precio mínimo esperado en $/kg; nulo = sin mínimo. */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  minPrice?: number | null;
+
+  /** Precio máximo esperado en $/kg; nulo = sin máximo. */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxPrice?: number | null;
 }
 
 export class UpdateQualityDto {
@@ -67,4 +79,14 @@ export class UpdateQualityDto {
   @IsNumber()
   @Min(0)
   fixedPrice?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  minPrice?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxPrice?: number | null;
 }

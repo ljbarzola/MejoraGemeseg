@@ -1,4 +1,7 @@
 import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
   IsDateString,
   IsIn,
   IsInt,
@@ -10,8 +13,10 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
+  ValidateNested,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 export const UNIDADES_RECEPCION = ['KG', 'TON', 'SACO', 'QQ'] as const;
 
@@ -27,6 +32,17 @@ const textoOpcional = ({ value }: { value: unknown }) => {
   const recortado = value.trim();
   return recortado === '' ? undefined : recortado;
 };
+
+/** Una pesada de un ticket pesado por tandas, en la unidad de la recepción. */
+export class ReceptionWeighingDto {
+  @IsNumber()
+  @IsPositive({ message: 'El peso bruto de cada pesada debe ser mayor a cero' })
+  grossWeight: number;
+
+  @IsNumber()
+  @Min(0, { message: 'La tara de cada pesada no puede ser negativa' })
+  tare: number;
+}
 
 export class CreateReceptionDto {
   @IsDateString()
@@ -44,15 +60,31 @@ export class CreateReceptionDto {
   @IsIn(UNIDADES_RECEPCION, { message: 'Unidad de medida no válida' })
   unitOfMeasure?: (typeof UNIDADES_RECEPCION)[number];
 
-  /** Peso bruto en la unidad indicada. */
+  /**
+   * Peso bruto en la unidad indicada. Si el ticket se pesó por tandas (`weighings`), no se manda: el
+   * servidor suma el de todas las pesadas.
+   */
+  @ValidateIf((o: { weighings?: unknown[] }) => !o.weighings?.length)
   @IsNumber()
   @IsPositive({ message: 'El peso bruto debe ser mayor a cero' })
-  grossWeight: number;
+  grossWeight?: number;
 
-  /** Tara en la unidad indicada. */
+  /** Tara en la unidad indicada (con tandas, el servidor suma la de cada pesada). */
+  @ValidateIf((o: { weighings?: unknown[] }) => !o.weighings?.length)
   @IsNumber()
   @Min(0)
-  tare: number;
+  tare?: number;
+
+  /**
+   * Pesadas (tandas) de un mismo ticket: la recepción guarda la suma y el detalle de cada una. Todas
+   * van en la unidad de la recepción y del mismo producto (una calidad, un lote).
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50, { message: 'Un ticket admite como máximo 50 pesadas' })
+  @ValidateNested({ each: true })
+  @Type(() => ReceptionWeighingDto)
+  weighings?: ReceptionWeighingDto[];
 
   /** Humedad medida, en %. */
   @IsNumber()
@@ -74,6 +106,22 @@ export class CreateReceptionDto {
   @IsOptional()
   @IsNumber()
   differential?: number;
+
+  /**
+   * La persona ya vio el aviso de que el precio queda fuera del rango de la calidad y decidió
+   * registrarlo igual. Sin esto, un precio fuera de rango se rechaza.
+   */
+  @IsOptional()
+  @IsBoolean()
+  confirmPriceOutOfRange?: boolean;
+
+  /**
+   * Entrega en consignación (se le paga al proveedor después de venderla). Es una marca para las
+   * listas y el informe: no cambia las reglas de liquidar.
+   */
+  @IsOptional()
+  @IsBoolean()
+  consigned?: boolean;
 
   /** Calidad del cacao recibido: es obligatoria y debe ser de la empresa. */
   @IsInt({ message: 'Selecciona la calidad del cacao' })

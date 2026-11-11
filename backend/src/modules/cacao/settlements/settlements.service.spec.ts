@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import type { PrismaService } from '../../../prisma/prisma.service';
 import {
   CacaoSettlementsService,
@@ -42,7 +43,11 @@ function armar() {
       updateMany: jest.fn(),
       update: jest.fn(),
       findFirst: jest.fn(),
+      // Anticipos ya descontados en liquidaciones vigentes (para el saldo del proveedor).
+      groupBy: jest.fn().mockResolvedValue([]),
     },
+    // Anticipos entregados al proveedor (para el saldo del proveedor).
+    cacaoSupplierAdvance: { groupBy: jest.fn().mockResolvedValue([]) },
     cacaoPayable: {
       findUnique: jest.fn(),
       create: jest.fn(),
@@ -56,7 +61,11 @@ function armar() {
     cacaoSettlement: { findFirst: jest.fn(), updateMany: jest.fn() },
   };
   // La empresa configuró 45 días de plazo de pago.
-  const config = { plazoPago: jest.fn().mockResolvedValue(45) };
+  const config = {
+    plazoPago: jest.fn().mockResolvedValue(45),
+    // Sin monto de aprobación configurado: un gerente puede aprobar cualquiera, como antes.
+    montoAprobacionAdmin: jest.fn().mockResolvedValue(null),
+  };
   const service = new CacaoSettlementsService(
     prisma as unknown as PrismaService,
     config as unknown as CacaoConfigService,
@@ -82,6 +91,161 @@ function dto(over: Partial<CreateSettlementDto> = {}): CreateSettlementDto {
     ...over,
   };
 }
+
+describe('CacaoSettlementsService.create: anticipo y forma de pago', () => {
+  /** El proveedor 5 tiene `anticipado` dólares anticipados y `descontado` ya gastados en otras liquidaciones. */
+  function conSaldo(anticipado: number, descontado = 0) {
+    const a = armar();
+    a.prisma.cacaoSupplier.findFirst.mockResolvedValue({ id: 5 });
+    a.tx.cacaoLot.findMany.mockResolvedValue([lote]);
+    a.tx.cacaoSettlementLot.groupBy.mockResolvedValue([]);
+    a.tx.cacaoSupplierAdvance.groupBy.mockResolvedValue([
+      { supplierId: 5, _sum: { amount: anticipado } },
+    ]);
+    a.tx.cacaoSettlement.groupBy.mockResolvedValue(
+      descontado > 0
+        ? [{ supplierId: 5, _sum: { advanceApplied: descontado } }]
+        : [],
+    );
+    a.tx.cacaoSettlement.create.mockImplementation(
+      (args: { data: unknown }) => args.data,
+    );
+    return a;
+  }
+  type Creada = {
+    totalAmount: number;
+    advanceApplied: number;
+    paymentPlan?: Array<{ method: string; amount: number }>;
+  };
+
+  // dto() liquida 400 kg a $2.00 efectivos: el valor del cacao es $728.
+
+  it('descuenta el anticipo sin cambiar el valor del cacao', async () => {
+    const a = conSaldo(300);
+    const r = (await a.service.create(
+      dto({ advanceApplied: 200 }),
+      4,
+      9,
+    )) as unknown as Creada;
+    expect(r.totalAmount).toBe(728); // el valor del cacao no cambia
+    expect(r.advanceApplied).toBe(200);
+  });
+
+  it('bloquea al proveedor mientras descuenta (dos liquidaciones no gastan el mismo anticipo)', async () => {
+    const a = conSaldo(300);
+    await a.service.create(dto({ advanceApplied: 200 }), 4, 9);
+    // Una llamada bloquea los lotes y otra al proveedor.
+    expect(a.tx.$queryRaw).toHaveBeenCalledTimes(2);
+  });
+
+  it('sin anticipo no consulta ni bloquea nada del proveedor', async () => {
+    const a = conSaldo(300);
+    const r = (await a.service.create(dto(), 4, 9)) as unknown as Creada;
+    expect(r.advanceApplied).toBe(0);
+    expect(a.tx.cacaoSupplierAdvance.groupBy).not.toHaveBeenCalled();
+    expect(a.tx.$queryRaw).toHaveBeenCalledTimes(1); // solo el bloqueo de los lotes
+  });
+
+  it('no deja descontar más que el saldo disponible', async () => {
+    const a = conSaldo(300);
+    await expect(
+      a.service.create(dto({ advanceApplied: 400 }), 4, 9),
+    ).rejects.toThrow(
+      /anticipo \(\$400\.00\) supera el saldo disponible del proveedor \(\$300\.00\)/,
+    );
+    expect(a.tx.cacaoSettlement.create).not.toHaveBeenCalled();
+  });
+
+  it('el saldo ya descuenta lo gastado en otras liquidaciones vigentes', async () => {
+    // Anticipó 300 y otra liquidación ya descontó 250: quedan 50.
+    const a = conSaldo(300, 250);
+    await expect(
+      a.service.create(dto({ advanceApplied: 100 }), 4, 9),
+    ).rejects.toThrow(/saldo disponible del proveedor \(\$50\.00\)/);
+    const ok = conSaldo(300, 250);
+    await ok.service.create(dto({ advanceApplied: 50 }), 4, 9);
+    expect(ok.tx.cacaoSettlement.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('el anticipo no puede cubrir toda la liquidación', async () => {
+    const a = conSaldo(1000);
+    await expect(
+      a.service.create(dto({ advanceApplied: 728 }), 4, 9),
+    ).rejects.toThrow(/no puede cubrir toda la liquidación/);
+    // Con 1 centavo por pagar sí pasa.
+    const ok = conSaldo(1000);
+    await ok.service.create(dto({ advanceApplied: 727.99 }), 4, 9);
+    expect(ok.tx.cacaoSettlement.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('guarda la forma de pago cuando suma lo que se debe pagar (valor menos anticipo)', async () => {
+    const a = conSaldo(300);
+    const r = (await a.service.create(
+      dto({
+        advanceApplied: 200,
+        paymentPlan: [
+          { method: 'TRANSFER', amount: 500 },
+          { method: 'CASH', amount: 28 },
+        ],
+      }),
+      4,
+      9,
+    )) as unknown as Creada;
+    expect(r.paymentPlan).toEqual([
+      { method: 'TRANSFER', amount: 500 },
+      { method: 'CASH', amount: 28 },
+    ]);
+  });
+
+  it('sin anticipo, la forma de pago debe sumar el valor del cacao', async () => {
+    const a = conSaldo(0);
+    const r = (await a.service.create(
+      dto({
+        paymentPlan: [
+          { method: 'CHECK', amount: 400 },
+          { method: 'CREDIT', amount: 328 },
+        ],
+      }),
+      4,
+      9,
+    )) as unknown as Creada;
+    expect(r.paymentPlan).toHaveLength(2);
+  });
+
+  it('rechaza una forma de pago que no cuadra y dice cuánto suma y cuánto se debe', async () => {
+    const a = conSaldo(300);
+    await expect(
+      a.service.create(
+        dto({
+          advanceApplied: 200,
+          paymentPlan: [{ method: 'CASH', amount: 100 }],
+        }),
+        4,
+        9,
+      ),
+    ).rejects.toThrow(/suma \$100\.00 y lo que se debe pagar es \$528\.00/);
+    expect(a.tx.cacaoSettlement.create).not.toHaveBeenCalled();
+  });
+
+  it('la forma de pago es opcional: sin ella no se guarda ninguna', async () => {
+    const a = conSaldo(300);
+    const r = (await a.service.create(dto(), 4, 9)) as unknown as Creada;
+    expect(r.paymentPlan).toBeUndefined();
+  });
+
+  it('tolera un centavo de diferencia de redondeo en la forma de pago', async () => {
+    const a = conSaldo(300);
+    await a.service.create(
+      dto({
+        advanceApplied: 200,
+        paymentPlan: [{ method: 'TRANSFER', amount: 528.004 }],
+      }),
+      4,
+      9,
+    );
+    expect(a.tx.cacaoSettlement.create).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('CacaoSettlementsService.create', () => {
   it('rechaza un proveedor de otra empresa o inexistente', async () => {
@@ -250,7 +414,36 @@ describe('CacaoSettlementsService.approve', () => {
   it('no deja aprobar a quien la creó', async () => {
     const { prisma, service } = armar();
     prisma.cacaoSettlement.findFirst.mockResolvedValue(pendiente);
-    await expect(service.approve(7, 4, 9)).rejects.toThrow(ForbiddenException);
+    await expect(service.approve(7, 4, 9, UserRole.ADMIN)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('un gerente no aprueba lo que supera el monto de la empresa; un administrador sí', async () => {
+    const { prisma, tx, config, service } = armar();
+    config.montoAprobacionAdmin.mockResolvedValue(500);
+    prisma.cacaoSettlement.findFirst.mockResolvedValue(pendiente); // $728 > $500
+    await expect(service.approve(7, 4, 3, UserRole.MANAGER)).rejects.toThrow(
+      /la debe aprobar un administrador/,
+    );
+    expect(tx.cacaoSettlement.updateMany).not.toHaveBeenCalled();
+
+    tx.cacaoSettlement.updateMany.mockResolvedValue({ count: 1 });
+    tx.cacaoPayable.findUnique.mockResolvedValue(null);
+    await service.approve(7, 4, 3, UserRole.ADMIN);
+    expect(tx.cacaoSettlement.updateMany).toHaveBeenCalled();
+  });
+
+  it('un gerente aprueba lo que no supera el monto, y todo si no hay monto', async () => {
+    const { prisma, tx, config, service } = armar();
+    prisma.cacaoSettlement.findFirst.mockResolvedValue(pendiente);
+    tx.cacaoSettlement.updateMany.mockResolvedValue({ count: 1 });
+    tx.cacaoPayable.findUnique.mockResolvedValue(null);
+
+    config.montoAprobacionAdmin.mockResolvedValue(728); // justo en el monto: pasa
+    await service.approve(7, 4, 3, UserRole.MANAGER);
+
+    config.montoAprobacionAdmin.mockResolvedValue(null); // sin monto: como antes
+    await service.approve(7, 4, 3, UserRole.MANAGER);
+    expect(tx.cacaoSettlement.updateMany).toHaveBeenCalledTimes(2);
   });
 
   it('solo aprueba una liquidación pendiente', async () => {
@@ -259,14 +452,14 @@ describe('CacaoSettlementsService.approve', () => {
       ...pendiente,
       status: 'APPROVED',
     });
-    await expect(service.approve(7, 4, 3)).rejects.toThrow(BadRequestException);
+    await expect(service.approve(7, 4, 3, UserRole.ADMIN)).rejects.toThrow(BadRequestException);
   });
 
   it('avisa si otra persona la decidió al mismo tiempo', async () => {
     const { prisma, tx, service } = armar();
     prisma.cacaoSettlement.findFirst.mockResolvedValue(pendiente);
     tx.cacaoSettlement.updateMany.mockResolvedValue({ count: 0 });
-    await expect(service.approve(7, 4, 3)).rejects.toThrow(/ya fue decidida/);
+    await expect(service.approve(7, 4, 3, UserRole.ADMIN)).rejects.toThrow(/ya fue decidida/);
     expect(tx.cacaoPayable.create).not.toHaveBeenCalled();
   });
 
@@ -277,7 +470,7 @@ describe('CacaoSettlementsService.approve', () => {
     tx.cacaoPayable.findUnique.mockResolvedValue(null);
 
     const antes = Date.now();
-    await service.approve(7, 4, 3);
+    await service.approve(7, 4, 3, UserRole.ADMIN);
 
     expect(tx.cacaoSettlement.updateMany).toHaveBeenCalledWith({
       where: { id: 7, companyId: 4, status: 'PENDING' },
@@ -293,6 +486,21 @@ describe('CacaoSettlementsService.approve', () => {
     expect(dias).toBeLessThan(20.01);
   });
 
+  it('la deuda nace por el valor del cacao menos el anticipo descontado', async () => {
+    const { prisma, tx, service } = armar();
+    prisma.cacaoSettlement.findFirst.mockResolvedValue({
+      ...pendiente,
+      advanceApplied: 200,
+    });
+    tx.cacaoSettlement.updateMany.mockResolvedValue({ count: 1 });
+    tx.cacaoPayable.findUnique.mockResolvedValue(null);
+    await service.approve(7, 4, 3, UserRole.ADMIN);
+    const args = tx.cacaoPayable.create.mock.calls[0][0] as {
+      data: { totalAmount: number };
+    };
+    expect(args.data.totalAmount).toBe(528); // 728 - 200
+  });
+
   it('usa 30 días si la liquidación no trae plazo', async () => {
     const { prisma, tx, service } = armar();
     prisma.cacaoSettlement.findFirst.mockResolvedValue({
@@ -302,7 +510,7 @@ describe('CacaoSettlementsService.approve', () => {
     tx.cacaoSettlement.updateMany.mockResolvedValue({ count: 1 });
     tx.cacaoPayable.findUnique.mockResolvedValue(null);
     const antes = Date.now();
-    await service.approve(7, 4, 3);
+    await service.approve(7, 4, 3, UserRole.ADMIN);
     const args = tx.cacaoPayable.create.mock.calls[0][0] as {
       data: { dueDate: Date };
     };
@@ -332,10 +540,10 @@ describe('CacaoSettlementsService.approveMany', () => {
         return Promise.resolve({} as never);
       });
 
-    const r = await service.approveMany([1, 2, 3, 4], 4, 9);
+    const r = await service.approveMany([1, 2, 3, 4], 4, 9, UserRole.ADMIN);
 
     expect(approve).toHaveBeenCalledTimes(4);
-    expect(approve).toHaveBeenCalledWith(1, 4, 9);
+    expect(approve).toHaveBeenCalledWith(1, 4, 9, UserRole.ADMIN);
     expect(r.aprobadas).toEqual([1, 4]);
     expect(r.omitidas).toEqual([
       {
@@ -352,7 +560,7 @@ describe('CacaoSettlementsService.approveMany', () => {
     const approve = jest
       .spyOn(service, 'approve')
       .mockResolvedValue({} as never);
-    const r = await service.approveMany([5, 5, 5], 4, 9);
+    const r = await service.approveMany([5, 5, 5], 4, 9, UserRole.ADMIN);
     expect(approve).toHaveBeenCalledTimes(1);
     expect(r.aprobadas).toEqual([5]);
   });

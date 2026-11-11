@@ -108,6 +108,7 @@ export default function ReceptionsList() {
         ),
       },
       { key: 'bruto', filtro: { tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (r) => r.grossWeight }, excel: { titulo: 'Peso Bruto (kg)' }, ancho: 170, label: 'Peso Bruto', orden: (r) => r.grossWeight, celda: (r) => pesoConUnidad(r.grossWeight, r.unitOfMeasure, '#718096') },
+      { key: 'pesadas', filtro: { tipo: 'numero', formato: (n) => `${n} pesadas`, getValue: (r) => r.weighingCount || 1 }, excel: { valor: (r) => r.weighingCount || 1, titulo: 'Pesadas' }, ancho: 100, label: 'Pesadas', orden: (r) => r.weighingCount || 1, celda: (r) => (r.weighingCount > 1 ? <span title="El ticket se pesó por tandas: el detalle está en el lote">{r.weighingCount} pesadas</span> : '—'), ocultaPorDefecto: true },
       { key: 'tara', filtro: { tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (r) => r.tare }, excel: { titulo: 'Tara (kg)' }, ancho: 150, label: 'Tara', orden: (r) => r.tare, celda: (r) => pesoConUnidad(r.tare, r.unitOfMeasure, '#718096') },
       { key: 'neto', filtro: { tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (r) => r.netWeight }, excel: { titulo: 'Peso Neto (kg)' }, ancho: 170, label: 'Peso Neto', orden: (r) => r.netWeight, celda: (r) => pesoConUnidad(r.netWeight, r.unitOfMeasure, '#2b6cb0', true) },
       { key: 'humedad', filtro: { tipo: 'numero', formato: (n) => `${n}%`, getValue: (r) => r.humidity }, excel: { tipo: 'porcentaje', titulo: 'Humedad (%)' }, label: 'Humedad %', orden: (r) => r.humidity, celda: (r) => `${r.humidity}%` },
@@ -121,6 +122,15 @@ export default function ReceptionsList() {
           r.lot ? (
             <span className="status-badge" style={{ backgroundColor: '#ebf8ff', color: '#2b6cb0' }}>{r.lot.code}</span>
           ) : '—',
+      },
+      {
+        key: 'consignacion', filtro: { tipo: 'valores', orden: ['En consignación', 'Compra directa'], getValues: (r) => (r.consigned ? 'En consignación' : 'Compra directa') },
+        excel: { valor: (r) => (r.consigned ? 'En consignación' : 'Compra directa') }, ancho: 140,
+        label: 'Consignación',
+        orden: (r) => (r.consigned ? 1 : 0),
+        celda: (r) => (r.consigned
+          ? <span className="status-badge" style={{ backgroundColor: '#e9d8fd', color: '#553c9a' }} title="Se le paga al proveedor después de venderla">En consignación</span>
+          : '—'),
       },
       {
         key: 'liquidacion', filtro: { tipo: 'valores', getValues: (r) => estadoLiquidacionEntrega(r).label }, excel: { valor: (r) => estadoLiquidacionEntrega(r).label }, ancho: 130,

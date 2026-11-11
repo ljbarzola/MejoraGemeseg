@@ -21,6 +21,7 @@ describe('CacaoConfigService', () => {
       ...AJUSTES_INICIALES,
       precioIce: null,
       pagosRequierenAutorizacion: false,
+      montoAprobacionAdmin: null,
     });
     expect(prisma.cacaoSetting.findMany).toHaveBeenCalledWith({
       where: { companyId: 4 },
@@ -48,6 +49,7 @@ describe('CacaoConfigService', () => {
       ...AJUSTES_INICIALES,
       precioIce: null,
       pagosRequierenAutorizacion: false,
+      montoAprobacionAdmin: null,
     });
   });
 
@@ -137,6 +139,49 @@ describe('CacaoConfigService', () => {
       await service.update(4, { precioIce: null });
       expect(prisma.cacaoSetting.deleteMany).toHaveBeenCalledWith({
         where: { companyId: 4, key: 'precioIce' },
+      });
+      expect(prisma.cacaoSetting.upsert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('monto de aprobación de administrador', () => {
+    it('una empresa nueva no tiene monto: un gerente puede aprobar cualquiera', async () => {
+      const { prisma, service } = armar();
+      prisma.cacaoSetting.findMany.mockResolvedValue([]);
+      expect(await service.montoAprobacionAdmin(4)).toBeNull();
+    });
+
+    it('lee el monto guardado e ignora uno inválido (cero, negativo o texto)', async () => {
+      const { prisma, service } = armar();
+      prisma.cacaoSetting.findMany.mockResolvedValue([
+        { key: 'montoAprobacionAdmin', value: '500.5' },
+      ]);
+      expect(await service.montoAprobacionAdmin(4)).toBe(500.5);
+
+      for (const malo of ['0', '-10', 'abc']) {
+        prisma.cacaoSetting.findMany.mockResolvedValue([
+          { key: 'montoAprobacionAdmin', value: malo },
+        ]);
+        expect(await service.montoAprobacionAdmin(4)).toBeNull();
+      }
+    });
+
+    it('lo guarda por empresa y mandar null lo borra', async () => {
+      const { prisma, service } = armar();
+      prisma.cacaoSetting.findMany.mockResolvedValue([]);
+      await service.update(4, { montoAprobacionAdmin: 750 });
+      expect(prisma.cacaoSetting.upsert).toHaveBeenCalledWith({
+        where: {
+          companyId_key: { companyId: 4, key: 'montoAprobacionAdmin' },
+        },
+        update: { value: '750' },
+        create: { companyId: 4, key: 'montoAprobacionAdmin', value: '750' },
+      });
+
+      prisma.cacaoSetting.upsert.mockClear();
+      await service.update(4, { montoAprobacionAdmin: null });
+      expect(prisma.cacaoSetting.deleteMany).toHaveBeenCalledWith({
+        where: { companyId: 4, key: 'montoAprobacionAdmin' },
       });
       expect(prisma.cacaoSetting.upsert).not.toHaveBeenCalled();
     });

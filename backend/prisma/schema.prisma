@@ -376,12 +376,77 @@ model CacaoSupplier {
   phone        String?
   paymentTerms String?
   bank         String?
+  // Ficha completa (2026-11-10): todo opcional. Columnas creadas al arrancar, ver
+  // cacao-config.schema.ts.
+  idType            String? // CEDULA | RUC | PASAPORTE | OTRO
+  idNumber          String?
+  email             String?
+  address           String?
+  bankAccountType   String? // AHORRO | CORRIENTE
+  bankAccountNumber String?
+  bankAccountHolder String?
+  rating            Int? // 1 a 5
   companyId    Int
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
   payables     CacaoPayable[]
   receptions   CacaoReception[]
   settlements  CacaoSettlement[]
+}
+
+// Pesadas (tandas) de una recepción: cuando un mismo ticket se pesa por partes, la recepción guarda
+// la suma (bruto, tara y neto) y aquí queda el detalle de cada pesada, en kg. Una recepción sin
+// pesadas es una sola pesada, como siempre. Sin relación en la base (se une por `receptionId`).
+// Tabla creada al arrancar, ver cacao-config.schema.ts.
+model CacaoReceptionWeighing {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  receptionId Int
+  lineNo      Int
+  grossWeight Float
+  tare        Float
+  netWeight   Float
+  createdAt   DateTime @default(now())
+
+  @@index([receptionId])
+}
+
+// Anticipos (adelantos de dinero) que se le dan a un proveedor y se descuentan al liquidarle. Su
+// saldo no se guarda: es lo anticipado (sin anulados) menos lo descontado en liquidaciones
+// vigentes. Tabla creada al arrancar, ver cacao-config.schema.ts.
+model CacaoSupplierAdvance {
+  id         Int       @id @default(autoincrement())
+  companyId  Int
+  supplierId Int
+  date       DateTime
+  amount     Float
+  method     String    @default("TRANSFER")
+  reference  String?
+  note       String?
+  createdBy  Int
+  createdAt  DateTime  @default(now())
+  voidedAt   DateTime?
+  voidedBy   Int?
+  voidReason String?
+
+  @@index([supplierId])
+}
+
+// Documentos adjuntos de un proveedor (cédula, RUT, certificados...). El archivo vive en
+// StoredFile (sobrevive a un reinicio); esta tabla guarda su nombre y su dueño. Tabla creada al
+// arrancar, ver cacao-config.schema.ts.
+model CacaoSupplierDocument {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  supplierId  Int
+  name        String
+  fileKey     String
+  contentType String
+  size        Int
+  uploadedBy  Int
+  createdAt   DateTime @default(now())
+
+  @@index([supplierId])
 }
 
 model CacaoClient {
@@ -405,6 +470,10 @@ model CacaoQuality {
   humidityDiscount Float      @default(7)
   impurityDiscount Float      @default(1)
   isFixedPrice     Boolean    @default(false)
+  // Rango de precio esperado en $/kg (opcional): si la recepción trae un precio fuera de él, se
+  // pide confirmación. Columnas creadas al arrancar, ver cacao-config.schema.ts.
+  minPrice         Float?
+  maxPrice         Float?
   // Cada empresa tiene sus propias calidades (línea blanca). Columna creada al arrancar,
   // ver cacao-config.schema.ts.
   companyId        Int?
@@ -486,6 +555,9 @@ model CacaoLot {
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
   differential Float?
+  // Peso del lote después de secar, en kg (opcional). Con él se calcula la merma de secado contra lo
+  // recibido; no cambia el kárdex ni lo que se paga. Columna creada al arrancar.
+  dryWeight    Float?
   kardex       CacaoKardex[]
   quality      CacaoQuality         @relation(fields: [qualityId], references: [id])
   priceFixings CacaoPriceFixing[]
@@ -532,6 +604,9 @@ model CacaoReception {
   voidReason       String?
   // Punto de acopio donde se recibió (columna creada al arrancar, ver cacao-config.schema.ts).
   puntoId          Int?
+  // Entrega en consignación: se le paga al proveedor después de venderla (2026-11-10). Solo es una
+  // marca para listas e informe; no cambia las reglas de liquidar. Columna creada al arrancar.
+  consigned        Boolean       @default(false)
   lot              CacaoLot?     @relation(fields: [lotId], references: [id])
   supplier         CacaoSupplier @relation(fields: [supplierId], references: [id])
   punto            CacaoPunto?   @relation(fields: [puntoId], references: [id])
@@ -560,6 +635,10 @@ model CacaoSettlement {
   decidedAt       DateTime?
   decisionReason  String?
   dueDays         Int?
+  // Anticipo del proveedor que se descuenta en esta liquidación y cómo se pagará el resto
+  // (2026-11-10). Columnas creadas al arrancar, ver cacao-config.schema.ts.
+  advanceApplied  Float                @default(0)
+  paymentPlan     Json?
   payable         CacaoPayable?
   supplier        CacaoSupplier        @relation(fields: [supplierId], references: [id])
   lots            CacaoSettlementLot[]

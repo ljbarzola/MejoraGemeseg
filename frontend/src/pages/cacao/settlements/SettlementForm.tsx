@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getSuppliers, getAvailableLots, createSettlement, getNextSettlementId, getCacaoConfig } from '../../../services/cacao.service';
+import { getSuppliers, getAvailableLots, createSettlement, getNextSettlementId, getCacaoConfig, getSupplierAdvances } from '../../../services/cacao.service';
 import { useCacaoUnidades } from '../useCacaoUnidades';
 import DateInput from '../../../components/common/DateInput';
 import ErrorBanner from '../../../components/common/ErrorBanner';
@@ -14,6 +14,14 @@ function getTodayLocal() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
+
+// Cómo se piensa pagar lo que queda por pagar. «Crédito» es la parte que se deja a plazo.
+const METODOS_PLAN: { value: string; label: string }[] = [
+  { value: 'TRANSFER', label: 'Transferencia' },
+  { value: 'CASH', label: 'Efectivo' },
+  { value: 'CHECK', label: 'Cheque' },
+  { value: 'CREDIT', label: 'Crédito (a plazo)' },
+];
 
 interface LotSelection {
   lotId: number;
@@ -43,6 +51,13 @@ export default function SettlementForm() {
     dueDays: '',
   });
   const [selectedLots, setSelectedLots] = useState<LotSelection[]>([]);
+  // Anticipos: saldo disponible del proveedor y lo que se descuenta. Mientras la persona no lo toque, se
+  // propone descontar todo el saldo (sin pasar de lo que se le debe); si lo edita, se respeta lo suyo.
+  const [saldoAnticipo, setSaldoAnticipo] = useState(0);
+  const [anticipoTexto, setAnticipoTexto] = useState('');
+  const [anticipoEditado, setAnticipoEditado] = useState(false);
+  // Forma de pago prevista (opcional): si se llena, tiene que sumar lo que se debe pagar.
+  const [plan, setPlan] = useState<{ method: string; amount: string }[]>([]);
   const isDirty = useRef(false);
   const [showUnsaved, setShowUnsaved] = useState(false);
   const pendingNav = useRef<(() => void) | null>(null);
@@ -78,6 +93,20 @@ export default function SettlementForm() {
         })));
       })
       .catch((err) => { if (!cancelled) { setAllLots([]); setError(apiErrorMessage(err, 'No se pudieron cargar los lotes del proveedor')); } });
+    return () => { cancelled = true; };
+  }, [form.supplierId]);
+
+  // Al elegir proveedor se trae su saldo de anticipos; cada proveedor empieza sin editar ni forma de pago.
+  useEffect(() => {
+    setSaldoAnticipo(0);
+    setAnticipoTexto('');
+    setAnticipoEditado(false);
+    setPlan([]);
+    if (!form.supplierId) return;
+    let cancelled = false;
+    getSupplierAdvances(Number(form.supplierId))
+      .then((r) => { if (!cancelled) setSaldoAnticipo(r.saldo); })
+      .catch(() => { if (!cancelled) setSaldoAnticipo(0); });
     return () => { cancelled = true; };
   }, [form.supplierId]);
 
@@ -215,6 +244,18 @@ export default function SettlementForm() {
   const totalNetWeight = selectedLotBreakdowns.reduce((sum, x) => sum + (x.breakdown?.netWeightAfterDiscount || 0), 0);
   const totalAmount = round2(selectedLotBreakdowns.reduce((sum, x) => sum + (x.breakdown?.lotAmount || 0), 0));
 
+  // Anticipo a descontar: lo propuesto (todo el saldo, sin cubrir la liquidación entera) o lo que la persona escribió.
+  const anticipoPropuesto = round2(Math.max(0, Math.min(saldoAnticipo, totalAmount - 0.01)));
+  const anticipo = anticipoEditado ? (Number(anticipoTexto) || 0) : anticipoPropuesto;
+  const aPagar = round2(totalAmount - anticipo);
+  const sumaPlan = round2(plan.reduce((s, p) => s + (Number(p.amount) || 0), 0));
+  const planCuadra = Math.abs(sumaPlan - aPagar) <= 0.005;
+
+  function setPlanRow(i: number, campo: 'method' | 'amount', valor: string) {
+    isDirty.current = true;
+    setPlan((prev) => prev.map((p, j) => (j === i ? { ...p, [campo]: valor } : p)));
+  }
+
   async function handleSubmit() {
     if (!form.supplierId) { setError('El proveedor es requerido'); return; }
     if (!form.periodStart || !form.periodEnd) { setError('El periodo es requerido'); return; }
@@ -242,17 +283,26 @@ export default function SettlementForm() {
         return;
       }
     }
+    if (anticipo < 0 || Math.abs(anticipo * 100 - Math.round(anticipo * 100)) > 1e-6) { setError('El anticipo debe ser un monto en dólares con máximo 2 decimales'); return; }
+    if (anticipo > saldoAnticipo + 0.005) { setError(`El anticipo ($${anticipo.toFixed(2)}) supera el saldo disponible del proveedor ($${saldoAnticipo.toFixed(2)})`); return; }
+    if (anticipo > 0 && aPagar < 0.01) { setError('El anticipo no puede cubrir toda la liquidación: deja algo por pagar (lo que sobre del anticipo queda para la próxima)'); return; }
+    if (plan.length > 0) {
+      if (plan.some((p) => !(Number(p.amount) > 0))) { setError('Cada forma de pago debe tener un monto mayor a cero (o quita la fila)'); return; }
+      if (!planCuadra) { setError(`La forma de pago suma $${sumaPlan.toFixed(2)} y lo que se debe pagar es $${aPagar.toFixed(2)}: ajústala para que cuadre`); return; }
+    }
     setSaving(true);
     setError('');
     try {
       // Los totales y el monto los calcula el servidor; aquí solo se envía qué lotes y qué
-      // descuentos se aplican a cada uno.
+      // descuentos se aplican a cada uno, el anticipo y la forma de pago prevista.
       const result = await createSettlement({
         date: form.date,
         supplierId: Number(form.supplierId),
         periodStart: form.periodStart,
         periodEnd: form.periodEnd,
         dueDays,
+        advanceApplied: anticipo > 0 ? round2(anticipo) : undefined,
+        paymentPlan: plan.length > 0 ? plan.map((p) => ({ method: p.method, amount: round2(Number(p.amount)) })) : undefined,
         lots: selectedLots.filter(sl => sl.lotId && Number(sl.quantity) > 0).map(sl => ({
           lotId: sl.lotId,
           quantity: Number(sl.quantity),
@@ -488,6 +538,62 @@ export default function SettlementForm() {
             </>
           )}
 
+          {form.supplierId && totalAmount > 0 && (
+            <>
+              <div className="form-section-title">Anticipo y forma de pago</div>
+              <div className="form-row" style={{ alignItems: 'flex-end' }}>
+                <div className="form-group">
+                  <label htmlFor="liq-anticipo">Anticipo a descontar ($)</label>
+                  <input
+                    id="liq-anticipo"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    disabled={saldoAnticipo <= 0}
+                    value={anticipoEditado ? anticipoTexto : (anticipoPropuesto > 0 ? String(anticipoPropuesto) : '')}
+                    placeholder="0.00"
+                    onChange={(e) => { isDirty.current = true; setAnticipoEditado(true); setAnticipoTexto(e.target.value); }}
+                  />
+                  <span style={{ fontSize: '11px', color: '#718096' }}>
+                    {saldoAnticipo > 0
+                      ? `Saldo de anticipos de este proveedor: $${saldoAnticipo.toFixed(2)}. Se propone descontarlo todo; puedes bajarlo.`
+                      : 'Este proveedor no tiene anticipos por descontar.'}
+                  </span>
+                </div>
+                <div className="form-group">
+                  <label>Lo que se debe pagar</label>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: aPagar > 0 ? '#276749' : '#c53030' }}>${aPagar.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '13px', color: '#718096' }}>
+                    Forma de pago prevista (opcional). Si la llenas, debe sumar lo que se debe pagar. El pago real se registra en Cuentas por pagar.
+                  </span>
+                  <button type="button" className="btn-secondary" onClick={() => { isDirty.current = true; setPlan([...plan, { method: 'TRANSFER', amount: plan.length === 0 ? String(aPagar > 0 ? aPagar : '') : '' }]); }}>+ Agregar forma de pago</button>
+                </div>
+                {plan.map((p, i) => (
+                  <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '8px' }}>
+                    <select value={p.method} onChange={(e) => setPlanRow(i, 'method', e.target.value)} style={{ flex: 1 }} aria-label="Forma de pago">
+                      {METODOS_PLAN.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select>
+                    <input type="number" inputMode="decimal" step="0.01" min="0" placeholder="Monto $" value={p.amount} onChange={(e) => setPlanRow(i, 'amount', e.target.value)} style={{ flex: 1 }} aria-label="Monto de esta forma de pago" />
+                    <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => { isDirty.current = true; setPlan(plan.filter((_, j) => j !== i)); }} title="Quitar forma de pago" aria-label="Quitar forma de pago"><Trash2 size={14} /></button>
+                  </div>
+                ))}
+                {plan.length > 0 && (
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: planCuadra ? '#276749' : '#c53030' }}>
+                    {planCuadra
+                      ? `Cuadra: suma $${sumaPlan.toFixed(2)}.`
+                      : `Suma $${sumaPlan.toFixed(2)}: ${sumaPlan < aPagar ? 'faltan' : 'sobran'} $${Math.abs(round2(aPagar - sumaPlan)).toFixed(2)} para llegar a $${aPagar.toFixed(2)}.`}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
           <div style={{
             marginTop: '16px',
             padding: '20px 24px',
@@ -511,9 +617,21 @@ export default function SettlementForm() {
               <div>Peso Neto</div>
               <div style={{ fontSize: '18px', fontWeight: 700 }}>{totalNetWeight.toFixed(1)} kg</div>
             </div>
+            {anticipo > 0 && (
+              <>
+                <div style={{ color: '#e2e8f0', fontSize: '14px' }}>
+                  <div>Valor del cacao</div>
+                  <div style={{ fontSize: '18px', fontWeight: 700 }}>${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+                </div>
+                <div style={{ color: '#fc8181', fontSize: '14px' }}>
+                  <div>Anticipo descontado</div>
+                  <div style={{ fontSize: '18px', fontWeight: 700 }}>-${round2(anticipo).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+                </div>
+              </>
+            )}
             <div style={{ color: '#fff', fontSize: '14px' }}>
               <div>MONTO A PAGAR (estimado)</div>
-              <div style={{ fontSize: '32px', fontWeight: 900, color: '#68d391' }}>${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+              <div style={{ fontSize: '32px', fontWeight: 900, color: '#68d391' }}>${aPagar.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
             </div>
           </div>
 

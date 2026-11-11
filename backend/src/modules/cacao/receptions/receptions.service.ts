@@ -69,9 +69,25 @@ export class CacaoReceptionsService {
       companyId,
       recepciones.map((r) => r.lotId).filter((id): id is number => id !== null),
     );
+    // Cuántas pesadas tiene cada entrega (0 = una sola pesada, como siempre).
+    const pesadas =
+      recepciones.length === 0
+        ? []
+        : await this.prisma.cacaoReceptionWeighing.groupBy({
+            by: ['receptionId'],
+            where: {
+              companyId,
+              receptionId: { in: recepciones.map((r) => r.id) },
+            },
+            _count: { _all: true },
+          });
+    const pesadasPorEntrega = new Map(
+      pesadas.map((p) => [p.receptionId, p._count._all]),
+    );
     return recepciones.map((r) => ({
       ...r,
       liquidadoKg: r.lotId === null ? 0 : (liquidado.get(r.lotId) ?? 0),
+      weighingCount: pesadasPorEntrega.get(r.id) ?? 0,
     }));
   }
 
@@ -257,6 +273,19 @@ export class CacaoReceptionsService {
     });
     if (!quality) throw new BadRequestException('Calidad no encontrada');
 
+    // Precio fuera del rango de la calidad: se rechaza salvo que la persona ya lo haya confirmado.
+    // Solo aplica a un precio provisional escrito (la calidad de precio fijo trae el suyo).
+    const precio = dto.provisionalPrice ?? 0;
+    if (precio > 0 && !quality.isFixedPrice && !dto.confirmPriceOutOfRange) {
+      const bajo = quality.minPrice != null && precio < quality.minPrice;
+      const alto = quality.maxPrice != null && precio > quality.maxPrice;
+      if (bajo || alto) {
+        throw new BadRequestException(
+          `El precio $${precio}/kg queda ${bajo ? 'por debajo del mínimo' : 'por encima del máximo'} de la calidad ${quality.name} ($${bajo ? quality.minPrice : quality.maxPrice}/kg). Revísalo y confirma para registrarlo igual.`,
+        );
+      }
+    }
+
     // Punto de acopio: si la empresa ya armó los suyos, la recepción dice en cuál se recibió.
     let puntoId: number | null = null;
     if (dto.puntoId !== undefined) {
@@ -291,8 +320,32 @@ export class CacaoReceptionsService {
     // Todo se guarda en kg
     const factor = await this.unitConfig.getFactor(unit, companyId);
     // Con un factor de 6 decimales (el quintal) los productos arrastran ruido: se guardan a 4 decimales.
-    const grossWeightKg = round4(dto.grossWeight * factor);
-    const tareKg = round4(dto.tare * factor);
+    // Si el ticket se pesó por tandas, el bruto y la tara son la SUMA de todas las pesadas (el servidor
+    // las suma: no confía en totales que mande el navegador) y cada pesada se guarda aparte.
+    const tandas = dto.weighings ?? [];
+    const pesadas = tandas.map((t, i) => {
+      const bruto = round4(t.grossWeight * factor);
+      const tara = round4(t.tare * factor);
+      const neto = round4(bruto - tara);
+      if (neto <= 0) {
+        throw new BadRequestException(
+          `La pesada ${i + 1} tiene peso neto cero o negativo: revisa su peso bruto y su tara`,
+        );
+      }
+      return { bruto, tara, neto };
+    });
+    let grossWeightKg: number;
+    let tareKg: number;
+    if (pesadas.length > 0) {
+      grossWeightKg = round4(pesadas.reduce((s, p) => s + p.bruto, 0));
+      tareKg = round4(pesadas.reduce((s, p) => s + p.tara, 0));
+    } else {
+      if (dto.grossWeight === undefined) {
+        throw new BadRequestException('El peso bruto es requerido');
+      }
+      grossWeightKg = round4(dto.grossWeight * factor);
+      tareKg = round4((dto.tare ?? 0) * factor);
+    }
     const netWeightKg = round4(grossWeightKg - tareKg);
     if (netWeightKg <= 0) {
       throw new BadRequestException(
@@ -339,6 +392,7 @@ export class CacaoReceptionsService {
               driverName: dto.driverName ?? null,
               vehiclePlate: dto.vehiclePlate ?? null,
               puntoId,
+              consigned: dto.consigned ?? false,
               grossWeight: grossWeightKg,
               tare: tareKg,
               netWeight: netWeightKg,
@@ -353,6 +407,20 @@ export class CacaoReceptionsService {
             },
             include: { supplier: true, lot: true, punto: true },
           });
+
+          // El detalle de cada pesada (en kg), en el mismo orden en que se registraron.
+          if (pesadas.length > 0) {
+            await tx.cacaoReceptionWeighing.createMany({
+              data: pesadas.map((p, i) => ({
+                companyId,
+                receptionId: created.id,
+                lineNo: i + 1,
+                grossWeight: p.bruto,
+                tare: p.tara,
+                netWeight: p.neto,
+              })),
+            });
+          }
 
           // El kárdex siempre va en kg
           await tx.cacaoKardex.create({

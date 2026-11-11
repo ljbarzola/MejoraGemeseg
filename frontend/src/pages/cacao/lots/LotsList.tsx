@@ -85,6 +85,8 @@ export default function LotsList() {
         orden: (l) => l.netWeight * l.averageCost,
         celda: (l) => `$${(l.netWeight * l.averageCost).toFixed(2)}`,
       },
+      { key: 'pesoSeco', filtro: { tipo: 'numero', formato: (n) => `${n.toLocaleString()} kg`, getValue: (l) => l.dryWeight }, excel: { titulo: 'Peso seco (kg)' }, ancho: 130, label: 'Peso seco', ocultaPorDefecto: true, orden: (l) => l.dryWeight, celda: (l) => (l.dryWeight != null ? `${l.dryWeight.toLocaleString()} kg` : '—') },
+      { key: 'merma', filtro: { tipo: 'numero', formato: (n) => `${n}%`, getValue: (l) => l.shrinkagePct }, excel: { tipo: 'porcentaje', titulo: 'Merma de secado (%)' }, ancho: 120, label: 'Merma %', orden: (l) => l.shrinkagePct, celda: (l) => (l.shrinkagePct != null ? <span title={`Recibido ${l.receivedKg.toLocaleString()} kg, seco ${l.dryWeight.toLocaleString()} kg`}>{l.shrinkagePct}%</span> : '—') },
       {
         key: 'estado', filtro: { tipo: 'valores', orden: ['OPEN', 'CLOSED'], getValues: (l) => ({ valor: l.status, etiqueta: estadoLote(l.status).label }) }, excel: { valor: (l) => estadoLote(l.status).label }, ancho: 110,
         label: 'Estado',

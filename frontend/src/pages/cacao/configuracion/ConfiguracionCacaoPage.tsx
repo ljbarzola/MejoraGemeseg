@@ -17,7 +17,7 @@ const PESTANAS: PageTab<Pestana>[] = [
   { key: 'puntos', label: 'Puntos de acopio', icon: MapPin, title: 'Las sucursales donde recibes cacao' },
   { key: 'unidades', label: 'Unidades de medida', icon: Scale, title: 'Cuánto pesa un saco en tu empresa' },
   { key: 'plazos', label: 'Plazos', icon: CalendarClock, title: 'Plazos de pago y de cobro' },
-  { key: 'pagos', label: 'Pagos', icon: BadgeCheck, title: 'Si los pagos a proveedores necesitan autorización' },
+  { key: 'pagos', label: 'Pagos', icon: BadgeCheck, title: 'Autorización de pagos y monto de aprobación de liquidaciones' },
   { key: 'motivos', label: 'Motivos', icon: ListChecks, title: 'Motivos de rechazo y anulación' },
 ];
 

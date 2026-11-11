@@ -73,6 +73,7 @@ export class CacaoSettlementsController {
       dto.ids,
       req.user.companyId,
       req.user.userId,
+      req.user.role,
     );
   }
 
@@ -81,7 +82,12 @@ export class CacaoSettlementsController {
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @Section('CACAO', 'write')
   approve(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
-    return this.service.approve(id, req.user.companyId, req.user.userId);
+    return this.service.approve(
+      id,
+      req.user.companyId,
+      req.user.userId,
+      req.user.role,
+    );
   }
 
   @Post(':id/reject')
