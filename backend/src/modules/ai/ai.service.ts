@@ -22,11 +22,21 @@ import { esAgenteSinChat } from '../agents/agent-trabajadores.const';
 import { buildBitacoraPrompt } from '../contratacion-publica/bitacoras/bitacora-prompt.util';
 import { SendMessageDto } from './dto/send-message.dto';
 import {
+  SCOPE_CACAO,
   SCOPE_VENTAS,
   intencionPermitida,
   perfilDeAgente,
+  seccionDePerfil,
   type PerfilAgente,
 } from './agent-profiles.util';
+import {
+  CACAO_AYUDA,
+  INSTRUCCIONES_CACAO_POR_DEFECTO,
+  MENSAJE_CACAO_ERROR,
+  MENSAJE_CACAO_SIN_IA,
+  SYSTEM_REDACCION_CACAO,
+  buildCacaoAgentPrompt,
+} from './cacao-agent-prompt.util';
 import {
   SYSTEM_REDACCION_VENTAS,
   VENTAS_AYUDA,
@@ -38,6 +48,12 @@ const RATE_LIMIT = 50;
 // El Agente de Ventas investiga (consultas más pesadas y respuestas más largas):
 // tiene su propio tope diario, además del general de 50.
 const RATE_LIMIT_VENTAS = 30;
+// El Agente de Cacao también consulta datos y redacta con ellos: su propio tope diario.
+const RATE_LIMIT_CACAO = 30;
+
+// Nombres de los agentes del sistema con perfil propio (el del chat y Sistemas → Agentes).
+const NOMBRE_AGENTE_VENTAS = 'Agente de Ventas';
+const NOMBRE_AGENTE_CACAO = 'Agente de Cacao';
 
 // Texto inicial EDITABLE del Agente de Ventas (Sistemas → Agentes). Solo pone
 // tono y prioridades; las reglas para investigar sin inventar van en código
@@ -52,6 +68,15 @@ export const MENSAJE_VENTAS_SIN_IA =
   'El Agente de Ventas todavía no está conectado a la inteligencia artificial en este entorno (falta configurar Google Vertex AI). Avisa a Sistemas.';
 export const MENSAJE_VENTAS_ERROR =
   'No pude consultar al Agente de Ventas en este momento. Intenta de nuevo en unos minutos; si sigue pasando, avisa a Sistemas.';
+// Lo que el usuario lee cuando un agente especializado no puede responder, según su perfil.
+const MENSAJE_SIN_IA: Partial<Record<PerfilAgente, string>> = {
+  VENTAS: MENSAJE_VENTAS_SIN_IA,
+  CACAO: MENSAJE_CACAO_SIN_IA,
+};
+const MENSAJE_ERROR: Partial<Record<PerfilAgente, string>> = {
+  VENTAS: MENSAJE_VENTAS_ERROR,
+  CACAO: MENSAJE_CACAO_ERROR,
+};
 
 // Cuánto de la conversación se le vuelve a mandar al modelo cuando redacta con datos del sistema:
 // los últimos turnos, cada uno recortado (los datos ya son largos). Exportada para probarla.
@@ -133,21 +158,39 @@ export class AiService implements OnModuleInit {
     } catch (err: any) {
       this.logger.warn(`No se pudo sembrar el Agente de Ventas: ${err.message}`);
     }
+    try {
+      await this.ensureCacaoAgent();
+    } catch (err: any) {
+      this.logger.warn(`No se pudo sembrar el Agente de Cacao: ${err.message}`);
+    }
   }
 
-  private async ensureSalesAgent() {
+  private ensureSalesAgent() {
+    return this.ensureSystemAgent(
+      NOMBRE_AGENTE_VENTAS,
+      SCOPE_VENTAS,
+      INSTRUCCIONES_VENTAS_POR_DEFECTO,
+    );
+  }
+
+  private ensureCacaoAgent() {
+    return this.ensureSystemAgent(
+      NOMBRE_AGENTE_CACAO,
+      SCOPE_CACAO,
+      INSTRUCCIONES_CACAO_POR_DEFECTO,
+    );
+  }
+
+  // Siembra un agente del sistema (sin dueño) de un módulo: nunca pisa uno que ya exista, porque su
+  // texto se edita desde Sistemas → Agentes.
+  private async ensureSystemAgent(name: string, scope: string, instructions: string) {
     const existe = await this.prisma.agent.findFirst({
-      where: { createdBy: null, scope: SCOPE_VENTAS },
+      where: { createdBy: null, scope },
       select: { id: true },
     });
     if (existe) return;
     await this.prisma.agent.create({
-      data: {
-        name: 'Agente de Ventas',
-        instructions: INSTRUCCIONES_VENTAS_POR_DEFECTO,
-        scope: SCOPE_VENTAS,
-        isDefault: false,
-      },
+      data: { name, instructions, scope, isDefault: false },
     });
   }
 
@@ -167,8 +210,9 @@ export class AiService implements OnModuleInit {
       select: { id: true, scope: true, isActive: true, createdBy: true },
     });
     // Un agente inexistente o desactivado cae al comportamiento de siempre
-    // (prompt base), salvo el de Ventas, que no tiene "prompt base" que lo cubra.
-    if (!agent || (!agent.isActive && agent.scope !== SCOPE_VENTAS)) {
+    // (prompt base), salvo los de Ventas y Cacao, que no tienen "prompt base" que los cubra.
+    const especializado = perfilDeAgente(agent?.scope) !== 'GENERAL';
+    if (!agent || (!agent.isActive && !especializado)) {
       // La conversación se crea con el agente que se devuelva aquí: uno que no
       // existe rompería la clave foránea, así que se usa el predeterminado.
       return {
@@ -183,8 +227,12 @@ export class AiService implements OnModuleInit {
         'Ese agente no conversa: se usa desde su pantalla (por ejemplo, Contratación Pública → Bitácoras).',
       );
     }
-    if (agent.scope === SCOPE_VENTAS && !agent.isActive) {
-      throw new ForbiddenException('El Agente de Ventas no está disponible ahora.');
+    if (especializado && !agent.isActive) {
+      throw new ForbiddenException(
+        agent.scope === SCOPE_CACAO
+          ? 'El Agente de Cacao no está disponible ahora.'
+          : 'El Agente de Ventas no está disponible ahora.',
+      );
     }
     const esDelSistema = agent.createdBy === null;
     if (!esDelSistema && agent.createdBy !== userId) {
@@ -198,6 +246,9 @@ export class AiService implements OnModuleInit {
     }
     if (agent.scope === SCOPE_VENTAS && !allowedKeys.includes('VENTAS')) {
       throw new ForbiddenException('No tienes acceso a Ventas con tu usuario actual.');
+    }
+    if (agent.scope === SCOPE_CACAO && !allowedKeys.includes('CACAO')) {
+      throw new ForbiddenException('No tienes acceso a Cacao con tu usuario actual.');
     }
     return { id: agent.id, scope: agent.scope, perfil: perfilDeAgente(agent.scope) };
   }
@@ -276,9 +327,9 @@ export class AiService implements OnModuleInit {
         reply = result.reply;
         tokensUsed = result.tokensUsed;
         auditoria = result.auditoria;
-      } else if (agente.perfil === 'VENTAS') {
-        // El modo mock habla de proyectos y tareas: al Agente de Ventas se le dice la verdad.
-        reply = MENSAJE_VENTAS_SIN_IA;
+      } else if (agente.perfil !== 'GENERAL') {
+        // El modo mock habla de proyectos y tareas: a un agente especializado se le dice la verdad.
+        reply = MENSAJE_SIN_IA[agente.perfil] ?? MENSAJE_VENTAS_SIN_IA;
       } else {
         reply = await this.mockResponse(dto.message, dto.context);
       }
@@ -289,8 +340,8 @@ export class AiService implements OnModuleInit {
         agentId,
         perfil: agente.perfil,
       });
-      if (agente.perfil === 'VENTAS') {
-        reply = MENSAJE_VENTAS_ERROR;
+      if (agente.perfil !== 'GENERAL') {
+        reply = MENSAJE_ERROR[agente.perfil] ?? MENSAJE_VENTAS_ERROR;
       } else {
         this.logger.warn('Error en IA, usando modo mock como fallback');
         reply = await this.mockResponse(dto.message, dto.context);
@@ -340,9 +391,10 @@ export class AiService implements OnModuleInit {
     };
   }
 
-  // El Agente de Ventas usa el modelo 'fuerte' y el resto 'ligero'.
+  // Los agentes especializados (Ventas y Cacao) usan el modelo 'fuerte': trabajan con cifras y
+  // listas que no deben resumirse mal. El resto 'ligero'.
   private nivelDePerfil(perfil?: string | null): 'fuerte' | 'ligero' {
-    return perfil === 'VENTAS' ? 'fuerte' : 'ligero';
+    return perfil === 'VENTAS' || perfil === 'CACAO' ? 'fuerte' : 'ligero';
   }
 
   private vertexModelForLog(perfil?: string | null): string {
@@ -434,16 +486,23 @@ export class AiService implements OnModuleInit {
   // es exactamente lo que recibe el modelo.
   private armarPartesDelPrompt(p: {
     basePrompt: string;
-    esVentas: boolean;
+    perfil: PerfilAgente;
     clavesVisibles: string[];
     ventasAgenteDisponible: boolean;
+    cacaoAgenteDisponible: boolean;
     kbContext: string;
   }): ParteDelPrompt[] {
-    const capabilities = p.esVentas
+    const esVentas = p.perfil === 'VENTAS';
+    const esCacao = p.perfil === 'CACAO';
+    const especializado = esVentas || esCacao;
+    const capabilities = esVentas
       ? `Consultas disponibles (datos reales de Ventas de la empresa):\n${VENTAS_AYUDA}`
-      : buildCapabilitiesPrompt(p.clavesVisibles, {
-          ventasAgenteDisponible: p.ventasAgenteDisponible,
-        });
+      : esCacao
+        ? `Consultas disponibles (datos reales de Cacao de la empresa):\n${CACAO_AYUDA}`
+        : buildCapabilitiesPrompt(p.clavesVisibles, {
+            ventasAgenteDisponible: p.ventasAgenteDisponible,
+            cacaoAgenteDisponible: p.cacaoAgenteDisponible,
+          });
     const partes: ParteDelPrompt[] = [
       {
         titulo: 'Texto propio del agente',
@@ -451,16 +510,16 @@ export class AiService implements OnModuleInit {
         origen: 'agente',
       },
       {
-        titulo: 'Reglas fijas del Agente de Ventas',
-        texto: p.esVentas ? buildSalesAgentPrompt() : '',
+        titulo: esCacao ? 'Reglas fijas del Agente de Cacao' : 'Reglas fijas del Agente de Ventas',
+        texto: esVentas ? buildSalesAgentPrompt() : esCacao ? buildCacaoAgentPrompt() : '',
         origen: 'codigo',
       },
       {
-        titulo: p.esVentas
+        titulo: especializado
           ? 'Consultas que puede pedir al sistema'
           : 'Módulos y consultas disponibles',
         texto: capabilities,
-        origen: p.esVentas ? 'codigo' : 'persona',
+        origen: especializado ? 'codigo' : 'persona',
       },
       {
         titulo: 'Manual de uso del sistema',
@@ -518,9 +577,10 @@ export class AiService implements OnModuleInit {
     }
 
     const perfil = perfilDeAgente(agente.scope);
-    const esVentas = perfil === 'VENTAS';
+    const seccion = seccionDePerfil(perfil);
+    const especializado = seccion !== null;
     const todas = ALL_SECTIONS.map((s) => s.key);
-    const clavesVisibles = esVentas ? todas.filter((k) => k === 'VENTAS') : todas;
+    const clavesVisibles = seccion ? todas.filter((k) => k === seccion) : todas;
     const basePrompt = agente.isActive ? agente.instructions : BASE_SYSTEM_PROMPT;
     const kbContext = await this.getFilteredKnowledgeBase(
       companyId,
@@ -529,14 +589,15 @@ export class AiService implements OnModuleInit {
     );
     const partes = this.armarPartesDelPrompt({
       basePrompt,
-      esVentas,
+      perfil,
       clavesVisibles,
-      ventasAgenteDisponible: !esVentas,
+      ventasAgenteDisponible: !especializado,
+      cacaoAgenteDisponible: !especializado,
       kbContext,
     });
     partes.push({
       titulo: 'Segunda llamada: redactar con los datos del sistema',
-      texto: esVentas ? SYSTEM_REDACCION_VENTAS : SYSTEM_REDACCION_GENERAL,
+      texto: this.systemRedaccion(perfil),
       origen: 'codigo',
     });
 
@@ -545,7 +606,7 @@ export class AiService implements OnModuleInit {
       'Si la respuesta pide datos del sistema, hay una SEGUNDA llamada al modelo con el último bloque de abajo y los datos que devolvió la consulta («Datos del sistema: … Pregunta original: …»).',
       'Los bloques «Módulos y consultas» y «Manual de uso» cambian según los permisos de cada persona: aquí se muestran con todas las secciones, que es la versión más completa.',
     ];
-    if (!agente.isActive && !esVentas) {
+    if (!agente.isActive && !especializado) {
       avisos.push(
         'Este agente está inactivo: el chat usa el texto base de Agente Gemeseg en lugar del suyo.',
       );
@@ -584,10 +645,11 @@ export class AiService implements OnModuleInit {
     const allowedKeys =
       allowedKeysParam ?? (await this.getAllowedSectionKeys(companyId, userId));
     const esVentas = perfil === 'VENTAS';
-    // El Agente de Ventas solo conoce Ventas: ni el manual ni la base de
+    const seccion = seccionDePerfil(perfil);
+    // Un agente especializado solo conoce su módulo: ni el manual ni la base de
     // conocimiento de otros módulos le llegan.
-    const clavesVisibles = esVentas
-      ? allowedKeys.filter((k) => k === 'VENTAS')
+    const clavesVisibles = seccion
+      ? allowedKeys.filter((k) => k === seccion)
       : allowedKeys;
 
     const kbContext = await this.getFilteredKnowledgeBase(
@@ -597,11 +659,12 @@ export class AiService implements OnModuleInit {
     );
     const systemPrompt = this.armarPartesDelPrompt({
       basePrompt,
-      esVentas,
+      perfil,
       clavesVisibles,
-      ventasAgenteDisponible: esVentas
-        ? false
-        : await this.tieneAgenteVentas(userId, allowedKeys),
+      ventasAgenteDisponible:
+        seccion === null && (await this.tieneAgenteDeSistema(allowedKeys, SCOPE_VENTAS, 'VENTAS')),
+      cacaoAgenteDisponible:
+        seccion === null && (await this.tieneAgenteDeSistema(allowedKeys, SCOPE_CACAO, 'CACAO')),
       kbContext,
     })
       .map((p) => p.texto)
@@ -619,7 +682,7 @@ export class AiService implements OnModuleInit {
       const inicioExp = Date.now();
       const datosCliente = await this.processor.expedienteDeCliente(companyId, clienteId);
       return this.redactarConDatos({
-        esVentas,
+        perfil,
         message,
         chatHistory,
         dataResult: datosCliente,
@@ -637,7 +700,7 @@ export class AiService implements OnModuleInit {
       systemPrompt,
       chatHistory,
       `[Contexto: ${context}] ${message}`,
-      esVentas
+      seccion
         ? { maxOutputTokens: 4096, nivel: 'fuerte' }
         : { nivel: 'ligero' },
     );
@@ -659,14 +722,16 @@ export class AiService implements OnModuleInit {
     }
     if (params.projectId) params.projectId = Number(params.projectId);
 
-    // Cada perfil ejecuta solo lo suyo: Agente Gemeseg ya no consulta Ventas y
-    // el Agente de Ventas no consulta nada fuera de Ventas, aunque el modelo
+    // Cada perfil ejecuta solo lo suyo: Agente Gemeseg ya no consulta Ventas ni Cacao y
+    // los agentes especializados no consultan nada fuera de su módulo, aunque el modelo
     // escriba el nombre de otra intención.
     if (!intencionPermitida(perfil, intent)) {
       return {
         reply: esVentas
           ? 'Esa consulta no es de este asistente: aquí solo respondo sobre Ventas.'
-          : 'No tengo esa consulta en este asistente.',
+          : perfil === 'CACAO'
+            ? 'Esa consulta no es de este asistente: aquí solo respondo sobre Cacao.'
+            : 'No tengo esa consulta en este asistente.',
         tokensUsed: result.tokensUsed,
       };
     }
@@ -689,7 +754,7 @@ export class AiService implements OnModuleInit {
       companyId,
     );
     return this.redactarConDatos({
-      esVentas,
+      perfil,
       message,
       chatHistory,
       dataResult,
@@ -708,7 +773,7 @@ export class AiService implements OnModuleInit {
   // «¿y qué le digo?» perdía el hilo) y las marcas de evidencia que el modelo cite se comprueban
   // contra los datos de ahora Y contra sus respuestas anteriores ya verificadas.
   private async redactarConDatos(p: {
-    esVentas: boolean;
+    perfil: PerfilAgente;
     message: string;
     chatHistory: ChatTurn[];
     dataResult: string;
@@ -719,14 +784,16 @@ export class AiService implements OnModuleInit {
     tokensUsed: number;
     auditoria?: Record<string, unknown>;
   }> {
-    const { esVentas, message, dataResult, tokensPrevios, auditoria } = p;
-    const historial = esVentas ? historialParaDatos(p.chatHistory) : [];
+    const { perfil, message, dataResult, tokensPrevios, auditoria } = p;
+    const esVentas = perfil === 'VENTAS';
+    const especializado = perfil !== 'GENERAL';
+    const historial = especializado ? historialParaDatos(p.chatHistory) : [];
     try {
       const finalResult = await this.vertexChat.sendChat(
-        esVentas ? SYSTEM_REDACCION_VENTAS : SYSTEM_REDACCION_GENERAL,
+        this.systemRedaccion(perfil),
         historial,
         `Datos del sistema:\n${dataResult}\n\nPregunta original: ${message}`,
-        esVentas
+        especializado
           ? { maxOutputTokens: 4096, nivel: 'fuerte' }
           : { nivel: 'ligero' },
       );
@@ -751,17 +818,26 @@ export class AiService implements OnModuleInit {
     }
   }
 
-  // ¿Puede esta persona usar el Agente de Ventas? Con acceso a Ventas y el agente activo, sí (ya no
-  // hace falta asignarlo). Si sí, Agente Gemeseg puede mandarla allá para datos en vivo.
-  private async tieneAgenteVentas(
-    userId: number,
+  // ¿Puede esta persona usar el agente del sistema de un módulo (Ventas o Cacao)? Con acceso a la
+  // sección y el agente activo, sí (no hace falta asignarlo). Si sí, Agente Gemeseg puede mandarla
+  // allá para datos en vivo.
+  private async tieneAgenteDeSistema(
     allowedKeys: string[],
+    scope: string,
+    seccion: string,
   ): Promise<boolean> {
-    if (!allowedKeys.includes('VENTAS')) return false;
+    if (!allowedKeys.includes(seccion)) return false;
     const n = await this.prisma.agent.count({
-      where: { scope: SCOPE_VENTAS, isActive: true, createdBy: null },
+      where: { scope, isActive: true, createdBy: null },
     });
     return n > 0;
+  }
+
+  // Instrucción de la segunda llamada (redactar con los datos del sistema), según el perfil.
+  private systemRedaccion(perfil: PerfilAgente): string {
+    if (perfil === 'VENTAS') return SYSTEM_REDACCION_VENTAS;
+    if (perfil === 'CACAO') return SYSTEM_REDACCION_CACAO;
+    return SYSTEM_REDACCION_GENERAL;
   }
 
   private async mockResponse(
@@ -802,9 +878,11 @@ export class AiService implements OnModuleInit {
     return `Estoy en modo respaldo (IA no disponible temporalmente). Pregúntame sobre proyectos, tareas o tu información. Contexto: ${context}.`;
   }
 
-  // El Agente de Ventas registra su uso con otra acción para poder contarlo aparte.
+  // Cada agente especializado registra su uso con otra acción para poder contarlo aparte.
   private accionLog(perfil: PerfilAgente): string {
-    return perfil === 'VENTAS' ? 'chat_message_ventas' : 'chat_message';
+    if (perfil === 'VENTAS') return 'chat_message_ventas';
+    if (perfil === 'CACAO') return 'chat_message_cacao';
+    return 'chat_message';
   }
 
   private async checkRateLimit(userId: number, perfil: PerfilAgente = 'GENERAL') {
@@ -814,7 +892,7 @@ export class AiService implements OnModuleInit {
     const count = await this.prisma.aiLog.count({
       where: {
         userId,
-        action: { in: ['chat_message', 'chat_message_ventas'] },
+        action: { in: ['chat_message', 'chat_message_ventas', 'chat_message_cacao'] },
         createdAt: { gte: today },
         success: true,
       },
@@ -827,18 +905,19 @@ export class AiService implements OnModuleInit {
       );
     }
 
-    if (perfil === 'VENTAS') {
-      const deVentas = await this.prisma.aiLog.count({
+    if (perfil === 'VENTAS' || perfil === 'CACAO') {
+      const tope = perfil === 'VENTAS' ? RATE_LIMIT_VENTAS : RATE_LIMIT_CACAO;
+      const propios = await this.prisma.aiLog.count({
         where: {
           userId,
-          action: 'chat_message_ventas',
+          action: this.accionLog(perfil),
           createdAt: { gte: today },
           success: true,
         },
       });
-      if (deVentas >= RATE_LIMIT_VENTAS) {
+      if (propios >= tope) {
         throw new HttpException(
-          `Has alcanzado el límite de ${RATE_LIMIT_VENTAS} mensajes al Agente de Ventas hoy. Intenta mañana.`,
+          `Has alcanzado el límite de ${tope} mensajes al ${perfil === 'VENTAS' ? 'Agente de Ventas' : 'Agente de Cacao'} hoy. Intenta mañana.`,
           HttpStatus.TOO_MANY_REQUESTS,
         );
       }

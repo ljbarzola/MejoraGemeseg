@@ -30,6 +30,7 @@ const AGENT_EMOJI: Record<string, string> = {
   TASKS: '✅',
   ADMIN: '⚙️',
   VENTAS: '📈',
+  CACAO: '🍫',
 };
 
 function getAgentEmoji(agent: Agent | null): string {
@@ -38,6 +39,7 @@ function getAgentEmoji(agent: Agent | null): string {
 }
 
 const esAgenteDeVentas = (agent: Agent | null | undefined) => agent?.scope === 'VENTAS';
+const esAgenteDeCacao = (agent: Agent | null | undefined) => agent?.scope === 'CACAO';
 
 // Preguntas de un clic para empezar con el Agente de Ventas. Son las que mejor sabe contestar.
 const SUGERENCIAS_VENTAS: { icono: string; texto: string }[] = [
@@ -46,6 +48,17 @@ const SUGERENCIAS_VENTAS: { icono: string; texto: string }[] = [
   { icono: '📊', texto: 'Dame un resumen de mi cartera' },
   { icono: '🔎', texto: '¿Por qué perdimos clientes en los últimos 90 días?' },
   { icono: '📅', texto: '¿Qué contratos vencen pronto y qué hago con cada uno?' },
+];
+
+// Preguntas de un clic para empezar con el Agente de Cacao (2026-11-11): explica el flujo del módulo
+// y consulta datos reales de la empresa.
+const SUGERENCIAS_CACAO: { icono: string; texto: string }[] = [
+  { icono: '✅', texto: '¿Qué liquidaciones faltan por aprobar?' },
+  { icono: '⏰', texto: '¿Qué cuentas por pagar están vencidas?' },
+  { icono: '💵', texto: '¿Qué proveedores tienen anticipos sin descontar?' },
+  { icono: '📋', texto: 'Dame un resumen de Cacao' },
+  { icono: '🧭', texto: '¿Cómo registro una liquidación con anticipo?' },
+  { icono: '🚫', texto: '¿Por qué no me deja aprobar una liquidación?' },
 ];
 
 interface ClienteDeLaConversacion {
@@ -85,6 +98,8 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
   const currentAgent = agents.find((a) => a.id === activeAgentId) || defaultAgent;
   const showChat = activeConversationId !== null || isNewConversation;
   const hablandoConVentas = esAgenteDeVentas(currentAgent);
+  const hablandoConCacao = esAgenteDeCacao(currentAgent);
+  const conSugerencias = hablandoConVentas || hablandoConCacao;
 
   useEffect(() => {
     if (isOpen && !agentsLoaded) {
@@ -323,7 +338,7 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
     <>
       <p className="chat-sugerencias-titulo">Puedes empezar con</p>
       <div className="chat-sugerencias">
-        {SUGERENCIAS_VENTAS.map((s) => (
+        {(hablandoConCacao ? SUGERENCIAS_CACAO : SUGERENCIAS_VENTAS).map((s) => (
           <button key={s.texto} type="button" className="chat-sugerencia" onClick={() => preguntarSugerida(s.texto)} disabled={isTyping}>
             <span aria-hidden="true">{s.icono}</span>
             <span>{s.texto}</span>
@@ -331,7 +346,9 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
         ))}
       </div>
       <p className="chat-ayuda-ventas">
-        Para analizar a una empresa escribe su nombre: «¿Qué puedo hacer con Hotel Sol?». También puedes abrirme desde su ficha, en el botón «Preguntar al agente». Todo lo que te digo sale de lo que está registrado en el sistema; lo que no consta te lo digo.
+        {hablandoConCacao
+          ? 'Para ver a un proveedor escribe su nombre: «¿Cuánto le debemos a Juan Pérez?». También te explico paso a paso cómo se hace algo en Cacao. Los datos son solo de tu empresa y salen de lo que está registrado; lo que no consta te lo digo.'
+          : 'Para analizar a una empresa escribe su nombre: «¿Qué puedo hacer con Hotel Sol?». También puedes abrirme desde su ficha, en el botón «Preguntar al agente». Todo lo que te digo sale de lo que está registrado en el sistema; lo que no consta te lo digo.'}
       </p>
     </>
   );
@@ -369,8 +386,8 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
                       <span className="chat-agent-option-desc">Agente por defecto: cómo usar la plataforma</span>
                     </button>
                   )}
-                  {/* El Agente de Ventas es del sistema (sin dueño): antes este filtro lo escondía. */}
-                  {agents.filter((a) => a.createdBy !== null || esAgenteDeVentas(a)).map((agent) => (
+                  {/* Los agentes de Ventas y de Cacao son del sistema (sin dueño): antes este filtro los escondía. */}
+                  {agents.filter((a) => a.createdBy !== null || esAgenteDeVentas(a) || esAgenteDeCacao(a)).map((agent) => (
                     <button
                       key={agent.id}
                       className={`chat-agent-option ${activeAgentId === agent.id ? 'active' : ''}`}
@@ -378,7 +395,11 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
                     >
                       <span className="chat-agent-option-name">{getAgentEmoji(agent)} {agent.name}</span>
                       <span className="chat-agent-option-desc">
-                        {esAgenteDeVentas(agent) ? 'Analiza clientes y sugiere qué hacer' : agent.scope}
+                        {esAgenteDeVentas(agent)
+                          ? 'Analiza clientes y sugiere qué hacer'
+                          : esAgenteDeCacao(agent)
+                            ? 'Explica Cacao y consulta tus datos'
+                            : agent.scope}
                       </span>
                     </button>
                   ))}
@@ -405,9 +426,13 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
             ) : messages.length === 0 ? (
               <div className="chat-empty">
                 <div className="chat-bot-icon-lg">{getAgentEmoji(currentAgent)}</div>
-                {hablandoConVentas ? (
+                {conSugerencias ? (
                   <>
-                    <p>¡Hola! Soy tu <strong>Agente de Ventas</strong>. Reviso lo que hay registrado, te cuento qué pasó y te sugiero qué hacer.</p>
+                    {hablandoConCacao ? (
+                      <p>¡Hola! Soy tu <strong>Agente de Cacao</strong>. Te explico cómo se hace cada cosa y consulto lo que hay registrado: cuentas por pagar, liquidaciones, anticipos, precios e inventario.</p>
+                    ) : (
+                      <p>¡Hola! Soy tu <strong>Agente de Ventas</strong>. Reviso lo que hay registrado, te cuento qué pasó y te sugiero qué hacer.</p>
+                    )}
                     {sugerencias}
                   </>
                 ) : (
@@ -447,7 +472,7 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
               <span className="chat-conversations-title">Conversaciones</span>
               <button className="chat-new-conv-btn" onClick={handleNewConversation}>+ Nueva</button>
             </div>
-            {hablandoConVentas && <div style={{ padding: '0 16px' }}>{sugerencias}</div>}
+            {conSugerencias && <div style={{ padding: '0 16px' }}>{sugerencias}</div>}
             {loadingConversations ? (
               <div className="chat-conversations-loading">Cargando...</div>
             ) : conversations.length === 0 ? (
@@ -457,7 +482,7 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
               </div>
             ) : (
               <div className="chat-conversations-list">
-                {hablandoConVentas && <p className="chat-sugerencias-titulo" style={{ padding: '0 4px' }}>Tus conversaciones</p>}
+                {conSugerencias && <p className="chat-sugerencias-titulo" style={{ padding: '0 4px' }}>Tus conversaciones</p>}
                 {conversations.map((conv) => (
                   <div key={conv.id} className="chat-conv-item-row">
                     <button

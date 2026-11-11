@@ -225,7 +225,7 @@ y apuntar una `DATABASE_URL` alterna a `127.0.0.1:5434` solo para esa sesion pun
 
 ### Agentes de IA
 - Solo ADMIN puede gestionar agentes (RolesGuard en AdminAgentsController).
-- Cada agente tiene: nombre, instrucciones (system prompt), alcance (GLOBAL/PROJECTS/TASKS/ADMIN/VENTAS). Desde 2026-10-07 el alcance **sí se usa**: `VENTAS` es el perfil del **Agente de Ventas** (solo consultas de Ventas, investiga clientes); cualquier otro es el perfil general (Agente Gemeseg). Ver `.agents/modules/agents-ai.md` punto 3.
+- Cada agente tiene: nombre, instrucciones (system prompt), alcance (GLOBAL/PROJECTS/TASKS/ADMIN/VENTAS/CACAO). Desde 2026-11-11 `CACAO` es el perfil del **Agente de Cacao** (explica el flujo de Cacao y consulta datos reales de la empresa; lo ve quien tenga la sección Cacao; ver `.agents/modules/agents-ai.md` punto 8). Desde 2026-10-07 el alcance **sí se usa**: `VENTAS` es el perfil del **Agente de Ventas** (solo consultas de Ventas, investiga clientes); cualquier otro es el perfil general (Agente Gemeseg). Ver `.agents/modules/agents-ai.md` punto 3.
 - El `agentId` que manda el chat se valida en cada mensaje: un agente propio o especializado exige estar asignado a la persona (o ser su creador), y el de Ventas además exige permiso de Ventas. El Agente de Ventas no aparece en el selector de quien no lo tenga asignado.
 - Un agente puede estar asignado a multiples usuarios.
 - Un usuario puede tener multiples agentes asignados.
@@ -341,12 +341,12 @@ Backfill para usuarios ya existentes sin ninguna fila `UserPermission`: `npm run
 - `POST /chat/message` - Enviar mensaje al asistente IA
 - `GET /chat/conversations` - Listar conversaciones del usuario (filtro por agentId)
 - `GET /chat/conversations/:id/messages` - Obtener mensajes de una conversacion
-- Rate limit: 50 mensajes/dia por usuario (el Agente de Ventas tiene además su propio tope de 30/dia, acción `chat_message_ventas`)
+- Rate limit: 50 mensajes/dia por usuario (el Agente de Ventas y el de Cacao tienen además su propio tope de 30/dia cada uno, acciones `chat_message_ventas` y `chat_message_cacao`)
 - Motor: Google Vertex AI / Gemini (`GOOGLE_VERTEX_PROJECT`/`GOOGLE_VERTEX_LOCATION`/`GOOGLE_VERTEX_CHAT_MODEL`, este último separado de `GOOGLE_VERTEX_MODEL` que usa RRHH), con fallback a mock si no está configurado. Reemplaza a GitHub Models desde 2026-09-29 (ver `.agents/modules/agents-ai.md` punto 1).
 - Rate limit: 50 mensajes/dia por usuario
 - Motor: Google Vertex AI / Gemini (`GOOGLE_VERTEX_PROJECT`/`GOOGLE_VERTEX_LOCATION`/`GOOGLE_VERTEX_MODEL_FUERTE`/`GOOGLE_VERTEX_MODEL_LIGERO`: dos niveles de modelo compartidos con RRHH, ver `agents-ai.md` punto 4), con fallback a mock si no está configurado. Reemplaza a GitHub Models desde 2026-09-29 (ver `.agents/modules/agents-ai.md` punto 1).
 - Intenciones sin dueño de sección (siempre ejecutables): `list_projects`, `count_tasks_by_status`, `user_info`, `project_summary`, `list_my_tasks`
-- Intenciones con datos en vivo de otros módulos, gateadas por la misma lógica de `SectionPermissionGuard` **antes** de ejecutar la consulta (`AiService.canUseIntent`, ver `.agents/modules/agents-ai.md` punto 1): `cacao_resumen` (CACAO), `custodias_resumen` (CUSTODIAS), `rrhh_resumen_personal` (RRHH). Las consultas de **Ventas** (`ventas_*`) ya **no** las ejecuta Agente Gemeseg: las hace el Agente de Ventas (ver `agents-ai.md` punto 3); Agente Gemeseg solo explica cómo se usa el módulo y, si la persona tiene el Agente de Ventas asignado, la manda allá
+- Intenciones con datos en vivo de otros módulos, gateadas por la misma lógica de `SectionPermissionGuard` **antes** de ejecutar la consulta (`AiService.canUseIntent`, ver `.agents/modules/agents-ai.md` punto 1): `custodias_resumen` (CUSTODIAS), `rrhh_resumen_personal` (RRHH). Las de **Cacao** (`cacao_*`, diez consultas curadas) ya **no** las ejecuta Agente Gemeseg: las hace el **Agente de Cacao** (punto 7 de `agents-ai.md`). Las consultas de **Ventas** (`ventas_*`) ya **no** las ejecuta Agente Gemeseg: las hace el Agente de Ventas (ver `agents-ai.md` punto 3); Agente Gemeseg solo explica cómo se usa el módulo y, si la persona tiene el Agente de Ventas asignado, la manda allá
 - Base de Conocimiento institucional por empresa (`CompanyKnowledgeBase`, editable por el ADMIN desde `/sistemas/base-conocimiento`) se inyecta como contexto extra, recortada a las secciones que el usuario puede ver — ver `.agents/modules/agents-ai.md` punto 1
 
 ### Agents (`/admin/agents`)

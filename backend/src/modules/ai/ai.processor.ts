@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AiVentasQueries, textoParam } from './ai-ventas.queries';
 import { AiVentasInvestigacionQueries } from './ai-ventas-investigacion.queries';
 import { AiVentasPlanQueries } from './ai-ventas-plan.queries';
+import { AiCacaoQueries } from './ai-cacao.queries';
 
 // Qué sección de permisos es dueña de cada intención — AiService la consulta
 // antes de ejecutar cualquier intención aquí abajo (ver canUseIntent en
@@ -17,7 +18,18 @@ export const INTENT_SECTION: Record<string, string | null> = {
   user_info: null,
   project_summary: null,
   list_my_tasks: null,
+  // Cacao: las consultas las hace el Agente de Cacao (ai-cacao.queries.ts); los nombres deben
+  // coincidir con INTENCIONES_CACAO (agent-profiles.util.ts) y con CACAO_AYUDA.
   cacao_resumen: 'CACAO',
+  cacao_proveedor: 'CACAO',
+  cacao_por_pagar: 'CACAO',
+  cacao_liquidaciones: 'CACAO',
+  cacao_recepciones: 'CACAO',
+  cacao_lotes: 'CACAO',
+  cacao_precios: 'CACAO',
+  cacao_anticipos: 'CACAO',
+  cacao_proveedores_incompletos: 'CACAO',
+  cacao_reglas: 'CACAO',
   custodias_resumen: 'CUSTODIAS',
   rrhh_resumen_personal: 'RRHH',
   // Ventas: todas leen Clientes/Contratos (ver ai-ventas.queries.ts). Los
@@ -46,6 +58,7 @@ export class AiProcessor {
     private ventas: AiVentasQueries,
     private investigacion: AiVentasInvestigacionQueries,
     private plan: AiVentasPlanQueries,
+    private cacao: AiCacaoQueries,
   ) {}
 
   // Expediente de un cliente conocido por su id: lo usa AiService cuando el chat se abre desde la
@@ -72,7 +85,16 @@ export class AiProcessor {
       case 'list_my_tasks':
         return this.listMyTasks(userId);
       case 'cacao_resumen':
-        return this.cacaoResumen(companyId);
+      case 'cacao_proveedor':
+      case 'cacao_por_pagar':
+      case 'cacao_liquidaciones':
+      case 'cacao_recepciones':
+      case 'cacao_lotes':
+      case 'cacao_precios':
+      case 'cacao_anticipos':
+      case 'cacao_proveedores_incompletos':
+      case 'cacao_reglas':
+        return this.cacaoQuery(intent, params, userId, companyId);
       case 'custodias_resumen':
         return this.custodiasResumen(companyId);
       case 'rrhh_resumen_personal':
@@ -98,23 +120,36 @@ export class AiProcessor {
     }
   }
 
-  private async cacaoResumen(companyId?: number | null): Promise<string> {
+  // Cacao: todas las consultas leen solo la empresa de quien pregunta (ver ai-cacao.queries.ts).
+  private async cacaoQuery(
+    intent: string,
+    params: any,
+    userId: number,
+    companyId?: number | null,
+  ): Promise<string> {
     if (!companyId) return 'No hay empresa asociada para consultar Cacao.';
-    const [recepciones30d, lotesAbiertos, lotesCerrados] = await Promise.all([
-      this.prisma.cacaoReception.count({
-        where: {
-          companyId,
-          createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
-        },
-      }),
-      this.prisma.cacaoLot.count({ where: { companyId, status: 'OPEN' } }),
-      this.prisma.cacaoLot.count({ where: { companyId, status: 'CLOSED' } }),
-    ]);
-    return [
-      `Recepciones de cacao (últimos 30 días): ${recepciones30d}`,
-      `Lotes abiertos: ${lotesAbiertos}`,
-      `Lotes cerrados: ${lotesCerrados}`,
-    ].join('\n');
+    switch (intent) {
+      case 'cacao_proveedor':
+        return this.cacao.proveedor(companyId, textoParam(params?.nombre));
+      case 'cacao_por_pagar':
+        return this.cacao.porPagar(companyId, textoParam(params?.estado));
+      case 'cacao_liquidaciones':
+        return this.cacao.liquidaciones(companyId, userId, textoParam(params?.estado));
+      case 'cacao_recepciones':
+        return this.cacao.recepciones(companyId, textoParam(params?.rango));
+      case 'cacao_lotes':
+        return this.cacao.lotes(companyId, textoParam(params?.estado));
+      case 'cacao_precios':
+        return this.cacao.precios(companyId, textoParam(params?.rango));
+      case 'cacao_anticipos':
+        return this.cacao.anticipos(companyId);
+      case 'cacao_proveedores_incompletos':
+        return this.cacao.proveedoresIncompletos(companyId);
+      case 'cacao_reglas':
+        return this.cacao.reglas(companyId, userId);
+      default:
+        return this.cacao.resumen(companyId);
+    }
   }
 
   private async custodiasResumen(companyId?: number | null): Promise<string> {

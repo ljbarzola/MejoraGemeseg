@@ -156,4 +156,22 @@ describe('buildSystemGuide', () => {
     expect(guide).toContain('Gestión de Encuestas');
     expect(guide).toContain('Marcar como Contratado');
   });
+
+  it('Cacao explica los flujos nuevos y los motivos de «por qué no me deja»', () => {
+    const guide = buildSystemGuide(['CACAO']);
+    for (const frase of [
+      'Anticipo a descontar',
+      'Pesar por tandas',
+      'Entrega en consignación',
+      'Merma de secado',
+      'Monto desde el cual solo aprueba un administrador',
+      'Precio fuera de rango',
+      'Por qué no me deja (Cacao)',
+      'la debe aprobar otra persona (nunca quien la creó)',
+    ]) {
+      expect(guide).toContain(frase);
+    }
+    // El manual de Cacao no se mezcla con el de otros módulos.
+    expect(guide).not.toContain('# Ventas y CRM');
+  });
 });

@@ -29,6 +29,8 @@ const SCOPE_OPTIONS = [
   // Agente especializado (2026-10-07): solo consulta datos de Ventas y no aparece
   // para nadie hasta que se le asigne a una persona (botón de asignar).
   { value: 'VENTAS', label: 'Ventas', desc: 'Investiga clientes y cartera de Ventas; solo lo ve quien lo tenga asignado' },
+  // Agente de Cacao (2026-11-11): lo siembra el sistema y lo ve quien tenga acceso a Cacao.
+  { value: 'CACAO', label: 'Cacao', desc: 'Explica el flujo de Cacao y consulta datos reales de la empresa; lo ve quien tenga acceso a Cacao' },
   // Agente que trabaja solo (2026-10-18): lo siembra el sistema, no conversa ni se asigna.
   { value: 'BITACORAS', label: 'Revisor de bitácoras', desc: 'Lee las fotos de las bitácoras de Contratación Pública; no conversa' },
   { value: 'ENTREGAS', label: 'Revisor de entregas', desc: 'Mira los documentos que otras áreas entregan a Contratación Pública; no conversa' },
@@ -43,6 +45,7 @@ const SCOPE_PREVIEW: Record<string, string[]> = {
   TASKS: ['Tareas asignadas', 'Estados Kanban', 'Prioridades', 'Fechas de entrega'],
   ADMIN: ['Todos los usuarios', 'Estadisticas globales', 'Roles y permisos', 'Metricas del sistema'],
   VENTAS: ['Expediente de un cliente', 'Cartera y contratos', 'Motivos de pérdida', 'Embudo de ventas'],
+  CACAO: ['Cuentas por pagar y vencidas', 'Liquidaciones por aprobar', 'Anticipos y saldos de proveedores', 'Precios e inventario'],
   BITACORAS: ['Foto de la hoja', 'Guardias y sus horas', 'Novedades por tipo', 'Nada del horario ni de los guardias'],
 };
 

@@ -26,7 +26,8 @@ describe('buildCapabilitiesPrompt', () => {
     const prompt = buildCapabilitiesPrompt(['CACAO', 'VENTAS']);
 
     expect(prompt).toContain('## Cacao');
-    expect(prompt).toContain('cacao_resumen');
+    // Los datos en vivo de Cacao los hace el Agente de Cacao, no Agente Gemeseg.
+    expect(prompt).not.toContain('cacao_resumen');
     expect(prompt).toContain('## Ventas y CRM');
     // Los datos en vivo de Ventas los hace el Agente de Ventas, no Agente Gemeseg.
     expect(prompt).not.toContain('ventas_resumen');
@@ -43,6 +44,15 @@ describe('buildCapabilitiesPrompt', () => {
     expect(sin).not.toContain('Agente de Ventas');
     // Sin permiso de Ventas nunca se nombra, aunque el indicador venga en true.
     expect(buildCapabilitiesPrompt(['CACAO'], { ventasAgenteDisponible: true })).not.toMatch(/ventas/i);
+  });
+
+  it('Agente Gemeseg manda a Cacao al Agente de Cacao solo si la persona puede usarlo', () => {
+    const con = buildCapabilitiesPrompt(['CACAO'], { cacaoAgenteDisponible: true });
+    const sin = buildCapabilitiesPrompt(['CACAO'], { cacaoAgenteDisponible: false });
+    expect(con).toContain('Agente de Cacao');
+    expect(sin).not.toContain('Agente de Cacao');
+    // Sin permiso de Cacao nunca se nombra, aunque el indicador venga en true.
+    expect(buildCapabilitiesPrompt(['VENTAS'], { cacaoAgenteDisponible: true })).not.toMatch(/cacao/i);
   });
 
   it('Proyectos y Tareas aparece siempre, sin importar qué secciones se permitan', () => {

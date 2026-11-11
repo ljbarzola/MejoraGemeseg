@@ -178,18 +178,23 @@ export class AgentsService {
     return { message: 'Agente eliminado (revertido a prompt base)' };
   }
 
-  // ¿Puede esta persona ver la sección Ventas ahora mismo? Misma regla que SectionPermissionGuard
-  // y que AiService.getAllowedSectionKeys: super admin pasa; la sección tiene que estar habilitada
-  // para la empresa; una sección fija pasa; con fila de permiso manda canView; sin fila = permitido.
-  private async puedeVerVentas(userId: number, companyId: number | null | undefined) {
+  // ¿Puede esta persona ver una sección (Ventas, Cacao) ahora mismo? Misma regla que
+  // SectionPermissionGuard y que AiService.getAllowedSectionKeys: super admin pasa; la sección tiene
+  // que estar habilitada para la empresa; una sección fija pasa; con fila de permiso manda canView;
+  // sin fila = permitido (salvo las cerradas por defecto, ver permiteSinFila).
+  private async puedeVerSeccion(
+    userId: number,
+    companyId: number | null | undefined,
+    seccion: string,
+  ) {
     if (!companyId) return true;
     const secciones = await this.permissions.getCompanySections(companyId);
-    if (!secciones.some((s) => s.key === 'VENTAS' && s.enabled)) return false;
+    if (!secciones.some((s) => s.key === seccion && s.enabled)) return false;
     const fijas = await this.permissions.getFixedSections(companyId);
-    if (fijas.includes('VENTAS')) return true;
+    if (fijas.includes(seccion)) return true;
     const perms = await this.permissions.getUserPermissions(userId);
-    const perm = perms.find((p) => p.section === 'VENTAS');
-    return perm ? perm.canView : permiteSinFila('VENTAS');
+    const perm = perms.find((p) => p.section === seccion);
+    return perm ? perm.canView : permiteSinFila(seccion);
   }
 
   async getAvailableForUser(userId: number, companyId?: number | null) {
@@ -200,15 +205,18 @@ export class AgentsService {
     const assignedAgentIds = userLinks.map((l) => l.agentId);
     // El Agente de Ventas (2026-10-18) ya no se asigna uno a uno: lo ve cualquiera con acceso a
     // Ventas. Quien no tiene Ventas no lo ve ni aunque lo tuviera asignado de antes.
-    const verVentas = await this.puedeVerVentas(userId, companyId);
+    const verVentas = await this.puedeVerSeccion(userId, companyId, 'VENTAS');
+    // El Agente de Cacao (2026-11-11) funciona igual: lo ve cualquiera con acceso a la sección Cacao.
+    const verCacao = await this.puedeVerSeccion(userId, companyId, 'CACAO');
 
     const agentesBd = await this.prisma.agent.findMany({
       where: {
         isActive: true,
         OR: [
-          { createdBy: null, NOT: { scope: { in: ['VENTAS', ...SCOPES_SIN_CHAT] } } },
+          { createdBy: null, NOT: { scope: { in: ['VENTAS', 'CACAO', ...SCOPES_SIN_CHAT] } } },
           { id: { in: assignedAgentIds } },
           ...(verVentas ? [{ createdBy: null, scope: 'VENTAS' }] : []),
+          ...(verCacao ? [{ createdBy: null, scope: 'CACAO' }] : []),
         ],
         // Un agente que trabaja solo (revisor de bitácoras) no conversa: no se
         // ofrece en el chat ni aunque alguien lo tenga asignado.
@@ -237,7 +245,9 @@ export class AgentsService {
       },
     });
 
-    const agents = agentesBd.filter((a) => a.scope !== 'VENTAS' || verVentas);
+    const agents = agentesBd.filter(
+      (a) => (a.scope !== 'VENTAS' || verVentas) && (a.scope !== 'CACAO' || verCacao),
+    );
 
     return { agents, defaultAgent };
   }
