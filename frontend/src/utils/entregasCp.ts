@@ -33,4 +33,6 @@ export const formatoFecha = (iso: string | null | undefined) => {
   return `${d}/${m}/${y}`;
 };
 
-export const tituloMes = (anio: number, mes: number) => `${MESES_ES[mes - 1]} de ${anio}`;
+/** «Septiembre de 2026» y, si el contrato va por ciclo, «Septiembre de 2026 (24 ago – 23 sep)». */
+export const tituloMes = (anio: number, mes: number, ciclo?: string | null) =>
+  `${MESES_ES[mes - 1]} de ${anio}${ciclo ? ` (${ciclo})` : ''}`;

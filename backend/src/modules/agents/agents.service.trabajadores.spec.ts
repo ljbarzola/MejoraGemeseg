@@ -59,12 +59,19 @@ describe('agentes que trabajan solos', () => {
       const { servicio, prisma } = montar();
       await servicio.getAvailableForUser(1, null);
       const donde = prisma.agent.findMany.mock.calls[0][0].where;
-      expect(donde.NOT).toEqual({ scope: { in: ['BITACORAS'] } });
+      expect(donde.NOT).toEqual({ scope: { in: ['BITACORAS', 'ENTREGAS'] } });
       expect(donde.OR[0]).toEqual({
         createdBy: null,
-        NOT: { scope: { in: ['VENTAS', 'BITACORAS'] } },
+        NOT: { scope: { in: ['VENTAS', 'BITACORAS', 'ENTREGAS'] } },
       });
     });
+  });
+
+  it('el revisor de entregas no conversa, no aprueba y tiene su documentación', () => {
+    expect(esAgenteSinChat('ENTREGAS')).toBe(true);
+    const doc = documentacionDeAgente('ENTREGAS');
+    expect(doc?.decide.join(' ')).toContain('NO aprueba ni rechaza');
+    expect(doc?.noHace.join(' ')).toContain('no conoce el nombre pedido');
   });
 });
 

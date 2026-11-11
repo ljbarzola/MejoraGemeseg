@@ -26,6 +26,7 @@ const LANDING_ROUTES: { section: string; path: string }[] = [
   { section: 'RRHH', path: '/rrhh' },
   { section: 'CUSTODIAS', path: '/custodias/dashboard' },
   { section: 'VENTAS', path: '/ventas' },
+  { section: 'OPERACIONES', path: '/operaciones' },
   { section: 'CACAO', path: '/cacao' },
   { section: 'SISTEMAS', path: '/sistemas/dashboard' },
   { section: 'PROJECTS', path: '/projects' },

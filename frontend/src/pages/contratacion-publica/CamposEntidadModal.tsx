@@ -27,11 +27,14 @@ export default function CamposEntidadModal({
   campos,
   onChange,
   onClose,
+  embebido = false,
 }: {
   campos: CPEntidadCampo[];
   /** Cada cambio devuelve la lista completa y actualizada. */
   onChange: (campos: CPEntidadCampo[]) => void;
-  onClose: () => void;
+  onClose?: () => void;
+  /** true = sin ventana: es una sección de la pantalla Configuración. */
+  embebido?: boolean;
 }) {
   const [error, setError] = useState('');
   const errorRef = useRef<HTMLDivElement>(null);
@@ -108,14 +111,8 @@ export default function CamposEntidadModal({
     }, 'No se pudo crear el campo.');
   };
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>Campos de la entidad</h3>
-          <button className="modal-close" onClick={onClose} aria-label="Cerrar"><X size={16} /></button>
-        </div>
-        <div className="modal-body">
+  const cuerpo = (
+        <>
           <p style={{ margin: '0 0 14px', fontSize: '0.88rem', color: '#4a5568' }}>
             Datos extra que se piden al crear o editar una entidad. Un campo desactivado deja de pedirse, pero los datos ya guardados se conservan.
           </p>
@@ -221,7 +218,20 @@ export default function CamposEntidadModal({
               </button>
             </div>
           </form>
+        </>
+  );
+
+  // Dentro de Configuración se muestra como una sección más; desde un botón, como ventana.
+  if (embebido) return <div className="admin-section">{cuerpo}</div>;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Campos de la entidad</h3>
+          <button className="modal-close" onClick={onClose} aria-label="Cerrar"><X size={16} /></button>
         </div>
+        <div className="modal-body">{cuerpo}</div>
         <div className="modal-actions">
           <button type="button" className="btn-secondary" onClick={onClose}>Listo</button>
         </div>

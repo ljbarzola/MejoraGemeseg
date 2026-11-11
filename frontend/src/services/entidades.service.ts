@@ -438,3 +438,34 @@ export const getNotificationConfig = (): Promise<NotificationConfig | null> =>
 
 export const updateNotificationConfig = (data: Partial<NotificationConfig>): Promise<NotificationConfig> =>
   api.patch('/personal/notification-config', data).then((r) => r.data);
+
+// Vigilante de vencimientos: aviso diario en la campana de RRHH cuando un documento de un guardia
+// cruza un plazo. Se configura aquí; el correo al guardia sigue siendo manual (botón «Enviar recordatorio»).
+export interface VigilanteConfig {
+  activo: boolean;
+  /** Se avisa cuando faltan exactamente estos días (0 = el día que vence). */
+  avisarDias: number[];
+  /** Mientras siga vencido, repetir el aviso cada N días (0 = no repetir). */
+  repetirVencidoDias: number;
+  /** Cada lunes, resumen de todo lo pendiente. */
+  resumenLunes: boolean;
+}
+
+/** Resultado de «Probar ahora»: el aviso de prueba que se dejó en la campana de quien lo pulsó. */
+export interface VigilantePrueba {
+  revisados: number;
+  vencidos: number;
+  porVencer: number;
+  sinFecha: number;
+  faltantes: number;
+  mensaje: string;
+}
+
+export const getVigilanteConfig = (): Promise<VigilanteConfig> =>
+  api.get('/personal/vigilante-vencimientos/config').then((r) => r.data);
+
+export const saveVigilanteConfig = (data: Partial<VigilanteConfig>): Promise<VigilanteConfig> =>
+  api.put('/personal/vigilante-vencimientos/config', data).then((r) => r.data);
+
+export const probarVigilante = (): Promise<VigilantePrueba> =>
+  api.post('/personal/vigilante-vencimientos/probar').then((r) => r.data);

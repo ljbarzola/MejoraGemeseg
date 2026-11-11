@@ -7,6 +7,7 @@ import type {
   LecturaParaGuardar,
   ListaBitacoras,
   OpcionPuestoBitacora,
+  PuestosDelDia,
   ResumenBitacoras,
 } from '../types/bitacoras';
 import type { CPCodigoTurno } from '../types/contratacion-publica';
@@ -30,6 +31,10 @@ export const getBitacoras = (
 export const getResumenBitacoras = (filtros: FiltrosBitacoras): Promise<ResumenBitacoras> =>
   api.get(`${BASE}/dashboard`, { params: limpiar(filtros) }).then((r) => r.data);
 
+/** Hoy en los puestos: quién debe estar, si la cobertura se cumple y qué bitácoras faltan por subir. */
+export const getPuestosHoy = (): Promise<PuestosDelDia> =>
+  api.get(`${BASE}/hoy`).then((r) => r.data);
+
 export const getBitacora = (id: number): Promise<BitacoraDetalle> =>
   api.get(`${BASE}/${id}`).then((r) => r.data);
 
@@ -38,7 +43,9 @@ export const subirBitacora = (puestoId: number, archivo: File | null): Promise<B
   const fd = new FormData();
   fd.append('puestoId', String(puestoId));
   if (archivo) fd.append('archivo', archivo);
-  return api.post(BASE, fd, { timeout: 120000 }).then((r) => r.data);
+  // El cliente axios manda JSON por defecto: sin este encabezado serializaba el FormData como JSON y el
+  // servidor rechazaba la subida («Hay datos no válidos en la solicitud»).
+  return api.post(BASE, fd, { timeout: 120000, headers: { 'Content-Type': 'multipart/form-data' } }).then((r) => r.data);
 };
 
 export const guardarLecturaBitacora = (id: number, lectura: LecturaParaGuardar): Promise<BitacoraDetalle> =>

@@ -38,6 +38,19 @@ export class CPHorariosService {
     private readonly patronRotacionService: CPPatronRotacionService,
   ) {}
 
+  /** Horarios de todos los contratos de la empresa, con el número del contrato y su entidad. */
+  async findAll(companyId: number) {
+    return this.prisma.cPHorarioMensual.findMany({
+      where: { companyId },
+      orderBy: [{ fechaInicio: 'desc' }],
+      include: {
+        contrato: {
+          select: { id: true, numero: true, entidad: { select: { id: true, nombre: true } } },
+        },
+      },
+    });
+  }
+
   async findAllByContrato(contratoId: number, companyId: number) {
     await this.assertContrato(contratoId, companyId);
     return this.prisma.cPHorarioMensual.findMany({
@@ -86,14 +99,46 @@ export class CPHorariosService {
     });
   }
 
-  async remove(id: number, companyId: number) {
+  /**
+   * Qué cuelga de un horario antes de eliminarlo: los informes que lo usan (quedarían sin horario) y,
+   * solo para avisar, las faltas y bitácoras de ese contrato en esas fechas (no se tocan).
+   */
+  async relacionados(id: number, companyId: number) {
+    const h = await this.assertHorario(id, companyId);
+    const [informes, ausencias, bitacoras] = await Promise.all([
+      this.prisma.cPInformeMensual.findMany({
+        where: { horarioMensualId: id, companyId },
+        select: { id: true, anio: true, mes: true, estado: true },
+      }),
+      this.prisma.cPAusencia.count({
+        where: { companyId, contratoId: h.contratoId, fecha: { gte: h.fechaInicio, lte: h.fechaFin }, estado: { not: 'ANULADA' } },
+      }),
+      this.prisma.cPBitacora.count({
+        where: { companyId, contratoId: h.contratoId, fechaDesde: { lte: h.fechaFin }, fechaHasta: { gte: h.fechaInicio } },
+      }),
+    ]);
+    return { estado: h.estado, informes, ausencias, bitacoras };
+  }
+
+  /**
+   * Un borrador se elimina sin más. Uno que ya pasó de borrador (enviado, aprobado, rechazado) solo con
+   * `confirmar` (la pantalla ya mostró lo relacionado y preguntó): sus informes se desvinculan (no se
+   * borran) y las faltas y bitácoras del periodo se conservan.
+   */
+  async remove(id: number, companyId: number, confirmar = false) {
     const horario = await this.assertHorario(id, companyId);
-    if (horario.estado !== 'BORRADOR') {
+    if (horario.estado !== 'BORRADOR' && !confirmar) {
       throw new BadRequestException(
-        'Solo se puede eliminar un horario en estado Borrador',
+        'Este horario ya no está en borrador: hay que confirmar la eliminación.',
       );
     }
-    return this.prisma.cPHorarioMensual.delete({ where: { id } });
+    return this.prisma.$transaction(async (tx) => {
+      await tx.cPInformeMensual.updateMany({
+        where: { horarioMensualId: id, companyId },
+        data: { horarioMensualId: null },
+      });
+      return tx.cPHorarioMensual.delete({ where: { id } });
+    });
   }
 
   // ==================== CELDAS ====================
@@ -333,7 +378,7 @@ export class CPHorariosService {
       this.prisma.cPCodigoTurno.findMany({ where: { companyId } }),
     ]);
 
-    const esDescanso = new Map(codigos.map((c) => [c.codigo, c.esDescanso]));
+    const esDescanso = new Map(codigos.map((c) => [c.codigo, c.esDescanso || c.esCustodia]));
     const fechas = listaFechasEnRango(horario.fechaInicio, horario.fechaFin);
     const errores: string[] = [];
 

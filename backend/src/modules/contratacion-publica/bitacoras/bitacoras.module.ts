@@ -3,6 +3,7 @@ import { PrismaModule } from '../../../prisma/prisma.module';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PermissionsModule } from '../../permissions/permissions.module';
 import { AgentsModule } from '../../agents/agents.module';
+import { NotificationsModule } from '../../notifications/notifications.module';
 import { GoogleAuthService } from '../../../common/services/google-auth.service';
 import { BitacorasController } from './bitacoras.controller';
 import { BitacorasService } from './bitacoras.service';
@@ -10,7 +11,7 @@ import { BitacoraLectorService } from './bitacora-lector.service';
 import { CP_BITACORAS_DDL } from './bitacoras.schema';
 
 @Module({
-  imports: [PrismaModule, PermissionsModule, AgentsModule],
+  imports: [PrismaModule, PermissionsModule, AgentsModule, NotificationsModule],
   controllers: [BitacorasController],
   providers: [BitacorasService, BitacoraLectorService, GoogleAuthService],
 })

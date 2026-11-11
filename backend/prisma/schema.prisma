@@ -1490,6 +1490,56 @@ model BitacoraHorario {
   fin              String
   actualizadoEn    DateTime @default(now())
   actualizadoPorId Int?
+  // Bolsa de horas (2026-11-10): minutos de tolerancia (menos que eso no suma) y
+  // minutos sin actividad tras los que se cierra solo un «tiempo extra».
+  toleranciaMinutos  Int    @default(10)
+  inactividadMinutos Int    @default(15)
+}
+
+// Tiempo extra (2026-11-10): la persona pulsa «Empezar tiempo extra» al llegar antes
+// o al quedarse después del horario; la extensión registra mientras dure y la
+// ventana se cierra sola por inactividad, al entrar al horario o por tope.
+// `minutos` = minutos con actividad real FUERA del horario dentro de la ventana
+// (se calculan al cerrar); `minutosContados` = lo que cuenta tras la tolerancia.
+// estado: PENDIENTE (espera a un administrador o gerente) | APROBADA | RECHAZADA |
+// SIN_TIEMPO (no llegó a la tolerancia). Creada al arrancar, sin relaciones.
+model BitacoraExtra {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  companyId       Int
+  inicio          DateTime
+  fin             DateTime?
+  // MANUAL | INACTIVIDAD | HORARIO | LIMITE
+  cierre          String?
+  minutos         Int?
+  minutosContados Int?
+  estado          String    @default("PENDIENTE")
+  resueltoPorId   Int?
+  resueltoEn      DateTime?
+  notaJefe        String?
+  creadoEn        DateTime  @default(now())
+
+  @@index([userId, inicio])
+  @@index([companyId, estado])
+}
+
+// Horas que la persona debe a la empresa (permiso, atraso, salida antes). La anota
+// la propia persona o un administrador/gerente; solo estos pueden anularla.
+model BitacoraDeuda {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  companyId    Int
+  // Día al que corresponde (AAAA-MM-DD, hora de Ecuador).
+  fecha        String
+  minutos      Int
+  motivo       String
+  creadaPorId  Int?
+  creadaEn     DateTime  @default(now())
+  anuladaEn    DateTime?
+  anuladaPorId Int?
+
+  @@index([userId, creadaEn])
+  @@index([companyId])
 }
 
 // Código de un solo uso (10 minutos) con el que una persona vincula la extensión
@@ -2660,6 +2710,18 @@ model CPContrato {
   // Si este contrato nació de una renovación de otro (en vez de una adenda
   // sobre el mismo) — ambos caminos quedan disponibles, ver plan.
   contratoOrigenId  Int?
+  // Para el informe mensual: quién administra el contrato en la entidad y cómo se compró
+  // («Compra por catálogo electrónico»). Columnas nuevas, se crean al arrancar (cp-informe-datos.schema.ts).
+  administradorNombre String?
+  administradorCargo  String?
+  tipoCompra          String?
+  // Día en que empieza el ciclo mensual (24 = del 24 al 23, se nombra por el mes en que termina). Null o 1 = mes calendario.
+  diaCorte            Int?
+  // Fechas de la orden de compra y plazo en días (para el informe): se escriben una vez en Editar contrato.
+  fechaEmisionOrden     DateTime? @db.Date
+  fechaAceptacionOrden  DateTime? @db.Date
+  fechaSuscripcionOrden DateTime? @db.Date
+  plazoDias             Int?
   createdBy         Int
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -2715,6 +2777,10 @@ model CPPuestoServicio {
   tipoTurno                     String // 8H, 12H, 24H
   cantidadGuardias              Int      @default(1)
   guardiasSimultaneosRequeridos Int      @default(1) // mínimo de guardias "trabajando" (no descanso) que debe haber cada día
+  // Dónde queda el puesto (tabla «Lugar del servicio» del informe mensual). Nuevas, opcionales.
+  canton                        String?
+  edificio                      String?
+  ubicacion                     String?
   createdAt                     DateTime @default(now())
   updatedAt                     DateTime @updatedAt
 
@@ -2777,6 +2843,10 @@ model CPCodigoTurno {
   // (bitacoras/bitacoras.schema.ts), el despliegue no corre migraciones.
   horaInicio String?
   horaFin    String?
+  // true = día de custodia (DC): la persona trabaja pero fuera del puesto, en un viaje del
+  // módulo Custodias. Se cruza con las custodias registradas ese día (horario ejecutado).
+  // Columna nueva de tabla existente: se asegura al arrancar (cp-codigo-turno-horas.schema.ts).
+  esCustodia Boolean  @default(false)
   activo     Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -2857,6 +2927,8 @@ model CPInformeMensual {
   conclusiones      String?
   estado            String   @default("BORRADOR") // BORRADOR, GENERADO
   generatedPdfPath  String?
+  // Qué plantilla Word usa este informe (CPPlantillaInformeArchivo); null = la primera de la empresa.
+  plantillaId       Int?
   createdBy         Int
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -3468,4 +3540,257 @@ model CotEditGrant {
 
   @@unique([ownerId, editorId])
   @@index([companyId, editorId])
+}
+
+// ---------------------------------------------------------------------------
+// Vigilante de vencimientos de RRHH (2026-10-30): configuración por empresa de los
+// avisos diarios de documentos de guardias. Sin relaciones (tabla de arranque, como
+// CPBitacora): la crea RrhhVigilanteService al arrancar.
+// ---------------------------------------------------------------------------
+model RrhhVigilanteConfig {
+  id                 Int      @id @default(autoincrement())
+  companyId          Int      @unique
+  // false = no se avisa nada.
+  activo             Boolean  @default(true)
+  // Se avisa cuando faltan exactamente estos días (0 = el día que vence).
+  avisarDias         Int[]    @default([30, 7, 0])
+  // Mientras siga vencido, repetir el aviso cada N días (0 = no repetir).
+  repetirVencidoDias Int      @default(7)
+  // Cada lunes, resumen de todo lo pendiente aunque hoy no cruce ningún plazo.
+  resumenLunes       Boolean  @default(true)
+  updatedBy          Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// ── Inventario de Operaciones (2026-11-06): uniformes, implementos, municiones y armas ──
+// Tablas creadas al arrancar (operaciones-inventario/inventario.schema.ts). El saldo de cada
+// artículo se calcula siempre desde sus movimientos; nunca se guarda.
+model InvArticulo {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  // UNIFORME | IMPLEMENTO | MUNICION
+  tipo        String
+  nombre      String
+  // Talla, calibre... Vacío si no aplica (no es null para que la restricción única funcione).
+  variante    String   @default("")
+  unidad      String   @default("unidad")
+  stockMinimo Int      @default(0)
+  stockMaximo Int?
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  movimientos InvMovimiento[]
+
+  @@unique([companyId, tipo, nombre, variante])
+  @@index([companyId, tipo])
+}
+
+model InvMovimiento {
+  id             Int      @id @default(autoincrement())
+  companyId      Int
+  articuloId     Int
+  // ENTRADA | ENTREGA | DEVOLUCION | BAJA | AJUSTE
+  tipo           String
+  cantidad       Int
+  fecha          DateTime @db.Date
+  puestoId       Int?
+  puestoNombre   String?
+  guardiaCedula  String?
+  guardiaNombre  String?
+  // En una devolución: NUEVO | USADO | DANADO
+  estadoDevuelto String?
+  motivo         String?
+  documento      String?
+  porId          Int
+  porNombre      String
+  createdAt      DateTime @default(now())
+
+  articulo InvArticulo @relation(fields: [articuloId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, fecha])
+  @@index([articuloId])
+}
+
+model InvArma {
+  id            Int       @id @default(autoincrement())
+  companyId     Int
+  serie         String
+  // PISTOLA | REVOLVER | ESCOPETA | OTRA
+  clase         String    @default("PISTOLA")
+  marca         String?
+  modelo        String?
+  calibre       String?
+  // DISPONIBLE | ASIGNADA | MANTENIMIENTO | BAJA
+  estado        String    @default("DISPONIBLE")
+  puestoId      Int?
+  puestoNombre  String?
+  guardiaCedula String?
+  guardiaNombre String?
+  asignadaAt    DateTime?
+  permisoNumero String?
+  permisoVence  DateTime? @db.Date
+  notas         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  eventos InvArmaEvento[]
+
+  @@unique([companyId, serie])
+  @@index([companyId, estado])
+}
+
+model InvArmaEvento {
+  id            Int      @id @default(autoincrement())
+  armaId        Int
+  // ALTA | ASIGNACION | DEVOLUCION | MANTENIMIENTO | REACTIVACION | BAJA | EDICION
+  tipo          String
+  detalle       String?
+  puestoNombre  String?
+  guardiaNombre String?
+  porNombre     String
+  createdAt     DateTime @default(now())
+
+  arma InvArma @relation(fields: [armaId], references: [id], onDelete: Cascade)
+
+  @@index([armaId])
+}
+
+// ── Faltas de guardias registradas al momento (2026-11-06): «No llegó» desde Hoy en los puestos ──
+// Tabla creada al arrancar (contratacion-publica/ausencias/ausencias.schema.ts). No depende de la bitácora:
+// la hoja que llegue después se compara con lo registrado aquí.
+model CPAusencia {
+  id                  Int      @id @default(autoincrement())
+  companyId           Int
+  puestoId            Int
+  puestoNombre        String
+  contratoId          Int
+  contratoNumero      String
+  entidadNombre       String
+  fecha               DateTime @db.Date
+  cedula              String
+  guardiaNombre       String
+  // NO_AVISO | ENFERMEDAD | PERMISO | OTRO
+  motivo              String
+  // Hora (HH:mm) a la que se notó la falta.
+  hora                String?
+  nota                String?
+  // POR_CUBRIR | CUBIERTA | ANULADA
+  estado              String   @default("POR_CUBRIR")
+  reemplazoCedula     String?
+  reemplazoNombre     String?
+  anulacionNota       String?
+  registradaPorId     Int
+  registradaPorNombre String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([companyId, fecha])
+  @@index([puestoId, fecha])
+}
+
+// Lo que dijo el Agente Revisor de Entregas de un documento entregado (una fila por documento; se rehace al entregar de nuevo).
+// El FK con borrado en cascada se crea en SQL (entrega-revision.schema.ts); aquí va solo el dato.
+model CPEntregaRevisionIA {
+  id             Int       @id @default(autoincrement())
+  entregaId      Int       @unique
+  companyId      Int
+  // REVISANDO | PARECE_CORRECTO | REVISAR | NO_LEIDO | ERROR
+  estado         String
+  // Cuándo se entregó el archivo que se revisó: si la entrega cambia, esta revisión ya no vale.
+  entregadoAt    DateTime?
+  tipoDocumento  String?
+  resumen        String?
+  motivos        Json?
+  mensajeRechazo String?
+  mensaje        String?
+  modelo         String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([companyId])
+}
+
+// Cronograma de supervisión (2026-11-10): qué días se planea visitar cada punto de un contrato y qué
+// visitas se hicieron. Tablas creadas al arrancar (contratacion-publica/supervision/supervision.schema.ts).
+model CPSupervisionCronograma {
+  id              Int      @id @default(autoincrement())
+  companyId       Int
+  contratoId      Int
+  fechaInicio     DateTime @db.Date
+  fechaFin        DateTime @db.Date
+  creadoPorId     Int
+  creadoPorNombre String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+
+  puntos CPSupervisionPunto[]
+
+  @@index([companyId, contratoId])
+}
+
+model CPSupervisionPunto {
+  id               Int     @id @default(autoincrement())
+  cronogramaId     Int
+  puestoId         Int
+  puestoNombre     String
+  // Persona del sistema que supervisa este punto; si no tiene usuario, solo el nombre escrito.
+  supervisorUserId Int?
+  supervisorNombre String?
+  // DIURNA | NOCTURNA | DIURNA/NOCTURNA
+  jornada          String  @default("DIURNA/NOCTURNA")
+  orden            Int     @default(0)
+
+  cronograma CPSupervisionCronograma @relation(fields: [cronogramaId], references: [id], onDelete: Cascade)
+  dias       CPSupervisionPlanDia[]
+
+  @@unique([cronogramaId, puestoId])
+  @@index([supervisorUserId])
+}
+
+model CPSupervisionPlanDia {
+  puntoId Int
+  fecha   DateTime @db.Date
+
+  punto CPSupervisionPunto @relation(fields: [puntoId], references: [id], onDelete: Cascade)
+
+  @@id([puntoId, fecha])
+}
+
+model CPSupervisionVisita {
+  id               Int      @id @default(autoincrement())
+  companyId        Int
+  contratoId       Int
+  puestoId         Int
+  puestoNombre     String
+  fecha            DateTime @db.Date
+  hora             String
+  supervisorUserId Int
+  supervisorNombre String
+  // SI | NO | NO_APLICA
+  guardiaPresente  String
+  observacion      String?
+  // Foto opcional guardada en StoredFile (clave lógica).
+  fotoKey          String?
+  fotoNombre       String?
+  fotoTipo         String?
+  createdAt        DateTime @default(now())
+
+  @@index([companyId, puestoId, fecha])
+  @@index([supervisorUserId, fecha])
+}
+
+// Plantillas Word del informe mensual (2026-11-10): una empresa puede tener varias (p. ej. informe base y
+// informe del Ministerio) y cada informe elige una. El archivo vive en StoredFile (storedKey).
+model CPPlantillaInformeArchivo {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  nombre    String
+  docxPath  String
+  storedKey String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([companyId])
 }

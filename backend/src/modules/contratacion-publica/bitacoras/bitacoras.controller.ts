@@ -27,12 +27,13 @@ import { ActorBitacora, BitacorasService } from './bitacoras.service';
 import {
   ActualizarHallazgoDto,
   DashboardBitacorasQueryDto,
+  PuestosHoyQueryDto,
   GuardarLecturaDto,
   ListarBitacorasQueryDto,
   SubirBitacoraDto,
 } from './dto/bitacoras.dto';
 
-const SECCION = 'CONTRATACION_PUBLICA';
+const SECCION = 'OPERACIONES';
 
 interface AuthedRequest {
   user: { userId: number; email: string; role: string; companyId: number };
@@ -74,6 +75,13 @@ export class BitacorasController {
   @Section(SECCION, 'view')
   agente() {
     return this.service.estadoDelAgente();
+  }
+
+  // Hoy en los puestos: quién debe estar, si la cobertura se cumple y qué bitácoras faltan por subir.
+  @Get('hoy')
+  @Section(SECCION, 'view')
+  hoy(@Query() q: PuestosHoyQueryDto, @Req() req: AuthedRequest) {
+    return this.service.puestosDelDia(req.user.companyId, q.fecha);
   }
 
   @Get('dashboard')

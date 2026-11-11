@@ -4,8 +4,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AGENT_RUN_DDL } from './agent-run.schema';
 import {
   INSTRUCCIONES_BITACORAS_POR_DEFECTO,
+  INSTRUCCIONES_ENTREGAS_POR_DEFECTO,
   NOMBRE_AGENTE_BITACORAS,
+  NOMBRE_AGENTE_ENTREGAS,
   SCOPE_BITACORAS,
+  SCOPE_ENTREGAS,
 } from './agent-trabajadores.const';
 
 export interface RegistroDeAgente {
@@ -62,6 +65,29 @@ export class AgentRunService implements OnModuleInit {
         `No se pudo sembrar el Agente Revisor de Bitácoras: ${(err as Error).message}`,
       );
     }
+    try {
+      await this.sembrarRevisorDeEntregas();
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo sembrar el Agente Revisor de Entregas: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  private async sembrarRevisorDeEntregas() {
+    const existe = await this.prisma.agent.findFirst({
+      where: { createdBy: null, scope: SCOPE_ENTREGAS },
+      select: { id: true },
+    });
+    if (existe) return;
+    await this.prisma.agent.create({
+      data: {
+        name: NOMBRE_AGENTE_ENTREGAS,
+        instructions: INSTRUCCIONES_ENTREGAS_POR_DEFECTO,
+        scope: SCOPE_ENTREGAS,
+        isDefault: false,
+      },
+    });
   }
 
   // Nunca pisa uno que ya exista: su texto se edita desde Sistemas → Agentes.
