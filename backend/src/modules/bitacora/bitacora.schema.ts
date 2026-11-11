@@ -86,6 +86,10 @@ export const BITACORA_DDL: string[] = [
     "actualizadoPorId" INTEGER,
     CONSTRAINT "BitacoraHorario_pkey" PRIMARY KEY ("companyId")
   )`,
+  // 2026-11-10: bolsa de horas. Columnas nuevas con valor por defecto en una tabla propia
+  // de la Bitácora: un servidor anterior sigue funcionando sin ellas.
+  `ALTER TABLE "BitacoraHorario" ADD COLUMN IF NOT EXISTS "toleranciaMinutos" INTEGER NOT NULL DEFAULT 10`,
+  `ALTER TABLE "BitacoraHorario" ADD COLUMN IF NOT EXISTS "inactividadMinutos" INTEGER NOT NULL DEFAULT 15`,
   `CREATE TABLE IF NOT EXISTS "BitacoraExtensionCodigo" (
     "userId" INTEGER NOT NULL,
     "codigoHash" TEXT NOT NULL,

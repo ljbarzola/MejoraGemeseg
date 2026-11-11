@@ -1,6 +1,6 @@
 # Mejora continua (agente de agentes) — Sistemas
 
-Creado 2026-11-11, **solo en local, sin commit ni despliegue**. Pantalla: Sistemas → Mejora continua (`/sistemas/mejora-continua`, sección `SISTEMAS`).
+Creado 2026-11-11 y **desplegado en producción el mismo día** (PR #70). Pantalla: Sistemas → Mejora continua (`/sistemas/mejora-continua`, sección `SISTEMAS`).
 
 ## Qué es
 Un ciclo semanal que Leidy pidió para acercar la plataforma a «un Grok que aprende» sin reentrenar modelos:
@@ -52,11 +52,12 @@ Una corrida no cambia su propio modelo a mitad de camino: el modelo se fija al c
 ## Primera corrida real (2026-11-11, local)
 Hecha contra el servidor local con el flujo completo: 3 lectores Haiku en paralelo → 1 Opus que propone → 1 Sonnet que verifica contra los archivos reales → envío. El verificador cazó una afirmación falsa del razonamiento («modelo retirado en producción»: cloudbuild.yaml ya usaba `gemini-3.8-flash`), dos alertas de riesgo mal fundadas, una cita inventada y pasos del plan que hablaban de una pantalla que no existe; se corrigieron antes de guardar. Quedó claro que sin verificación contra los archivos no hay que enviar nada. Confirmado también que una sesión de Claude reparte trabajo a subagentes con modelo propio (haiku, opus, sonnet); falta confirmarlo dentro de una rutina de la nube.
 
-## Para activarlo (nada de esto está hecho)
-1. Probar en local y dar el «ok».
-2. Crear en Secret Manager `MEJORA_CONTINUA_KEY` y `MEJORA_CONTINUA_DECISION_KEY` **antes** de listarlos en `--set-secrets` de `cloudbuild.yaml`; añadir las variables `MEJORA_CONTINUA_COMPANY_ID` y `MEJORA_CONTINUA_CORREO`; desplegar (un solo deploy junto con lo demás).
-3. Crear las dos rutinas (skill `schedule`, nube) con los prompts de esta carpeta, `MEJORA_CONTINUA_KEY` en su entorno y la zona horaria de Guayaquil. Se pide OK antes de crearlas.
-4. Primera corrida a mano con `?dryRun=true` para validar el formato y los modelos.
+## Estado de la activación (2026-11-11)
+**Desplegado en producción** (PR #70, revisión de Cloud Run `mejora-gemeseg-backend-00080-c7h`, respaldo de Cloud SQL `1794416331396` justo antes). Hecho:
+1. Secretos `MEJORA_CONTINUA_KEY` y `MEJORA_CONTINUA_DECISION_KEY` creados en Secret Manager (proyecto `mejora-gemeseg`, el servicio de Cloud Run ya tiene `secretAccessor` a nivel de proyecto) y listados en `--set-secrets` de `cloudbuild.yaml`. Los valores están SOLO en Secret Manager y en `C:Usersleidy.claudesecretsmejora-continua.env` (fuera del repo, para las sesiones de Claude de Leidy). Para rotarlas: nueva versión del secreto, redeploy y actualizar el prompt de las dos rutinas (la de rutinas) o el archivo local (la de decisiones).
+2. Sin `MEJORA_CONTINUA_COMPANY_ID`: el servidor deduce la empresa (la única con equipo de Sistemas con «Escribir» explícito). Si algún día hay varias, definir esa variable en `cloudbuild.yaml`. Sin `MEJORA_CONTINUA_CORREO`: solo avisa en la campana; para correo, poner ahí las direcciones que Leidy designe.
+3. Dos rutinas de Claude en la nube (entorno «Entorno abierto», sin conectores, modelo Sonnet 5.5, con el repo clonado): **«Mejora continua · propuestas del lunes»** (`trig_018xAWTRFkgEeqoghNLgPkH7`, cron `0 14 * * 1` UTC = lunes 9:00 en Ecuador) y **«Mejora continua · cierre del viernes»** (`trig_01JTeF63JxDFYDtUEwBDGQcJ`, cron `0 22 * * 5` UTC = viernes 17:00). Su prompt es corto y apunta a `.agents/mejora-continua/prompt-lunes.md` / `prompt-viernes.md` del repo (main): mejorar esos archivos cambia el comportamiento sin tocar las rutinas. Se administran en https://claude.ai/code/routines (ahí se pausan o borran; la API no borra).
+4. Las 5 propuestas de la primera corrida están anotadas en producción en estado «Más tarde» (Leidy: todavía no se hacen).
 
 ## Pendiente / decisiones abiertas
 - «Abrir sesión en Claude» desde la pantalla es hoy «Copiar brief» + pegarlo en una sesión nueva; no hay un enlace que abra la sesión solo. Desde una sesión de Claude se puede pedir «abre la sesión para la propuesta N» (lee el brief con la clave de decisiones).
