@@ -17,4 +17,9 @@ export class CreateInformeDto {
   @IsInt()
   @IsOptional()
   horarioMensualId?: number;
+
+  /** Plantilla Word a usar; sin valor = la primera de la empresa. */
+  @IsInt()
+  @IsOptional()
+  plantillaId?: number;
 }

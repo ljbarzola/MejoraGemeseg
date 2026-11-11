@@ -7,11 +7,16 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { AuthGuard } from '@nestjs/passport';
 import type { Response } from 'express';
 import * as path from 'path';
@@ -37,6 +42,38 @@ export class CPInformesController {
   @Section('CONTRATACION_PUBLICA', 'write')
   upsertPlantilla(@Body() dto: UpdatePlantillaDto, @Req() req: any) {
     return this.service.upsertPlantilla(dto, req.user.companyId);
+  }
+
+  // Varias plantillas Word por empresa (marcadores como [Entidad], [PeriodoDel]…); cada informe elige una.
+  @Get('plantillas')
+  @Section('CONTRATACION_PUBLICA', 'view')
+  listarPlantillas(@Req() req: any) {
+    return this.service.listarPlantillas(req.user.companyId);
+  }
+
+  @Post('plantillas')
+  @Section('CONTRATACION_PUBLICA', 'write')
+  @UseInterceptors(FileInterceptor('archivo', { storage: memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } }))
+  crearPlantilla(@UploadedFile() archivo: Express.Multer.File, @Body('nombre') nombre: string | undefined, @Req() req: any) {
+    return this.service.crearPlantilla(req.user.companyId, nombre, archivo?.buffer, archivo?.originalname);
+  }
+
+  @Put('plantillas/:id')
+  @Section('CONTRATACION_PUBLICA', 'write')
+  @UseInterceptors(FileInterceptor('archivo', { storage: memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } }))
+  actualizarPlantilla(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() archivo: Express.Multer.File | undefined,
+    @Body('nombre') nombre: string | undefined,
+    @Req() req: any,
+  ) {
+    return this.service.actualizarPlantilla(id, req.user.companyId, nombre, archivo?.buffer, archivo?.originalname);
+  }
+
+  @Delete('plantillas/:id')
+  @Section('CONTRATACION_PUBLICA', 'write')
+  eliminarPlantilla(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.service.eliminarPlantilla(id, req.user.companyId);
   }
 
   @Get('file/:fileName')
@@ -97,6 +134,20 @@ export class CPInformesController {
   @Section('CONTRATACION_PUBLICA', 'write')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.service.remove(id, req.user.companyId);
+  }
+
+  /** El informe armado en Word, editable (la persona lo revisa, lo ajusta y lo firma). */
+  @Get(':id/docx')
+  @Section('CONTRATACION_PUBLICA', 'view')
+  async descargarDocx(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+    @Res() res: Response,
+  ) {
+    const { buffer, nombre } = await this.service.generarDocx(id, req.user.companyId);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombre}"`);
+    res.end(buffer);
   }
 
   @Post(':id/generar-pdf')

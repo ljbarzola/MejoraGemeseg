@@ -21,6 +21,7 @@ import MovimientoDetalleModal from '../../../components/personal/MovimientoDetal
 import { cedulaVisible } from '../../../utils/postulacionValidacion';
 import ConfiguracionSistemasModal from '../../../components/personal/ConfiguracionSistemasModal';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import RrhhPageHeader from '../../../components/personal/RrhhPageHeader';
 import { usePerm } from '../../../contexts/PermissionsContext';
 
 const TIPO_COLOR: Record<string, { bg: string; fg: string }> = {
@@ -237,19 +238,11 @@ export default function HistorialGuardia() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">RECURSOS HUMANOS · CUMPLIMIENTO</p>
-            <h1>Historial</h1>
-            <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: '#718096' }}>
-              Asignaciones de puesto y entradas o salidas de cada guardia.
-            </p>
-          </div>
-          <div className="header-actions">
-            <button className="btn-secondary" onClick={load} disabled={loading}>
-              <RefreshCw size={16} className={loading ? 'spin' : undefined} /> {loading ? 'Cargando...' : 'Actualizar'}
-            </button>
+      <RrhhPageHeader
+        title="Historial"
+        description="Cumplimiento: consulta las asignaciones de puesto y las entradas o salidas de cada guardia."
+        actions={
+          <>
             <button
               type="button"
               className="btn-icon-toolbar"
@@ -259,9 +252,12 @@ export default function HistorialGuardia() {
             >
               <Settings size={18} />
             </button>
-          </div>
-        </div>
-      </div>
+            <button className="btn-secondary" onClick={load} disabled={loading}>
+              <RefreshCw size={16} className={loading ? 'spin' : undefined} /> {loading ? 'Cargando...' : 'Actualizar'}
+            </button>
+          </>
+        }
+      />
 
       {error && (
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{error}</div>

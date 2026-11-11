@@ -4,12 +4,16 @@ import { Search } from 'lucide-react';
 import {
   aprobarDocumento,
   getPorRevisar,
+  getRevisionesIA,
   rechazarDocumento,
 } from '../../services/contratacion-publica.service';
 import type { CPDocumentoBandeja } from '../../types/contratacion-publica';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import CPPageHeader from '../../components/contratacion-publica/CPPageHeader';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import RevisionPanel, { type DocumentoRevisable } from '../../components/contratacion-publica/RevisionPanel';
+import { REVISION_IA_COLOR, REVISION_IA_ETIQUETA } from '../../components/contratacion-publica/RevisionIA';
+import type { CPEstadoRevisionIA } from '../../types/contratacion-publica';
 import { usePerm } from '../../contexts/PermissionsContext';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
@@ -22,7 +26,7 @@ const aRevisable = (f: CPDocumentoBandeja): DocumentoRevisable => ({
   nombre: f.nombre,
   descripcion: f.descripcion,
   entidadNombre: f.entidadNombre,
-  periodo: tituloMes(f.anio, f.mes),
+  periodo: tituloMes(f.anio, f.mes, f.periodoCiclo),
   estado: f.estado,
   fechaLimite: f.fechaLimite,
   vencida: f.vencida,
@@ -50,12 +54,19 @@ export default function PorRevisarPage() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [panel, setPanel] = useState<{ items: DocumentoRevisable[]; inicioId: number } | null>(null);
+  // Lo que dijo el agente revisor de cada documento (etiqueta junto al nombre; es solo una sugerencia).
+  const [notasIA, setNotasIA] = useState<Record<number, CPEstadoRevisionIA>>({});
 
   const load = (silencioso = false) => {
     if (!silencioso) setLoading(true);
     setError('');
     getPorRevisar()
-      .then(setFilas)
+      .then((r) => {
+        setFilas(r);
+        getRevisionesIA(r.map((f) => f.id))
+          .then((n) => setNotasIA(Object.fromEntries(n.map((x) => [x.entregaId, x.estado as CPEstadoRevisionIA]))))
+          .catch(() => undefined);
+      })
       .catch((err) => setError(mensajeError(err, 'No se pudo cargar lo que falta aprobar.')))
       .finally(() => setLoading(false));
   };
@@ -112,25 +123,26 @@ export default function PorRevisarPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">CONTRATACIÓN PÚBLICA</p>
-            <h1>Por aprobar</h1>
-          </div>
-          <div className="header-actions">
-            <button className="auth-btn" disabled={ordenadas.length === 0} onClick={() => ordenadas[0] && abrirPanel(ordenadas[0].id)}>
-              <Search size={16} /> Revisar uno tras otro
-            </button>
-          </div>
-        </div>
-        {!loading && filas.length > 0 && (
-          <p style={{ margin: 0, fontSize: '0.85rem', color: '#4a5568' }}>
-            {filas.length} documento(s) esperando tu aprobación
-            {filas.some((f) => f.vencida) && <> · <strong style={{ color: '#c53030' }}>{filas.filter((f) => f.vencida).length} vencido(s)</strong></>}
-          </p>
-        )}
-      </div>
+      <CPPageHeader
+        pantalla="por-aprobar"
+        title="Por aprobar"
+        description={
+          <>
+            Los documentos que otras áreas entregaron y esperan tu decisión: míralos, apruébalos o recházalos con un motivo.
+            {!loading && filas.length > 0 && (
+              <>
+                {' '}<strong>{filas.length} esperando tu aprobación</strong>
+                {filas.some((f) => f.vencida) && <> · <strong style={{ color: '#c53030' }}>{filas.filter((f) => f.vencida).length} vencido(s)</strong></>}
+              </>
+            )}
+          </>
+        }
+        actions={
+          <button className="auth-btn" disabled={ordenadas.length === 0} onClick={() => ordenadas[0] && abrirPanel(ordenadas[0].id)}>
+            <Search size={16} /> Revisar uno tras otro
+          </button>
+        }
+      />
 
       {error && (
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{error}</div>
@@ -183,9 +195,18 @@ export default function PorRevisarPage() {
                     <td>
                       <span className="truncate" title={f.nombre} style={{ fontWeight: 700, color: 'var(--azul-oscuro)' }}>{f.nombre}</span>
                       {f.departmentName && <div style={{ fontSize: '0.75rem', color: '#718096' }}>{f.departmentName}</div>}
+                      {notasIA[f.id] && notasIA[f.id] !== 'NO_LEIDO' && (
+                        <span
+                          className="status-badge"
+                          title="Sugerencia del agente revisor sobre firma, sello, vigencia y si se lee. Tú decides."
+                          style={{ marginTop: 4, background: REVISION_IA_COLOR[notasIA[f.id]].bg, color: REVISION_IA_COLOR[notasIA[f.id]].fg }}
+                        >
+                          {REVISION_IA_ETIQUETA[notasIA[f.id]]}
+                        </span>
+                      )}
                     </td>
                     <td><span className="truncate" title={f.entidadNombre}>{f.entidadNombre}</span></td>
-                    <td><span className="truncate">{tituloMes(f.anio, f.mes)}</span></td>
+                    <td><span className="truncate">{tituloMes(f.anio, f.mes, f.periodoCiclo)}</span></td>
                     <td>
                       <span className="truncate">{f.entregadoPorNombre ?? '—'}</span>
                       <div style={{ fontSize: '0.72rem', color: '#718096' }}>

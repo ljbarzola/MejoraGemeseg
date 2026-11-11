@@ -99,6 +99,9 @@ export interface CPPuestoServicio {
   tipoTurno: string;
   cantidadGuardias: number;
   guardiasSimultaneosRequeridos: number;
+  canton?: string | null;
+  edificio?: string | null;
+  ubicacion?: string | null;
   createdAt: string;
   updatedAt: string;
   guardias?: CPPuestoGuardia[];
@@ -142,6 +145,15 @@ export interface CPContrato {
   fechaInicio: string;
   fechaFin: string;
   valorTotal: number | null;
+  administradorNombre?: string | null;
+  administradorCargo?: string | null;
+  tipoCompra?: string | null;
+  /** Día en que empieza el ciclo mensual (24 = del 24 al 23). Null o 1 = mes calendario. */
+  diaCorte?: number | null;
+  fechaEmisionOrden?: string | null;
+  fechaAceptacionOrden?: string | null;
+  fechaSuscripcionOrden?: string | null;
+  plazoDias?: number | null;
   estado: string;
   contratoOrigenId: number | null;
   createdBy: number;
@@ -163,6 +175,7 @@ export interface CPCodigoTurno {
   nombre: string;
   color: string | null;
   esDescanso: boolean;
+  esCustodia: boolean;
   /** Ventana del turno ("07:00"–"19:00"); la usa el revisor de bitácoras. */
   horaInicio?: string | null;
   horaFin?: string | null;
@@ -186,6 +199,62 @@ export interface CPHorarioCelda {
   updatedAt: string;
 }
 
+// Horario ejecutado: lo que realmente pasó (programado + faltas/reemplazos + cruce con Custodias)
+export interface CPCeldaEjecutada {
+  puestoId: number;
+  cedula: string;
+  nombre: string;
+  fecha: string;
+  programado: string | null;
+  ejecutado: string | null;
+  estado: 'IGUAL' | 'FALTO' | 'CUBRE';
+  detalle: string | null;
+}
+export interface CPAvisoCustodia {
+  tipo: 'DC_SIN_CUSTODIA' | 'CUSTODIA_SIN_DC';
+  puestoId: number;
+  cedula: string;
+  nombre: string;
+  fecha: string;
+  texto: string;
+}
+export interface CPHorarioEjecutado {
+  horarioId: number;
+  rango: { inicio: string; fin: string };
+  estado: string;
+  puestos: { id: number; nombre: string }[];
+  celdas: CPCeldaEjecutada[];
+  avisos: CPAvisoCustodia[];
+  resumen: { faltas: number; cubiertas: number; sinCubrir: number; avisosCustodia: number };
+}
+
+// Importar un horario desde Excel (vista previa y aplicar)
+export interface CPImportGuardia {
+  fila: number;
+  nombre: string;
+  cedula: string | null;
+  estado: 'OK' | 'NO_ASIGNADO' | 'SIN_TURNOS' | 'REPETIDO';
+  guardiaNombre?: string;
+  celdas: number;
+}
+export interface CPImportPuesto {
+  titulo: string;
+  puestoId: number | null;
+  puestoNombre: string | null;
+  guardias: CPImportGuardia[];
+}
+export interface CPImportHorarioResultado {
+  hojas: { nombre: string; puestos: number }[];
+  hoja: string;
+  rango: { inicio: string; fin: string };
+  puestos: CPImportPuesto[];
+  codigosDesconocidos: { codigo: string; veces: number }[];
+  totalCeldas: number;
+  avisos: string[];
+  puedeAplicar: boolean;
+  aplicado: boolean;
+}
+
 export interface CPHorarioMensual {
   id: number;
   companyId: number;
@@ -206,6 +275,8 @@ export interface CPHorarioMensual {
 }
 
 export interface CPInformeMensual {
+  /** Plantilla Word elegida; null = la primera. */
+  plantillaId?: number | null;
   id: number;
   companyId: number;
   contratoId: number;
@@ -232,6 +303,17 @@ export interface CPTextoInstitucional {
   updatedAt: string;
 }
 
+/** Una de las plantillas Word del informe (puede haber varias por empresa). */
+export interface CPPlantillaInformeArchivo {
+  id: number;
+  nombre: string;
+  updatedAt: string;
+  /** La primera: la que se usa si un informe no elige otra. */
+  porDefecto: boolean;
+  /** Cuántos informes la tienen elegida. */
+  informes: number;
+}
+
 export interface CPPlantillaInforme {
   id: number;
   companyId: number;
@@ -246,9 +328,30 @@ export interface CPDatosAutogeneradosInforme {
   numeroContrato: string;
   referenciaProceso: string | null;
   periodo: string;
-  puestos: { nombre: string; tipoTurno: string; cantidadGuardias: number }[];
+  puestos: {
+    nombre: string;
+    tipoTurno: string;
+    cantidadGuardias: number;
+    canton?: string | null;
+    edificio?: string | null;
+    ubicacion?: string | null;
+  }[];
   personal: { cedula: string; nombreGuardia: string; puesto: string }[];
   tieneHorarioAprobado: boolean;
+  tipoCompra?: string | null;
+  administradorNombre?: string | null;
+  administradorCargo?: string | null;
+  /** Periodo que cubre el informe: el del horario aprobado (puede cruzar de mes) o el mes calendario. */
+  periodoTexto: string;
+  fechaInforme: string;
+  fechaInicioServicio: string;
+  duracionContrato: string;
+  descripcionPuestos: string;
+  /** Conclusión armada con las bitácoras del periodo; null si no hay bitácoras. */
+  conclusionSugerida: string | null;
+  bitacorasDelPeriodo: number;
+  /** Datos que faltan para que el informe salga completo. */
+  faltantes: string[];
 }
 
 /** Claves sugeridas del boilerplate del informe — no es un enum cerrado
@@ -271,6 +374,8 @@ export interface CPSolicitudResumen {
   id: number;
   anio: number;
   mes: number;
+  /** «24 ago – 23 sep» si el contrato va por ciclo; null si es el mes calendario. */
+  periodoCiclo?: string | null;
   estado: 'BORRADOR' | 'ENVIADA';
   total: number;
   pendientes: number;
@@ -313,6 +418,7 @@ export interface CPSolicitudMensual {
   entidadNombre: string;
   anio: number;
   mes: number;
+  periodoCiclo?: string | null;
   estado: 'BORRADOR' | 'ENVIADA';
   enviadaAt: string | null;
   entregas: CPEntregaDocumento[];
@@ -338,9 +444,26 @@ export interface CPHistorialEntrega {
   createdAt: string;
 }
 
+/** Lo que dijo el Agente Revisor de Entregas de un documento. Solo sugiere: aprobar o rechazar es de una persona. */
+export type CPEstadoRevisionIA = 'REVISANDO' | 'PARECE_CORRECTO' | 'REVISAR' | 'NO_LEIDO' | 'ERROR';
+
+export interface CPRevisionIA {
+  entregaId: number;
+  estado: CPEstadoRevisionIA;
+  /** Qué parece ser el documento (solo informativo). */
+  tipoDocumento: string | null;
+  resumen: string | null;
+  motivos: string[];
+  /** Motivo de rechazo propuesto; vacío si no hay nada que objetar. */
+  mensajeRechazo: string;
+  /** Por qué no se pudo revisar (NO_LEIDO / ERROR). */
+  mensaje: string | null;
+}
+
 /** Fila de las bandejas "Por entregar" y "Por aprobar" (todas las entidades juntas). */
 export interface CPDocumentoBandeja {
   id: number;
+  periodoCiclo?: string | null;
   nombre: string;
   descripcion: string | null;
   estado: CPEstadoEntrega;

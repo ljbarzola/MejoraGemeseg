@@ -3,6 +3,7 @@ import { CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, X, XCircle } fro
 import FilePreview from '../common/FilePreview';
 import ErrorBanner from '../common/ErrorBanner';
 import HistorialEntrega from './HistorialEntrega';
+import RevisionIA from './RevisionIA';
 import { fetchArchivoEntrega } from '../../services/contratacion-publica.service';
 import type { CPEstadoEntrega } from '../../types/contratacion-publica';
 import { ESTADO_COLOR, ESTADO_LABEL, formatoFecha, mensajeError } from '../../utils/entregasCp';
@@ -206,6 +207,20 @@ export default function RevisionPanel({ items, inicioId, puedeRevisar, onAprobar
                 </div>
               )}
             </div>
+
+            {/* Nota del agente: solo para quien revisa (quien solo entrega no la ve). */}
+            {puedeRevisar && actual.estado !== 'PENDIENTE' && (
+              <RevisionIA
+                key={actual.id}
+                entregaId={actual.id}
+                estadoDocumento={actual.estado}
+                puedeProponerMotivo={puedeRechazar}
+                onUsarMotivo={(texto, soloSiVacio) => {
+                  setMotivo((previo) => (soloSiVacio && previo.trim() ? previo : texto));
+                  setTocado(false);
+                }}
+              />
+            )}
 
             <HistorialEntrega entregaId={actual.id} recargar={recargarHistorial} />
 

@@ -10,7 +10,9 @@
 export const SCOPE_BITACORAS = 'BITACORAS';
 
 /** Scopes de agentes que no conversan: el chat no los ofrece ni los acepta. */
-export const SCOPES_SIN_CHAT: readonly string[] = [SCOPE_BITACORAS];
+export const SCOPE_ENTREGAS = 'ENTREGAS';
+
+export const SCOPES_SIN_CHAT: readonly string[] = [SCOPE_BITACORAS, SCOPE_ENTREGAS];
 
 export const esAgenteSinChat = (scope: string | null | undefined): boolean =>
   !!scope && SCOPES_SIN_CHAT.includes(scope);
@@ -22,6 +24,17 @@ export const INSTRUCCIONES_BITACORAS_POR_DEFECTO = [
   '- Las columnas son: fecha, hora, novedad y firma del guardia.',
   '- El nombre del guardia que recibe el turno va arriba de la hoja.',
   '- «S/N» significa «sin novedad».',
+  '',
+  '(Mientras no cambies este texto, el lector usa solo sus reglas fijas.)',
+].join('\n');
+
+export const NOMBRE_AGENTE_ENTREGAS = 'Agente Revisor de Entregas';
+
+export const INSTRUCCIONES_ENTREGAS_POR_DEFECTO = [
+  'Describe aquí qué documentos recibe tu empresa y cómo son, para que el lector los entienda mejor. Ejemplos:',
+  '- Las planillas del IESS llevan sello digital, no firma manuscrita.',
+  '- Los certificados de antecedentes penales valen 90 días desde su emisión.',
+  '- Los oficios de la entidad siempre llevan la firma del administrador del contrato.',
   '',
   '(Mientras no cambies este texto, el lector usa solo sus reglas fijas.)',
 ].join('\n');
@@ -80,6 +93,42 @@ export const DOCUMENTACION_AGENTES: DocumentacionAgente[] = [
       'Una hoja con varios días se separa por fecha; si no se lee la fecha, la línea se descarta y se avisa en observaciones.',
       'Sin horas configuradas en el código del turno (Contratación Pública → Horarios de los turnos) solo se compara la persona, no la hora.',
       'Si el agente se desactiva o la IA no está configurada, la foto se guarda sin leer y se puede transcribir a mano.',
+    ],
+  },
+  {
+    scope: SCOPE_ENTREGAS,
+    nombre: NOMBRE_AGENTE_ENTREGAS,
+    resumen:
+      'Mira cada documento que otra área entrega y deja una nota para quien aprueba: «Parece correcto» o «Revisar» con el motivo (sin firma o sello, vencido, ilegible, de otro periodo).',
+    dondeSeUsa:
+      'Contratación Pública → Por aprobar (lista y panel de revisión). Solo lo ve quien tenga Contratación Pública con permiso de escribir.',
+    recibe: [
+      'El archivo entregado: PDF, imagen (JPG, PNG, WebP), Word o Excel (estos dos se convierten antes a PDF), de hasta 15 MB.',
+      'El texto de «Instrucciones» de este agente (cómo son los documentos de la empresa) y la fecha de hoy.',
+    ],
+    hace: [
+      'Describe lo que ve: si el documento se lee bien, qué parece ser, si un documento de ese tipo lleva firma o sello y si lo tiene, la fecha de vencimiento si el propio documento la escribe y el periodo que dice cubrir (por ejemplo «del 24 de agosto al 23 de septiembre»). No recibe el mes de la solicitud: lo compara el sistema.',
+      'Deja la nota en «Por aprobar»: una etiqueta en la lista y un cuadro en el panel de revisión, con el motivo y una propuesta de texto para rechazar.',
+    ],
+    decide: [
+      'NO aprueba ni rechaza: lo hace una persona. El agente solo sugiere.',
+      'El veredicto sale de reglas fijas del sistema, iguales cada vez: «Revisar» si no se lee, si debería llevar firma o sello y no se ve (o no está claro), si la fecha de vencimiento que escribe el documento ya pasó, o si el periodo que dice cubrir no toca el mes de la solicitud (un periodo que cruza de mes vale para los dos). Si no, «Parece correcto».',
+    ],
+    noHace: [
+      'No comprueba que sea el documento que se pidió, ni que sea del mes correcto: no conoce el nombre pedido, la entidad ni el mes.',
+      'No lee documentos entregados como enlace externo, ni ZIP.',
+      'No aprueba, rechaza, avisa ni envía correos a nadie.',
+      'No modifica ni borra el archivo.',
+    ],
+    datos: [
+      'El archivo se envía a Google Vertex AI (Gemini) solo para leerlo; se descarga de la carpeta de Drive de la entidad y no se guarda copia.',
+      'Cada revisión queda en el registro de actividad con quién la disparó, cuánto tardó, el modelo y los tokens usados; el resultado se guarda junto al documento y se rehace si se vuelve a entregar.',
+    ],
+    limites: [
+      'Que el agente diga «Parece correcto» no es garantía: solo cubre firma o sello, vigencia, periodo y que se lea. Quien aprueba sigue mirando el documento.',
+      'Si el documento no escribe fecha de vencimiento, no se puede saber si está vigente; si no dice qué periodo cubre, no se compara el mes. Un documento que se pide de un mes distinto al de la solicitud (por ejemplo una planilla del mes anterior) saldrá como «Revisar»: es solo una sugerencia.',
+      'Una firma pequeña en una foto de baja calidad puede salir como «no está claro»: por eso es una sugerencia.',
+      'Lo dispara el navegador de quien entrega justo después de entregar; si esa persona cierra la pestaña antes, quien aprueba puede pedir la revisión desde el panel.',
     ],
   },
 ];

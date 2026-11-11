@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, ClipboardList, ArrowRight, PartyPopper } from 'lucide-react';
-import PageHeader from '../../components/common/PageHeader';
+import RrhhPageHeader from '../../components/personal/RrhhPageHeader';
 import {
   getPendingSurveys,
   getSurveyToRespond,
@@ -98,8 +98,7 @@ export default function SurveysPage() {
 
   return (
     <div className="page-container">
-      <PageHeader
-        eyebrow="Recursos Humanos"
+      <RrhhPageHeader
         title="Encuestas"
         description="Las encuestas que RRHH te asignó y aún no has respondido."
       />

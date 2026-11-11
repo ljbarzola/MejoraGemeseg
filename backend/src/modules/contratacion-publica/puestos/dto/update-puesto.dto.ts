@@ -19,4 +19,16 @@ export class UpdatePuestoDto {
   @Min(1)
   @IsOptional()
   guardiasSimultaneosRequeridos?: number;
+
+  @IsString()
+  @IsOptional()
+  canton?: string;
+
+  @IsString()
+  @IsOptional()
+  edificio?: string;
+
+  @IsString()
+  @IsOptional()
+  ubicacion?: string;
 }

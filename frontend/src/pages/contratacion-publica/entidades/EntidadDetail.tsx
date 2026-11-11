@@ -27,6 +27,7 @@ import { MESES_ES } from '../../../types/contratacion-publica';
 import { usePerm } from '../../../contexts/PermissionsContext';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import ErrorBanner from '../../../components/common/ErrorBanner';
+import CPPageHeader from '../../../components/contratacion-publica/CPPageHeader';
 import EntregarModal from '../../../components/contratacion-publica/EntregarModal';
 import RevisionPanel, { type DocumentoRevisable } from '../../../components/contratacion-publica/RevisionPanel';
 import { formatFechaHoraSync } from '../../../utils/formatFechaHora';
@@ -235,7 +236,7 @@ export default function EntidadDetail() {
         nombre: d.nombre,
         descripcion: d.descripcion,
         entidadNombre: lista?.entidad.nombre ?? solicitud.entidadNombre,
-        periodo: tituloMes(solicitud.anio, solicitud.mes),
+        periodo: tituloMes(solicitud.anio, solicitud.mes, solicitud.periodoCiclo),
         estado: d.estado,
         fechaLimite: d.fechaLimite,
         vencida: d.vencida,
@@ -340,36 +341,36 @@ export default function EntidadDetail() {
         <button className="cacao-back-btn" onClick={() => navigate('/contratacion-publica/entidades')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">CONTRATACIÓN PÚBLICA · ENTIDAD</p>
-            <h1>{lista?.entidad.nombre ?? 'Entidad pública'}</h1>
-          </div>
-          <div className="header-actions">
-            {canEdit && lista && (
-              lista.entidad.driveFolderId ? (
-                <a
-                  className="btn-secondary"
-                  href={`https://drive.google.com/drive/folders/${lista.entidad.driveFolderId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ textDecoration: 'none' }}
-                >
-                  <FolderOpen size={16} /> Carpeta en Drive
-                </a>
-              ) : (
-                <button className="btn-secondary" disabled title="Esta entidad todavía no tiene carpeta. Créala desde Entidades Públicas → Sincronizar.">
-                  <FolderOpen size={16} /> Sin carpeta en Drive
+        <CPPageHeader
+          title={lista?.entidad.nombre ?? 'Entidad pública'}
+          description="Los documentos que otras áreas deben entregar cada mes para esta entidad, con su responsable y su fecha límite."
+          actions={
+            <>
+              {canEdit && lista && (
+                lista.entidad.driveFolderId ? (
+                  <a
+                    className="btn-secondary"
+                    href={`https://drive.google.com/drive/folders/${lista.entidad.driveFolderId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ textDecoration: 'none' }}
+                  >
+                    <FolderOpen size={16} /> Carpeta en Drive
+                  </a>
+                ) : (
+                  <button className="btn-secondary" disabled title="Esta entidad todavía no tiene carpeta. Créala desde Entidades Públicas → Sincronizar.">
+                    <FolderOpen size={16} /> Sin carpeta en Drive
+                  </button>
+                )
+              )}
+              {canEdit && lista && (
+                <button className="auth-btn" onClick={() => setMostrarNueva(true)}>
+                  <Plus size={16} /> Nueva solicitud
                 </button>
-              )
-            )}
-            {canEdit && lista && (
-              <button className="auth-btn" onClick={() => setMostrarNueva(true)}>
-                <Plus size={16} /> Nueva solicitud
-              </button>
-            )}
-          </div>
-        </div>
+              )}
+            </>
+          }
+        />
       </div>
 
       {error && (
@@ -403,7 +404,7 @@ export default function EntidadDetail() {
                     onClick={() => abrirSolicitud(s.id)}
                     style={{ cursor: 'pointer', background: s.id === solicitudId ? 'rgba(0,0,0,0.04)' : undefined }}
                   >
-                    <td style={{ fontWeight: 700, color: 'var(--azul-oscuro)' }}><span className="truncate">{tituloMes(s.anio, s.mes)}</span></td>
+                    <td style={{ fontWeight: 700, color: 'var(--azul-oscuro)' }}><span className="truncate">{tituloMes(s.anio, s.mes, s.periodoCiclo)}</span></td>
                     <td>
                       <span className="status-badge" style={s.estado === 'ENVIADA' ? { background: '#c6f6d5', color: '#276749' } : { background: '#e2e8f0', color: '#4a5568' }}>
                         {s.estado === 'ENVIADA' ? 'Enviada' : 'Borrador'}
@@ -428,7 +429,7 @@ export default function EntidadDetail() {
             <>
               <div className="page-title-row" style={{ marginBottom: '12px' }}>
                 <div>
-                  <h3 style={{ margin: 0 }}>{tituloMes(solicitud.anio, solicitud.mes)}</h3>
+                  <h3 style={{ margin: 0 }}>{tituloMes(solicitud.anio, solicitud.mes, solicitud.periodoCiclo)}</h3>
                   <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: '#718096' }}>
                     {solicitud.estado === 'BORRADOR'
                       ? 'Estado: Borrador'
@@ -639,7 +640,7 @@ export default function EntidadDetail() {
         <ConfirmDialog
           title="Eliminar solicitud"
           danger
-          message={`¿Eliminar la solicitud de ${tituloMes(solicitud.anio, solicitud.mes)} con todos sus documentos y entregas? Esta acción no se puede deshacer.`}
+          message={`¿Eliminar la solicitud de ${tituloMes(solicitud.anio, solicitud.mes, solicitud.periodoCiclo)} con todos sus documentos y entregas? Esta acción no se puede deshacer.`}
           confirmLabel="Eliminar"
           onCancel={() => setConfirmarEliminarSolicitud(false)}
           onConfirm={async () => {
