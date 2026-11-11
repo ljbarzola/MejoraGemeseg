@@ -14,6 +14,7 @@ import {
 import { getAgentRunsSummary } from '../../services/agent.service';
 import { getTools, getAssignments } from '../../services/tool.service';
 import { getKnowledgeBase } from '../../services/knowledge-base.service';
+import { getTarjetaMejoraContinua, type TarjetaMejoraContinua } from '../../services/mejora-continua.service';
 import type { ResumenActividadAgentes } from '../../types/agent';
 import type { Tool, ToolAssignment } from '../../types/tool';
 
@@ -61,6 +62,7 @@ interface Datos {
   asignaciones: ToolAssignment[] | null;
   novedades: NovedadApp[] | null;
   conocimiento: string | null;
+  mejora: TarjetaMejoraContinua | null;
 }
 
 const BOTON_TARJETA = { padding: '6px 12px', fontSize: '0.8rem' } as const;
@@ -81,6 +83,7 @@ export default function SistemasDashboardPage() {
       getAssignments(),
       getNovedades(),
       getKnowledgeBase(),
+      getTarjetaMejoraContinua(),
     ]).then((r) => {
       const todoFallo = r.every((x) => x.status === 'rejected');
       if (todoFallo) { setError(true); return; }
@@ -92,6 +95,7 @@ export default function SistemasDashboardPage() {
         asignaciones: val(r[4]),
         novedades: val(r[5]),
         conocimiento: r[6].status === 'fulfilled' ? r[6].value.content : null,
+        mejora: val(r[7]),
       });
     });
   }
@@ -131,7 +135,7 @@ export default function SistemasDashboardPage() {
 
 function Contenido({ datos }: { datos: Datos }) {
   const navigate = useNavigate();
-  const { stats, tickets, agentes, herramientas, asignaciones, novedades, conocimiento } = datos;
+  const { stats, tickets, agentes, herramientas, asignaciones, novedades, conocimiento, mejora } = datos;
 
   const ultimosTickets = useMemo(() => (tickets ?? []).slice(0, 5), [tickets]);
 
@@ -266,6 +270,27 @@ function Contenido({ datos }: { datos: Datos }) {
               ))}
               <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#718096' }}>
                 {numero(totalTokens)} tokens gastados en total.
+              </p>
+            </>
+          )}
+        </Tarjeta>
+
+        <Tarjeta
+          titulo="Mejora continua"
+          hint={mejora ? `Propuestas del agente · semana ${mejora.semanaActual}.` : undefined}
+          accion={<button className="btn-secondary" style={BOTON_TARJETA} onClick={() => navigate('/sistemas/mejora-continua')}>Ver propuestas</button>}
+        >
+          {!mejora ? (
+            <SinDatos texto="No se pudo cargar Mejora continua." />
+          ) : (
+            <>
+              <BarraH etiqueta="Por decidir" valor={mejora.pendientes} max={Math.max(mejora.pendientes, mejora.enCurso, mejora.hechas, 1)} color="#c05621" detalle={`${mejora.pendientes}`} />
+              <BarraH etiqueta="Aprobadas y en curso" valor={mejora.enCurso} max={Math.max(mejora.pendientes, mejora.enCurso, mejora.hechas, 1)} color="#2a78d6" detalle={`${mejora.enCurso}`} />
+              <BarraH etiqueta="Hechas" valor={mejora.hechas} max={Math.max(mejora.pendientes, mejora.enCurso, mejora.hechas, 1)} color="#1baf7a" detalle={`${mejora.hechas}`} />
+              <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#718096' }}>
+                {mejora.horasAhorradasMes > 0
+                  ? `${mejora.horasAhorradasMes} horas humanas ahorradas al mes con lo ya hecho.`
+                  : 'Aún sin horas ahorradas registradas.'}
               </p>
             </>
           )}
