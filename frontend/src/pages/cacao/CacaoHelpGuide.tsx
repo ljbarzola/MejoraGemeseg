@@ -135,6 +135,20 @@ const STEPS = [
     path: '/cacao/receivables',
     tip: 'Monitoree los saldos vencidos para mejorar la gestión de cobro.',
   },
+  {
+    num: 9,
+    title: 'Agente de Cacao (el asistente del chat)',
+    icon: '🍫',
+    color: '#8a5a2b',
+    description: 'Un asistente de inteligencia artificial que explica cómo se hace cada cosa en Cacao y consulta los datos de tu empresa. Lo encuentras en el botón del chat, eligiendo «Agente de Cacao» en el selector de agentes.',
+    details: [
+      { label: 'Cómo se hace', desc: 'Pregúntale «¿cómo registro una liquidación con anticipo?» o «¿cómo registro una recepción por tandas?» y te lo explica paso a paso con los nombres de los botones de esta guía.' },
+      { label: 'Por qué no me deja', desc: 'Si el sistema no te deja aprobar, pagar o guardar algo, pregúntale por qué: te dice la regla (por ejemplo, que la liquidación la aprueba otra persona o que lo que supera el monto del administrador solo lo aprueba un administrador) y qué hacer.' },
+      { label: 'Datos de tu empresa', desc: 'Te dice, por ejemplo, cuánto se le debe a un proveedor y su saldo de anticipos, qué liquidaciones faltan por aprobar, qué cuentas por pagar están vencidas, qué lotes y recepciones hay, el precio promedio por calidad y qué proveedores no tienen cuenta bancaria ni documentos. Siempre con fecha, y si algo no está registrado te dice «no consta».' },
+      { label: 'Qué no hace', desc: 'Solo consulta y explica: no aprueba, no paga ni crea registros; eso lo haces tú en cada pantalla. Solo ve los datos de tu empresa y solo lo ve quien tiene acceso a Cacao. Tiene un límite de 30 mensajes por día.' },
+    ],
+    tip: 'Pregúntale con el nombre del proveedor tal como está en la lista: «¿Cuánto le debemos a Juan Pérez?».',
+  },
 ];
 
 const FLOW = [

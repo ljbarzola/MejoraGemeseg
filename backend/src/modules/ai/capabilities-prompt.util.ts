@@ -50,7 +50,9 @@ const PROYECTOS_TAREAS: CapabilityModule = {
 };
 
 export const CAPABILITY_MODULES: CapabilityModule[] = [
-  { section: 'CACAO', titulo: 'Cacao', intents: ['cacao_resumen'] },
+  // Cacao: desde 2026-11-11 los datos en vivo los hace el Agente de Cacao (agente aparte; sus
+  // consultas y reglas están en cacao-agent-prompt.util.ts). Agente Gemeseg solo explica cómo se usa.
+  { section: 'CACAO', titulo: 'Cacao', intents: [] },
   { section: 'CUSTODIAS', titulo: 'Custodias', intents: ['custodias_resumen'] },
   { section: 'RRHH', titulo: 'Recursos Humanos', intents: ['rrhh_resumen_personal'] },
   {
@@ -68,6 +70,8 @@ export interface OpcionesCapacidades {
    * se menciona nada más allá de que sabe cómo se usa el módulo.
    */
   ventasAgenteDisponible?: boolean;
+  /** Igual que ventasAgenteDisponible, para el Agente de Cacao (la persona ve la sección Cacao). */
+  cacaoAgenteDisponible?: boolean;
 }
 
 export function buildCapabilitiesPrompt(
@@ -90,7 +94,12 @@ export function buildCapabilitiesPrompt(
                 (opciones.ventasAgenteDisponible
                   ? ' Si la persona quiere datos en vivo de Ventas (cartera, clientes, por qué se perdió un cliente) o una recomendación comercial, dile que use el Agente de Ventas desde el selector de agentes del chat.'
                   : '')
-              : ''
+              : m.section === 'CACAO'
+                ? ' No consultes datos en vivo de Cacao (cuánto se le debe a un proveedor, qué hay por aprobar, cuentas vencidas, precios, inventario).' +
+                  (opciones.cacaoAgenteDisponible
+                    ? ' Si la persona quiere esos datos, dile que use el Agente de Cacao desde el selector de agentes del chat.'
+                    : '')
+                : ''
           }`,
     )
     .join('\n\n');

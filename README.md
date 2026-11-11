@@ -82,6 +82,7 @@ Agrupa lo tecnico: dashboard, **Herramientas** (inventario y asignacion con audi
 - **Chat flotante**: boton + panel lateral, con conversaciones guardadas por agente y por usuario.
 - **Motor**: Google Vertex AI (Gemini); sin configurar responde en modo mock. Ver `.agents/modules/agents-ai.md`.
 - **Agentes**: catalogo con instrucciones y alcance, asignables a varios usuarios.
+- **Agente de Cacao**: asistente aparte, para quien tiene acceso a Cacao, que explica como se hace cada cosa (liquidaciones, anticipos, aprobaciones, pagos) y consulta los datos de la empresa (cuanto se le debe a un proveedor, liquidaciones por aprobar, cuentas vencidas, precios, inventario). Solo consulta y explica.
 - **Manual de uso integrado**: el agente conoce las pantallas del sistema, pero solo las de los modulos que el usuario puede ver.
 - **Base de Conocimiento**: documento por empresa (politicas, contactos, procesos) que el agente usa como contexto, filtrado por permisos.
 - **Datos en vivo** de Cacao, Custodias, RRHH y Ventas, solo si el usuario tiene acceso a ese modulo.

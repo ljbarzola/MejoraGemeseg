@@ -62,7 +62,7 @@ describe('agentes que trabajan solos', () => {
       expect(donde.NOT).toEqual({ scope: { in: ['BITACORAS'] } });
       expect(donde.OR[0]).toEqual({
         createdBy: null,
-        NOT: { scope: { in: ['VENTAS', 'BITACORAS'] } },
+        NOT: { scope: { in: ['VENTAS', 'CACAO', 'BITACORAS'] } },
       });
     });
   });
