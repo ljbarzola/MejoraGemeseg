@@ -31,6 +31,10 @@ export const NOMBRE_AGENTE_MEJORA = 'Agente de Mejora Continua';
 export const SCOPE_MEJORA = 'MEJORA_CONTINUA';
 const RUTA_PANTALLA = '/sistemas/mejora-continua';
 const PREFIJO_ASUNTO = '[Mejora continua]';
+// Casilla desde la que sale el correo (misma que usan los recordatorios de tareas): sin ella el servicio
+// de correo responde «No hay una casilla de envío configurada».
+const CORREO_REMITENTE = 'sistemas@gemeseg.com';
+const NOMBRE_REMITENTE = 'Mejora continua GEMESEG';
 
 export interface FilaPropuesta {
   id: number;
@@ -698,6 +702,8 @@ export class MejoraContinuaService implements OnModuleInit {
         await this.mail.sendMail({
           to,
           subject: asunto,
+          from: CORREO_REMITENTE,
+          fromName: NOMBRE_REMITENTE,
           bodyText: `${cuerpoCorreo}\n\nVer y decidir: ${base}${RUTA_PANTALLA}\n\nEste es un aviso automático del Agente de Mejora Continua.`,
         });
       } catch (err) {
