@@ -95,26 +95,26 @@ Agrupa lo tecnico: dashboard, **Herramientas** (inventario y asignacion con audi
 Registro automático de lo que hace cada persona (en app.gemeseg, en su cuenta de Google —inicio de sesión y Drive— y, si la vincula, en el navegador: solo el dominio del sitio y el tiempo, dentro del horario de la empresa, con una extensión de Chrome y Edge), para comprobar horario y trabajo en equipos virtuales sin pedir reportes. **En producción desde 2026-10-27; piloto solo con la usuaria, nadie más está activado.** Por defecto nadie tiene hoja: es un módulo propio del menú, «Bitácora», con **Dashboard** (métricas del equipo en 7, 14 o 30 días; con permiso), **Actividad del día** (el detalle de un día y la hoja de cada persona: primera y última actividad, huecos y lista de lo hecho; con permiso), **Mi hoja del día** (cada persona ve la suya) y **Configuración** (administradores y gerentes activan a cada persona, se le avisa, definen el horario de la extensión y manejan la lectura de Google). Solo registro, sin metas ni alertas. Ver `AGENTS.md`, «Bitácora del equipo».
 
 ## Credenciales de prueba
-Solo para el entorno local: las crean los seeds (`npm run seed:minimal` deja solo `admin@gemeseg.com`, `sistemas@gemeseg.com` y el super admin; `npm run seed` crea todos los de abajo). Las cuentas de produccion tienen sus propias contrasenas.
+Solo para el entorno local: las crean los seeds (`npm run seed:minimal` deja solo `admin@gemeseg.com`, `sistemas@gemeseg.com` y el super admin; `npm run seed` crea todos los de abajo). Las cuentas de produccion tienen sus propias contrasenas. Por ser un repositorio publico, aqui no se escribe ninguna contrasena por defecto: la fija quien corre el seed (`backend/prisma/seed*.js`).
 
 ### Super Admin (todas las empresas)
-| Usuario | Email | Contrasena | Rol | Empresa |
-|---------|-------|------------|-----|---------|
-| Super Administrador | admin@general.com | admin2026 | ADMIN | (todas) |
+| Usuario | Email | Rol | Empresa |
+|---------|-------|-----|---------|
+| Super Administrador | admin@general.com | ADMIN | (todas) |
 
 ### GEMESEG
-| Usuario | Email | Contrasena | Rol | Cargo |
-|---------|-------|------------|-----|-------|
-| Administracion GEMESEG | admin@gemeseg.com | gemeseg2026 | ADMIN | Administrador del Sistema |
-| Hugo Melo | hugo@gemeseg.com | gemeseg2026 | MANAGER | Gerente General |
-| David Izurieta | marketing@gemeseg.com | gemeseg2026 | EMPLOYEE | Analista de Marketing Digital |
-| Nayelli | nayelli@gemeseg.com | gemeseg2026 | EMPLOYEE | Analista de Recursos Humanos |
-| Leidy Barzola | sistemas@gemeseg.com | gemeseg2026 | EMPLOYEE | Analista de Sistemas |
+| Usuario | Email | Rol | Cargo |
+|---------|-------|-----|-------|
+| Administracion GEMESEG | admin@gemeseg.com | ADMIN | Administrador del Sistema |
+| Hugo Melo | hugo@gemeseg.com | MANAGER | Gerente General |
+| David Izurieta | marketing@gemeseg.com | EMPLOYEE | Analista de Marketing Digital |
+| Nayelli | nayelli@gemeseg.com | EMPLOYEE | Analista de Recursos Humanos |
+| Leidy Barzola | sistemas@gemeseg.com | EMPLOYEE | Analista de Sistemas |
 
 ### Mikacao S.A.
-| Usuario | Email | Contrasena | Rol | Cargo |
-|---------|-------|------------|-----|-------|
-| Administracion Mikacao | admin@mikacao.com | mikacao2026 | ADMIN | Administrador del Sistema |
+| Usuario | Email | Rol | Cargo |
+|---------|-------|-----|-------|
+| Administracion Mikacao | admin@mikacao.com | ADMIN | Administrador del Sistema |
 
 El seed completo tambien crea proyectos de ejemplo (Landings, Mejora GEMESEG, Cotizador, Plataforma GEMESEG, Migracion a Google Cloud), agentes de IA y datos de Cacao y Personal; el minimo crea un solo "Proyecto de Prueba".
 

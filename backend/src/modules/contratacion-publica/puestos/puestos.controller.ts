@@ -34,7 +34,7 @@ export class CPPuestosController {
   ) {}
 
   @Get()
-  @Section('CONTRATACION_PUBLICA', 'view')
+  @Section('OPERACIONES', 'view')
   findAllByContrato(
     @Query('contratoId', ParseIntPipe) contratoId: number,
     @Req() req: any,
@@ -43,19 +43,19 @@ export class CPPuestosController {
   }
 
   @Get(':id')
-  @Section('CONTRATACION_PUBLICA', 'view')
+  @Section('OPERACIONES', 'view')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.service.findOne(id, req.user.companyId);
   }
 
   @Post()
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   create(@Body() dto: CreatePuestoDto, @Req() req: any) {
     return this.service.create(dto, req.user.companyId);
   }
 
   @Patch(':id')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdatePuestoDto,
@@ -65,13 +65,13 @@ export class CPPuestosController {
   }
 
   @Delete(':id')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.service.remove(id, req.user.companyId);
   }
 
   @Post(':id/guardias')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   asignarGuardia(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AsignarGuardiaDto,
@@ -81,7 +81,7 @@ export class CPPuestosController {
   }
 
   @Delete(':id/guardias/:guardiaId')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   removeGuardia(
     @Param('id', ParseIntPipe) id: number,
     @Param('guardiaId', ParseIntPipe) guardiaId: number,
@@ -91,13 +91,13 @@ export class CPPuestosController {
   }
 
   @Get(':id/patron-rotacion')
-  @Section('CONTRATACION_PUBLICA', 'view')
+  @Section('OPERACIONES', 'view')
   getPatronRotacion(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.patronRotacionService.getPatron(id, req.user.companyId);
   }
 
   @Put(':id/patron-rotacion')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   guardarPatronRotacion(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: PatronRotacionConfigDto,
@@ -111,7 +111,7 @@ export class CPPuestosController {
   }
 
   @Post(':id/patron-rotacion/preview')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   previewPatronRotacion(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: PreviewPatronDto,

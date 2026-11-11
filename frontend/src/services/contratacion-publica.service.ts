@@ -16,6 +16,7 @@ import type {
   CPInformeMensual,
   CPTextoInstitucional,
   CPPlantillaInforme,
+  CPPlantillaInformeArchivo,
   CPDatosAutogeneradosInforme,
   CPPatronRotacion,
   TramoPatron,
@@ -25,7 +26,10 @@ import type {
   CPSolicitudMensual,
   CPCarpetaEntregas,
   CPHistorialEntrega,
+  CPRevisionIA,
   CPDocumentoBandeja,
+  CPImportHorarioResultado,
+  CPHorarioEjecutado,
 } from '../types/contratacion-publica';
 
 const BASE = '/contratacion-publica';
@@ -121,6 +125,14 @@ export const createContrato = (data: {
   fechaInicio: string;
   fechaFin: string;
   valorTotal?: number;
+  administradorNombre?: string;
+  administradorCargo?: string;
+  tipoCompra?: string;
+  diaCorte?: number | null;
+  fechaEmisionOrden?: string | null;
+  fechaAceptacionOrden?: string | null;
+  fechaSuscripcionOrden?: string | null;
+  plazoDias?: number | null;
 }): Promise<CPContrato> => api.post(`${BASE}/contratos`, data).then((r) => r.data);
 
 export const updateContrato = (
@@ -133,6 +145,14 @@ export const updateContrato = (
     fechaInicio: string;
     fechaFin: string;
     valorTotal: number;
+    administradorNombre: string;
+    administradorCargo: string;
+    tipoCompra: string;
+    diaCorte: number | null;
+    fechaEmisionOrden: string | null;
+    fechaAceptacionOrden: string | null;
+    fechaSuscripcionOrden: string | null;
+    plazoDias: number | null;
     estado: string;
   }>,
 ): Promise<CPContrato> => api.patch(`${BASE}/contratos/${id}`, data).then((r) => r.data);
@@ -197,6 +217,9 @@ export const createPuesto = (data: {
   tipoTurno: string;
   cantidadGuardias?: number;
   guardiasSimultaneosRequeridos?: number;
+  canton?: string;
+  edificio?: string;
+  ubicacion?: string;
 }): Promise<CPPuestoServicio> => api.post(`${BASE}/puestos`, data).then((r) => r.data);
 
 export const updatePuesto = (
@@ -206,6 +229,9 @@ export const updatePuesto = (
     tipoTurno: string;
     cantidadGuardias: number;
     guardiasSimultaneosRequeridos: number;
+    canton: string;
+    edificio: string;
+    ubicacion: string;
   }>,
 ): Promise<CPPuestoServicio> => api.patch(`${BASE}/puestos/${id}`, data).then((r) => r.data);
 
@@ -254,6 +280,7 @@ export const createCodigoTurno = (data: {
   color?: string;
   activo?: boolean;
   esDescanso?: boolean;
+  esCustodia?: boolean;
 }): Promise<CPCodigoTurno> => api.post(`${BASE}/codigos-turno`, data).then((r) => r.data);
 
 export const updateCodigoTurno = (
@@ -264,12 +291,17 @@ export const updateCodigoTurno = (
     color: string;
     activo: boolean;
     esDescanso: boolean;
+    esCustodia: boolean;
   }>,
 ): Promise<CPCodigoTurno> => api.patch(`${BASE}/codigos-turno/${id}`, data).then((r) => r.data);
 
 export const deleteCodigoTurno = (id: number) => api.delete(`${BASE}/codigos-turno/${id}`);
 
 // ==================== HORARIOS MENSUALES ====================
+
+/** Horarios de todos los contratos (con el número de contrato y la entidad). */
+export const getHorarios = (): Promise<CPHorarioMensual[]> =>
+  api.get(`${BASE}/horarios`).then((r) => r.data);
 
 export const getHorariosByContrato = (contratoId: number): Promise<CPHorarioMensual[]> =>
   api.get(`${BASE}/horarios`, { params: { contratoId } }).then((r) => r.data);
@@ -283,7 +315,19 @@ export const createHorario = (data: {
   fechaFin: string;
 }): Promise<CPHorarioMensual> => api.post(`${BASE}/horarios`, data).then((r) => r.data);
 
-export const deleteHorario = (id: number) => api.delete(`${BASE}/horarios/${id}`);
+export interface HorarioRelacionados {
+  estado: string;
+  informes: { id: number; anio: number; mes: number; estado: string }[];
+  ausencias: number;
+  bitacoras: number;
+}
+
+export const getHorarioRelacionados = (id: number): Promise<HorarioRelacionados> =>
+  api.get(`${BASE}/horarios/${id}/relacionados`).then((r) => r.data);
+
+/** `confirmar` es obligatorio para un horario que ya no está en borrador (la pantalla ya preguntó). */
+export const deleteHorario = (id: number, confirmar = false) =>
+  api.delete(`${BASE}/horarios/${id}`, { params: confirmar ? { confirmar: 'true' } : undefined });
 
 export const upsertCeldaHorario = (
   id: number,
@@ -322,6 +366,27 @@ export const cambiarEstadoHorario = (
 export const getHorarioPdfBlob = (id: number): Promise<Blob> =>
   api.get(`${BASE}/horarios/${id}/pdf`, { responseType: 'blob' }).then((r) => r.data);
 
+export const importarHorarioExcel = (
+  id: number,
+  archivo: File,
+  opciones: { hoja?: string; aplicar?: boolean } = {},
+): Promise<CPImportHorarioResultado> => {
+  const form = new FormData();
+  form.append('archivo', archivo);
+  return api
+    .post(`${BASE}/horarios/${id}/importar-excel`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params: { hoja: opciones.hoja || undefined, aplicar: opciones.aplicar ? 'true' : undefined },
+    })
+    .then((r) => r.data);
+};
+
+export const getHorarioEjecutado = (id: number): Promise<CPHorarioEjecutado> =>
+  api.get(`${BASE}/horarios/${id}/ejecutado`).then((r) => r.data);
+
+export const getHorarioEjecutadoExcelBlob = (id: number): Promise<Blob> =>
+  api.get(`${BASE}/horarios/${id}/ejecutado/excel`, { responseType: 'blob' }).then((r) => r.data);
+
 export const getHorarioExcelBlob = (id: number): Promise<Blob> =>
   api.get(`${BASE}/horarios/${id}/excel`, { responseType: 'blob' }).then((r) => r.data);
 
@@ -347,17 +412,42 @@ export const createInforme = (data: {
   anio: number;
   mes: number;
   horarioMensualId?: number;
+  plantillaId?: number;
 }): Promise<CPInformeMensual> => api.post(`${BASE}/informes`, data).then((r) => r.data);
 
 export const updateInforme = (
   id: number,
-  data: Partial<{ retroalimentacion: string; conclusiones: string }>,
+  data: Partial<{ retroalimentacion: string; conclusiones: string; plantillaId: number | null }>,
 ): Promise<CPInformeMensual> => api.patch(`${BASE}/informes/${id}`, data).then((r) => r.data);
 
 export const deleteInforme = (id: number) => api.delete(`${BASE}/informes/${id}`);
 
 export const generarPdfInforme = (id: number): Promise<{ success: boolean; pdfUrl: string }> =>
   api.post(`${BASE}/informes/${id}/generar-pdf`).then((r) => r.data);
+
+/** El informe armado en Word (editable). */
+export const getInformeDocxBlob = (id: number): Promise<Blob> =>
+  api.get(`${BASE}/informes/${id}/docx`, { responseType: 'blob' }).then((r) => r.data);
+
+// Varias plantillas Word del informe (hasta 5 por empresa).
+export const getPlantillasInforme = (): Promise<CPPlantillaInformeArchivo[]> =>
+  api.get(`${BASE}/informes/plantillas`).then((r) => r.data);
+
+export const crearPlantillaInforme = (nombre: string, archivo: File): Promise<CPPlantillaInformeArchivo> => {
+  const form = new FormData();
+  form.append('nombre', nombre);
+  form.append('archivo', archivo);
+  return api.post(`${BASE}/informes/plantillas`, form, { headers: { 'Content-Type': 'multipart/form-data' } }).then((r) => r.data);
+};
+
+export const actualizarPlantillaInforme = (id: number, cambios: { nombre?: string; archivo?: File }): Promise<CPPlantillaInformeArchivo> => {
+  const form = new FormData();
+  if (cambios.nombre) form.append('nombre', cambios.nombre);
+  if (cambios.archivo) form.append('archivo', cambios.archivo);
+  return api.put(`${BASE}/informes/plantillas/${id}`, form, { headers: { 'Content-Type': 'multipart/form-data' } }).then((r) => r.data);
+};
+
+export const eliminarPlantillaInforme = (id: number) => api.delete(`${BASE}/informes/plantillas/${id}`);
 
 export const resolveInformeFileUrl = (filePath: string): string =>
   `${(import.meta.env.VITE_API_URL || 'http://localhost:3000').replace(/\/api\/?$/, '')}${filePath}`;
@@ -451,6 +541,25 @@ export const aprobarDocumento =(id: number): Promise<CPSolicitudMensual> =>
 
 export const rechazarDocumento = (id: number, motivo: string): Promise<CPSolicitudMensual> =>
   api.post(`${ENTREGAS}/documentos/${id}/rechazar`, { motivo }).then((r) => r.data);
+
+// ---- Agente Revisor de Entregas (2026-11-09) ----
+
+/** Lo que dijo el agente de un documento (null si todavía no lo revisó). Solo el personal de CP. */
+export const getRevisionIA = (documentoId: number): Promise<{ revision: CPRevisionIA | null }> =>
+  api.get(`${ENTREGAS}/documentos/${documentoId}/revision-ia`).then((r) => r.data);
+
+/** Pide la revisión. Quien entrega la dispara tras entregar; el personal de CP puede pedir `volver`. */
+export const pedirRevisionIA = (
+  documentoId: number,
+  volver = false,
+): Promise<{ estado: string; revision: CPRevisionIA | null }> =>
+  api.post(`${ENTREGAS}/documentos/${documentoId}/revision-ia`, { volver }).then((r) => r.data);
+
+/** Estado de la revisión de varios documentos (para la lista de «Por aprobar»). */
+export const getRevisionesIA = (ids: number[]): Promise<{ entregaId: number; estado: string }[]> =>
+  ids.length
+    ? api.get(`${ENTREGAS}/revision-ia`, { params: { ids: ids.join(',') } }).then((r) => r.data)
+    : Promise.resolve([]);
 
 // ---- revisión: historial, vista previa y bandejas ----
 

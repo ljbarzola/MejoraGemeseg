@@ -29,6 +29,9 @@ export interface HorarioPdfData {
   fechas: string[]; // lista ordenada de 'YYYY-MM-DD' del rango completo
   puestos: HorarioPdfPuesto[];
   colorPorCodigo: Record<string, string | null>;
+  /** Título y nombre de hoja alternativos (el horario ejecutado reutiliza el mismo exportador). */
+  titulo?: string;
+  hoja?: string;
 }
 
 @Injectable()

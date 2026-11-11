@@ -33,10 +33,11 @@ const SCOPE_OPTIONS = [
   { value: 'CACAO', label: 'Cacao', desc: 'Explica el flujo de Cacao y consulta datos reales de la empresa; lo ve quien tenga acceso a Cacao' },
   // Agente que trabaja solo (2026-10-18): lo siembra el sistema, no conversa ni se asigna.
   { value: 'BITACORAS', label: 'Revisor de bitácoras', desc: 'Lee las fotos de las bitácoras de Contratación Pública; no conversa' },
+  { value: 'ENTREGAS', label: 'Revisor de entregas', desc: 'Mira los documentos que otras áreas entregan a Contratación Pública; no conversa' },
 ];
 
 /** Los agentes que trabajan solos no se crean a mano, no se asignan y no cambian de alcance. */
-const ES_TRABAJADOR = (scope: string) => scope === 'BITACORAS';
+const ES_TRABAJADOR = (scope: string) => scope === 'BITACORAS' || scope === 'ENTREGAS';
 
 const SCOPE_PREVIEW: Record<string, string[]> = {
   GLOBAL: ['Proyectos activos', 'Tareas asignadas', 'Rol del usuario', 'Informacion del perfil'],

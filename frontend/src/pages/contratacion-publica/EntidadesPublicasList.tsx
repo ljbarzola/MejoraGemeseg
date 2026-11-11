@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Pencil, X, Building2, FolderOpen, RefreshCw,
-  Archive, ArchiveRestore, SlidersHorizontal, ExternalLink,
+  Archive, ArchiveRestore,
 } from 'lucide-react';
 import {
   getEntidadesPublicas,
@@ -14,7 +14,6 @@ import {
   crearCarpetaEntidad,
   getCamposEntidad,
   getCarpetaEntregas,
-  saveCarpetaEntregas,
   sincronizarEntidadesDrive,
   usarNombreDeDrive,
   usarNombreDelSistema,
@@ -36,7 +35,8 @@ import { useSortableTable } from '../../hooks/useSortableTable';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useColumnFilters } from '../../hooks/useColumnFilters';
 import { filtroDeValores, type ColumnaFiltro } from '../../utils/columnFilters';
-import CamposEntidadModal from './CamposEntidadModal';
+import CPPageHeader from '../../components/contratacion-publica/CPPageHeader';
+import MovidoAConfiguracion from '../../components/common/MovidoAConfiguracion';
 
 // La revisión de Drive es una sola consulta, pero no hace falta repetirla si la
 // persona entra y sale de la pantalla: se reutiliza el último resultado 2 min.
@@ -114,12 +114,9 @@ export default function EntidadesPublicasList() {
   // Errores por campo (clave 'nombre' o 'campo:<id>'): se marcan en rojo, ver UX §2.
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const [modalCampos, setModalCampos] = useState(false);
-
-  // ---- carpeta de Drive y sincronización ----
+  // ---- carpeta de Drive y sincronización (la carpeta se elige en Configuración) ----
   const [carpeta, setCarpeta] = useState<CPCarpetaEntregas | null>(null);
   const [carpetaCargada, setCarpetaCargada] = useState(false);
-  const [modalCarpeta, setModalCarpeta] = useState(false);
   const [sync, setSync] = useState<CPSyncEntidadesDrive | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
   const [syncError, setSyncError] = useState('');
@@ -382,37 +379,33 @@ export default function EntidadesPublicasList() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">CONTRATACIÓN PÚBLICA</p>
-            <h1>Entidades Públicas</h1>
-          </div>
-          <div className="header-actions">
-            {canEdit && (
-              <>
-                <button className="btn-secondary" onClick={() => setModalCampos(true)} title="Datos extra que se piden en cada entidad (tipo, contacto...)">
-                  <SlidersHorizontal size={16} /> Campos de la entidad
-                </button>
-                <button className="btn-secondary" onClick={() => setModalCarpeta(true)} title="Carpeta de Google Drive de toda Contratación Pública">
-                  <FolderOpen size={16} /> Carpeta de Drive
-                </button>
-                <button className="btn-secondary" onClick={() => sincronizar(true)} disabled={sincronizando || !carpeta} title="Revisa la carpeta de Drive y te muestra qué falta en cada lado">
-                  <RefreshCw size={16} className={sincronizando ? 'spin' : undefined} /> Sincronizar
-                </button>
-                <button className="auth-btn" onClick={openCreate}>
-                  <Plus size={16} /> Nueva Entidad
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-        {canEdit && sync?.configurada && (
-          <p style={{ margin: 0, fontSize: '0.8rem', color: '#718096' }}>
-            Última sincronización con Drive: {formatFechaHoraSync(sync.sincronizadoAt)}
-          </p>
-        )}
-      </div>
+      <CPPageHeader
+        pantalla="entidades"
+        title="Entidades Públicas"
+        description={
+          <>
+            Las entidades a las que prestamos servicio, cada una con su carpeta en Drive y sus documentos por mes.
+            {canEdit && sync?.configurada && <> Última sincronización con Drive: {formatFechaHoraSync(sync.sincronizadoAt)}.</>}
+          </>
+        }
+        actions={
+          canEdit && (
+            <>
+              <button className="btn-secondary" onClick={() => sincronizar(true)} disabled={sincronizando || !carpeta} title="Revisa la carpeta de Drive y te muestra qué falta en cada lado">
+                <RefreshCw size={16} className={sincronizando ? 'spin' : undefined} /> Sincronizar
+              </button>
+              <button className="auth-btn" onClick={openCreate}>
+                <Plus size={16} /> Nueva Entidad
+              </button>
+            </>
+          )
+        }
+      />
+      {canEdit && (
+        <MovidoAConfiguracion to="/contratacion-publica/configuracion?pestana=campos" enlace="Ir a Campos de la entidad">
+          «Campos de la entidad» y «Carpeta de Drive» se movieron a Configuración.
+        </MovidoAConfiguracion>
+      )}
 
       {error && (
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{error}</div>
@@ -432,7 +425,7 @@ export default function EntidadesPublicasList() {
       {canEdit && carpetaCargada && !carpeta && (
         <div style={cajaAmarilla}>
           Falta elegir la <strong>carpeta de Google Drive</strong> de Contratación Pública. Una sola carpeta para todo: dentro de ella cada entidad tiene su propia subcarpeta.{' '}
-          <button className="auth-btn" style={{ padding: '4px 12px', fontSize: '0.8rem' }} onClick={() => setModalCarpeta(true)}>Elegir carpeta</button>
+          <button className="auth-btn" style={{ padding: '4px 12px', fontSize: '0.8rem' }} onClick={() => navigate('/contratacion-publica/configuracion?pestana=drive')}>Elegir carpeta</button>
         </div>
       )}
 
@@ -717,95 +710,6 @@ export default function EntidadesPublicasList() {
         </div>
       )}
 
-      {modalCampos && (
-        <CamposEntidadModal campos={campos} onChange={setCampos} onClose={() => setModalCampos(false)} />
-      )}
-
-      {modalCarpeta && (
-        <CarpetaDriveModal
-          actual={carpeta}
-          onCancel={() => setModalCarpeta(false)}
-          onGuardada={(c) => {
-            setCarpeta(c);
-            setModalCarpeta(false);
-            // Con la carpeta nueva se revisa Drive de una vez.
-            sincronizar(true);
-          }}
-        />
-      )}
-
-    </div>
-  );
-}
-
-// ============================================================ carpeta de Drive
-
-function CarpetaDriveModal({
-  actual,
-  onCancel,
-  onGuardada,
-}: {
-  actual: CPCarpetaEntregas | null;
-  onCancel: () => void;
-  onGuardada: (c: CPCarpetaEntregas) => void;
-}) {
-  const [valor, setValor] = useState('');
-  const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState('');
-
-  const guardar = async (ev: React.FormEvent) => {
-    ev.preventDefault();
-    if (!valor.trim()) return;
-    setGuardando(true);
-    setError('');
-    try {
-      onGuardada(await saveCarpetaEntregas(valor.trim()));
-    } catch (err) {
-      setError(mensaje(err, 'No se pudo guardar la carpeta. Revisa el enlace y que esté compartida con el sistema.'));
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>Carpeta de Drive de Contratación Pública</h3>
-          <button className="modal-close" onClick={onCancel}><X size={16} /></button>
-        </div>
-        <form onSubmit={guardar}>
-          <div className="modal-body">
-            <p style={{ margin: '0 0 12px', fontSize: '0.88rem' }}>
-              Una sola carpeta para toda Contratación Pública. Dentro de ella cada entidad tiene su propia subcarpeta, y el sistema las mantiene iguales a la lista de entidades.
-            </p>
-            {actual && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', margin: '0 0 12px', padding: '10px 12px', border: '1px solid #dfe3ea', borderRadius: 12, background: '#f8fafc' }}>
-                <span style={{ fontSize: '0.88rem', minWidth: 0, overflowWrap: 'anywhere' }}>
-                  Carpeta actual: <strong>{actual.driveFolderName}</strong>
-                </span>
-                {actual.driveFolderLink && (
-                  <a className="btn-secondary" href={actual.driveFolderLink} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', padding: '6px 12px', fontSize: '0.82rem' }}>
-                    <ExternalLink size={14} /> Abrir carpeta
-                  </a>
-                )}
-              </div>
-            )}
-            {error && <div className="form-error">{error}</div>}
-            <div className="form-group">
-              <label>{actual ? 'Enlace de la nueva carpeta' : 'Enlace de la carpeta'}</label>
-              <input type="text" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="https://drive.google.com/drive/folders/..." autoFocus />
-            </div>
-            <p style={{ margin: 0, fontSize: '0.8rem', color: '#718096' }}>
-              Compártela como <strong>Editor</strong> con la cuenta del sistema: drive-sync@agentes-504115.iam.gserviceaccount.com
-            </p>
-          </div>
-          <div className="modal-actions">
-            <button type="button" className="btn-secondary" onClick={onCancel}>Cancelar</button>
-            <button type="submit" className="auth-btn" disabled={guardando || !valor.trim()}>{guardando ? 'Guardando...' : 'Guardar'}</button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 }

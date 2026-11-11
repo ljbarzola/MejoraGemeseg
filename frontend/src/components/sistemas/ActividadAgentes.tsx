@@ -5,13 +5,17 @@ import { getAgentRuns, getAgentRunsSummary } from '../../services/agent.service'
 import type { EjecucionAgente, ResumenActividadAgentes } from '../../types/agent';
 import { formatFechaHoraSync } from '../../utils/formatFechaHora';
 
-const ACCION_LABEL: Record<string, string> = { LEER_BITACORA: 'Leer una bitácora' };
+const ACCION_LABEL: Record<string, string> = {
+  LEER_BITACORA: 'Leer una bitácora',
+  PROPONER_MEJORAS: 'Proponer mejoras de la semana',
+  CIERRE_SEMANAL: 'Cerrar la semana',
+};
 
 const segundos = (ms: number | null) => (ms === null ? '—' : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
 
 /** A dónde lleva «sobre qué trabajó» el agente, si hay una pantalla para verlo. */
 function enlaceDe(r: EjecucionAgente): string | null {
-  return r.entidadTipo === 'CPBitacora' && r.entidadId ? `/contratacion-publica/bitacoras/${r.entidadId}` : null;
+  return r.entidadTipo === 'CPBitacora' && r.entidadId ? `/operaciones/bitacoras/${r.entidadId}` : null;
 }
 
 /**

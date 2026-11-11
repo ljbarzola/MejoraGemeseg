@@ -63,10 +63,14 @@ export default function Sidebar() {
   const [cacaoOpen, setCacaoOpen] = useState(() => location.pathname.startsWith('/cacao'));
   const [custodiasOpen, setCustodiasOpen] = useState(false);
   const [sistemasOpen, setSistemasOpen] = useState(false);
-  const [contratacionPublicaOpen, setContratacionPublicaOpen] = useState(false);
+  // Abiertos desde el inicio si se entra directo a una pantalla del módulo (si no, se ve cerrado y sin pista de dónde está cada cosa).
+  const [contratacionPublicaOpen, setContratacionPublicaOpen] = useState(() => location.pathname.startsWith('/contratacion-publica'));
+  const [operacionesOpen, setOperacionesOpen] = useState(() => location.pathname.startsWith('/operaciones'));
   const [bitacoraOpen, setBitacoraOpen] = useState(false);
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+  useEffect(() => { if (location.pathname.startsWith('/operaciones')) setOperacionesOpen(true); }, [location.pathname]);
+  useEffect(() => { if (location.pathname.startsWith('/contratacion-publica')) setContratacionPublicaOpen(true); }, [location.pathname]);
 
   // Bitácora del equipo: qué ve esta persona en el menú depende de si su empresa la tiene encendida y de si a
   // ella le activaron la hoja o puede activar hojas. Se vuelve a pedir al entrar a las pantallas de la bitácora
@@ -103,6 +107,7 @@ export default function Sidebar() {
   const isCustodiasActive = location.pathname.startsWith('/custodias');
   const isSistemasActive = location.pathname.startsWith('/sistemas');
   const isContratacionPublicaActive = location.pathname.startsWith('/contratacion-publica');
+  const isOperacionesActive = location.pathname.startsWith('/operaciones');
   const isBitacoraActive = location.pathname.startsWith('/bitacora');
 
   const navItems = [
@@ -212,27 +217,35 @@ export default function Sidebar() {
     { label: 'Asistente GEME-BOT', path: '/custodias/gemebot', icon: '🤖' },
   ];
 
-  // Contratación Pública: Entidades Públicas con sus entregas de documentos, y desde
-  // 2026-10-18 las Operaciones (Contratos, Horarios, Códigos de turno y Bitácoras, que
-  // compara las hojas de los guardias con el horario). Informes y Textos Institucionales
-  // siguen ocultos (ver CP_MOSTRAR_SUBMODULOS_OCULTOS y CP_MOSTRAR_OPERACIONES en App.tsx).
+  // Contratación Pública: Entidades Públicas con sus entregas de documentos y su Configuración (campos de la
+  // entidad y carpeta de Drive). Informes y Textos Institucionales siguen ocultos (ver
+  // CP_MOSTRAR_SUBMODULOS_OCULTOS en App.tsx). Contratos, Horarios y Bitácoras pasaron a Operaciones (2026-11-05).
   const contratacionPublicaItems = [
-    { label: 'Entidades Públicas', path: '/contratacion-publica/entidades', icon: '🏛️' },
+    { label: 'Entidades Públicas', path: '/contratacion-publica/entidades', icon: '🏛️', grupo: 'Documentos' },
     // Solo el personal de Contratación Pública aprueba; el resto tiene "Por entregar".
     ...(canWrite('CONTRATACION_PUBLICA')
       ? [{ label: 'Por aprobar', path: '/contratacion-publica/por-revisar', icon: '🔎' }]
       : []),
     { label: 'Por entregar', path: '/contratacion-publica/mis-documentos', icon: '📥' },
-    { label: 'Contratos', path: '/contratacion-publica/contratos', icon: '📑' },
-    { label: 'Horarios', path: '/contratacion-publica/horarios', icon: '🗓️' },
-    { label: 'Códigos de turno', path: '/contratacion-publica/config/codigos-turno', icon: '🏷️' },
-    { label: 'Bitácoras', path: '/contratacion-publica/bitacoras', icon: '📒' },
+    { label: 'Configuración', path: '/contratacion-publica/configuracion', icon: '⚙️', separadorAntes: true },
+  ];
+
+  // Operaciones (2026-11-05): lo que hacen los guardias en cada puesto. El Resumen va primero, como en los demás módulos.
+  const operacionesItems = [
+    { label: 'Resumen', path: '/operaciones', icon: '📊' },
+    { label: 'Contratos', path: '/operaciones/contratos', icon: '📑', grupo: 'Puestos y horarios' },
+    { label: 'Horarios', path: '/operaciones/horarios', icon: '🗓️' },
+    { label: 'Bitácoras', path: '/operaciones/bitacoras', icon: '📒', grupo: 'Seguimiento' },
+    { label: 'Supervisión', path: '/operaciones/supervision', icon: '🧭' },
+    { label: 'Inventario', path: '/operaciones/inventario', icon: '🎒', grupo: 'Material' },
+    { label: 'Configuración', path: '/operaciones/configuracion', icon: '⚙️', separadorAntes: true },
   ];
 
   const sistemasSubItems = [
     { label: 'Dashboard', path: '/sistemas/dashboard', icon: '📊' },
     { label: 'Herramientas', path: '/sistemas/herramientas', icon: '🔧' },
     { label: 'Agentes', path: '/sistemas/agentes', icon: '🤖' },
+    { label: 'Mejora continua', path: '/sistemas/mejora-continua', icon: '🔄' },
     { label: 'Base de Conocimiento', path: '/sistemas/base-conocimiento', icon: '📚' },
     { label: 'Soporte Técnico', path: '/sistemas/soporte', icon: '🛠️' },
     { label: 'Novedades', path: '/sistemas/novedades', icon: '📣' },
@@ -370,6 +383,8 @@ export default function Sidebar() {
                   </span>
                 </button>
                 {custodiosOpen && renderSubItems(custodiosItems, 1)}
+                {/* Los avisos de vencimientos, el correo de envío y los requisitos generales viven aquí (2026-10-30). */}
+                {renderSubItems([{ label: 'Configuración', path: '/rrhh/configuracion', icon: '⚙️', separadorAntes: true }])}
               </div>
             )}
           </>
@@ -471,6 +486,40 @@ export default function Sidebar() {
             {!collapsed && cacaoOpen && (
               <div style={{ marginLeft: '12px', borderLeft: '2px solid #e2e8f0', paddingLeft: '0' }}>
                 {renderSubItems(cacaoItems)}
+              </div>
+            )}
+          </>
+        )}
+
+        {canView('OPERACIONES') && (
+          <>
+            <button
+              className={`sidebar-link ${isOperacionesActive ? 'sidebar-link-active' : ''}`}
+              onClick={() => {
+                if (collapsed) {
+                  navigate('/operaciones');
+                } else {
+                  setOperacionesOpen(!operacionesOpen);
+                  if (!operacionesOpen) navigate('/operaciones');
+                }
+              }}
+              title={collapsed ? 'Operaciones' : undefined}
+              style={{ justifyContent: 'space-between' }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span className="sidebar-icon">🔰</span>
+                {!collapsed && <span className="sidebar-label">Operaciones</span>}
+              </span>
+              {!collapsed && (
+                <span style={{ fontSize: '0.7rem', transition: 'transform 0.2s', transform: operacionesOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▶
+                </span>
+              )}
+            </button>
+
+            {!collapsed && operacionesOpen && (
+              <div style={{ marginLeft: '12px', borderLeft: '2px solid #e2e8f0', paddingLeft: '0' }}>
+                {renderSubItems(operacionesItems)}
               </div>
             )}
           </>

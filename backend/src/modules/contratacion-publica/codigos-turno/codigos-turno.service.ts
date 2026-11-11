@@ -7,6 +7,13 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateCodigoTurnoDto } from './dto/create-codigo-turno.dto';
 import { UpdateCodigoTurnoDto } from './dto/update-codigo-turno.dto';
 
+/** Un código es de un solo tipo: si se marca como custodia deja de ser descanso, y al revés. */
+function unSoloTipo<T extends { esDescanso?: boolean; esCustodia?: boolean }>(dto: T): T {
+  if (dto.esCustodia === true) return { ...dto, esDescanso: false };
+  if (dto.esDescanso === true) return { ...dto, esCustodia: false };
+  return dto;
+}
+
 @Injectable()
 export class CPCodigosTurnoService {
   constructor(private readonly prisma: PrismaService) {}
@@ -27,7 +34,7 @@ export class CPCodigosTurnoService {
         'Ya existe un código de turno con ese código',
       );
     }
-    return this.prisma.cPCodigoTurno.create({ data: { ...dto, companyId } });
+    return this.prisma.cPCodigoTurno.create({ data: { ...unSoloTipo(dto), companyId } });
   }
 
   async update(id: number, dto: UpdateCodigoTurnoDto, companyId: number) {
@@ -35,7 +42,7 @@ export class CPCodigosTurnoService {
       where: { id, companyId },
     });
     if (!codigo) throw new NotFoundException('Código de turno no encontrado');
-    return this.prisma.cPCodigoTurno.update({ where: { id }, data: dto });
+    return this.prisma.cPCodigoTurno.update({ where: { id }, data: unSoloTipo(dto) });
   }
 
   async remove(id: number, companyId: number) {

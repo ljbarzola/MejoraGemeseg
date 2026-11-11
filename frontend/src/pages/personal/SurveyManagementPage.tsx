@@ -12,6 +12,7 @@ import { usePerm } from '../../contexts/PermissionsContext';
 import SurveyBuilderModal from '../../components/personal/SurveyBuilderModal';
 import SurveyResultsModal from '../../components/personal/SurveyResultsModal';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import RrhhPageHeader from '../../components/personal/RrhhPageHeader';
 
 const STATUS_LABEL: Record<string, string> = { DRAFT: 'Borrador', PUBLISHED: 'Activa', CLOSED: 'Cerrada' };
 const STATUS_COLOR: Record<string, { bg: string; fg: string }> = {
@@ -192,24 +193,15 @@ export default function SurveyManagementPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">RECURSOS HUMANOS</p>
-            <h1>Gestión de Encuestas</h1>
-          </div>
-          <div className="header-actions">
-            <button className="auth-btn" onClick={() => setShowBuilder(true)}>
-              <Plus size={16} /> Nueva encuesta
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <p style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '20px' }}>
-        Una encuesta puede ir a empleados con cuenta en la app, a un enlace público que
-        responde cualquiera sin iniciar sesión (proveedores, clientes, postulantes), o a los dos a la vez.
-      </p>
+      <RrhhPageHeader
+        title="Gestión de Encuestas"
+        description="Crea encuestas y envíalas a empleados con cuenta en la app, a un enlace público que responde cualquiera sin iniciar sesión (proveedores, clientes, postulantes), o a los dos a la vez."
+        actions={
+          <button className="auth-btn" onClick={() => setShowBuilder(true)}>
+            <Plus size={16} /> Nueva encuesta
+          </button>
+        }
+      />
 
       {/* Un solo carril de avisos: antes eran cuatro bloques independientes
           apilados uno bajo otro, que empujaban la tabla hacia abajo. */}

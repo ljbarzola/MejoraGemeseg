@@ -127,9 +127,10 @@ describe('buildSystemGuide', () => {
     expect(guide).toContain('Entregar un documento');
   });
 
-  it('Contratación Pública explica las operaciones y las bitácoras', () => {
-    const guide = buildSystemGuide(['CONTRATACION_PUBLICA']);
-    expect(guide).toContain('Operaciones: Contratos, Horarios y Códigos de turno');
+  it('Operaciones explica los contratos, los horarios y las bitácoras, y Contratación Pública ya no', () => {
+    expect(buildSystemGuide(['CONTRATACION_PUBLICA'])).not.toContain('Subir bitácora');
+    const guide = buildSystemGuide(['OPERACIONES']);
+    expect(guide).toContain('Contratos, Horarios y Códigos de turno');
     expect(guide).toContain('Bitácoras (hojas de los guardias)');
     expect(guide).toContain('Subir bitácora');
     expect(guide).toContain('Horario de los turnos');

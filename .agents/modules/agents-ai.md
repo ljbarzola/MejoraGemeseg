@@ -51,7 +51,7 @@ Se agregaron 4 intenciones nuevas de datos en vivo en `ai.processor.ts` (mismo m
 
 | Intención | Sección dueña (`INTENT_SECTION`) | Qué devuelve |
 |---|---|---|
-| `cacao_resumen` | `CACAO` | Panorama de Cacao. Desde 2026-11-11 (sección 7) ya no la ejecuta Agente Gemeseg: es del **Agente de Cacao**, con otras nueve consultas |
+| `cacao_resumen` | `CACAO` | Panorama de Cacao. Desde 2026-11-11 (sección 8) ya no la ejecuta Agente Gemeseg: es del **Agente de Cacao**, con otras nueve consultas |
 | `custodias_resumen` | `CUSTODIAS` | Custodias agrupadas por estado |
 | `rrhh_resumen_personal` | `RRHH` | Personal con ficha registrada, vacantes abiertas |
 | `ventas_resumen` | `VENTAS` | Leads por estado con valor estimado |
@@ -71,7 +71,7 @@ Un documento Markdown por empresa (`CompanyKnowledgeBase.content`, único por `c
 ### Pendiente / fuera de alcance de esta migración
 - **Streaming de respuestas**: no implementado, `vertexChat.sendChat` es un solo request/response por turno. Mejora futura si la latencia de Vertex lo justifica.
 - ~~`document-extraction.service.ts` (RRHH, "Leer con IA") sigue en GitHub Models~~ — resuelto: ya corre en Vertex AI, ver el aviso ✅ de arriba.
-- ~~Retiro de Gemini 2.5 (Vertex: 20-oct-2026, no el 16)~~: migrado en código el 2026-10-14, ver el punto 4. **Falta para producción:** poner en `cloudbuild.yaml` `GOOGLE_VERTEX_LOCATION=global` y las dos variables de nivel (el flag `--set-env-vars` reemplaza TODAS las variables: copiar las actuales completas).
+- ~~Retiro de Gemini 2.5 (Vertex: 20-oct-2026, no el 16)~~: migrado en código el 2026-10-14, ver el punto 4. **Hecho en `cloudbuild.yaml`:** `GOOGLE_VERTEX_LOCATION=global`, `GOOGLE_VERTEX_MODEL_FUERTE=gemini-3.8-flash` y `GOOGLE_VERTEX_MODEL_LIGERO=gemini-3.5-flash-lite` (el flag `--set-env-vars` reemplaza TODAS las variables: al tocarlo, copiar las actuales completas).
 
 ### 4. Dos niveles de modelo y endpoint `global` (2026-10-14, solo local, sin desplegar)
 - `common/utils/vertex-endpoint.util.ts`: `vertexUrl()` (el host de `global` **no lleva prefijo de región**: `aiplatform.googleapis.com`) y `modeloVertex(nivel)`. Los 3.x solo responden por `global` en `agentes-504115`; en `us-central1` dan 404. El endpoint regional además es ~10 % más caro (página de precios de Google, desde el 1/07/2026).
@@ -165,7 +165,12 @@ Además de los agentes de chat hay agentes que **no conversan**: hacen una tarea
 - **Prompt real** (`components/sistemas/PromptRealModal.tsx`, botón del documento en la tarjeta y en «Editar agente»): el texto completo que recibe el modelo, por bloques y sin resumir, con quién cambia cada uno (texto del agente, código, permisos de cada persona, base de conocimiento), y descargable como `.txt`. Se arma con `AiService.armarPartesDelPrompt`, el MISMO método que usa el chat: lo que se ve es lo que se envía. Los bloques «Módulos y consultas» y «Manual de uso» dependen de los permisos de cada persona; la pantalla los muestra con todas las secciones. El lector de bitácoras muestra su prompt fijo (`buildBitacoraPrompt`) con las instrucciones de la empresa dentro.
 - Si cambia el prompt de un agente, NO hay que tocar la pantalla: se arma desde el mismo código.
 
-## 7. Agente de Cacao: explica el flujo y consulta datos reales de la empresa (2026-11-11, solo local, sin commit)
+## 7. Agentes que trabajan solos
+
+### Segundo agente que trabaja solo: el Agente Revisor de Entregas (2026-11-09)
+Mismo patrón (scope `ENTREGAS`, sin chat, sembrado por `AgentRunService`, actividad en `AgentRun`, documentación en `DOCUMENTACION_AGENTES`). Mira cada documento entregado en Contratación Pública y deja «Parece correcto» o «Revisar» en «Por aprobar»; el modelo describe y el código decide. Lo dispara el navegador de quien entrega con una petición propia (no un trabajo en segundo plano). Detalle y decisiones en `contratacion-publica.md`, «Agente Revisor de Entregas».
+
+## 8. Agente de Cacao: explica el flujo y consulta datos reales de la empresa (2026-11-11)
 
 **Decisión de Leidy:** el agente de Cacao **explica CÓMO se hace algo** (usando el bloque `CACAO` del manual) y además **consulta datos reales** de la empresa de quien pregunta. Mismo patrón que el Agente de Ventas (sección 3); lo que sigue es lo que cambia.
 
@@ -177,4 +182,4 @@ Además de los agentes de chat hay agentes que **no conversan**: hacen una tarea
 - **Límite propio:** 30 mensajes por día (acción `chat_message_cacao`), contados también en el tope general de 50.
 - **Manual (`system-guide.util.ts`, bloque `CACAO`):** se añadió la sección «Por qué no me deja (Cacao)» (aprobación por otra persona y por monto, anticipo, forma de pago, liquidar, pagar, anular, configuración, recepción, precio ICE, peso seco). La leen Agente Gemeseg y el de Cacao. **Al cambiar una pantalla o regla de Cacao, actualizar ese bloque** (`cacao-agent-prompt.util.spec.ts` falla si se borra un flujo que el agente debe saber explicar).
 - **Frontend:** `ChatDrawer.tsx` muestra «Agente de Cacao» (icono 🍫, «Explica Cacao y consulta tus datos»), bienvenida y seis preguntas de un clic; Sistemas → Agentes lo lista con alcance «Cacao». La guía del módulo (`/cacao/guia`) tiene el paso 9.
-- **Cómo se probó (sin el modelo real):** en el local la IA no tiene credenciales de Vertex. Se levantó el backend con la base local de Mikacao y se reemplazó SOLO `VertexChatClient.sendChat` por una función que registra lo que recibiría el modelo y hace de «modelo simulado» (elige la intención por palabras clave y devuelve los datos reales). Se comprobó en la pantalla del chat (clics reales, gerente temporal): el selector, las sugerencias, la regla del monto de administrador, la deuda de un proveedor; por API con administrador, gerente y un empleado sin la sección Cacao (403, no ve el agente); el prompt recibido lleva el manual de Cacao y no el de Ventas ni RRHH; el agente de Cacao no ejecuta consultas de Ventas y Agente Gemeseg no ejecuta las de Cacao. **Pendiente de probar con el modelo real** (calidad de la redacción, que no invente, que elija bien la consulta) cuando haya credenciales de Vertex o ya desplegado.
+- **Cómo se probó:** primero con un «modelo simulado» (solo `VertexChatClient.sendChat` reemplazado, datos reales de la base local de Mikacao): selector, sugerencias, regla del monto de administrador, deuda de un proveedor; por API con administrador, gerente y un empleado sin la sección Cacao (403 y no ve el agente); el prompt lleva el manual de Cacao y no el de Ventas ni RRHH; cada agente solo ejecuta sus consultas. **Después con Gemini real** (el `.env` local SÍ tiene credenciales de Vertex; la nota anterior de «sin credenciales» estaba desactualizada): una pregunta por el chat («¿cuántos proveedores tengo y cuántos tienen cuenta bancaria?») respondió bien y coincidía con la base. **Desplegado 2026-11-11** (ver `proceso-de-despliegue-ventas` en la memoria). **Pendiente:** que Mikacao lo use de verdad y revisar sus conversaciones en Sistemas → Agentes (calidad de la redacción, que no invente, que elija bien la consulta); probar a fondo `cacao_precios` y `cacao_proveedor` con datos reales de producción cuando haya liquidaciones; si el modelo falla seguido, ajustar el texto del agente (editable en Sistemas → Agentes) antes de tocar el código.

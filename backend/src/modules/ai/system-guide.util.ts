@@ -186,7 +186,7 @@ Los guardias de este padrón son los mismos que se eligen como personal en otros
 ## Entidades y Requisitos
 - Las entidades se crean solas al sincronizar el Listado de Guardias; aquí se corrigen nombre, tipo y requisitos. "+ Nueva Entidad": "Nombre de la Entidad *" y "Tipo *" (Pública/Privada). "Mostrar inactivas". Estado "● Activa/Inactiva" con clic. ⚠ si el nombre no empieza por una provincia.
 - "Requisitos Generales" en tres niveles: "Globales" (todas las entidades), "Entidades Públicas" y "Entidades Privadas"; además requisitos específicos por entidad (botón "n requisitos").
-- Cada requisito: "Nombre del requisito", "Duración del certificado" (días/semanas/meses/años; vacío = sin vencimiento, nunca vence) y con cuánta anticipación avisar antes de que venza.
+- Cada requisito: "Nombre del requisito" y "¿Cada cuánto vence?" (días, meses o años; vacío = sin vencimiento, nunca vence). Cuándo se avisa no se elige por requisito: es una sola regla para toda la empresa, en Configuración → "Avisos de vencimientos" (el plazo más lejano, 30 días por defecto, es también desde cuándo un documento sale en amarillo "por vencer" en Cumplimiento).
 - "Fusionar cédulas duplicadas" (solo Administrador): cédula de origen (la que se descarta) y de destino (la real) → "Ver vista previa" → "Confirmar fusión". Es irreversible.
 
 ## Cumplimiento
@@ -194,6 +194,7 @@ Los guardias de este padrón son los mismos que se eligen como personal en otros
 - Ícono "Notificaciones": "Correo de envío" (buzón real del dominio, se valida al guardar), "Nombre del remitente"; WhatsApp está en "Próximamente".
 - "Detalle de Cumplimiento" (clic en un guardia): aprobar/rechazar cada documento con motivo (queda historial), "Definir fecha de vencimiento" / "Editar fecha", "Leer con IA" (propone fechas de emisión/vencimiento de un PDF con texto; siempre revisar y guardar; si no puede, ingresar la fecha a mano), asignar archivos no reconocidos a un requisito.
 - "Enviar recordatorio a este guardia": correo consolidado con lo faltante, vencido o por vencer. Es manual, guardia por guardia; no hay envíos automáticos ni masivos. Si está al día responde que no hay nada pendiente.
+- Menú RRHH → "Configuración" (al final): pestañas "Avisos de vencimientos", "Correo de envío" (antes el engranaje "Notificaciones" de Cumplimiento) y "Requisitos generales" (documentos mínimos Globales, Públicos y Privados). En "Avisos de vencimientos": cada día el sistema revisa los documentos de los guardias y le deja UNA notificación en la app a todo el personal de RRHH con permiso de escribir (por vencer, vencidos, sin fecha de vencimiento cargada y faltantes). RRHH elige cuándo avisa: los plazos en días antes de vencer (por defecto 30, 7 y el día que vence), cada cuántos días repetir si ya venció (7) y el resumen de los lunes. "Probar ahora" te manda una notificación de prueba en la app solo a ti. No manda correos a los guardias.
 
 ## Historial
 - Muestra las asignaciones de puesto y las entradas/salidas de cada guardia. Ícono "Sistemas de ingreso y salida" para configurar el catálogo (IsyPlus, IESS, SUT, SICOSEP: nombre, link del portal, activo). "Mostrar todos".
@@ -400,6 +401,7 @@ const VENTAS = `# Ventas y CRM — guía detallada
 // seguimiento de entregas. Desde 2026-10-18 también las Operaciones (Contratos, Horarios,
 // Códigos de turno y Bitácoras). Informes y Textos Institucionales siguen ocultos, así que este
 // manual NO los menciona (el agente no debe explicar pantallas que la persona no puede abrir).
+// Contratos, Horarios y Bitácoras ya no son de este módulo: viven en la guía OPERACIONES.
 // Ver "Submódulos ocultos" y "Bitácoras" en .agents/modules/contratacion-publica.md.
 const CONTRATACION_PUBLICA = `# Contratación Pública — guía detallada
 
@@ -407,15 +409,15 @@ const CONTRATACION_PUBLICA = `# Contratación Pública — guía detallada
 Sirve para pedir y seguir, mes a mes, los documentos que otras áreas (RRHH, Financiero, Operaciones, Legal) deben entregar para el informe que se envía a cada entidad pública: qué se pidió, a quién, para cuándo y en qué estado está cada documento. También reúne las operaciones de guardianía de los contratos: contratos con sus puestos, horarios de los guardias y la revisión de las bitácoras que llenan los guardias.
 
 ## Acceso y pantallas
-- Menú → "Contratación Pública" tiene estas pantallas: "Entidades Públicas", "Por aprobar" (solo el personal de Contratación Pública), "Por entregar", "Contratos", "Horarios", "Códigos de turno" y "Bitácoras".
+- Menú → "Contratación Pública" tiene estas pantallas: "Entidades Públicas", "Por aprobar" (solo el personal de Contratación Pública), "Por entregar" y "Configuración". Los contratos, los horarios y las bitácoras de guardianía están en el módulo Operaciones.
 - Con permiso "ver" una persona entra y entrega solo los documentos que le asignaron. Con "escribir" (el personal de Contratación Pública) arma las solicitudes, las envía, y aprueba o rechaza lo entregado.
 
 ## Entidades Públicas
 - Buscar por nombre o RUC. "+ Nueva Entidad": Nombre * (ej. "Municipio de Guayaquil"), RUC, Dirección y los "Datos adicionales" que la empresa haya configurado (por defecto: Tipo de entidad, Contacto, Teléfono de contacto y Correo de contacto). Al hacer clic en una entidad se abre su detalle. El nombre no se puede repetir.
-- "Campos de la entidad" (botón de arriba, solo personal de Contratación Pública): se crean, renombran, reordenan, marcan como obligatorios o desactivan los datos extra de cada entidad. Los tipos son Texto, Lista de opciones (una opción por línea), Número y Fecha. Un campo no se borra, se desactiva: deja de pedirse pero los datos ya guardados se conservan. Con el botón "Columnas" cada persona elige cuáles ver en la tabla.
+- "Campos de la entidad" (Menú → Contratación Pública → Configuración → pestaña «Campos de la entidad», solo personal de Contratación Pública): se crean, renombran, reordenan, marcan como obligatorios o desactivan los datos extra de cada entidad. Los tipos son Texto, Lista de opciones (una opción por línea), Número y Fecha. Un campo no se borra, se desactiva: deja de pedirse pero los datos ya guardados se conservan. Con el botón "Columnas" cada persona elige cuáles ver en la tabla.
 - Cada fila tiene botones de icono: abrir la carpeta de la entidad en Drive, editar y archivar (en una entidad archivada es "Reactivar"). Las entidades no se pueden borrar desde el sistema: "Archivar" la oculta pero conserva sus datos, solicitudes y carpeta; se ve marcando "Mostrar archivadas" y se vuelve a mostrar con "Reactivar".
 - Hay una sola carpeta de Google Drive para toda Contratación Pública y, dentro, cada entidad tiene su propia subcarpeta. Al crear una entidad se crea su subcarpeta; al cambiarle el nombre se renombra la subcarpeta. Archivar una entidad no toca su carpeta ni sus archivos en Drive.
-- "Carpeta de Drive" (botón de arriba, solo personal de Contratación Pública): se pega una vez el enlace de la carpeta general. Debe estar compartida como Editor con la cuenta del sistema (se muestra en esa ventana).
+- "Carpeta de Drive" (Menú → Contratación Pública → Configuración → pestaña «Carpeta de Drive», solo personal de Contratación Pública): se pega una vez el enlace de la carpeta general. Debe estar compartida como Editor con la cuenta del sistema (se muestra en esa ventana).
 - "Sincronizar": revisa la carpeta de Drive y muestra qué falta en cada lado, sin crear nada solo. También se revisa sola al abrir la pantalla (como mucho una vez cada 2 minutos) y se muestra "Última sincronización con Drive". Si hay una carpeta en Drive sin entidad, el aviso ofrece "Crear entidad". Si una entidad no tiene carpeta, ofrece "Crear carpeta". Cuando hay varias, aparece "Crear todas". Si alguien le cambia el nombre a una carpeta en Drive, sale "Actualizar nombre" (la entidad toma el nombre de Drive) o "Mantener el del sistema" (la carpeta vuelve al nombre del sistema). Si una carpeta desaparece de Drive, el aviso ofrece "Volver a crearla"; la entidad nunca se borra sola. Las entidades archivadas no generan avisos.
 
 ## Solicitud mensual de documentos (en el detalle de la entidad)
@@ -436,29 +438,12 @@ Sirve para pedir y seguir, mes a mes, los documentos que otras áreas (RRHH, Fin
 - Estados: Pendiente → Entregado → Aprobado, o Rechazado (vuelve a Entregado cuando se entrega de nuevo).
 
 ## Revisar (personal de Contratación Pública)
-- Menú → "Contratación Pública" → "Por aprobar": todo lo entregado y sin revisar de todas las entidades, lo más antiguo primero. "Revisar uno tras otro" (o el botón "Revisar" de una fila) abre la pantalla de revisión. En el detalle de una entidad, el botón "Revisar" de un documento entregado abre la misma pantalla.
+- Menú → "Contratación Pública" → "Por aprobar": todo lo entregado y sin revisar de todas las entidades, lo más antiguo primero. "Revisar uno tras otro" (o el botón "Revisar" de una fila) abre la pantalla de revisión. En el detalle de una entidad, el botón "Revisar" de un documento entregado abre la misma pantalla. Cada documento trae una etiqueta del agente revisor ("Parece correcto" o "Revisar") y en el panel un cuadro con el motivo (sin firma o sello, vencido o que no se lee); es solo una sugerencia, tú decides. Si dice "Revisar", el motivo del rechazo ya aparece escrito y lo puedes editar. El agente no comprueba que sea el documento pedido ni el mes.
 - Pantalla de revisión: a la izquierda se ve el archivo (PDF, imagen, Word o Excel) dentro del sistema. Word tarda unos segundos porque se convierte a PDF para mostrarlo. Un Excel (.xlsx) se ve como una hoja de cálculo, parecida a la de Google Drive: pestañas por hoja abajo, letras de columna y números de fila que no se mueven, zoom con + y −, y al hacer clic en una celda se ve su contenido completo arriba (las flechas del teclado mueven la selección y Ctrl+F busca). Si se prefiere, "Ver como PDF" lo muestra como PDF y "Descargar" baja el archivo original; una hoja muy grande muestra solo las primeras 1000 filas y avisa. A la derecha están los datos del documento, su historial (entregó, rechazó con motivo, volvió a entregar, aprobó) y la decisión. Las flechas "Documento anterior / siguiente" recorren la lista, y al aprobar o rechazar pasa sola al siguiente que falta revisar. Esc cierra la pantalla.
 - "Aprobar", o "Rechazar" con el motivo: se puede tocar un motivo rápido (Documento ilegible, Documento caducado, No corresponde al tipo solicitado, Falta firma o sello) y editarlo; el motivo es obligatorio (mínimo 5 letras) y le llega al responsable por la campana y por correo. Un documento ya aprobado se puede rechazar para reabrirlo.
 - Los enlaces externos y los archivos ZIP no se pueden mostrar dentro del sistema: aparece "Abrir enlace" o "Descargar", y aprobar o rechazar funcionan igual.
 - Cuando alguien entrega un documento, el aviso por la campana le llega a todo el personal de Contratación Pública que revisa (no por correo).
 - Los archivos subidos se guardan en la subcarpeta de la entidad en Drive, dentro de una carpeta por mes. Sin la carpeta general de Contratación Pública (ver Entidades Públicas) solo se pueden entregar enlaces.
-
-## Operaciones: Contratos, Horarios y Códigos de turno
-- Menú → "Contratación Pública" → "Contratos": "+ Nuevo Contrato" pide Entidad Pública *, Número de contrato / orden de compra *, Objeto del servicio *, Referencia del proceso, Fecha de inicio *, Fecha de fin * y Valor total. Al abrir un contrato hay pestañas: Puestos, Adendas, Adjuntos y Horarios.
-- Puestos (pestaña del contrato): cada puesto de servicio lleva Nombre (ej. "Garita norte"), Tipo de turno (8H, 12H o 24H), Cantidad de guardias y Guardias simultáneos requeridos (cuántos deben estar trabajando a la vez cada día). A cada puesto se le asignan sus guardias.
-- Menú → "Contratación Pública" → "Códigos de turno": las letras que se usan en el horario (D, N, L…). Cada código tiene Código, Nombre, Color, Activo y "Es descanso/libre" (un descanso no cuenta como guardia trabajando). El horario de cada turno (de qué hora a qué hora) se pone en Bitácoras → "Horario de los turnos".
-- Menú → "Contratación Pública" → "Horarios": "Nuevo Horario" pide Fecha inicio y Fecha fin (no tiene que ser un mes calendario, por ejemplo del 30 de julio al 29 de agosto) y no puede cruzarse con otro horario del mismo contrato. Dentro se llena qué código le toca a cada guardia cada día; el horario pasa de Borrador a Enviado y a Aprobado.
-
-## Bitácoras (hojas de los guardias)
-- Para qué sirve: los guardias llenan a mano la bitácora de su puesto (quién estuvo, de qué hora a qué hora y las novedades). Alguien la fotografía y la sube; el Agente Revisor de Bitácoras la lee y el sistema la compara con el horario del puesto para avisar si quien aparece en la hoja no es quien debía estar.
-- Menú → "Contratación Pública" → "Bitácoras". Tiene dos pestañas: "Resumen" y "Hojas subidas", y filtros por puesto, resultado y fechas (con el botón de escoba para limpiarlos). Con permiso "ver" se mira todo; subir, corregir, resolver hallazgos y eliminar piden permiso de escribir en Contratación Pública.
-- "Subir bitácora": se elige el Puesto (de ahí sale el horario contra el que se compara, así que debe ser el de esa hoja) y la foto: "Tomar foto" abre la cámara en el celular y "Elegir archivo" sube una foto (JPG, PNG, WebP o HEIC) o un PDF de hasta 15 MB. "Subir y leer" tarda unos segundos, hasta medio minuto, y abre la bitácora ya leída y comparada. "Cargar sin foto" crea la bitácora vacía para escribir lo que dice la hoja a mano.
-- Al abrir una bitácora: a la izquierda la foto; a la derecha "Qué encontró la revisión" (los hallazgos), "Lo que dice la hoja" (lo que el agente leyó: días, guardias con su entrada y salida, y novedades) y "Lo que decía el horario" (quién le tocaba a cada guardia cada día y si aparece en la hoja). El resultado es Conforme (todo cuadra), A revisar (hay cosas por confirmar), Con errores (aparece alguien que no debía estar o falta alguien) o Sin comparar (no hay horario cargado para esos días).
-- Hallazgos: otro guardia en lugar del programado (por ejemplo, el horario decía Juan y la hoja trae a Pedro), guardia que no aparece, guardia que estaba libre, nombre que no es de ninguno del puesto, horas distintas a las del turno (se toleran 30 minutos), nombre dudoso o ambiguo, día sin horario, horario sin aprobar, fecha fuera del contrato, puesto distinto al elegido y hoja repetida. Cada uno se marca "Resolver" o "Descartar" con una nota obligatoria que queda en el historial; "Reabrir" lo deja abierto otra vez.
-- Si el agente leyó mal algo (la letra a mano a veces es difícil), se corrige en "Lo que dice la hoja" y se pulsa "Guardar y revisar de nuevo": la comparación se hace otra vez. "Volver a leer con el agente" vuelve a leer la foto y reemplaza lo corregido a mano (pide confirmación).
-- El agente solo transcribe la hoja: no conoce el horario ni a los guardias mientras lee (así no "corrige" un nombre equivocado), y la comparación la hace el sistema con reglas fijas. Si el agente está desactivado o la lectura con IA no está configurada, la foto se guarda sin leer y se transcribe a mano.
-- "Horario de los turnos" (botón de arriba): se escribe de qué hora a qué hora es cada turno, por ejemplo D de 07:00 a 19:00 y N de 19:00 a 07:00 (la noche cruza la medianoche). Sin esto solo se compara quién estuvo, no las horas.
-- "Resumen": cuántas bitácoras cuadran con el horario (%), hallazgos abiertos, la novedad que más se repite, el día y el puesto con más novedades, las novedades por tipo (ingreso de personas, vehículos, rondas, cambio de turno, equipos, incidente) y las más graves.
 
 ## Recordatorios
 - Cada día el sistema recuerda a los responsables los documentos Pendientes o Rechazados cuya fecha límite es dentro de 3 días y los que vencen ese mismo día, dentro del sistema y por correo.
@@ -467,10 +452,47 @@ Sirve para pedir y seguir, mes a mes, los documentos que otras áreas (RRHH, Fin
 - "No veo Contratación Pública": pedir el permiso a un administrador (Administración → Permisos de usuario) o por "Reportar un problema a Sistemas".
 - "No puedo subir un archivo": revisar que sea PDF, Word, Excel, imagen o ZIP de hasta 15 MB; si dice que falta configurar la carpeta de Drive, pegar un enlace o avisar al personal de Contratación Pública.
 - "No me deja enviar la solicitud": falta agregar al menos un documento, o algún documento no tiene responsable.
-- "Ya no recibo el recordatorio de un documento": solo se recuerdan los Pendientes o Rechazados; uno Entregado o Aprobado ya no genera recordatorios.
+- "Ya no recibo el recordatorio de un documento": solo se recuerdan los Pendientes o Rechazados; uno Entregado o Aprobado ya no genera recordatorios.`;
+
+// Operaciones (2026-11-05): contratos, horarios y bitácoras de guardianía salieron de Contratación Pública
+// a su propio módulo y sección de permisos. Ver .agents/modules/operaciones.md.
+const OPERACIONES = `# Operaciones — guía detallada
+
+## Para qué sirve
+Reúne lo que pasa en cada puesto de guardianía: los contratos con sus puestos y guardias, el horario de quién debe estar cada día y las bitácoras que llenan los guardias, que el sistema compara con ese horario.
+
+## Acceso y pantallas
+- Menú → "Operaciones" tiene estas pantallas: "Resumen", "Contratos", "Horarios", "Bitácoras", "Inventario" y "Configuración". "Nuevo contrato" y "Editar" abren una ventana sobre la lista o el detalle del contrato.
+- Para registrar al instante que un guardia no llegó: Menú → "Operaciones" → "Resumen" → en "Hoy en los puestos" pulsa "No llegó" junto al guardia. Eliges el motivo y quién lo cubre (el sistema sugiere guardias libres ese día) o lo dejas para después. No hace falta foto ni bitácora. Mientras nadie lo cubra, el puesto aparece con "Falta cobertura" o "Sin reemplazo"; "Elegir quién cubre" lo asigna después y "Deshacer" lo quita si fue un error. Cuando llega la bitácora de ese día, la revisión ya toma en cuenta la falta y el reemplazo.
+- Menú → "Operaciones" → "Inventario": uniformes (cada talla es un artículo), implementos y municiones con su kardex (entradas, entregas a un guardia o a un puesto, devoluciones, bajas y ajustes; el saldo se calcula solo, no se escribe), y las armas por número de serie (quién la tiene, historial, permiso con fecha de vencimiento: no se asigna un arma con el permiso vencido). Pestañas: Resumen, Existencias, Armas, "Quién tiene qué" y Movimientos. Al llegar un artículo a su mínimo se avisa por la campana y se calcula cuánto reponer.
+- Con permiso "ver" una persona mira; con "escribir" crea contratos y horarios, sube y corrige bitácoras y resuelve hallazgos. Si no aparece "Operaciones", pedir el permiso a un administrador (Administración → Permisos de usuario) o por "Reportar un problema a Sistemas".
+
+## Contratos, Horarios y Códigos de turno
+- Menú → "Operaciones" → "Contratos": "+ Nuevo Contrato" pide Entidad Pública *, Número de contrato / orden de compra *, Objeto del servicio *, Referencia del proceso, Fecha de inicio *, Fecha de fin * y Valor total. Al abrir un contrato hay pestañas: Puestos, Adendas, Adjuntos y Horarios.
+- Puestos (pestaña del contrato): cada puesto de servicio lleva Nombre (ej. "Garita norte"), Tipo de turno (8H, 12H o 24H), Cantidad de guardias y Guardias simultáneos requeridos (cuántos deben estar trabajando a la vez cada día). A cada puesto se le asignan sus guardias.
+- Códigos de turno (Menú → "Operaciones" → "Configuración" → pestaña «Códigos de turno»): las letras que se usan en el horario (D, N, L…). Cada código tiene Código, Nombre, Color, Activo y "Es descanso/libre" (un descanso no cuenta como guardia trabajando). El horario de cada turno (de qué hora a qué hora) está en la pestaña «Horario de los turnos» de la misma pantalla.
+- Menú → "Operaciones" → "Horarios": "Nuevo Horario" pide Fecha inicio y Fecha fin (no tiene que ser un mes calendario, por ejemplo del 30 de julio al 29 de agosto) y no puede cruzarse con otro horario del mismo contrato. Dentro se llena qué código le toca a cada guardia cada día; el horario pasa de Borrador a Enviado y a Aprobado.
+
+## Bitácoras (hojas de los guardias)
+- Para qué sirve: los guardias llenan a mano la bitácora de su puesto (quién estuvo, de qué hora a qué hora y las novedades). Alguien la fotografía y la sube; el Agente Revisor de Bitácoras la lee y el sistema la compara con el horario del puesto para avisar si quien aparece en la hoja no es quien debía estar.
+- Menú → "Operaciones" → "Bitácoras": la lista de hojas subidas, con filtros por puesto, resultado y fechas (con el botón de escoba para limpiarlos). Con permiso "ver" se mira todo; subir, corregir, resolver hallazgos y eliminar piden permiso de escribir en Operaciones.
+- "Subir bitácora": se elige el Puesto (de ahí sale el horario contra el que se compara, así que debe ser el de esa hoja) y la foto: "Tomar foto" abre la cámara en el celular y "Elegir archivo" sube una foto (JPG, PNG, WebP o HEIC) o un PDF de hasta 15 MB. "Subir y leer" tarda unos segundos, hasta medio minuto, y abre la bitácora ya leída y comparada. "Cargar sin foto" crea la bitácora vacía para escribir lo que dice la hoja a mano.
+- Al abrir una bitácora: a la izquierda la foto; a la derecha "Qué encontró la revisión" (los hallazgos), "Lo que dice la hoja" (lo que el agente leyó: días, guardias con su entrada y salida, y novedades) y "Lo que decía el horario" (quién le tocaba a cada guardia cada día y si aparece en la hoja). El resultado es Conforme (todo cuadra), A revisar (hay cosas por confirmar), Con errores (aparece alguien que no debía estar o falta alguien) o Sin comparar (no hay horario cargado para esos días).
+- Hallazgos: otro guardia en lugar del programado (por ejemplo, el horario decía Juan y la hoja trae a Pedro), guardia que no aparece, guardia que estaba libre, nombre que no es de ninguno del puesto, horas distintas a las del turno (se toleran 30 minutos), nombre dudoso o ambiguo, día sin horario, horario sin aprobar, fecha fuera del contrato, puesto distinto al elegido y hoja repetida. Cada uno se marca "Resolver" o "Descartar" con una nota obligatoria que queda en el historial; "Reabrir" lo deja abierto otra vez.
+- Cuando falta un guardia («le tocaba trabajar y no aparece»), el hallazgo propone quién podría cubrir ese día: guardias del mismo contrato que tenían descanso o ningún turno (primero los del mismo puesto), con un aviso si habían trabajado de noche el día anterior. Solo sugiere: quién cubre lo decide una persona.
+- Cuando una hoja pasa a «Con errores», llega un aviso por la campana a quienes pueden escribir en Operaciones (menos a quien la subió).
+- Si el agente leyó mal algo (la letra a mano a veces es difícil), se corrige en "Lo que dice la hoja" y se pulsa "Guardar y revisar de nuevo": la comparación se hace otra vez. "Volver a leer con el agente" vuelve a leer la foto y reemplaza lo corregido a mano (pide confirmación).
+- El agente solo transcribe la hoja: no conoce el horario ni a los guardias mientras lee (así no "corrige" un nombre equivocado), y la comparación la hace el sistema con reglas fijas. Si el agente está desactivado o la lectura con IA no está configurada, la foto se guarda sin leer y se transcribe a mano.
+- "Horario de los turnos" (Menú → "Operaciones" → "Configuración" → pestaña «Horario de los turnos»): se escribe de qué hora a qué hora es cada turno, por ejemplo D de 07:00 a 19:00 y N de 19:00 a 07:00 (la noche cruza la medianoche). Sin esto solo se compara quién estuvo, no las horas.
+
+## Resumen
+- Menú → "Operaciones" → "Resumen" es la primera pantalla del módulo. Arriba está «Hoy en los puestos»: por cada puesto de un contrato activo, quién debe estar hoy según el horario (con su turno y horas), quién tiene descanso, si se cumple la cantidad mínima de guardias («Cubierto», «Falta cobertura», «Sin horario» u «Horario sin aprobar») y qué días de la última semana no tienen bitácora aunque el horario aprobado esperaba guardias. Lo que pide atención sale primero. Cada fila tiene «Subir bitácora» (con el puesto ya elegido) o «Ver horarios» si no hay horario. No se escribe nada ahí: se calcula con los horarios y las bitácoras.
+- Debajo, «Lo que dejan las bitácoras»: cuántas bitácoras cuadran con el horario (%), hallazgos abiertos, la novedad que más se repite, el día y el puesto con más novedades, las novedades por tipo (ingreso de personas, vehículos, rondas, cambio de turno, equipos, incidente) y las más graves.
+
+## Preguntas frecuentes
 - "El agente leyó mal un nombre o una hora": abrir la bitácora, corregirlo en "Lo que dice la hoja" y pulsar "Guardar y revisar de nuevo".
-- "Sale «Día sin horario»": falta cargar el horario de ese período del contrato (Contratación Pública → Horarios).
-- "No puedo subir una bitácora": hace falta permiso de escribir en Contratación Pública; si el aviso dice que la lectura con IA no está configurada o el agente está desactivado, la foto se guarda igual y se escribe a mano.
+- "Sale «Día sin horario»": falta cargar el horario de ese período del contrato (Operaciones → Horarios).
+- "No puedo subir una bitácora": hace falta permiso de escribir en Operaciones; si el aviso dice que la lectura con IA no está configurada o el agente está desactivado, la foto se guarda igual y se escribe a mano.
 - "Un hallazgo no es un error": pulsar "Descartar" y explicar por qué en la nota.`;
 
 const CACAO = `# Cacao — guía
@@ -575,6 +597,7 @@ export const SECTION_GUIDES: Record<string, string> = {
   RRHH,
   VENTAS,
   CONTRATACION_PUBLICA,
+  OPERACIONES,
   CACAO,
   CUSTODIAS,
   ADMIN,

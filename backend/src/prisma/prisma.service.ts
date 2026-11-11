@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { USER_PHONE_DDL } from './user-phone.schema';
 import { CP_CODIGO_TURNO_HORAS_DDL } from './cp-codigo-turno-horas.schema';
+import { CP_INFORME_DATOS_DDL } from './cp-informe-datos.schema';
 import { CACAO_LIQUIDACIONES_DDL } from './cacao-liquidaciones.schema';
 import { CACAO_CONFIG_DDL } from './cacao-config.schema';
 
@@ -85,6 +86,7 @@ export class PrismaService
     for (const ddl of [
       ...USER_PHONE_DDL,
       ...CP_CODIGO_TURNO_HORAS_DDL,
+      ...CP_INFORME_DATOS_DDL,
       ...CACAO_LIQUIDACIONES_DDL,
       ...CACAO_CONFIG_DDL,
     ]) {

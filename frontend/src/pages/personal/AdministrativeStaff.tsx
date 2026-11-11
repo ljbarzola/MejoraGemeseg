@@ -18,6 +18,7 @@ import {
 import AdministrativoDetalleModal from '../../components/personal/AdministrativoDetalleModal';
 import AdministrativeStaffConfigModal from '../../components/personal/AdministrativeStaffConfigModal';
 import NuevoPersonalAdministrativoModal from '../../components/personal/NuevoPersonalAdministrativoModal';
+import RrhhPageHeader from '../../components/personal/RrhhPageHeader';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import OpenFolderButton from '../../components/common/OpenFolderButton';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
@@ -208,57 +209,49 @@ export default function AdministrativeStaff() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">RECURSOS HUMANOS</p>
-            <h1>Personal Administrativo</h1>
-            <p style={{ color: '#718096', fontSize: '0.85rem', marginTop: '4px' }}>
-              Personal de oficina y administrativo sincronizado desde Google Drive
-            </p>
-            <p style={{ color: '#a0aec0', fontSize: '0.78rem', marginTop: '2px' }}>
-              La carpeta se nombra igual que en Guardias: "Apellidos Nombres". El puesto y la cédula se guardan dentro de datos.json, no en el nombre.
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-            <div className="header-actions">
-              {canEdit && (
-                <button className="auth-btn" onClick={() => { setNuevoOk(''); setShowNuevo(true); }}>
-                  <UserPlus size={16} /> Nuevo
-                </button>
-              )}
-              <button className="btn-secondary" onClick={handleSync} disabled={syncing}>
-                <RefreshCw size={16} className={syncing ? 'spin' : undefined} />
-                {syncing ? 'Sincronizando...' : 'Sincronizar'}
+      <RrhhPageHeader
+        title="Personal Administrativo"
+        description="Personal de oficina y administrativo, con sus datos y documentos traídos desde Google Drive."
+        actions={
+          <>
+            <button
+              type="button"
+              className="btn-icon-toolbar"
+              onClick={() => setShowDocTypesModal(true)}
+              title="Datos, campos y documentos requeridos"
+              aria-label="Datos, campos y documentos requeridos"
+            >
+              <FileCog size={18} />
+            </button>
+            <button
+              type="button"
+              className="btn-icon-toolbar"
+              onClick={openConfigModal}
+              title="Carpeta de Drive"
+              aria-label="Carpeta de Drive"
+            >
+              <Settings size={18} />
+            </button>
+            <button className="btn-secondary" onClick={handleSync} disabled={syncing}>
+              <RefreshCw size={16} className={syncing ? 'spin' : undefined} />
+              {syncing ? 'Sincronizando...' : 'Sincronizar'}
+            </button>
+            {canEdit && (
+              <button className="auth-btn" onClick={() => { setNuevoOk(''); setShowNuevo(true); }}>
+                <UserPlus size={16} /> Nuevo
               </button>
-              <button
-                type="button"
-                className="btn-icon-toolbar"
-                onClick={() => setShowDocTypesModal(true)}
-                title="Datos, campos y documentos requeridos"
-                aria-label="Datos, campos y documentos requeridos"
-              >
-                <FileCog size={18} />
-              </button>
-              <button
-                type="button"
-                className="btn-icon-toolbar"
-                onClick={openConfigModal}
-                title="Carpeta de Drive"
-                aria-label="Carpeta de Drive"
-              >
-                <Settings size={18} />
-              </button>
-            </div>
-            {ultimaSincronizacion && (
-              <span style={{ fontSize: '0.75rem', color: '#718096' }}>
-                Última sincronización: {formatFechaHoraSync(ultimaSincronizacion)}
-              </span>
             )}
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
+      {ultimaSincronizacion && (
+        <p style={{ fontSize: '0.75rem', color: '#718096', textAlign: 'right', margin: '4px 0 0' }}>
+          Última sincronización: {formatFechaHoraSync(ultimaSincronizacion)}
+        </p>
+      )}
+      <p style={{ color: '#a0aec0', fontSize: '0.78rem', margin: '4px 0 0' }}>
+        La carpeta se nombra igual que en Guardias: "Apellidos Nombres". El puesto y la cédula se guardan dentro de datos.json, no en el nombre.
+      </p>
 
       {deleteError && (
         <div ref={deleteErrorRef} style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginTop: '16px', fontSize: '0.85rem' }}>{deleteError}</div>

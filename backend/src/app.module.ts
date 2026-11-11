@@ -20,6 +20,7 @@ import { PersonalModule } from './modules/personal/personal.module';
 import { VentasModule } from './modules/ventas/ventas.module';
 import { SistemasModule } from './modules/sistemas/sistemas.module';
 import { ContratacionPublicaModule } from './modules/contratacion-publica/contratacion-publica.module';
+import { OperacionesInventarioModule } from './modules/operaciones-inventario/operaciones-inventario.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { BitacoraModule } from './modules/bitacora/bitacora.module';
 
@@ -44,6 +45,7 @@ import { BitacoraModule } from './modules/bitacora/bitacora.module';
     VentasModule,
     SistemasModule,
     ContratacionPublicaModule,
+    OperacionesInventarioModule,
     NotificationsModule,
     BitacoraModule,
   ],
