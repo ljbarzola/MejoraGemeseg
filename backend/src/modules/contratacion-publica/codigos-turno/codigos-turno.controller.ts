@@ -23,19 +23,19 @@ export class CPCodigosTurnoController {
   constructor(private readonly service: CPCodigosTurnoService) {}
 
   @Get()
-  @Section('CONTRATACION_PUBLICA', 'view')
+  @Section('OPERACIONES', 'view')
   findAll(@Req() req: any) {
     return this.service.findAll(req.user.companyId);
   }
 
   @Post()
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   create(@Body() dto: CreateCodigoTurnoDto, @Req() req: any) {
     return this.service.create(dto, req.user.companyId);
   }
 
   @Patch(':id')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCodigoTurnoDto,
@@ -45,7 +45,7 @@ export class CPCodigosTurnoController {
   }
 
   @Delete(':id')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.service.remove(id, req.user.companyId);
   }

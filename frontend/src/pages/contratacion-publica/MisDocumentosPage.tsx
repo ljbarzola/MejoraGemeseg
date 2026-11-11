@@ -1,15 +1,35 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload } from 'lucide-react';
+import { Search, Upload } from 'lucide-react';
 import { getMisDocumentos } from '../../services/contratacion-publica.service';
 import type { CPDocumentoBandeja } from '../../types/contratacion-publica';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import EntregarModal from '../../components/contratacion-publica/EntregarModal';
+import RevisionPanel, { type DocumentoRevisable } from '../../components/contratacion-publica/RevisionPanel';
+import CPPageHeader from '../../components/contratacion-publica/CPPageHeader';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import { useColumnFilters } from '../../hooks/useColumnFilters';
 import { ESTADO_COLOR, ESTADO_LABEL, formatoFecha, mensajeError, tituloMes } from '../../utils/entregasCp';
+
+const aRevisable = (f: CPDocumentoBandeja): DocumentoRevisable => ({
+  id: f.id,
+  nombre: f.nombre,
+  descripcion: f.descripcion,
+  entidadNombre: f.entidadNombre,
+  periodo: tituloMes(f.anio, f.mes, f.periodoCiclo),
+  estado: f.estado,
+  fechaLimite: f.fechaLimite,
+  vencida: f.vencida,
+  origen: f.origen ?? null,
+  url: f.url ?? null,
+  motivoRechazo: f.motivoRechazo,
+  entregadoPorNombre: f.entregadoPorNombre ?? null,
+  entregadoAt: f.entregadoAt ?? null,
+  revisadoPorNombre: f.revisadoPorNombre ?? null,
+  revisadoAt: f.revisadoAt ?? null,
+});
 
 // Rechazados primero, luego vencidos, luego el resto por fecha límite.
 const prioridad = (f: CPDocumentoBandeja) =>
@@ -29,6 +49,7 @@ export default function MisDocumentosPage() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [entregando, setEntregando] = useState<CPDocumentoBandeja | null>(null);
+  const [viendoId, setViendoId] = useState<number | null>(null);
 
   const load = (silencioso = false) => {
     if (!silencioso) setLoading(true);
@@ -75,21 +96,22 @@ export default function MisDocumentosPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">CONTRATACIÓN PÚBLICA</p>
-            <h1>Por entregar</h1>
-          </div>
-        </div>
-        {!loading && filas.length > 0 && (
-          <p style={{ margin: 0, fontSize: '0.85rem', color: '#4a5568' }}>
-            {filas.length} por entregar
-            {rechazados > 0 && <> · <strong style={{ color: '#c53030' }}>{rechazados} rechazado(s)</strong></>}
-            {vencidos > 0 && <> · <strong style={{ color: '#c53030' }}>{vencidos} vencido(s)</strong></>}
-          </p>
-        )}
-      </div>
+      <CPPageHeader
+        pantalla="por-entregar"
+        title="Por entregar"
+        description={
+          <>
+            Los documentos que te asignaron, de cualquier entidad, con su fecha límite. Entrégalos con un archivo o un enlace.
+            {!loading && filas.length > 0 && (
+              <>
+                {' '}<strong>{filas.length} por entregar</strong>
+                {rechazados > 0 && <> · <strong style={{ color: '#c53030' }}>{rechazados} rechazado(s)</strong></>}
+                {vencidos > 0 && <> · <strong style={{ color: '#c53030' }}>{vencidos} vencido(s)</strong></>}
+              </>
+            )}
+          </>
+        }
+      />
 
       {error && (
         <div style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{error}</div>
@@ -121,12 +143,12 @@ export default function MisDocumentosPage() {
             <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th {...thProps('nombre')} style={{ width: '24%' }}>Documento <ColumnFilter cf={cf} col="nombre" orden={ordenDe('nombre')} /></th>
-                  <th {...thProps('entidad')} style={{ width: '21%' }}>Entidad <ColumnFilter cf={cf} col="entidad" orden={ordenDe('entidad')} /></th>
-                  <th {...thProps('mes')} style={{ width: '14%' }}>Mes <ColumnFilter cf={cf} col="mes" orden={ordenDe('mes')} /></th>
-                  <th {...thProps('fechaLimite')} style={{ width: '12%' }}>Fecha límite <ColumnFilter cf={cf} col="fechaLimite" orden={ordenDe('fechaLimite')} /></th>
-                  <th {...thProps('prioridad')} style={{ width: '16%' }}>Estado <ColumnFilter cf={cf} col="estado" orden={ordenDe('prioridad')} /></th>
-                  <th style={{ textAlign: 'right', width: '13%' }}>Acciones</th>
+                  <th {...thProps('nombre')} style={{ width: '22%' }}>Documento <ColumnFilter cf={cf} col="nombre" orden={ordenDe('nombre')} /></th>
+                  <th {...thProps('entidad')} style={{ width: '18%' }}>Entidad <ColumnFilter cf={cf} col="entidad" orden={ordenDe('entidad')} /></th>
+                  <th {...thProps('mes')} style={{ width: '12%' }}>Mes <ColumnFilter cf={cf} col="mes" orden={ordenDe('mes')} /></th>
+                  <th {...thProps('fechaLimite')} style={{ width: '11%' }}>Fecha límite <ColumnFilter cf={cf} col="fechaLimite" orden={ordenDe('fechaLimite')} /></th>
+                  <th {...thProps('prioridad')} style={{ width: '15%' }}>Estado <ColumnFilter cf={cf} col="estado" orden={ordenDe('prioridad')} /></th>
+                  <th style={{ textAlign: 'right', width: '22%' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -154,7 +176,7 @@ export default function MisDocumentosPage() {
                         </a>
                       </span>
                     </td>
-                    <td><span className="truncate">{tituloMes(f.anio, f.mes)}</span></td>
+                    <td><span className="truncate">{tituloMes(f.anio, f.mes, f.periodoCiclo)}</span></td>
                     <td>
                       {formatoFecha(f.fechaLimite)}
                       {f.vencida && <div style={{ color: '#c53030', fontWeight: 700, fontSize: '0.72rem' }}>Vencido</div>}
@@ -167,10 +189,17 @@ export default function MisDocumentosPage() {
                         <div style={{ fontSize: '0.72rem', color: '#c53030', marginTop: 2 }}>{f.motivoRechazo}</div>
                       )}
                     </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <button className="auth-btn" style={{ padding: '6px 12px', fontSize: '0.8rem', whiteSpace: 'nowrap' }} onClick={() => setEntregando(f)}>
-                        <Upload size={13} /> {f.estado === 'RECHAZADO' ? 'Entregar de nuevo' : 'Entregar'}
-                      </button>
+                    <td>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch' }}>
+                        {f.url && (
+                          <button className="btn-secondary" style={{ padding: '6px 10px', fontSize: '0.8rem', whiteSpace: 'nowrap', justifyContent: 'center' }} onClick={() => setViendoId(f.id)}>
+                            <Search size={13} /> Ver detalle
+                          </button>
+                        )}
+                        <button className="auth-btn" style={{ padding: '6px 10px', fontSize: '0.8rem', whiteSpace: 'nowrap', justifyContent: 'center' }} onClick={() => setEntregando(f)}>
+                          <Upload size={13} /> {f.estado === 'RECHAZADO' ? 'Entregar de nuevo' : 'Entregar'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -179,6 +208,17 @@ export default function MisDocumentosPage() {
           </div>
         )}
       </div>
+
+      {viendoId !== null && (
+        <RevisionPanel
+          items={filas.filter((f) => f.url).map(aRevisable)}
+          inicioId={viendoId}
+          puedeRevisar={false}
+          onClose={() => setViendoId(null)}
+          onAprobar={async () => undefined}
+          onRechazar={async () => undefined}
+        />
+      )}
 
       {entregando && (
         <EntregarModal

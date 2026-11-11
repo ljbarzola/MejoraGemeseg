@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import FileOrLinkInput from '../common/FileOrLinkInput';
 import ErrorBanner from '../common/ErrorBanner';
 import HistorialEntrega from './HistorialEntrega';
-import { entregarDocumento, subirArchivoEntrega } from '../../services/contratacion-publica.service';
+import { entregarDocumento, pedirRevisionIA, subirArchivoEntrega } from '../../services/contratacion-publica.service';
 import type { CPEstadoEntrega, CPSolicitudMensual } from '../../types/contratacion-publica';
 import { ARCHIVOS_ACEPTADOS, formatoFecha, mensajeError } from '../../utils/entregasCp';
 
@@ -48,11 +48,15 @@ export default function EntregarModal({
     setGuardando(true);
     setError('');
     try {
-      onEntregada(await entregarDocumento(entrega.id, {
+      const entregada = await entregarDocumento(entrega.id, {
         origen,
         url: url.trim(),
         ...(hayAnterior ? { reemplazarAnterior: queHacerConAnterior === 'reemplazar' } : {}),
-      }));
+      });
+      // El agente revisor lee el archivo mientras la persona sigue con lo suyo: es una petición
+      // aparte (no frena la entrega) y si falla no importa, quien aprueba la puede pedir desde su panel.
+      if (origen === 'ARCHIVO') void pedirRevisionIA(entrega.id).catch(() => undefined);
+      onEntregada(entregada);
     } catch (err) {
       setError(mensajeError(err, 'No se pudo registrar la entrega.'));
     } finally {

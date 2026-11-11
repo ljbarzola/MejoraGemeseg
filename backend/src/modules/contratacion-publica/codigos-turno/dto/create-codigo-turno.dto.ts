@@ -22,6 +22,11 @@ export class CreateCodigoTurnoDto {
   @IsOptional()
   esDescanso?: boolean;
 
+  /** Día de custodia (DC): trabaja fuera del puesto, en un viaje de Custodias. */
+  @IsBoolean()
+  @IsOptional()
+  esCustodia?: boolean;
+
   /** Ventana del turno, "07:00". null = sin hora. La usa el revisor de bitácoras. */
   @IsOptional()
   @Matches(HORA, { message: MSG_HORA })

@@ -79,6 +79,14 @@ export class CPContratosService {
         fechaInicio: new Date(dto.fechaInicio),
         fechaFin: new Date(dto.fechaFin),
         valorTotal: dto.valorTotal,
+        administradorNombre: dto.administradorNombre,
+        administradorCargo: dto.administradorCargo,
+        tipoCompra: dto.tipoCompra,
+        diaCorte: dto.diaCorte,
+        fechaEmisionOrden: dto.fechaEmisionOrden ? new Date(dto.fechaEmisionOrden) : undefined,
+        fechaAceptacionOrden: dto.fechaAceptacionOrden ? new Date(dto.fechaAceptacionOrden) : undefined,
+        fechaSuscripcionOrden: dto.fechaSuscripcionOrden ? new Date(dto.fechaSuscripcionOrden) : undefined,
+        plazoDias: dto.plazoDias,
         companyId,
         createdBy,
       },
@@ -103,6 +111,9 @@ export class CPContratosService {
     const data: any = { ...dto };
     if (dto.fechaInicio) data.fechaInicio = new Date(dto.fechaInicio);
     if (dto.fechaFin) data.fechaFin = new Date(dto.fechaFin);
+    for (const campo of ['fechaEmisionOrden', 'fechaAceptacionOrden', 'fechaSuscripcionOrden'] as const) {
+      if (campo in dto) data[campo] = dto[campo] ? new Date(dto[campo] as string) : null;
+    }
 
     return this.prisma.cPContrato.update({
       where: { id },
@@ -153,6 +164,11 @@ export class CPContratosService {
         fechaInicio: new Date(dto.fechaInicio),
         fechaFin: new Date(dto.fechaFin),
         valorTotal: dto.valorTotal,
+        // Una renovación sigue con la misma entidad: hereda quién la administra y cómo se compró.
+        administradorNombre: original.administradorNombre,
+        administradorCargo: original.administradorCargo,
+        tipoCompra: original.tipoCompra,
+        diaCorte: original.diaCorte,
         contratoOrigenId: original.id,
         companyId,
         createdBy,

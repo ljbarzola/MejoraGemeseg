@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsInt, IsOptional, IsString } from 'class-validator';
 
 export class UpdateInformeDto {
   @IsString()
@@ -8,4 +8,9 @@ export class UpdateInformeDto {
   @IsString()
   @IsOptional()
   conclusiones?: string;
+
+  /** null = volver a la plantilla por defecto (la primera). */
+  @IsInt()
+  @IsOptional()
+  plantillaId?: number | null;
 }

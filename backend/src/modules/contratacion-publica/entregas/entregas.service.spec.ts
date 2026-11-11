@@ -112,6 +112,8 @@ describe('EntregasService', () => {
 
   beforeEach(() => {
     prisma = {
+      // Los ciclos por contrato (día de corte): sin contratos activos todo cae en el mes calendario.
+      cPContrato: { findMany: jest.fn().mockResolvedValue([]) },
       cPEntidadPublica: { findFirst: jest.fn().mockResolvedValue(entidad) },
       cPSolicitudMensual: {
         findUnique: jest.fn(),
@@ -744,6 +746,8 @@ describe('EntregasService: historial, vista previa y bandejas', () => {
 
   beforeEach(() => {
     prisma = {
+      // Los ciclos por contrato (día de corte): sin contratos activos todo cae en el mes calendario.
+      cPContrato: { findMany: jest.fn().mockResolvedValue([]) },
       cPEntidadPublica: {
         findFirst: jest.fn().mockResolvedValue({ ...entidad, driveFolderId: 'ENT' }),
       },
@@ -1020,6 +1024,8 @@ describe('EntregasService: entregar de nuevo (reemplazar o conservar el archivo 
 
   beforeEach(() => {
     prisma = {
+      // Los ciclos por contrato (día de corte): sin contratos activos todo cae en el mes calendario.
+      cPContrato: { findMany: jest.fn().mockResolvedValue([]) },
       cPEntidadPublica: {
         findFirst: jest.fn().mockResolvedValue({ ...entidad, driveFolderId: 'ENT' }),
       },

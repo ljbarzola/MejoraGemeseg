@@ -22,7 +22,7 @@ export class CPHorariosExcelService {
    */
   async generarExcelHorario(data: HorarioPdfData): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('Horario', {
+    const sheet = workbook.addWorksheet(data.hoja ?? 'Horario', {
       pageSetup: { orientation: 'landscape', fitToPage: true },
     });
 
@@ -32,7 +32,7 @@ export class CPHorariosExcelService {
     sheet.mergeCells(1, 1, 1, totalCols);
     const titulo = sheet.getCell(1, 1);
     titulo.value =
-      'GEMESEG — Horario Mensual de Guardias (Contratación Pública)';
+      data.titulo ?? 'GEMESEG — Horario Mensual de Guardias (Contratación Pública)';
     titulo.font = { bold: true, size: 14, color: { argb: 'FF1E3A5F' } };
     titulo.alignment = { horizontal: 'center' };
 

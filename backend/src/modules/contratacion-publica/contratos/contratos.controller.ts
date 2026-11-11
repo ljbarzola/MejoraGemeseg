@@ -33,7 +33,7 @@ export class CPContratosController {
   constructor(private readonly service: CPContratosService) {}
 
   @Get()
-  @Section('CONTRATACION_PUBLICA', 'view')
+  @Section('OPERACIONES', 'view')
   findAll(
     @Req() req: any,
     @Query('estado') estado?: string,
@@ -46,7 +46,7 @@ export class CPContratosController {
   }
 
   @Get('file/:fileName')
-  @Section('CONTRATACION_PUBLICA', 'view')
+  @Section('OPERACIONES', 'view')
   async getFile(
     @Param('fileName') fileName: string,
     @Req() req: any,
@@ -60,19 +60,19 @@ export class CPContratosController {
   }
 
   @Get(':id')
-  @Section('CONTRATACION_PUBLICA', 'view')
+  @Section('OPERACIONES', 'view')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.service.findOne(id, req.user.companyId);
   }
 
   @Post()
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   create(@Body() dto: CreateContratoDto, @Req() req: any) {
     return this.service.create(dto, req.user.companyId, req.user.userId);
   }
 
   @Patch(':id')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateContratoDto,
@@ -82,13 +82,13 @@ export class CPContratosController {
   }
 
   @Delete(':id')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.service.remove(id, req.user.companyId);
   }
 
   @Post(':id/renovar')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   renovar(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: RenovarContratoDto,
@@ -98,7 +98,7 @@ export class CPContratosController {
   }
 
   @Post(':id/adendas')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   addAdenda(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreateAdendaDto,
@@ -108,7 +108,7 @@ export class CPContratosController {
   }
 
   @Delete(':id/adendas/:adendaId')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   removeAdenda(
     @Param('id', ParseIntPipe) id: number,
     @Param('adendaId', ParseIntPipe) adendaId: number,
@@ -118,7 +118,7 @@ export class CPContratosController {
   }
 
   @Post(':id/adjuntos')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -135,7 +135,7 @@ export class CPContratosController {
   }
 
   @Delete(':id/adjuntos/:adjuntoId')
-  @Section('CONTRATACION_PUBLICA', 'write')
+  @Section('OPERACIONES', 'write')
   removeAdjunto(
     @Param('id', ParseIntPipe) id: number,
     @Param('adjuntoId', ParseIntPipe) adjuntoId: number,

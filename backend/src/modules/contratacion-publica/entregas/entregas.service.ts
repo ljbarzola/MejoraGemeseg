@@ -44,6 +44,7 @@ import {
   nombreMes,
   trasladarFechaAMes,
 } from './entregas.util';
+import { cicloDelMes, cicloTextoCorto, corteDeEntidad, type CicloMensual } from '../shared/ciclo.util';
 
 /**
  * Remitente propio de los correos de Contratación Pública. NO se usa
@@ -91,6 +92,45 @@ export class EntregasService {
     private readonly permissions: PermissionsService,
   ) {}
 
+  // ------------------------------------------------------------ ciclo mensual
+
+  /**
+   * Día de corte de cada entidad según sus contratos activos (ver `corteDeEntidad`). La solicitud sigue
+   * siendo del MES (la carpeta de Drive y la clave no cambian); el ciclo solo dice qué fechas cubre.
+   */
+  async cortesPorEntidad(companyId: number, entidadIds: number[]): Promise<Map<number, number | null>> {
+    const ids = [...new Set(entidadIds)];
+    const out = new Map<number, number | null>(ids.map((id) => [id, null]));
+    if (!ids.length) return out;
+    const contratos = await this.prisma.cPContrato.findMany({
+      where: { companyId, estado: 'ACTIVO', entidadId: { in: ids } },
+      select: { entidadId: true, diaCorte: true },
+    });
+    for (const id of ids) {
+      out.set(id, corteDeEntidad(contratos.filter((c) => c.entidadId === id).map((c) => c.diaCorte)).dia);
+    }
+    return out;
+  }
+
+  /** El ciclo de una solicitud: las fechas que realmente cubre («24 ago – 23 sep» y no «septiembre»). */
+  async cicloDeSolicitud(companyId: number, entidadId: number, anio: number, mes: number): Promise<CicloMensual> {
+    const corte = (await this.cortesPorEntidad(companyId, [entidadId])).get(entidadId) ?? null;
+    return cicloDelMes(anio, mes, corte);
+  }
+
+  /** Texto corto del ciclo si no es el mes calendario; null si lo es. */
+  private textoCiclo(anio: number, mes: number, corte: number | null | undefined): string | null {
+    const c = cicloDelMes(anio, mes, corte);
+    return c.esCiclo ? cicloTextoCorto(c) : null;
+  }
+
+  /** «septiembre de 2026» o, con ciclo, «septiembre de 2026, ciclo 24 ago – 23 sep» (para los avisos). */
+  private async periodoLegible(companyId: number, entidadId: number, anio: number, mes: number): Promise<string> {
+    const corte = (await this.cortesPorEntidad(companyId, [entidadId])).get(entidadId) ?? null;
+    const ciclo = this.textoCiclo(anio, mes, corte);
+    return `${nombreMes(mes)} de ${anio}${ciclo ? `, ciclo ${ciclo}` : ''}`;
+  }
+
   // ---------------------------------------------------------------- consulta
 
   async listarSolicitudes(entidadId: number, actor: Actor) {
@@ -114,6 +154,7 @@ export class EntregasService {
     });
 
     const hoy = hoyEcuador();
+    const corte = (await this.cortesPorEntidad(actor.companyId, [entidadId])).get(entidadId) ?? null;
     const filas = solicitudes
       .map((s) => {
         const visibles = actor.puedeEscribir
@@ -125,6 +166,7 @@ export class EntregasService {
           id: s.id,
           anio: s.anio,
           mes: s.mes,
+          periodoCiclo: this.textoCiclo(s.anio, s.mes, corte),
           estado: s.estado,
           total: visibles.length,
           pendientes: visibles.filter((e) => e.estado === 'PENDIENTE').length,
@@ -189,12 +231,14 @@ export class EntregasService {
             e.estado !== 'APROBADO',
         };
       });
+    const corteEntidad = (await this.cortesPorEntidad(actor.companyId, [s.entidadId])).get(s.entidadId) ?? null;
     return {
       id: s.id,
       entidadId: s.entidadId,
       entidadNombre: s.entidad.nombre,
       anio: s.anio,
       mes: s.mes,
+      periodoCiclo: this.textoCiclo(s.anio, s.mes, corteEntidad),
       estado: s.estado,
       enviadaAt: s.enviadaAt,
       entregas,
@@ -303,7 +347,7 @@ export class EntregasService {
         porPersona.set(r.userId, [...(porPersona.get(r.userId) ?? []), e]);
       }
     }
-    const periodo = `${nombreMes(s.mes)} de ${s.anio}`;
+    const periodo = await this.periodoLegible(actor.companyId, s.entidadId, s.anio, s.mes);
     for (const [userId, docs] of porPersona) {
       const proxima = docs
         .map((d) => d.fechaLimite)
@@ -348,7 +392,7 @@ export class EntregasService {
     if (s.estado === 'ENVIADA') {
       await this.avisar(responsableIds, actor.companyId, {
         titulo: 'Nuevo documento por entregar',
-        mensaje: `Se te asignó "${creada.nombre}" para ${s.entidad.nombre} (${nombreMes(s.mes)} de ${s.anio}). Vence el ${formatoFecha(creada.fechaLimite)}.`,
+        mensaje: `Se te asignó "${creada.nombre}" para ${s.entidad.nombre} (${await this.periodoLegible(actor.companyId, s.entidadId, s.anio, s.mes)}). Vence el ${formatoFecha(creada.fechaLimite)}.`,
         link: this.link(s.entidadId, s.id),
         correo: true,
       });
@@ -406,7 +450,7 @@ export class EntregasService {
     if (s.estado === 'ENVIADA') {
       const nombre = dto.nombre?.trim() || e.nombre;
       const fecha = nuevaFecha ?? e.fechaLimite;
-      const ctx = `${s.entidad.nombre} (${nombreMes(s.mes)} de ${s.anio})`;
+      const ctx = `${s.entidad.nombre} (${await this.periodoLegible(actor.companyId, s.entidadId, s.anio, s.mes)})`;
       await this.avisar(agregados, actor.companyId, {
         titulo: 'Nuevo documento por entregar',
         mensaje: `Se te asignó "${nombre}" para ${ctx}. Vence el ${formatoFecha(fecha)}.`,
@@ -469,7 +513,7 @@ export class EntregasService {
       e.estado === 'RECHAZADO' ? ' Fue rechazado: hay que entregarlo de nuevo.' : '';
     await this.avisar(destinatarios, actor.companyId, {
       titulo: 'Recordatorio de documento',
-      mensaje: `Recuerda entregar "${e.nombre}" para ${e.solicitud.entidad.nombre} (${nombreMes(e.solicitud.mes)} de ${e.solicitud.anio}): ${cuando}.${rechazado}`,
+      mensaje: `Recuerda entregar "${e.nombre}" para ${e.solicitud.entidad.nombre} (${await this.periodoLegible(actor.companyId, e.solicitud.entidadId, e.solicitud.anio, e.solicitud.mes)}): ${cuando}.${rechazado}`,
       link: this.link(e.solicitud.entidadId, e.solicitudId),
       correo: true,
     });
@@ -581,7 +625,7 @@ export class EntregasService {
     );
     await this.avisar(destinatarios, actor.companyId, {
       titulo: 'Documento entregado',
-      mensaje: `${persona?.fullName ?? 'Alguien'} entregó "${e.nombre}" para ${s.entidad.nombre} (${nombreMes(s.mes)} de ${s.anio}). Falta revisarlo.`,
+      mensaje: `${persona?.fullName ?? 'Alguien'} entregó "${e.nombre}" para ${s.entidad.nombre} (${await this.periodoLegible(actor.companyId, s.entidadId, s.anio, s.mes)}). Falta revisarlo.`,
       link: this.link(s.entidadId, s.id),
       correo: false,
     });
@@ -919,6 +963,7 @@ export class EntregasService {
         },
       },
     });
+    const cortes = await this.cortesPorEntidad(actor.companyId, filas.map((f) => f.solicitud.entidad.id));
     const orden = (f: (typeof filas)[number]) =>
       f.estado === 'RECHAZADO' ? 0 : estaVencida(f.estado, f.fechaLimite, hoy) ? 1 : 2;
     return filas
@@ -939,9 +984,15 @@ export class EntregasService {
         // Para que "Entregar de nuevo" sepa si hay un archivo anterior en Drive
         // y pregunte si se reemplaza o se conservan ambos.
         origen: f.origen,
+        url: f.url,
+        entregadoPorNombre: f.entregadoPorNombre,
+        entregadoAt: f.entregadoAt,
+        revisadoPorNombre: f.revisadoPorNombre,
+        revisadoAt: f.revisadoAt,
         solicitudId: f.solicitud.id,
         anio: f.solicitud.anio,
         mes: f.solicitud.mes,
+        periodoCiclo: this.textoCiclo(f.solicitud.anio, f.solicitud.mes, cortes.get(f.solicitud.entidad.id)),
         entidadId: f.solicitud.entidad.id,
         entidadNombre: f.solicitud.entidad.nombre,
       }));
@@ -968,6 +1019,7 @@ export class EntregasService {
         },
       },
     });
+    const cortes = await this.cortesPorEntidad(actor.companyId, filas.map((f) => f.solicitud.entidad.id));
     return filas.map((f) => ({
       id: f.id,
       nombre: f.nombre,
@@ -986,6 +1038,7 @@ export class EntregasService {
       solicitudId: f.solicitud.id,
       anio: f.solicitud.anio,
       mes: f.solicitud.mes,
+      periodoCiclo: this.textoCiclo(f.solicitud.anio, f.solicitud.mes, cortes.get(f.solicitud.entidad.id)),
       entidadId: f.solicitud.entidad.id,
       entidadNombre: f.solicitud.entidad.nombre,
     }));

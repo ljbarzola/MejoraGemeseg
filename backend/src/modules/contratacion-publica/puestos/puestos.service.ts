@@ -40,6 +40,9 @@ export class CPPuestosService {
         tipoTurno: dto.tipoTurno,
         cantidadGuardias: dto.cantidadGuardias ?? 1,
         guardiasSimultaneosRequeridos: dto.guardiasSimultaneosRequeridos ?? 1,
+        canton: dto.canton,
+        edificio: dto.edificio,
+        ubicacion: dto.ubicacion,
         companyId,
       },
     });

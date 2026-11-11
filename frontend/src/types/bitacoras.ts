@@ -72,6 +72,8 @@ export interface NovedadBitacora {
 
 export interface HallazgoBitacora {
   id: number;
+  /** Para «Guardia que no aparece»: `GUARDIA_AUSENTE|fecha|cedula`. */
+  clave?: string;
   fecha: string | null;
   tipo: string;
   severidad: Severidad;
@@ -98,6 +100,16 @@ export interface EstadoAgenteBitacoras {
   iaConfigurada: boolean;
 }
 
+/** Quién podría cubrir una falta (el sistema solo sugiere; quién cubre lo decide una persona). */
+export interface SugerenciaReemplazo {
+  cedula: string;
+  nombre: string;
+  puestoNombre: string;
+  mismoPuesto: boolean;
+  motivo: string;
+  aviso: string | null;
+}
+
 export interface BitacoraDetalle extends Omit<BitacoraResumen, 'lineas' | 'novedades' | 'hallazgosAbiertos' | 'hallazgosAltos'> {
   companyId: number;
   puestoLeido: string | null;
@@ -107,6 +119,10 @@ export interface BitacoraDetalle extends Omit<BitacoraResumen, 'lineas' | 'noved
   registros: (RegistroBitacora & { fecha: string })[];
   novedades: (NovedadBitacora & { fecha: string })[];
   hallazgos: HallazgoBitacora[];
+  /** Por id de hallazgo «le tocaba trabajar y no aparece»: guardias libres ese día. */
+  sugerenciasReemplazo?: Record<number, SugerenciaReemplazo[]>;
+  /** Faltas registradas con «No llegó» en este puesto durante los días de la hoja. */
+  ausencias?: Omit<AusenciaRegistrada, 'puestoId' | 'puestoNombre' | 'nota'>[];
   puestoExiste: boolean;
   /** Lo que decía el horario cada día (YYYY-MM-DD → personas). */
   esperadoPorFecha: Record<string, EsperadoDelDia[]>;
@@ -172,4 +188,79 @@ export interface FiltrosBitacoras {
   resultado?: string;
   desde?: string;
   hasta?: string;
+}
+
+export type EstadoCobertura = 'CUBIERTO' | 'SIN_CUBRIR' | 'SIN_HORARIO' | 'HORARIO_NO_APROBADO';
+
+export type MotivoAusencia = 'NO_AVISO' | 'ENFERMEDAD' | 'PERMISO' | 'OTRO';
+export const MOTIVO_AUSENCIA_LABEL: Record<MotivoAusencia, string> = {
+  NO_AVISO: 'No avisó',
+  ENFERMEDAD: 'Enfermedad',
+  PERMISO: 'Permiso',
+  OTRO: 'Otro motivo',
+};
+
+/** Una falta registrada con «No llegó». */
+export interface AusenciaRegistrada {
+  id: number;
+  puestoId: number;
+  puestoNombre: string;
+  fecha: string;
+  cedula: string;
+  guardiaNombre: string;
+  motivo: MotivoAusencia;
+  hora: string | null;
+  nota: string | null;
+  estado: 'POR_CUBRIR' | 'CUBIERTA' | 'ANULADA';
+  reemplazoCedula: string | null;
+  reemplazoNombre: string | null;
+  registradaPorNombre: string;
+}
+
+/** La falta de hoy de un guardia, tal como llega en «Hoy en los puestos». */
+export interface AusenciaDeGuardia {
+  id: number;
+  estado: 'POR_CUBRIR' | 'CUBIERTA';
+  motivo: MotivoAusencia;
+  hora: string | null;
+  nota: string | null;
+  reemplazoNombre: string | null;
+}
+
+export interface GuardiaDelDia {
+  cedula: string;
+  nombre: string;
+  codigo: string;
+  horaInicio: string | null;
+  horaFin: string | null;
+  ausencia: AusenciaDeGuardia | null;
+}
+
+export interface PuestoDelDia {
+  puestoId: number;
+  puestoNombre: string;
+  contratoId: number;
+  contratoNumero: string;
+  entidadNombre: string;
+  horarioEstado: string | null;
+  cobertura: EstadoCobertura;
+  minimo: number;
+  trabajando: GuardiaDelDia[];
+  /** Faltas de hoy sin nadie que las cubra. */
+  ausentesSinCubrir: number;
+  libres: { cedula: string; nombre: string; codigo: string }[];
+  /** Días (YYYY-MM-DD) de la última semana con guardias según el horario y ninguna bitácora subida. */
+  bitacorasSinSubir: string[];
+}
+
+export interface PuestosDelDia {
+  resumen: {
+    fecha: string;
+    puestos: number;
+    sinHorario: number;
+    sinCubrir: number;
+    faltasSinCubrir: number;
+    conBitacorasSinSubir: number;
+  };
+  puestos: PuestoDelDia[];
 }

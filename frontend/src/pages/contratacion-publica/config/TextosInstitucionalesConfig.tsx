@@ -121,7 +121,7 @@ export default function TextosInstitucionalesConfig() {
   return (
     <div className="page-container">
       <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate('/contratacion-publica/contratos')} style={{ alignSelf: 'flex-start' }}>
+        <button className="cacao-back-btn" onClick={() => navigate('/operaciones/contratos')} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
         <div className="page-title-row">

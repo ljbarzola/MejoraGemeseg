@@ -6,4 +6,6 @@
 export const CP_CODIGO_TURNO_HORAS_DDL = [
   'ALTER TABLE "CPCodigoTurno" ADD COLUMN IF NOT EXISTS "horaInicio" TEXT',
   'ALTER TABLE "CPCodigoTurno" ADD COLUMN IF NOT EXISTS "horaFin" TEXT',
+  // 2026-11-10: marca de «día de custodia» (aditiva, con valor por defecto: un despliegue anterior sigue funcionando).
+  'ALTER TABLE "CPCodigoTurno" ADD COLUMN IF NOT EXISTS "esCustodia" BOOLEAN NOT NULL DEFAULT false',
 ];

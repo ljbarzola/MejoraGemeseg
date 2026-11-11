@@ -40,6 +40,8 @@ import { PermissionsModule } from '../permissions/permissions.module';
 import { MailModule } from '../mail/mail.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { GoogleAuthService } from '../../common/services/google-auth.service';
+import { VigilanteService } from './vigilante/vigilante.service';
+import { VigilanteController, VigilanteCronController } from './vigilante/vigilante.controller';
 
 @Module({
   imports: [PrismaModule, PermissionsModule, MailModule, NotificationsModule],
@@ -53,6 +55,8 @@ import { GoogleAuthService } from '../../common/services/google-auth.service';
     SurveyController,
     PublicSurveyController,
     NotificationConfigController,
+    VigilanteController,
+    VigilanteCronController,
   ],
   providers: [
     PersonalService,
@@ -83,6 +87,7 @@ import { GoogleAuthService } from '../../common/services/google-auth.service';
     NotificationConfigService,
     WhatsAppService,
     GoogleAuthService,
+    VigilanteService,
   ],
   exports: [PersonalService, DriveService],
 })

@@ -12,12 +12,25 @@ import {
   saveStoredFile,
 } from '../../../common/utils/stored-file.util';
 import { AgentRunService } from '../../agents/agent-run.service';
+import { NotificationsService } from '../../notifications/notifications.service';
+import { PermissionsService } from '../../permissions/permissions.service';
 import {
   NOMBRE_AGENTE_BITACORAS,
   SCOPE_BITACORAS,
   INSTRUCCIONES_BITACORAS_POR_DEFECTO,
 } from '../../agents/agent-trabajadores.const';
 import { formatFechaISO, parseFechaUTC } from '../shared/fecha-rango.util';
+import {
+  armarPuestosDelDia,
+  diasAnteriores,
+  DIAS_VENTANA_BITACORAS,
+} from './puestos-del-dia.util';
+import {
+  cedulaDeHallazgoAusente,
+  diaAnterior,
+  sugerirReemplazos,
+  type SugerenciaReemplazo,
+} from './reemplazo-sugerido.util';
 import {
   CATEGORIAS_NOVEDAD,
   ETIQUETA_CATEGORIA,
@@ -44,6 +57,7 @@ import type {
   ListarBitacorasQueryDto,
   DashboardBitacorasQueryDto,
 } from './dto/bitacoras.dto';
+import { aplicarAusencias } from '../ausencias/ausencias.util';
 
 export interface ActorBitacora {
   userId: number;
@@ -70,6 +84,8 @@ export class BitacorasService {
     private readonly prisma: PrismaService,
     private readonly lector: BitacoraLectorService,
     private readonly agentRuns: AgentRunService,
+    private readonly notifications: NotificationsService,
+    private readonly permissions: PermissionsService,
   ) {}
 
   // ------------------------------------------------------------------ opciones
@@ -273,11 +289,17 @@ export class BitacorasService {
             (r.lectura.observaciones ? ` ${r.lectura.observaciones}` : ''),
         });
       } else {
-        await this.revisarYGuardar(id, actor.companyId, r.lectura, {
-          estadoLectura: 'LEIDA',
-          mensajeLectura: null,
-          origenLectura: 'IA',
-        });
+        await this.revisarYGuardar(
+          id,
+          actor.companyId,
+          r.lectura,
+          {
+            estadoLectura: 'LEIDA',
+            mensajeLectura: null,
+            origenLectura: 'IA',
+          },
+          actor.userId,
+        );
       }
       await this.agentRuns.registrar({
         ...base,
@@ -373,7 +395,7 @@ export class BitacorasService {
     if (!puesto) return null;
 
     const fechasDate = fechas.map(aFecha);
-    const [horarios, celdas, codigos, otras] = await Promise.all([
+    const [horarios, celdas, codigos, otras, ausencias] = await Promise.all([
       fechas.length
         ? this.prisma.cPHorarioMensual.findMany({
             where: {
@@ -425,7 +447,15 @@ export class BitacorasService {
             orderBy: { id: 'asc' },
           })
         : Promise.resolve([] as { id: number; fechas: string[] }[]),
+      // Faltas ya registradas con «No llegó»: la revisión las toma en cuenta (ver aplicarAusencias).
+      fechas.length
+        ? this.prisma.cPAusencia.findMany({
+            where: { companyId: b.companyId, puestoId: b.puestoId, fecha: { in: fechasDate }, estado: { not: 'ANULADA' } },
+            select: { fecha: true, cedula: true, estado: true, reemplazoCedula: true, reemplazoNombre: true },
+          })
+        : Promise.resolve([] as { fecha: Date; cedula: string; estado: string; reemplazoCedula: string | null; reemplazoNombre: string | null }[]),
     ]);
+    const faltas = ausencias.map((a) => ({ ...a, fecha: aISO(a.fecha) }));
 
     const horarioPorFecha: Record<string, string> = {};
     for (const f of fechas) {
@@ -440,7 +470,7 @@ export class BitacorasService {
     for (const c of codigos) {
       codigosPorCodigo[c.codigo] = {
         nombre: c.nombre,
-        esDescanso: c.esDescanso,
+        esDescanso: c.esDescanso || c.esCustodia,
         horaInicio: c.horaInicio,
         horaFin: c.horaFin,
       };
@@ -455,16 +485,22 @@ export class BitacorasService {
     return {
       fechas,
       registros,
-      guardiasPuesto: puesto.guardias.map((g) => ({
-        cedula: g.cedula,
-        nombre: g.nombreGuardia,
-      })),
-      celdas: celdas.map((c) => ({
-        fecha: aISO(c.fecha),
-        cedula: c.cedula,
-        nombre: c.nombreGuardia,
-        codigo: c.codigoTurno,
-      })),
+      // Quien cubrió una falta puede ser de otro puesto: se cuenta como guardia de este para que su nombre no se marque ajeno.
+      guardiasPuesto: [
+        ...puesto.guardias.map((g) => ({ cedula: g.cedula, nombre: g.nombreGuardia })),
+        ...faltas
+          .filter((a) => a.estado === 'CUBIERTA' && a.reemplazoCedula && a.reemplazoNombre && !puesto.guardias.some((g) => g.cedula === a.reemplazoCedula))
+          .map((a) => ({ cedula: a.reemplazoCedula as string, nombre: a.reemplazoNombre as string })),
+      ],
+      celdas: aplicarAusencias(
+        celdas.map((c) => ({
+          fecha: aISO(c.fecha),
+          cedula: c.cedula,
+          nombre: c.nombreGuardia,
+          codigo: c.codigoTurno,
+        })),
+        faltas,
+      ),
       horarioPorFecha,
       codigos: codigosPorCodigo,
       contrato: {
@@ -492,6 +528,7 @@ export class BitacorasService {
       mensajeLectura?: string | null;
       origenLectura?: string;
     },
+    actorId?: number,
   ) {
     const b = await this.cargarSimple(id, companyId);
 
@@ -605,6 +642,57 @@ export class BitacorasService {
         },
       }),
     ]);
+
+    // Una hoja que pasa a «Con errores» se avisa por la campana a quien trabaja Operaciones. Solo
+    // al pasar a ese estado (no en cada corrección) y nunca a quien acaba de subirla o corregirla.
+    if (salida.resultado === 'CON_ERRORES' && b.resultado !== 'CON_ERRORES') {
+      await this.avisarHojaConErrores(
+        { id, companyId, puestoNombre: b.puestoNombre, entidadNombre: b.entidadNombre },
+        fechas,
+        salida.hallazgos,
+        actorId,
+      );
+    }
+  }
+
+  /** Aviso por la campana de una hoja con errores. Si falla, la hoja ya quedó guardada: solo se registra. */
+  private async avisarHojaConErrores(
+    b: { id: number; companyId: number; puestoNombre: string; entidadNombre: string },
+    fechas: string[],
+    hallazgos: { severidad: string }[],
+    actorId?: number,
+  ) {
+    try {
+      const destinatarios = (
+        await this.permissions.getCompanyUserIdsWithWriteAccess(b.companyId, 'OPERACIONES')
+      ).filter((u) => u !== actorId);
+      if (destinatarios.length === 0) return;
+
+      const graves = hallazgos.filter((h) => h.severidad === 'ALTA').length;
+      const periodo =
+        fechas.length === 0
+          ? ''
+          : fechas.length === 1
+            ? ` del ${fechas[0].split('-').reverse().join('/')}`
+            : ` del ${fechas[0].split('-').reverse().join('/')} al ${fechas[fechas.length - 1].split('-').reverse().join('/')}`;
+      const message =
+        `La bitácora de ${b.puestoNombre} (${b.entidadNombre})${periodo} no cuadra con el horario: ` +
+        `${hallazgos.length} ${hallazgos.length === 1 ? 'hallazgo' : 'hallazgos'}` +
+        (graves > 0 ? `, ${graves} ${graves === 1 ? 'grave' : 'graves'}` : '') +
+        '.';
+
+      for (const userId of destinatarios) {
+        await this.notifications.create({
+          userId,
+          companyId: b.companyId,
+          title: 'Bitácora con errores',
+          message,
+          link: `/operaciones/bitacoras/${b.id}`,
+        });
+      }
+    } catch (err) {
+      this.logger.warn(`No se pudo avisar de la bitácora ${b.id} con errores: ${(err as Error).message}`);
+    }
   }
 
   /** Lo que la persona corrigió o transcribió a mano: se guarda y se compara de nuevo. */
@@ -639,15 +727,21 @@ export class BitacorasService {
       observaciones: b.observaciones,
     };
     // Una hoja transcrita o corregida por una persona deja de ser "solo IA".
-    await this.revisarYGuardar(id, actor.companyId, lectura, {
-      // «Corregida» solo si el agente de verdad la había leído; si nunca se leyó, la transcribió una persona.
-      origenLectura:
-        b.estadoLectura === 'LEIDA' && b.origenLectura !== 'MANUAL'
-          ? 'IA_CORREGIDA'
-          : 'MANUAL',
-      estadoLectura: 'LEIDA',
-      mensajeLectura: null,
-    });
+    await this.revisarYGuardar(
+      id,
+      actor.companyId,
+      lectura,
+      {
+        // «Corregida» solo si el agente de verdad la había leído; si nunca se leyó, la transcribió una persona.
+        origenLectura:
+          b.estadoLectura === 'LEIDA' && b.origenLectura !== 'MANUAL'
+            ? 'IA_CORREGIDA'
+            : 'MANUAL',
+        estadoLectura: 'LEIDA',
+        mensajeLectura: null,
+      },
+      actor.userId,
+    );
     return this.obtener(id, actor.companyId);
   }
 
@@ -793,6 +887,8 @@ export class BitacorasService {
 
     return {
       ...b,
+      sugerenciasReemplazo: await this.sugerenciasReemplazo(b),
+      ausencias: await this.ausenciasDeLaHoja(b),
       puestoExiste: !!entrada,
       esperadoPorFecha: esperado?.esperadoPorFecha ?? {},
       horarioPorFecha: entrada?.horarioPorFecha ?? {},
@@ -802,6 +898,235 @@ export class BitacorasService {
       })),
       agente: await this.estadoDelAgente(),
     };
+  }
+
+  /**
+   * Quién podría cubrir cada falta abierta («le tocaba trabajar y no aparece»): guardias del puesto y
+   * del resto del contrato que ese día tenían descanso o ningún turno (ver reemplazo-sugerido.util.ts).
+   * Se calcula al abrir la hoja, con el horario vigente; no se guarda. Solo sugiere.
+   */
+  /** Faltas registradas con «No llegó» en este puesto durante los días de la hoja (para enlazarlas con la revisión). */
+  private async ausenciasDeLaHoja(b: { companyId: number; puestoId: number; fechas: string[] }) {
+    if (b.fechas.length === 0) return [];
+    try {
+      const filas = await this.prisma.cPAusencia.findMany({
+        where: {
+          companyId: b.companyId,
+          puestoId: b.puestoId,
+          fecha: { in: b.fechas.map(aFecha) },
+          estado: { not: 'ANULADA' },
+        },
+        orderBy: { id: 'asc' },
+      });
+      return filas.map((a) => ({
+        id: a.id,
+        fecha: aISO(a.fecha),
+        cedula: a.cedula,
+        guardiaNombre: a.guardiaNombre,
+        motivo: a.motivo,
+        hora: a.hora,
+        estado: a.estado,
+        reemplazoNombre: a.reemplazoNombre,
+        registradaPorNombre: a.registradaPorNombre,
+      }));
+    } catch (err) {
+      this.logger.warn(`No se pudieron leer las faltas registradas de la bitácora: ${(err as Error).message}`);
+      return [];
+    }
+  }
+
+  private async sugerenciasReemplazo(b: {
+    companyId: number;
+    puestoId: number;
+    hallazgos: { id: number; tipo: string; estado: string; fecha: Date | null; clave: string }[];
+    registros: { fecha: Date; cedula: string | null }[];
+  }): Promise<Record<number, SugerenciaReemplazo[]>> {
+    const faltas = b.hallazgos.filter(
+      (h) => h.tipo === 'GUARDIA_AUSENTE' && h.estado === 'ABIERTO' && h.fecha,
+    );
+    if (faltas.length === 0) return {};
+
+    try {
+      const puesto = await this.cargarPuesto(b.puestoId, b.companyId);
+      if (!puesto) return {};
+
+      const dias = [...new Set(faltas.map((h) => aISO(h.fecha as Date)))];
+      const fechasConsulta = [...new Set(dias.flatMap((d) => [d, diaAnterior(d)]))].map(aFecha);
+      const [puestos, celdas, codigos] = await Promise.all([
+        this.prisma.cPPuestoServicio.findMany({
+          where: { contratoId: puesto.contrato.id, companyId: b.companyId },
+          select: { id: true, nombre: true, guardias: { select: { cedula: true, nombreGuardia: true } } },
+        }),
+        this.prisma.cPHorarioCelda.findMany({
+          where: {
+            fecha: { in: fechasConsulta },
+            horario: { contratoId: puesto.contrato.id, companyId: b.companyId },
+          },
+          select: { fecha: true, cedula: true, codigoTurno: true },
+        }),
+        this.prisma.cPCodigoTurno.findMany({ where: { companyId: b.companyId } }),
+      ]);
+
+      const guardias = puestos.flatMap((p) =>
+        p.guardias.map((g) => ({
+          cedula: g.cedula,
+          nombre: g.nombreGuardia,
+          puestoId: p.id,
+          puestoNombre: p.nombre,
+        })),
+      );
+      const codigosPorCodigo: Record<string, CodigoTurnoInfo> = {};
+      for (const c of codigos) {
+        codigosPorCodigo[c.codigo] = {
+          nombre: c.nombre,
+          esDescanso: c.esDescanso || c.esCustodia,
+          horaInicio: c.horaInicio,
+          horaFin: c.horaFin,
+        };
+      }
+
+      const salida: Record<number, SugerenciaReemplazo[]> = {};
+      for (const h of faltas) {
+        const cedula = cedulaDeHallazgoAusente(h.clave);
+        if (!cedula) continue;
+        const fecha = aISO(h.fecha as Date);
+        salida[h.id] = sugerirReemplazos({
+          fecha,
+          puestoId: b.puestoId,
+          ausenteCedula: cedula,
+          guardias,
+          celdas: celdas.map((c) => ({ fecha: aISO(c.fecha), cedula: c.cedula, codigo: c.codigoTurno })),
+          codigos: codigosPorCodigo,
+          presentes: b.registros
+            .filter((r) => r.cedula && aISO(r.fecha) === fecha)
+            .map((r) => r.cedula as string),
+        });
+      }
+      return salida;
+    } catch (err) {
+      // Es una ayuda: si falla, la hoja se abre igual, sin sugerencias.
+      this.logger.warn(`No se pudieron calcular los reemplazos de la bitácora: ${(err as Error).message}`);
+      return {};
+    }
+  }
+
+  // ------------------------------------------------------------------ hoy
+
+  /**
+   * «Hoy en los puestos»: para cada puesto de un contrato activo, quién debe estar hoy según el
+   * horario, si se cumple la cobertura mínima y qué días de la última semana no tienen bitácora
+   * aunque el horario aprobado esperaba guardias (ver puestos-del-dia.util.ts). No guarda nada.
+   */
+  async puestosDelDia(companyId: number, fecha?: string) {
+    const hoy = fecha ?? hoyEcuador();
+    const ventana = diasAnteriores(hoy, DIAS_VENTANA_BITACORAS);
+    const desde = ventana[0];
+
+    const contratos = await this.prisma.cPContrato.findMany({
+      where: {
+        companyId,
+        estado: 'ACTIVO',
+        fechaInicio: { lte: aFecha(hoy) },
+        fechaFin: { gte: aFecha(hoy) },
+      },
+      select: {
+        id: true,
+        numero: true,
+        entidad: { select: { nombre: true } },
+        puestos: {
+          select: { id: true, nombre: true, guardiasSimultaneosRequeridos: true },
+        },
+      },
+    });
+    const puestos = contratos.flatMap((c) =>
+      c.puestos.map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        contratoId: c.id,
+        contratoNumero: c.numero,
+        entidadNombre: c.entidad.nombre,
+        minimo: p.guardiasSimultaneosRequeridos,
+      })),
+    );
+    const vacio = armarPuestosDelDia({
+      fecha: hoy,
+      puestos: [],
+      horariosHoy: [],
+      celdasHoy: [],
+      codigos: {},
+      celdasPasadas: [],
+      bitacoras: [],
+    });
+    if (puestos.length === 0) return vacio;
+
+    const puestoIds = puestos.map((p) => p.id);
+    const contratoIds = contratos.map((c) => c.id);
+    const [horarios, celdas, codigos, bitacoras, ausencias] = await Promise.all([
+      this.prisma.cPHorarioMensual.findMany({
+        where: {
+          companyId,
+          contratoId: { in: contratoIds },
+          fechaInicio: { lte: aFecha(hoy) },
+          fechaFin: { gte: aFecha(hoy) },
+        },
+        select: { contratoId: true, estado: true },
+      }),
+      this.prisma.cPHorarioCelda.findMany({
+        where: {
+          puestoId: { in: puestoIds },
+          fecha: { gte: aFecha(desde), lte: aFecha(hoy) },
+          horario: { companyId },
+        },
+        select: {
+          puestoId: true,
+          cedula: true,
+          nombreGuardia: true,
+          fecha: true,
+          codigoTurno: true,
+          horario: { select: { estado: true } },
+        },
+      }),
+      this.prisma.cPCodigoTurno.findMany({ where: { companyId } }),
+      this.prisma.cPBitacora.findMany({
+        where: { companyId, puestoId: { in: puestoIds }, fechas: { hasSome: ventana } },
+        select: { puestoId: true, fechas: true },
+      }),
+      this.prisma.cPAusencia.findMany({
+        where: { companyId, puestoId: { in: puestoIds }, fecha: aFecha(hoy), estado: { not: 'ANULADA' } },
+        select: { id: true, puestoId: true, cedula: true, estado: true, motivo: true, hora: true, nota: true, reemplazoNombre: true },
+      }),
+    ]);
+
+    const codigosPorCodigo: Record<string, CodigoTurnoInfo> = {};
+    for (const c of codigos) {
+      codigosPorCodigo[c.codigo] = {
+        nombre: c.nombre,
+        esDescanso: c.esDescanso || c.esCustodia,
+        horaInicio: c.horaInicio,
+        horaFin: c.horaFin,
+      };
+    }
+
+    return armarPuestosDelDia({
+      fecha: hoy,
+      puestos,
+      horariosHoy: horarios,
+      celdasHoy: celdas
+        .filter((c) => aISO(c.fecha) === hoy)
+        .map((c) => ({
+          puestoId: c.puestoId,
+          cedula: c.cedula,
+          nombre: c.nombreGuardia,
+          codigo: c.codigoTurno,
+        })),
+      codigos: codigosPorCodigo,
+      // Solo cuenta lo que un horario APROBADO esperaba: uno en borrador no obliga a nadie.
+      celdasPasadas: celdas
+        .filter((c) => aISO(c.fecha) !== hoy && c.horario.estado === 'APROBADO')
+        .map((c) => ({ puestoId: c.puestoId, fecha: aISO(c.fecha), codigo: c.codigoTurno })),
+      bitacoras,
+      ausencias,
+    });
   }
 
   // ------------------------------------------------------------------ resumen

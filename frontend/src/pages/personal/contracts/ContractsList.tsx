@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { FilePlus, FileText, FolderOpen, Trash2 } from 'lucide-react';
 import { getContracts, getContractTemplates, deleteContractTemplate, deleteContract, resolveContractFileUrl, getDriveConfig, type ContractTemplate } from '../../../services/personal.service';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import RrhhPageHeader from '../../../components/personal/RrhhPageHeader';
 import { cedulaVisible } from '../../../utils/postulacionValidacion';
 import { usePerm } from '../../../contexts/PermissionsContext';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../components/common/ColumnFilter';
@@ -106,13 +107,11 @@ export default function ContractsList() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">RECURSOS HUMANOS</p>
-            <h1>Contratos</h1>
-          </div>
-          <div className="header-actions">
+      <RrhhPageHeader
+        title="Contratos"
+        description="Administra las plantillas de contratos y actas, y consulta los documentos que ya se generaron para cada guardia."
+        actions={
+          <>
             {carpetaDriveUrl && (
               <a
                 className="btn-secondary"
@@ -130,9 +129,9 @@ export default function ContractsList() {
             <button className="auth-btn" onClick={() => navigate('/rrhh/contracts/plantillas/nueva')}>
               <FilePlus size={16} /> Nueva plantilla
             </button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {deleteTemplateError && (
         <div ref={deleteTemplateErrorRef} style={{ background: '#fff5f5', border: '1px solid #feb2b2', color: '#c53030', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>{deleteTemplateError}</div>
