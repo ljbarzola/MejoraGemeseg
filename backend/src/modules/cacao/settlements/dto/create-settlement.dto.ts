@@ -1,7 +1,9 @@
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsDateString,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -11,6 +13,30 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+
+/**
+ * Cómo se piensa pagar lo que queda por pagar de una liquidación. «Crédito» es la parte que se
+ * deja a plazo. Es un plan para la persona que paga: el pago real se sigue registrando en
+ * Cuentas por pagar.
+ */
+export const METODOS_PLAN_PAGO = [
+  'CASH',
+  'TRANSFER',
+  'CHECK',
+  'CREDIT',
+] as const;
+
+export class PaymentPlanLineDto {
+  @IsIn(METODOS_PLAN_PAGO, { message: 'Forma de pago no válida' })
+  method: (typeof METODOS_PLAN_PAGO)[number];
+
+  @IsNumber(
+    { maxDecimalPlaces: 2 },
+    { message: 'Cada monto de la forma de pago debe tener máximo 2 decimales' },
+  )
+  @IsPositive({ message: 'Cada monto de la forma de pago debe ser mayor a cero' })
+  amount: number;
+}
 
 export class SettlementLotDto {
   @IsInt()
@@ -72,6 +98,26 @@ export class CreateSettlementDto {
   @ValidateNested({ each: true })
   @Type(() => SettlementLotDto)
   lots: SettlementLotDto[];
+
+  /**
+   * Anticipo del proveedor que se descuenta en esta liquidación (en $). No puede superar su saldo
+   * disponible ni cubrir toda la liquidación: lo valida el servidor.
+   */
+  @IsOptional()
+  @IsNumber(
+    { maxDecimalPlaces: 2 },
+    { message: 'El anticipo debe tener máximo 2 decimales' },
+  )
+  @Min(0, { message: 'El anticipo no puede ser negativo' })
+  advanceApplied?: number;
+
+  /** Forma de pago de lo que queda por pagar. Si se manda, debe sumar exactamente ese monto. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(8)
+  @ValidateNested({ each: true })
+  @Type(() => PaymentPlanLineDto)
+  paymentPlan?: PaymentPlanLineDto[];
 
   // Los totales los calcula el servidor. Se aceptan por compatibilidad con pantallas
   // anteriores, pero se ignoran.

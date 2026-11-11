@@ -1,5 +1,31 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+
+const TOLERANCIA_KG = 0.001;
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+const round4 = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
+
+/**
+ * Lo recibido de un lote (suma de sus recepciones) y, si ya se midió su peso seco, la merma de
+ * secado: cuánto del peso recibido se perdió, en kg y en %. El peso del lote (`netWeight`) no sirve
+ * de base porque baja cuando se vende en un embarque.
+ */
+function conMerma<T extends { dryWeight: number | null; receptions: { netWeight: number }[] }>(
+  lot: T,
+) {
+  const receivedKg = round4(lot.receptions.reduce((s, r) => s + r.netWeight, 0));
+  const shrinkageKg =
+    lot.dryWeight != null ? round4(receivedKg - lot.dryWeight) : null;
+  const shrinkagePct =
+    shrinkageKg != null && receivedKg > 0
+      ? round2((shrinkageKg / receivedKg) * 100)
+      : null;
+  return { ...lot, receivedKg, shrinkageKg, shrinkagePct };
+}
 
 @Injectable()
 export class CacaoLotsService {
@@ -15,11 +41,12 @@ export class CacaoLotsService {
     if (query.supplierId) {
       where.receptions = { some: { supplierId: Number(query.supplierId) } };
     }
-    return this.prisma.cacaoLot.findMany({
+    const lots = await this.prisma.cacaoLot.findMany({
       where,
       include: { quality: true, receptions: { include: { supplier: true } } },
       orderBy: { id: 'desc' },
     });
+    return lots.map(conMerma);
   }
 
   async getNextCode(companyId: number) {
@@ -43,9 +70,51 @@ export class CacaoLotsService {
       },
     });
     if (!lot) throw new NotFoundException('Lote no encontrado');
+    // Detalle de las pesadas de su recepción (vacío si se pesó de una sola vez).
+    const weighings = await this.prisma.cacaoReceptionWeighing.findMany({
+      where: { companyId, receptionId: { in: lot.receptions.map((r) => r.id) } },
+      orderBy: [{ receptionId: 'asc' }, { lineNo: 'asc' }],
+    });
     return {
-      ...lot,
+      ...conMerma(lot),
       differential: lot.differential ?? lot.receptions[0]?.differential ?? null,
+      weighings,
     };
+  }
+
+  /**
+   * Guarda el peso del lote después de secar (o lo borra con `null`). No puede superar lo recibido:
+   * el cacao pierde peso al secarse, no lo gana. No toca el kárdex ni lo que se le paga al proveedor.
+   */
+  async setDryWeight(
+    id: number,
+    companyId: number,
+    dryWeight: number | null,
+  ) {
+    const lot = await this.prisma.cacaoLot.findFirst({
+      where: { id, companyId },
+      include: { receptions: { select: { netWeight: true } } },
+    });
+    if (!lot) throw new NotFoundException('Lote no encontrado');
+    if (lot.status === 'VOIDED') {
+      throw new BadRequestException(
+        'El lote está anulado: no se le puede registrar peso seco',
+      );
+    }
+    if (dryWeight !== null) {
+      const recibido = round4(
+        lot.receptions.reduce((s, r) => s + r.netWeight, 0),
+      );
+      if (dryWeight > recibido + TOLERANCIA_KG) {
+        throw new BadRequestException(
+          `El peso seco (${dryWeight} kg) no puede superar lo recibido (${recibido} kg): al secarse el cacao pierde peso`,
+        );
+      }
+    }
+    await this.prisma.cacaoLot.update({
+      where: { id },
+      data: { dryWeight },
+    });
+    return this.findOne(id, companyId);
   }
 }

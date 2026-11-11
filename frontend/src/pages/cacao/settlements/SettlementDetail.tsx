@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getSettlement, approveSettlement, rejectSettlement, cancelSettlement } from '../../../services/cacao.service';
 import { getUser } from '../../../services/auth.service';
-import { formatDateEc, estadoLiquidacion, estadoCuenta, apiErrorMessage } from '../utils';
+import { formatDateEc, estadoLiquidacion, estadoCuenta, apiErrorMessage, PAYMENT_METHOD_LABEL } from '../utils';
 import { useCompany } from '../../../contexts/ThemeContext';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import MotivoDialog from '../MotivoDialog';
@@ -40,6 +40,8 @@ export default function SettlementDetail() {
   const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const estado = estadoLiquidacion(settlement.status);
   const code = `LIQ-${String(settlement.id).padStart(4, '0')}`;
+  // Lo que realmente se le debe pagar: el valor del cacao menos el anticipo que se le descontó.
+  const aPagar = Math.round(((settlement.totalAmount || 0) - (settlement.advanceApplied || 0)) * 100) / 100;
 
   // Aprueban/rechazan/anulan el gerente o el administrador; quien creó la liquidación no puede aprobarla.
   const puedeDecidir = me?.role === 'ADMIN' || me?.role === 'MANAGER';
@@ -135,8 +137,20 @@ export default function SettlementDetail() {
           <div><strong>Periodo:</strong> {formatDateEc(settlement.periodStart)} — {formatDateEc(settlement.periodEnd)}</div>
           <div><strong>Peso Neto Total:</strong> {settlement.totalNetWeight.toLocaleString()} kg</div>
           <div><strong>Descuentos:</strong> {settlement.totalDeductions.toLocaleString()} kg</div>
-          <div><strong>Monto Total:</strong> <span style={{ color: '#276749', fontWeight: 700 }}>{fmt(settlement.totalAmount)}</span></div>
+          <div><strong>{settlement.advanceApplied > 0 ? 'Valor del cacao:' : 'Monto Total:'}</strong> <span style={{ color: '#276749', fontWeight: 700 }}>{fmt(settlement.totalAmount)}</span></div>
+          {settlement.advanceApplied > 0 && (
+            <>
+              <div><strong>Anticipo descontado:</strong> <span style={{ color: '#c53030', fontWeight: 700 }}>-{fmt(settlement.advanceApplied)}</span></div>
+              <div><strong>A pagar al proveedor:</strong> <span style={{ color: '#276749', fontWeight: 700 }}>{fmt(aPagar)}</span></div>
+            </>
+          )}
         </div>
+        {Array.isArray(settlement.paymentPlan) && settlement.paymentPlan.length > 0 && (
+          <div style={{ marginTop: '16px', fontSize: '14px' }}>
+            <strong>Forma de pago prevista:</strong>{' '}
+            {settlement.paymentPlan.map((p: any) => `${PAYMENT_METHOD_LABEL[p.method] || p.method} ${fmt(p.amount)}`).join(' · ')}
+          </div>
+        )}
       </div>
 
       <div className="admin-section">
@@ -198,7 +212,7 @@ export default function SettlementDetail() {
       {accion === 'approve' && (
         <ConfirmDialog
           title="Aprobar liquidación"
-          message={`Vas a aprobar ${code} por ${fmt(settlement.totalAmount)}. Se generará la cuenta por pagar y ya se podrá pagar.`}
+          message={`Vas a aprobar ${code} por ${fmt(settlement.totalAmount)}${settlement.advanceApplied > 0 ? `, con un anticipo descontado de ${fmt(settlement.advanceApplied)} (a pagar ${fmt(aPagar)})` : ''}. Se generará la cuenta por pagar y ya se podrá pagar.`}
           confirmLabel="Aprobar"
           onCancel={() => setAccion(null)}
           onConfirm={() => ejecutar(() => approveSettlement(settlement.id), 'No se pudo aprobar la liquidación.')}

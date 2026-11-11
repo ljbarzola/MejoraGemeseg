@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useCacaoUnidades } from '../useCacaoUnidades';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { getLotById } from '../../../services/cacao.service';
-import { formatDateEc, formatMoney } from '../utils';
+import { getLotById, setLotDryWeight } from '../../../services/cacao.service';
+import { getUser } from '../../../services/auth.service';
+import ErrorBanner from '../../../components/common/ErrorBanner';
+import SoloAdminDialog from '../../../components/common/SoloAdminDialog';
+import { formatDateEc, formatMoney, apiErrorMessage } from '../utils';
 import { useCompany } from '../../../contexts/ThemeContext';
 import { ABREVIATURA_UNIDAD as UNIT_ABBR, NOMBRE_UNIDAD as UNIT_FULL } from '../useCacaoUnidades';
 
@@ -15,12 +18,35 @@ export default function LotDetail() {
   const { theme } = useCompany();
   const [lot, setLot] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  // Peso seco: quien no es administrador ve el botón igual y, al usarlo, se le explica a quién acudir.
+  const [pesoSeco, setPesoSeco] = useState('');
+  const [guardandoSeco, setGuardandoSeco] = useState(false);
+  const [errorSeco, setErrorSeco] = useState('');
+  const [soloAdmin, setSoloAdmin] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
-      getLotById(Number(id)).then(setLot).finally(() => setLoading(false));
+      getLotById(Number(id))
+        .then((l) => { setLot(l); setPesoSeco(l.dryWeight != null ? String(l.dryWeight) : ''); })
+        .finally(() => setLoading(false));
     }
   }, [id]);
+
+  async function guardarPesoSeco(quitar = false) {
+    if (getUser()?.role !== 'ADMIN') { setSoloAdmin('registre el peso seco'); return; }
+    const texto = quitar ? '' : pesoSeco.trim();
+    const valor = texto === '' ? null : Number(texto);
+    if (valor !== null && (!Number.isFinite(valor) || valor <= 0)) { setErrorSeco('El peso seco debe ser mayor a cero'); return; }
+    setGuardandoSeco(true);
+    setErrorSeco('');
+    try {
+      const actualizado = await setLotDryWeight(lot.id, valor);
+      setLot(actualizado);
+      setPesoSeco(actualizado.dryWeight != null ? String(actualizado.dryWeight) : '');
+    } catch (err: any) {
+      setErrorSeco(apiErrorMessage(err, 'No se pudo guardar el peso seco. Inténtalo de nuevo.'));
+    } finally { setGuardandoSeco(false); }
+  }
 
   useEffect(() => {
     if (lot) document.title = `${lot.code} — ${theme.name}`;
@@ -147,8 +173,72 @@ export default function LotDetail() {
             {recepcion.weighingProfile && <div><strong>Perfil de pesaje:</strong> {recepcion.weighingProfile === 'BULTOS' ? 'Por bultos' : 'En báscula'}</div>}
             {recepcion.driverName && <div><strong>Chofer:</strong> {recepcion.driverName}</div>}
             {recepcion.vehiclePlate && <div><strong>Placa:</strong> {recepcion.vehiclePlate}</div>}
+            {recepcion.consigned && <div><strong>Consignación:</strong> Sí, se paga después de venderla</div>}
           </div>
         )}
+
+        {/* Pesadas: solo si el ticket se pesó por tandas. */}
+        {Array.isArray(lot.weighings) && lot.weighings.length > 0 && (
+          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+            <div style={{ fontWeight: 700, color: '#4a5568', marginBottom: '8px', textTransform: 'uppercase', fontSize: '11px' }}>
+              Pesadas del ticket ({lot.weighings.length})
+            </div>
+            <div className="tasks-table-wrapper">
+              <table className="tasks-table" style={{ fontSize: '13px' }}>
+                <thead>
+                  <tr><th>Pesada</th><th>Bruto (kg)</th><th>Tara (kg)</th><th>Neto (kg)</th></tr>
+                </thead>
+                <tbody>
+                  {lot.weighings.map((w: any) => (
+                    <tr key={w.id}>
+                      <td>{w.lineNo}</td>
+                      <td>{w.grossWeight.toLocaleString()}</td>
+                      <td>{w.tare.toLocaleString()}</td>
+                      <td style={{ fontWeight: 600 }}>{w.netWeight.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                  <tr style={{ fontWeight: 700 }}>
+                    <td>Total</td>
+                    <td>{lot.weighings.reduce((s: number, w: any) => s + w.grossWeight, 0).toLocaleString()}</td>
+                    <td>{lot.weighings.reduce((s: number, w: any) => s + w.tare, 0).toLocaleString()}</td>
+                    <td>{lot.weighings.reduce((s: number, w: any) => s + w.netWeight, 0).toLocaleString()}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Merma de secado: lo que perdió de peso el cacao al secarse, contra lo recibido. */}
+        <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+          <div style={{ fontWeight: 700, color: '#4a5568', marginBottom: '8px', textTransform: 'uppercase', fontSize: '11px' }}>Merma de secado</div>
+          <div className="no-print"><ErrorBanner mensaje={errorSeco} /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px 32px', fontSize: '14px', alignItems: 'center' }}>
+            <div><strong>Recibido:</strong> {lot.receivedKg.toLocaleString()} kg</div>
+            <div><strong>Peso seco:</strong> {lot.dryWeight != null ? `${lot.dryWeight.toLocaleString()} kg` : 'Sin medir'}</div>
+            <div>
+              <strong>Merma:</strong>{' '}
+              {lot.shrinkagePct != null
+                ? <span style={{ fontWeight: 700, color: '#9b2c2c' }}>{lot.shrinkageKg.toLocaleString()} kg ({lot.shrinkagePct}%)</span>
+                : '—'}
+            </div>
+          </div>
+          {lot.status !== 'VOIDED' && (
+            <div className="no-print" style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', marginTop: '12px', flexWrap: 'wrap' }}>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label htmlFor="lote-seco">Peso después de secar (kg)</label>
+                <input id="lote-seco" type="number" inputMode="decimal" step="0.01" min="0" placeholder="Ej: 950" value={pesoSeco} onChange={(e) => setPesoSeco(e.target.value)} />
+              </div>
+              <button type="button" className="auth-btn" onClick={() => guardarPesoSeco()} disabled={guardandoSeco}>{guardandoSeco ? 'Guardando…' : 'Guardar peso seco'}</button>
+              {lot.dryWeight != null && (
+                <button type="button" className="btn-secondary" onClick={() => { setPesoSeco(''); guardarPesoSeco(true); }} disabled={guardandoSeco}>Quitar</button>
+              )}
+            </div>
+          )}
+          <div style={{ marginTop: '6px', color: '#718096', fontSize: '12px' }}>
+            Es solo un dato de control: no cambia el kárdex ni lo que se le paga al proveedor.
+          </div>
+        </div>
       </div>
 
       <div className="admin-section">
@@ -228,6 +318,7 @@ export default function LotDetail() {
           </div>
         )}
       </div>
+      {soloAdmin && <SoloAdminDialog accion={soloAdmin} onClose={() => setSoloAdmin(null)} />}
     </div>
   );
 }

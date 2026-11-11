@@ -5,11 +5,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateSettlementDto } from './dto/create-settlement.dto';
 import { CacaoConfigService } from '../config/cacao-config.service';
 import { ESTADOS_QUE_LIBERAN_LOTE } from '../common/liquidado.util';
+import { saldoAnticipos } from '../common/anticipos.util';
+import { TOLERANCIA_MONTO } from '../common/payment.dto';
 
 // Los estados que dejan libre el peso de un lote viven en ../common/liquidado.util.ts.
 export { ESTADOS_QUE_LIBERAN_LOTE };
@@ -277,6 +279,39 @@ export class CacaoSettlementsService {
       const finalPrice =
         totalNetWeight > 0 ? round4(totalAmount / totalNetWeight) : 0;
 
+      // Anticipo que se descuenta: no cambia el valor del cacao, cambia lo que se debe pagar.
+      const advanceApplied = round2(dto.advanceApplied ?? 0);
+      if (advanceApplied > 0) {
+        // Bloquea al proveedor: dos liquidaciones simultáneas no gastan dos veces el mismo anticipo.
+        await tx.$queryRaw`SELECT "id" FROM "CacaoSupplier" WHERE "id" = ${dto.supplierId} FOR UPDATE`;
+        const saldo = await saldoAnticipos(tx, companyId, dto.supplierId);
+        if (advanceApplied > saldo + TOLERANCIA_MONTO) {
+          throw new BadRequestException(
+            `El anticipo ($${advanceApplied.toFixed(2)}) supera el saldo disponible del proveedor ($${Math.max(0, saldo).toFixed(2)})`,
+          );
+        }
+      }
+      const netAmount = round2(totalAmount - advanceApplied);
+      if (advanceApplied > 0 && netAmount < 0.01) {
+        throw new BadRequestException(
+          'El anticipo no puede cubrir toda la liquidación: deja algo por pagar (lo que sobre del anticipo queda para la próxima)',
+        );
+      }
+      // La forma de pago, si se indica, debe cuadrar con lo que realmente se va a pagar.
+      let paymentPlan: { method: string; amount: number }[] | undefined;
+      if (dto.paymentPlan && dto.paymentPlan.length > 0) {
+        paymentPlan = dto.paymentPlan.map((p) => ({
+          method: p.method,
+          amount: round2(p.amount),
+        }));
+        const sumaPlan = round2(paymentPlan.reduce((s, p) => s + p.amount, 0));
+        if (Math.abs(sumaPlan - netAmount) > TOLERANCIA_MONTO) {
+          throw new BadRequestException(
+            `La forma de pago suma $${sumaPlan.toFixed(2)} y lo que se debe pagar es $${netAmount.toFixed(2)}: ajústala para que cuadre`,
+          );
+        }
+      }
+
       return tx.cacaoSettlement.create({
         data: {
           date: new Date(dto.date),
@@ -287,6 +322,8 @@ export class CacaoSettlementsService {
           totalDeductions,
           finalPrice,
           totalAmount,
+          advanceApplied,
+          ...(paymentPlan ? { paymentPlan } : {}),
           dueDays,
           status: 'PENDING',
           companyId,
@@ -317,7 +354,12 @@ export class CacaoSettlementsService {
    * Aprueba una liquidación pendiente y recién ahí nace la cuenta por pagar. Solo la
    * puede aprobar alguien distinto de quien la creó (la ruta limita el rol).
    */
-  async approve(id: number, companyId: number, userId: number) {
+  async approve(
+    id: number,
+    companyId: number,
+    userId: number,
+    role: UserRole,
+  ) {
     const settlement = await this.findOne(id, companyId);
     if (settlement.status !== 'PENDING') {
       throw new BadRequestException(
@@ -328,6 +370,15 @@ export class CacaoSettlementsService {
       throw new ForbiddenException(
         'La liquidación debe aprobarla otra persona, no quien la creó',
       );
+    }
+    // Si la empresa fijó un monto, lo que lo supere solo lo aprueba un administrador.
+    if (role !== UserRole.ADMIN) {
+      const tope = await this.config.montoAprobacionAdmin(companyId);
+      if (tope !== null && settlement.totalAmount > tope) {
+        throw new ForbiddenException(
+          `Esta liquidación supera $${tope.toFixed(2)}: la debe aprobar un administrador`,
+        );
+      }
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -349,7 +400,10 @@ export class CacaoSettlementsService {
           data: {
             settlementId: id,
             supplierId: settlement.supplierId,
-            totalAmount: settlement.totalAmount,
+            // Lo que se le debe pagar: el valor del cacao menos el anticipo ya entregado.
+            totalAmount: round2(
+              settlement.totalAmount - (settlement.advanceApplied ?? 0),
+            ),
             paidAmount: 0,
             dueDate: new Date(Date.now() + days * DIA_MS),
             status: 'PENDING',
@@ -366,12 +420,17 @@ export class CacaoSettlementsService {
    * aprobación individual (pendiente, no la aprueba quien la creó, cuenta por pagar en su
    * propia transacción): si una no se puede aprobar, las demás siguen y se devuelve por qué.
    */
-  async approveMany(ids: number[], companyId: number, userId: number) {
+  async approveMany(
+    ids: number[],
+    companyId: number,
+    userId: number,
+    role: UserRole,
+  ) {
     const aprobadas: number[] = [];
     const omitidas: { id: number; motivo: string }[] = [];
     for (const id of [...new Set(ids)]) {
       try {
-        await this.approve(id, companyId, userId);
+        await this.approve(id, companyId, userId, role);
         aprobadas.push(id);
       } catch (error) {
         omitidas.push({ id, motivo: this.mensajeDe(error) });

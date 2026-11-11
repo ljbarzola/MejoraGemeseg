@@ -1,16 +1,22 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { UserRole } from '@prisma/client';
 import { SectionPermissionGuard } from '../../../common/guards/section-permission.guard';
 import { Section } from '../../../common/decorators/section.decorator';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../../common/guards/roles.guard';
 import { CacaoLotsService } from './lots.service';
+import { SetDryWeightDto } from './dto/dry-weight.dto';
 
 @Controller('cacao/lots')
 export class CacaoLotsController {
@@ -39,5 +45,18 @@ export class CacaoLotsController {
   @Section('CACAO', 'view')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.service.findOne(id, req.user.companyId);
+  }
+
+  /** Registra (o borra, con null) el peso del lote después de secar, para medir la merma. */
+  @Patch(':id/dry-weight')
+  @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
+  @Roles(UserRole.ADMIN)
+  @Section('CACAO', 'write')
+  setDryWeight(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SetDryWeightDto,
+    @Req() req: any,
+  ) {
+    return this.service.setDryWeight(id, req.user.companyId, dto.dryWeight);
   }
 }

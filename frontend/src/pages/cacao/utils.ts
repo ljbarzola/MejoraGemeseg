@@ -22,6 +22,11 @@ export function formatKg(n: number): string {
 export function apiErrorMessage(err: any, fallback: string): string {
   // El servidor responde «Forbidden resource» cuando el rol no puede hacer la acción (p. ej. un gerente que paga).
   if (err?.response?.status === 403) {
+    // Si el servidor da una razón concreta («la debe aprobar un administrador», «la debe aprobar otra
+    // persona»), se muestra: es más útil que el aviso genérico. El «Forbidden resource» de un rol sin
+    // permiso sigue mostrándose con el mensaje de siempre.
+    const razon = err?.response?.data?.message;
+    if (typeof razon === 'string' && razon.trim() && !/forbidden|unauthorized/i.test(razon)) return razon;
     return 'No tienes permiso para hacer esto. Contacta a un administrador de tu empresa.';
   }
   const raw = err?.response?.data?.message;
@@ -62,4 +67,6 @@ export const PAYMENT_METHOD_LABEL: Record<string, string> = {
   TRANSFER: 'Transferencia',
   CASH: 'Efectivo',
   CHECK: 'Cheque',
+  // Solo en la forma de pago prevista de una liquidación: la parte que se deja a plazo.
+  CREDIT: 'Crédito',
 };

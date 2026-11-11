@@ -109,6 +109,72 @@ export const CACAO_CONFIG_DDL = [
    )`,
   'CREATE INDEX IF NOT EXISTS "CacaoPaymentRequest_companyId_status_idx" ON "CacaoPaymentRequest" ("companyId", "status")',
   'CREATE INDEX IF NOT EXISTS "CacaoPaymentRequest_payableId_idx" ON "CacaoPaymentRequest" ("payableId")',
+  // Rango de precio esperado por calidad (2026-11-10): columnas nuevas y opcionales; el
+  // despliegue anterior sigue funcionando con ellas creadas.
+  'ALTER TABLE IF EXISTS "CacaoQuality" ADD COLUMN IF NOT EXISTS "minPrice" DOUBLE PRECISION',
+  'ALTER TABLE IF EXISTS "CacaoQuality" ADD COLUMN IF NOT EXISTS "maxPrice" DOUBLE PRECISION',
+  // Ficha completa del proveedor (2026-11-10): columnas nuevas y opcionales; el despliegue
+  // anterior sigue funcionando con ellas creadas.
+  'ALTER TABLE IF EXISTS "CacaoSupplier" ADD COLUMN IF NOT EXISTS "idType" TEXT',
+  'ALTER TABLE IF EXISTS "CacaoSupplier" ADD COLUMN IF NOT EXISTS "idNumber" TEXT',
+  'ALTER TABLE IF EXISTS "CacaoSupplier" ADD COLUMN IF NOT EXISTS "email" TEXT',
+  'ALTER TABLE IF EXISTS "CacaoSupplier" ADD COLUMN IF NOT EXISTS "address" TEXT',
+  'ALTER TABLE IF EXISTS "CacaoSupplier" ADD COLUMN IF NOT EXISTS "bankAccountType" TEXT',
+  'ALTER TABLE IF EXISTS "CacaoSupplier" ADD COLUMN IF NOT EXISTS "bankAccountNumber" TEXT',
+  'ALTER TABLE IF EXISTS "CacaoSupplier" ADD COLUMN IF NOT EXISTS "bankAccountHolder" TEXT',
+  'ALTER TABLE IF EXISTS "CacaoSupplier" ADD COLUMN IF NOT EXISTS "rating" INTEGER',
+  // Documentos adjuntos del proveedor. Tabla nueva: solo la lee código nuevo.
+  `CREATE TABLE IF NOT EXISTS "CacaoSupplierDocument" (
+     "id" SERIAL NOT NULL,
+     "companyId" INTEGER NOT NULL,
+     "supplierId" INTEGER NOT NULL,
+     "name" TEXT NOT NULL,
+     "fileKey" TEXT NOT NULL,
+     "contentType" TEXT NOT NULL,
+     "size" INTEGER NOT NULL,
+     "uploadedBy" INTEGER NOT NULL,
+     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+     CONSTRAINT "CacaoSupplierDocument_pkey" PRIMARY KEY ("id")
+   )`,
+  'CREATE INDEX IF NOT EXISTS "CacaoSupplierDocument_supplierId_idx" ON "CacaoSupplierDocument" ("supplierId")',
+  // Anticipos a proveedores y forma de pago de la liquidación (2026-11-10). Tabla nueva y
+  // columnas con valor por defecto: el despliegue anterior sigue funcionando con ellas creadas.
+  `CREATE TABLE IF NOT EXISTS "CacaoSupplierAdvance" (
+     "id" SERIAL NOT NULL,
+     "companyId" INTEGER NOT NULL,
+     "supplierId" INTEGER NOT NULL,
+     "date" TIMESTAMP(3) NOT NULL,
+     "amount" DOUBLE PRECISION NOT NULL,
+     "method" TEXT NOT NULL DEFAULT 'TRANSFER',
+     "reference" TEXT,
+     "note" TEXT,
+     "createdBy" INTEGER NOT NULL,
+     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+     "voidedAt" TIMESTAMP(3),
+     "voidedBy" INTEGER,
+     "voidReason" TEXT,
+     CONSTRAINT "CacaoSupplierAdvance_pkey" PRIMARY KEY ("id")
+   )`,
+  'CREATE INDEX IF NOT EXISTS "CacaoSupplierAdvance_supplierId_idx" ON "CacaoSupplierAdvance" ("supplierId")',
+  'ALTER TABLE IF EXISTS "CacaoSettlement" ADD COLUMN IF NOT EXISTS "advanceApplied" DOUBLE PRECISION NOT NULL DEFAULT 0',
+  'ALTER TABLE IF EXISTS "CacaoSettlement" ADD COLUMN IF NOT EXISTS "paymentPlan" JSONB',
+  // Consignación y peso seco (2026-11-10): columnas con valor por defecto u opcionales; el
+  // despliegue anterior sigue funcionando con ellas creadas.
+  'ALTER TABLE IF EXISTS "CacaoReception" ADD COLUMN IF NOT EXISTS "consigned" BOOLEAN NOT NULL DEFAULT false',
+  'ALTER TABLE IF EXISTS "CacaoLot" ADD COLUMN IF NOT EXISTS "dryWeight" DOUBLE PRECISION',
+  // Pesadas (tandas) de una recepción (2026-11-10). Tabla nueva: solo la lee código nuevo.
+  `CREATE TABLE IF NOT EXISTS "CacaoReceptionWeighing" (
+     "id" SERIAL NOT NULL,
+     "companyId" INTEGER NOT NULL,
+     "receptionId" INTEGER NOT NULL,
+     "lineNo" INTEGER NOT NULL,
+     "grossWeight" DOUBLE PRECISION NOT NULL,
+     "tare" DOUBLE PRECISION NOT NULL,
+     "netWeight" DOUBLE PRECISION NOT NULL,
+     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+     CONSTRAINT "CacaoReceptionWeighing_pkey" PRIMARY KEY ("id")
+   )`,
+  'CREATE INDEX IF NOT EXISTS "CacaoReceptionWeighing_receptionId_idx" ON "CacaoReceptionWeighing" ("receptionId")',
   // El número de ticket no se repite dentro de una empresa (Postgres deja varias filas con NULL).
   `DO $$ BEGIN
      IF to_regclass('"CacaoReception"') IS NOT NULL THEN

@@ -7,7 +7,7 @@ import ErrorBanner from '../../../components/common/ErrorBanner';
 import SoloAdminDialog from '../../../components/common/SoloAdminDialog';
 import { apiErrorMessage } from '../utils';
 
-const FORM_VACIO = { name: '', humidityDiscount: '', impurityDiscount: '', isFixedPrice: false, fixedPrice: '' };
+const FORM_VACIO = { name: '', humidityDiscount: '', impurityDiscount: '', isFixedPrice: false, fixedPrice: '', minPrice: '', maxPrice: '' };
 
 /** Un número escrito en un campo; vacío o inválido da NaN (un 0 es un valor válido). */
 const numero = (t: string) => (t.trim() === '' ? NaN : Number(t));
@@ -51,6 +51,12 @@ export default function CalidadesPanel({ puedeEditar }: { puedeEditar: boolean }
     if (Number.isNaN(humedad) || humedad < 0 || humedad > 100) { setError('El descuento por humedad debe estar entre 0 y 100'); return; }
     if (Number.isNaN(impurezas) || impurezas < 0 || impurezas > 100) { setError('El descuento por impurezas debe estar entre 0 y 100'); return; }
     if (form.isFixedPrice && (Number.isNaN(precio) || precio <= 0)) { setError('Si el precio es fijo, debes indicar el monto'); return; }
+    // El rango es opcional: vacío = sin límite. Un 0 no es un límite útil, así que se pide mayor a cero.
+    const minimo = numero(form.minPrice);
+    const maximo = numero(form.maxPrice);
+    if (!Number.isNaN(minimo) && minimo <= 0) { setError('El precio mínimo debe ser mayor a cero'); return; }
+    if (!Number.isNaN(maximo) && maximo <= 0) { setError('El precio máximo debe ser mayor a cero'); return; }
+    if (!Number.isNaN(minimo) && !Number.isNaN(maximo) && minimo > maximo) { setError('El precio mínimo no puede ser mayor que el máximo'); return; }
     setSaving(true);
     setError('');
     try {
@@ -60,6 +66,8 @@ export default function CalidadesPanel({ puedeEditar }: { puedeEditar: boolean }
         impurityDiscount: impurezas,
         isFixedPrice: form.isFixedPrice,
         fixedPrice: form.isFixedPrice ? precio : null,
+        minPrice: Number.isNaN(minimo) ? null : minimo,
+        maxPrice: Number.isNaN(maximo) ? null : maximo,
       };
       if (editingId) await updateQuality(editingId, data);
       else await createQuality(data);
@@ -77,6 +85,8 @@ export default function CalidadesPanel({ puedeEditar }: { puedeEditar: boolean }
       impurityDiscount: String(q.impurityDiscount ?? ''),
       isFixedPrice: !!q.isFixedPrice,
       fixedPrice: q.fixedPrice != null ? String(q.fixedPrice) : '',
+      minPrice: q.minPrice != null ? String(q.minPrice) : '',
+      maxPrice: q.maxPrice != null ? String(q.maxPrice) : '',
     });
     setEditingId(q.id);
     setShowForm(true);
@@ -145,6 +155,21 @@ export default function CalidadesPanel({ puedeEditar }: { puedeEditar: boolean }
               <input id="cal-precio" type="number" inputMode="decimal" step="0.01" min="0" value={form.fixedPrice} onChange={(e) => setForm({ ...form, fixedPrice: e.target.value })} />
             </div>
           )}
+          {!form.isFixedPrice && (
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="cal-min">Precio mínimo ($/kg)</label>
+                <input id="cal-min" type="number" inputMode="decimal" step="0.01" min="0" placeholder="Sin mínimo" value={form.minPrice} onChange={(e) => setForm({ ...form, minPrice: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="cal-max">Precio máximo ($/kg)</label>
+                <input id="cal-max" type="number" inputMode="decimal" step="0.01" min="0" placeholder="Sin máximo" value={form.maxPrice} onChange={(e) => setForm({ ...form, maxPrice: e.target.value })} />
+              </div>
+              <span style={{ fontSize: '11px', color: '#718096', flexBasis: '100%' }}>
+                Opcional. Si una recepción trae un precio fuera de este rango, el sistema avisa y pide confirmar antes de registrarla.
+              </span>
+            </div>
+          )}
         </FormModal>
       )}
 
@@ -163,6 +188,7 @@ export default function CalidadesPanel({ puedeEditar }: { puedeEditar: boolean }
                   <th>Desc. impurezas</th>
                   <th>Tipo de precio</th>
                   <th>Precio fijo</th>
+                  <th>Rango esperado</th>
                   <th className="col-acciones"><span className="visually-hidden">Acciones</span></th>
                 </tr>
               </thead>
@@ -178,6 +204,7 @@ export default function CalidadesPanel({ puedeEditar }: { puedeEditar: boolean }
                       </span>
                     </td>
                     <td>{q.fixedPrice ? `$${q.fixedPrice}/kg` : '—'}</td>
+                    <td>{q.minPrice != null || q.maxPrice != null ? `${q.minPrice != null ? `$${q.minPrice}` : '—'} a ${q.maxPrice != null ? `$${q.maxPrice}` : '—'} /kg` : '—'}</td>
                     <td className="col-acciones">
                       <div className="tools-actions-cell">
                         <button className="btn-secondary icon-btn" onClick={() => requiere('edite la calidad', () => startEdit(q))} title="Editar" aria-label="Editar"><Pencil size={14} /></button>

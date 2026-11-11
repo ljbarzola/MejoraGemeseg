@@ -11,6 +11,7 @@ function armar() {
   const tx = {
     cacaoLot: { findFirst: jest.fn(), create: jest.fn() },
     cacaoReception: { create: jest.fn() },
+    cacaoReceptionWeighing: { createMany: jest.fn() },
     cacaoKardex: { create: jest.fn() },
   };
   const prisma = {
@@ -20,6 +21,8 @@ function armar() {
     cacaoSupplier: { findFirst: jest.fn().mockResolvedValue({ id: 5 }) },
     cacaoQuality: { findFirst: jest.fn().mockResolvedValue({ id: 2 }) },
     cacaoReception: { findFirst: jest.fn().mockResolvedValue(null) },
+    // Cuántas pesadas tiene cada entrega (la lista lo consulta aparte).
+    cacaoReceptionWeighing: { groupBy: jest.fn().mockResolvedValue([]) },
     cacaoPunto: {
       findFirst: jest.fn(),
       count: jest.fn().mockResolvedValue(0),
@@ -52,6 +55,304 @@ function dto(over: Partial<CreateReceptionDto> = {}): CreateReceptionDto {
     ...over,
   };
 }
+
+describe('CacaoReceptionsService.create: rango de precio de la calidad', () => {
+  const calidad = (over: Record<string, unknown> = {}) => ({
+    id: 2,
+    name: 'CCN-51',
+    isFixedPrice: false,
+    minPrice: 2,
+    maxPrice: 4,
+    ...over,
+  });
+
+  it('rechaza un precio por encima del máximo hasta que la persona lo confirme', async () => {
+    const a = armar();
+    a.prisma.cacaoQuality.findFirst.mockResolvedValue(calidad());
+    await expect(
+      a.service.create(dto({ provisionalPrice: 5 }), 4, 9),
+    ).rejects.toThrow(/\$5\/kg queda por encima del máximo de la calidad CCN-51 \(\$4\/kg\)/);
+    expect(a.tx.cacaoReception.create).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un precio por debajo del mínimo', async () => {
+    const a = armar();
+    a.prisma.cacaoQuality.findFirst.mockResolvedValue(calidad());
+    await expect(
+      a.service.create(dto({ provisionalPrice: 1.5 }), 4, 9),
+    ).rejects.toThrow(/por debajo del mínimo/);
+  });
+
+  it('con la confirmación explícita registra el precio fuera de rango', async () => {
+    const a = armar();
+    a.prisma.cacaoQuality.findFirst.mockResolvedValue(calidad());
+    await a.service.create(
+      dto({ provisionalPrice: 5, confirmPriceOutOfRange: true }),
+      4,
+      9,
+    );
+    expect(a.tx.cacaoReception.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('un precio dentro del rango (incluidos los extremos) pasa sin confirmar', async () => {
+    for (const precio of [2, 3, 4]) {
+      const a = armar();
+      a.prisma.cacaoQuality.findFirst.mockResolvedValue(calidad());
+      await a.service.create(dto({ provisionalPrice: precio }), 4, 9);
+      expect(a.tx.cacaoReception.create).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('sin precio (es opcional) no hay nada que comparar', async () => {
+    const a = armar();
+    a.prisma.cacaoQuality.findFirst.mockResolvedValue(calidad());
+    await a.service.create(dto({ provisionalPrice: undefined }), 4, 9);
+    expect(a.tx.cacaoReception.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('una calidad de precio fijo no pasa por el rango', async () => {
+    const a = armar();
+    a.prisma.cacaoQuality.findFirst.mockResolvedValue(
+      calidad({ isFixedPrice: true }),
+    );
+    await a.service.create(dto({ provisionalPrice: 9 }), 4, 9);
+    expect(a.tx.cacaoReception.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('un rango con un solo extremo solo vigila ese extremo', async () => {
+    const a = armar();
+    a.prisma.cacaoQuality.findFirst.mockResolvedValue(
+      calidad({ minPrice: null }),
+    );
+    await a.service.create(dto({ provisionalPrice: 0.5 }), 4, 9); // sin mínimo
+    await expect(
+      a.service.create(dto({ provisionalPrice: 6 }), 4, 9),
+    ).rejects.toThrow(/por encima del máximo/);
+  });
+
+  it('una calidad sin rango no restringe nada', async () => {
+    const a = armar();
+    a.prisma.cacaoQuality.findFirst.mockResolvedValue(
+      calidad({ minPrice: null, maxPrice: null }),
+    );
+    await a.service.create(dto({ provisionalPrice: 99 }), 4, 9);
+    expect(a.tx.cacaoReception.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CacaoReceptionsService.create: pesadas (tandas) de un ticket', () => {
+  type Datos = { data: Record<string, number> };
+  const datosRecepcion = (a: ReturnType<typeof armar>) =>
+    a.tx.cacaoReception.create.mock.calls[0][0] as Datos;
+
+  it('suma el bruto y la tara de todas las pesadas y guarda el detalle de cada una', async () => {
+    const a = armar();
+    await a.service.create(
+      dto({
+        grossWeight: undefined,
+        tare: undefined,
+        weighings: [
+          { grossWeight: 1000, tare: 10 },
+          { grossWeight: 500, tare: 5 },
+        ],
+      }),
+      4,
+      9,
+    );
+    expect(datosRecepcion(a).data).toMatchObject({
+      grossWeight: 1500,
+      tare: 15,
+      netWeight: 1485,
+    });
+    expect(a.tx.cacaoReceptionWeighing.createMany).toHaveBeenCalledWith({
+      data: [
+        { companyId: 4, receptionId: 21, lineNo: 1, grossWeight: 1000, tare: 10, netWeight: 990 },
+        { companyId: 4, receptionId: 21, lineNo: 2, grossWeight: 500, tare: 5, netWeight: 495 },
+      ],
+    });
+  });
+
+  it('el lote y el kárdex nacen con el neto de la suma (un solo lote)', async () => {
+    const a = armar();
+    await a.service.create(
+      dto({
+        weighings: [
+          { grossWeight: 1000, tare: 10 },
+          { grossWeight: 500, tare: 5 },
+        ],
+      }),
+      4,
+      9,
+    );
+    expect(a.tx.cacaoLot.create).toHaveBeenCalledTimes(1);
+    const lote = a.tx.cacaoLot.create.mock.calls[0][0] as Datos;
+    expect(lote.data.netWeight).toBe(1485);
+    const kardex = a.tx.cacaoKardex.create.mock.calls[0][0] as Datos;
+    expect(kardex.data.quantity).toBe(1485);
+  });
+
+  it('ignora los totales que mande el navegador: manda la suma de las pesadas', async () => {
+    const a = armar();
+    await a.service.create(
+      dto({
+        grossWeight: 99999,
+        tare: 1,
+        weighings: [{ grossWeight: 200, tare: 20 }],
+      }),
+      4,
+      9,
+    );
+    expect(datosRecepcion(a).data).toMatchObject({
+      grossWeight: 200,
+      tare: 20,
+      netWeight: 180,
+    });
+  });
+
+  it('convierte cada pesada a kg con la unidad de la recepción y las suma ya redondeadas', async () => {
+    const a = armar();
+    a.unitConfig.getFactor.mockResolvedValue(45.359237); // quintal
+    await a.service.create(
+      dto({
+        unitOfMeasure: 'QQ',
+        weighings: [
+          { grossWeight: 10, tare: 0.5 },
+          { grossWeight: 10, tare: 0.5 },
+        ],
+      }),
+      4,
+      9,
+    );
+    const filas = (
+      a.tx.cacaoReceptionWeighing.createMany.mock.calls[0][0] as {
+        data: Array<{ grossWeight: number; tare: number; netWeight: number }>;
+      }
+    ).data;
+    expect(filas[0]).toMatchObject({
+      grossWeight: 453.5924,
+      tare: 22.6796,
+      netWeight: 430.9128,
+    });
+    expect(datosRecepcion(a).data.grossWeight).toBe(907.1848); // 2 × 453.5924
+  });
+
+  it('rechaza una pesada cuyo neto no es positivo y dice cuál es', async () => {
+    const a = armar();
+    await expect(
+      a.service.create(
+        dto({
+          weighings: [
+            { grossWeight: 100, tare: 10 },
+            { grossWeight: 50, tare: 50 },
+          ],
+        }),
+        4,
+        9,
+      ),
+    ).rejects.toThrow(/La pesada 2 tiene peso neto cero o negativo/);
+    expect(a.tx.cacaoReception.create).not.toHaveBeenCalled();
+  });
+
+  it('sin pesadas es una sola pesada, como siempre, y no guarda detalle', async () => {
+    const a = armar();
+    await a.service.create(dto(), 4, 9);
+    expect(a.tx.cacaoReceptionWeighing.createMany).not.toHaveBeenCalled();
+    expect(datosRecepcion(a).data.grossWeight).toBe(1500);
+  });
+
+  it('sin pesadas exige el peso bruto', async () => {
+    const a = armar();
+    await expect(
+      a.service.create(dto({ grossWeight: undefined }), 4, 9),
+    ).rejects.toThrow(/El peso bruto es requerido/);
+  });
+
+  it('la lista dice cuántas pesadas tiene cada entrega (0 = una sola)', async () => {
+    const a = armar();
+    const prismaExtra = a.prisma as unknown as Record<string, unknown>;
+    prismaExtra.cacaoReception = {
+      findMany: jest.fn().mockResolvedValue([
+        { id: 1, lotId: null },
+        { id: 2, lotId: null },
+      ]),
+    };
+    prismaExtra.cacaoSettlementLot = { groupBy: jest.fn() };
+    a.prisma.cacaoReceptionWeighing.groupBy.mockResolvedValue([
+      { receptionId: 2, _count: { _all: 4 } },
+    ]);
+    const lista = await a.service.findAll(4, {});
+    expect(lista.map((r) => r.weighingCount)).toEqual([0, 4]);
+    const consulta = a.prisma.cacaoReceptionWeighing.groupBy.mock
+      .calls[0][0] as { where: { companyId: number } };
+    expect(consulta.where.companyId).toBe(4);
+  });
+});
+
+describe('CreateReceptionDto: pesadas', () => {
+  const base = {
+    date: '2026-10-20',
+    supplierId: 5,
+    guideNumber: 'G-1',
+    humidity: 7,
+    impurities: 1,
+    qualityId: 2,
+  };
+  const validar = (extra: Record<string, unknown>) =>
+    validate(plainToInstance(CreateReceptionDto, { ...base, ...extra }));
+
+  it('con pesadas no hace falta mandar el bruto ni la tara', async () => {
+    expect(
+      await validar({ weighings: [{ grossWeight: 100, tare: 5 }] }),
+    ).toHaveLength(0);
+  });
+
+  it('sin pesadas el bruto sigue siendo obligatorio', async () => {
+    expect(await validar({})).not.toHaveLength(0);
+    expect(await validar({ grossWeight: 100, tare: 1 })).toHaveLength(0);
+  });
+
+  it('valida cada pesada: bruto mayor a cero y tara no negativa', async () => {
+    expect(
+      await validar({ weighings: [{ grossWeight: 0, tare: 0 }] }),
+    ).not.toHaveLength(0);
+    expect(
+      await validar({ weighings: [{ grossWeight: 100, tare: -1 }] }),
+    ).not.toHaveLength(0);
+    expect(
+      await validar({ weighings: [{ grossWeight: 'x', tare: 1 }] }),
+    ).not.toHaveLength(0);
+  });
+
+  it('admite hasta 50 pesadas', async () => {
+    const pesada = { grossWeight: 10, tare: 1 };
+    expect(
+      await validar({ weighings: Array.from({ length: 50 }, () => pesada) }),
+    ).toHaveLength(0);
+    expect(
+      await validar({ weighings: Array.from({ length: 51 }, () => pesada) }),
+    ).not.toHaveLength(0);
+  });
+});
+
+describe('CacaoReceptionsService.create: consignación', () => {
+  it('por defecto la entrega no es en consignación', async () => {
+    const a = armar();
+    await a.service.create(dto(), 4, 9);
+    const datos = a.tx.cacaoReception.create.mock.calls[0][0] as {
+      data: { consigned: boolean };
+    };
+    expect(datos.data.consigned).toBe(false);
+  });
+
+  it('guarda la marca de consignación cuando se pide', async () => {
+    const a = armar();
+    await a.service.create(dto({ consigned: true }), 4, 9);
+    const datos = a.tx.cacaoReception.create.mock.calls[0][0] as {
+      data: { consigned: boolean };
+    };
+    expect(datos.data.consigned).toBe(true);
+  });
+});
 
 describe('CacaoReceptionsService.create: punto de acopio', () => {
   it('sin puntos configurados no pide punto y guarda la recepción sin él', async () => {

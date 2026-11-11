@@ -24,16 +24,22 @@ export class CacaoQualitiesService {
 
   async create(dto: CreateQualityDto, companyId: number) {
     await this.assertNombreLibre(dto.name, companyId);
+    this.assertRangoDePrecio(dto.minPrice, dto.maxPrice);
     return this.prisma.cacaoQuality.create({
       data: { ...dto, name: dto.name.trim(), companyId },
     });
   }
 
   async update(id: number, dto: UpdateQualityDto, companyId: number) {
-    await this.findOne(id, companyId);
+    const actual = await this.findOne(id, companyId);
     if (dto.name !== undefined) {
       await this.assertNombreLibre(dto.name, companyId, id);
     }
+    // El rango final es lo que se manda más lo que ya tenía la calidad (nulo lo borra).
+    this.assertRangoDePrecio(
+      dto.minPrice !== undefined ? dto.minPrice : actual.minPrice,
+      dto.maxPrice !== undefined ? dto.maxPrice : actual.maxPrice,
+    );
     return this.prisma.cacaoQuality.update({
       where: { id },
       data: {
@@ -54,6 +60,18 @@ export class CacaoQualitiesService {
       );
     }
     return this.prisma.cacaoQuality.delete({ where: { id } });
+  }
+
+  /** El precio mínimo no puede ser mayor que el máximo. */
+  private assertRangoDePrecio(
+    min: number | null | undefined,
+    max: number | null | undefined,
+  ) {
+    if (min != null && max != null && min > max) {
+      throw new BadRequestException(
+        'El precio mínimo no puede ser mayor que el precio máximo',
+      );
+    }
   }
 
   private async findOne(id: number, companyId: number) {

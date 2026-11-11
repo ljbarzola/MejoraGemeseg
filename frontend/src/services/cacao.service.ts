@@ -5,6 +5,40 @@ export const createSupplier = (data: any) => api.post('/cacao/suppliers', data).
 export const updateSupplier = (id: number, data: any) => api.patch(`/cacao/suppliers/${id}`, data).then(r => r.data);
 export const deleteSupplier = (id: number) => api.delete(`/cacao/suppliers/${id}`);
 
+// Peso del lote después de secar (null lo borra): con él se calcula la merma de secado
+export const setLotDryWeight = (id: number, dryWeight: number | null) =>
+  api.patch(`/cacao/lots/${id}/dry-weight`, { dryWeight }).then(r => r.data);
+
+// Anticipos (adelantos de dinero) a un proveedor: se descuentan al liquidarle
+export interface SupplierAdvance {
+  id: number; supplierId: number; date: string; amount: number; method: string;
+  reference: string | null; note: string | null; createdAt: string;
+  voidedAt: string | null; voidReason: string | null;
+}
+export interface SupplierAdvances { saldo: number; anticipos: SupplierAdvance[] }
+export const getSupplierAdvances = (supplierId: number): Promise<SupplierAdvances> =>
+  api.get('/cacao/anticipos', { params: { supplierId } }).then(r => r.data);
+export const createSupplierAdvance = (data: { supplierId: number; date: string; amount: number; method: string; reference?: string; note?: string }) =>
+  api.post('/cacao/anticipos', data).then(r => r.data);
+export const voidSupplierAdvance = (id: number, reason: string): Promise<SupplierAdvances> =>
+  api.post(`/cacao/anticipos/${id}/void`, { reason }).then(r => r.data);
+
+// Documentos adjuntos del proveedor (cédula, RUT, certificados...)
+export interface SupplierDocument { id: number; name: string; contentType: string; size: number; createdAt: string }
+export const getSupplierDocuments = (supplierId: number): Promise<SupplierDocument[]> =>
+  api.get(`/cacao/suppliers/${supplierId}/documents`).then(r => r.data);
+export const uploadSupplierDocument = (supplierId: number, archivo: File, nombre?: string): Promise<SupplierDocument> => {
+  const form = new FormData();
+  form.append('archivo', archivo);
+  if (nombre?.trim()) form.append('nombre', nombre.trim());
+  // El cliente axios manda JSON por defecto: sin este encabezado serializa el FormData como JSON y el
+  // servidor no recibe el archivo («Elige el archivo que quieres adjuntar»).
+  return api.post(`/cacao/suppliers/${supplierId}/documents`, form, { timeout: 60000, headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+};
+export const downloadSupplierDocument = (docId: number): Promise<Blob> =>
+  api.get(`/cacao/suppliers/documents/${docId}/archivo`, { responseType: 'blob' }).then(r => r.data);
+export const deleteSupplierDocument = (docId: number) => api.delete(`/cacao/suppliers/documents/${docId}`).then(r => r.data);
+
 export const getClients = () => api.get('/cacao/clients').then(r => r.data);
 export const createClient = (data: any) => api.post('/cacao/clients', data).then(r => r.data);
 export const updateClient = (id: number, data: any) => api.patch(`/cacao/clients/${id}`, data).then(r => r.data);
@@ -79,7 +113,7 @@ export const deleteCacaoMotivo = (id: number) => api.delete(`/cacao/motivos/${id
 
 // Ajustes de la empresa (plazos de pago y cobro)
 export const getCacaoConfig = () => api.get('/cacao/configuracion').then(r => r.data);
-export const updateCacaoConfig = (data: { plazoPagoDias?: number; plazoCobroDias?: number; precioIce?: number | null; pagosRequierenAutorizacion?: boolean }) => api.put('/cacao/configuracion', data).then(r => r.data);
+export const updateCacaoConfig = (data: { plazoPagoDias?: number; plazoCobroDias?: number; precioIce?: number | null; pagosRequierenAutorizacion?: boolean; montoAprobacionAdmin?: number | null }) => api.put('/cacao/configuracion', data).then(r => r.data);
 
 // Cerrar una entrega sin liquidarla (con motivo) y volver a abrirla
 export const closeReception = (id: number, reason: string) => api.post(`/cacao/receptions/${id}/close`, { reason }).then(r => r.data);

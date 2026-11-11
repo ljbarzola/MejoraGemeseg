@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getSuppliers, getQualities, createReception, getNextLotCode, getUnitConfig, getCacaoPuntos } from '../../../services/cacao.service';
 import DateInput from '../../../components/common/DateInput';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { apiErrorMessage } from '../utils';
 import { ABREVIATURA_UNIDAD as UNIT_ABBR, NOMBRE_UNIDAD as UNIT_FULL, KG_POR_QUINTAL } from '../useCacaoUnidades';
 
@@ -44,11 +45,19 @@ export default function ReceptionForm() {
     differential: '',
     qualityId: '',
     isFixedPrice: false,
+    // Entrega en consignación: se le paga al proveedor después de venderla.
+    consigned: false,
   });
+  // Pesar por tandas: un mismo ticket pesado en varias pesadas (mismo producto). El bruto y la tara de la
+  // recepción son la suma de todas; el servidor las suma otra vez y guarda el detalle de cada una.
+  const [porTandas, setPorTandas] = useState(false);
+  const [tandas, setTandas] = useState<{ gross: string; tare: string }[]>([]);
   const isDirty = useRef(false);
   const [showUnsaved, setShowUnsaved] = useState(false);
   const pendingNav = useRef<(() => void) | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({});
+  // Texto del aviso «precio fuera de rango» mientras se espera la confirmación de la persona.
+  const [avisoPrecio, setAvisoPrecio] = useState<string | null>(null);
 
   const supplierRef = useRef<HTMLSelectElement>(null);
   const puntoRef = useRef<HTMLSelectElement>(null);
@@ -132,8 +141,27 @@ export default function ReceptionForm() {
   };
 
   const unitFactor = getUnitFactor();
-  const grossWeightNum = parseFloat(form.grossWeight) || 0;
-  const tareNum = parseFloat(form.tare) || 0;
+  // Con tandas, el bruto y la tara son la suma de las pesadas; sin ellas, lo escrito en los dos campos.
+  const grossWeightNum = porTandas
+    ? round4(tandas.reduce((s, t) => s + (parseFloat(t.gross) || 0), 0))
+    : parseFloat(form.grossWeight) || 0;
+  const tareNum = porTandas
+    ? round4(tandas.reduce((s, t) => s + (parseFloat(t.tare) || 0), 0))
+    : parseFloat(form.tare) || 0;
+
+  function activarTandas(activar: boolean) {
+    isDirty.current = true;
+    if (activar) {
+      // La primera pesada arranca con lo que ya estaba escrito, para no perderlo.
+      setTandas([{ gross: form.grossWeight, tare: form.tare }]);
+      clearFieldError('grossWeight');
+    }
+    setPorTandas(activar);
+  }
+  function cambiarTanda(i: number, campo: 'gross' | 'tare', valor: string) {
+    isDirty.current = true;
+    setTandas((prev) => prev.map((t, j) => (j === i ? { ...t, [campo]: valor } : t)));
+  }
   const netWeightInUnit = round4(grossWeightNum - tareNum);
   const netWeightKg = round4(netWeightInUnit * unitFactor);
   const grossWeightKg = round4(grossWeightNum * unitFactor);
@@ -148,7 +176,7 @@ export default function ReceptionForm() {
     if (!form.supplierId) errors.supplierId = true;
     if (puntos.length > 0 && !form.puntoId) errors.puntoId = true;
     if (!form.guideNumber) errors.guideNumber = true;
-    if (!form.grossWeight) errors.grossWeight = true;
+    if (!porTandas && !form.grossWeight) errors.grossWeight = true;
     if (!form.qualityId) errors.qualityId = true;
 
     if (Object.keys(errors).length > 0) {
@@ -159,10 +187,39 @@ export default function ReceptionForm() {
       return;
     }
     setFieldErrors({});
+
+    // Cada pesada necesita su peso bruto, y su tara no puede ser tan grande que deje el neto en cero.
+    if (porTandas) {
+      for (let i = 0; i < tandas.length; i++) {
+        const bruto = parseFloat(tandas[i].gross) || 0;
+        const tara = parseFloat(tandas[i].tare) || 0;
+        if (bruto <= 0) { setError(`La pesada ${i + 1} necesita su peso bruto (o quítala)`); return; }
+        if (tara < 0 || tara >= bruto) { setError(`La tara de la pesada ${i + 1} debe ser menor que su peso bruto`); return; }
+      }
+    }
+
+    // Precio provisional fuera del rango esperado de la calidad: se avisa y se pide confirmar.
+    const precio = Number(form.provisionalPrice) || 0;
+    if (precio > 0 && selectedQuality && !selectedQuality.isFixedPrice) {
+      const bajo = selectedQuality.minPrice != null && precio < selectedQuality.minPrice;
+      const alto = selectedQuality.maxPrice != null && precio > selectedQuality.maxPrice;
+      if (bajo || alto) {
+        setAvisoPrecio(
+          `El precio $${precio}/kg queda ${bajo ? 'por debajo del mínimo' : 'por encima del máximo'} de la calidad ${selectedQuality.name} ($${bajo ? selectedQuality.minPrice : selectedQuality.maxPrice}/kg). Puede ser un error de digitación. ¿Registrar la recepción con este precio?`,
+        );
+        return;
+      }
+    }
+    await registrar(false);
+  }
+
+  async function registrar(precioConfirmado: boolean) {
     setSaving(true);
     setError('');
     try {
       await createReception({
+        confirmPriceOutOfRange: precioConfirmado || undefined,
+        consigned: form.consigned || undefined,
         date: form.date,
         supplierId: Number(form.supplierId),
         puntoId: form.puntoId ? Number(form.puntoId) : undefined,
@@ -172,8 +229,10 @@ export default function ReceptionForm() {
         weighingProfile: form.weighingProfile || undefined,
         driverName: form.driverName.trim() || undefined,
         vehiclePlate: form.vehiclePlate.trim() || undefined,
-        grossWeight: grossWeightNum,
-        tare: tareNum,
+        // Con tandas se manda el detalle de cada pesada y el servidor suma; sin ellas, el bruto y la tara.
+        ...(porTandas
+          ? { weighings: tandas.map((t) => ({ grossWeight: parseFloat(t.gross) || 0, tare: parseFloat(t.tare) || 0 })) }
+          : { grossWeight: grossWeightNum, tare: tareNum }),
         humidity: Number(form.humidity) || 0,
         impurities: Number(form.impurities) || 0,
         provisionalPrice: Number(form.provisionalPrice) || 0,
@@ -326,6 +385,35 @@ export default function ReceptionForm() {
           )}
 
           <div className="form-section-title">Pesos (en {UNIT_FULL[form.unitOfMeasure]})</div>
+          <div className="form-group">
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={porTandas} onChange={(e) => activarTandas(e.target.checked)} />
+              Pesar por tandas (el mismo ticket se pesó en varias pesadas)
+            </label>
+            <span style={{ fontSize: '11px', color: '#718096' }}>Anota cada pesada con su bruto y su tara: el sistema suma todas. Siguen siendo el mismo cacao, la misma calidad y un solo lote.</span>
+          </div>
+          {porTandas ? (
+            <div style={{ marginBottom: '8px' }}>
+              {tandas.map((t, i) => {
+                const bruto = parseFloat(t.gross) || 0;
+                const tara = parseFloat(t.tare) || 0;
+                const neto = round4(bruto - tara);
+                return (
+                  <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ minWidth: '70px', fontSize: '13px', fontWeight: 600, color: '#4a5568' }}>Pesada {i + 1}</span>
+                    <input type="number" step="0.0001" min="0" placeholder={`Bruto (${unitAbbr})`} aria-label={`Peso bruto de la pesada ${i + 1}`} value={t.gross} onChange={(e) => cambiarTanda(i, 'gross', e.target.value)} style={{ flex: 1 }} />
+                    <input type="number" step="0.0001" min="0" placeholder={`Tara (${unitAbbr})`} aria-label={`Tara de la pesada ${i + 1}`} value={t.tare} onChange={(e) => cambiarTanda(i, 'tare', e.target.value)} style={{ flex: 1 }} />
+                    <span style={{ minWidth: '110px', fontSize: '13px', color: neto > 0 ? '#2b6cb0' : '#a0aec0', fontWeight: 600 }}>Neto {neto > 0 ? neto.toFixed(2) : '—'} {unitAbbr}</span>
+                    <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} disabled={tandas.length === 1} onClick={() => { isDirty.current = true; setTandas(tandas.filter((_, j) => j !== i)); }} title="Quitar pesada" aria-label={`Quitar la pesada ${i + 1}`}>✕</button>
+                  </div>
+                );
+              })}
+              <button type="button" className="btn-secondary" onClick={() => { isDirty.current = true; setTandas([...tandas, { gross: '', tare: '' }]); }}>+ Agregar pesada</button>
+              <div style={{ marginTop: '8px', fontSize: '13px', color: '#4a5568' }}>
+                {tandas.length} {tandas.length === 1 ? 'pesada' : 'pesadas'} · Bruto total <strong>{grossWeightNum.toFixed(2)} {unitAbbr}</strong> · Tara total <strong>{tareNum.toFixed(2)} {unitAbbr}</strong>
+              </div>
+            </div>
+          ) : (
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="rec-10">Peso Bruto ({unitAbbr}) *</label>
@@ -337,6 +425,7 @@ export default function ReceptionForm() {
               <input id="rec-11" type="number" step="0.0001" min="0" value={form.tare} onChange={(e) => setField('tare', e.target.value)} placeholder={`Ej: ${form.unitOfMeasure === 'TON' ? '0.05' : form.unitOfMeasure === 'QQ' ? '0.5' : form.unitOfMeasure === 'SACO' ? '1' : '50'}`} />
             </div>
           </div>
+          )}
 
           {/* NETO EN UNIDAD ORIGINAL */}
           <div className="form-row">
@@ -428,6 +517,14 @@ export default function ReceptionForm() {
             </div>
           </div>
 
+          <div className="form-group">
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={form.consigned} onChange={(e) => { isDirty.current = true; setForm((prev) => ({ ...prev, consigned: e.target.checked })); }} />
+              Entrega en consignación (se le paga al proveedor después de venderla)
+            </label>
+            <span style={{ fontSize: '11px', color: '#718096' }}>Solo la marca en las listas para que la ubiques; no cambia cómo se liquida.</span>
+          </div>
+
           <div className="form-section-title">Precio y Diferencial</div>
           <div className="form-row">
             <div className="form-group">
@@ -451,6 +548,17 @@ export default function ReceptionForm() {
           </div>
         </div>
       </div>
+
+      {avisoPrecio && (
+        <ConfirmDialog
+          title="Precio fuera de rango"
+          message={avisoPrecio}
+          confirmLabel="Sí, registrar igual"
+          cancelLabel="Corregir el precio"
+          onConfirm={() => { setAvisoPrecio(null); registrar(true); }}
+          onCancel={() => setAvisoPrecio(null)}
+        />
+      )}
 
       {showUnsaved && (
         <div className="unsaved-dialog-overlay" onClick={() => { setShowUnsaved(false); pendingNav.current = null; }}>

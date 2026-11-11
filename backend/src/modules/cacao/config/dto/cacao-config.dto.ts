@@ -30,6 +30,16 @@ export class UpdateCacaoConfigDto {
   @Max(1000000)
   precioIce?: number | null;
 
+  /**
+   * Monto en $ desde el cual una liquidación solo la aprueba un administrador (máx. 2 decimales).
+   * `null` lo borra: un gerente vuelve a poder aprobar cualquiera.
+   */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  @Max(1000000000)
+  montoAprobacionAdmin?: number | null;
+
   /** Si los pagos a proveedores deben solicitarse y autorizarse antes de pagarse. */
   @IsOptional()
   @IsBoolean()
