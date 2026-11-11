@@ -6,6 +6,7 @@ import { CP_CODIGO_TURNO_HORAS_DDL } from './cp-codigo-turno-horas.schema';
 import { CP_INFORME_DATOS_DDL } from './cp-informe-datos.schema';
 import { CACAO_LIQUIDACIONES_DDL } from './cacao-liquidaciones.schema';
 import { CACAO_CONFIG_DDL } from './cacao-config.schema';
+import { COMPLAINT_EXTERNA_DDL } from './complaint-externa.schema';
 
 /** Default pg pool size. Cloud SQL db-f1-micro allows ~25 connections; Cloud Run max-instances=10 would blow that with pg's default of 10. */
 const DEFAULT_POOL_MAX = 3;
@@ -89,6 +90,7 @@ export class PrismaService
       ...CP_INFORME_DATOS_DDL,
       ...CACAO_LIQUIDACIONES_DDL,
       ...CACAO_CONFIG_DDL,
+      ...COMPLAINT_EXTERNA_DDL,
     ]) {
       try {
         await this.$executeRawUnsafe(ddl);

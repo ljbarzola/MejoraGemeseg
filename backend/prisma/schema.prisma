@@ -78,6 +78,8 @@ model Company {
   complaintStages           ComplaintStage[]
   complaintStageChanges     ComplaintStageChange[]
   complaintFieldDefinitions ComplaintFieldDefinition[]
+  complaintPublicOptions    ComplaintPublicOption[]
+  complaintPublicSetting    ComplaintPublicSetting?
   surveys                   Survey[]
   notificationConfigs       NotificationConfig[]
   ticketsSoporte            TicketSoporte[]
@@ -1115,12 +1117,51 @@ model Complaint {
   // ComplaintFieldDefinition), keyed por el id del campo — igual patrón que
   // GuardiaFichaPersonal.camposPersonalizados.
   customFieldValues Json                   @default("{}")
+  // Etiqueta de dónde viene: 'INTERNA' (personal con cuenta, buzón de la app) o
+  // 'EXTERNA' (formulario público quejas.gemeseg.com, personal en inducción o
+  // reinducción). Las columnas de abajo solo se llenan en las externas. Columnas
+  // nuevas de una tabla existente: se crean al arrancar (complaint-externa.schema.ts).
+  origen            String                 @default("INTERNA")
+  tipo              String?
+  sede              String?
+  // Día de la inducción, 'YYYY-MM-DD' (texto, para no depender de zonas horarias).
+  fechaInduccion    String?
+  // Solo si la persona NO eligió ser anónima y quiso dejar un medio de contacto.
+  contactoNombre    String?
+  contactoEmail     String?
+  contactoTelefono  String?
+  // Opcional (formulario público): nombres o cargos de quienes estuvieron presentes o están involucrados.
+  personasInvolucradas String?
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
   stageChanges      ComplaintStageChange[]
 
   @@index([companyId])
   @@index([companyId, status])
+}
+
+// Opciones del formulario público de quejas (tipos de queja y sedes), editables
+// por RRHH. `kind` = 'TIPO' | 'SEDE'. Tabla creada al arrancar.
+model ComplaintPublicOption {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  kind      String
+  label     String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([companyId, kind, label])
+  @@index([companyId, kind])
+}
+
+// La empresa que recibe lo que llega por quejas.gemeseg.com. Solo UNA empresa
+// puede tenerlo activo a la vez (se valida al activarlo). Tabla creada al arrancar.
+model ComplaintPublicSetting {
+  companyId Int      @id
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
 }
 
 // Etapa editable del proceso de quejas y sugerencias (Fase 5: reemplaza el

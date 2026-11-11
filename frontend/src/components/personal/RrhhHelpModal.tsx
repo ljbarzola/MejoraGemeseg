@@ -93,6 +93,8 @@ const MODULOS_INDEPENDIENTES: Submodulo[] = [
       'Cualquier empleado puede enviar una queja o sugerencia, identificado o de forma anónima, sin necesitar acceso a RRHH.',
       'RRHH la gestiona en un tablero arrastrable con 5 etapas (recibida, sensibilización, comunicación, solución, cerrada) desde "Gestión de Quejas y Sugerencias", y puede agregar campos extra al formulario de envío (ej. Departamento).',
       'En el botón de etapas se pueden cambiar, agregar o quitar las columnas del tablero. La primera etapa que se crea queda como etapa inicial (la de la estrella): ahí entra toda queja nueva.',
+      'Cada queja lleva una etiqueta: «Interna» (la envió una persona con cuenta desde este buzón) o «Externa» (la envió, sin cuenta, quien recibe la inducción o la reinducción por quejas.gemeseg.com). Arriba del tablero puedes filtrar por Todas, Internas o Externas.',
+      'El botón del código QR abre la configuración del formulario público: lo enciende o apaga, edita las sedes y los tipos de queja que ofrece, y deja descargar el QR para presentarlo en la inducción. Quien lo llena puede ir anónimo o dejar un correo o teléfono; las externas muestran en su detalle el tipo, la sede, la fecha de inducción, las personas involucradas (si las indicaron) y ese contacto. Quien la envía debe aceptar la política de privacidad. La web gemeseg.com tiene además una página «Canal de quejas» que explica el canal y lleva al formulario.',
     ],
   },
   {

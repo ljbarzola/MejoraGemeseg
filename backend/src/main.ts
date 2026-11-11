@@ -51,6 +51,11 @@ async function bootstrap() {
   const landingOrigins = origenesDeLanding();
   const landingRoute = /^\/api\/ventas\/whatsapp\/clic(\?|$)/;
 
+  // El formulario público de quejas (quejas.gemeseg.com, personal en inducción) solo puede
+  // llamar a /api/public/quejas...: a cualquier otra ruta sigue aplicándose la lista de arriba.
+  const quejasOrigin = 'https://quejas.gemeseg.com';
+  const quejasRoute = /^\/api\/public\/quejas(\/|\?|$)/;
+
   app.enableCors(
     (
       req: { headers: { origin?: string }; originalUrl?: string; url?: string },
@@ -71,11 +76,15 @@ async function bootstrap() {
         landingOrigins.includes(origin) &&
         landingRoute.test(req.originalUrl ?? req.url ?? '');
 
+      const isQuejas =
+        origin === quejasOrigin && quejasRoute.test(req.originalUrl ?? req.url ?? '');
+
       if (
         !origin ||
         isLocalDev ||
         isExtension ||
         isLanding ||
+        isQuejas ||
         allowedOrigins.includes(origin) ||
         previewChannel.test(origin)
       ) {

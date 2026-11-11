@@ -41,6 +41,11 @@ import {
   UpdateComplaintFieldDto,
 } from './dto/complaint-field-definition.dto';
 import { ComplaintStageService } from './services/complaint-stage.service';
+import { ComplaintExternaService } from './services/complaint-externa.service';
+import {
+  CreateComplaintPublicOptionDto,
+  SetComplaintPublicEnabledDto,
+} from './dto/complaint-externa.dto';
 import {
   CreateComplaintStageDto,
   UpdateComplaintStageDto,
@@ -73,6 +78,7 @@ export class EntidadController {
     private readonly complaintService: ComplaintService,
     private readonly complaintFieldDefinitionService: ComplaintFieldDefinitionService,
     private readonly complaintStageService: ComplaintStageService,
+    private readonly complaintExternaService: ComplaintExternaService,
   ) {}
 
   // ENTIDADES
@@ -433,6 +439,43 @@ export class EntidadController {
   @Section('RRHH', 'write')
   deleteComplaint(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.complaintService.delete(id, req.user.companyId);
+  }
+
+  // QUEJAS EXTERNAS (formulario público quejas.gemeseg.com): configuración de RRHH.
+  @Get('complaints-externas/config')
+  @Section('RRHH', 'view')
+  getComplaintExternasConfig(@Req() req: any) {
+    return this.complaintExternaService.getConfig(req.user.companyId);
+  }
+
+  @Patch('complaints-externas/config')
+  @Section('RRHH', 'write')
+  setComplaintExternasEnabled(
+    @Body() body: SetComplaintPublicEnabledDto,
+    @Req() req: any,
+  ) {
+    return this.complaintExternaService.setEnabled(
+      req.user.companyId,
+      body.enabled,
+    );
+  }
+
+  @Post('complaints-externas/opciones')
+  @Section('RRHH', 'write')
+  addComplaintExternasOption(
+    @Body() body: CreateComplaintPublicOptionDto,
+    @Req() req: any,
+  ) {
+    return this.complaintExternaService.addOption(req.user.companyId, body);
+  }
+
+  @Delete('complaints-externas/opciones/:id')
+  @Section('RRHH', 'write')
+  removeComplaintExternasOption(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+  ) {
+    return this.complaintExternaService.removeOption(req.user.companyId, id);
   }
 
   // CAMPOS EXTRA DEL FORMULARIO DE QUEJAS (configurados por RRHH). El GET no
