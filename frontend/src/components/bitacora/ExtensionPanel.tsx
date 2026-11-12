@@ -65,14 +65,14 @@ export default function ExtensionPanel() {
     <div className="bit-extension">
       <h2 className="bit-detalle-titulo">
         Extensión del navegador
-        <small>Completa tu hoja con los sitios web (solo el dominio) y el tiempo, dentro del horario.</small>
+        <small>Completa tu hoja con los sitios web (solo el dominio) y el tiempo, dentro del horario o durante un tiempo extra que tú empieces.</small>
       </h2>
 
       <ErrorBanner mensaje={error} />
 
       {estado?.vinculada ? (
         <>
-          <div className="bit-aviso">Tu extensión está vinculada. Se registra solo dentro del horario de la empresa.</div>
+          <div className="bit-aviso">Tu extensión está vinculada. Se registra solo dentro del horario de la empresa o mientras tengas un tiempo extra en curso.</div>
           <ul className="bit-extension-equipos">
             {estado.dispositivos.map((d) => (
               <li key={d.id}>
@@ -106,9 +106,9 @@ export default function ExtensionPanel() {
       <p className="bit-nota">Qué registra la extensión:</p>
       <ul className="bit-nota" style={{ marginTop: 4, paddingLeft: 20 }}>
         <li>Solo el dominio del sitio (por ejemplo «ejemplo.com»), nunca la dirección completa, el título ni el contenido.</li>
-        <li>Solo mientras la ventana del navegador está al frente y estás activo, y solo dentro del horario.</li>
+        <li>Solo mientras la ventana del navegador está al frente y estás activo, y solo dentro del horario o de un tiempo extra que tú empieces.</li>
         <li>No registra las ventanas privadas ni lo que escribes, ni toma capturas.</li>
-        <li>Fuera del horario no envía nada. Puedes desvincularla aquí o desde la propia extensión cuando quieras.</li>
+        <li>Fuera del horario no envía nada, salvo mientras tengas un tiempo extra en curso. Puedes desvincularla aquí o desde la propia extensión cuando quieras.</li>
       </ul>
 
       {codigo && (

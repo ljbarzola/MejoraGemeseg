@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomInt } from 'crypto';
 import { minutosDelDia, ZONA_ECUADOR } from './bitacora-fecha.util';
+import { esSitioSensible, rutaLimpia, tituloLimpio } from './bitacora-sitios.util';
 
 /**
  * Lógica pura de la extensión del navegador: horario, dominios, tramos y
@@ -22,6 +23,16 @@ export interface Tramo {
   dominio: string;
   inicio: Date;
   minutos: number;
+  /** Ruta limpia de la página (sin «?» ni «#»); null en sitios sensibles o si no hay. */
+  ruta?: string | null;
+  /** Título de la pestaña, recortado; null en sitios sensibles o si no hay. */
+  titulo?: string | null;
+}
+
+/** Ventana de «tiempo extra»: la extensión puede registrar aunque sea fuera del horario. fin null = abierta. */
+export interface VentanaExtra {
+  inicio: Date;
+  fin: Date | null;
 }
 
 export const DIAS_SEMANA = [1, 2, 3, 4, 5, 6, 7];
@@ -89,6 +100,19 @@ export function dentroDelHorario(horario: Horario, instante: Date): boolean {
   return minuto >= aMinutos(horario.inicio) && minuto < aMinutos(horario.fin);
 }
 
+/** ¿Ese instante cae dentro de alguna ventana de tiempo extra? (el minuto de fin ya no cuenta). */
+export function dentroDeVentana(
+  ventanas: VentanaExtra[],
+  instante: Date,
+): boolean {
+  const m = Math.floor(instante.getTime() / 60_000);
+  return ventanas.some(
+    (v) =>
+      m >= Math.floor(v.inicio.getTime() / 60_000) &&
+      (v.fin === null || m < Math.floor(v.fin.getTime() / 60_000)),
+  );
+}
+
 export function horarioPublico(h: Horario): HorarioPublico {
   return { dias: h.dias, inicio: h.inicio, fin: h.fin, zona: ZONA_ECUADOR };
 }
@@ -122,14 +146,18 @@ export interface TramosValidados {
 /**
  * Filtra lo que envía la extensión: se queda solo con los tramos bien formados,
  * recientes, que no estén en el futuro y que caigan por completo dentro del
- * horario. Todo lo demás se descarta sin guardarse.
+ * horario o de una ventana de tiempo extra. Todo lo demás se descarta sin guardarse.
  */
 export function validarTramos(
   entrada: unknown,
   horario: Horario,
   desde: Date | null,
   ahora: Date = new Date(),
+  ventanas: VentanaExtra[] = [],
+  sitiosSensibles: string[] = [],
 ): TramosValidados {
+  const permitido = (t: Date) =>
+    dentroDelHorario(horario, t) || dentroDeVentana(ventanas, t);
   const lista = Array.isArray(entrada)
     ? entrada.slice(0, TRAMOS_POR_PETICION)
     : [];
@@ -144,6 +172,8 @@ export function validarTramos(
       dominio?: unknown;
       inicio?: unknown;
       minutos?: unknown;
+      ruta?: unknown;
+      titulo?: unknown;
     };
     const dominio = normalizarDominio(crudo?.dominio);
     const inicio =
@@ -169,8 +199,8 @@ export function validarTramos(
       inicioMinuto.getTime() < ahora.getTime() - ANTIGUEDAD_MAXIMA_MS ||
       fin.getTime() > ahora.getTime() + FUTURO_TOLERADO_MS ||
       (desde && inicioMinuto.getTime() < desde.getTime()) ||
-      !dentroDelHorario(horario, inicioMinuto) ||
-      !dentroDelHorario(horario, fin)
+      !permitido(inicioMinuto) ||
+      !permitido(fin)
     ) {
       descartados++;
       continue;
@@ -181,7 +211,15 @@ export function validarTramos(
       continue;
     }
     vistos.add(clave);
-    validos.push({ dominio, inicio: inicioMinuto, minutos });
+    // Ruta y título: se vuelven a limpiar aquí y en un sitio sensible se descartan.
+    const sensible = esSitioSensible(dominio, sitiosSensibles);
+    validos.push({
+      dominio,
+      inicio: inicioMinuto,
+      minutos,
+      ruta: sensible ? null : rutaLimpia(crudo?.ruta),
+      titulo: sensible ? null : tituloLimpio(crudo?.titulo),
+    });
   }
   return { validos, descartados };
 }

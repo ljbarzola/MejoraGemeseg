@@ -437,6 +437,7 @@ export class BitacoraService implements OnModuleInit {
         accion: true,
         ruta: true,
         nombre: true,
+        titulo: true,
         minutos: true,
         ocurridoEn: true,
       },

@@ -1511,8 +1511,10 @@ model BitacoraEvento {
   nombre     String?
   // GOOGLE y EXTENSION: identificador del evento, para no guardarlo dos veces.
   externalId String?
-  // Solo EXTENSION: minutos que duró el tramo en ese sitio (el dominio va en `nombre`).
+  // Solo EXTENSION: minutos que duró el tramo en ese sitio (el dominio va en `nombre`,
+  // la ruta limpia en `ruta` y el título de la pestaña en `titulo`; 2026-11-11).
   minutos    Int?
+  titulo     String?
   ocurridoEn DateTime @default(now())
 
   @@unique([fuente, externalId])
@@ -1581,6 +1583,58 @@ model BitacoraDeuda {
 
   @@index([userId, creadaEn])
   @@index([companyId])
+}
+
+// Dominios de una empresa donde la extensión guarda SOLO el dominio (sin ruta ni título),
+// además de la lista por defecto del código. Creada al arrancar (2026-11-11).
+model BitacoraSitioSensible {
+  companyId Int
+  dominio   String
+  creadoEn  DateTime @default(now())
+
+  @@id([companyId, dominio])
+}
+
+// Lo que la persona anota de su día cuando algo no se registró solo (2026-11-11). Va aparte
+// de lo automático y se marca «escrito por la persona»; NUNCA suma al saldo de horas.
+model BitacoraNota {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  companyId   Int
+  // Día (AAAA-MM-DD, hora de Ecuador).
+  fecha       String
+  // «HH:MM» opcionales, hora de Ecuador.
+  desde       String?
+  hasta       String?
+  // REUNION | VISITA | SIN_COMPUTADOR | OTRO
+  tipo        String
+  texto       String
+  creadaEn    DateTime  @default(now())
+  editadaEn   DateTime?
+  eliminadaEn DateTime?
+
+  @@index([userId, fecha])
+}
+
+// Resumen del día de una persona (uno por persona y día): cifras calculadas + texto
+// redactado (con IA si estaba disponible). Creada al arrancar (2026-11-11).
+model BitacoraResumen {
+  userId        Int
+  fecha         String
+  companyId     Int
+  texto         String
+  puntos        Json
+  cifras        Json
+  conIA         Boolean   @default(false)
+  modelo        String?
+  tokens        Int?
+  // Cuántos eventos y anotaciones había al generarlo: si cambian, el resumen quedó viejo.
+  marcaDatos    String
+  generadoPorId Int?
+  generadoEn    DateTime  @default(now())
+  veces         Int       @default(1)
+
+  @@id([userId, fecha])
 }
 
 // Código de un solo uso (10 minutos) con el que una persona vincula la extensión

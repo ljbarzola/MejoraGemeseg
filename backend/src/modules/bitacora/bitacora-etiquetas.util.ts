@@ -12,6 +12,16 @@ export interface EventoDescribible {
   nombre: string | null;
   /** Solo EXTENSION: minutos que duró el tramo en el sitio. */
   minutos?: number | null;
+  /** Solo EXTENSION: título de la pestaña (2026-11-11). */
+  titulo?: string | null;
+}
+
+/** «docs.google.com › Contrato Solutech» o «app.gemeseg.com/ventas/oportunidades › GEMESEG»: dominio + ruta + título. */
+export function sitioConDetalle(e: EventoDescribible): string {
+  const dominio = e.nombre ?? '';
+  const ruta = e.ruta && e.ruta !== '/' ? e.ruta : '';
+  const titulo = e.titulo ? ` › ${e.titulo}` : '';
+  return `${dominio}${ruta}${titulo}`;
 }
 
 /** «25 min», «1 h», «1 h 5 min». */
@@ -146,7 +156,7 @@ export function describirAccion(e: EventoDescribible): string {
 export function describirEvento(e: EventoDescribible): string {
   const base = describirAccion(e);
   if (e.fuente === 'EXTENSION') {
-    const sitio = e.nombre ? `${base}: ${e.nombre}` : base;
+    const sitio = e.nombre ? `${base}: ${sitioConDetalle(e)}` : base;
     return e.minutos ? `${sitio} (${duracionCorta(e.minutos)})` : sitio;
   }
   return e.nombre ? `${base}: «${e.nombre}»` : base;

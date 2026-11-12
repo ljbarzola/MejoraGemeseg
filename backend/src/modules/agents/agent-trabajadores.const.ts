@@ -12,7 +12,13 @@ export const SCOPE_BITACORAS = 'BITACORAS';
 /** Scopes de agentes que no conversan: el chat no los ofrece ni los acepta. */
 export const SCOPE_ENTREGAS = 'ENTREGAS';
 
-export const SCOPES_SIN_CHAT: readonly string[] = [SCOPE_BITACORAS, SCOPE_ENTREGAS];
+export const SCOPE_BITACORA_RESUMEN = 'BITACORA_RESUMEN';
+
+export const SCOPES_SIN_CHAT: readonly string[] = [
+  SCOPE_BITACORAS,
+  SCOPE_ENTREGAS,
+  SCOPE_BITACORA_RESUMEN,
+];
 
 export const esAgenteSinChat = (scope: string | null | undefined): boolean =>
   !!scope && SCOPES_SIN_CHAT.includes(scope);
@@ -37,6 +43,17 @@ export const INSTRUCCIONES_ENTREGAS_POR_DEFECTO = [
   '- Los oficios de la entidad siempre llevan la firma del administrador del contrato.',
   '',
   '(Mientras no cambies este texto, el lector usa solo sus reglas fijas.)',
+].join('\n');
+
+export const NOMBRE_AGENTE_BITACORA_RESUMEN = 'Agente Redactor del Resumen del Día';
+
+export const INSTRUCCIONES_BITACORA_RESUMEN_POR_DEFECTO = [
+  'Describe aquí cómo quieres que se redacte el resumen del día de la Bitácora. Ejemplos:',
+  '- Escribe en tercera persona («Trabajó en…»).',
+  '- Nombra primero lo que se hizo en Ventas y CRM.',
+  '- «Contratación Pública» se escribe siempre completo.',
+  '',
+  '(Mientras no cambies este texto, el redactor usa solo sus reglas fijas.)',
 ].join('\n');
 
 export interface DocumentacionAgente {
@@ -129,6 +146,40 @@ export const DOCUMENTACION_AGENTES: DocumentacionAgente[] = [
       'Si el documento no escribe fecha de vencimiento, no se puede saber si está vigente; si no dice qué periodo cubre, no se compara el mes. Un documento que se pide de un mes distinto al de la solicitud (por ejemplo una planilla del mes anterior) saldrá como «Revisar»: es solo una sugerencia.',
       'Una firma pequeña en una foto de baja calidad puede salir como «no está claro»: por eso es una sugerencia.',
       'Lo dispara el navegador de quien entrega justo después de entregar; si esa persona cierra la pestaña antes, quien aprueba puede pedir la revisión desde el panel.',
+    ],
+  },
+  {
+    scope: SCOPE_BITACORA_RESUMEN,
+    nombre: NOMBRE_AGENTE_BITACORA_RESUMEN,
+    resumen:
+      'Redacta el «resumen del día» de la Bitácora del equipo: un párrafo corto y unas viñetas con lo que una persona hizo ese día, usando solo las cifras que calcula el sistema.',
+    dondeSeUsa:
+      'Bitácora → Mi hoja del día (botón «Generar resumen») y Bitácora → Actividad del día. Lo genera la propia persona o quien tenga permiso de ver la bitácora del equipo.',
+    recibe: [
+      'Las cifras del día ya calculadas por el sistema: primera y última actividad, acciones por módulo con ejemplos, sitios web con su título y minutos, eventos de Google, silencios y tiempo extra.',
+      'Lo que la persona anotó a mano ese día («Lo que anoté yo»), marcado aparte.',
+      'El texto de «Instrucciones» de este agente (cómo quiere la empresa que se redacte).',
+    ],
+    hace: [
+      'Escribe un párrafo de máximo 3 frases y entre 3 y 6 viñetas, en español, con esas cifras.',
+      'Presenta lo anotado por la persona como «según anotó la persona», separado de lo registrado automáticamente.',
+    ],
+    decide: [
+      'NO calcula ni decide nada: las cifras salen de código. Si el modelo no responde o no devuelve el formato esperado, el sistema guarda un resumen calculado con una plantilla fija, igual de exacto.',
+    ],
+    noHace: [
+      'No evalúa ni juzga la productividad de nadie.',
+      'No inventa cifras, tareas ni nombres.',
+      'No envía avisos ni correos; no modifica la hoja ni las anotaciones.',
+    ],
+    datos: [
+      'Se envían a Google Vertex AI (Gemini, Estados Unidos) las cifras del día, los títulos de las páginas visitadas (nunca el enlace completo) y el texto que la persona anotó.',
+      'Cada resumen queda en el registro de actividad con quién lo pidió, cuánto tardó, el modelo y los tokens usados; el resultado se guarda en la Bitácora y se reutiliza mientras no haya datos nuevos.',
+    ],
+    limites: [
+      'Solo resume lo que la Bitácora ve: app.gemeseg, Google y el navegador con la extensión. Poca actividad registrada no significa poco trabajo.',
+      'Se puede regenerar hasta 10 veces por persona y día; sin datos nuevos se devuelve el ya guardado.',
+      'Si el agente se desactiva o la IA no está configurada, el resumen sale con la plantilla calculada.',
     ],
   },
 ];

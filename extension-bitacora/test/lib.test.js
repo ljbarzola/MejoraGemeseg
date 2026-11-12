@@ -6,10 +6,13 @@ import {
   colapsarMuestras,
   dentroDelHorario,
   dominioDeUrl,
+  esSitioSensible,
   motivoDePausa,
   nombreEquipo,
   normalizarDominio,
+  rutaDeUrl,
   textoHorario,
+  tituloLimpio,
 } from '../src/lib.js';
 
 const MIN = 60_000;
@@ -66,6 +69,11 @@ test('motivoDePausa: ante cualquier duda no se registra', () => {
   assert.equal(motivoDePausa({ token: 'bx_x', config: { ...config, registrando: false }, ahoraMs }), 'hoja-inactiva');
   assert.equal(motivoDePausa({ token: 'bx_x', config: { ...config, horario: null }, ahoraMs }), 'sin-horario');
   assert.equal(motivoDePausa({ token: 'bx_x', config, ahoraMs: miercoles('23:00') }), 'fuera-de-horario');
+  // Con un tiempo extra abierto en app.gemeseg, fuera del horario sí se registra.
+  assert.equal(
+    motivoDePausa({ token: 'bx_x', config: { ...config, extra: true }, ahoraMs: miercoles('23:00') }),
+    null,
+  );
   const domingo = Date.parse('2026-11-01T15:00:00Z');
   assert.equal(
     motivoDePausa({ token: 'bx_x', config: { ...config, obtenidaEn: domingo - 5 * MIN }, ahoraMs: domingo }),
@@ -115,4 +123,46 @@ test('nombreEquipo reconoce el navegador y el sistema', () => {
   assert.equal(nombreEquipo('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0 Safari/537.36 Edg/130.0'), 'Edge en Windows');
   assert.equal(nombreEquipo('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0 Safari/537.36'), 'Chrome en Windows');
   assert.equal(nombreEquipo('algo raro'), 'Navegador');
+});
+
+test('rutaDeUrl deja solo la ruta, sin consulta ni códigos', () => {
+  assert.equal(rutaDeUrl('https://app.com/ventas/Oportunidades?token=abc#x'), '/ventas/oportunidades');
+  assert.equal(rutaDeUrl('https://app.com/ventas/oportunidades/123456'), '/ventas/oportunidades/:id');
+  assert.equal(rutaDeUrl('https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789/edit'), '/document/d/:id/edit');
+  assert.equal(rutaDeUrl('https://app.com/clientes/3f2504e0-4f89-11d3-9a0c-0305e82c3301'), '/clientes/:id');
+  assert.equal(rutaDeUrl('https://app.com/perfil/juan@correo.com'), '/perfil/:id');
+  assert.equal(rutaDeUrl('https://app.com/'), null);
+  assert.equal(rutaDeUrl('chrome://settings'), null);
+  assert.ok((rutaDeUrl(`https://app.com/${'a'.repeat(300)}`) ?? '').length <= 120);
+});
+
+test('tituloLimpio quita contadores, correos y números largos', () => {
+  assert.equal(tituloLimpio('(3) Contrato Solutech - Documentos de Google'), 'Contrato Solutech - Documentos de Google');
+  assert.equal(tituloLimpio('Bandeja - leidy@gemeseg.com'), 'Bandeja - …');
+  assert.equal(tituloLimpio('Cuenta 1234567890'), 'Cuenta …');
+  assert.equal(tituloLimpio('   '), null);
+  assert.ok((tituloLimpio('x'.repeat(500)) ?? '').length <= 120);
+});
+
+test('esSitioSensible reconoce la lista, sus subdominios y los bancos', () => {
+  const lista = ['mail.google.com', 'miempresa-privada.com'];
+  assert.equal(esSitioSensible('mail.google.com', lista), true);
+  assert.equal(esSitioSensible('x.miempresa-privada.com', lista), true);
+  assert.equal(esSitioSensible('bancoguayaquil.com', lista), true);
+  assert.equal(esSitioSensible('docs.google.com', lista), false);
+});
+
+test('colapsarMuestras separa rutas distintas del mismo sitio y manda ruta y título solo si hay', () => {
+  const t0 = miercoles('15:00');
+  const tramos = colapsarMuestras([
+    { d: 'a.com', r: '/x', ti: 'Uno', t: t0 },
+    { d: 'a.com', r: '/x', ti: 'Uno', t: t0 + MIN },
+    { d: 'a.com', r: '/y', ti: 'Dos', t: t0 + 2 * MIN },
+    { d: 'banco.com', r: null, ti: null, t: t0 + 3 * MIN },
+  ]);
+  assert.deepEqual(tramos, [
+    { dominio: 'a.com', inicio: new Date(t0).toISOString(), minutos: 2, ruta: '/x', titulo: 'Uno' },
+    { dominio: 'a.com', inicio: new Date(t0 + 2 * MIN).toISOString(), minutos: 1, ruta: '/y', titulo: 'Dos' },
+    { dominio: 'banco.com', inicio: new Date(t0 + 3 * MIN).toISOString(), minutos: 1 },
+  ]);
 });

@@ -9,6 +9,16 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { BitacoraService, UsuarioBitacora } from './bitacora.service';
+import { BitacoraHorasService } from './bitacora-horas.service';
+import {
+  dominioDeLista,
+  SITIOS_SENSIBLES_DEFECTO,
+} from './bitacora-sitios.util';
+import {
+  errorDeReglas,
+  REGLAS_POR_DEFECTO,
+  ReglasExtra,
+} from './bitacora-extra.util';
 import {
   CODIGO_VIGENCIA_MS,
   diasATexto,
@@ -47,6 +57,10 @@ export interface ConfiguracionExtension {
   /** Hoy se le está registrando (hoja activada y sección encendida). */
   registrando: boolean;
   horario: HorarioPublico | null;
+  /** Hay una ventana de «tiempo extra» abierta: la extensión registra aunque sea fuera del horario. */
+  extra: boolean;
+  /** Dominios donde la extensión guarda SOLO el dominio (sin ruta ni título). */
+  sitiosSensibles: string[];
   nombre: string;
   /** Hora del servidor, para que la extensión detecte un reloj desajustado. */
   ahora: string;
@@ -72,6 +86,7 @@ export class BitacoraExtensionService {
     private readonly prisma: PrismaService,
     private readonly bitacora: BitacoraService,
     private readonly notificaciones: NotificationsService,
+    private readonly horas: BitacoraHorasService,
   ) {}
 
   // ───────────────────────── Horario (administradores y gerentes) ─────────────────────────
@@ -88,26 +103,35 @@ export class BitacoraExtensionService {
 
   async obtenerHorario(
     user: UsuarioBitacora,
-  ): Promise<{ configurado: boolean } & Horario> {
+  ): Promise<{ configurado: boolean } & Horario & ReglasExtra> {
     const companyId = await this.bitacora.exigirAdministrador(user);
-    const h = await this.horarioDe(companyId);
+    const { horario: h, reglas } = await this.horas.horarioYReglas(companyId);
     return {
       configurado: !!h,
       ...(h ?? { dias: [1, 2, 3, 4, 5], inicio: '08:00', fin: '17:00' }),
+      ...(h ? reglas : REGLAS_POR_DEFECTO),
     };
   }
 
   async guardarHorario(
     user: UsuarioBitacora,
-    horario: Horario,
-  ): Promise<{ configurado: boolean } & Horario> {
+    horario: Horario & Partial<ReglasExtra>,
+  ): Promise<{ configurado: boolean } & Horario & ReglasExtra> {
     const companyId = await this.bitacora.exigirAdministrador(user);
-    const error = errorDeHorario(horario);
+    const error = errorDeHorario(horario) ?? errorDeReglas(horario);
     if (error) throw new BadRequestException(error);
+    const { reglas: actuales } = await this.horas.horarioYReglas(companyId);
+    const reglas: ReglasExtra = {
+      toleranciaMinutos: horario.toleranciaMinutos ?? actuales.toleranciaMinutos,
+      inactividadMinutos:
+        horario.inactividadMinutos ?? actuales.inactividadMinutos,
+    };
     const datos = {
       dias: diasATexto(horario.dias),
       inicio: horario.inicio,
       fin: horario.fin,
+      toleranciaMinutos: reglas.toleranciaMinutos,
+      inactividadMinutos: reglas.inactividadMinutos,
       actualizadoEn: new Date(),
       actualizadoPorId: user.userId,
     };
@@ -117,6 +141,57 @@ export class BitacoraExtensionService {
       update: datos,
     });
     return this.obtenerHorario(user);
+  }
+
+  // ───────────────────────── Sitios sensibles (administradores y gerentes) ─────────────────────────
+
+  /** Solo los que agregó la empresa (los de por defecto viven en el código). */
+  async sitiosDeLaEmpresa(companyId: number | null): Promise<string[]> {
+    if (!companyId) return [];
+    const filas = await this.prisma.bitacoraSitioSensible.findMany({
+      where: { companyId },
+      orderBy: { dominio: 'asc' },
+      select: { dominio: true },
+    });
+    return filas.map((f) => f.dominio);
+  }
+
+  async obtenerSitiosSensibles(
+    user: UsuarioBitacora,
+  ): Promise<{ porDefecto: string[]; propios: string[] }> {
+    const companyId = await this.bitacora.exigirAdministrador(user);
+    return {
+      porDefecto: SITIOS_SENSIBLES_DEFECTO,
+      propios: await this.sitiosDeLaEmpresa(companyId),
+    };
+  }
+
+  /** Reemplaza la lista propia de la empresa. Los dominios inválidos se rechazan con un mensaje claro. */
+  async guardarSitiosSensibles(
+    user: UsuarioBitacora,
+    dominios: unknown,
+  ): Promise<{ porDefecto: string[]; propios: string[] }> {
+    const companyId = await this.bitacora.exigirAdministrador(user);
+    if (!Array.isArray(dominios) || dominios.length > 200) {
+      throw new BadRequestException('La lista de sitios no es válida.');
+    }
+    const limpios = new Set<string>();
+    for (const d of dominios) {
+      const dominio = dominioDeLista(d);
+      if (!dominio) {
+        throw new BadRequestException(
+          `«${String(d).slice(0, 60)}» no parece un sitio. Escribe solo el dominio, por ejemplo «banco.com».`,
+        );
+      }
+      if (!SITIOS_SENSIBLES_DEFECTO.includes(dominio)) limpios.add(dominio);
+    }
+    await this.prisma.$transaction([
+      this.prisma.bitacoraSitioSensible.deleteMany({ where: { companyId } }),
+      this.prisma.bitacoraSitioSensible.createMany({
+        data: [...limpios].map((dominio) => ({ companyId, dominio })),
+      }),
+    ]);
+    return this.obtenerSitiosSensibles(user);
   }
 
   // ───────────────────────── Vinculación (la persona, desde app.gemeseg) ─────────────────────────
@@ -255,9 +330,18 @@ export class BitacoraExtensionService {
       ext.companyId,
     );
     const horario = registrando ? await this.horarioDe(ext.companyId) : null;
+    const extra =
+      registrando && !!horario
+        ? await this.horas.tieneAbierta(ext.userId, ext.companyId)
+        : false;
     return {
       registrando: registrando && !!horario,
       horario: horario ? horarioPublico(horario) : null,
+      extra,
+      sitiosSensibles: [
+        ...SITIOS_SENSIBLES_DEFECTO,
+        ...(await this.sitiosDeLaEmpresa(ext.companyId)),
+      ],
       nombre: ext.nombre,
       ahora: new Date().toISOString(),
     };
@@ -272,7 +356,12 @@ export class BitacoraExtensionService {
   async recibirTramos(
     ext: ExtensionAutenticada,
     tramos: unknown,
-  ): Promise<{ guardados: number; descartados: number; registrando: boolean }> {
+  ): Promise<{
+    guardados: number;
+    descartados: number;
+    registrando: boolean;
+    extra: boolean;
+  }> {
     const total = Array.isArray(tramos) ? tramos.length : 0;
     const registrando = await this.bitacora.personaActiva(
       ext.userId,
@@ -280,18 +369,26 @@ export class BitacoraExtensionService {
     );
     const horario = registrando ? await this.horarioDe(ext.companyId) : null;
     if (!registrando || !horario || !ext.companyId) {
-      return { guardados: 0, descartados: total, registrando: false };
+      return { guardados: 0, descartados: total, registrando: false, extra: false };
     }
     const activacion = await this.prisma.bitacoraActivacion.findUnique({
       where: { userId: ext.userId },
       select: { desde: true },
     });
+    // Fuera del horario solo se aceptan tramos dentro de una ventana de tiempo extra.
+    const ventanas = await this.horas.ventanasRecientes(ext.userId);
     const { validos, descartados } = validarTramos(
       tramos,
       horario,
       activacion?.desde ?? null,
+      new Date(),
+      ventanas,
+      await this.sitiosDeLaEmpresa(ext.companyId),
     );
-    if (validos.length === 0) return { guardados: 0, descartados, registrando };
+    if (validos.length === 0) {
+      const extra = await this.horas.tieneAbierta(ext.userId, ext.companyId);
+      return { guardados: 0, descartados, registrando, extra };
+    }
 
     try {
       const r = await this.prisma.bitacoraEvento.createMany({
@@ -302,13 +399,17 @@ export class BitacoraExtensionService {
           modulo: 'web',
           accion: 'SITIO',
           nombre: t.dominio,
+          ruta: t.ruta ?? null,
+          titulo: t.titulo ?? null,
           minutos: t.minutos,
           externalId: externalIdDeTramo(ext.userId, t),
           ocurridoEn: t.inicio,
         })),
         skipDuplicates: true,
       });
-      return { guardados: r.count, descartados, registrando };
+      // Después de guardar: así un envío atrasado no cierra la ventana por «inactividad».
+      const extra = await this.horas.tieneAbierta(ext.userId, ext.companyId);
+      return { guardados: r.count, descartados, registrando, extra };
     } catch (err) {
       this.logger.warn(
         `No se pudieron guardar los sitios web: ${(err as Error).message}`,

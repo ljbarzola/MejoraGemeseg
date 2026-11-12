@@ -265,3 +265,132 @@
   padding: 14px 10px;
   user-select: all;
 }
+
+/* Bolsa de horas: saldo, tiempo extra y horas que se deben. */
+.bit-horas {
+  border-top: 1px solid #e2e8f0;
+  margin-top: 20px;
+  padding-top: 16px;
+}
+
+.bit-horas-titulo {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  color: #1a202c;
+}
+
+.bit-horas-subtitulo {
+  margin: 18px 0 8px;
+  font-size: 0.92rem;
+  color: #2d3748;
+}
+
+.bit-kpi-favor {
+  border-color: #9ae6b4;
+  background: #f0fff4;
+}
+
+.bit-kpi-deuda {
+  border-color: #fbd38d;
+  background: #fffaf0;
+}
+
+.bit-extra-caja {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #f7fafc;
+}
+
+.bit-extra-estado {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: #2d3748;
+  line-height: 1.5;
+}
+
+.bit-reglas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin: 18px 0 6px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.bit-reglas label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: #718096;
+}
+
+.bit-reglas input[type='number'] {
+  height: 38px;
+  width: 140px;
+  padding: 0 10px;
+  border: 1px solid #cbd5e0;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+/* Resumen del día, anotaciones de la persona y sitios sensibles (2026-11-11). */
+.bit-resumen {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  background: #fff;
+}
+
+.bit-resumen-cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.bit-resumen-texto {
+  margin: 8px 0;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: #1a202c;
+}
+
+.bit-resumen-puntos {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #2d3748;
+}
+
+.bit-notas {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.bit-nota-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-bottom: 1px solid #edf2f7;
+  font-size: 0.9rem;
+  color: #2d3748;
+}
+
+.bit-nota-item:last-child {
+  border-bottom: none;
+}
+
+.bit-sitios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

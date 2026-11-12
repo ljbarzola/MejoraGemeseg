@@ -157,6 +157,8 @@ describe('bitacora-extension.util', () => {
           dominio: 'ejemplo.com',
           inicio: new Date('2026-10-28T15:00:00Z'),
           minutos: 5,
+          ruta: null,
+          titulo: null,
         },
       ]);
     });
