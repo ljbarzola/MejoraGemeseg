@@ -20,7 +20,17 @@ import { PermissionsService } from '../permissions/permissions.service';
 import { BitacoraService, UsuarioBitacora } from './bitacora.service';
 import { BitacoraGoogleService } from './bitacora-google.service';
 import { BitacoraExtensionService } from './bitacora-extension.service';
+import { BitacoraHorasService } from './bitacora-horas.service';
+import { BitacoraNotasService } from './bitacora-notas.service';
+import { BitacoraResumenService } from './bitacora-resumen.service';
 import { CambiarActivacionDto } from './dto/cambiar-activacion.dto';
+import { AnotarDeudaDto, ResolverExtraDto } from './dto/horas.dto';
+import {
+  ActualizarNotaDto,
+  CrearNotaDto,
+  GenerarResumenDto,
+  GuardarSitiosSensiblesDto,
+} from './dto/notas.dto';
 import { GuardarHorarioDto } from './dto/guardar-horario.dto';
 
 interface Autenticado {
@@ -41,6 +51,9 @@ export class BitacoraController {
     private readonly bitacora: BitacoraService,
     private readonly google: BitacoraGoogleService,
     private readonly extension: BitacoraExtensionService,
+    private readonly horas: BitacoraHorasService,
+    private readonly notas: BitacoraNotasService,
+    private readonly resumen: BitacoraResumenService,
     private readonly permisos: PermissionsService,
   ) {}
 
@@ -55,11 +68,17 @@ export class BitacoraController {
     const dia = this.bitacora.resolverFecha(fecha);
     const estado = await this.bitacora.estado(req.user);
     // Quien nunca tuvo la hoja activada no ve nada; quien la tuvo conserva su historial.
-    const hoja =
-      estado.empresaActiva && estado.registrada
-        ? await this.bitacora.hojaDe(req.user.userId, dia)
-        : null;
-    return { ...estado, fecha: dia, hoja };
+    const visible = estado.empresaActiva && estado.registrada;
+    const hoja = visible
+      ? await this.bitacora.hojaDe(req.user.userId, dia)
+      : null;
+    const [notas, resumen] = visible
+      ? await Promise.all([
+          this.notas.listar(req.user.userId, dia),
+          this.resumen.obtener(req.user.userId, dia),
+        ])
+      : [[], null];
+    return { ...estado, fecha: dia, hoja, notas, resumen };
   }
 
   /** Personas de la empresa con su estado (por defecto ninguna activada). Administradores y gerentes. */
@@ -86,6 +105,53 @@ export class BitacoraController {
   @Put('horario')
   guardarHorario(@Req() req: Autenticado, @Body() dto: GuardarHorarioDto) {
     return this.extension.guardarHorario(req.user, dto);
+  }
+
+  // ───────────────────────── Bolsa de horas (tiempo extra y horas que se deben) ─────────────────────────
+
+  /** Mi saldo, mi tiempo extra y lo que debo. Cualquier persona con la hoja activada. */
+  @Get('horas/mi-estado')
+  horasMiEstado(@Req() req: Autenticado) {
+    return this.horas.estadoPersona(req.user);
+  }
+
+  @Post('horas/iniciar')
+  horasIniciar(@Req() req: Autenticado) {
+    return this.horas.iniciar(req.user);
+  }
+
+  @Post('horas/terminar')
+  horasTerminar(@Req() req: Autenticado) {
+    return this.horas.terminar(req.user);
+  }
+
+  /** Anota horas que se deben. La persona las suyas; administradores y gerentes, las de su equipo. */
+  @Post('horas/deudas')
+  horasAnotarDeuda(@Req() req: Autenticado, @Body() dto: AnotarDeudaDto) {
+    return this.horas.anotarDeuda(req.user, dto);
+  }
+
+  @Delete('horas/deudas/:id')
+  horasAnularDeuda(
+    @Req() req: Autenticado,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.horas.anularDeuda(req.user, id);
+  }
+
+  /** Saldo del equipo y tiempo extra por aprobar. Administradores y gerentes. */
+  @Get('horas/equipo')
+  horasEquipo(@Req() req: Autenticado) {
+    return this.horas.resumenEquipo(req.user);
+  }
+
+  @Put('horas/extras/:id')
+  horasResolver(
+    @Req() req: Autenticado,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ResolverExtraDto,
+  ) {
+    return this.horas.resolverExtra(req.user, id, dto.aprobar, dto.nota);
   }
 
   /** Extensiones vinculadas a la persona que consulta. */
@@ -147,7 +213,86 @@ export class BitacoraController {
         activa: persona.activa,
       },
       hoja: await this.bitacora.hojaDe(persona.id, dia),
+      notas: await this.notas.listar(persona.id, dia),
+      resumen: await this.resumen.obtener(persona.id, dia),
     };
+  }
+
+  // ───────────────────────── Anotaciones de la persona y resumen del día ─────────────────────────
+
+  @Post('notas')
+  crearNota(@Req() req: Autenticado, @Body() dto: CrearNotaDto) {
+    return this.notas.crear(req.user, dto);
+  }
+
+  @Put('notas/:id')
+  editarNota(
+    @Req() req: Autenticado,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ActualizarNotaDto,
+  ) {
+    return this.notas.editar(req.user, id, dto);
+  }
+
+  @Delete('notas/:id')
+  eliminarNota(
+    @Req() req: Autenticado,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.notas.eliminar(req.user, id);
+  }
+
+  /**
+   * Genera (o reutiliza) el resumen de un día. La propia persona lo hace sin permiso especial; el de
+   * otra persona exige el mismo permiso explícito de «Ver» la bitácora del equipo y deja constancia.
+   */
+  @Post('resumen')
+  async generarResumen(
+    @Req() req: Autenticado,
+    @Body() dto: GenerarResumenDto,
+  ) {
+    const dia = this.bitacora.resolverFecha(dto.fecha);
+    if (!dto.userId || dto.userId === req.user.userId) {
+      const estado = await this.bitacora.estado(req.user);
+      if (!estado.empresaActiva || !estado.registrada) {
+        throw new ForbiddenException(
+          'Tu hoja del día no está activada, así que no hay nada que resumir.',
+        );
+      }
+      return this.resumen.generar({
+        userId: req.user.userId,
+        companyId: req.user.companyId as number,
+        fecha: dia,
+        quien: { userId: req.user.userId, nombre: null },
+      });
+    }
+    const companyId = this.empresaDe(req);
+    await this.exigirPermisoExplicito(req.user.userId);
+    const persona = await this.bitacora.personaDeLaEmpresa(
+      companyId,
+      dto.userId,
+    );
+    await this.bitacora.registrarConsulta(req.user.userId, persona.id, dia);
+    return this.resumen.generar({
+      userId: persona.id,
+      companyId,
+      fecha: dia,
+      quien: { userId: req.user.userId, nombre: null },
+    });
+  }
+
+  /** Dominios donde la extensión guarda solo el dominio (por defecto + los de la empresa). Administradores y gerentes. */
+  @Get('sitios-sensibles')
+  sitiosSensibles(@Req() req: Autenticado) {
+    return this.extension.obtenerSitiosSensibles(req.user);
+  }
+
+  @Put('sitios-sensibles')
+  guardarSitiosSensibles(
+    @Req() req: Autenticado,
+    @Body() dto: GuardarSitiosSensiblesDto,
+  ) {
+    return this.extension.guardarSitiosSensibles(req.user, dto.dominios);
   }
 
   /**

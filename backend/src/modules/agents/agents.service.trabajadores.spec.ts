@@ -59,10 +59,16 @@ describe('agentes que trabajan solos', () => {
       const { servicio, prisma } = montar();
       await servicio.getAvailableForUser(1, null);
       const donde = prisma.agent.findMany.mock.calls[0][0].where;
-      expect(donde.NOT).toEqual({ scope: { in: ['BITACORAS', 'ENTREGAS'] } });
+      expect(donde.NOT).toEqual({
+        scope: { in: ['BITACORAS', 'ENTREGAS', 'BITACORA_RESUMEN'] },
+      });
       expect(donde.OR[0]).toEqual({
         createdBy: null,
-        NOT: { scope: { in: ['VENTAS', 'CACAO', 'BITACORAS', 'ENTREGAS'] } },
+        NOT: {
+          scope: {
+            in: ['VENTAS', 'CACAO', 'BITACORAS', 'ENTREGAS', 'BITACORA_RESUMEN'],
+          },
+        },
       });
     });
   });

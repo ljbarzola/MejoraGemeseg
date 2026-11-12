@@ -6,6 +6,7 @@ import {
   ExtensionAutenticada,
 } from './bitacora-extension.service';
 import { BitacoraService, UsuarioBitacora } from './bitacora.service';
+import { BitacoraHorasService } from './bitacora-horas.service';
 import {
   generarToken,
   hashear,
@@ -30,6 +31,8 @@ interface PrismaMock {
   };
   bitacoraActivacion: { findUnique: Mock };
   bitacoraEvento: { createMany: Mock };
+  bitacoraExtra: { findMany: Mock; findFirst: Mock; count: Mock };
+  bitacoraSitioSensible: { findMany: Mock };
   user: { findUnique: Mock };
 }
 
@@ -89,6 +92,12 @@ describe('BitacoraExtensionService', () => {
             Promise.resolve({ count: data.length }),
           ),
       },
+      bitacoraSitioSensible: { findMany: jest.fn().mockResolvedValue([]) },
+      bitacoraExtra: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
+        count: jest.fn().mockResolvedValue(0),
+      },
       user: {
         findUnique: jest.fn().mockResolvedValue({
           id: 2,
@@ -107,6 +116,11 @@ describe('BitacoraExtensionService', () => {
       prisma as unknown as PrismaService,
       bitacora as unknown as BitacoraService,
       notificaciones as unknown as NotificationsService,
+      new BitacoraHorasService(
+        prisma as unknown as PrismaService,
+        bitacora as unknown as BitacoraService,
+        notificaciones as unknown as NotificationsService,
+      ),
     );
   });
 
@@ -122,6 +136,8 @@ describe('BitacoraExtensionService', () => {
         dias: [1, 2, 3, 4, 5],
         inicio: '08:00',
         fin: '17:00',
+        toleranciaMinutos: 10,
+        inactividadMinutos: 15,
       });
     });
 
@@ -401,7 +417,12 @@ describe('BitacoraExtensionService', () => {
     it('guarda los sitios web como eventos de la extensión, con dominio y minutos', async () => {
       const t = tramo();
       const r = await service.recibirTramos(ext, [t]);
-      expect(r).toEqual({ guardados: 1, descartados: 0, registrando: true });
+      expect(r).toEqual({
+        guardados: 1,
+        descartados: 0,
+        registrando: true,
+        extra: false,
+      });
       expect(prisma.bitacoraEvento.createMany).toHaveBeenCalledWith({
         data: [
           {
@@ -411,6 +432,8 @@ describe('BitacoraExtensionService', () => {
             modulo: 'web',
             accion: 'SITIO',
             nombre: 'ejemplo.com',
+            ruta: null,
+            titulo: null,
             minutos: 5,
             externalId: `2|ejemplo.com|${t.inicio}`,
             ocurridoEn: new Date(t.inicio),
@@ -432,14 +455,24 @@ describe('BitacoraExtensionService', () => {
     it('con la hoja apagada descarta todo y avisa que ya no se registra', async () => {
       bitacora.personaActiva.mockResolvedValue(false);
       const r = await service.recibirTramos(ext, [tramo(), tramo()]);
-      expect(r).toEqual({ guardados: 0, descartados: 2, registrando: false });
+      expect(r).toEqual({
+        guardados: 0,
+        descartados: 2,
+        registrando: false,
+        extra: false,
+      });
       expect(prisma.bitacoraEvento.createMany).not.toHaveBeenCalled();
     });
 
     it('sin horario guardado descarta todo', async () => {
       prisma.bitacoraHorario.findUnique.mockResolvedValue(null);
       const r = await service.recibirTramos(ext, [tramo()]);
-      expect(r).toEqual({ guardados: 0, descartados: 1, registrando: false });
+      expect(r).toEqual({
+        guardados: 0,
+        descartados: 1,
+        registrando: false,
+        extra: false,
+      });
     });
 
     it('fuera del horario descarta, aunque la extensión lo haya mandado', async () => {

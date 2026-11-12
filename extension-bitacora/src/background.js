@@ -7,7 +7,10 @@ import {
   MAX_MUESTRAS,
   colapsarMuestras,
   dominioDeUrl,
+  esSitioSensible,
   motivoDePausa,
+  rutaDeUrl,
+  tituloLimpio,
 } from './lib.js';
 
 const MIN = 60_000;
@@ -75,6 +78,10 @@ async function actualizarConfig(forzar) {
       config: {
         registrando: !!r.datos.registrando,
         horario: r.datos.horario ?? null,
+        // Tiempo extra en curso (la persona lo pulsó en app.gemeseg): se registra aunque sea fuera del horario.
+        extra: !!r.datos.extra,
+        // Sitios donde se guarda solo el dominio. Si el servidor no manda la lista, no se guarda ruta ni título.
+        sitiosSensibles: Array.isArray(r.datos.sitiosSensibles) ? r.datos.sitiosSensibles : null,
         obtenidaEn: Date.now(),
       },
       nombre: r.datos.nombre ?? '',
@@ -96,7 +103,13 @@ async function motivoActual() {
 }
 
 async function tomarMuestra() {
-  const motivoBase = await motivoActual();
+  let motivoBase = await motivoActual();
+  if (motivoBase === 'fuera-de-horario') {
+    // Fuera del horario, quien está frente al equipo pudo pulsar «Empezar tiempo extra» en app.gemeseg:
+    // se pregunta cada pocos minutos (solo si la persona está activa, para no despertar el servidor de noche).
+    await buscarTiempoExtra();
+    motivoBase = await motivoActual();
+  }
   if (motivoBase) {
     await pintarEstado(motivoBase);
     return;
@@ -132,12 +145,30 @@ async function tomarMuestra() {
   }
 
   const minuto = Math.floor(Date.now() / MIN) * MIN;
-  const { muestras = [] } = await leer(['muestras']);
+  const { muestras = [], config } = await leer(['muestras', 'config']);
+  // Ruta limpia y título solo fuera de los sitios sensibles (y solo si el servidor mandó la lista).
+  const conDetalle = Array.isArray(config?.sitiosSensibles) && !esSitioSensible(dominio, config.sitiosSensibles);
   if (!muestras.some((m) => m.t === minuto)) {
-    muestras.push({ d: dominio, t: minuto });
+    muestras.push({
+      d: dominio,
+      r: conDetalle ? rutaDeUrl(pestana.url ?? '') : null,
+      ti: conDetalle ? tituloLimpio(pestana.title ?? '') : null,
+      t: minuto,
+    });
     await guardar({ muestras: muestras.slice(-MAX_MUESTRAS) });
   }
   await pintarEstado(null);
+}
+
+const BUSCAR_EXTRA_CADA_MS = 2 * MIN;
+
+/** Pregunta al servidor si empezó un tiempo extra; solo si ya pasaron un par de minutos y la persona está activa. */
+async function buscarTiempoExtra() {
+  const { config } = await leer(['config']);
+  if (!config || Date.now() - config.obtenidaEn < BUSCAR_EXTRA_CADA_MS) return;
+  const reposo = await chrome.idle.queryState(IDLE_SEGUNDOS);
+  if (reposo !== 'active') return;
+  await actualizarConfig(true);
 }
 
 // ───────────────────────── Envío ─────────────────────────
@@ -175,7 +206,10 @@ async function enviar() {
         muestras: actuales.filter((m) => !minutosEnviados.has(m.t)),
         ultimoEnvio: Date.now(),
       });
-      if (r.ok && r.datos && r.datos.registrando === false) await actualizarConfig(true);
+      // El servidor dice si el tiempo extra sigue abierto: si cambió, se actualiza la configuración ya.
+      const { config } = await leer(['config']);
+      const cambioExtra = r.ok && r.datos && typeof r.datos.extra === 'boolean' && r.datos.extra !== !!config?.extra;
+      if (r.ok && r.datos && (r.datos.registrando === false || cambioExtra)) await actualizarConfig(true);
       if (colapsarMuestras(muestras).length <= TRAMOS_POR_ENVIO) return;
     }
   } finally {

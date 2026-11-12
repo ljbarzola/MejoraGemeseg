@@ -6,6 +6,8 @@ import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import { useColumnFilters } from '../../hooks/useColumnFilters';
 import HojaDelDia from '../../components/bitacora/HojaDelDia';
+import NotasDelDia from '../../components/bitacora/NotasDelDia';
+import ResumenDelDia from '../../components/bitacora/ResumenDelDia';
 import Kpi from '../../components/bitacora/Kpi';
 import SelectorDia from '../../components/bitacora/SelectorDia';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
@@ -16,6 +18,8 @@ import {
   getBitacoraPersona,
   mensajeErrorBitacora,
   type HojaDia,
+  type NotaDia,
+  type ResumenDia,
   type ResumenPersona,
 } from '../../services/bitacora.service';
 import { duracion, fechaLarga, hoyEcuador, hora } from '../../utils/bitacoraFechas';
@@ -49,6 +53,8 @@ export default function BitacoraActividadPage() {
     cargo: string | null;
     activa: boolean;
     hoja: HojaDia;
+    notas: NotaDia[];
+    resumen: ResumenDia | null;
   } | null>(null);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [errorDetalle, setErrorDetalle] = useState('');
@@ -100,6 +106,8 @@ export default function BitacoraActividadPage() {
           cargo: r.persona.cargo,
           activa: r.persona.activa,
           hoja: r.hoja,
+          notas: r.notas ?? [],
+          resumen: r.resumen ?? null,
         });
         detalleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       })
@@ -231,6 +239,13 @@ export default function BitacoraActividadPage() {
                       registrado antes.
                     </div>
                   )}
+                  <ResumenDelDia
+                    fecha={fecha}
+                    userId={seleccion ?? undefined}
+                    resumen={detalle.resumen}
+                    onResumen={(r) => setDetalle((d) => (d ? { ...d, resumen: r } : d))}
+                  />
+                  <NotasDelDia fecha={fecha} notas={detalle.notas} editable={false} onCambio={() => undefined} />
                   <HojaDelDia hoja={detalle.hoja} />
                 </>
               )

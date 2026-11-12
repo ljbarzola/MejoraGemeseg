@@ -36,7 +36,9 @@ async function pintar() {
 
   $('saludo').textContent = nombre ? `Vinculada como ${nombre}` : 'Vinculada';
   $('detalle').textContent = activo
-    ? 'Ahora se registra el sitio web que tienes al frente (solo el dominio).'
+    ? config?.extra
+      ? 'Tiempo extra en curso: se registra el sitio web que tienes al frente (solo el dominio), aunque sea fuera del horario.'
+      : 'Ahora se registra el sitio web que tienes al frente (solo el dominio).'
     : `No se registra nada: ${(MOTIVOS[ultimoMotivo] ?? 'en pausa').toLowerCase()}.`;
   $('horario').textContent = config?.horario ? `Horario: ${textoHorario(config.horario)}.` : '';
   $('envio').textContent = ultimoEnvio

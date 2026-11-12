@@ -88,8 +88,82 @@ export const BITACORA_DDL: string[] = [
   )`,
   // 2026-11-10: bolsa de horas. Columnas nuevas con valor por defecto en una tabla propia
   // de la Bitácora: un servidor anterior sigue funcionando sin ellas.
+  // 2026-11-11: título de la pestaña de los tramos de la extensión (la ruta ya tenía columna).
+  `ALTER TABLE "BitacoraEvento" ADD COLUMN IF NOT EXISTS "titulo" TEXT`,
+  `CREATE TABLE IF NOT EXISTS "BitacoraSitioSensible" (
+    "companyId" INTEGER NOT NULL,
+    "dominio" TEXT NOT NULL,
+    "creadoEn" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "BitacoraSitioSensible_pkey" PRIMARY KEY ("companyId", "dominio")
+  )`,
+  `CREATE TABLE IF NOT EXISTS "BitacoraNota" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "companyId" INTEGER NOT NULL,
+    "fecha" TEXT NOT NULL,
+    "desde" TEXT,
+    "hasta" TEXT,
+    "tipo" TEXT NOT NULL,
+    "texto" TEXT NOT NULL,
+    "creadaEn" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "editadaEn" TIMESTAMP(3),
+    "eliminadaEn" TIMESTAMP(3),
+    CONSTRAINT "BitacoraNota_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE INDEX IF NOT EXISTS "BitacoraNota_userId_fecha_idx" ON "BitacoraNota"("userId", "fecha")`,
+  `CREATE TABLE IF NOT EXISTS "BitacoraResumen" (
+    "userId" INTEGER NOT NULL,
+    "fecha" TEXT NOT NULL,
+    "companyId" INTEGER NOT NULL,
+    "texto" TEXT NOT NULL,
+    "puntos" JSONB NOT NULL,
+    "cifras" JSONB NOT NULL,
+    "conIA" BOOLEAN NOT NULL DEFAULT false,
+    "modelo" TEXT,
+    "tokens" INTEGER,
+    "marcaDatos" TEXT NOT NULL,
+    "generadoPorId" INTEGER,
+    "generadoEn" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "veces" INTEGER NOT NULL DEFAULT 1,
+    CONSTRAINT "BitacoraResumen_pkey" PRIMARY KEY ("userId", "fecha")
+  )`,
   `ALTER TABLE "BitacoraHorario" ADD COLUMN IF NOT EXISTS "toleranciaMinutos" INTEGER NOT NULL DEFAULT 10`,
   `ALTER TABLE "BitacoraHorario" ADD COLUMN IF NOT EXISTS "inactividadMinutos" INTEGER NOT NULL DEFAULT 15`,
+  `CREATE TABLE IF NOT EXISTS "BitacoraExtra" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "companyId" INTEGER NOT NULL,
+    "inicio" TIMESTAMP(3) NOT NULL,
+    "fin" TIMESTAMP(3),
+    "cierre" TEXT,
+    "minutos" INTEGER,
+    "minutosContados" INTEGER,
+    "estado" TEXT NOT NULL DEFAULT 'PENDIENTE',
+    "resueltoPorId" INTEGER,
+    "resueltoEn" TIMESTAMP(3),
+    "notaJefe" TEXT,
+    "creadoEn" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "BitacoraExtra_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE INDEX IF NOT EXISTS "BitacoraExtra_userId_inicio_idx" ON "BitacoraExtra"("userId", "inicio")`,
+  `CREATE INDEX IF NOT EXISTS "BitacoraExtra_companyId_estado_idx" ON "BitacoraExtra"("companyId", "estado")`,
+  // Una sola ventana abierta por persona, aunque dos peticiones lleguen a la vez.
+  `CREATE UNIQUE INDEX IF NOT EXISTS "BitacoraExtra_una_abierta_key" ON "BitacoraExtra"("userId") WHERE "fin" IS NULL`,
+  `CREATE TABLE IF NOT EXISTS "BitacoraDeuda" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "companyId" INTEGER NOT NULL,
+    "fecha" TEXT NOT NULL,
+    "minutos" INTEGER NOT NULL,
+    "motivo" TEXT NOT NULL,
+    "creadaPorId" INTEGER,
+    "creadaEn" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "anuladaEn" TIMESTAMP(3),
+    "anuladaPorId" INTEGER,
+    CONSTRAINT "BitacoraDeuda_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE INDEX IF NOT EXISTS "BitacoraDeuda_userId_creadaEn_idx" ON "BitacoraDeuda"("userId", "creadaEn")`,
+  `CREATE INDEX IF NOT EXISTS "BitacoraDeuda_companyId_idx" ON "BitacoraDeuda"("companyId")`,
   `CREATE TABLE IF NOT EXISTS "BitacoraExtensionCodigo" (
     "userId" INTEGER NOT NULL,
     "codigoHash" TEXT NOT NULL,

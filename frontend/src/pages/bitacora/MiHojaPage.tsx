@@ -3,9 +3,19 @@ import BitacoraPageHeader from '../../components/bitacora/BitacoraPageHeader';
 import ErrorBanner from '../../components/common/ErrorBanner';
 import ExtensionPanel from '../../components/bitacora/ExtensionPanel';
 import HojaDelDia from '../../components/bitacora/HojaDelDia';
+import NotasDelDia from '../../components/bitacora/NotasDelDia';
+import ResumenDelDia from '../../components/bitacora/ResumenDelDia';
+import SaldoHorasPanel from '../../components/bitacora/SaldoHorasPanel';
 import SelectorDia from '../../components/bitacora/SelectorDia';
-import { getMiHoja, mensajeErrorBitacora, type EstadoBitacora, type HojaDia } from '../../services/bitacora.service';
-import { fechaLarga, hoyEcuador, instanteLegible } from '../../utils/bitacoraFechas';
+import {
+  getMiHoja,
+  mensajeErrorBitacora,
+  type EstadoBitacora,
+  type HojaDia,
+  type NotaDia,
+  type ResumenDia,
+} from '../../services/bitacora.service';
+import { fechaLarga, hoyEcuador, instanteLegible, sumarDias } from '../../utils/bitacoraFechas';
 import '../../styles/bitacora.css';
 
 /** Cada persona ve aquí lo que quedó registrado de su propia actividad. No necesita permiso de sección. */
@@ -13,6 +23,9 @@ export default function MiHojaPage() {
   const [fecha, setFecha] = useState(hoyEcuador());
   const [hoja, setHoja] = useState<HojaDia | null>(null);
   const [estado, setEstado] = useState<EstadoBitacora | null>(null);
+  const [notas, setNotas] = useState<NotaDia[]>([]);
+  const [resumen, setResumen] = useState<ResumenDia | null>(null);
+  const [version, setVersion] = useState(0);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
 
@@ -25,13 +38,15 @@ export default function MiHojaPage() {
         if (!vigente) return;
         setEstado(r);
         setHoja(r.hoja);
+        setNotas(r.notas ?? []);
+        setResumen(r.resumen ?? null);
       })
       .catch((err) => vigente && setError(mensajeErrorBitacora(err)))
       .finally(() => vigente && setCargando(false));
     return () => {
       vigente = false;
     };
-  }, [fecha]);
+  }, [fecha, version]);
 
   const mensajeVacio = !estado
     ? ''
@@ -72,10 +87,19 @@ export default function MiHojaPage() {
             <h2 className="bit-detalle-titulo">
               <small>{fechaLarga(fecha)}</small>
             </h2>
+            {/* Anotar o corregir solo hoy y los 6 días anteriores, y con la hoja activa. */}
+            <ResumenDelDia fecha={fecha} resumen={resumen} onResumen={setResumen} />
+            <NotasDelDia
+              fecha={fecha}
+              notas={notas}
+              editable={!!estado?.activa && fecha <= hoyEcuador() && fecha >= sumarDias(hoyEcuador(), -6)}
+              onCambio={() => setVersion((v) => v + 1)}
+            />
             <HojaDelDia hoja={hoja} />
           </>
         ) : null}
 
+        {estado?.activa && <SaldoHorasPanel />}
         {estado?.activa && <ExtensionPanel />}
       </div>
     </div>

@@ -3,6 +3,7 @@ import {
   describirEvento,
   duracionCorta,
   moduloEtiqueta,
+  sitioConDetalle,
   EventoDescribible,
 } from './bitacora-etiquetas.util';
 
@@ -95,6 +96,7 @@ function finDe(e: EventoHoja): number {
 
 function claveGrupo(e: EventoHoja): string {
   // Dos sitios web distintos nunca se juntan en una fila.
+  // Dos sitios web distintos nunca se juntan; en el mismo sitio, la ruta ya va en la clave.
   const sitio = e.fuente === 'EXTENSION' ? (e.nombre ?? '') : '';
   return `${e.fuente}|${e.modulo}|${e.accion}|${e.ruta ?? ''}|${sitio}`;
 }
@@ -133,7 +135,7 @@ function filaDeGrupo(g: EventoHoja[]): FilaHoja {
       fuente: primero.fuente,
       modulo: primero.modulo,
       moduloEtiqueta: moduloEtiqueta(primero.modulo),
-      texto: `${describirAccion(primero)}: ${primero.nombre ?? ''} (${duracionCorta(minutos)})`,
+      texto: `${describirAccion(primero)}: ${sitioConDetalle(primero)} (${duracionCorta(minutos)})`,
       veces: g.length,
       minutos,
     };

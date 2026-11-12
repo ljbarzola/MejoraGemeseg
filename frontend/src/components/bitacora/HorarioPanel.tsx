@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import ErrorBanner from '../common/ErrorBanner';
+import SitiosSensiblesPanel from './SitiosSensiblesPanel';
 import {
   getHorarioBitacora,
   guardarHorarioBitacora,
@@ -26,6 +27,9 @@ export default function HorarioPanel() {
   const [dias, setDias] = useState<number[]>([1, 2, 3, 4, 5]);
   const [inicio, setInicio] = useState('08:00');
   const [fin, setFin] = useState('17:00');
+  // Texto, para poder borrar y reescribir el número sin que el campo salte.
+  const [tolerancia, setTolerancia] = useState('10');
+  const [inactividad, setInactividad] = useState('15');
   const [configurado, setConfigurado] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -40,6 +44,8 @@ export default function HorarioPanel() {
         setDias(h.dias);
         setInicio(h.inicio);
         setFin(h.fin);
+        setTolerancia(String(h.toleranciaMinutos));
+        setInactividad(String(h.inactividadMinutos));
         setConfigurado(h.configurado);
       })
       .catch((err) => vigente && setError(mensajeErrorBitacora(err)))
@@ -59,10 +65,18 @@ export default function HorarioPanel() {
     setError('');
     setAviso('');
     try {
-      const h = await guardarHorarioBitacora({ dias, inicio, fin });
+      const h = await guardarHorarioBitacora({
+        dias,
+        inicio,
+        fin,
+        toleranciaMinutos: Number(tolerancia),
+        inactividadMinutos: Number(inactividad),
+      });
       setDias(h.dias);
       setInicio(h.inicio);
       setFin(h.fin);
+      setTolerancia(String(h.toleranciaMinutos));
+      setInactividad(String(h.inactividadMinutos));
       setConfigurado(h.configurado);
       setAviso('Horario guardado. Las extensiones lo toman en unos minutos.');
     } catch (err) {
@@ -119,10 +133,39 @@ export default function HorarioPanel() {
               }}
             />
           </label>
-          <button type="button" className="auth-btn" disabled={guardando} onClick={guardar}>
-            {guardando ? 'Guardando...' : 'Guardar horario'}
-          </button>
         </div>
+      </div>
+
+      <div className="bit-reglas">
+        <label>
+          Tolerancia del tiempo extra (minutos)
+          <input
+            type="number"
+            min={0}
+            max={60}
+            value={tolerancia}
+            onChange={(e) => {
+              setTolerancia(e.target.value);
+              setAviso('');
+            }}
+          />
+        </label>
+        <label>
+          Cerrar el tiempo extra tras (minutos sin actividad)
+          <input
+            type="number"
+            min={10}
+            max={120}
+            value={inactividad}
+            onChange={(e) => {
+              setInactividad(e.target.value);
+              setAviso('');
+            }}
+          />
+        </label>
+        <button type="button" className="auth-btn" disabled={guardando} onClick={guardar}>
+          {guardando ? 'Guardando...' : 'Guardar horario'}
+        </button>
       </div>
       {aviso && <div className="bit-aviso">{aviso}</div>}
 
@@ -135,7 +178,15 @@ export default function HorarioPanel() {
         </li>
         <li>El servidor vuelve a comprobarlo: lo que llegue fuera del horario se descarta sin guardarse.</li>
         <li>Si cambias el horario, la extensión lo toma sola; no hay que reinstalar nada.</li>
+        <li>
+          Tiempo extra: quien llega antes o se queda después pulsa «Empezar tiempo extra» en su hoja y la extensión
+          registra aunque sea fuera del horario. Menos minutos que la tolerancia no suman, y el tiempo extra se cierra
+          solo si pasan los minutos de inactividad indicados (entre 10 y 120; menos de 10 cerraría por un simple
+          retraso de la extensión).
+        </li>
       </ul>
+
+      <SitiosSensiblesPanel />
     </>
   );
 }

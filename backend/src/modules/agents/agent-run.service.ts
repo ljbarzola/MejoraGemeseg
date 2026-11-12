@@ -3,10 +3,13 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AGENT_RUN_DDL } from './agent-run.schema';
 import {
+  INSTRUCCIONES_BITACORA_RESUMEN_POR_DEFECTO,
   INSTRUCCIONES_BITACORAS_POR_DEFECTO,
   INSTRUCCIONES_ENTREGAS_POR_DEFECTO,
+  NOMBRE_AGENTE_BITACORA_RESUMEN,
   NOMBRE_AGENTE_BITACORAS,
   NOMBRE_AGENTE_ENTREGAS,
+  SCOPE_BITACORA_RESUMEN,
   SCOPE_BITACORAS,
   SCOPE_ENTREGAS,
 } from './agent-trabajadores.const';
@@ -72,6 +75,29 @@ export class AgentRunService implements OnModuleInit {
         `No se pudo sembrar el Agente Revisor de Entregas: ${(err as Error).message}`,
       );
     }
+    try {
+      await this.sembrarRedactorDeResumen();
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo sembrar el Agente Redactor del Resumen del Día: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  private async sembrarRedactorDeResumen() {
+    const existe = await this.prisma.agent.findFirst({
+      where: { createdBy: null, scope: SCOPE_BITACORA_RESUMEN },
+      select: { id: true },
+    });
+    if (existe) return;
+    await this.prisma.agent.create({
+      data: {
+        name: NOMBRE_AGENTE_BITACORA_RESUMEN,
+        instructions: INSTRUCCIONES_BITACORA_RESUMEN_POR_DEFECTO,
+        scope: SCOPE_BITACORA_RESUMEN,
+        isDefault: false,
+      },
+    });
   }
 
   private async sembrarRevisorDeEntregas() {

@@ -108,10 +108,71 @@ export const getMetricas = (dias: number): Promise<Metricas> =>
 export const getBitacoraEstado = (): Promise<EstadoBitacora> =>
   api.get('/bitacora/estado').then((r) => r.data);
 
+/** Lo que la persona anota de su día cuando algo no se registró solo («Escrito por la persona»). */
+export interface NotaDia {
+  id: number;
+  fecha: string;
+  desde: string | null;
+  hasta: string | null;
+  /** REUNION | VISITA | SIN_COMPUTADOR | OTRO */
+  tipo: string;
+  texto: string;
+  creadaEn: string;
+  editadaEn: string | null;
+}
+
+export interface ResumenDia {
+  fecha: string;
+  userId: number;
+  texto: string;
+  puntos: string[];
+  /** true = redactado por la IA con las cifras; false = texto calculado con plantilla. */
+  conIA: boolean;
+  generadoPor: string | null;
+  generadoEn: string;
+  veces: number;
+  /** Hubo actividad o anotaciones nuevas después de generarlo. */
+  desactualizado: boolean;
+  reutilizado?: boolean;
+}
+
 export const getMiHoja = (
   fecha: string,
-): Promise<EstadoBitacora & { fecha: string; hoja: HojaDia | null }> =>
+): Promise<EstadoBitacora & { fecha: string; hoja: HojaDia | null; notas: NotaDia[]; resumen: ResumenDia | null }> =>
   api.get('/bitacora/mi-hoja', { params: { fecha } }).then((r) => r.data);
+
+export const crearNotaDia = (datos: {
+  fecha: string;
+  desde?: string;
+  hasta?: string;
+  tipo: string;
+  texto: string;
+}): Promise<NotaDia> => api.post('/bitacora/notas', datos).then((r) => r.data);
+
+export const editarNotaDia = (
+  id: number,
+  datos: { desde?: string; hasta?: string; tipo?: string; texto?: string },
+): Promise<NotaDia> => api.put(`/bitacora/notas/${id}`, datos).then((r) => r.data);
+
+export const eliminarNotaDia = (id: number): Promise<{ ok: true }> =>
+  api.delete(`/bitacora/notas/${id}`).then((r) => r.data);
+
+/** Genera (o reutiliza) el resumen de un día. Sin `userId` es el propio; con otra persona exige permiso de ver el equipo. */
+export const generarResumenDia = (fecha: string, userId?: number): Promise<ResumenDia> =>
+  api.post('/bitacora/resumen', { fecha, userId }).then((r) => r.data);
+
+export interface SitiosSensibles {
+  /** Vienen con la aplicación y no se pueden quitar. */
+  porDefecto: string[];
+  /** Los que agregó la empresa. */
+  propios: string[];
+}
+
+export const getSitiosSensibles = (): Promise<SitiosSensibles> =>
+  api.get('/bitacora/sitios-sensibles').then((r) => r.data);
+
+export const guardarSitiosSensibles = (dominios: string[]): Promise<SitiosSensibles> =>
+  api.put('/bitacora/sitios-sensibles', { dominios }).then((r) => r.data);
 
 export const getActivaciones = (): Promise<ActivacionPersona[]> =>
   api.get('/bitacora/activaciones').then((r) => r.data);
@@ -133,6 +194,8 @@ export const getBitacoraPersona = (
 ): Promise<{
   persona: { id: number; nombre: string; cargo: string | null; activa: boolean };
   hoja: HojaDia;
+  notas: NotaDia[];
+  resumen: ResumenDia | null;
 }> => api.get(`/bitacora/equipo/${userId}`, { params: { fecha } }).then((r) => r.data);
 
 export interface EstadoGoogle {
@@ -159,14 +222,95 @@ export interface HorarioBitacora {
   dias: number[];
   inicio: string;
   fin: string;
+  /** Menos de estos minutos de tiempo extra no suman. */
+  toleranciaMinutos: number;
+  /** Minutos sin actividad tras los que se cierra solo el tiempo extra. */
+  inactividadMinutos: number;
 }
 
 export const getHorarioBitacora = (): Promise<HorarioBitacora> =>
   api.get('/bitacora/horario').then((r) => r.data);
 
 export const guardarHorarioBitacora = (
-  horario: Pick<HorarioBitacora, 'dias' | 'inicio' | 'fin'>,
+  horario: Pick<HorarioBitacora, 'dias' | 'inicio' | 'fin' | 'toleranciaMinutos' | 'inactividadMinutos'>,
 ): Promise<HorarioBitacora> => api.put('/bitacora/horario', horario).then((r) => r.data);
+
+// ───────────────────────── Bolsa de horas: tiempo extra y horas que se deben ─────────────────────────
+
+export interface ExtraVista {
+  id: number;
+  inicio: string;
+  /** null = sigue abierto. */
+  fin: string | null;
+  /** MANUAL | INACTIVIDAD | HORARIO | LIMITE */
+  cierre: string | null;
+  /** Minutos con actividad real fuera del horario. */
+  minutos: number;
+  /** Lo que cuenta tras la tolerancia. */
+  minutosContados: number;
+  /** PENDIENTE | APROBADA | RECHAZADA | SIN_TIEMPO */
+  estado: string;
+  notaJefe: string | null;
+  resueltoEn: string | null;
+}
+
+export interface DeudaVista {
+  id: number;
+  fecha: string;
+  minutos: number;
+  motivo: string;
+  creadaPor: string | null;
+  creadaEn: string;
+}
+
+export interface SaldoHoras {
+  abonadoMinutos: number;
+  deudaMinutos: number;
+  /** Positivo = a favor de la persona; negativo = debe horas. */
+  saldoMinutos: number;
+  pendienteMinutos: number;
+}
+
+export interface EstadoHoras {
+  horarioConfigurado: boolean;
+  reglas: { toleranciaMinutos: number; inactividadMinutos: number };
+  abierta: ExtraVista | null;
+  saldo: SaldoHoras;
+  extras: ExtraVista[];
+  deudas: DeudaVista[];
+}
+
+export interface ResumenHorasEquipo {
+  personas: (SaldoHoras & { userId: number; nombre: string; cargo: string | null })[];
+  pendientes: (ExtraVista & { userId: number; nombre: string })[];
+  recientes: (ExtraVista & { userId: number; nombre: string })[];
+  deudas: (DeudaVista & { userId: number; nombre: string })[];
+}
+
+export const getMiEstadoHoras = (): Promise<EstadoHoras> =>
+  api.get('/bitacora/horas/mi-estado').then((r) => r.data);
+
+export const iniciarTiempoExtra = (): Promise<EstadoHoras> =>
+  api.post('/bitacora/horas/iniciar').then((r) => r.data);
+
+export const terminarTiempoExtra = (): Promise<EstadoHoras> =>
+  api.post('/bitacora/horas/terminar').then((r) => r.data);
+
+export const anotarHorasDebidas = (datos: {
+  userId?: number;
+  minutos: number;
+  motivo: string;
+  fecha?: string;
+}): Promise<EstadoHoras> => api.post('/bitacora/horas/deudas', datos).then((r) => r.data);
+
+export const anularHorasDebidas = (id: number): Promise<{ ok: true }> =>
+  api.delete(`/bitacora/horas/deudas/${id}`).then((r) => r.data);
+
+export const getHorasEquipo = (): Promise<ResumenHorasEquipo> =>
+  api.get('/bitacora/horas/equipo').then((r) => r.data);
+
+export const resolverTiempoExtra = (id: number, aprobar: boolean, nota?: string): Promise<{ ok: true }> =>
+  api.put(`/bitacora/horas/extras/${id}`, { aprobar, nota }).then((r) => r.data);
 
 export interface EstadoExtension {
   vinculada: boolean;

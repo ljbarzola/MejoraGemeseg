@@ -34,7 +34,59 @@ export function dominioDeUrl(url) {
   }
 }
 
-const DIAS_INGLES = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+export const RUTA_MAXIMA = 120;
+export const TITULO_MAXIMO = 120;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** ¿Este tramo de la ruta parece un código o un dato personal (y no una pantalla)? Igual que el servidor. */
+function pareceCodigo(segmento) {
+  if (UUID_RE.test(segmento)) return true;
+  if (/^\d{5,}$/.test(segmento)) return true;
+  if (/@|%40/.test(segmento)) return true;
+  if (segmento.length >= 10 && /\d/.test(segmento) && /[a-z]/i.test(segmento)) return true;
+  return segmento.length >= 20 && /^[A-Za-z0-9_-]+$/.test(segmento);
+}
+
+/**
+ * Solo la ruta de una dirección, sin «?» ni «#» y con los códigos largos cambiados por «:id»:
+ * «https://app.com/ventas/oportunidades/12345?x=1» → «/ventas/oportunidades/:id». Null si no hay ruta útil.
+ */
+export function rutaDeUrl(url) {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    const segmentos = u.pathname
+      .split('/')
+      .filter((s) => s.length > 0)
+      .map((s) => (pareceCodigo(s) ? ':id' : s.toLowerCase()));
+    if (segmentos.length === 0) return null;
+    return `/${segmentos.join('/')}`.slice(0, RUTA_MAXIMA);
+  } catch {
+    return null;
+  }
+}
+
+/** Título de la pestaña, corto: sin el contador del inicio «(3) », sin correos ni números largos. Null si queda vacío. */
+export function tituloLimpio(titulo) {
+  if (typeof titulo !== 'string') return null;
+  let t = titulo.replace(/[\x00-\x1f\x7f]/g, ' ');
+  t = t.replace(/^\(\d+\)\s*/, '');
+  t = t.replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, '…');
+  t = t.replace(/\d{7,}/g, '…');
+  t = t.replace(/\s+/g, ' ').trim();
+  if (!t) return null;
+  return t.length > TITULO_MAXIMO ? `${t.slice(0, TITULO_MAXIMO - 1)}…` : t;
+}
+
+/** ¿Es un sitio donde se guarda SOLO el dominio? `lista` viene del servidor (por defecto + la de la empresa). */
+export function esSitioSensible(dominio, lista) {
+  const d = String(dominio).toLowerCase();
+  if (/(^|[.-])banco|bank/.test(d)) return true;
+  return (lista ?? []).some((s) => d === s || d.endsWith(`.${s}`));
+}
+
+const DIAS_INGLES ={ Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
 
 /** Día de la semana (1 = lunes ... 7 = domingo) y minutos desde las 00:00 en la zona del horario. */
 export function reloj(ms, zona) {
@@ -67,14 +119,15 @@ export function dentroDelHorario(horario, ms) {
 /**
  * Por qué NO se registra ahora, o null si toca registrar. Se revisa en este orden y, ante
  * cualquier duda (sin vincular, sin configuración reciente, hoja apagada, fuera de horario),
- * no se registra.
+ * no se registra. Única excepción fuera del horario: la persona pulsó «Empezar tiempo extra»
+ * en app.gemeseg (`config.extra`); el servidor sigue comprobando que el tramo caiga en esa ventana.
  */
 export function motivoDePausa({ token, config, ahoraMs }) {
   if (!token) return 'sin-vincular';
   if (!config || ahoraMs - config.obtenidaEn > CONFIG_CADUCA_MS) return 'sin-configuracion';
   if (!config.registrando) return 'hoja-inactiva';
   if (!config.horario) return 'sin-horario';
-  if (!dentroDelHorario(config.horario, ahoraMs)) return 'fuera-de-horario';
+  if (!dentroDelHorario(config.horario, ahoraMs) && !config.extra) return 'fuera-de-horario';
   return null;
 }
 
@@ -87,14 +140,14 @@ export function colapsarMuestras(muestras) {
   const tramos = [];
   let actual = null;
   for (const m of orden) {
-    if (actual && actual.dominio === m.d && m.t - actual.ultimo <= MIN * 1.5 && actual.minutos < TRAMO_MAXIMO_MINUTOS) {
+    if (actual && actual.dominio === m.d && (actual.ruta ?? null) === (m.r ?? null) && m.t - actual.ultimo <= MIN * 1.5 && actual.minutos < TRAMO_MAXIMO_MINUTOS) {
       if (m.t !== actual.ultimo) {
         actual.minutos++;
         actual.ultimo = m.t;
       }
     } else {
       if (actual) tramos.push(actual);
-      actual = { dominio: m.d, inicioMs: m.t, ultimo: m.t, minutos: 1 };
+      actual = { dominio: m.d, ruta: m.r ?? null, titulo: m.ti ?? null, inicioMs: m.t, ultimo: m.t, minutos: 1 };
     }
   }
   if (actual) tramos.push(actual);
@@ -102,6 +155,9 @@ export function colapsarMuestras(muestras) {
     dominio: t.dominio,
     inicio: new Date(t.inicioMs).toISOString(),
     minutos: t.minutos,
+    // Solo si hay: en sitios sensibles no se envía nada más que el dominio.
+    ...(t.ruta ? { ruta: t.ruta } : {}),
+    ...(t.titulo ? { titulo: t.titulo } : {}),
   }));
 }
 

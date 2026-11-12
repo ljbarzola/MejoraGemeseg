@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Clock, Globe, Users } from 'lucide-react';
+import { Clock, Globe, Hourglass, Users } from 'lucide-react';
 import BitacoraPageHeader from '../../components/bitacora/BitacoraPageHeader';
 import ActivacionHojasPanel from '../../components/bitacora/ActivacionHojasPanel';
 import GoogleConexionPanel from '../../components/bitacora/GoogleConexionPanel';
 import HorarioPanel from '../../components/bitacora/HorarioPanel';
+import HorasExtraPanel from '../../components/bitacora/HorasExtraPanel';
 import PageTabs from '../../components/common/PageTabs';
 import { getBitacoraEstado, type EstadoBitacora } from '../../services/bitacora.service';
 import '../../styles/bitacora.css';
 
-type Pestana = 'hojas' | 'horario' | 'google';
+type Pestana = 'hojas' | 'horario' | 'horas' | 'google';
 
 /** Configuración de la Bitácora (administradores y gerentes): quién tiene hoja del día, el horario del navegador y cómo se lee Google. */
 export default function BitacoraConfiguracionPage() {
@@ -31,7 +32,7 @@ export default function BitacoraConfiguracionPage() {
     <div className="page-container">
       <BitacoraPageHeader
         title="Configuración"
-        description="A quién se le registra la hoja del día, en qué horario registra la extensión del navegador y cómo se lee la actividad de Google."
+        description="A quién se le registra la hoja del día, en qué horario registra la extensión del navegador, el tiempo extra de cada persona y cómo se lee la actividad de Google."
       />
 
       {sinAcceso ? (
@@ -51,6 +52,7 @@ export default function BitacoraConfiguracionPage() {
             tabs={[
               { key: 'hojas', label: 'Hojas del día', icon: Users },
               { key: 'horario', label: 'Horario', icon: Clock },
+              { key: 'horas', label: 'Horas extra', icon: Hourglass },
               { key: 'google', label: 'Google', icon: Globe },
             ]}
           />
@@ -59,6 +61,8 @@ export default function BitacoraConfiguracionPage() {
               <ActivacionHojasPanel />
             ) : pestana === 'horario' ? (
               <HorarioPanel />
+            ) : pestana === 'horas' ? (
+              <HorasExtraPanel />
             ) : (
               <GoogleConexionPanel />
             )}

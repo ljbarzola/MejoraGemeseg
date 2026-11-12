@@ -13,6 +13,11 @@ export function sumarDias(fecha: string, dias: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Día (AAAA-MM-DD) de Ecuador de un instante. */
+export function diaEcuador(iso: string): string {
+  return new Date(new Date(iso).getTime() - DESFASE_MS).toISOString().slice(0, 10);
+}
+
 /** «08:12», en hora de Ecuador. */
 export function hora(iso: string): string {
   return new Date(iso).toLocaleTimeString('es-EC', {

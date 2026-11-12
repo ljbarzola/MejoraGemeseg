@@ -2,6 +2,9 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PermissionsService } from '../permissions/permissions.service';
 import { BitacoraController } from './bitacora.controller';
 import { BitacoraExtensionService } from './bitacora-extension.service';
+import { BitacoraHorasService } from './bitacora-horas.service';
+import { BitacoraNotasService } from './bitacora-notas.service';
+import { BitacoraResumenService } from './bitacora-resumen.service';
 import { BitacoraGoogleService } from './bitacora-google.service';
 import { BitacoraService, UsuarioBitacora } from './bitacora.service';
 
@@ -52,6 +55,13 @@ describe('BitacoraController', () => {
       bitacora as unknown as BitacoraService,
       google as unknown as BitacoraGoogleService,
       {} as unknown as BitacoraExtensionService,
+      {} as unknown as BitacoraHorasService,
+      {
+        listar: jest.fn().mockResolvedValue([]),
+      } as unknown as BitacoraNotasService,
+      {
+        obtener: jest.fn().mockResolvedValue(null),
+      } as unknown as BitacoraResumenService,
       permisos as unknown as PermissionsService,
     );
   });
