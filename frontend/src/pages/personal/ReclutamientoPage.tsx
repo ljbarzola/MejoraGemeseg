@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense, type ReactNode } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense, type ReactNode, type DragEvent as ReactDragEvent, type CSSProperties } from 'react';
 import { buildDriveFolderLink } from '../../utils/driveLink';
 import { formatFechaHoraSync } from '../../utils/formatFechaHora';
 import { getUser } from '../../services/auth.service';
@@ -22,6 +22,7 @@ import {
   Lock,
   Trash2,
   Copy,
+  GripVertical,
 } from 'lucide-react';
 import {
   getJobPositions,
@@ -115,6 +116,73 @@ function isLockedCampo(nombre: string): boolean {
 function lockedCampoReason(): string {
   return 'Con Apellidos y Nombres se arma el nombre de la carpeta en Drive, no se puede quitar';
 }
+
+function moverEnLista<T>(lista: T[], desde: number, hasta: number): T[] {
+  const copia = [...lista];
+  const [movido] = copia.splice(desde, 1);
+  copia.splice(hasta, 0, movido);
+  return copia;
+}
+
+// Ordenar filas arrastrándolas por su asa (⋮⋮), como el menú «Columnas».
+// La fila entera es `draggable`, pero el arrastre solo arranca si empezó en
+// el asa: así seleccionar texto en el nombre no mueve la fila.
+function useArrastreFilas(mover: (desde: number, hasta: number) => void) {
+  const [arrastrado, setArrastrado] = useState<number | null>(null);
+  const [destino, setDestino] = useState<number | null>(null);
+  const desdeAsa = useRef(false);
+  const terminar = () => { setArrastrado(null); setDestino(null); desdeAsa.current = false; };
+  return {
+    filaProps: (i: number) => ({
+      draggable: true,
+      onDragStart: (e: ReactDragEvent) => {
+        if (!desdeAsa.current) { e.preventDefault(); return; }
+        e.dataTransfer.effectAllowed = 'move';
+        setArrastrado(i);
+      },
+      onDragOver: (e: ReactDragEvent) => {
+        if (arrastrado === null) return;
+        e.preventDefault();
+        if (destino !== i) setDestino(i);
+      },
+      onDrop: (e: ReactDragEvent) => {
+        e.preventDefault();
+        if (arrastrado !== null && arrastrado !== i) mover(arrastrado, i);
+        terminar();
+      },
+      onDragEnd: terminar,
+    }),
+    filaEstilo: (i: number): CSSProperties => ({
+      boxShadow: destino === i && arrastrado !== null && arrastrado !== i
+        ? `inset 0 ${arrastrado < i ? '-2px' : '2px'} 0 var(--azul-claro)` : 'none',
+      opacity: arrastrado === i ? 0.4 : 1,
+      background: '#fff',
+    }),
+    asaProps: (nombre: string) => ({
+      title: 'Arrastra para cambiar el orden',
+      'aria-label': `Mover ${nombre}`,
+      onMouseDown: () => { desdeAsa.current = true; },
+      onMouseUp: () => { desdeAsa.current = false; },
+      style: { cursor: 'grab', color: 'var(--azul-claro)', opacity: 0.55, display: 'flex' } as CSSProperties,
+    }),
+  };
+}
+
+function FormatoChip({ ext, activo, onToggle }: { ext: string; activo: boolean; onToggle: () => void }) {
+  return (
+    <label
+      style={{
+        display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', padding: '3px 9px',
+        border: `1px solid ${activo ? 'var(--azul-claro)' : 'var(--gris-claro)'}`, borderRadius: '999px', cursor: 'pointer',
+        background: activo ? 'rgba(18, 55, 95, 0.08)' : '#fff',
+        color: activo ? 'var(--azul-claro)' : '#6b7280',
+      }}
+    >
+      <input type="checkbox" checked={activo} onChange={onToggle} style={{ margin: 0 }} /> .{ext}
+    </label>
+  );
+}
+
 const DEFAULT_ARCHIVOS: ArchivoRequerido[] = [
   { nombre: 'Hoja de Vida', extensiones: ['pdf', 'doc', 'docx'], obligatorio: true },
   { nombre: 'Cédula', extensiones: ['pdf', 'jpg', 'png'], obligatorio: true },
@@ -484,6 +552,8 @@ export default function ReclutamientoPage() {
   const [puestoError, setPuestoError] = useState('');
   const [campoAviso, setCampoAviso] = useState('');
   const [archivoAviso, setArchivoAviso] = useState('');
+  // Fila de documento con sus formatos abiertos para editarlos (null = ninguna).
+  const [archivoFormatosAbierto, setArchivoFormatosAbierto] = useState<number | null>(null);
   const [syncError, setSyncError] = useState('');
 
   // Cambiar estado (Abierta/Cerrada) de una vacante, desde su tarjeta.
@@ -618,6 +688,7 @@ export default function ReclutamientoPage() {
   };
 
   const resetForm = () => {
+    setArchivoFormatosAbierto(null);
     setNuevoPuesto('');
     setNuevaDescripcion('');
     setCamposList(DEFAULT_CAMPOS);
@@ -647,12 +718,74 @@ export default function ReclutamientoPage() {
     setNuevoCampoObligatorio(true);
   };
 
+  // Ordenar los datos arrastrando la fila por su asa (el orden es el del formulario).
+  const arrastreCampos = useArrastreFilas((desde, hasta) => {
+    setCampoAviso('');
+    setCamposList((prev) => moverEnLista(prev, desde, hasta));
+  });
+  const arrastreArchivos = useArrastreFilas((desde, hasta) => {
+    setArchivoAviso('');
+    setArchivoFormatosAbierto(null);
+    setArchivosList((prev) => moverEnLista(prev, desde, hasta));
+  });
+
+  const updateCampo = (idx: number, cambios: Partial<CampoRequerido>) => {
+    setCampoAviso('');
+    setCamposList((prev) => prev.map((c, i) => (i === idx ? { ...c, ...cambios } : c)));
+  };
+
+  // Al salir del nombre: no se permite dejarlo vacío ni repetir otro dato.
+  const confirmarNombreCampo = (idx: number, anterior: string) => {
+    setCamposList((prev) => {
+      const actual = prev[idx];
+      if (!actual) return prev;
+      const limpio = actual.nombre.trim();
+      const repetido = prev.some((c, i) => i !== idx && c.nombre.trim().toLowerCase() === limpio.toLowerCase());
+      if (!limpio || repetido || isLockedCampo(limpio)) {
+        setCampoAviso(!limpio ? 'El nombre del dato no puede quedar vacío.' : 'Ya hay otro dato con ese nombre.');
+        return prev.map((c, i) => (i === idx ? { ...c, nombre: anterior } : c));
+      }
+      setCampoAviso('');
+      return prev.map((c, i) => (i === idx ? { ...c, nombre: limpio } : c));
+    });
+  };
+
   const toggleCampoObligatorio = (idx: number) => {
     setCamposList((prev) => prev.map((c, i) => (i === idx ? { ...c, obligatorio: c.obligatorio === false } : c)));
   };
 
   const toggleArchivoObligatorio = (idx: number) => {
     setArchivosList((prev) => prev.map((a, i) => (i === idx ? { ...a, obligatorio: a.obligatorio === false } : a)));
+  };
+
+  const updateArchivo = (idx: number, cambios: Partial<ArchivoRequerido>) => {
+    setArchivoAviso('');
+    setArchivosList((prev) => prev.map((a, i) => (i === idx ? { ...a, ...cambios } : a)));
+  };
+
+  // Mismo criterio que los datos: el nombre no puede quedar vacío ni repetirse.
+  const confirmarNombreArchivo = (idx: number, anterior: string) => {
+    setArchivosList((prev) => {
+      const actual = prev[idx];
+      if (!actual) return prev;
+      const limpio = actual.nombre.trim();
+      const repetido = prev.some((a, i) => i !== idx && a.nombre.trim().toLowerCase() === limpio.toLowerCase());
+      if (!limpio || repetido) {
+        setArchivoAviso(!limpio ? 'El nombre del documento no puede quedar vacío.' : 'Ya hay otro documento con ese nombre.');
+        return prev.map((a, i) => (i === idx ? { ...a, nombre: anterior } : a));
+      }
+      setArchivoAviso('');
+      return prev.map((a, i) => (i === idx ? { ...a, nombre: limpio } : a));
+    });
+  };
+
+  // Formatos de un documento ya agregado: se abren debajo de su fila.
+  const toggleArchivoExt = (idx: number, ext: string) => {
+    setArchivosList((prev) => prev.map((a, i) => {
+      if (i !== idx) return a;
+      const actuales = a.extensiones || [];
+      return { ...a, extensiones: actuales.includes(ext) ? actuales.filter((e) => e !== ext) : [...actuales, ext] };
+    }));
   };
 
   const addArchivo = () => {
@@ -1760,7 +1893,7 @@ export default function ReclutamientoPage() {
                 <div className="form-group">
                   <label>Datos que debe llenar</label>
                   <small style={{ display: 'block', color: 'var(--azul-claro)', opacity: 0.75, margin: '-2px 0 8px' }}>
-Con "Apellidos" y "Nombres" se arma el nombre de la carpeta de la postulación en Drive, que siempre queda como "Apellidos Nombres" —sin guion, sin cédula y sin puesto—. Por eso esos dos campos no se pueden quitar ni volver opcionales. Todos los demás, incluida la Cédula, son campos normales que puedes agregar, quitar o dejar opcionales.
+Con "Apellidos" y "Nombres" se arma el nombre de la carpeta de la postulación en Drive, que siempre queda como "Apellidos Nombres" —sin guion, sin cédula y sin puesto—. Por eso esos dos campos no se pueden quitar ni volver opcionales. Todos los demás, incluida la Cédula, son campos normales que puedes agregar, quitar, dejar opcionales o editar en la misma fila (nombre y tipo). Arrastra el asa ⋮⋮ de la izquierda para cambiar el orden en que el postulante los ve. Si cambias el nombre de un dato, las respuestas que ya enviaron los postulantes con el nombre anterior no se pasan solas al nuevo.
                   </small>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <input
@@ -1797,13 +1930,45 @@ Con "Apellidos" y "Nombres" se arma el nombre de la carpeta de la postulación e
                         return (
                           <div
                             key={i}
+                            {...arrastreCampos.filaProps(i)}
                             style={{
-                              display: 'grid', gridTemplateColumns: '1fr 130px 96px 28px', alignItems: 'center', gap: '10px',
+                              display: 'grid', gridTemplateColumns: '18px 1fr 165px 96px 28px', alignItems: 'center', gap: '10px',
                               padding: '9px 12px', borderTop: i > 0 ? '1px solid var(--gris-claro)' : 'none', fontSize: '0.85rem',
+                              ...arrastreCampos.filaEstilo(i),
                             }}
                           >
-                            <span style={{ fontWeight: 600, color: 'var(--azul-oscuro)' }}>{c.nombre}</span>
-                            <span style={{ color: 'var(--azul-claro)', fontSize: '0.78rem' }}>{campoTipoLabel(c.tipo)}</span>
+                            <span {...arrastreCampos.asaProps(c.nombre)}>
+                              <GripVertical size={14} />
+                            </span>
+                            {locked ? (
+                              <span style={{ fontWeight: 600, color: 'var(--azul-oscuro)' }} title={lockedCampoReason()}>{c.nombre}</span>
+                            ) : (
+                              <input
+                                type="text"
+                                value={c.nombre}
+                                aria-label={`Nombre del dato ${c.nombre}`}
+                                title="Haz clic para cambiar el nombre"
+                                onFocus={(e) => { e.currentTarget.dataset.anterior = c.nombre; }}
+                                onChange={(e) => updateCampo(i, { nombre: e.target.value })}
+                                onBlur={(e) => confirmarNombreCampo(i, e.currentTarget.dataset.anterior ?? c.nombre)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}
+                                style={{ fontWeight: 600, color: 'var(--azul-oscuro)', fontSize: '0.85rem', padding: '5px 8px', minWidth: 0 }}
+                              />
+                            )}
+                            {locked ? (
+                              <span style={{ color: 'var(--azul-claro)', fontSize: '0.78rem' }}>{campoTipoLabel(c.tipo)}</span>
+                            ) : (
+                              <select
+                                value={c.tipo}
+                                aria-label={`Tipo del dato ${c.nombre}`}
+                                onChange={(e) => updateCampo(i, { tipo: e.target.value })}
+                                style={{ fontSize: '0.78rem', padding: '5px 6px', minWidth: 0 }}
+                              >
+                                {CAMPO_TIPOS.map((t) => (
+                                  <option key={t.value} value={t.value}>{t.label}</option>
+                                ))}
+                              </select>
+                            )}
                             <Switch
                               checked={obligatorio}
                               onChange={() => toggleCampoObligatorio(i)}
@@ -1841,7 +2006,7 @@ Con "Apellidos" y "Nombres" se arma el nombre de la carpeta de la postulación e
                 <div className="form-group">
                   <label>Documentos que debe subir</label>
                   <small style={{ display: 'block', color: 'var(--azul-claro)', opacity: 0.75, margin: '-2px 0 8px' }}>
-                    Si no marcas ninguno, el portal no acepta cualquier archivo: usa pdf, doc, docx, xls, xlsx, jpg, jpeg y png. Marca formatos solo cuando quieras una lista más corta.
+                    Si no marcas ninguno, el portal no acepta cualquier archivo: usa pdf, doc, docx, xls, xlsx, jpg, jpeg y png. Marca formatos solo cuando quieras una lista más corta. En cada documento ya agregado puedes cambiar el nombre, pulsar sus formatos para cambiarlos y arrastrar el asa ⋮⋮ para ordenarlos.
                   </small>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <input
@@ -1861,22 +2026,9 @@ Con "Apellidos" y "Nombres" se arma el nombre de la carpeta de la postulación e
                   {archivoAviso && <small style={{ color: '#c53030', display: 'block', marginTop: '6px' }}>{archivoAviso}</small>}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', margin: '8px 0 0' }}>
                     <span style={{ fontSize: '0.75rem', color: 'var(--azul-claro)', opacity: 0.7 }}>Formatos que acepta:</span>
-                    {ARCHIVO_EXTENSIONES.map((ext) => {
-                      const active = nuevoArchivoExts.includes(ext);
-                      return (
-                        <label
-                          key={ext}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', padding: '3px 9px',
-                            border: `1px solid ${active ? 'var(--azul-claro)' : 'var(--gris-claro)'}`, borderRadius: '999px', cursor: 'pointer',
-                            background: active ? 'rgba(18, 55, 95, 0.08)' : '#fff',
-                            color: active ? 'var(--azul-claro)' : '#6b7280',
-                          }}
-                        >
-                          <input type="checkbox" checked={active} onChange={() => toggleNuevoArchivoExt(ext)} style={{ margin: 0 }} /> .{ext}
-                        </label>
-                      );
-                    })}
+                    {ARCHIVO_EXTENSIONES.map((ext) => (
+                      <FormatoChip key={ext} ext={ext} activo={nuevoArchivoExts.includes(ext)} onToggle={() => toggleNuevoArchivoExt(ext)} />
+                    ))}
                   </div>
 
                   {archivosList.length > 0 ? (
@@ -1886,24 +2038,63 @@ Con "Apellidos" y "Nombres" se arma el nombre de la carpeta de la postulación e
                         return (
                           <div
                             key={i}
+                            {...arrastreArchivos.filaProps(i)}
                             style={{
-                              display: 'grid', gridTemplateColumns: '1fr 150px 96px 28px', alignItems: 'center', gap: '10px',
+                              display: 'grid', gridTemplateColumns: '18px 1fr 165px 96px 28px', alignItems: 'center', gap: '10px',
                               padding: '9px 12px', borderTop: i > 0 ? '1px solid var(--gris-claro)' : 'none', fontSize: '0.85rem',
+                              ...arrastreArchivos.filaEstilo(i),
                             }}
                           >
-                            <span style={{ fontWeight: 600, color: 'var(--azul-oscuro)' }}>{a.nombre}</span>
-                            <span style={{ color: 'var(--azul-claro)', fontSize: '0.78rem' }}>
-                              {a.extensiones?.length ? a.extensiones.map((e) => '.' + e).join(', ') : `Por defecto (${FORMATOS_POR_DEFECTO_PORTAL})`}
+                            <span {...arrastreArchivos.asaProps(a.nombre)}>
+                              <GripVertical size={14} />
                             </span>
+                            <input
+                              type="text"
+                              value={a.nombre}
+                              aria-label={`Nombre del documento ${a.nombre}`}
+                              title="Haz clic para cambiar el nombre"
+                              onFocus={(e) => { e.currentTarget.dataset.anterior = a.nombre; }}
+                              onChange={(e) => updateArchivo(i, { nombre: e.target.value })}
+                              onBlur={(e) => confirmarNombreArchivo(i, e.currentTarget.dataset.anterior ?? a.nombre)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}
+                              style={{ fontWeight: 600, color: 'var(--azul-oscuro)', fontSize: '0.85rem', padding: '5px 8px', minWidth: 0 }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setArchivoFormatosAbierto((abierto) => (abierto === i ? null : i))}
+                              aria-expanded={archivoFormatosAbierto === i}
+                              aria-label={`Formatos de ${a.nombre}`}
+                              title="Cambiar los formatos que acepta"
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, textAlign: 'left',
+                                border: '1px solid var(--gris-claro)', borderRadius: '8px', background: '#fff',
+                                padding: '5px 8px', color: 'var(--azul-claro)', fontSize: '0.78rem', cursor: 'pointer',
+                              }}
+                            >
+                              <span className="truncate" style={{ flex: 1 }}>
+                                {a.extensiones?.length ? a.extensiones.map((e) => '.' + e).join(', ') : 'Por defecto'}
+                              </span>
+                              <Pencil size={12} style={{ flexShrink: 0, opacity: 0.6 }} />
+                            </button>
                             <Switch checked={obligatorio} onChange={() => toggleArchivoObligatorio(i)} label={obligatorio ? 'Obligatorio' : 'Opcional'} />
                             <button
                               type="button"
-                              onClick={() => setArchivosList((prev) => prev.filter((_, idx) => idx !== i))}
+                              onClick={() => { setArchivoFormatosAbierto(null); setArchivosList((prev) => prev.filter((_, idx) => idx !== i)); }}
                               title="Quitar"
                               style={{ border: 'none', background: 'none', color: 'var(--azul-claro)', opacity: 0.55, cursor: 'pointer', display: 'flex', justifySelf: 'end' }}
                             >
                               <X size={14} />
                             </button>
+                            {archivoFormatosAbierto === i && (
+                              <div style={{ gridColumn: '2 / -1', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--azul-claro)', opacity: 0.7 }}>
+                                  {a.extensiones?.length ? 'Formatos que acepta:' : `Por defecto acepta ${FORMATOS_POR_DEFECTO_PORTAL}. Marca para acotar:`}
+                                </span>
+                                {ARCHIVO_EXTENSIONES.map((ext) => (
+                                  <FormatoChip key={ext} ext={ext} activo={!!a.extensiones?.includes(ext)} onToggle={() => toggleArchivoExt(i, ext)} />
+                                ))}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
