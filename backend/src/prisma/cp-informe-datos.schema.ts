@@ -15,6 +15,8 @@ export const CP_INFORME_DATOS_DDL = [
   'ALTER TABLE "CPContrato" ADD COLUMN IF NOT EXISTS "fechaAceptacionOrden" DATE',
   'ALTER TABLE "CPContrato" ADD COLUMN IF NOT EXISTS "fechaSuscripcionOrden" DATE',
   'ALTER TABLE "CPContrato" ADD COLUMN IF NOT EXISTS "plazoDias" INTEGER',
+  // Tipo de la entidad (2026-11-13): PUBLICA o PRIVADA. Con valor por defecto, así el despliegue anterior sigue insertando sin problema.
+  `ALTER TABLE "CPEntidadPublica" ADD COLUMN IF NOT EXISTS "tipo" TEXT NOT NULL DEFAULT 'PUBLICA'`,
   'ALTER TABLE "CPPuestoServicio" ADD COLUMN IF NOT EXISTS "canton" TEXT',
   'ALTER TABLE "CPPuestoServicio" ADD COLUMN IF NOT EXISTS "edificio" TEXT',
   'ALTER TABLE "CPPuestoServicio" ADD COLUMN IF NOT EXISTS "ubicacion" TEXT',

@@ -5,7 +5,7 @@ import ContratoFormModal from './ContratoFormModal';
 import ImportarContratoModal from './ImportarContratoModal';
 import { fechaCorta } from '../../../utils/bitacoras';
 import { getContratos, deleteContrato } from '../../../services/contratacion-publica.service';
-import type { CPContrato } from '../../../types/contratacion-publica';
+import { TIPO_ENTIDAD_LABEL, type CPContrato } from '../../../types/contratacion-publica';
 import { usePerm } from '../../../contexts/PermissionsContext';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import OperacionesPageHeader from '../../../components/operaciones/OperacionesPageHeader';
@@ -65,6 +65,7 @@ export default function ContratosList() {
   const cf = useColumnFilters<CPContrato>(contratos, [
     { key: 'numero', etiqueta: 'Número', tipo: 'texto', getValue: (c) => c.numero },
     { key: 'entidad', etiqueta: 'Entidad', tipo: 'valores', vacio: 'Sin entidad', getValues: (c) => (c.entidad ? { valor: String(c.entidadId), etiqueta: c.entidad.nombre } : null) },
+    { key: 'tipo', etiqueta: 'Tipo', tipo: 'valores', orden: ['PUBLICA', 'PRIVADA'], getValues: (c) => { const t = c.entidad?.tipo ?? 'PUBLICA'; return { valor: t, etiqueta: TIPO_ENTIDAD_LABEL[t] }; } },
     { key: 'objeto', etiqueta: 'Objeto', tipo: 'texto', getValue: (c) => c.objeto },
     { key: 'puestos', etiqueta: 'Puestos', tipo: 'numero', getValue: (c) => c._count?.puestos ?? 0 },
     // «Vigente en»: el contrato cuenta si estuvo en pie en algún momento del periodo.
@@ -87,6 +88,7 @@ export default function ContratosList() {
     {
       numero: (c) => c.numero,
       entidad: (c) => c.entidad?.nombre,
+      tipo: (c) => TIPO_ENTIDAD_LABEL[c.entidad?.tipo ?? 'PUBLICA'],
       objeto: (c) => c.objeto,
       puestos: (c) => c._count?.puestos ?? 0,
       fechaFin: (c) => c.fechaFin,
@@ -163,6 +165,7 @@ export default function ContratosList() {
                 <tr>
                   <th {...thProps('numero')}>Número <ColumnFilter cf={cf} col="numero" orden={ordenDe('numero')} /></th>
                   <th {...thProps('entidad')}>Entidad <ColumnFilter cf={cf} col="entidad" orden={ordenDe('entidad')} /></th>
+                  <th {...thProps('tipo')}>Tipo <ColumnFilter cf={cf} col="tipo" orden={ordenDe('tipo')} /></th>
                   <th {...thProps('objeto')}>Objeto <ColumnFilter cf={cf} col="objeto" orden={ordenDe('objeto')} /></th>
                   <th {...thProps('puestos')}>Puestos <ColumnFilter cf={cf} col="puestos" orden={ordenDe('puestos')} /></th>
                   <th {...thProps('fechaFin')}>Vigencia <ColumnFilter cf={cf} col="fechaFin" orden={ordenDe('fechaFin')} /></th>
@@ -173,7 +176,7 @@ export default function ContratosList() {
               <tbody>
                 {filas.length === 0 && (
                   <FilaSinResultados
-                    columnas={7}
+                    columnas={8}
                     mensaje="No hay contratos que coincidan con los filtros."
                     onLimpiar={hayFiltros ? limpiarTodo : undefined}
                   />
@@ -182,6 +185,7 @@ export default function ContratosList() {
                   <tr key={c.id} onClick={() => navigate(`/operaciones/contratos/${c.id}`)} style={{ cursor: 'pointer' }}>
                     <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#2b6cb0' }}>{c.numero}</td>
                     <td><span className="truncate">{c.entidad?.nombre || '—'}</span></td>
+                    <td>{TIPO_ENTIDAD_LABEL[c.entidad?.tipo ?? 'PUBLICA']}</td>
                     <td><span className="truncate">{c.objeto}</span></td>
                     <td>{c._count?.puestos ?? 0}</td>
                     <td style={{ fontSize: '0.82rem' }}>{formatFecha(c.fechaInicio)} — {formatFecha(c.fechaFin)}</td>

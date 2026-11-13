@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Camera, UserX } from 'lucide-react';
 import { getPuestosHoy } from '../../services/bitacoras.service';
@@ -8,6 +8,9 @@ import ConfirmDialog from '../../components/common/ConfirmDialog';
 import NoLlegoModal from './NoLlegoModal';
 import { usePerm } from '../../contexts/PermissionsContext';
 import { diaMes, fechaConDia } from '../../utils/bitacoras';
+import { hoyEcuador, sumarDias } from '../../utils/bitacoraFechas';
+import SelectorDia from '../../components/bitacora/SelectorDia';
+import FilterField from '../../components/common/FilterField';
 import { mensajeError } from '../../utils/entregasCp';
 import SubirBitacoraModal from './bitacoras/SubirBitacoraModal';
 
@@ -32,18 +35,20 @@ const botonChico: React.CSSProperties = { padding: '2px 10px', fontSize: '0.75re
 
 function DebeEstar({
   p,
+  esHoy,
   puedeEscribir,
   onNoLlego,
   onCubrir,
   onDeshacer,
 }: {
   p: PuestoDelDia;
+  esHoy: boolean;
   puedeEscribir: boolean;
   onNoLlego: (g: GuardiaDelDia) => void;
   onCubrir: (g: GuardiaDelDia) => void;
   onDeshacer: (g: GuardiaDelDia) => void;
 }) {
-  if (p.cobertura === 'SIN_HORARIO') return <span style={{ color: '#a0aec0' }}>No hay horario que cubra hoy</span>;
+  if (p.cobertura === 'SIN_HORARIO') return <span style={{ color: '#a0aec0' }}>No hay horario que cubra {esHoy ? 'hoy' : 'este día'}</span>;
   if (p.trabajando.length === 0) return <span style={{ color: '#c53030' }}>Nadie programado</span>;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -93,7 +98,8 @@ function DebeEstar({
 
 /**
  * «Hoy en los puestos»: lo primero que mira un supervisor al empezar el turno y el jefe de supervisores
- * durante el día. Por puesto: quién debe estar hoy según el horario, si la cobertura mínima se cumple y qué
+ * durante el día. Con el selector de día se puede mirar cualquier otra fecha (pasada o futura) para revisar un
+ * horario; las faltas «No llegó» solo se registran de hoy y de los 7 días anteriores. Por puesto: quién debe estar hoy según el horario, si la cobertura mínima se cumple y qué
  * días de la última semana no tienen bitácora aunque el horario esperaba guardias. Los que piden atención
  * van arriba. No guarda nada: se calcula con el horario y las bitácoras que ya existen.
  */
@@ -102,18 +108,27 @@ export default function PuestosHoy() {
   const { canWrite } = usePerm();
   const puedeEscribir = canWrite('OPERACIONES');
   const [datos, setDatos] = useState<PuestosDelDia | null>(null);
+  const [fecha, setFecha] = useState(() => hoyEcuador());
+  // Públicos, privados o todos. Se filtra aquí con lo que ya llegó: las cifras de arriba se recalculan con lo que se ve.
+  const [tipo, setTipo] = useState<'' | 'PUBLICA' | 'PRIVADA'>('');
+  const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
   const [subiendoPuesto, setSubiendoPuesto] = useState<number | null>(null);
   // «No llegó» (falta nueva) o «Quién cubre» (falta ya registrada, con su id).
   const [falta, setFalta] = useState<{ puesto: PuestoDelDia; guardia: GuardiaDelDia; cubrirId?: number } | null>(null);
   const [deshaciendo, setDeshaciendo] = useState<GuardiaDelDia | null>(null);
 
+  // Si se cambia de día mientras llega la respuesta anterior, esa respuesta se descarta.
+  const pedido = useRef(0);
   const cargar = () => {
-    getPuestosHoy()
-      .then((d) => { setDatos(d); setError(''); })
-      .catch((err) => setError(mensajeError(err, 'No se pudo cargar el estado de hoy.')));
+    const mio = ++pedido.current;
+    setCargando(true);
+    getPuestosHoy(fecha)
+      .then((d) => { if (mio === pedido.current) { setDatos(d); setError(''); } })
+      .catch((err) => { if (mio === pedido.current) setError(mensajeError(err, 'No se pudo cargar el estado de los puestos.')); })
+      .finally(() => { if (mio === pedido.current) setCargando(false); });
   };
-  useEffect(cargar, []);
+  useEffect(cargar, [fecha]);
 
   const confirmarDeshacer = async () => {
     const g = deshaciendo;
@@ -130,11 +145,39 @@ export default function PuestosHoy() {
   if (error) return <div className="form-error">{error}</div>;
   if (!datos) return <div className="loading-state">Cargando los puestos de hoy…</div>;
 
-  const r = datos.resumen;
+  const visibles = tipo ? datos.puestos.filter((p) => p.entidadTipo === tipo) : datos.puestos;
+  const r = tipo
+    ? {
+        ...datos.resumen,
+        puestos: visibles.length,
+        sinCubrir: visibles.filter((p) => p.cobertura === 'SIN_CUBRIR').length,
+        faltasSinCubrir: visibles.reduce((n, p) => n + p.ausentesSinCubrir, 0),
+        sinHorario: visibles.filter((p) => p.cobertura === 'SIN_HORARIO').length,
+        conBitacorasSinSubir: visibles.filter((p) => p.bitacorasSinSubir.length > 0).length,
+      }
+    : datos.resumen;
+  const hoy = hoyEcuador();
+  const esHoy = r.fecha === hoy;
+  // «No llegó» solo acepta hoy y hasta 7 días atrás (misma regla del servidor).
+  const puedeMarcarFalta = r.fecha <= hoy && r.fecha >= sumarDias(hoy, -7);
   return (
     <div className="admin-section" style={{ marginBottom: 20 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--azul-oscuro)' }}>Hoy en los puestos · {fechaConDia(r.fecha)}</h3>
+        <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--azul-oscuro)' }}>
+          {esHoy ? `Hoy en los puestos · ${fechaConDia(r.fecha)}` : `En los puestos · ${fechaConDia(r.fecha)}`}
+        </h3>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
+          <FilterField label="Tipo">
+            <select className="filter-select" value={tipo} onChange={(e) => setTipo(e.target.value as '' | 'PUBLICA' | 'PRIVADA')} aria-label="Tipo de cliente">
+              <option value="">Públicos y privados</option>
+              <option value="PUBLICA">Solo públicos</option>
+              <option value="PRIVADA">Solo privados</option>
+            </select>
+          </FilterField>
+          <SelectorDia fecha={fecha} onChange={setFecha} permitirFuturos />
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12, opacity: cargando ? 0.6 : 1 }}>
         {r.puestos > 0 && (
           <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
             <Cifra valor={r.puestos} etiqueta="puestos" />
@@ -146,23 +189,23 @@ export default function PuestosHoy() {
         )}
       </div>
 
-      {datos.puestos.length === 0 ? (
-        <div className="empty-state">No hay contratos activos con puestos hoy. Crea un contrato y sus puestos en Contratos.</div>
+      {visibles.length === 0 ? (
+        <div className="empty-state">{tipo && datos.puestos.length > 0 ? 'No hay puestos de ese tipo en esta fecha.' : <>{esHoy ? 'No hay contratos activos con puestos hoy.' : 'No hay contratos activos con puestos en esta fecha.'} Crea un contrato y sus puestos en Contratos.</>}</div>
       ) : (
         <div className="tasks-table-wrapper">
           <table className="tasks-table">
             <thead>
               <tr>
                 <th>Puesto</th>
-                <th>Debe estar hoy</th>
-                <th>Libres hoy</th>
+                <th>Debe estar {esHoy ? 'hoy' : 'ese día'}</th>
+                <th>Libres {esHoy ? 'hoy' : 'ese día'}</th>
                 <th>Cobertura</th>
                 <th>Bitácoras por subir (7 días)</th>
                 <th className="col-acciones col-acciones--ancha" title="Acciones"><span className="visually-hidden">Acciones</span></th>
               </tr>
             </thead>
             <tbody>
-              {datos.puestos.map((p) => {
+              {visibles.map((p) => {
                 const c = COBERTURA[p.cobertura];
                 return (
                   <tr key={p.puestoId}>
@@ -175,7 +218,8 @@ export default function PuestosHoy() {
                     <td>
                       <DebeEstar
                         p={p}
-                        puedeEscribir={puedeEscribir}
+                        esHoy={esHoy}
+                        puedeEscribir={puedeEscribir && puedeMarcarFalta}
                         onNoLlego={(g) => setFalta({ puesto: p, guardia: g })}
                         onCubrir={(g) => setFalta({ puesto: p, guardia: g, cubrirId: g.ausencia?.id })}
                         onDeshacer={setDeshaciendo}

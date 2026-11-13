@@ -242,6 +242,8 @@ export interface PuestoDelDia {
   contratoId: number;
   contratoNumero: string;
   entidadNombre: string;
+  /** PUBLICA o PRIVADA. */
+  entidadTipo: 'PUBLICA' | 'PRIVADA';
   horarioEstado: string | null;
   cobertura: EstadoCobertura;
   minimo: number;

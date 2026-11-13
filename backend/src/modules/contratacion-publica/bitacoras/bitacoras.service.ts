@@ -1032,7 +1032,7 @@ export class BitacorasService {
       select: {
         id: true,
         numero: true,
-        entidad: { select: { nombre: true } },
+        entidad: { select: { nombre: true, tipo: true } },
         puestos: {
           select: { id: true, nombre: true, guardiasSimultaneosRequeridos: true },
         },
@@ -1045,6 +1045,7 @@ export class BitacorasService {
         contratoId: c.id,
         contratoNumero: c.numero,
         entidadNombre: c.entidad.nombre,
+        entidadTipo: c.entidad.tipo,
         minimo: p.guardiasSimultaneosRequeridos,
       })),
     );

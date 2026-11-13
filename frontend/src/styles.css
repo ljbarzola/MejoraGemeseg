@@ -5789,3 +5789,15 @@ textarea.chat-input {
 .filter-field:has(.filtro-fecha-dia) {
   flex: 0 0 auto;
 }
+/* Fecha con calendario propio (DateInput) dentro de una barra de filtros: mismo alto y redondeo que los selects de al lado,
+   con espacio a la derecha para el icono del calendario. Solo aplica dentro de este envoltorio: los filtros de Ventas
+   (input nativo con la misma clase) no cambian. */
+.filtro-fecha-dateinput {
+  width: 150px;
+}
+.filtro-fecha-dateinput .filtro-fecha-dia {
+  height: 38px;
+  padding: 0 30px 0 10px;
+  font-size: 0.85rem;
+  width: 100%;
+}

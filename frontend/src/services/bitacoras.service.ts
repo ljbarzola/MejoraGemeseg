@@ -32,8 +32,8 @@ export const getResumenBitacoras = (filtros: FiltrosBitacoras): Promise<ResumenB
   api.get(`${BASE}/dashboard`, { params: limpiar(filtros) }).then((r) => r.data);
 
 /** Hoy en los puestos: quién debe estar, si la cobertura se cumple y qué bitácoras faltan por subir. */
-export const getPuestosHoy = (): Promise<PuestosDelDia> =>
-  api.get(`${BASE}/hoy`).then((r) => r.data);
+export const getPuestosHoy = (fecha?: string): Promise<PuestosDelDia> =>
+  api.get(`${BASE}/hoy`, { params: fecha ? { fecha } : undefined }).then((r) => r.data);
 
 export const getBitacora = (id: number): Promise<BitacoraDetalle> =>
   api.get(`${BASE}/${id}`).then((r) => r.data);

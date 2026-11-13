@@ -17,6 +17,8 @@ export interface PuestoBase {
   contratoId: number;
   contratoNumero: string;
   entidadNombre: string;
+  /** PUBLICA o PRIVADA (sin dato = pública). */
+  entidadTipo?: string;
   /** Cuántos guardias deben estar trabajando a la vez cada día. */
   minimo: number;
 }
@@ -81,6 +83,7 @@ export interface PuestoDelDia {
   contratoId: number;
   contratoNumero: string;
   entidadNombre: string;
+  entidadTipo: string;
   /** Estado del horario que cubre hoy, o null si no hay ninguno. */
   horarioEstado: string | null;
   cobertura: EstadoCobertura;
@@ -193,6 +196,7 @@ export function armarPuestosDelDia(entrada: EntradaPuestosDelDia): {
       contratoId: p.contratoId,
       contratoNumero: p.contratoNumero,
       entidadNombre: p.entidadNombre,
+      entidadTipo: p.entidadTipo ?? 'PUBLICA',
       horarioEstado,
       cobertura,
       minimo: p.minimo,

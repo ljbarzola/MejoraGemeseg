@@ -3,9 +3,15 @@
 // modelos `CP*`). No inventar campos — cualquier cambio debe empezar
 // leyendo el DTO/servicio real del backend.
 
+/** Pública (entidad del Estado) o privada (cliente privado): Operaciones y Contratación Pública los distinguen y filtran. */
+export type TipoEntidad = 'PUBLICA' | 'PRIVADA';
+export const TIPO_ENTIDAD_LABEL: Record<TipoEntidad, string> = { PUBLICA: 'Pública', PRIVADA: 'Privada' };
+
 export interface CPEntidadPublica {
   id: number;
   nombre: string;
+  /** Sin dato = pública. */
+  tipo?: TipoEntidad;
   ruc: string | null;
   direccion: string | null;
   /** Subcarpeta de la entidad en la carpeta raíz de Drive de Contratación Pública. */

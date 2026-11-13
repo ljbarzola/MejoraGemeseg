@@ -107,6 +107,7 @@ export default function EntidadesPublicasList() {
   const [editing, setEditing] = useState<CPEntidadPublica | null>(null);
   const [formNombre, setFormNombre] = useState('');
   const [formRuc, setFormRuc] = useState('');
+  const [formTipo, setFormTipo] = useState<'PUBLICA' | 'PRIVADA'>('PUBLICA');
   const [formDireccion, setFormDireccion] = useState('');
   const [formExtra, setFormExtra] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -215,6 +216,7 @@ export default function EntidadesPublicasList() {
       key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['ACTIVA', 'ARCHIVADA'],
       getValues: (e) => ({ valor: e.archivada ? 'ARCHIVADA' : 'ACTIVA', etiqueta: e.archivada ? 'Archivada' : 'Activa' }),
     },
+    { key: 'tipo', etiqueta: 'Tipo', tipo: 'valores', orden: ['PUBLICA', 'PRIVADA'], getValues: (e) => ({ valor: e.tipo ?? 'PUBLICA', etiqueta: (e.tipo ?? 'PUBLICA') === 'PRIVADA' ? 'Privada' : 'Pública' }) },
     { key: COL_RUC, etiqueta: 'RUC', tipo: 'texto', getValue: (e) => e.ruc },
     { key: COL_DIRECCION, etiqueta: 'Dirección', tipo: 'texto', getValue: (e) => e.direccion },
     ...camposActivos.map((c): ColumnaFiltro<CPEntidadPublica> => {
@@ -264,6 +266,7 @@ export default function EntidadesPublicasList() {
   const resetForm = () => {
     setFormNombre('');
     setFormRuc('');
+    setFormTipo('PUBLICA');
     setFormDireccion('');
     setFormExtra({});
     setFormError('');
@@ -280,6 +283,7 @@ export default function EntidadesPublicasList() {
     setEditing(e);
     setFormNombre(e.nombre);
     setFormRuc(e.ruc || '');
+    setFormTipo(e.tipo ?? 'PUBLICA');
     setFormDireccion(e.direccion || '');
     setFormExtra(
       Object.fromEntries(Object.entries(e.camposExtra || {}).map(([k, v]) => [k, String(v)])),
@@ -322,6 +326,7 @@ export default function EntidadesPublicasList() {
       const payload = {
         nombre: formNombre.trim(),
         ruc: formRuc.trim() || undefined,
+        tipo: formTipo,
         direccion: formDireccion.trim() || undefined,
         // Un campo vacío viaja como null para que el servidor lo borre.
         camposExtra: Object.fromEntries(
@@ -552,7 +557,7 @@ export default function EntidadesPublicasList() {
             <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
-                  <th {...thProps('nombre')}>Nombre <ColumnFilter cf={cf} col="nombre" orden={ordenDe('nombre')} /><ColumnFilter cf={cf} col="estado" segundo /></th>
+                  <th {...thProps('nombre')}>Nombre <ColumnFilter cf={cf} col="nombre" orden={ordenDe('nombre')} /><ColumnFilter cf={cf} col="estado" segundo /><ColumnFilter cf={cf} col="tipo" segundo /></th>
                   {columnasVisibles.map((c) => (
                     <th key={c.key} {...thProps(c.key)}>{c.label} <ColumnFilter cf={cf} col={c.key} orden={ordenDe(c.key)} /></th>
                   ))}
@@ -651,6 +656,13 @@ export default function EntidadesPublicasList() {
                     placeholder="Ej: Municipio de Guayaquil"
                   />
                   {fieldErrors.nombre && <span className="field-error">{fieldErrors.nombre}</span>}
+                </div>
+                <div className="form-group">
+                  <label>Tipo</label>
+                  <select value={formTipo} onChange={(e) => setFormTipo(e.target.value as 'PUBLICA' | 'PRIVADA')}>
+                    <option value="PUBLICA">Pública (entidad del Estado)</option>
+                    <option value="PRIVADA">Privada (cliente privado)</option>
+                  </select>
                 </div>
                 <div className="form-group">
                   <label>RUC</label>
