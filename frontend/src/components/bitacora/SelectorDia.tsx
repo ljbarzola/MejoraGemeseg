@@ -4,13 +4,18 @@ import FilterField from '../common/FilterField';
 import { hoyEcuador, sumarDias } from '../../utils/bitacoraFechas';
 import '../../styles/bitacora.css';
 
-/** Día a consultar: flechas para ir al anterior o siguiente, calendario y «Hoy». No permite días futuros. */
+/**
+ * Día a consultar: flechas para ir al anterior o siguiente, calendario y «Hoy». Por defecto no permite días
+ * futuros (la Bitácora solo mira lo ya pasado); con `permitirFuturos` sí (Operaciones mira también horarios por venir).
+ */
 export default function SelectorDia({
   fecha,
   onChange,
+  permitirFuturos = false,
 }: {
   fecha: string;
   onChange: (fecha: string) => void;
+  permitirFuturos?: boolean;
 }) {
   const hoy = hoyEcuador();
   return (
@@ -28,7 +33,7 @@ export default function SelectorDia({
         {/* Misma clase que los demás filtros de fecha de la app (`filtro-fecha-dia`): sin ella el campo salía
             como un input pelado, sin bordes redondeados ni la altura de los botones de al lado. */}
         <div className="bit-fecha-dia">
-          <DateInput className="filtro-fecha-dia" value={fecha} max={hoy} onChange={(v) => v && onChange(v)} />
+          <DateInput className="filtro-fecha-dia" value={fecha} max={permitirFuturos ? undefined : hoy} onChange={(v) => v && onChange(v)} />
         </div>
       </FilterField>
       <button
@@ -36,7 +41,7 @@ export default function SelectorDia({
         className="btn-secondary icon-btn"
         title="Día siguiente"
         aria-label="Día siguiente"
-        disabled={fecha >= hoy}
+        disabled={!permitirFuturos && fecha >= hoy}
         onClick={() => onChange(sumarDias(fecha, 1))}
       >
         <ChevronRight size={16} />

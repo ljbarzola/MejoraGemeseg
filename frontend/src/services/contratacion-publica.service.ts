@@ -46,6 +46,7 @@ export const getEntidadPublica = (id: number): Promise<CPEntidadPublica> =>
 
 export interface CPEntidadPayload {
   nombre: string;
+  tipo?: 'PUBLICA' | 'PRIVADA';
   ruc?: string;
   direccion?: string;
   camposExtra?: Record<string, string | number | null>;

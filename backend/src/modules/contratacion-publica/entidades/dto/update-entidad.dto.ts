@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsObject } from 'class-validator';
+import { IsString, IsOptional, IsObject, IsIn } from 'class-validator';
 
 export class UpdateEntidadDto {
   @IsString()
@@ -12,6 +12,10 @@ export class UpdateEntidadDto {
   @IsString()
   @IsOptional()
   direccion?: string;
+
+  @IsIn(['PUBLICA', 'PRIVADA'], { message: 'El tipo de entidad no es válido' })
+  @IsOptional()
+  tipo?: 'PUBLICA' | 'PRIVADA';
 
   /** Valores de los campos configurables: { "<idCampo>": valor }. Reemplaza los de los campos activos. */
   @IsObject()

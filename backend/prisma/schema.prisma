@@ -2658,6 +2658,8 @@ model CPEntidadPublica {
   // Archivada = oculta de la lista (con "Mostrar archivadas" se ve), sin borrar
   // nada: conserva sus solicitudes, su carpeta de Drive y sus datos.
   archivada     Boolean  @default(false)
+  // PUBLICA (entidad del Estado) o PRIVADA (cliente privado): Operaciones los filtra aparte. Columna creada al arrancar (cp-informe-datos.schema.ts).
+  tipo          String   @default("PUBLICA")
   // Valores de los campos configurables (CPEntidadCampo): { "<idCampo>": valor }.
   camposExtra   Json?
   companyId     Int

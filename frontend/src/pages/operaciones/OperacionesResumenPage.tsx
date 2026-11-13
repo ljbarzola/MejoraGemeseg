@@ -4,6 +4,7 @@ import type { FiltrosBitacoras, OpcionPuestoBitacora } from '../../types/bitacor
 import OperacionesPageHeader from '../../components/operaciones/OperacionesPageHeader';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import DateInput from '../../components/common/DateInput';
+import FilterField from '../../components/common/FilterField';
 import BitacorasResumen from './bitacoras/BitacorasResumen';
 import PuestosHoy from './PuestosHoy';
 
@@ -50,12 +51,16 @@ export default function OperacionesResumenPage() {
             <option value="">Todos los puestos</option>
             {puestosFiltro.map((p) => <option key={p.id} value={p.id}>{p.texto}</option>)}
           </select>
-          <div style={{ minWidth: 150 }}>
-            <DateInput value={filtros.desde ?? ''} onChange={(v) => setFiltros((f) => ({ ...f, desde: v }))} placeholder="Desde" max={filtros.hasta || undefined} />
-          </div>
-          <div style={{ minWidth: 150 }}>
-            <DateInput value={filtros.hasta ?? ''} onChange={(v) => setFiltros((f) => ({ ...f, hasta: v }))} placeholder="Hasta" min={filtros.desde || undefined} />
-          </div>
+          <FilterField label="Desde">
+            <div className="filtro-fecha-dateinput">
+              <DateInput className="filtro-fecha-dia" value={filtros.desde ?? ''} onChange={(v) => setFiltros((f) => ({ ...f, desde: v }))} max={filtros.hasta || undefined} />
+            </div>
+          </FilterField>
+          <FilterField label="Hasta">
+            <div className="filtro-fecha-dateinput">
+              <DateInput className="filtro-fecha-dia" value={filtros.hasta ?? ''} onChange={(v) => setFiltros((f) => ({ ...f, hasta: v }))} min={filtros.desde || undefined} />
+            </div>
+          </FilterField>
         </div>
         <div className="filter-bar-actions">
           <ClearFiltersButton onClear={() => setFiltros({})} disabled={!hayFiltros} />

@@ -79,6 +79,7 @@ export default function ImportarContratoModal({
   const [periodoLeido, setPeriodoLeido] = useState('');
   const [creandoEntidad, setCreandoEntidad] = useState(false);
   const [nuevaEntidad, setNuevaEntidad] = useState('');
+  const [nuevaTipo, setNuevaTipo] = useState<'PUBLICA' | 'PRIVADA'>('PUBLICA');
   const [guardandoEntidad, setGuardandoEntidad] = useState(false);
 
   useEffect(() => {
@@ -136,7 +137,7 @@ export default function ImportarContratoModal({
     setGuardandoEntidad(true);
     setError('');
     try {
-      const e = await createEntidadPublica({ nombre });
+      const e = await createEntidadPublica({ nombre, tipo: nuevaTipo });
       setEntidades((lista) => [...lista, e as unknown as CPEntidadPublica].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')));
       setEntidadId(String(e.id));
       setNuevaEntidad('');
@@ -318,6 +319,10 @@ export default function ImportarContratoModal({
                       </button>
                     ) : (
                       <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                        <select value={nuevaTipo} onChange={(e) => setNuevaTipo(e.target.value as 'PUBLICA' | 'PRIVADA')} aria-label="Tipo de entidad">
+                          <option value="PUBLICA">Pública</option>
+                          <option value="PRIVADA">Privada</option>
+                        </select>
                         <input type="text" placeholder="Nombre de la nueva entidad" value={nuevaEntidad} onChange={(e) => setNuevaEntidad(e.target.value)} style={{ flex: '1 1 240px' }} autoFocus />
                         <button type="button" className="auth-btn" disabled={guardandoEntidad || !nuevaEntidad.trim()} onClick={crearEntidad}>{guardandoEntidad ? 'Creando...' : 'Crear entidad'}</button>
                         <button type="button" className="btn-secondary" disabled={guardandoEntidad} onClick={() => { setCreandoEntidad(false); setNuevaEntidad(''); }}>Cancelar</button>

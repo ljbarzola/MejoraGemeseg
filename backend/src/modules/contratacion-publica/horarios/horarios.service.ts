@@ -45,7 +45,7 @@ export class CPHorariosService {
       orderBy: [{ fechaInicio: 'desc' }],
       include: {
         contrato: {
-          select: { id: true, numero: true, entidad: { select: { id: true, nombre: true } } },
+          select: { id: true, numero: true, entidad: { select: { id: true, nombre: true, tipo: true } } },
         },
       },
     });

@@ -9,7 +9,7 @@ import {
   getContrato,
   getContratos,
 } from '../../../services/contratacion-publica.service';
-import type { CPHorarioMensual, CPContrato } from '../../../types/contratacion-publica';
+import { TIPO_ENTIDAD_LABEL, type CPHorarioMensual, type CPContrato } from '../../../types/contratacion-publica';
 import { fechaCorta } from '../../../utils/bitacoras';
 import { usePerm } from '../../../contexts/PermissionsContext';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
@@ -80,6 +80,7 @@ export default function HorarioMensualList() {
   const cf = useColumnFilters<CPHorarioMensual>(horarios, [
     { key: 'contrato', etiqueta: 'Contrato', tipo: 'valores', getValues: (h) => ({ valor: String(h.contratoId), etiqueta: h.contrato?.numero ?? `#${h.contratoId}` }) },
     { key: 'entidad', etiqueta: 'Entidad', tipo: 'valores', getValues: (h) => ({ valor: String(h.contrato?.entidad?.id ?? 0), etiqueta: h.contrato?.entidad?.nombre ?? '—' }) },
+    { key: 'tipo', etiqueta: 'Tipo', tipo: 'valores', orden: ['PUBLICA', 'PRIVADA'], getValues: (h) => { const t = h.contrato?.entidad?.tipo ?? 'PUBLICA'; return { valor: t, etiqueta: TIPO_ENTIDAD_LABEL[t] }; } },
     { key: 'periodo', etiqueta: 'Periodo', tipo: 'fecha', getValue: (h) => h.fechaInicio, getFin: (h) => h.fechaFin },
     { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['BORRADOR', 'ENVIADO', 'APROBADO', 'RECHAZADO'], getValues: (h) => ({ valor: h.estado, etiqueta: h.estado }) },
   ]);
@@ -132,7 +133,7 @@ export default function HorarioMensualList() {
     }
   };
 
-  const columnas = contratoId ? 3 : 5;
+  const columnas = contratoId ? 3 : 6;
 
   return (
     <div className="page-container">
@@ -211,6 +212,7 @@ export default function HorarioMensualList() {
                 <tr>
                   {!contratoId && <th>Contrato<ColumnFilter cf={cf} col="contrato" orden={cf.ordenDe('contrato')} /></th>}
                   {!contratoId && <th>Entidad<ColumnFilter cf={cf} col="entidad" orden={cf.ordenDe('entidad')} /></th>}
+                  {!contratoId && <th>Tipo<ColumnFilter cf={cf} col="tipo" orden={cf.ordenDe('tipo')} /></th>}
                   <th>Periodo<ColumnFilter cf={cf} col="periodo" orden={cf.ordenDe('periodo')} /></th>
                   <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
                   <th className="col-acciones col-acciones--ancha" title="Acciones"><span className="visually-hidden">Acciones</span></th>
@@ -224,6 +226,7 @@ export default function HorarioMensualList() {
                   <tr key={h.id}>
                     {!contratoId && <td style={{ fontWeight: 600 }}>{h.contrato?.numero ?? `#${h.contratoId}`}</td>}
                     {!contratoId && <td>{h.contrato?.entidad?.nombre ?? '—'}</td>}
+                    {!contratoId && <td>{TIPO_ENTIDAD_LABEL[h.contrato?.entidad?.tipo ?? 'PUBLICA']}</td>}
                     <td style={{ fontWeight: 600 }}>{formatFechaCorta(h.fechaInicio)} – {formatFechaCorta(h.fechaFin)}</td>
                     <td>
                       <span className="status-badge" style={{ background: ESTADO_COLOR[h.estado]?.bg, color: ESTADO_COLOR[h.estado]?.fg }}>
