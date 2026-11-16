@@ -1374,6 +1374,87 @@ export const getAnaliticaMotivos = (p?: RangoParams): Promise<AnaliticaMotivos> 
 export const getAnaliticaActividad = (p?: RangoParams): Promise<AnaliticaActividad> =>
   api.get('/ventas/analitica/actividad', { params: p }).then(r => r.data);
 
+// Metas comerciales (2026-11-13): se fijan en Configuración → Metas (solo ADMIN y MANAGER) y el Dashboard
+// → Metas muestra el avance contra ellas.
+export type TipoMeta = 'MONTO' | 'CLIENTES_NUEVOS' | 'IMPACTOS';
+export type EstadoMeta = 'SIN_META' | 'VERDE' | 'AMARILLO' | 'ROJO';
+export interface CumplimientoMeta {
+  meta: number | null;
+  avance: number;
+  pct: number | null;
+  brecha: number | null;
+  estado: EstadoMeta;
+}
+export type TarjetasMeta = Record<TipoMeta, CumplimientoMeta>;
+export interface MetasCumplimiento {
+  desde: string;
+  hasta: string;
+  periodo: 'SEMANA' | 'MES' | 'ANIO' | null;
+  etiquetaPeriodo: string | null;
+  ritmo: number | null;
+  hayMetas: boolean;
+  alcance: { vendedorId: number | null; esGerencia: boolean };
+  tarjetas: TarjetasMeta;
+  global: TarjetasMeta | null;
+  vendedores: { id: number; nombre: string; tarjetas: TarjetasMeta }[] | null;
+  total: TarjetasMeta | null;
+  sinMonto: number;
+}
+export const getMetasCumplimiento = (p: RangoParams & { periodo?: string }): Promise<MetasCumplimiento> =>
+  api.get('/ventas/metas/cumplimiento', { params: p }).then(r => r.data);
+
+export interface MetasListado {
+  periodKind: 'MES' | 'ANIO';
+  year: number;
+  month: number;
+  editable: boolean;
+  vendedores: { id: number; nombre: string }[];
+  metas: { userId: number | null; kind: TipoMeta; target: number }[];
+}
+export const getMetas = (p: { periodKind: 'MES' | 'ANIO'; year: number; month?: number }): Promise<MetasListado> =>
+  api.get('/ventas/metas', { params: p }).then(r => r.data);
+export const guardarMetas = (dto: {
+  periodKind: 'MES' | 'ANIO';
+  year: number;
+  month?: number;
+  metas: { userId: number | null; kind: TipoMeta; target: number | null }[];
+}): Promise<MetasListado> => api.put('/ventas/metas', dto).then(r => r.data);
+
+// Tabla dinámica del Dashboard (2026-11-16): lo vendido en el periodo ordenado en filas, columnas y filtros.
+export type DimensionPivot = 'vendedor' | 'cliente' | 'servicio' | 'provincia' | 'ciudad' | 'mes' | 'tipo' | 'rango';
+export type MedidaPivot = 'monto' | 'ventas' | 'clientes' | 'ticket';
+export interface MedidasPivot { monto: number; ventas: number; clientes: number; ticket: number | null }
+export interface FilaPivot {
+  clave: string;
+  etiqueta: string;
+  celdas: MedidasPivot[];
+  total: MedidasPivot;
+  hijos?: FilaPivot[];
+  esOtros?: boolean;
+}
+export interface TablaDinamica {
+  desde: string;
+  hasta: string;
+  alcance: { vendedorId: number | null; esGerencia: boolean };
+  dimensiones: { clave: DimensionPivot; etiqueta: string }[];
+  opciones: Record<DimensionPivot, { valor: string; etiqueta: string }[]>;
+  filas: DimensionPivot[];
+  columna: DimensionPivot | null;
+  medidas: MedidaPivot[];
+  columnas: { clave: string; etiqueta: string; esOtros?: boolean }[];
+  datos: FilaPivot[];
+  total: { celdas: MedidasPivot[]; total: MedidasPivot };
+  ventas: number;
+  sinMonto: number;
+  plegado: { filas: number; columnas: number };
+}
+export const getTablaDinamica = (p: RangoParams & {
+  filas: string;
+  columna: string;
+  medidas: string;
+  filtros: string;
+}): Promise<TablaDinamica> => api.get('/ventas/tabla-dinamica', { params: p }).then(r => r.data);
+
 // Mapa de Ecuador del Dashboard: dónde están las oportunidades que tienen Ubicación.
 export type VistaMapa = 'todas' | 'abiertas' | 'cotizadas' | 'aceptadas' | 'perdidas';
 export interface PuntoMapa {
