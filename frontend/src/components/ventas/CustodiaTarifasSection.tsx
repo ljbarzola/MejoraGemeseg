@@ -149,11 +149,9 @@ export default function CustodiaTarifasSection({ puedeEditar }: { puedeEditar: b
         {num('equipos', 'Equipos y comunicaciones ($)', 'Radio, GPS, monitoreo.')}
       </div>
 
-      <h4>Política comercial</h4>
+      <h4>Imprevistos</h4>
       <div className="cus-fila">
         {num('imprevistosPct', 'Imprevistos (%)', 'Reserva sobre el costo directo.', 100)}
-        {num('margenPct', 'Margen sobre el precio (%)', 'Precio = costo ÷ (1 − margen). 30 % = de cada $100, $30 son utilidad. No es un recargo sobre el costo.', 95)}
-        {num('ivaPct', 'IVA (%)', 'Confirma con contabilidad si la custodia lleva IVA y a qué tasa.', 100)}
       </div>
 
       <h4>Extras opcionales</h4>

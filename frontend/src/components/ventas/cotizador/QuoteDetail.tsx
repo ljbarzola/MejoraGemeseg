@@ -259,7 +259,7 @@ export default function QuoteDetail({ items, comp, readOnly, onItems, onOpenProd
                 <td>
                   <strong style={{ fontWeight: 600 }}>{l.line.description}</strong>
                   <span className="cus-row-detalle">
-                    {l.line.entrada.region} · {l.line.entrada.agentes} custodio(s), {l.line.entrada.choferes} chofer(es) · IVA {l.ivaPct}%
+                    {l.line.entrada.region} · {l.line.entrada.agentes} custodio(s), {l.line.entrada.choferes} chofer(es) · Margen {l.line.resultado.margenPct}%
                   </span>
                   {!readOnly && onEditCustodia && (
                     <span className="cus-row-botones">

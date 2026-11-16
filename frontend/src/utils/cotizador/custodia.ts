@@ -32,8 +32,6 @@ export interface TarifasCustodia {
   equipos: number;
   esperaVehiculoHora: number;
   imprevistosPct: number;
-  margenPct: number;
-  ivaPct: number;
   minAgentes: number;
   extras: ExtraCustodia[];
 }
@@ -69,8 +67,8 @@ export interface EntradaCustodia {
   otrosGastos: number;
   extras: ExtraElegido[];
   imprevistosPct: number | null;
-  margenPct: number | null;
-  ivaPct: number | null;
+  /** Margen de ganancia sobre el precio de venta, en %. Se define en la calculadora. */
+  margenPct: number;
 }
 
 export interface ConceptoCustodia {
@@ -95,9 +93,6 @@ export interface ResultadoCustodia {
   costoTotal: number;
   margenPct: number;
   precioSinIva: number;
-  ivaPct: number;
-  iva: number;
-  totalConIva: number;
   utilidad: number;
   margenEfectivoPct: number;
   costoPorKm: number;
@@ -107,7 +102,6 @@ export interface ResultadoCustodia {
 /** Lo que se guarda en la cotización: el precio de ese momento (las tarifas pueden cambiar después). */
 export interface ResumenCustodiaGuardado {
   precioSinIva: number;
-  ivaPct: number;
   costoDirecto: number;
   imprevistos: number;
   costoTotal: number;
@@ -137,6 +131,9 @@ export interface RutaCalculada {
 }
 
 /** Valores con los que arranca la calculadora: la región más usada y el mínimo de custodios de las tarifas. */
+/** Margen con el que arranca cada custodia (se cambia en la misma calculadora). */
+export const MARGEN_CUSTODIA_POR_DEFECTO = 30;
+
 export function entradaInicial(t: TarifasCustodia): EntradaCustodia {
   const region = t.regiones.find((r) => r.nombre.toLowerCase() === 'sierra') ?? t.regiones[0];
   return {
@@ -165,8 +162,7 @@ export function entradaInicial(t: TarifasCustodia): EntradaCustodia {
     otrosGastos: 0,
     extras: [],
     imprevistosPct: null,
-    margenPct: null,
-    ivaPct: null,
+    margenPct: MARGEN_CUSTODIA_POR_DEFECTO,
   };
 }
 
@@ -191,7 +187,6 @@ export function lineaDesdeResultado(
     entrada,
     resultado: {
       precioSinIva: r.precioSinIva,
-      ivaPct: r.ivaPct,
       costoDirecto: r.costoDirecto,
       imprevistos: r.imprevistos,
       costoTotal: r.costoTotal,

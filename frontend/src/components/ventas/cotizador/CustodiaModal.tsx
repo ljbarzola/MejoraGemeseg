@@ -5,6 +5,7 @@ import { calcularCustodia, getTarifasCustodia } from '../../../services/cotizado
 import {
   entradaInicial,
   lineaDesdeResultado,
+  MARGEN_CUSTODIA_POR_DEFECTO,
   type CotCustodiaLine,
   type EntradaCustodia,
   type ResultadoCustodia,
@@ -276,16 +277,13 @@ export default function CustodiaModal({ inicial, onClose, onConfirm }: Props) {
               )}
 
               <section>
-                <h4>{hayExtras ? '7' : '6'}. Política comercial <small>(vacío = el de las tarifas)</small></h4>
+                <h4>{hayExtras ? '7' : '6'}. Margen e imprevistos</h4>
                 <div className="cus-fila">
-                  <Campo etiqueta="Imprevistos (%)" ayuda={`Tarifas: ${pct(tarifas.imprevistosPct)}`}>
+                  <Campo etiqueta="Imprevistos (%)" ayuda={`Vacío = el de las tarifas (${pct(tarifas.imprevistosPct)})`}>
                     <NumInput value={entrada.imprevistosPct} min={0} max={100} ariaLabel="Imprevistos" placeholder={String(tarifas.imprevistosPct)} onCommit={(n) => set({ imprevistosPct: n })} />
                   </Campo>
-                  <Campo etiqueta="Margen sobre el precio (%)" ayuda={`Tarifas: ${pct(tarifas.margenPct)}. 30 % = de cada $100 vendidos, $30 son utilidad.`}>
-                    <NumInput value={entrada.margenPct} min={0} max={95} ariaLabel="Margen" placeholder={String(tarifas.margenPct)} onCommit={(n) => set({ margenPct: n })} />
-                  </Campo>
-                  <Campo etiqueta="IVA (%)" ayuda={`Tarifas: ${pct(tarifas.ivaPct)}`}>
-                    <NumInput value={entrada.ivaPct} min={0} max={100} ariaLabel="IVA" placeholder={String(tarifas.ivaPct)} onCommit={(n) => set({ ivaPct: n })} />
+                  <Campo etiqueta="Margen de ganancia (%)" ayuda="Sobre el precio de venta: 30 % = de cada $100 vendidos, $30 son utilidad.">
+                    <NumInput value={entrada.margenPct} min={0} max={95} ariaLabel="Margen" placeholder={String(MARGEN_CUSTODIA_POR_DEFECTO)} onCommit={(n) => set({ margenPct: n ?? MARGEN_CUSTODIA_POR_DEFECTO })} />
                   </Campo>
                 </div>
                 <small className="cus-nota">El descuento comercial se aplica en la cotización completa, antes del IVA.</small>
@@ -303,9 +301,7 @@ export default function CustodiaModal({ inicial, onClose, onConfirm }: Props) {
                   <div className="cus-precio">
                     <span>Precio sin IVA</span>
                     <strong>{money(resultado.precioSinIva)}</strong>
-                    <small>
-                      IVA {pct(resultado.ivaPct)}: {money(resultado.iva)} · Total {money(resultado.totalConIva)}
-                    </small>
+                    <small>El IVA se suma al final, en el total de la cotización.</small>
                   </div>
                   <dl className="cus-interno">
                     <dt className="cus-tag-interno">Interno · no se imprime</dt>

@@ -35,8 +35,7 @@ const hoja = {
   otrosGastos: 0,
   extras: [],
   imprevistosPct: null,
-  margenPct: null,
-  ivaPct: null,
+  margenPct: 30,
 };
 
 const entrada = (p: Partial<Record<keyof EntradaCustodia, unknown>> = {}) => limpiarEntrada({ ...hoja, ...p });
@@ -63,13 +62,19 @@ describe('cotizador-custodia.util', () => {
       expect(r.precioSinIva).toBe(0);
     });
 
-    it('calcula el IVA (la hoja nunca lo calculaba) y respeta el IVA elegido en la cotización', () => {
-      const con15 = calcularCustodia(entrada({ agentes: 1 }), T);
-      expect(con15.ivaPct).toBe(15);
-      expect(con15.iva).toBe(Math.round(con15.precioSinIva * 15) / 100);
-      const con0 = calcularCustodia(entrada({ agentes: 1, ivaPct: 0 }), T);
-      expect(con0.iva).toBe(0);
-      expect(con0.totalConIva).toBe(con0.precioSinIva);
+    it('no calcula IVA: el precio sale sin IVA y la cotización lo suma al final, como con los productos', () => {
+      const r = calcularCustodia(entrada({ agentes: 1 }), T);
+      expect(r).not.toHaveProperty('iva');
+      expect(r).not.toHaveProperty('ivaPct');
+      expect(r.precioSinIva).toBeGreaterThan(0);
+    });
+
+    it('el margen sale de la propia custodia: 30 % si no se envía otro', () => {
+      expect(limpiarEntrada({ ...hoja, margenPct: undefined }).margenPct).toBe(30);
+      expect(limpiarEntrada({ ...hoja, margenPct: null }).margenPct).toBe(30);
+      const con40 = calcularCustodia(entrada({ agentes: 1, margenPct: 40 }), T);
+      expect(con40.margenPct).toBe(40);
+      expect(con40.margenEfectivoPct).toBe(40);
     });
 
     it('el margen es sobre el precio: precio = costo / (1 - margen)', () => {
@@ -93,10 +98,10 @@ describe('cotizador-custodia.util', () => {
       expect(claves).not.toContain('alquiler');
     });
 
-    it('rechaza una región que no está en las tarifas y un margen de 100 % o más', () => {
+    it('rechaza una región que no está en las tarifas y un margen de 95 % o más', () => {
       expect(calcularCustodia(entrada({ agentes: 1, region: 'Oriente' }), T).errores).toContain('Elige la región del servicio.');
-      const t = { ...T, margenPct: 95 };
-      expect(calcularCustodia(entrada({ agentes: 1 }), t).ok).toBe(true);
+      expect(calcularCustodia(entrada({ agentes: 1, margenPct: 95 }), T).ok).toBe(true);
+      expect(() => limpiarEntrada({ ...hoja, margenPct: 99 })).toThrow(/margen/i);
     });
 
     it('suma los extras: fijo × cantidad y porcentaje sobre el costo normal', () => {
@@ -143,15 +148,15 @@ describe('cotizador-custodia.util', () => {
     });
 
     it('lo que no se envía se conserva de la base', () => {
-      const t = limpiarTarifas({ ivaPct: 0 }, T);
-      expect(t.ivaPct).toBe(0);
-      expect(t.margenPct).toBe(T.margenPct);
+      const t = limpiarTarifas({ imprevistosPct: 0 }, T);
+      expect(t.imprevistosPct).toBe(0);
+      expect(t.comida).toBe(T.comida);
       expect(t.regiones).toEqual(T.regiones);
     });
 
-    it('rechaza regiones repetidas, margen fuera de rango y rendimiento 0', () => {
+    it('rechaza regiones repetidas, imprevistos fuera de rango y rendimiento 0', () => {
       expect(() => limpiarTarifas({ regiones: [{ nombre: 'Costa', agente: 1 }, { nombre: 'costa', agente: 2 }] }, T)).toThrow(/repetida/);
-      expect(() => limpiarTarifas({ margenPct: 120 }, T)).toThrow();
+      expect(() => limpiarTarifas({ imprevistosPct: 120 }, T)).toThrow();
       expect(() => limpiarTarifas({ rendimientoKmGalon: 0 }, T)).toThrow(/rendimiento/i);
     });
   });
