@@ -183,7 +183,7 @@ export default function ReportarProblemaButton() {
             <div className="modal-body">
               {enviado ? (
                 <p style={{ fontSize: '0.88rem', color: '#276749' }}>
-                  Reporte enviado. Sistemas lo revisará pronto. Te avisaremos en la campana de notificaciones cuando esté en revisión y cuando quede resuelto.
+                  Reporte enviado. Sistemas lo revisará pronto. Te avisaremos con una notificación en la app cuando esté en revisión y cuando quede resuelto.
                 </p>
               ) : (
                 <form onSubmit={handleSubmit} onPaste={handlePaste}>

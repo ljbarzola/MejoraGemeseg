@@ -2874,6 +2874,8 @@ model CPPuestoServicio {
   tipoTurno                     String // 8H, 12H, 24H
   cantidadGuardias              Int      @default(1)
   guardiasSimultaneosRequeridos Int      @default(1) // mínimo de guardias "trabajando" (no descanso) que debe haber cada día
+  // Turnos del puesto (2026-11-16): [{ nombre, horaInicio, horaFin, guardias }]. Con turnos, el mínimo diario es la suma de sus guardias.
+  turnos                        Json?
   // Dónde queda el puesto (tabla «Lugar del servicio» del informe mensual). Nuevas, opcionales.
   canton                        String?
   edificio                      String?

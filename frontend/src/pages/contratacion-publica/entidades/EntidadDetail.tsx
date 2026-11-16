@@ -45,6 +45,7 @@ import { useColumnFilters } from '../../../hooks/useColumnFilters';
 import { useColumnPreferences } from '../../../hooks/useColumnPreferences';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
 import { useSortableTable } from '../../../hooks/useSortableTable';
+import DateInput from '../../../components/common/DateInput';
 
 // Columnas de la tabla de documentos que cada persona puede mostrar u ocultar.
 // "Documento" y "Acciones" son fijas. Área arranca oculta: casi nunca se llena
@@ -850,7 +851,7 @@ function DocumentoModal({
               </div>
               <div className="form-group" style={{ flex: '1 1 200px' }}>
                 <label>Fecha límite *</label>
-                <input type="date" value={fechaLimite} onChange={(e) => setFechaLimite(e.target.value)} required />
+                <DateInput value={fechaLimite} onChange={setFechaLimite} required />
               </div>
             </div>
             <div className="form-group">

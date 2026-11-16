@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, FileSpreadsheet, Send, CheckCircle2, XCircle, RotateCcw, Repeat, Wand2, Upload, ClipboardCheck, Trash2 } from 'lucide-react';
+import { ArrowLeft, Download, Send, CheckCircle2, XCircle, RotateCcw, Repeat, Wand2, Upload, ClipboardCheck, Trash2 } from 'lucide-react';
 import {
   getHorario,
   getPuestosByContrato,
@@ -18,10 +18,12 @@ import type {
   CPPuestoServicio,
   CPCodigoTurno,
 } from '../../../types/contratacion-publica';
+import { ESTADO_HORARIO_LABEL } from '../../../types/contratacion-publica';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import OperacionesPageHeader from '../../../components/operaciones/OperacionesPageHeader';
 import GeneradorPatronModal from './GeneradorPatronModal';
 import ImportarExcelModal from './ImportarExcelModal';
+import ExportarHorarioModal from './ExportarHorarioModal';
 import { mensajeEliminarHorario } from '../../../utils/horarioEliminar';
 import EjecutadoModal from './EjecutadoModal';
 
@@ -74,6 +76,9 @@ interface FilaGuardia {
   nombreGuardia: string;
 }
 
+/** Ancho de cada columna de día en la grilla: cabe un código corto (D, N, L, D/8); el nombre completo sale al pasar el mouse. */
+const ANCHO_DIA = 44;
+
 export default function HorarioMensualEditor() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -106,6 +111,7 @@ export default function HorarioMensualEditor() {
 
   const [patronPuestoId, setPatronPuestoId] = useState<number | null>(null);
   const [importando, setImportando] = useState(false);
+  const [exportandoHorario, setExportandoHorario] = useState(false);
   const [confirmandoEliminar, setConfirmandoEliminar] = useState<React.ReactNode | null>(null);
   const [verEjecutado, setVerEjecutado] = useState(false);
 
@@ -258,29 +264,20 @@ export default function HorarioMensualEditor() {
     }
   };
 
-  const handleExportarPdf = async () => {
+  // «Exportar» (2026-11-16): un solo botón; el formato se elige en ExportarHorarioModal. Los dos se descargan
+  // (abrir el PDF en otra pestaña después de esperar al servidor lo bloquea el navegador).
+  const handleExportar = async (formato: 'excel' | 'pdf') => {
     if (!horario) return;
     try {
-      const blob = await getHorarioPdfBlob(horario.id);
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-    } catch {
-      setError('No se pudo generar el PDF del horario.');
-    }
-  };
-
-  const handleExportarExcel = async () => {
-    if (!horario) return;
-    try {
-      const blob = await getHorarioExcelBlob(horario.id);
+      const blob = formato === 'pdf' ? await getHorarioPdfBlob(horario.id) : await getHorarioExcelBlob(horario.id);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `horario_${horario.fechaInicio.slice(0, 10)}_${horario.fechaFin.slice(0, 10)}.xlsx`;
+      a.download = `horario_${horario.fechaInicio.slice(0, 10)}_${horario.fechaFin.slice(0, 10)}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch {
-      setError('No se pudo generar el Excel del horario.');
+      setError(formato === 'pdf' ? 'No se pudo generar el PDF del horario.' : 'No se pudo generar el Excel del horario.');
     }
   };
 
@@ -302,13 +299,10 @@ export default function HorarioMensualEditor() {
           actions={
           <>
             <span className="status-badge" style={{ background: ESTADO_COLOR[horario.estado]?.bg, color: ESTADO_COLOR[horario.estado]?.fg }}>
-              {horario.estado}
+              {ESTADO_HORARIO_LABEL[horario.estado] ?? horario.estado}
             </span>
-            <button className="btn-secondary" onClick={handleExportarPdf}>
-              <Download size={16} /> Exportar PDF
-            </button>
-            <button className="btn-secondary" onClick={handleExportarExcel}>
-              <FileSpreadsheet size={16} /> Exportar Excel
+            <button className="btn-secondary" onClick={() => setExportandoHorario(true)}>
+              <Download size={16} /> Exportar
             </button>
             <button className="btn-secondary" onClick={() => setVerEjecutado(true)}>
               <ClipboardCheck size={16} /> Ejecutado
@@ -332,7 +326,7 @@ export default function HorarioMensualEditor() {
             </button>
             {permitidas.includes('ENVIADO') && (
               <button className="auth-btn" disabled={cambiandoEstado} onClick={() => setConfirmandoEstado('ENVIADO')}>
-                <Send size={16} /> Enviar
+                <Send size={16} /> Pedir aprobación
               </button>
             )}
             {permitidas.includes('APROBADO') && (
@@ -361,7 +355,7 @@ export default function HorarioMensualEditor() {
 
       {!editable && (
         <div style={{ background: '#ebf8ff', border: '1px solid #bee3f8', borderRadius: '10px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.82rem', color: '#2b6cb0' }}>
-          Este horario está en estado <strong>{horario.estado}</strong> — la matriz es de solo lectura. Solo se puede editar en Borrador.
+          Este horario está <strong>{ESTADO_HORARIO_LABEL[horario.estado] ?? horario.estado}</strong> — la matriz es de solo lectura. Solo se puede editar en Borrador.
           {horario.estado === 'RECHAZADO' && horario.motivoRechazo && (
             <div style={{ marginTop: '6px' }}>Motivo de rechazo: {horario.motivoRechazo}</div>
           )}
@@ -428,9 +422,9 @@ export default function HorarioMensualEditor() {
                     Guardia
                   </th>
                   {fechas.map((f) => (
-                    <th key={f} style={{ position: 'sticky', top: 0, zIndex: 2, background: '#f7fafc', border: '1px solid #e2e8f0', padding: '6px 4px', minWidth: '40px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{diaSemanaInicial(f)}</div>
-                      <div>{formatFechaCorta(f)}</div>
+                    <th key={f} title={formatFechaCorta(f)} style={{ position: 'sticky', top: 0, zIndex: 2, background: '#f7fafc', border: '1px solid #e2e8f0', padding: '4px 0', width: ANCHO_DIA, minWidth: ANCHO_DIA, maxWidth: ANCHO_DIA, textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.66rem', color: '#94a3b8' }}>{diaSemanaInicial(f)}</div>
+                      <div>{f.slice(8, 10)}</div>
                     </th>
                   ))}
                 </tr>
@@ -471,7 +465,7 @@ export default function HorarioMensualEditor() {
                             const valor = matriz[key] || '';
                             const codigoInfo = valor ? codigoPorCodigo.get(valor) : undefined;
                             return (
-                              <td key={f} style={{ border: '1px solid #e2e8f0', padding: 0, textAlign: 'center' }}>
+                              <td key={f} title={codigoInfo ? `${formatFechaCorta(f)} · ${valor} = ${codigoInfo.nombre}` : formatFechaCorta(f)} style={{ border: '1px solid #e2e8f0', padding: 0, textAlign: 'center', width: ANCHO_DIA, minWidth: ANCHO_DIA, maxWidth: ANCHO_DIA }}>
                                 {editable ? (
                                   <select
                                     value={valor}
@@ -479,7 +473,13 @@ export default function HorarioMensualEditor() {
                                     style={{
                                       width: '100%',
                                       border: 'none',
-                                      padding: '6px 2px',
+                                      appearance: 'none',
+                                      WebkitAppearance: 'none',
+                                      cursor: 'pointer',
+                                      textAlignLast: 'center',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      padding: '6px 1px',
                                       textAlign: 'center',
                                       fontSize: '0.76rem',
                                       fontWeight: 700,
@@ -493,7 +493,7 @@ export default function HorarioMensualEditor() {
                                     ))}
                                   </select>
                                 ) : (
-                                  <div style={{ padding: '6px 2px', fontWeight: 700, background: codigoInfo?.color ? `${codigoInfo.color}33` : 'transparent', color: codigoInfo?.color || '#2d3748' }}>
+                                  <div style={{ padding: '6px 1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700, background: codigoInfo?.color ? `${codigoInfo.color}33` : 'transparent', color: codigoInfo?.color || '#2d3748' }}>
                                     {valor || '·'}
                                   </div>
                                 )}
@@ -513,8 +513,10 @@ export default function HorarioMensualEditor() {
 
       {confirmandoEstado != null && (
         <ConfirmDialog
-          title="Cambiar estado del horario"
-          message={`¿Cambiar el estado de este horario a ${confirmandoEstado}?`}
+          title={confirmandoEstado === 'ENVIADO' ? 'Pedir aprobación' : 'Cambiar estado del horario'}
+          message={confirmandoEstado === 'ENVIADO'
+            ? 'El horario quedará «Por aprobar» y no se podrá editar. Les llegará una notificación en la app a quienes trabajan en Operaciones para que lo revisen.'
+            : `¿Pasar este horario a «${ESTADO_HORARIO_LABEL[confirmandoEstado] ?? confirmandoEstado}»?`}
           confirmLabel="Confirmar"
           onConfirm={handleCambiarEstado}
           onCancel={() => setConfirmandoEstado(null)}
@@ -542,6 +544,9 @@ export default function HorarioMensualEditor() {
 
       {verEjecutado && <EjecutadoModal horarioId={horario.id} onClose={() => setVerEjecutado(false)} />}
 
+      {exportandoHorario && (
+        <ExportarHorarioModal onExportar={handleExportar} onClose={() => setExportandoHorario(false)} />
+      )}
       {importando && (
         <ImportarExcelModal
           horarioId={horario.id}

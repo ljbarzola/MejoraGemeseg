@@ -22,10 +22,13 @@ import type {
   CPHorarioMensual,
   CPInformeMensual,
 } from '../../../types/contratacion-publica';
+import { ESTADO_HORARIO_LABEL } from '../../../types/contratacion-publica';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import OperacionesPageHeader from '../../../components/operaciones/OperacionesPageHeader';
 import DateInput from '../../../components/common/DateInput';
 import PuestoFormModal from '../puestos/PuestoFormModal';
+import { useModuloContratos } from '../../../hooks/useModuloContratos';
+import { textoTurnos } from '../puestos/turnosPuesto';
 
 const TABS = ['PUESTOS', 'ADENDAS', 'ADJUNTOS', 'HORARIOS', 'INFORMES'] as const;
 type Tab = (typeof TABS)[number];
@@ -52,6 +55,9 @@ export default function ContratoDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
   const contratoId = Number(id);
+  // En Contratación Pública no se ven los horarios (son de Operaciones): ni la pestaña ni su consulta.
+  const { enCP, base, modulo, puedeEditar } = useModuloContratos();
+  const tabs = TABS.filter((t) => !(enCP && t === 'HORARIOS'));
 
   const [contrato, setContrato] = useState<CPContrato | null>(null);
   const [puestos, setPuestos] = useState<CPPuestoServicio[]>([]);
@@ -65,7 +71,7 @@ export default function ContratoDetail() {
   // «?tab=HORARIOS» abre esa pestaña: así volver desde un horario o un informe cae donde estaba la persona.
   const [tab, setTab] = useState<Tab>(() => {
     const pedida = searchParams.get('tab');
-    return (TABS as readonly string[]).includes(pedida ?? '') ? (pedida as Tab) : 'PUESTOS';
+    return (TABS as readonly string[]).includes(pedida ?? '') && !(enCP && pedida === 'HORARIOS') ? (pedida as Tab) : 'PUESTOS';
   });
   const [editandoContrato, setEditandoContrato] = useState(searchParams.get('editar') === '1');
   const cerrarEdicion = () => {
@@ -110,7 +116,7 @@ export default function ContratoDetail() {
     Promise.all([
       getContrato(contratoId),
       getPuestosByContrato(contratoId),
-      getHorariosByContrato(contratoId),
+      enCP ? Promise.resolve([] as CPHorarioMensual[]) : getHorariosByContrato(contratoId),
       getInformesByContrato(contratoId),
     ])
       .then(([c, p, h, inf]) => { setContrato(c); setPuestos(p); setHorarios(h); setInformes(inf); })
@@ -209,7 +215,7 @@ export default function ContratoDetail() {
         fechaInicio: renovarFechaInicio,
         fechaFin: renovarFechaFin,
       });
-      navigate(`/operaciones/contratos/${nuevo.id}`);
+      navigate(`${base}/${nuevo.id}`);
     } catch (err: any) {
       setError(err.response?.data?.message || 'No se pudo renovar el contrato.');
     } finally {
@@ -227,14 +233,15 @@ export default function ContratoDetail() {
   return (
     <div className="page-container">
       <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate('/operaciones/contratos')} style={{ alignSelf: 'flex-start' }}>
+        <button className="cacao-back-btn" onClick={() => navigate(base)} style={{ alignSelf: 'flex-start' }}>
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
         <OperacionesPageHeader
+          eyebrow={modulo}
           title={`Contrato ${contrato.numero}`}
-          description={`Contrato con ${contrato.entidad?.nombre ?? 'la entidad'}: sus puestos y guardias, adendas, adjuntos, horarios e informes.`}
+          description={`Contrato con ${contrato.entidad?.nombre ?? 'la entidad'}: sus puestos con sus turnos y guardias, adendas, adjuntos${enCP ? '' : ', horarios'} e informes.`}
           actions={
-            <>
+            puedeEditar && <>
               <button className="btn-secondary" onClick={() => setEditandoContrato(true)}>
                 <Pencil size={16} /> Editar
               </button>
@@ -277,7 +284,7 @@ export default function ContratoDetail() {
 
       <div className="admin-section">
         <div style={{ display: 'flex', gap: '6px', borderBottom: '1px solid #e2e8f0', marginBottom: '18px', flexWrap: 'wrap' }}>
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -305,14 +312,16 @@ export default function ContratoDetail() {
         {tab === 'PUESTOS' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '14px' }}>
-              {puestos.length > 0 && (
+              {puestos.length > 0 && !enCP && (
                 <button className="btn-secondary" style={{ marginRight: 10 }} onClick={() => navigate(`/operaciones/horarios?contratoId=${contratoId}&nuevo=1`)}>
                   <CalendarPlus size={16} /> Crear horario
                 </button>
               )}
-              <button className="auth-btn" onClick={() => { setEditingPuesto(null); setShowPuestoModal(true); }}>
-                <Plus size={16} /> Nuevo Puesto
-              </button>
+              {puedeEditar && (
+                <button className="auth-btn" onClick={() => { setEditingPuesto(null); setShowPuestoModal(true); }}>
+                  <Plus size={16} /> Nuevo Puesto
+                </button>
+              )}
             </div>
             {puestos.length === 0 ? (
               <div className="empty-state">No hay puestos de servicio creados para este contrato.</div>
@@ -322,7 +331,9 @@ export default function ContratoDetail() {
                   <thead>
                     <tr>
                       <th>Puesto</th>
-                      <th>Tipo de turno</th>
+                      <th>Jornada</th>
+                      <th>Turnos</th>
+                      <th>Mínimo por día</th>
                       <th>Cant. guardias</th>
                       <th>Guardias asignados</th>
                       <th style={{ textAlign: 'right' }}>Acciones</th>
@@ -333,6 +344,8 @@ export default function ContratoDetail() {
                       <tr key={p.id}>
                         <td style={{ fontWeight: 600 }}>{p.nombre}</td>
                         <td>{p.tipoTurno}</td>
+                        <td style={{ fontSize: '0.82rem' }}>{textoTurnos(p.turnos) || <span style={{ color: '#a0aec0' }}>Sin definir</span>}</td>
+                        <td>{p.guardiasSimultaneosRequeridos}</td>
                         <td>{p.cantidadGuardias}</td>
                         <td>{p.guardias?.length || 0}</td>
                         <td style={{ textAlign: 'right' }}>
@@ -479,11 +492,11 @@ export default function ContratoDetail() {
                         <td style={{ fontWeight: 600 }}>{MESES[h.mes - 1]} {h.anio}</td>
                         <td>
                           <span className="status-badge" style={{ background: ESTADO_HORARIO_COLOR[h.estado]?.bg, color: ESTADO_HORARIO_COLOR[h.estado]?.fg }}>
-                            {h.estado}
+                            {ESTADO_HORARIO_LABEL[h.estado] ?? h.estado}
                           </span>
                         </td>
                         <td style={{ textAlign: 'right' }}>
-                          <button className="btn-secondary" onClick={() => navigate(`/operaciones/horarios/${h.id}`, { state: { volverA: `/operaciones/contratos/${contratoId}?tab=HORARIOS` } })}>Abrir</button>
+                          <button className="btn-secondary" onClick={() => navigate(`/operaciones/horarios/${h.id}`, { state: { volverA: `${base}/${contratoId}?tab=HORARIOS` } })}>Abrir</button>
                         </td>
                       </tr>
                     ))}

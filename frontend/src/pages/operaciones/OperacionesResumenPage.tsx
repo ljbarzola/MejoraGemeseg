@@ -7,6 +7,7 @@ import DateInput from '../../components/common/DateInput';
 import FilterField from '../../components/common/FilterField';
 import BitacorasResumen from './bitacoras/BitacorasResumen';
 import PuestosHoy from './PuestosHoy';
+import AvisoHorasCodigos from '../../components/operaciones/AvisoHorasCodigos';
 
 /**
  * Resumen de Operaciones, la primera pantalla del módulo. Arriba, «Hoy en los puestos» (quién debe
@@ -36,6 +37,8 @@ export default function OperacionesResumenPage() {
         title="Resumen"
         description="Cómo van los puestos hoy y lo que dejan las bitácoras: quién debe estar, qué hojas faltan por subir, qué porcentaje cuadra con el horario y qué hallazgos siguen abiertos."
       />
+
+      <AvisoHorasCodigos />
 
       <PuestosHoy />
 

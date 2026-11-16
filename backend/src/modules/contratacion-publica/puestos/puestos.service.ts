@@ -3,10 +3,21 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreatePuestoDto } from './dto/create-puesto.dto';
 import { UpdatePuestoDto } from './dto/update-puesto.dto';
 import { AsignarGuardiaDto } from './dto/asignar-guardia.dto';
+import type { TurnoPuestoDto } from './dto/create-puesto.dto';
+
+/** Turnos limpios para guardar y el mínimo diario que suman (null = sin turnos: se usa el número a mano). */
+function normalizarTurnos(turnos: TurnoPuestoDto[] | undefined) {
+  if (turnos === undefined) return undefined;
+  const lista = turnos
+    .map((t) => ({ nombre: t.nombre.trim(), horaInicio: t.horaInicio || null, horaFin: t.horaFin || null, guardias: t.guardias }))
+    .filter((t) => t.nombre);
+  return { lista: lista.length ? lista : null, minimo: lista.length ? lista.reduce((n, t) => n + t.guardias, 0) : null };
+}
 
 @Injectable()
 export class CPPuestosService {
@@ -33,13 +44,15 @@ export class CPPuestosService {
 
   async create(dto: CreatePuestoDto, companyId: number) {
     await this.assertContrato(dto.contratoId, companyId);
+    const turnos = normalizarTurnos(dto.turnos);
     return this.prisma.cPPuestoServicio.create({
       data: {
         contratoId: dto.contratoId,
         nombre: dto.nombre,
         tipoTurno: dto.tipoTurno,
         cantidadGuardias: dto.cantidadGuardias ?? 1,
-        guardiasSimultaneosRequeridos: dto.guardiasSimultaneosRequeridos ?? 1,
+        guardiasSimultaneosRequeridos: turnos?.minimo ?? dto.guardiasSimultaneosRequeridos ?? 1,
+        turnos: turnos?.lista ?? Prisma.DbNull,
         canton: dto.canton,
         edificio: dto.edificio,
         ubicacion: dto.ubicacion,
@@ -50,7 +63,14 @@ export class CPPuestosService {
 
   async update(id: number, dto: UpdatePuestoDto, companyId: number) {
     await this.findOne(id, companyId);
-    return this.prisma.cPPuestoServicio.update({ where: { id }, data: dto });
+    const { turnos: turnosDto, ...resto } = dto;
+    const turnos = normalizarTurnos(turnosDto);
+    const data: Prisma.CPPuestoServicioUpdateInput = { ...resto };
+    if (turnos) {
+      data.turnos = turnos.lista ?? Prisma.DbNull;
+      if (turnos.minimo) data.guardiasSimultaneosRequeridos = turnos.minimo;
+    }
+    return this.prisma.cPPuestoServicio.update({ where: { id }, data });
   }
 
   async remove(id: number, companyId: number) {

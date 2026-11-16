@@ -20,7 +20,7 @@ import { memoryStorage } from 'multer';
 import type { Response } from 'express';
 import * as path from 'path';
 import { SectionPermissionGuard } from '../../../common/guards/section-permission.guard';
-import { Section } from '../../../common/decorators/section.decorator';
+import { SectionAny } from '../../../common/decorators/section.decorator';
 import { CPContratosService, CP_ADJUNTOS_DIR } from './contratos.service';
 import { CreateContratoDto } from './dto/create-contrato.dto';
 import { UpdateContratoDto } from './dto/update-contrato.dto';
@@ -33,7 +33,7 @@ export class CPContratosController {
   constructor(private readonly service: CPContratosService) {}
 
   @Get()
-  @Section('OPERACIONES', 'view')
+  @SectionAny(['OPERACIONES', 'CONTRATACION_PUBLICA'], 'view')
   findAll(
     @Req() req: any,
     @Query('estado') estado?: string,
@@ -46,7 +46,7 @@ export class CPContratosController {
   }
 
   @Get('file/:fileName')
-  @Section('OPERACIONES', 'view')
+  @SectionAny(['OPERACIONES', 'CONTRATACION_PUBLICA'], 'view')
   async getFile(
     @Param('fileName') fileName: string,
     @Req() req: any,
@@ -60,19 +60,19 @@ export class CPContratosController {
   }
 
   @Get(':id')
-  @Section('OPERACIONES', 'view')
+  @SectionAny(['OPERACIONES', 'CONTRATACION_PUBLICA'], 'view')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.service.findOne(id, req.user.companyId);
   }
 
   @Post()
-  @Section('OPERACIONES', 'write')
+  @SectionAny(['OPERACIONES', 'CONTRATACION_PUBLICA'], 'write')
   create(@Body() dto: CreateContratoDto, @Req() req: any) {
     return this.service.create(dto, req.user.companyId, req.user.userId);
   }
 
   @Patch(':id')
-  @Section('OPERACIONES', 'write')
+  @SectionAny(['OPERACIONES', 'CONTRATACION_PUBLICA'], 'write')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateContratoDto,
@@ -82,13 +82,13 @@ export class CPContratosController {
   }
 
   @Delete(':id')
-  @Section('OPERACIONES', 'write')
+  @SectionAny(['OPERACIONES', 'CONTRATACION_PUBLICA'], 'write')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.service.remove(id, req.user.companyId);
   }
 
   @Post(':id/renovar')
-  @Section('OPERACIONES', 'write')
+  @SectionAny(['OPERACIONES', 'CONTRATACION_PUBLICA'], 'write')
   renovar(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: RenovarContratoDto,
@@ -98,7 +98,7 @@ export class CPContratosController {
   }
 
   @Post(':id/adendas')
-  @Section('OPERACIONES', 'write')
+  @SectionAny(['OPERACIONES', 'CONTRATACION_PUBLICA'], 'write')
   addAdenda(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreateAdendaDto,
@@ -108,7 +108,7 @@ export class CPContratosController {
   }
 
   @Delete(':id/adendas/:adendaId')
-  @Section('OPERACIONES', 'write')
+  @SectionAny(['OPERACIONES', 'CONTRATACION_PUBLICA'], 'write')
   removeAdenda(
     @Param('id', ParseIntPipe) id: number,
     @Param('adendaId', ParseIntPipe) adendaId: number,
@@ -118,7 +118,7 @@ export class CPContratosController {
   }
 
   @Post(':id/adjuntos')
-  @Section('OPERACIONES', 'write')
+  @SectionAny(['OPERACIONES', 'CONTRATACION_PUBLICA'], 'write')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -135,7 +135,7 @@ export class CPContratosController {
   }
 
   @Delete(':id/adjuntos/:adjuntoId')
-  @Section('OPERACIONES', 'write')
+  @SectionAny(['OPERACIONES', 'CONTRATACION_PUBLICA'], 'write')
   removeAdjunto(
     @Param('id', ParseIntPipe) id: number,
     @Param('adjuntoId', ParseIntPipe) adjuntoId: number,

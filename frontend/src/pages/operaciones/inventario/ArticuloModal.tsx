@@ -97,7 +97,7 @@ export default function ArticuloModal({
               <div className="form-group" style={{ flex: '1 1 160px' }}>
                 <label>Mínimo en bodega</label>
                 <input type="number" min="0" step="1" value={minimo} onChange={(e) => setMinimo(e.target.value)} />
-                <small style={{ color: '#718096' }}>Al llegar a esta cantidad se avisa por la campana.</small>
+                <small style={{ color: '#718096' }}>Al llegar a esta cantidad llega una notificación en la app.</small>
               </div>
               <div className="form-group" style={{ flex: '1 1 160px' }}>
                 <label>Máximo en bodega</label>

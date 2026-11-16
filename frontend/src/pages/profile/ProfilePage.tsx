@@ -250,7 +250,7 @@ export default function ProfilePage() {
                 />
                 <span>
                   <strong>Notificaciones en la app y correo</strong>
-                  <small>Te avisamos en las notificaciones de la app (el ícono de campana, arriba a la derecha) y también por correo a {profile.email}.</small>
+                  <small>Te avisamos en las notificaciones de la app (arriba a la derecha) y también por correo a {profile.email}.</small>
                 </span>
               </label>
               <label className={`profile-option ${soloNotificaciones ? 'selected' : ''}`}>
@@ -263,7 +263,7 @@ export default function ProfilePage() {
                 />
                 <span>
                   <strong>Solo notificaciones en la app</strong>
-                  <small>Te avisamos solo dentro de la app, en el ícono de campana. No te enviamos correo.</small>
+                  <small>Te avisamos solo dentro de la app, en sus notificaciones. No te enviamos correo.</small>
                 </span>
               </label>
             </div>

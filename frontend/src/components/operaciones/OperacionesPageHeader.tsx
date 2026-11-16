@@ -13,8 +13,11 @@ export default function OperacionesPageHeader({
   description,
   actions,
   pantalla,
+  eyebrow = 'Operaciones',
 }: {
   title: string;
+  /** Módulo que se muestra arriba del título (los contratos también se ven desde Contratación Pública). */
+  eyebrow?: string;
   description?: ReactNode;
   actions?: ReactNode;
   /** Pantalla principal desde la que se abre la ayuda. Sin ella no hay botón «Cómo funciona». */
@@ -22,7 +25,7 @@ export default function OperacionesPageHeader({
 }) {
   return (
     <PageHeader
-      eyebrow="Operaciones"
+      eyebrow={eyebrow}
       title={title}
       description={description}
       actions={

@@ -9,7 +9,7 @@ import {
   getContrato,
   getContratos,
 } from '../../../services/contratacion-publica.service';
-import { TIPO_ENTIDAD_LABEL, type CPHorarioMensual, type CPContrato } from '../../../types/contratacion-publica';
+import { ESTADO_HORARIO_LABEL, TIPO_ENTIDAD_LABEL, type CPHorarioMensual, type CPContrato } from '../../../types/contratacion-publica';
 import { fechaCorta } from '../../../utils/bitacoras';
 import { usePerm } from '../../../contexts/PermissionsContext';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
@@ -21,6 +21,7 @@ import { useColumnFilters } from '../../../hooks/useColumnFilters';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
 import { proponerCiclo } from '../../../utils/cicloMensual';
 import { mensajeEliminarHorario } from '../../../utils/horarioEliminar';
+import DateInput from '../../../components/common/DateInput';
 
 const formatFechaCorta = (fechaIso: string): string => fechaCorta(fechaIso);
 
@@ -82,7 +83,7 @@ export default function HorarioMensualList() {
     { key: 'entidad', etiqueta: 'Entidad', tipo: 'valores', getValues: (h) => ({ valor: String(h.contrato?.entidad?.id ?? 0), etiqueta: h.contrato?.entidad?.nombre ?? '—' }) },
     { key: 'tipo', etiqueta: 'Tipo', tipo: 'valores', orden: ['PUBLICA', 'PRIVADA'], getValues: (h) => { const t = h.contrato?.entidad?.tipo ?? 'PUBLICA'; return { valor: t, etiqueta: TIPO_ENTIDAD_LABEL[t] }; } },
     { key: 'periodo', etiqueta: 'Periodo', tipo: 'fecha', getValue: (h) => h.fechaInicio, getFin: (h) => h.fechaFin },
-    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['BORRADOR', 'ENVIADO', 'APROBADO', 'RECHAZADO'], getValues: (h) => ({ valor: h.estado, etiqueta: h.estado }) },
+    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['BORRADOR', 'ENVIADO', 'APROBADO', 'RECHAZADO'], getValues: (h) => ({ valor: h.estado, etiqueta: ESTADO_HORARIO_LABEL[h.estado] ?? h.estado }) },
   ]);
 
   // Al abrir «Nuevo horario» (o cambiar el contrato) se proponen las fechas del siguiente ciclo del contrato.
@@ -154,8 +155,8 @@ export default function HorarioMensualList() {
           )
         }
       />
-      <MovidoAConfiguracion to="/operaciones/configuracion?pestana=codigos" enlace="Ir a Códigos de turno">
-        «Códigos de turno» se movió del menú a Configuración.
+      <MovidoAConfiguracion to="/operaciones/configuracion?pestana=codigos" enlace="Abrir Códigos de turno">
+        Los códigos de turno (D, N, L…) se crean y editan en Configuración.
       </MovidoAConfiguracion>
 
       {error && (
@@ -177,11 +178,11 @@ export default function HorarioMensualList() {
           )}
           <div className="form-group" style={{ margin: 0 }}>
             <label>Fecha inicio</label>
-            <input type="date" required value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+            <DateInput required value={fechaInicio} onChange={setFechaInicio} />
           </div>
           <div className="form-group" style={{ margin: 0 }}>
             <label>Fecha fin</label>
-            <input type="date" required min={fechaInicio || undefined} value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+            <DateInput required min={fechaInicio || undefined} value={fechaFin} onChange={setFechaFin} />
           </div>
           <button type="submit" className="auth-btn" disabled={saving || !fechaInicio || !fechaFin || (!contratoId && !contratoElegido)}>{saving ? 'Creando...' : 'Crear Horario'}</button>
           <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancelar</button>
@@ -230,7 +231,7 @@ export default function HorarioMensualList() {
                     <td style={{ fontWeight: 600 }}>{formatFechaCorta(h.fechaInicio)} – {formatFechaCorta(h.fechaFin)}</td>
                     <td>
                       <span className="status-badge" style={{ background: ESTADO_COLOR[h.estado]?.bg, color: ESTADO_COLOR[h.estado]?.fg }}>
-                        {h.estado}
+                        {ESTADO_HORARIO_LABEL[h.estado] ?? h.estado}
                       </span>
                     </td>
                     <td>

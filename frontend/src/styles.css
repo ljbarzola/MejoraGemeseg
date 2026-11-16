@@ -5801,3 +5801,42 @@ textarea.chat-input {
   font-size: 0.85rem;
   width: 100%;
 }
+
+/* Generar patrón (Operaciones → Horarios): los cuatro campos en una fila, con la etiqueta en una sola línea y
+   todos los controles del mismo alto, para que queden alineados (2026-11-16). */
+.generador-campos {
+  display: grid;
+  grid-template-columns: 110px 150px 150px minmax(0, 1fr);
+  gap: 12px;
+  align-items: end;
+  margin-top: 6px;
+}
+.generador-campos > label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  min-width: 0;
+}
+.generador-campos > label > span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #4a5568;
+  white-space: nowrap;
+}
+.generador-campos input,
+.generador-campos select {
+  height: 38px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 10px;
+  font-size: 0.85rem;
+}
+.generador-campos input[type='text'] {
+  padding-right: 30px;
+}
+@media (max-width: 640px) {
+  .generador-campos {
+    grid-template-columns: 1fr 1fr;
+  }
+}

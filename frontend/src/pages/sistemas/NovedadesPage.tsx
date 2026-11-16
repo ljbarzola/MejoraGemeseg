@@ -68,7 +68,7 @@ export default function NovedadesPage() {
       <PageHeader
         eyebrow="Sistemas"
         title="Novedades de la app"
-        description="Avisa de un cambio en la app. Le llega a la campana de notificaciones (no por correo) a quienes tienen acceso a los módulos que elijas."
+        description="Avisa de un cambio en la app. Llega como notificación en la app (no por correo) a quienes tienen acceso a los módulos que elijas."
         actions={
           <button className="auth-btn" onClick={() => setShowForm(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Plus size={16} /> Nueva novedad
