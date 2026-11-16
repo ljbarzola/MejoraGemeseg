@@ -57,6 +57,18 @@ export class SectionPermissionGuard implements CanActivate {
 
     if (this.permissionsService.isSuperAdmin(user)) return true;
 
+    // @SectionAny: pasa con acceso a cualquiera de las secciones (misma regla que hasSectionAccess).
+    if (requirement.sections && requirement.sections.length > 1) {
+      for (const s of requirement.sections) {
+        if (await this.permissionsService.hasSectionAccess(user, s, requirement.access)) return true;
+      }
+      throw new ForbiddenException(
+        requirement.access === 'write'
+          ? 'No tienes permiso para modificar esto'
+          : 'No tienes acceso a esta información',
+      );
+    }
+
     if (!user.companyId) {
       throw new ForbiddenException('Usuario sin empresa asociada');
     }

@@ -6,7 +6,6 @@ import ImportarContratoModal from './ImportarContratoModal';
 import { fechaCorta } from '../../../utils/bitacoras';
 import { getContratos, deleteContrato } from '../../../services/contratacion-publica.service';
 import { TIPO_ENTIDAD_LABEL, type CPContrato } from '../../../types/contratacion-publica';
-import { usePerm } from '../../../contexts/PermissionsContext';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import OperacionesPageHeader from '../../../components/operaciones/OperacionesPageHeader';
 import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
@@ -14,6 +13,7 @@ import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../componen
 import { useColumnFilters } from '../../../hooks/useColumnFilters';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
 import { useSortableTable } from '../../../hooks/useSortableTable';
+import { useModuloContratos } from '../../../hooks/useModuloContratos';
 
 const ESTADO_LABEL: Record<string, string> = { ACTIVO: 'Activo', FINALIZADO: 'Finalizado' };
 const ESTADO_COLOR: Record<string, { bg: string; fg: string }> = {
@@ -25,8 +25,7 @@ const formatFecha = (date: string) => fechaCorta(date);
 
 export default function ContratosList() {
   const navigate = useNavigate();
-  const { canWrite } = usePerm();
-  const canEdit = canWrite('OPERACIONES');
+  const { enCP, base, modulo, puedeEditar: canEdit } = useModuloContratos();
   const tablaRef = useResizableColumns('cp-contratos');
 
   const [contratos, setContratos] = useState<CPContrato[]>([]);
@@ -116,15 +115,18 @@ export default function ContratosList() {
   return (
     <div className="page-container">
       <OperacionesPageHeader
-        pantalla="contratos"
+        pantalla={enCP ? undefined : 'contratos'}
+        eyebrow={modulo}
         title="Contratos"
         description="Los contratos de seguridad con cada entidad. Dentro de cada uno están sus puestos con los guardias, adendas, adjuntos, horarios e informes."
         actions={
           canEdit && (
             <>
-              <button className="btn-secondary" onClick={() => setImportando(true)}>
-                <FileSpreadsheet size={16} /> Importar desde Excel
-              </button>
+              {!enCP && (
+                <button className="btn-secondary" onClick={() => setImportando(true)}>
+                  <FileSpreadsheet size={16} /> Importar desde Excel
+                </button>
+              )}
               <button className="auth-btn" onClick={() => setFormAbierto(true)}>
                 <Plus size={16} /> Nuevo Contrato
               </button>
@@ -182,7 +184,7 @@ export default function ContratosList() {
                   />
                 )}
                 {filas.map((c) => (
-                  <tr key={c.id} onClick={() => navigate(`/operaciones/contratos/${c.id}`)} style={{ cursor: 'pointer' }}>
+                  <tr key={c.id} onClick={() => navigate(`${base}/${c.id}`)} style={{ cursor: 'pointer' }}>
                     <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#2b6cb0' }}>{c.numero}</td>
                     <td><span className="truncate">{c.entidad?.nombre || '—'}</span></td>
                     <td>{TIPO_ENTIDAD_LABEL[c.entidad?.tipo ?? 'PUBLICA']}</td>
@@ -196,7 +198,7 @@ export default function ContratosList() {
                     </td>
                     <td className="col-acciones col-acciones--ancha" onClick={(e) => e.stopPropagation()}>
                       <div className="acciones-iconos">
-                        <button type="button" className="btn-secondary icon-btn" title="Ver detalle" aria-label="Ver detalle" onClick={() => navigate(`/operaciones/contratos/${c.id}`)}>
+                        <button type="button" className="btn-secondary icon-btn" title="Ver detalle" aria-label="Ver detalle" onClick={() => navigate(`${base}/${c.id}`)}>
                           <Eye size={16} />
                         </button>
                         {canEdit && (
@@ -235,7 +237,7 @@ export default function ContratosList() {
             const eraNuevo = !editando;
             cerrarForm();
             // Un contrato nuevo se abre para agregarle puestos; uno editado solo recarga la lista.
-            if (eraNuevo) navigate(`/operaciones/contratos/${guardado.id}`);
+            if (eraNuevo) navigate(`${base}/${guardado.id}`);
             else load();
           }}
         />

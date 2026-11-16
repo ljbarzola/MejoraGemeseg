@@ -1,5 +1,5 @@
 import { api } from './auth.service';
-import type {
+import type { TurnoPuesto,
   CPEntidadPublica,
   CPEntidadGuardada,
   CPEntidadCampo,
@@ -221,6 +221,7 @@ export const createPuesto = (data: {
   canton?: string;
   edificio?: string;
   ubicacion?: string;
+  turnos?: TurnoPuesto[];
 }): Promise<CPPuestoServicio> => api.post(`${BASE}/puestos`, data).then((r) => r.data);
 
 export const updatePuesto = (
@@ -233,6 +234,7 @@ export const updatePuesto = (
     canton: string;
     edificio: string;
     ubicacion: string;
+    turnos: TurnoPuesto[];
   }>,
 ): Promise<CPPuestoServicio> => api.patch(`${BASE}/puestos/${id}`, data).then((r) => r.data);
 
@@ -355,6 +357,8 @@ export const generarPatronHorario = (
     puestoId: number;
     patron: PatronRotacionConfig;
     guardarComoPatronDelPuesto?: boolean;
+    hasta?: string;
+    quitarUltimoDia?: string[];
   },
 ): Promise<CPHorarioCelda[]> =>
   api.post(`${BASE}/horarios/${horarioId}/generar-patron`, data).then((r) => r.data);

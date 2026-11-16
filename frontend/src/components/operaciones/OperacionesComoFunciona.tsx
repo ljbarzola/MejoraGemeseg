@@ -30,13 +30,13 @@ const RECORRIDO: Paso[] = [
     clave: 'bitacoras',
     pantalla: '3. Bitácoras',
     texto:
-      'Subes la foto de la hoja que llenan los guardias en cada puesto. El agente la transcribe sin conocer el horario y el sistema la compara con el horario del puesto: avisa si quien aparece no es quien debía estar, o si faltan guardias u horas. Cuando falta alguien, propone quién del puesto estaba libre ese día. Si una hoja sale con errores, llega un aviso por la campana.',
+      'Subes la foto de la hoja que llenan los guardias en cada puesto. El agente la transcribe sin conocer el horario y el sistema la compara con el horario del puesto: avisa si quien aparece no es quien debía estar, o si faltan guardias u horas. Cuando falta alguien, propone quién del puesto estaba libre ese día. Si una hoja sale con errores, llega una notificación en la app.',
   },
   {
     clave: 'inventario',
     pantalla: '4. Inventario',
     texto:
-      'Uniformes (por talla), implementos y municiones con su kardex: registras entradas, entregas a un guardia o a un puesto, devoluciones, bajas y ajustes, y el saldo se calcula solo. Avisa por la campana cuando un artículo llega al mínimo y dice cuánto reponer. Las armas se llevan por número de serie: quién la tiene, su historial y cuándo vence el permiso (no se asigna con el permiso vencido). «Quién tiene qué» muestra lo entregado y aún no devuelto.',
+      'Uniformes (por talla), implementos y municiones con su kardex: registras entradas, entregas a un guardia o a un puesto, devoluciones, bajas y ajustes, y el saldo se calcula solo. Avisa con una notificación en la app cuando un artículo llega al mínimo y dice cuánto reponer. Las armas se llevan por número de serie: quién la tiene, su historial y cuándo vence el permiso (no se asigna con el permiso vencido). «Quién tiene qué» muestra lo entregado y aún no devuelto.',
   },
   {
     clave: 'resumen',

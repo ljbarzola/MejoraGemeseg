@@ -516,10 +516,11 @@ function AppInner() {
         <Route path="/operaciones/inventario" element={<ProtectedLayout><SectionRoute section="OPERACIONES"><OpInventario /></SectionRoute></ProtectedLayout>} />
         <Route path="/operaciones/configuracion" element={<ProtectedLayout><SectionRoute section="OPERACIONES"><OpConfiguracion /></SectionRoute></ProtectedLayout>} />
         {/* Las URLs de antes de mover el módulo siguen funcionando (avisos, correos y marcadores guardados). */}
-        <Route path="/contratacion-publica/contratos" element={<RedirigirConParametros a="/operaciones/contratos" />} />
-        <Route path="/contratacion-publica/contratos/nuevo" element={<Navigate to="/operaciones/contratos?nuevo=1" replace />} />
-        <Route path="/contratacion-publica/contratos/:id" element={<RedirigirConParametros a="/operaciones/contratos/:id" />} />
-        <Route path="/contratacion-publica/contratos/:id/editar" element={<RedirigirConParametros a="/operaciones/contratos/:id?editar=1" />} />
+        {/* Contratos con sus puestos y turnos también en Contratación Pública (2026-11-16): mismas pantallas que Operaciones. */}
+        <Route path="/contratacion-publica/contratos" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><OpContratosList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/contratos/nuevo" element={<Navigate to="/contratacion-publica/contratos?nuevo=1" replace />} />
+        <Route path="/contratacion-publica/contratos/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><OpContratoDetail /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contratacion-publica/contratos/:id/editar" element={<RedirigirConParametros a="/contratacion-publica/contratos/:id?editar=1" />} />
         <Route path="/contratacion-publica/horarios" element={<RedirigirConParametros a="/operaciones/horarios" />} />
         <Route path="/contratacion-publica/horarios/:id" element={<RedirigirConParametros a="/operaciones/horarios/:id" />} />
         <Route path="/contratacion-publica/bitacoras" element={<RedirigirConParametros a="/operaciones/bitacoras" />} />

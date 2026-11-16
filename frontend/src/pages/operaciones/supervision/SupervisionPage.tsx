@@ -15,6 +15,7 @@ import type { CPContrato } from '../../../types/contratacion-publica';
 import type { CronogramaResumen, MisVisitasHoy, SinVisita } from '../../../types/supervision';
 import { proponerCiclo } from '../../../utils/cicloMensual';
 import RegistrarVisitaModal from './RegistrarVisitaModal';
+import DateInput from '../../../components/common/DateInput';
 
 type Pestana = 'hoy' | 'cronogramas';
 const PESTANAS = [
@@ -261,11 +262,11 @@ function NuevoCronogramaModal({
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <div className="form-group" style={{ flex: '1 1 150px' }}>
                 <label>Desde *</label>
-                <input type="date" required value={desde} onChange={(e) => setDesde(e.target.value)} />
+                <DateInput required value={desde} onChange={setDesde} />
               </div>
               <div className="form-group" style={{ flex: '1 1 150px' }}>
                 <label>Hasta *</label>
-                <input type="date" required min={desde || undefined} value={hasta} onChange={(e) => setHasta(e.target.value)} />
+                <DateInput required min={desde || undefined} value={hasta} onChange={setHasta} />
               </div>
             </div>
           </div>

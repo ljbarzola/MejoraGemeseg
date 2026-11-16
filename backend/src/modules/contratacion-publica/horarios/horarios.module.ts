@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { NotificationsModule } from '../../notifications/notifications.module';
 import { CPHorariosController } from './horarios.controller';
 import { CPHorariosService } from './horarios.service';
 import { CPHorariosPdfService } from './horarios-pdf.service';
@@ -12,7 +13,7 @@ import { PermissionsModule } from '../../permissions/permissions.module';
 import { CPPuestosModule } from '../puestos/puestos.module';
 
 @Module({
-  imports: [PrismaModule, PermissionsModule, CPPuestosModule],
+  imports: [PrismaModule, PermissionsModule, CPPuestosModule, NotificationsModule],
   controllers: [CPHorariosController, ImportacionContratoController],
   providers: [CPHorariosService, CPHorariosPdfService, CPHorariosExcelService, CPHorariosImportarService, CPHorariosEjecutadoService, ImportacionContratoService],
   exports: [CPHorariosService],

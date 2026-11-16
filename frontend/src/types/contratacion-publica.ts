@@ -7,6 +7,14 @@
 export type TipoEntidad = 'PUBLICA' | 'PRIVADA';
 export const TIPO_ENTIDAD_LABEL: Record<TipoEntidad, string> = { PUBLICA: 'Pública', PRIVADA: 'Privada' };
 
+/** Cómo se llama cada estado del horario en pantalla. «ENVIADO» se muestra «Por aprobar» (2026-11-16). */
+export const ESTADO_HORARIO_LABEL: Record<string, string> = {
+  BORRADOR: 'Borrador',
+  ENVIADO: 'Por aprobar',
+  APROBADO: 'Aprobado',
+  RECHAZADO: 'Rechazado',
+};
+
 export interface CPEntidadPublica {
   id: number;
   nombre: string;
@@ -108,9 +116,19 @@ export interface CPPuestoServicio {
   canton?: string | null;
   edificio?: string | null;
   ubicacion?: string | null;
+  /** Turnos del puesto; con turnos, guardiasSimultaneosRequeridos es la suma de sus guardias. */
+  turnos?: TurnoPuesto[] | null;
   createdAt: string;
   updatedAt: string;
   guardias?: CPPuestoGuardia[];
+}
+
+/** Un turno del puesto: «Día 07:00–19:00, 2 guardias». */
+export interface TurnoPuesto {
+  nombre: string;
+  horaInicio: string | null;
+  horaFin: string | null;
+  guardias: number;
 }
 
 export interface TramoPatron {

@@ -6,6 +6,7 @@ import PageTabs from '../../../components/common/PageTabs';
 import CodigosTurnoConfig from './CodigosTurnoConfig';
 import HorasTurnoModal from '../bitacoras/HorasTurnoModal';
 import PlantillaInformeConfig from './PlantillaInformeConfig';
+import AvisoHorasCodigos from '../../../components/operaciones/AvisoHorasCodigos';
 
 type Pestana = 'codigos' | 'horas' | 'informe';
 
@@ -42,7 +43,7 @@ export default function ConfiguracionOperacionesPage() {
       />
 
       {pestana === 'codigos' && <CodigosTurnoConfig />}
-      {pestana === 'horas' && <HorasTurnoModal embebido puedeEditar={puedeEditar} />}
+      {pestana === 'horas' && <><AvisoHorasCodigos enConfiguracion /><HorasTurnoModal embebido puedeEditar={puedeEditar} /></>}
       {pestana === 'informe' && <PlantillaInformeConfig />}
     </div>
   );

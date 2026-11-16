@@ -17,6 +17,8 @@ export const CP_INFORME_DATOS_DDL = [
   'ALTER TABLE "CPContrato" ADD COLUMN IF NOT EXISTS "plazoDias" INTEGER',
   // Tipo de la entidad (2026-11-13): PUBLICA o PRIVADA. Con valor por defecto, así el despliegue anterior sigue insertando sin problema.
   `ALTER TABLE "CPEntidadPublica" ADD COLUMN IF NOT EXISTS "tipo" TEXT NOT NULL DEFAULT 'PUBLICA'`,
+  // Turnos del puesto (2026-11-16): lista JSON [{ nombre, horaInicio, horaFin, guardias }]. Opcional.
+  'ALTER TABLE "CPPuestoServicio" ADD COLUMN IF NOT EXISTS "turnos" JSONB',
   'ALTER TABLE "CPPuestoServicio" ADD COLUMN IF NOT EXISTS "canton" TEXT',
   'ALTER TABLE "CPPuestoServicio" ADD COLUMN IF NOT EXISTS "edificio" TEXT',
   'ALTER TABLE "CPPuestoServicio" ADD COLUMN IF NOT EXISTS "ubicacion" TEXT',

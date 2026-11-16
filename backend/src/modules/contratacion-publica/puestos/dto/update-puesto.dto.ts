@@ -1,5 +1,6 @@
-import { IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
-import { TIPOS_TURNO_PUESTO } from './create-puesto.dto';
+import { Type } from 'class-transformer';
+import { ArrayMaxSize, IsArray, IsIn, IsInt, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { TIPOS_TURNO_PUESTO, TurnoPuestoDto } from './create-puesto.dto';
 
 export class UpdatePuestoDto {
   @IsString()
@@ -31,4 +32,11 @@ export class UpdatePuestoDto {
   @IsString()
   @IsOptional()
   ubicacion?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6)
+  @ValidateNested({ each: true })
+  @Type(() => TurnoPuestoDto)
+  turnos?: TurnoPuestoDto[];
 }

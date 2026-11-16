@@ -414,7 +414,7 @@ export default function BitacoraDetallePage() {
               </div>
               {puedeEscribir && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
-                  <div style={{ width: 170 }}><DateInput value={fechaNueva} onChange={setFechaNueva} placeholder="Agregar un día" /></div>
+                  <div className="filtro-fecha-dateinput" style={{ width: 170 }}><DateInput className="filtro-fecha-dia" value={fechaNueva} onChange={setFechaNueva} placeholder="Agregar un día" /></div>
                   <button type="button" className="btn-secondary" disabled={!fechaNueva || bloquear} onClick={() => { setFechasExtra((fs) => [...new Set([...fs, fechaNueva])]); setFechaNueva(''); marcar(); }}>
                     <Plus size={14} /> Agregar
                   </button>

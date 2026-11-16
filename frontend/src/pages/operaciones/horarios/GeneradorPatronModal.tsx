@@ -11,6 +11,7 @@ import type {
   TramoPatron,
 } from '../../../types/contratacion-publica';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import DateInput from '../../../components/common/DateInput';
 
 interface Props {
   puestoId: number;
@@ -46,6 +47,10 @@ export default function GeneradorPatronModal({
   const [coberturaSimultanea, setCoberturaSimultanea] = useState(1);
   const [ordenGuardias, setOrdenGuardias] = useState<GuardiaOrdenPatron[]>(guardiasDelPuesto);
   const [fechaInicioCiclo, setFechaInicioCiclo] = useState(fechaInicio);
+  // «Llenar hasta» (por defecto el último día del horario) y «El último día termina con»: hasta qué turno se
+  // trabaja ese último día (p. ej. hasta el de Día, y esa noche ya no le toca a nadie). '' = todos los turnos.
+  const [hasta, setHasta] = useState(fechaFin);
+  const [ultimoTurno, setUltimoTurno] = useState('');
   const [loadingInicial, setLoadingInicial] = useState(true);
 
   const [previewResult, setPreviewResult] = useState<{
@@ -90,6 +95,32 @@ export default function GeneradorPatronModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [puestoId]);
 
+  // Turnos de trabajo de la secuencia (sin libres ni custodias), en el orden del día: por hora de entrada si
+  // todos la tienen; si no, en el orden en que aparecen en los tramos.
+  const turnosDeTrabajo = useMemo(() => {
+    const lista: string[] = [];
+    tramos.forEach((t) => {
+      const c = codigoPorCodigo.get(t.codigoTurno);
+      if (c && !c.esDescanso && !c.esCustodia && !lista.includes(c.codigo)) lista.push(c.codigo);
+    });
+    const hora = (cod: string) => codigoPorCodigo.get(cod)?.horaInicio ?? '';
+    if (lista.every((cod) => hora(cod))) lista.sort((a, b) => hora(a).localeCompare(hora(b)));
+    return lista;
+  }, [tramos, codigoPorCodigo]);
+  const ultimoDia = hasta || fechaFin;
+  const turnoFinal = turnosDeTrabajo.includes(ultimoTurno) ? ultimoTurno : '';
+  // Lo que ese último día ya no se pone: los turnos que empiezan después del elegido.
+  const quitarUltimoDia = useMemo(
+    () => (turnoFinal ? turnosDeTrabajo.slice(turnosDeTrabajo.indexOf(turnoFinal) + 1) : []),
+    [turnoFinal, turnosDeTrabajo],
+  );
+  const textoTurno = (cod: string) => {
+    const c = codigoPorCodigo.get(cod);
+    if (!c) return cod;
+    const horas = c.horaInicio && c.horaFin ? ` (${c.horaInicio} a ${c.horaFin}${c.horaFin <= c.horaInicio ? ' del día siguiente' : ''})` : '';
+    return `${c.codigo} — ${c.nombre}${horas}`;
+  };
+
   useEffect(() => {
     if (loadingInicial) return;
     setPreviewError('');
@@ -101,7 +132,7 @@ export default function GeneradorPatronModal({
         ordenGuardias,
         fechaInicioCiclo,
         fechaInicio,
-        fechaFin,
+        fechaFin: hasta || fechaFin,
       })
         .then((res) => setPreviewResult(res))
         .catch((err) => {
@@ -111,7 +142,7 @@ export default function GeneradorPatronModal({
         .finally(() => setLoadingPreview(false));
     }, 400);
     return () => clearTimeout(handle);
-  }, [tramos, coberturaSimultanea, ordenGuardias, fechaInicioCiclo, loadingInicial, puestoId, fechaInicio, fechaFin]);
+  }, [tramos, coberturaSimultanea, ordenGuardias, fechaInicioCiclo, loadingInicial, puestoId, fechaInicio, fechaFin, hasta]);
 
   const updateTramo = (i: number, patch: Partial<TramoPatron>) =>
     setTramos((prev) => prev.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
@@ -137,14 +168,30 @@ export default function GeneradorPatronModal({
 
   const previewCeldaPorGuardiaYFecha = useMemo(() => {
     const map = new Map<string, string>();
-    (previewResult?.celdas || []).forEach((c) => map.set(`${c.cedula}|${c.fecha}`, c.codigoTurno));
+    (previewResult?.celdas || []).forEach((c) => {
+      if (c.fecha === ultimoDia && quitarUltimoDia.includes(c.codigoTurno)) return;
+      map.set(`${c.cedula}|${c.fecha}`, c.codigoTurno);
+    });
     return map;
-  }, [previewResult]);
+  }, [previewResult, ultimoDia, quitarUltimoDia]);
+
+  // Cómo cierra el último día: el último turno que se trabaja y a quién le toca.
+  const cierre = useMemo(() => {
+    if (!previewResult) return null;
+    const delDia = ordenGuardias
+      .map((g) => ({ nombre: g.nombreGuardia, codigo: previewCeldaPorGuardiaYFecha.get(`${g.cedula}|${ultimoDia}`) || '' }))
+      .filter((x) => turnosDeTrabajo.includes(x.codigo));
+    if (delDia.length === 0) return { codigo: '', nombres: [] as string[] };
+    const codigo = turnosDeTrabajo.filter((t) => delDia.some((x) => x.codigo === t)).pop()!;
+    return { codigo, nombres: delDia.filter((x) => x.codigo === codigo).map((x) => x.nombre) };
+  }, [previewResult, ordenGuardias, previewCeldaPorGuardiaYFecha, ultimoDia, turnosDeTrabajo]);
 
   const fechasPreview = useMemo(() => {
     const set = new Set<string>();
     (previewResult?.celdas || []).forEach((c) => set.add(c.fecha));
-    return Array.from(set).sort().slice(0, 12); // solo un adelanto, no el rango completo
+    const todas = Array.from(set).sort();
+    // Un adelanto: los primeros días y los últimos, para ver cómo empieza y con qué termina cada guardia.
+    return todas.length <= 12 ? todas : [...todas.slice(0, 8), ...todas.slice(-4)];
   }, [previewResult]);
 
   const ejecutarGeneracion = async () => {
@@ -154,6 +201,8 @@ export default function GeneradorPatronModal({
         puestoId,
         patron: { tramos, coberturaSimultanea, ordenGuardias, fechaInicioCiclo },
         guardarComoPatronDelPuesto: true,
+        hasta: hasta && hasta < fechaFin ? hasta : undefined,
+        quitarUltimoDia: quitarUltimoDia.length ? quitarUltimoDia : undefined,
       });
       onGenerated();
     } catch (err: any) {
@@ -172,7 +221,10 @@ export default function GeneradorPatronModal({
     }
   };
 
+  // El diálogo de confirmar es HERMANO del fondo de esta ventana, no hijo: si fuera hijo en el DOM, un clic en
+  // su fondo oscuro burbujearía hasta el `onClick={onClose}` de abajo y cerraría también esta ventana.
   return (
+    <>
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-lg" style={{ maxWidth: '760px' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -186,10 +238,18 @@ export default function GeneradorPatronModal({
             <div className="loading-state">Cargando...</div>
           ) : (
             <>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ fontWeight: 600, fontSize: '0.85rem' }}>Tramos del ciclo</label>
+              <div style={{ background: '#ebf8ff', border: '1px solid #bee3f8', color: '#2a4365', borderRadius: 10, padding: '8px 14px', marginBottom: 14, fontSize: '0.8rem', lineHeight: 1.5 }}>
+                <strong>Cómo funciona</strong>
+                <ol style={{ margin: '2px 0 0', paddingLeft: 18 }}>
+                  <li>Arma la secuencia que se repite, por ejemplo 2 días D, 2 N y 2 L.</li>
+                  <li>Ordena a los guardias: cada uno empieza la secuencia unos días después del anterior, así siempre hay alguien.</li>
+                  <li>Elige hasta qué día llenar (empieza el {formatFechaCorta(fechaInicio)}) y con qué turno termina ese último día.</li>
+                </ol>
+              </div>
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ fontWeight: 600, fontSize: '0.85rem' }}>1. Secuencia que se repite</label>
                 <div style={{ fontSize: '0.76rem', color: '#718096', marginBottom: '6px' }}>
-                  Ej. 2 días código D, 2 días código N, 2 días código L — se repite todo el período.
+                  Cada fila es un turno y cuántos días seguidos dura.
                 </div>
                 {tramos.map((t, i) => (
                   <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px' }}>
@@ -217,29 +277,47 @@ export default function GeneradorPatronModal({
                 </button>
               </div>
 
-              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '16px' }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>Cobertura simultánea</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={coberturaSimultanea}
-                    onChange={(e) => setCoberturaSimultanea(Math.max(1, Number(e.target.value)))}
-                    style={{ width: '90px' }}
-                    title="Cuántos guardias trabajan a la vez en cada tramo"
-                  />
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ fontWeight: 600, fontSize: '0.85rem' }}>2. Fechas y cobertura</label>
+                <div className="generador-campos">
+                  <label>
+                    <span>Guardias a la vez</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={coberturaSimultanea}
+                      onChange={(e) => setCoberturaSimultanea(Math.max(1, Number(e.target.value)))}
+                      title="Cuántos guardias trabajan al mismo tiempo en cada turno"
+                    />
+                  </label>
+                  <label>
+                    <span>Empieza a contar el</span>
+                    <DateInput value={fechaInicioCiclo} onChange={setFechaInicioCiclo} />
+                  </label>
+                  <label>
+                    <span>Llenar hasta</span>
+                    <DateInput value={hasta} onChange={(v) => setHasta(v || fechaFin)} min={fechaInicio} max={fechaFin} />
+                  </label>
+                  <label>
+                    <span>El último día termina con</span>
+                    <select value={turnoFinal} onChange={(e) => setUltimoTurno(e.target.value)} disabled={turnosDeTrabajo.length < 2}>
+                      <option value="">Todos los turnos del día</option>
+                      {turnosDeTrabajo.map((cod) => (
+                        <option key={cod} value={cod}>{textoTurno(cod)}</option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>Fecha de inicio del ciclo</label>
-                  <input type="date" value={fechaInicioCiclo} onChange={(e) => setFechaInicioCiclo(e.target.value)} />
+                <div style={{ fontSize: '0.72rem', color: '#718096', marginTop: 6, lineHeight: 1.45 }}>
+                  «Empieza a contar el» es el día en que el primer guardia arranca la secuencia; si el puesto ya venía con esta rotación, deja la fecha de entonces para que siga sin cortes.
+                  {quitarUltimoDia.length > 0 && (
+                    <> El {formatFechaCorta(ultimoDia)} no se pone {quitarUltimoDia.map(textoTurno).join(', ')}: ese turno queda para el horario siguiente.</>
+                  )}
                 </div>
-              </div>
-              <div style={{ fontSize: '0.72rem', color: '#a0aec0', marginTop: '-10px', marginBottom: '14px' }}>
-                Si este puesto ya tenía un ciclo corriendo el período pasado, deja la fecha original para que continúe sin cortes.
               </div>
 
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ fontWeight: 600, fontSize: '0.85rem' }}>Orden de guardias (define el desfase)</label>
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ fontWeight: 600, fontSize: '0.85rem' }}>3. Orden de los guardias</label>
                 {ordenGuardias.map((g, i) => (
                   <div key={g.cedula} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
                     <div style={{ flex: 1, fontSize: '0.8rem' }}>{g.nombreGuardia} <span style={{ color: '#a0aec0' }}>({g.cedula})</span></div>
@@ -292,7 +370,14 @@ export default function GeneradorPatronModal({
                     </table>
                   </div>
                   {fechasPreview.length < (previewResult.celdas.length ? new Set(previewResult.celdas.map((c) => c.fecha)).size : 0) && (
-                    <div style={{ fontSize: '0.7rem', color: '#a0aec0', marginTop: '4px' }}>Vista previa limitada a los primeros 12 días — el patrón se aplica a todo el período.</div>
+                    <div style={{ fontSize: '0.7rem', color: '#a0aec0', marginTop: '4px' }}>Vista previa: los primeros 8 días y los últimos 4. El patrón se aplica a todos los días hasta «Llenar hasta».</div>
+                  )}
+                  {cierre && (
+                    <div style={{ marginTop: 8, background: '#f0fff4', border: '1px solid #c6f6d5', color: '#22543d', borderRadius: 8, padding: '8px 12px', fontSize: '0.8rem' }}>
+                      {cierre.codigo
+                        ? <>El <strong>{formatFechaCorta(ultimoDia)}</strong> termina con el turno <strong>{textoTurno(cierre.codigo)}</strong>: le toca a <strong>{cierre.nombres.join(', ')}</strong>.</>
+                        : <>El {formatFechaCorta(ultimoDia)} nadie trabaja con esta secuencia.</>}
+                    </div>
                   )}
                 </div>
               )}
@@ -312,17 +397,18 @@ export default function GeneradorPatronModal({
           )}
         </div>
       </div>
+    </div>
 
       {confirmandoSobrescritura && (
         <ConfirmDialog
           title="Sobrescribir días ya cargados"
-          message={`Esto reemplazará los ${celdasExistentesCount} día(s) ya cargados para "${puestoNombre}" en este período. ¿Continuar?`}
+          message={`Esto reemplazará los días ya cargados de "${puestoNombre}" hasta el ${formatFechaCorta(hasta || fechaFin)}. ¿Continuar?`}
           confirmLabel="Sobrescribir"
           danger
           onConfirm={ejecutarGeneracion}
           onCancel={() => setConfirmandoSobrescritura(false)}
         />
       )}
-    </div>
+    </>
   );
 }

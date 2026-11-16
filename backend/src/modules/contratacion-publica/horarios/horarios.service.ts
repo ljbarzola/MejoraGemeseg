@@ -1,9 +1,13 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { PermissionsService } from '../../permissions/permissions.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 import { CreateHorarioDto } from './dto/create-horario.dto';
 import { UpsertCeldaDto } from './dto/upsert-celda.dto';
 import { ReemplazarCeldasPuestoDto } from './dto/reemplazar-celdas-puesto.dto';
@@ -33,9 +37,14 @@ const TRANSICIONES: Record<string, string[]> = {
 
 @Injectable()
 export class CPHorariosService {
+  private readonly logger = new Logger(CPHorariosService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly patronRotacionService: CPPatronRotacionService,
+    // Opcionales para que los specs que construyen el servicio a mano sigan valiendo.
+    @Optional() private readonly permissions?: PermissionsService,
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
 
   /** Horarios de todos los contratos de la empresa, con el número del contrato y su entidad. */
@@ -203,12 +212,21 @@ export class CPHorariosService {
       dto.patron.ordenGuardias,
     );
 
+    const inicioHorario = formatFechaISO(parseFechaUTC(horario.fechaInicio));
+    const finHorario = formatFechaISO(parseFechaUTC(horario.fechaFin));
+    if (dto.hasta && (dto.hasta < inicioHorario || dto.hasta > finHorario)) {
+      throw new BadRequestException('La fecha «Llenar hasta» tiene que estar dentro de las fechas del horario.');
+    }
+    const hasta = dto.hasta ?? finHorario;
     const resultado = this.patronRotacionService.calcular({
       ...dto.patron,
-      fechaInicio: formatFechaISO(parseFechaUTC(horario.fechaInicio)),
-      fechaFin: formatFechaISO(parseFechaUTC(horario.fechaFin)),
+      fechaInicio: inicioHorario,
+      fechaFin: hasta,
     });
     if (!resultado.ok) throw new BadRequestException(resultado.error);
+    // «El último día termina con»: ese día se quitan los turnos que empiezan después del elegido.
+    const quitar = new Set(dto.quitarUltimoDia ?? []);
+    const celdas = quitar.size ? resultado.celdas.filter((c) => !(c.fecha === hasta && quitar.has(c.codigoTurno))) : resultado.celdas;
 
     const guardarPatron = dto.guardarComoPatronDelPuesto ?? true;
 
@@ -231,7 +249,8 @@ export class CPHorariosService {
           },
         });
       }
-      return this.replaceCeldasPuestoTx(tx, id, dto.puestoId, resultado.celdas);
+      // Con «Llenar hasta» antes del fin del horario, los días posteriores del puesto se conservan.
+      return this.replaceCeldasPuestoTx(tx, id, dto.puestoId, celdas, hasta < finHorario ? hasta : undefined);
     });
   }
 
@@ -245,9 +264,10 @@ export class CPHorariosService {
       fecha: string;
       codigoTurno: string;
     }[],
+    hasta?: string,
   ) {
     await tx.cPHorarioCelda.deleteMany({
-      where: { horarioId, puestoId },
+      where: { horarioId, puestoId, ...(hasta ? { fecha: { lte: new Date(`${hasta}T00:00:00.000Z`) } } : {}) },
     });
     if (celdas.length > 0) {
       await tx.cPHorarioCelda.createMany({
@@ -322,6 +342,7 @@ export class CPHorariosService {
     id: number,
     dto: CambiarEstadoHorarioDto,
     companyId: number,
+    actorId?: number,
   ) {
     const horario = await this.assertHorario(id, companyId);
     const permitidas = TRANSICIONES[horario.estado] || [];
@@ -335,7 +356,7 @@ export class CPHorariosService {
       const errores = await this.validarCoberturaHorario(id, companyId);
       if (errores.length > 0) {
         throw new BadRequestException(
-          `No se puede enviar el horario, hay días sin la cobertura mínima requerida:\n${errores.join('\n')}`,
+          `No se puede pedir la aprobación: hay días sin la cobertura mínima requerida:\n${errores.join('\n')}`,
         );
       }
     }
@@ -352,7 +373,30 @@ export class CPHorariosService {
       data.aprobadoAt = null;
     }
 
-    return this.prisma.cPHorarioMensual.update({ where: { id }, data });
+    const actualizado = await this.prisma.cPHorarioMensual.update({ where: { id }, data });
+    // «Pedir aprobación» (2026-11-16): avisa por la campana a quien puede escribir en Operaciones.
+    if (dto.estado === 'ENVIADO') await this.avisarPedidoAprobacion(id, companyId, actorId);
+    return actualizado;
+  }
+
+  /** Aviso de que un horario espera aprobación. Si falla, el cambio de estado ya quedó: solo se registra. */
+  private async avisarPedidoAprobacion(id: number, companyId: number, actorId?: number) {
+    if (!this.permissions || !this.notifications) return;
+    try {
+      const h = await this.prisma.cPHorarioMensual.findFirst({
+        where: { id, companyId },
+        select: { fechaInicio: true, fechaFin: true, contrato: { select: { numero: true, entidad: { select: { nombre: true } } } } },
+      });
+      if (!h) return;
+      const destinatarios = (await this.permissions.getCompanyUserIdsWithWriteAccess(companyId, 'OPERACIONES')).filter((u) => u !== actorId);
+      const dia = (d: Date) => d.toISOString().slice(0, 10).split('-').reverse().join('/');
+      const message = `El horario del ${dia(h.fechaInicio)} al ${dia(h.fechaFin)} de ${h.contrato.entidad.nombre} (contrato ${h.contrato.numero}) espera tu aprobación.`;
+      for (const userId of destinatarios) {
+        await this.notifications.create({ userId, companyId, title: 'Horario por aprobar', message, link: `/operaciones/horarios/${id}` });
+      }
+    } catch (err) {
+      this.logger.warn(`No se pudo avisar del horario ${id} por aprobar: ${(err as Error).message}`);
+    }
   }
 
   /**

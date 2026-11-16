@@ -1,15 +1,24 @@
 import { useState } from 'react';
-import { X, Trash2, UserPlus } from 'lucide-react';
+import { X, Trash2, UserPlus, Plus } from 'lucide-react';
 import {
   createPuesto,
   updatePuesto,
   asignarGuardiaPuesto,
   removeGuardiaPuesto,
 } from '../../../services/contratacion-publica.service';
-import type { CPPuestoServicio, TipoTurnoPuesto } from '../../../types/contratacion-publica';
+import type { CPPuestoServicio, TipoTurnoPuesto, TurnoPuesto } from '../../../types/contratacion-publica';
+import { turnosSugeridos } from './turnosPuesto';
 import { TIPOS_TURNO_PUESTO } from '../../../types/contratacion-publica';
 import EmpleadoSelect from '../../../components/custodias/EmpleadoSelect';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+
+const HORA_VALIDA = /^([01]\d|2[0-3]):[0-5]\d$/;
+/** Pone los dos puntos sola mientras se escribe: «0700» → «07:00». */
+const horaEscrita = (v: string): string | null => {
+  const d = v.replace(/\D/g, '').slice(0, 4);
+  if (!d) return null;
+  return d.length > 2 ? `${d.slice(0, 2)}:${d.slice(2)}` : d;
+};
 
 const TIPO_TURNO_LABEL: Record<TipoTurnoPuesto, string> = { '8H': '8 horas', '12H': '12 horas', '24H': '24 horas' };
 
@@ -37,6 +46,10 @@ export default function PuestoFormModal({
   const [guardiasSimultaneosRequeridos, setGuardiasSimultaneosRequeridos] = useState(
     puesto?.guardiasSimultaneosRequeridos || 1,
   );
+  // Turnos del puesto (2026-11-16): cuáles hay y cuántos guardias en cada uno. El mínimo por día sale de la suma.
+  const [turnos, setTurnos] = useState<TurnoPuesto[]>(() => puesto?.turnos?.length ? puesto.turnos : puesto ? [] : turnosSugeridos('8H'));
+  const minimoPorTurnos = turnos.reduce((n, t) => n + (t.guardias || 0), 0);
+  const cambiarTurno = (i: number, cambio: Partial<TurnoPuesto>) => setTurnos((ts) => ts.map((t, j) => (j === i ? { ...t, ...cambio } : t)));
   const [canton, setCanton] = useState(puesto?.canton || '');
   const [edificio, setEdificio] = useState(puesto?.edificio || '');
   const [ubicacion, setUbicacion] = useState(puesto?.ubicacion || '');
@@ -54,15 +67,25 @@ export default function PuestoFormModal({
       setError('El nombre del puesto es obligatorio.');
       return;
     }
+    if (turnos.some((t) => !t.nombre.trim())) {
+      setError('Cada turno necesita un nombre (por ejemplo «Día» o «Noche»).');
+      return;
+    }
+    if (turnos.some((t) => (t.horaInicio && !HORA_VALIDA.test(t.horaInicio)) || (t.horaFin && !HORA_VALIDA.test(t.horaFin)))) {
+      setError('Las horas de los turnos van en formato de 24 horas, por ejemplo 07:00 o 19:00.');
+      return;
+    }
     setSaving(true);
     setError('');
+    const turnosLimpios = turnos.map((t) => ({ ...t, nombre: t.nombre.trim(), horaInicio: t.horaInicio || null, horaFin: t.horaFin || null }));
     try {
       if (current) {
         const updated = await updatePuesto(current.id, {
           nombre: nombre.trim(),
           tipoTurno,
           cantidadGuardias,
-          guardiasSimultaneosRequeridos,
+          guardiasSimultaneosRequeridos: turnos.length ? minimoPorTurnos : guardiasSimultaneosRequeridos,
+          turnos: turnosLimpios,
           canton: canton.trim(),
           edificio: edificio.trim(),
           ubicacion: ubicacion.trim(),
@@ -74,7 +97,8 @@ export default function PuestoFormModal({
           nombre: nombre.trim(),
           tipoTurno,
           cantidadGuardias,
-          guardiasSimultaneosRequeridos,
+          guardiasSimultaneosRequeridos: turnos.length ? minimoPorTurnos : guardiasSimultaneosRequeridos,
+          turnos: turnosLimpios,
           canton: canton.trim() || undefined,
           edificio: edificio.trim() || undefined,
           ubicacion: ubicacion.trim() || undefined,
@@ -124,7 +148,10 @@ export default function PuestoFormModal({
 
   const asignados = current?.guardias || [];
 
+  // El diálogo de confirmar es HERMANO del fondo de esta ventana, no hijo: si fuera hijo en el DOM, un clic en
+  // su fondo oscuro burbujearía hasta el `onClick={onClose}` de abajo y cerraría también esta ventana.
   return (
+    <>
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -140,8 +167,8 @@ export default function PuestoFormModal({
             </div>
             <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
               <div className="form-group" style={{ flex: '1 1 160px' }}>
-                <label>Tipo de turno *</label>
-                <select value={tipoTurno} onChange={(e) => setTipoTurno(e.target.value as TipoTurnoPuesto)}>
+                <label>Jornada *</label>
+                <select value={tipoTurno} onChange={(e) => { const j = e.target.value as TipoTurnoPuesto; setTipoTurno(j); if (!current) setTurnos(turnosSugeridos(j)); }}>
                   {TIPOS_TURNO_PUESTO.map((t) => (
                     <option key={t} value={t}>{TIPO_TURNO_LABEL[t]}</option>
                   ))}
@@ -151,16 +178,43 @@ export default function PuestoFormModal({
                 <label>Cantidad de guardias</label>
                 <input type="number" min={1} value={cantidadGuardias} onChange={(e) => setCantidadGuardias(Math.max(1, Number(e.target.value)))} />
               </div>
-              <div className="form-group" style={{ flex: '1 1 220px' }}>
-                <label>Guardias simultáneos requeridos</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={guardiasSimultaneosRequeridos}
-                  onChange={(e) => setGuardiasSimultaneosRequeridos(Math.max(1, Number(e.target.value)))}
-                  title="Mínimo de guardias que deben estar trabajando a la vez cada día (ej. 2 en un puesto 24H)"
-                />
-              </div>
+              {turnos.length === 0 && (
+                <div className="form-group" style={{ flex: '1 1 220px' }}>
+                  <label>Guardias por día (mínimo)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={guardiasSimultaneosRequeridos}
+                    onChange={(e) => setGuardiasSimultaneosRequeridos(Math.max(1, Number(e.target.value)))}
+                    title="Mínimo de guardias que deben estar trabajando cada día. Si defines los turnos, se calcula solo."
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label>Turnos del puesto</label>
+              <p style={{ fontSize: '0.8rem', color: '#718096', margin: '0 0 8px' }}>
+                Qué turnos tiene el puesto y cuántos guardias van en cada uno. {turnos.length > 0 && <>Mínimo por día: <strong>{minimoPorTurnos}</strong> guardia{minimoPorTurnos === 1 ? '' : 's'}.</>}
+              </p>
+              {turnos.map((t, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                  <input type="text" value={t.nombre} onChange={(e) => cambiarTurno(i, { nombre: e.target.value })} placeholder="Nombre (Día, Noche…)" aria-label="Nombre del turno" style={{ flex: '1 1 auto', minWidth: 0 }} />
+                  <input type="text" inputMode="numeric" maxLength={5} placeholder="07:00" value={t.horaInicio ?? ''} onChange={(e) => cambiarTurno(i, { horaInicio: horaEscrita(e.target.value) })} aria-label="Desde (HH:MM)" title="Desde, en formato de 24 horas (HH:MM)" style={{ width: 78, flex: 'none', textAlign: 'center', padding: '8px 4px' }} />
+                  <span style={{ color: '#a0aec0' }}>a</span>
+                  <input type="text" inputMode="numeric" maxLength={5} placeholder="19:00" value={t.horaFin ?? ''} onChange={(e) => cambiarTurno(i, { horaFin: horaEscrita(e.target.value) })} aria-label="Hasta (HH:MM)" title="Hasta, en formato de 24 horas (HH:MM)" style={{ width: 78, flex: 'none', textAlign: 'center', padding: '8px 4px' }} />
+                  <input type="number" min={1} max={50} value={t.guardias} onChange={(e) => cambiarTurno(i, { guardias: Math.max(1, Number(e.target.value)) })} aria-label="Guardias en este turno" title="Guardias en este turno" style={{ width: 64, flex: 'none' }} />
+                  <span style={{ fontSize: '0.78rem', color: '#718096', flex: 'none' }}>guardia{t.guardias === 1 ? '' : 's'}</span>
+                  <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Quitar turno" aria-label="Quitar turno" onClick={() => setTurnos((ts) => ts.filter((_, j) => j !== i))}>
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+              {turnos.length < 6 && (
+                <button type="button" className="btn-secondary" style={{ alignSelf: 'flex-start' }} onClick={() => setTurnos((ts) => [...ts, { nombre: '', horaInicio: null, horaFin: null, guardias: 1 }])}>
+                  <Plus size={14} /> Agregar turno
+                </button>
+              )}
             </div>
             <p style={{ fontSize: '0.8rem', color: '#718096', margin: '4px 0 8px' }}>
               Dónde queda el puesto (opcional): aparece en la tabla «Lugar del servicio» del informe mensual.
@@ -233,6 +287,7 @@ export default function PuestoFormModal({
           <button className="btn-secondary" onClick={onClose}>Cerrar</button>
         </div>
       </div>
+    </div>
 
       {confirmandoQuitar != null && (
         <ConfirmDialog
@@ -244,6 +299,6 @@ export default function PuestoFormModal({
           onCancel={() => setConfirmandoQuitar(null)}
         />
       )}
-    </div>
+    </>
   );
 }

@@ -227,6 +227,8 @@ export default function Sidebar() {
       ? [{ label: 'Por aprobar', path: '/contratacion-publica/por-revisar', icon: '🔎' }]
       : []),
     { label: 'Por entregar', path: '/contratacion-publica/mis-documentos', icon: '📥' },
+    // Contratos con sus puestos y turnos (2026-11-16): Contratación Pública los crea y Operaciones ve lo mismo.
+    { label: 'Contratos', path: '/contratacion-publica/contratos', icon: '📑' },
     { label: 'Configuración', path: '/contratacion-publica/configuracion', icon: '⚙️', separadorAntes: true },
   ];
 

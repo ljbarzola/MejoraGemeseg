@@ -130,7 +130,7 @@ export class CPHorariosController {
     @Body() dto: CambiarEstadoHorarioDto,
     @Req() req: any,
   ) {
-    return this.service.cambiarEstado(id, dto, req.user.companyId);
+    return this.service.cambiarEstado(id, dto, req.user.companyId, req.user.userId);
   }
 
   @Get(':id/pdf')

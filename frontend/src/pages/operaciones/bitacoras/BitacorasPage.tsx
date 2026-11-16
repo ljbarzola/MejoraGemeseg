@@ -19,6 +19,7 @@ import ClearFiltersButton from '../../../components/common/ClearFiltersButton';
 import ColumnPickerMenu from '../../../components/common/ColumnPickerMenu';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import DateInput from '../../../components/common/DateInput';
+import FilterField from '../../../components/common/FilterField';
 import { usePerm } from '../../../contexts/PermissionsContext';
 import { useColumnPreferences } from '../../../hooks/useColumnPreferences';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
@@ -168,8 +169,8 @@ export default function BitacorasPage() {
           </button>
         }
       />
-      <MovidoAConfiguracion to="/operaciones/configuracion?pestana=horas" enlace="Ir a Horario de los turnos">
-        «Horario de los turnos» se movió a Configuración.
+      <MovidoAConfiguracion to="/operaciones/configuracion?pestana=horas" enlace="Abrir Horario de los turnos">
+        La hora de cada turno, con la que se comparan las horas de la bitácora, se ajusta en Configuración.
       </MovidoAConfiguracion>
 
       {agente && (!agente.activo || !agente.iaConfigurada) && (
@@ -194,12 +195,16 @@ export default function BitacorasPage() {
           <select className="filter-select" value={filtros.resultado ?? ''} onChange={(e) => cambiarFiltro({ resultado: e.target.value })} aria-label="Resultado">
             {OPCIONES_RESULTADO.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <div style={{ minWidth: 150 }}>
-            <DateInput value={filtros.desde ?? ''} onChange={(v) => cambiarFiltro({ desde: v })} placeholder="Desde" max={filtros.hasta || undefined} />
-          </div>
-          <div style={{ minWidth: 150 }}>
-            <DateInput value={filtros.hasta ?? ''} onChange={(v) => cambiarFiltro({ hasta: v })} placeholder="Hasta" min={filtros.desde || undefined} />
-          </div>
+          <FilterField label="Desde">
+            <div className="filtro-fecha-dateinput">
+              <DateInput className="filtro-fecha-dia" value={filtros.desde ?? ''} onChange={(v) => cambiarFiltro({ desde: v })} max={filtros.hasta || undefined} />
+            </div>
+          </FilterField>
+          <FilterField label="Hasta">
+            <div className="filtro-fecha-dateinput">
+              <DateInput className="filtro-fecha-dia" value={filtros.hasta ?? ''} onChange={(v) => cambiarFiltro({ hasta: v })} min={filtros.desde || undefined} />
+            </div>
+          </FilterField>
         </div>
         <div className="filter-bar-actions">
           <ColumnPickerMenu

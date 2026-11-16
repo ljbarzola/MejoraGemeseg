@@ -407,8 +407,8 @@ export default function EntidadesPublicasList() {
         }
       />
       {canEdit && (
-        <MovidoAConfiguracion to="/contratacion-publica/configuracion?pestana=campos" enlace="Ir a Campos de la entidad">
-          «Campos de la entidad» y «Carpeta de Drive» se movieron a Configuración.
+        <MovidoAConfiguracion to="/contratacion-publica/configuracion?pestana=campos" enlace="Abrir Campos de la entidad">
+          Los campos de la entidad y la carpeta de Drive se configuran en Configuración.
         </MovidoAConfiguracion>
       )}
 
