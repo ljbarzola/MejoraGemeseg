@@ -1,12 +1,14 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Inbox, ListX, Package, Plug } from 'lucide-react';
+import { Inbox, ListX, Package, Plug, Truck } from 'lucide-react';
 import ErrorBanner from '../../components/common/ErrorBanner';
 import PageTabs from '../../components/common/PageTabs';
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import ConexionesConfigSection from '../../components/ventas/ConexionesConfigSection';
 import MotivosCatalogo from '../../components/ventas/MotivosCatalogo';
 import ServiciosConfigSection from '../../components/ventas/ServiciosConfigSection';
+import CustodiaTarifasSection from '../../components/ventas/CustodiaTarifasSection';
+import '../../styles/custodia.css';
 import { useCanalesLead } from '../../hooks/useCanalesLead';
 import { usePerm } from '../../contexts/PermissionsContext';
 import {
@@ -25,8 +27,8 @@ const mensajeDe = (err: any, porDefecto: string) => {
 
 // `?tab=` se conserva tal cual: hay enlaces guardados. `descartes`, `perdidas` y `contratos`
 // eran listas de motivos aparte; hoy las tres se ven a la vez bajo «Motivos de cierre».
-type Seccion = 'conexiones' | 'fuentes' | 'servicios' | 'descartes' | 'perdidas' | 'contratos';
-type Pestana = 'conexiones' | 'fuentes' | 'servicios' | 'motivos';
+type Seccion = 'conexiones' | 'fuentes' | 'servicios' | 'custodia' | 'descartes' | 'perdidas' | 'contratos';
+type Pestana = 'conexiones' | 'fuentes' | 'servicios' | 'custodia' | 'motivos';
 
 type Icono = ComponentType<{ size?: number }>;
 
@@ -34,10 +36,11 @@ const PESTANAS: { key: Pestana; label: string; icono: Icono; primera: Seccion }[
   { key: 'conexiones', label: 'Cómo llegan los posibles clientes', icono: Plug, primera: 'conexiones' },
   { key: 'fuentes', label: 'Fuentes', icono: Inbox, primera: 'fuentes' },
   { key: 'servicios', label: 'Servicios', icono: Package, primera: 'servicios' },
+  { key: 'custodia', label: 'Tarifas de custodia', icono: Truck, primera: 'custodia' },
   { key: 'motivos', label: 'Motivos de cierre', icono: ListX, primera: 'descartes' },
 ];
 
-const SECCIONES: Seccion[] = ['conexiones', 'fuentes', 'servicios', 'descartes', 'perdidas', 'contratos'];
+const SECCIONES: Seccion[] = ['conexiones', 'fuentes', 'servicios', 'custodia', 'descartes', 'perdidas', 'contratos'];
 const SECCIONES_MOTIVOS: Seccion[] = ['descartes', 'perdidas', 'contratos'];
 
 const pestanaDe = (s: Seccion): Pestana => (SECCIONES_MOTIVOS.includes(s) ? 'motivos' : (s as Pestana));
@@ -82,6 +85,12 @@ export default function ConfiguracionVentasPage() {
         ayuda: 'El embudo se pierde en tres lugares y cada uno tiene SU lista de motivos. Así se puede analizar por separado en qué nivel y por qué se va la gente.',
         detalle: 'Si un motivo ya se usó no se borra: se desactiva para que deje de ofrecerse sin perder lo registrado.',
       }
+      : pestana === 'custodia'
+        ? {
+          titulo: 'Tarifas de custodia',
+          ayuda: 'Los costos con los que el Cotizador calcula una custodia móvil: vehículo, personal por región, viáticos, imprevistos, margen e IVA, más los extras opcionales.',
+          detalle: 'Son costos internos: solo los cambia un administrador o gerente. Las cotizaciones ya hechas no cambian.',
+        }
       : pestana === 'fuentes'
         ? {
           titulo: 'Fuentes de posibles clientes',
@@ -138,6 +147,8 @@ export default function ConfiguracionVentasPage() {
             {seccion === 'servicios' && (
               <ServiciosConfigSection puedeEditar={puedeEditar} onChanged={() => getServicios().then(setServicios).catch(() => {})} />
             )}
+
+            {seccion === 'custodia' && <CustodiaTarifasSection puedeEditar={puedeEditar} />}
 
             {pestana === 'motivos' && <MotivosCatalogo puedeEditar={puedeEditar} />}
 

@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import type { CotInstallService, CotProduct, CotQuote } from '@prisma/client';
+import { limpiarLineaCustodia, type CotCustodiaLine } from './cotizador-custodia.util';
 
 // Reglas puras del Cotizador (sin base de datos), para poder probarlas solas.
 
@@ -249,7 +250,7 @@ export interface CotInstallLine {
   customMargin: number | null;
 }
 
-export type CotLine = CotProductLine | CotKitLine | CotInstallLine;
+export type CotLine = CotProductLine | CotKitLine | CotInstallLine | CotCustodiaLine;
 
 const bad = (msg: string): never => {
   throw new BadRequestException(msg);
@@ -326,6 +327,8 @@ export function sanitizeLines(items: unknown): CotLine[] {
   if (items.length > 500) return bad('Demasiadas líneas (máximo 500)');
   return items.map((raw): CotLine => {
     if (!isObj(raw)) return bad('Línea no válida');
+    // Custodia móvil: lleva su cálculo guardado (precio congelado); ver cotizador-custodia.util.ts.
+    if (raw.isCustodia) return limpiarLineaCustodia(raw);
     if (raw.isInstallService) {
       return {
         isInstallService: true,

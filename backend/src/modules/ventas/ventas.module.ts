@@ -38,6 +38,8 @@ import { CotizadorCatalogoService } from './cotizador-catalogo.service';
 import { CotizadorCatalogoController } from './cotizador-catalogo.controller';
 import { CotizadorCotizacionesService } from './cotizador-cotizaciones.service';
 import { CotizadorCotizacionesController } from './cotizador-cotizaciones.controller';
+import { CotizadorCustodiaService } from './cotizador-custodia.service';
+import { CotizadorCustodiaController } from './cotizador-custodia.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { PersonalModule } from '../personal/personal.module';
 import { PermissionsModule } from '../permissions/permissions.module';
@@ -77,6 +79,7 @@ import { VentasUbicacionesService } from './ventas-ubicaciones.service';
     VentasWhatsappClicsController,
     CotizadorCatalogoController,
     CotizadorCotizacionesController,
+    CotizadorCustodiaController,
   ],
   providers: [
     VentasService,
@@ -100,6 +103,7 @@ import { VentasUbicacionesService } from './ventas-ubicaciones.service';
     VentasWhatsappClicsService,
     CotizadorCatalogoService,
     CotizadorCotizacionesService,
+    CotizadorCustodiaService,
   ],
   exports: [
     VentasCicloService,

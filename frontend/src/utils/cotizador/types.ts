@@ -1,4 +1,5 @@
 // Tipos del Cotizador de Ventas y CRM (lo que devuelve y recibe /ventas/cotizador/*).
+import type { CotCustodiaLine } from './custodia';
 
 export type CotKind = 'EQUIPO' | 'MATERIAL' | 'SERVICIO';
 
@@ -75,12 +76,15 @@ export interface CotInstallLine {
   customMargin: number | null;
 }
 
-export type CotLine = CotProductLine | CotKitLine | CotInstallLine;
+export type CotLine = CotProductLine | CotKitLine | CotInstallLine | CotCustodiaLine;
 
 export const isKitLine = (l: CotLine): l is CotKitLine => 'isKit' in l && l.isKit === true;
 export const isInstallLine = (l: CotLine): l is CotInstallLine =>
   'isInstallService' in l && l.isInstallService === true;
-export const isProductLine = (l: CotLine): l is CotProductLine => !isKitLine(l) && !isInstallLine(l);
+/** Servicio de custodia móvil con su cálculo guardado (ver utils/cotizador/custodia.ts). */
+export const isCustodiaLine = (l: CotLine): l is CotCustodiaLine => 'isCustodia' in l && l.isCustodia === true;
+export const isProductLine = (l: CotLine): l is CotProductLine =>
+  !isKitLine(l) && !isInstallLine(l) && !isCustodiaLine(l);
 
 export type DiscountType = 'none' | 'percent' | 'fixed';
 
