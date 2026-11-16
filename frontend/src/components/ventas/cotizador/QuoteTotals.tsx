@@ -49,19 +49,10 @@ export default function QuoteTotals({ totals, discountType, discountValue, total
         <span>Subtotal</span>
         <span>{money(totals.subtotal)}</span>
       </div>
-      {/* Una fila por tasa de IVA (casi siempre solo la de 15 %; la custodia puede llevar otra). */}
-      {totals.ivaDesglose.filter((d) => d.pct > 0).map((d) => (
-        <div className="row" key={d.pct}>
-          <span>IVA {String(d.pct).replace('.', ',')}%</span>
-          <span>{money(d.iva)}</span>
-        </div>
-      ))}
-      {totals.ivaDesglose.every((d) => d.pct === 0) && (
-        <div className="row">
-          <span>IVA 0%</span>
-          <span>{money(0)}</span>
-        </div>
-      )}
+      <div className="row">
+        <span>IVA 15%</span>
+        <span>{money(totals.iva)}</span>
+      </div>
       <div className="row total">
         <span>TOTAL</span>
         <span id={totalId}>{money(totals.total)}</span>

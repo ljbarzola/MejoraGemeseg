@@ -4,7 +4,7 @@ import type { CotCustodiaLine } from './custodia';
 import { addOrReplaceCustodia } from './quoteState';
 
 // Línea de custodia con el precio ya congelado (como la guarda la cotización).
-const custodia = (id: string, precioSinIva: number, ivaPct: number, qty = 1): CotCustodiaLine => ({
+const custodia = (id: string, precioSinIva: number, qty = 1): CotCustodiaLine => ({
   isCustodia: true,
   id,
   description: 'Servicio de custodia móvil',
@@ -12,7 +12,6 @@ const custodia = (id: string, precioSinIva: number, ivaPct: number, qty = 1): Co
   entrada: {} as CotCustodiaLine['entrada'],
   resultado: {
     precioSinIva,
-    ivaPct,
     costoDirecto: 0,
     imprevistos: 0,
     costoTotal: precioSinIva * 0.7,
@@ -31,38 +30,31 @@ const totales = (items: CotCustodiaLine[], discountType: string = 'none', discou
   computeQuote({ items, catalog: buildCatalogMap([]), supplierMargins: {}, installMargin: 35, discountType, discountValue }).totals;
 
 describe('totales con custodia móvil', () => {
-  it('una custodia al 15 % da el IVA de siempre', () => {
-    const t = totales([custodia('a', 408.31, 15)]);
+  it('el IVA de la custodia se calcula al final, igual que el de los productos', () => {
+    const t = totales([custodia('a', 408.31)]);
     expect(t.totalCustodiaSinIva).toBeCloseTo(408.31, 2);
     expect(t.iva).toBe(61.25);
     expect(t.total).toBe(469.56);
-    expect(t.ivaDesglose.map((d) => d.pct)).toEqual([15]);
   });
 
-  it('una custodia al 0 % no paga IVA y no deja una fila de 15 % vacía', () => {
-    const t = totales([custodia('a', 408.31, 0)]);
-    expect(t.iva).toBe(0);
-    expect(t.total).toBe(408.31);
-    expect(t.ivaDesglose.map((d) => d.pct)).toEqual([0]);
-  });
-
-  it('con tasas distintas, el descuento se reparte en proporción y cada grupo lleva su IVA', () => {
-    const t = totales([custodia('a', 100, 15), custodia('b', 100, 0)], 'percent', 10);
+  it('el descuento se resta antes del IVA, también sobre la custodia', () => {
+    const t = totales([custodia('a', 100), custodia('b', 100)], 'percent', 10);
     expect(t.discount).toBe(20);
-    expect(t.iva).toBe(13.5); // 15 % de los 90 que quedan del grupo al 15 %
-    expect(t.total).toBe(193.5);
+    expect(t.subtotal).toBe(180);
+    expect(t.iva).toBe(27); // 15 % de los 180 que quedan
+    expect(t.total).toBe(207);
   });
 
   it('la cantidad multiplica el precio', () => {
-    expect(totales([custodia('a', 100, 15, 3)]).totalCustodiaSinIva).toBe(300);
+    expect(totales([custodia('a', 100, 3)]).totalCustodiaSinIva).toBe(300);
   });
 
   it('agregar la misma custodia otra vez la reemplaza (Recalcular no duplica)', () => {
-    const primera = custodia('a', 100, 15);
-    const nueva = custodia('a', 150, 15);
+    const primera = custodia('a', 100);
+    const nueva = custodia('a', 150);
     const items = addOrReplaceCustodia([primera], nueva);
     expect(items).toHaveLength(1);
     expect(items[0]).toBe(nueva);
-    expect(addOrReplaceCustodia(items, custodia('b', 10, 15))).toHaveLength(2);
+    expect(addOrReplaceCustodia(items, custodia('b', 10))).toHaveLength(2);
   });
 });

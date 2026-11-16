@@ -18,13 +18,11 @@ import { isCustodiaLine, isInstallLine, isKitLine } from './types';
 import type { CotCustodiaLine } from './custodia';
 
 export const IVA_RATE = 0.15;
-/** El 15 % como número entero (para agrupar el IVA por tasa sin errores de decimales). */
-const IVA_PCT_ESTANDAR = Math.round(IVA_RATE * 100);
 export const DEFAULT_SUPPLIER_MARGIN = 15;
 export const DEFAULT_INSTALL_MARGIN = 35;
 export const SIN_PROVEEDOR = 'Sin proveedor';
 
-const r2 = (n: number): number => Math.round(n * 100) / 100;
+export const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 // ---------------------------------------------------------------------------
 // Producto "para cotizar"
@@ -272,17 +270,7 @@ export type LineComputation =
       gananciaTotal: number;
       /** Precio guardado × cantidad, sin IVA. */
       pvpTotal: number;
-      /** IVA con el que se cotizó esta custodia (configurable en las tarifas). */
-      ivaPct: number;
     };
-
-/** IVA de una parte de la cotización: los productos van al 15 %; la custodia, con el IVA de sus tarifas. */
-export interface IvaDesglose {
-  pct: number;
-  /** Parte de este grupo ya con el descuento aplicado. */
-  base: number;
-  iva: number;
-}
 
 export interface QuoteTotals {
   subtotalEquipo: number;
@@ -295,8 +283,6 @@ export interface QuoteTotals {
   subtotal: number;
   iva: number;
   total: number;
-  /** Una fila por tasa de IVA distinta (casi siempre una sola: 15 %). */
-  ivaDesglose: IvaDesglose[];
 }
 
 export interface QuoteComputation {
@@ -374,9 +360,6 @@ export function computeQuote(input: QuoteInput): QuoteComputation {
   let subtotalEquipo = 0;
   let totalInstSinIva = 0;
   let totalCustodiaSinIva = 0;
-  // Base de cada tasa de IVA. Los productos siempre van al 15 %; cada custodia con el suyo.
-  const bases = new Map<number, number>();
-  const sumarBase = (pct: number, monto: number) => bases.set(pct, (bases.get(pct) ?? 0) + monto);
 
   const note = (c: ProductComputation) => {
     if (c.change) changes.set(c.change.code, c.change);
@@ -390,9 +373,8 @@ export function computeQuote(input: QuoteInput): QuoteComputation {
       const unit = line.resultado.precioSinIva;
       const pvpTotal = unit * qty;
       totalCustodiaSinIva += pvpTotal;
-      sumarBase(line.resultado.ivaPct, pvpTotal);
       lines.push({
-        kind: 'custodia', line, pvpTotal, ivaPct: line.resultado.ivaPct,
+        kind: 'custodia', line, pvpTotal,
         costTotal: line.resultado.costoTotal * qty, gananciaTotal: line.resultado.utilidad * qty,
       });
       continue;
@@ -431,30 +413,17 @@ export function computeQuote(input: QuoteInput): QuoteComputation {
     lines.push({ kind: 'product', ...c });
   }
 
-  sumarBase(IVA_PCT_ESTANDAR, subtotalEquipo + totalInstSinIva);
   const base = subtotalEquipo + totalInstSinIva + totalCustodiaSinIva;
   const discount = calcDiscount(base, input.discountType, input.discountValue);
   const subtotal = base - discount;
-  // Con una sola tasa (lo de siempre: todo al 15 %) el IVA es exactamente el de antes. Con varias, el
-  // descuento se reparte en proporción a lo que pesa cada grupo y cada uno lleva su IVA.
-  const ivaDesglose: IvaDesglose[] = [];
-  if (bases.size <= 1) {
-    ivaDesglose.push({ pct: IVA_PCT_ESTANDAR, base: subtotal, iva: r2(subtotal * IVA_RATE) });
-  } else {
-    const factor = base > 0 ? subtotal / base : 0;
-    for (const [pct, monto] of [...bases.entries()].sort((a, b) => b[0] - a[0])) {
-      if (monto === 0) continue; // un grupo sin importe (p. ej. sin productos) no lleva fila de IVA
-      const parte = monto * factor;
-      ivaDesglose.push({ pct, base: parte, iva: r2(parte * (pct / 100)) });
-    }
-  }
-  const iva = r2(ivaDesglose.reduce((s, d) => s + d.iva, 0));
+  // La custodia es una línea más: el IVA se calcula una sola vez, al final, sobre el subtotal con descuento.
+  const iva = r2(subtotal * IVA_RATE);
   // Igual que lo que se muestra (toFixed(2)): evita diferencias de medio centavo entre pantalla e historial
   const total = Math.max(0, Number((subtotal + iva).toFixed(2)));
 
   return {
     lines,
-    totals: { subtotalEquipo, totalInstSinIva, totalCustodiaSinIva, base, discount, subtotal, iva, total, ivaDesglose },
+    totals: { subtotalEquipo, totalInstSinIva, totalCustodiaSinIva, base, discount, subtotal, iva, total },
     priceChanges: [...changes.values()],
     missing: [...missing],
     legacyCount,

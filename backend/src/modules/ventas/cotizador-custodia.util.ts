@@ -48,14 +48,13 @@ export interface TarifasCustodia {
   equipos: number;
   esperaVehiculoHora: number;
   imprevistosPct: number;
-  margenPct: number;
-  ivaPct: number;
   minAgentes: number;
   extras: ExtraCustodia[];
 }
 
 // Valores de la hoja que Gemeseg usa hoy para cotizar. Cada empresa los edita en Ventas → Configuración.
-// El IVA arranca en 15 % como el resto del Cotizador; confirmar con contabilidad si la custodia lleva IVA.
+// El IVA no se configura aquí: la custodia es una línea más de la cotización y el IVA se calcula al final, igual
+// que con los productos. El margen tampoco: se define en cada cotización (por defecto 30 %).
 export const TARIFAS_CUSTODIA_POR_DEFECTO: TarifasCustodia = {
   combustibleGalon: 3.17,
   rendimientoKmGalon: 42,
@@ -76,8 +75,6 @@ export const TARIFAS_CUSTODIA_POR_DEFECTO: TarifasCustodia = {
   equipos: 0,
   esperaVehiculoHora: 0,
   imprevistosPct: 5,
-  margenPct: 30,
-  ivaPct: 15,
   minAgentes: 1,
   extras: [
     { id: 'recargo-nocturno', nombre: 'Recargo nocturno', modo: 'PORCENTAJE', valor: 0, unidad: 'servicio' },
@@ -88,6 +85,9 @@ export const TARIFAS_CUSTODIA_POR_DEFECTO: TarifasCustodia = {
     { id: 'financiamiento', nombre: 'Financiamiento / cobranza diferida', modo: 'PORCENTAJE', valor: 0, unidad: 'servicio' },
   ],
 };
+
+/** Margen con el que arranca cada cálculo de custodia (se cambia en la misma calculadora). */
+export const MARGEN_CUSTODIA_POR_DEFECTO = 30;
 
 export interface ExtraElegido {
   id: string;
@@ -122,8 +122,8 @@ export interface EntradaCustodia {
   extras: ExtraElegido[];
   /** null = usar el de las tarifas. */
   imprevistosPct: number | null;
-  margenPct: number | null;
-  ivaPct: number | null;
+  /** Margen de ganancia sobre el precio de venta, en %. */
+  margenPct: number;
 }
 
 export interface ConceptoCustodia {
@@ -149,9 +149,6 @@ export interface ResultadoCustodia {
   margenPct: number;
   /** Precio de venta antes de IVA. */
   precioSinIva: number;
-  ivaPct: number;
-  iva: number;
-  totalConIva: number;
   utilidad: number;
   margenEfectivoPct: number;
   costoPorKm: number;
@@ -247,8 +244,6 @@ export function limpiarTarifas(raw: unknown, base: TarifasCustodia = TARIFAS_CUS
     equipos: rango(raw.equipos, 'Equipos y comunicaciones', 0, m, base.equipos),
     esperaVehiculoHora: rango(raw.esperaVehiculoHora, 'La espera del vehículo', 0, m, base.esperaVehiculoHora),
     imprevistosPct: rango(raw.imprevistosPct, 'Los imprevistos', 0, 100, base.imprevistosPct),
-    margenPct: rango(raw.margenPct, 'El margen', 0, 95, base.margenPct),
-    ivaPct: rango(raw.ivaPct, 'El IVA', 0, 100, base.ivaPct),
     minAgentes: Math.trunc(rango(raw.minAgentes, 'El mínimo de custodios', 0, 20, base.minAgentes)),
     extras,
   };
@@ -306,8 +301,7 @@ export function limpiarEntrada(raw: unknown): EntradaCustodia {
       return { id, cantidad: rango(e.cantidad, 'La cantidad de un extra', 0, 10_000, 1) };
     }),
     imprevistosPct: nullable(raw.imprevistosPct, 'Los imprevistos', 100),
-    margenPct: nullable(raw.margenPct, 'El margen', 95),
-    ivaPct: nullable(raw.ivaPct, 'El IVA', 100),
+    margenPct: rango(raw.margenPct, 'El margen', 0, 95, MARGEN_CUSTODIA_POR_DEFECTO),
   };
 }
 
@@ -326,9 +320,6 @@ const VACIO: Omit<ResultadoCustodia, 'ok' | 'errores'> = {
   costoTotal: 0,
   margenPct: 0,
   precioSinIva: 0,
-  ivaPct: 0,
-  iva: 0,
-  totalConIva: 0,
   utilidad: 0,
   margenEfectivoPct: 0,
   costoPorKm: 0,
@@ -352,7 +343,7 @@ export function calcularCustodia(e: EntradaCustodia, t: TarifasCustodia): Result
         : `Se necesitan al menos ${t.minAgentes} custodios (los choferes no cuentan como custodios).`,
     );
   }
-  const margenPct = e.margenPct ?? t.margenPct;
+  const margenPct = e.margenPct;
   if (margenPct >= 100) errores.push('El margen debe ser menor a 100 %.');
   for (const x of e.extras) {
     if (!t.extras.some((ex) => ex.id === x.id)) errores.push('Un extra elegido ya no existe en las tarifas.');
@@ -362,7 +353,6 @@ export function calcularCustodia(e: EntradaCustodia, t: TarifasCustodia): Result
   }
 
   const imprevistosPct = e.imprevistosPct ?? t.imprevistosPct;
-  const ivaPct = e.ivaPct ?? t.ivaPct;
 
   // Kilómetros. El vehículo siempre vuelve; el servicio solo cuenta el regreso si la custodia lo cubre.
   const kmRegreso = e.kmRegreso ?? e.kmIda;
@@ -436,7 +426,6 @@ export function calcularCustodia(e: EntradaCustodia, t: TarifasCustodia): Result
   const imprevistos = r2(imprevistosBruto);
   const costoTotal = r2(costoTotalBruto);
   const precioSinIva = r2(precioBruto);
-  const iva = r2(precioSinIva * (ivaPct / 100));
   const utilidad = r2(precioBruto - costoTotalBruto);
 
   return {
@@ -452,9 +441,6 @@ export function calcularCustodia(e: EntradaCustodia, t: TarifasCustodia): Result
     costoTotal,
     margenPct,
     precioSinIva,
-    ivaPct,
-    iva,
-    totalConIva: r2(precioSinIva + iva),
     utilidad,
     margenEfectivoPct: precioSinIva > 0 ? r2((utilidad / precioSinIva) * 100) : 0,
     costoPorKm: kmServicio > 0 ? r2(costoTotalBruto / kmServicio) : 0,
@@ -469,7 +455,6 @@ export function calcularCustodia(e: EntradaCustodia, t: TarifasCustodia): Result
 /** El precio con el que se cotizó, congelado: aunque las tarifas cambien, la cotización no se mueve. */
 export interface ResumenCustodiaGuardado {
   precioSinIva: number;
-  ivaPct: number;
   costoDirecto: number;
   imprevistos: number;
   costoTotal: number;
@@ -510,7 +495,6 @@ export function limpiarLineaCustodia(raw: Record<string, unknown>): CotCustodiaL
     entrada: limpiarEntrada(raw.entrada),
     resultado: {
       precioSinIva: precio,
-      ivaPct: rango(r.ivaPct, 'El IVA', 0, 100, 0),
       costoDirecto: din(r.costoDirecto, 'El costo directo'),
       imprevistos: din(r.imprevistos, 'Los imprevistos'),
       costoTotal: din(r.costoTotal, 'El costo total'),
