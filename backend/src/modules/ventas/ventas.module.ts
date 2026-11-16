@@ -32,6 +32,10 @@ import { GoogleAdsConversionesService } from './google-ads-conversiones.service'
 import { VentasConfigService } from './ventas-config.service';
 import { VentasConfigController } from './ventas-config.controller';
 import { VentasAnaliticaController } from './ventas-analitica.controller';
+import { VentasMetasService } from './ventas-metas.service';
+import { VentasMetasController } from './ventas-metas.controller';
+import { VentasPivotService } from './ventas-pivot.service';
+import { VentasPivotController } from './ventas-pivot.controller';
 import { VentasOportunidadesController } from './ventas-oportunidades.controller';
 import { VentasAcuerdosController } from './ventas-acuerdos.controller';
 import { CotizadorCatalogoService } from './cotizador-catalogo.service';
@@ -68,6 +72,8 @@ import { VentasUbicacionesService } from './ventas-ubicaciones.service';
     VentasMotivosController,
     VentasOportunidadesController,
     VentasAnaliticaController,
+    VentasMetasController,
+    VentasPivotController,
     VentasLeadsController,
     VentasConversionesController,
     VentasConversionesCronController,
@@ -93,6 +99,8 @@ import { VentasUbicacionesService } from './ventas-ubicaciones.service';
     VentasRenovacionesService,
     VentasCicloService,
     VentasAnaliticaService,
+    VentasMetasService,
+    VentasPivotService,
     VentasLeadsService,
     VentasExpedienteService,
     VentasConversionesService,

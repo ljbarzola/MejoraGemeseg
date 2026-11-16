@@ -85,7 +85,7 @@ describe('buildSystemGuide', () => {
     // Nombres de pantalla: «Hoy» → «Para hoy» (2026-10-18) y Configuración con cuatro pestañas (2026-10-20):
     // Cómo llegan los posibles clientes, Fuentes, Servicios y Motivos de cierre. El servicio sale SOLO del catálogo de Configuración.
     expect(guide).toContain('pestaña "Para hoy"');
-    expect(guide).toContain('cuatro pestañas arriba');
+    expect(guide).toContain('estas pestañas arriba');
     expect(guide).toContain('pestaña "Motivos de cierre"');
     expect(guide).not.toContain('pestaña "Hoy"');
     expect(guide).not.toContain('antes se llamaba "Conexiones"');

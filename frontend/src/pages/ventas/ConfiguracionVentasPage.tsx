@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Inbox, ListX, Package, Plug, Truck } from 'lucide-react';
+import { Inbox, ListX, Package, Plug, Target, Truck } from 'lucide-react';
 import ErrorBanner from '../../components/common/ErrorBanner';
 import PageTabs from '../../components/common/PageTabs';
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
@@ -8,9 +8,11 @@ import ConexionesConfigSection from '../../components/ventas/ConexionesConfigSec
 import MotivosCatalogo from '../../components/ventas/MotivosCatalogo';
 import ServiciosConfigSection from '../../components/ventas/ServiciosConfigSection';
 import CustodiaTarifasSection from '../../components/ventas/CustodiaTarifasSection';
+import MetasConfigSection from '../../components/ventas/MetasConfigSection';
 import '../../styles/custodia.css';
 import { useCanalesLead } from '../../hooks/useCanalesLead';
 import { usePerm } from '../../contexts/PermissionsContext';
+import { getUser } from '../../services/auth.service';
 import {
   getConfiguracionVentas,
   getServicios,
@@ -27,8 +29,8 @@ const mensajeDe = (err: any, porDefecto: string) => {
 
 // `?tab=` se conserva tal cual: hay enlaces guardados. `descartes`, `perdidas` y `contratos`
 // eran listas de motivos aparte; hoy las tres se ven a la vez bajo «Motivos de cierre».
-type Seccion = 'conexiones' | 'fuentes' | 'servicios' | 'custodia' | 'descartes' | 'perdidas' | 'contratos';
-type Pestana = 'conexiones' | 'fuentes' | 'servicios' | 'custodia' | 'motivos';
+type Seccion = 'conexiones' | 'fuentes' | 'servicios' | 'custodia' | 'metas' | 'descartes' | 'perdidas' | 'contratos';
+type Pestana = 'conexiones' | 'fuentes' | 'servicios' | 'custodia' | 'metas' | 'motivos';
 
 type Icono = ComponentType<{ size?: number }>;
 
@@ -37,10 +39,11 @@ const PESTANAS: { key: Pestana; label: string; icono: Icono; primera: Seccion }[
   { key: 'fuentes', label: 'Fuentes', icono: Inbox, primera: 'fuentes' },
   { key: 'servicios', label: 'Servicios', icono: Package, primera: 'servicios' },
   { key: 'custodia', label: 'Tarifas de custodia', icono: Truck, primera: 'custodia' },
+  { key: 'metas', label: 'Metas', icono: Target, primera: 'metas' },
   { key: 'motivos', label: 'Motivos de cierre', icono: ListX, primera: 'descartes' },
 ];
 
-const SECCIONES: Seccion[] = ['conexiones', 'fuentes', 'servicios', 'custodia', 'descartes', 'perdidas', 'contratos'];
+const SECCIONES: Seccion[] = ['conexiones', 'fuentes', 'servicios', 'custodia', 'metas', 'descartes', 'perdidas', 'contratos'];
 const SECCIONES_MOTIVOS: Seccion[] = ['descartes', 'perdidas', 'contratos'];
 
 const pestanaDe = (s: Seccion): Pestana => (SECCIONES_MOTIVOS.includes(s) ? 'motivos' : (s as Pestana));
@@ -53,9 +56,12 @@ export default function ConfiguracionVentasPage() {
   const { canales } = useCanalesLead();
   const { canWrite } = usePerm();
   const puedeEditar = canWrite('VENTAS');
+  // Las metas son solo de administradores y gerentes (2026-11-16): a los demás ni siquiera se les muestra la pestaña.
+  const rol = getUser()?.role;
+  const esGerencia = rol === 'ADMIN' || rol === 'MANAGER';
   const [params, setParams] = useSearchParams();
   const pedida = params.get('tab') as Seccion | null;
-  const seccion: Seccion = pedida && SECCIONES.includes(pedida) ? pedida : 'conexiones';
+  const seccion: Seccion = pedida && SECCIONES.includes(pedida) && (pedida !== 'metas' || esGerencia) ? pedida : 'conexiones';
   const pestana = pestanaDe(seccion);
   const elegir = (s: Seccion) => setParams(s === 'conexiones' ? {} : { tab: s }, { replace: true });
 
@@ -91,6 +97,11 @@ export default function ConfiguracionVentasPage() {
           ayuda: 'Los costos con los que el Cotizador calcula una custodia móvil: vehículo, personal por región, viáticos, imprevistos, margen e IVA, más los extras opcionales.',
           detalle: 'Son costos internos: solo los cambia un administrador o gerente. Las cotizaciones ya hechas no cambian.',
         }
+      : pestana === 'metas'
+        ? {
+          titulo: 'Metas comerciales',
+          ayuda: 'Lo que la empresa espera vender por mes o por año, en total y por persona. Solo gerencia y administradores las fijan; el avance está en Dashboard → Metas.',
+        }
       : pestana === 'fuentes'
         ? {
           titulo: 'Fuentes de posibles clientes',
@@ -112,13 +123,13 @@ export default function ConfiguracionVentasPage() {
     <div className="page-container">
       <VentasPageHeader
         title="Configuración"
-        description="Lo que la empresa ajusta del CRM: cómo llegan los posibles clientes, fuentes, servicios y motivos de cierre."
+        description="Lo que la empresa ajusta del CRM: cómo llegan los posibles clientes, fuentes, servicios, metas y motivos de cierre."
       />
 
       <PageTabs
         label="Secciones de la configuración" value={pestana} estilo="ventana"
         onChange={(k) => elegir(PESTANAS.find((p) => p.key === k)!.primera)}
-        tabs={PESTANAS.map((p) => ({ key: p.key, label: p.label, icon: p.icono }))}
+        tabs={PESTANAS.filter((p) => p.key !== 'metas' || esGerencia).map((p) => ({ key: p.key, label: p.label, icon: p.icono }))}
       />
 
       <section className="cfg-panel" aria-labelledby="cfg-titulo" data-tablas-vivas="off">
@@ -149,6 +160,8 @@ export default function ConfiguracionVentasPage() {
             )}
 
             {seccion === 'custodia' && <CustodiaTarifasSection puedeEditar={puedeEditar} />}
+
+            {seccion === 'metas' && <MetasConfigSection puedeEditar={puedeEditar} />}
 
             {pestana === 'motivos' && <MotivosCatalogo puedeEditar={puedeEditar} />}
 

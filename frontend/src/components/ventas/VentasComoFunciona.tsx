@@ -62,7 +62,7 @@ const OTROS_CRM: { nombre: string; filas: FilaEquivalencia[]; diferencia: string
       { crm: 'Tareas, Reuniones y Llamadas', aqui: 'Historial y Siguiente paso', nota: 'En la ficha: notas, llamadas y reuniones. La pestaña «Para hoy» muestra a quién atender.' },
       { crm: 'Productos y Presupuestos', aqui: 'Cotizador', nota: 'El catálogo y las cotizaciones con líneas (aún sin vínculo a las oportunidades). Los servicios contratados están en Contratos y el monto cotizado, en la oportunidad.' },
       { crm: 'Campañas', aqui: 'Fuente y campaña', nota: 'Cada posible cliente guarda de dónde llegó (anuncio, web, referido…).' },
-      { crm: 'Informes y Análisis', aqui: 'Dashboard', nota: 'Embudo, cartera de contratos, motivos de pérdida, equipo y un mapa de Ecuador con dónde se está cotizando.' },
+      { crm: 'Informes y Análisis', aqui: 'Dashboard', nota: 'Metas y cumplimiento y una tabla dinámica para ordenar lo vendido como quieras (solo administradores y gerentes), embudo, cartera de contratos, motivos de pérdida, equipo y un mapa de Ecuador con dónde se está cotizando. Las metas las fija gerencia en Configuración.' },
       { crm: 'Documentos', aqui: 'Documentación', nota: 'Genera el PDF desde una plantilla y lo envía a firmar.' },
     ],
     diferencia:

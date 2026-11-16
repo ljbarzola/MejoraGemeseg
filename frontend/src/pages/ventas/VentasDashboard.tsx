@@ -9,6 +9,8 @@ import DashboardCartera from '../../components/ventas/dashboard/DashboardCartera
 import DashboardEmbudo from '../../components/ventas/dashboard/DashboardEmbudo';
 import DashboardMotivos from '../../components/ventas/dashboard/DashboardMotivos';
 import DashboardEquipo from '../../components/ventas/dashboard/DashboardEquipo';
+import DashboardMetas from '../../components/ventas/dashboard/DashboardMetas';
+import DashboardPivot from '../../components/ventas/dashboard/DashboardPivot';
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import ClienteFichaPanel from '../../components/ventas/ClienteFichaPanel';
 import ClienteFormModal from '../../components/ventas/ClienteFormModal';
@@ -25,9 +27,12 @@ const DashboardMapa = lazy(() => import('../../components/ventas/dashboard/Dashb
 // Pestañas del dashboard (2026-10-07). «Resumen» es el tablero de siempre (se
 // mira por clientes); las demás salen de las oportunidades, los contratos y los
 // motivos de cierre.
-type Pestana = 'resumen' | 'cartera' | 'embudo' | 'motivos' | 'equipo';
-const PESTANAS: { value: Pestana; label: string }[] = [
+type Pestana = 'resumen' | 'metas' | 'tabla' | 'cartera' | 'embudo' | 'motivos' | 'equipo';
+// «Metas» y «Tabla dinámica» son solo de administradores y gerentes (2026-11-16): el servidor tampoco las entrega a otros.
+const PESTANAS: { value: Pestana; label: string; soloGerencia?: boolean }[] = [
   { value: 'resumen', label: 'Resumen' },
+  { value: 'metas', label: 'Metas', soloGerencia: true },
+  { value: 'tabla', label: 'Tabla dinámica', soloGerencia: true },
   { value: 'cartera', label: 'Cartera y contratos' },
   { value: 'embudo', label: 'Embudo de ventas' },
   { value: 'motivos', label: 'Motivos de pérdida' },
@@ -53,6 +58,7 @@ export default function VentasDashboard() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const currentUser = getUser();
+  const esGerencia = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
   const [data, setData] = useState<DashboardClientes | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -161,7 +167,7 @@ export default function VentasDashboard() {
 
       <PageTabs
         label="Secciones del dashboard" value={pestana} onChange={cambiarPestana}
-        tabs={PESTANAS.map((p) => ({ key: p.value, label: p.label }))}
+        tabs={PESTANAS.filter((p) => !p.soloGerencia || esGerencia).map((p) => ({ key: p.value, label: p.label }))}
       />
 
       <div className="dash-barra">
@@ -204,7 +210,11 @@ export default function VentasDashboard() {
         </div>
       )}
 
-      {pestana === 'cartera' ? (
+      {pestana === 'metas' ? (
+        <DashboardMetas alcance={responsable} desde={desde} hasta={hasta} atajo={periodo.atajo} />
+      ) : pestana === 'tabla' ? (
+        <DashboardPivot alcance={responsable} desde={desde} hasta={hasta} />
+      ) : pestana === 'cartera' ? (
         <DashboardCartera alcance={responsable} desde={desde} hasta={hasta} />
       ) : pestana === 'embudo' ? (
         <DashboardEmbudo alcance={responsable} desde={desde} hasta={hasta} />

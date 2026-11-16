@@ -22,8 +22,10 @@
   display: flex; flex-wrap: nowrap; align-items: flex-end; gap: 4px; margin: 0; padding: 0;
   background: transparent; border-radius: 0; box-shadow: none;
 }
+/* Las pestañas se encogen para caber en una línea (Configuración tiene seis, una con un nombre largo); solo si ni
+   así caben —pantallas pequeñas— la franja se desplaza. El texto no se parte. */
 .page-tabs--ventana .admin-tab {
-  flex: 0 0 auto; min-width: 168px; padding: 13px 28px 12px; gap: 9px;
+  flex: 0 1 auto; min-width: 0; padding: 13px 18px 12px; gap: 8px; white-space: nowrap;
   position: relative; z-index: 1; margin-bottom: -1px;
   border: 1px solid transparent; border-bottom: 0; border-radius: 14px 14px 0 0;
   background: #e4e8ee; color: var(--v-suave); font-weight: 600;
@@ -234,3 +236,83 @@ button.dash-kpi:hover { background: #f8fafc; }
 .dash-barra-rango { margin: 0 0 6px auto; font-size: 0.82rem; color: var(--v-suave); white-space: nowrap; }
 .dash-barra-rango strong { color: var(--v-tinta); font-weight: 600; }
 @media (max-width: 760px) { .dash-barra-rango { margin-left: 0; } }
+
+/* Metas comerciales (pestaña «Metas» del Dashboard y Configuración → Metas) */
+.meta-periodo { margin: 0; font-size: 0.9rem; color: var(--v-suave); }
+.meta-periodo strong { color: var(--v-tinta); }
+.meta-cifra { font-size: 1.9rem; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; margin-bottom: 10px; }
+.meta-barra { position: relative; height: 10px; border-radius: 6px; background: #edf2f7; overflow: visible; }
+.meta-barra-relleno { height: 100%; border-radius: 6px; transition: width 0.25s; }
+.meta-barra-ritmo { position: absolute; top: -3px; width: 2px; height: 16px; background: #718096; border-radius: 1px; transform: translateX(-1px); }
+.meta-linea { margin: 10px 0 0; font-size: 0.86rem; color: var(--v-tinta); }
+.meta-linea--suave { margin-top: 2px; color: var(--v-suave); }
+.meta-nota { margin: 0; font-size: 0.8rem; color: #b45309; }
+.meta-empresa { display: grid; gap: 14px; }
+.meta-empresa-cab { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 0.86rem; margin-bottom: 6px; }
+.meta-tabla th.meta-grupo { text-align: center; border-left: 1px solid var(--v-linea); }
+.meta-tabla tbody td:nth-child(3n+2), .meta-tabla tfoot td:nth-child(3n+2) { border-left: 1px solid var(--v-linea); }
+.meta-tabla td { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.meta-total td { font-weight: 800; background: #f7fafc; border-top: 2px solid var(--v-linea); }
+/* Configuración → Metas */
+.metas-config-barra { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; }
+.metas-config-barra .filter-select { min-width: 120px; }
+.metas-config-barra { margin-bottom: 12px; }
+/* El botón de copiar del mismo alto que los selectores de al lado (el .btn-secondary base es mucho más grande). */
+.metas-config-barra .btn-secondary { padding: 10px 16px; font-size: 0.88rem; border-radius: 10px; }
+.metas-config-tabla th:first-child, .metas-config-tabla td:first-child { width: 26%; }
+.metas-config-tabla input { width: 100%; min-width: 96px; max-width: 160px; padding: 7px 9px; border: 1px solid var(--v-linea); border-radius: 8px; font: inherit; font-variant-numeric: tabular-nums; }
+.metas-config-tabla tr.metas-fila-global td { background: #f7fafc; font-weight: 700; }
+.metas-config-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
+.metas-config-ayuda { margin: 12px 0 0; font-size: 0.8rem; color: var(--v-suave); line-height: 1.45; }
+@media (max-width: 720px) {
+  .meta-cifra { font-size: 1.6rem; }
+  .metas-config-tabla input { min-width: 80px; }
+}
+
+/* Tabla dinámica del Dashboard (2026-11-16) */
+.pivot-controles { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; }
+.pivot-controles .filter-select { min-width: 150px; }
+.pivot-restablecer { padding: 6px 12px; font-size: 0.8rem; }
+.pivot-medidas { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; min-width: 0; }
+.pivot-medidas legend { font-size: 0.72rem; font-weight: 600; color: var(--v-suave); padding: 0; margin-bottom: 4px; float: left; width: 100%; }
+.pivot-opcion { display: inline-flex; align-items: center; gap: 6px; font-size: 0.86rem; color: var(--v-tinta); cursor: pointer; }
+.pivot-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--v-linea); }
+.pivot-filtros-titulo { font-size: 0.72rem; font-weight: 600; color: var(--v-suave); }
+.pivot-chip-zona { position: relative; display: inline-flex; }
+.pivot-chip { display: inline-flex; align-items: center; border: 1px solid var(--v-linea); background: #f7fafc; border-radius: 999px; font-size: 0.82rem; }
+.pivot-chip--nuevo { border-style: dashed; }
+.pivot-chip-boton { background: none; border: 0; padding: 5px 4px 5px 12px; font: inherit; color: var(--v-tinta); cursor: pointer; }
+.pivot-chip--nuevo .pivot-chip-boton { padding-right: 12px; cursor: default; }
+.pivot-chip-quitar { background: none; border: 0; padding: 5px 10px 5px 4px; color: var(--v-suave); cursor: pointer; display: inline-flex; align-items: center; }
+.pivot-chip-quitar:hover { color: #c53030; }
+.pivot-agregar { min-width: 150px; max-width: 190px; }
+.pivot-panel { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: 260px; max-width: calc(100vw - 48px); background: #fff; border: 1px solid var(--v-linea); border-radius: 12px; box-shadow: 0 10px 28px rgba(16, 15, 49, 0.14); padding: 10px; }
+.pivot-panel-buscar { width: 100%; box-sizing: border-box; margin-bottom: 8px; padding: 8px 10px; border: 1px solid var(--v-linea); border-radius: 8px; font: inherit; font-size: 0.85rem; }
+.pivot-panel-lista { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 2px; }
+.pivot-panel-vacio { margin: 0; font-size: 0.82rem; color: #a0aec0; }
+.pivot-panel-pie { display: flex; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.pivot-panel-pie .btn-secondary { padding: 6px 12px; font-size: 0.8rem; }
+.pivot-scroll { overflow-x: auto; max-width: 100%; }
+.pivot-tabla { width: auto; min-width: 100%; border-collapse: separate; border-spacing: 0; }
+.pivot-tabla th, .pivot-tabla td { white-space: nowrap; }
+.pivot-tabla td.pivot-num { text-align: right; font-variant-numeric: tabular-nums; }
+.pivot-tabla th.pivot-sub { text-align: right; font-weight: 600; }
+.pivot-tabla th.pivot-grupo { text-align: center; border-left: 1px solid var(--v-linea); max-width: 220px; }
+.pivot-tabla .pivot-borde { border-left: 1px solid var(--v-linea); }
+.pivot-tabla .pivot-etiqueta { position: sticky; left: 0; z-index: 2; background: #fff; min-width: 170px; max-width: 280px; text-align: left; box-shadow: 1px 0 0 var(--v-linea); }
+.pivot-tabla thead .pivot-etiqueta { background: #f7fafc; z-index: 3; }
+.pivot-tabla .pivot-vacia { color: #cbd5e0; }
+.pivot-tabla .pivot-col-total { background: #f7fafc; font-weight: 700; }
+.pivot-grupo-fila td { background: #f7fafc; font-weight: 700; }
+.pivot-grupo-fila .pivot-etiqueta { background: #f7fafc; }
+.pivot-otros td { color: var(--v-suave); font-style: italic; }
+.pivot-plegar { display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: inherit; cursor: pointer; max-width: 100%; }
+.pivot-total td { font-weight: 800; background: #edf2f7; border-top: 2px solid var(--v-linea); }
+.pivot-total .pivot-etiqueta { background: #edf2f7; }
+.pivot-notas { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
+.pivot-notas p { margin: 0; font-size: 0.8rem; color: var(--v-suave); line-height: 1.4; }
+@media (max-width: 720px) {
+  .pivot-controles .filter-select { min-width: 0; width: 100%; }
+  .pivot-controles .filter-field { flex: 1 1 100%; }
+  .pivot-tabla .pivot-etiqueta { min-width: 120px; max-width: 150px; }
+}
