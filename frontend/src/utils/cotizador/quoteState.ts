@@ -1,6 +1,7 @@
 // Edición de las líneas de una cotización. Funciones PURAS (devuelven una lista nueva): así la pantalla
 // puede usarlas con useState y se pueden probar sin navegador. Portadas de las acciones del carrito del
 // cotizador original, pero con el producto identificado por su CÓDIGO.
+import type { CotCustodiaLine } from './custodia';
 import type {
   CotInstall,
   CotInstallLine,
@@ -10,7 +11,7 @@ import type {
   CotProduct,
   CotProductLine,
 } from './types';
-import { isInstallLine, isKitLine, isProductLine } from './types';
+import { isCustodiaLine, isInstallLine, isKitLine, isProductLine } from './types';
 import { DEFAULT_INSTALL_MARGIN } from './pricing';
 
 /** Cantidad con la que entra un producto: los servicios que solo tienen costo anual entran por 12 meses. */
@@ -61,6 +62,13 @@ export function addInstall(items: CotLine[], s: CotInstall): CotLine[] {
     customMargin: DEFAULT_INSTALL_MARGIN,
   };
   return [...items, line];
+}
+
+/** Agrega una custodia calculada; si ya estaba (mismo `id`), la reemplaza: así «Recalcular» no la duplica. */
+export function addOrReplaceCustodia(items: CotLine[], linea: CotCustodiaLine): CotLine[] {
+  const i = items.findIndex((l) => isCustodiaLine(l) && l.id === linea.id);
+  if (i < 0) return [...items, linea];
+  return items.map((l, k) => (k === i ? linea : l));
 }
 
 export function removeLine(items: CotLine[], index: number): CotLine[] {

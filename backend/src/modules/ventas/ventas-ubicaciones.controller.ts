@@ -16,6 +16,18 @@ export class VentasUbicacionesController {
     return this.ubicaciones.buscar(q);
   }
 
+  // Ruta por carretera entre dos puntos (Cotizador de custodia).
+  @Get('ruta')
+  @Section('VENTAS', 'view')
+  ruta(
+    @Query('olat') olat?: string,
+    @Query('olng') olng?: string,
+    @Query('dlat') dlat?: string,
+    @Query('dlng') dlng?: string,
+  ) {
+    return this.ubicaciones.ruta(olat, olng, dlat, dlng);
+  }
+
   @Get('inversa')
   @Section('VENTAS', 'view')
   inversa(@Query('lat') lat?: string, @Query('lng') lng?: string) {

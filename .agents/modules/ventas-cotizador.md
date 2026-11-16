@@ -93,6 +93,7 @@ Pedido de Leidy tras comparar el PDF del original (`COT-…`) con el de la app: 
 - Kits: `GET/POST kits`, `PATCH/DELETE kits/:id`. Plantillas: `GET/POST plantillas`, `PATCH/DELETE plantillas/:id`.
 - Cotizaciones: `GET cotizaciones`, `GET cotizaciones/siguiente-numero`, `GET cotizaciones/verificar-numero`, `POST cotizaciones`, `GET/PATCH/DELETE cotizaciones/:id`, `PATCH cotizaciones/:id/estado`, `POST cotizaciones/:id/copiar`.
 - Compartir: `GET cotizaciones/:id/compartidos`, `POST cotizaciones/:id/compartir`, `DELETE cotizaciones/:id/compartir/:userId`, `GET usuarios`, `GET/POST accesos-edicion`, `DELETE accesos-edicion/:userId`.
+- Custodia móvil (sección «Custodia móvil», 2026-11-16): `GET custodia/tarifas`, `PUT custodia/tarifas` (solo ADMIN/MANAGER), `POST custodia/calcular`; la ruta del mapa es `GET /ventas/ubicaciones/ruta`.
 
 ## Catálogo, totales e importación del original (2026-10-30)
 
@@ -103,6 +104,28 @@ Pedido de Leidy tras comparar el PDF del original (`COT-…`) con el de la app: 
 ## Historial de cotizaciones: tabla (2026-11-06)
 
 La tabla del historial tenía las celdas de cliente y vendedor apiladas en una sola columna: usaban `className="truncate"` en el `<td>`, y esa clase es `display: block`, así que sacaba la celda de la tabla (la misma causa que ya se había arreglado en el catálogo). El recorte va en un `<span className="truncate" title=...>` dentro del `<td>`. El Total se alinea a la derecha (`cot-num`), las cifras de arriba dicen «borradores» (no «borradors») y los anchos de columna suman menos que el ancho útil de la ventana `lg` (920 px) para que no salga barra horizontal; el estilo compacto es el del catálogo (`.cot-hist-wrap` en `cotizador.css`; ese archivo está en Latin-1, editarlo en binario).
+
+## Custodia móvil dentro del Cotizador (2026-11-16)
+
+Pedido de Leidy: pasar al Cotizador la hoja de Google «GEMESEG | Cotizador de Custodia Móvil» que el equipo usaba para cotizar (la hoja **no se tocó**: solo se leyó). En «Detalle de la cotización», el botón **«+ Custodia móvil»** abre una calculadora y agrega UNA línea de servicio a la cotización (`isCustodia`), que se guarda, se comparte, se copia y se imprime como cualquier otra.
+
+**Decisiones de Leidy (2026-11-16):**
+- **IVA configurable** (por defecto 15 %, como el resto del Cotizador; la hoja traía 0 % y la celda del IVA ni siquiera tenía fórmula, así que allí nunca se calculaba). Confirmar con contabilidad si la custodia lleva IVA y a qué tasa.
+- **Todas las tarifas configurables.** Los valores iniciales son los de la hoja (los que el equipo usa hoy; el propio archivo los llama «de demostración»): Ventas → Configuración → «Tarifas de custodia». Región configurable (lista de regiones con su tarifa de agente, el vendedor elige una en cada cotización: no se decide por origen/destino).
+- **Mínimo de custodios** (1 por defecto, configurable): los choferes no cuentan. La hoja de ejemplo traía 0 custodios y 2 choferes.
+- **Mapa para la ruta:** se busca origen y destino (Nominatim, el mismo buscador de «Ubicación» de las oportunidades), se dibuja la ruta por carretera y llena los km de ida; los km siempre se pueden corregir a mano y el regreso/desvíos también.
+- **Costos que la hoja solo nombraba en su guía** (recargo nocturno, relevo/pernocta, seguro de carga, ruta alternativa, permisos o equipo especializado, financiamiento) son **extras opcionales** configurables: «Fijo» (valor × cantidad) o «Porcentaje» (del costo normal). Nacen con valor 0 (no inventamos tarifas): se llenan en Configuración y el vendedor los marca solo si aplican.
+- **Personal fijo por viaje y región, como en la hoja:** no sube con los km ni con las horas (solo la espera del vehículo cambia el costo por horas). A Leidy no le quedó clara la pregunta, así que se conservó la regla de la hoja; es fácil de cambiar si Comercial quiere cobrar por km/hora.
+- **Margen sobre el PRECIO, como la hoja:** precio = costo total ÷ (1 − margen); 30 % = de cada $100, $30 son utilidad (precio = 1,43× el costo). Es distinto al margen del resto del Cotizador (se suma sobre el costo); la pantalla lo rotula así. Pendiente de confirmar con Comercial.
+
+**Cómo funciona:**
+- El cálculo vive en el servidor (`backend/src/modules/ventas/cotizador-custodia.util.ts`, función pura `calcularCustodia`) para que la pantalla y, más adelante, el bot de WhatsApp usen la misma fórmula. Reproduce la hoja **al centavo** (ejemplo: costo directo 325,89, imprevistos 16,29, costo total 342,19, precio 488,84, utilidad 146,65): se suma sin redondear cada concepto y solo se redondea lo que se muestra. Un cálculo con datos que faltan devuelve `ok:false` y la lista de motivos (no lanza).
+- Endpoints (`/ventas/cotizador/custodia`, sección `VENTAS`): `GET tarifas` (ver), `PUT tarifas` (solo ADMIN/MANAGER: son costos internos), `POST calcular` (ver). Ruta del mapa: `GET /ventas/ubicaciones/ruta?olat&olng&dlat&dlng` → `{ km, minutos, trazo }` con el servicio público de OSRM (`OSRM_URL` lo cambia), espaciado a 1 consulta por segundo y con caché; si no responde, se escriben los km a mano.
+- Las tarifas se guardan por empresa en `SalesSetting` (clave `cotizador-custodia`): **sin tablas ni columnas nuevas**. Una empresa que nunca las guardó usa las de la hoja.
+- La línea guarda sus datos y el **resultado congelado** (como `snap` de los productos): si las tarifas cambian, la cotización no se mueve; «Recalcular» abre la calculadora con esa línea y la reemplaza. El servidor valida y acota los números de la línea (`limpiarLineaCustodia`).
+- Totales (`computeQuote`): el IVA se agrupa por tasa. Todo al 15 % da exactamente el mismo total de siempre; si una custodia lleva otra tasa, el descuento se reparte en proporción y el cuadro muestra una fila de IVA por tasa. El PDF agrega la sección «SERVICIO DE CUSTODIA MÓVIL» solo con descripción y precio: **nunca** costos, utilidad ni margen (esos van en la fila interna de la pantalla).
+
+**Pendiente / ojo:** el texto legal del PDF sigue diciendo «IVA del 15 %» (no se cambió); el servicio de rutas es público y de uso moderado (si se vuelve cuello de botella, cambiar `OSRM_URL` o contratar uno); sin pruebas de pantalla automáticas.
 
 ## Rutas frontend
 

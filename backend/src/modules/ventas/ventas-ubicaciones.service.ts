@@ -23,11 +23,21 @@ const URL_NOMINATIM =
   process.env.NOMINATIM_URL || 'https://nominatim.openstreetmap.org';
 const USER_AGENT =
   process.env.NOMINATIM_USER_AGENT || 'GEMESEG-CRM/1.0 (app.gemeseg.com)';
+const URL_OSRM = process.env.OSRM_URL || 'https://router.project-osrm.org';
+const TIMEOUT_RUTA_MS = 15000;
 const ESPERA_MIN_MS = 1100;
 const TIMEOUT_MS = 8000;
 const CACHE_MAX = 500;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_CONSULTA = 150;
+
+export interface RutaCalculada {
+  /** Kilómetros por carretera, con un decimal. */
+  km: number;
+  minutos: number;
+  /** Trazo para dibujar en el mapa: [latitud, longitud]. */
+  trazo: [number, number][];
+}
 
 interface ItemNominatim {
   osm_type?: string;
@@ -158,6 +168,63 @@ export class VentasUbicacionesService {
       .filter((u): u is UbicacionOportunidad => u !== null);
     this.guardarEnCache(clave, lista);
     return lista;
+  }
+
+  // Ruta por carretera entre dos puntos de Ecuador (Cotizador de custodia, 2026-11-16): distancia, tiempo
+  // y el trazo para dibujarlo. Usa el servicio público de OSRM (OpenStreetMap), que es de uso moderado: se
+  // espacia, se guarda en memoria y su dirección se puede cambiar con OSRM_URL. Si no responde, la persona
+  // escribe los km a mano: la distancia siempre es editable.
+  async ruta(
+    olatRaw: string | undefined,
+    olngRaw: string | undefined,
+    dlatRaw: string | undefined,
+    dlngRaw: string | undefined,
+  ): Promise<RutaCalculada> {
+    const o = { lat: Number(olatRaw), lng: Number(olngRaw) };
+    const d = { lat: Number(dlatRaw), lng: Number(dlngRaw) };
+    if (!estaEnEcuador(o.lat, o.lng) || !estaEnEcuador(d.lat, d.lng)) {
+      throw new BadRequestException('El origen y el destino deben estar dentro de Ecuador.');
+    }
+    const clave = `r:${o.lat.toFixed(4)},${o.lng.toFixed(4)}>${d.lat.toFixed(4)},${d.lng.toFixed(4)}`;
+    const guardada = this.delCache<RutaCalculada>(clave);
+    if (guardada) return guardada;
+    let data: {
+      code?: string;
+      routes?: { distance?: number; duration?: number; geometry?: { coordinates?: [number, number][] } }[];
+    };
+    try {
+      const r = await this.espaciada(() =>
+        axios.get(
+          `${URL_OSRM}/route/v1/driving/${o.lng},${o.lat};${d.lng},${d.lat}`,
+          {
+            params: { overview: 'full', geometries: 'geojson', alternatives: false, steps: false },
+            headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+            timeout: TIMEOUT_RUTA_MS,
+          },
+        ),
+      );
+      data = r.data;
+    } catch (err) {
+      this.logger.warn(`El servicio de rutas no respondió: ${(err as Error).message}`);
+      throw new ServiceUnavailableException(
+        'El servicio de rutas no respondió. Escribe los km a mano o inténtalo de nuevo en unos segundos.',
+      );
+    }
+    const ruta = data?.routes?.[0];
+    if (data?.code !== 'Ok' || !ruta?.distance) {
+      throw new BadRequestException('No se encontró una ruta por carretera entre esos dos puntos. Escribe los km a mano.');
+    }
+    const puntos = (ruta.geometry?.coordinates ?? []).map(([lng, lat]) => [lat, lng] as [number, number]);
+    // El trazo se aligera (cientos de puntos bastan para dibujarlo) para no mandar miles al navegador.
+    const paso = Math.max(1, Math.ceil(puntos.length / 500));
+    const trazo = puntos.filter((_, i) => i % paso === 0 || i === puntos.length - 1);
+    const resultado: RutaCalculada = {
+      km: Math.round((ruta.distance / 1000) * 10) / 10,
+      minutos: Math.round((ruta.duration ?? 0) / 60),
+      trazo,
+    };
+    this.guardarEnCache(clave, resultado);
+    return resultado;
   }
 
   // Dirección de un punto marcado a mano en el mapa.

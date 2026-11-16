@@ -15,6 +15,7 @@ import PriceChangesModal from '../../components/ventas/cotizador/PriceChangesMod
 import ProductDetailModal from '../../components/ventas/cotizador/ProductDetailModal';
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import QuoteDetail from '../../components/ventas/cotizador/QuoteDetail';
+import CustodiaModal from '../../components/ventas/cotizador/CustodiaModal';
 import QuotePrint from '../../components/ventas/cotizador/QuotePrint';
 import QuoteTotals from '../../components/ventas/cotizador/QuoteTotals';
 import { EditAccessModal, ShareQuoteModal } from '../../components/ventas/cotizador/ShareModals';
@@ -60,7 +61,8 @@ import {
   withSnapshots,
   type PriceChange,
 } from '../../utils/cotizador/pricing';
-import { addInstall, addKit, addProduct } from '../../utils/cotizador/quoteState';
+import { addInstall, addKit, addOrReplaceCustodia, addProduct } from '../../utils/cotizador/quoteState';
+import type { CotCustodiaLine } from '../../utils/cotizador/custodia';
 import type {
   CotInstall,
   CotKit,
@@ -254,6 +256,8 @@ export default function CotizadorPage() {
   const [verAccesoEdicion, setVerAccesoEdicion] = useState(false);
   const [compartir, setCompartir] = useState<CotQuote | null>(null);
   const [elegirInstalacion, setElegirInstalacion] = useState(false);
+  // Calculadora de custodia móvil: `linea` = una ya agregada que se recalcula; null = una nueva.
+  const [custodiaModal, setCustodiaModal] = useState<{ linea: CotCustodiaLine | null } | null>(null);
   const [detalleCodigo, setDetalleCodigo] = useState<string | null>(null);
   const [cambiosPrecio, setCambiosPrecio] = useState<PriceChange[] | null>(null);
   const [confirmNueva, setConfirmNueva] = useState(false);
@@ -308,6 +312,12 @@ export default function CotizadorPage() {
     if (items === draft.items) return showToast('El kit no tiene productos disponibles en el catálogo', 'error');
     setItems(items);
     showToast(`✓ Kit "${k.name}" agregado`, 'success');
+  };
+
+  const onConfirmCustodia = (linea: CotCustodiaLine) => {
+    setItems(addOrReplaceCustodia(draft.items, linea));
+    setCustodiaModal(null);
+    showToast('✓ Custodia móvil agregada a la cotización', 'success');
   };
 
   const onPickInstall = (s: CotInstall) => {
@@ -811,8 +821,20 @@ export default function CotizadorPage() {
                 <small>
                   {draft.items.length} {draft.items.length === 1 ? 'producto' : 'productos'}
                 </small>
+                {!readOnly && (
+                  <button type="button" className="btn-secondary" style={{ marginLeft: 'auto' }} onClick={() => setCustodiaModal({ linea: null })}>
+                    + Custodia móvil
+                  </button>
+                )}
               </h2>
-              <QuoteDetail items={draft.items} comp={comp} readOnly={readOnly} onItems={setItems} onOpenProduct={setDetalleCodigo} />
+              <QuoteDetail
+                items={draft.items}
+                comp={comp}
+                readOnly={readOnly}
+                onItems={setItems}
+                onOpenProduct={setDetalleCodigo}
+                onEditCustodia={(linea) => setCustodiaModal({ linea })}
+              />
             </section>
 
             <section className="cot-card cot-card-interno">
@@ -992,6 +1014,7 @@ export default function CotizadorPage() {
       {verAccesoEdicion && <EditAccessModal onClose={() => setVerAccesoEdicion(false)} />}
       {compartir && <ShareQuoteModal quoteId={compartir.id} quoteNumber={compartir.quoteNumber} onClose={() => setCompartir(null)} />}
       {elegirInstalacion && <InstallPicker installs={installs} onPick={onPickInstall} onClose={() => setElegirInstalacion(false)} />}
+      {custodiaModal && <CustodiaModal inicial={custodiaModal.linea} onClose={() => setCustodiaModal(null)} onConfirm={onConfirmCustodia} />}
       {detalle && (
         <ProductDetailModal
           product={detalle}

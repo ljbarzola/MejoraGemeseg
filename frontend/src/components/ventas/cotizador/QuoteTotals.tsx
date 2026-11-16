@@ -15,14 +15,22 @@ export default function QuoteTotals({ totals, discountType, discountValue, total
   const hasDiscount = totals.discount > 0;
   return (
     <div className="cot-totals" aria-label="Totales de la cotización">
-      <div className="row detail">
-        <span>Productos</span>
-        <span>{money(totals.subtotalEquipo)}</span>
-      </div>
+      {(totals.subtotalEquipo > 0 || totals.totalCustodiaSinIva <= 0) && (
+        <div className="row detail">
+          <span>Productos</span>
+          <span>{money(totals.subtotalEquipo)}</span>
+        </div>
+      )}
       {totals.totalInstSinIva > 0 && (
         <div className="row detail">
           <span>Instalaciones</span>
           <span>{money(totals.totalInstSinIva)}</span>
+        </div>
+      )}
+      {totals.totalCustodiaSinIva > 0 && (
+        <div className="row detail">
+          <span>Custodia móvil</span>
+          <span>{money(totals.totalCustodiaSinIva)}</span>
         </div>
       )}
       {hasDiscount && (
@@ -41,10 +49,19 @@ export default function QuoteTotals({ totals, discountType, discountValue, total
         <span>Subtotal</span>
         <span>{money(totals.subtotal)}</span>
       </div>
-      <div className="row">
-        <span>IVA 15%</span>
-        <span>{money(totals.iva)}</span>
-      </div>
+      {/* Una fila por tasa de IVA (casi siempre solo la de 15 %; la custodia puede llevar otra). */}
+      {totals.ivaDesglose.filter((d) => d.pct > 0).map((d) => (
+        <div className="row" key={d.pct}>
+          <span>IVA {String(d.pct).replace('.', ',')}%</span>
+          <span>{money(d.iva)}</span>
+        </div>
+      ))}
+      {totals.ivaDesglose.every((d) => d.pct === 0) && (
+        <div className="row">
+          <span>IVA 0%</span>
+          <span>{money(0)}</span>
+        </div>
+      )}
       <div className="row total">
         <span>TOTAL</span>
         <span id={totalId}>{money(totals.total)}</span>

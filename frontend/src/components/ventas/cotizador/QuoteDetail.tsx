@@ -1,6 +1,7 @@
 import { Fragment } from 'react';
 import type { QuoteComputation, ProductComputation } from '../../../utils/cotizador/pricing';
 import type { CotLine } from '../../../utils/cotizador/types';
+import type { CotCustodiaLine } from '../../../utils/cotizador/custodia';
 import {
   removeKitComp,
   removeLine,
@@ -17,6 +18,8 @@ interface Props {
   readOnly: boolean;
   onItems: (items: CotLine[]) => void;
   onOpenProduct: (code: string) => void;
+  /** Abre la calculadora de custodia con esa línea para recalcularla. */
+  onEditCustodia?: (linea: CotCustodiaLine) => void;
 }
 
 function Chips({ c }: { c: ProductComputation }) {
@@ -137,13 +140,14 @@ function ProductRow({
   );
 }
 
-export default function QuoteDetail({ items, comp, readOnly, onItems, onOpenProduct }: Props) {
+export default function QuoteDetail({ items, comp, readOnly, onItems, onOpenProduct, onEditCustodia }: Props) {
   // Primero los kits y después los productos sueltos. Los servicios de instalación van solo en "Ganancia por instalación".
   const kits = comp.lines.map((l, index) => ({ l, index })).filter((x) => x.l.kind === 'kit');
   const prods = comp.lines.map((l, index) => ({ l, index })).filter((x) => x.l.kind === 'product');
+  const custodias = comp.lines.map((l, index) => ({ l, index })).filter((x) => x.l.kind === 'custodia');
   let n = 0;
 
-  if (kits.length === 0 && prods.length === 0) {
+  if (kits.length === 0 && prods.length === 0 && custodias.length === 0) {
     return (
       <div className="cot-empty">
         <div className="cot-empty-icon">🛒</div>
@@ -239,6 +243,47 @@ export default function QuoteDetail({ items, comp, readOnly, onItems, onOpenProd
                 onRemove={() => onItems(removeLine(items, index))}
                 onOpen={() => onOpenProduct(l.line.code)}
               />
+            ) : null,
+          )}
+          {kits.length + prods.length > 0 && custodias.length > 0 && (
+            <tr className="sep">
+              <td colSpan={10}>
+                <div style={{ borderTop: '2px dashed #cbd5e0' }} />
+              </td>
+            </tr>
+          )}
+          {custodias.map(({ l, index }) =>
+            l.kind === 'custodia' ? (
+              <tr key={`c${index}`} className="cus-row">
+                <td className="num">{++n}</td>
+                <td>
+                  <strong style={{ fontWeight: 600 }}>{l.line.description}</strong>
+                  <span className="cus-row-detalle">
+                    {l.line.entrada.region} · {l.line.entrada.agentes} custodio(s), {l.line.entrada.choferes} chofer(es) · IVA {l.ivaPct}%
+                  </span>
+                  {!readOnly && onEditCustodia && (
+                    <span className="cus-row-botones">
+                      <button type="button" className="btn-secondary" onClick={() => onEditCustodia(l.line)}>
+                        Recalcular
+                      </button>
+                    </span>
+                  )}
+                </td>
+                <td className="center" style={{ fontSize: 11, fontWeight: 600 }}>servicio</td>
+                <td className="right">{money(l.line.resultado.costoTotal)}</td>
+                <td className="center">{l.line.qty}</td>
+                <td className="right"><strong>{money(l.costTotal)}</strong></td>
+                <td className="right">{money(l.gananciaTotal)}</td>
+                <td className="right">{money(l.pvpTotal)}</td>
+                <td className="center"><span style={{ color: '#a0aec0' }}>—</span></td>
+                <td>
+                  {!readOnly && (
+                    <button type="button" className="cot-x" onClick={() => onItems(removeLine(items, index))} title="Eliminar" aria-label="Eliminar custodia">
+                      ✕
+                    </button>
+                  )}
+                </td>
+              </tr>
             ) : null,
           )}
         </tbody>

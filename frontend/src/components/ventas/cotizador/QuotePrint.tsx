@@ -27,6 +27,7 @@ export default function QuotePrint({ draft, comp, companyName, logoUrl, issuerNa
   const kits = comp.lines.filter((l) => l.kind === 'kit');
   const prods = comp.lines.filter((l) => l.kind === 'product');
   const installs = comp.lines.filter((l) => l.kind === 'install');
+  const custodias = comp.lines.filter((l) => l.kind === 'custodia');
   let n = 0;
 
   const esGemeseg = /gemeseg/i.test(companyName);
@@ -147,6 +148,46 @@ export default function QuotePrint({ draft, comp, companyName, logoUrl, issuerNa
             {prods.map((l, i) => (l.kind === 'product' ? row(l, `p${i}`) : null))}
           </tbody>
         </table>
+      )}
+
+      {custodias.length > 0 && (
+        <>
+          <div className="cot-print-section-title">SERVICIO DE CUSTODIA MÓVIL</div>
+          <table className="cot-print-table">
+            <thead>
+              <tr>
+                <th style={{ width: 24 }}>#</th>
+                <th>Servicio / Descripción</th>
+                <th className="right" style={{ width: 84 }}>
+                  Precio unit.
+                </th>
+                <th className="center" style={{ width: 40 }}>
+                  Cant
+                </th>
+                <th className="right" style={{ width: 96 }}>
+                  Precio total
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {custodias.map((l, i) =>
+                l.kind === 'custodia' ? (
+                  <tr key={`c${i}`}>
+                    <td className="num">{i + 1}</td>
+                    <td>
+                      <span className="desc">{l.line.description}</span>
+                    </td>
+                    <td className="right">{money(l.line.resultado.precioSinIva)}</td>
+                    <td className="center">{l.line.qty}</td>
+                    <td className="right">
+                      <strong>{money(l.pvpTotal)}</strong>
+                    </td>
+                  </tr>
+                ) : null,
+              )}
+            </tbody>
+          </table>
+        </>
       )}
 
       {installs.length > 0 && (
