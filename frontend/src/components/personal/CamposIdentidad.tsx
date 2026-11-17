@@ -37,10 +37,9 @@ export default function CamposIdentidad({
         />
       </div>
       <div className="form-group">
-        <label>Cédula</label>
+        <label>Cédula o documento</label>
         <input
-          inputMode="numeric"
-          placeholder="10 dígitos"
+          placeholder="Cédula, pasaporte u otro documento"
           value={cedula}
           onChange={(e) => onChange({ cedula: e.target.value })}
         />

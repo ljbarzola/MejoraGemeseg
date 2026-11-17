@@ -140,8 +140,13 @@ export default function CustodiaFormModal({
       if (validContainers.length === 0) { setError('Debe registrar al menos un contenedor'); return; }
     }
 
-    const cedulas = [form.choferCedula, form.custodio1Cedula, form.custodio2Cedula].filter(Boolean);
-    if (cedulas.length >= 2 && new Set(cedulas).size < cedulas.length) {
+    // La misma persona no puede ir dos veces: se reconoce por la cédula o, si aún no la tiene (es opcional), por el nombre.
+    const claves = [
+      form.choferCedula.trim() || form.choferName.trim().toLowerCase(),
+      form.custodio1Cedula.trim() || form.custodio1Name.trim().toLowerCase(),
+      form.custodio2Cedula.trim() || form.custodio2Name.trim().toLowerCase(),
+    ].filter(Boolean);
+    if (new Set(claves).size < claves.length) {
       setError('Chofer y custodios deben ser personas distintas.');
       return;
     }
@@ -267,7 +272,7 @@ export default function CustodiaFormModal({
 
       <h3 style={{ ...subtitulo, marginTop: 16 }}>Personal asignado</h3>
       <p style={{ fontSize: '0.75rem', color: '#718096', margin: '0 0 10px' }}>
-        Busca y selecciona del personal registrado. Si falta alguien, regístralo primero en Recursos Humanos.
+        Escribe para buscar por nombre o cédula entre el personal de Recursos Humanos (la cédula es opcional: quien aún no la tiene aparece como «Sin cédula»). Si alguien no está, usa «Créalo aquí» al pie de la lista.
       </p>
       <div className="form-row">
         <div className="form-group">
@@ -275,6 +280,7 @@ export default function CustodiaFormModal({
             label="Chofer"
             value={{ nombre: form.choferName, cedula: form.choferCedula }}
             onChange={(v) => setForm((f) => ({ ...f, choferName: v.nombre, choferCedula: v.cedula }))}
+            permitirCrear
             required
           />
         </div>
@@ -284,6 +290,8 @@ export default function CustodiaFormModal({
             value={{ nombre: form.custodio1Name, cedula: form.custodio1Cedula }}
             onChange={(v) => setForm((f) => ({ ...f, custodio1Name: v.nombre, custodio1Cedula: v.cedula }))}
             excludeCedulas={[form.choferCedula].filter(Boolean)}
+            excludeNombres={[form.choferName]}
+            permitirCrear
             required
           />
         </div>
@@ -293,6 +301,8 @@ export default function CustodiaFormModal({
             value={{ nombre: form.custodio2Name, cedula: form.custodio2Cedula }}
             onChange={(v) => setForm((f) => ({ ...f, custodio2Name: v.nombre, custodio2Cedula: v.cedula }))}
             excludeCedulas={[form.choferCedula, form.custodio1Cedula].filter(Boolean)}
+            excludeNombres={[form.choferName, form.custodio1Name]}
+            permitirCrear
             required
           />
         </div>

@@ -7,6 +7,7 @@ import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../../componen
 import { useColumnFilters } from '../../../hooks/useColumnFilters';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
 import { formatoFecha, mensajeError, nombreArticulo, pluralUnidad } from './inventarioUi';
+import { cedulaMostrable } from '../../../utils/postulacionValidacion';
 
 /** Quién tiene qué: lo entregado y todavía no devuelto, por guardia o por puesto. */
 export default function TenenciasTab({ recarga }: { recarga: number }) {
@@ -78,7 +79,7 @@ export default function TenenciasTab({ recarga }: { recarga: number }) {
                   <tr key={`${t.articuloId}|${t.tenedor}`}>
                     <td style={{ fontWeight: 600 }}>
                       {t.nombre}
-                      {t.cedula && <div style={{ fontSize: '0.75rem', color: '#718096', fontWeight: 400 }}>{t.cedula}</div>}
+                      {cedulaMostrable(t.cedula) && <div style={{ fontSize: '0.75rem', color: '#718096', fontWeight: 400 }}>{cedulaMostrable(t.cedula)}</div>}
                     </td>
                     <td>{t.tenedorTipo === 'GUARDIA' ? 'Guardia' : 'Puesto'}</td>
                     <td>{nombreArticulo(t.articulo, t.variante)}</td>

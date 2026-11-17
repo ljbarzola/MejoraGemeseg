@@ -229,7 +229,7 @@ export default function ImportarContratoModal({
               ))}
               {resultado.sinCedula.length > 0 && (
                 <details style={{ fontSize: '0.84rem', marginTop: 8 }}>
-                  <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Personas con identificador temporal (completar su cédula)</summary>
+                  <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Personas sin cédula (se asignan por nombre)</summary>
                   <ul style={{ margin: '6px 0 0', paddingLeft: 18, maxHeight: 160, overflow: 'auto' }}>
                     {resultado.sinCedula.map((p, i) => <li key={i}>{p.nombre} — {p.puesto}</li>)}
                   </ul>
@@ -247,7 +247,7 @@ export default function ImportarContratoModal({
             <div className="modal-body">
               <p style={{ fontSize: '0.85rem', color: '#4a5568', marginTop: 0 }}>
                 Sube el Excel de horarios, marca los puestos que son de este contrato y completa sus datos. Se crean el contrato, los puestos, los guardias
-                (cédula y nombre del Excel) y un horario en borrador con los turnos. Si alguien no trae cédula basta con el nombre: si ya está en RRHH se usa su cédula y si no queda con un identificador temporal hasta que la completes.
+                (cédula y nombre del Excel) y un horario en borrador con los turnos. Si alguien no trae cédula basta con el nombre: si ya está en RRHH se usa su cédula y si no queda sin cédula, identificada por su nombre.
               </p>
 
               <input ref={inputRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={(e) => { elegirArchivo(e.target.files?.[0]); e.target.value = ''; }} />

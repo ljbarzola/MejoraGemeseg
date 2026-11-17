@@ -47,6 +47,8 @@ interface GuardiaRow {
   asignacion: AsignacionGuardia | null;
   entidad: Entidad | null;
   fuera: boolean;
+  /** Creada por Operaciones desde un viaje: todavía sin carpeta en Drive. */
+  sinCarpeta: boolean;
 }
 
 const TIPO_LABEL: Record<EntidadTipo, string> = { PUBLICA: 'Pública', PRIVADA: 'Privada' };
@@ -354,7 +356,7 @@ export default function GuardiasList() {
       guardias.map((g) => {
         const asignacion = asignacionPorCedula.get(g.cedula) || null;
         const entidad = asignacion ? entidadPorId.get(asignacion.entidadId) || asignacion.entidad || null : null;
-        return { ...g, asignacion, entidad, fuera: fueraSet.has(g.cedula) };
+        return { ...g, asignacion, entidad, fuera: fueraSet.has(g.cedula), sinCarpeta: !!g.sinCarpeta };
       }),
     [guardias, asignacionPorCedula, entidadPorId, fueraSet],
   );
@@ -639,6 +641,15 @@ export default function GuardiasList() {
                         </span>
                         {r.fuera && (
                           <span className="status-badge" style={{ background: '#edf2f7', color: '#718096', fontSize: '0.68rem' }}>Fuera</span>
+                        )}
+                        {r.sinCarpeta && (
+                          <span
+                            className="status-badge"
+                            style={{ background: '#fef3c7', color: '#92400e', fontSize: '0.68rem' }}
+                            title="Operaciones la registró desde un viaje. Crea su carpeta en Drive con el nombre «Apellidos Nombres» y sincroniza."
+                          >
+                            Sin carpeta
+                          </span>
                         )}
                       </div>
                     </td>

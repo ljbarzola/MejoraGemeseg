@@ -557,7 +557,7 @@ const CUSTODIAS = `# Custodias — guía
 ## Nueva custodia
 - Botón "+ Nueva custodia" arriba a la derecha: abre una ventana, sin salir de la lista.
 - "Tipo de Custodia *": HACIENDA, PUERTO o VIP. Datos Generales: Número de Guía *, Cliente, Placa GEMESEG. Ruta y Horarios: direcciones y fecha/hora de salida y llegada.
-- Personal Asignado: Chofer, Custodio 1 y Custodio 2 (obligatorios, tres personas distintas); se buscan por nombre o cédula; "+ Manual" si no está en la lista.
+- Personal Asignado: Chofer, Custodio 1 y Custodio 2 (obligatorios, tres personas distintas); se buscan escribiendo el nombre o la cédula entre el personal de Recursos Humanos (Guardias). Solo se puede elegir de la lista o crear a la persona: si no está, al pie de la lista dice "¿No existe? Créalo aquí" y abre una ventana "Crear persona" donde solo el nombre (apellidos y nombres) es obligatorio; la "Cédula o documento de identidad" es opcional (si se escribe, vale una cédula, un pasaporte o el documento de otro país: de 5 a 20 letras, números o guion; hoy los guardias de RRHH aún no tienen documento cargado y aparecen como "Sin cédula", y se pueden elegir igual); teléfono, correo, dirección y contacto de emergencia son opcionales. La persona queda elegida y también aparece en Recursos Humanos › Guardias con la etiqueta "Sin carpeta", y RRHH recibe una notificación en la app para crear su carpeta en Drive.
 - Según el tipo: Hacienda → Nombre Hacienda * y Cantidad Sacos *; Puerto → al menos un contenedor (número, sello, guía, BL opcionales); VIP → nada extra. Observaciones.
 - "Registrar custodia" → pregunta si imprimir la Orden de Custodia ("Imprimir PDF").
 

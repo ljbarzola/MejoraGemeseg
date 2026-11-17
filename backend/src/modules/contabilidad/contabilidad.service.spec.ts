@@ -129,6 +129,22 @@ describe('ContabilidadService', () => {
       expect(nomina.resumen.tipos_sin_tarifa).toEqual(['HACIENDA']);
     });
 
+    it('la matriz cronológica tiene columna y suma para toda persona con viajes, esté o no en el padrón', async () => {
+      // El padrón de custodios está vacío: antes, nadie tenía columna.
+      prisma.custodia.findMany.mockResolvedValue([
+        makeCustodia({ id: 1, tipoCustodia: 'HACIENDA' }),
+        makeCustodia({ id: 2, numeroGuia: 'G-002', tipoCustodia: 'PUERTO' }),
+      ]);
+      const nomina = await service.getNomina(1, '2026-08-01', '2026-08-31');
+
+      expect([...nomina.matriz.columnas_trabajadores].sort()).toEqual(
+        ['Ana Custodio', 'Juan Chofer', 'Luis Custodio'],
+      );
+      expect(nomina.matriz.totales_por_trabajador['Juan Chofer']).toBe(30); // $20 + $10
+      expect(nomina.matriz.gran_total).toBe(90); // 3 personas x ($20 + $10)
+      expect(nomina.matriz.filas[0].celdas['Ana Custodio'].monto).toBe(20);
+    });
+
     it('rechaza un período sin fechas', async () => {
       await expect(service.getNomina(1, '', '')).rejects.toBeInstanceOf(BadRequestException);
     });

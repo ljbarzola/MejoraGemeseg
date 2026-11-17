@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import { HorarioPdfData } from './horarios-pdf.service';
 import { formatFechaCorta } from '../shared/fecha-rango.util';
+import { cedulaMostrable } from '../../personal/utils/identidad-persona.util';
 
 const HEADER_FILL = 'FF1E3A5F';
 
@@ -76,7 +77,7 @@ export class CPHorariosExcelService {
       for (const fila of puesto.filas) {
         const r = sheet.getRow(row);
         r.getCell(1).value = fila.nombreGuardia;
-        r.getCell(2).value = fila.cedula;
+        r.getCell(2).value = cedulaMostrable(fila.cedula);
         fechas.forEach((fecha, i) => {
           const codigo = fila.porFecha[fecha] || '';
           const cell = r.getCell(3 + i);

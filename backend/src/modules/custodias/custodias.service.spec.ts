@@ -63,6 +63,49 @@ describe('CustodiasService', () => {
     service = new CustodiasService(prisma as unknown as PrismaService);
   });
 
+  describe('getAvailableCustodios', () => {
+    it('ofrece a todos los guardias; a quien no tiene documento lo marca «sin cédula» y no entrega la clave interna', async () => {
+      prisma.employeeDriveFolder.findMany.mockResolvedValue([
+        { employeeName: 'Ana Mora', cedula: '0912345678', lastSyncAt: null },
+        { employeeName: 'John Smith', cedula: 'AB123456', lastSyncAt: null },
+        { employeeName: 'Luis Corto', cedula: '12345', lastSyncAt: null },
+        { employeeName: 'Sin Documento', cedula: 'ID-1AbCdEfGh', lastSyncAt: null },
+        { employeeName: 'Temporal', cedula: 'TEMP-9', lastSyncAt: null },
+      ]);
+      const lista = await service.getAvailableCustodios(1);
+      expect(lista).toHaveLength(5);
+      expect(lista.filter((p) => p.sinCedula).map((p) => p.name).sort()).toEqual(['Sin Documento', 'Temporal']);
+      // La clave interna (ID-…, TEMP-…) nunca sale del servidor.
+      expect(lista.every((p) => !/^(ID|TEMP)-/i.test(p.cedula))).toBe(true);
+      expect(lista.find((p) => p.name === 'John Smith')).toMatchObject({ cedula: 'AB123456', sinCedula: false });
+    });
+  });
+
+  describe('personas distintas en un viaje', () => {
+    const base = { numeroGuia: 'G-9', tipoCustodia: 'hacienda' } as any;
+
+    it('rechaza repetir a la misma persona por cédula, o por nombre cuando aún no tiene cédula', async () => {
+      prisma.custodia.findUnique.mockResolvedValue(null);
+      await expect(
+        service.create({ ...base, choferName: 'A', choferCedula: '111', custodio1Name: 'B', custodio1Cedula: '111', custodio2Name: 'C' }, 1, 1),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      // Sin cédula (opcional): el mismo nombre en dos puestos, aunque cambien las mayúsculas, es la misma persona.
+      await expect(
+        service.create({ ...base, choferName: 'Ana Mora', custodio1Name: 'ana mora', custodio2Name: 'Luis Pérez' }, 1, 1),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.custodia.create).not.toHaveBeenCalled();
+    });
+
+    it('acepta un viaje con tres personas distintas aunque ninguna tenga cédula', async () => {
+      prisma.custodia.findUnique.mockResolvedValue(null);
+      prisma.custodia.create.mockResolvedValue({ id: 1 });
+      await service.create(
+        { ...base, choferName: 'Ana Mora', custodio1Name: 'Luis Pérez', custodio2Name: 'Eva Cruz' }, 1, 1,
+      );
+      expect(prisma.custodia.create.mock.calls[0][0].data).toMatchObject({ choferCedula: '', custodio1Cedula: '', custodio2Cedula: '' });
+    });
+  });
+
   describe('create', () => {
     it('rejects a duplicate numeroGuia', async () => {
       prisma.custodia.findUnique.mockResolvedValue(makeCustodia());
@@ -293,7 +336,9 @@ describe('CustodiasService', () => {
   });
 
   describe('getDashboardStats', () => {
-    it('counts every custodia por estado and only counts finalizadas per type, with no money', async () => {
+    // El dashboard es operativo: cuenta todos los viajes del mes (de cualquier estado) por tipo y por estado; solo
+    // `viajes_finalizados` son los que llegaron. Antes contaba por tipo solo los finalizados (cuando mostraba dinero).
+    it('counts every custodia del mes por tipo y por estado, finalizadas aparte, with no money', async () => {
       prisma.custodia.findMany.mockResolvedValue([
         makeCustodia({ id: 1, tipoCustodia: 'HACIENDA', estado: 'LLEGO' }),
         makeCustodia({ id: 2, tipoCustodia: 'PUERTO', estado: 'EN_CAMINO' }),
@@ -310,7 +355,8 @@ describe('CustodiasService', () => {
       expect(stats.kpis.viajes_finalizados).toBe(1);
       expect(stats.kpis).not.toHaveProperty('total_nomina_usd'); // el dinero vive en Contabilidad
       expect(stats.por_tipo.find((t) => t.tipo === 'HACIENDA')?.cantidad).toBe(1);
-      expect(stats.por_tipo.find((t) => t.tipo === 'PUERTO')?.cantidad).toBe(0);
+      expect(stats.por_tipo.find((t) => t.tipo === 'PUERTO')?.cantidad).toBe(1); // en camino, igual cuenta como viaje
+      expect(stats.por_tipo.find((t) => t.tipo === 'VIP')?.cantidad).toBe(1);
       expect(stats.por_estado).toEqual(
         expect.arrayContaining([
           { estado: 'LISTO_PARA_CUSTODIAR', cantidad: 1 },

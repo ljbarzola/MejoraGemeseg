@@ -12,7 +12,7 @@ function sinTildes(valor: string): string {
 }
 
 export function esCedulaSintetica(cedula?: string | null): boolean {
-  return /^(ID|TEMP)-/i.test((cedula || '').trim());
+  return /^(ID|TEMP|SC)-/i.test((cedula || '').trim());
 }
 
 function claveCampo(valor: string): string {
@@ -53,6 +53,12 @@ export function valorCampoPostulacion(
     if (hallado) return hallado;
   }
   return '';
+}
+
+/** Lo que se escribe en una celda de cédula: vacío si solo hay una clave interna (ID-, TEMP-, SC-). */
+export function cedulaMostrable(cedula?: string | null): string {
+  const limpia = (cedula || '').trim();
+  return !limpia || esCedulaSintetica(limpia) ? '' : limpia;
 }
 
 export function cedulaVisible(cedula?: string | null): string {

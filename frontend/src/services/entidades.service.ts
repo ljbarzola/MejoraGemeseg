@@ -185,6 +185,8 @@ export interface GuardiaPadron {
   nombreSeparadoExacto: boolean;
   cedula: string;
   lastSyncAt: string | null;
+  /** true = la creó Operaciones desde un viaje y todavía no tiene carpeta en Drive. */
+  sinCarpeta?: boolean;
 }
 
 // Vive en RRHH (/personal/guardias), no en Custodias: esta pantalla es de

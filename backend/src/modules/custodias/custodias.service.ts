@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCustodiaDto } from './dto/create-custodia.dto';
 import { UpdateCustodiaDto } from './dto/update-custodia.dto';
+import { esCedulaSintetica } from '../personal/utils/postulacion-validacion.util';
 import {
   diasDelMes,
   dondeFechaViaje,
@@ -39,6 +40,11 @@ export class CustodiasService {
     if (existing) {
       throw new BadRequestException('El número de guía ya existe.');
     }
+    this.exigirPersonasDistintas([
+      { nombre: dto.choferName, cedula: dto.choferCedula },
+      { nombre: dto.custodio1Name, cedula: dto.custodio1Cedula },
+      { nombre: dto.custodio2Name, cedula: dto.custodio2Cedula },
+    ]);
 
     return this.prisma.custodia.create({
       data: {
@@ -195,16 +201,24 @@ export class CustodiasService {
     }
 
     // Chofer y custodios deben ser personas distintas (misma regla que en el formulario).
-    const cedulas = [
-      data.choferCedula ?? actual.choferCedula,
-      data.custodio1Cedula ?? actual.custodio1Cedula,
-      data.custodio2Cedula ?? actual.custodio2Cedula,
-    ].filter(Boolean);
-    if (new Set(cedulas).size < cedulas.length) {
-      throw new BadRequestException('Chofer y custodios deben ser personas distintas.');
-    }
+    this.exigirPersonasDistintas([
+      { nombre: data.choferName ?? actual.choferName, cedula: data.choferCedula ?? actual.choferCedula },
+      { nombre: data.custodio1Name ?? actual.custodio1Name, cedula: data.custodio1Cedula ?? actual.custodio1Cedula },
+      { nombre: data.custodio2Name ?? actual.custodio2Name, cedula: data.custodio2Cedula ?? actual.custodio2Cedula },
+    ]);
 
     return this.prisma.custodia.update({ where: { id }, data });
+  }
+
+  // La misma persona no puede ir dos veces en un viaje. Se identifica por la cédula y, si no la tiene (la cédula es
+  // opcional, 2026-11-17), por el nombre sin importar mayúsculas: igual que Contabilidad (`clavePersona`).
+  private exigirPersonasDistintas(personas: { nombre?: string | null; cedula?: string | null }[]) {
+    const claves = personas
+      .map((p) => (p.cedula ?? '').trim() || (p.nombre ?? '').trim().toLowerCase())
+      .filter(Boolean);
+    if (new Set(claves).size < claves.length) {
+      throw new BadRequestException('Chofer y custodios deben ser personas distintas.');
+    }
   }
 
   // Un viaje solo AVANZA al paso siguiente o VUELVE al inicio (2026-11-16, pedido de Leidy): no se salta pasos
@@ -277,13 +291,20 @@ export class CustodiasService {
     // práctica — se preserva ese mismo valor fijo para no alterar lo que ya
     // se veía acá.
     const list = driveCustodios
-      .filter((c) => /^\d{10}$/.test(c.cedula))
-      .map((c) => ({
-        name: c.employeeName,
-        cedula: c.cedula,
-        status: 'Inscrito',
-        lastSyncAt: c.lastSyncAt,
-      }));
+      // La cédula es OPCIONAL (2026-11-17): en producción los guardias de RRHH aún no tienen documento cargado (todos
+      // tienen una clave interna ID-…) y Operaciones debe poder elegirlos igual. Para esas personas se devuelve la
+      // cédula vacía y `sinCedula: true`; la clave interna no sale del servidor ni se guarda en el viaje.
+      .filter((c) => !!c.employeeName?.trim())
+      .map((c) => {
+        const sinCedula = !c.cedula?.trim() || esCedulaSintetica(c.cedula);
+        return {
+          name: c.employeeName,
+          cedula: sinCedula ? '' : c.cedula,
+          sinCedula,
+          status: 'Inscrito',
+          lastSyncAt: c.lastSyncAt,
+        };
+      });
 
     return list.sort((a, b) => a.name.localeCompare(b.name));
   }

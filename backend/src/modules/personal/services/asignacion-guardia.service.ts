@@ -51,6 +51,8 @@ export class AsignacionGuardiaService {
           nombreSeparadoExacto: exacto,
           cedula: c.cedula,
           lastSyncAt: c.lastSyncAt,
+          // Persona que Operaciones creó desde un viaje (2026-11-17): aún no tiene carpeta en Drive.
+          sinCarpeta: !c.folderId,
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));

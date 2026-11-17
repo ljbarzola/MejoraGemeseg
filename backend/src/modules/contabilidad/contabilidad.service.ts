@@ -618,21 +618,21 @@ export class ContabilidadService implements OnModuleInit {
     const totales_por_tipo: Record<string, number> = { HACIENDA: 0, PUERTO: 0, VIP: 0 };
     for (const c of pagables) totales_por_tipo[c.tipoCustodia]++;
 
-    // Matriz cronológica: filas = viajes, columnas = trabajadores del padrón de custodios.
-    const trabajadoresCatalogo = await this.prisma.employeeDriveFolder.findMany({
-      where: { companyId, folderType: 'CUSTODIAS' },
-      orderBy: { employeeName: 'asc' },
-    });
-    const columnasTrabajadores = trabajadoresCatalogo.map((e) => e.employeeName);
+    // Matriz cronológica: filas = viajes, columnas = las personas que hicieron viajes en el período (2026-11-17: antes
+    // eran las del padrón de custodios y quien no estaba en él, como una persona recién creada o de prueba, no tenía
+    // columna ni suma). El nombre de la columna es el mismo del resumen, para que cuadre persona por persona.
+    const columnasTrabajadores = empleados.filter((e) => e.total_viajes > 0).map((e) => e.nombre);
     const totalesMatrix: Record<string, number> = {};
     for (const t of columnasTrabajadores) totalesMatrix[t] = 0;
+    const nombreDe = (nombre: string, cedula: string) =>
+      empleadosMap.get(clavePersona(cedula, nombre))?.nombre ?? nombre.trim();
 
     const filas = [];
     for (const c of pagables) {
       const participantes = [
-        { nombre: c.choferName, rol: 'Chofer' },
-        { nombre: c.custodio1Name, rol: 'Custodio 1' },
-        { nombre: c.custodio2Name, rol: 'Custodio 2' },
+        { nombre: nombreDe(c.choferName, c.choferCedula), rol: 'Chofer' },
+        { nombre: nombreDe(c.custodio1Name, c.custodio1Cedula), rol: 'Custodio 1' },
+        { nombre: nombreDe(c.custodio2Name, c.custodio2Cedula), rol: 'Custodio 2' },
       ];
       const celdas: Record<string, any> = {};
       for (const p of participantes) {

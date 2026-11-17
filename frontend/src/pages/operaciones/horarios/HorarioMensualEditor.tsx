@@ -26,6 +26,7 @@ import ImportarExcelModal from './ImportarExcelModal';
 import ExportarHorarioModal from './ExportarHorarioModal';
 import { mensajeEliminarHorario } from '../../../utils/horarioEliminar';
 import EjecutadoModal from './EjecutadoModal';
+import { cedulaMostrable } from '../../../utils/postulacionValidacion';
 
 // Inicial del día de la semana en español, lunes primero (fila de encabezado).
 const DIA_INICIAL = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -458,7 +459,7 @@ export default function HorarioMensualEditor() {
                         <tr key={`${fila.puestoId}-${fila.cedula}`}>
                           <td style={{ position: 'sticky', left: 0, zIndex: 1, background: '#fff', border: '1px solid #e2e8f0', padding: '6px 10px', whiteSpace: 'nowrap' }}>
                             <div style={{ fontWeight: 600 }}>{fila.nombreGuardia}</div>
-                            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{fila.cedula}</div>
+                            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{cedulaMostrable(fila.cedula)}</div>
                           </td>
                           {fechas.map((f) => {
                             const key = `${fila.puestoId}|${fila.cedula}|${f}`;

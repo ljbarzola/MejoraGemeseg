@@ -266,7 +266,7 @@ export class ImportacionContratoService {
       avisos.push(`${enlazadasPorNombre} persona(s) sin cédula en el Excel ya estaban en RRHH: se asignaron con su cédula por el nombre.`);
     }
     if (sinCedula.length > 0) {
-      avisos.push(`${sinCedula.length} persona(s) no tienen cédula y no están en RRHH: quedaron asignadas con un identificador temporal. Completa su cédula cuando la tengas.`);
+      avisos.push(`${sinCedula.length} persona(s) no tienen cédula y no están en RRHH: quedaron asignadas sin cédula (se identifican por su nombre). RRHH puede cargarla cuando la tenga.`);
     }
 
     return { ...creado, puestos: elegidos.length, guardias: totalGuardias, sinCedula, enlazadasPorNombre, celdas, avisos };

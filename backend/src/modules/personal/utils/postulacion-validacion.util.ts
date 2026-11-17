@@ -32,7 +32,8 @@ export function mismaPersona(a?: string | null, b?: string | null): boolean {
 }
 
 export function esCedulaSintetica(cedula?: string | null): boolean {
-  return /^(ID|TEMP)-/i.test((cedula || '').trim());
+  // ID- (sync de Drive / Operaciones), TEMP- y SC- (importador de contratos): claves internas, no documentos.
+  return /^(ID|TEMP|SC)-/i.test((cedula || '').trim());
 }
 
 export function validarValorCampo(

@@ -10,6 +10,19 @@ export const deleteCustodia = (id: number) => api.delete(`/custodias/${id}`);
 export const updateCustodiaEstado = (id: number, estado: string, fecha?: string) => api.patch(`/custodias/${id}/estado`, { estado, fecha }).then(r => r.data);
 export const getAvailableCustodios = () => api.get('/custodias/available-custodios').then(r => r.data);
 
+export interface NuevaPersonaCustodia {
+  nombre: string;
+  cedula?: string;
+  telefono?: string;
+  email?: string;
+  direccion?: string;
+  contactoEmergenciaNombre?: string;
+  contactoEmergenciaTelefono?: string;
+}
+/** Persona nueva desde el formulario del viaje: entra a los Guardias de RRHH (sin carpeta de Drive todavía). */
+export const crearPersonaCustodia = (data: NuevaPersonaCustodia) =>
+  api.post('/custodias/personal', data).then(r => r.data as { name: string; cedula: string; sinCedula: boolean; status: string; yaExistia: boolean });
+
 export const getCustodiasDashboard = (mes?: string) => api.get('/custodias/dashboard', { params: { mes } }).then(r => r.data);
 
 // La orden en PDF se pide con el token de sesión (un enlace directo daba 401): ver utils/archivos.ts.

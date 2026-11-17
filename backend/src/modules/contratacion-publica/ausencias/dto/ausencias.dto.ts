@@ -16,7 +16,7 @@ export class CrearAusenciaDto {
 
   @Transform(texto)
   @IsString()
-  @MaxLength(20)
+  @MaxLength(60)
   cedula: string;
 
   /** Por defecto hoy (día de Ecuador). Hasta 7 días atrás. */
@@ -40,7 +40,7 @@ export class CrearAusenciaDto {
   @IsOptional()
   @Transform(texto)
   @IsString()
-  @MaxLength(20)
+  @MaxLength(60)
   reemplazoCedula?: string | null;
 
   @IsOptional()
@@ -53,7 +53,7 @@ export class CrearAusenciaDto {
 export class CubrirAusenciaDto {
   @Transform(texto)
   @IsString()
-  @MaxLength(20)
+  @MaxLength(60)
   reemplazoCedula: string;
 
   @Transform(texto)

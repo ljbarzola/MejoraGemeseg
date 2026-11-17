@@ -10,6 +10,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import JSZip from 'jszip';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { cedulaMostrable } from '../../personal/utils/identidad-persona.util';
 import { CreateInformeDto } from './dto/create-informe.dto';
 import { UpdateInformeDto } from './dto/update-informe.dto';
 import { UpdatePlantillaDto } from './dto/update-plantilla.dto';
@@ -521,7 +522,7 @@ export class CPInformesService {
         'TablaPersonal',
         this.buildTableXml(
           ['Cédula', 'Nombre', 'Puesto'],
-          datos.personal.map((p) => [p.cedula, p.nombreGuardia, p.puesto]),
+          datos.personal.map((p) => [cedulaMostrable(p.cedula), p.nombreGuardia, p.puesto]),
         ),
       );
 

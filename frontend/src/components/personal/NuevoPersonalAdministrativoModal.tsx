@@ -70,13 +70,12 @@ export default function NuevoPersonalAdministrativoModal({ onClose, onCreated }:
             <input type="text" value={nombres} onChange={(e) => setNombres(e.target.value)} placeholder="Ej. María José" />
           </div>
           <div className="form-group">
-            <label>Cédula</label>
+            <label>Cédula o documento</label>
             <input
               type="text"
-              inputMode="numeric"
               value={cedula}
-              onChange={(e) => setCedula(e.target.value.replace(/\D/g, '').slice(0, 10))}
-              placeholder="10 dígitos (opcional)"
+              onChange={(e) => setCedula(e.target.value.replace(/[^A-Za-z0-9-]/g, '').slice(0, 20).toUpperCase())}
+              placeholder="Cédula, pasaporte u otro (opcional)"
             />
             <span style={{ fontSize: '0.75rem', color: '#a0aec0' }}>Si no la tienes a la mano, puedes agregarla después en su ficha.</span>
           </div>

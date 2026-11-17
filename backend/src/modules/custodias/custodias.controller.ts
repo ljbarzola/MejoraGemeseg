@@ -15,6 +15,8 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import type { Response } from 'express';
 import { CustodiasService } from './custodias.service';
+import { CustodiasPersonalService } from './custodias-personal.service';
+import { CreatePersonaCustodiaDto } from './dto/create-persona.dto';
 import { PdfService } from './pdf.service';
 import { CreateCustodiaDto } from './dto/create-custodia.dto';
 import { UpdateEstadoDto } from './dto/update-estado.dto';
@@ -27,8 +29,16 @@ import { Section } from '../../common/decorators/section.decorator';
 export class CustodiasController {
   constructor(
     private readonly custodiasService: CustodiasService,
+    private readonly personalService: CustodiasPersonalService,
     private readonly pdfService: PdfService,
   ) {}
+
+  // Persona nueva desde el formulario del viaje («No existe, créalo aquí»): entra a la lista de Guardias de RRHH.
+  @Post('personal')
+  @Section('CUSTODIAS', 'write')
+  crearPersona(@Body() dto: CreatePersonaCustodiaDto, @Req() req: any) {
+    return this.personalService.crear(req.user.companyId, req.user.userId, dto);
+  }
 
   @Post()
   @Section('CUSTODIAS', 'write')

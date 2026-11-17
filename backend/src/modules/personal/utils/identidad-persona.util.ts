@@ -20,13 +20,21 @@ export function cedulaEsDigitosDeCarpeta(
   return /^\d{10}$/.test(cedula) && cedula === digitos;
 }
 
+// Cédula o documento de identidad de una persona (2026-11-17). Antes se exigían
+// exactamente 10 dígitos y eso dejaba fuera a quien no es de Ecuador (pasaporte,
+// documento de otro país) o tiene un número distinto. Ahora vale cualquier
+// documento de 5 a 20 caracteres (letras, números o guion), sin espacios, en
+// mayúsculas. Lo único prohibido son las claves internas (ID-…, TEMP-…), que
+// no son un documento. La regla de POSTULACIÓN (portal público) sigue siendo
+// de 10 dígitos: es otro repositorio y se cambia en los dos lados.
+export const DOCUMENTO_MENSAJE =
+  'El documento de identidad debe tener entre 5 y 20 caracteres (letras, números o guion), sin espacios, y no puede empezar con «ID-» ni «TEMP-».';
+
 export function validarCedulaIngresada(valor: string): string | null {
-  const limpia = valor.trim();
+  const limpia = valor.replace(/\s+/g, '').toUpperCase();
   if (!limpia) return null;
-  if (esCedulaSintetica(limpia) || !/^\d{10}$/.test(limpia)) {
-    throw new BadRequestException(
-      'La cédula debe tener 10 dígitos, sin espacios ni guiones.',
-    );
+  if (esCedulaSintetica(limpia) || !/^[A-Z0-9-]{5,20}$/.test(limpia)) {
+    throw new BadRequestException(DOCUMENTO_MENSAJE);
   }
   return limpia;
 }
