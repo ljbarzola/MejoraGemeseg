@@ -5,17 +5,23 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCustodiaDto } from './dto/create-custodia.dto';
+import { UpdateCustodiaDto } from './dto/update-custodia.dto';
+import {
+  diasDelMes,
+  dondeFechaViaje,
+  esMesValido,
+  etiquetaMes,
+  mesActualEcuador,
+  mesDeViaje,
+  rangoDiasEcuador,
+  ultimosMeses,
+} from '../../common/utils/viaje-fechas.util';
 
-const CUSTODIA_RATES: Record<string, number> = {
-  HACIENDA: 20,
-  PUERTO: 10,
-  VIP: 23,
-};
-
-const TIPO_LABELS: Record<string, string> = {
-  HACIENDA: 'Hacienda',
-  PUERTO: 'Puerto',
-  VIP: 'VIP',
+/** A qué estados puede pasar un viaje desde cada uno: avanzar un paso, o volver al inicio. */
+const TRANSICIONES: Record<string, string[]> = {
+  LISTO_PARA_CUSTODIAR: ['EN_CAMINO'],
+  EN_CAMINO: ['LLEGO', 'LISTO_PARA_CUSTODIAR'],
+  LLEGO: ['LISTO_PARA_CUSTODIAR'],
 };
 
 @Injectable()
@@ -89,7 +95,8 @@ export class CustodiasService {
     }
     return this.prisma.custodia.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      // El id desempata viajes registrados en el mismo instante: sin él, el orden cambiaba al editar uno.
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   }
 
@@ -101,22 +108,154 @@ export class CustodiasService {
     return custodia;
   }
 
-  async updateEstado(id: number, estado: string, companyId: number) {
+  // Un viaje con pagos ya registrados en Contabilidad (tabla ContabPagoCustodia) no se elimina, no vuelve al inicio ni
+  // cambia de tipo o de personal: eso movería lo que ya se pagó. Primero hay que deshacer esos pagos en Pagos. Si la
+  // tabla aún no existe (el servidor no terminó de arrancar), se asume que no hay pagos.
+  private async tienePagosRegistrados(id: number): Promise<boolean> {
+    try {
+      const filas = await this.prisma.$queryRaw<{ n: number }[]>`
+        SELECT COUNT(*)::int AS "n" FROM "ContabPagoCustodia" WHERE "custodiaId" = ${id}`;
+      return (filas?.[0]?.n ?? 0) > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  private async exigirSinPagos(id: number, accion: string) {
+    if (await this.tienePagosRegistrados(id)) {
+      throw new BadRequestException(
+        `Este viaje ya tiene pagos registrados en Contabilidad, así que no se puede ${accion}. Deshaz esos pagos en «Pagos» primero.`,
+      );
+    }
+  }
+
+  // Editar un viaje (2026-11-16): antes solo se podía crear, cambiar de estado o eliminar. Se corrige lo que llega;
+  // el estado NO se toca aquí (tiene su propia ruta). Lo que ya no aplica al tipo final se limpia: un viaje que
+  // deja de ser de hacienda pierde la hacienda y los sacos, y uno que deja de ser de puerto, sus contenedores.
+  async update(id: number, dto: UpdateCustodiaDto, companyId: number) {
+    const actual = await this.findOne(id, companyId);
+    const data: Record<string, any> = {};
+
+    const cambiaPagable =
+      (dto.tipoCustodia !== undefined &&
+        dto.tipoCustodia.toUpperCase().replace(/\s+/g, '_') !== actual.tipoCustodia) ||
+      (['choferName', 'custodio1Name', 'custodio2Name', 'choferCedula', 'custodio1Cedula', 'custodio2Cedula'] as const).some(
+        (k) => dto[k] !== undefined && (dto[k] ?? '').trim() !== ((actual as any)[k] ?? '').trim(),
+      );
+    if (cambiaPagable) await this.exigirSinPagos(id, 'cambiar su tipo o su personal');
+
+    if (dto.numeroGuia !== undefined) {
+      const guia = dto.numeroGuia.trim();
+      if (!guia) throw new BadRequestException('El número de guía es requerido.');
+      if (guia !== actual.numeroGuia) {
+        const repetida = await this.prisma.custodia.findUnique({ where: { numeroGuia: guia } });
+        if (repetida && repetida.id !== id) {
+          throw new BadRequestException('El número de guía ya existe.');
+        }
+      }
+      data.numeroGuia = guia;
+    }
+    if (dto.tipoCustodia !== undefined) {
+      data.tipoCustodia = dto.tipoCustodia.toUpperCase().replace(/\s+/g, '_');
+    }
+    for (const campo of [
+      'choferName', 'custodio1Name', 'custodio2Name',
+    ] as const) {
+      if (dto[campo] !== undefined) {
+        const v = dto[campo]!.trim();
+        if (!v) throw new BadRequestException('Chofer y custodios no pueden quedar vacíos.');
+        data[campo] = v;
+      }
+    }
+    for (const campo of [
+      'choferCedula', 'custodio1Cedula', 'custodio2Cedula', 'cliente', 'placa', 'direccionSalida', 'direccionLlegada',
+    ] as const) {
+      if (dto[campo] !== undefined) data[campo] = (dto[campo] ?? '').trim();
+    }
+    if ('fechaHoraSalida' in dto) {
+      data.fechaHoraSalida = dto.fechaHoraSalida ? new Date(dto.fechaHoraSalida) : null;
+    }
+    if ('fechaHoraLlegada' in dto) {
+      data.fechaHoraLlegada = dto.fechaHoraLlegada ? new Date(dto.fechaHoraLlegada) : null;
+    }
+    if ('observaciones' in dto) data.observaciones = dto.observaciones?.trim() || null;
+
+    const tipoFinal = data.tipoCustodia ?? actual.tipoCustodia;
+    if (tipoFinal === 'HACIENDA') {
+      if ('nombreHacienda' in dto) data.nombreHacienda = dto.nombreHacienda?.trim() || null;
+      if ('cantidadSacos' in dto) data.cantidadSacos = dto.cantidadSacos || null;
+    } else {
+      data.nombreHacienda = null;
+      data.cantidadSacos = null;
+    }
+    if (tipoFinal === 'PUERTO') {
+      if ('contenedores' in dto) data.contenedores = dto.contenedores || [];
+    } else {
+      data.contenedores = [];
+    }
+
+    // Chofer y custodios deben ser personas distintas (misma regla que en el formulario).
+    const cedulas = [
+      data.choferCedula ?? actual.choferCedula,
+      data.custodio1Cedula ?? actual.custodio1Cedula,
+      data.custodio2Cedula ?? actual.custodio2Cedula,
+    ].filter(Boolean);
+    if (new Set(cedulas).size < cedulas.length) {
+      throw new BadRequestException('Chofer y custodios deben ser personas distintas.');
+    }
+
+    return this.prisma.custodia.update({ where: { id }, data });
+  }
+
+  // Un viaje solo AVANZA al paso siguiente o VUELVE al inicio (2026-11-16, pedido de Leidy): no se salta pasos
+  // ni retrocede de a uno. Volver al inicio saca el viaje de lo que se paga en Contabilidad (solo cuenta «Llegó»).
+  // Al marcar «Salió» o «Llegó» se guarda la hora REAL (la que elige la persona, que no siempre alcanza a marcar a
+  // tiempo; por defecto, ahora). Esa hora decide a qué día y mes cuenta el viaje en Contabilidad. Al volver al
+  // inicio se borra la hora de llegada: el viaje todavía no llegó.
+  async updateEstado(id: number, estado: string, companyId: number, fecha?: string) {
     const validEstados = ['LISTO_PARA_CUSTODIAR', 'EN_CAMINO', 'LLEGO'];
     if (!validEstados.includes(estado)) {
       throw new BadRequestException(
         `Estado inválido. Opciones: ${validEstados.join(', ')}`,
       );
     }
-    await this.findOne(id, companyId);
-    return this.prisma.custodia.update({
-      where: { id },
-      data: { estado } as any,
-    });
+    const actual = await this.findOne(id, companyId);
+    if (estado === 'LISTO_PARA_CUSTODIAR') await this.exigirSinPagos(id, 'devolver al inicio');
+    const permitidos = TRANSICIONES[actual.estado] ?? [];
+    if (!permitidos.includes(estado)) {
+      throw new BadRequestException(
+        actual.estado === estado
+          ? 'El viaje ya está en ese estado.'
+          : 'Un viaje solo puede pasar al paso siguiente o volver a «Listo para custodiar».',
+      );
+    }
+    const data: Record<string, any> = { estado };
+    if (estado === 'LISTO_PARA_CUSTODIAR') {
+      data.fechaHoraLlegada = null;
+    } else {
+      const momento = fecha ? new Date(fecha) : new Date();
+      if (Number.isNaN(momento.getTime())) {
+        throw new BadRequestException('La fecha y hora no son válidas.');
+      }
+      // Un margen de 5 minutos por relojes desfasados; más allá, sería registrar algo que aún no pasa.
+      if (momento.getTime() > Date.now() + 5 * 60 * 1000) {
+        throw new BadRequestException('La fecha y hora no pueden ser futuras.');
+      }
+      if (estado === 'EN_CAMINO') {
+        data.fechaHoraSalida = momento;
+      } else {
+        if (actual.fechaHoraSalida && momento < actual.fechaHoraSalida) {
+          throw new BadRequestException('La llegada no puede ser anterior a la salida.');
+        }
+        data.fechaHoraLlegada = momento;
+      }
+    }
+    return this.prisma.custodia.update({ where: { id }, data });
   }
 
   async remove(id: number, companyId: number) {
     await this.findOne(id, companyId);
+    await this.exigirSinPagos(id, 'eliminar');
     return this.prisma.custodia.delete({ where: { id } });
   }
 
@@ -149,624 +288,94 @@ export class CustodiasService {
     return list.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  async getNomina(companyId: number, fechaInicio: string, fechaFin: string) {
-    const custodias = await this.findAll(companyId, { fechaInicio, fechaFin });
-    const pagables = custodias.filter((c) => c.estado === 'LLEGO');
-
-    const empleadosMap = new Map<
-      string,
-      {
-        nombre: string;
-        cedula: string;
-        total_viajes: number;
-        por_tipo: Record<string, number>;
-        subtotales: Record<string, number>;
-        total_usd: number;
-        detalle: any[];
-      }
-    >();
-
-    const registrar = (
-      nombre: string,
-      cedula: string,
-      rol: string,
-      custodia: any,
-    ) => {
-      const key = cedula?.trim() || nombre.trim();
-      if (!empleadosMap.has(key)) {
-        empleadosMap.set(key, {
-          nombre: nombre.trim(),
-          cedula: cedula?.trim() || '',
-          total_viajes: 0,
-          por_tipo: { HACIENDA: 0, PUERTO: 0, VIP: 0 },
-          subtotales: { HACIENDA: 0, PUERTO: 0, VIP: 0 },
-          total_usd: 0,
-          detalle: [],
-        });
-      }
-      const emp = empleadosMap.get(key)!;
-      const tarifa = CUSTODIA_RATES[custodia.tipoCustodia] || 0;
-      emp.total_viajes++;
-      emp.por_tipo[custodia.tipoCustodia] =
-        (emp.por_tipo[custodia.tipoCustodia] || 0) + 1;
-      emp.subtotales[custodia.tipoCustodia] =
-        (emp.subtotales[custodia.tipoCustodia] || 0) + tarifa;
-      emp.total_usd += tarifa;
-      emp.detalle.push({
-        numero_guia: custodia.numeroGuia,
-        rol,
-        tipo_custodia: custodia.tipoCustodia,
-        monto: tarifa,
-        cliente: custodia.cliente,
-        placa: custodia.placa,
-        direccion_salida: custodia.direccionSalida,
-        direccion_llegada: custodia.direccionLlegada,
-        fecha_hora_salida: custodia.fechaHoraSalida,
-        fecha_hora_llegada: custodia.fechaHoraLlegada,
-        fecha_registro: custodia.createdAt,
-      });
-    };
-
-    for (const c of pagables) {
-      registrar(c.choferName, c.choferCedula, 'Chofer', c);
-      registrar(c.custodio1Name, c.custodio1Cedula, 'Custodio 1', c);
-      registrar(c.custodio2Name, c.custodio2Cedula, 'Custodio 2', c);
-    }
-
-    const empleados = Array.from(empleadosMap.values()).sort((a, b) =>
-      a.nombre.localeCompare(b.nombre),
-    );
-    const total_pagado = empleados.reduce((sum, e) => sum + e.total_usd, 0);
-
-    const totales_por_tipo: Record<string, number> = {
-      HACIENDA: 0,
-      PUERTO: 0,
-      VIP: 0,
-    };
-    for (const c of pagables) totales_por_tipo[c.tipoCustodia]++;
-
-    // Build chronological matrix
-    const trabajadoresCatalogo = await this.prisma.employeeDriveFolder.findMany(
-      {
-        where: { companyId, folderType: 'CUSTODIAS' },
-        orderBy: { employeeName: 'asc' },
-      },
-    );
-    const columnasTrabajadores = trabajadoresCatalogo.map(
-      (e) => e.employeeName,
-    );
-    const totalesMatrix: Record<string, number> = {};
-    for (const t of columnasTrabajadores) totalesMatrix[t] = 0;
-
-    const filas = [];
-    for (const c of pagables) {
-      const tarifa = CUSTODIA_RATES[c.tipoCustodia] || 0;
-      const participantes = [
-        { nombre: c.choferName, rol: 'Chofer' },
-        { nombre: c.custodio1Name, rol: 'Custodio 1' },
-        { nombre: c.custodio2Name, rol: 'Custodio 2' },
-      ];
-      const celdas: Record<string, any> = {};
-      for (const p of participantes) {
-        const tipoTxt = TIPO_LABELS[c.tipoCustodia] || c.tipoCustodia;
-        let label: string;
-        if (p.rol === 'Chofer') label = `Chofer-${tipoTxt}: ${tarifa}`;
-        else
-          label = `${p.rol === 'Custodio 1' ? 'Cust. 1' : 'Cust. 2'} ${c.tipoCustodia} ${tarifa} dolares`;
-        celdas[p.nombre] = {
-          tipo: c.tipoCustodia,
-          monto: tarifa,
-          rol: p.rol,
-          label,
-        };
-        if (totalesMatrix[p.nombre] !== undefined)
-          totalesMatrix[p.nombre] += tarifa;
-      }
-      filas.push({
-        fecha: c.fechaHoraSalida
-          ? this.formatFechaEC(c.fechaHoraSalida)
-          : this.formatFechaEC(c.createdAt),
-        fecha_hora: c.fechaHoraSalida || c.createdAt,
-        numero_guia: c.numeroGuia,
-        cliente: c.cliente,
-        placa: c.placa,
-        celdas,
-      });
-    }
-
-    const matriz = {
-      columnas_fijas: ['fecha', 'guia'],
-      columnas_trabajadores: columnasTrabajadores,
-      filas,
-      totales_por_trabajador: totalesMatrix,
-      gran_total: Object.values(totalesMatrix).reduce((s, v) => s + v, 0),
-    };
-
-    return {
-      periodo: { fecha_inicio: fechaInicio, fecha_fin: fechaFin },
-      resumen: {
-        total_custodias: pagables.length,
-        total_pagado,
-        empleados: empleados.length,
-        totales_por_tipo,
-        tarifas: CUSTODIA_RATES,
-        nota: 'Solo incluye custodias en estado LLEGÓ.',
-      },
-      empleados: empleados.map(({ detalle, ...rest }) => rest),
-      empleados_detalle: empleados,
-      matriz,
-      trabajadores_catalogo: columnasTrabajadores,
-    };
-  }
-
+  // Dashboard OPERATIVO (2026-11-16): cifras del mes elegido (viajes, estados, tipos, personal, clientes), la
+  // tendencia de los últimos 6 meses y quiénes y qué clientes concentran los viajes. Sin dinero: eso vive en
+  // Contabilidad. Un viaje cuenta en el mes de su salida (o, sin hora de salida, de su registro), día de Ecuador.
   async getDashboardStats(companyId: number, mes?: string) {
-    const now = new Date();
-    const targetMes =
-      mes && /^\d{4}-\d{2}$/.test(mes)
-        ? mes
-        : `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
-    const [year, month] = targetMes.split('-').map(Number);
-    const startDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
-    const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
-
-    const todas = await this.prisma.custodia.findMany({
+    const mesObjetivo = esMesValido(mes) ? mes : mesActualEcuador();
+    const meses = ultimosMeses(mesObjetivo, 6);
+    const viajes = await this.prisma.custodia.findMany({
       where: {
         companyId,
-        createdAt: { gte: startDate, lte: endDate },
+        ...dondeFechaViaje(
+          rangoDiasEcuador(diasDelMes(meses[0]).desde, diasDelMes(mesObjetivo).hasta),
+        ),
       },
-      orderBy: { createdAt: 'desc' },
     });
+    const delMes = viajes.filter((c) => mesDeViaje(c) === mesObjetivo);
+    const finalizadas = delMes.filter((c) => c.estado === 'LLEGO');
 
-    const finalizadas = todas.filter((c) => c.estado === 'LLEGO');
-
-    const porTipoMap: Record<
-      string,
-      {
-        tipo: string;
-        cantidad: number;
-        total_costo: number;
-        tarifa_persona: number;
-      }
-    > = {
-      HACIENDA: {
-        tipo: 'HACIENDA',
-        cantidad: 0,
-        total_costo: 0,
-        tarifa_persona: CUSTODIA_RATES.HACIENDA,
-      },
-      PUERTO: {
-        tipo: 'PUERTO',
-        cantidad: 0,
-        total_costo: 0,
-        tarifa_persona: CUSTODIA_RATES.PUERTO,
-      },
-      VIP: {
-        tipo: 'VIP',
-        cantidad: 0,
-        total_costo: 0,
-        tarifa_persona: CUSTODIA_RATES.VIP,
-      },
+    const porTipoMap: Record<string, { tipo: string; cantidad: number }> = {
+      HACIENDA: { tipo: 'HACIENDA', cantidad: 0 },
+      PUERTO: { tipo: 'PUERTO', cantidad: 0 },
+      VIP: { tipo: 'VIP', cantidad: 0 },
     };
-
     const porEstadoMap: Record<string, number> = {
       LISTO_PARA_CUSTODIAR: 0,
       EN_CAMINO: 0,
       LLEGO: 0,
     };
-
-    const empleadosSet = new Set<string>();
-    let total_nomina_usd = 0;
-
-    for (const c of todas) {
+    for (const c of delMes) {
       if (porEstadoMap[c.estado] !== undefined) porEstadoMap[c.estado]++;
+      if (porTipoMap[c.tipoCustodia]) porTipoMap[c.tipoCustodia].cantidad++;
     }
 
-    for (const c of finalizadas) {
-      if (porTipoMap[c.tipoCustodia]) {
-        porTipoMap[c.tipoCustodia].cantidad++;
-        porTipoMap[c.tipoCustodia].total_costo +=
-          (CUSTODIA_RATES[c.tipoCustodia] || 0) * 3;
+    // Tendencia: viajes por mes y tipo.
+    const porMes = meses.map((m) => ({
+      mes: m,
+      etiqueta: etiquetaMes(m),
+      total: 0,
+      HACIENDA: 0,
+      PUERTO: 0,
+      VIP: 0,
+    }));
+    const porMesMap = new Map(porMes.map((f) => [f.mes, f]));
+    for (const c of viajes) {
+      const f = porMesMap.get(mesDeViaje(c));
+      if (!f) continue;
+      f.total++;
+      if (c.tipoCustodia in f) (f as any)[c.tipoCustodia]++;
+    }
+
+    // Personal y clientes del mes.
+    const personas = new Map<string, { nombre: string; viajes: number }>();
+    const clientes = new Map<string, number>();
+    for (const c of delMes) {
+      const nombreCliente = (c.cliente ?? '').trim() || 'Sin cliente';
+      clientes.set(nombreCliente, (clientes.get(nombreCliente) ?? 0) + 1);
+      for (const [nombre, cedula] of [
+        [c.choferName, c.choferCedula],
+        [c.custodio1Name, c.custodio1Cedula],
+        [c.custodio2Name, c.custodio2Cedula],
+      ]) {
+        const clave = (cedula || nombre || '').trim();
+        if (!clave) continue;
+        const p = personas.get(clave) ?? { nombre: (nombre ?? '').trim() || clave, viajes: 0 };
+        p.viajes++;
+        personas.set(clave, p);
       }
-      total_nomina_usd += (CUSTODIA_RATES[c.tipoCustodia] || 0) * 3;
-      [
-        c.choferCedula || c.choferName,
-        c.custodio1Cedula || c.custodio1Name,
-        c.custodio2Cedula || c.custodio2Name,
-      ]
-        .filter(Boolean)
-        .forEach((key) => empleadosSet.add(key.trim()));
     }
 
     return {
-      periodo: {
-        mes: targetMes,
-        fecha_inicio: startDate.toISOString().split('T')[0],
-        fecha_fin: endDate.toISOString().split('T')[0],
-      },
+      periodo: { mes: mesObjetivo, ...diasDelMes(mesObjetivo) },
       kpis: {
-        total_viajes: todas.length,
+        total_viajes: delMes.length,
         viajes_finalizados: finalizadas.length,
-        total_nomina_usd,
-        empleados_activos: empleadosSet.size,
+        en_camino: porEstadoMap.EN_CAMINO,
+        empleados_activos: personas.size,
+        clientes_atendidos: clientes.size,
       },
       por_tipo: Object.values(porTipoMap),
       por_estado: Object.entries(porEstadoMap).map(([estado, cantidad]) => ({
         estado,
         cantidad,
       })),
+      por_mes: porMes,
+      por_cliente: [...clientes.entries()]
+        .map(([cliente, n]) => ({ cliente, viajes: n }))
+        .sort((a, b) => b.viajes - a.viajes)
+        .slice(0, 6),
+      por_persona: [...personas.values()].sort((a, b) => b.viajes - a.viajes).slice(0, 6),
     };
-  }
-
-  async getTrabajadorByCedula(
-    companyId: number,
-    cedulaInput: string,
-    mes?: string,
-  ) {
-    const cedulaNorm = String(cedulaInput || '')
-      .trim()
-      .replace(/\s+/g, '');
-    if (!cedulaNorm) {
-      throw new BadRequestException('La cédula es requerida.');
-    }
-
-    let startDate: Date | undefined;
-    let endDate: Date | undefined;
-    let periodObj: any = null;
-
-    if (mes && /^\d{4}-\d{2}$/.test(mes)) {
-      const [year, month] = mes.split('-').map(Number);
-      startDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
-      endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
-      periodObj = {
-        mes,
-        fecha_inicio: startDate.toISOString().split('T')[0],
-        fecha_fin: endDate.toISOString().split('T')[0],
-      };
-    }
-
-    // Try finding employee name from Drive folders
-    const driveEmployee = await this.prisma.employeeDriveFolder.findFirst({
-      where: { companyId, cedula: cedulaNorm },
-    });
-
-    const knownName = driveEmployee?.employeeName || '';
-
-    const whereClause: any = {
-      companyId,
-      estado: 'LLEGO',
-      OR: [
-        { choferCedula: cedulaNorm },
-        { custodio1Cedula: cedulaNorm },
-        { custodio2Cedula: cedulaNorm },
-      ],
-    };
-
-    if (knownName) {
-      whereClause.OR.push(
-        { choferName: { contains: knownName, mode: 'insensitive' } },
-        { custodio1Name: { contains: knownName, mode: 'insensitive' } },
-        { custodio2Name: { contains: knownName, mode: 'insensitive' } },
-      );
-    }
-
-    if (startDate && endDate) {
-      whereClause.createdAt = { gte: startDate, lte: endDate };
-    }
-
-    const rows = await this.prisma.custodia.findMany({
-      where: whereClause,
-      orderBy: { createdAt: 'desc' },
-    });
-
-    const historial: any[] = [];
-    let detectedName = knownName;
-    let total_usd = 0;
-
-    for (const c of rows) {
-      const tarifa = CUSTODIA_RATES[c.tipoCustodia] || 0;
-      let rol = 'Custodio';
-      if (
-        c.choferCedula === cedulaNorm ||
-        (knownName &&
-          c.choferName.toLowerCase().includes(knownName.toLowerCase()))
-      ) {
-        rol = 'Chofer';
-        if (!detectedName) detectedName = c.choferName;
-      } else if (
-        c.custodio1Cedula === cedulaNorm ||
-        (knownName &&
-          c.custodio1Name.toLowerCase().includes(knownName.toLowerCase()))
-      ) {
-        rol = 'Custodio 1';
-        if (!detectedName) detectedName = c.custodio1Name;
-      } else if (
-        c.custodio2Cedula === cedulaNorm ||
-        (knownName &&
-          c.custodio2Name.toLowerCase().includes(knownName.toLowerCase()))
-      ) {
-        rol = 'Custodio 2';
-        if (!detectedName) detectedName = c.custodio2Name;
-      }
-
-      total_usd += tarifa;
-      historial.push({
-        id: c.id,
-        numero_guia: c.numeroGuia,
-        tipo_custodia: c.tipoCustodia,
-        rol,
-        monto_usd: tarifa,
-        cliente: c.cliente,
-        placa: c.placa,
-        direccion_salida: c.direccionSalida,
-        direccion_llegada: c.direccionLlegada,
-        fecha_hora_salida: c.fechaHoraSalida || c.createdAt,
-        fecha_hora_llegada: c.fechaHoraLlegada,
-        fecha_registro: c.createdAt,
-        observaciones: c.observaciones,
-      });
-    }
-
-    return {
-      trabajador: { cedula: cedulaNorm, nombre: detectedName || 'Guardia' },
-      periodo: periodObj,
-      resumen: { total_viajes: historial.length, total_usd },
-      historial,
-      nota: 'Solo se muestran viajes con estado Finalizado (LLEGÓ).',
-    };
-  }
-
-  async queryGemeBot(companyId: number, queryMessage: string) {
-    const rawText = String(queryMessage || '').trim();
-    if (!rawText)
-      throw new BadRequestException('El mensaje no puede estar vacío.');
-
-    const norm = rawText
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
-
-    // Intent detection
-    let intent:
-      'antiguedad' | 'placa_puerto' | 'custodio_hacienda' | 'desconocido' =
-      'desconocido';
-
-    if (
-      norm.includes('primer viaje') ||
-      norm.includes('antiguedad') ||
-      norm.includes('antiguedad') ||
-      norm.includes('tiempo') ||
-      norm.includes('primer registro') ||
-      norm.includes('lleva trabajando')
-    ) {
-      intent = 'antiguedad';
-    } else if (
-      norm.includes('placa') ||
-      norm.includes('puerto') ||
-      norm.includes('vehiculo') ||
-      norm.includes('carro')
-    ) {
-      intent = 'placa_puerto';
-    } else if (
-      norm.includes('hacienda') ||
-      norm.includes('custodio') ||
-      norm.includes('30 dias') ||
-      norm.includes('viajes')
-    ) {
-      intent = 'custodio_hacienda';
-    }
-
-    if (intent === 'placa_puerto') {
-      const now = new Date();
-      const startDate = new Date(
-        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
-      );
-      const PUERTORows = await this.prisma.custodia.findMany({
-        where: {
-          companyId,
-          tipoCustodia: 'PUERTO',
-          createdAt: { gte: startDate },
-        },
-        select: { placa: true },
-      });
-
-      const placaCountMap = new Map<string, number>();
-      for (const row of PUERTORows) {
-        const p = row.placa?.trim() || 'SIN PLACA';
-        placaCountMap.set(p, (placaCountMap.get(p) || 0) + 1);
-      }
-
-      const ranking = Array.from(placaCountMap.entries())
-        .map(([placa, viajes]) => ({ placa, viajes }))
-        .sort((a, b) => b.viajes - a.viajes);
-
-      if (ranking.length === 0) {
-        return {
-          intent,
-          respuesta:
-            'No se encontraron viajes tipo PUERTO registrados en este mes.',
-          datos: null,
-        };
-      }
-
-      const top = ranking[0];
-      const detalleRanking = ranking
-        .slice(0, 5)
-        .map((r, i) => `${i + 1}. Placa: ${r.placa} — ${r.viajes} viaje(s)`)
-        .join('\n');
-
-      return {
-        intent,
-        respuesta: `La placa GEMESEG más utilizada en rutas PUERTO este mes es **${top.placa}** con **${top.viajes}** viaje(s).\n\nRanking del mes:\n${detalleRanking}`,
-        datos: { top, ranking },
-      };
-    }
-
-    if (intent === 'custodio_hacienda') {
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const haciendaRows = await this.prisma.custodia.findMany({
-        where: {
-          companyId,
-          tipoCustodia: 'HACIENDA',
-          createdAt: { gte: thirtyDaysAgo },
-        },
-        select: { custodio1Name: true, custodio2Name: true },
-      });
-
-      const custodioCountMap = new Map<string, number>();
-      for (const row of haciendaRows) {
-        if (row.custodio1Name?.trim()) {
-          const n = row.custodio1Name.trim();
-          custodioCountMap.set(n, (custodioCountMap.get(n) || 0) + 1);
-        }
-        if (row.custodio2Name?.trim()) {
-          const n = row.custodio2Name.trim();
-          custodioCountMap.set(n, (custodioCountMap.get(n) || 0) + 1);
-        }
-      }
-
-      const ranking = Array.from(custodioCountMap.entries())
-        .map(([nombre, viajes]) => ({ nombre, viajes }))
-        .sort((a, b) => b.viajes - a.viajes);
-
-      if (ranking.length === 0) {
-        return {
-          intent,
-          respuesta:
-            'No hay custodias registradas para HACIENDA en los últimos 30 días.',
-          datos: null,
-        };
-      }
-
-      const top = ranking[0];
-      const detalleRanking = ranking
-        .slice(0, 5)
-        .map(
-          (r, i) =>
-            `${i + 1}. ${r.nombre} — ${r.viajes} viaje(s) como custodio`,
-        )
-        .join('\n');
-
-      return {
-        intent,
-        respuesta: `En los últimos 30 días, el guardia con más viajes en HACIENDA es **${top.nombre}** con **${top.viajes}** participación(es).\n\nTop guardias:\n${detalleRanking}`,
-        datos: { top, ranking },
-      };
-    }
-
-    if (intent === 'antiguedad') {
-      const custodiosDrive = await this.prisma.employeeDriveFolder.findMany({
-        where: { companyId, folderType: 'CUSTODIAS' },
-      });
-
-      // Search for employee mentioned in query
-      const matchedEmp = custodiosDrive.find((e) =>
-        norm.includes(
-          e.employeeName
-            .toLowerCase()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, ''),
-        ),
-      );
-
-      if (!matchedEmp) {
-        const firstCustodia = await this.prisma.custodia.findFirst({
-          where: { companyId },
-          orderBy: { createdAt: 'asc' },
-        });
-
-        if (!firstCustodia) {
-          return {
-            intent,
-            respuesta: 'No hay custodias registradas aún en el sistema.',
-            datos: null,
-          };
-        }
-
-        const viajesCount = await this.prisma.custodia.count({
-          where: { companyId },
-        });
-        return {
-          intent,
-          respuesta: `Primer viaje registrado en el sistema: Guía **${firstCustodia.numeroGuia}** (${firstCustodia.tipoCustodia}) el ${this.formatFechaEC(firstCustodia.createdAt)}. Total viajes registrados: ${viajesCount}. Si deseas consultar un guardia en específico, incluye su nombre completo.`,
-          datos: { primer_viaje: firstCustodia, total_viajes: viajesCount },
-        };
-      }
-
-      const patron = matchedEmp.employeeName;
-      const primerViaje = await this.prisma.custodia.findFirst({
-        where: {
-          companyId,
-          OR: [
-            { choferName: { contains: patron, mode: 'insensitive' } },
-            { custodio1Name: { contains: patron, mode: 'insensitive' } },
-            { custodio2Name: { contains: patron, mode: 'insensitive' } },
-          ],
-        },
-        orderBy: { createdAt: 'asc' },
-      });
-
-      const totalViajes = await this.prisma.custodia.count({
-        where: {
-          companyId,
-          OR: [
-            { choferName: { contains: patron, mode: 'insensitive' } },
-            { custodio1Name: { contains: patron, mode: 'insensitive' } },
-            { custodio2Name: { contains: patron, mode: 'insensitive' } },
-          ],
-        },
-      });
-
-      const fechaInic = primerViaje?.createdAt || matchedEmp.createdAt;
-      const dias = Math.floor(
-        (Date.now() - new Date(fechaInic).getTime()) / (1000 * 60 * 60 * 24),
-      );
-      const meses = Math.floor(dias / 30);
-      const tiempoTexto =
-        meses >= 12
-          ? `${Math.floor(meses / 12)} año(s) y ${meses % 12} mes(es)`
-          : meses >= 1
-            ? `${meses} mes(es)`
-            : `${dias} día(s)`;
-
-      return {
-        intent,
-        respuesta:
-          `**${matchedEmp.employeeName}** lleva registrado en el sistema ${tiempoTexto} (desde ${this.formatFechaEC(fechaInic)}).\n` +
-          (primerViaje
-            ? `Su primer viaje registrado fue la guía **${primerViaje.numeroGuia}** (${primerViaje.tipoCustodia}) el ${this.formatFechaEC(primerViaje.createdAt)}.\n`
-            : '') +
-          `Total de custodias asociadas: **${totalViajes}**.`,
-        datos: {
-          guardia: matchedEmp.employeeName,
-          primer_viaje: primerViaje,
-          total_viajes: totalViajes,
-        },
-      };
-    }
-
-    return {
-      intent: 'desconocido',
-      respuesta:
-        'Lo siento, no logré entender la consulta. Puedes preguntarme sobre:\n1. Antigüedad / primer viaje de un guardia\n2. Placa más usada en PUERTO este mes\n3. Guardias con más viajes en HACIENDA en los últimos 30 días',
-      datos: null,
-    };
-  }
-
-  private formatFechaEC(date: Date): string {
-    const d = new Date(date);
-    const dia = String(d.getUTCDate()).padStart(2, '0');
-    const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const anio = d.getUTCFullYear();
-    return `${dia}/${mes}/${anio}`;
-  }
-
-  private formatFechaHoraEC(date: Date): string {
-    const d = new Date(date);
-    const dia = String(d.getUTCDate()).padStart(2, '0');
-    const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const anio = d.getUTCFullYear();
-    const hora = String(d.getUTCHours()).padStart(2, '0');
-    const minuto = String(d.getUTCMinutes()).padStart(2, '0');
-    return `${dia}/${mes}/${anio} ${hora}:${minuto}`;
   }
 }

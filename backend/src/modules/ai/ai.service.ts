@@ -23,6 +23,7 @@ import { buildBitacoraPrompt } from '../contratacion-publica/bitacoras/bitacora-
 import { SendMessageDto } from './dto/send-message.dto';
 import {
   SCOPE_CACAO,
+  SCOPE_CUSTODIA,
   SCOPE_VENTAS,
   intencionPermitida,
   perfilDeAgente,
@@ -37,6 +38,11 @@ import {
   SYSTEM_REDACCION_CACAO,
   buildCacaoAgentPrompt,
 } from './cacao-agent-prompt.util';
+import {
+  CUSTODIA_AYUDA,
+  SYSTEM_REDACCION_CUSTODIA,
+  buildCustodiaAgentPrompt,
+} from './custodia-agent-prompt.util';
 import {
   SYSTEM_REDACCION_VENTAS,
   VENTAS_AYUDA,
@@ -54,6 +60,7 @@ const RATE_LIMIT_CACAO = 30;
 // Nombres de los agentes del sistema con perfil propio (el del chat y Sistemas → Agentes).
 const NOMBRE_AGENTE_VENTAS = 'Agente de Ventas';
 const NOMBRE_AGENTE_CACAO = 'Agente de Cacao';
+const NOMBRE_AGENTE_CUSTODIA = 'Agente de Custodia';
 
 // Texto inicial EDITABLE del Agente de Ventas (Sistemas → Agentes). Solo pone
 // tono y prioridades; las reglas para investigar sin inventar van en código
@@ -68,15 +75,27 @@ export const MENSAJE_VENTAS_SIN_IA =
   'El Agente de Ventas todavía no está conectado a la inteligencia artificial en este entorno (falta configurar Google Vertex AI). Avisa a Sistemas.';
 export const MENSAJE_VENTAS_ERROR =
   'No pude consultar al Agente de Ventas en este momento. Intenta de nuevo en unos minutos; si sigue pasando, avisa a Sistemas.';
+// Agente de Custodia (2026-11-16, reemplaza a GEME-BOT): texto inicial editable (solo el tono) y lo que
+// ve quien le escribe cuando la IA no responde (el modo mock habla de proyectos y tareas).
+export const INSTRUCCIONES_CUSTODIA_POR_DEFECTO = `Tono profesional y cercano, directo y sin rodeos. Responde con los números y las fechas tal como están registrados.
+Tutea a la persona y usa los nombres de menús y botones tal como se ven en pantalla.`;
+export const MENSAJE_CUSTODIA_SIN_IA =
+  'El Agente de Custodia todavía no está conectado a la inteligencia artificial en este entorno (falta configurar Google Vertex AI). Avisa a Sistemas.';
+export const MENSAJE_CUSTODIA_ERROR =
+  'No pude consultar al Agente de Custodia en este momento. Intenta de nuevo en unos minutos; si sigue pasando, avisa a Sistemas.';
+
 // Lo que el usuario lee cuando un agente especializado no puede responder, según su perfil.
 const MENSAJE_SIN_IA: Partial<Record<PerfilAgente, string>> = {
   VENTAS: MENSAJE_VENTAS_SIN_IA,
   CACAO: MENSAJE_CACAO_SIN_IA,
+  CUSTODIA: MENSAJE_CUSTODIA_SIN_IA,
 };
 const MENSAJE_ERROR: Partial<Record<PerfilAgente, string>> = {
   VENTAS: MENSAJE_VENTAS_ERROR,
   CACAO: MENSAJE_CACAO_ERROR,
+  CUSTODIA: MENSAJE_CUSTODIA_ERROR,
 };
+
 
 // Cuánto de la conversación se le vuelve a mandar al modelo cuando redacta con datos del sistema:
 // los últimos turnos, cada uno recortado (los datos ya son largos). Exportada para probarla.
@@ -163,6 +182,11 @@ export class AiService implements OnModuleInit {
     } catch (err: any) {
       this.logger.warn(`No se pudo sembrar el Agente de Cacao: ${err.message}`);
     }
+    try {
+      await this.ensureCustodiaAgent();
+    } catch (err: any) {
+      this.logger.warn(`No se pudo sembrar el Agente de Custodia: ${err.message}`);
+    }
   }
 
   private ensureSalesAgent() {
@@ -178,6 +202,15 @@ export class AiService implements OnModuleInit {
       NOMBRE_AGENTE_CACAO,
       SCOPE_CACAO,
       INSTRUCCIONES_CACAO_POR_DEFECTO,
+    );
+  }
+
+  // Agente de Custodia (2026-11-16, reemplaza a GEME-BOT): igual que los demás, nunca pisa uno que ya exista.
+  private ensureCustodiaAgent() {
+    return this.ensureSystemAgent(
+      NOMBRE_AGENTE_CUSTODIA,
+      SCOPE_CUSTODIA,
+      INSTRUCCIONES_CUSTODIA_POR_DEFECTO,
     );
   }
 
@@ -210,7 +243,7 @@ export class AiService implements OnModuleInit {
       select: { id: true, scope: true, isActive: true, createdBy: true },
     });
     // Un agente inexistente o desactivado cae al comportamiento de siempre
-    // (prompt base), salvo los de Ventas y Cacao, que no tienen "prompt base" que los cubra.
+    // (prompt base), salvo los especializados (Ventas, Cacao, Custodia), que no tienen "prompt base" que los cubra.
     const especializado = perfilDeAgente(agent?.scope) !== 'GENERAL';
     if (!agent || (!agent.isActive && !especializado)) {
       // La conversación se crea con el agente que se devuelva aquí: uno que no
@@ -227,10 +260,13 @@ export class AiService implements OnModuleInit {
         'Ese agente no conversa: se usa desde su pantalla (por ejemplo, Contratación Pública → Bitácoras).',
       );
     }
+    const perfilAgente = perfilDeAgente(agent.scope);
     if (especializado && !agent.isActive) {
       throw new ForbiddenException(
-        agent.scope === SCOPE_CACAO
+        perfilAgente === 'CACAO'
           ? 'El Agente de Cacao no está disponible ahora.'
+          : perfilAgente === 'CUSTODIA'
+            ? 'El Agente de Custodia no está disponible ahora.'
           : 'El Agente de Ventas no está disponible ahora.',
       );
     }
@@ -244,13 +280,17 @@ export class AiService implements OnModuleInit {
         throw new ForbiddenException('No tienes asignado ese agente.');
       }
     }
-    if (agent.scope === SCOPE_VENTAS && !allowedKeys.includes('VENTAS')) {
-      throw new ForbiddenException('No tienes acceso a Ventas con tu usuario actual.');
+    const seccionExigida = seccionDePerfil(perfilAgente);
+    if (seccionExigida && !allowedKeys.includes(seccionExigida)) {
+      throw new ForbiddenException(
+        perfilAgente === 'CACAO'
+          ? 'No tienes acceso a Cacao con tu usuario actual.'
+          : perfilAgente === 'CUSTODIA'
+            ? 'No tienes acceso a Custodias con tu usuario actual.'
+            : 'No tienes acceso a Ventas con tu usuario actual.',
+      );
     }
-    if (agent.scope === SCOPE_CACAO && !allowedKeys.includes('CACAO')) {
-      throw new ForbiddenException('No tienes acceso a Cacao con tu usuario actual.');
-    }
-    return { id: agent.id, scope: agent.scope, perfil: perfilDeAgente(agent.scope) };
+    return { id: agent.id, scope: agent.scope, perfil: perfilAgente };
   }
 
   async sendMessage(
@@ -490,19 +530,24 @@ export class AiService implements OnModuleInit {
     clavesVisibles: string[];
     ventasAgenteDisponible: boolean;
     cacaoAgenteDisponible: boolean;
+    custodiaAgenteDisponible: boolean;
     kbContext: string;
   }): ParteDelPrompt[] {
     const esVentas = p.perfil === 'VENTAS';
     const esCacao = p.perfil === 'CACAO';
-    const especializado = esVentas || esCacao;
+    const esCustodia = p.perfil === 'CUSTODIA';
+    const especializado = esVentas || esCacao || esCustodia;
     const capabilities = esVentas
       ? `Consultas disponibles (datos reales de Ventas de la empresa):\n${VENTAS_AYUDA}`
       : esCacao
         ? `Consultas disponibles (datos reales de Cacao de la empresa):\n${CACAO_AYUDA}`
-        : buildCapabilitiesPrompt(p.clavesVisibles, {
-            ventasAgenteDisponible: p.ventasAgenteDisponible,
-            cacaoAgenteDisponible: p.cacaoAgenteDisponible,
-          });
+        : esCustodia
+          ? `Consultas disponibles (datos reales de Custodias de la empresa, sin dinero):\n${CUSTODIA_AYUDA}`
+          : buildCapabilitiesPrompt(p.clavesVisibles, {
+              ventasAgenteDisponible: p.ventasAgenteDisponible,
+              cacaoAgenteDisponible: p.cacaoAgenteDisponible,
+              custodiaAgenteDisponible: p.custodiaAgenteDisponible,
+            });
     const partes: ParteDelPrompt[] = [
       {
         titulo: 'Texto propio del agente',
@@ -510,8 +555,18 @@ export class AiService implements OnModuleInit {
         origen: 'agente',
       },
       {
-        titulo: esCacao ? 'Reglas fijas del Agente de Cacao' : 'Reglas fijas del Agente de Ventas',
-        texto: esVentas ? buildSalesAgentPrompt() : esCacao ? buildCacaoAgentPrompt() : '',
+        titulo: esCacao
+          ? 'Reglas fijas del Agente de Cacao'
+          : esCustodia
+            ? 'Reglas fijas del Agente de Custodia'
+            : 'Reglas fijas del Agente de Ventas',
+        texto: esVentas
+          ? buildSalesAgentPrompt()
+          : esCacao
+            ? buildCacaoAgentPrompt()
+            : esCustodia
+              ? buildCustodiaAgentPrompt()
+              : '',
         origen: 'codigo',
       },
       {
@@ -593,6 +648,7 @@ export class AiService implements OnModuleInit {
       clavesVisibles,
       ventasAgenteDisponible: !especializado,
       cacaoAgenteDisponible: !especializado,
+      custodiaAgenteDisponible: !especializado,
       kbContext,
     });
     partes.push({
@@ -665,6 +721,8 @@ export class AiService implements OnModuleInit {
         seccion === null && (await this.tieneAgenteDeSistema(allowedKeys, SCOPE_VENTAS, 'VENTAS')),
       cacaoAgenteDisponible:
         seccion === null && (await this.tieneAgenteDeSistema(allowedKeys, SCOPE_CACAO, 'CACAO')),
+      custodiaAgenteDisponible:
+        seccion === null && (await this.tieneAgenteDeSistema(allowedKeys, SCOPE_CUSTODIA, 'CUSTODIAS')),
       kbContext,
     })
       .map((p) => p.texto)
@@ -731,7 +789,9 @@ export class AiService implements OnModuleInit {
           ? 'Esa consulta no es de este asistente: aquí solo respondo sobre Ventas.'
           : perfil === 'CACAO'
             ? 'Esa consulta no es de este asistente: aquí solo respondo sobre Cacao.'
-            : 'No tengo esa consulta en este asistente.',
+            : perfil === 'CUSTODIA'
+              ? 'Esa consulta no es de este asistente: aquí solo respondo sobre Custodias.'
+              : 'No tengo esa consulta en este asistente.',
         tokensUsed: result.tokensUsed,
       };
     }
@@ -837,6 +897,7 @@ export class AiService implements OnModuleInit {
   private systemRedaccion(perfil: PerfilAgente): string {
     if (perfil === 'VENTAS') return SYSTEM_REDACCION_VENTAS;
     if (perfil === 'CACAO') return SYSTEM_REDACCION_CACAO;
+    if (perfil === 'CUSTODIA') return SYSTEM_REDACCION_CUSTODIA;
     return SYSTEM_REDACCION_GENERAL;
   }
 
@@ -882,6 +943,7 @@ export class AiService implements OnModuleInit {
   private accionLog(perfil: PerfilAgente): string {
     if (perfil === 'VENTAS') return 'chat_message_ventas';
     if (perfil === 'CACAO') return 'chat_message_cacao';
+    if (perfil === 'CUSTODIA') return 'chat_message_custodia';
     return 'chat_message';
   }
 
@@ -892,7 +954,7 @@ export class AiService implements OnModuleInit {
     const count = await this.prisma.aiLog.count({
       where: {
         userId,
-        action: { in: ['chat_message', 'chat_message_ventas', 'chat_message_cacao'] },
+        action: { in: ['chat_message', 'chat_message_ventas', 'chat_message_cacao', 'chat_message_custodia'] },
         createdAt: { gte: today },
         success: true,
       },

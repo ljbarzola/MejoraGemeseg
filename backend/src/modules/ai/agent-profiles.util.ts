@@ -10,19 +10,24 @@
 //   CACAO    Agente de Cacao (2026-11-11): explica el flujo de Cacao y consulta datos
 //            reales de Cacao de la empresa de quien pregunta. Lo ve quien tiene la
 //            sección Cacao.
+//   CUSTODIA Agente de Custodia (2026-11-16, reemplaza a GEME-BOT): solo consultas
+//            operativas de Custodias (viajes, personal, placas), SIN dinero. Lo usa
+//            cualquiera que vea la sección Custodias, sin asignarlo.
 //
 // La lista de intenciones por perfil vive aquí, junto a la regla, para que
 // AiService y AiProcessor consulten lo mismo: no basta con que el prompt no
 // nombre una intención, el procesador tampoco debe ejecutarla.
 
-export type PerfilAgente = 'GENERAL' | 'VENTAS' | 'CACAO';
+export type PerfilAgente = 'GENERAL' | 'VENTAS' | 'CACAO' | 'CUSTODIA';
 
 export const SCOPE_VENTAS = 'VENTAS';
 export const SCOPE_CACAO = 'CACAO';
+export const SCOPE_CUSTODIA = 'CUSTODIAS';
 
 export function perfilDeAgente(scope: string | null | undefined): PerfilAgente {
   if (scope === SCOPE_VENTAS) return 'VENTAS';
   if (scope === SCOPE_CACAO) return 'CACAO';
+  if (scope === SCOPE_CUSTODIA) return 'CUSTODIA';
   return 'GENERAL';
 }
 
@@ -30,6 +35,7 @@ export function perfilDeAgente(scope: string | null | undefined): PerfilAgente {
 export function seccionDePerfil(perfil: PerfilAgente): string | null {
   if (perfil === 'VENTAS') return 'VENTAS';
   if (perfil === 'CACAO') return 'CACAO';
+  if (perfil === 'CUSTODIA') return 'CUSTODIAS';
   return null;
 }
 
@@ -74,13 +80,32 @@ export const esIntencionDeVentas = (intent: string): boolean =>
 export const esIntencionDeCacao = (intent: string): boolean =>
   (INTENCIONES_CACAO as readonly string[]).includes(intent);
 
+// Intenciones de datos en vivo de Custodias. Los nombres deben coincidir con
+// INTENT_SECTION (ai.processor.ts) y con CUSTODIA_AYUDA (custodia-agent-prompt.util.ts).
+export const INTENCIONES_CUSTODIA = [
+  'custodias_resumen',
+  'custodia_viajes',
+  'custodia_antiguedad',
+  'custodia_placas_puerto',
+  'custodia_top_hacienda',
+] as const;
+
+export const esIntencionDeCustodia = (intent: string): boolean =>
+  (INTENCIONES_CUSTODIA as readonly string[]).includes(intent);
+
 // Cada agente especializado solo ejecuta consultas de su módulo; el GENERAL, todo
-// menos Ventas y Cacao (Agente Gemeseg se queda en cómo usar la plataforma y en lo base).
+// menos Ventas, Cacao y Custodias (Agente Gemeseg se queda en cómo usar la plataforma
+// y en lo base).
 export function intencionPermitida(
   perfil: PerfilAgente,
   intent: string,
 ): boolean {
   if (perfil === 'VENTAS') return esIntencionDeVentas(intent);
   if (perfil === 'CACAO') return esIntencionDeCacao(intent);
-  return !esIntencionDeVentas(intent) && !esIntencionDeCacao(intent);
+  if (perfil === 'CUSTODIA') return esIntencionDeCustodia(intent);
+  return (
+    !esIntencionDeVentas(intent) &&
+    !esIntencionDeCacao(intent) &&
+    !esIntencionDeCustodia(intent)
+  );
 }

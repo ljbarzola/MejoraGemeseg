@@ -31,6 +31,9 @@ const SCOPE_OPTIONS = [
   { value: 'VENTAS', label: 'Ventas', desc: 'Investiga clientes y cartera de Ventas; solo lo ve quien lo tenga asignado' },
   // Agente de Cacao (2026-11-11): lo siembra el sistema y lo ve quien tenga acceso a Cacao.
   { value: 'CACAO', label: 'Cacao', desc: 'Explica el flujo de Cacao y consulta datos reales de la empresa; lo ve quien tenga acceso a Cacao' },
+  // Agente especializado (2026-11-16, reemplaza a GEME-BOT): solo consulta viajes de Custodias, sin dinero, y lo ve
+  // cualquiera que tenga la sección Custodias (no hace falta asignarlo).
+  { value: 'CUSTODIAS', label: 'Custodias', desc: 'Consulta viajes, personal y placas de Custodias (sin dinero); lo ve quien tenga Custodias' },
   // Agente que trabaja solo (2026-10-18): lo siembra el sistema, no conversa ni se asigna.
   { value: 'BITACORAS', label: 'Revisor de bitácoras', desc: 'Lee las fotos de las bitácoras de Contratación Pública; no conversa' },
   { value: 'ENTREGAS', label: 'Revisor de entregas', desc: 'Mira los documentos que otras áreas entregan a Contratación Pública; no conversa' },
@@ -46,6 +49,7 @@ const SCOPE_PREVIEW: Record<string, string[]> = {
   ADMIN: ['Todos los usuarios', 'Estadisticas globales', 'Roles y permisos', 'Metricas del sistema'],
   VENTAS: ['Expediente de un cliente', 'Cartera y contratos', 'Motivos de pérdida', 'Embudo de ventas'],
   CACAO: ['Cuentas por pagar y vencidas', 'Liquidaciones por aprobar', 'Anticipos y saldos de proveedores', 'Precios e inventario'],
+  CUSTODIAS: ['Viajes por estado y tipo', 'Viajes de un guardia', 'Antigüedad de un custodio', 'Placas más usadas en puerto'],
   BITACORAS: ['Foto de la hoja', 'Guardias y sus horas', 'Novedades por tipo', 'Nada del horario ni de los guardias'],
 };
 

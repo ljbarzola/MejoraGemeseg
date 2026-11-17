@@ -51,7 +51,7 @@ Ademas del rol, cada modulo es una "seccion" con su propio control de acceso:
 Back-office de comercio de cacao que replica el proceso fisico: proveedores y clientes, recepciones, lotes, liquidaciones, embarques, cuentas por pagar y por cobrar, precios fijados, calidades y kardex. Esta en linea blanca: cada empresa configura sus calidades, el peso de su saco y sus plazos (Cacao → Configuracion) y empieza sin nada cargado. Tiene su propio menu desplegable con el Dashboard primero. Las liquidaciones a proveedores pasan por aprobacion de un gerente (la cuenta por pagar nace al aprobar), el servidor recalcula sus montos, y los pagos y cobros se validan y pueden anularse con motivo. Los proveedores llevan ficha completa (identificacion, cuenta bancaria, calificacion, documentos adjuntos) y anticipos que se descuentan al liquidar; cada calidad puede tener un rango de precio que avisa antes de registrar un precio fuera de el; las entregas pueden marcarse en consignacion y cada lote puede registrar su peso seco para medir la merma. Incluye una guia de uso dentro de la app (`/cacao/guia`).
 
 ### Custodias
-Rutas, traslados y nomina de escoltas de seguridad. Estados `LISTO_PARA_CUSTODIAR → EN_CAMINO → LLEGO` (la nomina solo liquida lo que llego), tarifas por tipo (hacienda, puerto, VIP), PDFs de orden de custodia y de nomina, consulta por cedula y el asistente GEME-BOT.
+Rutas y traslados de escoltas de seguridad. Estados `LISTO_PARA_CUSTODIAR → EN_CAMINO → LLEGO`, tipos hacienda, puerto y VIP, PDF de orden de custodia, consulta de viajes por cedula y el Agente de Custodia en el chat (reemplaza a GEME-BOT).
 
 ### Recursos Humanos
 - **Reclutamiento**: postulantes sincronizados desde Google Drive, revision de documentos con apoyo de IA (la persona de RRHH siempre confirma) y contratacion que mueve la carpeta a su destino.
@@ -251,7 +251,8 @@ La API completa se explora en Swagger (`/docs`). El detalle por modulo, con sus 
 | `/chat`, `/admin/agents`, `/agents`, `/company-knowledge-base` | Agente Gemeseg, agentes y base de conocimiento |
 | `/notifications` | Bandeja de notificaciones |
 | `/cacao/...` | Proveedores, recepciones, lotes, liquidaciones, embarques, cuentas, kardex |
-| `/custodias` | Custodias, nomina, PDFs y GEME-BOT |
+| `/custodias` | Custodias (viajes y orden en PDF, sin dinero) |
+| `/contabilidad` | Contabilidad: pagos (con registro de pagado y extras/descuentos), tarifas y dashboard |
 | `/personal/...`, `/public/surveys/:token` | Recursos Humanos (reclutamiento, cumplimiento, capacitaciones, quejas, encuestas) |
 | `/ventas/...` | Posibles clientes (`leads`), directorio (`clientes`), referidos, oportunidades, contratos, cotizador, documentacion (plantillas y firma) y dashboard |
 | `/contratacion-publica/...` | Entidades, contratos, puestos, horarios, informes, entregas (revisión con vista previa, historial y bandejas) |

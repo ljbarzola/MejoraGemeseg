@@ -66,7 +66,7 @@ describe('agentes que trabajan solos', () => {
         createdBy: null,
         NOT: {
           scope: {
-            in: ['VENTAS', 'CACAO', 'BITACORAS', 'ENTREGAS', 'BITACORA_RESUMEN'],
+            in: ['VENTAS', 'CACAO', 'CUSTODIAS', 'BITACORAS', 'ENTREGAS', 'BITACORA_RESUMEN'],
           },
         },
       });

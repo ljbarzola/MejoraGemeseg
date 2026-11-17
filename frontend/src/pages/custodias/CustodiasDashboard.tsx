@@ -1,144 +1,125 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import PageHeader from '../../components/common/PageHeader';
+import FilterField from '../../components/common/FilterField';
 import { getCustodiasDashboard } from '../../services/custodia.service';
+import { BarraApilada, AreaGrafico, Dona } from '../../components/ventas/dashboard/DashboardGraficos';
+import { BarraH, Cargando, Contador, KpiFila, SinDatos, Tarjeta } from '../../components/ventas/dashboard/DashboardBits';
 
-export default function CustodiasDashboard() {
-  const navigate = useNavigate();
-  const now = new Date();
-  const defaultMes = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
-  
-  const [mes, setMes] = useState(defaultMes);
+const TIPO_LABEL: Record<string, string> = { HACIENDA: 'Hacienda', PUERTO: 'Puerto', VIP: 'VIP' };
+const TIPO_COLOR: Record<string, string> = { HACIENDA: '#2f855a', PUERTO: '#2b6cb0', VIP: '#6b46c1' };
+const ESTADO_LABEL: Record<string, string> = { LISTO_PARA_CUSTODIAR: 'Listo para custodiar', EN_CAMINO: 'En camino', LLEGO: 'Llegó' };
+const ESTADO_COLOR: Record<string, string> = { LISTO_PARA_CUSTODIAR: '#b7791f', EN_CAMINO: '#2b6cb0', LLEGO: '#2f855a' };
+
+const mesActual = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const nombreMes = (m: string) => `${MESES[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
+
+/**
+ * Cifras de los viajes de custodia. `incrustado`: se muestra como una pestaña del Resumen de Operaciones (sin
+ * encabezado ni marco propio); sin él es la pantalla completa, que ve quien tiene Custodias y no Operaciones.
+ */
+export default function CustodiasDashboard({ incrustado = false }: { incrustado?: boolean }) {
+  const [mes, setMes] = useState(mesActual());
   const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  const loadData = () => {
-    setLoading(true);
-    getCustodiasDashboard(mes)
-      .then(setData)
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    loadData();
+  const cargar = useCallback(async () => {
+    setError(false);
+    try {
+      setData(await getCustodiasDashboard(mes));
+    } catch {
+      setError(true);
+    }
   }, [mes]);
+  useEffect(() => { setData(null); cargar(); }, [cargar]);
+
+  const k = data?.kpis;
+  const maxCliente = Math.max(1, ...(data?.por_cliente ?? []).map((c: any) => c.viajes));
+  const maxPersona = Math.max(1, ...(data?.por_persona ?? []).map((p: any) => p.viajes));
 
   return (
-    <div className="page-container">
-      <div className="page-header-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div>
-            <p className="page-eyebrow">CUSTODIAS</p>
-            <h1>Dashboard Operativo</h1>
-          </div>
-        </div>
+    <div className={incrustado ? undefined : 'page-container'}>
+      {!incrustado && (
+        <PageHeader
+          eyebrow="Operaciones"
+          title="Resumen de custodias"
+          description="Cómo van los viajes de custodia: cuántos hay, en qué estado, para qué clientes y con qué personal."
+        />
+      )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4a5568' }}>Mes:</label>
+      <div className="dash-barra">
+        <FilterField label="Mes">
           <input
-            type="month"
-            value={mes}
-            onChange={(e) => setMes(e.target.value)}
-            style={{ padding: '8px 12px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600 }}
+            type="month" className="filter-select" value={mes}
+            onChange={(e) => e.target.value && setMes(e.target.value)}
           />
-        </div>
+        </FilterField>
+        <p className="dash-barra-rango"><strong>{nombreMes(mes)}</strong></p>
+        <p className="dash-barra-nota">Las cifras son del mes elegido; la tendencia muestra los 6 meses hasta ese mes.</p>
       </div>
 
-      {loading ? (
-        <div className="loading-state">Cargando métricas...</div>
-      ) : !data ? (
-        <div className="empty-state">No se pudieron cargar los datos del mes seleccionado.</div>
+      {!data ? (
+        <Cargando error={error} onReintentar={cargar} />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* KPI CARDS */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-            <div style={{ padding: '20px', background: '#fff', borderRadius: '14px', borderLeft: '5px solid #100F31', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#718096', textTransform: 'uppercase' }}>TOTAL VIAJES</div>
-              <div style={{ fontSize: '2rem', fontWeight: 800, color: '#100F31', marginTop: '4px' }}>{data.kpis.total_viajes}</div>
-              <div style={{ fontSize: '0.75rem', color: '#a0aec0', marginTop: '4px' }}>Registrados en el mes</div>
-            </div>
+        <div className="dash-pila">
+          <KpiFila>
+            <Contador titulo="Viajes del mes" valor={k.total_viajes} color="#100F31" detalle="Registrados en el mes" />
+            <Contador titulo="Finalizados" valor={k.viajes_finalizados} color="#2f855a" detalle="Llegaron a su destino" />
+            <Contador titulo="En camino" valor={k.en_camino} color="#2b6cb0" detalle="Salieron y aún no llegan" />
+            <Contador titulo="Clientes atendidos" valor={k.clientes_atendidos} color="#6b46c1" detalle="Con al menos un viaje" />
+            <Contador titulo="Personal activo" valor={k.empleados_activos} color="#d97706" detalle="Choferes y custodios con viajes" />
+          </KpiFila>
 
-            <div style={{ padding: '20px', background: '#fff', borderRadius: '14px', borderLeft: '5px solid #3b82f6', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#718096', textTransform: 'uppercase' }}>VIAJES FINALIZADOS</div>
-              <div style={{ fontSize: '2rem', fontWeight: 800, color: '#3b82f6', marginTop: '4px' }}>{data.kpis.viajes_finalizados}</div>
-              <div style={{ fontSize: '0.75rem', color: '#a0aec0', marginTop: '4px' }}>Estado LLEGÓ</div>
-            </div>
+          <div className="dash-grid">
+            <Tarjeta titulo="Viajes por mes" hint="Los últimos 6 meses, todos los tipos" className="dash-span2">
+              <AreaGrafico
+                puntos={data.por_mes.map((m: any) => ({ etiqueta: m.etiqueta, valor: m.total }))}
+                aria="Viajes registrados por mes"
+              />
+            </Tarjeta>
 
-            <div style={{ padding: '20px', background: '#fff', borderRadius: '14px', borderLeft: '5px solid #22c55e', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#718096', textTransform: 'uppercase' }}>NÓMINA GENERADA</div>
-              <div style={{ fontSize: '2rem', fontWeight: 800, color: '#22c55e', marginTop: '4px' }}>${data.kpis.total_nomina_usd.toFixed(2)}</div>
-              <div style={{ fontSize: '0.75rem', color: '#a0aec0', marginTop: '4px' }}>Total a pagar (USD)</div>
-            </div>
+            <Tarjeta titulo="Por tipo de custodia" hint={`En ${nombreMes(mes)}`}>
+              <Dona
+                aria="Viajes por tipo de custodia"
+                centroTitulo="viajes"
+                vacio="No hay viajes en este mes"
+                segmentos={data.por_tipo.map((t: any) => ({
+                  key: t.tipo, etiqueta: TIPO_LABEL[t.tipo] ?? t.tipo, valor: t.cantidad, color: TIPO_COLOR[t.tipo] ?? '#94a3b8',
+                }))}
+              />
+            </Tarjeta>
 
-            <div style={{ padding: '20px', background: '#fff', borderRadius: '14px', borderLeft: '5px solid #eab308', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#718096', textTransform: 'uppercase' }}>GUARDIAS ACTIVOS</div>
-              <div style={{ fontSize: '2rem', fontWeight: 800, color: '#d97706', marginTop: '4px' }}>{data.kpis.empleados_activos}</div>
-              <div style={{ fontSize: '0.75rem', color: '#a0aec0', marginTop: '4px' }}>Con participaciones</div>
-            </div>
-          </div>
+            <Tarjeta titulo="Estado de los viajes" hint={`En ${nombreMes(mes)}`}>
+              <BarraApilada
+                vacio="No hay viajes en este mes"
+                partes={data.por_estado.map((e: any) => ({
+                  key: e.estado, etiqueta: ESTADO_LABEL[e.estado] ?? e.estado, valor: e.cantidad, color: ESTADO_COLOR[e.estado] ?? '#94a3b8',
+                }))}
+              />
+            </Tarjeta>
 
-          {/* BREAKDOWN SECTIONS */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '24px' }}>
-            {/* DESGROSE POR TIPO */}
-            <div className="admin-section" style={{ margin: 0 }}>
-              <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#100F31', marginBottom: '16px' }}>Desglose por Tipo de Custodia</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {data.por_tipo.map((t: any) => (
-                  <div key={t.tipo} style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontWeight: 700, color: '#100F31', fontSize: '0.9rem' }}>{t.tipo}</div>
-                      <div style={{ fontSize: '0.78rem', color: '#718096' }}>${t.tarifa_persona}/persona (${t.tarifa_persona * 3} por viaje)</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#2b6cb0' }}>{t.cantidad} viajes</div>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#22c55e' }}>${t.total_costo} USD</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <Tarjeta titulo="Clientes con más viajes" hint={`En ${nombreMes(mes)}`}>
+              {data.por_cliente.length === 0 ? (
+                <SinDatos texto="No hay viajes en este mes." />
+              ) : (
+                data.por_cliente.map((c: any) => (
+                  <BarraH key={c.cliente} etiqueta={c.cliente} valor={c.viajes} max={maxCliente} color="#6b46c1" detalle={`${c.viajes}`} />
+                ))
+              )}
+            </Tarjeta>
 
-            {/* DESGROSE POR ESTADO */}
-            <div className="admin-section" style={{ margin: 0 }}>
-              <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#100F31', marginBottom: '16px' }}>Estado de las Operaciones</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {data.por_estado.map((e: any) => {
-                  let color = '#eab308';
-                  let label = 'Listo para Custodiar';
-                  if (e.estado === 'EN_CAMINO') { color = '#3b82f6'; label = 'En Camino'; }
-                  if (e.estado === 'LLEGO') { color = '#22c55e'; label = 'Llegó (Finalizado)'; }
-
-                  return (
-                    <div key={e.estado} style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '10px', borderLeft: `4px solid ${color}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ fontWeight: 700, color: '#100F31', fontSize: '0.9rem' }}>{label}</div>
-                      <div style={{ fontWeight: 800, fontSize: '1.2rem', color }}>{e.cantidad}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* QUICK NAV */}
-          <div className="admin-section" style={{ margin: 0, background: '#100F31', color: '#fff', borderRadius: '14px', padding: '20px' }}>
-            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#fff', marginBottom: '14px' }}>Accesos Rápidos</h2>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-              <button onClick={() => navigate('/custodias')} style={{ padding: '10px 18px', background: '#12375F', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 600 }}>
-                📋 Ver Lista de Operaciones
-              </button>
-              <button onClick={() => navigate('/custodias/new')} style={{ padding: '10px 18px', background: '#EE3B1B', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 600 }}>
-                ➕ Nueva Custodia
-              </button>
-              <button onClick={() => navigate('/custodias/nomina')} style={{ padding: '10px 18px', background: '#12375F', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 600 }}>
-                💰 Liquidación de Nómina
-              </button>
-              <button onClick={() => navigate('/custodias/trabajador')} style={{ padding: '10px 18px', background: '#12375F', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 600 }}>
-                🔍 Consulta por Cédula
-              </button>
-              <button onClick={() => navigate('/custodias/gemebot')} style={{ padding: '10px 18px', background: '#12375F', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 600 }}>
-                🤖 GEME-BOT Asistente
-              </button>
-            </div>
+            <Tarjeta titulo="Personal con más viajes" hint={`Como chofer o custodio, en ${nombreMes(mes)}`}>
+              {data.por_persona.length === 0 ? (
+                <SinDatos texto="No hay viajes en este mes." />
+              ) : (
+                data.por_persona.map((p: any) => (
+                  <BarraH key={p.nombre} etiqueta={p.nombre} valor={p.viajes} max={maxPersona} color="#d97706" detalle={`${p.viajes}`} />
+                ))
+              )}
+            </Tarjeta>
           </div>
         </div>
       )}

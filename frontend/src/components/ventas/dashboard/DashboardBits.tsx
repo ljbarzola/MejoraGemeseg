@@ -10,7 +10,7 @@ export const iso = (d: Date) =>
 export const dinero = (v: number | null | undefined): string =>
   v === null || v === undefined
     ? '—'
-    : `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    : `${v < 0 ? '−' : ''}$${Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; // el signo va delante: «-$3.00», no «$-3.00»
 
 export const pct = (v: number | null | undefined): string => (v === null || v === undefined ? '—' : `${v}%`);
 

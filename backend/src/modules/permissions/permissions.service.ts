@@ -60,6 +60,10 @@ export const ALL_SECTIONS = [
   // defecto (solo ve la bitácora de todo el equipo quien tenga fila de permiso).
   // Cada persona ve siempre su propia hoja, sin necesitar permiso.
   { key: 'BITACORA', label: 'Bitácora del equipo', alwaysEnabled: false },
+  // Contabilidad (2026-11-16): el dinero que antes vivía mezclado en Custodias (tarifas, nómina,
+  // roles de pago). Apagada por empresa y cerrada por defecto: quien tiene Custodias NO ve dinero
+  // a menos que tenga además su propia fila de permiso aquí.
+  { key: 'CONTABILIDAD', label: 'Contabilidad', alwaysEnabled: false },
 ];
 
 /** Secciones que no se pueden negar usuario por usuario (ver ALL_SECTIONS). */
@@ -91,7 +95,11 @@ export function esSeccionSiempreVisible(section: string): boolean {
  * Herramientas es una pantalla de Sistemas, no una sección aparte. Crear un
  * ticket sigue abierto a cualquiera (ese endpoint no usa guard de sección).
  */
-export const SECCIONES_CERRADAS_POR_DEFECTO: string[] = ['SISTEMAS', 'BITACORA'];
+export const SECCIONES_CERRADAS_POR_DEFECTO: string[] = [
+  'SISTEMAS',
+  'BITACORA',
+  'CONTABILIDAD',
+];
 
 /** ¿Qué pasa con una sección cuando la persona no tiene fila de permiso? */
 export function permiteSinFila(section: string): boolean {

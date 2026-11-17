@@ -61,15 +61,18 @@ export default function Sidebar() {
   const [ventasOpen, setVentasOpen] = useState(false);
   // Abierto desde el inicio si se entra directo a una pantalla de Cacao (si no, se veía cerrado y sin pista de dónde estás).
   const [cacaoOpen, setCacaoOpen] = useState(() => location.pathname.startsWith('/cacao'));
-  const [custodiasOpen, setCustodiasOpen] = useState(false);
+  const [contabilidadOpen, setContabilidadOpen] = useState(() => location.pathname.startsWith('/contabilidad'));
   const [sistemasOpen, setSistemasOpen] = useState(false);
   // Abiertos desde el inicio si se entra directo a una pantalla del módulo (si no, se ve cerrado y sin pista de dónde está cada cosa).
   const [contratacionPublicaOpen, setContratacionPublicaOpen] = useState(() => location.pathname.startsWith('/contratacion-publica'));
-  const [operacionesOpen, setOperacionesOpen] = useState(() => location.pathname.startsWith('/operaciones'));
+  // Custodias ya no es un módulo aparte (2026-11-16): sus viajes viven dentro de Operaciones, así que el menú de
+  // Operaciones también se abre en /custodias.
+  const enOperaciones = (ruta: string) => ruta.startsWith('/operaciones') || ruta.startsWith('/custodias');
+  const [operacionesOpen, setOperacionesOpen] = useState(() => enOperaciones(location.pathname));
   const [bitacoraOpen, setBitacoraOpen] = useState(false);
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
-  useEffect(() => { if (location.pathname.startsWith('/operaciones')) setOperacionesOpen(true); }, [location.pathname]);
+  useEffect(() => { if (enOperaciones(location.pathname)) setOperacionesOpen(true); }, [location.pathname]);
   useEffect(() => { if (location.pathname.startsWith('/contratacion-publica')) setContratacionPublicaOpen(true); }, [location.pathname]);
 
   // Bitácora del equipo: qué ve esta persona en el menú depende de si su empresa la tiene encendida y de si a
@@ -104,10 +107,10 @@ export default function Sidebar() {
   const isPersonalActive = location.pathname.startsWith('/rrhh');
   const isVentasActive = location.pathname.startsWith('/ventas');
   const isCacaoActive = location.pathname.startsWith('/cacao');
-  const isCustodiasActive = location.pathname.startsWith('/custodias');
+  const isContabilidadActive = location.pathname.startsWith('/contabilidad');
   const isSistemasActive = location.pathname.startsWith('/sistemas');
   const isContratacionPublicaActive = location.pathname.startsWith('/contratacion-publica');
-  const isOperacionesActive = location.pathname.startsWith('/operaciones');
+  const isOperacionesActive = enOperaciones(location.pathname);
   const isBitacoraActive = location.pathname.startsWith('/bitacora');
 
   const navItems = [
@@ -208,13 +211,11 @@ export default function Sidebar() {
     { label: 'Guía del módulo', path: '/cacao/guia', icon: '📖' },
   ];
 
-  const custodiasSubItems = [
-    { label: 'Dashboard Operativo', path: '/custodias/dashboard', icon: '📊' },
-    { label: 'Lista de Operaciones', path: '/custodias', icon: '📋' },
-    { label: 'Nueva Custodia', path: '/custodias/new', icon: '➕' },
-    { label: 'Nómina y Liquidación', path: '/custodias/nomina', icon: '💰' },
-    { label: 'Consulta por Cédula', path: '/custodias/trabajador', icon: '🔍' },
-    { label: 'Asistente GEME-BOT', path: '/custodias/gemebot', icon: '🤖' },
+  // Contabilidad (2026-11-16): el dinero de las custodias, con su propio permiso. Por ahora solo cubre eso.
+  const contabilidadSubItems = [
+    { label: 'Dashboard', path: '/contabilidad', icon: '📊' },
+    { label: 'Pagos', path: '/contabilidad/pagos', icon: '💰' },
+    { label: 'Tarifas', path: '/contabilidad/tarifas', icon: '🏷️', separadorAntes: true },
   ];
 
   // Contratación Pública: Entidades Públicas con sus entregas de documentos y su Configuración (campos de la
@@ -233,14 +234,24 @@ export default function Sidebar() {
   ];
 
   // Operaciones (2026-11-05): lo que hacen los guardias en cada puesto. El Resumen va primero, como en los demás módulos.
-  const operacionesItems = [
-    { label: 'Resumen', path: '/operaciones', icon: '📊' },
-    { label: 'Contratos', path: '/operaciones/contratos', icon: '📑', grupo: 'Puestos y horarios' },
-    { label: 'Horarios', path: '/operaciones/horarios', icon: '🗓️' },
-    { label: 'Bitácoras', path: '/operaciones/bitacoras', icon: '📒', grupo: 'Seguimiento' },
-    { label: 'Supervisión', path: '/operaciones/supervision', icon: '🧭' },
-    { label: 'Inventario', path: '/operaciones/inventario', icon: '🎒', grupo: 'Material' },
-    { label: 'Configuración', path: '/operaciones/configuracion', icon: '⚙️', separadorAntes: true },
+  // Los viajes de Custodias (2026-11-16) son un grupo más de Operaciones; su dashboard es una pestaña del Resumen.
+  // Quien tiene Custodias pero no Operaciones ve solo «Resumen» (el dashboard de custodias) y «Viajes».
+  const verOperaciones = canView('OPERACIONES');
+  const verCustodias = canView('CUSTODIAS');
+  const inicioOperaciones = verOperaciones ? '/operaciones' : '/custodias';
+  const operacionesItems: SubItem[] = [
+    ...(verOperaciones
+      ? [
+          { label: 'Resumen', path: '/operaciones', icon: '📊' },
+          { label: 'Contratos', path: '/operaciones/contratos', icon: '📑', grupo: 'Puestos y horarios' },
+          { label: 'Horarios', path: '/operaciones/horarios', icon: '🗓️' },
+          { label: 'Bitácoras', path: '/operaciones/bitacoras', icon: '📒', grupo: 'Seguimiento' },
+          { label: 'Supervisión', path: '/operaciones/supervision', icon: '🧭' },
+          { label: 'Inventario', path: '/operaciones/inventario', icon: '🎒', grupo: 'Material' },
+        ]
+      : [{ label: 'Resumen', path: '/custodias/dashboard', icon: '📊' }]),
+    ...(verCustodias ? [{ label: 'Viajes', path: '/custodias', icon: '🚚', ...(verOperaciones ? { grupo: 'Custodias' } : {}) }] : []),
+    ...(verOperaciones ? [{ label: 'Configuración', path: '/operaciones/configuracion', icon: '⚙️', separadorAntes: true }] : []),
   ];
 
   const sistemasSubItems = [
@@ -392,35 +403,35 @@ export default function Sidebar() {
           </>
         )}
 
-        {canView('CUSTODIAS') && (
+        {canView('CONTABILIDAD') && (
           <>
             <button
-              className={`sidebar-link ${isCustodiasActive ? 'sidebar-link-active' : ''}`}
+              className={`sidebar-link ${isContabilidadActive ? 'sidebar-link-active' : ''}`}
               onClick={() => {
                 if (collapsed) {
-                  navigate('/custodias');
+                  navigate('/contabilidad');
                 } else {
-                  setCustodiasOpen(!custodiasOpen);
-                  if (!custodiasOpen) navigate('/custodias');
+                  setContabilidadOpen(!contabilidadOpen);
+                  if (!contabilidadOpen) navigate('/contabilidad');
                 }
               }}
-              title={collapsed ? 'Custodias' : undefined}
+              title={collapsed ? 'Contabilidad' : undefined}
               style={{ justifyContent: 'space-between' }}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span className="sidebar-icon">🛡️</span>
-                {!collapsed && <span className="sidebar-label">Custodias</span>}
+                <span className="sidebar-icon">🧾</span>
+                {!collapsed && <span className="sidebar-label">Contabilidad</span>}
               </span>
               {!collapsed && (
-                <span style={{ fontSize: '0.7rem', transition: 'transform 0.2s', transform: custodiasOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                <span style={{ fontSize: '0.7rem', transition: 'transform 0.2s', transform: contabilidadOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
                   ▶
                 </span>
               )}
             </button>
 
-            {!collapsed && custodiasOpen && (
+            {!collapsed && contabilidadOpen && (
               <div style={{ marginLeft: '12px', borderLeft: '2px solid #e2e8f0', paddingLeft: '0' }}>
-                {renderSubItems(custodiasSubItems)}
+                {renderSubItems(contabilidadSubItems)}
               </div>
             )}
           </>
@@ -493,23 +504,23 @@ export default function Sidebar() {
           </>
         )}
 
-        {canView('OPERACIONES') && (
+        {(verOperaciones || verCustodias) && (
           <>
             <button
               className={`sidebar-link ${isOperacionesActive ? 'sidebar-link-active' : ''}`}
               onClick={() => {
                 if (collapsed) {
-                  navigate('/operaciones');
+                  navigate(inicioOperaciones);
                 } else {
                   setOperacionesOpen(!operacionesOpen);
-                  if (!operacionesOpen) navigate('/operaciones');
+                  if (!operacionesOpen) navigate(inicioOperaciones);
                 }
               }}
               title={collapsed ? 'Operaciones' : undefined}
               style={{ justifyContent: 'space-between' }}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span className="sidebar-icon">🔰</span>
+                <span className="sidebar-icon">🛡️</span>
                 {!collapsed && <span className="sidebar-label">Operaciones</span>}
               </span>
               {!collapsed && (

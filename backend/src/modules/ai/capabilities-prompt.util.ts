@@ -53,7 +53,9 @@ export const CAPABILITY_MODULES: CapabilityModule[] = [
   // Cacao: desde 2026-11-11 los datos en vivo los hace el Agente de Cacao (agente aparte; sus
   // consultas y reglas están en cacao-agent-prompt.util.ts). Agente Gemeseg solo explica cómo se usa.
   { section: 'CACAO', titulo: 'Cacao', intents: [] },
-  { section: 'CUSTODIAS', titulo: 'Custodias', intents: ['custodias_resumen'] },
+  // Custodias (2026-11-16): los datos en vivo de los viajes son del Agente de Custodia (agente aparte,
+  // sin dinero); Agente Gemeseg solo explica cómo se usa el módulo.
+  { section: 'CUSTODIAS', titulo: 'Custodias', intents: [] },
   { section: 'RRHH', titulo: 'Recursos Humanos', intents: ['rrhh_resumen_personal'] },
   {
     section: 'VENTAS',
@@ -73,6 +75,8 @@ export interface OpcionesCapacidades {
   ventasAgenteDisponible?: boolean;
   /** Igual que ventasAgenteDisponible, para el Agente de Cacao (la persona ve la sección Cacao). */
   cacaoAgenteDisponible?: boolean;
+  /** Igual para Custodias: la persona ve la sección y el Agente de Custodia está activo. */
+  custodiaAgenteDisponible?: boolean;
 }
 
 export function buildCapabilitiesPrompt(
@@ -99,6 +103,11 @@ export function buildCapabilitiesPrompt(
                 ? ' No consultes datos en vivo de Cacao (cuánto se le debe a un proveedor, qué hay por aprobar, cuentas vencidas, precios, inventario).' +
                   (opciones.cacaoAgenteDisponible
                     ? ' Si la persona quiere esos datos, dile que use el Agente de Cacao desde el selector de agentes del chat.'
+                    : '')
+                : m.section === 'CUSTODIAS'
+                  ? ' No consultes viajes ni personal en vivo.' +
+                    (opciones.custodiaAgenteDisponible
+                      ? ' Si la persona quiere datos en vivo de los viajes (cuántos hay, quién los hizo, placas), dile que use el Agente de Custodia desde el selector de agentes del chat.'
                     : '')
                 : ''
           }`,

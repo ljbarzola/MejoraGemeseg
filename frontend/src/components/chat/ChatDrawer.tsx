@@ -31,6 +31,7 @@ const AGENT_EMOJI: Record<string, string> = {
   ADMIN: '⚙️',
   VENTAS: '📈',
   CACAO: '🍫',
+  CUSTODIAS: '🛡️',
 };
 
 function getAgentEmoji(agent: Agent | null): string {
@@ -40,6 +41,8 @@ function getAgentEmoji(agent: Agent | null): string {
 
 const esAgenteDeVentas = (agent: Agent | null | undefined) => agent?.scope === 'VENTAS';
 const esAgenteDeCacao = (agent: Agent | null | undefined) => agent?.scope === 'CACAO';
+// Agente de Custodia (2026-11-16): del sistema, sin dueño, lo ve quien tiene la sección Custodias.
+const esAgenteDeCustodia = (agent: Agent | null | undefined) => agent?.scope === 'CUSTODIAS';
 
 // Preguntas de un clic para empezar con el Agente de Ventas. Son las que mejor sabe contestar.
 const SUGERENCIAS_VENTAS: { icono: string; texto: string }[] = [
@@ -386,8 +389,8 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
                       <span className="chat-agent-option-desc">Agente por defecto: cómo usar la plataforma</span>
                     </button>
                   )}
-                  {/* Los agentes de Ventas y de Cacao son del sistema (sin dueño): antes este filtro los escondía. */}
-                  {agents.filter((a) => a.createdBy !== null || esAgenteDeVentas(a) || esAgenteDeCacao(a)).map((agent) => (
+                  {/* Los agentes de Ventas, Cacao y Custodia son del sistema (sin dueño): antes este filtro los escondía. */}
+                  {agents.filter((a) => a.createdBy !== null || esAgenteDeVentas(a) || esAgenteDeCacao(a) || esAgenteDeCustodia(a)).map((agent) => (
                     <button
                       key={agent.id}
                       className={`chat-agent-option ${activeAgentId === agent.id ? 'active' : ''}`}
@@ -399,6 +402,8 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
                           ? 'Analiza clientes y sugiere qué hacer'
                           : esAgenteDeCacao(agent)
                             ? 'Explica Cacao y consulta tus datos'
+                            : esAgenteDeCustodia(agent)
+                              ? 'Consulta viajes, personal y placas de Custodias'
                             : agent.scope}
                       </span>
                     </button>
