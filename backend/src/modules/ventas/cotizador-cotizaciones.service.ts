@@ -4,10 +4,12 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { CotQuote } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CotizadorOportunidadService } from './cotizador-oportunidad.service';
 import {
   ChangeCotStatusDto,
   CreateCotQuoteDto,
@@ -49,7 +51,11 @@ const esAdmin = (a: CotActor) => a.role === 'ADMIN';
  */
 @Injectable()
 export class CotizadorCotizacionesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // Opcional para las pruebas que crean el servicio solo con Prisma.
+    @Optional() private readonly oportunidad?: CotizadorOportunidadService,
+  ) {}
 
   private requireCompany(actor: CotActor): number {
     if (!actor.companyId)
@@ -131,8 +137,11 @@ export class CotizadorCotizacionesService {
     });
   }
 
-  /** Cotización a la que el usuario tiene acceso; si no la ve, responde 404 (no revela que existe). */
-  private async cargar(actor: CotActor, id: number) {
+  /**
+   * Cotización a la que el usuario tiene acceso; si no la ve, responde 404 (no revela que existe).
+   * Pública dentro del módulo: el enlace para el cliente (cotizador-enlaces.service.ts) usa las mismas reglas.
+   */
+  async cargar(actor: CotActor, id: number) {
     const cid = this.requireCompany(actor);
     const q = await this.prisma.cotQuote.findFirst({
       where: { id, companyId: cid },
@@ -372,6 +381,8 @@ export class CotizadorCotizacionesService {
     // El dueño original y su nombre NO cambian aunque edite alguien con "edición total".
     try {
       const upd = await this.prisma.cotQuote.update({ where: { id }, data });
+      // Si es la cotización principal de su oportunidad, el monto de la oportunidad se pone al día.
+      await this.oportunidad?.sincronizarMonto(upd);
       return this.mapConTelefono(upd, access);
     } catch (e) {
       if (
@@ -394,7 +405,9 @@ export class CotizadorCotizacionesService {
       );
     const upd = await this.prisma.cotQuote.update({
       where: { id: q.id },
-      data: { status: dto.status },
+      // Cambiar el estado no modifica la cotización: se conserva updatedAt para que el enlace del
+      // cliente no diga «Actualizada el…» solo porque se marcó aceptada/rechazada (2026-11-17).
+      data: { status: dto.status, updatedAt: q.updatedAt },
     });
     return this.mapConTelefono(upd, access);
   }

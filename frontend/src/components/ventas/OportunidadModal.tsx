@@ -4,6 +4,8 @@ import ServiciosPorCategoria from './ServiciosPorCategoria';
 import UbicacionCampo from './UbicacionCampo';
 import FlujoComercialPasos from './FlujoComercialPasos';
 import ErrorBanner from '../common/ErrorBanner';
+import CotizacionesDeOportunidad from './CotizacionesDeOportunidad';
+import { usePerm } from '../../contexts/PermissionsContext';
 import DateInput from '../common/DateInput';
 import { diaEcuador } from '../../utils/rangoFechas';
 import {
@@ -47,6 +49,9 @@ export default function OportunidadModal({
   const [ubicacion, setUbicacion] = useState<UbicacionOportunidad | null>(oportunidad?.ubicacion ?? null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
+  // Con cotización principal el monto no se escribe a mano (lo pone el Cotizador) y no se envía al guardar.
+  const [hayPrincipal, setHayPrincipal] = useState(false);
+  const { canWrite } = usePerm();
 
   const yaAsignados = new Set(oportunidad?.services.map((s) => s.id) ?? []);
   const disponibles = servicios.filter((s) => s.isActive || yaAsignados.has(s.id));
@@ -68,7 +73,7 @@ export default function OportunidadModal({
         receivedAt: llegoEl,
         title: titulo.trim(),
         serviceIds,
-        quotedAmount: montoNumero,
+        ...(hayPrincipal ? {} : { quotedAmount: montoNumero }),
         quotedAt: cotizadaEl || null,
         notes: notas.trim(),
         // null quita la ubicación que tenía; sin ubicación en una oportunidad nueva simplemente no se envía.
@@ -152,12 +157,32 @@ export default function OportunidadModal({
             </small>
           </div>
 
+          {/* Cotizaciones del Cotizador unidas a esta oportunidad (2026-11-17): la principal pone el monto. */}
+          {modo === 'editar' && oportunidad && (
+            <CotizacionesDeOportunidad
+              oportunidadId={oportunidad.id}
+              puedeEscribir={canWrite('VENTAS')}
+              onMontoCambio={(m, principal) => {
+                setHayPrincipal(principal);
+                if (principal) setMonto(m != null ? String(m) : '');
+              }}
+            />
+          )}
+
           {/* Al crear no se pide: la oportunidad nace en «Nueva» y el monto se registra al pasarla a «Cotizada». */}
           {modo === 'editar' && (
             <div className="form-row">
               <div className="form-group">
                 <label>Monto cotizado (opcional)</label>
-                <input type="number" min={0} step="0.01" inputMode="decimal" value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="Ej: 3000" />
+                <input
+                  type="number" min={0} step="0.01" inputMode="decimal" value={monto}
+                  onChange={(e) => setMonto(e.target.value)} placeholder="Ej: 3000"
+                  disabled={hayPrincipal}
+                  title={hayPrincipal ? 'Sale de la cotización principal' : undefined}
+                />
+                {hayPrincipal && (
+                  <small style={{ display: 'block', marginTop: 4, fontSize: 12, color: '#718096' }}>Sale de la cotización principal.</small>
+                )}
               </div>
               <div className="form-group">
                 <label>Cotizada el (opcional)</label>

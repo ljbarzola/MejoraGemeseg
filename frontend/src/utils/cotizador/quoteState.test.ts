@@ -18,7 +18,7 @@ import type { CotInstall, CotKit, CotKitLine, CotProduct, CotProductLine } from 
 const prod = (extra: Partial<CotProduct> = {}): CotProduct => ({
   id: 1, kind: 'EQUIPO', code: 'EQ-0001', category: '', subcategory: '', model: '', name: 'Cámara', description: '',
   unit: 'u', defaultQty: 1, unitCost: 100, monthlyCost: 0, annualCost: 0, hasProfit: true, hasInstall: false,
-  supplier: '', lastUpdate: null, notes: '', isActive: true, ...extra,
+  supplier: '', lastUpdate: null, notes: '', minPrice: null, isActive: true, ...extra,
 });
 
 describe('addProduct()', () => {

@@ -134,6 +134,7 @@ const ContratoComercialDetalle = lazy(() => import('./pages/ventas/ContratoComer
 const ContratoForm = lazy(() => import('./pages/ventas/ContratoForm'));
 const ContratoResult = lazy(() => import('./pages/ventas/ContratoResult'));
 const CompletarContrato = lazy(() => import('./pages/ventas/CompletarContrato'));
+const CotizacionPublicaPage = lazy(() => import('./pages/ventas/CotizacionPublicaPage'));
 const SoporteTecnicoPage = lazy(() => import('./pages/sistemas/SoporteTecnicoPage'));
 const SistemasDashboardPage = lazy(() => import('./pages/sistemas/SistemasDashboardPage'));
 const MejoraContinuaPage = lazy(() => import('./pages/sistemas/MejoraContinuaPage'));
@@ -277,8 +278,10 @@ function RootRedirect() {
 function AppInner() {
   const perms = usePermissions();
   const [chatOpen, setChatOpen] = useState(false);
-  // En el formulario público de quejas (QR de la inducción) no se muestra el chat del agente.
-  const enFormularioPublico = useLocation().pathname === '/quejas';
+  // En las páginas públicas (quejas de la inducción, cotización del cliente) no se muestra el chat del agente,
+  // aunque quien la abra tenga sesión (el vendedor revisando lo que verá el cliente).
+  const ruta = useLocation().pathname;
+  const enFormularioPublico = ruta === '/quejas' || ruta.startsWith('/cotizacion/');
 
   // «Preguntar al agente» desde la ficha de un cliente (chat.service.ts → abrirChatDeVentas):
   // abre el cajón del chat; ChatDrawer se encarga de elegir al Agente de Ventas y mandar la pregunta.
@@ -306,6 +309,9 @@ function AppInner() {
         {/* Quejas de la inducción (personal nuevo o en reinducción, sin cuenta): se llega con el QR a
             quejas.gemeseg.com, que abre esta misma pantalla. */}
         <Route path="/quejas" element={<PublicComplaintPage />} />
+        {/* Cotización que el asesor le manda al cliente por enlace (Cotizador → «Enviar al cliente»).
+            Sin sesión: el código al azar de la URL es la única credencial, y solo trae precios de venta. */}
+        <Route path="/cotizacion/:token" element={<CotizacionPublicaPage />} />
         <Route
           path="/dashboard"
           element={

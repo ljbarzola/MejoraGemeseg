@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDashboardClientes, getSalesClient, getSalesClientFields, type DashboardClientes, type SalesClient, type SalesClientField } from '../../services/ventas.service';
+import { getDashboardClientes, getSalesClient, getSalesClientFields, setFiltrosDashboard, type DashboardClientes, type FiltrosDashboard, type SalesClient, type SalesClientField } from '../../services/ventas.service';
+import FiltrosSegmentoBar from '../../components/ventas/dashboard/FiltrosSegmentoBar';
+import DashboardImpactados from '../../components/ventas/dashboard/DashboardImpactados';
 import { useToast } from '../../contexts/ToastContext';
 import { getUser } from '../../services/auth.service';
 import { useSortableTable } from '../../hooks/useSortableTable';
@@ -72,6 +74,12 @@ export default function VentasDashboard() {
   }
   const { desde, hasta } = ultimoValido.current;
   const rango = { desde, hasta };
+  // Filtros del Dashboard (2026-11-17): se dejan puestos en el servicio ANTES de que las pestañas pidan sus cifras
+  // (por eso aquí, en el render) y se quitan al salir. `filtrosClave` hace que las pestañas se recarguen al cambiarlos.
+  const [filtros, setFiltros] = useState<FiltrosDashboard>({});
+  setFiltrosDashboard(filtros);
+  const filtrosClave = JSON.stringify(filtros);
+  useEffect(() => () => setFiltrosDashboard({}), []);
   // La ficha de un cliente se abre AQUÍ, a la derecha, sin cambiar de pestaña ni de pantalla.
   const [fichaCliente, setFichaCliente] = useState<SalesClient | null>(null);
   const [editarCliente, setEditarCliente] = useState<SalesClient | null>(null);
@@ -96,7 +104,8 @@ export default function VentasDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [responsable, desde, hasta]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [responsable, desde, hasta, filtrosClave]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -197,6 +206,10 @@ export default function VentasDashboard() {
           <strong>{formatDia(desde)} – {formatDia(hasta)}</strong>
         </p>
       </div>
+      {/* Filtros por segmento: solo en las pestañas que los usan (Metas, Tabla dinámica y Equipo tienen los suyos). */}
+      {(pestana === 'resumen' || pestana === 'cartera' || pestana === 'embudo' || pestana === 'motivos') && (
+        <FiltrosSegmentoBar valor={filtros} onChange={setFiltros} />
+      )}
 
       {sinNadaMio && (
         <div className="dash-aviso" role="status">
@@ -215,11 +228,11 @@ export default function VentasDashboard() {
       ) : pestana === 'tabla' ? (
         <DashboardPivot alcance={responsable} desde={desde} hasta={hasta} />
       ) : pestana === 'cartera' ? (
-        <DashboardCartera alcance={responsable} desde={desde} hasta={hasta} />
+        <DashboardCartera key={filtrosClave} alcance={responsable} desde={desde} hasta={hasta} />
       ) : pestana === 'embudo' ? (
-        <DashboardEmbudo alcance={responsable} desde={desde} hasta={hasta} />
+        <DashboardEmbudo key={filtrosClave} alcance={responsable} desde={desde} hasta={hasta} />
       ) : pestana === 'motivos' ? (
-        <DashboardMotivos alcance={responsable} desde={desde} hasta={hasta} />
+        <DashboardMotivos key={filtrosClave} alcance={responsable} desde={desde} hasta={hasta} />
       ) : pestana === 'equipo' ? (
         <DashboardEquipo alcance={responsable} desde={desde} hasta={hasta} />
       ) : error ? (
@@ -274,6 +287,9 @@ export default function VentasDashboard() {
               />
             </Tarjeta>
           </div>
+
+          {/* Clientes nuevos, impactados y recurrentes (2026-11-17, asesor comercial) */}
+          <DashboardImpactados key={filtrosClave} alcance={responsable} desde={desde} hasta={hasta} onFicha={(id) => void abrirFicha(id)} />
 
           {/* Fila 2: el embudo y lo que se está quedando atrás */}
           <div className="dash-grid dash-grid--3">
@@ -338,7 +354,7 @@ export default function VentasDashboard() {
           {/* Fila 3: dónde se cotiza, documentos y referidos */}
           <div className="dash-grid dash-grid--3">
             <Suspense fallback={null}>
-              <DashboardMapa alcance={responsable} desde={desde} hasta={hasta} className="dash-span2" />
+              <DashboardMapa key={filtrosClave} alcance={responsable} desde={desde} hasta={hasta} className="dash-span2" />
             </Suspense>
 
             <div className="dash-pila">

@@ -38,7 +38,8 @@ interface Props {
 // Con «solo datos» (Directorio y visitas) solo se piden el nombre y la fecha de ingreso; la fuente se
 // ofrece a la vista y el resto queda en «Más datos (opcional)». Nadie siempre tiene a la mano la cédula,
 // el teléfono o el correo. «Servicio requerido» NO se pide: es de la oportunidad, no de la empresa.
-const CAMPOS_VISIBLES = ['fuente'];
+// «Tipo de negocio» y «Público / Privado» (2026-11-17) van a la vista: alimentan los filtros del Dashboard.
+const CAMPOS_VISIBLES = ['tipo_negocio', 'sector', 'fuente'];
 
 // Únicos campos núcleo que viven como columna propia de SalesClient en vez
 // de en `extra` — todo lo demás (fuente, servicio_requerido, cualquier

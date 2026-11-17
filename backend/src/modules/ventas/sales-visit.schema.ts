@@ -18,5 +18,8 @@ export const SALES_VISIT_COLUMNS_DDL: string[] = [
   // 2026-10-20: el check-in compara el GPS con el lugar de la visita (ver checkin.util.ts).
   `ALTER TABLE "ClientVisit" ADD COLUMN IF NOT EXISTS "checkInResult" TEXT`,
   `ALTER TABLE "ClientVisit" ADD COLUMN IF NOT EXISTS "checkInDistanceM" INTEGER`,
+  // 2026-11-17 (asesor comercial): por qué no se cumplió una visita planificada (texto de la lista fija
+  // de VISITA_MOTIVOS_NO_CUMPLIDA o lo que se escribió en «Otro»). Antes iba suelto dentro de las notas.
+  `ALTER TABLE "ClientVisit" ADD COLUMN IF NOT EXISTS "cancelMotivo" TEXT`,
   `CREATE INDEX IF NOT EXISTS "ClientVisit_salesClientId_idx" ON "ClientVisit"("salesClientId")`,
 ];

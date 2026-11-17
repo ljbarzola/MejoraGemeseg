@@ -36,6 +36,19 @@ export interface QuoteDraft {
   discountValue: number;
   conditions: string;
   notes: string;
+  /**
+   * Oportunidad de Ventas a la que pertenece (2026-11-17). Se guarda aparte de la cotización
+   * (PUT /cotizaciones/:id/oportunidad) justo después de guardarla; obligatoria para enviar o descargar.
+   */
+  oportunidad: CotOportunidadElegida | null;
+}
+
+/** Lo mínimo de la oportunidad elegida que se muestra en el Cotizador. */
+export interface CotOportunidadElegida {
+  id: number;
+  titulo: string;
+  cliente: string;
+  etapa: string;
 }
 
 export function emptyDraft(): QuoteDraft {
@@ -56,6 +69,7 @@ export function emptyDraft(): QuoteDraft {
     discountValue: 0,
     conditions: DEFAULT_CONDITIONS,
     notes: '',
+    oportunidad: null,
   };
 }
 
@@ -77,6 +91,8 @@ export function draftFromQuote(q: CotQuote): QuoteDraft {
     discountValue: q.discountValue,
     conditions: q.conditions,
     notes: q.notes,
+    // La oportunidad no viene con la cotización: la pantalla la pide aparte al cargarla.
+    oportunidad: null,
   };
 }
 

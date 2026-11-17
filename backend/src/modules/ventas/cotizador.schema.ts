@@ -31,6 +31,7 @@ export const COTIZADOR_DDL: string[] = [
     "supplier" TEXT NOT NULL DEFAULT '',
     "lastUpdate" TEXT,
     "notes" TEXT NOT NULL DEFAULT '',
+    "minPrice" DECIMAL(15,4),
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -164,4 +165,114 @@ export const COTIZADOR_DDL: string[] = [
   fk('CotEditGrant', 'companyId', 'Company', 'CASCADE'),
   fk('CotEditGrant', 'ownerId', 'User', 'CASCADE'),
   fk('CotEditGrant', 'editorId', 'User', 'CASCADE'),
+
+  // Historial de cambios del catálogo (2026-11-12). Tabla nueva: no toca las existentes.
+  `CREATE TABLE IF NOT EXISTS "CotCambio" (
+    "id" SERIAL NOT NULL,
+    "companyId" INTEGER NOT NULL,
+    "entidad" TEXT NOT NULL,
+    "entidadId" INTEGER NOT NULL,
+    "codigo" TEXT NOT NULL,
+    "nombre" TEXT NOT NULL DEFAULT '',
+    "accion" TEXT NOT NULL,
+    "campo" TEXT NOT NULL DEFAULT '',
+    "valorAntes" TEXT,
+    "valorDespues" TEXT,
+    "userId" INTEGER,
+    "userNombre" TEXT NOT NULL DEFAULT '',
+    "creadoEn" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "CotCambio_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE INDEX IF NOT EXISTS "CotCambio_companyId_creadoEn_idx" ON "CotCambio"("companyId", "creadoEn")`,
+  `CREATE INDEX IF NOT EXISTS "CotCambio_companyId_codigo_idx" ON "CotCambio"("companyId", "codigo")`,
+  fk('CotCambio', 'companyId', 'Company', 'CASCADE'),
+  fk('CotCambio', 'userId', 'User', 'SET NULL'),
+
+  // Límites de precio por empresa (2026-11-12): solo generan avisos en la cotización, no bloquean.
+  // Vacío = sin límite.
+  `CREATE TABLE IF NOT EXISTS "CotLimites" (
+    "companyId" INTEGER NOT NULL,
+    "maxDescuentoPct" DECIMAL(6,2),
+    "maxDescuentoServiciosPct" DECIMAL(6,2),
+    "minGananciaPct" DECIMAL(6,2),
+    "updatedBy" INTEGER,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "CotLimites_pkey" PRIMARY KEY ("companyId")
+  )`,
+  fk('CotLimites', 'companyId', 'Company', 'CASCADE'),
+  fk('CotLimites', 'updatedBy', 'User', 'SET NULL'),
+
+  // Enlace de la cotización para el cliente (2026-11-17). Tablas NUEVAS, sin modelo Prisma
+  // (se consultan con SQL en cotizador-enlaces.service.ts). Un enlace activo por cotización;
+  // desactivarlo lo deja guardado (con sus visitas) y uno nuevo lleva otro código.
+  `CREATE TABLE IF NOT EXISTS "CotEnlace" (
+    "id" SERIAL NOT NULL,
+    "companyId" INTEGER NOT NULL,
+    "quoteId" INTEGER NOT NULL,
+    "token" TEXT NOT NULL,
+    "activo" BOOLEAN NOT NULL DEFAULT true,
+    "creadoPor" INTEGER,
+    "creadoEn" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "desactivadoEn" TIMESTAMP(3),
+    "primeraVista" TIMESTAMP(3),
+    "ultimaVista" TIMESTAMP(3),
+    CONSTRAINT "CotEnlace_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "CotEnlace_token_key" ON "CotEnlace"("token")`,
+  `CREATE INDEX IF NOT EXISTS "CotEnlace_quoteId_idx" ON "CotEnlace"("quoteId")`,
+  fk('CotEnlace', 'companyId', 'Company', 'CASCADE'),
+  fk('CotEnlace', 'quoteId', 'CotQuote', 'CASCADE'),
+  fk('CotEnlace', 'creadoPor', 'User', 'SET NULL'),
+
+  // Cada vez que alguien abre el enlace. No guarda IP ni nada personal: solo el tipo de equipo,
+  // un identificador al azar del navegador (para contar personas distintas) y el tiempo con la página
+  // a la vista. Las aperturas del propio equipo (sesión iniciada de la empresa) se marcan "interna".
+  `CREATE TABLE IF NOT EXISTS "CotEnlaceVisita" (
+    "id" SERIAL NOT NULL,
+    "enlaceId" INTEGER NOT NULL,
+    "clave" TEXT NOT NULL,
+    "visitante" TEXT NOT NULL DEFAULT '',
+    "dispositivo" TEXT NOT NULL DEFAULT 'computadora',
+    "interna" BOOLEAN NOT NULL DEFAULT false,
+    "inicio" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "ultimoLatido" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "segundos" INTEGER NOT NULL DEFAULT 0,
+    "descargoPdf" BOOLEAN NOT NULL DEFAULT false,
+    CONSTRAINT "CotEnlaceVisita_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE INDEX IF NOT EXISTS "CotEnlaceVisita_enlaceId_idx" ON "CotEnlaceVisita"("enlaceId")`,
+  fk('CotEnlaceVisita', 'enlaceId', 'CotEnlace', 'CASCADE'),
+
+  // «Me interesa» / «Tengo dudas» que el cliente deja desde la página.
+  `CREATE TABLE IF NOT EXISTS "CotEnlaceRespuesta" (
+    "id" SERIAL NOT NULL,
+    "enlaceId" INTEGER NOT NULL,
+    "tipo" TEXT NOT NULL,
+    "mensaje" TEXT NOT NULL DEFAULT '',
+    "creadoEn" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "CotEnlaceRespuesta_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE INDEX IF NOT EXISTS "CotEnlaceRespuesta_enlaceId_idx" ON "CotEnlaceRespuesta"("enlaceId")`,
+  fk('CotEnlaceRespuesta', 'enlaceId', 'CotEnlace', 'CASCADE'),
+
+  // Cotización ↔ oportunidad (2026-11-17). Tabla NUEVA, sin modelo Prisma (cotizador-oportunidad.service.ts).
+  // Una cotización pertenece a UNA oportunidad; una oportunidad puede tener varias cotizaciones
+  // (versiones o alternativas, no son varias oportunidades). El vendedor marca UNA como principal y su
+  // total pasa a ser el monto cotizado de la oportunidad. Si se borra la oportunidad o la cotización,
+  // el enlace se va con ella.
+  `CREATE TABLE IF NOT EXISTS "CotQuoteOportunidad" (
+    "quoteId" INTEGER NOT NULL,
+    "companyId" INTEGER NOT NULL,
+    "opportunityId" INTEGER NOT NULL,
+    "principal" BOOLEAN NOT NULL DEFAULT false,
+    "unidaPor" INTEGER,
+    "unidaEn" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "CotQuoteOportunidad_pkey" PRIMARY KEY ("quoteId")
+  )`,
+  `CREATE INDEX IF NOT EXISTS "CotQuoteOportunidad_opp_idx" ON "CotQuoteOportunidad"("opportunityId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "CotQuoteOportunidad_principal_key" ON "CotQuoteOportunidad"("opportunityId") WHERE "principal"`,
+  fk('CotQuoteOportunidad', 'quoteId', 'CotQuote', 'CASCADE'),
+  fk('CotQuoteOportunidad', 'companyId', 'Company', 'CASCADE'),
+  fk('CotQuoteOportunidad', 'opportunityId', 'SalesOpportunity', 'CASCADE'),
+  fk('CotQuoteOportunidad', 'unidaPor', 'User', 'SET NULL'),
 ];

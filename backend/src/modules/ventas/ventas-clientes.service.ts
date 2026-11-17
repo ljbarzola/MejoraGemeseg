@@ -33,6 +33,7 @@ import {
 import { nombresParecidos } from './nombre-similar.util';
 import { esOrigenReferido } from './origen-referido.util';
 import { KINDS_MOTIVO_PERDIDA, motivoPorCambioDeEtapa } from './motivo-perdida.util';
+import { armarSegmento, type FiltrosSegmento } from './ventas-segmento.util';
 
 // Dashboard: etapas "ganada"/"perdida" por clave (decisión de Ventas: en
 // producción siempre existen ACEPTADO y RECHAZADO como etapas finales) y
@@ -236,6 +237,38 @@ export const CORE_CLIENT_FIELDS = [
   { key: 'phone', label: 'Teléfono', fieldType: 'TEXT' },
   { key: 'ruc', label: 'Cédula / RUC', fieldType: 'TEXT' },
   { key: 'address', label: 'Dirección', fieldType: 'TEXT' },
+  // Pedidos por el asesor comercial (2026-11-17): saber a quién se le vende y filtrar el Dashboard por
+  // eso. Lista base fija + «Otro» con texto libre; Leidy no quiere otra pantalla de configuración.
+  {
+    key: 'tipo_negocio',
+    label: 'Tipo de negocio',
+    fieldType: 'SELECT',
+    options: [
+      { key: 'BANCA_FINANZAS', label: 'Banca y finanzas' },
+      { key: 'COMERCIO', label: 'Comercio' },
+      { key: 'INDUSTRIA', label: 'Industria y manufactura' },
+      { key: 'AGROINDUSTRIA', label: 'Agroindustria' },
+      { key: 'MINERIA_PETROLEO', label: 'Minería y petróleo' },
+      { key: 'TRANSPORTE_LOGISTICA', label: 'Transporte y logística' },
+      { key: 'CONSTRUCCION', label: 'Construcción e inmobiliaria' },
+      { key: 'SALUD', label: 'Salud' },
+      { key: 'EDUCACION', label: 'Educación' },
+      { key: 'GOBIERNO', label: 'Gobierno / entidad pública' },
+      { key: 'SERVICIOS', label: 'Servicios' },
+      { key: 'RESIDENCIAL', label: 'Residencial / persona natural' },
+    ],
+    allowOther: true,
+  },
+  {
+    key: 'sector',
+    label: 'Público / Privado',
+    fieldType: 'SELECT',
+    options: [
+      { key: 'PUBLICO', label: 'Público' },
+      { key: 'PRIVADO', label: 'Privado' },
+      { key: 'MIXTO', label: 'Mixto' },
+    ],
+  },
   {
     key: 'fuente',
     label: 'Fuente',
@@ -311,9 +344,17 @@ export class VentasClientesService {
   // requerido hasta 2026-10-02). `allowOther` de fábrica solo se usa al crear.
   async ensureCoreFields(companyId: number) {
     const existing = await this.prisma.salesClientField.findMany({
-      where: { companyId, isCore: true },
+      where: { companyId },
     });
+    // Un campo propio que una empresa ya hubiera creado con la misma clave (ej. «sector») se convierte en
+    // núcleo en vez de chocar con la clave única; sus opciones y etiqueta se respetan.
     const byKey = new Map(existing.map((f) => [f.key, f]));
+    const nucleoKeys = new Set<string>(CORE_CLIENT_FIELDS.map((c) => c.key));
+    for (const f of existing) {
+      if (!f.isCore && nucleoKeys.has(f.key)) {
+        await this.prisma.salesClientField.update({ where: { id: f.id }, data: { isCore: true } });
+      }
+    }
     for (let i = 0; i < CORE_CLIENT_FIELDS.length; i++) {
       const core = CORE_CLIENT_FIELDS[i];
       const current = byKey.get(core.key);
@@ -1536,10 +1577,12 @@ export class VentasClientesService {
   async getDashboard(
     companyId: number | null,
     user: { userId: number; role: string },
-    query: { desde?: string; hasta?: string; responsable?: string; hoy?: string },
+    query: { desde?: string; hasta?: string; responsable?: string; hoy?: string; filtros?: FiltrosSegmento },
   ) {
     if (!companyId) throw new BadRequestException('Se requiere una empresa');
     await this.ensureDefaultStages(companyId);
+    // Filtros del Dashboard: restringen las empresas o personas y sus oportunidades (dentro del alcance).
+    const seg = await armarSegmento(this.prisma, companyId, query.filtros);
 
     const esManager = user.role === 'ADMIN' || user.role === 'MANAGER';
     const hoy = esDiaValido(query.hoy) ? query.hoy : aDia(new Date());
@@ -1582,6 +1625,7 @@ export class VentasClientesService {
             ],
           };
     if (clausulaAlcance) where.OR = clausulaAlcance.OR;
+    if (seg.clientes) where.id = { in: seg.clientes };
 
     const stages = await this.prisma.salesClientStage.findMany({
       where: { companyId },
@@ -1623,7 +1667,7 @@ export class VentasClientesService {
     // se cuenta por OPORTUNIDAD (así el número coincide con la lista a la que lleva cada botón del tablero).
     const oportunidades = clientes.length
       ? await this.prisma.salesOpportunity.findMany({
-          where: { companyId, salesClientId: { in: clientes.map((c) => c.id) } },
+          where: { AND: [seg.oportunidad], companyId, salesClientId: { in: clientes.map((c) => c.id) } },
           select: {
             salesClientId: true,
             status: true,

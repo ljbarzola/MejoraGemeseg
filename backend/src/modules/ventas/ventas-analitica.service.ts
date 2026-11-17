@@ -36,6 +36,7 @@ import { ETIQUETA_KIND, MOTIVO_KINDS } from './ventas-motivos.service';
 import { agruparMapa, vistaValida } from './ventas-mapa.util';
 import { rangoDiasEcuador } from './fecha-llegada.util';
 import { Prisma } from '@prisma/client';
+import { armarSegmento, intersectar, type FiltrosSegmento, type Segmento } from './ventas-segmento.util';
 
 // Desde cuándo existe el historial de cambios de etapa (SalesClientStageChange
 // empezó a guardarse ese día). Lo anterior se mide solo cuando hay datos
@@ -68,6 +69,8 @@ export interface AlcanceAnalitica {
   userId: number;
   role: string;
   alcance?: string; // 'mine' | 'all' | id de un vendedor
+  // Filtros del Dashboard (2026-11-17): tipo de negocio, público/privado, servicio, provincia y ciudad.
+  filtros?: FiltrosSegmento;
 }
 
 @Injectable()
@@ -137,6 +140,16 @@ export class VentasAnaliticaService {
     return cs.map((c) => c.id);
   }
 
+  /** Segmento de los filtros del Dashboard (vacío si no hay filtros). */
+  private segmento(cid: number, a: AlcanceAnalitica): Promise<Segmento> {
+    return armarSegmento(this.prisma, cid, a.filtros);
+  }
+
+  /** Empresas o personas del alcance Y de los filtros del Dashboard (null = todas). */
+  private async idsConFiltros(cid: number, a: AlcanceAnalitica, seg: Segmento) {
+    return intersectar(await this.idsClientes(cid, this.vendedor(a)), seg.clientes);
+  }
+
   /** Ids de las empresas o personas del alcance (null = toda la empresa). Los usan las pantallas a las que lleva el Dashboard. */
   async clientesDelAlcance(companyId: number | null, a: AlcanceAnalitica): Promise<{ ids: number[] | null }> {
     const cid = this.requireCompany(companyId);
@@ -157,7 +170,7 @@ export class VentasAnaliticaService {
   // entero, todos los contratos, reducciones de los últimos 90 días y bajas del mes en curso.
   async cartera(companyId: number | null, a: AlcanceAnalitica, desdeRaw?: string, hastaRaw?: string) {
     const cid = this.requireCompany(companyId);
-    const ids = await this.idsClientes(cid, this.vendedor(a));
+    const ids = await this.idsConFiltros(cid, a, await this.segmento(cid, a));
     const filtroCliente = ids ? { in: ids } : undefined;
     const hoy = hoyEcuador();
     const hoyD = diaUtc(hoy);
@@ -374,7 +387,7 @@ export class VentasAnaliticaService {
   ) {
     const cid = this.requireCompany(companyId);
     const r = this.rango(desdeRaw, hastaRaw);
-    const ids = await this.idsClientes(cid, this.vendedor(a));
+    const ids = await this.idsConFiltros(cid, a, await this.segmento(cid, a));
     const contratos = await this.prisma.salesAgreement.findMany({
       where: { companyId: cid, kind: { not: 'PRODUCTO' }, ...(ids ? { salesClientId: { in: ids } } : {}) },
     });
@@ -464,10 +477,12 @@ export class VentasAnaliticaService {
     const cid = this.requireCompany(companyId);
     const r = this.rango(desdeRaw, hastaRaw);
     const vend = this.vendedor(a);
+    const seg = await this.segmento(cid, a);
     const [etapas, opps] = await Promise.all([
       this.prisma.salesClientStage.findMany({ where: { companyId: cid }, orderBy: { order: 'asc' } }),
       this.prisma.salesOpportunity.findMany({
         where: {
+          AND: [seg.oportunidad],
           companyId: cid,
           receivedAt: { gte: r.desde, lte: r.hastaFin },
           // Un cliente que ya venía contratando y se registró a mano no es una venta nueva. Una
@@ -588,7 +603,9 @@ export class VentasAnaliticaService {
     const vend = this.vendedor(a);
     const vista = vistaValida(vistaRaw);
     const llegada = rangoDiasEcuador(desde, hasta);
+    const seg = await this.segmento(cid, a);
     const where: Prisma.SalesOpportunityWhereInput = {
+      AND: [seg.oportunidad],
       companyId: cid,
       originType: { notIn: ['HISTORICO', 'RENOVACION'] },
       ...(vend !== null ? { assignedUserId: vend } : {}),
@@ -621,6 +638,102 @@ export class VentasAnaliticaService {
     };
   }
 
+  /** Provincias y ciudades que tienen las oportunidades (para los filtros del Dashboard), de la más usada a la menos. */
+  async lugares(companyId: number | null) {
+    const cid = this.requireCompany(companyId);
+    const filas = await this.prisma.salesOpportunity.findMany({
+      where: { companyId: cid, OR: [{ locationProvince: { not: null } }, { locationCity: { not: null } }] },
+      select: { locationProvince: true, locationCity: true },
+    });
+    const contar = (valores: (string | null)[]) => {
+      const m = new Map<string, number>();
+      for (const v of valores) {
+        const t = (v ?? '').trim();
+        if (t) m.set(t, (m.get(t) ?? 0) + 1);
+      }
+      return [...m.entries()].sort((p, q) => q[1] - p[1] || p[0].localeCompare(q[0], 'es')).map(([nombre]) => nombre);
+    };
+    return { provincias: contar(filas.map((f) => f.locationProvince)), ciudades: contar(filas.map((f) => f.locationCity)) };
+  }
+
+  // ---------------------------------------------------------------------
+  // Clientes nuevos, impactados y recurrentes (2026-11-17, asesor comercial)
+  // ---------------------------------------------------------------------
+
+  // Venta = oportunidad aceptada (GANADA) en el periodo (fecha de cierre), sin las históricas importadas: la misma
+  // regla de Metas y de la Tabla dinámica. «Impactados» = empresas o personas con al menos una venta en el periodo;
+  // de ellas, «nuevos» compraron por primera vez (sin venta anterior ni contrato que empezara antes, regla de Metas)
+  // y «recurrentes» ya habían comprado antes. Impactados = nuevos + recurrentes.
+  async clientesImpactados(companyId: number | null, a: AlcanceAnalitica, desdeRaw?: string, hastaRaw?: string) {
+    const cid = this.requireCompany(companyId);
+    const r = this.rango(desdeRaw, hastaRaw);
+    const vend = this.vendedor(a);
+    const seg = await this.segmento(cid, a);
+    const ventas = await this.prisma.salesOpportunity.findMany({
+      where: {
+        AND: [seg.oportunidad],
+        companyId: cid,
+        outcome: 'GANADA',
+        closedAt: { gte: r.desde, lte: r.hastaFin },
+        originType: { not: 'HISTORICO' },
+        ...(vend !== null ? { assignedUserId: vend } : {}),
+      },
+      select: { id: true, salesClientId: true, quotedAmount: true, salesClient: { select: { name: true } } },
+    });
+    const ids = [...new Set(ventas.map((v) => v.salesClientId))];
+    const conCompraPrevia = new Set<number>();
+    if (ids.length) {
+      const idsVentas = ventas.map((v) => v.id);
+      const [previas, contratos] = await Promise.all([
+        this.prisma.salesOpportunity.findMany({
+          where: {
+            companyId: cid,
+            salesClientId: { in: ids },
+            outcome: 'GANADA',
+            id: { notIn: idsVentas },
+            OR: [{ originType: 'HISTORICO' }, { closedAt: { lt: r.desde } }],
+          },
+          select: { salesClientId: true },
+        }),
+        this.prisma.salesAgreement.findMany({
+          where: {
+            companyId: cid,
+            salesClientId: { in: ids },
+            startDate: { lt: diaUtc(r.desdeStr) },
+            OR: [{ opportunityId: null }, { opportunityId: { notIn: idsVentas } }],
+          },
+          select: { salesClientId: true },
+        }),
+      ]);
+      for (const p of previas) conCompraPrevia.add(p.salesClientId);
+      for (const c of contratos) conCompraPrevia.add(c.salesClientId);
+    }
+    const porCliente = new Map<number, { id: number; nombre: string; ventas: number; monto: number; recurrente: boolean }>();
+    for (const v of ventas) {
+      const f = porCliente.get(v.salesClientId) ?? {
+        id: v.salesClientId,
+        nombre: v.salesClient.name,
+        ventas: 0,
+        monto: 0,
+        recurrente: conCompraPrevia.has(v.salesClientId),
+      };
+      f.ventas++;
+      f.monto += v.quotedAmount === null ? 0 : Number(v.quotedAmount);
+      porCliente.set(v.salesClientId, f);
+    }
+    const lista = [...porCliente.values()]
+      .map((f) => ({ ...f, monto: Math.round(f.monto * 100) / 100 }))
+      .sort((p, q) => q.monto - p.monto || p.nombre.localeCompare(q.nombre, 'es'));
+    const recurrentes = lista.filter((f) => f.recurrente).length;
+    return {
+      periodo: { desde: r.desdeStr, hasta: r.hastaStr },
+      impactados: lista.length,
+      nuevos: lista.length - recurrentes,
+      recurrentes,
+      clientes: lista,
+    };
+  }
+
   // Velocidad típica de la empresa (últimos 12 meses): contra ella compara el
   // expediente de un cliente cuánto tardó en responderse y cotizarse.
   async velocidadEmpresa(companyId: number) {
@@ -647,10 +760,12 @@ export class VentasAnaliticaService {
     const cid = this.requireCompany(companyId);
     const r = this.rango(desdeRaw, hastaRaw);
     const vend = this.vendedor(a);
+    const seg = await this.segmento(cid, a);
     // Cohorte: las oportunidades que LLEGARON en el periodo (la misma fecha «Llegó» de la lista de Oportunidades y la
     // misma regla del Resumen) y que hoy están cerradas, ganadas o perdidas. Antes se contaba por la fecha de cierre.
     const cerradas = await this.prisma.salesOpportunity.findMany({
       where: {
+        AND: [seg.oportunidad],
         companyId: cid,
         outcome: { in: ['GANADA', 'PERDIDA'] },
         receivedAt: { gte: r.desde, lte: r.hastaFin },
@@ -717,10 +832,11 @@ export class VentasAnaliticaService {
     const cid = this.requireCompany(companyId);
     const r = this.rango(desdeRaw, hastaRaw);
     const vend = this.vendedor(a);
-    const ids = await this.idsClientes(cid, vend);
+    const seg = await this.segmento(cid, a);
+    const ids = await this.idsConFiltros(cid, a, seg);
     // Un posible cliente descartado aún no es una empresa del Directorio (no tiene salesClientId): para un vendedor
-    // cuentan los que tenía asignados.
-    const leadsDelVendedor = vend === null
+    // cuentan los que tenía asignados. Con filtros del Dashboard no cuentan (no tienen tipo de negocio, servicio ni lugar).
+    const leadsDelVendedor = vend === null || seg.activo
       ? []
       : (await this.prisma.salesLead.findMany({ where: { companyId: cid, assignedUserId: vend }, select: { id: true } })).map((l) => l.id);
     const registradas = await this.prisma.salesReasonEntry.findMany({
@@ -760,7 +876,7 @@ export class VentasAnaliticaService {
     // para que la dona sume lo mismo que el medidor de Aceptación y que la lista a la que lleva (2026-10-21).
     const [perdidasSinMotivo, descartadosSinMotivo] = await Promise.all([
       this.perdidasSinMotivo(cid, ids, r.desde, r.hastaFin),
-      this.descartadosSinMotivo(cid, vend, r.desde, r.hastaFin),
+      seg.activo ? Promise.resolve(0) : this.descartadosSinMotivo(cid, vend, r.desde, r.hastaFin),
     ]);
     entradas.push(
       ...Array.from({ length: perdidasSinMotivo }, () => ({ kind: 'OPP_PERDIDA', reasonLabel: MOTIVO_SIN_INFORMACION, source: null })),

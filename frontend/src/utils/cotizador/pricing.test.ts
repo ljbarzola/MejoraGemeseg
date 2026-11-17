@@ -51,6 +51,7 @@ const product = (extra: Partial<CotProduct> = {}): CotProduct => ({
   supplier: 'Sisegusa',
   lastUpdate: null,
   notes: '',
+  minPrice: null,
   isActive: true,
   ...extra,
 });

@@ -7,6 +7,7 @@ import { CP_INFORME_DATOS_DDL } from './cp-informe-datos.schema';
 import { CACAO_LIQUIDACIONES_DDL } from './cacao-liquidaciones.schema';
 import { CACAO_CONFIG_DDL } from './cacao-config.schema';
 import { COMPLAINT_EXTERNA_DDL } from './complaint-externa.schema';
+import { COT_PRODUCT_MINPRICE_DDL } from './cot-product-minprice.schema';
 
 /** Default pg pool size. Cloud SQL db-f1-micro allows ~25 connections; Cloud Run max-instances=10 would blow that with pg's default of 10. */
 const DEFAULT_POOL_MAX = 3;
@@ -91,6 +92,7 @@ export class PrismaService
       ...CACAO_LIQUIDACIONES_DDL,
       ...CACAO_CONFIG_DDL,
       ...COMPLAINT_EXTERNA_DDL,
+      ...COT_PRODUCT_MINPRICE_DDL,
     ]) {
       try {
         await this.$executeRawUnsafe(ddl);

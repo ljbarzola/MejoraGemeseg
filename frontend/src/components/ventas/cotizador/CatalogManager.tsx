@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { History, Pencil, Plus, Trash2 } from 'lucide-react';
 import ClearFiltersButton from '../../common/ClearFiltersButton';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../common/ColumnFilter';
 import ColumnPickerMenu from '../../common/ColumnPickerMenu';
@@ -12,10 +12,12 @@ import { useColumnPreferences } from '../../../hooks/useColumnPreferences';
 import { useResizableColumns } from '../../../hooks/useResizableColumns';
 import { useSortableTable } from '../../../hooks/useSortableTable';
 import { deleteCotInstall, deleteCotKit, deleteCotProduct } from '../../../services/cotizador.service';
+import { getUser } from '../../../services/auth.service';
 import { apiError, money } from '../../../utils/cotizador/format';
 import { compareCodes, serviceCost } from '../../../utils/cotizador/pricing';
 import type { CotInstall, CotKit, CotProduct } from '../../../utils/cotizador/types';
 import { InstallFormModal, ProductFormModal } from './CatalogForms';
+import HistorialCatalogoModal from './HistorialCatalogoModal';
 import KitEditorModal from './KitEditorModal';
 
 type Tab = 'productos' | 'instalaciones' | 'kits';
@@ -31,10 +33,11 @@ const COLS_PROD = [
   { key: 'costo', label: 'Costo' },
   { key: 'margenes', label: 'Márgenes' },
   { key: 'proveedor', label: 'Proveedor' },
+  { key: 'minimo', label: 'Precio mínimo' },
 ];
 const DEF_PROD = ['tipo', 'nombre', 'subcategoria', 'costo', 'unidad', 'proveedor'];
 const ANCHO_PROD: Record<string, number> = {
-  codigo: 108, tipo: 96, nombre: 290, modelo: 140, subcategoria: 160, unidad: 90, costo: 104, margenes: 168, proveedor: 140, acciones: 64,
+  codigo: 108, tipo: 96, nombre: 290, modelo: 140, subcategoria: 160, unidad: 90, costo: 104, margenes: 168, proveedor: 140, minimo: 118, acciones: 64,
 };
 
 interface Props {
@@ -52,6 +55,7 @@ export default function CatalogManager({ products, installs, kits, byCode, canWr
   const [tab, setTab] = useState<Tab>('productos');
   const [error, setError] = useState('');
   const [soloAdmin, setSoloAdmin] = useState<string | null>(null);
+  const [historial, setHistorial] = useState(false);
 
   // Formularios
   const [productForm, setProductForm] = useState<{ product: CotProduct | null } | null>(null);
@@ -60,6 +64,9 @@ export default function CatalogManager({ products, installs, kits, byCode, canWr
   const [aEliminar, setAEliminar] = useState<{ tipo: Tab; id: number; texto: string } | null>(null);
 
   const pedir = (accion: string, fn: () => void) => (canWrite ? fn() : setSoloAdmin(accion));
+  // Solo administradores y gerentes fijan el precio mínimo de un producto (el servidor también lo exige)
+  const rolUsuario = getUser()?.role;
+  const esAdminOGerente = rolUsuario === 'ADMIN' || rolUsuario === 'MANAGER';
 
   const subcats = useMemo(
     () => [...new Set(products.map((p) => p.subcategory).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')),
@@ -85,7 +92,11 @@ export default function CatalogManager({ products, installs, kits, byCode, canWr
     }
   };
 
+  // Las ventanas hijas (editar producto/servicio/kit, confirmar, historial) se dibujan como HERMANAS del
+  // fondo del catálogo, no dentro de él: si fueran hijas en el DOM, un clic en su fondo oscuro burbujearía
+  // hasta el `onClick={onClose}` del catálogo y lo cerraría también (corregido 2026-11-13).
   return (
+    <>
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal modal-ventas-xl cot-cat-modal"
@@ -111,6 +122,14 @@ export default function CatalogManager({ products, installs, kits, byCode, canWr
             </button>
             <button type="button" className={`cot-tab ${tab === 'kits' ? 'active' : ''}`} onClick={() => setTab('kits')}>
               Kits ({kits.length})
+            </button>
+            <button
+              type="button"
+              className="cot-tab cot-tab-extra"
+              onClick={() => setHistorial(true)}
+              title="Ver quién cambió qué en el catálogo"
+            >
+              <History size={14} /> Historial
             </button>
           </div>
 
@@ -154,12 +173,14 @@ export default function CatalogManager({ products, installs, kits, byCode, canWr
           </button>
         </div>
       </div>
+    </div>
 
       {productForm && (
         <ProductFormModal
           product={productForm.product}
           subcategories={subcats}
           suppliers={suppliers}
+          puedeFijarMinimo={esAdminOGerente}
           onClose={() => setProductForm(null)}
           onSaved={(p, creado) => {
             setProductForm(null);
@@ -206,7 +227,8 @@ export default function CatalogManager({ products, installs, kits, byCode, canWr
         />
       )}
       {soloAdmin && <SoloAdminDialog accion={soloAdmin} onClose={() => setSoloAdmin(null)} />}
-    </div>
+      {historial && <HistorialCatalogoModal onClose={() => setHistorial(false)} />}
+    </>
   );
 }
 
@@ -249,6 +271,7 @@ function ProductsTab({
       },
     },
     { key: 'proveedor', etiqueta: 'Proveedor', tipo: 'valores', vacio: 'Sin proveedor', getValues: (p) => p.supplier },
+    { key: 'minimo', etiqueta: 'Precio mínimo', tipo: 'numero', getValue: (p) => p.minPrice, formato: money },
   ]);
   const prefs = useColumnPreferences('cotizador-catalogo', DEF_PROD);
   // Una columna oculta con filtro activo se muestra igual, para que se vea qué está filtrando.
@@ -283,6 +306,7 @@ function ProductsTab({
       costo: (p: CotProduct) => (p.kind === 'SERVICIO' ? serviceCost(p) : p.unitCost),
       margenes: (p: CotProduct) => (p.hasProfit ? 1 : 0) + (p.hasInstall ? 2 : 0),
       proveedor: (p: CotProduct) => p.supplier,
+      minimo: (p: CotProduct) => p.minPrice ?? 0,
     }),
     [],
   );
@@ -395,6 +419,12 @@ function ProductsTab({
                             )}
                           </td>
                         );
+                      case 'minimo':
+                        return (
+                          <td key={k} className="cot-num">
+                            {p.minPrice != null ? money(p.minPrice) : '—'}
+                          </td>
+                        );
                       default:
                         return <td key={k} className="truncate">{p.supplier}</td>;
                     }
@@ -428,7 +458,7 @@ const COLS_INST = [
   { key: 'costo', label: 'Costo' },
 ];
 const ANCHO_INST: Record<string, number> = { codigo: 108, nombre: 360, categoria: 170, subcategoria: 190, costo: 104, acciones: 64 };
-const NUMERICAS = new Set(['costo']);
+const NUMERICAS = new Set(['costo', 'minimo']);
 // Suma de los anchos declarados: la tabla nunca se encoge por debajo (así cabecera y contenido siguen alineados).
 const sumaAnchos = (anchos: Record<string, number>, keys: string[]) => keys.reduce((t, k) => t + (anchos[k] ?? 120), 0);
 
@@ -607,7 +637,7 @@ function KitsTab({
           Aún no hay kits. Crea uno para agregar varios productos juntos a una cotización.
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: 10 }}>
+        <div className="cot-cat-kits">
           {kits.map((k) => {
             const comps = k.components.filter((c) => c.included);
             const faltan = comps.filter((c) => !byCode.has(c.code)).length;

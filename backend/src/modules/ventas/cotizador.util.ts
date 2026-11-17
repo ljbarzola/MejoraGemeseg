@@ -157,6 +157,7 @@ export function mapProduct(p: CotProduct) {
     supplier: p.supplier,
     lastUpdate: p.lastUpdate,
     notes: p.notes,
+    minPrice: p.minPrice === null ? null : toNum(p.minPrice),
     isActive: p.isActive,
   };
 }
@@ -172,6 +173,126 @@ export function mapInstall(i: CotInstallService) {
     notes: i.notes,
     isActive: i.isActive,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Historial de cambios del catálogo (2026-11-12)
+// ---------------------------------------------------------------------------
+
+export type CotCambioEntidad = 'PRODUCTO' | 'INSTALACION';
+export type CotCambioAccion = 'CREO' | 'EDITO' | 'ELIMINO';
+/** Cómo se muestra el valor: dinero ($), número, sí/no o texto. */
+export type CotCampoTipo = 'dinero' | 'numero' | 'si_no' | 'texto';
+
+interface CampoCatalogo {
+  campo: string;
+  etiqueta: string;
+  tipo: CotCampoTipo;
+  /** Cuenta como cambio de «precio» (lo que más interesa vigilar). */
+  precio?: boolean;
+}
+
+export const CAMPOS_PRODUCTO: CampoCatalogo[] = [
+  { campo: 'name', etiqueta: 'Nombre', tipo: 'texto' },
+  { campo: 'category', etiqueta: 'Categoría', tipo: 'texto' },
+  { campo: 'subcategory', etiqueta: 'Subcategoría', tipo: 'texto' },
+  { campo: 'model', etiqueta: 'Modelo', tipo: 'texto' },
+  { campo: 'description', etiqueta: 'Descripción', tipo: 'texto' },
+  { campo: 'unit', etiqueta: 'Unidad', tipo: 'texto' },
+  { campo: 'supplier', etiqueta: 'Proveedor', tipo: 'texto' },
+  { campo: 'notes', etiqueta: 'Notas', tipo: 'texto' },
+  { campo: 'lastUpdate', etiqueta: 'Última actualización', tipo: 'texto' },
+  { campo: 'defaultQty', etiqueta: 'Cantidad por defecto', tipo: 'numero' },
+  {
+    campo: 'unitCost',
+    etiqueta: 'Costo unitario',
+    tipo: 'dinero',
+    precio: true,
+  },
+  {
+    campo: 'monthlyCost',
+    etiqueta: 'Costo mensual',
+    tipo: 'dinero',
+    precio: true,
+  },
+  { campo: 'annualCost', etiqueta: 'Costo anual', tipo: 'dinero', precio: true },
+  {
+    campo: 'minPrice',
+    etiqueta: 'Precio mínimo',
+    tipo: 'dinero',
+    precio: true,
+  },
+  // «Lleva ganancia» y «Lleva instalación» NO se registran: Leidy los descartó (2026-11-12), son demasiado detalle.
+];
+
+export const CAMPOS_INSTALACION: CampoCatalogo[] = [
+  { campo: 'name', etiqueta: 'Nombre', tipo: 'texto' },
+  { campo: 'category', etiqueta: 'Categoría', tipo: 'texto' },
+  { campo: 'subcategory', etiqueta: 'Subcategoría', tipo: 'texto' },
+  { campo: 'notes', etiqueta: 'Notas', tipo: 'texto' },
+  {
+    campo: 'unitCost',
+    etiqueta: 'Costo unitario',
+    tipo: 'dinero',
+    precio: true,
+  },
+];
+
+/** Claves de los campos que cuentan como «precio» (para el filtro del historial). */
+export const CAMPOS_PRECIO: string[] = Array.from(
+  new Set(
+    [...CAMPOS_PRODUCTO, ...CAMPOS_INSTALACION]
+      .filter((c) => c.precio)
+      .map((c) => c.campo),
+  ),
+);
+
+const camposDe = (entidad: CotCambioEntidad) =>
+  entidad === 'PRODUCTO' ? CAMPOS_PRODUCTO : CAMPOS_INSTALACION;
+
+/** Etiqueta y tipo de un campo para mostrarlo; un campo desconocido se muestra tal cual. */
+export function infoCampo(
+  entidad: CotCambioEntidad,
+  campo: string,
+): { etiqueta: string; tipo: CotCampoTipo } {
+  const c = camposDe(entidad).find((x) => x.campo === campo);
+  return c
+    ? { etiqueta: c.etiqueta, tipo: c.tipo }
+    : { etiqueta: campo, tipo: 'texto' };
+}
+
+/** Valor guardado en el historial: número normalizado, 'true'/'false' o texto recortado. */
+function valorParaHistorial(tipo: CotCampoTipo, v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  if (tipo === 'dinero' || tipo === 'numero') return String(toNum(v));
+  if (tipo === 'si_no') return v ? 'true' : 'false';
+  return String(v).trim().slice(0, 500);
+}
+
+export interface CotCampoCambiado {
+  campo: string;
+  valorAntes: string | null;
+  valorDespues: string | null;
+}
+
+/**
+ * Compara un producto (o servicio de instalación) antes y después de guardar y devuelve
+ * solo los campos que de verdad cambiaron. Si no cambió nada devuelve [] y no se anota nada.
+ */
+export function diffCatalogo(
+  entidad: CotCambioEntidad,
+  antes: Record<string, unknown>,
+  despues: Record<string, unknown>,
+): CotCampoCambiado[] {
+  const cambios: CotCampoCambiado[] = [];
+  for (const c of camposDe(entidad)) {
+    const a = valorParaHistorial(c.tipo, antes[c.campo]);
+    const d = valorParaHistorial(c.tipo, despues[c.campo]);
+    // Un texto vacío y un null son lo mismo para quien lo lee
+    if ((a ?? '') === (d ?? '')) continue;
+    cambios.push({ campo: c.campo, valorAntes: a, valorDespues: d });
+  }
+  return cambios;
 }
 
 export function mapQuote(

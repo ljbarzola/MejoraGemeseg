@@ -155,10 +155,12 @@ export class VentasController {
   cancelVisit(
     @Param('id') id: string,
     @Req() req: any,
-    @Body() body: { notes?: string; reason?: string },
+    @Body() body: { motivo?: string; notes?: string; reason?: string },
   ) {
-    // La pantalla manda `reason`; antes solo se leía `notes` y el motivo se perdía.
-    return this.ventasService.cancelVisit(+id, req.user.companyId, body.notes ?? body.reason);
+    // `motivo` (2026-11-17) es el motivo elegido; `notes`/`reason` el detalle opcional.
+    const motivo = typeof body?.motivo === 'string' ? body.motivo : undefined;
+    const detalle = typeof body?.notes === 'string' ? body.notes : typeof body?.reason === 'string' ? body.reason : undefined;
+    return this.ventasService.cancelVisit(+id, req.user.companyId, motivo, detalle);
   }
 
   @Delete('visits/:id')

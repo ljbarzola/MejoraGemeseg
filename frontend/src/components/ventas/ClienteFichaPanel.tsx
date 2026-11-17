@@ -31,6 +31,7 @@ import {
   SERVICIO_KEY,
   FUENTE_KEY,
   salesClientListaSubopcionesLabel,
+  salesClientSelectLabel,
 } from '../../services/ventas.service';
 
 interface Props {
@@ -107,6 +108,8 @@ function Etapa({ info }: { info: { label: string; color: string } | null }) {
 export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: Props) {
   const fuenteField = fields.find((f) => f.key === FUENTE_KEY);
   const servicioField = fields.find((f) => f.key === SERVICIO_KEY);
+  const tipoNegocioField = fields.find((f) => f.key === 'tipo_negocio');
+  const sectorField = fields.find((f) => f.key === 'sector');
   const { showToast } = useToast();
   const currentUser = getUser();
   const navigate = useNavigate();
@@ -454,6 +457,8 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
                 {dato('Correo principal', client.email)}
                 {dato('RUC / Cédula', client.ruc)}
                 {dato('Dirección', client.address)}
+                {tipoNegocioField && dato(tipoNegocioField.label, salesClientSelectLabel(client, tipoNegocioField))}
+                {sectorField && dato(sectorField.label, salesClientSelectLabel(client, sectorField))}
                 {fuenteField && dato(fuenteField.label, salesClientListaSubopcionesLabel(client, fuenteField))}
                 {servicioField && dato(servicioField.label, salesClientListaSubopcionesLabel(client, servicioField))}
                 {dato('Observaciones', client.observaciones)}
