@@ -12,6 +12,7 @@ import type {
 } from '../../../types/contratacion-publica';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import DateInput from '../../../components/common/DateInput';
+import { cedulaMostrable } from '../../../utils/postulacionValidacion';
 
 interface Props {
   puestoId: number;
@@ -320,7 +321,7 @@ export default function GeneradorPatronModal({
                 <label style={{ fontWeight: 600, fontSize: '0.85rem' }}>3. Orden de los guardias</label>
                 {ordenGuardias.map((g, i) => (
                   <div key={g.cedula} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
-                    <div style={{ flex: 1, fontSize: '0.8rem' }}>{g.nombreGuardia} <span style={{ color: '#a0aec0' }}>({g.cedula})</span></div>
+                    <div style={{ flex: 1, fontSize: '0.8rem' }}>{g.nombreGuardia} {cedulaMostrable(g.cedula) && <span style={{ color: '#a0aec0' }}>({cedulaMostrable(g.cedula)})</span>}</div>
                     <button type="button" className="btn-secondary icon-btn" title="Subir" aria-label="Subir" onClick={() => moveGuardia(i, -1)} disabled={i === 0}><ChevronUp size={16} /></button>
                     <button type="button" className="btn-secondary icon-btn" title="Bajar" aria-label="Bajar" onClick={() => moveGuardia(i, 1)} disabled={i === ordenGuardias.length - 1}><ChevronDown size={16} /></button>
                   </div>

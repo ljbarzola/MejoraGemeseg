@@ -58,11 +58,10 @@ const ReceivablesList = lazy(() => import('./pages/cacao/receivables/Receivables
 const ConfiguracionCacaoPage = lazy(() => import('./pages/cacao/configuracion/ConfiguracionCacaoPage'));
 const ReportesCacao = lazy(() => import('./pages/cacao/reportes/ReportesCacao'));
 const CustodiasList = lazy(() => import('./pages/custodias/CustodiasList'));
-const CustodiaForm = lazy(() => import('./pages/custodias/CustodiaForm'));
-const NominaPage = lazy(() => import('./pages/custodias/NominaPage'));
+const PagosPage = lazy(() => import('./pages/contabilidad/PagosPage'));
+const ContabilidadDashboard = lazy(() => import('./pages/contabilidad/ContabilidadDashboard'));
+const TarifasPage = lazy(() => import('./pages/contabilidad/TarifasPage'));
 const CustodiasDashboard = lazy(() => import('./pages/custodias/CustodiasDashboard'));
-const ConsultaTrabajador = lazy(() => import('./pages/custodias/ConsultaTrabajador'));
-const GemeBotChat = lazy(() => import('./pages/custodias/GemeBotChat'));
 const CPEntidadesPublicasList = lazy(() => import('./pages/contratacion-publica/EntidadesPublicasList'));
 const CPEntidadDetail = lazy(() => import('./pages/contratacion-publica/entidades/EntidadDetail'));
 const CPMisDocumentos = lazy(() => import('./pages/contratacion-publica/MisDocumentosPage'));
@@ -490,10 +489,19 @@ function AppInner() {
         <Route path="/cacao/qualities" element={<ProtectedLayout><SectionRoute section="CACAO"><Navigate to="/cacao/configuracion?tab=calidades" replace /></SectionRoute></ProtectedLayout>} />
         <Route path="/custodias" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><CustodiasList /></SectionRoute></ProtectedLayout>} />
         <Route path="/custodias/dashboard" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><CustodiasDashboard /></SectionRoute></ProtectedLayout>} />
-        <Route path="/custodias/new" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><CustodiaForm /></SectionRoute></ProtectedLayout>} />
-        <Route path="/custodias/nomina" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><NominaPage /></SectionRoute></ProtectedLayout>} />
-        <Route path="/custodias/trabajador" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><ConsultaTrabajador /></SectionRoute></ProtectedLayout>} />
-        <Route path="/custodias/gemebot" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><GemeBotChat /></SectionRoute></ProtectedLayout>} />
+        {/* «Nueva custodia» es una ventana del listado de Viajes y «Consulta por cédula» es el filtro de persona del listado (2026-11-16). */}
+        <Route path="/custodias/new" element={<Navigate to="/custodias?nueva=1" replace />} />
+        <Route path="/custodias/trabajador" element={<Navigate to="/custodias" replace />} />
+        {/* Nómina y GEME-BOT salieron de Custodias (2026-11-16): la nómina es de Contabilidad y GEME-BOT pasó a ser el Agente de Custodia del chat. */}
+        <Route path="/custodias/nomina" element={<Navigate to="/contabilidad/pagos" replace />} />
+        <Route path="/custodias/gemebot" element={<Navigate to="/custodias/dashboard" replace />} />
+        <Route path="/contabilidad" element={<ProtectedLayout><SectionRoute section="CONTABILIDAD"><ContabilidadDashboard /></SectionRoute></ProtectedLayout>} />
+        <Route path="/contabilidad/pagos" element={<ProtectedLayout><SectionRoute section="CONTABILIDAD"><PagosPage /></SectionRoute></ProtectedLayout>} />
+        {/* Los extras y descuentos ya no son una pestaña: se abren desde «Pagos» (2026-11-16). */}
+        <Route path="/contabilidad/ajustes" element={<Navigate to="/contabilidad/pagos" replace />} />
+        <Route path="/contabilidad/nomina" element={<Navigate to="/contabilidad/pagos" replace />} />
+        <Route path="/contabilidad/trabajador" element={<Navigate to="/contabilidad/pagos" replace />} />
+        <Route path="/contabilidad/tarifas" element={<ProtectedLayout><SectionRoute section="CONTABILIDAD"><TarifasPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/contratacion-publica/entidades" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPEntidadesPublicasList /></SectionRoute></ProtectedLayout>} />
         <Route path="/contratacion-publica/entidades/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPEntidadDetail /></SectionRoute></ProtectedLayout>} />
         <Route path="/contratacion-publica/mis-documentos" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPMisDocumentos /></SectionRoute></ProtectedLayout>} />

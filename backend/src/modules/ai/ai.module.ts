@@ -8,6 +8,7 @@ import { AiVentasQueries } from './ai-ventas.queries';
 import { AiVentasInvestigacionQueries } from './ai-ventas-investigacion.queries';
 import { AiVentasPlanQueries } from './ai-ventas-plan.queries';
 import { AiCacaoQueries } from './ai-cacao.queries';
+import { AiCustodiasQueries } from './ai-custodias.queries';
 import { CacaoConfigModule } from '../cacao/config/cacao-config.module';
 import { VentasModule } from '../ventas/ventas.module';
 import { VertexChatClient } from './vertex-chat.client';
@@ -30,6 +31,7 @@ import { GoogleAuthService } from '../../common/services/google-auth.service';
     AiVentasInvestigacionQueries,
     AiVentasPlanQueries,
     AiCacaoQueries,
+    AiCustodiasQueries,
     VertexChatClient,
     GoogleAuthService,
   ],

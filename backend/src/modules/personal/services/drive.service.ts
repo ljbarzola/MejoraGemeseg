@@ -2390,9 +2390,9 @@ export class DriveService {
     const folder = await this.prisma.employeeDriveFolder.findUnique({
       where: { companyId_cedula: { companyId, cedula } },
     });
-    if (!folder) {
+    if (!folder?.folderId) {
       throw new BadRequestException(
-        'Este guardia no tiene una carpeta de Drive vinculada.',
+        'Este guardia no tiene una carpeta de Drive vinculada. Si lo registró Operaciones, crea primero su carpeta en Drive y sincroniza.',
       );
     }
 
@@ -2466,9 +2466,9 @@ export class DriveService {
     const folder = await this.prisma.employeeDriveFolder.findUnique({
       where: { companyId_cedula: { companyId, cedula } },
     });
-    if (!folder) {
+    if (!folder?.folderId) {
       throw new BadRequestException(
-        'Este guardia no tiene una carpeta de Drive vinculada.',
+        'Este guardia no tiene una carpeta de Drive vinculada. Si lo registró Operaciones, crea primero su carpeta en Drive y sincroniza.',
       );
     }
 

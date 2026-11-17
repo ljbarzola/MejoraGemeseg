@@ -1,5 +1,6 @@
 import {
   INTENCIONES_CACAO,
+  INTENCIONES_CUSTODIA,
   INTENCIONES_VENTAS,
   intencionPermitida,
   perfilDeAgente,
@@ -9,9 +10,10 @@ import { INTENT_SECTION } from './ai.processor';
 import { CAPABILITY_MODULES } from './capabilities-prompt.util';
 
 describe('perfilDeAgente', () => {
-  it('solo el scope VENTAS es del perfil de ventas; todo lo demás es general', () => {
+  it('VENTAS y CUSTODIAS son perfiles propios; todo lo demás es general', () => {
     expect(perfilDeAgente('VENTAS')).toBe('VENTAS');
     expect(perfilDeAgente('CACAO')).toBe('CACAO');
+    expect(perfilDeAgente('CUSTODIAS')).toBe('CUSTODIA');
     for (const scope of ['GLOBAL', 'PROJECTS', 'TASKS', 'ADMIN', 'RECLUTAMIENTO', '', null, undefined]) {
       expect(perfilDeAgente(scope as string | null | undefined)).toBe('GENERAL');
     }
@@ -38,6 +40,7 @@ describe('intencionPermitida', () => {
       expect(intencionPermitida('CACAO', intent)).toBe(true);
     }
     expect(intencionPermitida('CACAO', 'ventas_expediente')).toBe(false);
+    expect(intencionPermitida('CACAO', 'custodia_viajes')).toBe(false);
     expect(intencionPermitida('CACAO', 'rrhh_resumen_personal')).toBe(false);
     expect(intencionPermitida('CACAO', 'list_projects')).toBe(false);
   });
@@ -48,17 +51,35 @@ describe('intencionPermitida', () => {
       expect(intencionPermitida('VENTAS', intent)).toBe(false);
     }
   });
+
+  it('el Agente de Custodia ejecuta solo consultas de Custodias, y Agente Gemeseg, Ventas y Cacao ninguna', () => {
+    for (const intent of INTENCIONES_CUSTODIA) {
+      expect(intencionPermitida('CUSTODIA', intent)).toBe(true);
+      expect(intencionPermitida('GENERAL', intent)).toBe(false);
+      expect(intencionPermitida('VENTAS', intent)).toBe(false);
+      expect(intencionPermitida('CACAO', intent)).toBe(false);
+    }
+    expect(intencionPermitida('CUSTODIA', 'ventas_resumen')).toBe(false);
+    expect(intencionPermitida('CUSTODIA', 'cacao_resumen')).toBe(false);
+  });
 });
 
 describe('seccionDePerfil', () => {
   it('cada agente especializado exige la sección de su módulo; el general ninguna', () => {
     expect(seccionDePerfil('VENTAS')).toBe('VENTAS');
     expect(seccionDePerfil('CACAO')).toBe('CACAO');
+    expect(seccionDePerfil('CUSTODIA')).toBe('CUSTODIAS');
     expect(seccionDePerfil('GENERAL')).toBeNull();
   });
 });
 
 describe('contrato entre perfiles, intenciones y permisos', () => {
+  it('toda intención de Custodias existe en INTENT_SECTION y la gobierna la sección CUSTODIAS', () => {
+    for (const intent of INTENCIONES_CUSTODIA) {
+      expect(INTENT_SECTION[intent]).toBe('CUSTODIAS');
+    }
+  });
+
   it('toda intención de Ventas existe en INTENT_SECTION y la gobierna la sección VENTAS', () => {
     for (const intent of INTENCIONES_VENTAS) {
       expect(INTENT_SECTION[intent]).toBe('VENTAS');

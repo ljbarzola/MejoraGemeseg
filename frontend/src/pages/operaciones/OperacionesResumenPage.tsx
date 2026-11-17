@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { ShieldCheck, Truck } from 'lucide-react';
+import { usePerm } from '../../contexts/PermissionsContext';
+import PageTabs from '../../components/common/PageTabs';
+import CustodiasDashboard from '../custodias/CustodiasDashboard';
 import { getOpcionesBitacora } from '../../services/bitacoras.service';
 import type { FiltrosBitacoras, OpcionPuestoBitacora } from '../../types/bitacoras';
 import OperacionesPageHeader from '../../components/operaciones/OperacionesPageHeader';
@@ -16,6 +21,11 @@ import AvisoHorasCodigos from '../../components/operaciones/AvisoHorasCodigos';
  * novedades, hallazgos abiertos). Lo de abajo antes era una pestaña dentro de Bitácoras.
  */
 export default function OperacionesResumenPage() {
+  const { canView } = usePerm();
+  const [params, setParams] = useSearchParams();
+  // «Custodias» es una ventana más del Resumen (2026-11-16): los viajes ya no son un módulo aparte.
+  const hayCustodias = canView('CUSTODIAS');
+  const vista: 'puestos' | 'custodias' = hayCustodias && params.get('vista') === 'custodias' ? 'custodias' : 'puestos';
   const [opciones, setOpciones] = useState<OpcionPuestoBitacora[]>([]);
   const [filtros, setFiltros] = useState<FiltrosBitacoras>({});
 
@@ -35,9 +45,25 @@ export default function OperacionesResumenPage() {
       <OperacionesPageHeader
         pantalla="resumen"
         title="Resumen"
-        description="Cómo van los puestos hoy y lo que dejan las bitácoras: quién debe estar, qué hojas faltan por subir, qué porcentaje cuadra con el horario y qué hallazgos siguen abiertos."
+        description="Cómo van los puestos hoy y lo que dejan las bitácoras: quién debe estar, qué hojas faltan por subir, qué porcentaje cuadra con el horario y qué hallazgos siguen abiertos. Si tienes Custodias, en esa pestaña ves cómo van los viajes."
       />
 
+      {hayCustodias && (
+        <PageTabs
+          label="Resumen de Operaciones"
+          tabs={[
+            { key: 'puestos' as const, label: 'Puestos y bitácoras', icon: ShieldCheck },
+            { key: 'custodias' as const, label: 'Custodias', icon: Truck },
+          ]}
+          value={vista}
+          onChange={(key) => setParams(key === 'puestos' ? {} : { vista: key }, { replace: true })}
+        />
+      )}
+
+      {vista === 'custodias' && <CustodiasDashboard incrustado />}
+
+      {vista === 'puestos' && (
+      <>
       <AvisoHorasCodigos />
 
       <PuestosHoy />
@@ -71,6 +97,8 @@ export default function OperacionesResumenPage() {
       </div>
 
       <BitacorasResumen filtros={filtros} />
+      </>
+      )}
     </div>
   );
 }

@@ -34,6 +34,10 @@ const CONSULTA_LABEL: Record<string, string> = {
   list_my_tasks: 'Mis tareas',
   cacao_resumen: 'Resumen de Cacao',
   custodias_resumen: 'Resumen de Custodias',
+  custodia_viajes: 'Viajes de un guardia',
+  custodia_antiguedad: 'Antigüedad de un custodio',
+  custodia_placas_puerto: 'Placas en Puerto',
+  custodia_top_hacienda: 'Custodios de Hacienda',
   rrhh_resumen_personal: 'Resumen de personal',
 };
 

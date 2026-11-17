@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import { formatFechaCorta } from '../shared/fecha-rango.util';
+import { cedulaMostrable } from '../../personal/utils/identidad-persona.util';
 
 const NAVY = '#1e3a5f';
 const GOLD = '#d4a017';
@@ -137,7 +138,7 @@ export class CPHorariosPdfService {
               lineBreak: false,
             });
           cx += nombreW;
-          doc.text(fila.cedula, cx, y + 3, { width: cedulaW - 4 });
+          doc.text(cedulaMostrable(fila.cedula), cx, y + 3, { width: cedulaW - 4 });
           cx += cedulaW;
           for (const fecha of fechas) {
             const codigo = fila.porFecha[fecha] || '';

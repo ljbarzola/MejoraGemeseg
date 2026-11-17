@@ -324,7 +324,16 @@ Agregado el 2026-10-23 con Cacao (las tres pautas fijas de la usuaria; ver `.age
 
 ---
 
+## 26. Nada se sale de su cuadro: Calendarios y Menús Dentro de la Pantalla, Ventanas que se Ajustan
+
+### Regla: Ningún Desplegable, Calendario ni Menú Puede Quedar Cortado por el Borde de una Ventana o de la Pantalla (Leidy, 2026-11-16)
+- **Contexto:** el calendario de `DateInput` se pintaba debajo del campo con `position: absolute` DENTRO de la ventana (modal). Como el cuerpo del modal tiene scroll, el calendario aparecía cortado, con una barra horizontal, o tapaba el botón «Guardar» (la ventana «¿Cuándo salió…?» y «Rol de pago y matriz»).
+- **Regla:** todo elemento flotante (calendario, menú «⋯», selector) debe verse entero. `DateInput` ahora se pinta con un portal al `<body>` en `position: fixed`, debajo del campo si cabe, encima si no, y recortado al ancho visible; se recoloca al hacer scroll o cambiar el tamaño. **Se abre al hacer clic en el campo (o con la flecha abajo), no al recibir el foco:** `FormModal` enfoca el primer campo al abrirse y, si fuera una fecha, el calendario se abría solo sobre los botones.
+- **Si un contenido nuevo no cabe, la ventana se hace más grande o más larga** (`ancho` de `FormModal`, o scroll del cuerpo), nunca se deja que algo se corte o produzca scroll horizontal. Al probar una pantalla nueva: abrir cada ventana a 1530×740 y comprobar que ningún desplegable toca el borde.
+- **No hacer:** un `position: absolute` para un calendario o menú dentro de un contenedor con `overflow`; ni abrir un desplegable en el evento de foco.
+
 ## Versión
+- v2.3 - Noviembre 2026 (nada se sale de su cuadro: calendario en portal, abre con clic)
 - v2.2 - Octubre 2026 (módulo en línea blanca: submódulos, Dashboard primero y «Primeros pasos»)
 - v2.1 - Octubre 2026 (marco de pantalla, estado desde la lista, tarea como ventana)
 - v1.9 - Octubre 2026 (todo cierre se explica con `MotivoCierreModal`)

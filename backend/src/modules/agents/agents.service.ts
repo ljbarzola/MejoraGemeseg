@@ -178,7 +178,7 @@ export class AgentsService {
     return { message: 'Agente eliminado (revertido a prompt base)' };
   }
 
-  // ¿Puede esta persona ver una sección (Ventas, Cacao) ahora mismo? Misma regla que
+  // ¿Puede esta persona ver una sección (Ventas, Cacao, Custodias) ahora mismo? Misma regla que
   // SectionPermissionGuard y que AiService.getAllowedSectionKeys: super admin pasa; la sección tiene
   // que estar habilitada para la empresa; una sección fija pasa; con fila de permiso manda canView;
   // sin fila = permitido (salvo las cerradas por defecto, ver permiteSinFila).
@@ -208,15 +208,18 @@ export class AgentsService {
     const verVentas = await this.puedeVerSeccion(userId, companyId, 'VENTAS');
     // El Agente de Cacao (2026-11-11) funciona igual: lo ve cualquiera con acceso a la sección Cacao.
     const verCacao = await this.puedeVerSeccion(userId, companyId, 'CACAO');
+    // El Agente de Custodia (2026-11-16) tampoco se asigna: lo ve quien ve la sección Custodias.
+    const verCustodias = await this.puedeVerSeccion(userId, companyId, 'CUSTODIAS');
 
     const agentesBd = await this.prisma.agent.findMany({
       where: {
         isActive: true,
         OR: [
-          { createdBy: null, NOT: { scope: { in: ['VENTAS', 'CACAO', ...SCOPES_SIN_CHAT] } } },
+          { createdBy: null, NOT: { scope: { in: ['VENTAS', 'CACAO', 'CUSTODIAS', ...SCOPES_SIN_CHAT] } } },
           { id: { in: assignedAgentIds } },
           ...(verVentas ? [{ createdBy: null, scope: 'VENTAS' }] : []),
           ...(verCacao ? [{ createdBy: null, scope: 'CACAO' }] : []),
+          ...(verCustodias ? [{ createdBy: null, scope: 'CUSTODIAS' }] : []),
         ],
         // Un agente que trabaja solo (revisor de bitácoras) no conversa: no se
         // ofrece en el chat ni aunque alguien lo tenga asignado.
@@ -246,7 +249,10 @@ export class AgentsService {
     });
 
     const agents = agentesBd.filter(
-      (a) => (a.scope !== 'VENTAS' || verVentas) && (a.scope !== 'CACAO' || verCacao),
+      (a) =>
+        (a.scope !== 'VENTAS' || verVentas) &&
+        (a.scope !== 'CACAO' || verCacao) &&
+        (a.scope !== 'CUSTODIAS' || verCustodias),
     );
 
     return { agents, defaultAgent };

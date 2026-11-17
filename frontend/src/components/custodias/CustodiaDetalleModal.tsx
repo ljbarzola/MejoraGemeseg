@@ -1,4 +1,6 @@
-import { getCustodiaPdfUrl } from '../../services/custodia.service';
+import { useState } from 'react';
+import { descargarOrdenCustodia } from '../../services/custodia.service';
+import ErrorBanner from '../common/ErrorBanner';
 
 const ESTADO_LABELS: Record<string, string> = {
   LISTO_PARA_CUSTODIAR: 'LISTO PARA CUSTODIAR',
@@ -17,8 +19,6 @@ const TIPO_LABELS: Record<string, string> = {
   PUERTO: 'Puerto',
   VIP: 'VIP',
 };
-
-const TARIFAS: Record<string, number> = { HACIENDA: 20, PUERTO: 10, VIP: 23 };
 
 function formatFecha(date: string) {
   if (!date) return '—';
@@ -39,10 +39,21 @@ interface Props {
 }
 
 export default function CustodiaDetalleModal({ custodia, onClose }: Props) {
+  const [errorPdf, setErrorPdf] = useState('');
+  const [bajando, setBajando] = useState(false);
   if (!custodia) return null;
 
-  const tarifa = TARIFAS[custodia.tipoCustodia] || 0;
-  const costoTotal = tarifa * 3;
+  const bajarPdf = async () => {
+    setErrorPdf('');
+    setBajando(true);
+    try {
+      await descargarOrdenCustodia(custodia.id, custodia.numeroGuia);
+    } catch {
+      setErrorPdf('No se pudo generar la orden en PDF. Inténtalo de nuevo.');
+    } finally {
+      setBajando(false);
+    }
+  };
 
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={onClose}>
@@ -53,12 +64,14 @@ export default function CustodiaDetalleModal({ custodia, onClose }: Props) {
             <p style={{ margin: '4px 0 0', color: '#718096', fontSize: '0.85rem' }}>{custodia.numeroGuia}</p>
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <a href={getCustodiaPdfUrl(custodia.id)} target="_blank" rel="noopener noreferrer" style={{ padding: '6px 14px', background: '#1e3a5f', color: '#fff', borderRadius: '8px', fontSize: '0.8rem', textDecoration: 'none' }}>
-              PDF
-            </a>
+            <button type="button" onClick={bajarPdf} disabled={bajando} style={{ padding: '6px 14px', background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '0.8rem', cursor: 'pointer' }}>
+              {bajando ? 'Generando...' : 'PDF'}
+            </button>
             <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.3rem', cursor: 'pointer', color: '#718096' }}>X</button>
           </div>
         </div>
+
+        <ErrorBanner mensaje={errorPdf} />
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '18px' }}>
           <div>
@@ -80,14 +93,6 @@ export default function CustodiaDetalleModal({ custodia, onClose }: Props) {
           <div>
             <div style={{ fontSize: '0.72rem', color: '#718096', fontWeight: 700 }}>PLACA</div>
             <div style={{ fontSize: '0.9rem', fontFamily: 'monospace', fontWeight: 600 }}>{custodia.placa || '—'}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: '#718096', fontWeight: 700 }}>TARIFA / PERSONA</div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#22c55e' }}>${tarifa} USD</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: '#718096', fontWeight: 700 }}>COSTO TOTAL (3 personas)</div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1e3a5f' }}>${costoTotal} USD</div>
           </div>
         </div>
 

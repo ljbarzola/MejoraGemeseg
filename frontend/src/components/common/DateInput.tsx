@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar } from 'lucide-react';
 
 const MESES = [
@@ -6,6 +7,27 @@ const MESES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
 const DIAS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+const ANCHO_CALENDARIO = 240;
+const ALTO_CALENDARIO = 280;
+const MARGEN = 8;
+
+/**
+ * Dónde pintar el calendario para que NUNCA se salga de la pantalla ni quede cortado por una ventana (modal) con
+ * scroll: debajo del campo si cabe, encima si no, y si no cabe en ninguno se ajusta al borde. Horizontalmente se
+ * recorta al ancho visible. (Regla de UX: ver `.agents/RECOMENDACIONES_UX_UI.md`.)
+ */
+function posicionCalendario(r: DOMRect) {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const abajo = vh - r.bottom - MARGEN;
+  const arriba = r.top - MARGEN;
+  let top: number;
+  if (abajo >= ALTO_CALENDARIO) top = r.bottom + 4;
+  else if (arriba >= ALTO_CALENDARIO) top = r.top - ALTO_CALENDARIO - 4;
+  else top = Math.max(MARGEN, Math.min(vh - ALTO_CALENDARIO - MARGEN, r.bottom + 4));
+  const left = Math.max(MARGEN, Math.min(r.left, vw - ANCHO_CALENDARIO - MARGEN));
+  return { top, left };
+}
 
 function isoToDisplay(iso: string): string {
   if (!iso) return '';
@@ -71,6 +93,23 @@ export default function DateInput({ value, onChange, id, name, required, disable
     return +m - 1;
   });
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  // El calendario se pinta fuera de la ventana (portal al <body>) y se recoloca al abrir, al hacer scroll y al cambiar el tamaño.
+  const recolocar = useCallback(() => {
+    if (wrapperRef.current) setPos(posicionCalendario(wrapperRef.current.getBoundingClientRect()));
+  }, []);
+  useLayoutEffect(() => {
+    if (!open) return;
+    recolocar();
+    window.addEventListener('scroll', recolocar, true);
+    window.addEventListener('resize', recolocar);
+    return () => {
+      window.removeEventListener('scroll', recolocar, true);
+      window.removeEventListener('resize', recolocar);
+    };
+  }, [open, recolocar]);
 
   useEffect(() => {
     setText(isoToDisplay(value));
@@ -84,7 +123,9 @@ export default function DateInput({ value, onChange, id, name, required, disable
   useEffect(() => {
     if (!open) return;
     const onClickOutside = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false);
+      const dentro = e.target as Node;
+      if (wrapperRef.current?.contains(dentro) || popupRef.current?.contains(dentro)) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', onClickOutside);
     return () => document.removeEventListener('mousedown', onClickOutside);
@@ -127,7 +168,8 @@ export default function DateInput({ value, onChange, id, name, required, disable
           placeholder={placeholder}
           value={text}
           onChange={(e) => commitText(maskDigits(e.target.value))}
-          onFocus={() => setOpen(true)}
+          onClick={() => !disabled && setOpen(true)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); else if (e.key === 'ArrowDown') setOpen(true); }}
           className={className}
           style={{ width: '100%', paddingRight: 30, boxSizing: 'border-box', ...style }}
           maxLength={10}
@@ -147,12 +189,13 @@ export default function DateInput({ value, onChange, id, name, required, disable
         </button>
       </div>
 
-      {open && !disabled && (
+      {open && !disabled && pos && createPortal(
         <div
+          ref={popupRef}
           style={{
-            position: 'absolute', zIndex: 50, top: 'calc(100% + 4px)', left: 0,
+            position: 'fixed', zIndex: 100000, top: pos.top, left: pos.left,
             background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: 10, width: 240,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: 10, width: ANCHO_CALENDARIO,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -191,7 +234,8 @@ export default function DateInput({ value, onChange, id, name, required, disable
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

@@ -85,7 +85,8 @@ describe('buildCapabilitiesPrompt', () => {
     ]) {
       expect(prompt).toContain(titulo);
     }
-    expect(prompt).toContain('custodias_resumen');
+    // Custodias: los datos en vivo son del Agente de Custodia, no de Agente Gemeseg.
+    expect(prompt).not.toContain('custodias_resumen');
     expect(prompt).toMatch(/Contratación Pública\nNo tienes consulta de datos en vivo para este módulo, pero SÍ conoces cómo se usa/);
   });
 

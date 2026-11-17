@@ -4,6 +4,7 @@ import { AiVentasQueries, textoParam } from './ai-ventas.queries';
 import { AiVentasInvestigacionQueries } from './ai-ventas-investigacion.queries';
 import { AiVentasPlanQueries } from './ai-ventas-plan.queries';
 import { AiCacaoQueries } from './ai-cacao.queries';
+import { AiCustodiasQueries } from './ai-custodias.queries';
 
 // Qué sección de permisos es dueña de cada intención — AiService la consulta
 // antes de ejecutar cualquier intención aquí abajo (ver canUseIntent en
@@ -30,7 +31,12 @@ export const INTENT_SECTION: Record<string, string | null> = {
   cacao_anticipos: 'CACAO',
   cacao_proveedores_incompletos: 'CACAO',
   cacao_reglas: 'CACAO',
+  // Custodias (2026-11-16): las consultas en vivo son del Agente de Custodia, sin dinero.
   custodias_resumen: 'CUSTODIAS',
+  custodia_viajes: 'CUSTODIAS',
+  custodia_antiguedad: 'CUSTODIAS',
+  custodia_placas_puerto: 'CUSTODIAS',
+  custodia_top_hacienda: 'CUSTODIAS',
   rrhh_resumen_personal: 'RRHH',
   // Ventas: todas leen Clientes/Contratos (ver ai-ventas.queries.ts). Los
   // nombres deben coincidir con los de capabilities-prompt.util.ts.
@@ -59,6 +65,7 @@ export class AiProcessor {
     private investigacion: AiVentasInvestigacionQueries,
     private plan: AiVentasPlanQueries,
     private cacao: AiCacaoQueries,
+    private custodias: AiCustodiasQueries,
   ) {}
 
   // Expediente de un cliente conocido por su id: lo usa AiService cuando el chat se abre desde la
@@ -96,7 +103,11 @@ export class AiProcessor {
       case 'cacao_reglas':
         return this.cacaoQuery(intent, params, userId, companyId);
       case 'custodias_resumen':
-        return this.custodiasResumen(companyId);
+      case 'custodia_viajes':
+      case 'custodia_antiguedad':
+      case 'custodia_placas_puerto':
+      case 'custodia_top_hacienda':
+        return this.custodiasQuery(intent, params, companyId);
       case 'rrhh_resumen_personal':
         return this.rrhhResumenPersonal(companyId);
       case 'ventas_resumen':
@@ -152,16 +163,25 @@ export class AiProcessor {
     }
   }
 
-  private async custodiasResumen(companyId?: number | null): Promise<string> {
+  // Custodias: solo viajes y personal, nunca dinero (ver ai-custodias.queries.ts).
+  private async custodiasQuery(
+    intent: string,
+    params: any,
+    companyId?: number | null,
+  ): Promise<string> {
     if (!companyId) return 'No hay empresa asociada para consultar Custodias.';
-    const porEstado = await this.prisma.custodia.groupBy({
-      by: ['estado'],
-      where: { companyId },
-      _count: { id: true },
-    });
-    if (porEstado.length === 0) return 'No hay custodias registradas.';
-    const lista = porEstado.map((c) => `${c.estado}: ${c._count.id}`).join(', ');
-    return `Custodias por estado: ${lista}`;
+    switch (intent) {
+      case 'custodia_viajes':
+        return this.custodias.viajes(companyId, textoParam(params?.nombre));
+      case 'custodia_antiguedad':
+        return this.custodias.antiguedad(companyId, textoParam(params?.nombre));
+      case 'custodia_placas_puerto':
+        return this.custodias.placasPuerto(companyId);
+      case 'custodia_top_hacienda':
+        return this.custodias.topHacienda(companyId);
+      default:
+        return this.custodias.resumen(companyId);
+    }
   }
 
   private async rrhhResumenPersonal(companyId?: number | null): Promise<string> {

@@ -547,27 +547,43 @@ Cada empresa empieza sin nada cargado: el sistema no trae calidades, pesos de sa
 const CUSTODIAS = `# Custodias — guía
 
 ## Acceso
-- Menú → "Custodias": "Dashboard Operativo", "Lista de Operaciones", "Nueva Custodia", "Nómina y Liquidación", "Consulta por Cédula", "Asistente GEME-BOT".
-- Custodias son los viajes de escolta; el personal (chofer y custodios) sale del padrón de guardias.
+- Custodias es parte de Operaciones (no tiene módulo propio): Menú → "Operaciones" → "Viajes" (grupo "Custodias") y, en "Operaciones" → "Resumen", la pestaña "Custodias" con las cifras de los viajes. Quien tiene Custodias pero no Operaciones ve en ese menú solo "Resumen" y "Viajes". En el selector de agentes del chat aparece el "Agente de Custodia", que responde sobre los viajes (cuántos hay, quién los hizo, placas, antigüedad de un custodio); es distinto de Agente Gemeseg.
+- Custodias son los viajes de escolta; el personal (chofer y custodios) sale del padrón de guardias. Aquí solo se registran y siguen los viajes: lo que se paga por ellos (tarifas, pagos, roles de pago) está en el módulo Contabilidad, que tiene su propio permiso.
 
-## Nueva Custodia
-- "Tipo de Custodia *": HACIENDA ($20 por persona), PUERTO ($10 por persona) o VIP ($23 por persona); el costo se calcula para 3 personas.
-- Datos Generales: Número de Guía *, Cliente, Placa GEMESEG. Ruta y Horarios: direcciones y fecha/hora de salida y llegada.
-- Personal Asignado: Chofer, Custodio 1 y Custodio 2 (obligatorios, tres personas distintas); se buscan por nombre o cédula; "+ Manual" si no está en la lista.
+## Viajes
+- Es la lista de todos los viajes. Se filtra en la cabecera de cada columna (estado, tipo, cliente, fecha de salida…; un clic en el nombre de la columna ordena o filtra) y con el buscador de arriba (guía, cliente, placa o persona por nombre o cédula; así se ve todo lo que hizo una persona). "Columnas" elige qué columnas ver, el botón de la flecha "Exportar" baja lo que se ve en Excel, PDF o CSV, y la escoba limpia los filtros.
+- Cada fila tiene un botón con el siguiente paso (se llama "Salió" cuando está LISTO PARA CUSTODIAR y "Llegó" cuando está EN CAMINO). Al pulsarlo se abre una ventana que propone la hora de ahora y se puede cambiar el día y la hora, porque no siempre se alcanza a marcar a tiempo; esa hora decide a qué día y mes cuenta el viaje. El menú "⋯" tiene "Ver detalle", "Orden en PDF", "Editar" (corrige los datos del viaje, no su estado), "Volver al inicio" (devuelve el viaje a LISTO PARA CUSTODIAR; si ya había llegado pide confirmar porque deja de contar en Contabilidad) y "Eliminar" (pide confirmación). Un viaje solo avanza al paso siguiente o vuelve al inicio, no se salta pasos. Un viaje solo entra a los pagos de Contabilidad cuando está en LLEGÓ.
+
+## Nueva custodia
+- Botón "+ Nueva custodia" arriba a la derecha: abre una ventana, sin salir de la lista.
+- "Tipo de Custodia *": HACIENDA, PUERTO o VIP. Datos Generales: Número de Guía *, Cliente, Placa GEMESEG. Ruta y Horarios: direcciones y fecha/hora de salida y llegada.
+- Personal Asignado: Chofer, Custodio 1 y Custodio 2 (obligatorios, tres personas distintas); se buscan escribiendo el nombre o la cédula entre el personal de Recursos Humanos (Guardias). Solo se puede elegir de la lista o crear a la persona: si no está, al pie de la lista dice "¿No existe? Créalo aquí" y abre una ventana "Crear persona" donde solo el nombre (apellidos y nombres) es obligatorio; la "Cédula o documento de identidad" es opcional (si se escribe, vale una cédula, un pasaporte o el documento de otro país: de 5 a 20 letras, números o guion; hoy los guardias de RRHH aún no tienen documento cargado y aparecen como "Sin cédula", y se pueden elegir igual); teléfono, correo, dirección y contacto de emergencia son opcionales. La persona queda elegida y también aparece en Recursos Humanos › Guardias con la etiqueta "Sin carpeta", y RRHH recibe una notificación en la app para crear su carpeta en Drive.
 - Según el tipo: Hacienda → Nombre Hacienda * y Cantidad Sacos *; Puerto → al menos un contenedor (número, sello, guía, BL opcionales); VIP → nada extra. Observaciones.
-- "Registrar Custodia" → pregunta si imprimir la Orden de Custodia ("Imprimir PDF").
+- "Registrar custodia" → pregunta si imprimir la Orden de Custodia ("Imprimir PDF").
 
-## Lista de Operaciones
-- Filtros por tipo, estado y fechas ("Filtrar", "Limpiar"). Columnas Guía, Tipo, Cliente, Placa, Horario, Personal, Estado.
-- El estado se cambia en la misma fila: LISTO PARA CUSTODIAR → EN CAMINO → LLEGÓ. "Ver Detalle" abre la Orden de Custodia con botón PDF. "Eliminar" pide confirmación.
+## Resumen de custodias (pestaña "Custodias" de Operaciones → "Resumen")
+- Elige el mes arriba. Muestra viajes del mes, finalizados, en camino, clientes atendidos y personal activo; los viajes por mes de los últimos 6 meses; el reparto por tipo y por estado; y los clientes y el personal con más viajes. No muestra dinero.`;
 
-## Nómina y Liquidación
-- Fecha Inicio * y Fecha Fin * → "Calcular Nómina". Solo cuentan los viajes en LLEGÓ (si un viaje no aparece, revisar que esté en LLEGÓ).
-- Tarjetas de viajes, empleados y total a pagar; tabla por trabajador con viajes y montos por tipo; GRAN TOTAL. "Ver Matriz Cronológica". PDFs: "PDF General (Matriz)", "PDF Masivo (Matriz)" y "Rol de Pago" individual (elegir el empleado).
+const CONTABILIDAD = `# Contabilidad — guía
 
-## Otras
-- Consulta por Cédula: Cédula * y Mes opcional → "Buscar Viajes" (total de viajes, ingreso acumulado, detalle).
-- Asistente GEME-BOT: chat de consultas rápidas por palabras clave (placa más usada en PUERTO este mes, guardia con más viajes de HACIENDA en 30 días, primer viaje/antigüedad); es distinto de Agente Gemeseg.`;
+## Acceso
+- Menú → "Contabilidad": "Dashboard", "Pagos" y "Tarifas". Es un módulo aparte de Custodias con su propio permiso: tener Custodias no da acceso a Contabilidad.
+- Por ahora Contabilidad cubre el dinero de las custodias: cuánto se paga a chofer y custodios por cada viaje.
+
+## Pagos
+- Es la lista de lo que cobra cada persona por cada viaje que llegó a su destino (una fila por persona y viaje: persona, estado, fecha, guía, rol, tipo, cliente, tarifa, ajuste y total). Se abre con todo y se filtra en la cabecera de cada columna: por estado (Pendiente o Pagado), fecha, persona, tipo, cliente, etc. Filtrando una persona se ve lo que ganó. Las cifras de arriba (total, por pagar, pagado, personas, viajes) siguen lo que se ve.
+- "Columnas" elige qué columnas ver y la flecha "Exportar" baja lo que se ve en Excel, PDF o CSV.
+- "Registrar pagos (N)" marca como pagado todo lo pendiente que se ve en la lista (filtra primero, por ejemplo una persona o un mes): pide el día en que se pagó y una referencia opcional (nº de transferencia). Desde el menú "⋯" de una fila también se puede "Registrar pago" de uno solo. Un pago registrado guarda lo que valía en ese momento; en su "⋯" se puede "Corregir día o referencia" o "Deshacer pago" (vuelve a Pendiente). Un viaje con pagos registrados no se puede eliminar, devolver al inicio ni cambiar de tipo o de personal hasta deshacer esos pagos.
+- "Extras y descuentos" abre una ventana con todos los ajustes: un extra suma a lo que se le paga a una persona (por ejemplo una espera o un viaje largo del chofer) y un descuento lo resta (por ejemplo un uniforme perdido). Ahí se crean, editan y eliminan ("+ Nuevo ajuste"), con persona, tipo, monto, motivo y fecha, y pueden ligarse a un viaje (entonces cuentan en el día de ese viaje y salen en su fila). También se crean desde el "⋯" de una fila: "Agregar extra o descuento". Entran al rol de pago y a los totales del Dashboard. Un ajuste de un pago ya registrado no se toca hasta deshacer ese pago.
+- "Rol de pago y matriz": primero eliges "¿Qué necesitas?" — "Matriz de todo el personal" (una fila por persona: viajes, por tipo, subtotal, ajustes y neto), "Rol de pago de una persona" (sus viajes, sus extras y descuentos y el total neto; pide la persona), "Detalle de viajes" (una fila por viaje y persona) o "Matriz cronológica" (viaje por viaje, una columna por persona) —, las fechas "Desde" y "Hasta" y, al final, el "Archivo" (PDF para imprimir o Excel para filtrar y sumar). Debajo de las fechas, "Así saldrá" muestra un ejemplo de las columnas: el PDF y el Excel de lo mismo traen esas columnas en el mismo orden (el Excel suma hojas con más detalle). Se descarga con "Descargar".
+
+## Tarifas
+- Una tarifa es lo que se paga POR PERSONA en un viaje, según el tipo (HACIENDA, PUERTO, VIP). En un viaje cobran tres personas: chofer, custodio 1 y custodio 2.
+- "+ Nueva tarifa": Tipo *, Valor por persona ($) * y "Rige desde" *. Cada cambio es una tarifa nueva con su fecha: un viaje se paga con la tarifa vigente el día del viaje. Toda tarifa se puede editar o quitar desde "⋯"; si ya rige, los viajes pendientes de pago de esos días se recalculan y los pagos ya registrados como pagados no cambian.
+- Si un tipo no tiene tarifa para la fecha de un viaje (o no tiene ninguna, o la primera empieza después de ese viaje), ese viaje se cuenta pero paga $0 y no se puede registrar su pago. En Pagos sale un aviso naranja que dice cuántos pagos de cada tipo están así, desde qué viaje y si el tipo no tiene ninguna tarifa o la primera empieza más tarde; el botón "Definir tarifa de …" (o "Definir la tarifa de este viaje" en el menú "⋯" de la fila) abre Tarifas con el tipo y el día ya puestos. Al guardarla, los pagos se recalculan solos. Al pasar el mouse sobre "Sin tarifa" se lee la causa.
+
+## Dashboard
+- Elige el mes arriba. Muestra el total a pagar, los ajustes del mes, los viajes pagados, las personas a pagar y el promedio por viaje; el total pagado por mes (6 meses); el costo por tipo; y los clientes que más cuestan y a quién se le paga más.`;
 
 const ADMIN = `# Administración — guía
 
@@ -605,6 +621,7 @@ export const SECTION_GUIDES: Record<string, string> = {
   OPERACIONES,
   CACAO,
   CUSTODIAS,
+  CONTABILIDAD,
   ADMIN,
   SISTEMAS,
   BITACORA,

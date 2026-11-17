@@ -23,6 +23,7 @@ import { ContratacionPublicaModule } from './modules/contratacion-publica/contra
 import { OperacionesInventarioModule } from './modules/operaciones-inventario/operaciones-inventario.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { BitacoraModule } from './modules/bitacora/bitacora.module';
+import { ContabilidadModule } from './modules/contabilidad/contabilidad.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { BitacoraModule } from './modules/bitacora/bitacora.module';
     OperacionesInventarioModule,
     NotificationsModule,
     BitacoraModule,
+    ContabilidadModule,
   ],
   controllers: [AppController],
   providers: [AppService],

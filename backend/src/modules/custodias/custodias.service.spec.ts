@@ -39,6 +39,7 @@ describe('CustodiasService', () => {
       count: jest.Mock;
     };
     employeeDriveFolder: { findMany: jest.Mock; findFirst: jest.Mock };
+    $queryRaw: jest.Mock;
   };
 
   beforeEach(() => {
@@ -56,8 +57,53 @@ describe('CustodiasService', () => {
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
       },
+      // Pagos registrados en Contabilidad: por defecto, ninguno.
+      $queryRaw: jest.fn().mockResolvedValue([{ n: 0 }]),
     };
     service = new CustodiasService(prisma as unknown as PrismaService);
+  });
+
+  describe('getAvailableCustodios', () => {
+    it('ofrece a todos los guardias; a quien no tiene documento lo marca «sin cédula» y no entrega la clave interna', async () => {
+      prisma.employeeDriveFolder.findMany.mockResolvedValue([
+        { employeeName: 'Ana Mora', cedula: '0912345678', lastSyncAt: null },
+        { employeeName: 'John Smith', cedula: 'AB123456', lastSyncAt: null },
+        { employeeName: 'Luis Corto', cedula: '12345', lastSyncAt: null },
+        { employeeName: 'Sin Documento', cedula: 'ID-1AbCdEfGh', lastSyncAt: null },
+        { employeeName: 'Temporal', cedula: 'TEMP-9', lastSyncAt: null },
+      ]);
+      const lista = await service.getAvailableCustodios(1);
+      expect(lista).toHaveLength(5);
+      expect(lista.filter((p) => p.sinCedula).map((p) => p.name).sort()).toEqual(['Sin Documento', 'Temporal']);
+      // La clave interna (ID-…, TEMP-…) nunca sale del servidor.
+      expect(lista.every((p) => !/^(ID|TEMP)-/i.test(p.cedula))).toBe(true);
+      expect(lista.find((p) => p.name === 'John Smith')).toMatchObject({ cedula: 'AB123456', sinCedula: false });
+    });
+  });
+
+  describe('personas distintas en un viaje', () => {
+    const base = { numeroGuia: 'G-9', tipoCustodia: 'hacienda' } as any;
+
+    it('rechaza repetir a la misma persona por cédula, o por nombre cuando aún no tiene cédula', async () => {
+      prisma.custodia.findUnique.mockResolvedValue(null);
+      await expect(
+        service.create({ ...base, choferName: 'A', choferCedula: '111', custodio1Name: 'B', custodio1Cedula: '111', custodio2Name: 'C' }, 1, 1),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      // Sin cédula (opcional): el mismo nombre en dos puestos, aunque cambien las mayúsculas, es la misma persona.
+      await expect(
+        service.create({ ...base, choferName: 'Ana Mora', custodio1Name: 'ana mora', custodio2Name: 'Luis Pérez' }, 1, 1),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.custodia.create).not.toHaveBeenCalled();
+    });
+
+    it('acepta un viaje con tres personas distintas aunque ninguna tenga cédula', async () => {
+      prisma.custodia.findUnique.mockResolvedValue(null);
+      prisma.custodia.create.mockResolvedValue({ id: 1 });
+      await service.create(
+        { ...base, choferName: 'Ana Mora', custodio1Name: 'Luis Pérez', custodio2Name: 'Eva Cruz' }, 1, 1,
+      );
+      expect(prisma.custodia.create.mock.calls[0][0].data).toMatchObject({ choferCedula: '', custodio1Cedula: '', custodio2Cedula: '' });
+    });
   });
 
   describe('create', () => {
@@ -116,8 +162,10 @@ describe('CustodiasService', () => {
       expect(prisma.custodia.update).not.toHaveBeenCalled();
     });
 
-    it('updates the estado when the custodia exists', async () => {
-      prisma.custodia.findFirst.mockResolvedValue(makeCustodia());
+    it('avanza al paso siguiente', async () => {
+      prisma.custodia.findFirst.mockResolvedValue(
+        makeCustodia({ estado: 'LISTO_PARA_CUSTODIAR' }),
+      );
       prisma.custodia.update.mockResolvedValue(
         makeCustodia({ estado: 'EN_CAMINO' }),
       );
@@ -126,49 +174,171 @@ describe('CustodiasService', () => {
 
       expect(prisma.custodia.update).toHaveBeenCalledWith({
         where: { id: 1 },
-        data: { estado: 'EN_CAMINO' },
+        data: { estado: 'EN_CAMINO', fechaHoraSalida: expect.any(Date) },
       });
       expect(result.estado).toBe('EN_CAMINO');
     });
-  });
 
-  describe('getNomina', () => {
-    it('only pays custodias in estado LLEGO, at the full per-person rate', async () => {
-      prisma.custodia.findMany.mockResolvedValue([
-        makeCustodia({ id: 1, tipoCustodia: 'HACIENDA', estado: 'LLEGO' }),
-        makeCustodia({ id: 2, tipoCustodia: 'PUERTO', estado: 'EN_CAMINO' }),
-      ]);
+    it('«Salió» guarda la hora que se eligió, y «Llegó» la suya', async () => {
+      prisma.custodia.findFirst.mockResolvedValue(makeCustodia({ estado: 'LISTO_PARA_CUSTODIAR' }));
+      prisma.custodia.update.mockResolvedValue(makeCustodia());
+      await service.updateEstado(1, 'EN_CAMINO', 1, '2026-07-01T13:00:00.000Z');
+      expect(prisma.custodia.update.mock.calls[0][0].data).toEqual({
+        estado: 'EN_CAMINO',
+        fechaHoraSalida: new Date('2026-07-01T13:00:00.000Z'),
+      });
 
-      const nomina = await service.getNomina(1, '2026-08-01', '2026-08-31');
-
-      expect(nomina.resumen.total_custodias).toBe(1);
-      expect(nomina.resumen.total_pagado).toBe(60); // 3 people x $20 (HACIENDA)
-      expect(nomina.empleados).toHaveLength(3);
-      expect(nomina.empleados.every((e) => e.total_usd === 20)).toBe(true);
+      prisma.custodia.findFirst.mockResolvedValue(makeCustodia({ estado: 'EN_CAMINO' }));
+      await service.updateEstado(1, 'LLEGO', 1, '2026-08-01T18:00:00.000Z');
+      expect(prisma.custodia.update.mock.calls[1][0].data).toEqual({
+        estado: 'LLEGO',
+        fechaHoraLlegada: new Date('2026-08-01T18:00:00.000Z'),
+      });
     });
 
-    it('splits pay per trip role when the same person appears twice', async () => {
-      prisma.custodia.findMany.mockResolvedValue([
-        makeCustodia({
-          id: 1,
-          tipoCustodia: 'VIP',
-          estado: 'LLEGO',
-          choferCedula: '1111111111',
-          custodio1Cedula: '1111111111',
-          custodio1Name: 'Juan Chofer',
-        }),
-      ]);
+    it('sin hora elegida toma el momento de marcar', async () => {
+      prisma.custodia.findFirst.mockResolvedValue(makeCustodia({ estado: 'EN_CAMINO', fechaHoraSalida: null }));
+      prisma.custodia.update.mockResolvedValue(makeCustodia());
+      await service.updateEstado(1, 'LLEGO', 1);
+      const marcada: Date = prisma.custodia.update.mock.calls[0][0].data.fechaHoraLlegada;
+      expect(Math.abs(marcada.getTime() - Date.now())).toBeLessThan(5000);
+    });
 
-      const nomina = await service.getNomina(1, '2026-08-01', '2026-08-31');
-      const juan = nomina.empleados.find((e) => e.cedula === '1111111111');
+    it('rechaza una hora futura y una llegada anterior a la salida', async () => {
+      prisma.custodia.findFirst.mockResolvedValue(makeCustodia({ estado: 'LISTO_PARA_CUSTODIAR' }));
+      await expect(
+        service.updateEstado(1, 'EN_CAMINO', 1, new Date(Date.now() + 3600 * 1000).toISOString()),
+      ).rejects.toBeInstanceOf(BadRequestException);
 
-      expect(juan?.total_viajes).toBe(2);
-      expect(juan?.total_usd).toBe(46); // 2 x $23 (VIP)
+      prisma.custodia.findFirst.mockResolvedValue(makeCustodia({ estado: 'EN_CAMINO' })); // salió 2026-08-01 10:00Z
+      await expect(
+        service.updateEstado(1, 'LLEGO', 1, '2026-08-01T09:00:00.000Z'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.custodia.update).not.toHaveBeenCalled();
+    });
+
+    it('volver al inicio borra la hora de llegada pero deja la de salida', async () => {
+      prisma.custodia.findFirst.mockResolvedValue(makeCustodia({ estado: 'LLEGO' }));
+      prisma.custodia.update.mockResolvedValue(makeCustodia());
+      await service.updateEstado(1, 'LISTO_PARA_CUSTODIAR', 1);
+      expect(prisma.custodia.update.mock.calls[0][0].data).toEqual({
+        estado: 'LISTO_PARA_CUSTODIAR',
+        fechaHoraLlegada: null,
+      });
+    });
+
+    it('vuelve al inicio desde En camino y desde Llegó', async () => {
+      for (const estado of ['EN_CAMINO', 'LLEGO']) {
+        prisma.custodia.findFirst.mockResolvedValue(makeCustodia({ estado }));
+        prisma.custodia.update.mockResolvedValue(
+          makeCustodia({ estado: 'LISTO_PARA_CUSTODIAR' }),
+        );
+        await service.updateEstado(1, 'LISTO_PARA_CUSTODIAR', 1);
+      }
+      expect(prisma.custodia.update).toHaveBeenCalledTimes(2);
+    });
+
+    it('no deja saltarse un paso, retroceder de a uno ni repetir el estado', async () => {
+      const casos: [string, string][] = [
+        ['LISTO_PARA_CUSTODIAR', 'LLEGO'],
+        ['LLEGO', 'EN_CAMINO'],
+        ['EN_CAMINO', 'EN_CAMINO'],
+        ['LISTO_PARA_CUSTODIAR', 'LISTO_PARA_CUSTODIAR'],
+      ];
+      for (const [desde, hacia] of casos) {
+        prisma.custodia.findFirst.mockResolvedValue(makeCustodia({ estado: desde }));
+        await expect(service.updateEstado(1, hacia, 1)).rejects.toBeInstanceOf(
+          BadRequestException,
+        );
+      }
+      expect(prisma.custodia.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('viaje con pagos registrados en Contabilidad', () => {
+    beforeEach(() => {
+      prisma.custodia.findFirst.mockResolvedValue(makeCustodia({ estado: 'LLEGO' }));
+      prisma.$queryRaw.mockResolvedValue([{ n: 3 }]);
+    });
+
+    it('no se elimina, no vuelve al inicio y no cambia de tipo ni de personal', async () => {
+      await expect(service.remove(1, 1)).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.updateEstado(1, 'LISTO_PARA_CUSTODIAR', 1)).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.update(1, { tipoCustodia: 'VIP' }, 1)).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.update(1, { choferName: 'Otro Chofer' }, 1)).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.custodia.delete).not.toHaveBeenCalled();
+      expect(prisma.custodia.update).not.toHaveBeenCalled();
+    });
+
+    it('sí deja corregir lo que no mueve el pago (cliente, placa, direcciones)', async () => {
+      prisma.custodia.update.mockResolvedValue(makeCustodia());
+      await service.update(1, { cliente: 'Nuevo cliente', placa: 'ZZZ-1' }, 1);
+      expect(prisma.custodia.update).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('update', () => {
+    it('cambia solo lo que llega y no toca el estado', async () => {
+      prisma.custodia.findFirst.mockResolvedValue(makeCustodia());
+      prisma.custodia.update.mockResolvedValue(makeCustodia());
+
+      await service.update(1, { cliente: '  Otro cliente ', placa: 'XYZ-9' }, 1);
+
+      const data = prisma.custodia.update.mock.calls[0][0].data;
+      expect(data).toEqual(
+        expect.objectContaining({ cliente: 'Otro cliente', placa: 'XYZ-9' }),
+      );
+      expect(data.estado).toBeUndefined();
+      expect(data.choferName).toBeUndefined();
+    });
+
+    it('rechaza una guía que ya usa otro viaje, pero deja la propia', async () => {
+      prisma.custodia.findFirst.mockResolvedValue(makeCustodia());
+      prisma.custodia.findUnique.mockResolvedValue(makeCustodia({ id: 2, numeroGuia: 'G-009' }));
+      await expect(
+        service.update(1, { numeroGuia: 'G-009' }, 1),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      prisma.custodia.update.mockResolvedValue(makeCustodia());
+      await service.update(1, { numeroGuia: 'G-001' }, 1);
+      expect(prisma.custodia.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('al dejar de ser hacienda se borran la hacienda y los sacos', async () => {
+      prisma.custodia.findFirst.mockResolvedValue(
+        makeCustodia({ nombreHacienda: 'La Esperanza', cantidadSacos: 50 }),
+      );
+      prisma.custodia.update.mockResolvedValue(makeCustodia());
+      await service.update(1, { tipoCustodia: 'VIP' }, 1);
+      const data = prisma.custodia.update.mock.calls[0][0].data;
+      expect(data.tipoCustodia).toBe('VIP');
+      expect(data.nombreHacienda).toBeNull();
+      expect(data.cantidadSacos).toBeNull();
+    });
+
+    it('no deja a la misma persona dos veces ni vaciar un nombre', async () => {
+      prisma.custodia.findFirst.mockResolvedValue(makeCustodia());
+      await expect(
+        service.update(1, { custodio1Cedula: '1111111111' }, 1),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.update(1, { choferName: '  ' }, 1),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.custodia.update).not.toHaveBeenCalled();
+    });
+
+    it('avisa si el viaje no es de la empresa', async () => {
+      prisma.custodia.findFirst.mockResolvedValue(null);
+      await expect(service.update(1, { placa: 'X' }, 1)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
   describe('getDashboardStats', () => {
-    it('counts every custodia por estado but only totals nomina for finalizadas', async () => {
+    // El dashboard es operativo: cuenta todos los viajes del mes (de cualquier estado) por tipo y por estado; solo
+    // `viajes_finalizados` son los que llegaron. Antes contaba por tipo solo los finalizados (cuando mostraba dinero).
+    it('counts every custodia del mes por tipo y por estado, finalizadas aparte, with no money', async () => {
       prisma.custodia.findMany.mockResolvedValue([
         makeCustodia({ id: 1, tipoCustodia: 'HACIENDA', estado: 'LLEGO' }),
         makeCustodia({ id: 2, tipoCustodia: 'PUERTO', estado: 'EN_CAMINO' }),
@@ -183,7 +353,10 @@ describe('CustodiasService', () => {
 
       expect(stats.kpis.total_viajes).toBe(3);
       expect(stats.kpis.viajes_finalizados).toBe(1);
-      expect(stats.kpis.total_nomina_usd).toBe(60); // only the LLEGO HACIENDA trip, x3 people
+      expect(stats.kpis).not.toHaveProperty('total_nomina_usd'); // el dinero vive en Contabilidad
+      expect(stats.por_tipo.find((t) => t.tipo === 'HACIENDA')?.cantidad).toBe(1);
+      expect(stats.por_tipo.find((t) => t.tipo === 'PUERTO')?.cantidad).toBe(1); // en camino, igual cuenta como viaje
+      expect(stats.por_tipo.find((t) => t.tipo === 'VIP')?.cantidad).toBe(1);
       expect(stats.por_estado).toEqual(
         expect.arrayContaining([
           { estado: 'LISTO_PARA_CUSTODIAR', cantidad: 1 },

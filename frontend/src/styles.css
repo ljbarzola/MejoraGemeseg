@@ -860,6 +860,12 @@ body {
   width: 160px;
 }
 
+/* Un botón corto con UNA palabra («Salió», «Llegó») + el menú "⋯" (2026-11-16, Viajes). Ocupa lo justo. */
+.resizable-table th.col-acciones--dos,
+.resizable-table td.col-acciones--dos {
+  width: 116px;
+}
+
 /* Botones de icono visibles en la celda de acciones (en vez del menú "⋯"): usar
    junto a `col-acciones col-acciones--ancha` (160px = hasta 3 botones de 38px) o
    `col-acciones col-acciones--iconos` (172px = hasta 4). En tablas los botones

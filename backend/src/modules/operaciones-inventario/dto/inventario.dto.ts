@@ -118,7 +118,7 @@ export class CrearMovimientoDto {
   @IsOptional()
   @Transform(texto)
   @IsString()
-  @MaxLength(20)
+  @MaxLength(60)
   guardiaCedula?: string | null;
 
   @IsOptional()
@@ -271,7 +271,7 @@ export class AsignarArmaDto {
   @IsOptional()
   @Transform(texto)
   @IsString()
-  @MaxLength(20)
+  @MaxLength(60)
   guardiaCedula?: string | null;
 
   @IsOptional()

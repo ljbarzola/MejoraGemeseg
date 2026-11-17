@@ -11,6 +11,7 @@ import { turnosSugeridos } from './turnosPuesto';
 import { TIPOS_TURNO_PUESTO } from '../../../types/contratacion-publica';
 import EmpleadoSelect from '../../../components/custodias/EmpleadoSelect';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import { cedulaMostrable } from '../../../utils/postulacionValidacion';
 
 const HORA_VALIDA = /^([01]\d|2[0-3]):[0-5]\d$/;
 /** Pone los dos puntos sola mientras se escribe: «0700» → «07:00». */
@@ -270,7 +271,7 @@ export default function PuestoFormModal({
                   <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{g.nombreGuardia}</div>
-                      <div style={{ fontSize: '0.72rem', color: '#718096' }}>Cédula: {g.cedula}</div>
+                      <div style={{ fontSize: '0.72rem', color: '#718096' }}>{cedulaMostrable(g.cedula) ? `Cédula: ${cedulaMostrable(g.cedula)}` : 'Sin cédula'}</div>
                     </div>
                     <div className="acciones-iconos">
                       <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Quitar guardia" aria-label="Quitar guardia" onClick={() => setConfirmandoQuitar(g.id)}>
