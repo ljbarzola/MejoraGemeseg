@@ -8,6 +8,9 @@ import {
   leerLibroExcel,
 } from './excel-hojas.util';
 
+// Armar y leer libros de Excel enormes tarda; con el equipo ocupado pasaba de los 5 s por defecto y la prueba fallaba sin razón.
+jest.setTimeout(30000);
+
 describe('excel-hojas.util', () => {
   describe('formatearNumero', () => {
     it.each([
