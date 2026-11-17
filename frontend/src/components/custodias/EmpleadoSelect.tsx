@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
+import { Check, Plus } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { getAvailableCustodios } from '../../services/custodia.service';
 import { getGuardias } from '../../services/entidades.service';
@@ -19,6 +20,33 @@ const EVENTO_PERSONA_CREADA = 'empleado-select:persona-creada';
 
 function unirPersona(lista: Empleado[], p: Empleado): Empleado[] {
   return lista.some((x) => x.name === p.name && x.cedula === p.cedula) ? lista : [...lista, p];
+}
+
+// Los nombres de RRHH vienen en mayúsculas ("HIDALGO ZAMBRANO EITHER SMITH"): se leen mejor como nombre propio.
+function nombrePropio(nombre: string): string {
+  return nombre.toLowerCase().replace(/(^|\s)(\S)/g, (_m, sp: string, c: string) => sp + c.toUpperCase());
+}
+
+function iniciales(nombre: string): string {
+  const palabras = nombre.trim().split(/\s+/).filter(Boolean);
+  return ((palabras[0]?.[0] ?? '') + (palabras[1]?.[0] ?? '')).toUpperCase();
+}
+
+const sinTildes = (t: string) => t.normalize('NFD').replace(/\p{Mn}/gu, '').toLowerCase();
+
+/** Marca en el texto lo que la persona escribió (sin distinguir mayúsculas ni tildes). */
+function Resaltado({ texto, termino }: { texto: string; termino: string }) {
+  const t = termino.trim();
+  if (!t) return <>{texto}</>;
+  const i = sinTildes(texto).indexOf(sinTildes(t));
+  if (i < 0) return <>{texto}</>;
+  return (
+    <Fragment>
+      {texto.slice(0, i)}
+      <mark style={{ background: '#fde68a', color: 'inherit', borderRadius: 3, padding: '0 1px' }}>{texto.slice(i, i + t.length)}</mark>
+      {texto.slice(i + t.length)}
+    </Fragment>
+  );
 }
 
 interface Props {
@@ -52,6 +80,9 @@ export default function EmpleadoSelect({ label, value, onChange, excludeCedulas 
   const [loading, setLoading] = useState(false);
   const [creando, setCreando] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const listaRef = useRef<HTMLDivElement>(null);
+  const [activo, setActivo] = useState(0);
+  const [navegado, setNavegado] = useState(false);
 
   useEffect(() => {
     setSearch(value.nombre || '');
@@ -100,9 +131,33 @@ export default function EmpleadoSelect({ label, value, onChange, excludeCedulas 
     if (e.cedula && excludeCedulas.includes(e.cedula)) return false;
     if (excludeNombres.some((n) => n && n.trim().toLowerCase() === e.name.trim().toLowerCase())) return false;
     if (!search.trim() || isExactSelection) return true;
-    const term = search.trim().toLowerCase();
-    return e.name.toLowerCase().includes(term) || (cedulaMostrable(e.cedula) !== '' && e.cedula.toLowerCase().includes(term));
+    const term = sinTildes(search.trim());
+    return sinTildes(e.name).includes(term) || (cedulaMostrable(e.cedula) !== '' && e.cedula.toLowerCase().includes(term));
   });
+
+  // La fila resaltada vuelve a la primera cuando cambia lo escrito, y se mantiene a la vista al moverse con el teclado.
+  useEffect(() => { setActivo(0); setNavegado(false); }, [search, open]);
+  useEffect(() => {
+    listaRef.current?.querySelector('[data-activo="true"]')?.scrollIntoView({ block: 'nearest' });
+  }, [activo]);
+
+  function alTeclear(ev: React.KeyboardEvent<HTMLInputElement>) {
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      if (!open) { setOpen(true); return; }
+      setNavegado(true);
+      setActivo((i) => Math.max(0, Math.min(filtered.length - 1, i + (ev.key === 'ArrowDown' ? 1 : -1))));
+    } else if (ev.key === 'Enter' && open && filtered[activo] && (permitirCrear || navegado)) {
+      ev.preventDefault();
+      select(filtered[activo]);
+    } else if (ev.key === 'Escape' && open) {
+      // Cierra solo la lista, no la ventana del formulario.
+      ev.stopPropagation();
+      ev.nativeEvent.stopImmediatePropagation();
+      setOpen(false);
+      if (permitirCrear) setSearch(value.nombre || '');
+    }
+  }
 
   function select(emp: Empleado) {
     onChange({ nombre: emp.name, cedula: emp.cedula });
@@ -144,6 +199,11 @@ export default function EmpleadoSelect({ label, value, onChange, excludeCedulas 
           value={search}
           onChange={handleInputChange}
           onFocus={() => setOpen(true)}
+          onKeyDown={alTeclear}
+          role="combobox"
+          aria-expanded={open}
+          aria-autocomplete="list"
+          autoComplete="off"
           placeholder={loading ? 'Cargando guardias...' : permitirCrear ? `Escribe para buscar ${label.toLowerCase()}…` : `-- Seleccionar ${label.toLowerCase()} --`}
           style={{
             width: '100%',
@@ -200,71 +260,84 @@ export default function EmpleadoSelect({ label, value, onChange, excludeCedulas 
             right: 0,
             background: '#fff',
             border: '1px solid #cbd5e1',
-            borderRadius: '10px',
-            boxShadow: '0 8px 20px rgba(0,0,0,0.12)',
-            maxHeight: '220px',
-            overflowY: 'auto',
+            borderRadius: '12px',
+            boxShadow: '0 12px 28px rgba(15,23,42,0.16)',
             zIndex: 100,
-            marginTop: '4px',
+            marginTop: '6px',
+            overflow: 'hidden',
           }}
         >
-          {filtered.length === 0 ? (
-            <div style={{ padding: '12px', fontSize: '0.82rem', color: '#718096', textAlign: 'center' }}>
-              {loading
-                ? 'Cargando lista de guardias...'
-                : permitirCrear
-                  ? 'No se encontró a nadie con ese nombre o cédula.'
-                  : 'No se encontraron guardias. Puedes escribir un nombre manualmente.'}
+          {filtered.length > 0 && (
+            <div style={{ padding: '6px 14px', fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#94a3b8', background: '#f8fafc', borderBottom: '1px solid #eef2f7' }}>
+              {filtered.length} {filtered.length === 1 ? 'persona' : 'personas'}
             </div>
-          ) : (
-            filtered.map((e) => (
-              <div
-                key={`${e.cedula}|${e.name}`}
-                onClick={() => select(e)}
-                style={{
-                  padding: '10px 14px',
-                  cursor: 'pointer',
-                  borderBottom: '1px solid #f1f5f9',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-                onMouseEnter={(ev) => (ev.currentTarget.style.background = '#f1f5f9')}
-                onMouseLeave={(ev) => (ev.currentTarget.style.background = '#fff')}
-              >
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '0.88rem', color: '#100F31' }}>{e.name}</div>
-                  <div style={{ fontSize: '0.72rem', color: '#718096' }}>{cedulaMostrable(e.cedula) ? `Cédula: ${cedulaMostrable(e.cedula)}` : 'Sin cédula'}</div>
-                </div>
-                {e.status && (
-                  <span
+          )}
+          <div ref={listaRef} role="listbox" style={{ maxHeight: '248px', overflowY: 'auto' }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: '16px 12px', fontSize: '0.82rem', color: '#718096', textAlign: 'center' }}>
+                {loading
+                  ? 'Cargando lista de guardias...'
+                  : permitirCrear
+                    ? 'No se encontró a nadie con ese nombre o cédula.'
+                    : 'No se encontraron guardias. Puedes escribir un nombre manualmente.'}
+              </div>
+            ) : (
+              filtered.map((e, idx) => {
+                const documento = cedulaMostrable(e.cedula);
+                const elegido = !!value.nombre && value.nombre.trim().toLowerCase() === e.name.trim().toLowerCase();
+                const resaltada = idx === activo;
+                return (
+                  <div
+                    key={`${e.cedula}|${e.name}`}
+                    role="option"
+                    aria-selected={elegido}
+                    data-activo={resaltada ? 'true' : undefined}
+                    onClick={() => select(e)}
+                    onMouseEnter={() => setActivo(idx)}
                     style={{
-                      fontSize: '0.7rem',
-                      padding: '2px 8px',
-                      borderRadius: '8px',
-                      background: '#e2e8f0',
-                      color: '#2d3748',
-                      fontWeight: 600,
+                      padding: '8px 14px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      background: resaltada ? '#eff4fb' : '#fff',
+                      borderLeft: `3px solid ${resaltada ? '#1e3a5f' : 'transparent'}`,
                     }}
                   >
-                    {e.status}
-                  </span>
-                )}
-              </div>
-            ))
-          )}
+                    <span
+                      aria-hidden="true"
+                      style={{ flex: '0 0 30px', height: '30px', borderRadius: '50%', background: elegido ? '#1e3a5f' : '#e2e8f0', color: elegido ? '#fff' : '#475569', fontSize: '0.7rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      {iniciales(e.name)}
+                    </span>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div title={nombrePropio(e.name)} style={{ fontWeight: 600, fontSize: '0.86rem', color: '#100F31', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <Resaltado texto={nombrePropio(e.name)} termino={isExactSelection ? '' : search} />
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: documento ? '#64748b' : '#a0aec0', fontStyle: documento ? 'normal' : 'italic' }}>
+                        {documento ? <>Cédula <Resaltado texto={documento} termino={isExactSelection ? '' : search} /></> : 'Sin cédula'}
+                      </div>
+                    </div>
+                    {elegido && <Check size={16} color="#1e3a5f" aria-label="Elegido" />}
+                    {!permitirCrear && e.status && (
+                      <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '8px', background: '#e2e8f0', color: '#2d3748', fontWeight: 600 }}>
+                        {e.status}
+                      </span>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
           {permitirCrear && (
-            <div style={{ position: 'sticky', bottom: 0, background: '#f8fafc', borderTop: '1px solid #e2e8f0', padding: '8px 12px', textAlign: 'center' }}>
-              <span style={{ fontSize: '0.78rem', color: '#718096' }}>¿No existe? </span>
-              <button
-                type="button"
-                className="enlace-tabla"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, color: '#1e3a5f', padding: 0 }}
-                onClick={() => { setOpen(false); setCreando(true); }}
-              >
-                Créalo aquí
-              </button>
-            </div>
+            <button
+              type="button"
+              className="enlace-tabla"
+              onClick={() => { setOpen(false); setCreando(true); }}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: '#f8fafc', border: 'none', borderTop: '1px solid #e2e8f0', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, color: '#1e3a5f', padding: '10px 12px' }}
+            >
+              <Plus size={14} /> ¿No existe? Créalo aquí
+            </button>
           )}
         </div>
       )}

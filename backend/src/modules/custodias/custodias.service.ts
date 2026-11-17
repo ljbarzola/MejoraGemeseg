@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCustodiaDto } from './dto/create-custodia.dto';
 import { UpdateCustodiaDto } from './dto/update-custodia.dto';
 import { esCedulaSintetica } from '../personal/utils/postulacion-validacion.util';
+import { mismoNombre } from '../contratacion-publica/horarios/horarios-importar.util';
 import {
   diasDelMes,
   dondeFechaViaje,
@@ -305,6 +306,27 @@ export class CustodiasService {
           lastSyncAt: c.lastSyncAt,
         };
       });
+
+    // Las personas de los horarios de Operaciones (guardias de los puestos) también son guardias: se ofrecen igual,
+    // sin repetir a quien ya viene de RRHH (misma cédula real o mismo nombre sin importar el orden de apellidos).
+    const delHorario = await this.prisma.cPPuestoGuardia.findMany({
+      where: { puesto: { companyId } },
+      select: { cedula: true, nombreGuardia: true },
+    });
+    const vistas = new Set<string>();
+    for (const g of delHorario) {
+      const nombre = g.nombreGuardia?.trim();
+      if (!nombre) continue;
+      const sinCedula = !g.cedula?.trim() || esCedulaSintetica(g.cedula);
+      const clave = sinCedula ? `n:${nombre.toLowerCase().split(/\s+/).sort().join(' ')}` : `c:${g.cedula}`;
+      if (vistas.has(clave)) continue;
+      vistas.add(clave);
+      const yaEsta = list.some(
+        (p) => (!sinCedula && !!p.cedula && p.cedula === g.cedula) || mismoNombre(p.name, nombre),
+      );
+      if (yaEsta) continue;
+      list.push({ name: nombre, cedula: sinCedula ? '' : g.cedula, sinCedula, status: 'Inscrito', lastSyncAt: null });
+    }
 
     return list.sort((a, b) => a.name.localeCompare(b.name));
   }
