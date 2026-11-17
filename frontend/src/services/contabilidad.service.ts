@@ -107,6 +107,6 @@ export const deshacerPagos = (ids: number[]): Promise<{ deshechos: number }> =>
 /** Matriz cronológica (sin `cedula`) o rol de pago de una persona (con `cedula`) de un período, en PDF o en Excel. */
 export const getNominaArchivo = (
   formato: 'pdf' | 'excel',
-  params: { fechaInicio: string; fechaFin: string; cedula?: string },
+  params: { fechaInicio: string; fechaFin: string; cedula?: string; documento?: 'resumen' | 'persona' | 'detalle' | 'cronologica' },
 ): Promise<Blob> =>
   api.get(`/contabilidad/nomina/${formato}`, { params, responseType: 'blob' }).then((r) => r.data);

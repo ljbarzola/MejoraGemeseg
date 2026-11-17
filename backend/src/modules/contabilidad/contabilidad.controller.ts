@@ -129,7 +129,14 @@ export class ContabilidadController {
     return this.service.deshacerPagos(this.empresa(req), dto?.ids);
   }
 
-  // La misma nómina del PDF, en Excel (resumen por persona, detalle por viaje y ajustes).
+  /** Qué contenido se pide (`resumen`, `persona`, `detalle` o `cronologica`); sin él, el comportamiento de antes. */
+  private documento(valor?: string): 'resumen' | 'persona' | 'detalle' | 'cronologica' {
+    return valor === 'resumen' || valor === 'persona' || valor === 'detalle' || valor === 'cronologica'
+      ? valor
+      : 'resumen';
+  }
+
+  // La misma nómina del PDF, en Excel: la primera hoja es lo que se pidió, con las mismas columnas que el PDF.
   @Get('nomina/excel')
   @Section('CONTABILIDAD', 'view')
   async nominaExcel(
@@ -138,14 +145,16 @@ export class ContabilidadController {
     @Query('fechaInicio') fechaInicio: string,
     @Query('fechaFin') fechaFin: string,
     @Query('cedula') cedula?: string,
+    @Query('documento') documento?: string,
   ) {
     try {
       const nomina = await this.service.getNomina(this.empresa(req), fechaInicio, fechaFin);
       if (cedula && !nomina.empleados_detalle?.some((e: any) => e.cedula === cedula)) {
         throw new BadRequestException('Esa persona no tiene pagos en el período elegido.');
       }
-      const buffer = await generarExcelNomina(nomina, cedula || undefined);
-      const quien = cedula ? `rol_pago_${cedula}` : 'nomina';
+      const doc = this.documento(documento);
+      const buffer = await generarExcelNomina(nomina, { documento: doc, cedula: cedula || undefined });
+      const quien = cedula ? `rol_pago_${cedula}` : doc === 'detalle' ? 'detalle_viajes' : doc === 'cronologica' ? 'matriz_cronologica' : 'nomina';
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Length', buffer.length.toString());
       res.setHeader('Content-Disposition', `attachment; filename="${quien}_${fechaInicio}_${fechaFin}.xlsx"`);
@@ -166,12 +175,20 @@ export class ContabilidadController {
     @Query('fechaFin') fechaFin: string,
     @Query('cedula') cedula?: string,
     @Query('todos') todos?: string,
+    @Query('documento') documento?: string,
   ) {
     try {
       const nomina = await this.service.getNomina(this.empresa(req), fechaInicio, fechaFin);
       let buffer: Buffer;
       let nombre: string;
-      if (cedula) {
+      const doc = this.documento(documento);
+      if (!cedula && doc === 'resumen' && documento) {
+        buffer = await this.pdf.generarPdfResumen(nomina);
+        nombre = `matriz_personal_${fechaInicio}_${fechaFin}.pdf`;
+      } else if (!cedula && doc === 'detalle') {
+        buffer = await this.pdf.generarPdfDetalle(nomina);
+        nombre = `detalle_viajes_${fechaInicio}_${fechaFin}.pdf`;
+      } else if (cedula) {
         buffer = await this.pdf.generarPdfIndividual(nomina, cedula);
         const emp = nomina.empleados_detalle?.find((e: any) => e.cedula === cedula);
         const slug = (emp?.nombre || 'empleado').replace(/[^\w]+/g, '_');

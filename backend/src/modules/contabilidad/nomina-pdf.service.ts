@@ -255,8 +255,152 @@ function dibujarMatrizPdf(
     );
 }
 
+
+interface ColumnaTabla {
+  titulo: string;
+  ancho: number;
+  align?: 'left' | 'right' | 'center';
+}
+
+const usd = (n: unknown) => `$${Number(n ?? 0).toFixed(2)}`;
+const usdFirmado = (n: unknown) => `${Number(n ?? 0) < 0 ? '-' : ''}$${Math.abs(Number(n ?? 0)).toFixed(2)}`;
+
+/**
+ * Tabla simple con el encabezado repetido en cada página y una fila de total al final. La usan «Matriz de todo el
+ * personal» (una fila por persona) y «Detalle de viajes» (una fila por persona y viaje); sus columnas son las mismas
+ * que la primera hoja del Excel del mismo contenido.
+ */
+function dibujarTabla(
+  doc: any,
+  columnas: ColumnaTabla[],
+  filas: string[][],
+  totales: string[],
+  startX: number,
+) {
+  const anchoTotal = columnas.reduce((s, c) => s + c.ancho, 0);
+  const rowH = 15;
+  const cabecera = (y: number) => {
+    doc.rect(startX, y, anchoTotal, 18).fill(NAVY);
+    doc.fillColor('#ffffff').fontSize(7).font('Helvetica-Bold');
+    let x = startX;
+    for (const c of columnas) {
+      doc.text(c.titulo, x + 3, y + 5, { width: c.ancho - 6, align: c.align ?? 'left', lineBreak: false });
+      x += c.ancho;
+    }
+    return y + 18;
+  };
+  const fila = (valores: string[], y: number, fondo: string, negrita: boolean) => {
+    doc.rect(startX, y, anchoTotal, rowH).fill(fondo);
+    doc.fillColor(NAVY).fontSize(7).font(negrita ? 'Helvetica-Bold' : 'Helvetica');
+    let x = startX;
+    columnas.forEach((c, i) => {
+      doc.text(valores[i] ?? '', x + 3, y + 4, { width: c.ancho - 6, align: c.align ?? 'left', lineBreak: false, ellipsis: true });
+      x += c.ancho;
+    });
+    doc.moveTo(startX, y + rowH).lineTo(startX + anchoTotal, y + rowH).strokeColor(ROW_DIVIDER).lineWidth(0.5).stroke();
+    return y + rowH;
+  };
+
+  let y = cabecera(doc.y + 4);
+  filas.forEach((f, i) => {
+    if (y > doc.page.height - 60) {
+      doc.addPage();
+      y = cabecera(40);
+    }
+    y = fila(f, y, i % 2 ? '#f8fafc' : '#ffffff', false);
+  });
+  if (y > doc.page.height - 60) {
+    doc.addPage();
+    y = 40;
+  }
+  y = fila(totales, y, TOTAL_ROW_BG, true);
+  doc.x = startX;
+  doc.y = y + 10;
+}
+
 @Injectable()
 export class NominaPdfService {
+  private nuevoDoc(opts: any): { doc: any; listo: Promise<Buffer> } {
+    const doc = new (PDFDocument as any)(opts);
+    const chunks: Buffer[] = [];
+    const listo = new Promise<Buffer>((resolve, reject) => {
+      doc.on('data', (c: Buffer) => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+    });
+    return { doc, listo };
+  }
+
+  /** Matriz de todo el personal: una fila por persona (viajes, por tipo, subtotal, ajustes y neto). */
+  async generarPdfResumen(nominaData: any): Promise<Buffer> {
+    const empleados: any[] = nominaData.empleados_detalle ?? [];
+    if (!empleados.length) throw new Error('No hay datos para exportar en el período.');
+    const { doc, listo } = this.nuevoDoc({ margin: 30, size: 'LETTER', layout: 'landscape' });
+    encabezado(doc, 'Liquidación de Nómina — Matriz de todo el personal', nominaData.periodo);
+    const columnas: ColumnaTabla[] = [
+      { titulo: 'PERSONA', ancho: 170 },
+      { titulo: 'CÉDULA', ancho: 70 },
+      { titulo: 'VIAJES', ancho: 45, align: 'right' },
+      { titulo: 'HACIENDA', ancho: 65, align: 'right' },
+      { titulo: 'PUERTO', ancho: 60, align: 'right' },
+      { titulo: 'VIP', ancho: 50, align: 'right' },
+      { titulo: 'SUBTOTAL', ancho: 70, align: 'right' },
+      { titulo: 'AJUSTES', ancho: 65, align: 'right' },
+      { titulo: 'TOTAL NETO', ancho: 75, align: 'right' },
+    ];
+    const suma = (f: (e: any) => number) => empleados.reduce((s, e) => s + (f(e) || 0), 0);
+    dibujarTabla(
+      doc,
+      columnas,
+      empleados.map((e) => [
+        e.nombre, e.cedula || '—', String(e.total_viajes ?? 0),
+        usd(e.subtotales?.HACIENDA), usd(e.subtotales?.PUERTO), usd(e.subtotales?.VIP),
+        usd(e.subtotal_viajes_usd ?? e.total_usd), usdFirmado(e.ajustes_usd), usd(e.total_usd),
+      ]),
+      [
+        'TOTAL', '', String(suma((e) => e.total_viajes)),
+        usd(suma((e) => e.subtotales?.HACIENDA)), usd(suma((e) => e.subtotales?.PUERTO)), usd(suma((e) => e.subtotales?.VIP)),
+        usd(suma((e) => e.subtotal_viajes_usd)), usdFirmado(suma((e) => e.ajustes_usd)), usd(suma((e) => e.total_usd)),
+      ],
+      30,
+    );
+    doc.end();
+    return listo;
+  }
+
+  /** Detalle de viajes: una fila por persona y viaje. */
+  async generarPdfDetalle(nominaData: any): Promise<Buffer> {
+    const empleados: any[] = nominaData.empleados_detalle ?? [];
+    const filas: string[][] = [];
+    let total = 0;
+    for (const e of empleados) {
+      for (const v of e.detalle ?? []) {
+        total += v.monto ?? 0;
+        filas.push([
+          e.nombre, e.cedula || '—', formatFechaHoraEC(v.fecha_hora_salida ?? v.fecha_registro).slice(0, 10),
+          v.numero_guia, v.rol, v.tipo_custodia, v.cliente || '—', v.placa || '—', usd(v.monto),
+        ]);
+      }
+    }
+    if (!filas.length) throw new Error('No hay datos para exportar en el período.');
+    const { doc, listo } = this.nuevoDoc({ margin: 30, size: 'LEGAL', layout: 'landscape' });
+    encabezado(doc, 'Liquidación de Nómina — Detalle de viajes', nominaData.periodo);
+    const columnas: ColumnaTabla[] = [
+      { titulo: 'PERSONA', ancho: 150 },
+      { titulo: 'CÉDULA', ancho: 70 },
+      { titulo: 'FECHA', ancho: 60 },
+      { titulo: 'GUÍA', ancho: 75 },
+      { titulo: 'ROL', ancho: 65 },
+      { titulo: 'TIPO', ancho: 60 },
+      { titulo: 'CLIENTE', ancho: 190 },
+      { titulo: 'PLACA', ancho: 65 },
+      { titulo: 'MONTO', ancho: 65, align: 'right' },
+    ];
+    dibujarTabla(doc, columnas, filas, ['TOTAL', '', '', '', '', '', '', '', usd(total)], 30);
+    doc.end();
+    return listo;
+  }
+
   async generarPdfNomina(nominaData: any): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const doc = new (PDFDocument as any)({
@@ -337,28 +481,45 @@ export class NominaPdfService {
           `VIP: ${emp.por_tipo?.VIP || 0} ($${(emp.subtotales?.VIP || 0).toFixed(2)})`,
         );
 
-      // Extras y descuentos de la liquidación (no son tarifa): se muestran uno por uno y se suman al total.
+      // Mismas columnas y orden que la hoja «Rol de pago» del Excel: viajes, subtotal, extras y descuentos, total neto.
+      doc.moveDown(0.6);
+      doc.fillColor(NAVY).fontSize(10).font('Helvetica-Bold').text('Detalle de Viajes');
+      const subtotal = Number(emp.subtotal_viajes_usd ?? emp.total_usd);
+      dibujarTabla(
+        doc,
+        [
+          { titulo: 'FECHA', ancho: 62 },
+          { titulo: 'GUÍA', ancho: 70 },
+          { titulo: 'ROL', ancho: 64 },
+          { titulo: 'TIPO', ancho: 58 },
+          { titulo: 'CLIENTE', ancho: 138 },
+          { titulo: 'PLACA', ancho: 62 },
+          { titulo: 'MONTO', ancho: 58, align: 'right' },
+        ],
+        (emp.detalle || []).map((v: any) => [
+          formatFechaHoraEC(v.fecha_hora_salida ?? v.fecha_registro).slice(0, 10),
+          v.numero_guia, v.rol, v.tipo_custodia, v.cliente || '—', v.placa || '—', usd(v.monto),
+        ]),
+        ['', '', '', '', 'Subtotal de viajes', '', usd(subtotal)],
+        40,
+      );
+
+      // Extras y descuentos de la liquidación (no son tarifa): uno por uno, y se suman al total.
       const ajustes: any[] = emp.ajustes || [];
-      doc.moveDown(0.5);
-      doc
-        .fillColor('#2d3748')
-        .fontSize(9)
-        .font('Helvetica-Bold')
-        .text(`Subtotal de viajes: $${Number(emp.subtotal_viajes_usd ?? emp.total_usd).toFixed(2)}`);
       if (ajustes.length) {
+        doc.fillColor('#2d3748').fontSize(9).font('Helvetica-Bold').text('Extras y descuentos', 40);
         doc.font('Helvetica');
         for (const a of ajustes) {
           const signo = a.tipo === 'DESCUENTO' ? '-' : '+';
           const guia = a.numeroGuia ? ` (guía ${a.numeroGuia})` : '';
           doc.text(
             `${signo} $${Number(a.monto).toFixed(2)}  ${a.tipo === 'DESCUENTO' ? 'Descuento' : 'Extra'} · ${formatFechaEC(a.fecha)} · ${a.concepto}${guia}`,
+            40,
           );
         }
         doc
           .font('Helvetica-Bold')
-          .text(
-            `Ajustes (extras menos descuentos): ${Number(emp.ajustes_usd) < 0 ? '-' : ''}$${Math.abs(Number(emp.ajustes_usd)).toFixed(2)}`,
-          );
+          .text(`Ajustes (extras menos descuentos): ${usdFirmado(emp.ajustes_usd)}`, 40);
       }
 
       doc.moveDown(0.5);
@@ -366,29 +527,7 @@ export class NominaPdfService {
         .fillColor(GOLD)
         .fontSize(14)
         .font('Helvetica-Bold')
-        .text(`TOTAL NETO A PAGAR: $${emp.total_usd.toFixed(2)} USD`);
-
-      doc.moveDown(0.8);
-      doc
-        .fillColor(NAVY)
-        .fontSize(10)
-        .font('Helvetica-Bold')
-        .text('Detalle de Viajes');
-      doc.moveDown(0.3);
-
-      for (const v of emp.detalle || []) {
-        if (doc.y > doc.page.height - 60) doc.addPage();
-        doc
-          .fontSize(7)
-          .fillColor('#2d3748')
-          .font('Helvetica')
-          .text(
-            `${formatFechaHoraEC(v.fecha_hora_salida)} | ${v.numero_guia} | ${v.rol} | $${v.monto}`,
-          )
-          .text(`Cliente: ${v.cliente} | Placa: ${v.placa}`)
-          .text(`${v.direccion_salida} → ${v.direccion_llegada}`)
-          .moveDown(0.25);
-      }
+        .text(`TOTAL NETO A PAGAR: $${emp.total_usd.toFixed(2)} USD`, 40);
 
       doc.end();
     });

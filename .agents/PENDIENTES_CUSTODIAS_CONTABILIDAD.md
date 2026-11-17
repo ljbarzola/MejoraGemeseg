@@ -2,17 +2,11 @@
 
 Estado: todo lo de esta lista está **solo en local / en la rama remota, sin desplegar**. Lo hecho está descrito en `AGENTS.md` («Contabilidad»), `.agents/modules/custodias.md` y `.agents/RECOMENDACIONES_UX_UI.md` (§26). Aquí solo van las decisiones abiertas y lo que falta.
 
-## 1. Formato del «Rol de pago y matriz» (decisión de Leidy pendiente)
+## 1. Formato del «Rol de pago y matriz» (hecho 2026-11-16, falta que Leidy lo pruebe)
 
-**Qué incomoda:** al elegir PDF o Excel en «Rol de pago y matriz» el resultado no se parece. Hay dos cosas distintas mezcladas: el *archivo* (PDF/Excel) y *lo que se exporta* (la matriz de todo el personal o el rol de una persona). Hoy el PDF y el Excel no muestran las mismas columnas ni el mismo orden, y la ventana no explica qué saldrá.
+Leidy eligió la opción 3 + 1: la ventana pregunta primero «¿Qué necesitas?» (matriz de todo el personal, rol de una persona, detalle de viajes y, conservada de antes, la matriz cronológica), muestra «Así saldrá» con las columnas y al final pide el archivo (PDF o Excel). El PDF y la primera hoja del Excel de cada contenido traen las mismas columnas. El «Así saldrá» usa un ejemplo fijo, no datos reales.
 
-**Opciones propuestas** (la 3 + la 1 es la recomendada):
-1. **Vista previa en la ventana:** al elegir «Documento» (todo el personal o una persona), mostrar debajo una tabla de ejemplo con las columnas que saldrán y una frase («Una fila por persona: viajes, subtotal, ajustes y neto»). Cambia al elegir otra opción. Solo explica; no cambia lo que se descarga.
-2. **Mismo contenido, dos archivos:** la hoja principal del Excel idéntica a la tabla del PDF (mismas columnas y orden); los extras (detalle de viajes, ajustes) en hojas aparte con nombre claro. Así «cambiar de formato» solo cambia el archivo.
-3. **Separar «qué» de «en qué archivo»:** primero «¿Qué necesitas?» (Matriz de todo el personal / Rol de una persona / Detalle de viajes), cada una con su descripción; después «Archivo» (PDF o Excel) como un selector chico. Un botón «Descargar».
-4. **Una sola exportación configurable:** quitar la matriz especial y usar «Exportar» de Pagos (elegir columnas, agrupar por persona) para todo, dejando solo el rol individual en PDF con membrete.
-
-Hay que decidir cuál, y si el rol individual debe llevar firma de recibido.
+Pendiente de decidir: si el rol de pago individual debe llevar una línea de **firma de recibido** (hoy no la tiene).
 
 ## 2. Operaciones ve la entidad del custodio y puede añadir personas (idea de Leidy, aprobada solo si es sencilla)
 
