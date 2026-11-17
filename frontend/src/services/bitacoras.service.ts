@@ -51,8 +51,8 @@ export const subirBitacora = (puestoId: number, archivo: File | null): Promise<B
 export const guardarLecturaBitacora = (id: number, lectura: LecturaParaGuardar): Promise<BitacoraDetalle> =>
   api.put(`${BASE}/${id}/lectura`, lectura).then((r) => r.data);
 
-export const releerBitacora = (id: number): Promise<BitacoraDetalle> =>
-  api.post(`${BASE}/${id}/releer`, undefined, { timeout: 120000 }).then((r) => r.data);
+export const releerBitacora = (id: number, nota?: string): Promise<BitacoraDetalle> =>
+  api.post(`${BASE}/${id}/releer`, nota?.trim() ? { nota: nota.trim() } : {}, { timeout: 120000 }).then((r) => r.data);
 
 export const actualizarHallazgoBitacora = (
   hallazgoId: number,

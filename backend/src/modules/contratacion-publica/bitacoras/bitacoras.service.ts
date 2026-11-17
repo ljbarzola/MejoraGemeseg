@@ -209,7 +209,7 @@ export class BitacorasService {
   }
 
   /** Vuelve a leer la foto guardada (reemplaza lo leído y lo corregido a mano). */
-  async releer(id: number, actor: ActorBitacora) {
+  async releer(id: number, actor: ActorBitacora, nota?: string) {
     const b = await this.cargarSimple(id, actor.companyId);
     if (!b.archivoKey || !b.archivoTipo) {
       throw new BadRequestException(
@@ -226,7 +226,7 @@ export class BitacorasService {
       throw new NotFoundException(
         'No se encontró el archivo de esta bitácora.',
       );
-    await this.leerConAgente(id, buffer, b.archivoTipo, actor);
+    await this.leerConAgente(id, buffer, b.archivoTipo, actor, nota);
     return this.obtener(id, actor.companyId);
   }
 
@@ -240,6 +240,7 @@ export class BitacorasService {
     buffer: Buffer,
     mime: string,
     actor: ActorBitacora,
+    pistaDeLaPersona?: string,
   ) {
     const agente = await this.agentRuns.obtenerTrabajador(SCOPE_BITACORAS);
     const agentId = agente?.id ?? null;
@@ -280,6 +281,7 @@ export class BitacorasService {
         sinInstruccionesPropias(agente?.instructions ?? '')
           ? ''
           : agente!.instructions,
+        pistaDeLaPersona,
       );
       if (!r.lectura.esBitacora) {
         await this.marcarLectura(id, {

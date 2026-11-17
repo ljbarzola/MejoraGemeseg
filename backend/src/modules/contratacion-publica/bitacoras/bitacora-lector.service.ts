@@ -5,7 +5,11 @@ import {
   vertexLocation,
   vertexUrl,
 } from '../../../common/utils/vertex-endpoint.util';
-import { normalizarLectura, type LecturaBitacora } from './bitacora.util';
+import {
+  corregirAnioPorDiaSemana,
+  normalizarLectura,
+  type LecturaBitacora,
+} from './bitacora.util';
 import { buildBitacoraPrompt } from './bitacora-prompt.util';
 
 export const TIPOS_ARCHIVO_BITACORA = [
@@ -67,12 +71,15 @@ export class BitacoraLectorService {
     buffer: Buffer,
     mime: string,
     instruccionesDeLaEmpresa: string,
+    pistaDeLaPersona?: string,
   ): Promise<ResultadoLectura> {
     const modelo = modeloVertex('fuerte');
     const inicio = Date.now();
+    const hoy = new Date().toISOString().slice(0, 10);
     const prompt = buildBitacoraPrompt({
-      hoy: new Date().toISOString().slice(0, 10),
+      hoy,
       instruccionesDeLaEmpresa,
+      pistaDeLaPersona,
     });
 
     let respuesta: Response;
@@ -151,8 +158,13 @@ export class BitacoraLectorService {
       );
     }
 
+    // Si la persona ya dijo qué se leyó mal, su pista manda: no se vuelve a «corregir» el año por su cuenta.
+    const lecturaLimpia = normalizarLectura(json);
+    const diaSemana = (json as { diaSemana?: unknown } | null)?.diaSemana;
     return {
-      lectura: normalizarLectura(json),
+      lectura: pistaDeLaPersona?.trim()
+        ? lecturaLimpia
+        : corregirAnioPorDiaSemana(lecturaLimpia, diaSemana, hoy),
       modelo,
       tokensEntrada: datos?.usageMetadata?.promptTokenCount ?? null,
       tokensSalida: datos?.usageMetadata?.candidatesTokenCount ?? null,
