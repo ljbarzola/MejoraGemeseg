@@ -26,6 +26,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { ActorBitacora, BitacorasService } from './bitacoras.service';
 import {
   ActualizarHallazgoDto,
+  ReleerBitacoraDto,
   DashboardBitacorasQueryDto,
   PuestosHoyQueryDto,
   GuardarLecturaDto,
@@ -172,9 +173,10 @@ export class BitacorasController {
   @Section(SECCION, 'write')
   async releer(
     @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ReleerBitacoraDto,
     @Req() req: AuthedRequest,
   ) {
-    return this.service.releer(id, await this.actor(req));
+    return this.service.releer(id, await this.actor(req), dto?.nota);
   }
 
   @Delete(':id')

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Bot, CheckCircle2, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Bot, CheckCircle2, Pencil, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react';
 import {
   actualizarHallazgoBitacora,
   eliminarBitacora,
@@ -89,6 +89,9 @@ export default function BitacoraDetallePage() {
   const [novedades, setNovedades] = useState<FilaNovedad[]>([]);
   const [sucio, setSucio] = useState(false);
   const [fechaNueva, setFechaNueva] = useState('');
+  const [editandoDia, setEditandoDia] = useState<string | null>(null);
+  const [diaCorregido, setDiaCorregido] = useState('');
+  const [anioNuevo, setAnioNuevo] = useState('');
 
   const [accionHallazgo, setAccionHallazgo] = useState<{ h: HallazgoBitacora; estado: 'RESUELTO' | 'DESCARTADO' } | null>(null);
   const [confirmando, setConfirmando] = useState<'releer' | 'borrar' | null>(null);
@@ -164,13 +167,42 @@ export default function BitacoraDetallePage() {
     }
   };
 
-  const releer = async () => {
+  // Cambia un día de toda la hoja (chip, líneas de guardia y novedades) de una vez: sirve cuando
+  // el agente leyó mal el día, el mes o el año y habría que corregir línea por línea.
+  const cambiarDia = (desde: string, hasta: string) => {
+    if (!hasta || hasta === desde) { setEditandoDia(null); return; }
+    setFechasExtra((fs) => [...new Set(fs.map((f) => (f === desde ? hasta : f)))]);
+    setRegistros((rs) => rs.map((r) => (r.fecha === desde ? { ...r, fecha: hasta } : r)));
+    setNovedades((ns) => ns.map((n) => (n.fecha === desde ? { ...n, fecha: hasta } : n)));
+    setEditandoDia(null);
+    marcar();
+  };
+
+  // Cambia solo el año de TODAS las fechas de la hoja, dejando día y mes (el error más común: 2026 leído como 2021).
+  const cambiarAnio = () => {
+    const anio = anioNuevo.trim();
+    if (!/^\d{4}$/.test(anio)) { setError('Escribe el año con cuatro cifras, por ejemplo 2026.'); return; }
+    const mover = (f: string) => {
+      if (!f) return f;
+      const candidata = `${anio}-${f.slice(5)}`;
+      const d = new Date(`${candidata}T00:00:00Z`);
+      return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== candidata ? `${anio}-${f.slice(5, 7)}-28` : candidata;
+    };
+    setError('');
+    setFechasExtra((fs) => [...new Set(fs.map(mover))]);
+    setRegistros((rs) => rs.map((r) => ({ ...r, fecha: mover(r.fecha) })));
+    setNovedades((ns) => ns.map((n) => ({ ...n, fecha: mover(n.fecha) })));
+    setAnioNuevo('');
+    marcar();
+  };
+
+  const releer = async (nota?: string) => {
     if (!det) return;
     setConfirmando(null);
     setOcupado('releer');
     setError('');
     try {
-      aplicar(await releerBitacora(det.id));
+      aplicar(await releerBitacora(det.id, nota));
       setAviso('El agente volvió a leer la foto.');
     } catch (err) {
       setError(mensajeError(err, 'No se pudo volver a leer la bitácora.'));
@@ -405,6 +437,9 @@ export default function BitacoraDetallePage() {
                   return (
                     <span key={f} className="status-badge" style={{ background: '#e2e8f0', color: '#2d3748', textTransform: 'none', letterSpacing: 0 }}>
                       {fechaCorta(f)}
+                      {puedeEscribir && (
+                        <button type="button" aria-label={`Corregir el día ${fechaCorta(f)}`} title="Corregir este día (cambia también sus guardias y novedades)" disabled={bloquear} onClick={() => { setEditandoDia(f); setDiaCorregido(f); }} style={{ border: 'none', background: 'none', cursor: 'pointer', marginLeft: 4, padding: 0 }}><Pencil size={12} /></button>
+                      )}
                       {puedeEscribir && !enUso && (
                         <button type="button" aria-label={`Quitar ${fechaCorta(f)}`} onClick={() => { setFechasExtra((fs) => fs.filter((x) => x !== f)); marcar(); }} style={{ border: 'none', background: 'none', cursor: 'pointer', marginLeft: 4, padding: 0 }}><X size={12} /></button>
                       )}
@@ -412,6 +447,21 @@ export default function BitacoraDetallePage() {
                   );
                 })}
               </div>
+              {puedeEscribir && editandoDia && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.85rem' }}>Corregir el {fechaCorta(editandoDia)} por:</span>
+                  <div className="filtro-fecha-dateinput" style={{ width: 170 }}><DateInput className="filtro-fecha-dia" value={diaCorregido} onChange={setDiaCorregido} placeholder="Día correcto" /></div>
+                  <button type="button" className="btn-secondary" disabled={!diaCorregido} onClick={() => cambiarDia(editandoDia, diaCorregido)}>Cambiar</button>
+                  <button type="button" className="btn-secondary" onClick={() => setEditandoDia(null)}>Cancelar</button>
+                </div>
+              )}
+              {puedeEscribir && fechasActuales.length > 0 && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.85rem' }}>¿El año está mal? Cambiarlo en toda la hoja:</span>
+                  <input type="text" inputMode="numeric" maxLength={4} aria-label="Año correcto" placeholder="2026" value={anioNuevo} disabled={bloquear} onChange={(e) => setAnioNuevo(e.target.value.replace(/\D/g, ''))} onKeyDown={(e) => { if (e.key === 'Enter') cambiarAnio(); }} style={{ ...inputCelda, width: 80 }} />
+                  <button type="button" className="btn-secondary" disabled={anioNuevo.length !== 4 || bloquear} onClick={cambiarAnio}>Cambiar año</button>
+                </div>
+              )}
               {puedeEscribir && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
                   <div className="filtro-fecha-dateinput" style={{ width: 170 }}><DateInput className="filtro-fecha-dia" value={fechaNueva} onChange={setFechaNueva} placeholder="Agregar un día" /></div>
@@ -522,11 +572,12 @@ export default function BitacoraDetallePage() {
         />
       )}
       {confirmando === 'releer' && (
-        <ConfirmDialog
+        <PromptDialog
           title="Volver a leer la foto"
           confirmLabel="Volver a leer"
-          message={sucio || det.origenLectura === 'IA_CORREGIDA' ? 'El agente leerá la foto otra vez y se reemplazará todo lo que está escrito abajo, incluidas tus correcciones. ¿Continuar?' : 'El agente leerá la foto otra vez y se reemplazará lo leído. ¿Continuar?'}
-          onConfirm={() => void releer()}
+          message={`${sucio || det.origenLectura === 'IA_CORREGIDA' ? 'El agente leerá la foto otra vez y se reemplazará todo lo que está escrito abajo, incluidas tus correcciones.' : 'El agente leerá la foto otra vez y se reemplazará lo leído.'} Si sabes qué leyó mal, díselo para que vuelva a mirar esa parte (opcional). Si solo es un dato suelto, es más rápido corregirlo a mano abajo.`}
+          placeholder="Ej.: el año es 2026, no 2021"
+          onConfirm={(nota) => void releer(nota)}
           onCancel={() => setConfirmando(null)}
         />
       )}

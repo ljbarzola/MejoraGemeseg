@@ -1,6 +1,8 @@
 import {
+  corregirAnioPorDiaSemana,
   diferenciaMinutos,
   esFechaISO,
+  indiceDiaSemana,
   normalizarHora,
   normalizarLectura,
 } from './bitacora.util';
@@ -145,5 +147,40 @@ describe('similitudes', () => {
   it('texto libre', () => {
     expect(similitudTexto('GARITA NORTE', 'Garita Norte - planta')).toBe(1);
     expect(similitudTexto('Bodega central', 'Garita norte')).toBe(0);
+  });
+});
+
+describe('corregirAnioPorDiaSemana', () => {
+  const lectura = (fecha: string) =>
+    normalizarLectura({
+      esBitacora: true,
+      fechas: [fecha],
+      registros: [{ fecha, guardia: 'Juan Perez', horaEntrada: '07:00' }],
+      novedades: [{ fecha, texto: 'Sin novedad', categoria: 'SIN_NOVEDAD' }],
+    });
+
+  it('entiende el día de la semana con tildes, mayúsculas y abreviado', () => {
+    expect(indiceDiaSemana('Lunes')).toBe(1);
+    expect(indiceDiaSemana('miércoles')).toBe(3);
+    expect(indiceDiaSemana('Sáb.')).toBe(6);
+    expect(indiceDiaSemana('hola')).toBeNull();
+    expect(indiceDiaSemana(null)).toBeNull();
+  });
+
+  it('corrige el año de toda la hoja cuando el día de la semana solo cuadra con otro año', () => {
+    // 24/08/2026 fue lunes; 24/08/2021 fue martes.
+    const r = corregirAnioPorDiaSemana(lectura('2021-08-24'), 'lunes', '2026-11-17');
+    expect(r.fechas).toEqual(['2026-08-24']);
+    expect(r.registros[0].fecha).toBe('2026-08-24');
+    expect(r.novedades[0].fecha).toBe('2026-08-24');
+    expect(r.observaciones).toContain('2021 a 2026');
+  });
+
+  it('no toca nada si el día de la semana ya cuadra, falta o no cuadra con ningún año cercano', () => {
+    const buena = lectura('2026-08-24');
+    expect(corregirAnioPorDiaSemana(buena, 'lunes', '2026-11-17')).toBe(buena);
+    expect(corregirAnioPorDiaSemana(buena, null, '2026-11-17')).toBe(buena);
+    const rara = lectura('2021-08-24');
+    expect(corregirAnioPorDiaSemana(rara, 'jueves', '2026-11-17')).toBe(rara);
   });
 });

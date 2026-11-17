@@ -104,6 +104,14 @@ export class ActualizarHallazgoDto {
   nota?: string;
 }
 
+/** Al volver a leer con el agente, la persona puede decirle qué leyó mal (opcional). */
+export class ReleerBitacoraDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  nota?: string;
+}
+
 export class ListarBitacorasQueryDto {
   @IsOptional() @IsString() entidadId?: string;
   @IsOptional() @IsString() contratoId?: string;

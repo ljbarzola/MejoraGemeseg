@@ -88,6 +88,77 @@ export function esFechaISO(v: unknown): v is string {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
 }
 
+const DIAS_SEMANA = [
+  'domingo',
+  'lunes',
+  'martes',
+  'miercoles',
+  'jueves',
+  'viernes',
+  'sabado',
+] as const;
+
+/** «Lunes», «miércoles», «Sáb.» -> 0..6 (domingo = 0); algo que no es un día -> null. */
+export function indiceDiaSemana(valor: unknown): number | null {
+  if (typeof valor !== 'string') return null;
+  const t = valor
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+  if (t.length < 3) return null;
+  const i = DIAS_SEMANA.findIndex((d) => d.startsWith(t.slice(0, 3)));
+  return i >= 0 ? i : null;
+}
+
+function cambiarAnio(fecha: string, anio: number): string {
+  const [, mes, dia] = fecha.split('-');
+  // 29 de febrero en un año que no es bisiesto: se queda en el 28.
+  const candidata = `${anio}-${mes}-${dia}`;
+  return esFechaISO(candidata) ? candidata : `${anio}-${mes}-28`;
+}
+
+/**
+ * El año manuscrito se confunde con facilidad (2026 leído como 2021). El día de
+ * la semana que trae el encabezado ayuda a detectarlo: si la fecha leída no cae
+ * en ese día pero, con otro año cercano, sí cae, se corrige el año de TODA la
+ * hoja y se deja dicho en las observaciones. Si no hay día de la semana, o
+ * ningún año cercano cuadra, no se toca nada.
+ */
+export function corregirAnioPorDiaSemana(
+  lectura: LecturaBitacora,
+  diaSemanaEscrito: unknown,
+  hoy: string,
+): LecturaBitacora {
+  const esperado = indiceDiaSemana(diaSemanaEscrito);
+  const base = lectura.fechas[0];
+  if (esperado === null || !base) return lectura;
+  const diaDe = (f: string) => new Date(`${f}T00:00:00Z`).getUTCDay();
+  if (diaDe(base) === esperado) return lectura;
+
+  const anioHoy = Number(hoy.slice(0, 4));
+  const anioLeido = Number(base.slice(0, 4));
+  const candidatos = [anioHoy, anioHoy - 1, anioHoy - 2].filter((a) => {
+    const f = cambiarAnio(base, a);
+    return f.slice(5) === base.slice(5) && diaDe(f) === esperado && f <= hoy;
+  });
+  if (candidatos.length !== 1 || candidatos[0] === anioLeido) return lectura;
+
+  const nuevo = candidatos[0];
+  const mover = (f: string) => cambiarAnio(f, nuevo);
+  const aviso = `Se corrigió el año de ${anioLeido} a ${nuevo}: la hoja dice «${String(diaSemanaEscrito).trim()}» y el ${base.split('-').reverse().join('/')} de ${nuevo} cae en ese día.`;
+  return {
+    ...lectura,
+    fechas: [...new Set(lectura.fechas.map(mover))].sort(),
+    registros: lectura.registros.map((r) => ({ ...r, fecha: mover(r.fecha) })),
+    novedades: lectura.novedades.map((n) => ({
+      ...n,
+      fecha: n.fecha ? mover(n.fecha) : null,
+    })),
+    observaciones: [lectura.observaciones, aviso].filter(Boolean).join(' '),
+  };
+}
+
 // ---------------------------------------------------------------- lectura
 
 export interface LecturaRegistro {
