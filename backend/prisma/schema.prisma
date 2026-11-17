@@ -3527,6 +3527,40 @@ model CotProduct {
   @@index([companyId, kind, isActive])
 }
 
+// Límites de precio de la empresa (2026-11-12): avisos del Cotizador, no bloqueos. Vacío = sin límite.
+// Tabla de arranque (cotizador.schema.ts).
+model CotLimites {
+  companyId                Int      @id
+  maxDescuentoPct          Decimal? @db.Decimal(6, 2)
+  maxDescuentoServiciosPct Decimal? @db.Decimal(6, 2)
+  minGananciaPct           Decimal? @db.Decimal(6, 2)
+  updatedBy                Int?
+  updatedAt                DateTime @default(now())
+}
+
+// Historial de cambios del catálogo del Cotizador (2026-11-12): una fila por campo
+// cambiado de un producto o servicio de instalación (acción EDITO), o una sola al
+// crearlo (CREO) o eliminarlo (ELIMINO, que en el fondo lo desactiva). Lo escribe el
+// servidor en la misma transacción del cambio. Tabla de arranque (cotizador.schema.ts).
+model CotCambio {
+  id           Int      @id @default(autoincrement())
+  companyId    Int
+  entidad      String // PRODUCTO | INSTALACION
+  entidadId    Int
+  codigo       String
+  nombre       String   @default("")
+  accion       String // CREO | EDITO | ELIMINO
+  campo        String   @default("") // clave del campo (unitCost...), vacío en CREO/ELIMINO
+  valorAntes   String?
+  valorDespues String?
+  userId       Int?
+  userNombre   String   @default("")
+  creadoEn     DateTime @default(now())
+
+  @@index([companyId, creadoEn])
+  @@index([companyId, codigo])
+}
+
 // Servicios de instalación del catálogo (INST-001...). Se copian por valor dentro
 // de la cotización.
 model CotInstallService {
