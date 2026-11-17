@@ -39,6 +39,7 @@ describe('CustodiasService', () => {
       count: jest.Mock;
     };
     employeeDriveFolder: { findMany: jest.Mock; findFirst: jest.Mock };
+    cPPuestoGuardia: { findMany: jest.Mock };
     $queryRaw: jest.Mock;
   };
 
@@ -57,6 +58,8 @@ describe('CustodiasService', () => {
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
       },
+      // Guardias de los puestos de Operaciones: por defecto, ninguno.
+      cPPuestoGuardia: { findMany: jest.fn().mockResolvedValue([]) },
       // Pagos registrados en Contabilidad: por defecto, ninguno.
       $queryRaw: jest.fn().mockResolvedValue([{ n: 0 }]),
     };
@@ -78,6 +81,24 @@ describe('CustodiasService', () => {
       // La clave interna (ID-…, TEMP-…) nunca sale del servidor.
       expect(lista.every((p) => !/^(ID|TEMP)-/i.test(p.cedula))).toBe(true);
       expect(lista.find((p) => p.name === 'John Smith')).toMatchObject({ cedula: 'AB123456', sinCedula: false });
+    });
+
+    it('ofrece también a las personas de los horarios de Operaciones, sin repetir a las de RRHH ni entregar su clave interna', async () => {
+      prisma.employeeDriveFolder.findMany.mockResolvedValue([
+        { employeeName: 'Mora Ana', cedula: '0912345678', lastSyncAt: null },
+      ]);
+      prisma.cPPuestoGuardia.findMany.mockResolvedValue([
+        { cedula: '0912345678', nombreGuardia: 'ANA MORA' }, // ya está en RRHH (misma cédula)
+        { cedula: 'SC-ABCDEF1234', nombreGuardia: 'ana mora' }, // ya está en RRHH (mismo nombre, otro orden/mayúsculas)
+        { cedula: 'SC-1111111111', nombreGuardia: 'PEREZ LUIS' }, // solo en horarios, sin cédula
+        { cedula: 'SC-2222222222', nombreGuardia: 'luis perez' }, // la misma persona en otro puesto
+        { cedula: '0999999999', nombreGuardia: 'RUIZ SOFIA' }, // solo en horarios, con cédula
+      ]);
+      const lista = await service.getAvailableCustodios(1);
+      expect(lista.map((p) => p.name).sort()).toEqual(['Mora Ana', 'PEREZ LUIS', 'RUIZ SOFIA']);
+      expect(lista.find((p) => p.name === 'PEREZ LUIS')).toMatchObject({ cedula: '', sinCedula: true });
+      expect(lista.find((p) => p.name === 'RUIZ SOFIA')).toMatchObject({ cedula: '0999999999', sinCedula: false });
+      expect(lista.every((p) => !/^(ID|TEMP|SC)-/i.test(p.cedula))).toBe(true);
     });
   });
 

@@ -272,7 +272,7 @@ export default function CustodiaFormModal({
 
       <h3 style={{ ...subtitulo, marginTop: 16 }}>Personal asignado</h3>
       <p style={{ fontSize: '0.75rem', color: '#718096', margin: '0 0 10px' }}>
-        Escribe para buscar por nombre o cédula entre el personal de Recursos Humanos (la cédula es opcional: quien aún no la tiene aparece como «Sin cédula»). Si alguien no está, usa «Créalo aquí» al pie de la lista.
+        Escribe para buscar por nombre o cédula entre el personal de Recursos Humanos y el de los horarios de Operaciones (la cédula es opcional: quien aún no la tiene aparece como «Sin cédula»). Si alguien no está, usa «Créalo aquí» al pie de la lista.
       </p>
       <div className="form-row">
         <div className="form-group">
