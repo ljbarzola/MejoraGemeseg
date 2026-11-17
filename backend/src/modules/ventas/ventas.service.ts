@@ -480,18 +480,27 @@ export class VentasService {
     return { ...(await this.conCrm(companyId, [completada]))[0], oportunidadActualizada: actualizaOportunidad };
   }
 
-  async cancelVisit(id: number, companyId: number, notes?: string) {
+  /**
+   * La visita no se cumplió. `motivo` es obligatorio desde 2026-11-17 (pedido del asesor comercial: saber
+   * por qué no se cumplen las rutas): una opción de la lista fija o lo escrito en «Otro». `notes` es el
+   * detalle opcional y se sigue añadiendo a las notas como antes.
+   */
+  async cancelVisit(id: number, companyId: number, motivo: string | undefined, notes?: string) {
     const visit = await this.prisma.clientVisit.findFirst({
       where: { id, companyId },
     });
     if (!visit) throw new NotFoundException('Visita no encontrada');
+    const m = (motivo ?? '').trim().slice(0, 200);
+    if (!m) throw new BadRequestException('Elige por qué no se cumplió la visita.');
+    const detalle = (notes ?? '').trim().slice(0, 1000);
 
     return this.prisma.clientVisit.update({
       where: { id },
       data: {
         status: 'CANCELLED',
-        notes: notes
-          ? `${visit.notes || ''}\nCancelado: ${notes}`
+        cancelMotivo: m,
+        notes: detalle
+          ? `${visit.notes ? `${visit.notes}\n` : ''}No se cumplió: ${detalle}`
           : visit.notes,
       },
     });

@@ -12,13 +12,13 @@ import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
 import { useColumnFilters } from '../../hooks/useColumnFilters';
-import { getVisits, checkInVisit, cancelVisit, deleteVisit, getSalesClient, getSalesClientFields, ClientVisit, type CheckInPorConfirmar, type SalesClient, type SalesClientField } from '../../services/ventas.service';
+import { getVisits, checkInVisit, deleteVisit, getSalesClient, getSalesClientFields, ClientVisit, type CheckInPorConfirmar, type SalesClient, type SalesClientField } from '../../services/ventas.service';
 import VisitaModal from '../../components/ventas/VisitaModal';
 import VisitaOfertaModal from '../../components/ventas/VisitaOfertaModal';
 import ClienteFichaPanel from '../../components/ventas/ClienteFichaPanel';
 import ClienteFormModal from '../../components/ventas/ClienteFormModal';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
-import PromptDialog from '../../components/common/PromptDialog';
+import VisitaNoCumplidaModal from '../../components/ventas/VisitaNoCumplidaModal';
 import { useToast } from '../../contexts/ToastContext';
 import { RESULTADO_VISITA_LABEL } from '../../utils/visitasVentas';
 
@@ -39,6 +39,8 @@ const COLUMNAS_VISITA = [
   { key: 'estado', label: 'Estado' },
   { key: 'oferta', label: 'Oferta comercial' },
   { key: 'resultado', label: 'Resultado' },
+  // Por qué no se cumplió una visita cancelada (2026-11-17).
+  { key: 'motivo', label: 'Motivo si no se cumplió' },
 ];
 // «Oferta comercial» solo tiene datos al cerrar la visita (y ya está en la pestaña Resultados): se
 // elige con «Columnas» para que Acciones quepa a la vista sin desplazarse.
@@ -52,7 +54,7 @@ const COLUMNAS_EXPORTAR_VISITA = [
   { key: 'notas', label: 'Notas de la visita' },
 ];
 const ANCHO_COLUMNA_VISITA: Record<string, number> = {
-  vendedor: 125, fecha: 105, checkin: 165, estado: 112, oferta: 190, resultado: 125,
+  vendedor: 125, fecha: 105, checkin: 165, estado: 112, oferta: 190, resultado: 125, motivo: 170,
 };
 
 const sinTildes = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -238,18 +240,6 @@ export default function VisitasPage() {
     setPromptCancelVisit(visit);
   };
 
-  const confirmarCancelarVisita = async (reason: string) => {
-    const visit = promptCancelVisit;
-    if (!visit) return;
-    setPromptCancelVisit(null);
-    try {
-      await cancelVisit(visit.id, reason);
-      loadVisits();
-    } catch {
-      setCancelError('Error al cancelar visita');
-    }
-  };
-
   const handleDeleteVisit = (visit: ClientVisit) => {
     setDeleteError('');
     setConfirmDeleteVisit(visit);
@@ -285,6 +275,7 @@ export default function VisitasPage() {
     { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: Object.keys(ESTADO_VISITA), getValues: (v) => ({ valor: v.status, etiqueta: (ESTADO_VISITA[v.status] ?? ESTADO_VISITA.PLANNED).label }) },
     { key: 'oferta', etiqueta: 'Oferta', tipo: 'numero', formato: (n) => `$${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`, getValue: (v) => v.quotedAmount },
     { key: 'resultado', etiqueta: 'Resultado', tipo: 'valores', vacio: 'Sin resultado', getValues: (v) => (v.outcome ? { valor: v.outcome, etiqueta: OUTCOME_LABELS[v.outcome] || v.outcome } : null) },
+    { key: 'motivo', etiqueta: 'Motivo', tipo: 'valores', vacio: 'Sin motivo', getValues: (v) => (v.cancelMotivo ? { valor: v.cancelMotivo, etiqueta: v.cancelMotivo } : null) },
   ]);
   const hayFiltros = !!busqueda || cf.hayFiltros;
   const limpiarTodo = () => { setBusqueda(''); cf.limpiar(); };
@@ -307,6 +298,7 @@ export default function VisitasPage() {
     estado: (v) => ESTADO_VISITA[v.status]?.label,
     oferta: (v) => v.quotedAmount,
     resultado: (v) => (v.outcome ? OUTCOME_LABELS[v.outcome] ?? v.outcome : ''),
+    motivo: (v) => v.cancelMotivo ?? '',
   });
 
   const abrirOferta = (v: ClientVisit) => setShowOfferModal(v);
@@ -352,6 +344,7 @@ export default function VisitasPage() {
       case 'estado': return (ESTADO_VISITA[v.status] ?? ESTADO_VISITA.PLANNED).label;
       case 'oferta': return v.commercialOffer ?? '';
       case 'resultado': return v.outcome ? OUTCOME_LABELS[v.outcome] || v.outcome : '';
+      case 'motivo': return v.cancelMotivo ?? '';
       case 'lugar': return v.location || '';
       case 'oportunidad': return v.oportunidad ? v.oportunidad.title || `Oportunidad #${v.oportunidad.id}` : '';
       case 'notas': return v.notes || '';
@@ -381,6 +374,10 @@ export default function VisitasPage() {
       case 'resultado':
         return v.outcome
           ? <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--azul-oscuro)' }}>{OUTCOME_LABELS[v.outcome] || v.outcome}</span>
+          : <span style={{ color: '#a0aec0' }}>—</span>;
+      case 'motivo':
+        return v.cancelMotivo
+          ? <span className="truncate" title={v.cancelMotivo} style={{ fontSize: 13, color: '#742a2a' }}>{v.cancelMotivo}</span>
           : <span style={{ color: '#a0aec0' }}>—</span>;
       default:
         return null;
@@ -615,12 +612,10 @@ export default function VisitasPage() {
       )}
 
       {promptCancelVisit && (
-        <PromptDialog
-          title="Cancelar visita"
-          message={`Motivo de cancelación de la visita a ${promptCancelVisit.clientName}:`}
-          confirmLabel="Cancelar visita"
-          onConfirm={confirmarCancelarVisita}
-          onCancel={() => setPromptCancelVisit(null)}
+        <VisitaNoCumplidaModal
+          visita={promptCancelVisit}
+          onClose={() => setPromptCancelVisit(null)}
+          onDone={() => { setPromptCancelVisit(null); showToast('La visita quedó cancelada con su motivo.', 'success'); loadVisits(); }}
         />
       )}
     </div>

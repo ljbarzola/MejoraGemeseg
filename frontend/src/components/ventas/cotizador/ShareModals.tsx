@@ -72,7 +72,7 @@ export function ShareQuoteModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-ventas-sm" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="cot-sh-title">
         <div className="modal-header">
-          <h3 id="cot-sh-title">🔗 Compartir cotización {quoteNumber}</h3>
+          <h3 id="cot-sh-title">Compartir con mi equipo · {quoteNumber}</h3>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">
             ✕
           </button>
@@ -80,7 +80,7 @@ export function ShareQuoteModal({
         <div className="modal-body">
           <ErrorBanner mensaje={error} />
           <p className="cot-muted" style={{ marginTop: 0 }}>
-            La persona con quien la compartas podrá verla y crear una copia propia. No podrá modificarla ni eliminarla.
+            La persona de tu equipo con quien la compartas podrá verla y crear una copia propia. No podrá modificarla ni eliminarla.
           </p>
           <div className="form-group">
             <label htmlFor="cot-share-user">Compartir con</label>

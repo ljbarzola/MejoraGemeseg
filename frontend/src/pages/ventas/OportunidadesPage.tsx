@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Plus, Pencil, Trash2, ClipboardList, Workflow, CalendarPlus, UserPlus, UserMinus, Bot, AlertCircle } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Plus, Pencil, Trash2, ClipboardList, Workflow, CalendarPlus, UserPlus, UserMinus, Bot, AlertCircle, Calculator } from 'lucide-react';
 import { abrirChatDeVentas } from '../../services/chat.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
@@ -90,6 +90,7 @@ const dinero = (v?: number | null) =>
 // tener varias (por ejemplo, ya contrata y pide otro servicio).
 export default function OportunidadesPage() {
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentUser = getUser();
   const esManager = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
@@ -342,6 +343,8 @@ export default function OportunidadesPage() {
     const lista: RowAction[] = [
       { label: 'Ver ficha', icon: <ClipboardList size={14} />, onClick: () => abrirFicha(o.salesClientId) },
       { label: 'Editar', icon: <Pencil size={14} />, onClick: () => setModal({ modo: 'editar', oportunidad: o }) },
+      // 2026-11-17: abre el Cotizador con el cliente puesto y la cotización ya unida a esta oportunidad.
+      { label: 'Cotizar', icon: <Calculator size={14} />, onClick: () => navigate(`/ventas/cotizador?oportunidad=${o.id}`) },
       {
         label: 'Preguntar al agente',
         icon: <Bot size={14} />,

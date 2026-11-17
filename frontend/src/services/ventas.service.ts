@@ -289,6 +289,8 @@ export const fetchProtectedFile = (apiPath: string): Promise<Blob> =>
 export interface ClientVisit {
   id: number; clientName: string; clientEmail?: string; clientPhone?: string;
   clientAddress?: string; location?: string; notes?: string; status: string;
+  // Por qué no se cumplió (visitas canceladas desde 2026-11-17).
+  cancelMotivo?: string | null;
   scheduledDate?: string; checkInTime?: string; checkOutTime?: string;
   checkInLat?: number; checkInLng?: number;
   visitDate?: string; isVerified?: boolean;
@@ -335,7 +337,9 @@ export interface CierreVisitaInput {
 }
 export const completeVisit = (id: number, data?: CierreVisitaInput): Promise<ClientVisit & { oportunidadActualizada: boolean }> =>
   api.post(`/ventas/visits/${id}/complete`, data).then(r => r.data);
-export const cancelVisit = (id: number, reason?: string) => api.post(`/ventas/visits/${id}/cancel`, { reason }).then(r => r.data);
+// `motivo`: por qué no se cumplió (obligatorio, 2026-11-17); `detalle`: nota opcional.
+export const cancelVisit = (id: number, motivo: string, detalle?: string) =>
+  api.post(`/ventas/visits/${id}/cancel`, { motivo, notes: detalle }).then(r => r.data);
 export const deleteVisit = (id: number) => api.delete(`/ventas/visits/${id}`).then(r => r.data);
 
 // ==================== LEGACY: LEADS ====================
@@ -554,7 +558,7 @@ export interface DashboardClientes {
 
 // `hoy` es el día local de quien mira (nextActionDate es solo-día).
 export const getDashboardClientes = (params: { desde?: string; hasta?: string; responsable?: string; hoy: string }) =>
-  api.get('/ventas/clientes/dashboard', { params }).then(r => r.data as DashboardClientes);
+  api.get('/ventas/clientes/dashboard', { params: { ...params, ...filtrosDashboardActuales() } }).then(r => r.data as DashboardClientes);
 
 // ---------- Ficha del cliente: línea de tiempo y actividades ----------
 
@@ -1361,16 +1365,51 @@ export interface AnaliticaActividad {
 }
 
 type RangoParams = { desde?: string; hasta?: string; alcance?: string };
+
+// ---- Filtros del Dashboard (2026-11-17): tipo de negocio, público/privado, servicio, provincia y ciudad ----
+// Los fija la pantalla del Dashboard y viajan en la query de las pestañas que los usan (Resumen, Cartera y
+// contratos, Embudo, Motivos). Se guardan aquí para no pasarlos por cada componente; el Dashboard los limpia al salir.
+export interface FiltrosDashboard {
+  tipoNegocio?: string;
+  sector?: string;
+  servicioId?: string;
+  provincia?: string;
+  ciudad?: string;
+}
+/** Valores especiales de tipo/sector (iguales a ventas-segmento.util.ts del servidor). */
+export const FILTRO_OTRO = '__OTRO__';
+export const FILTRO_SIN_DATO = '__SIN__';
+let filtrosDashboard: FiltrosDashboard = {};
+function filtrosDashboardActuales(): FiltrosDashboard {
+  return filtrosDashboard;
+}
+export const setFiltrosDashboard = (f: FiltrosDashboard) => {
+  filtrosDashboard = Object.fromEntries(Object.entries(f).filter(([, v]) => v)) as FiltrosDashboard;
+};
+const conFiltros = <T extends object | undefined>(p: T) => ({ ...(p ?? {}), ...filtrosDashboard });
+
 export const getAnaliticaCartera = (p?: RangoParams): Promise<AnaliticaCartera> =>
-  api.get('/ventas/analitica/cartera', { params: p }).then(r => r.data);
+  api.get('/ventas/analitica/cartera', { params: conFiltros(p) }).then(r => r.data);
 export const getAnaliticaRetencion = (p?: RangoParams): Promise<AnaliticaRetencion> =>
-  api.get('/ventas/analitica/retencion', { params: p }).then(r => r.data);
+  api.get('/ventas/analitica/retencion', { params: conFiltros(p) }).then(r => r.data);
 export const getAnaliticaEmbudo = (p?: RangoParams): Promise<AnaliticaEmbudo> =>
-  api.get('/ventas/analitica/embudo', { params: p }).then(r => r.data);
+  api.get('/ventas/analitica/embudo', { params: conFiltros(p) }).then(r => r.data);
 export const getAnaliticaAceptacion = (p?: RangoParams): Promise<AnaliticaAceptacion> =>
-  api.get('/ventas/analitica/aceptacion', { params: p }).then(r => r.data);
+  api.get('/ventas/analitica/aceptacion', { params: conFiltros(p) }).then(r => r.data);
 export const getAnaliticaMotivos = (p?: RangoParams): Promise<AnaliticaMotivos> =>
-  api.get('/ventas/analitica/motivos', { params: p }).then(r => r.data);
+  api.get('/ventas/analitica/motivos', { params: conFiltros(p) }).then(r => r.data);
+
+export interface ClientesImpactados {
+  periodo: { desde: string; hasta: string };
+  impactados: number;
+  nuevos: number;
+  recurrentes: number;
+  clientes: { id: number; nombre: string; ventas: number; monto: number; recurrente: boolean }[];
+}
+export const getClientesImpactados = (p?: RangoParams): Promise<ClientesImpactados> =>
+  api.get('/ventas/analitica/clientes-impactados', { params: conFiltros(p) }).then(r => r.data);
+export const getLugaresOportunidades = (): Promise<{ provincias: string[]; ciudades: string[] }> =>
+  api.get('/ventas/analitica/lugares').then(r => r.data);
 export const getAnaliticaActividad = (p?: RangoParams): Promise<AnaliticaActividad> =>
   api.get('/ventas/analitica/actividad', { params: p }).then(r => r.data);
 
@@ -1482,7 +1521,7 @@ export interface AnaliticaMapa {
 }
 // `desde`/`hasta` ('YYYY-MM-DD', días de Ecuador): solo las oportunidades que llegaron en ese periodo.
 export const getAnaliticaMapa = (p: { alcance?: string; vista?: VistaMapa; desde?: string; hasta?: string }): Promise<AnaliticaMapa> =>
-  api.get('/ventas/analitica/mapa', { params: p }).then(r => r.data);
+  api.get('/ventas/analitica/mapa', { params: { ...p, ...filtrosDashboardActuales() } }).then(r => r.data);
 
 // Buscador de lugares (OpenStreetMap, a través del servidor) para el cuadro «Ubicación».
 export const buscarUbicaciones = (q: string): Promise<UbicacionOportunidad[]> =>

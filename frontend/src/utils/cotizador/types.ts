@@ -23,6 +23,8 @@ export interface CotProduct {
   supplier: string;
   lastUpdate: string | null;
   notes: string;
+  /** Precio mínimo de venta antes de IVA; null = sin mínimo. Solo genera un aviso. */
+  minPrice: number | null;
   isActive: boolean;
 }
 

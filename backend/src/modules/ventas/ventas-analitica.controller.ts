@@ -3,6 +3,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
 import { Section } from '../../common/decorators/section.decorator';
 import { VentasAnaliticaService } from './ventas-analitica.service';
+import { leerFiltros } from './ventas-segmento.util';
 
 // Analítica de Ventas (tablero ampliado, 2026-10-07). Va bajo /ventas/analitica
 // porque /ventas/dashboard ya lo usa el módulo viejo de metas. Quien no es ADMIN
@@ -12,8 +13,10 @@ import { VentasAnaliticaService } from './ventas-analitica.service';
 export class VentasAnaliticaController {
   constructor(private readonly analitica: VentasAnaliticaService) {}
 
+  // Los filtros del Dashboard (tipo de negocio, público/privado, servicio, provincia, ciudad; 2026-11-17) viajan en
+  // la misma query de cada pestaña y se aplican dentro del alcance.
   private alcance(req: any, alcance?: string) {
-    return { userId: req.user.userId, role: req.user.role, alcance };
+    return { userId: req.user.userId, role: req.user.role, alcance, filtros: leerFiltros(req.query) };
   }
 
   // Quiénes son «mis clientes» (o los de un vendedor): lo usan el Directorio y Contratos cuando el Dashboard
@@ -68,6 +71,25 @@ export class VentasAnaliticaController {
     @Query('hasta') hasta?: string,
   ) {
     return this.analitica.embudo(req.user.companyId, this.alcance(req, alcance), desde, hasta);
+  }
+
+  // Provincias y ciudades para los filtros del Dashboard (2026-11-17).
+  @Get('lugares')
+  @Section('VENTAS', 'view')
+  lugares(@Req() req: any) {
+    return this.analitica.lugares(req.user.companyId);
+  }
+
+  // Clientes nuevos / impactados / recurrentes del periodo (2026-11-17).
+  @Get('clientes-impactados')
+  @Section('VENTAS', 'view')
+  clientesImpactados(
+    @Req() req: any,
+    @Query('alcance') alcance?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+  ) {
+    return this.analitica.clientesImpactados(req.user.companyId, this.alcance(req, alcance), desde, hasta);
   }
 
   @Get('aceptacion')

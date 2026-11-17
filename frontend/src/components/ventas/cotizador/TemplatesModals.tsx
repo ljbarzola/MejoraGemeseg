@@ -83,7 +83,10 @@ export function TemplatesModal({
     }
   };
 
+  // La vista previa y el diálogo de eliminar son HERMANOS del fondo de esta ventana (no hijos): si no, un clic
+  // en su fondo oscuro burbujearía al `onClick={onClose}` de aquí y cerraría también las plantillas (2026-11-13).
   return (
+    <>
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal modal-ventas-lg"
@@ -165,6 +168,7 @@ export function TemplatesModal({
           </button>
         </div>
       </div>
+    </div>
 
       {preview && <TemplatePreview t={preview} byCode={byCode} onClose={() => setPreview(null)} onLoad={() => onLoad(preview)} />}
       {aEliminar && (
@@ -177,7 +181,7 @@ export function TemplatesModal({
           onCancel={() => setAEliminar(null)}
         />
       )}
-    </div>
+    </>
   );
 }
 

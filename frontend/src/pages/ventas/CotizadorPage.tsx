@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FolderOpen, FileText, Lock, Package, Printer, Save, Plus, RotateCcw, Share2 } from 'lucide-react';
+import { FolderOpen, FileText, Lock, Package, Printer, Save, Plus, RotateCcw, Send, TriangleAlert, Users } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import DateInput from '../../components/common/DateInput';
 import ErrorBanner from '../../components/common/ErrorBanner';
@@ -16,6 +17,7 @@ import ProductDetailModal from '../../components/ventas/cotizador/ProductDetailM
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import QuoteDetail from '../../components/ventas/cotizador/QuoteDetail';
 import CustodiaModal from '../../components/ventas/cotizador/CustodiaModal';
+import EnviarClienteModal from '../../components/ventas/cotizador/EnviarClienteModal';
 import QuotePrint from '../../components/ventas/cotizador/QuotePrint';
 import QuoteTotals from '../../components/ventas/cotizador/QuoteTotals';
 import { EditAccessModal, ShareQuoteModal } from '../../components/ventas/cotizador/ShareModals';
@@ -27,6 +29,7 @@ import { getUser } from '../../services/auth.service';
 import { getMe } from '../../services/user.service';
 import { getSalesContacts, type SalesClient, type SalesContact } from '../../services/ventas.service';
 import ClienteDirectorioInput from '../../components/ventas/cotizador/ClienteDirectorioInput';
+import OportunidadSelector, { elegidaDe } from '../../components/ventas/cotizador/OportunidadSelector';
 import { TELEFONO_POR_DEFECTO } from '../../utils/telefono';
 import {
   changeCotQuoteStatus,
@@ -36,11 +39,19 @@ import {
   deleteCotQuote,
   deleteCotTemplate,
   getCotCatalogo,
+  getCotLimites,
   getCotKits,
   getCotNextNumber,
+  getCotQuote,
+  getCotQuoteOportunidad,
   getCotQuotes,
   getCotTemplates,
+  setCotQuoteOportunidad,
   updateCotQuote,
+  getCotOportunidad,
+  marcarCotizacionPrincipal,
+  type CotDeOportunidad,
+  type CotOportunidadOpcion,
   type CotQuoteInput,
 } from '../../services/cotizador.service';
 import {
@@ -61,6 +72,7 @@ import {
   withSnapshots,
   type PriceChange,
 } from '../../utils/cotizador/pricing';
+import { calcularAlertas, SIN_LIMITES, type CotLimites } from '../../utils/cotizador/alertas';
 import { addInstall, addKit, addOrReplaceCustodia, addProduct } from '../../utils/cotizador/quoteState';
 import type { CotCustodiaLine } from '../../utils/cotizador/custodia';
 import type {
@@ -181,6 +193,16 @@ export default function CotizadorPage() {
     recargarCatalogo();
   }, [recargarCatalogo]);
 
+  // ---------------- Límites de precio (solo avisos) ----------------
+  const [limites, setLimites] = useState<CotLimites>(SIN_LIMITES);
+  useEffect(() => {
+    getCotLimites()
+      .then(setLimites)
+      .catch(() => {
+        /* sin límites cargados no hay avisos; nunca se bloquea cotizar */
+      });
+  }, []);
+
   // ---------------- Borrador de la cotización ----------------
   const [draft, setDraft] = useState<QuoteDraft>(() => emptyDraft());
   const restaurado = useRef(false);
@@ -227,6 +249,26 @@ export default function CotizadorPage() {
 
   const readOnly = draft.quoteId !== null && draft.access !== 'owner' && draft.access !== 'editor';
 
+  // Firma de la última versión guardada: «Enviar al cliente» avisa si lo que hay en pantalla aún no se guardó
+  // (el cliente ve la versión guardada, no la de la pantalla).
+  const firmaGuardada = useRef<string | null>(null);
+  const firmaDe = (d: QuoteDraft) =>
+    JSON.stringify([d.quoteDate, d.client, d.items, d.supplierMargins, d.installMargin, d.discountType, d.discountValue, d.conditions, d.notes, d.oportunidad?.id ?? null]);
+  // Cotización guardada cuya oportunidad ya se consultó al servidor: solo entonces «sin oportunidad» en
+  // pantalla significa «se la quitaron» (y al guardar se quita también en el servidor).
+  const oportunidadLeidaDe = useRef<number | null>(null);
+  // Id de la oportunidad que el SERVIDOR tiene unida a la cotización en pantalla (null = ninguna o no se sabe).
+  const oportunidadGuardada = useRef<number | null>(null);
+  const oportunidadRef = useRef<HTMLInputElement | null>(null);
+  const [errorOportunidad, setErrorOportunidad] = useState(false);
+  const pedirOportunidad = (para: string) => {
+    setErrorOportunidad(true);
+    showToast(`Elige la oportunidad de esta cotización antes de ${para}.`, 'error');
+    oportunidadRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => oportunidadRef.current?.focus(), 300);
+  };
+  const [enviarCliente, setEnviarCliente] = useState(false);
+
   const comp = useMemo(
     () =>
       computeQuote({
@@ -239,6 +281,8 @@ export default function CotizadorPage() {
       }),
     [draft.items, draft.supplierMargins, draft.installMargin, draft.discountType, draft.discountValue, byCode],
   );
+  // Avisos de precio bajo: solo avisan, nunca impiden guardar ni enviar
+  const alertas = useMemo(() => calcularAlertas(comp, byCode, limites), [comp, byCode, limites]);
 
   // ---------------- Diálogos ----------------
   const [verHistorial, setVerHistorial] = useState(false);
@@ -344,6 +388,7 @@ export default function CotizadorPage() {
       showToast('✓ Copia creada — edítala y guárdala como tuya', 'success');
     } else {
       setDraft(d);
+      firmaGuardada.current = firmaDe(d);
       showToast(`✓ Cotización cargada: ${q.quoteNumber}`, 'success');
       const r = computeQuote({
         items: q.items,
@@ -356,8 +401,105 @@ export default function CotizadorPage() {
       if (r.priceChanges.length > 0) setCambiosPrecio(r.priceChanges);
     }
     setClientErrors({});
+    setErrorOportunidad(false);
     setVerHistorial(false);
+    // La oportunidad viene aparte. Una copia conserva la oportunidad del original (suele ser otra versión
+    // de la misma negociación); se puede cambiar antes de guardarla.
+    oportunidadLeidaDe.current = null;
+    oportunidadGuardada.current = null;
+    getCotQuoteOportunidad(q.id)
+      .then((r) => {
+        const opp = r.oportunidad ? elegidaDe(r.oportunidad) : null;
+        if (!copia) {
+          oportunidadLeidaDe.current = q.id;
+          oportunidadGuardada.current = opp?.id ?? null;
+        }
+        setDraft((d) => {
+          if (copia ? d.quoteId !== null : d.quoteId !== q.id) return d;
+          const nuevo = { ...d, oportunidad: opp };
+          if (!copia) firmaGuardada.current = firmaDe(nuevo);
+          return nuevo;
+        });
+      })
+      .catch(() => {
+        /* sin la oportunidad a la vista: al enviar se pedirá elegirla */
+      });
   };
+
+  // Elegir oportunidad: los datos del cliente pasan a ser los de esa oportunidad (la cotización es para ese
+  // cliente). Si ya estaban escritos los de otro cliente, se avisa del cambio.
+  const elegirOportunidad = async (o: CotOportunidadOpcion | null) => {
+    setErrorOportunidad(false);
+    if (!o) return patch({ oportunidad: null });
+    const mismo =
+      (o.cliente.ruc && o.cliente.ruc.trim() === draft.client.ruc.trim()) ||
+      o.cliente.nombre.trim().toLowerCase() === draft.client.name.trim().toLowerCase();
+    setDraft((d) => ({ ...d, oportunidad: elegidaDe(o) }));
+    if (!mismo) {
+      const habiaOtro = draft.client.name.trim() !== '';
+      await traerDelDirectorio({
+        id: o.cliente.id,
+        name: o.cliente.nombre,
+        ruc: o.cliente.ruc,
+        phone: o.cliente.telefono,
+        address: o.cliente.direccion,
+        email: o.cliente.email,
+      } as SalesClient);
+      if (habiaOtro) showToast(`Los datos del cliente se cambiaron a los de «${o.cliente.nombre}».`, 'success');
+    }
+  };
+
+  // Desde la notificación «Tu cotización fue vista» (/ventas/cotizador?cotizacion=<id>&seguimiento=1):
+  // se carga esa cotización y se abre su seguimiento. Espera al catálogo para calcular bien los precios.
+  const [searchParams, setSearchParams] = useSearchParams();
+  // «Cotizar» desde Oportunidades (/ventas/cotizador?oportunidad=<id>): cotización nueva con el cliente ya
+  // puesto y unida a esa oportunidad. Si hay una cotización sin guardar en pantalla, se pregunta antes.
+  const [cotizarPara, setCotizarPara] = useState<CotOportunidadOpcion | null>(null);
+  const empezarParaOportunidad = async (o: CotOportunidadOpcion) => {
+    setCotizarPara(null);
+    setDraft({ ...emptyDraft(), ownerName: user?.fullName ?? '', oportunidad: elegidaDe(o) });
+    setClientErrors({});
+    setErrorGuardar('');
+    setErrorOportunidad(false);
+    firmaGuardada.current = null;
+    oportunidadLeidaDe.current = null;
+    oportunidadGuardada.current = null;
+    await traerDelDirectorio({
+      id: o.cliente.id,
+      name: o.cliente.nombre,
+      ruc: o.cliente.ruc,
+      phone: o.cliente.telefono,
+      address: o.cliente.direccion,
+      email: o.cliente.email,
+    } as SalesClient);
+    showToast(`Nueva cotización para «${o.cliente.nombre}»`, 'success');
+  };
+  useEffect(() => {
+    const oppId = Number(searchParams.get('oportunidad'));
+    if (!oppId || cargando) return;
+    setSearchParams({}, { replace: true });
+    getCotOportunidad(oppId)
+      .then((o) => {
+        if (draftHasContent(draft) && draft.quoteId === null) setCotizarPara(o);
+        else void empezarParaOportunidad(o);
+      })
+      .catch((e) => showToast(apiError(e, 'No se pudo abrir esa oportunidad.'), 'error'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, cargando]);
+
+  useEffect(() => {
+    const id = Number(searchParams.get('cotizacion'));
+    if (!id || cargando) return;
+    const abrirSeguimiento = searchParams.get('seguimiento') === '1';
+    setSearchParams({}, { replace: true });
+    getCotQuote(id)
+      .then((q) => {
+        cargarCotizacion(q);
+        if (abrirSeguimiento) setEnviarCliente(true);
+      })
+      .catch((e) => showToast(apiError(e, 'No se pudo abrir esa cotización. Búscala en el Historial.'), 'error'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, cargando]);
 
   const cargarPlantilla = (t: CotTemplate) => {
     setDraft({
@@ -407,6 +549,47 @@ export default function CotizadorPage() {
       },
     });
     setClientErrors({});
+  };
+
+  // Monto de la oportunidad al guardar (2026-11-17, pedido de Leidy: nunca reemplazarlo en silencio).
+  //  · Esta cotización ya es la principal → el servidor ya puso su total: solo se avisa.
+  //  · No es la principal y se acaba de unir → se pregunta si su total pasa a ser el monto (la oportunidad tenía
+  //    un monto escrito a mano, u otra cotización principal). Si el monto ya es igual y no hay otra principal, se
+  //    marca sola sin preguntar.
+  //  · No es la principal y ya estaba unida → no se pregunta otra vez (se cambia en Oportunidades → «Marcar principal»).
+  const [preguntaMonto, setPreguntaMonto] = useState<{
+    quoteId: number;
+    oportunidadId: number;
+    total: number;
+    monto: number | null;
+    principalActual: CotDeOportunidad['principalActual'];
+  } | null>(null);
+  const dinero = (n: number | null) =>
+    n === null ? '—' : `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const decidirMonto = async (quoteId: number, oportunidadId: number, r: CotDeOportunidad, unionNueva: boolean) => {
+    if (r.total === null) return;
+    if (r.principal) {
+      showToast(`Monto de la oportunidad actualizado a ${dinero(r.total)}`, 'success');
+      return;
+    }
+    if (!r.principalActual && r.montoOportunidad !== null && Math.abs(r.montoOportunidad - r.total) < 0.005) {
+      await marcarCotizacionPrincipal(oportunidadId, quoteId).catch(() => undefined);
+      return;
+    }
+    if (unionNueva) {
+      setPreguntaMonto({ quoteId, oportunidadId, total: r.total, monto: r.montoOportunidad, principalActual: r.principalActual });
+    }
+  };
+  const usarComoMonto = async () => {
+    const p = preguntaMonto;
+    setPreguntaMonto(null);
+    if (!p) return;
+    try {
+      await marcarCotizacionPrincipal(p.oportunidadId, p.quoteId);
+      showToast(`Monto de la oportunidad actualizado a ${dinero(p.total)}`, 'success');
+    } catch (e) {
+      showToast(apiError(e, 'No se pudo cambiar el monto de la oportunidad. Hazlo desde Oportunidades → Editar → «Marcar principal».'), 'error');
+    }
   };
 
   const preguntarDuplicado = (numero: string, canUpdate: boolean) =>
@@ -474,7 +657,27 @@ export default function CotizadorPage() {
         }
       }
       if (saved) {
-        setDraft(draftFromQuote(saved));
+        // Unión con la oportunidad: se manda la elegida; «sin oportunidad» solo se manda si es la misma
+        // cotización y ya se sabía cuál tenía (si no, no se quitaría nada que no se vio).
+        const elegida = draft.oportunidad;
+        const mismaCotizacion = saved.id === draft.quoteId && oportunidadLeidaDe.current === saved.id;
+        // ¿Se acaba de unir a esta oportunidad (cotización nueva, o antes era de otra o de ninguna)?
+        const unionNueva = !mismaCotizacion || oportunidadGuardada.current !== (elegida?.id ?? null);
+        let oportunidad = elegida;
+        try {
+          if (elegida || mismaCotizacion) {
+            const r = await setCotQuoteOportunidad(saved.id, elegida?.id ?? null);
+            oportunidad = r.oportunidad ? elegidaDe(r.oportunidad) : null;
+            if (r.oportunidad) await decidirMonto(saved.id, r.oportunidad.id, r, unionNueva);
+          }
+          oportunidadLeidaDe.current = saved.id;
+          oportunidadGuardada.current = oportunidad?.id ?? null;
+        } catch (e) {
+          showToast(apiError(e, 'La cotización se guardó, pero no se pudo unir a la oportunidad. Intenta guardar de nuevo.'), 'error');
+        }
+        const d = { ...draftFromQuote(saved), oportunidad };
+        setDraft(d);
+        firmaGuardada.current = firmaDe(d);
         setClientErrors({});
       }
     } catch (e) {
@@ -503,6 +706,9 @@ export default function CotizadorPage() {
   // ---------------- Nueva cotización / imprimir ----------------
   const nuevaCotizacion = () => {
     setDraft({ ...emptyDraft(), ownerName: user?.fullName ?? '' });
+    oportunidadLeidaDe.current = null;
+    oportunidadGuardada.current = null;
+    setErrorOportunidad(false);
     setClientErrors({});
     setErrorGuardar('');
     if (user) clearDraftLocal(user.id);
@@ -711,6 +917,24 @@ export default function CotizadorPage() {
               <h2 className="cot-card-title">Datos del cliente</h2>
               <div className="cot-grid-2">
                 <div className="cot-field full">
+                  <label htmlFor="cot-opp">
+                    Oportunidad <span className="cot-muted" style={{ fontWeight: 400 }}>(obligatoria para enviar o descargar)</span>
+                  </label>
+                  <OportunidadSelector
+                    id="cot-opp"
+                    value={draft.oportunidad}
+                    client={draft.client}
+                    disabled={readOnly}
+                    puedeCrear={puedeEscribir}
+                    error={errorOportunidad}
+                    inputRef={(el) => {
+                      oportunidadRef.current = el;
+                    }}
+                    onChange={(o) => void elegirOportunidad(o)}
+                  />
+                  {errorOportunidad && !draft.oportunidad && <span className="field-error">Elige la oportunidad</span>}
+                </div>
+                <div className="cot-field full">
                   <label htmlFor="cot-c-name">
                     Cliente / Razón social <span className="req">*</span>
                   </label>
@@ -910,14 +1134,67 @@ export default function CotizadorPage() {
             <QuoteTotals totals={comp.totals} discountType={draft.discountType} discountValue={draft.discountValue} totalId="totalView" />
             </div>
 
+            {alertas.length > 0 && (
+              <div className="cot-alertas" role="alert">
+                <div className="cot-alertas-titulo">
+                  <TriangleAlert size={16} /> Precio bajo: revisa antes de enviar
+                </div>
+                <ul>
+                  {alertas.map((a) => (
+                    <li key={a.tipo}>
+                      {a.mensaje}
+                      {a.detalle.length > 0 && (
+                        <ul>
+                          {a.detalle.map((d) => (
+                            <li key={d}>{d}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="cot-alertas-nota">Es solo un aviso: puedes guardar la cotización igual.</p>
+              </div>
+            )}
+
             <ErrorBanner mensaje={errorGuardar} />
 
             <div className="cot-actions">
-              <button type="button" className="btn-secondary" onClick={() => window.print()}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => (draft.oportunidad ? window.print() : pedirOportunidad('descargar el PDF'))}
+              >
                 <Printer size={15} /> Imprimir / Guardar PDF
               </button>
               <button type="button" className="auth-btn" onClick={guardar} disabled={guardando || readOnly}>
                 <Save size={15} /> {guardando ? 'Guardando...' : 'Guardar cotización'}
+              </button>
+              {/* Enlace para el cliente: solo de una cotización guardada (el cliente ve la versión guardada) */}
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  // No se bloquea en silencio: lo recuperado del navegador (o una cotización nueva) aún no está
+                  // guardado y el cliente solo puede ver una cotización guardada.
+                  if (draft.quoteId === null) {
+                    showToast(
+                      'Primero guarda la cotización (o ábrela desde «Historial»): el cliente solo puede ver una cotización guardada.',
+                      'error',
+                    );
+                    return;
+                  }
+                  if (!draft.oportunidad) return pedirOportunidad('enviarla al cliente');
+                  // La oportunidad elegida aún no se guardó: el servidor no la conoce todavía.
+                  if (oportunidadGuardada.current !== draft.oportunidad.id) {
+                    showToast('Guarda la cotización para que quede unida a la oportunidad y luego envíala.', 'error');
+                    return;
+                  }
+                  setEnviarCliente(true);
+                }}
+                title="Enviar al cliente con un enlace"
+              >
+                <Send size={15} /> Enviar al cliente
               </button>
               <button
                 type="button"
@@ -944,7 +1221,7 @@ export default function CotizadorPage() {
                         .catch(() => showToast('No se pudo abrir la ventana para compartir', 'error'));
                   }}
                 >
-                  <Share2 size={15} /> Compartir
+                  <Users size={15} /> Compartir con mi equipo
                 </button>
               )}
             </div>
@@ -1012,6 +1289,23 @@ export default function CotizadorPage() {
         />
       )}
       {verAccesoEdicion && <EditAccessModal onClose={() => setVerAccesoEdicion(false)} />}
+      {enviarCliente && draft.quoteId !== null && (
+        <EnviarClienteModal
+          quoteId={draft.quoteId}
+          quoteNumber={draft.quoteNumber}
+          clienteNombre={draft.client.contact.split(' - ')[0] || draft.client.name}
+          clienteTelefono={draft.client.phone}
+          cambiosSinGuardar={firmaGuardada.current !== null && firmaGuardada.current !== firmaDe(draft)}
+          onClose={() => setEnviarCliente(false)}
+          onEstadoCambiado={() => {
+            const id = draft.quoteId;
+            if (id === null) return;
+            getCotQuote(id)
+              .then((q) => setDraft((d) => (d.quoteId === q.id ? { ...d, status: q.status } : d)))
+              .catch(() => undefined);
+          }}
+        />
+      )}
       {compartir && <ShareQuoteModal quoteId={compartir.id} quoteNumber={compartir.quoteNumber} onClose={() => setCompartir(null)} />}
       {elegirInstalacion && <InstallPicker installs={installs} onPick={onPickInstall} onClose={() => setElegirInstalacion(false)} />}
       {custodiaModal && <CustodiaModal inicial={custodiaModal.linea} onClose={() => setCustodiaModal(null)} onConfirm={onConfirmCustodia} />}
@@ -1048,6 +1342,29 @@ export default function CotizadorPage() {
           confirmLabel="Empezar nueva"
           onConfirm={nuevaCotizacion}
           onCancel={() => setConfirmNueva(false)}
+        />
+      )}
+      {preguntaMonto && (
+        <ConfirmDialog
+          title="Monto de la oportunidad"
+          message={
+            preguntaMonto.principalActual
+              ? `La cotización principal de esta oportunidad es ${preguntaMonto.principalActual.quoteNumber} (${dinero(preguntaMonto.principalActual.total)}). ¿Hacer esta la principal? Su total, ${dinero(preguntaMonto.total)}, pasará a ser el monto de la oportunidad.`
+              : `Esta oportunidad tiene ${dinero(preguntaMonto.monto)} como monto cotizado. ¿Usar el total de esta cotización (${dinero(preguntaMonto.total)}) como monto?`
+          }
+          confirmLabel="Usar esta cotización"
+          cancelLabel="Dejar el monto como está"
+          onConfirm={() => void usarComoMonto()}
+          onCancel={() => setPreguntaMonto(null)}
+        />
+      )}
+      {cotizarPara && (
+        <ConfirmDialog
+          title="Cotizar para la oportunidad"
+          message={`Tienes una cotización sin guardar en pantalla. ¿Descartarla y empezar una nueva para «${cotizarPara.cliente.nombre}»?`}
+          confirmLabel="Empezar nueva"
+          onConfirm={() => void empezarParaOportunidad(cotizarPara)}
+          onCancel={() => setCotizarPara(null)}
         />
       )}
       {soloAdmin && <SoloAdminDialog accion={soloAdmin} onClose={() => setSoloAdmin(null)} />}

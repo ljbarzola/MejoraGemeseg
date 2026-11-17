@@ -8,6 +8,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -15,10 +16,14 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
 import { Section } from '../../common/decorators/section.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CotizadorCatalogoService } from './cotizador-catalogo.service';
 import {
   CatalogoLoteDto,
+  CotLimitesDto,
   CotKitDto,
   CotTemplateDto,
   CreateCotInstallDto,
@@ -69,10 +74,61 @@ export class CotizadorCatalogoController {
     );
   }
 
+  // Historial general de cambios del catálogo (solo lectura, lo ve quien ve el Cotizador)
+  @Get('historial')
+  @Section('VENTAS', 'view')
+  historial(
+    @Req() req: any,
+    @Query('q') q?: string,
+    @Query('tipo') tipo?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+    @Query('userId') userId?: string,
+    @Query('pagina') pagina?: string,
+    @Query('limite') limite?: string,
+  ) {
+    const num = (v?: string) => (v && /^\d+$/.test(v) ? parseInt(v, 10) : undefined);
+    return this.catalogo.historial(req.user.companyId, {
+      q,
+      tipo,
+      desde,
+      hasta,
+      userId: num(userId),
+      pagina: num(pagina),
+      limite: num(limite),
+    });
+  }
+
+  @Get('historial/personas')
+  @Section('VENTAS', 'view')
+  personasHistorial(@Req() req: any) {
+    return this.catalogo.personasHistorial(req.user.companyId);
+  }
+
+  // Límites de precio de la empresa. Los ve quien usa el Cotizador (para mostrar los avisos);
+  // solo administradores y gerentes los cambian.
+  @Get('limites')
+  @Section('VENTAS', 'view')
+  limites(@Req() req: any) {
+    return this.catalogo.obtenerLimites(req.user.companyId);
+  }
+
+  @Put('limites')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Section('VENTAS', 'write')
+  guardarLimites(@Req() req: any, @Body() dto: CotLimitesDto) {
+    return this.catalogo.guardarLimites(
+      req.user.companyId,
+      dto,
+      req.user.userId,
+    );
+  }
+
   @Post('catalogo/lote')
   @Section('VENTAS', 'write')
   lote(@Req() req: any, @Body() dto: CatalogoLoteDto) {
-    return this.catalogo.lote(req.user.companyId, dto);
+    return this.catalogo.lote(req.user.companyId, dto, req.user.userId);
   }
 
   // ---- Productos ----
@@ -80,7 +136,7 @@ export class CotizadorCatalogoController {
   @Post('productos')
   @Section('VENTAS', 'write')
   crearProducto(@Req() req: any, @Body() dto: CreateCotProductDto) {
-    return this.catalogo.crearProducto(req.user.companyId, dto);
+    return this.catalogo.crearProducto(req.user.companyId, dto, req.user.userId);
   }
 
   @Patch('productos/:id')
@@ -90,14 +146,23 @@ export class CotizadorCatalogoController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCotProductDto,
   ) {
-    return this.catalogo.actualizarProducto(req.user.companyId, id, dto);
+    return this.catalogo.actualizarProducto(
+      req.user.companyId,
+      id,
+      dto,
+      req.user.userId,
+    );
   }
 
   // "Eliminar" desactiva el producto: las cotizaciones que lo usaron no se tocan.
   @Delete('productos/:id')
   @Section('VENTAS', 'write')
   desactivarProducto(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
-    return this.catalogo.desactivarProducto(req.user.companyId, id);
+    return this.catalogo.desactivarProducto(
+      req.user.companyId,
+      id,
+      req.user.userId,
+    );
   }
 
   // ---- Servicios de instalación ----
@@ -105,7 +170,11 @@ export class CotizadorCatalogoController {
   @Post('instalaciones')
   @Section('VENTAS', 'write')
   crearInstalacion(@Req() req: any, @Body() dto: CreateCotInstallDto) {
-    return this.catalogo.crearInstalacion(req.user.companyId, dto);
+    return this.catalogo.crearInstalacion(
+      req.user.companyId,
+      dto,
+      req.user.userId,
+    );
   }
 
   @Patch('instalaciones/:id')
@@ -115,7 +184,12 @@ export class CotizadorCatalogoController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCotInstallDto,
   ) {
-    return this.catalogo.actualizarInstalacion(req.user.companyId, id, dto);
+    return this.catalogo.actualizarInstalacion(
+      req.user.companyId,
+      id,
+      dto,
+      req.user.userId,
+    );
   }
 
   @Delete('instalaciones/:id')
@@ -124,7 +198,11 @@ export class CotizadorCatalogoController {
     @Req() req: any,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    return this.catalogo.desactivarInstalacion(req.user.companyId, id);
+    return this.catalogo.desactivarInstalacion(
+      req.user.companyId,
+      id,
+      req.user.userId,
+    );
   }
 
   // ---- Kits ----

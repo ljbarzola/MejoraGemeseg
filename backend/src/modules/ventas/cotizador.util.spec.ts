@@ -5,6 +5,7 @@ import {
   canEditQuote,
   canShareQuote,
   codeWidth,
+  diffCatalogo,
   ecuadorToday,
   formatCode,
   formatQuoteNumber,
@@ -38,6 +39,66 @@ describe('códigos del catálogo', () => {
     expect(parseCodeNumber('EQUIPO', 'MT-0017')).toBeNull();
     expect(parseCodeNumber('EQUIPO', 'EQ-12ab')).toBeNull();
     expect(parseCodeNumber('EQUIPO', 'SWITCH 5 PUERTOS')).toBeNull();
+  });
+});
+
+describe('diffCatalogo() - historial de cambios del catálogo', () => {
+  const antes = {
+    name: 'Cámara',
+    unitCost: '85.0000', // Decimal de Prisma llega como texto
+    hasProfit: true,
+    supplier: 'Hikvision',
+    lastUpdate: null,
+  };
+
+  it('devuelve solo lo que cambió, con el valor normalizado', () => {
+    const r = diffCatalogo('PRODUCTO', antes, {
+      ...antes,
+      unitCost: 92,
+      supplier: 'Sisegusa',
+    });
+    expect(r).toEqual([
+      { campo: 'supplier', valorAntes: 'Hikvision', valorDespues: 'Sisegusa' },
+      { campo: 'unitCost', valorAntes: '85', valorDespues: '92' },
+    ]);
+  });
+
+  it('«Lleva ganancia» y «Lleva instalación» no se registran', () => {
+    expect(
+      diffCatalogo('PRODUCTO', antes, {
+        ...antes,
+        hasProfit: false,
+        hasInstall: true,
+      }),
+    ).toEqual([]);
+  });
+
+  it('85.0000 y 85 son el mismo costo: no es un cambio', () => {
+    expect(diffCatalogo('PRODUCTO', antes, { ...antes, unitCost: 85 })).toEqual(
+      [],
+    );
+  });
+
+  it('texto vacío y null cuentan igual; los espacios sobrantes no son un cambio', () => {
+    expect(
+      diffCatalogo('PRODUCTO', { ...antes, supplier: '' }, {
+        ...antes,
+        supplier: null,
+        lastUpdate: '',
+        name: ' Cámara ',
+      }),
+    ).toEqual([]);
+  });
+
+  it('una instalación solo compara sus propios campos', () => {
+    const r = diffCatalogo(
+      'INSTALACION',
+      { name: 'Cableado', unitCost: 10, supplier: 'a' },
+      { name: 'Cableado', unitCost: 12, supplier: 'b' },
+    );
+    expect(r).toEqual([
+      { campo: 'unitCost', valorAntes: '10', valorDespues: '12' },
+    ]);
   });
 });
 

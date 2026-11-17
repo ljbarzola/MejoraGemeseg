@@ -44,6 +44,14 @@ import { CotizadorCotizacionesService } from './cotizador-cotizaciones.service';
 import { CotizadorCotizacionesController } from './cotizador-cotizaciones.controller';
 import { CotizadorCustodiaService } from './cotizador-custodia.service';
 import { CotizadorCustodiaController } from './cotizador-custodia.controller';
+import { CotizadorEnlacesService } from './cotizador-enlaces.service';
+import {
+  CotizadorEnlacePublicoController,
+  CotizadorEnlacesController,
+} from './cotizador-enlaces.controller';
+import { CotizadorOportunidadService } from './cotizador-oportunidad.service';
+import { CotizadorOportunidadController } from './cotizador-oportunidad.controller';
+import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { PersonalModule } from '../personal/personal.module';
 import { PermissionsModule } from '../permissions/permissions.module';
@@ -61,6 +69,8 @@ import { VentasUbicacionesService } from './ventas-ubicaciones.service';
     PermissionsModule,
     NotificationsModule,
     MailModule,
+    // Solo por JwtService: la página pública de la cotización reconoce al propio equipo (no cuenta como vista del cliente).
+    AuthModule,
   ],
   controllers: [
     VentasController,
@@ -86,6 +96,9 @@ import { VentasUbicacionesService } from './ventas-ubicaciones.service';
     CotizadorCatalogoController,
     CotizadorCotizacionesController,
     CotizadorCustodiaController,
+    CotizadorEnlacesController,
+    CotizadorEnlacePublicoController,
+    CotizadorOportunidadController,
   ],
   providers: [
     VentasService,
@@ -112,6 +125,8 @@ import { VentasUbicacionesService } from './ventas-ubicaciones.service';
     CotizadorCatalogoService,
     CotizadorCotizacionesService,
     CotizadorCustodiaService,
+    CotizadorEnlacesService,
+    CotizadorOportunidadService,
   ],
   exports: [
     VentasCicloService,

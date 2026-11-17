@@ -1935,6 +1935,8 @@ model ClientVisit {
   isVerified      Boolean       @default(false)
   checkInResult   String?
   checkInDistanceM Int?
+  // 2026-11-17: motivo de una visita que no se cumplió (columna nula creada al arrancar, sales-visit.schema.ts).
+  cancelMotivo     String?
   commercialOffer String?
   quotedAmount    Float?        @default(0)
   outcome         VisitOutcome?
@@ -3515,6 +3517,8 @@ model CotProduct {
   supplier    String   @default("")
   lastUpdate  String?
   notes       String   @default("")
+  // Precio mínimo de venta antes de IVA (2026-11-12). Vacío = sin mínimo. Solo genera un aviso.
+  minPrice    Decimal? @db.Decimal(15, 4)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

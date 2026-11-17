@@ -14,6 +14,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
 import { Section } from '../../common/decorators/section.decorator';
 import { VentasClientesService } from './ventas-clientes.service';
+import { leerFiltros } from './ventas-segmento.util';
 import {
   CreateSalesClientDto,
   UpdateSalesClientDto,
@@ -152,7 +153,8 @@ export class VentasClientesController {
     return this.clientesService.getDashboard(
       req.user.companyId,
       { userId: req.user.userId, role: req.user.role },
-      { desde, hasta, responsable, hoy },
+      // Filtros del Dashboard (2026-11-17): los mismos que las demás pestañas (ventas-segmento.util.ts).
+      { desde, hasta, responsable, hoy, filtros: leerFiltros(req.query) },
     );
   }
 

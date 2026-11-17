@@ -89,11 +89,14 @@ Pedido de Leidy tras comparar el PDF del original (`COT-…`) con el de la app: 
 
 ## Endpoints (`/ventas/cotizador`, `VENTAS` ver/escribir; rutas fijas antes de las de `:id`)
 
+- Historial del catálogo (punto 12): `GET historial` (`?q=&tipo=&desde=&hasta=&userId=&pagina=&limite=`), `GET historial/personas`.
+- Límites de precio (punto 13): `GET limites` (quien ve el Cotizador), `PUT limites` (solo ADMIN/MANAGER).
 - Catálogo: `GET catalogo` (`?incluirInactivos=true`), `GET siguiente-codigo?tipo=`, `POST catalogo/lote`, `POST/PATCH/DELETE productos(/:id)`, `POST/PATCH/DELETE instalaciones(/:id)`.
 - Kits: `GET/POST kits`, `PATCH/DELETE kits/:id`. Plantillas: `GET/POST plantillas`, `PATCH/DELETE plantillas/:id`.
 - Cotizaciones: `GET cotizaciones`, `GET cotizaciones/siguiente-numero`, `GET cotizaciones/verificar-numero`, `POST cotizaciones`, `GET/PATCH/DELETE cotizaciones/:id`, `PATCH cotizaciones/:id/estado`, `POST cotizaciones/:id/copiar`.
 - Compartir: `GET cotizaciones/:id/compartidos`, `POST cotizaciones/:id/compartir`, `DELETE cotizaciones/:id/compartir/:userId`, `GET usuarios`, `GET/POST accesos-edicion`, `DELETE accesos-edicion/:userId`.
 - Custodia móvil (sección «Custodia móvil», 2026-11-16): `GET custodia/tarifas`, `PUT custodia/tarifas` (solo ADMIN/MANAGER), `POST custodia/calcular`; la ruta del mapa es `GET /ventas/ubicaciones/ruta`.
+- Enlace para el cliente (punto 14): `GET cotizaciones/:id/enlace` (ver), `POST cotizaciones/:id/enlace` y `DELETE cotizaciones/:id/enlace` (escribir; dueño o edición total). Públicas, sin sesión: `GET /public/cotizaciones/:token`, `POST /public/cotizaciones/:token/visitas`, `POST /public/cotizaciones/:token/visitas/:visita/latido`, `POST /public/cotizaciones/:token/respuesta`.
 
 ## Catálogo, totales e importación del original (2026-10-30)
 
@@ -104,6 +107,50 @@ Pedido de Leidy tras comparar el PDF del original (`COT-…`) con el de la app: 
 ## Historial de cotizaciones: tabla (2026-11-06)
 
 La tabla del historial tenía las celdas de cliente y vendedor apiladas en una sola columna: usaban `className="truncate"` en el `<td>`, y esa clase es `display: block`, así que sacaba la celda de la tabla (la misma causa que ya se había arreglado en el catálogo). El recorte va en un `<span className="truncate" title=...>` dentro del `<td>`. El Total se alinea a la derecha (`cot-num`), las cifras de arriba dicen «borradores» (no «borradors») y los anchos de columna suman menos que el ancho útil de la ventana `lg` (920 px) para que no salga barra horizontal; el estilo compacto es el del catálogo (`.cot-hist-wrap` en `cotizador.css`; ese archivo está en Latin-1, editarlo en binario).
+
+## 12. Historial de cambios del catálogo (2026-11-12, local, sin desplegar)
+
+**Por qué:** cualquier persona con permiso de escribir en Ventas puede cambiar el costo de un producto del catálogo, que es global para la empresa, y no quedaba rastro de quién lo hizo ni qué valor tenía antes (solo `updatedAt`). Pedido del equipo comercial: limitar la edición de precios, aprobar cambios, alertas de precio bajo y un link único para el cliente. **Orden decidido con Leidy:** primero el historial (sin él no se puede aprobar ni alertar con sentido), después alertas y descuento con límite, después solicitudes de cambio con aprobación, y el link único aparte.
+
+**Decisiones de Leidy (esta entrega):**
+- **Solo historial**: nadie pierde permisos todavía (los vendedores siguen editando el catálogo).
+- **Un historial general, no por producto**: los cambios de precio son raros, lo útil es ver qué cambió en el catálogo y quién lo hizo. Rechazó la vista «Historial» en el menú «⋯» de cada fila. El producto es solo un filtro (buscar por código o nombre).
+- **Qué se registra**: crear, eliminar y editar (costos, proveedor, nombre, categoría, unidad, notas). **«Lleva ganancia» y «Lleva instalación» NO se registran** (Leidy, 2026-11-12: «un poquito de más»). Kits y plantillas no entran.
+- En pantalla se dice **«Eliminó»**, igual que el botón «Eliminar»; por dentro sigue siendo desactivar (punto 3). No hay opción «desactivar» nueva.
+
+**Cómo funciona:**
+- Tabla nueva `CotCambio` (arranque, `cotizador.schema.ts`; un renglón por campo cambiado en `EDITO`, uno solo en `CREO`/`ELIMINO`; `userNombre` se copia para que el nombre sobreviva si el usuario se borra; `valorAntes`/`valorDespues` en texto normalizado). Migración solo de referencia: `prisma/migrations/20261112_cotizador_historial/`.
+- Lo escribe el **servidor** en la misma transacción del cambio (`anotar` en `cotizador-catalogo.service.ts`): si el guardado falla, el historial tampoco queda. Cubre crear, editar, eliminar y el lote (`POST catalogo/lote`). Si se guarda sin cambiar nada, o se elimina algo ya desactivado, no se anota nada. La comparación es la función pura `diffCatalogo` (`cotizador.util.ts`; `85.0000` = `85`, texto vacío = `null`).
+- Campos que cuentan como «precio» (`CAMPOS_PRECIO`): costo unitario/mensual/anual. Sirven al parámetro `tipo=precio|datos` de la API y a resaltar esas filas en negrita.
+- Lectura: `GET /ventas/cotizador/historial?q=&tipo=precio|datos|creo|elimino&desde=&hasta=&userId=&pagina=&limite=` y `GET historial/personas`, sección `VENTAS` ver (lo ve quien ve el Cotizador). Las fechas son días de Ecuador (UTC-5), también en el filtro.
+- Pantalla: Catálogo → pestaña «Historial» (a la derecha de Kits) → ventana `modal-ventas-lg` (`HistorialCatalogoModal.tsx`), columnas Fecha, Persona, Producto, Qué cambió, Antes, Después. **Es una tabla como las demás (decisión de Leidy, 2026-11-12):** los filtros viven en la cabecera de cada columna (`useColumnFilters` + `ColumnFilter`, con ordenar), arriba solo el buscador por código/nombre, «Columnas» (con fija elegible), limpiar y exportar, columnas redimensionables. Una primera versión con selectores de Tipo de cambio / Persona / Fecha sueltos por fuera se rechazó. Como los filtros son de columna, la ventana trae el historial completo (pedidos de 200, hasta 5.000 cambios) y filtra en el navegador; los parámetros de `GET historial` siguen existiendo pero esta pantalla no los usa. Las celdas hacen salto de línea (sin barra horizontal a 1530 px). Si la carga falla se muestra un mensaje corto fijo, no el texto del servidor.
+
+**No incluido / pendiente:** no se reconstruye el pasado (empieza al desplegar); sin bloqueo de edición, aprobaciones ni alertas; no registra cambios hechos por scripts/importaciones directas a la base (como el del 2026-10-30). Probado en local por pantalla (crear, editar costo, eliminar, filtros) y por API; las pruebas jest nuevas están escritas pero **sin ejecutar** hasta el ok de Leidy.
+
+## 13. Avisos de precio bajo y límites (2026-11-12, local, sin desplegar)
+
+**Pedido del equipo:** que un vendedor no pueda dañar el catálogo ni vender por debajo de lo razonable. Propuestas originales: edición solo a nivel de cotización, solicitudes de cambio con aprobación y alertas de precio bajo (sobre todo servicios). **Orden decidido con Leidy:** historial (punto 12) → **avisos** (este punto) → solicitudes con aprobación → link único para el cliente.
+
+**Decisiones de Leidy (esta entrega):**
+- **Solo aviso, no bloqueo**: hoy no existe quien apruebe, así que nada impide guardar ni enviar; el aviso lo ve quien cotiza.
+- Se vigilan **las tres cosas**: descuento máximo, ganancia mínima y precio mínimo por producto.
+- **Límites por empresa, definidos por administradores y gerentes**, con **un límite de descuento distinto para servicios**. Los vendedores los ven (pantalla de solo lectura) pero no los cambian.
+- El **historial** del punto 12 lo ve todo el que ve el Cotizador.
+
+**Cómo funciona (reglas en `frontend/src/utils/cotizador/alertas.ts`, función pura `calcularAlertas`, con `alertas.test.ts`):**
+- **Descuento máximo:** % del descuento sobre la base (también si el descuento es de valor fijo). Un límite para equipos/materiales/instalaciones y otro para servicios; si la cotización mezcla, manda el más bajo de los que aplican. Una cotización solo de servicios usa solo el límite de servicios.
+- **Ganancia mínima:** % de ganancia sobre el costo, **solo de lo que lleva ganancia** (equipos, materiales, instalaciones); un servicio se vende a su costo y no suma ni diluye. Cuenta el descuento (repartido en proporción) y los márgenes propios de cada línea.
+- **Precio mínimo por producto o servicio:** precio de venta unitario **antes de IVA**, con el descuento repartido en proporción; avisa con la lista de productos. Vacío o 0 = no vigila.
+- Vacío en cualquier límite = sin límite. Sin límites configurados no hay avisos. El aviso sale junto a los botones de guardar («Precio bajo: revisa antes de enviar … Es solo un aviso»), no se imprime en el PDF.
+
+**Datos:**
+- Tabla nueva `CotLimites` (una fila por empresa; `maxDescuentoPct`, `maxDescuentoServiciosPct`, `minGananciaPct`; arranque, `cotizador.schema.ts`).
+- **Columna nueva en tabla existente** `CotProduct.minPrice` (decimal, nula): se crea al arrancar en `src/prisma/cot-product-minprice.schema.ts` (misma regla que `User.phone`; protegida con `to_regclass` porque en una base nueva la tabla la crea `VentasSchemaService` después, y ahí la columna ya está en su `CREATE TABLE`). Migración solo de referencia: `prisma/migrations/20261112_cotizador_limites/`.
+- **Quién cambia qué:** `PUT /ventas/cotizador/limites` exige rol ADMIN o MANAGER (y `VENTAS` escribir); `GET limites` lo ve quien ve el Cotizador. El **precio mínimo** de un producto solo lo fijan ADMIN o MANAGER: el servidor responde 403 si otro rol lo cambia (guardar un producto que ya tiene mínimo sin tocarlo sí se permite), y el formulario lo muestra de solo lectura. Los cambios del precio mínimo quedan en el historial del punto 12 («Precio mínimo»).
+
+**Pantallas:** botón «Límites de precio» en el encabezado del Cotizador (lo abren todos; editan solo admin/gerente; ventana `modal-ventas-sm`), campo «Precio mínimo de venta» en el formulario de producto del Catálogo y columna opcional «Precio mínimo» en su tabla.
+
+**No incluido / pendiente:** no hay aprobación ni bloqueo; no se anotan los cambios de los límites de la empresa en el historial; los servicios de instalación no tienen precio mínimo (se venden por margen); el aviso no se guarda con la cotización (se calcula al abrirla con los límites de hoy). Probado en local por pantalla (aviso con los tres tipos, ventana de límites, formulario) y por API (403 a vendedor); pruebas jest y vitest escritas y pasando.
 
 ## Custodia móvil dentro del Cotizador (2026-11-16)
 
@@ -127,10 +174,54 @@ Pedido de Leidy: pasar al Cotizador la hoja de Google «GEMESEG | Cotizador de C
 
 **Pendiente / ojo:** el texto legal del PDF sigue diciendo «IVA del 15 %» (no se cambió); el servicio de rutas es público y de uso moderado (si se vuelve cuello de botella, cambiar `OSRM_URL` o contratar uno); sin pruebas de pantalla automáticas.
 
+## 14. Enviar al cliente con un enlace (2026-11-17, local, sin commit ni despliegue)
+
+**Pedido de Leidy:** «modernizarnos»: mandarle al cliente un enlace con su cotización en vez del PDF suelto, saber si la vio y cuánto tiempo, ideas para lucir mejor, y **seguridad ante todo: el cliente JAMÁS ve porcentajes de ganancia** (igual que el PDF). La idea venía solo como «opcional: enviar la cotización en PDF» en el plan del bot de WhatsApp; el diseño se acordó en esta sesión.
+
+**Decisiones de Leidy:** el enlace se comparte con **«Copiar»** y **«Enviar por WhatsApp»** (abre WhatsApp con el número del cliente y el mensaje escrito; no se envía nada desde Mejora, ni correo); **sí** se registra la apertura; el enlace **no vence** (solo se apaga a mano con «Desactivar enlace»); aprobó las ideas de presentación (página con la marca, asesor con WhatsApp/llamar, «Válida hasta», «Me interesa» / «Tengo dudas», «Actualizada el…»).
+
+**Seguridad (lo más importante):**
+- Los precios finales se calculan **en el servidor**: `cotizador-precios.util.ts` es la copia de `computeQuote` (`frontend/src/utils/cotizador/pricing.ts`) y devuelve **solo** precio unitario de venta, cantidad y total por línea, más los totales. La página pública recibe una **lista blanca** (`armarPagina` en `cotizador-enlaces.util.ts`): nada de costo, ganancia, margen, proveedor, `snap`, costos de la custodia ni ids internos. El teléfono y el correo **del propio cliente** sí van desde el 2026-11-17 (tarde), porque el PDF de la app los imprime y Leidy pidió que el PDF del enlace sea el mismo. **Si cambia una regla de `pricing.ts`, hay que cambiarla también en `cotizador-precios.util.ts`.** Verificado el 2026-11-17 comparando los dos cálculos sobre todas las cotizaciones de la BD local y casos armados con kits, instalaciones, servicios, márgenes propios, producto inexistente y precio congelado: iguales al centavo.
+- Código del enlace al azar de 192 bits (`randomBytes(24)`, 32 caracteres), nunca el número de la cotización; un código mal formado, inventado o apagado da el mismo 404 («ya no está disponible»), sin revelar si existió. Límite por IP (lectura 120 / 10 min, avisos de tiempo 600 / 10 min, respuestas 10 / hora) y máximo 10 respuestas por enlace al día. La IP no se guarda. Cabeceras `no-store` y `noindex`; la página pone `robots noindex` y `referrer no-referrer`.
+- Ruta pública **sin** `AuthGuard` (`/api/public/cotizaciones/...`), como las encuestas y las quejas.
+
+**Seguimiento:**
+- Cada apertura es una fila de `CotEnlaceVisita` con el tipo de equipo (celular/tablet/computadora, del User-Agent), un identificador al azar del navegador (para contar personas distintas; nada personal) y el tiempo a la vista: la página avisa cada 15 s **solo si está visible**; el servidor suma lo transcurrido con tope de 30 s por aviso y 4 h por visita, y al volver de otra pestaña (`reanudar`) no suma el rato oculto. **El tiempo es aproximado** y así se rotula.
+- **«Descargar PDF» sale IDÉNTICO al PDF de la app (pedido de Leidy, 2026-11-17 tarde).** La hoja impresa vive en UNA pieza, `components/ventas/cotizador/HojaCotizacion.tsx` (datos neutros, solo precios de venta): `QuotePrint.tsx` (el PDF del Cotizador) la arma con el cálculo de la pantalla y `CotizacionPublicaPage` con lo que manda el servidor; al imprimir la página pública se ocultan la barra y el contenido web y sale solo esa hoja (estilos `.cot-print-*` de `cotizador.css`, márgenes A4 de `styles.css`). Verificado: el HTML de las dos hojas es igual carácter por carácter en la cotización de prueba. Para que cuadre, el servidor manda además la cantidad por kit (`cantidadEnKit`), la categoría/subcategoría de cada instalación y el teléfono y correo del cliente. Un cambio de diseño del PDF se hace en `HojaCotizacion.tsx` y vale para los dos. La descarga queda marcada en la visita.
+- **Nombres (pedido de Leidy, 2026-11-17):** «Compartir» (dar a un compañero una cotización en solo lectura) se confundía con «Enviar al cliente»; ahora se llama **«Compartir con mi equipo»** (botón, acción del Historial y título de su ventana, icono de personas). «Compartir edición» del encabezado no cambió.
+- **Aperturas del propio equipo no cuentan:** si el navegador tiene sesión de la misma empresa, la página manda el token y la visita queda `interna` (la página lo avisa y las respuestas de prueba no se guardan).
+- La primera apertura del cliente pasa la cotización a «Vista» (si estaba en borrador o enviada) y deja una **notificación en la app** al dueño; cada «Me interesa»/«Tengo dudas» (con mensaje opcional, 500 caracteres) también. El aviso lleva a `/ventas/cotizador?cotizacion=<id>&seguimiento=1`, que carga la cotización y abre su seguimiento. Crear el enlace pasa «Borrador» a «Enviada».
+- Cambiar el estado ya no toca `updatedAt` (también `cambiarEstado` del Historial): la página dice «Actualizada el…» solo cuando cambió la cotización, no su estado.
+
+**Pantallas:** botón «Enviar al cliente» junto a «Guardar cotización» (bloqueado hasta guardar); ventana `EnviarClienteModal` (`modal-ventas-md`) con el enlace, «Copiar», «Enviar por WhatsApp», «Ver como el cliente», el aviso «Tienes cambios sin guardar» (el cliente ve la última versión guardada), «Lo que hizo el cliente» (veces, tiempo, PDF, primera/última vez, tabla de visitas, respuestas) y «Desactivar enlace» (diálogo propio). Crear/desactivar: dueño o edición total; ver el seguimiento: quien ve la cotización. Página pública `CotizacionPublicaPage` (`/cotizacion/:token`, fuera de `ProtectedLayout`; sin chat del agente aunque haya sesión), con los colores y el logo de la empresa, lista en celular (la tabla pasa a bloques) e impresión.
+
+**Tablas nuevas (al arrancar, `cotizador.schema.ts`, sin modelo Prisma; se consultan con SQL):** `CotEnlace` (un activo por cotización; desactivar lo conserva), `CotEnlaceVisita`, `CotEnlaceRespuesta`. Sin columnas nuevas en tablas existentes.
+
+**Verificado en local por pantalla (2026-11-17, servidor propio en 3100 + Vite en 5180):** crear enlace, mensaje de WhatsApp, página como cliente sin sesión (escritorio y 375 px sin desplazamiento lateral), respuesta «Me interesa», notificaciones, apertura desde la notificación, aviso de cambios sin guardar, visita interna no contada, desactivar y 404. **No probado:** el diálogo de impresión real («Descargar PDF»; sí se comparó el HTML de la hoja con el de la app), WhatsApp abriéndose en un celular de verdad, y el enlace con el dominio de producción. Sin pruebas jest/vitest escritas para esto todavía.
+
+**Pendiente / ideas:** los datos de prueba (`PRUEBA enlace (borrar)`, COT-20261117-0005, y sus visitas) quedan en la BD local; el envío por correo desde Mejora no se hizo (decisión: solo copiar y WhatsApp).
+
+## 15. Cotización ↔ oportunidad (2026-11-17, local, sin commit ni despliegue)
+
+**Pedido del asesor comercial y decisiones de Leidy:** al cotizar se elige la oportunidad; **una oportunidad puede tener varias cotizaciones** (versiones o alternativas de la misma negociación, no son varias oportunidades). Debe funcionar **en los dos sentidos**: botón «Cotizar» en la oportunidad (abre el Cotizador prellenado y ya unido) **y** selector «Oportunidad» dentro del Cotizador. Elegirla es **obligatorio para enviar al cliente o descargar el PDF**, no para guardar un borrador. El monto de la oportunidad sale de la cotización que **el vendedor marca como principal** (descartado: «la aceptada o la última» y «escribirlo a mano»). La primera propuesta (solo desde el Cotizador) no la convenció; la de los dos sentidos sí.
+
+**Cómo quedó:**
+- Tabla nueva `CotQuoteOportunidad` (al arrancar, `cotizador.schema.ts`, sin modelo Prisma): `quoteId` (PK: una oportunidad por cotización), `opportunityId`, `principal` (índice único parcial: una principal por oportunidad), quién y cuándo. Borrar la cotización o la oportunidad borra la unión. Sin columnas nuevas en tablas existentes.
+- `cotizador-oportunidad.service.ts` / `.controller.ts`: buscar oportunidades abiertas (`GET /ventas/cotizador/oportunidades?q=`, por cliente, RUC o título), una (`GET .../oportunidades/:id`), unir/quitar (`GET|PUT /ventas/cotizador/cotizaciones/:id/oportunidad`, solo quien edita la cotización), cotizaciones de una oportunidad con su total (`GET /ventas/oportunidades/:id/cotizaciones`) y marcar principal (`POST /ventas/oportunidades/:id/cotizaciones/:quoteId/principal`, permiso VENTAS escritura).
+- El total (con IVA) se calcula en el servidor con `cotizador-precios.util.ts` (el mismo del enlace). La principal copia su total a `SalesOpportunity.quotedAmount` al marcarla y **cada vez que esa cotización se guarda** (`actualizar` → `sincronizarMonto`; si falla, se registra y no se cae el guardado); `quotedAt` solo se pone si estaba vacío. Al unir la primera cotización a una oportunidad **sin monto** queda principal sola (no pisa un monto escrito a mano). Quitar la unión no borra el monto.
+- **Nunca se reemplaza el monto en silencio (pedido de Leidy, 2026-11-17 tarde: «si cotizo y guardo, ¿por qué no se actualiza el valor?»).** Al guardar, `GET|PUT …/oportunidad` devuelve además el total de la cotización, el monto actual de la oportunidad y la principal actual, y la pantalla decide: si **ya es la principal** (o quedó principal sola porque la oportunidad no tenía monto) → aviso «Monto de la oportunidad actualizado a $X»; si **se acaba de unir y no es la principal** → pregunta «Esta oportunidad tiene $A. ¿Usar el total de esta cotización ($B) como monto?» o, si hay otra principal, «La principal es COT-… ($A). ¿Hacer esta la principal?», con «Usar esta cotización» / «Dejar el monto como está»; si el monto ya es igual y no hay otra principal, se marca sola. Una cotización que ya estaba unida y no es principal no vuelve a preguntar (se cambia en Oportunidades → «Marcar principal»). Probado en pantalla los tres casos.
+- «Enviar al cliente» exige la unión también en el servidor (`CotizadorEnlacesService.crear` → 400 «elige a qué oportunidad pertenece»).
+- **Cotizador:** campo «Oportunidad» arriba de «Datos del cliente» (`OportunidadSelector.tsx`): busca entre las abiertas, empieza por el RUC/nombre del cliente escrito, y «Crear oportunidad para «cliente»» la crea ahí mismo (busca la empresa en el Directorio por RUC o nombre exacto; si no está, la agrega con «solo datos» y los datos escritos en la cotización). Elegirla pone los datos de ese cliente (avisa si reemplaza a otro). La unión se guarda junto con «Guardar cotización» (`PUT` después de crear/actualizar); el borrador local la recuerda. `?oportunidad=<id>` (lo usa «Cotizar») empieza una cotización nueva prellenada y unida; si hay una sin guardar en pantalla, pregunta antes. «Imprimir / Guardar PDF» y «Enviar al cliente» sin oportunidad marcan el campo y no siguen; «Enviar» con una oportunidad elegida pero aún no guardada pide guardar. Una copia (Historial → «Crear copia») conserva la oportunidad del original.
+- **Oportunidades:** «⋯» → «Cotizar»; en «Editar» la sección «Cotizaciones» (`CotizacionesDeOportunidad.tsx`) lista número, fecha, estado, vendedor y total, con «Cotizar», «Marcar principal» y enlace para abrir la que el usuario puede ver; con principal, «Monto cotizado» queda bloqueado («Sale de la cotización principal») y no se envía al guardar.
+- **Ojo:** el cuadro de cambio de etapa a «Cotizada» todavía pide y guarda un monto a mano; si hay principal, el siguiente guardado de esa cotización lo vuelve a poner. No se tocó para no cambiar ese flujo sin preguntar.
+
+**Verificado en local por pantalla (3100/5180):** crear oportunidad desde el selector, guardar y unir (monto 148,48 = total en pantalla), «Cotizar» desde Oportunidades (cliente prellenado y aviso de borrador sin guardar), segunda cotización de la misma oportunidad (no principal), «Marcar principal» (el monto cambia a 21,33), «Enviar al cliente» con unión, y bloqueo de PDF/envío sin oportunidad. Datos de prueba en la BD local: oportunidad 145, cliente 188 «PRUEBA enlace (borrar)», cotizaciones 217 y 219.
+
 ## Rutas frontend
 
-- `/ventas/cotizador` (`SectionRoute section="VENTAS"`), página `pages/ventas/CotizadorPage.tsx`, componentes en `components/ventas/cotizador/`, lógica pura en `utils/cotizador/` (`types`, `pricing`, `quoteState`, `format`, `draft`), servicio `services/cotizador.service.ts`.
+- `/ventas/cotizador` (`SectionRoute section="VENTAS"`), página `pages/ventas/CotizadorPage.tsx`, componentes en `components/ventas/cotizador/`, lógica pura en `utils/cotizador/` (`types`, `pricing`, `quoteState`, `format`, `draft`), servicio `services/cotizador.service.ts`. Acepta `?cotizacion=<id>&seguimiento=1` (punto 14) y `?oportunidad=<id>` (punto 15).
+- `/cotizacion/:token` (pública, sin sesión): `pages/ventas/CotizacionPublicaPage.tsx` + `cotizacionPublica.css`, servicio `services/cotizacionPublica.service.ts` (punto 14).
 
 ## Modelos de Prisma relevantes
 
-`CotProduct`, `CotInstallService`, `CotCounter`, `CotQuoteSequence`, `CotKit`, `CotTemplate`, `CotQuote`, `CotQuoteShare`, `CotEditGrant`.
+`CotProduct`, `CotInstallService`, `CotCounter`, `CotQuoteSequence`, `CotKit`, `CotTemplate`, `CotQuote`, `CotQuoteShare`, `CotEditGrant`, `CotCambio` (historial, punto 12), `CotLimites` (punto 13); `CotProduct` tiene además `minPrice`. Sin modelo Prisma (SQL, punto 14): `CotEnlace`, `CotEnlaceVisita`, `CotEnlaceRespuesta`; (punto 15) `CotQuoteOportunidad`.

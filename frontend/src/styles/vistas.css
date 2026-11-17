@@ -71,6 +71,9 @@
   font-size: 0.78rem; line-height: 1.35; color: var(--v-suave);
 }
 @media (max-width: 760px) { .dash-barra-nota { margin-left: 0; text-align: left; max-width: none; } }
+/* Segunda barra: filtros por segmento (2026-11-17), pegada a la del periodo. */
+.dash-barra--filtros { margin-top: -8px; padding-top: 10px; padding-bottom: 10px; }
+.dash-barra--filtros .filter-select { max-width: 190px; }
 
 /* Franja de cifras: una tarjeta partida en celdas con líneas finas (nada de tarjetas altas sueltas). */
 .dash-kpis {

@@ -70,6 +70,13 @@ export class CreateCotProductDto {
 
   @IsOptional() @IsBoolean() hasProfit?: boolean;
   @IsOptional() @IsBoolean() hasInstall?: boolean;
+
+  /** Precio mínimo de venta antes de IVA. Solo administradores y gerentes pueden ponerlo. */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  @Max(MAX_DINERO)
+  minPrice?: number | null;
 }
 
 // Editar: todo opcional y sin `kind` ni `code` (no cambian nunca).
@@ -110,6 +117,34 @@ export class UpdateCotProductDto {
 
   @IsOptional() @IsBoolean() hasProfit?: boolean;
   @IsOptional() @IsBoolean() hasInstall?: boolean;
+
+  /** Precio mínimo de venta antes de IVA (null = quitarlo). Solo administradores y gerentes. */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  @Max(MAX_DINERO)
+  minPrice?: number | null;
+}
+
+/** Límites de precio de la empresa: avisos en la cotización. null o vacío = sin límite. */
+export class CotLimitesDto {
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
+  maxDescuentoPct?: number | null;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
+  maxDescuentoServiciosPct?: number | null;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(1000)
+  minGananciaPct?: number | null;
 }
 
 export class CreateCotInstallDto {

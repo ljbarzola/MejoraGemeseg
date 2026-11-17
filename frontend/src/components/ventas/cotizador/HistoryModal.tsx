@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Copy, FolderOpen, Share2, Trash2 } from 'lucide-react';
+import { Copy, FolderOpen, Trash2, Users } from 'lucide-react';
 import ClearFiltersButton from '../../common/ClearFiltersButton';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../common/ColumnFilter';
 import ColumnPickerMenu from '../../common/ColumnPickerMenu';
@@ -154,7 +154,7 @@ export default function HistoryModal({
 
   const acciones = (q: CotQuote): RowAction[] => {
     const a: RowAction[] = [{ label: 'Cargar', icon: <FolderOpen size={14} />, onClick: () => onLoad(q) }];
-    if (q.canShare) a.push({ label: 'Compartir', icon: <Share2 size={14} />, onClick: () => onShare(q) });
+    if (q.canShare) a.push({ label: 'Compartir con mi equipo', icon: <Users size={14} />, onClick: () => onShare(q) });
     if (q.access !== 'owner') a.push({ label: 'Crear copia', icon: <Copy size={14} />, onClick: () => onCopy(q) });
     if (q.canDelete) a.push({ label: 'Eliminar', icon: <Trash2 size={14} />, danger: true, onClick: () => setAEliminar(q) });
     return a;
@@ -178,7 +178,10 @@ export default function HistoryModal({
     </th>
   );
 
+  // El diálogo de eliminar es HERMANO del fondo de esta ventana (no hijo): si no, un clic en su fondo oscuro
+  // burbujearía al `onClick={onClose}` de aquí y cerraría también el historial (corregido 2026-11-13).
   return (
+    <>
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal modal-ventas-lg"
@@ -332,6 +335,7 @@ export default function HistoryModal({
           </button>
         </div>
       </div>
+    </div>
 
       {aEliminar && (
         <ConfirmDialog
@@ -343,6 +347,6 @@ export default function HistoryModal({
           onCancel={() => setAEliminar(null)}
         />
       )}
-    </div>
+    </>
   );
 }

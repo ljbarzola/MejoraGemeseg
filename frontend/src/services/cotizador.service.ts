@@ -1,4 +1,5 @@
 import { api } from './auth.service';
+import type { CotLimites } from '../utils/cotizador/alertas';
 import type {
   CotClientData,
   CotInstall,
@@ -27,6 +28,53 @@ export interface CotCatalogo {
 export const getCotCatalogo = (incluirInactivos = false): Promise<CotCatalogo> =>
   api.get('/ventas/cotizador/catalogo', { params: { incluirInactivos } }).then(r => r.data);
 
+// ---------- Límites de precio (avisos) ----------
+
+export const getCotLimites = (): Promise<CotLimites> =>
+  api.get('/ventas/cotizador/limites').then(r => r.data);
+
+/** Solo administradores y gerentes. null = sin límite. */
+export const saveCotLimites = (data: CotLimites): Promise<CotLimites> =>
+  api.put('/ventas/cotizador/limites', data).then(r => r.data);
+
+// ---------- Historial de cambios del catálogo ----------
+
+export interface CotCambio {
+  id: number;
+  creadoEn: string;
+  entidad: 'PRODUCTO' | 'INSTALACION';
+  codigo: string;
+  nombre: string;
+  accion: 'CREO' | 'EDITO' | 'ELIMINO';
+  campo: string;
+  campoEtiqueta: string;
+  campoTipo: 'dinero' | 'numero' | 'si_no' | 'texto';
+  esPrecio: boolean;
+  valorAntes: string | null;
+  valorDespues: string | null;
+  userId: number | null;
+  userNombre: string;
+}
+
+export interface CotHistorialFiltro {
+  q?: string;
+  /** precio | datos | creo | elimino */
+  tipo?: string;
+  desde?: string;
+  hasta?: string;
+  userId?: number;
+  pagina?: number;
+  limite?: number;
+}
+
+export const getCotHistorial = (
+  filtro: CotHistorialFiltro,
+): Promise<{ total: number; pagina: number; limite: number; items: CotCambio[] }> =>
+  api.get('/ventas/cotizador/historial', { params: filtro }).then(r => r.data);
+
+export const getCotHistorialPersonas = (): Promise<{ userId: number; nombre: string }[]> =>
+  api.get('/ventas/cotizador/historial/personas').then(r => r.data);
+
 export interface CotProductInput {
   kind?: CotKind; // solo al crear
   name: string;
@@ -44,6 +92,8 @@ export interface CotProductInput {
   annualCost?: number;
   hasProfit?: boolean;
   hasInstall?: boolean;
+  /** Precio mínimo de venta antes de IVA; null lo quita. Solo lo acepta el servidor de administradores y gerentes. */
+  minPrice?: number | null;
 }
 
 export const createCotProduct = (data: CotProductInput & { kind: CotKind }): Promise<CotProduct> =>
@@ -197,3 +247,100 @@ export const grantCotEditAccess = (userId: number): Promise<CotShareUser> =>
 
 export const revokeCotEditAccess = (userId: number) =>
   api.delete(`/ventas/cotizador/accesos-edicion/${userId}`).then(r => r.data);
+
+// ---------- Enlace para el cliente (2026-11-17) ----------
+
+export interface CotEnlaceSeguimiento {
+  /** Puede crear o desactivar el enlace (dueño o edición total). */
+  puedeGestionar: boolean;
+  enlace: { token: string; creadoEn: string; creadoPor: string } | null;
+  huboEnlaces: number;
+  resumen: {
+    aperturas: number;
+    personas: number;
+    segundos: number;
+    descargas: number;
+    primeraVista: string | null;
+    ultimaVista: string | null;
+    celular: number;
+    computadora: number;
+    tablet: number;
+    /** Aperturas del propio equipo (no cuentan). */
+    internas: number;
+  };
+  visitas: { inicio: string; segundos: number; dispositivo: string; descargoPdf: boolean }[];
+  respuestas: { tipo: 'interesa' | 'dudas'; mensaje: string; creadoEn: string }[];
+}
+
+export const getCotEnlace = (id: number): Promise<CotEnlaceSeguimiento> =>
+  api.get(`/ventas/cotizador/cotizaciones/${id}/enlace`).then(r => r.data);
+
+export const crearCotEnlace = (id: number): Promise<CotEnlaceSeguimiento> =>
+  api.post(`/ventas/cotizador/cotizaciones/${id}/enlace`).then(r => r.data);
+
+export const desactivarCotEnlace = (id: number): Promise<CotEnlaceSeguimiento> =>
+  api.delete(`/ventas/cotizador/cotizaciones/${id}/enlace`).then(r => r.data);
+
+/** Dirección pública que se le manda al cliente. */
+export const urlCotizacionPublica = (token: string): string =>
+  `${window.location.origin}/cotizacion/${token}`;
+
+// ---------------------------------------------------------------------------
+// Cotización ↔ oportunidad (2026-11-17)
+// ---------------------------------------------------------------------------
+
+/** Una oportunidad en el selector «Oportunidad» del Cotizador. */
+export interface CotOportunidadOpcion {
+  id: number;
+  titulo: string;
+  etapa: string;
+  abierta: boolean;
+  monto: number | null;
+  llegada: string;
+  responsable: string;
+  cliente: { id: number; nombre: string; ruc: string; direccion: string; telefono: string; email: string };
+}
+
+export interface CotDeOportunidad {
+  oportunidad: CotOportunidadOpcion | null;
+  principal: boolean;
+  /** Total (con IVA) de esta cotización calculado en el servidor; null si no está unida. */
+  total: number | null;
+  /** Monto cotizado que tiene hoy la oportunidad. */
+  montoOportunidad: number | null;
+  /** La cotización principal de la oportunidad cuando NO es esta. */
+  principalActual: { id: number; quoteNumber: string; total: number } | null;
+}
+
+/** Cotizaciones de una oportunidad (su ficha en Oportunidades). */
+export interface CotizacionesDeOportunidad {
+  montoOportunidad: number | null;
+  cotizaciones: {
+    id: number;
+    quoteNumber: string;
+    quoteDate: string;
+    status: string;
+    vendorName: string;
+    total: number;
+    principal: boolean;
+    puedeAbrir: boolean;
+  }[];
+}
+
+export const buscarCotOportunidades = (q: string): Promise<CotOportunidadOpcion[]> =>
+  api.get('/ventas/cotizador/oportunidades', { params: { q } }).then(r => r.data);
+
+export const getCotOportunidad = (id: number): Promise<CotOportunidadOpcion> =>
+  api.get(`/ventas/cotizador/oportunidades/${id}`).then(r => r.data);
+
+export const getCotQuoteOportunidad =(id: number): Promise<CotDeOportunidad> =>
+  api.get(`/ventas/cotizador/cotizaciones/${id}/oportunidad`).then(r => r.data);
+
+export const setCotQuoteOportunidad = (id: number, opportunityId: number | null): Promise<CotDeOportunidad> =>
+  api.put(`/ventas/cotizador/cotizaciones/${id}/oportunidad`, { opportunityId }).then(r => r.data);
+
+export const getCotizacionesDeOportunidad = (oppId: number): Promise<CotizacionesDeOportunidad> =>
+  api.get(`/ventas/oportunidades/${oppId}/cotizaciones`).then(r => r.data);
+
+export const marcarCotizacionPrincipal = (oppId: number, quoteId: number): Promise<CotizacionesDeOportunidad> =>
+  api.post(`/ventas/oportunidades/${oppId}/cotizaciones/${quoteId}/principal`).then(r => r.data);

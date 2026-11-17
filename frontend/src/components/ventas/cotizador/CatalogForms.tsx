@@ -28,6 +28,7 @@ export function ProductFormModal({
   product,
   subcategories,
   suppliers,
+  puedeFijarMinimo,
   onClose,
   onSaved,
 }: {
@@ -35,6 +36,8 @@ export function ProductFormModal({
   product: CotProduct | null;
   subcategories: string[];
   suppliers: string[];
+  /** Solo administradores y gerentes ponen el precio mínimo; los demás lo ven (si existe) pero no lo cambian. */
+  puedeFijarMinimo: boolean;
   onClose: () => void;
   onSaved: (p: CotProduct, creado: boolean) => void;
 }) {
@@ -54,6 +57,7 @@ export function ProductFormModal({
   const [hasInstall, setHasInstall] = useState(product?.hasInstall ?? true);
   const [lastUpdate, setLastUpdate] = useState(product?.lastUpdate ?? '');
   const [notes, setNotes] = useState(product?.notes ?? '');
+  const [minPrice, setMinPrice] = useState(product?.minPrice != null ? String(product.minPrice) : '');
   const [nextCode, setNextCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -76,6 +80,8 @@ export function ProductFormModal({
       unit: unit.trim() || (kind === 'SERVICIO' ? 'servicio' : 'u'),
       defaultQty: num(defaultQty) || 1,
       notes,
+      // Vacío = sin mínimo. Quien no puede fijarlo ni lo manda (el servidor también lo exige).
+      ...(puedeFijarMinimo ? { minPrice: minPrice.trim() === '' ? null : num(minPrice) } : {}),
       ...(kind === 'SERVICIO'
         ? { description, monthlyCost: num(monthlyCost), annualCost: num(annualCost) }
         : {
@@ -213,6 +219,26 @@ export function ProductFormModal({
                 </label>
               </div>
             </>
+          )}
+          {(puedeFijarMinimo || (product?.minPrice ?? null) !== null) && (
+            <div className="form-group">
+              <label htmlFor="cot-pf-min">Precio mínimo de venta ($, antes de IVA)</label>
+              <input
+                id="cot-pf-min"
+                type="number"
+                min={0}
+                step="0.01"
+                value={minPrice}
+                disabled={!puedeFijarMinimo}
+                onChange={(e) => setMinPrice(e.target.value)}
+                placeholder="Sin mínimo"
+              />
+              <p className="cot-muted" style={{ margin: '4px 0 0' }}>
+                {puedeFijarMinimo
+                  ? 'Si una cotización lo vende por debajo (con el descuento aplicado), aparece un aviso. No impide guardar. Déjalo vacío para no vigilarlo.'
+                  : 'Lo define un administrador o gerente. Si una cotización lo vende por debajo, aparece un aviso.'}
+              </p>
+            </div>
           )}
           <div className="form-group">
             <label htmlFor="cot-pf-notes">Observaciones</label>
