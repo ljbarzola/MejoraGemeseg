@@ -122,6 +122,9 @@ import { VentasUbicacionesService } from './ventas-ubicaciones.service';
     VentasTemplatesService,
     VentasContratosService,
     VentasClientesService,
+    // El bot de WhatsApp (whatsapp-bot/) crea posibles clientes y enlaza el código de la landing.
+    VentasLeadsService,
+    VentasWhatsappClicsService,
   ],
 })
 export class VentasModule {}

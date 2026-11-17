@@ -12,7 +12,8 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // rawBody: el aviso de WhatsApp (Meta) se valida con la firma del cuerpo EXACTO que llegó.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
 
   app.use(
     helmet({

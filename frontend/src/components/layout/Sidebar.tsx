@@ -182,6 +182,7 @@ export default function Sidebar() {
   const ventasItems: SubItem[] = [
     { label: 'Dashboard', path: '/ventas', icon: '📊' },
     { label: 'Posibles clientes', path: '/ventas/leads', icon: '📥', grupo: 'Captar' },
+    { label: 'Conversaciones', path: '/ventas/conversaciones', icon: '💬' },
     { label: 'Oportunidades', path: '/ventas/oportunidades', icon: '🎯', grupo: 'Negociar' },
     { label: 'Planificación y Campo', path: '/ventas/visitas', icon: '📍', disabled: !PLANIFICACION_Y_CAMPO_ACTIVA },
     { label: 'Cotizador', path: '/ventas/cotizador', icon: '🧾' },

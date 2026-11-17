@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Inbox, ListX, Package, Plug, Target, Truck } from 'lucide-react';
+import { Bot, Inbox, ListX, Package, Plug, Target, Truck } from 'lucide-react';
 import ErrorBanner from '../../components/common/ErrorBanner';
 import PageTabs from '../../components/common/PageTabs';
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
@@ -8,6 +8,7 @@ import ConexionesConfigSection from '../../components/ventas/ConexionesConfigSec
 import MotivosCatalogo from '../../components/ventas/MotivosCatalogo';
 import ServiciosConfigSection from '../../components/ventas/ServiciosConfigSection';
 import CustodiaTarifasSection from '../../components/ventas/CustodiaTarifasSection';
+import BotWhatsappConfigSection from '../../components/ventas/BotWhatsappConfigSection';
 import MetasConfigSection from '../../components/ventas/MetasConfigSection';
 import '../../styles/custodia.css';
 import { useCanalesLead } from '../../hooks/useCanalesLead';
@@ -29,8 +30,8 @@ const mensajeDe = (err: any, porDefecto: string) => {
 
 // `?tab=` se conserva tal cual: hay enlaces guardados. `descartes`, `perdidas` y `contratos`
 // eran listas de motivos aparte; hoy las tres se ven a la vez bajo «Motivos de cierre».
-type Seccion = 'conexiones' | 'fuentes' | 'servicios' | 'custodia' | 'metas' | 'descartes' | 'perdidas' | 'contratos';
-type Pestana = 'conexiones' | 'fuentes' | 'servicios' | 'custodia' | 'metas' | 'motivos';
+type Seccion = 'conexiones' | 'fuentes' | 'servicios' | 'custodia' | 'bot' | 'metas' | 'descartes' | 'perdidas' | 'contratos';
+type Pestana = 'conexiones' | 'fuentes' | 'servicios' | 'custodia' | 'bot' | 'metas' | 'motivos';
 
 type Icono = ComponentType<{ size?: number }>;
 
@@ -39,11 +40,12 @@ const PESTANAS: { key: Pestana; label: string; icono: Icono; primera: Seccion }[
   { key: 'fuentes', label: 'Fuentes', icono: Inbox, primera: 'fuentes' },
   { key: 'servicios', label: 'Servicios', icono: Package, primera: 'servicios' },
   { key: 'custodia', label: 'Tarifas de custodia', icono: Truck, primera: 'custodia' },
+  { key: 'bot', label: 'Bot de WhatsApp', icono: Bot, primera: 'bot' },
   { key: 'metas', label: 'Metas', icono: Target, primera: 'metas' },
   { key: 'motivos', label: 'Motivos de cierre', icono: ListX, primera: 'descartes' },
 ];
 
-const SECCIONES: Seccion[] = ['conexiones', 'fuentes', 'servicios', 'custodia', 'metas', 'descartes', 'perdidas', 'contratos'];
+const SECCIONES: Seccion[] = ['conexiones', 'fuentes', 'servicios', 'custodia', 'bot', 'metas', 'descartes', 'perdidas', 'contratos'];
 const SECCIONES_MOTIVOS: Seccion[] = ['descartes', 'perdidas', 'contratos'];
 
 const pestanaDe = (s: Seccion): Pestana => (SECCIONES_MOTIVOS.includes(s) ? 'motivos' : (s as Pestana));
@@ -96,6 +98,12 @@ export default function ConfiguracionVentasPage() {
           titulo: 'Tarifas de custodia',
           ayuda: 'Los costos con los que el Cotizador calcula una custodia móvil: vehículo, personal por región, viáticos, imprevistos, margen e IVA, más los extras opcionales.',
           detalle: 'Son costos internos: solo los cambia un administrador o gerente. Las cotizaciones ya hechas no cambian.',
+        }
+      : pestana === 'bot'
+        ? {
+          titulo: 'Bot de WhatsApp',
+          ayuda: 'El asistente que contesta los WhatsApp de posibles clientes y clientes. Aquí se enciende, se elige cuándo atienden los asesores y qué sabe.',
+          detalle: 'Las conversaciones se atienden en Conversaciones. Siempre avisa que es una IA y que los valores no son finales.',
         }
       : pestana === 'metas'
         ? {
@@ -160,6 +168,8 @@ export default function ConfiguracionVentasPage() {
             )}
 
             {seccion === 'custodia' && <CustodiaTarifasSection puedeEditar={puedeEditar} />}
+
+            {seccion === 'bot' && <BotWhatsappConfigSection puedeEditar={puedeEditar} />}
 
             {seccion === 'metas' && <MetasConfigSection puedeEditar={puedeEditar} />}
 

@@ -18,6 +18,7 @@ import { PermissionsModule } from './modules/permissions/permissions.module';
 import { CustodiasModule } from './modules/custodias/custodias.module';
 import { PersonalModule } from './modules/personal/personal.module';
 import { VentasModule } from './modules/ventas/ventas.module';
+import { WhatsappBotModule } from './modules/whatsapp-bot/whatsapp-bot.module';
 import { SistemasModule } from './modules/sistemas/sistemas.module';
 import { ContratacionPublicaModule } from './modules/contratacion-publica/contratacion-publica.module';
 import { OperacionesInventarioModule } from './modules/operaciones-inventario/operaciones-inventario.module';
@@ -44,6 +45,7 @@ import { ContabilidadModule } from './modules/contabilidad/contabilidad.module';
     CustodiasModule,
     PersonalModule,
     VentasModule,
+    WhatsappBotModule,
     SistemasModule,
     ContratacionPublicaModule,
     OperacionesInventarioModule,
