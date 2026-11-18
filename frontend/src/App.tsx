@@ -61,8 +61,8 @@ const CustodiasList = lazy(() => import('./pages/custodias/CustodiasList'));
 const PagosPage = lazy(() => import('./pages/contabilidad/PagosPage'));
 const ContabilidadDashboard = lazy(() => import('./pages/contabilidad/ContabilidadDashboard'));
 const TarifasPage = lazy(() => import('./pages/contabilidad/TarifasPage'));
-const CustodiasDashboard = lazy(() => import('./pages/custodias/CustodiasDashboard'));
 const CPEntidadesPublicasList = lazy(() => import('./pages/contratacion-publica/EntidadesPublicasList'));
+const CPDashboard = lazy(() => import('./pages/contratacion-publica/DashboardCPPage'));
 const CPEntidadDetail = lazy(() => import('./pages/contratacion-publica/entidades/EntidadDetail'));
 const CPMisDocumentos = lazy(() => import('./pages/contratacion-publica/MisDocumentosPage'));
 const CPPorRevisar = lazy(() => import('./pages/contratacion-publica/PorRevisarPage'));
@@ -494,14 +494,15 @@ function AppInner() {
         <Route path="/cacao/configuracion" element={<ProtectedLayout><SectionRoute section="CACAO"><ConfiguracionCacaoPage /></SectionRoute></ProtectedLayout>} />
         {/* La pantalla de calidades pasó a Configuración (2026-10-23); la URL vieja sigue funcionando. */}
         <Route path="/cacao/qualities" element={<ProtectedLayout><SectionRoute section="CACAO"><Navigate to="/cacao/configuracion?tab=calidades" replace /></SectionRoute></ProtectedLayout>} />
-        <Route path="/custodias" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><CustodiasList /></SectionRoute></ProtectedLayout>} />
-        <Route path="/custodias/dashboard" element={<ProtectedLayout><SectionRoute section="CUSTODIAS"><CustodiasDashboard /></SectionRoute></ProtectedLayout>} />
-        {/* «Nueva custodia» es una ventana del listado de Viajes y «Consulta por cédula» es el filtro de persona del listado (2026-11-16). */}
-        <Route path="/custodias/new" element={<Navigate to="/custodias?nueva=1" replace />} />
-        <Route path="/custodias/trabajador" element={<Navigate to="/custodias" replace />} />
-        {/* Nómina y GEME-BOT salieron de Custodias (2026-11-16): la nómina es de Contabilidad y GEME-BOT pasó a ser el Agente de Custodia del chat. */}
+        {/* Custodias ya no es un módulo (2026-11-18): los viajes son parte de Operaciones (permiso OPERACIONES).
+            Las direcciones viejas /custodias/* llevan a su lugar nuevo, conservando la búsqueda (?nueva=1, filtros). */}
+        <Route path="/operaciones/viajes" element={<ProtectedLayout><SectionRoute section="OPERACIONES"><CustodiasList /></SectionRoute></ProtectedLayout>} />
+        <Route path="/custodias" element={<RedirigirConParametros a="/operaciones/viajes" />} />
+        <Route path="/custodias/dashboard" element={<Navigate to="/operaciones?vista=custodias" replace />} />
+        <Route path="/custodias/new" element={<Navigate to="/operaciones/viajes?nueva=1" replace />} />
+        <Route path="/custodias/trabajador" element={<Navigate to="/operaciones/viajes" replace />} />
         <Route path="/custodias/nomina" element={<Navigate to="/contabilidad/pagos" replace />} />
-        <Route path="/custodias/gemebot" element={<Navigate to="/custodias/dashboard" replace />} />
+        <Route path="/custodias/gemebot" element={<Navigate to="/operaciones?vista=custodias" replace />} />
         <Route path="/contabilidad" element={<ProtectedLayout><SectionRoute section="CONTABILIDAD"><ContabilidadDashboard /></SectionRoute></ProtectedLayout>} />
         <Route path="/contabilidad/pagos" element={<ProtectedLayout><SectionRoute section="CONTABILIDAD"><PagosPage /></SectionRoute></ProtectedLayout>} />
         {/* Los extras y descuentos ya no son una pestaña: se abren desde «Pagos» (2026-11-16). */}
@@ -509,6 +510,8 @@ function AppInner() {
         <Route path="/contabilidad/nomina" element={<Navigate to="/contabilidad/pagos" replace />} />
         <Route path="/contabilidad/trabajador" element={<Navigate to="/contabilidad/pagos" replace />} />
         <Route path="/contabilidad/tarifas" element={<ProtectedLayout><SectionRoute section="CONTABILIDAD"><TarifasPage /></SectionRoute></ProtectedLayout>} />
+        {/* Dashboard (2026-11-18): primero del submenú; el encabezado del módulo abre aquí. */}
+        <Route path="/contratacion-publica" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPDashboard /></SectionRoute></ProtectedLayout>} />
         <Route path="/contratacion-publica/entidades" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPEntidadesPublicasList /></SectionRoute></ProtectedLayout>} />
         <Route path="/contratacion-publica/entidades/:id" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPEntidadDetail /></SectionRoute></ProtectedLayout>} />
         <Route path="/contratacion-publica/mis-documentos" element={<ProtectedLayout><SectionRoute section="CONTRATACION_PUBLICA"><CPMisDocumentos /></SectionRoute></ProtectedLayout>} />

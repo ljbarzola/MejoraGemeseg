@@ -2662,6 +2662,11 @@ model CPEntidadPublica {
   archivada     Boolean  @default(false)
   // PUBLICA (entidad del Estado) o PRIVADA (cliente privado): Operaciones los filtra aparte. Columna creada al arrancar (cp-informe-datos.schema.ts).
   tipo          String   @default("PUBLICA")
+  // Sector (lista según el tipo), provincia (las 24) y cantón (2026-11-18, Dashboard de Contratación
+  // Pública). Columnas creadas al arrancar (cp-informe-datos.schema.ts); listas en entidad-clasificacion.util.ts.
+  sector        String?
+  provincia     String?
+  canton        String?
   // Valores de los campos configurables (CPEntidadCampo): { "<idCampo>": valor }.
   camposExtra   Json?
   companyId     Int

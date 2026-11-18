@@ -22,6 +22,10 @@ export interface CPEntidadPublica {
   tipo?: TipoEntidad;
   ruc: string | null;
   direccion: string | null;
+  /** Sector (lista según el tipo), provincia y cantón (2026-11-18, ver utils/entidadClasificacion.ts). */
+  sector?: string | null;
+  provincia?: string | null;
+  canton?: string | null;
   /** Subcarpeta de la entidad en la carpeta raíz de Drive de Contratación Pública. */
   driveFolderId: string | null;
   /** Oculta de la lista (se ve con "Mostrar archivadas"); no borra nada. */

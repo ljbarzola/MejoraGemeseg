@@ -32,11 +32,11 @@ export const INTENT_SECTION: Record<string, string | null> = {
   cacao_proveedores_incompletos: 'CACAO',
   cacao_reglas: 'CACAO',
   // Custodias (2026-11-16): las consultas en vivo son del Agente de Custodia, sin dinero.
-  custodias_resumen: 'CUSTODIAS',
-  custodia_viajes: 'CUSTODIAS',
-  custodia_antiguedad: 'CUSTODIAS',
-  custodia_placas_puerto: 'CUSTODIAS',
-  custodia_top_hacienda: 'CUSTODIAS',
+  custodias_resumen: 'OPERACIONES',
+  custodia_viajes: 'OPERACIONES',
+  custodia_antiguedad: 'OPERACIONES',
+  custodia_placas_puerto: 'OPERACIONES',
+  custodia_top_hacienda: 'OPERACIONES',
   rrhh_resumen_personal: 'RRHH',
   // Ventas: todas leen Clientes/Contratos (ver ai-ventas.queries.ts). Los
   // nombres deben coincidir con los de capabilities-prompt.util.ts.

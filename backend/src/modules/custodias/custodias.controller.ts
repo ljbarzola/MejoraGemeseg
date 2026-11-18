@@ -35,13 +35,13 @@ export class CustodiasController {
 
   // Persona nueva desde el formulario del viaje («No existe, créalo aquí»): entra a la lista de Guardias de RRHH.
   @Post('personal')
-  @Section('CUSTODIAS', 'write')
+  @Section('OPERACIONES', 'write')
   crearPersona(@Body() dto: CreatePersonaCustodiaDto, @Req() req: any) {
     return this.personalService.crear(req.user.companyId, req.user.userId, dto);
   }
 
   @Post()
-  @Section('CUSTODIAS', 'write')
+  @Section('OPERACIONES', 'write')
   create(@Body() dto: CreateCustodiaDto, @Req() req: any) {
     return this.custodiasService.create(
       dto,
@@ -51,7 +51,7 @@ export class CustodiasController {
   }
 
   @Get()
-  @Section('CUSTODIAS', 'view')
+  @Section('OPERACIONES', 'view')
   findAll(
     @Req() req: any,
     @Query('fechaInicio') fechaInicio?: string,
@@ -68,25 +68,25 @@ export class CustodiasController {
   }
 
   @Get('available-custodios')
-  @Section('CUSTODIAS', 'view')
+  @Section('OPERACIONES', 'view')
   getAvailableCustodios(@Req() req: any) {
     return this.custodiasService.getAvailableCustodios(req.user.companyId);
   }
 
   @Get('dashboard')
-  @Section('CUSTODIAS', 'view')
+  @Section('OPERACIONES', 'view')
   getDashboard(@Req() req: any, @Query('mes') mes?: string) {
     return this.custodiasService.getDashboardStats(req.user.companyId, mes);
   }
 
   @Get(':id')
-  @Section('CUSTODIAS', 'view')
+  @Section('OPERACIONES', 'view')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.custodiasService.findOne(id, req.user.companyId);
   }
 
   @Get(':id/pdf')
-  @Section('CUSTODIAS', 'view')
+  @Section('OPERACIONES', 'view')
   async exportarPdf(
     @Param('id', ParseIntPipe) id: number,
     @Req() req: any,
@@ -109,7 +109,7 @@ export class CustodiasController {
   }
 
   @Patch(':id')
-  @Section('CUSTODIAS', 'write')
+  @Section('OPERACIONES', 'write')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCustodiaDto,
@@ -119,7 +119,7 @@ export class CustodiasController {
   }
 
   @Patch(':id/estado')
-  @Section('CUSTODIAS', 'write')
+  @Section('OPERACIONES', 'write')
   updateEstado(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateEstadoDto,
@@ -134,7 +134,7 @@ export class CustodiasController {
   }
 
   @Delete(':id')
-  @Section('CUSTODIAS', 'write')
+  @Section('OPERACIONES', 'write')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.custodiasService.remove(id, req.user.companyId);
   }

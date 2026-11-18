@@ -49,6 +49,10 @@ export interface CPEntidadPayload {
   tipo?: 'PUBLICA' | 'PRIVADA';
   ruc?: string;
   direccion?: string;
+  /** '' = sin dato. */
+  sector?: string;
+  provincia?: string;
+  canton?: string;
   camposExtra?: Record<string, string | number | null>;
 }
 
@@ -589,3 +593,32 @@ export const getMisDocumentos = (): Promise<CPDocumentoBandeja[]> =>
 /** Lo entregado y sin revisar, de todas las entidades (solo personal de Contratación Pública). */
 export const getPorRevisar = (): Promise<CPDocumentoBandeja[]> =>
   api.get(`${ENTREGAS}/por-revisar`).then((r) => r.data);
+
+// ---------------------------------------------------------------- Dashboard (2026-11-18)
+// Misma forma que devuelve armarDashboard (backend/src/modules/contratacion-publica/dashboard/cp-dashboard.util.ts).
+export interface DashboardCP {
+  hoy: string;
+  kpis: {
+    entidades: number; publicas: number; privadas: number; conContratoVigente: number;
+    porVencer30: number; porVencer60: number; porVencer90: number; valorVigente: number; vigentesSinValor: number;
+  };
+  datosPorCompletar: { entidadId: number; nombre: string; tipo: string; contratoId: number | null; faltan: string[] }[];
+  contratos: {
+    valorPorEntidad: { entidadId: number; nombre: string; tipo: string; contratos: number; valor: number }[];
+    valorPublicas: number;
+    valorPrivadas: number;
+    porVencer: { contratoId: number; numero: string; entidadId: number; entidadNombre: string; fechaFin: string; dias: number }[];
+  };
+  entregas: {
+    total: number; aTiempo: number; atrasadas: number; rechazadas: number; pendientes: number;
+    porEntidad: { entidadId: number; nombre: string; total: number; aTiempo: number; atrasadas: number; rechazadas: number; pendientes: number }[];
+  };
+  mapa: { sinProvincia: number; provincias: { provincia: string; lat: number; lng: number; entidades: number; puestos: number }[] };
+  operaciones: null | {
+    bitacoras: { total: number; conErrores: number; hallazgosAbiertos: number; porEntidad: { entidadId: number; nombre: string; hojas: number; conErrores: number; hallazgosAbiertos: number }[] };
+    faltas: { total: number; cubiertas: number; sinCubrir: number; visitas: number; porEntidad: { entidadId: number; nombre: string; faltas: number; cubiertas: number; sinCubrir: number; visitas: number }[] };
+  };
+}
+
+export const getDashboardCP = (params: { tipo?: 'PUBLICA' | 'PRIVADA'; desde: string; hasta: string }): Promise<DashboardCP> =>
+  api.get(`${BASE}/dashboard`, { params }).then((r) => r.data);

@@ -16,7 +16,7 @@ const SECCIONES_SIEMPRE_VISIBLES = ['DASHBOARD', 'PROJECTS'];
 
 const SECTION_ICONS: Record<string, string> = {
   DASHBOARD: '📊', PROJECTS: '📁', ADMIN: '👥',
-  CACAO: '🫘', COMPANY_SETTINGS: '🎨', COMPANIES: '🏢', CUSTODIAS: '🛡️', RRHH: '👤',
+  CACAO: '🫘', COMPANY_SETTINGS: '🎨', COMPANIES: '🏢', RRHH: '👤',
   VENTAS: '💼', SISTEMAS: '🖥️',
 };
 

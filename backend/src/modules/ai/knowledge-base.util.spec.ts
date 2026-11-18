@@ -4,7 +4,7 @@ import {
   findUnknownHeadings,
 } from './knowledge-base.util';
 
-const KNOWN_KEYS = ['CACAO', 'CUSTODIAS', 'RRHH', 'VENTAS'];
+const KNOWN_KEYS = ['CACAO', 'OPERACIONES', 'RRHH', 'VENTAS'];
 
 describe('parseKnowledgeBase / filterKnowledgeBase', () => {
   it('texto antes del primer encabezado se trata como GENERAL (heading null) y siempre se incluye', () => {

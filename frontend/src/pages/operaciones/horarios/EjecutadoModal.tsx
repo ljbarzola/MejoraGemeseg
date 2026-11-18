@@ -59,7 +59,7 @@ export default function EjecutadoModal({ horarioId, onClose }: Props) {
         </div>
         <div className="modal-body">
           <p style={{ fontSize: '0.85rem', color: '#4a5568', marginTop: 0 }}>
-            Es el horario programado más las faltas registradas con «No llegó» y quién las cubrió. También cruza los días de custodia con el módulo Custodias.
+            Es el horario programado más las faltas registradas con «No llegó» y quién las cubrió. También cruza los días de custodia con los viajes registrados.
             No cambia el horario: solo muestra qué se movió y qué conviene revisar.
           </p>
           {error && <div ref={errorRef} className="form-error" style={{ marginBottom: 12 }}>{error}</div>}

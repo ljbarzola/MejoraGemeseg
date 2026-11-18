@@ -91,7 +91,7 @@ export default function BitacoraDetallePage() {
   const [fechaNueva, setFechaNueva] = useState('');
   const [editandoDia, setEditandoDia] = useState<string | null>(null);
   const [diaCorregido, setDiaCorregido] = useState('');
-  const [anioNuevo, setAnioNuevo] = useState('');
+  const [agregandoDia, setAgregandoDia] = useState(false);
 
   const [accionHallazgo, setAccionHallazgo] = useState<{ h: HallazgoBitacora; estado: 'RESUELTO' | 'DESCARTADO' } | null>(null);
   const [confirmando, setConfirmando] = useState<'releer' | 'borrar' | null>(null);
@@ -175,24 +175,6 @@ export default function BitacoraDetallePage() {
     setRegistros((rs) => rs.map((r) => (r.fecha === desde ? { ...r, fecha: hasta } : r)));
     setNovedades((ns) => ns.map((n) => (n.fecha === desde ? { ...n, fecha: hasta } : n)));
     setEditandoDia(null);
-    marcar();
-  };
-
-  // Cambia solo el año de TODAS las fechas de la hoja, dejando día y mes (el error más común: 2026 leído como 2021).
-  const cambiarAnio = () => {
-    const anio = anioNuevo.trim();
-    if (!/^\d{4}$/.test(anio)) { setError('Escribe el año con cuatro cifras, por ejemplo 2026.'); return; }
-    const mover = (f: string) => {
-      if (!f) return f;
-      const candidata = `${anio}-${f.slice(5)}`;
-      const d = new Date(`${candidata}T00:00:00Z`);
-      return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== candidata ? `${anio}-${f.slice(5, 7)}-28` : candidata;
-    };
-    setError('');
-    setFechasExtra((fs) => [...new Set(fs.map(mover))]);
-    setRegistros((rs) => rs.map((r) => ({ ...r, fecha: mover(r.fecha) })));
-    setNovedades((ns) => ns.map((n) => ({ ...n, fecha: mover(n.fecha) })));
-    setAnioNuevo('');
     marcar();
   };
 
@@ -438,7 +420,7 @@ export default function BitacoraDetallePage() {
                     <span key={f} className="status-badge" style={{ background: '#e2e8f0', color: '#2d3748', textTransform: 'none', letterSpacing: 0 }}>
                       {fechaCorta(f)}
                       {puedeEscribir && (
-                        <button type="button" aria-label={`Corregir el día ${fechaCorta(f)}`} title="Corregir este día (cambia también sus guardias y novedades)" disabled={bloquear} onClick={() => { setEditandoDia(f); setDiaCorregido(f); }} style={{ border: 'none', background: 'none', cursor: 'pointer', marginLeft: 4, padding: 0 }}><Pencil size={12} /></button>
+                        <button type="button" aria-label={`Corregir el día ${fechaCorta(f)}`} title="Corregir este día (cambia también sus guardias y novedades)" disabled={bloquear} onClick={() => { setAgregandoDia(false); setEditandoDia(f); setDiaCorregido(f); }} style={{ border: 'none', background: 'none', cursor: 'pointer', marginLeft: 4, padding: 0 }}><Pencil size={12} /></button>
                       )}
                       {puedeEscribir && !enUso && (
                         <button type="button" aria-label={`Quitar ${fechaCorta(f)}`} onClick={() => { setFechasExtra((fs) => fs.filter((x) => x !== f)); marcar(); }} style={{ border: 'none', background: 'none', cursor: 'pointer', marginLeft: 4, padding: 0 }}><X size={12} /></button>
@@ -446,28 +428,26 @@ export default function BitacoraDetallePage() {
                     </span>
                   );
                 })}
-              </div>
-              {puedeEscribir && editandoDia && (
-                <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '0.85rem' }}>Corregir el {fechaCorta(editandoDia)} por:</span>
-                  <div className="filtro-fecha-dateinput" style={{ width: 170 }}><DateInput className="filtro-fecha-dia" value={diaCorregido} onChange={setDiaCorregido} placeholder="Día correcto" /></div>
-                  <button type="button" className="btn-secondary" disabled={!diaCorregido} onClick={() => cambiarDia(editandoDia, diaCorregido)}>Cambiar</button>
-                  <button type="button" className="btn-secondary" onClick={() => setEditandoDia(null)}>Cancelar</button>
-                </div>
-              )}
-              {puedeEscribir && fechasActuales.length > 0 && (
-                <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '0.85rem' }}>¿El año está mal? Cambiarlo en toda la hoja:</span>
-                  <input type="text" inputMode="numeric" maxLength={4} aria-label="Año correcto" placeholder="2026" value={anioNuevo} disabled={bloquear} onChange={(e) => setAnioNuevo(e.target.value.replace(/\D/g, ''))} onKeyDown={(e) => { if (e.key === 'Enter') cambiarAnio(); }} style={{ ...inputCelda, width: 80 }} />
-                  <button type="button" className="btn-secondary" disabled={anioNuevo.length !== 4 || bloquear} onClick={cambiarAnio}>Cambiar año</button>
-                </div>
-              )}
-              {puedeEscribir && (
-                <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
-                  <div className="filtro-fecha-dateinput" style={{ width: 170 }}><DateInput className="filtro-fecha-dia" value={fechaNueva} onChange={setFechaNueva} placeholder="Agregar un día" /></div>
-                  <button type="button" className="btn-secondary" disabled={!fechaNueva || bloquear} onClick={() => { setFechasExtra((fs) => [...new Set([...fs, fechaNueva])]); setFechaNueva(''); marcar(); }}>
-                    <Plus size={14} /> Agregar
+                {puedeEscribir && (
+                  <button type="button" className="status-badge" disabled={bloquear} onClick={() => { setEditandoDia(null); setAgregandoDia(true); setFechaNueva(''); }} title="Agregar un día a la hoja" style={{ background: 'white', color: 'var(--azul-oscuro)', border: '1px dashed #a0aec0', cursor: 'pointer', textTransform: 'none', letterSpacing: 0 }}>
+                    <Plus size={12} style={{ verticalAlign: '-2px' }} /> Día
                   </button>
+                )}
+              </div>
+              {puedeEscribir && (editandoDia || agregandoDia) && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.85rem' }}>{editandoDia ? `Corregir el ${fechaCorta(editandoDia)} por:` : 'Día a agregar:'}</span>
+                  <div className="filtro-fecha-dateinput" style={{ width: 170 }}>
+                    {editandoDia
+                      ? <DateInput className="filtro-fecha-dia" value={diaCorregido} onChange={setDiaCorregido} placeholder="Día correcto" />
+                      : <DateInput className="filtro-fecha-dia" value={fechaNueva} onChange={setFechaNueva} placeholder="Elige el día" />}
+                  </div>
+                  {editandoDia ? (
+                    <button type="button" className="btn-secondary" disabled={!diaCorregido} onClick={() => cambiarDia(editandoDia, diaCorregido)}>Cambiar</button>
+                  ) : (
+                    <button type="button" className="btn-secondary" disabled={!fechaNueva || bloquear} onClick={() => { setFechasExtra((fs) => [...new Set([...fs, fechaNueva])]); setFechaNueva(''); setAgregandoDia(false); marcar(); }}>Agregar</button>
+                  )}
+                  <button type="button" className="btn-secondary" onClick={() => { setEditandoDia(null); setAgregandoDia(false); }}>Cancelar</button>
                 </div>
               )}
             </div>

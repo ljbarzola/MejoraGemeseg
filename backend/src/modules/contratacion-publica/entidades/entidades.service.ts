@@ -14,6 +14,7 @@ import {
   nombreCarpeta,
 } from './entidad-folder.util';
 import { normalizarCamposExtra } from './entidad-campos.util';
+import { normalizarClasificacion, sectoresDe } from './entidad-clasificacion.util';
 
 export interface SyncEntidadesDriveResult {
   /** false = todavía no hay carpeta raíz elegida. */
@@ -60,10 +61,11 @@ export class CPEntidadesService {
 
   async create(dto: CreateEntidadDto, companyId: number) {
     await this.assertNombreLibre(dto.nombre, companyId);
-    const { camposExtra, ...resto } = dto;
+    const { camposExtra, sector, provincia, canton, ...resto } = dto;
+    const clasificacion = this.clasificacion({ sector, provincia, canton }, dto.tipo ?? 'PUBLICA');
     const extra = await this.valoresDeCampos(camposExtra, companyId, null);
     const entidad = await this.prisma.cPEntidadPublica.create({
-      data: { ...resto, camposExtra: extra, companyId },
+      data: { ...resto, ...clasificacion, camposExtra: extra, companyId },
     });
     const advertenciaDrive = await this.asegurarCarpeta(entidad, companyId);
     const actual = await this.findOne(entidad.id, companyId);
@@ -75,8 +77,17 @@ export class CPEntidadesService {
     if (dto.nombre !== undefined) {
       await this.assertNombreLibre(dto.nombre, companyId, id);
     }
-    const { camposExtra, ...resto } = dto;
-    const data: Record<string, unknown> = { ...resto };
+    const { camposExtra, sector, provincia, canton, ...resto } = dto;
+    const tipoFinal = dto.tipo ?? antes.tipo;
+    const data: Record<string, unknown> = {
+      ...resto,
+      ...this.clasificacion({ sector, provincia, canton }, tipoFinal),
+    };
+    // Si cambió el tipo y el sector guardado ya no es de ese tipo (p. ej. «Ministerio» en una
+    // privada), se deja sin sector en vez de guardar una combinación imposible.
+    if (sector === undefined && antes.sector && !sectoresDe(tipoFinal).includes(antes.sector)) {
+      data.sector = null;
+    }
     if (camposExtra !== undefined) {
       data.camposExtra = await this.valoresDeCampos(
         camposExtra,
@@ -99,6 +110,15 @@ export class CPEntidadesService {
       advertenciaDrive = await this.renombrarCarpeta(actual, companyId);
     }
     return { ...(await this.findOne(id, companyId)), advertenciaDrive };
+  }
+
+  private clasificacion(
+    dto: { sector?: string | null; provincia?: string | null; canton?: string | null },
+    tipo: string,
+  ) {
+    const { error, ...r } = normalizarClasificacion(dto, tipo);
+    if (error) throw new BadRequestException(error);
+    return r;
   }
 
   /** Valida y deja listos los valores de los campos configurables. */

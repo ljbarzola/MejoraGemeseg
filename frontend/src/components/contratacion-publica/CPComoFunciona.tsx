@@ -5,7 +5,7 @@ import { X, ArrowDown, HelpCircle } from 'lucide-react';
 // del módulo (igual que el de Ventas): cuenta el recorrido completo y marca «Estás aquí» en la
 // pantalla desde la que se abrió.
 
-export type PantallaCP = 'entidades' | 'por-aprobar' | 'por-entregar' | 'configuracion';
+export type PantallaCP = 'dashboard' | 'entidades' | 'por-aprobar' | 'por-entregar' | 'configuracion';
 
 interface Paso {
   clave: PantallaCP;
@@ -15,25 +15,31 @@ interface Paso {
 
 const RECORRIDO: Paso[] = [
   {
+    clave: 'dashboard',
+    pantalla: '1. Dashboard',
+    texto:
+      'La vista de todas las entidades juntas: qué datos les faltan, el valor de los contratos y los que vencen pronto, cómo van las entregas de documentos, en qué provincias están y, si también ves Operaciones, sus bitácoras, faltas y visitas de supervisión. Se filtra por tipo (públicas o privadas) y por periodo.',
+  },
+  {
     clave: 'entidades',
-    pantalla: '1. Entidades Públicas',
+    pantalla: '2. Entidades Públicas',
     texto:
       'Las entidades a las que Gemeseg presta servicio. Cada una tiene su carpeta en Google Drive y no se borra: se archiva. Al abrir una entidad ves, mes a mes, los documentos que otras áreas (RRHH, Financiero, Operaciones, Legal) deben entregar para el informe de esa entidad, con su responsable y su fecha límite.',
   },
   {
     clave: 'por-entregar',
-    pantalla: '2. Por entregar',
+    pantalla: '3. Por entregar',
     texto: 'Lo que te toca subir a ti: cada documento con su fecha límite y si ya venció. Se entrega con un archivo o con un enlace.',
   },
   {
     clave: 'por-aprobar',
-    pantalla: '3. Por aprobar',
+    pantalla: '4. Por aprobar',
     texto:
       'Solo para quien trabaja en Contratación Pública. Reúne, de todas las entidades, los documentos entregados que esperan una decisión: se mira el archivo, se aprueba o se rechaza con un motivo, y la persona recibe el aviso.',
   },
   {
     clave: 'configuracion',
-    pantalla: '4. Configuración',
+    pantalla: '5. Configuración',
     texto:
       'Lo que se ajusta una vez y se usa en el resto: los datos extra que se piden de cada entidad y la carpeta de Google Drive de todo el módulo.',
   },
