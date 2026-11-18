@@ -343,7 +343,7 @@ export default function EntidadDetail() {
           <ArrowLeft size={16} strokeWidth={2.4} /> Volver
         </button>
         <CPPageHeader
-          title={lista?.entidad.nombre ?? 'Entidad pública'}
+          title={lista?.entidad.nombre ?? 'Entidad'}
           description="Los documentos que otras áreas deben entregar cada mes para esta entidad, con su responsable y su fecha límite."
           actions={
             <>
