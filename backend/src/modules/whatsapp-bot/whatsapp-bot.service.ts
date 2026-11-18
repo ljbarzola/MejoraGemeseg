@@ -235,10 +235,24 @@ export class WhatsappBotService implements OnModuleInit {
   // reintente todo el lote, por eso cada uno se atiende por separado y el error solo se registra.
   async procesarAviso(payload: unknown) {
     this.requireListo();
-    for (const m of extraerMensajes(payload)) {
+    const mensajes = extraerMensajes(payload);
+    // Solo cifras e identificadores del número de la empresa (nada del contenido ni de teléfonos de clientes),
+    // para poder ver en el log qué manda Meta y por qué se ignora algo.
+    const p = payload as { entry?: { changes?: { field?: string; value?: { metadata?: { phone_number_id?: string }; statuses?: unknown[] } }[] }[] };
+    const cambios = (p?.entry ?? []).flatMap((e) => e?.changes ?? []);
+    this.logger.log(
+      `Aviso de Meta: ${mensajes.length} mensaje(s), ${cambios.reduce((n, c) => n + (c?.value?.statuses?.length ?? 0), 0)} estado(s); ` +
+        `campo(s): ${cambios.map((c) => c?.field ?? '?').join(',') || 'ninguno'}; ` +
+        `número(s): ${[...new Set(cambios.map((c) => c?.value?.metadata?.phone_number_id ?? '?'))].join(',') || 'ninguno'}`,
+    );
+    for (const m of mensajes) {
       try {
         const companyId = await this.empresaDeNumero(m.phoneNumberId);
-        if (!companyId) continue; // número no conectado o bot apagado: se ignora
+        if (!companyId) {
+          // número no conectado o bot apagado: se ignora
+          this.logger.warn(`Mensaje ignorado: ningún bot activo tiene el número ${m.phoneNumberId} en su configuración.`);
+          continue;
+        }
         let texto = m.texto;
         let esTexto = m.esTexto;
         // Audio o imagen: se transcribe/describe para que el bot y las personas lo entiendan. Si no se
