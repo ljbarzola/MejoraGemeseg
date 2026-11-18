@@ -590,7 +590,7 @@ export default function EntidadesPublicasList() {
           <div className="loading-state">Cargando entidades públicas...</div>
         ) : entidades.length === 0 ? (
           <div className="empty-state">
-            No hay entidades públicas creadas. Haz clic en <strong>"+ Nueva Entidad"</strong> para registrar la primera.
+            No hay entidades creadas. Haz clic en <strong>"+ Nueva Entidad"</strong> para registrar la primera.
           </div>
         ) : (
           <div className="tasks-table-wrapper">
@@ -677,7 +677,7 @@ export default function EntidadesPublicasList() {
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>{editing ? 'Editar Entidad Pública' : 'Nueva Entidad Pública'}</h3>
+              <h3>{editing ? 'Editar entidad' : 'Nueva entidad'}</h3>
               <button className="modal-close" onClick={() => setShowModal(false)}>
                 <X size={16} />
               </button>
