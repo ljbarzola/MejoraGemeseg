@@ -60,6 +60,8 @@ export interface EntranteInput {
   // ficha al convertir el posible cliente en oportunidad.
   direccion?: string | null;
   createdBy?: number | null;
+  // true: se crea el posible cliente pero no se avisa al equipo (teléfonos de prueba del bot de WhatsApp).
+  sinAviso?: boolean;
 }
 
 const recortar = (v: string | null | undefined, max: number): string | null => {
@@ -145,7 +147,7 @@ export class VentasLeadsService {
       },
     });
     // Aviso en las notificaciones; un fallo acá nunca debe perder el lead ya guardado.
-    await this.avisarLeadNuevo(lead);
+    if (!input.sinAviso) await this.avisarLeadNuevo(lead);
     return { lead, nuevo: true };
   }
 

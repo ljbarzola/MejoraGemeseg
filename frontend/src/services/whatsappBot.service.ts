@@ -85,6 +85,8 @@ export interface AjustesBot {
   guion: GuionBot;
   plantilla: PlantillaBot;
   cotizacion: CotizacionBotAjustes;
+  // Teléfonos de prueba (solo dígitos): el bot les responde igual, pero no avisa al equipo.
+  telefonosPrueba: string[];
   // El servidor ya tiene el token de Meta (variables de entorno).
   conectado: boolean;
 }
