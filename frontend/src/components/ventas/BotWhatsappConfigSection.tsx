@@ -46,9 +46,11 @@ export default function BotWhatsappConfigSection({ puedeEditar }: { puedeEditar:
   const [a, setA] = useState<AjustesBot | null>(null);
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
+  // Se edita como texto (separado por comas o líneas) y el servidor lo limpia a solo dígitos.
+  const [telefonosTexto, setTelefonosTexto] = useState('');
 
   useEffect(() => {
-    getAjustesBot().then(setA).catch((err) => setError(mensajeDe(err, 'No se pudieron cargar los ajustes del bot.')));
+    getAjustesBot().then((r) => { setA(r); setTelefonosTexto((r.telefonosPrueba ?? []).join(', ')); }).catch((err) => setError(mensajeDe(err, 'No se pudieron cargar los ajustes del bot.')));
   }, []);
 
   if (!a) return error ? <ErrorBanner mensaje={error} /> : <p style={{ color: '#888', fontSize: 13 }}>Cargando...</p>;
@@ -75,9 +77,10 @@ export default function BotWhatsappConfigSection({ puedeEditar }: { puedeEditar:
     try {
       const r = await guardarAjustesBot({
         phoneNumberId: a.phoneNumberId.trim(), activo: a.activo, modo: a.modo, conocimiento: a.conocimiento, horario: a.horario,
-        guion: a.guion, plantilla: a.plantilla, cotizacion: a.cotizacion,
+        guion: a.guion, plantilla: a.plantilla, cotizacion: a.cotizacion, telefonosPrueba: telefonosTexto as unknown as string[],
       });
       setA(r);
+      setTelefonosTexto((r.telefonosPrueba ?? []).join(', '));
       showToast('Ajustes del bot guardados.', 'success');
     } catch (err) {
       setError(mensajeDe(err, 'No se pudieron guardar los ajustes. Intenta de nuevo.'));
@@ -122,6 +125,19 @@ export default function BotWhatsappConfigSection({ puedeEditar }: { puedeEditar:
         <label htmlFor="bot-numero"><strong>Identificador del número en Meta</strong></label>
         <input id="bot-numero" value={a.phoneNumberId} disabled={!puedeEditar} placeholder="Ej.: 123456789012345" onChange={(e) => cambiar({ phoneNumberId: e.target.value })} />
         <small>Lo ves en Meta → WhatsApp → Configuración de la API («Identificador del número de teléfono»). No es el número de teléfono.</small>
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="bot-telefonos-prueba"><strong>Teléfonos de prueba</strong></label>
+        <input
+          id="bot-telefonos-prueba" value={telefonosTexto} disabled={!puedeEditar}
+          placeholder="Ej.: 0979459793, +593 99 123 4567"
+          onChange={(e) => setTelefonosTexto(e.target.value)}
+        />
+        <small>
+          Estos números conversan con el bot igual que un cliente, pero no generan notificaciones al equipo ni el aviso de «Nuevo posible cliente».
+          Sepáralos con comas y quítalos de aquí cuando termines de probar.
+        </small>
       </div>
 
       <div className="form-group">

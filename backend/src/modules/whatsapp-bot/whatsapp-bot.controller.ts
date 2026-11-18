@@ -90,6 +90,7 @@ export class WhatsappBotController {
       guion: body?.guion,
       plantilla: body?.plantilla,
       cotizacion: body?.cotizacion,
+      telefonosPrueba: body?.telefonosPrueba,
     });
   }
 

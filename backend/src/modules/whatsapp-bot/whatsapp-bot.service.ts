@@ -34,13 +34,16 @@ import {
   PLANTILLA_POR_DEFECTO,
   ciudadEnSedes,
   construirPrompt,
+  construirPromptExtraccion,
   dentroDeHorario,
   extraerCodigoLanding,
   extraerMensajes,
+  esTelefonoDePrueba,
   extraerPedidoCotizacion,
   limpiarCotizacion,
   limpiarGuion,
   limpiarPlantilla,
+  limpiarTelefonosPrueba,
   normalizarTelefonoWa,
   separarEscalado,
   separarListo,
@@ -70,6 +73,8 @@ export interface AjustesBot {
   // Plantilla de Meta para reabrir una conversación pasadas las 24 h.
   plantilla: PlantillaBot;
   cotizacion: AjustesCotizacionBot;
+  // Teléfonos de prueba (solo dígitos): el bot les responde igual, pero no genera avisos al equipo.
+  telefonosPrueba: string[];
 }
 
 const AJUSTES_POR_DEFECTO: AjustesBot = {
@@ -81,6 +86,7 @@ const AJUSTES_POR_DEFECTO: AjustesBot = {
   guion: GUION_POR_DEFECTO,
   plantilla: PLANTILLA_POR_DEFECTO,
   cotizacion: COTIZACION_POR_DEFECTO,
+  telefonosPrueba: [],
 };
 
 const MAX_PRODUCTOS_AL_MODELO = 300;
@@ -178,6 +184,7 @@ export class WhatsappBotService implements OnModuleInit {
       guion: limpiarGuion(v.guion, GUION_POR_DEFECTO),
       plantilla: limpiarPlantilla(v.plantilla, PLANTILLA_POR_DEFECTO),
       cotizacion: limpiarCotizacion(v.cotizacion, COTIZACION_POR_DEFECTO),
+      telefonosPrueba: limpiarTelefonosPrueba(v.telefonosPrueba),
     };
   }
 
@@ -206,6 +213,8 @@ export class WhatsappBotService implements OnModuleInit {
       plantilla: cambios.plantilla === undefined ? actual.plantilla : limpiarPlantilla(cambios.plantilla, actual.plantilla),
       cotizacion:
         cambios.cotizacion === undefined ? actual.cotizacion : limpiarCotizacion(cambios.cotizacion, actual.cotizacion),
+      telefonosPrueba:
+        cambios.telefonosPrueba === undefined ? actual.telefonosPrueba : limpiarTelefonosPrueba(cambios.telefonosPrueba),
     };
     await this.prisma.salesSetting.upsert({
       where: { companyId_key: { companyId, key: CLAVE_AJUSTES } },
@@ -312,11 +321,19 @@ export class WhatsappBotService implements OnModuleInit {
       entrada.nombre ?? null,
     );
 
+    const ajustes = await this.ajustes(companyId);
+
     if (nueva || !conversacion.leadId) {
-      await this.crearPosibleCliente(companyId, conversacion.id, telefono, entrada.nombre ?? null, texto);
+      await this.crearPosibleCliente(
+        companyId,
+        conversacion.id,
+        telefono,
+        entrada.nombre ?? null,
+        texto,
+        esTelefonoDePrueba(ajustes.telefonosPrueba, telefono),
+      );
     }
 
-    const ajustes = await this.ajustes(companyId);
     // Si una persona ya tomó la conversación, el bot no interviene: solo se avisa.
     if (conversacion.estado === 'PERSONA' || conversacion.estado === 'CERRADA') {
       if (conversacion.estado === 'CERRADA') {
@@ -403,6 +420,7 @@ export class WhatsappBotService implements OnModuleInit {
     telefono: string,
     nombre: string | null,
     texto: string,
+    sinAviso = false,
   ) {
     try {
       const r = await this.leads.ingresar(companyId, {
@@ -412,6 +430,7 @@ export class WhatsappBotService implements OnModuleInit {
         channel: 'WHATSAPP',
         externalId: `wa:${telefono}`,
         extra: { origenBot: 'whatsapp-bot' },
+        sinAviso,
       });
       await this.prisma.$executeRawUnsafe(`UPDATE "WaConversation" SET "leadId" = $2 WHERE "id" = $1`, conversationId, r.lead.id);
       const codigo = extraerCodigoLanding(texto);
@@ -492,7 +511,13 @@ export class WhatsappBotService implements OnModuleInit {
           resumenListo = conListo.resumen;
           motivo = `Listo para un asesor: ${conListo.resumen}`;
         }
-        const ext = extraerPedidoCotizacion(conListo.texto);
+        let ext = extraerPedidoCotizacion(conListo.texto);
+        // El bot cerró con [LISTO] sin pedir la cotización aunque el área la permite: una segunda lectura de la
+        // conversación saca el pedido y el servidor lo calcula (queda como borrador para que una persona lo revise).
+        if (!ext.pedido && !ext.ilegible && resumenListo !== null && contexto) {
+          const delCierre = await this.pedidoDelCierre(contexto, ajustes.guion, historial, ultimo, resumenListo);
+          if (delCierre) ext = { ...ext, pedido: delCierre };
+        }
 
         if (!ext.pedido && !ext.ilegible) {
           propuesta = ext.texto;
@@ -521,6 +546,8 @@ export class WhatsappBotService implements OnModuleInit {
           break;
         }
         faltantes = calculo.faltantes;
+        // Si falta un dato, el bot vuelve a preguntar: todavía no está «listo» para un asesor.
+        if (vuelta === 0) resumenListo = null;
         if (vuelta === 1) {
           propuesta = ext.texto;
           motivo = motivo ?? `Cotización: falta ${calculo.faltantes.join('; ')}`;
@@ -624,6 +651,32 @@ export class WhatsappBotService implements OnModuleInit {
   // Cotizador (cotizador-precios.util.ts y cotizador-custodia.util.ts) y el texto con los números lo arma el
   // servidor. Al modelo nunca se le entregan costos, márgenes ni precios.
   // ---------------------------------------------------------------------
+
+  // Segunda lectura al cerrar: pide al modelo, sin conversar, el pedido de cotización que se desprende de lo que
+  // dijo el cliente. Devuelve null si no hay nada que cotizar o si la lectura falla (entonces sigue el cierre normal).
+  private async pedidoDelCierre(
+    contexto: ContextoCotizacion,
+    guion: GuionBot,
+    historial: { role: 'user' | 'assistant'; content: string }[],
+    ultimo: string,
+    resumen: string,
+  ): Promise<PedidoCotizacion | null> {
+    try {
+      const conversacion = [...historial, { role: 'user' as const, content: ultimo }]
+        .map((t) => `${t.role === 'user' ? 'Cliente' : 'Asistente'}: ${t.content}`)
+        .join('\n');
+      const r = await this.vertex.sendChat(
+        construirPromptExtraccion({ cotizacion: contexto, guion }),
+        [],
+        `CONVERSACIÓN:\n${conversacion}\n\nRESUMEN DEL ASISTENTE: ${resumen}`,
+        { nivel: 'ligero', maxOutputTokens: 700 },
+      );
+      return extraerPedidoCotizacion(r.reply).pedido;
+    } catch (err) {
+      this.logger.warn(`No se pudo leer la cotización al cierre: ${(err as Error).message}`);
+      return null;
+    }
+  }
 
   private cotizacionPermitida(guion: GuionBot, pedido: PedidoCotizacion): boolean {
     const tipo = pedido.tipo === 'PRODUCTOS' ? 'CATALOGO' : 'CUSTODIA';
@@ -871,11 +924,13 @@ export class WhatsappBotService implements OnModuleInit {
   // «Escribir» explícito (el mismo criterio que los posibles clientes nuevos).
   private async avisarEquipo(companyId: number, conversationId: number, quien: string, que: string) {
     try {
-      const f = await this.prisma.$queryRawUnsafe<{ sinLeer: number }[]>(
-        `SELECT "sinLeer" FROM "WaConversation" WHERE "id" = $1`,
+      const f = await this.prisma.$queryRawUnsafe<{ sinLeer: number; phone: string }[]>(
+        `SELECT "sinLeer", "phone" FROM "WaConversation" WHERE "id" = $1`,
         conversationId,
       );
       if ((f[0]?.sinLeer ?? 0) > 1) return;
+      // Teléfonos de prueba (Configuración → Bot de WhatsApp): el bot funciona igual, pero no molesta al equipo.
+      if (esTelefonoDePrueba((await this.ajustes(companyId)).telefonosPrueba, f[0]?.phone)) return;
       const equipo = (await this.permissions.getUsersWithExplicitSectionWrite('VENTAS')).filter(
         (u) => u.companyId === companyId,
       );

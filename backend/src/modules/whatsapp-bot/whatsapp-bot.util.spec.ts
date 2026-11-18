@@ -3,14 +3,18 @@ import {
   avisoPrecios,
   ciudadEnSedes,
   construirPrompt,
+  construirPromptExtraccion,
   dentroDeHorario,
+  esTelefonoDePrueba,
   extraerCodigoLanding,
   extraerMensajes,
   extraerPedidoCotizacion,
   firmaValida,
+  GUION_POR_DEFECTO,
   limpiarCotizacion,
   limpiarGuion,
   limpiarPlantilla,
+  limpiarTelefonosPrueba,
   separarEscalado,
   separarListo,
   textoCotizacionCustodia,
@@ -212,5 +216,39 @@ describe('whatsapp-bot.util', () => {
       expect(p).toContain('hasta 2026-12-31');
       expect(p).not.toMatch(/\$\s?\d/);
     });
+  });
+});
+
+describe('teléfonos de prueba', () => {
+  it('limpia a solo dígitos, sin repetidos ni basura', () => {
+    expect(limpiarTelefonosPrueba('0979 459-793, +593 97 945 9793;\n123, abc')).toEqual(['0979459793', '593979459793']);
+    expect(limpiarTelefonosPrueba(['09 7945 9793', '09 7945 9793'])).toEqual(['0979459793']);
+    expect(limpiarTelefonosPrueba(undefined)).toEqual([]);
+  });
+
+  it('reconoce el mismo número escrito con o sin código de país', () => {
+    const lista = limpiarTelefonosPrueba('0979459793');
+    expect(esTelefonoDePrueba(lista, '593979459793')).toBe(true);
+    expect(esTelefonoDePrueba(lista, '+593 97 945 9793')).toBe(true);
+    expect(esTelefonoDePrueba(lista, '593999999999')).toBe(false);
+  });
+
+  it('con la lista vacía nadie es de prueba', () => {
+    expect(esTelefonoDePrueba([], '593979459793')).toBe(false);
+    expect(esTelefonoDePrueba(undefined, '593979459793')).toBe(false);
+  });
+});
+
+describe('construirPromptExtraccion', () => {
+  const guion = { ...GUION_POR_DEFECTO, pilares: [{ id: 'g', nombre: 'Seguridad', descripcion: '', cotiza: ['CUSTODIA' as const], preguntas: [], activo: true }] };
+  const cotizacion = { catalogo: [], regiones: ['Costa', 'Sierra'], extras: [] };
+
+  it('pide solo la etiqueta o NINGUNA, con las regiones y sin precios', () => {
+    const p = construirPromptExtraccion({ cotizacion, guion });
+    expect(p).toContain('NINGUNA');
+    expect(p).toContain('COTIZAR_CUSTODIA');
+    expect(p).toContain('REGIONES: Costa, Sierra');
+    expect(p).not.toContain('LISTADO DE PRODUCTOS');
+    expect(p).not.toMatch(/\$\s?\d/);
   });
 });
