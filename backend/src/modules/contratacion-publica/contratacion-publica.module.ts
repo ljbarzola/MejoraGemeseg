@@ -10,6 +10,7 @@ import { CPEntregasModule } from './entregas/entregas.module';
 import { CPBitacorasModule } from './bitacoras/bitacoras.module';
 import { CPAusenciasModule } from './ausencias/ausencias.module';
 import { CPSupervisionModule } from './supervision/supervision.module';
+import { CPDashboardModule } from './dashboard/cp-dashboard.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { CPSupervisionModule } from './supervision/supervision.module';
     CPBitacorasModule,
     CPAusenciasModule,
     CPSupervisionModule,
+    CPDashboardModule,
     CPEntidadesModule,
     CPContratosModule,
     CPPuestosModule,

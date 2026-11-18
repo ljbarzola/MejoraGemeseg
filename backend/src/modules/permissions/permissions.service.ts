@@ -6,7 +6,10 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { asegurarSeccionOperaciones } from './operaciones-seccion.schema';
+import {
+  asegurarCustodiasEnOperaciones,
+  asegurarSeccionOperaciones,
+} from './operaciones-seccion.schema';
 
 // `alwaysEnabled`  = la EMPRESA la tiene activa siempre (no hace falta que un
 //                     super admin la encienda).
@@ -33,7 +36,9 @@ export const ALL_SECTIONS = [
   { key: 'CACAO', label: 'Cacao', alwaysEnabled: false },
   { key: 'COMPANY_SETTINGS', label: 'Mi Empresa', alwaysEnabled: false },
   { key: 'COMPANIES', label: 'Empresas', alwaysEnabled: false },
-  { key: 'CUSTODIAS', label: 'Custodias', alwaysEnabled: false },
+  // Custodias ya NO es una sección (2026-11-18): los viajes son parte de Operaciones y los gobierna
+  // OPERACIONES (asegurarCustodiasEnOperaciones la enciende donde estaba Custodias). Las filas
+  // 'CUSTODIAS' que queden en CompanySection/UserPermission se ignoran.
   { key: 'RRHH', label: 'Recursos Humanos', alwaysEnabled: false },
   { key: 'VENTAS', label: 'Ventas y CRM', alwaysEnabled: false },
   {
@@ -61,7 +66,7 @@ export const ALL_SECTIONS = [
   // Cada persona ve siempre su propia hoja, sin necesitar permiso.
   { key: 'BITACORA', label: 'Bitácora del equipo', alwaysEnabled: false },
   // Contabilidad (2026-11-16): el dinero que antes vivía mezclado en Custodias (tarifas, nómina,
-  // roles de pago). Apagada por empresa y cerrada por defecto: quien tiene Custodias NO ve dinero
+  // roles de pago). Apagada por empresa y cerrada por defecto: quien ve los viajes (Operaciones) NO ve dinero
   // a menos que tenga además su propia fila de permiso aquí.
   { key: 'CONTABILIDAD', label: 'Contabilidad', alwaysEnabled: false },
 ];
@@ -101,6 +106,10 @@ export const SECCIONES_CERRADAS_POR_DEFECTO: string[] = [
   'CONTABILIDAD',
 ];
 
+/** Una fila de permiso de una sección que ya no existe (TOOLS, CUSTODIAS) se ignora. */
+export const esSeccionVigente = (p: { section: string }) =>
+  ALL_SECTIONS.some((a) => a.key === p.section);
+
 /** ¿Qué pasa con una sección cuando la persona no tiene fila de permiso? */
 export function permiteSinFila(section: string): boolean {
   return !SECCIONES_CERRADAS_POR_DEFECTO.includes(section);
@@ -124,6 +133,12 @@ export class PermissionsService implements OnModuleInit {
       );
       if (hecho) {
         this.logger.log('Sección OPERACIONES encendida donde ya estaba Contratación Pública.');
+      }
+      const custodias = await asegurarCustodiasEnOperaciones(
+        this.prisma as unknown as Parameters<typeof asegurarCustodiasEnOperaciones>[0],
+      );
+      if (custodias) {
+        this.logger.log('Sección OPERACIONES encendida donde estaba Custodias (Custodias ya no es una sección).');
       }
     } catch (err) {
       this.logger.error(
@@ -435,7 +450,7 @@ export class PermissionsService implements OnModuleInit {
       where: { userId },
       select: { section: true, canView: true, canWrite: true },
     });
-    return perms;
+    return perms.filter(esSeccionVigente);
   }
 
   async getUserPermissionsForCompany(companyId: number) {
@@ -452,7 +467,9 @@ export class PermissionsService implements OnModuleInit {
       },
       orderBy: { fullName: 'asc' },
     });
-    return users;
+    // Las filas de secciones que ya no existen (TOOLS, CUSTODIAS) se ignoran: no se cuentan
+    // («12/11 secciones») ni se muestran.
+    return users.map((u) => ({ ...u, permissions: u.permissions.filter(esSeccionVigente) }));
   }
 
   /**

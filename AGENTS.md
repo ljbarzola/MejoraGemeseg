@@ -235,7 +235,7 @@ y apuntar una `DATABASE_URL` alterna a `127.0.0.1:5434` solo para esa sesion pun
 ### Permisos por seccion (`/permissions`)
 Existen **dos capas de autorizacion independientes**, no una sola:
 1. **RolesGuard** (`@Roles(UserRole.ADMIN)`): rol grueso ADMIN/MANAGER/EMPLOYEE, por endpoint.
-2. **Permisos por seccion** (`PermissionsService`, modulo `permissions`): gatea modulos completos (DASHBOARD, PROJECTS, ADMIN, CACAO, COMPANY_SETTINGS, COMPANIES, CUSTODIAS, RRHH, VENTAS, CONTRATACION_PUBLICA, SISTEMAS, BITACORA, CONTABILIDAD - ver `ALL_SECTIONS` en `permissions.service.ts`).
+2. **Permisos por seccion** (`PermissionsService`, modulo `permissions`): gatea modulos completos (DASHBOARD, PROJECTS, ADMIN, CACAO, COMPANY_SETTINGS, COMPANIES, RRHH, VENTAS, CONTRATACION_PUBLICA, OPERACIONES, SISTEMAS, BITACORA, CONTABILIDAD - ver `ALL_SECTIONS` en `permissions.service.ts`). Desde 2026-11-18 `CUSTODIAS` ya no es una sección: los viajes los gobierna `OPERACIONES` (ver `.agents/modules/custodias.md`, último punto).
 
 Reglas:
 - Una seccion con `alwaysEnabled: true` (DASHBOARD, PROJECTS, ADMIN, SISTEMAS) esta siempre visible para toda empresa.

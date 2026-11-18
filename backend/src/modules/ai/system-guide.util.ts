@@ -552,7 +552,7 @@ Cada empresa empieza sin nada cargado: el sistema no trae calidades, pesos de sa
 const CUSTODIAS = `# Custodias — guía
 
 ## Acceso
-- Custodias es parte de Operaciones (no tiene módulo propio): Menú → "Operaciones" → "Viajes" (grupo "Custodias") y, en "Operaciones" → "Resumen", la pestaña "Custodias" con las cifras de los viajes. Quien tiene Custodias pero no Operaciones ve en ese menú solo "Resumen" y "Viajes". En el selector de agentes del chat aparece el "Agente de Custodia", que responde sobre los viajes (cuántos hay, quién los hizo, placas, antigüedad de un custodio); es distinto de Agente Gemeseg.
+- Custodias es parte de Operaciones (no tiene módulo propio): Menú → "Operaciones" → "Viajes" (grupo "Custodias") y, en "Operaciones" → "Resumen", la pestaña "Custodias" con las cifras de los viajes. Se ven con el permiso de Operaciones: Custodias ya no es un módulo ni un permiso aparte. En el selector de agentes del chat aparece el "Agente de Custodia", que responde sobre los viajes (cuántos hay, quién los hizo, placas, antigüedad de un custodio); es distinto de Agente Gemeseg.
 - Custodias son los viajes de escolta; el personal (chofer y custodios) sale del padrón de guardias. Aquí solo se registran y siguen los viajes: lo que se paga por ellos (tarifas, pagos, roles de pago) está en el módulo Contabilidad, que tiene su propio permiso.
 
 ## Viajes
@@ -572,7 +572,7 @@ const CUSTODIAS = `# Custodias — guía
 const CONTABILIDAD = `# Contabilidad — guía
 
 ## Acceso
-- Menú → "Contabilidad": "Dashboard", "Pagos" y "Tarifas". Es un módulo aparte de Custodias con su propio permiso: tener Custodias no da acceso a Contabilidad.
+- Menú → "Contabilidad": "Dashboard", "Pagos" y "Tarifas". Es un módulo aparte con su propio permiso: tener Operaciones (y ver los viajes) no da acceso a Contabilidad.
 - Por ahora Contabilidad cubre el dinero de las custodias: cuánto se paga a chofer y custodios por cada viaje.
 
 ## Pagos
@@ -623,9 +623,11 @@ export const SECTION_GUIDES: Record<string, string> = {
   RRHH,
   VENTAS,
   CONTRATACION_PUBLICA,
-  OPERACIONES,
+  // Los viajes de custodia son parte de Operaciones (2026-11-18): su guía va con la de Operaciones.
+  OPERACIONES: `${OPERACIONES}
+
+${CUSTODIAS}`,
   CACAO,
-  CUSTODIAS,
   CONTABILIDAD,
   ADMIN,
   SISTEMAS,

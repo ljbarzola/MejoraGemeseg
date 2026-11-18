@@ -59,7 +59,7 @@ describe('buildCapabilitiesPrompt', () => {
     expect(buildCapabilitiesPrompt([])).toContain('Proyectos y Tareas');
     expect(buildCapabilitiesPrompt(['CACAO'])).toContain('Proyectos y Tareas');
     expect(
-      buildCapabilitiesPrompt(['CACAO', 'CUSTODIAS', 'RRHH', 'VENTAS', 'CONTRATACION_PUBLICA']),
+      buildCapabilitiesPrompt(['CACAO', 'OPERACIONES', 'RRHH', 'VENTAS', 'CONTRATACION_PUBLICA']),
     ).toContain('Proyectos y Tareas');
   });
 
@@ -71,14 +71,14 @@ describe('buildCapabilitiesPrompt', () => {
   it('con todas las secciones permitidas, incluye los cinco bloques de módulo con su intención (o el aviso de "sin consulta en vivo" para Contratación Pública)', () => {
     const prompt = buildCapabilitiesPrompt([
       'CACAO',
-      'CUSTODIAS',
+      'OPERACIONES',
       'RRHH',
       'VENTAS',
       'CONTRATACION_PUBLICA',
     ]);
     for (const titulo of [
       'Cacao',
-      'Custodias',
+      'Operaciones (incluye los viajes de custodia)',
       'Recursos Humanos',
       'Ventas y CRM',
       'Contratación Pública',

@@ -66,8 +66,8 @@ export default function Sidebar() {
   // Abiertos desde el inicio si se entra directo a una pantalla del módulo (si no, se ve cerrado y sin pista de dónde está cada cosa).
   const [contratacionPublicaOpen, setContratacionPublicaOpen] = useState(() => location.pathname.startsWith('/contratacion-publica'));
   // Custodias ya no es un módulo aparte (2026-11-16): sus viajes viven dentro de Operaciones, así que el menú de
-  // Operaciones también se abre en /custodias.
-  const enOperaciones = (ruta: string) => ruta.startsWith('/operaciones') || ruta.startsWith('/custodias');
+  // Las direcciones viejas /custodias redirigen a /operaciones/viajes.
+  const enOperaciones = (ruta: string) => ruta.startsWith('/operaciones');
   const [operacionesOpen, setOperacionesOpen] = useState(() => enOperaciones(location.pathname));
   const [bitacoraOpen, setBitacoraOpen] = useState(false);
 
@@ -223,6 +223,8 @@ export default function Sidebar() {
   // entidad y carpeta de Drive). Informes y Textos Institucionales siguen ocultos (ver
   // CP_MOSTRAR_SUBMODULOS_OCULTOS en App.tsx). Contratos, Horarios y Bitácoras pasaron a Operaciones (2026-11-05).
   const contratacionPublicaItems = [
+    // Dashboard primero, como en los demás módulos (2026-11-18).
+    { label: 'Dashboard', path: '/contratacion-publica', icon: '📊' },
     { label: 'Entidades Públicas', path: '/contratacion-publica/entidades', icon: '🏛️', grupo: 'Documentos' },
     // Solo el personal de Contratación Pública aprueba; el resto tiene "Por entregar".
     ...(canWrite('CONTRATACION_PUBLICA')
@@ -236,10 +238,9 @@ export default function Sidebar() {
 
   // Operaciones (2026-11-05): lo que hacen los guardias en cada puesto. El Resumen va primero, como en los demás módulos.
   // Los viajes de Custodias (2026-11-16) son un grupo más de Operaciones; su dashboard es una pestaña del Resumen.
-  // Quien tiene Custodias pero no Operaciones ve solo «Resumen» (el dashboard de custodias) y «Viajes».
+  // Desde 2026-11-18 Custodias no es una sección: los viajes los gobierna el permiso de Operaciones.
   const verOperaciones = canView('OPERACIONES');
-  const verCustodias = canView('CUSTODIAS');
-  const inicioOperaciones = verOperaciones ? '/operaciones' : '/custodias';
+  const inicioOperaciones = '/operaciones';
   const operacionesItems: SubItem[] = [
     ...(verOperaciones
       ? [
@@ -249,10 +250,10 @@ export default function Sidebar() {
           { label: 'Bitácoras', path: '/operaciones/bitacoras', icon: '📒', grupo: 'Seguimiento' },
           { label: 'Supervisión', path: '/operaciones/supervision', icon: '🧭' },
           { label: 'Inventario', path: '/operaciones/inventario', icon: '🎒', grupo: 'Material' },
+          { label: 'Viajes', path: '/operaciones/viajes', icon: '🚚', grupo: 'Custodias' },
+          { label: 'Configuración', path: '/operaciones/configuracion', icon: '⚙️', separadorAntes: true },
         ]
-      : [{ label: 'Resumen', path: '/custodias/dashboard', icon: '📊' }]),
-    ...(verCustodias ? [{ label: 'Viajes', path: '/custodias', icon: '🚚', ...(verOperaciones ? { grupo: 'Custodias' } : {}) }] : []),
-    ...(verOperaciones ? [{ label: 'Configuración', path: '/operaciones/configuracion', icon: '⚙️', separadorAntes: true }] : []),
+      : []),
   ];
 
   const sistemasSubItems = [
@@ -505,7 +506,7 @@ export default function Sidebar() {
           </>
         )}
 
-        {(verOperaciones || verCustodias) && (
+        {verOperaciones && (
           <>
             <button
               className={`sidebar-link ${isOperacionesActive ? 'sidebar-link-active' : ''}`}
@@ -545,10 +546,10 @@ export default function Sidebar() {
               className={`sidebar-link ${isContratacionPublicaActive ? 'sidebar-link-active' : ''}`}
               onClick={() => {
                 if (collapsed) {
-                  navigate('/contratacion-publica/entidades');
+                  navigate('/contratacion-publica');
                 } else {
                   setContratacionPublicaOpen(!contratacionPublicaOpen);
-                  if (!contratacionPublicaOpen) navigate('/contratacion-publica/entidades');
+                  if (!contratacionPublicaOpen) navigate('/contratacion-publica');
                 }
               }}
               title={collapsed ? 'Contratación Pública' : undefined}

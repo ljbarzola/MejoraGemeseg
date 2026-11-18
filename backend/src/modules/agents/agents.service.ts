@@ -208,8 +208,8 @@ export class AgentsService {
     const verVentas = await this.puedeVerSeccion(userId, companyId, 'VENTAS');
     // El Agente de Cacao (2026-11-11) funciona igual: lo ve cualquiera con acceso a la sección Cacao.
     const verCacao = await this.puedeVerSeccion(userId, companyId, 'CACAO');
-    // El Agente de Custodia (2026-11-16) tampoco se asigna: lo ve quien ve la sección Custodias.
-    const verCustodias = await this.puedeVerSeccion(userId, companyId, 'CUSTODIAS');
+    // El Agente de Custodia (2026-11-16) tampoco se asigna: lo ve quien ve Operaciones (Custodias dejó de ser una sección el 2026-11-18; el scope interno sigue siendo 'CUSTODIAS').
+    const verCustodias = await this.puedeVerSeccion(userId, companyId, 'OPERACIONES');
 
     const agentesBd = await this.prisma.agent.findMany({
       where: {

@@ -56,20 +56,20 @@ describe('AiService.canUseIntent — bloqueo de intenciones por permisos', () =>
   });
 
   it('sin fila UserPermission para la sección: permitido (mismo default permisivo del guard)', async () => {
-    permissions.getCompanySections.mockResolvedValue([{ key: 'CUSTODIAS', enabled: true }]);
+    permissions.getCompanySections.mockResolvedValue([{ key: 'OPERACIONES', enabled: true }]);
     permissions.getFixedSections.mockResolvedValue(['DASHBOARD', 'PROJECTS']);
     permissions.getUserPermissions.mockResolvedValue([]);
-    const allowed = await canUseIntent(1, 1, 'CUSTODIAS');
+    const allowed = await canUseIntent(1, 1, 'OPERACIONES');
     expect(allowed).toBe(true);
   });
 
   it('fila UserPermission con canView:false: denegado', async () => {
-    permissions.getCompanySections.mockResolvedValue([{ key: 'CUSTODIAS', enabled: true }]);
+    permissions.getCompanySections.mockResolvedValue([{ key: 'OPERACIONES', enabled: true }]);
     permissions.getFixedSections.mockResolvedValue(['DASHBOARD', 'PROJECTS']);
     permissions.getUserPermissions.mockResolvedValue([
-      { section: 'CUSTODIAS', canView: false, canWrite: false },
+      { section: 'OPERACIONES', canView: false, canWrite: false },
     ]);
-    const allowed = await canUseIntent(1, 1, 'CUSTODIAS');
+    const allowed = await canUseIntent(1, 1, 'OPERACIONES');
     expect(allowed).toBe(false);
   });
 

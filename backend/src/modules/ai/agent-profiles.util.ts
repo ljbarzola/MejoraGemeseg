@@ -12,7 +12,7 @@
 //            sección Cacao.
 //   CUSTODIA Agente de Custodia (2026-11-16, reemplaza a GEME-BOT): solo consultas
 //            operativas de Custodias (viajes, personal, placas), SIN dinero. Lo usa
-//            cualquiera que vea la sección Custodias, sin asignarlo.
+//            cualquiera que vea Operaciones, sin asignarlo (Custodias dejó de ser una sección el 2026-11-18).
 //
 // La lista de intenciones por perfil vive aquí, junto a la regla, para que
 // AiService y AiProcessor consulten lo mismo: no basta con que el prompt no
@@ -35,7 +35,8 @@ export function perfilDeAgente(scope: string | null | undefined): PerfilAgente {
 export function seccionDePerfil(perfil: PerfilAgente): string | null {
   if (perfil === 'VENTAS') return 'VENTAS';
   if (perfil === 'CACAO') return 'CACAO';
-  if (perfil === 'CUSTODIA') return 'CUSTODIAS';
+  // Custodias dejó de ser una sección (2026-11-18): el Agente de Custodia lo usa quien ve Operaciones.
+  if (perfil === 'CUSTODIA') return 'OPERACIONES';
   return null;
 }
 

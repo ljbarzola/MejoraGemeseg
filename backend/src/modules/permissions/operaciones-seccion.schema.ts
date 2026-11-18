@@ -42,6 +42,37 @@ interface PrismaCrudo {
   $transaction<T>(fn: (tx: PrismaCrudo) => Promise<T>): Promise<T>;
 }
 
+/**
+ * Custodias deja de ser una sección (2026-11-18): los viajes viven en Operaciones y los gobierna el
+ * permiso OPERACIONES. UNA SOLA VEZ se enciende OPERACIONES en las empresas que tenían CUSTODIAS,
+ * para que nadie pierda los viajes. Las filas de permiso por persona NO se copian: sin fila de
+ * OPERACIONES la persona ya la ve, y copiar un «Custodias: no» le quitaría Operaciones entera. Las
+ * filas viejas 'CUSTODIAS' quedan en la base y se ignoran (no se borran).
+ */
+export const MIGRACION_CUSTODIAS = 'custodias-a-operaciones-2026-11';
+
+export const SQL_EMPRESAS_CUSTODIAS_A_OPERACIONES = `INSERT INTO "CompanySection" ("companyId", "section", "fixedForAll")
+  SELECT "companyId", 'OPERACIONES', "fixedForAll"
+  FROM "CompanySection"
+  WHERE "section" = 'CUSTODIAS'
+  ON CONFLICT ("companyId", "section") DO NOTHING`;
+
+/** Devuelve true si se hizo ahora, false si ya estaba hecho. */
+export async function asegurarCustodiasEnOperaciones(
+  prisma: PrismaCrudo,
+): Promise<boolean> {
+  await prisma.$executeRawUnsafe(MIGRACION_DATOS_DDL);
+  return prisma.$transaction(async (tx) => {
+    const marcadas = await tx.$executeRawUnsafe(
+      SQL_MARCAR_MIGRACION,
+      MIGRACION_CUSTODIAS,
+    );
+    if (marcadas === 0) return false;
+    await tx.$executeRawUnsafe(SQL_EMPRESAS_CUSTODIAS_A_OPERACIONES);
+    return true;
+  });
+}
+
 /** Devuelve true si la copia se hizo ahora, false si ya estaba hecha. */
 export async function asegurarSeccionOperaciones(
   prisma: PrismaCrudo,

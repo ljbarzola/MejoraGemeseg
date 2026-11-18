@@ -68,15 +68,15 @@ describe('seccionDePerfil', () => {
   it('cada agente especializado exige la sección de su módulo; el general ninguna', () => {
     expect(seccionDePerfil('VENTAS')).toBe('VENTAS');
     expect(seccionDePerfil('CACAO')).toBe('CACAO');
-    expect(seccionDePerfil('CUSTODIA')).toBe('CUSTODIAS');
+    expect(seccionDePerfil('CUSTODIA')).toBe('OPERACIONES');
     expect(seccionDePerfil('GENERAL')).toBeNull();
   });
 });
 
 describe('contrato entre perfiles, intenciones y permisos', () => {
-  it('toda intención de Custodias existe en INTENT_SECTION y la gobierna la sección CUSTODIAS', () => {
+  it('toda intención de Custodias existe en INTENT_SECTION y la gobierna la sección OPERACIONES (Custodias ya no es una sección)', () => {
     for (const intent of INTENCIONES_CUSTODIA) {
-      expect(INTENT_SECTION[intent]).toBe('CUSTODIAS');
+      expect(INTENT_SECTION[intent]).toBe('OPERACIONES');
     }
   });
 

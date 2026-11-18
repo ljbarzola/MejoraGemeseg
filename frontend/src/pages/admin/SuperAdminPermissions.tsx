@@ -13,7 +13,6 @@ const SECTION_META: Record<string, { icon: string; desc: string }> = {
   CACAO: { icon: '🫘', desc: 'Módulo completo de inventario de cacao' },
   COMPANY_SETTINGS: { icon: '🎨', desc: 'Configuración de marca y colores' },
   COMPANIES: { icon: '🏢', desc: 'Gestión de empresas del plataforma' },
-  CUSTODIAS: { icon: '🛡️', desc: 'Gestión de custodias y nómina de seguridad' },
   RRHH: { icon: '👤', desc: 'Reclutamiento, contratos, capacitaciones, quejas y encuestas' },
   VENTAS: { icon: '💼', desc: 'Leads, visitas, metas y contratos de venta' },
   SISTEMAS: { icon: '🖥️', desc: 'Dashboard, herramientas, agentes de IA y soporte técnico interno' },

@@ -49,9 +49,6 @@ export default function Navbar() {
         {canView('CACAO') && (
           <button className="navbar-link navbar-link-cacao" onClick={() => navigate('/cacao')}>Cacao</button>
         )}
-        {canView('CUSTODIAS') && (
-          <button className="navbar-link" onClick={() => navigate('/custodias')}>Custodias</button>
-        )}
         {isSuperAdmin && (
           <button className="navbar-link navbar-link-admin" onClick={() => navigate('/admin/permissions')}>Permisos</button>
         )}

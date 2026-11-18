@@ -19,7 +19,7 @@ const nombreMes = (m: string) => `${MESES[Number(m.slice(5, 7)) - 1]} ${m.slice(
 
 /**
  * Cifras de los viajes de custodia. `incrustado`: se muestra como una pestaña del Resumen de Operaciones (sin
- * encabezado ni marco propio); sin él es la pantalla completa, que ve quien tiene Custodias y no Operaciones.
+ * encabezado ni marco propio); sin él es la pantalla completa (desde 2026-11-18 ya no tiene ruta propia: /custodias/dashboard lleva a la pestaña).
  */
 export default function CustodiasDashboard({ incrustado = false }: { incrustado?: boolean }) {
   const [mes, setMes] = useState(mesActual());

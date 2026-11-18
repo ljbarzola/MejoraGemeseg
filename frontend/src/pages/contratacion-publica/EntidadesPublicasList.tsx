@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { PROVINCIAS, sectoresDe } from '../../utils/entidadClasificacion';
 import {
   Plus, Pencil, X, Building2, FolderOpen, RefreshCw,
   Archive, ArchiveRestore,
@@ -77,7 +78,10 @@ const botonAviso: React.CSSProperties = { padding: '4px 12px', fontSize: '0.78re
 // Columnas opcionales que existen siempre; los campos configurables se suman.
 const COL_RUC = 'ruc';
 const COL_DIRECCION = 'direccion';
-const DEFAULT_VISIBLE = [COL_RUC, COL_DIRECCION];
+const COL_SECTOR = 'sector';
+const COL_PROVINCIA = 'provincia';
+const COL_CANTON = 'canton';
+const DEFAULT_VISIBLE = [COL_SECTOR, COL_PROVINCIA, COL_RUC, COL_DIRECCION];
 const claveColumnaCampo = (id: number) => `campo:${id}`;
 
 /** Un valor guardado de un campo configurable, listo para mostrar (fechas en DD/MM/AAAA). */
@@ -109,6 +113,9 @@ export default function EntidadesPublicasList() {
   const [formRuc, setFormRuc] = useState('');
   const [formTipo, setFormTipo] = useState<'PUBLICA' | 'PRIVADA'>('PUBLICA');
   const [formDireccion, setFormDireccion] = useState('');
+  const [formSector, setFormSector] = useState('');
+  const [formProvincia, setFormProvincia] = useState('');
+  const [formCanton, setFormCanton] = useState('');
   const [formExtra, setFormExtra] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -138,6 +145,17 @@ export default function EntidadesPublicasList() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => load(), []);
+
+  // «Completar» desde el Dashboard (2026-11-18) llega con ?editar=<id>: se abre su ventana de edición una vez.
+  const [params, setParams] = useSearchParams();
+  const editarId = Number(params.get('editar'));
+  useEffect(() => {
+    if (!editarId || entidades.length === 0) return;
+    const e = entidades.find((x) => x.id === editarId);
+    if (e) openEdit(e);
+    setParams((p) => { p.delete('editar'); return p; }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editarId, entidades]);
 
   useEffect(() => {
     getCamposEntidad().then(setCampos).catch(() => setCampos([]));
@@ -192,6 +210,9 @@ export default function EntidadesPublicasList() {
   };
 
   const columnasElegibles = [
+    { key: COL_SECTOR, label: 'Sector' },
+    { key: COL_PROVINCIA, label: 'Provincia' },
+    { key: COL_CANTON, label: 'Cantón' },
     { key: COL_RUC, label: 'RUC' },
     { key: COL_DIRECCION, label: 'Dirección' },
     ...camposActivos.map((c) => ({ key: claveColumnaCampo(c.id), label: c.nombre })),
@@ -202,6 +223,9 @@ export default function EntidadesPublicasList() {
     .filter((c): c is { key: string; label: string } => !!c);
 
   const valorDeColumna = (e: CPEntidadPublica, key: string): string => {
+    if (key === COL_SECTOR) return e.sector || '';
+    if (key === COL_PROVINCIA) return e.provincia || '';
+    if (key === COL_CANTON) return e.canton || '';
     if (key === COL_RUC) return e.ruc || '';
     if (key === COL_DIRECCION) return e.direccion || '';
     const campo = camposActivos.find((c) => claveColumnaCampo(c.id) === key);
@@ -217,6 +241,9 @@ export default function EntidadesPublicasList() {
       getValues: (e) => ({ valor: e.archivada ? 'ARCHIVADA' : 'ACTIVA', etiqueta: e.archivada ? 'Archivada' : 'Activa' }),
     },
     { key: 'tipo', etiqueta: 'Tipo', tipo: 'valores', orden: ['PUBLICA', 'PRIVADA'], getValues: (e) => ({ valor: e.tipo ?? 'PUBLICA', etiqueta: (e.tipo ?? 'PUBLICA') === 'PRIVADA' ? 'Privada' : 'Pública' }) },
+    { key: COL_SECTOR, etiqueta: 'Sector', tipo: 'valores', vacio: 'Sin dato', getValues: (e) => e.sector || null },
+    { key: COL_PROVINCIA, etiqueta: 'Provincia', tipo: 'valores', vacio: 'Sin dato', getValues: (e) => e.provincia || null },
+    { key: COL_CANTON, etiqueta: 'Cantón', tipo: 'texto', getValue: (e) => e.canton || null },
     { key: COL_RUC, etiqueta: 'RUC', tipo: 'texto', getValue: (e) => e.ruc },
     { key: COL_DIRECCION, etiqueta: 'Dirección', tipo: 'texto', getValue: (e) => e.direccion },
     ...camposActivos.map((c): ColumnaFiltro<CPEntidadPublica> => {
@@ -248,6 +275,9 @@ export default function EntidadesPublicasList() {
     filtered,
     {
       nombre: (e) => e.nombre,
+      [COL_SECTOR]: (e) => e.sector,
+      [COL_PROVINCIA]: (e) => e.provincia,
+      [COL_CANTON]: (e) => e.canton,
       [COL_RUC]: (e) => e.ruc,
       [COL_DIRECCION]: (e) => e.direccion,
       ...Object.fromEntries(
@@ -268,6 +298,9 @@ export default function EntidadesPublicasList() {
     setFormRuc('');
     setFormTipo('PUBLICA');
     setFormDireccion('');
+    setFormSector('');
+    setFormProvincia('');
+    setFormCanton('');
     setFormExtra({});
     setFormError('');
     setFieldErrors({});
@@ -285,6 +318,9 @@ export default function EntidadesPublicasList() {
     setFormRuc(e.ruc || '');
     setFormTipo(e.tipo ?? 'PUBLICA');
     setFormDireccion(e.direccion || '');
+    setFormSector(e.sector || '');
+    setFormProvincia(e.provincia || '');
+    setFormCanton(e.canton || '');
     setFormExtra(
       Object.fromEntries(Object.entries(e.camposExtra || {}).map(([k, v]) => [k, String(v)])),
     );
@@ -328,6 +364,10 @@ export default function EntidadesPublicasList() {
         ruc: formRuc.trim() || undefined,
         tipo: formTipo,
         direccion: formDireccion.trim() || undefined,
+        // Vacío viaja como '' para que el servidor lo deje sin dato.
+        sector: formSector,
+        provincia: formProvincia,
+        canton: formCanton.trim(),
         // Un campo vacío viaja como null para que el servidor lo borre.
         camposExtra: Object.fromEntries(
           camposActivos.map((c) => [String(c.id), (formExtra[String(c.id)] ?? '').trim() || null]),
@@ -659,10 +699,35 @@ export default function EntidadesPublicasList() {
                 </div>
                 <div className="form-group">
                   <label>Tipo</label>
-                  <select value={formTipo} onChange={(e) => setFormTipo(e.target.value as 'PUBLICA' | 'PRIVADA')}>
+                  <select value={formTipo} onChange={(e) => {
+                    const tipo = e.target.value as 'PUBLICA' | 'PRIVADA';
+                    setFormTipo(tipo);
+                    // Un sector de pública no vale para una privada (y al revés): se deja sin sector.
+                    if (formSector && !sectoresDe(tipo).includes(formSector)) setFormSector('');
+                  }}>
                     <option value="PUBLICA">Pública (entidad del Estado)</option>
                     <option value="PRIVADA">Privada (cliente privado)</option>
                   </select>
+                </div>
+                <div className="form-group">
+                  <label>Sector</label>
+                  <select value={formSector} onChange={(e) => setFormSector(e.target.value)}>
+                    <option value="">Sin sector</option>
+                    {sectoresDe(formTipo).map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Provincia</label>
+                    <select value={formProvincia} onChange={(e) => setFormProvincia(e.target.value)}>
+                      <option value="">Sin provincia</option>
+                      {PROVINCIAS.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Cantón</label>
+                    <input type="text" maxLength={80} value={formCanton} onChange={(e) => setFormCanton(e.target.value)} placeholder="Ej: Quito" />
+                  </div>
                 </div>
                 <div className="form-group">
                   <label>RUC</label>

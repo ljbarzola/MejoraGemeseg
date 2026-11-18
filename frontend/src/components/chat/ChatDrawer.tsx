@@ -41,7 +41,7 @@ function getAgentEmoji(agent: Agent | null): string {
 
 const esAgenteDeVentas = (agent: Agent | null | undefined) => agent?.scope === 'VENTAS';
 const esAgenteDeCacao = (agent: Agent | null | undefined) => agent?.scope === 'CACAO';
-// Agente de Custodia (2026-11-16): del sistema, sin dueño, lo ve quien tiene la sección Custodias.
+// Agente de Custodia (2026-11-16): del sistema, sin dueño, lo ve quien tiene Operaciones (Custodias dejó de ser una sección el 2026-11-18).
 const esAgenteDeCustodia = (agent: Agent | null | undefined) => agent?.scope === 'CUSTODIAS';
 
 // Preguntas de un clic para empezar con el Agente de Ventas. Son las que mejor sabe contestar.

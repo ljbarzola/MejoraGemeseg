@@ -286,7 +286,7 @@ export class AiService implements OnModuleInit {
         perfilAgente === 'CACAO'
           ? 'No tienes acceso a Cacao con tu usuario actual.'
           : perfilAgente === 'CUSTODIA'
-            ? 'No tienes acceso a Custodias con tu usuario actual.'
+            ? 'No tienes acceso a Operaciones con tu usuario actual.'
             : 'No tienes acceso a Ventas con tu usuario actual.',
       );
     }
@@ -722,7 +722,7 @@ export class AiService implements OnModuleInit {
       cacaoAgenteDisponible:
         seccion === null && (await this.tieneAgenteDeSistema(allowedKeys, SCOPE_CACAO, 'CACAO')),
       custodiaAgenteDisponible:
-        seccion === null && (await this.tieneAgenteDeSistema(allowedKeys, SCOPE_CUSTODIA, 'CUSTODIAS')),
+        seccion === null && (await this.tieneAgenteDeSistema(allowedKeys, SCOPE_CUSTODIA, 'OPERACIONES')),
       kbContext,
     })
       .map((p) => p.texto)

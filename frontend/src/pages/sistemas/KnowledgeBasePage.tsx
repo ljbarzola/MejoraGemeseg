@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import PageHeader from '../../components/common/PageHeader';
 import { getKnowledgeBase, updateKnowledgeBase } from '../../services/knowledge-base.service';
 
-const SECCIONES_EJEMPLO = ['CACAO', 'CUSTODIAS', 'RRHH', 'VENTAS', 'CONTRATACION_PUBLICA', 'SISTEMAS'];
+const SECCIONES_EJEMPLO = ['CACAO', 'OPERACIONES', 'RRHH', 'VENTAS', 'CONTRATACION_PUBLICA', 'SISTEMAS'];
 
 export default function KnowledgeBasePage() {
   const [content, setContent] = useState('');

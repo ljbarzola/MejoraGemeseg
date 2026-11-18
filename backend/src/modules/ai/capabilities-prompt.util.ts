@@ -55,7 +55,7 @@ export const CAPABILITY_MODULES: CapabilityModule[] = [
   { section: 'CACAO', titulo: 'Cacao', intents: [] },
   // Custodias (2026-11-16): los datos en vivo de los viajes son del Agente de Custodia (agente aparte,
   // sin dinero); Agente Gemeseg solo explica cómo se usa el módulo.
-  { section: 'CUSTODIAS', titulo: 'Custodias', intents: [] },
+  // (desde 2026-11-18 Custodias no es una sección: los viajes van dentro de Operaciones, más abajo)
   { section: 'RRHH', titulo: 'Recursos Humanos', intents: ['rrhh_resumen_personal'] },
   {
     section: 'VENTAS',
@@ -63,7 +63,7 @@ export const CAPABILITY_MODULES: CapabilityModule[] = [
     intents: [],
   },
   { section: 'CONTRATACION_PUBLICA', titulo: 'Contratación Pública', intents: [] },
-  { section: 'OPERACIONES', titulo: 'Operaciones', intents: [] },
+  { section: 'OPERACIONES', titulo: 'Operaciones (incluye los viajes de custodia)', intents: [] },
 ];
 
 export interface OpcionesCapacidades {
@@ -75,7 +75,7 @@ export interface OpcionesCapacidades {
   ventasAgenteDisponible?: boolean;
   /** Igual que ventasAgenteDisponible, para el Agente de Cacao (la persona ve la sección Cacao). */
   cacaoAgenteDisponible?: boolean;
-  /** Igual para Custodias: la persona ve la sección y el Agente de Custodia está activo. */
+  /** Igual para los viajes de custodia: la persona ve Operaciones y el Agente de Custodia está activo. */
   custodiaAgenteDisponible?: boolean;
 }
 
@@ -104,7 +104,7 @@ export function buildCapabilitiesPrompt(
                   (opciones.cacaoAgenteDisponible
                     ? ' Si la persona quiere esos datos, dile que use el Agente de Cacao desde el selector de agentes del chat.'
                     : '')
-                : m.section === 'CUSTODIAS'
+                : m.section === 'OPERACIONES'
                   ? ' No consultes viajes ni personal en vivo.' +
                     (opciones.custodiaAgenteDisponible
                       ? ' Si la persona quiere datos en vivo de los viajes (cuántos hay, quién los hizo, placas), dile que use el Agente de Custodia desde el selector de agentes del chat.'

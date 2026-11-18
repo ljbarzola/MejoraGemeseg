@@ -110,7 +110,7 @@ const SIGUIENTE: Record<string, { estado: 'EN_CAMINO' | 'LLEGO'; texto: string; 
 
 export default function CustodiasList() {
   const { canWrite } = usePermissions();
-  const puedeEscribir = canWrite('CUSTODIAS');
+  const puedeEscribir = canWrite('OPERACIONES');
   const [params, setParams] = useSearchParams();
   const [custodias, setCustodias] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

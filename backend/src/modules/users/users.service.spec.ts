@@ -58,7 +58,9 @@ describe('UsersService.create — permisos por defecto', () => {
     expect(sections).toContain('ADMIN');
     expect(sections).toContain('SISTEMAS');
     expect(sections).toContain('CACAO');
-    expect(sections).toContain('CUSTODIAS');
+    // Custodias dejó de ser una sección (2026-11-18): sus viajes los gobierna OPERACIONES.
+    expect(sections).not.toContain('CUSTODIAS');
+    expect(sections).toContain('OPERACIONES');
     expect(sections).toContain('RRHH');
     expect(sections).toContain('VENTAS');
   });

@@ -24,7 +24,8 @@ export default function OperacionesResumenPage() {
   const { canView } = usePerm();
   const [params, setParams] = useSearchParams();
   // «Custodias» es una ventana más del Resumen (2026-11-16): los viajes ya no son un módulo aparte.
-  const hayCustodias = canView('CUSTODIAS');
+  // Desde 2026-11-18 los viajes los gobierna el mismo permiso de Operaciones.
+  const hayCustodias = canView('OPERACIONES');
   const vista: 'puestos' | 'custodias' = hayCustodias && params.get('vista') === 'custodias' ? 'custodias' : 'puestos';
   const [opciones, setOpciones] = useState<OpcionPuestoBitacora[]>([]);
   const [filtros, setFiltros] = useState<FiltrosBitacoras>({});
@@ -45,7 +46,7 @@ export default function OperacionesResumenPage() {
       <OperacionesPageHeader
         pantalla="resumen"
         title="Resumen"
-        description="Cómo van los puestos hoy y lo que dejan las bitácoras: quién debe estar, qué hojas faltan por subir, qué porcentaje cuadra con el horario y qué hallazgos siguen abiertos. Si tienes Custodias, en esa pestaña ves cómo van los viajes."
+        description="Cómo van los puestos hoy y lo que dejan las bitácoras: quién debe estar, qué hojas faltan por subir, qué porcentaje cuadra con el horario y qué hallazgos siguen abiertos. En la pestaña Custodias ves cómo van los viajes."
       />
 
       {hayCustodias && (
