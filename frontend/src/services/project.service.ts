@@ -20,6 +20,20 @@ export async function getProjects(params?: {
   return res.data;
 }
 
+/**
+ * El listado viene paginado de 10 en 10: quien necesita TODOS los proyectos de la
+ * persona (selector de proyecto, filtros) debe recorrer las páginas.
+ */
+export async function getAllProjects(): Promise<{ id: number; name: string }[]> {
+  const primera = await getProjects({ page: 1 });
+  let todos = primera.data;
+  for (let pagina = 2; pagina <= primera.pagination.totalPages; pagina++) {
+    const resto = await getProjects({ page: pagina });
+    todos = todos.concat(resto.data);
+  }
+  return todos.map((p: any) => ({ id: p.id, name: p.name }));
+}
+
 export async function getProject(id: number) {
   const res = await api.get(`/projects/${id}`);
   return res.data;

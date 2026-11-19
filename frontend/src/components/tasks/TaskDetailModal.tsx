@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { getTask, updateTask, getProjectMembers, deleteTask } from '../../services/task.service';
+import { getTask, updateTask, getProjectMembers, getAssignableUsers, deleteTask } from '../../services/task.service';
 import { getUser } from '../../services/auth.service';
 import type { Task, ProjectMember } from '../../types/task';
 import { STATUS_LABELS, STATUS_COLORS } from '../../types/task';
 import ConfirmDialog from '../common/ConfirmDialog';
 import DateInput from '../common/DateInput';
 import ReminderPicker, { RECORDATORIOS_POR_DEFECTO } from './ReminderPicker';
+import { errorFechasTarea } from '../../utils/fechasTarea';
 
 interface Props {
   taskId: number;
@@ -69,7 +70,7 @@ export default function TaskDetailModal({ taskId, onClose, onChanged }: Props) {
         setSelectedAssignees(asignados);
         setReminderDays(recordatorios);
         inicial.current = { form: f, assignees: asignados, reminders: recordatorios };
-        setMembers(await getProjectMembers(t.projectId));
+        setMembers(t.projectId == null ? await getAssignableUsers() : await getProjectMembers(t.projectId));
       })
       .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
@@ -114,6 +115,11 @@ export default function TaskDetailModal({ taskId, onClose, onChanged }: Props) {
 
   const guardar = async (): Promise<boolean> => {
     if (!task) return false;
+    const errorFechas = errorFechasTarea(form.startDate, form.endDate);
+    if (errorFechas) {
+      setError(errorFechas);
+      return false;
+    }
     setSaving(true);
     setError('');
     try {
@@ -240,6 +246,9 @@ export default function TaskDetailModal({ taskId, onClose, onChanged }: Props) {
                 <div className="form-group">
                   <label htmlFor="tm-end">Fecha fin</label>
                   <DateInput id="tm-end" value={form.endDate} onChange={(v) => handleChange('endDate', v)} disabled={isViewer} />
+                  {errorFechasTarea(form.startDate, form.endDate) && (
+                    <span className="field-error">{errorFechasTarea(form.startDate, form.endDate)}</span>
+                  )}
                 </div>
               </div>
 

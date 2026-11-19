@@ -355,7 +355,7 @@ export class AiProcessor {
     const list = taskAssignees
       .map(
         (ta) =>
-          `- ${ta.task.title} [${ta.task.status}] (${ta.task.project.name})${ta.task.endDate ? ` - hasta ${ta.task.endDate.toLocaleDateString('es-EC')}` : ''}`,
+          `- ${ta.task.title} [${ta.task.status}] (${ta.task.project?.name ?? 'Sin proyecto'})${ta.task.endDate ? ` - hasta ${ta.task.endDate.toLocaleDateString('es-EC')}` : ''}`,
       )
       .join('\n');
 

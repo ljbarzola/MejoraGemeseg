@@ -19,15 +19,9 @@ export const PREFERENCIA_RECORDATORIOS_TAREAS = 'notificaciones:recordatorios-ta
 /** Valor guardado cuando la persona pide recibirlos solo en las notificaciones de la app (sin correo). */
 export const SOLO_NOTIFICACIONES = 'solo-notificaciones';
 
-/**
- * ¿Esta persona quiere el recordatorio también por correo? Sí por defecto: sin
- * preferencia guardada (o con un valor que no entendemos) se sigue enviando,
- * que es como funcionaba antes de que existiera la opción. Solo un
- * `solo-notificaciones` explícito lo apaga.
- */
-export function quiereCorreo(valorGuardado: unknown): boolean {
-  return !(Array.isArray(valorGuardado) && valorGuardado.includes(SOLO_NOTIFICACIONES));
-}
+// Desde 2026-11-18 el correo es opt-in (por defecto solo la notificación en la app):
+// la regla vive en common/utils/avisos-correo.util.ts y se reexporta aquí.
+export { quiereCorreo } from '../../common/utils/avisos-correo.util';
 
 /** Recordatorios que se crean cuando la tarea tiene fecha fin y no se eligió ninguno. */
 export const RECORDATORIOS_POR_DEFECTO = [1];

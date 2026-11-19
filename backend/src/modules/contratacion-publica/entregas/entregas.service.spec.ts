@@ -139,6 +139,14 @@ describe('EntregasService', () => {
       },
       department: { findUnique: jest.fn() },
       notificationConfig: { findUnique: jest.fn().mockResolvedValue(null) },
+      // El correo es opt-in (Perfil → «Avisos: app o correo»): por defecto todos los de estas pruebas lo pidieron.
+      userPreference: {
+        findMany: jest
+          .fn()
+          .mockImplementation(({ where }: { where: { userId: { in: number[] } } }) =>
+            Promise.resolve(where.userId.in.map((userId) => ({ userId, value: ['correo'] }))),
+          ),
+      },
       $transaction: jest.fn().mockResolvedValue([]),
     };
     notifications = { create: jest.fn().mockResolvedValue({}) };
@@ -674,6 +682,14 @@ describe('EntregasService', () => {
           correo: false,
         }),
       ).resolves.toBeUndefined();
+    });
+
+    it('sin pedir el correo en su Perfil solo llega la notificación en la app', async () => {
+      prisma.userPreference.findMany.mockResolvedValue([]);
+      prisma.user.findMany.mockResolvedValue([{ email: 'a@x.com', fullName: 'A' }]);
+      await service.avisar([4], 1, { titulo: 't', mensaje: 'm', link: '/x', correo: true });
+      expect(notifications.create).toHaveBeenCalledTimes(1);
+      expect(mail.sendMail).not.toHaveBeenCalled();
     });
 
     it('los correos salen con el remitente propio de Contratación Pública, sin mirar la configuración de RRHH', async () => {
