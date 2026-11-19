@@ -1,8 +1,54 @@
 steps:
-  # Build backend image (frontend is deployed separately to Firebase Hosting)
-  - name: 'gcr.io/cloud-builders/docker'
+  # Build backend image (frontend is deployed separately to Firebase Hosting).
+  # `waitFor: ['-']` arranca este paso y los del frontend a la vez (antes iban
+  # en fila). BuildKit + caché en línea: la imagen `latest` guarda su caché y
+  # el siguiente build reutiliza las capas del sistema (Chromium y LibreOffice)
+  # cuando no cambian. La primera vez no hay caché y tarda como antes.
+  # La etapa de compilación (npm ci, 90-100 s) se construye aparte y se guarda
+  # como imagen `mejora-gemeseg-backend-builder:cache` solo para reutilizar su
+  # caché; esa imagen NO se despliega. Con package*.json sin cambios, `npm ci`
+  # sale de caché. En las pruebas, un despliegue con código cambiado bajó de
+  # ~221 s a ~151 s en este tramo y la imagen final salió idéntica (mismas
+  # versiones de Node, Chromium y LibreOffice, mismos paquetes y mismo peso).
+  - id: 'build-builder'
+    name: 'gcr.io/cloud-builders/docker'
+    env:
+      - 'DOCKER_BUILDKIT=1'
+    waitFor: ['-']
     args:
       - 'build'
+      - '--target'
+      - 'backend-builder'
+      - '--build-arg'
+      - 'BUILDKIT_INLINE_CACHE=1'
+      - '--cache-from'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/gemeseg-repo/mejora-gemeseg-backend-builder:cache'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/gemeseg-repo/mejora-gemeseg-backend-builder:cache'
+      - '-f'
+      - 'backend/Dockerfile'
+      - '.'
+
+  # Guarda la caché de la etapa de compilación para el próximo build. Corre en
+  # paralelo con el resto: nada depende de que termine.
+  - id: 'push-builder-cache'
+    name: 'gcr.io/cloud-builders/docker'
+    waitFor: ['build-builder']
+    args:
+      - 'push'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/gemeseg-repo/mejora-gemeseg-backend-builder:cache'
+
+  - id: 'build-backend'
+    name: 'gcr.io/cloud-builders/docker'
+    env:
+      - 'DOCKER_BUILDKIT=1'
+    waitFor: ['build-builder']
+    args:
+      - 'build'
+      - '--build-arg'
+      - 'BUILDKIT_INLINE_CACHE=1'
+      - '--cache-from'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/gemeseg-repo/mejora-gemeseg-backend:latest'
       - '-t'
       - 'us-central1-docker.pkg.dev/$PROJECT_ID/gemeseg-repo/mejora-gemeseg-backend:$BUILD_ID'
       - '-t'
@@ -12,14 +58,18 @@ steps:
       - '.'
 
   # Push images
-  - name: 'gcr.io/cloud-builders/docker'
+  - id: 'push-backend'
+    name: 'gcr.io/cloud-builders/docker'
+    waitFor: ['build-backend']
     args:
       - 'push'
       - '--all-tags'
       - 'us-central1-docker.pkg.dev/$PROJECT_ID/gemeseg-repo/mejora-gemeseg-backend'
 
   # Deploy to Cloud Run
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  - id: 'deploy-backend'
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    waitFor: ['push-backend']
     entrypoint: 'gcloud'
     args:
       - 'run'
@@ -62,14 +112,21 @@ steps:
   # Build frontend. El intento anterior de desplegarlo vía GitHub Actions
   # (.github/workflows/firebase-hosting-merge.yml) fallaba porque requería un
   # secret FIREBASE_SERVICE_ACCOUNT que nunca se configuró en el repo.
-  - name: 'node:20'
+  # El frontend se instala y compila EN PARALELO con la imagen del backend
+  # (`waitFor: ['-']`); solo el despliegue a Hosting espera a Cloud Run, así el
+  # orden de salida sigue siendo backend primero y frontend después.
+  - id: 'frontend-install'
+    name: 'node:20'
     dir: 'frontend'
     entrypoint: 'npm'
+    waitFor: ['-']
     args: ['ci']
 
-  - name: 'node:20'
+  - id: 'frontend-build'
+    name: 'node:20'
     dir: 'frontend'
     entrypoint: 'npm'
+    waitFor: ['frontend-install']
     args: ['run', 'build']
     env:
       - 'VITE_API_URL=https://mejora-gemeseg-backend-141953681725.us-central1.run.app/api'
@@ -88,7 +145,9 @@ steps:
   # https://cloud.google.com/build/docs/deploying-builds/deploy-firebase).
   # No crear una clave de service account para esto — la política de la
   # organización bloquea `iam.serviceAccountKeys.create` incluso para Owner.
-  - name: 'us-docker.pkg.dev/firebase-cli/us/firebase'
+  - id: 'deploy-hosting'
+    name: 'us-docker.pkg.dev/firebase-cli/us/firebase'
+    waitFor: ['deploy-backend', 'frontend-build']
     args: ['deploy', '--project=mejora-gemeseg', '--only=hosting']
 
 options:
