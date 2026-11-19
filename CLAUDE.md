@@ -47,7 +47,7 @@ Los servicios reciben un unico `PrismaService`, asi que los specs instancian la 
 ## Arquitectura transversal
 
 ### Despliegue
-Todo sale de `cloudbuild.yaml` al empujar a `main` (ver `AGENTS.md`, «Despliegue»): backend (solo API) a Cloud Run y frontend a Firebase Hosting en el mismo build, en pasos secuenciales. `firebase.json` reenvia `/api/**`, `/health` y `/docs/**` de Hosting a Cloud Run, y `app.gemeseg.com` es dominio personalizado sobre Hosting.
+Todo sale de `cloudbuild.yaml` al empujar a `main` (ver `AGENTS.md`, «Despliegue»): backend (solo API) a Cloud Run y frontend a Firebase Hosting en el mismo build; el frontend se publica solo después de que Cloud Run termine de desplegar el backend. `firebase.json` reenvia `/api/**`, `/health` y `/docs/**` de Hosting a Cloud Run, y `app.gemeseg.com` es dominio personalizado sobre Hosting.
 - No meter el frontend en `backend/Dockerfile`: es un paso aparte para que un fallo del frontend no bloquee el backend.
 - El paso de Firebase usa el builder oficial `us-docker.pkg.dev/firebase-cli/us/firebase` con la identidad ambiental de la cuenta de servicio de Cloud Build. No usar `npx firebase-tools` sobre `node:20` (no toma esa identidad) ni un token personal `firebase login:ci` (se revoca), ni claves de service account (la politica de la organizacion las bloquea).
 - Variables de entorno de Cloud Run y secretos: solo en `cloudbuild.yaml` (`--set-env-vars`, `--set-secrets`); lo puesto a mano en la consola se pierde en el siguiente deploy. Pool de Prisma limitado a 3 (`DATABASE_POOL_MAX`).
