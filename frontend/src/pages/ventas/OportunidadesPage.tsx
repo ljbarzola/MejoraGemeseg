@@ -104,7 +104,6 @@ export default function OportunidadesPage() {
   const [hoyResponsable, setHoyResponsable] = useState('mine');
   const [fichaId, setFichaId] = useState<number | null>(null);
   const [mostrarEtapas, setMostrarEtapas] = useState(false);
-  const [personaNueva, setPersonaNueva] = useState(false);
   // Editar los datos de la empresa o persona desde su ficha.
   const [editarCliente, setEditarCliente] = useState<SalesClient | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -662,27 +661,12 @@ export default function OportunidadesPage() {
           clientes={clientes}
           clienteIdInicial={modal.modo === 'crear' ? modal.clienteId : undefined}
           servicios={servicios}
-          onNuevaPersona={modal.modo === 'crear' ? () => setPersonaNueva(true) : undefined}
+          camposCliente={modal.modo === 'crear' ? campos : undefined}
           onClose={() => setModal(null)}
           onSaved={() => {
             const eraNueva = modal.modo === 'crear';
             setModal(null);
             showToast(eraNueva ? 'Oportunidad creada' : 'Oportunidad actualizada', 'success');
-            cargar();
-          }}
-        />
-      )}
-
-      {personaNueva && (
-        <ClienteFormModal
-          client={null}
-          fields={campos}
-          onClose={() => setPersonaNueva(false)}
-          onSaved={() => {
-            // El servidor ya crea su primera oportunidad: no hace falta otra.
-            setPersonaNueva(false);
-            setModal(null);
-            showToast('Contacto registrado: quedó como oportunidad nueva', 'success');
             cargar();
           }}
         />

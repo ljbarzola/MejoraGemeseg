@@ -1,5 +1,6 @@
-import { useState, type CSSProperties } from 'react';
+import { useState } from 'react';
 import { X } from 'lucide-react';
+import ErrorBanner from '../common/ErrorBanner';
 import {
   createSalesClient,
   updateSalesClient,
@@ -77,20 +78,14 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
     return initial;
   });
   const [saving, setSaving] = useState(false);
+  // Mismo aviso que Nueva oportunidad: dentro de la ventana y traído a la vista (ErrorBanner).
+  const [error, setError] = useState('');
 
   const handleSave = async () => {
-    if (!name.trim()) {
-      showToast('El nombre es requerido', 'error');
-      return;
-    }
-    if (!fechaIngreso) {
-      showToast('La fecha de ingreso es requerida', 'error');
-      return;
-    }
-    if (fechaIngreso > hoy) {
-      showToast('La fecha de ingreso no puede ser futura', 'error');
-      return;
-    }
+    setError('');
+    if (!name.trim()) return setError('Escribe el nombre o la razón social.');
+    if (!fechaIngreso) return setError('Indica la fecha de ingreso.');
+    if (fechaIngreso > hoy) return setError('La fecha de ingreso no puede ser futura.');
     setSaving(true);
     try {
       // Al editar se parte de lo que la ficha ya tiene: el servidor reemplaza `extra` completo, y lo que este
@@ -131,28 +126,29 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
       }
       onSaved(creado);
     } catch (err: any) {
-      showToast(err?.response?.data?.message || 'No se pudo guardar', 'error');
+      const msg = err?.response?.data?.message;
+      setError((Array.isArray(msg) ? msg[0] : msg) || 'No se pudo guardar. Intenta de nuevo.');
     } finally {
       setSaving(false);
     }
   };
 
+  // Mismo formato que «Nueva oportunidad» (2026-11-19): `form-group` con sus etiquetas y campos, sin estilos sueltos.
   const renderCampo = (f: SalesClientField) => {
     if (f.fieldType === LISTA_SUBOPCIONES) {
       const subKey = subopcionesKey(f.key);
       const opciones = subserviciosDe(f.options, values[f.key] || '');
       return (
-        <div key={f.key} style={opciones.length > 0 ? { gridColumn: '1 / -1' } : undefined}>
-          <ExtraField
-            field={{ ...f, fieldType: 'SELECT' }}
+        <div key={f.key} className="form-group" style={opciones.length > 0 ? { gridColumn: '1 / -1' } : undefined}>
+          <label>{f.label}</label>
+          <SelectWithOther
+            field={f}
             value={values[f.key] || ''}
             onChange={(v) => setValues({ ...values, [f.key]: v, [subKey]: '' })}
           />
           {opciones.length > 0 && (
-            <div style={{ marginTop: 6 }}>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>
-                Subopciones <span style={{ fontWeight: 400 }}>(opcional)</span>
-              </label>
+            <div className="ficha-subopciones">
+              <span>Subopciones (opcional)</span>
               <SubserviciosCheckboxes
                 options={opciones}
                 value={values[subKey] || ''}
@@ -164,12 +160,9 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
       );
     }
     return (
-      <div key={f.key} style={f.fieldType === 'TEXTAREA' ? { gridColumn: '1 / -1' } : undefined}>
-        <ExtraField
-          field={f}
-          value={values[f.key] || ''}
-          onChange={(v) => setValues({ ...values, [f.key]: v })}
-        />
+      <div key={f.key} className="form-group" style={f.fieldType === 'TEXTAREA' ? { gridColumn: '1 / -1' } : undefined}>
+        <label>{f.label}</label>
+        <ExtraField field={f} value={values[f.key] || ''} onChange={(v) => setValues({ ...values, [f.key]: v })} />
       </div>
     );
   };
@@ -179,53 +172,54 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
       <div className={`modal ${soloDatos && !client ? 'modal-ventas-sm' : 'modal-ventas-md'}`} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{client ? 'Editar empresa o persona' : soloDatos ? 'Nueva empresa o persona' : yaEsCliente ? 'Nueva empresa o persona (ya contrata)' : 'Nueva empresa o persona en negociación'}</h3>
-          <button className="modal-close" onClick={onClose}>
+          <button className="modal-close" onClick={onClose} aria-label="Cerrar">
             <X size={16} />
           </button>
         </div>
         <div className="modal-body">
+          <ErrorBanner mensaje={error} />
           {!client && yaEsCliente && (
-            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#744210', background: '#fffaf0', border: '1px solid #fbd38d', borderRadius: 6, padding: '8px 10px' }}>
-              Queda como Cliente «Por contratar» hasta que cargues su contrato y no cuenta en las cifras de ventas nuevas.
-            </p>
+            <div className="form-ayuda ficha-ayuda-aviso">
+              <p>Queda como Cliente «Por contratar» hasta que cargues su contrato y no cuenta en las cifras de ventas nuevas.</p>
+            </div>
           )}
           {!client && soloDatos && (
-            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#666' }}>
-              Solo el nombre es obligatorio; el resto lo puedes completar después. La negociación se abre desde Posibles clientes o con «+ Nueva oportunidad» en Oportunidades.
-            </p>
+            <div className="form-ayuda">
+              <p>
+                Solo el <strong>nombre</strong> es obligatorio; el resto lo puedes completar después. La negociación se abre desde
+                Posibles clientes o con <strong>+ Nueva oportunidad</strong> en Oportunidades.
+              </p>
+            </div>
           )}
           {!client && !yaEsCliente && !soloDatos && (
-            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#666' }}>
-              Queda en Oportunidades como una negociación nueva y en el Directorio como prospecto hasta que acepte.
-            </p>
-          )}
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <Field label="Nombre / Razón social *" value={name} onChange={setName} />
+            <div className="form-ayuda">
+              <p>Queda en Oportunidades como una negociación nueva y en el Directorio como prospecto hasta que acepte.</p>
             </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>Fecha de ingreso *</label>
-              <DateInput value={fechaIngreso} onChange={setFechaIngreso} max={hoy}
-                style={{ padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }} />
+          )}
+          <div className="ficha-grid">
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+              <label>Nombre / Razón social *</label>
+              <input type="text" value={name} maxLength={200} autoFocus={!client}
+                onChange={(e) => setName(e.target.value)} placeholder="Ej: Textiles del Valle S.A." />
+            </div>
+            <div className="form-group">
+              <label>Fecha de ingreso *</label>
+              <DateInput value={fechaIngreso} onChange={setFechaIngreso} max={hoy} />
             </div>
             {camposVisibles.map(renderCampo)}
             {camposOpcionales.length > 0 && (
-              <details style={{ gridColumn: '1 / -1' }}>
-                <summary style={{ cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: '#2b6cb0' }}>
-                  Más datos (opcional): correo, teléfono, cédula / RUC, dirección…
-                </summary>
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12, marginTop: 10 }}>
+              <details className="form-mas" style={{ gridColumn: '1 / -1' }}>
+                <summary>Más datos (opcional): correo, teléfono, cédula / RUC, dirección…</summary>
+                <div className="ficha-grid">
                   {camposOpcionales.map(renderCampo)}
                 </div>
               </details>
             )}
             {/* Solo lectura: el vínculo lo crea el flujo "Referir un cliente", no este formulario. */}
             {client?.referredBy && (
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>Referido por</label>
-                <div style={{ padding: '6px 8px', borderRadius: 4, border: '1px solid #e2e8f0', background: '#f7fafc', fontSize: 12, color: '#2d3748' }}>
-                  {client.referredBy.fullName}
-                </div>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>Referido por</label>
+                <input type="text" value={client.referredBy.fullName} readOnly disabled />
               </div>
             )}
           </div>
@@ -241,82 +235,53 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
   );
 }
 
-function Field({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+// El control de un campo (sin etiqueta: la pone el `form-group` de arriba). Toma el estilo de los formularios.
+function ExtraField({ field, value, onChange }: { field: SalesClientField; value: string; onChange: (v: string) => void }) {
+  if (field.fieldType === 'DATE') return <DateInput value={value} onChange={onChange} />;
+  if (field.fieldType === 'BOOLEAN') {
+    return (
+      <select value={value || 'false'} onChange={(e) => onChange(e.target.value)}>
+        <option value="false">No</option>
+        <option value="true">Sí</option>
+      </select>
+    );
+  }
+  if (field.fieldType === 'SELECT') return <SelectWithOther field={field} value={value} onChange={onChange} />;
+  if (field.fieldType === 'TEXTAREA') {
+    return <textarea className="form-textarea" rows={3} value={value} onChange={(e) => onChange(e.target.value)} />;
+  }
   return (
-    <div>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)}
-        style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12, boxSizing: 'border-box' }} />
-    </div>
+    <input
+      type={field.fieldType === 'NUMBER' ? 'number' : field.fieldType === 'EMAIL' ? 'email' : 'text'}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
   );
 }
 
 // Sentinel para la opción "Otro" — nunca se guarda tal cual, ver SelectWithOther.
 const OTHER_SENTINEL = '__OTHER__';
 
-function ExtraField({ field, value, onChange }: { field: SalesClientField; value: string; onChange: (v: string) => void }) {
-  const inputStyle = { padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 };
-  return (
-    <div>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>{field.label}</label>
-      {field.fieldType === 'DATE' ? (
-        <DateInput value={value} onChange={onChange} style={inputStyle} />
-      ) : field.fieldType === 'BOOLEAN' ? (
-        <select value={value || 'false'} onChange={(e) => onChange(e.target.value)}
-          style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}>
-          <option value="false">No</option>
-          <option value="true">Sí</option>
-        </select>
-      ) : field.fieldType === 'SELECT' ? (
-        <SelectWithOther field={field} value={value} onChange={onChange} inputStyle={inputStyle} />
-      ) : field.fieldType === 'TEXTAREA' ? (
-        <textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          rows={3}
-          style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
-        />
-      ) : (
-        <input type={field.fieldType === 'NUMBER' ? 'number' : 'text'} value={value} onChange={(e) => onChange(e.target.value)}
-          style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
-      )}
-    </div>
-  );
-}
-
 // Mismo patrón que el Select de ContratoForm.tsx para campos DROPDOWN con
 // allowOther: se agrega una opción sentinel "Otro (especifique)" que cambia
 // a un <input> de texto libre. El valor se guarda literal (sin prefijo ni
 // key especial) — por eso "es Otro" se infiere del valor actual cuando no
-// calza con ninguna opción conocida, no de un flag aparte.
-function SelectWithOther({
-  field,
-  value,
-  onChange,
-  inputStyle,
-}: {
-  field: SalesClientField;
-  value: string;
-  onChange: (v: string) => void;
-  inputStyle: CSSProperties;
-}) {
+// calza con ninguna opción conocida, no de un flag aparte. Si la lista ya
+// trae su propio «Otro» (la fuente), no se repite.
+function SelectWithOther({ field, value, onChange }: { field: SalesClientField; value: string; onChange: (v: string) => void }) {
   const [forceOther, setForceOther] = useState(false);
   const options = field.options || [];
   const isKnownOption = !value || options.some((o) => o.key === value);
   const isOther = field.allowOther && (forceOther || (!!value && !isKnownOption));
+  const yaTraeOtro = options.some((o) => o.label.trim().toLowerCase() === 'otro');
 
   if (isOther) {
     return (
-      <div style={{ display: 'flex', gap: 6, minWidth: 0 }}>
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Especifica..."
-          style={{ ...inputStyle, flex: 1, minWidth: 0, boxSizing: 'border-box' }}
-        />
-        <button type="button" className="btn-secondary" style={{ padding: '4px 8px', fontSize: 11, whiteSpace: 'nowrap', flex: '0 0 auto' }}
-          title="Elegir de la lista" onClick={() => { setForceOther(false); onChange(''); }}>
+      <div style={{ display: 'flex', gap: 8, minWidth: 0 }}>
+        <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder="Especifica..."
+          style={{ flex: 1, minWidth: 0 }} />
+        <button type="button" className="btn-secondary" title="Elegir de la lista"
+          onClick={() => { setForceOther(false); onChange(''); }}>
           Lista
         </button>
       </div>
@@ -330,13 +295,12 @@ function SelectWithOther({
         if (e.target.value === OTHER_SENTINEL) { setForceOther(true); onChange(''); }
         else onChange(e.target.value);
       }}
-      style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
     >
-      <option value="">— Sin definir —</option>
+      <option value="">Elegir...</option>
       {options.map((o) => (
         <option key={o.key} value={o.key}>{o.label}</option>
       ))}
-      {field.allowOther && <option value={OTHER_SENTINEL}>Otro (especifique)</option>}
+      {field.allowOther && !yaTraeOtro && <option value={OTHER_SENTINEL}>Otro (especifique)</option>}
     </select>
   );
 }

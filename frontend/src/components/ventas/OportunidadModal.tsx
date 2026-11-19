@@ -8,11 +8,17 @@ import CotizacionesDeOportunidad from './CotizacionesDeOportunidad';
 import { usePerm } from '../../contexts/PermissionsContext';
 import DateInput from '../common/DateInput';
 import { diaEcuador } from '../../utils/rangoFechas';
+import SubserviciosCheckboxes from '../common/SubserviciosCheckboxes';
+import { useToast } from '../../contexts/ToastContext';
 import {
   createOportunidad,
+  createSalesClient,
   updateOportunidad,
+  subopcionesKey,
+  subserviciosDe,
   type Oportunidad,
   type SalesClient,
+  type SalesClientField,
   type SalesServicio,
   type UbicacionOportunidad,
 } from '../../services/ventas.service';
@@ -23,20 +29,38 @@ interface Props {
   clientes?: SalesClient[];
   clienteIdInicial?: number;
   servicios: SalesServicio[];
-  // Si se pasa, junto al selector de cliente aparece «Es una persona nueva».
-  onNuevaPersona?: () => void;
+  // Campos del Directorio. Si se pasan (al crear), aparece «Es nueva en el directorio»: la empresa o persona
+  // se registra AQUÍ MISMO, sin otra ventana, y nace con esta oportunidad (2026-11-19).
+  camposCliente?: SalesClientField[];
   onClose: () => void;
   onSaved: (o: Oportunidad) => void;
 }
+
+// Empresa o persona nueva: a la vista, lo que alimenta las cifras (fuente obligatoria, tipo de negocio y
+// público/privado); el contacto queda en «Más datos». «Servicio requerido» no se pide: los servicios son los
+// de esta oportunidad. La fecha de ingreso es la «Fecha en que llegó» de la oportunidad.
+const CAMPOS_A_LA_VISTA = ['tipo_negocio', 'sector'];
+const CAMPOS_CONTACTO = ['email', 'phone', 'ruc', 'address'];
+const OTRO = '__OTRO__';
 
 // Una oportunidad es una negociación de un servicio de un cliente: aquí se crea
 // una nueva (por ejemplo, un cliente que ya contrata y pide otro servicio) o se
 // corrigen sus datos. La etapa no se cambia aquí: tiene su propio flujo, porque
 // al cotizar se pide el monto y al perder, el motivo.
 export default function OportunidadModal({
-  modo, oportunidad, clientes = [], clienteIdInicial, servicios, onNuevaPersona, onClose, onSaved,
+  modo, oportunidad, clientes = [], clienteIdInicial, servicios, camposCliente, onClose, onSaved,
 }: Props) {
   const navigate = useNavigate();
+  const { showToast } = useToast();
+  // Alta de una empresa o persona nueva dentro de esta misma ventana.
+  const [nueva, setNueva] = useState(false);
+  const [nombreNuevo, setNombreNuevo] = useState('');
+  const [datosNuevo, setDatosNuevo] = useState<Record<string, string>>({});
+  // Si la empresa ya se guardó pero la oportunidad falló, el segundo «Guardar» no la vuelve a crear.
+  const [creada, setCreada] = useState<{ id: number; name: string } | null>(null);
+  const campo = (key: string) => camposCliente?.find((f) => f.key === key);
+  const campoFuente = campo('fuente');
+  const ponerDato = (key: string, valor: string) => setDatosNuevo((prev) => ({ ...prev, [key]: valor }));
   const [clienteId, setClienteId] = useState<number | ''>(oportunidad?.salesClientId ?? clienteIdInicial ?? '');
   const [titulo, setTitulo] = useState(oportunidad?.title ?? '');
   const [serviceIds, setServiceIds] = useState<number[]>(oportunidad?.services.map((s) => s.id) ?? []);
@@ -60,7 +84,13 @@ export default function OportunidadModal({
 
   const guardar = async () => {
     setError('');
-    if (modo === 'crear' && !clienteId) return setError('Elige la empresa o persona de la oportunidad.');
+    const altaNueva = modo === 'crear' && nueva && !creada;
+    if (altaNueva) {
+      if (!nombreNuevo.trim()) return setError('Escribe el nombre o la razón social de la empresa o persona nueva.');
+      if (campoFuente && !(datosNuevo.fuente ?? '').trim()) return setError('Elige la fuente: cómo llegó esta empresa o persona.');
+    } else if (modo === 'crear' && !nueva && !clienteId) {
+      return setError('Elige la empresa o persona de la oportunidad.');
+    }
     const montoNumero = monto.trim() === '' ? null : Number(monto.replace(',', '.'));
     if (montoNumero !== null && (Number.isNaN(montoNumero) || montoNumero < 0)) {
       return setError('El monto cotizado no es válido.');
@@ -68,6 +98,40 @@ export default function OportunidadModal({
     if (!llegoEl) return setError('Indica la fecha en que llegó la oportunidad.');
     if (llegoEl > hoy) return setError('La fecha en que llegó no puede ser futura.');
     setGuardando(true);
+    let idCliente = creada?.id ?? Number(clienteId);
+    if (altaNueva) {
+      try {
+        const extra: Record<string, string> = {};
+        for (const key of ['fuente', subopcionesKey('fuente'), ...CAMPOS_A_LA_VISTA]) {
+          const v = (datosNuevo[key] ?? '').trim();
+          if (v) extra[key] = v;
+        }
+        const contacto: Record<string, string> = {};
+        for (const key of CAMPOS_CONTACTO) {
+          const v = (datosNuevo[key] ?? '').trim();
+          if (v) contacto[key] = v;
+        }
+        // «Solo datos»: la empresa nace sin oportunidad propia; la única es la que se crea abajo, con todo lo
+        // que se marcó aquí (servicios, título, ubicación, notas). Su fecha de ingreso es la de llegada.
+        const nuevo = (await createSalesClient({
+          name: nombreNuevo.trim(),
+          fechaIngreso: llegoEl,
+          soloDatos: true,
+          ...contacto,
+          extra,
+        })) as SalesClient & { posiblesDuplicados?: { id: number; name: string }[] };
+        setCreada({ id: nuevo.id, name: nuevo.name });
+        idCliente = nuevo.id;
+        if (nuevo.posiblesDuplicados?.length) {
+          showToast(`Ojo: se parece a «${nuevo.posiblesDuplicados[0].name}», que ya está en el directorio`, 'info');
+        }
+      } catch (err: any) {
+        const msg = err?.response?.data?.message;
+        setError((Array.isArray(msg) ? msg[0] : msg) || 'No se pudo registrar la empresa o persona. Intenta de nuevo.');
+        setGuardando(false);
+        return;
+      }
+    }
     try {
       const datos = {
         receivedAt: llegoEl,
@@ -81,12 +145,17 @@ export default function OportunidadModal({
       };
       const guardada =
         modo === 'crear'
-          ? await createOportunidad({ ...datos, salesClientId: Number(clienteId) })
+          ? await createOportunidad({ ...datos, salesClientId: idCliente })
           : await updateOportunidad(oportunidad!.id, datos);
       onSaved(guardada);
     } catch (err: any) {
       const msg = err?.response?.data?.message;
-      setError((Array.isArray(msg) ? msg[0] : msg) || 'No se pudo guardar la oportunidad. Intenta de nuevo.');
+      const detalle = (Array.isArray(msg) ? msg[0] : msg) || 'No se pudo guardar la oportunidad. Intenta de nuevo.';
+      setError(
+        modo === 'crear' && nueva && idCliente
+          ? `«${nombreNuevo.trim()}» ya quedó en el directorio, pero la oportunidad no se creó: ${detalle} Pulsa Guardar otra vez.`
+          : detalle,
+      );
     } finally {
       setGuardando(false);
     }
@@ -117,7 +186,7 @@ export default function OportunidadModal({
             </div>
           )}
 
-          {modo === 'crear' && (
+          {modo === 'crear' && !nueva && (
             <div className="form-group">
               <label>Empresa o persona *</label>
               <select value={clienteId} onChange={(e) => setClienteId(e.target.value ? Number(e.target.value) : '')}>
@@ -126,13 +195,80 @@ export default function OportunidadModal({
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
-              {onNuevaPersona && (
-                <a href="#nueva-persona" className="enlace-tabla" onClick={(e) => { e.preventDefault(); onNuevaPersona(); }}
+              {camposCliente && (
+                <a href="#nueva-persona" className="enlace-tabla" onClick={(e) => { e.preventDefault(); setNueva(true); }}
                   style={{ display: 'inline-block', marginTop: 6, fontSize: 12.5 }}>
                   Es nueva en el directorio
                 </a>
               )}
             </div>
+          )}
+
+          {modo === 'crear' && nueva && (
+            <fieldset className="oport-nueva-persona" disabled={!!creada}>
+              <legend>Empresa o persona nueva</legend>
+              {creada ? (
+                <p className="oport-nueva-nota">Ya quedó guardada en el directorio. Solo falta crear la oportunidad.</p>
+              ) : (
+                <a href="#elegir-existente" className="enlace-tabla oport-nueva-volver"
+                  onClick={(e) => { e.preventDefault(); setNueva(false); }}>
+                  Elegir una que ya está en el directorio
+                </a>
+              )}
+              <div className="form-group">
+                <label>Nombre / Razón social *</label>
+                <input type="text" value={nombreNuevo} maxLength={200} autoFocus
+                  onChange={(e) => setNombreNuevo(e.target.value)} placeholder="Ej: Textiles del Valle S.A." />
+              </div>
+              {campoFuente && (
+                <div className="form-group">
+                  <label>{campoFuente.label} *</label>
+                  <CampoLista campo={campoFuente} valor={datosNuevo.fuente ?? ''}
+                    onChange={(v) => setDatosNuevo((prev) => ({ ...prev, fuente: v, [subopcionesKey('fuente')]: '' }))} />
+                  {subserviciosDe(campoFuente.options, datosNuevo.fuente ?? '').length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      <SubserviciosCheckboxes
+                        options={subserviciosDe(campoFuente.options, datosNuevo.fuente ?? '')}
+                        value={datosNuevo[subopcionesKey('fuente')] ?? ''}
+                        onChange={(v) => ponerDato(subopcionesKey('fuente'), v)}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="form-row">
+                {CAMPOS_A_LA_VISTA.map((key) => {
+                  const f = campo(key);
+                  if (!f) return null;
+                  return (
+                    <div className="form-group" key={key}>
+                      <label>{f.label} (opcional)</label>
+                      <CampoLista campo={f} valor={datosNuevo[key] ?? ''} onChange={(v) => ponerDato(key, v)} />
+                    </div>
+                  );
+                })}
+              </div>
+              <details className="oport-nueva-mas">
+                <summary>Más datos (opcional): correo, teléfono, cédula / RUC, dirección</summary>
+                <div className="form-row">
+                  {CAMPOS_CONTACTO.slice(0, 2).map((key) => (
+                    <div className="form-group" key={key}>
+                      <label>{campo(key)?.label ?? key}</label>
+                      <input type={key === 'email' ? 'email' : 'text'} value={datosNuevo[key] ?? ''}
+                        onChange={(e) => ponerDato(key, e.target.value)} />
+                    </div>
+                  ))}
+                </div>
+                <div className="form-row">
+                  {CAMPOS_CONTACTO.slice(2).map((key) => (
+                    <div className="form-group" key={key}>
+                      <label>{campo(key)?.label ?? key}</label>
+                      <input type="text" value={datosNuevo[key] ?? ''} onChange={(e) => ponerDato(key, e.target.value)} />
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </fieldset>
           )}
 
           <div className="form-group">
@@ -204,5 +340,38 @@ export default function OportunidadModal({
         </div>
       </div>
     </div>
+  );
+}
+
+// Lista de un campo del Directorio (fuente, tipo de negocio, público/privado). Si el campo admite «Otro»,
+// esa opción cambia a un texto libre que se guarda tal cual (mismo criterio que la ficha del Directorio).
+function CampoLista({ campo, valor, onChange }: { campo: SalesClientField; valor: string; onChange: (v: string) => void }) {
+  const [otro, setOtro] = useState(false);
+  const opciones = campo.options ?? [];
+  const esOtro = !!campo.allowOther && (otro || (!!valor && !opciones.some((o) => o.key === valor)));
+  if (esOtro) {
+    return (
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input type="text" value={valor} autoFocus placeholder="Especifica..." onChange={(e) => onChange(e.target.value)} />
+        <button type="button" className="btn-secondary" onClick={() => { setOtro(false); onChange(''); }}>Lista</button>
+      </div>
+    );
+  }
+  return (
+    <select
+      value={valor}
+      onChange={(e) => {
+        if (e.target.value === OTRO) { setOtro(true); onChange(''); } else onChange(e.target.value);
+      }}
+    >
+      <option value="">Elegir...</option>
+      {opciones.map((o) => (
+        <option key={o.key} value={o.key}>{o.label}</option>
+      ))}
+      {/* Si la lista ya trae su propio «Otro» (la fuente), no se repite. */}
+      {campo.allowOther && !opciones.some((o) => o.label.trim().toLowerCase() === 'otro') && (
+        <option value={OTRO}>Otro (especifique)</option>
+      )}
+    </select>
   );
 }

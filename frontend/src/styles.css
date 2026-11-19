@@ -2068,7 +2068,7 @@ a.enlace-tabla:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
+  padding: 16px 24px;
   border-bottom: 2px solid var(--gris-claro);
 }
 
@@ -2099,10 +2099,29 @@ a.enlace-tabla:hover {
 }
 
 .modal-body {
-  padding: 24px;
+  /* Arriba menos que abajo: con 24px el título quedaba muy separado de lo primero (2026-11-19). */
+  padding: 16px 24px 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* Todas las ventanas con la estructura estándar (2026-11-19, pedido de Leidy): el título y los botones
+   quedan fijos y solo el contenido se desplaza. Antes se desplazaba la ventana entera y su barra cortaba
+   las esquinas redondeadas de la derecha. Mismo patrón que ya usaban `.modal-tarea` y el catálogo del
+   Cotizador. `:where` deja la especificidad baja para que los ajustes propios de cada ventana sigan mandando. */
+.modal:where(:has(> .modal-body)) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal:where(:has(> .modal-body)) > :where(.modal-header, .modal-actions) {
+  flex: 0 0 auto;
+}
+.modal:where(:has(> .modal-body)) > :where(.modal-body) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Estilo por defecto para inputs/selects sueltos dentro de un modal (sin
@@ -5643,6 +5662,33 @@ textarea.chat-input {
 }
 .form-ayuda p { margin: 0 0 3px; }
 .form-ayuda p:last-child { margin-bottom: 0; }
+/* «Es nueva en el directorio» dentro de Nueva oportunidad (2026-11-19): un bloque en la misma ventana. */
+.oport-nueva-persona {
+  border: 1px solid #d9e2ec;
+  border-radius: 12px;
+  padding: 10px 14px 4px;
+  margin: 0 0 16px;
+  min-width: 0;
+}
+.oport-nueva-persona legend {
+  padding: 0 6px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #1a2b4a;
+}
+.oport-nueva-volver { display: inline-block; font-size: 12.5px; margin-bottom: 10px; }
+.oport-nueva-nota { margin: 0 0 10px; font-size: 12.5px; color: #276749; }
+.oport-nueva-mas, .form-mas { margin-bottom: 12px; }
+.oport-nueva-mas summary, .form-mas summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: #2b6cb0; margin-bottom: 10px; }
+/* Ficha de empresa o persona del Directorio (ClienteFormModal), mismo formato que Nueva oportunidad. */
+.ficha-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 16px; }
+.ficha-grid .form-group { min-width: 0; }
+.ficha-grid .form-group :is(input, select, textarea) { width: 100%; box-sizing: border-box; }
+.form-mas .ficha-grid { margin-top: 4px; }
+.ficha-subopciones { margin-top: 4px; font-size: 12.5px; }
+.ficha-subopciones > span { display: block; font-weight: 600; color: #718096; margin-bottom: 4px; }
+.ficha-ayuda-aviso { background: #fffaf0; border-color: #fbd38d; color: #744210; }
+@media (max-width: 560px) { .ficha-grid { grid-template-columns: minmax(0, 1fr); } }
 .fuente-grupo { margin-top: 8px; }
 .fuente-grupo-titulo {
   display: block;
