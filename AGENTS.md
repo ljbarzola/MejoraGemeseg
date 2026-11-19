@@ -65,7 +65,7 @@ Cada modulo tiene sus reglas, decisiones y trampas en su archivo de `.agents/mod
 | Auth, Users, perfil, sesiones | `users.md` |
 | Proyectos y tareas | `proyectos-tareas.md` |
 | Sistemas: herramientas, notificaciones, correo, base de conocimiento | `sistemas.md` |
-| Agentes de IA: chat, Agente Gemeseg, Ventas, Cacao, Custodia | `agents-ai.md` |
+| Agentes de IA: chat, Agente Gemeseg, Ventas, Cacao, Custodia | `agents-ai.md` (qué agentes construir después: `../PLAN_AGENTES_IA.md`) |
 | Mejora continua (agente semanal) | `mejora-continua.md` |
 | Recursos Humanos (Personal, Guardias, quejas, encuestas) | `recursos-humanos.md` |
 | Reclutamiento | `reclutamiento.md` |

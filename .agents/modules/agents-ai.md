@@ -1,6 +1,6 @@
 # Módulo: Agents (IA) — catálogo de agentes, chat «Agente Gemeseg» y agentes especializados
 
-Motor conversacional en `backend/src/modules/ai/`; catálogo (crear/editar/asignar) en `backend/src/modules/agents/`. Incluye la documentación de `/chat` y `/admin/agents`.
+Motor conversacional en `backend/src/modules/ai/`; catálogo (crear/editar/asignar) en `backend/src/modules/agents/`. Incluye la documentación de `/chat` y `/admin/agents`. Qué agentes construir después, dolores por área y orden recomendado: `.agents/PLAN_AGENTES_IA.md`.
 
 ## Endpoints
 - Admin (solo rol ADMIN, `RolesGuard`): `GET /admin/agents` (usuarios con agentes), `GET /admin/agents/catalog`, `GET /admin/agents/assignments`, `GET /admin/agents/user/:userId`, `POST /admin/agents` (se auto-asigna al creador), `PATCH /admin/agents/:id` (nombre, instrucciones, alcance, isActive), `DELETE /admin/agents/:id`, `POST|DELETE /admin/agents/:id/assign/:userId`.
