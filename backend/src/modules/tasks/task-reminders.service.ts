@@ -10,10 +10,12 @@ import {
 import {
   cuandoVence,
   diaDeVencimiento,
-  PREFERENCIA_RECORDATORIOS_TAREAS,
-  quiereCorreo,
   tocaEnviar,
 } from './task-reminders.util';
+import {
+  AVISOS_CLAVES,
+  personasConCorreo,
+} from '../../common/utils/avisos-correo.util';
 
 const CORREO_REMITENTE_TAREAS = 'sistemas@gemeseg.com';
 const NOMBRE_REMITENTE_TAREAS = 'Tareas GEMESEG';
@@ -113,7 +115,7 @@ export class TaskRemindersService {
       const aviso: AvisoTarea = {
         taskId: r.task.id,
         titulo: r.task.title,
-        proyecto: r.task.project.name,
+        proyecto: r.task.project?.name ?? 'Sin proyecto',
         texto: cuandoVence(
           faltan,
           formatoFecha(diaDeVencimiento(r.task.endDate as Date)),
@@ -132,8 +134,12 @@ export class TaskRemindersService {
       }
     }
 
-    // Quien eligió «solo notificaciones en la app» en su Perfil no recibe correo.
-    const sinCorreo = await this.personasSinCorreo([...porPersona.keys()]);
+    // Solo reciben correo quienes lo pidieron en su Perfil (por defecto, solo la notificación en la app).
+    const conCorreo = await personasConCorreo(
+      this.prisma,
+      [...porPersona.keys()],
+      AVISOS_CLAVES.RECORDATORIOS_TAREAS,
+    );
 
     if (opciones.dryRun) {
       return {
@@ -141,7 +147,7 @@ export class TaskRemindersService {
         personas: porPersona.size,
         destinatarios: [...porPersona.entries()].map(([userId, p]) => ({
           email: p.usuario.email,
-          correo: !sinCorreo.has(userId),
+          correo: conCorreo.has(userId),
           tareas: [...p.tareas.values()],
         })),
       };
@@ -156,7 +162,7 @@ export class TaskRemindersService {
         userId,
         p.usuario,
         tareas,
-        !sinCorreo.has(userId),
+        conCorreo.has(userId),
       );
       if (llego) p.reminderIds.forEach((id) => entregados.add(id));
     }
@@ -174,32 +180,7 @@ export class TaskRemindersService {
   }
 
   /**
-   * Personas, de entre `userIds`, que pidieron los recordatorios solo en la
-   * notificaciones (sin correo). Si la consulta falla se asume que todas quieren correo: es peor
-   * quedarse sin avisar que mandar un correo de más.
-   */
-  private async personasSinCorreo(userIds: number[]): Promise<Set<number>> {
-    try {
-      const filas = await this.prisma.userPreference.findMany({
-        where: {
-          key: PREFERENCIA_RECORDATORIOS_TAREAS,
-          userId: { in: userIds },
-        },
-        select: { userId: true, value: true },
-      });
-      return new Set(
-        filas.filter((f) => !quiereCorreo(f.value)).map((f) => f.userId),
-      );
-    } catch (err) {
-      this.logger.warn(
-        `No se pudieron leer las preferencias de aviso: ${(err as Error).message}`,
-      );
-      return new Set();
-    }
-  }
-
-  /**
-   * Notificación (y correo, si la persona no pidió lo contrario) para una persona.
+   * Notificación (y correo, si la persona lo pidió en su Perfil) para una persona.
    * Devuelve true si el aviso quedó resuelto: llegó por algún canal, o la
    * persona eligió no recibirlo por el único canal que tenía.
    */
@@ -254,7 +235,7 @@ export class TaskRemindersService {
           unica
             ? mensaje
             : `Tienes ${tareas.length} tareas con recordatorio:\n\n${lineas.join('\n')}`
-        }\n\nPuedes verlo aquí: ${base}${link}\n\nEste es un aviso automático del sistema de Gemeseg. Si prefieres recibir estos recordatorios solo en las notificaciones de la app (sin correo), cámbialo en tu Perfil: ${base}/profile`,
+        }\n\nPuedes verlo aquí: ${base}${link}\n\nEste es un aviso automático del sistema de Gemeseg. Si prefieres recibirlos solo en las notificaciones de la app (sin correo), cámbialo en tu Perfil: ${base}/profile`,
         from: CORREO_REMITENTE_TAREAS,
         fromName: NOMBRE_REMITENTE_TAREAS,
       });

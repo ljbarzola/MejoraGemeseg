@@ -217,11 +217,12 @@ model Task {
   priority       Priority       @default(MEDIUM)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
-  projectId      Int
+  projectId      Int?
+  createdById    Int?
   estimatedHours Float?
   endDate        DateTime?
   startDate      DateTime?
-  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project        Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignees      TaskAssignee[]
   reminders      TaskReminder[]
 }

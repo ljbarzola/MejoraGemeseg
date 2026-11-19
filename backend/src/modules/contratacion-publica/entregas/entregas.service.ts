@@ -26,6 +26,10 @@ import {
 } from '../entidades/entidad-folder.util';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { GmailMailService } from '../../mail/gmail-mail.service';
+import {
+  AVISOS_CLAVES,
+  personasConCorreo,
+} from '../../../common/utils/avisos-correo.util';
 import { PermissionsService } from '../../permissions/permissions.service';
 import {
   CreateEntregaDto,
@@ -1115,8 +1119,15 @@ export class EntregasService {
     link: string,
   ) {
     try {
+      // Correo solo a quien lo pidió en su Perfil (por defecto, solo la notificación en la app).
+      const quieren = await personasConCorreo(
+        this.prisma,
+        userIds,
+        AVISOS_CLAVES.CONTRATACION_PUBLICA,
+      );
+      if (quieren.size === 0) return;
       const usuarios = await this.prisma.user.findMany({
-        where: { id: { in: userIds }, companyId, isActive: true },
+        where: { id: { in: [...quieren] }, companyId, isActive: true },
         select: { email: true, fullName: true },
       });
       const base = (process.env.FRONTEND_URL || '').replace(/\/$/, '');

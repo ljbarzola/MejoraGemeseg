@@ -18,7 +18,8 @@ export interface Task {
   assignees: { user: TaskAssignee }[];
   /** Días antes de la fecha fin en que se avisa a los asignados (0 = el mismo día, positivo = antes, negativo = aviso único esos días después si sigue sin terminar). */
   reminderDays?: number[];
-  projectId: number;
+  /** Nulo = tarea «Sin proyecto». */
+  projectId: number | null;
 }
 
 export interface TaskGrouped {

@@ -14,7 +14,11 @@ export default function TaskDetailPage() {
   useEffect(() => {
     if (!id) return;
     getTask(Number(id))
-      .then((t) => navigate(`/projects/${t.projectId}?tarea=${t.id}`, { replace: true }))
+      .then((t) =>
+        navigate(t.projectId == null ? `/?tarea=${t.id}` : `/projects/${t.projectId}?tarea=${t.id}`, {
+          replace: true,
+        }),
+      )
       .catch(() => navigate('/projects', { replace: true }));
   }, [id, navigate]);
 

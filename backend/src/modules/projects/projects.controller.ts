@@ -116,6 +116,7 @@ export class ProjectsController {
       dto,
       req.user.userId,
       req.user.role,
+      req.user.companyId ?? null,
     );
   }
 
