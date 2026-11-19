@@ -1,128 +1,75 @@
-# Modulo: Users
+# Módulo: Users y Auth
 
-## Descripcion
-Gestion de usuarios del sistema con permisos por seccion.
+Usuarios, perfil, preferencias personales, autenticación, seguridad de sesión y contraseñas. Permisos por sección y empresas: ver `AGENTS.md`.
 
 ## Endpoints
-- `POST /users` - Crear usuario (solo ADMIN)
-- `GET /users` - Listar usuarios (cualquier autenticado)
-- `GET /users/me` - Perfil del usuario (con herramientas asignadas, `phone` y `hasPassword`; el hash nunca sale)
-- `PATCH /users/me` - La persona cambia SU teléfono (única cosa editable del perfil propio; ver punto 8)
-- `POST /auth/change-password` - Cambiar la propia contraseña desde el perfil (vive en `auth`; ver "Cambiar contraseña" abajo)
-- `GET /users/me/preferences/:key` / `PUT /users/me/preferences/:key` - Preferencia personal del usuario autenticado (ver punto 3)
-- `GET /users/stats` - Estadisticas (solo ADMIN)
-- `GET /users/locations` - Catálogo de ubicaciones de la empresa (solo ADMIN, ver punto 2)
-- `POST /users/locations` - Crear ubicación (solo ADMIN, ver punto 2)
-- `GET /users/:id` - Detalle de usuario (solo ADMIN)
-- `PATCH /users/:id` - Actualizar usuario (solo ADMIN)
-- `DELETE /users/:id` - Soft delete (solo ADMIN)
+**Users (`/users`)**
+- `POST /users` (ADMIN): el admin define la contraseña (sin default; se hashea). Crea filas `UserPermission` explícitas (punto 1).
+- `GET /users`: cualquier autenticado; la forma de la respuesta depende del rol (punto 7).
+- `GET /users/me`: perfil con herramientas asignadas, `phone`, `hasPassword`, `debeCambiarContrasena`. El hash nunca sale.
+- `PATCH /users/me`: la persona cambia SU teléfono (punto 8).
+- `GET|PUT /users/me/preferences/:key`: preferencia personal (punto 3).
+- `GET /users/stats`, `GET|POST /users/locations`, `GET|PATCH|DELETE /users/:id`: solo ADMIN (el Gerente ve la lista de administración, solo lectura). `DELETE` = soft delete. `PATCH` incluye `locationId`.
 
-## Permisos
-- `CompanySection`: controla que secciones puede ver cada empresa
-- `UserPermission`: controla canView/canWrite por usuario y seccion
-- Super Admin ve todo sin restricciones
-- Company Admin gestiona permisos de sus usuarios
+**Auth (`/auth`)**
+- `POST /auth/login`: devuelve JWT (7 días). `GET /auth/profile`.
+- `POST /auth/forgot-password/request|confirm`: recuperación en dos pasos (código de 6 dígitos por correo).
+- `POST /auth/change-password`: con sesión; `currentPassword` + `newPassword` (mín. 8). Los errores de validación son **400**, nunca 401 (el frontend cierra la sesión ante cualquier 401 fuera de `/auth/`). Devuelve un token nuevo que el frontend guarda.
+- No existe registro público (`/register` redirige al login). Los usuarios los crea un ADMIN.
 
-## Convenciones
-- Contraseña al crear usuario: el admin define la contraseña (no hay default)
-- El password se hashea antes de guardar
-- Nunca retornar el password hasheado en responses
+## Permisos (resumen)
+- `CompanySection`: secciones habilitadas por empresa. `UserPermission`: `canView`/`canWrite` por usuario y sección. Super admin ve todo; Company Admin gestiona los permisos de su empresa.
+- Gerente: solo lectura en Administración, Mi Empresa y Permisos usuarios (el rol manda para ver; escribir es solo ADMIN en backend). Los botones de cambio NO se esconden: al pulsarlos sale `SoloAdminDialog` («es solo para administradores…»). Toda pantalla nueva en solo lectura para algún rol usa el mismo diálogo.
+- Nunca devolver el hash de contraseña.
 
-## 1. Bug de permisos al crear usuario: filas `UserPermission` explícitas, no implícitas (2026-09-29)
+## 1. Bug de permisos al crear usuario: filas `UserPermission` explícitas, no implícitas
+El guard (`section-permission.guard.ts`) y `usePermissions.ts` tratan «sin fila `UserPermission`» como permitido (default permisivo deliberado, ver `AGENTS.md`). Por eso un usuario nuevo sin filas tenía acceso total mientras `/admin/user-permissions` lo mostraba sin marcar.
+- `UsersService.create()` (misma transacción): para cada sección de `ALL_SECTIONS` que no sea `SECCIONES_SIEMPRE_VISIBLES` ni `CompanySection.fixedForAll` de esa empresa, crea fila explícita: EMPLOYEE/MANAGER `canView:false, canWrite:false`; ADMIN `true/true`.
+- Super admin (`companyId: null`) no tiene filas (bypasea todo).
+- Backfill: `npm run backfill:permissions` (en `backend/`, `prisma/backfill-user-permissions.js`) aplica lo mismo a usuarios de empresa con cero filas. Dry-run por defecto, `--apply` ejecuta. Es JS plano con su propia copia de `ALL_SECTION_KEYS`/`SECCIONES_SIEMPRE_VISIBLES`: si cambia `permissions.service.ts`, actualizarlo también.
 
-**El bug:** `section-permission.guard.ts` (backend) y `usePermissions.ts` (frontend) tratan "no existe fila `UserPermission` para esa sección" como **"permitido"** — un default permisivo deliberado y documentado (ver `AGENTS.md`, "Permisos por seccion", punto 4 de `SectionPermissionGuard`), pensado para no dejar fuera a usuarios antiguos sin permisos cargados. El problema es que `UsersService.create()` nunca creaba ninguna fila para un usuario nuevo, así que ese usuario heredaba el default permisivo — acceso total a todo módulo habilitado para su empresa — mientras `/admin/user-permissions` lo mostraba con **todo sin marcar**, dando la impresión contraria (que estaba bloqueado).
+## 2. Ubicación por usuario + catálogo `CompanyLocation`
+- Columna «Ubicación» en Administración → Gestionar usuarios (`AdminDashboardPage.tsx`), ordenable y filtrable, con el patrón de tabla de `ContratosList.tsx`.
+- `CompanyLocation`: catálogo por empresa (`@@unique([companyId, nombre])`). `User.locationId` nullable con `onDelete: SetNull`.
+- Alta desde el modal «Editar usuario» («+ Agregar nueva ubicación…» → `POST /users/locations`, queda seleccionada).
+- Duplicados (sin distinguir mayúsculas): 409 con mensaje entendible.
+- `PATCH /users/:id` con `locationId` verifica en servidor que sea de la misma empresa del usuario editado (`ForbiddenException`); nunca confía en el cliente.
 
-**El fix (`UsersService.create()`, dentro de la misma transacción que crea el usuario):** para cada sección de `ALL_SECTIONS` que **no** sea `SECCIONES_SIEMPRE_VISIBLES` (Inicio/Proyectos) ni esté marcada `fixedForAll` para esa empresa (`CompanySection.fixedForAll`, ver `AGENTS.md`), se crea una fila `UserPermission` explícita:
-- **EMPLOYEE/MANAGER**: `canView: false, canWrite: false` — arrancan denegados en todo lo que no sea fijo, coherente con lo que `/admin/user-permissions` va a mostrar.
-- **ADMIN**: `canView: true, canWrite: true` — arranca con acceso explícito completo (antes quedaba sin filas, que en la práctica es el mismo resultado de acceso, pero ahora además se ve reflejado correctamente en esa pantalla en vez de aparecer "sin nada marcado").
+## 3. Preferencias personales por usuario: `UserPreference`
+- Modelo `UserPreference` (`userId` cascade, `key`, `value Json`, `@@unique([userId, key])`). Guardadas en la cuenta (siguen a la persona entre navegadores).
+- `GET|PUT /users/me/preferences/:key` usan siempre `req.user.userId`, sin sección de permiso, declarados antes de `:id`.
+- El servicio solo acepta claves `(columnas|notificaciones):[a-z0-9-]+`; el DTO valida un arreglo de máx. 50 strings de máx. 64 caracteres. Para otro tipo de preferencia, ampliar `PREFERENCE_KEY_PATTERN` y el DTO, no abrirlo a cualquier JSON. Los prefijos cerrados impiden que el cliente escriba claves internas (p. ej. `seguridad:`).
+- Frontend: `useColumnPreferences` + `ColumnPickerMenu` arrancan con caché local, adoptan el valor del servidor y `set()` guarda en ambos; si el servidor falla, el cambio queda en el navegador y se avisa.
+- **La tabla se crea sola al arrancar:** el despliegue (`cloudbuild.yaml` + `Dockerfile`) NO corre migraciones (el contenedor arranca `node dist/main`). `UsersService.onModuleInit` ejecuta SQL idempotente (`user-preference.schema.ts`, una sentencia por llamada); si falla, solo avisa en el log. Es una excepción puntual, no un sistema de migraciones: para otra tabla nueva, aplicar el SQL antes de desplegar o añadir un paso real de migración.
+- **Avisos: app o correo.** El Perfil permite elegir por tipo de aviso si llega solo en la app o también por correo (`notificaciones:<tipo>`, valor `correo` / `solo-notificaciones`; regla única en `common/utils/avisos-correo.util.ts`). Por defecto solo la app. Nombre de cara al usuario: «notificaciones en la app» (ícono de campana). Las notificaciones en la app no se pueden apagar. Ver `proyectos-tareas.md` (tareas) y `sistemas.md` (Notificaciones).
 
-Un super admin (`companyId: null`) no pasa por esto — no tiene filas `UserPermission` porque no las necesita (bypasea todo).
+## 4. Cambiar contraseña desde el perfil + cierre de sesiones
+- Perfil → `ChangePasswordSection`: actual, nueva (mín. 8) y repetirla, con `components/common/PasswordInput.tsx`. Cambiarla (o restablecerla con el código) cierra las demás sesiones.
+- `AuthService.changePassword`: contraseña actual incorrecta, nueva igual a la actual o cuenta sin contraseña → 400. Registra el corte y DESPUÉS firma el token, para que el nuevo (`iat` ≥ corte) sobreviva.
+- Cuentas solo-Google (`User.password` nulo): el perfil no muestra el formulario e indica usar «¿Olvidaste tu contraseña?» (`hasPassword` en `/users/me`).
+- **Corte de sesiones:** tabla `UserSessionCutoff (userId, validAfter)` (aparte, no columna en `User`: una columna faltante rompería toda consulta a `User` en producción). Se crea al arrancar en `SessionCutoffService.onModuleInit` (`auth/session-cutoff.schema.ts`). `JwtStrategy.validate` rechaza con 401 un token con `iat` anterior a `validAfter`. **Falla abierto** (sin tabla, sin fila o error de BD el token se acepta). Solo `changePassword` y `confirmPasswordReset` escriben el corte; si no se pudo guardar, la contraseña cambia igual y el mensaje no promete cerrar sesiones. Caché en memoria de 30 s por usuario (otra instancia de Cloud Run puede tardar hasta 30 s en enterarse).
 
-**Backfill para usuarios ya existentes** (`backend/prisma/backfill-user-permissions.js`, `npm run backfill:permissions` desde `backend/`): aplica la misma regla a cualquier usuario de empresa con **cero** filas `UserPermission` — Employee/Manager quedan denegados por defecto, Admin recibe las filas explícitas de acceso completo. Dry-run por defecto (reporta cuántos usuarios y una muestra de hasta 20, sin escribir nada); `--apply` ejecuta de verdad. Es JS plano (no pasa por `ts-node`), así que mantiene su propia copia de `ALL_SECTION_KEYS`/`SECCIONES_SIEMPRE_VISIBLES` — si se agrega o quita una sección en `permissions.service.ts`, actualizar también este script.
+## 5. Gerente en pantallas administrativas, Herramientas dentro de Sistemas y aviso de tickets
+- Gerente solo lectura: ver «Permisos (resumen)». Permisos usuarios redirige a quien no sea ADMIN/MANAGER (esa ruta no tiene `SectionRoute`). Mi Empresa lee la empresa por una ruta pública; la pantalla queda sin Guardar ni logo/colores editables.
+- **Herramientas** se gobierna por la sección `SISTEMAS` (`TOOLS` no está en `ALL_SECTIONS`; `ToolsController` usa `@Section('SISTEMAS', …)`). Filas `UserPermission` `TOOLS` antiguas quedan inertes y ya no se crean. En la Base de Conocimiento, un `## TOOLS` o `## AGENTS` se trata como `## SISTEMAS` (`LEGACY_HEADINGS` en `ai/knowledge-base.util.ts`). La Base de Conocimiento está en el submenú de Sistemas (`Sidebar.tsx`, `sistemasSubItems`).
+- **Aviso a Sistemas** al crear un ticket: ver `sistemas.md` (`notificarEquipoSistemas`). Solo recibe quien tiene `SISTEMAS` con «Escribir» marcado explícitamente; cada persona del equipo debe marcarse una vez.
 
-**Verificado end-to-end en local con llamadas HTTP reales:** un usuario EMPLOYEE recién creado recibió filas de denegación explícitas y quedó efectivamente bloqueado al intentar una intención de chat de un módulo restringido (ver `.agents/modules/agents-ai.md`, punto 1).
+## 7. Endurecimiento de seguridad
+- **Hash de contraseña:** `PrismaService` usa `omit: { user: { password: true } }` global. Solo `auth.service.ts` lo pide (`omit: { password: false }`; `getMe` con `select: { password: true }`). Cualquier `include` futuro queda protegido.
+- **Sin registro público.** `findAll` devuelve lista vacía a quien no tiene empresa y no es super admin (antes un `companyId` nulo veía a todas las empresas).
+- **`GET /users` por rol:** EMPLOYEE recibe solo `id, fullName, email, role, position, isActive, department {id,name}`; ADMIN y Gerente ven la ficha completa. Sin cédula, rol relacional, ubicación, teléfono ni conteos para EMPLOYEE (cubierto por prueba).
+- **Permisos entre empresas:** `PermissionsService.assertPuedeGestionarUsuario` (404 si no existe; super admin pasa; si no, misma empresa o 403). `setCompanySections` y `setUserPermissions` lanzan `ForbiddenException`, no `Error` (500).
+- **Límite de intentos:** `AuthThrottleService` + tabla `AuthAttempt` (creada al arrancar, falla abierto, `auth-throttle.schema.ts`). 5 fallos en 15 min por correo → 429 durante 15 min (con los minutos que faltan); login correcto reinicia. Claves `login:<correo>`, `reset:<correo>`, `cambio:<userId>`. Cada solicitud de `forgot-password/request` cuenta, exista o no el correo (no delata cuentas ni permite envío masivo). Se usa el correo y no la IP (no hay `trust proxy`); costo aceptado: alguien puede bloquear 15 min a otra persona. Un solo `INSERT … ON CONFLICT` atómico para varias instancias.
+- **Cambio de contraseña obligatorio a administradores:** `PasswordRotationService` marca al arrancar a los ADMIN activos con contraseña (y anteriores al corte configurado) con una fila `UserPreference` de clave `seguridad:…` y les cierra sesiones. `GET /users/me` devuelve `debeCambiarContrasena`; `CambioContrasenaObligatorio` (layout protegido) abre `ChangePasswordModal obligatorio` (sin X, Esc, clic fuera ni Cancelar) hasta que cambian la contraseña (`changePassword`/`confirmPasswordReset` la pasan a «hecha»). Para repetirlo en local: borrar esa fila y reiniciar el backend.
+- **Sistemas cerrado por defecto:** `SECCIONES_CERRADAS_POR_DEFECTO = ['SISTEMAS']` y `permiteSinFila()` en los 5 sitios que aplicaban «sin fila = permitido» (guard, `hasSectionAccess`, `evaluarAccesoSecciones`, `canUseIntent`, `getAllowedSectionKeys`). `getMyPermissions` entrega una fila denegada sintética, así el frontend no cambia. Quien no tenga fila `SISTEMAS` explícita (admins y usuarios antiguos incluidos) no ve Sistemas: darle fila `UserPermission` (`canView/canWrite` true) a quien deba conservarlo.
+- **`/tools` por empresa:** `ToolsService` filtra asignaciones y personas por `user.companyId`; `assignTool`/`updateAssignment`/`removeAssignment`/`getAuditLog` dan 403 si la persona o asignación es de otra empresa; `removeTool` da 409 si otras empresas la tienen asignada (borrar la herramienta borra en cascada sus asignaciones). `Tool` es catálogo compartido sin `companyId`. El super admin lo ve todo.
+- **Repo público:** nunca poner contraseñas, `JWT_SECRET` ni ejemplos reales en el repo; las contraseñas de cuentas semilla y el secreto de producción no deben coincidir con nada documentado.
 
-## 2. Ubicación por usuario + catálogo `CompanyLocation` (2026-09-29)
-
-Nueva columna "Ubicación" en Administración → Gestionar usuarios (`AdminDashboardPage.tsx`), ordenable y filtrable — mismo patrón de tabla que `ContratosList.tsx` (`useResizableColumns('admin-users')` + `useSortableTable` + `ClearFiltersButton` + `RowActionsMenu`).
-
-- **`CompanyLocation`** (nuevo modelo): catálogo por empresa (`id`, `companyId`, `nombre`, `createdAt`, `@@unique([companyId, nombre])`) — mismo patrón que `PersonalFieldDefinition`/`JobPosition` (catálogo simple, sin enum). `User.locationId` es una FK nullable con `onDelete: SetNull` — borrar una ubicación no borra ni bloquea a los usuarios que la tenían, solo la deja vacía.
-- **Alta desde el propio formulario de edición**: el modal "Editar usuario" tiene un select de ubicaciones de la empresa más una opción "+ Agregar nueva ubicación..." que abre un campo inline, crea la ubicación (`POST /users/locations`) y la deja auto-seleccionada — no hace falta salir a una pantalla de catálogo aparte.
-- **Duplicados**: `POST /users/locations` compara sin distinguir mayúsculas/minúsculas y responde 409 con un mensaje entendible en vez de un error crudo de Prisma.
-- **Aislamiento entre empresas**: `PATCH /users/:id` con un `locationId` verifica en el servidor que esa ubicación pertenezca a la misma empresa del usuario que se está editando antes de guardar (`ForbiddenException` si no) — nunca confía en el `locationId` que manda el cliente a ciegas.
-
-## 3. Preferencias personales por usuario: `UserPreference` (2026-10-02)
-
-Nació para las columnas de la tabla de Clientes de Ventas (`useColumnPreferences` + `ColumnPickerMenu`), que antes vivían solo en `localStorage` y no seguían a la persona a otro navegador o computador. **Decisión explícita del usuario:** guardarlas en la cuenta.
-
-- **`UserPreference`** (nuevo modelo): `userId` (cascade), `key`, `value Json`, `@@unique([userId, key])`. Genérico, para otras preferencias de interfaz a futuro. Migración `20261002_user_preferences` (aditiva, idempotente).
-- **Endpoints** `GET|PUT /users/me/preferences/:key`: usan siempre `req.user.userId`; no hay forma de leer o escribir las de otro. Sin sección de permiso (dato personal). Declarados antes de `:id`. El servicio solo acepta claves `(columnas|notificaciones):[a-z0-9-]+` (la segunda familia se añadió el 2026-10-14 para elegir cómo llegan los recordatorios de tareas) y el DTO valida un arreglo de máx. 50 strings de máx. 64 caracteres — si se agrega otro tipo de preferencia, ampliar `PREFERENCE_KEY_PATTERN` y el DTO, no abrirlo a cualquier JSON.
-- **Frontend**: el hook arranca con el caché local, adopta el valor del servidor al llegar (salvo que la persona ya haya aplicado un cambio) y `set()` guarda en ambos; si el servidor falla, el cambio queda en el navegador y se avisa con un mensaje claro.
-- **La tabla se crea sola al arrancar (2026-10-02, fix posterior).** El despliegue (`cloudbuild.yaml` + `Dockerfile`) **no corre migraciones**: el contenedor arranca con `node dist/main`. La migración `20261002_user_preferences` se fusionó sin aplicarse, y en producción las rutas de preferencias habrían fallado por tabla inexistente. `UsersService.onModuleInit` ejecuta ahora el mismo SQL idempotente (`user-preference.schema.ts`, una sentencia por llamada) en cada arranque; si la base lo rechaza, solo deja un aviso en el log y el servicio sigue (el frontend usa su caché local). Es una excepción puntual para esta tabla, no un sistema de migraciones: para cualquier otra tabla nueva, aplicar el SQL antes de desplegar o agregar un paso real de migración al despliegue.
-
-- **Notificaciones en el Perfil (2026-10-14).** Sección "Recordatorios de tareas" de `ProfilePage.tsx` con dos opciones: *Notificaciones en la app y correo* (por defecto) y *Solo notificaciones en la app*. **Nombre de cara al usuario: "notificaciones en la app"** (el ícono de campana), sin diminutivos para el ícono: el usuario pidió ese nombre en todos los textos y documentos (2026-10-14). Guarda `notificaciones:recordatorios-tareas` con `['solo-notificaciones']` (apagar el correo) o `['correo']`; **sin fila se sigue enviando correo**, que es como funcionaba antes de la opción, y un valor que no se entiende tampoco lo apaga (`quiereCorreo`, `tasks/task-reminders.util.ts`). Las notificaciones en la app no se pueden apagar. El recordatorio de tareas lee la preferencia en lote antes de enviar; si esa lectura falla, envía correo igual (peor quedarse sin avisar que avisar de más). Decisión del usuario: poder elegir para no saturar el correo.
-
-## 4. Cambiar contraseña desde el perfil + cierre de sesiones (2026-10-06)
-
-Antes solo se podía recuperar la contraseña con "¿Olvidaste tu contraseña?" en el login; con la sesión iniciada no había forma. Ahora el Perfil (`ProfilePage` → `ChangePasswordSection`) tiene "Cambiar contraseña": actual, nueva (mín. 8) y repetirla, con ojito mostrar/ocultar (`components/common/PasswordInput.tsx`, reutilizable). **Decisiones del usuario:** cierra todas las demás sesiones, y el "olvidé mi contraseña" también.
-
-- **Endpoint:** `POST /auth/change-password` (`AuthService.changePassword`). Contraseña actual incorrecta, nueva igual a la actual o cuenta sin contraseña → **400** con mensaje claro (un 401 haría que el frontend cierre la sesión). Devuelve un token nuevo; el frontend lo guarda para que la sesión actual no se caiga. Primero se registra el corte y después se firma el token, así el nuevo (`iat` ≥ corte) sobrevive.
-- **Cuentas solo-Google** (`User.password` nulo): el perfil no muestra el formulario, indica usar "¿Olvidaste tu contraseña?" para crear una. `GET /users/me` expone `hasPassword`.
-- **Cierre de sesiones:** `SessionCutoffService` + tabla `UserSessionCutoff` (ver `AGENTS.md`, Auth). Se creó **tabla aparte** y no una columna en `User` porque una columna faltante habría roto toda consulta a `User` en producción (el despliegue no corre migraciones). Se crea sola al arrancar — mismo patrón que `UserPreference` (punto 3), segunda excepción a "no copiar este patrón": se aceptó porque falla abierto (sin la tabla solo se pierde el cierre de sesiones). Migración de registro: `20261006_user_session_cutoff`.
-- **Garantía de sesión abierta:** solo `changePassword` y `confirmPasswordReset` escriben el corte. Si no se pudo guardar, la contraseña cambia igual y el mensaje no promete cerrar sesiones.
-- **Costo:** una consulta por PK por usuario cada 30 s por instancia (caché en memoria), no una por petición.
-- ~~Pendiente (auditoría): sin límite de intentos~~ → **resuelto el 2026-10-14**, ver la sección 7.
-
-## 5. Gerente en pantallas administrativas, Herramientas dentro de Sistemas y aviso de tickets (2026-10-06)
-
-Pedido en producción: los gerentes deben **ver** Administración, Mi Empresa y Permisos usuarios; "Herramientas" seguía apareciendo como sección aparte en Permisos usuarios; y Sistemas debía enterarse de los reportes. **Decisiones del usuario:** gerente **solo lectura**; Herramientas se gobierna por la sección Sistemas; el aviso va a quien tiene **escritura** en Sistemas, de cualquier empresa.
-
-- **Gerente solo lectura:** ver `AGENTS.md` (Permisos, regla del Gerente). El rol manda para ver estas pantallas (ignora lo marcado por usuario); escribir sigue siendo solo ADMIN en el backend. Permisos usuarios además redirige a quien no sea ADMIN/MANAGER (esa ruta no tiene `SectionRoute`). Mi Empresa lee la empresa por una ruta pública, por eso el backend no cambió allí; la pantalla queda sin "Guardar" ni logo/colores editables.
-- **Herramientas:** `TOOLS` salió de `ALL_SECTIONS`; `ToolsController` pasó de `@Roles(ADMIN)` a `@Section('SISTEMAS', view|write)` (como `AgentsController`). Filas `UserPermission` `TOOLS` antiguas quedan inertes; `users.service.create` y `backfill-user-permissions.js` ya no las crean. En la Base de Conocimiento, un `## TOOLS` o `## AGENTS` antiguo se trata automáticamente como `## SISTEMAS` (`LEGACY_HEADINGS` en `ai/knowledge-base.util.ts`): su texto lo ve quien tiene Sistemas y no hace falta editar nada. La Base de Conocimiento tenía ruta (`/sistemas/base-conocimiento`, sección SISTEMAS) pero **no aparecía en el menú**: solo se llegaba por un botón del Dashboard de Sistemas. Desde 2026-10-06 está en el submenú de Sistemas (`Sidebar.tsx`, `sistemasSubItems`) y `## SISTEMAS` figura en la lista de encabezados de la pantalla.
-- **Aviso al gerente que intenta cambiar algo (2026-10-06):** los botones de cambio NO se esconden: al pulsarlos aparece `SoloAdminDialog` («No tienes permiso para esto: es solo para administradores… contacta a un administrador de tu empresa para que {acción}»). Aplica en Administración (Nuevo usuario y menú de cada fila), Mi Empresa (logo, colores, Guardar) y Permisos usuarios (casillas, Guardar, módulos fijos). Cualquier pantalla nueva en solo lectura para algún rol debe usar el mismo diálogo.
-- **Aviso a Sistemas:** `SistemasService.notificarEquipoSistemas`, solo campana, **solo a quien tiene SISTEMAS con "Escribir" marcado explícitamente** en Permisos usuarios (decisión del usuario; `getUsersWithExplicitSectionWrite`). Cada persona del equipo de Sistemas debe estar marcada una vez. Riesgo que SIGUE abierto: el default permisivo (sin fila = acceso) sí aplica a Herramientas, que expone claves de licencia — ver pendientes de seguridad.
-- ~~Pendiente: `POST /permissions/users/:userId` no validaba la misma empresa y varios endpoints lanzaban `Error` (500)~~ → **resuelto el 2026-10-14**, ver la sección 7.
-
-## 7. Endurecimiento de seguridad (2026-10-14)
-
-Pedido tras la auditoría; al revisar el código aparecieron hallazgos más graves que los anotados. Decisiones de la usuaria: forzar el cambio de contraseña solo a **administradores**; recortar `GET /users` para empleados; límite de intentos **en la base**; **desactivar el registro público**; Sistemas cerrado por defecto; `/tools` por empresa. Fuera de alcance: los 8 puntos de la revisión de Contratación Pública (nadie la usa aún en producción).
-
-- **Hash de contraseña:** salía en `GET /users` (abierto a CUALQUIER usuario con sesión), `POST/PATCH/GET /users/:id` y en `/tools` (`user: true`). Ahora `PrismaService` usa `omit: { user: { password: true } }`; `auth.service.ts` (login y cambiar contraseña) pide el hash con `omit: { password: false }` y `getMe` con `select: { password: true }` (verificado que respeta el omit). Cualquier `include` futuro queda protegido.
-- **Registro público eliminado:** `POST /auth/register`, `RegisterDto`, `RegisterPage`, el enlace del login y `register()` del servicio. `/register` redirige al login. El código tenía además un error: comparaba `@gemeseg.com` con `gemeseg.com`, así que quien se registraba nacía con `companyId` nulo y `GET /users` (sin filtro de empresa) le devolvía a TODAS las empresas. `findAll` ahora devuelve lista vacía a quien no tiene empresa y no es super admin.
-- **Lista de usuarios por rol:** EMPLOYEE recibe solo `id, fullName, email, role, position, isActive, department {id,name}` (lo que usan EntidadDetail, ProjectDetailPage y las encuestas). Sin cédula, rol de sistema relacional, ubicación ni conteos.
-- **Permisos entre empresas:** `PermissionsService.assertPuedeGestionarUsuario` (404 si no existe; super admin pasa; si no, misma empresa o 403). `setCompanySections` y el chequeo de `setUserPermissions` pasaron de `Error` a `ForbiddenException`.
-- **Límite de intentos:** `AuthThrottleService` + tabla `AuthAttempt` (se crea al arrancar, falla abierto). 5 fallos/15 min por correo → 429 15 min. Claves `login:<correo>`, `reset:<correo>`, `cambio:<userId>`. Un solo `INSERT … ON CONFLICT` atómico para varias instancias de Cloud Run.
-- **Cambio de contraseña obligatorio a administradores:** `PasswordRotationService` (ver `AGENTS.md`, Auth). Sin columna ni migración (fila en `UserPreference`; la lista cerrada de prefijos de la API de preferencias —`columnas:`, `notificaciones:`— impide que el cliente la escriba). `CambioContrasenaObligatorio` (layout protegido) abre `ChangePasswordModal obligatorio`.
-- **Sistemas cerrado por defecto:** `SECCIONES_CERRADAS_POR_DEFECTO = ['SISTEMAS']` y `permiteSinFila()` en los 5 sitios que aplicaban "sin fila = permitido" (guard, `hasSectionAccess`, `evaluarAccesoSecciones`, `canUseIntent`, `getAllowedSectionKeys`). `getMyPermissions` entrega una fila denegada sintética, así el frontend no cambió. ⚠️ **Consecuencia:** los administradores y usuarios antiguos que no tengan fila de SISTEMAS pierden Sistemas (en la BD local, `admin@gemeseg.com` era uno). Antes de desplegar, listar y decidir quién conserva acceso:
-  ```sql
-  SELECT u.id, u.email, u.role, c.name AS empresa FROM "User" u
-  LEFT JOIN "Company" c ON c.id = u."companyId"
-  WHERE u."companyId" IS NOT NULL AND u."isActive" = true
-    AND NOT EXISTS (SELECT 1 FROM "UserPermission" p WHERE p."userId" = u.id AND p.section = 'SISTEMAS')
-  ORDER BY c.name, u.role, u.email;
-  -- para quien deba conservarlo:
-  INSERT INTO "UserPermission" ("userId", section, "canView", "canWrite") VALUES (<id>, 'SISTEMAS', true, true);
-  ```
-- **`/tools` por empresa:** `ToolsService` recibe `req.user`; filtra asignaciones y personas por `user.companyId`; `assignTool`/`updateAssignment`/`removeAssignment`/`getAuditLog` dan 403 si la persona o asignación es de otra empresa; el conteo del catálogo es por empresa; `removeTool` da 409 si otras empresas la tienen asignada (borrar la herramienta borra en cascada sus asignaciones). El super admin lo ve todo. Herramientas es una pantalla de Sistemas.
-- **Revisión de secretos en git (solo lectura):** el repo es **público**. Nunca se commiteó una clave privada, un archivo de service account ni un `.env`. El "token" de `reporte_auditoria.txt` (commits de jul/ago) mide 37 caracteres: es un fragmento truncado y no sirve como token. Pero `AGENTS.md` publicaba un valor de ejemplo para `JWT_SECRET` (ya reemplazado por un marcador) y las contraseñas de las cuentas semilla de prueba. **A verificar en producción, antes de desplegar:** que el `JWT_SECRET` de Secret Manager no se parezca a ningún ejemplo del repositorio y que las cuentas reales no usen las contraseñas de las cuentas semilla. El `GITHUB_TOKEN` de `backend/.env` ya no lo usa el backend (GitHub Models se eliminó): conviene revocarlo.
-- **Consultas de apoyo para producción (solo lectura):**
-  ```sql
-  -- Cuentas sin empresa que no son super admin (posibles autoregistros):
-  SELECT id, email, "fullName", role, "isActive", "createdAt" FROM "User" WHERE "companyId" IS NULL AND role <> 'ADMIN' ORDER BY "createdAt" DESC;
-  -- Administradores a los que se obligará a cambiar la contraseña:
-  SELECT email, "companyId" FROM "User" WHERE role = 'ADMIN' AND "isActive" AND password IS NOT NULL AND "createdAt" < '2026-10-15';
-  ```
-- **Producción ya expuso esos hashes** a los empleados de cada empresa (y a cuentas autoregistradas): además del cambio obligatorio a administradores, conviene pedir el cambio al resto del personal. `GET /users` sigue abierto a cualquier empleado (los selectores de personas lo usan) pero ya sin datos sensibles.
-- **Pruebas:** 793 unitarias en verde (nuevas: `auth-throttle.service.spec`, `password-rotation.service.spec`, `permissions-seguridad.spec`, `users-seguridad.spec`, `tools.service.spec`, y ampliado `auth.service.spec`). Verificado contra la BD local con el backend real (45 comprobaciones de API: sin hash en ningún endpoint, 429 al 6.º intento, bandera y modal obligatorio, Sistemas sin fila → 403 y ticket sí, aislamiento entre GEMESEG y Mikacao) y en navegador (modal sin cerrar con X, Esc, clic fuera ni Cancelar).
-
-
-## 8. Teléfono de la persona: `User.phone` (2026-10-15)
-
-Lo pidió la usuaria para el encabezado del PDF del Cotizador (el original lo tenía en `profiles.telefono`). Decisiones suyas: **cada persona lo escribe en su perfil y el administrador también puede ponerlo o corregirlo**; si alguien no tiene, el PDF usa el +593 99 897 4909 del original (constante `TELEFONO_POR_DEFECTO` en `frontend/src/utils/telefono.ts`, un solo sitio).
-
-- **Columna nueva y opcional** `User.phone TEXT`. Como el deploy no corre migraciones y Prisma pide TODAS las columnas del modelo en cada consulta de `User`, una columna que falte en producción rompería el inicio de sesión de todos. Por eso se crea **al arrancar, dentro de `PrismaService.onModuleInit`**, justo después de conectar y antes de cualquier otro módulo (`src/prisma/user-phone.schema.ts`; `ADD COLUMN IF NOT EXISTS`, con un reintento por si dos instancias arrancan a la vez). Si falla, el servidor **no arranca** (mejor que arrancar a medias). Es solo aditivo: un deploy anterior sigue funcionando con la columna ya creada. `prisma/migrations/20261017_user_phone` existe solo como referencia (no usar `migrate deploy`). Es el primer caso de columna nueva sobre una tabla que ya existe; el patrón de `UserPreference`/`UserSessionCutoff` (tabla aparte) se usó antes justamente para evitar esto.
-- **Formato** (`users/phone.const.ts` en backend, `utils/telefono.ts` en frontend, misma regla): solo dígitos, espacios, `+`, guiones y paréntesis, entre 7 y 15 dígitos, máximo 25 caracteres. Permisivo a propósito (fijos, celulares, extranjeros). Vacío o `null` = sin teléfono. Sin validación específica de Ecuador.
-- **Quién lo ve:** la propia persona (`GET /users/me`), el administrador (`GET /users`, `GET /users/:id`; el Gerente ve la lista de administración) y el encabezado/PDF del Cotizador (`ownerPhone` de cada cotización = teléfono ACTUAL del dueño, no se congela). **No** entra al listado de EMPLOYEE (`findAll` con `select` mínimo, cubierto por prueba), ni al token JWT ni a la respuesta del login: el frontend lo pide a `/users/me` cuando lo necesita porque `localStorage['user']` solo se actualiza al iniciar sesión.
-- **`PATCH /users/me`** (cualquier autenticado): lista cerrada en `UpdateMeDto` (solo `phone`). Las propiedades extra se rechazan (el `ValidationPipe` global usa `forbidNonWhitelisted`), así nadie se cambia el rol, el nombre ni el cargo por aquí. Antes el perfil era 100 % de lectura; si en el futuro se quieren más campos editables, se añaden a ese DTO, nunca se abre `PATCH /users/:id` a la propia persona.
-- **Administración → Usuarios:** campo «Teléfono» en crear/editar y columna en la tabla. **Mi perfil:** «Teléfono» con «Agregar/Editar». Los errores del formulario de administración ahora hacen `scrollIntoView` (regla de la usuaria: el modal tiene scroll).
-- **Importación desde el cotizador original** (`backend/prisma/import-cotizador.js`): copia `profiles.telefono` a `User.phone` **solo si la persona no tiene uno** y el valor no es el número por defecto. Nunca pisa un teléfono ya escrito. Como el resto de la migración real, solo con autorización explícita.
+## 8. Teléfono de la persona: `User.phone`
+Sirve al encabezado del PDF del Cotizador. Cada persona lo escribe en su perfil y el administrador también lo edita. Si no hay, el PDF usa la constante `TELEFONO_POR_DEFECTO` (`frontend/src/utils/telefono.ts`, un solo sitio).
+- **Columna nueva sobre tabla existente:** como el deploy no corre migraciones y Prisma pide todas las columnas de `User` en cada consulta, una columna faltante rompería el login de todos. Se crea al arrancar en `PrismaService.onModuleInit` (`src/prisma/user-phone.schema.ts`, `ADD COLUMN IF NOT EXISTS`, con reintento por arranques simultáneos). Si falla, el servidor NO arranca. Solo aditivo. `prisma/migrations/20261017_user_phone` es solo referencia (no usar `migrate deploy`). Para columnas nuevas en tablas existentes, repetir este patrón; para tablas nuevas se usa tabla aparte.
+- **Formato** (`users/phone.const.ts` y `utils/telefono.ts`, misma regla): dígitos, espacios, `+`, guiones y paréntesis; 7-15 dígitos; máx. 25 caracteres. Vacío o `null` = sin teléfono. Sin validación específica de país.
+- **Quién lo ve:** la propia persona (`/users/me`), el administrador (`GET /users`, `GET /users/:id`) y el encabezado/PDF del Cotizador (`ownerPhone` = teléfono ACTUAL del dueño, no se congela). NO va en el listado de EMPLOYEE, ni en el JWT, ni en la respuesta del login: el frontend lo pide a `/users/me`.
+- **`PATCH /users/me`:** lista cerrada en `UpdateMeDto` (solo `phone`); las propiedades extra se rechazan (`forbidNonWhitelisted`). Para más campos editables, añadirlos a ese DTO; nunca abrir `PATCH /users/:id` a la propia persona.
+- Administración → Usuarios: campo y columna «Teléfono»; Mi perfil: «Teléfono» con Agregar/Editar. Los errores del formulario de administración hacen `scrollIntoView`.
+- `backend/prisma/import-cotizador.js` copia `profiles.telefono` a `User.phone` solo si la persona no tiene uno y no es el número por defecto; nunca pisa. Solo con autorización explícita.
