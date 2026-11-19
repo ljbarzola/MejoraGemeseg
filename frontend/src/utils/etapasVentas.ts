@@ -12,17 +12,28 @@ export function etapaDeReapertura<T extends EtapaOrden>(etapas: T[]): T | null {
   return abiertas[1] ?? abiertas[0] ?? null;
 }
 
-// Las etapas solo avanzan: una abierta pasa a una posterior; una cerrada solo se reabre. El servidor lo exige
-// igual; aquí la lista desplegable deja sin elegir lo que no se puede.
+// Las etapas se mueven en cualquier sentido (abierta adelante o atrás, cerrada a la etapa que se elija y
+// Aceptada ⇄ Perdida). Cualquier etapa de la empresa es un destino válido; lo único que no se permite es
+// quedarse en la misma. El servidor aplica la misma regla.
 export function etapaPermitida<T extends EtapaOrden>(
+  _opp: { status?: string | null; abierta: boolean },
+  _destino: T,
+  _etapas: T[],
+): boolean {
+  return true;
+}
+
+export type TipoCambioEtapa = 'AVANCE' | 'RETROCESO' | 'REAPERTURA' | 'CORRECCION';
+
+// Qué clase de cambio es, para que el cuadro de confirmación lo explique y pida la nota.
+export function tipoCambioEtapa<T extends EtapaOrden>(
   opp: { status?: string | null; abierta: boolean },
   destino: T,
   etapas: T[],
-): boolean {
+): TipoCambioEtapa {
+  if (!opp.abierta) return destino.isFinal ? 'CORRECCION' : 'REAPERTURA';
   const actual = etapas.find((e) => e.key === opp.status);
-  if (!actual || destino.key === opp.status) return true;
-  if (!opp.abierta) return destino.key === etapaDeReapertura(etapas)?.key;
-  return destino.order > actual.order;
+  return actual && destino.order < actual.order ? 'RETROCESO' : 'AVANCE';
 }
 
 export const SIGNIFICADO_ETAPA: Record<string, string> = {

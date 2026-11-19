@@ -5,6 +5,7 @@ import DateInput from '../common/DateInput';
 import MotivoCierreModal from './MotivoCierreModal';
 import ContratoComercialModal from './ContratoComercialModal';
 import { diaCorto } from '../../utils/contratoComercial';
+import { tipoCambioEtapa } from '../../utils/etapasVentas';
 import {
   cambiarEtapaOportunidad,
   getContratoComercial,
@@ -46,6 +47,7 @@ export default function CambioEtapaOportunidadModal({ oportunidad, etapas, desti
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
 
+  const tipo_cambio = tipoCambioEtapa(oportunidad, destino, etapas);
   const esPerdida = destino.key === 'RECHAZADO';
   const esCotizado = destino.key === 'COTIZADO';
   const esAceptada = destino.key === 'ACEPTADO';
@@ -231,14 +233,28 @@ export default function CambioEtapaOportunidadModal({ oportunidad, etapas, desti
             <Badge label={destino.label} color={destino.color} />
           </div>
 
-          {!oportunidad.abierta && (
+          {tipo_cambio === 'RETROCESO' && (
+            <div className="form-ayuda" style={{ background: '#fffbeb', borderColor: '#f6e05e' }}>
+              <p><strong>Vas a devolver esta oportunidad a una etapa anterior.</strong> Queda en el historial con quién lo hizo y la nota que escribas.</p>
+            </div>
+          )}
+
+          {tipo_cambio === 'REAPERTURA' && (
             <div className="form-ayuda" style={{ background: '#fffbeb', borderColor: '#f6e05e' }}>
               <p><strong>Vas a reabrir esta oportunidad.</strong> Vuelve a «{destino.label}» y quedará marcada con «!» para que se sepa que estuvo cerrada.</p>
               <p>
                 {oportunidad.outcome === 'GANADA'
-                  ? 'El contrato que se creó al aceptarla NO se borra. Si fue un error, cancélalo desde Contratos.'
+                  ? `El contrato que se creó al aceptarla NO se borra. Si fue un error, cancélalo desde Contratos. ${cliente} dejará de verse como cliente mientras no tenga otra oportunidad aceptada. Lo que ya se avisó a Google Ads no se retira ni se vuelve a enviar.`
                   : 'El motivo de pérdida anterior queda en el historial, pero ya no cuenta en el Dashboard mientras siga abierta.'}
               </p>
+            </div>
+          )}
+
+          {tipo_cambio === 'CORRECCION' && (
+            <div className="form-ayuda" style={{ background: '#fffbeb', borderColor: '#f6e05e' }}>
+              <p><strong>Vas a corregir el resultado:</strong> de «{origen?.label ?? 'Sin etapa'}» a «{destino.label}».</p>
+              {oportunidad.outcome === 'GANADA' && <p>Lo que ya se avisó a Google Ads no se retira.</p>}
+              <p>Para que aparezca como Aceptada se registra el contrato como al aceptar cualquier oportunidad; el contrato anterior no se borra.</p>
             </div>
           )}
 
@@ -345,8 +361,8 @@ export default function CambioEtapaOportunidadModal({ oportunidad, etapas, desti
           )}
 
           <div className="form-group">
-            <label>Nota del cambio (opcional)</label>
-            <textarea className="form-textarea" rows={2} maxLength={500} value={notas} onChange={(e) => setNotas(e.target.value)} />
+            <label>{tipo_cambio === 'AVANCE' ? 'Nota del cambio (opcional)' : 'Nota (opcional)'}</label>
+            <textarea className="form-textarea" rows={2} maxLength={500} placeholder={tipo_cambio === 'AVANCE' ? undefined : 'Ej: el cliente pidió una nueva cotización'} value={notas} onChange={(e) => setNotas(e.target.value)} />
           </div>
         </div>
         <div className="modal-actions">

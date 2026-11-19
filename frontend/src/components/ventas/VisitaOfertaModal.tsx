@@ -50,7 +50,7 @@ const mensajeDe = (err: any, porDefecto: string) => {
 // Cierre de una visita de campo: qué se ofreció (productos y servicios del catálogo, el mismo de «Nueva
 // oportunidad»), el monto y el resultado. Está conectado a la oportunidad: si la visita no tiene, se puede crear
 // aquí; al completar se le suman los servicios y el monto, y se propone mover su etapa según el resultado con el
-// mismo cuadro de «Cambiar de etapa» de Oportunidades (la etapa solo avanza; si no se puede, no se fuerza).
+// mismo cuadro de «Cambiar de etapa» de Oportunidades (la visita solo propone avanzar la etapa, nunca devolverla).
 export default function VisitaOfertaModal({ visita, onClose, onDone }: Props) {
   const [servicios, setServicios] = useState<SalesServicio[]>([]);
   const [etapas, setEtapas] = useState<SalesClientStage[]>([]);
@@ -97,7 +97,10 @@ export default function VisitaOfertaModal({ visita, onClose, onDone }: Props) {
     return clave ? etapas.find((e) => e.key === clave) ?? null : null;
   }, [resultado, etapas]);
   const oportunidadAbierta = !!oportunidad && oportunidad.abierta;
-  const puedeMoverEtapa = !!(oportunidadAbierta && etapaDestino && oportunidad!.status !== etapaDestino.key && etapaPermitida(oportunidad!, etapaDestino, etapas));
+  // La visita solo propone AVANZAR la etapa (nunca devolverla por sí sola); devolverla es decisión de quien lo hace en Oportunidades.
+  const etapaActual = oportunidad ? etapas.find((e) => e.key === oportunidad.status) ?? null : null;
+  const puedeMoverEtapa = !!(oportunidadAbierta && etapaDestino && oportunidad!.status !== etapaDestino.key
+    && etapaPermitida(oportunidad!, etapaDestino, etapas) && (!etapaActual || etapaDestino.order > etapaActual.order));
 
   // Lo que va a pasar al completar, dicho antes de hacerlo.
   const aviso = (() => {
@@ -107,7 +110,7 @@ export default function VisitaOfertaModal({ visita, onClose, onDone }: Props) {
     const suma = 'Se agregarán los productos y servicios a la oportunidad y se actualizará su monto cotizado con el de aquí (si lo dejas vacío, el monto no cambia).';
     if (!etapaDestino) return `${suma} Su etapa no cambia.`;
     if (oportunidad.status === etapaDestino.key) return `${suma} Ya está en «${etapaDestino.label}».`;
-    if (!puedeMoverEtapa) return `${suma} Ya está más adelante que «${etapaDestino.label}» y las etapas solo avanzan, así que su etapa no cambia.`;
+    if (!puedeMoverEtapa) return `${suma} Ya está más adelante que «${etapaDestino.label}»: la visita no la devuelve, así que su etapa no cambia.`;
     return `${suma} Después te propondremos pasarla a «${etapaDestino.label}».`;
   })();
 
