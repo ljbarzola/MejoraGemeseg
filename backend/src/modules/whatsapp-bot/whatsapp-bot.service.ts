@@ -461,6 +461,8 @@ export class WhatsappBotService implements OnModuleInit {
     let propuesta = '';
     let motivo: string | null = null;
     let cotizacionGuardada: unknown = null;
+    // Texto para el cliente que acompaña a una cotización en borrador (sale solo en modo automático).
+    let acuse = '';
     // Resumen que dejó el bot al dar por entendido el pedido: se muestra en Posibles clientes.
     let resumenListo: string | null = null;
     try {
@@ -514,8 +516,11 @@ export class WhatsappBotService implements OnModuleInit {
         let ext = extraerPedidoCotizacion(conListo.texto);
         // El bot cerró con [LISTO] sin pedir la cotización aunque el área la permite: una segunda lectura de la
         // conversación saca el pedido y el servidor lo calcula (queda como borrador para que una persona lo revise).
-        if (!ext.pedido && !ext.ilegible && resumenListo !== null && contexto) {
-          const delCierre = await this.pedidoDelCierre(contexto, ajustes.guion, historial, ultimo, resumenListo);
+        // También cuando el cliente pidió la cotización y el bot, en vez de calcularla, escaló por su cuenta
+        // («Cotización fuera de horario»): la lectura devuelve NINGUNA si de verdad faltan datos.
+        const pideCotizar = /cotiz|precio|valor|cu[aá]nto|presupuesto|costo|tarifa/i.test(`${ultimo} ${motivo ?? ''}`);
+        if (!ext.pedido && !ext.ilegible && contexto && (resumenListo !== null || (!!motivo && pideCotizar))) {
+          const delCierre = await this.pedidoDelCierre(contexto, ajustes.guion, historial, ultimo, resumenListo ?? motivo ?? '');
           if (delCierre) ext = { ...ext, pedido: delCierre };
         }
 
@@ -533,7 +538,10 @@ export class WhatsappBotService implements OnModuleInit {
         }
         const calculo = await this.calcularPedido(companyId, ajustes, ext.pedido, empresa);
         if (calculo.ok) {
-          propuesta = [ext.texto, calculo.texto].filter(Boolean).join('\n\n');
+          // El aviso al cliente («un asesor te enviará la cotización…») sale aparte y solo; la cotización con
+          // precio queda como borrador para que una persona la revise, la edite en el Cotizador y la envíe.
+          acuse = ext.texto || 'Gracias, ya tengo lo que necesito. Un asesor revisará tu cotización y te la enviará.';
+          propuesta = calculo.texto;
           cotizacionGuardada = calculo.registro;
           break;
         }
@@ -581,6 +589,18 @@ export class WhatsappBotService implements OnModuleInit {
     // pondré en contacto con un asesor» salen solos. Lo único que siempre revisa una persona antes de salir es
     // una respuesta con precios (cotización), aunque el bot esté en automático.
     const autoEnvio = ajustes.modo === 'AUTO' && !cotizacionGuardada;
+    if (acuse) {
+      const aviso = await this.insertarMensaje({
+        conversationId,
+        companyId,
+        direccion: 'SALIENTE',
+        autor: 'BOT',
+        estado: 'PROPUESTO',
+        texto: acuse,
+        respondeAId: mensajeClienteId,
+      });
+      if (aviso && ajustes.modo === 'AUTO') await this.enviarMensaje(companyId, aviso.id, ajustes);
+    }
     const msg = await this.insertarMensaje({
       conversationId,
       companyId,
@@ -821,7 +841,13 @@ export class WhatsappBotService implements OnModuleInit {
         { subtotal: c.totales.subtotal, iva: c.totales.iva, total: c.totales.total },
         empresa,
       ),
-      registro: { tipo: 'PRODUCTOS', lineas: filas, totales: c.totales },
+      // `items` (código y cantidad) permite abrir esta cotización en el Cotizador para editarla.
+      registro: {
+        tipo: 'PRODUCTOS',
+        lineas: filas,
+        totales: c.totales,
+        items: lineas.map((l) => ({ codigo: l.code, cantidad: l.qty })),
+      },
     };
   }
 

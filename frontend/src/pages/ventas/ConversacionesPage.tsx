@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Bot, Check, FlaskConical, Hand, RotateCcw, Send, UserRound, X } from 'lucide-react';
+import { Bot, Calculator, Check, FlaskConical, Hand, RotateCcw, Send, UserRound, X } from 'lucide-react';
 import ErrorBanner from '../../components/common/ErrorBanner';
+import CotizacionBotModal from '../../components/ventas/CotizacionBotModal';
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import { usePerm } from '../../contexts/PermissionsContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -67,6 +68,8 @@ export default function ConversacionesPage() {
   const [error, setError] = useState('');
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
+  // Mensaje del bot cuya cotización se está viendo en la vista previa.
+  const [verCot, setVerCot] = useState<MensajeWa | null>(null);
   // Borradores editados de las respuestas propuestas, por id de mensaje.
   const [borradores, setBorradores] = useState<Record<number, string>>({});
   const finRef = useRef<HTMLDivElement>(null);
@@ -249,6 +252,7 @@ export default function ConversacionesPage() {
                     onBorrador={(v) => setBorradores((b) => ({ ...b, [m.id]: v }))}
                     puedeEscribir={puedeEscribir}
                     enviando={enviando}
+                    onVerCotizacion={() => setVerCot(m)}
                     onAprobar={() => aprobar(m)}
                     onDescartar={() => accion(() => descartarRespuesta(conv.id, m.id), 'Respuesta descartada.')}
                   />
@@ -284,18 +288,28 @@ export default function ConversacionesPage() {
           )}
         </section>
       </div>
+
+      {verCot?.cotizacion && conv && (
+        <CotizacionBotModal
+          cotizacion={verCot.cotizacion}
+          puedeEditar={puedeEscribir}
+          onClose={() => setVerCot(null)}
+          onEditar={() => navigate(`/ventas/cotizador?conversacion=${conv.id}&mensaje=${verCot.id}`)}
+        />
+      )}
     </div>
   );
 }
 
 function Burbuja({
-  m, borrador, onBorrador, puedeEscribir, enviando, onAprobar, onDescartar,
+  m, borrador, onBorrador, puedeEscribir, enviando, onVerCotizacion, onAprobar, onDescartar,
 }: {
   m: MensajeWa;
   borrador: string | undefined;
   onBorrador: (v: string) => void;
   puedeEscribir: boolean;
   enviando: boolean;
+  onVerCotizacion: () => void;
   onAprobar: () => void;
   onDescartar: () => void;
 }) {
@@ -315,7 +329,14 @@ function Burbuja({
             className="conv-borrador" value={valor} rows={Math.min(8, Math.max(3, Math.ceil(valor.length / 60)))}
             onChange={(e) => onBorrador(e.target.value)} aria-label="Editar la respuesta antes de enviarla"
           />
-          {m.cotizacion && <p className="conv-cotizacion">{resumenCotizacion(m.cotizacion)}</p>}
+          {m.cotizacion && (
+            <div className="conv-cotizacion-tarjeta">
+              <span>{resumenCotizacion(m.cotizacion)}</span>
+              <button type="button" className="btn-secondary" onClick={onVerCotizacion}>
+                <Calculator size={15} aria-hidden /> Ver cotización
+              </button>
+            </div>
+          )}
           {m.error && <p className="conv-error-envio">{m.error}</p>}
           <span className="conv-borrador-acciones">
             <button type="button" className="auth-btn" disabled={enviando || !valor.trim()} onClick={onAprobar}>
@@ -344,10 +365,8 @@ function Burbuja({
 // tarifas del Cotizador (el bot no escribe precios); aquí se muestra con qué margen, para que la apruebe o la corrija.
 function resumenCotizacion(c: any): string {
   const usd = (n: unknown) => `$${Number(n ?? 0).toFixed(2)}`;
-  if (c?.tipo === 'CUSTODIA') {
-    return `Cotización calculada por el sistema (custodia móvil): costo ${usd(c.costoTotal)}, margen ${c.margenPct}%, precio ${usd(c.precioSinIva)} + IVA. Revísala antes de enviarla.`;
-  }
-  return `Cotización calculada por el sistema con los precios del Cotizador (total ${usd(c?.totales?.total)} con IVA). Revísala antes de enviarla.`;
+  const total = c?.tipo === 'CUSTODIA' ? c.total : c?.totales?.total;
+  return `Cotización del sistema (${c?.tipo === 'CUSTODIA' ? 'custodia móvil' : 'productos'}): ${usd(total)} con IVA. Revísala antes de enviarla.`;
 }
 
 // Solo en local (npm run dev): permite probar el bot sin una cuenta de Meta ni un número real.

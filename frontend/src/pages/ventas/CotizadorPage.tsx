@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FolderOpen, FileText, Lock, Package, Printer, Save, Plus, RotateCcw, Send, TriangleAlert, Users } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { ArrowLeft, FolderOpen, FileText, Lock, Package, Printer, Save, Plus, RotateCcw, Send, TriangleAlert, Users } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import DateInput from '../../components/common/DateInput';
 import ErrorBanner from '../../components/common/ErrorBanner';
@@ -73,8 +73,10 @@ import {
   type PriceChange,
 } from '../../utils/cotizador/pricing';
 import { calcularAlertas, SIN_LIMITES, type CotLimites } from '../../utils/cotizador/alertas';
-import { addInstall, addKit, addOrReplaceCustodia, addProduct } from '../../utils/cotizador/quoteState';
-import type { CotCustodiaLine } from '../../utils/cotizador/custodia';
+import { addInstall, addKit, addOrReplaceCustodia, addProduct, newProductLine } from '../../utils/cotizador/quoteState';
+import { lineaDesdeResultado, type CotCustodiaLine } from '../../utils/cotizador/custodia';
+import { calcularCustodia } from '../../services/cotizador-custodia.service';
+import { getConversacion } from '../../services/whatsappBot.service';
 import type {
   CotInstall,
   CotKit,
@@ -487,6 +489,57 @@ export default function CotizadorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, cargando]);
 
+  // «Editar en el Cotizador» desde Ventas › Conversaciones (/ventas/cotizador?conversacion=<id>&mensaje=<id>):
+  // abre la cotización que calculó el bot como borrador nuevo (con el nombre y teléfono del cliente de WhatsApp)
+  // y deja UN botón para volver a esa conversación. Si hay una cotización sin guardar en pantalla, se pregunta.
+  const navigate = useNavigate();
+  const [volverA, setVolverA] = useState<number | null>(null);
+  const [cotizarDesdeChat, setCotizarDesdeChat] = useState<{ conversacion: number; mensaje: number } | null>(null);
+  const empezarDesdeConversacion = async (conversacion: number, mensaje: number) => {
+    setCotizarDesdeChat(null);
+    try {
+      const d = await getConversacion(conversacion);
+      const cot = d.mensajes.find((x) => x.id === mensaje)?.cotizacion;
+      if (!cot) throw new Error('El mensaje ya no tiene una cotización.');
+      let items: typeof draft.items = [];
+      if (cot.tipo === 'CUSTODIA') {
+        const r = await calcularCustodia(cot.entrada);
+        items = [lineaDesdeResultado(r.entrada, r.resultado)];
+      } else {
+        items = ((cot.items ?? []) as { codigo: string; cantidad: number }[])
+          .filter((i) => byCode.has(i.codigo))
+          .map((i) => newProductLine(i.codigo, Number(i.cantidad) || 1));
+        if (!items.length) throw new Error('No se pudieron cargar los productos de esa cotización.');
+      }
+      const base = emptyDraft();
+      setDraft({
+        ...base,
+        ownerName: user?.fullName ?? '',
+        items,
+        client: { ...base.client, name: d.conversacion.contactName ?? '', phone: `+${d.conversacion.phone}` },
+      });
+      setClientErrors({});
+      setErrorGuardar('');
+      setErrorOportunidad(false);
+      firmaGuardada.current = null;
+      oportunidadLeidaDe.current = null;
+      oportunidadGuardada.current = null;
+      setVolverA(conversacion);
+      showToast('Cotización del bot abierta: edítala, guárdala y vuelve a la conversación.', 'success');
+    } catch (e) {
+      showToast(apiError(e, 'No se pudo abrir la cotización de la conversación.'), 'error');
+    }
+  };
+  useEffect(() => {
+    const conversacion = Number(searchParams.get('conversacion'));
+    const mensaje = Number(searchParams.get('mensaje'));
+    if (!conversacion || !mensaje || cargando) return;
+    setSearchParams({}, { replace: true });
+    if (draftHasContent(draft) && draft.quoteId === null) setCotizarDesdeChat({ conversacion, mensaje });
+    else void empezarDesdeConversacion(conversacion, mensaje);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, cargando]);
+
   useEffect(() => {
     const id = Number(searchParams.get('cotizacion'));
     if (!id || cargando) return;
@@ -772,6 +825,11 @@ export default function CotizadorPage() {
           description="Arma cotizaciones con el catálogo de productos y kits, calcula tus márgenes y descárgalas en PDF."
           actions={
             <>
+              {volverA && (
+                <button type="button" className="btn-secondary" onClick={() => navigate(`/ventas/conversaciones?c=${volverA}`)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <ArrowLeft size={15} /> Volver a la conversación
+                </button>
+              )}
               <button type="button" className="btn-secondary" onClick={() => setVerCatalogo(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Package size={15} /> Catálogo
               </button>
@@ -1365,6 +1423,15 @@ export default function CotizadorPage() {
           confirmLabel="Empezar nueva"
           onConfirm={() => void empezarParaOportunidad(cotizarPara)}
           onCancel={() => setCotizarPara(null)}
+        />
+      )}
+      {cotizarDesdeChat && (
+        <ConfirmDialog
+          title="Abrir la cotización del bot"
+          message="Tienes una cotización sin guardar en pantalla. ¿Descartarla y abrir la que preparó el bot?"
+          confirmLabel="Abrir la del bot"
+          onConfirm={() => void empezarDesdeConversacion(cotizarDesdeChat.conversacion, cotizarDesdeChat.mensaje)}
+          onCancel={() => setCotizarDesdeChat(null)}
         />
       )}
       {soloAdmin && <SoloAdminDialog accion={soloAdmin} onClose={() => setSoloAdmin(null)} />}

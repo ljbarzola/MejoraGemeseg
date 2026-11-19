@@ -92,3 +92,12 @@
 .cfg-bot-pilar-fila { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
 .cfg-bot-pilar .cfg-bot-pilar-fila { margin-top: 0; }
 .cfg-bot-pilar .cfg-bot-pilar-fila > input:not([type='checkbox']) { flex: 1; min-width: 200px; }
+
+/* Vista previa de la cotización que calculó el bot (modal «Ver cotización») */
+.conv-cot { display: flex; flex-direction: column; gap: 12px; }
+.conv-cot-nota { margin: 0; font-size: 13px; color: #5b6573; }
+.conv-cot-bloque { display: flex; flex-direction: column; border: 1px solid var(--borde, #e3e6ea); border-radius: 10px; padding: 4px 12px; }
+.conv-cot-fila { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid #eef0f3; font-size: 14px; }
+.conv-cot-fila:last-child { border-bottom: 0; }
+.conv-cot-fila--total { font-size: 16px; }
+.conv-cotizacion-tarjeta { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: #e6f1fb; color: #0c447c; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
