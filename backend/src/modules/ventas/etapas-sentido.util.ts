@@ -1,10 +1,10 @@
-// Las etapas de una oportunidad solo avanzan (2026-10-22). Una oportunidad abierta pasa a una etapa
-// POSTERIOR (se pueden saltar etapas hacia adelante: cotizó en la primera llamada). Una cerrada
-// (Aceptada o Perdida) solo puede REABRIRSE, y vuelve siempre a «En evaluación». Ir hacia atrás o de
-// una cerrada a otra no se permite: evita errores y deja el historial entendible.
+// Las etapas de una oportunidad se pueden mover en cualquier sentido (2026-11-19): una abierta pasa a
+// cualquier otra etapa (adelante o atrás), una cerrada se reabre a la etapa que se elija y Aceptada ⇄
+// Perdida se corrige directo. Cada cambio queda en el historial con quién, cuándo y la nota opcional.
 //
-// Esta regla vive en el servidor para que ninguna pantalla ni el agente la salten; la lista
-// desplegable del frontend solo la refleja (frontend/src/utils/etapasVentas.ts).
+// Lo único que no cambia: la etapa debe existir en la empresa y no puede ser la misma que ya tiene
+// (eso lo valida `cambiarEtapa`). Esta regla vive en el servidor para que ninguna pantalla ni el agente
+// la salten; el frontend la refleja en frontend/src/utils/etapasVentas.ts.
 
 export interface EtapaOrden {
   key: string;
@@ -13,11 +13,11 @@ export interface EtapaOrden {
   isFinal: boolean;
 }
 
-// «En evaluación» (clave histórica LEIDO).
+// «En evaluación» (clave histórica LEIDO): destino por defecto sugerido al reabrir.
 export const ETAPA_REAPERTURA = 'LEIDO';
 
-// A dónde vuelve una oportunidad reabierta. Una empresa que borró o cambió esa etapa cae en la primera
-// etapa abierta que no sea la inicial; si solo tiene una abierta, en esa.
+// Etapa que se sugiere al reabrir. Una empresa que borró o cambió esa etapa cae en la primera etapa
+// abierta que no sea la inicial; si solo tiene una abierta, en esa.
 export function etapaDeReapertura(etapas: EtapaOrden[]): EtapaOrden | null {
   const exacta = etapas.find((e) => e.key === ETAPA_REAPERTURA);
   if (exacta) return exacta;
@@ -27,22 +27,26 @@ export function etapaDeReapertura(etapas: EtapaOrden[]): EtapaOrden | null {
 
 export type ResultadoCambio = { ok: true } | { ok: false; mensaje: string };
 
+export type TipoDeCambio = 'AVANCE' | 'RETROCESO' | 'REAPERTURA' | 'CORRECCION';
+
+// Clasifica el cambio (para mensajes y para que el historial se entienda). Cualquier cambio es válido.
+export function tipoDeCambio(actual: EtapaOrden | null, cerrada: boolean, destino: EtapaOrden): TipoDeCambio {
+  if (cerrada) return destino.isFinal ? 'CORRECCION' : 'REAPERTURA';
+  if (actual && destino.order < actual.order) return 'RETROCESO';
+  return 'AVANCE';
+}
+
 export function validarCambioDeEtapa(
   actual: EtapaOrden | null,
   cerrada: boolean,
   destino: EtapaOrden,
   etapas: EtapaOrden[],
 ): ResultadoCambio {
-  // Sin etapa todavía (dato viejo): cualquiera sirve para empezar.
-  if (!actual) return { ok: true };
-  if (cerrada) {
-    const reapertura = etapaDeReapertura(etapas);
-    if (reapertura && destino.key === reapertura.key) return { ok: true };
-    return {
-      ok: false,
-      mensaje: `Una oportunidad cerrada solo puede reabrirse: pásala a «${reapertura?.label ?? 'En evaluación'}».`,
-    };
+  if (!etapas.some((e) => e.key === destino.key)) {
+    return { ok: false, mensaje: `La etapa «${destino.label}» no existe en esta empresa.` };
   }
-  if (destino.order > actual.order) return { ok: true };
-  return { ok: false, mensaje: 'Una oportunidad solo avanza: no se puede volver a una etapa anterior.' };
+  if (actual && actual.key === destino.key && !cerrada) {
+    return { ok: false, mensaje: 'La oportunidad ya está en esa etapa.' };
+  }
+  return { ok: true };
 }

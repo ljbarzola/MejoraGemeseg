@@ -52,8 +52,9 @@ export default function EtapasAyuda({ etapas }: { etapas: { key: string; label: 
             ))}
           </ol>
           <p className="etapas-ayuda-regla">
-            Solo se avanza: no se vuelve a una etapa anterior. Una oportunidad cerrada (Aceptada o Perdida) se puede
-            reabrir, y solo vuelve a «En evaluación»; queda marcada con «!».
+            Una oportunidad se puede mover a cualquier etapa, también hacia atrás, y puedes anotar por qué. Una cerrada
+            (Aceptada o Perdida) se puede reabrir a la etapa que elijas, o corregir de Aceptada a Perdida y al revés;
+            la reabierta queda marcada con «!».
           </p>
         </div>,
         document.body,

@@ -23,7 +23,7 @@ const RECORRIDO: Paso[] = [
   {
     pantalla: '2. Oportunidades',
     texto:
-      'Con «Pasar a oportunidad» queda como prospecto en el Directorio y se abre la negociación de un servicio. Avanza por Nueva → En evaluación → Cotizada → En negociación y termina en Aceptada o Perdida; solo se avanza (se pueden saltar etapas), no se vuelve atrás. Una oportunidad cerrada se puede reabrir y vuelve a En evaluación, marcada con «!». Es el único lugar donde se cambia la etapa. Cada oportunidad puede llevar, si se quiere, su «Ubicación» (se elige en un mapa): sirve para ver en el Dashboard qué zonas del país se están cotizando.',
+      'Con «Pasar a oportunidad» queda como prospecto en el Directorio y se abre la negociación de un servicio. Avanza por Nueva → En evaluación → Cotizada → En negociación y termina en Aceptada o Perdida; se puede saltar etapas y también volver atrás (con una nota opcional del porqué). Una oportunidad cerrada se puede reabrir a la etapa que elijas, marcada con «!», o corregir de Aceptada a Perdida y al revés. Es el único lugar donde se cambia la etapa. Cada oportunidad puede llevar, si se quiere, su «Ubicación» (se elige en un mapa): sirve para ver en el Dashboard qué zonas del país se están cotizando.',
   },
   {
     pantalla: '3. Directorio',

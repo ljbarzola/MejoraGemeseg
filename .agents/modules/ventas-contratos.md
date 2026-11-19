@@ -280,7 +280,7 @@ Solo cambió lo visible; **ninguna URL, ruta de API, clave ni enum** (`/ventas/l
 ## 36. Origen único, etapas en una sola dirección y reapertura con «!»
 
 - **Origen de una oportunidad = UNA lista** (`origenDeOportunidad`, frontend): fuente del contacto + «Renovación» + «Ya era cliente»; `MIGRADA` y fuentes desconocidas = «Ingreso manual». `originType` y `source` se guardan tal cual.
-- **Etapas solo avanzan** (`etapas-sentido.util.ts`, exigido en `cambiarEtapa`; la UI usa `etapaPermitida` de `utils/etapasVentas.ts`): una abierta pasa a una posterior (se pueden saltar); una cerrada solo se **reabre** a «En evaluación» (`LEIDO`, o la primera abierta tras la inicial). Aceptada↔Perdida no. Reabrir limpia `outcome` y `closedAt`; el contrato creado al aceptar NO se borra y los avisos a Google no se retiran.
+- **Etapas en cualquier sentido** (`etapas-sentido.util.ts`, aplicado en `cambiarEtapa`; la UI usa `tipoCambioEtapa` de `utils/etapasVentas.ts`): una abierta pasa a cualquier otra etapa (adelante o atrás); una cerrada se **reabre** a la etapa que se elija; Aceptada⇄Perdida se corrige directo. La nota del cambio es opcional (en Perdida el motivo sigue siendo obligatorio). Reabrir limpia `outcome` y `closedAt`; el cliente se refleja solo (`espejarCliente`); el contrato creado al aceptar NO se borra y los avisos a Google no se retiran ni se repiten. La visita de campo solo propone AVANZAR la etapa.
 - «!» de reapertura: `reabierta` sale del historial (final → no final), sin columna. La dona de motivos ignora una oportunidad que ya no está Perdida y cuenta solo el último si se perdió dos veces. «Nueva oportunidad» no pide monto ni fecha (se piden al pasar a Cotizada).
 
 ## 37. Tipo de contrato editable, tres tamaños de modal y job de renovaciones

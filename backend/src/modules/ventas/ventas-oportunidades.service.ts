@@ -735,7 +735,10 @@ export class VentasOportunidadesService {
     if (!destino) {
       throw new BadRequestException(`La etapa "${dto.toStatus}" no existe en esta empresa`);
     }
-    // Solo se avanza; una cerrada solo se reabre a «En evaluación» (ver etapas-sentido.util.ts).
+    // Se puede avanzar, retroceder, reabrir una cerrada o corregir Aceptada ⇄ Perdida (ver etapas-sentido.util.ts).
+    // El cliente refleja la etapa de su oportunidad principal (espejarCliente): si una Aceptada se corrige o se
+    // reabre, el cliente deja de verse como cliente solo, sin otro paso. Las conversiones a Google no se retiran
+    // y no se repiten (skipDuplicates en registrarPorEtapa).
     const sentido = validarCambioDeEtapa(
       etapasEmpresa.find((e) => e.key === opp.status) ?? null,
       opp.closedAt !== null,
