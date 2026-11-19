@@ -58,19 +58,19 @@ describe('tocaEnviar', () => {
 });
 
 describe('quiereCorreo', () => {
-  it('sin preferencia guardada sigue enviando correo (como antes de la opción)', () => {
-    expect(quiereCorreo(null)).toBe(true);
-    expect(quiereCorreo(undefined)).toBe(true);
+  it('sin preferencia guardada solo llega la notificación en la app (el correo es opt-in)', () => {
+    expect(quiereCorreo(null)).toBe(false);
+    expect(quiereCorreo(undefined)).toBe(false);
   });
 
-  it('solo un «solo notificaciones en la app» explícito apaga el correo', () => {
-    expect(quiereCorreo([SOLO_NOTIFICACIONES])).toBe(false);
+  it('solo un «correo» explícito enciende el correo', () => {
     expect(quiereCorreo(['correo'])).toBe(true);
+    expect(quiereCorreo([SOLO_NOTIFICACIONES])).toBe(false);
   });
 
-  it('un valor que no se entiende no deja a nadie sin aviso', () => {
-    expect(quiereCorreo('solo-notificaciones')).toBe(true);
-    expect(quiereCorreo({})).toBe(true);
-    expect(quiereCorreo([])).toBe(true);
+  it('un valor que no se entiende no manda correo', () => {
+    expect(quiereCorreo('correo')).toBe(false);
+    expect(quiereCorreo({})).toBe(false);
+    expect(quiereCorreo([])).toBe(false);
   });
 });

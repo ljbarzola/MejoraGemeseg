@@ -2,8 +2,9 @@ import { useState, useEffect, type ReactNode } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { getUser } from '../../services/auth.service';
 import { getMyTasks, updateTask } from '../../services/task.service';
-import { getProjects } from '../../services/project.service';
+import { getAllProjects } from '../../services/project.service';
 import CreateTaskModal from '../../components/tasks/CreateTaskModal';
+import { formularioEstabaAbierto } from '../../utils/borradorTarea';
 import TaskDetailModal from '../../components/tasks/TaskDetailModal';
 import TaskStatusMenu from '../../components/tasks/TaskStatusMenu';
 import PendingSurveysBanner from '../../components/personal/PendingSurveysBanner';
@@ -62,21 +63,6 @@ function diasParaVencer(fin: string): number {
   return Math.round((finDia.getTime() - hoyDia.getTime()) / 86_400_000);
 }
 
-/**
- * El listado de proyectos viene paginado de 10 en 10. El filtro de proyecto
- * necesita TODOS los de la persona: con solo la primera página, un proyecto
- * más antiguo no aparecía en el desplegable aunque tuviera tareas suyas.
- */
-async function cargarTodosLosProyectos(): Promise<{ id: number; name: string }[]> {
-  const primera = await getProjects({ page: 1 });
-  let todos = primera.data;
-  for (let pagina = 2; pagina <= primera.pagination.totalPages; pagina++) {
-    const resto = await getProjects({ page: pagina });
-    todos = todos.concat(resto.data);
-  }
-  return todos.map((p: any) => ({ id: p.id, name: p.name }));
-}
-
 const fechaCorta = (valor: string | null) => (valor ? new Date(valor).toLocaleDateString('es-EC') : '—');
 
 export default function DashboardPage() {
@@ -95,20 +81,33 @@ export default function DashboardPage() {
   const [assignedToMe, setAssignedToMe] = useState(
     () => localStorage.getItem('dashboard_assigned_to_me') === 'true'
   );
-  const [projectFilter, setProjectFilter] = useState<number | ''>(
+  const [projectFilter, setProjectFilter] = useState<number | 'none' | ''>(
     () => {
       const saved = localStorage.getItem('dashboard_project_filter');
-      return saved !== null ? (saved === '' ? '' : Number(saved)) : '';
+      if (saved === 'none') return 'none';
+      return saved !== null && saved !== '' && !isNaN(Number(saved)) ? Number(saved) : '';
     }
   );
   const [projects, setProjects] = useState<{ id: number; name: string }[]>([]);
   // La consulta de tareas espera a saber qué proyectos existen: así un filtro de
   // proyecto guardado que ya no aplica se descarta ANTES de pedir las tareas.
   const [projectsLoaded, setProjectsLoaded] = useState(false);
-  const [showCreateTask, setShowCreateTask] = useState(false);
+  // Si la persona salió con el formulario abierto (p. ej. al Perfil a configurar sus avisos), al volver se reabre con su borrador.
+  const [showCreateTask, setShowCreateTask] = useState(() => formularioEstabaAbierto());
   const [tareaAbierta, setTareaAbierta] = useState<number | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const { showToast } = useToast();
+
+  // Un enlace /tasks/ID de una tarea «Sin proyecto» llega aquí como /?tarea=ID: abre su ventana.
+  useEffect(() => {
+    const id = searchParams.get('tarea');
+    if (!id) return;
+    setTareaAbierta(Number(id));
+    const next = new URLSearchParams(searchParams);
+    next.delete('tarea');
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Mueve la tarea de estado sin abrirla: se pinta al instante y, si el servidor la rechaza
   // (p. ej. la persona es observadora de ese proyecto), vuelve al estado anterior.
@@ -127,7 +126,7 @@ export default function DashboardPage() {
   const tablaRef = useResizableColumns('mis-tareas', ['title', ...columnasVisibles]);
 
   useEffect(() => {
-    cargarTodosLosProyectos()
+    getAllProjects()
       .then(setProjects)
       .catch(() => {})
       .finally(() => setProjectsLoaded(true));
@@ -138,7 +137,7 @@ export default function DashboardPage() {
   // «Todos los proyectos» pero la consulta seguía filtrando por él y la lista
   // salía vacía en todas las pestañas.
   useEffect(() => {
-    if (!projectsLoaded || projects.length === 0 || projectFilter === '') return;
+    if (!projectsLoaded || projects.length === 0 || projectFilter === '' || projectFilter === 'none') return;
     if (!projects.some((p) => p.id === projectFilter)) {
       setProjectFilter('');
       localStorage.setItem('dashboard_project_filter', '');
@@ -151,7 +150,7 @@ export default function DashboardPage() {
     getMyTasks({
       status: statusFilter || undefined,
       assignedToMe: assignedToMe || undefined,
-      projectId: projectFilter !== '' ? Number(projectFilter) : undefined,
+      projectId: projectFilter === 'none' ? 'none' : projectFilter !== '' ? Number(projectFilter) : undefined,
     }).then(setTasks).finally(() => setLoading(false));
   }, [projectsLoaded, statusFilter, assignedToMe, projectFilter, location.key, reloadKey]);
 
@@ -175,12 +174,16 @@ export default function DashboardPage() {
     switch (key) {
       case 'project':
         return (
-          <span className="project-name-chip" title={(task as any).project?.name} onClick={(e) => {
-            e.stopPropagation();
-            navigate(`/projects/${task.projectId}`);
-          }}>
-            {(task as any).project?.name || `Proyecto #${task.projectId}`}
-          </span>
+          task.projectId == null ? (
+            <span className="project-name-chip" style={{ cursor: 'default', opacity: 0.75 }}>Sin proyecto</span>
+          ) : (
+            <span className="project-name-chip" title={(task as any).project?.name} onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/projects/${task.projectId}`);
+            }}>
+              {(task as any).project?.name || `Proyecto #${task.projectId}`}
+            </span>
+          )
         );
       case 'status':
         return task.status === 'CANCELLED' ? (
@@ -316,12 +319,13 @@ export default function DashboardPage() {
               aria-label="Filtrar por proyecto"
               value={projectFilter}
               onChange={(e) => {
-                const val = e.target.value ? Number(e.target.value) : '';
+                const val = e.target.value === 'none' ? 'none' : e.target.value ? Number(e.target.value) : '';
                 setProjectFilter(val);
                 localStorage.setItem('dashboard_project_filter', String(val));
               }}
             >
               <option value="">Todos los proyectos</option>
+              <option value="none">Sin proyecto</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}

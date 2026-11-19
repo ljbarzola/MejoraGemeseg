@@ -5,12 +5,30 @@ import type { ProfileData } from '../../services/user.service';
 import { useToast } from '../../contexts/ToastContext';
 import ChangePasswordModal from './ChangePasswordModal';
 import { errorTelefono } from '../../utils/telefono';
+import { usePerm } from '../../contexts/PermissionsContext';
 
-// Cómo llegan los recordatorios de tareas. Sin nada guardado se envía correo
-// (es lo que ya pasaba); solo «solo-notificaciones» lo apaga. Misma clave y valor que
-// usa el backend (tasks/task-reminders.util.ts).
-const CLAVE_AVISOS_TAREAS = 'notificaciones:recordatorios-tareas';
+// Cómo llegan los avisos de cada tipo. POR DEFECTO solo la notificación en la app: el correo hay que
+// pedirlo (valor 'correo'). Mismas claves y valores que el backend (common/utils/avisos-correo.util.ts).
 const SOLO_NOTIFICACIONES = 'solo-notificaciones';
+const CORREO = 'correo';
+const TIPOS_AVISO: { clave: string; titulo: string; detalle: string; seccion?: string }[] = [
+  {
+    clave: 'notificaciones:tareas-avisos',
+    titulo: 'Tareas: asignaciones y cambios',
+    detalle: 'Cuando te asignan una tarea o cambia su estado, se edita o se elimina.',
+  },
+  {
+    clave: 'notificaciones:recordatorios-tareas',
+    titulo: 'Tareas: recordatorios de vencimiento',
+    detalle: 'Antes de que venza la fecha fin de tus tareas. Si tienes varias el mismo día, llegan juntas; máximo un correo al día.',
+  },
+  {
+    clave: 'notificaciones:contratacion-publica',
+    titulo: 'Contratación Pública',
+    detalle: 'Avisos de entregas de documentos y vencimientos de las entidades.',
+    seccion: 'CONTRATACION_PUBLICA',
+  },
+];
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrador',
@@ -24,9 +42,10 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const { showToast } = useToast();
-  // null = todavía cargando o no se pudo leer (no se muestra una opción que podría ser falsa).
-  const [soloNotificaciones, setSoloNotificaciones] = useState<boolean | null>(null);
-  const [guardandoAvisos, setGuardandoAvisos] = useState(false);
+  const { canView } = usePerm();
+  // Por tipo de aviso: true = también por correo. null = todavía cargando o no se pudo leer.
+  const [avisosCorreo, setAvisosCorreo] = useState<Record<string, boolean> | null>(null);
+  const [guardandoAviso, setGuardandoAviso] = useState<string | null>(null);
   // Teléfono propio: null = no se está editando.
   const [telefonoEdit, setTelefonoEdit] = useState<string | null>(null);
   const [telefonoError, setTelefonoError] = useState('');
@@ -54,24 +73,37 @@ export default function ProfilePage() {
     getMe()
       .then(setProfile)
       .finally(() => setLoading(false));
-    getUserPreference(CLAVE_AVISOS_TAREAS)
-      .then((valor) => setSoloNotificaciones(Array.isArray(valor) && valor.includes(SOLO_NOTIFICACIONES)))
+    Promise.all(TIPOS_AVISO.map((t) => getUserPreference(t.clave)))
+      .then((valores) => {
+        const mapa: Record<string, boolean> = {};
+        TIPOS_AVISO.forEach((t, i) => {
+          const v = valores[i];
+          mapa[t.clave] = Array.isArray(v) && v.includes(CORREO);
+        });
+        setAvisosCorreo(mapa);
+      })
       .catch(() => { /* la sección avisa que no se pudo cargar */ });
   }, []);
 
-  const cambiarAvisos = async (solo: boolean) => {
-    if (guardandoAvisos || solo === soloNotificaciones) return;
-    const anterior = soloNotificaciones;
-    setSoloNotificaciones(solo);
-    setGuardandoAvisos(true);
+  // Enlace directo desde el formulario de tareas (/profile#avisos): baja hasta la sección de avisos.
+  useEffect(() => {
+    if (loading || window.location.hash !== '#avisos') return;
+    document.getElementById('avisos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [loading, avisosCorreo]);
+
+  const cambiarAviso = async (clave: string, correo: boolean) => {
+    if (guardandoAviso || !avisosCorreo || avisosCorreo[clave] === correo) return;
+    const anterior = avisosCorreo;
+    setAvisosCorreo({ ...avisosCorreo, [clave]: correo });
+    setGuardandoAviso(clave);
     try {
-      await setUserPreference(CLAVE_AVISOS_TAREAS, [solo ? SOLO_NOTIFICACIONES : 'correo']);
-      showToast(solo ? 'Listo: los recordatorios te llegarán solo en las notificaciones de la app, sin correo.' : 'Listo: los recordatorios te llegarán en las notificaciones de la app y por correo.', 'success');
+      await setUserPreference(clave, [correo ? CORREO : SOLO_NOTIFICACIONES]);
+      showToast(correo ? 'Listo: este aviso te llegará en la app y por correo.' : 'Listo: este aviso te llegará solo en la app, sin correo.', 'success');
     } catch {
-      setSoloNotificaciones(anterior);
+      setAvisosCorreo(anterior);
       showToast('No pudimos guardar tu elección. Inténtalo de nuevo en unos segundos.', 'error');
     } finally {
-      setGuardandoAvisos(false);
+      setGuardandoAviso(null);
     }
   };
 
@@ -230,42 +262,46 @@ export default function ProfilePage() {
           )}
         </div>
 
-        <div className="profile-password-section">
-          <h2 className="profile-tools-title">Recordatorios de tareas</h2>
+        <div className="profile-password-section" id="avisos">
+          <h2 className="profile-tools-title">Avisos: app o correo</h2>
           <p className="profile-option-hint">
-            Te avisamos antes de que venza la fecha fin de las tareas que tienes asignadas. Si tienes varias el mismo día, te llegan juntas en un solo mensaje, y
-            nunca recibes más de un correo al día.
+            Todos los avisos te llegan en las notificaciones de la app. Aquí eliges, para cada tipo, si además quieres recibirlos por correo a {profile.email}.
+            Los avisos de seguridad, como el cambio de contraseña, siempre llegan por correo.
           </p>
-          {soloNotificaciones === null ? (
+          {avisosCorreo === null ? (
             <p className="profile-option-hint">No se pudo cargar esta opción. Recarga la página para intentarlo de nuevo.</p>
           ) : (
-            <div className="profile-option-group" role="radiogroup" aria-label="Cómo recibir los recordatorios de tareas">
-              <label className={`profile-option ${!soloNotificaciones ? 'selected' : ''}`}>
-                <input
-                  type="radio"
-                  name="avisos-tareas"
-                  checked={!soloNotificaciones}
-                  disabled={guardandoAvisos}
-                  onChange={() => cambiarAvisos(false)}
-                />
-                <span>
-                  <strong>Notificaciones en la app y correo</strong>
-                  <small>Te avisamos en las notificaciones de la app (arriba a la derecha) y también por correo a {profile.email}.</small>
-                </span>
-              </label>
-              <label className={`profile-option ${soloNotificaciones ? 'selected' : ''}`}>
-                <input
-                  type="radio"
-                  name="avisos-tareas"
-                  checked={soloNotificaciones}
-                  disabled={guardandoAvisos}
-                  onChange={() => cambiarAvisos(true)}
-                />
-                <span>
-                  <strong>Solo notificaciones en la app</strong>
-                  <small>Te avisamos solo dentro de la app, en sus notificaciones. No te enviamos correo.</small>
-                </span>
-              </label>
+            <div className="tasks-table-wrapper">
+              <table className="tasks-table">
+                <thead>
+                  <tr>
+                    <th>Aviso</th>
+                    <th>Cómo quieres recibirlo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {TIPOS_AVISO.filter((t) => !t.seccion || canView(t.seccion)).map((t) => (
+                    <tr key={t.clave}>
+                      <td>
+                        <strong>{t.titulo}</strong>
+                        <div className="profile-option-hint" style={{ margin: 0 }}>{t.detalle}</div>
+                      </td>
+                      <td>
+                        <select
+                          className="filter-select"
+                          aria-label={`Cómo recibir: ${t.titulo}`}
+                          value={avisosCorreo[t.clave] ? 'correo' : 'app'}
+                          disabled={guardandoAviso !== null}
+                          onChange={(e) => cambiarAviso(t.clave, e.target.value === 'correo')}
+                        >
+                          <option value="app">Solo en la app</option>
+                          <option value="correo">En la app y por correo</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

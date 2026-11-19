@@ -1,5 +1,6 @@
-// Recordatorios de una tarea: en qué días respecto a la fecha fin se avisa por
-// correo y notificación a los asignados. Se usa en crear (página y modal) y en el
+// Recordatorios de una tarea: en qué días respecto a la fecha fin se avisa a los
+// asignados. El canal (solo la app o también correo) lo elige cada persona en su
+// Perfil → «Avisos: app o correo». Se usa en crear (página y modal) y en el
 // detalle de la tarea.
 //
 // El valor es una lista de días respecto a la fecha fin: 0 = el mismo día,
@@ -8,6 +9,7 @@
 // existen en pantalla: se guardan como días (semana = 7, mes = 30).
 
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 export const RECORDATORIOS_POR_DEFECTO = [1];
 
@@ -62,9 +64,14 @@ interface Props {
   /** Sin fecha fin no hay a qué referirse: el selector queda desactivado. */
   hasDate: boolean;
   disabled?: boolean;
+  /**
+   * El enlace «Configurar mis avisos» abre el Perfil en esta misma pestaña (solo si el formulario guarda
+   * borrador y Inicio lo reabre al volver); si no, en otra pestaña para no perder lo escrito.
+   */
+  mismaPestana?: boolean;
 }
 
-export default function ReminderPicker({ value, onChange, hasDate, disabled }: Props) {
+export default function ReminderPicker({ value, onChange, hasDate, disabled, mismaPestana }: Props) {
   const bloqueado = disabled || !hasDate;
   const rapidos = RAPIDOS.map((o) => o.dias);
   const personalizados = value.filter((d) => d > 0 && !rapidos.includes(d)).sort((a, b) => b - a);
@@ -266,9 +273,29 @@ export default function ReminderPicker({ value, onChange, hasDate, disabled }: P
         {hasDate
           ? value.length === 0
             ? 'Sin recordatorios: no se avisará a los asignados.'
-            : 'Se avisa por correo y en las notificaciones de la app a las personas asignadas, a las 9:00 a. m.'
+            : 'Se avisa a las personas asignadas a las 9:00 a. m., según lo que cada una configuró en sus avisos (solo en la app o también por correo).'
           : 'Pon una fecha fin para poder elegir recordatorios.'}
       </small>
+      {hasDate && value.length > 0 &&
+        (mismaPestana ? (
+          <Link
+            className="enlace-tabla"
+            to="/profile#avisos"
+            title="Lo que llevas escrito se guarda: al volver a Inicio, el formulario sigue como estaba"
+          >
+            Configurar mis avisos (app o correo)
+          </Link>
+        ) : (
+          <a
+            className="enlace-tabla"
+            href="/profile#avisos"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Se abre en otra pestaña para no perder lo que estás escribiendo"
+          >
+            Configurar mis avisos (app o correo)
+          </a>
+        ))}
     </div>
   );
 }

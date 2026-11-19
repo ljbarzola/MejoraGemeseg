@@ -9,6 +9,7 @@ import { STATUS_LABELS, STATUS_COLORS } from '../../types/task';
 import type { ProjectMember } from '../../types/task';
 import DateInput from '../../components/common/DateInput';
 import ReminderPicker, { RECORDATORIOS_POR_DEFECTO } from '../../components/tasks/ReminderPicker';
+import { errorFechasTarea } from '../../utils/fechasTarea';
 
 const taskSchema = z.object({
   title: z.string().min(1, 'El título es requerido'),
@@ -81,6 +82,11 @@ export default function CreateTaskPage() {
       return;
     }
     setServerError('');
+    const errorFechas = errorFechasTarea(data.startDate, data.endDate);
+    if (errorFechas) {
+      setServerError(errorFechas);
+      return;
+    }
     setLoading(true);
     try {
       const payload: any = { ...data, assigneeIds: selectedAssignees };
@@ -203,6 +209,9 @@ export default function CreateTaskPage() {
             <div className="form-group">
               <label htmlFor="endDate">Fecha fin</label>
               <DateInput id="endDate" value={watch('endDate') || ''} onChange={(v) => setValue('endDate', v)} />
+              {errorFechasTarea(watch('startDate'), watch('endDate')) && (
+                <span className="field-error">{errorFechasTarea(watch('startDate'), watch('endDate'))}</span>
+              )}
             </div>
           </div>
 
