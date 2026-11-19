@@ -32,6 +32,7 @@ const AGENT_EMOJI: Record<string, string> = {
   VENTAS: '📈',
   CACAO: '🍫',
   CUSTODIAS: '🛡️',
+  OPERACIONES: '🧭',
 };
 
 function getAgentEmoji(agent: Agent | null): string {
@@ -43,6 +44,8 @@ const esAgenteDeVentas = (agent: Agent | null | undefined) => agent?.scope === '
 const esAgenteDeCacao = (agent: Agent | null | undefined) => agent?.scope === 'CACAO';
 // Agente de Custodia (2026-11-16): del sistema, sin dueño, lo ve quien tiene Operaciones (Custodias dejó de ser una sección el 2026-11-18).
 const esAgenteDeCustodia = (agent: Agent | null | undefined) => agent?.scope === 'CUSTODIAS';
+// Agente de Operaciones (2026-11-19): del sistema, sin dueño, lo ve quien tiene la sección Operaciones.
+const esAgenteDeOperaciones = (agent: Agent | null | undefined) => agent?.scope === 'OPERACIONES';
 
 // Preguntas de un clic para empezar con el Agente de Ventas. Son las que mejor sabe contestar.
 const SUGERENCIAS_VENTAS: { icono: string; texto: string }[] = [
@@ -390,7 +393,7 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
                     </button>
                   )}
                   {/* Los agentes de Ventas, Cacao y Custodia son del sistema (sin dueño): antes este filtro los escondía. */}
-                  {agents.filter((a) => a.createdBy !== null || esAgenteDeVentas(a) || esAgenteDeCacao(a) || esAgenteDeCustodia(a)).map((agent) => (
+                  {agents.filter((a) => a.createdBy !== null || esAgenteDeVentas(a) || esAgenteDeCacao(a) || esAgenteDeCustodia(a) || esAgenteDeOperaciones(a)).map((agent) => (
                     <button
                       key={agent.id}
                       className={`chat-agent-option ${activeAgentId === agent.id ? 'active' : ''}`}
@@ -404,7 +407,9 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
                             ? 'Explica Cacao y consulta tus datos'
                             : esAgenteDeCustodia(agent)
                               ? 'Consulta viajes, personal y placas de Custodias'
-                            : agent.scope}
+                              : esAgenteDeOperaciones(agent)
+                                ? 'Consulta puestos, faltas, bitácoras, inventario y contratos'
+                                : agent.scope}
                       </span>
                     </button>
                   ))}

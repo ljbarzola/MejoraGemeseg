@@ -1,6 +1,7 @@
 import {
   INTENCIONES_CACAO,
   INTENCIONES_CUSTODIA,
+  INTENCIONES_OPERACIONES,
   INTENCIONES_VENTAS,
   intencionPermitida,
   perfilDeAgente,
@@ -70,6 +71,39 @@ describe('seccionDePerfil', () => {
     expect(seccionDePerfil('CACAO')).toBe('CACAO');
     expect(seccionDePerfil('CUSTODIA')).toBe('OPERACIONES');
     expect(seccionDePerfil('GENERAL')).toBeNull();
+  });
+});
+
+describe('Agente de Operaciones (2026-11-19)', () => {
+  it('OPERACIONES es un perfil propio y exige la sección Operaciones', () => {
+    expect(perfilDeAgente('OPERACIONES')).toBe('OPERACIONES');
+    expect(seccionDePerfil('OPERACIONES')).toBe('OPERACIONES');
+  });
+
+  it('ejecuta solo consultas de Operaciones; ningún otro perfil las ejecuta', () => {
+    for (const intent of INTENCIONES_OPERACIONES) {
+      expect(intencionPermitida('OPERACIONES', intent)).toBe(true);
+      expect(intencionPermitida('GENERAL', intent)).toBe(false);
+      expect(intencionPermitida('VENTAS', intent)).toBe(false);
+      expect(intencionPermitida('CUSTODIA', intent)).toBe(false);
+      expect(intencionPermitida('CACAO', intent)).toBe(false);
+    }
+    expect(intencionPermitida('OPERACIONES', 'ventas_resumen')).toBe(false);
+    expect(intencionPermitida('OPERACIONES', 'custodia_viajes')).toBe(false);
+    expect(intencionPermitida('OPERACIONES', 'cacao_resumen')).toBe(false);
+  });
+
+  it('toda intención de Operaciones existe en INTENT_SECTION y la gobierna la sección OPERACIONES', () => {
+    for (const intent of INTENCIONES_OPERACIONES) {
+      expect(INTENT_SECTION[intent]).toBe('OPERACIONES');
+    }
+  });
+
+  it('toda intención operaciones_* de INTENT_SECTION está declarada para el Agente de Operaciones', () => {
+    const declaradas = new Set<string>(INTENCIONES_OPERACIONES);
+    for (const intent of Object.keys(INTENT_SECTION).filter((k) => k.startsWith('operaciones_'))) {
+      expect(declaradas.has(intent)).toBe(true);
+    }
   });
 });
 

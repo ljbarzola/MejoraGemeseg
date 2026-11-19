@@ -28,6 +28,12 @@ const TIPOS_AVISO: { clave: string; titulo: string; detalle: string; seccion?: s
     detalle: 'Avisos de entregas de documentos y vencimientos de las entidades.',
     seccion: 'CONTRATACION_PUBLICA',
   },
+  {
+    clave: 'notificaciones:operaciones-resumen',
+    titulo: 'Operaciones: resumen diario',
+    detalle: 'Una sola notificación cada mañana con lo pendiente: faltas sin cubrir, puestos sin cobertura, bitácoras sin subir, armas por vencer, inventario bajo el mínimo, supervisión, horarios sin aprobar y contratos por vencer. Si no hay nada pendiente, no llega.',
+    seccion: 'OPERACIONES',
+  },
 ];
 
 const ROLE_LABELS: Record<string, string> = {

@@ -22,6 +22,7 @@ import { WhatsappBotModule } from './modules/whatsapp-bot/whatsapp-bot.module';
 import { SistemasModule } from './modules/sistemas/sistemas.module';
 import { ContratacionPublicaModule } from './modules/contratacion-publica/contratacion-publica.module';
 import { OperacionesInventarioModule } from './modules/operaciones-inventario/operaciones-inventario.module';
+import { OperacionesResumenModule } from './modules/operaciones-resumen/operaciones-resumen.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { BitacoraModule } from './modules/bitacora/bitacora.module';
 import { ContabilidadModule } from './modules/contabilidad/contabilidad.module';
@@ -49,6 +50,7 @@ import { ContabilidadModule } from './modules/contabilidad/contabilidad.module';
     SistemasModule,
     ContratacionPublicaModule,
     OperacionesInventarioModule,
+    OperacionesResumenModule,
     NotificationsModule,
     BitacoraModule,
     ContabilidadModule,

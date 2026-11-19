@@ -5,6 +5,7 @@ import { AiVentasInvestigacionQueries } from './ai-ventas-investigacion.queries'
 import { AiVentasPlanQueries } from './ai-ventas-plan.queries';
 import { AiCacaoQueries } from './ai-cacao.queries';
 import { AiCustodiasQueries } from './ai-custodias.queries';
+import { AiOperacionesQueries } from './ai-operaciones.queries';
 
 // Qué sección de permisos es dueña de cada intención — AiService la consulta
 // antes de ejecutar cualquier intención aquí abajo (ver canUseIntent en
@@ -34,9 +35,19 @@ export const INTENT_SECTION: Record<string, string | null> = {
   // Custodias (2026-11-16): las consultas en vivo son del Agente de Custodia, sin dinero.
   custodias_resumen: 'OPERACIONES',
   custodia_viajes: 'OPERACIONES',
+  custodia_lista: 'OPERACIONES',
   custodia_antiguedad: 'OPERACIONES',
   custodia_placas_puerto: 'OPERACIONES',
   custodia_top_hacienda: 'OPERACIONES',
+  // Operaciones (2026-11-19): el Agente de Operaciones solo LEE, sin dinero.
+  operaciones_resumen: 'OPERACIONES',
+  operaciones_hoy: 'OPERACIONES',
+  operaciones_faltas: 'OPERACIONES',
+  operaciones_bitacoras: 'OPERACIONES',
+  operaciones_supervision: 'OPERACIONES',
+  operaciones_armas: 'OPERACIONES',
+  operaciones_stock: 'OPERACIONES',
+  operaciones_contratos: 'OPERACIONES',
   rrhh_resumen_personal: 'RRHH',
   // Ventas: todas leen Clientes/Contratos (ver ai-ventas.queries.ts). Los
   // nombres deben coincidir con los de capabilities-prompt.util.ts.
@@ -66,6 +77,7 @@ export class AiProcessor {
     private plan: AiVentasPlanQueries,
     private cacao: AiCacaoQueries,
     private custodias: AiCustodiasQueries,
+    private operaciones: AiOperacionesQueries,
   ) {}
 
   // Expediente de un cliente conocido por su id: lo usa AiService cuando el chat se abre desde la
@@ -104,10 +116,20 @@ export class AiProcessor {
         return this.cacaoQuery(intent, params, userId, companyId);
       case 'custodias_resumen':
       case 'custodia_viajes':
+      case 'custodia_lista':
       case 'custodia_antiguedad':
       case 'custodia_placas_puerto':
       case 'custodia_top_hacienda':
         return this.custodiasQuery(intent, params, companyId);
+      case 'operaciones_resumen':
+      case 'operaciones_hoy':
+      case 'operaciones_faltas':
+      case 'operaciones_bitacoras':
+      case 'operaciones_supervision':
+      case 'operaciones_armas':
+      case 'operaciones_stock':
+      case 'operaciones_contratos':
+        return this.operacionesQuery(intent, params, companyId);
       case 'rrhh_resumen_personal':
         return this.rrhhResumenPersonal(companyId);
       case 'ventas_resumen':
@@ -171,6 +193,8 @@ export class AiProcessor {
   ): Promise<string> {
     if (!companyId) return 'No hay empresa asociada para consultar Custodias.';
     switch (intent) {
+      case 'custodia_lista':
+        return this.custodias.lista(companyId, textoParam(params?.estado), textoParam(params?.dias));
       case 'custodia_viajes':
         return this.custodias.viajes(companyId, textoParam(params?.nombre));
       case 'custodia_antiguedad':
@@ -181,6 +205,33 @@ export class AiProcessor {
         return this.custodias.topHacienda(companyId);
       default:
         return this.custodias.resumen(companyId);
+    }
+  }
+
+  // Operaciones: solo lectura de lo que ya muestran sus pantallas (ver ai-operaciones.queries.ts).
+  private async operacionesQuery(
+    intent: string,
+    params: any,
+    companyId?: number | null,
+  ): Promise<string> {
+    if (!companyId) return 'No hay empresa asociada para consultar Operaciones.';
+    switch (intent) {
+      case 'operaciones_hoy':
+        return this.operaciones.hoy(companyId, textoParam(params?.puesto));
+      case 'operaciones_faltas':
+        return this.operaciones.faltas(companyId, textoParam(params?.dias));
+      case 'operaciones_bitacoras':
+        return this.operaciones.bitacoras(companyId, textoParam(params?.dias));
+      case 'operaciones_supervision':
+        return this.operaciones.supervision(companyId);
+      case 'operaciones_armas':
+        return this.operaciones.armas(companyId);
+      case 'operaciones_stock':
+        return this.operaciones.stock(companyId);
+      case 'operaciones_contratos':
+        return this.operaciones.contratos(companyId);
+      default:
+        return this.operaciones.resumen(companyId);
     }
   }
 

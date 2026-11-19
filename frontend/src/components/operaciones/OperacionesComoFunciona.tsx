@@ -42,7 +42,7 @@ const RECORRIDO: Paso[] = [
     clave: 'resumen',
     pantalla: '5. Resumen',
     texto:
-      'Arriba, «Hoy en los puestos»: quién debe estar hoy en cada puesto según el horario, si la cobertura mínima se cumple y qué días de la última semana no tienen bitácora subida (los que piden atención salen primero, y desde ahí se sube la hoja). Si alguien no llegó, «No llegó» lo registra al instante y propone quién lo cubre. Debajo, lo que dejan las bitácoras: qué porcentaje de las hojas cuadra con el horario, la novedad que más se repite, qué días y en qué puestos hubo más, y los hallazgos que siguen abiertos.',
+      'Arriba, «Hoy en los puestos»: quién debe estar hoy en cada puesto según el horario, si la cobertura mínima se cumple y qué días de la última semana no tienen bitácora subida (los que piden atención salen primero, y desde ahí se sube la hoja). Si alguien no llegó, «No llegó» lo registra al instante y propone quién lo cubre. Debajo, lo que dejan las bitácoras: qué porcentaje de las hojas cuadra con el horario, la novedad que más se repite, qué días y en qué puestos hubo más, y los hallazgos que siguen abiertos. Cada mañana te llega una sola notificación en la app con lo que tiene pendiente Operaciones (si no hay nada, no llega), y en el chat puedes preguntarle al Agente de Operaciones, que solo consulta y no cambia nada.',
   },
   {
     clave: 'configuracion',

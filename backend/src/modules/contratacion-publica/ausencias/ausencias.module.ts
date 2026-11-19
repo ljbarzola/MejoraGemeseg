@@ -11,6 +11,8 @@ import { CP_AUSENCIAS_DDL } from './ausencias.schema';
   imports: [PrismaModule, PermissionsModule, NotificationsModule],
   controllers: [AusenciasController],
   providers: [AusenciasService],
+  // Lo lee el resumen de Operaciones (faltas «No llegó»).
+  exports: [AusenciasService],
 })
 export class CPAusenciasModule implements OnModuleInit {
   private readonly logger = new Logger(CPAusenciasModule.name);

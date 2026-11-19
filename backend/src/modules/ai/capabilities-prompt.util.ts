@@ -77,6 +77,8 @@ export interface OpcionesCapacidades {
   cacaoAgenteDisponible?: boolean;
   /** Igual para los viajes de custodia: la persona ve Operaciones y el Agente de Custodia está activo. */
   custodiaAgenteDisponible?: boolean;
+  /** Igual para los datos de Operaciones: la persona ve la sección y el Agente de Operaciones está activo. */
+  operacionesAgenteDisponible?: boolean;
 }
 
 export function buildCapabilitiesPrompt(
@@ -105,10 +107,13 @@ export function buildCapabilitiesPrompt(
                     ? ' Si la persona quiere esos datos, dile que use el Agente de Cacao desde el selector de agentes del chat.'
                     : '')
                 : m.section === 'OPERACIONES'
-                  ? ' No consultes viajes ni personal en vivo.' +
+                  ? ' No consultes viajes, personal, puestos, faltas, bitácoras, inventario ni contratos en vivo.' +
                     (opciones.custodiaAgenteDisponible
                       ? ' Si la persona quiere datos en vivo de los viajes (cuántos hay, quién los hizo, placas), dile que use el Agente de Custodia desde el selector de agentes del chat.'
-                    : '')
+                      : '') +
+                    (opciones.operacionesAgenteDisponible
+                      ? ' Si la persona quiere datos en vivo de Operaciones (quién está hoy en un puesto, faltas sin cubrir, bitácoras con hallazgos, armas por vencer, inventario bajo el mínimo, contratos por vencer), dile que use el Agente de Operaciones desde el selector de agentes del chat.'
+                      : '')
                 : ''
           }`,
     )

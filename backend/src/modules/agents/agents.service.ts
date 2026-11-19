@@ -210,16 +210,19 @@ export class AgentsService {
     const verCacao = await this.puedeVerSeccion(userId, companyId, 'CACAO');
     // El Agente de Custodia (2026-11-16) tampoco se asigna: lo ve quien ve Operaciones (Custodias dejó de ser una sección el 2026-11-18; el scope interno sigue siendo 'CUSTODIAS').
     const verCustodias = await this.puedeVerSeccion(userId, companyId, 'OPERACIONES');
+    // El Agente de Operaciones (2026-11-19) igual: lo ve quien ve la sección Operaciones.
+    const verOperaciones = verCustodias;
 
     const agentesBd = await this.prisma.agent.findMany({
       where: {
         isActive: true,
         OR: [
-          { createdBy: null, NOT: { scope: { in: ['VENTAS', 'CACAO', 'CUSTODIAS', ...SCOPES_SIN_CHAT] } } },
+          { createdBy: null, NOT: { scope: { in: ['VENTAS', 'CACAO', 'CUSTODIAS', 'OPERACIONES', ...SCOPES_SIN_CHAT] } } },
           { id: { in: assignedAgentIds } },
           ...(verVentas ? [{ createdBy: null, scope: 'VENTAS' }] : []),
           ...(verCacao ? [{ createdBy: null, scope: 'CACAO' }] : []),
           ...(verCustodias ? [{ createdBy: null, scope: 'CUSTODIAS' }] : []),
+          ...(verOperaciones ? [{ createdBy: null, scope: 'OPERACIONES' }] : []),
         ],
         // Un agente que trabaja solo (revisor de bitácoras) no conversa: no se
         // ofrece en el chat ni aunque alguien lo tenga asignado.
@@ -252,7 +255,8 @@ export class AgentsService {
       (a) =>
         (a.scope !== 'VENTAS' || verVentas) &&
         (a.scope !== 'CACAO' || verCacao) &&
-        (a.scope !== 'CUSTODIAS' || verCustodias),
+        (a.scope !== 'CUSTODIAS' || verCustodias) &&
+        (a.scope !== 'OPERACIONES' || verOperaciones),
     );
 
     return { agents, defaultAgent };

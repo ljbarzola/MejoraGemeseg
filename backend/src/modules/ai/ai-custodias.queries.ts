@@ -90,6 +90,49 @@ export class AiCustodiasQueries {
     return lineas.join('\n');
   }
 
+  /** «llegó», «en camino», «pendientes»… → estado del viaje (null = todos). */
+  private estadoDeTexto(texto?: string): string | null {
+    const t = sinTildes(texto ?? '');
+    if (t.includes('lleg')) return 'LLEGO';
+    if (t.includes('camino')) return 'EN_CAMINO';
+    if (t.includes('listo') || t.includes('pendiente')) return 'LISTO_PARA_CUSTODIAR';
+    return null;
+  }
+
+  /** Lista los viajes (guía, tipo, estado, cliente, placa y quién fue), de un estado o de todos. */
+  async lista(companyId: number, estado?: string, dias?: string): Promise<string> {
+    const est = this.estadoDeTexto(estado);
+    const n = Number.parseInt((dias ?? '').trim(), 10);
+    const desde = Number.isFinite(n) && n >= 1 ? new Date(Date.now() - Math.min(n, 365) * DIA_MS) : null;
+    const where = { companyId, ...(desde ? { createdAt: { gte: desde } } : {}), ...(est ? { estado: est as 'LLEGO' | 'EN_CAMINO' | 'LISTO_PARA_CUSTODIAR' } : {}) };
+    const [total, filas] = await Promise.all([
+      this.prisma.custodia.count({ where }),
+      this.prisma.custodia.findMany({
+        where,
+        orderBy: [{ fechaHoraSalida: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+        take: 15,
+      }),
+    ]);
+    const que =
+      (est ? `en estado «${ESTADO_TEXTO[est]}»` : 'registrados') +
+      (desde ? ` en los últimos ${Math.min(n, 365)} día(s)` : '');
+    if (total === 0) return `No hay viajes ${que}.`;
+    const lineas = [
+      `Viajes ${que}: ${total}${total > filas.length ? ` (se muestran los ${filas.length} más recientes)` : ''}.`,
+    ];
+    for (const c of filas) {
+      const gente = [
+        c.choferName ? `chofer ${c.choferName}` : '',
+        c.custodio1Name ? `custodio ${c.custodio1Name}` : '',
+        c.custodio2Name ? `custodio ${c.custodio2Name}` : '',
+      ].filter(Boolean);
+      lineas.push(
+        `- Guía ${c.numeroGuia} (${TIPO_TEXTO[c.tipoCustodia] ?? c.tipoCustodia}, ${ESTADO_TEXTO[c.estado] ?? c.estado}), cliente ${c.cliente || 'sin cliente'}, placa ${c.placa || 'sin placa'}, salida ${fechaEc(c.fechaHoraSalida ?? c.createdAt)}${gente.length ? ', ' + gente.join(', ') : ''}`,
+      );
+    }
+    return lineas.join('\n');
+  }
+
   /** Cédula (10 dígitos) o parte del nombre → condiciones para buscar a una persona en los viajes. */
   private condicionesDePersona(texto: string) {
     const t = texto.trim();

@@ -14,20 +14,26 @@
 //            operativas de Custodias (viajes, personal, placas), SIN dinero. Lo usa
 //            cualquiera que vea Operaciones, sin asignarlo (Custodias dejó de ser una sección el 2026-11-18).
 //
+//   OPERACIONES Agente de Operaciones (2026-11-19): solo LEE cómo están los puestos, las faltas, las
+//            bitácoras, la supervisión, el inventario y los contratos, sin dinero. Lo usa cualquiera que
+//            vea la sección Operaciones, sin asignarlo.
+//
 // La lista de intenciones por perfil vive aquí, junto a la regla, para que
 // AiService y AiProcessor consulten lo mismo: no basta con que el prompt no
 // nombre una intención, el procesador tampoco debe ejecutarla.
 
-export type PerfilAgente = 'GENERAL' | 'VENTAS' | 'CACAO' | 'CUSTODIA';
+export type PerfilAgente = 'GENERAL' | 'VENTAS' | 'CACAO' | 'CUSTODIA' | 'OPERACIONES';
 
 export const SCOPE_VENTAS = 'VENTAS';
 export const SCOPE_CACAO = 'CACAO';
 export const SCOPE_CUSTODIA = 'CUSTODIAS';
+export const SCOPE_OPERACIONES = 'OPERACIONES';
 
 export function perfilDeAgente(scope: string | null | undefined): PerfilAgente {
   if (scope === SCOPE_VENTAS) return 'VENTAS';
   if (scope === SCOPE_CACAO) return 'CACAO';
   if (scope === SCOPE_CUSTODIA) return 'CUSTODIA';
+  if (scope === SCOPE_OPERACIONES) return 'OPERACIONES';
   return 'GENERAL';
 }
 
@@ -37,6 +43,7 @@ export function seccionDePerfil(perfil: PerfilAgente): string | null {
   if (perfil === 'CACAO') return 'CACAO';
   // Custodias dejó de ser una sección (2026-11-18): el Agente de Custodia lo usa quien ve Operaciones.
   if (perfil === 'CUSTODIA') return 'OPERACIONES';
+  if (perfil === 'OPERACIONES') return 'OPERACIONES';
   return null;
 }
 
@@ -86,6 +93,7 @@ export const esIntencionDeCacao = (intent: string): boolean =>
 export const INTENCIONES_CUSTODIA = [
   'custodias_resumen',
   'custodia_viajes',
+  'custodia_lista',
   'custodia_antiguedad',
   'custodia_placas_puerto',
   'custodia_top_hacienda',
@@ -93,6 +101,22 @@ export const INTENCIONES_CUSTODIA = [
 
 export const esIntencionDeCustodia = (intent: string): boolean =>
   (INTENCIONES_CUSTODIA as readonly string[]).includes(intent);
+
+// Intenciones de datos en vivo de Operaciones. Los nombres deben coincidir con INTENT_SECTION
+// (ai.processor.ts) y con OPERACIONES_AYUDA (operaciones-agent-prompt.util.ts).
+export const INTENCIONES_OPERACIONES = [
+  'operaciones_resumen',
+  'operaciones_hoy',
+  'operaciones_faltas',
+  'operaciones_bitacoras',
+  'operaciones_supervision',
+  'operaciones_armas',
+  'operaciones_stock',
+  'operaciones_contratos',
+] as const;
+
+export const esIntencionDeOperaciones = (intent: string): boolean =>
+  (INTENCIONES_OPERACIONES as readonly string[]).includes(intent);
 
 // Cada agente especializado solo ejecuta consultas de su módulo; el GENERAL, todo
 // menos Ventas, Cacao y Custodias (Agente Gemeseg se queda en cómo usar la plataforma
@@ -104,9 +128,11 @@ export function intencionPermitida(
   if (perfil === 'VENTAS') return esIntencionDeVentas(intent);
   if (perfil === 'CACAO') return esIntencionDeCacao(intent);
   if (perfil === 'CUSTODIA') return esIntencionDeCustodia(intent);
+  if (perfil === 'OPERACIONES') return esIntencionDeOperaciones(intent);
   return (
     !esIntencionDeVentas(intent) &&
     !esIntencionDeCacao(intent) &&
-    !esIntencionDeCustodia(intent)
+    !esIntencionDeCustodia(intent) &&
+    !esIntencionDeOperaciones(intent)
   );
 }
