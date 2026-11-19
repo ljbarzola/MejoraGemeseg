@@ -34,6 +34,9 @@ const SCOPE_OPTIONS = [
   // Agente especializado (2026-11-16, reemplaza a GEME-BOT): solo consulta viajes de custodia, sin dinero. Desde
   // 2026-11-18 lo ve cualquiera con Operaciones (Custodias dejó de ser una sección; el valor interno sigue igual).
   { value: 'CUSTODIAS', label: 'Operaciones (viajes)', desc: 'Consulta viajes de custodia, personal y placas (sin dinero); lo ve quien tenga Operaciones' },
+  // Agente especializado (2026-11-19): solo LEE cómo está Operaciones (puestos, faltas, bitácoras, inventario,
+  // contratos), sin dinero, y lo ve cualquiera que tenga la sección Operaciones (no hace falta asignarlo).
+  { value: 'OPERACIONES', label: 'Operaciones (puestos y pendientes)', desc: 'Consulta puestos, faltas, bitácoras, inventario y contratos (solo lectura); lo ve quien tenga Operaciones' },
   // Agente que trabaja solo (2026-10-18): lo siembra el sistema, no conversa ni se asigna.
   { value: 'BITACORAS', label: 'Revisor de bitácoras', desc: 'Lee las fotos de las bitácoras de Contratación Pública; no conversa' },
   { value: 'ENTREGAS', label: 'Revisor de entregas', desc: 'Mira los documentos que otras áreas entregan a Contratación Pública; no conversa' },
@@ -50,6 +53,7 @@ const SCOPE_PREVIEW: Record<string, string[]> = {
   VENTAS: ['Expediente de un cliente', 'Cartera y contratos', 'Motivos de pérdida', 'Embudo de ventas'],
   CACAO: ['Cuentas por pagar y vencidas', 'Liquidaciones por aprobar', 'Anticipos y saldos de proveedores', 'Precios e inventario'],
   CUSTODIAS: ['Viajes por estado y tipo', 'Viajes de un guardia', 'Antigüedad de un custodio', 'Placas más usadas en puerto'],
+  OPERACIONES: ['Quién está hoy en cada puesto', 'Faltas sin cubrir y bitácoras sin subir', 'Armas por vencer e inventario bajo el mínimo', 'Contratos por vencer'],
   BITACORAS: ['Foto de la hoja', 'Guardias y sus horas', 'Novedades por tipo', 'Nada del horario ni de los guardias'],
 };
 

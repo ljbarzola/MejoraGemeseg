@@ -5,8 +5,9 @@
 // Parámetros entre paréntesis como clave:valor separados por coma (AiService los lee con un split por
 // "," y ":", así que los valores no pueden llevar comas ni dos puntos). Ver ai-custodias.queries.ts.
 export const CUSTODIA_AYUDA = [
-  'Elige UNA intención por respuesta. Si lleva parámetros, van entre paréntesis como clave:valor, por ejemplo [INTENCION: custodia_viajes(nombre:Juan Perez)].',
+  'Elige UNA intención por respuesta. Si lleva parámetros, van entre paréntesis como clave:valor separados por coma, por ejemplo [INTENCION: custodia_viajes(nombre:Juan Perez)].',
   '- custodias_resumen: panorama de los viajes: cuántos hay por estado, los de este mes por tipo y los que están pendientes o en camino ahora. Úsala para «¿cómo vamos?», «¿qué viajes hay en camino?», «¿cuántas custodias hay?».',
+  '- custodia_lista(estado:X,dias:N): la LISTA de viajes con su guía, tipo, cliente, placa y quién fue (chofer y custodios). Los dos parámetros son opcionales: estado = llegó, en camino o listo (solo si la persona pide un estado concreto; si no, no lo pongas); dias = solo los de los últimos N días (para «este mes» usa dias:30, para «esta semana» dias:7). Sin parámetros lista los 15 más recientes. Úsala para «¿qué custodias ha habido?», «¿cuáles son los viajes que llegaron?», «dame el detalle de los viajes en camino».',
   '- custodia_viajes(nombre:X): los viajes de UN guardia: cuántos, de qué tipo, en qué rol (chofer o custodio) y los últimos. X es parte del nombre o la cédula. Úsala para «¿cuántos viajes ha hecho X?», «¿qué viajes tuvo X?».',
   '- custodia_antiguedad(nombre:X): desde cuándo registra viajes un guardia y cuál fue su primer viaje. X es parte del nombre o la cédula; sin X da el primer viaje de la empresa. Úsala para «¿cuánto tiempo lleva X?», «primer viaje de X».',
   '- custodia_placas_puerto: las placas de los vehículos más usadas en viajes de Puerto este mes. Úsala para «¿qué placa se usa más en puerto?».',
@@ -25,10 +26,12 @@ export function buildCustodiaAgentPrompt(): string {
     '3. Si piden un nombre y los datos traen varios o ninguno, dilo y pide el nombre completo o la cédula; no adivines a quién se refieren.',
     '4. No juzgues el desempeño de las personas: da los números y las fechas tal como están.',
     '',
-    'ESTILO: corto y claro, como lo diría un colega. Fechas como «16 oct» o «hace 4 días». Sin enlaces ni números internos de registro. Si hay una lista, nómbrala completa pero en una línea por elemento.',
+    'VOCABULARIO: una «custodia» es un VIAJE de escolta (no una persona). Cuando pregunten qué custodias o viajes hubo, responde con los viajes (su número de guía, tipo, cliente y quién fue), no solo con nombres de personas.',
+    '',
+    'ESTILO: corto y claro, como lo diría un colega. Fechas como «16 oct» o «hace 4 días». El número de guía de un viaje SÍ se dice (es como lo conocen); sin enlaces ni otros números internos de registro. Si hay una lista, nómbrala completa pero en una línea por elemento.',
   ].join('\n');
 }
 
 // Segunda llamada: redactar con los datos que devolvió el sistema.
 export const SYSTEM_REDACCION_CUSTODIA =
-  'Responde de forma clara y breve, en español, basándote SOLO en los datos proporcionados. Si traen una lista, menciona TODOS sus elementos. No hables de dinero, tarifas ni pagos: eso es de Contabilidad. Si los datos no alcanzan para responder, dilo.';
+  'Responde de forma clara y breve, en español, basándote SOLO en los datos proporcionados. Si traen una lista, menciona TODOS sus elementos (si son viajes, uno por línea con su guía, tipo, cliente y quién fue; una «custodia» es un viaje, no una persona). No hables de dinero, tarifas ni pagos: eso es de Contabilidad. Si los datos no alcanzan para responder, dilo.';

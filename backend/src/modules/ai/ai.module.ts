@@ -9,6 +9,8 @@ import { AiVentasInvestigacionQueries } from './ai-ventas-investigacion.queries'
 import { AiVentasPlanQueries } from './ai-ventas-plan.queries';
 import { AiCacaoQueries } from './ai-cacao.queries';
 import { AiCustodiasQueries } from './ai-custodias.queries';
+import { AiOperacionesQueries } from './ai-operaciones.queries';
+import { OperacionesResumenModule } from '../operaciones-resumen/operaciones-resumen.module';
 import { CacaoConfigModule } from '../cacao/config/cacao-config.module';
 import { VentasModule } from '../ventas/ventas.module';
 import { VertexChatClient } from './vertex-chat.client';
@@ -21,7 +23,7 @@ import { GoogleAuthService } from '../../common/services/google-auth.service';
   // VentasModule: AiVentasQueries reutiliza el cálculo del Dashboard y la ficha
   // del cliente de VentasClientesService.
   // CacaoConfigModule: AiCacaoQueries lee las reglas de la empresa (monto de aprobación, pagos).
-  imports: [PrismaModule, AuthModule, PermissionsModule, VentasModule, CacaoConfigModule],
+  imports: [PrismaModule, AuthModule, PermissionsModule, VentasModule, CacaoConfigModule, OperacionesResumenModule],
   controllers: [AiController, AgentesAdminController],
   providers: [
     AiService,
@@ -32,6 +34,7 @@ import { GoogleAuthService } from '../../common/services/google-auth.service';
     AiVentasPlanQueries,
     AiCacaoQueries,
     AiCustodiasQueries,
+    AiOperacionesQueries,
     VertexChatClient,
     GoogleAuthService,
   ],

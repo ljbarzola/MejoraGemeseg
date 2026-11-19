@@ -14,6 +14,8 @@ import { CP_BITACORAS_DDL } from './bitacoras.schema';
   imports: [PrismaModule, PermissionsModule, AgentsModule, NotificationsModule],
   controllers: [BitacorasController],
   providers: [BitacorasService, BitacoraLectorService, GoogleAuthService],
+  // Lo lee el resumen de Operaciones (operaciones-resumen/), que solo consulta «Hoy en los puestos».
+  exports: [BitacorasService],
 })
 export class CPBitacorasModule implements OnModuleInit {
   private readonly logger = new Logger(CPBitacorasModule.name);

@@ -11,6 +11,8 @@ import { INVENTARIO_DDL } from './inventario.schema';
   imports: [PrismaModule, PermissionsModule, NotificationsModule],
   controllers: [InventarioController],
   providers: [InventarioService],
+  // Lo lee el resumen de Operaciones (armas y artículos bajo el mínimo).
+  exports: [InventarioService],
 })
 export class OperacionesInventarioModule implements OnModuleInit {
   private readonly logger = new Logger(OperacionesInventarioModule.name);
