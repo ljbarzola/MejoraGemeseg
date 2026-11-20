@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { X, Settings2, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { X, Settings2, Plus, Trash2, Lock, ChevronRight } from 'lucide-react';
 import {
   addSalesClientField,
   updateSalesClientField,
@@ -12,6 +12,7 @@ import {
 
 const TYPE_LABEL: Record<string, string> = {
   TEXT: 'Texto',
+  TEXTAREA: 'Texto largo',
   EMAIL: 'Email',
   NUMBER: 'Número',
   DATE: 'Fecha',
@@ -48,6 +49,9 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
   const [addingField, setAddingField] = useState(false);
   const [error, setError] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
+  // El error se pinta arriba: si se borró desde abajo de la lista, se lleva a la vista.
+  const errorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (error) errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, [error]);
 
   const handleAddField = async () => {
     if (!newFieldLabel.trim()) return;
@@ -189,9 +193,14 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
     }
   };
 
+  const camposVisibles = fields.filter((f) => f.key !== SUBSERVICIOS_KEY);
+  // Panel de la derecha: las opciones de la lista elegida. Por defecto, la primera lista.
+  const listaElegida = camposVisibles.find((f) => f.id === editingId && esLista(f.fieldType))
+    ?? camposVisibles.find((f) => esLista(f.fieldType));
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-ventas-sm" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-ventas-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Settings2 size={17} /> Configurar campos de la ficha
@@ -200,84 +209,21 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
             <X size={16} />
           </button>
         </div>
-        <div className="modal-body">
-          <p style={{ fontSize: 12, color: '#666', margin: '0 0 12px' }}>
-            Estos campos se pueden mapear a las variables de un contrato. Nombre y email son fijos; puedes añadir más,
-            y renombrar o editar las opciones de "Fuente" y "Servicio requerido". En cada opción puedes cargar subopciones.
+        <div className="modal-body cfc">
+          <p className="cfc-ayuda">
+            Los datos que se guardan de cada empresa o persona del Directorio. Para renombrar uno, escribe encima.
           </p>
 
-          {error && <div className="form-error" style={{ marginBottom: 12 }}>{error}</div>}
+          {error && <div className="form-error" ref={errorRef}>{error}</div>}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-            {fields.filter((f) => f.key !== SUBSERVICIOS_KEY).map((f) => (
-              <div key={f.id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 10px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input
-                    defaultValue={f.label}
-                    onBlur={(e) => handleRenameField(f, e.target.value)}
-                    style={{ flex: 1, padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 12, fontWeight: 600 }}
-                  />
-                  <span style={{ fontSize: 10, color: '#888', whiteSpace: 'nowrap' }}>({TYPE_LABEL[f.fieldType] || f.fieldType})</span>
-                  {esLista(f.fieldType) && (
-                    <button type="button" onClick={() => setEditingId(editingId === f.id ? null : f.id)}
-                      className="btn-secondary" style={{ padding: '2px 8px', fontSize: 11 }}>
-                      {editingId === f.id ? 'Cerrar' : 'Opciones'}
-                    </button>
-                  )}
-                  {!f.isCore && (
-                    <button type="button" onClick={() => handleDeleteField(f.id)}
-                      style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#c33' }}>
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
-
-                {esLista(f.fieldType) && editingId === f.id && (
-                  <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed #e2e8f0' }}>
-                    {(f.options || []).map((o) => (
-                      <div key={o.key} style={{ marginBottom: 6 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                          <input
-                            defaultValue={o.label}
-                            onBlur={(e) => handleRenameOption(f, o.key, e.target.value)}
-                            style={{ flex: 1, padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 12 }}
-                          />
-                          <button type="button" onClick={() => handleRemoveOption(f, o.key)}
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#c33' }}>
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                        {f.fieldType === LISTA_SUBOPCIONES && (
-                          <HijosDeOpcion
-                            titulo={`Subopciones de "${o.label}"`}
-                            option={o}
-                            placeholder="Nueva subopción"
-                            onRename={(childKey, label) => handleRenameChild(f, o, childKey, label)}
-                            onRemove={(childKey) => handleRemoveChild(f, o, childKey)}
-                            onAdd={(label) => handleAddChild(f, o, label)}
-                          />
-                        )}
-                      </div>
-                    ))}
-                    <AddOptionRow onAdd={(label) => handleAddOptionToField(f, label)} />
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: '#666', marginTop: 8, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={f.allowOther} onChange={() => handleToggleAllowOther(f)} />
-                      Permitir "Otro" con texto libre
-                    </label>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div style={{ paddingTop: 10, borderTop: '1px solid #e2e8f0' }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--azul-oscuro)', margin: '0 0 8px' }}>Agregar campo nuevo</p>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <input value={newFieldLabel} onChange={(e) => setNewFieldLabel(e.target.value)} placeholder="Nuevo campo (ej. Representante legal)"
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddField(); } }}
-                style={{ flex: 1, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }} />
-              <select value={newFieldType} onChange={(e) => setNewFieldType(e.target.value)}
-                style={{ padding: '8px 10px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }}>
+          {/* Agregar: una sola fila, como «Crear Puesto / Vacante». */}
+          <div className="form-group">
+            <label>Agregar campo</label>
+            <div className="cfc-agregar">
+              <input value={newFieldLabel} onChange={(e) => setNewFieldLabel(e.target.value)} placeholder="Ej.: Representante legal"
+                aria-label="Nombre del campo nuevo"
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddField(); } }} />
+              <select value={newFieldType} onChange={(e) => setNewFieldType(e.target.value)} aria-label="Tipo del campo nuevo">
                 <option value="TEXT">Texto</option>
                 <option value="NUMBER">Número</option>
                 <option value="DATE">Fecha</option>
@@ -285,35 +231,117 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
                 <option value="SELECT">Lista de opciones</option>
                 <option value={LISTA_SUBOPCIONES}>Lista con subopciones</option>
               </select>
-              <button className="btn-secondary" onClick={handleAddField} disabled={addingField || !newFieldLabel.trim()}
-                style={{ padding: '8px 14px', fontSize: 12 }}>Añadir campo</button>
+              <button type="button" className="auth-btn cfc-btn-agregar" onClick={handleAddField} disabled={addingField || !newFieldLabel.trim()}>
+                <Plus size={15} /> Añadir
+              </button>
             </div>
-
             {esLista(newFieldType) && (
-              <div style={{ marginTop: 8 }}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
-                  {newOptions.map((o) => (
-                    <span key={o.key} style={{ padding: '3px 8px', borderRadius: 10, background: '#f1f5f9', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      {o.label}
-                      <button type="button" onClick={() => setNewOptions(newOptions.filter((x) => x.key !== o.key))}
-                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#c33', padding: 0 }}>✕</button>
-                    </span>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input value={newOptionLabel} onChange={(e) => setNewOptionLabel(e.target.value)} placeholder="Opción (ej. Referido)"
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddNewOption(); } }}
-                    style={{ flex: 1, padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }} />
-                  <button type="button" className="btn-secondary" onClick={handleAddNewOption} style={{ padding: '6px 10px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Plus size={12} /> Opción
+              <div className="cfc-opciones-nuevas">
+                {newOptions.length > 0 && (
+                  <div className="cfc-chips">
+                    {newOptions.map((o) => (
+                      <span key={o.key} className="cfc-chip">
+                        {o.label}
+                        <button type="button" onClick={() => setNewOptions(newOptions.filter((x) => x.key !== o.key))}
+                          title="Quitar opción" aria-label={`Quitar ${o.label}`}>
+                          <X size={13} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="cfc-fila-sencilla">
+                  <input value={newOptionLabel} onChange={(e) => setNewOptionLabel(e.target.value)} placeholder="Opción de la lista (ej.: Referido) y Enter"
+                    aria-label="Opción nueva"
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddNewOption(); } }} />
+                  <button type="button" className="btn-secondary icon-btn" onClick={handleAddNewOption} title="Agregar opción" aria-label="Agregar opción">
+                    <Plus size={14} />
                   </button>
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: '#666', marginTop: 8, cursor: 'pointer' }}>
+                <label className="casilla">
                   <input type="checkbox" checked={newAllowOther} onChange={(e) => setNewAllowOther(e.target.checked)} />
-                  Permitir "Otro" con texto libre
+                  Permitir «Otro» con texto libre
                 </label>
               </div>
             )}
+          </div>
+
+          <div className="cfc-dos">
+            {/* Izquierda: todos los campos, uno por fila. */}
+            <div className="form-group">
+              <label>Campos de la ficha ({camposVisibles.length})</label>
+              <div className="cfc-lista">
+                {camposVisibles.map((f) => {
+                  const elegido = listaElegida?.id === f.id;
+                  return (
+                    <div key={f.id} className={elegido ? 'cfc-campo cfc-campo--elegido' : 'cfc-campo'}>
+                      <input
+                        aria-label="Nombre del campo"
+                        defaultValue={f.label}
+                        onBlur={(e) => handleRenameField(f, e.target.value)}
+                      />
+                      {esLista(f.fieldType) ? (
+                        <button type="button" className="cfc-tipo cfc-tipo--lista" onClick={() => setEditingId(f.id)} aria-pressed={elegido}
+                          title="Ver sus opciones">
+                          Lista ({f.options?.length ?? 0}) <ChevronRight size={13} />
+                        </button>
+                      ) : (
+                        <span className="cfc-tipo">{TYPE_LABEL[f.fieldType] || f.fieldType}</span>
+                      )}
+                      {f.isCore ? (
+                        <span className="cfc-candado" title="Campo fijo: lo usan los filtros, el Dashboard y los documentos. Se puede renombrar, no borrar.">
+                          <Lock size={14} />
+                        </span>
+                      ) : (
+                        <button type="button" className="btn-secondary icon-btn" onClick={() => handleDeleteField(f.id)}
+                          style={{ color: '#c53030' }} title="Borrar campo (solo si nadie lo tiene lleno)" aria-label={`Borrar el campo ${f.label}`}>
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <small>El candado marca los campos fijos del sistema. Los que agregues se pueden borrar mientras nadie del Directorio los tenga llenos.</small>
+            </div>
+
+            {/* Derecha: las opciones de la lista elegida. */}
+            <div className="form-group">
+              <label>{listaElegida ? `Opciones de «${listaElegida.label}»` : 'Opciones'}</label>
+              {!listaElegida ? (
+                <p className="cfc-vacio">Ningún campo es una lista. Agrega uno de tipo «Lista de opciones» para cargar sus opciones aquí.</p>
+              ) : (
+                <div className="cfc-opciones">
+                  {listaElegida.fieldType === LISTA_SUBOPCIONES ? (
+                    (listaElegida.options || []).map((o) => (
+                      <div key={`${listaElegida.id}-${o.key}`} className="cfc-opcion-grupo">
+                        <OpcionEditable label={o.label} titulo="Nombre de la opción"
+                          onRename={(label) => handleRenameOption(listaElegida, o.key, label)} onRemove={() => handleRemoveOption(listaElegida, o.key)} />
+                        <HijosDeOpcion
+                          option={o}
+                          placeholder={`Subopción de «${o.label}»`}
+                          onRename={(childKey, label) => handleRenameChild(listaElegida, o, childKey, label)}
+                          onRemove={(childKey) => handleRemoveChild(listaElegida, o, childKey)}
+                          onAdd={(label) => handleAddChild(listaElegida, o, label)}
+                        />
+                      </div>
+                    ))
+                  ) : (
+                    <div className="cfc-rejilla">
+                      {(listaElegida.options || []).map((o) => (
+                        <OpcionEditable key={`${listaElegida.id}-${o.key}`} label={o.label} titulo="Nombre de la opción"
+                          onRename={(label) => handleRenameOption(listaElegida, o.key, label)} onRemove={() => handleRemoveOption(listaElegida, o.key)} />
+                      ))}
+                    </div>
+                  )}
+                  <AddOptionRow key={listaElegida.id} onAdd={(label) => handleAddOptionToField(listaElegida, label)} />
+                  <label className="casilla">
+                    <input type="checkbox" checked={listaElegida.allowOther} onChange={() => handleToggleAllowOther(listaElegida)} />
+                    Permitir «Otro» con texto libre
+                  </label>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <div className="modal-actions">
@@ -324,15 +352,26 @@ export default function ClienteFieldsConfigModal({ fields, onClose, onChanged }:
   );
 }
 
+// Una opción (o subopción) como caja compacta: se renombra escribiendo encima y se quita con la papelera.
+function OpcionEditable({ label, titulo, onRename, onRemove }: { label: string; titulo: string; onRename: (label: string) => void; onRemove: () => void }) {
+  return (
+    <div className="cfc-fila-sencilla">
+      <input aria-label={titulo} defaultValue={label} onBlur={(e) => { if (e.target.value !== label) onRename(e.target.value); }} />
+      <button type="button" className="btn-secondary icon-btn" onClick={onRemove}
+        style={{ color: '#c53030' }} title="Quitar" aria-label={`Quitar ${label}`}>
+        <Trash2 size={14} />
+      </button>
+    </div>
+  );
+}
+
 function HijosDeOpcion({
-  titulo,
   option,
   placeholder,
   onRename,
   onRemove,
   onAdd,
 }: {
-  titulo: string;
   option: SalesClientFieldOption;
   placeholder: string;
   onRename: (childKey: string, label: string) => void;
@@ -340,35 +379,27 @@ function HijosDeOpcion({
   onAdd: (label: string) => void;
 }) {
   return (
-    <div style={{ marginLeft: 18, paddingLeft: 8, borderLeft: '2px solid #e2e8f0' }}>
-      <div style={{ fontSize: 10.5, color: '#888', marginBottom: 2 }}>{titulo}</div>
-      {(option.children || []).map((c) => (
-        <div key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-          <input
-            defaultValue={c.label}
-            onBlur={(e) => onRename(c.key, e.target.value)}
-            style={{ flex: 1, padding: '3px 6px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 11.5 }}
-          />
-          <button type="button" onClick={() => onRemove(c.key)}
-            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#c33' }}>
-            <Trash2 size={11} />
-          </button>
-        </div>
-      ))}
-      <AddOptionRow placeholder={placeholder} onAdd={onAdd} />
+    <div className="cfc-hijos">
+      <div className="cfc-rejilla">
+        {(option.children || []).map((c) => (
+          <OpcionEditable key={c.key} label={c.label} titulo="Nombre de la subopción"
+            onRename={(label) => onRename(c.key, label)} onRemove={() => onRemove(c.key)} />
+        ))}
+        <AddOptionRow placeholder={placeholder} onAdd={onAdd} />
+      </div>
     </div>
   );
 }
 
-function AddOptionRow({ onAdd, placeholder = 'Nueva opción' }: { onAdd: (label: string) => void; placeholder?: string }) {
+function AddOptionRow({ onAdd, placeholder = 'Nueva opción y Enter' }: { onAdd: (label: string) => void; placeholder?: string }) {
   const [label, setLabel] = useState('');
+  const agregar = () => { if (label.trim()) { onAdd(label); setLabel(''); } };
   return (
-    <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-      <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={placeholder}
-        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onAdd(label); setLabel(''); } }}
-        style={{ flex: 1, padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 12 }} />
-      <button type="button" className="btn-secondary" onClick={() => { onAdd(label); setLabel(''); }} style={{ padding: '4px 8px', fontSize: 11 }}>
-        <Plus size={12} />
+    <div className="cfc-fila-sencilla">
+      <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={placeholder} aria-label={placeholder}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } }} />
+      <button type="button" className="btn-secondary icon-btn" onClick={agregar} title="Agregar" aria-label="Agregar">
+        <Plus size={14} />
       </button>
     </div>
   );

@@ -13,7 +13,6 @@ import {
 } from '../../services/ventas.service';
 
 const SIN_CATEGORIA = 'Otros';
-const inputStyle = { padding: '8px 10px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 };
 
 const mensajeDe = (err: any, porDefecto: string) => {
   const m = err?.response?.data?.message;
@@ -119,17 +118,22 @@ export default function ServiciosConfigSection({ puedeEditar, onChanged }: { pue
       <ErrorBanner mensaje={error} />
 
       {puedeEditar && (
-        <div className="cfg-herramientas">
-          <input
-            type="text" value={nuevo} maxLength={100} placeholder="Nombre del servicio nuevo"
-            aria-label="Nombre del servicio nuevo"
-            onChange={(e) => setNuevo(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') agregar(); }}
-            style={{ ...inputStyle, flex: '1 1 220px' }}
-          />
-          <select value={nuevaCat} aria-label="Categoría del servicio nuevo" onChange={(e) => setNuevaCat(e.target.value)} style={inputStyle}>
-            {[...CATEGORIAS_ORDEN, SIN_CATEGORIA].map((c) => <option key={c} value={c}>{c === SIN_CATEGORIA ? 'Otros (sin categoría)' : c}</option>)}
-          </select>
+        <div className="cfg-herramientas" style={{ alignItems: 'flex-end' }}>
+          <div className="form-group" style={{ flex: '1 1 220px', minWidth: 0 }}>
+            <label htmlFor="servicio-nuevo-nombre">Servicio nuevo</label>
+            <input
+              id="servicio-nuevo-nombre"
+              type="text" value={nuevo} maxLength={100} placeholder="Nombre del servicio"
+              onChange={(e) => setNuevo(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') agregar(); }}
+            />
+          </div>
+          <div className="form-group" style={{ flex: '0 1 240px', minWidth: 0 }}>
+            <label htmlFor="servicio-nuevo-categoria">Categoría</label>
+            <select id="servicio-nuevo-categoria" value={nuevaCat} onChange={(e) => setNuevaCat(e.target.value)}>
+              {[...CATEGORIAS_ORDEN, SIN_CATEGORIA].map((c) => <option key={c} value={c}>{c === SIN_CATEGORIA ? 'Otros (sin categoría)' : c}</option>)}
+            </select>
+          </div>
           <button className="auth-btn" onClick={agregar}>Agregar servicio</button>
         </div>
       )}
@@ -165,16 +169,22 @@ export default function ServiciosConfigSection({ puedeEditar, onChanged }: { pue
                         <li key={s.id} className={`cfg-mot-item${s.isActive ? '' : ' cfg-mot-item--off'}${editando ? ' cfg-mot-item--edit' : ''}`}>
                           {editando ? (
                             <>
-                              <input value={editNombre} maxLength={100} aria-label={`Nombre de ${s.name}`}
-                                onChange={(e) => setEditNombre(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') guardarEdicion(); }}
-                                style={{ ...inputStyle, width: '100%', padding: '6px 8px' }} />
-                              <select value={editCat} aria-label={`Categoría de ${s.name}`}
-                                onChange={(e) => setEditCat(e.target.value)}
-                                style={{ ...inputStyle, width: '100%', padding: '6px 8px' }}>
-                                {opcionesCategoria(editCat).map((c) => <option key={c} value={c}>{c}</option>)}
-                                <option value={SIN_CATEGORIA}>Otros (sin categoría)</option>
-                              </select>
+                              <div className="form-group">
+                                <label htmlFor={`servicio-${s.id}-nombre`}>Nombre</label>
+                                <input id={`servicio-${s.id}-nombre`} value={editNombre} maxLength={100}
+                                  onChange={(e) => setEditNombre(e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === 'Enter') guardarEdicion(); }}
+                                  style={{ width: '100%', boxSizing: 'border-box' }} />
+                              </div>
+                              <div className="form-group">
+                                <label htmlFor={`servicio-${s.id}-categoria`}>Categoría</label>
+                                <select id={`servicio-${s.id}-categoria`} value={editCat}
+                                  onChange={(e) => setEditCat(e.target.value)}
+                                  style={{ width: '100%', boxSizing: 'border-box' }}>
+                                  {opcionesCategoria(editCat).map((c) => <option key={c} value={c}>{c}</option>)}
+                                  <option value={SIN_CATEGORIA}>Otros (sin categoría)</option>
+                                </select>
+                              </div>
                               <div className="cfg-serv-acciones" style={{ justifyContent: 'flex-end' }}>
                                 <button className="btn-secondary icon-btn" title="Guardar" aria-label={`Guardar ${s.name}`} onClick={guardarEdicion}><Check size={15} /></button>
                                 <button className="btn-secondary icon-btn" title="Cancelar" aria-label="Cancelar" onClick={() => setEditId(null)}><XIcon size={15} /></button>

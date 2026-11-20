@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { Copy, Eye, RefreshCw } from 'lucide-react';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import { getContract, generateContractPdf, sendContract, getContractDocuments, fetchProtectedFile, uploadSignedContract, getContractSignatureStatus, getEstadoFirmaElectronica, cambiarTipoDocumento, SalesContract, SalesContractDocument, SignatureStatus } from '../../services/ventas.service';
-import { subPageTitle } from './contratoStyles';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import TipoDocumentoSelect from '../../components/ventas/TipoDocumentoSelect';
@@ -243,46 +243,47 @@ export default function ContratoResult() {
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '16px 24px', background: '#fff', borderBottom: '1px solid #e2e8f0', gap: 14, flexShrink: 0 }}>
-        <button className="cacao-back-btn" onClick={() => navigate('/ventas/documentacion')}>
-          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-        </button>
-        <h2 style={subPageTitle}>{subido ? 'Documento subido' : 'Documento'} {contract.contractNumber || `#${contract.id}`}{nombreDoc ? ` · ${nombreDoc}` : ''} — {contract.clientName}</h2>
-        <span style={{ padding: '3px 10px', borderRadius: 12, background: statusColors[contract.status] || '#888', color: '#fff', fontSize: 11, fontWeight: 600 }}>{contract.status}</span>
-        <div style={{ flex: 1 }} />
-        {!subido && contract.status !== 'SIGNED' && (
-          <button className="btn-secondary" onClick={handleEditFieldsClick} style={{ padding: '10px 20px', fontSize: 13 }}>
-            ✏️ Editar campos
-          </button>
-        )}
-        {!subido && contract.status !== 'SIGNED' && (
-          <button className="auth-btn" onClick={handleGenerateClick} disabled={generating} style={{ padding: '10px 20px', fontSize: 13 }}>
-            {generating ? 'Generando PDF...' : contract.generatedPdfPath ? '🔄 Regenerar PDF' : '⚡ Generar PDF'}
-          </button>
-        )}
-      </div>
-
-      <div style={{ padding: '8px 24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 13, flexShrink: 0 }}>
-        <span>
-          Tipo:{' '}
-          {etiquetaTipo
-            ? <span className="status-badge" style={{ backgroundColor: '#eef2f7', color: '#334155' }}>{etiquetaTipo}</span>
-            : <span style={{ color: '#a0aec0' }}>sin tipo</span>}{' '}
-          <button type="button" className="enlace-tabla" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13 }}
-            onClick={() => { setTipoNuevo(contract.documentType || ''); setTipoOtroNuevo(contract.documentTypeOther || ''); setCambiandoTipo(true); }}>
-            Cambiar tipo
-          </button>
-        </span>
-        <span>
-          Contrato:{' '}
-          {contratoDelDoc ? (
-            <a className="enlace-tabla" href={`/ventas/contratos/${contratoDelDoc.id}`}
-              title={`Ver el contrato «${nombreContratoDoc}» de ${contract.clientName}`}
-              onClick={(e) => { e.preventDefault(); navigate(`/ventas/contratos/${contratoDelDoc.id}`); }}>
-              {nombreContratoDoc}
-            </a>
-          ) : <span style={{ color: '#a0aec0' }}>no está asociado a ningún contrato</span>}
-        </span>
+      <div style={{ padding: '16px 24px 8px', background: '#fff', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+        <VentasPageHeader
+          title={`${subido ? 'Documento subido' : 'Documento'} ${contract.contractNumber || `#${contract.id}`}${nombreDoc ? ` · ${nombreDoc}` : ''} — ${contract.clientName}`}
+          onVolver={() => navigate('/ventas/documentacion')}
+          ayuda={null}
+          description={
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <span style={{ padding: '3px 10px', borderRadius: 12, background: statusColors[contract.status] || '#888', color: '#fff', fontSize: 11, fontWeight: 600 }}>{contract.status}</span>
+              <span>
+                Tipo:{' '}
+                {etiquetaTipo
+                  ? <span className="status-badge" style={{ backgroundColor: '#eef2f7', color: '#334155' }}>{etiquetaTipo}</span>
+                  : <span style={{ color: '#a0aec0' }}>sin tipo</span>}{' '}
+                <button type="button" className="enlace-tabla" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13 }}
+                  onClick={() => { setTipoNuevo(contract.documentType || ''); setTipoOtroNuevo(contract.documentTypeOther || ''); setCambiandoTipo(true); }}>
+                  Cambiar tipo
+                </button>
+              </span>
+              <span>
+                Contrato:{' '}
+                {contratoDelDoc ? (
+                  <a className="enlace-tabla" href={`/ventas/contratos/${contratoDelDoc.id}`}
+                    title={`Ver el contrato «${nombreContratoDoc}» de ${contract.clientName}`}
+                    onClick={(e) => { e.preventDefault(); navigate(`/ventas/contratos/${contratoDelDoc.id}`); }}>
+                    {nombreContratoDoc}
+                  </a>
+                ) : <span style={{ color: '#a0aec0' }}>no está asociado a ningún contrato</span>}
+              </span>
+            </span>
+          }
+          actions={!subido && contract.status !== 'SIGNED' ? (
+            <>
+              <button className="btn-secondary" onClick={handleEditFieldsClick}>
+                Editar campos
+              </button>
+              <button className="auth-btn" onClick={handleGenerateClick} disabled={generating}>
+                {generating ? 'Generando PDF...' : contract.generatedPdfPath ? 'Regenerar PDF' : 'Generar PDF'}
+              </button>
+            </>
+          ) : undefined}
+        />
       </div>
 
       {cambiandoTipo && (
@@ -328,13 +329,13 @@ export default function ContratoResult() {
           ) : (
             <>
               <span style={{ fontSize: 13, color: '#92400e' }}>El cliente todavía debe completar información antes de firmar.</span>
-              <button className="btn-secondary" style={{ padding: '4px 12px', fontSize: 12 }}
+              <button type="button" className="btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 onClick={() => {
                   const url = `${window.location.origin}/ventas/contratos/completar/${contract.clientFillToken}`;
                   navigator.clipboard.writeText(url);
                   showToast('Link copiado al portapapeles', 'success');
                 }}>
-                📋 Copiar link para el cliente
+                <Copy size={14} /> Copiar link para el cliente
               </button>
             </>
           )}
@@ -352,8 +353,8 @@ export default function ContratoResult() {
                 <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
                 <div style={{ fontSize: 14, marginBottom: 16 }}>{pdfError}</div>
                 {isDraft || contract.status === 'READY' ? (
-                  <button className="auth-btn" onClick={handleGenerate} disabled={generating} style={{ padding: '10px 24px', fontSize: 13 }}>
-                    {generating ? 'Generando...' : '🔄 Regenerar PDF'}
+                  <button className="auth-btn" onClick={handleGenerate} disabled={generating}>
+                    {generating ? 'Generando...' : 'Regenerar PDF'}
                   </button>
                 ) : null}
               </div>
@@ -365,7 +366,7 @@ export default function ContratoResult() {
               <div style={{ fontSize: 48, marginBottom: 12 }}>📄</div>
               <div style={{ fontSize: 14, marginBottom: 16 }}>El PDF aún no ha sido generado</div>
               {isDraft && (
-                <button className="auth-btn" onClick={handleGenerate} disabled={generating} style={{ padding: '10px 24px', fontSize: 13 }}>
+                <button className="auth-btn" onClick={handleGenerate} disabled={generating}>
                   Generar PDF
                 </button>
               )}
@@ -379,7 +380,9 @@ export default function ContratoResult() {
           {/* Client fields — qué se le va a pedir al cliente, y cómo (antes o al firmar) */}
           {clientFields.length > 0 && (
             <div style={{ padding: 16, borderBottom: '1px solid #eee' }}>
-              <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#888', textTransform: 'uppercase' }}>Información que se le pedirá al cliente</h4>
+              <div className="form-seccion-cab">
+                <h3 className="form-seccion-titulo">Información que se le pedirá al cliente</h3>
+              </div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #eee' }}>
@@ -402,8 +405,10 @@ export default function ContratoResult() {
           )}
 
           {subido && (
-            <div style={{ padding: 16, borderBottom: '1px solid #eee', fontSize: 12, color: '#555', lineHeight: 1.5 }}>
-              <h3 style={{ margin: '0 0 8px', fontSize: 14, color: '#222' }}>Documento subido ya hecho</h3>
+            <div style={{ padding: 16, borderBottom: '1px solid #eee', fontSize: 13, color: '#5a6678', lineHeight: 1.5 }}>
+              <div className="form-seccion-cab">
+                <h3 className="form-seccion-titulo">Documento subido ya hecho</h3>
+              </div>
               Este PDF de <strong>{contract.salesClient?.name || contract.clientName}</strong> se subió tal cual: no sale de una plantilla,
               así que no se genera ni se envía a firma desde aquí.
             </div>
@@ -411,21 +416,22 @@ export default function ContratoResult() {
 
           {!subido && (<>
           <div style={{ padding: 16, borderBottom: '1px solid #eee' }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>Envío de correo</h3>
-            <div style={{ marginBottom: 8 }}>
-              <label style={{ fontSize: 11, fontWeight: 600, color: '#888', display: 'block', marginBottom: 2 }}>Para</label>
-              <input value={emailTo} onChange={e => setEmailTo(e.target.value)} type="email"
-                style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12, boxSizing: 'border-box' }} />
+            <div className="form-seccion-cab">
+              <h3 className="form-seccion-titulo">Envío de correo</h3>
             </div>
-            <div style={{ marginBottom: 8 }}>
-              <label style={{ fontSize: 11, fontWeight: 600, color: '#888', display: 'block', marginBottom: 2 }}>Asunto</label>
-              <input value={emailSubject} onChange={e => setEmailSubject(e.target.value)}
-                style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12, boxSizing: 'border-box' }} />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: '#888', display: 'block', marginBottom: 2 }}>Mensaje</label>
-              <textarea value={emailBody} onChange={e => setEmailBody(e.target.value)} rows={5}
-                style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12, boxSizing: 'border-box', resize: 'vertical' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="form-group">
+                <label>Para</label>
+                <input value={emailTo} onChange={e => setEmailTo(e.target.value)} type="email" />
+              </div>
+              <div className="form-group">
+                <label>Asunto</label>
+                <input value={emailSubject} onChange={e => setEmailSubject(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Mensaje</label>
+                <textarea value={emailBody} onChange={e => setEmailBody(e.target.value)} rows={5} />
+              </div>
             </div>
           </div>
 
@@ -434,23 +440,24 @@ export default function ContratoResult() {
           {/* Estado de la firma en SignWell — a demanda, no hay polling automático */}
           {contract.signwellDocumentId && (
             <div style={{ padding: 16, borderBottom: '1px solid #eee' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <h4 style={{ margin: 0, fontSize: 12, color: '#888', textTransform: 'uppercase' }}>Estado de la firma</h4>
-                <button onClick={handleCheckStatus} disabled={checkingStatus}
-                  style={{ padding: '3px 10px', borderRadius: 4, border: '1px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: 11 }}>
-                  {checkingStatus ? 'Consultando...' : '🔄 Actualizar'}
+              <div className="form-seccion-cab" style={{ marginBottom: 8 }}>
+                <h3 className="form-seccion-titulo">Estado de la firma</h3>
+                <button type="button" className="btn-secondary icon-btn" onClick={handleCheckStatus} disabled={checkingStatus}
+                  title={checkingStatus ? 'Consultando...' : 'Actualizar estado de la firma'} aria-label="Actualizar estado de la firma">
+                  <RefreshCw size={14} />
                 </button>
               </div>
-              <div style={{ fontSize: 12, marginBottom: signatureStatus ? 8 : 0 }}>
-                {signatureStatus ? signwellStatusLabel(signatureStatus.status) : signwellStatusLabel(contract.signwellStatus || 'Sent')}
+              <div style={{ fontSize: 13, marginBottom: signatureStatus ? 8 : 0 }}>
+                {checkingStatus ? 'Consultando...' : signatureStatus ? signwellStatusLabel(signatureStatus.status) : signwellStatusLabel(contract.signwellStatus || 'Sent')}
               </div>
               {signingUrl && contract.status !== 'SIGNED' && (
-                <button className="btn-secondary" style={{ padding: '4px 12px', fontSize: 11, marginBottom: 8 }}
+                <button type="button" className="btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 8 }}
+                  title="Copiar link de firma del cliente (SignWell)"
                   onClick={() => {
                     navigator.clipboard.writeText(signingUrl);
                     showToast('Link de firma copiado al portapapeles', 'success');
                   }}>
-                  📋 Copiar link de firma del cliente (SignWell)
+                  <Copy size={14} /> Copiar link de firma
                 </button>
               )}
               {signatureStatus && signatureStatus.recipients.length > 0 && (
@@ -473,7 +480,9 @@ export default function ContratoResult() {
           {/* Document history */}
           {documents.length > 0 && (
             <div style={{ padding: 16, borderBottom: '1px solid #eee' }}>
-              <h4 style={{ margin: '0 0 8px', fontSize: 12, color: '#888', textTransform: 'uppercase' }}>Historial de documentos</h4>
+              <div className="form-seccion-cab">
+                <h3 className="form-seccion-titulo">Historial de documentos</h3>
+              </div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #eee' }}>
@@ -488,9 +497,9 @@ export default function ContratoResult() {
                       <td style={{ padding: '4px 6px' }}>{DOCUMENT_TYPE_LABELS[d.type] || d.type}</td>
                       <td style={{ padding: '4px 6px', color: '#888' }}>{new Date(d.createdAt).toLocaleString('es-EC')}</td>
                       <td style={{ padding: '4px 6px', textAlign: 'right' }}>
-                        <button onClick={() => handleOpenDocument(d.filePath)}
-                          style={{ padding: '2px 8px', borderRadius: 4, border: '1px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: 10 }}>
-                          Ver
+                        <button type="button" className="btn-secondary icon-btn" onClick={() => handleOpenDocument(d.filePath)}
+                          title="Ver documento" aria-label="Ver documento">
+                          <Eye size={14} />
                         </button>
                       </td>
                     </tr>
@@ -511,13 +520,13 @@ export default function ContratoResult() {
             )}
             {!subido && (
               <button className="auth-btn" onClick={handleSend} disabled={sending || !isReady || signwellListo === false}
-                style={{ width: '100%', padding: '10px', fontSize: 13, ...(isReady && signwellListo !== false ? { background: '#059669' } : {}) }}>
-                {sending ? 'Enviando...' : signwellListo === false ? '✉️ Enviar a firma · Próximamente' : isReady ? '✉️ Enviar a Firma Electrónica (SignWell)' : 'Genera el PDF primero'}
+                style={{ width: '100%', ...(isReady && signwellListo !== false ? { background: '#059669' } : {}) }}>
+                {sending ? 'Enviando...' : signwellListo === false ? 'Enviar a firma · Próximamente' : isReady ? 'Enviar a firma electrónica (SignWell)' : 'Genera el PDF primero'}
               </button>
             )}
             {contract.status !== 'DRAFT' && contract.status !== 'SIGNED' && (
-              <label className="btn-secondary" style={{ display: 'block', width: '100%', padding: '10px', fontSize: 13, textAlign: 'center', marginTop: subido ? 0 : 8, cursor: uploadingSigned ? 'default' : 'pointer', boxSizing: 'border-box' }}>
-                {uploadingSigned ? 'Subiendo...' : '📤 Subir PDF firmado'}
+              <label className="btn-secondary" style={{ display: 'block', width: '100%', textAlign: 'center', marginTop: subido ? 0 : 8, cursor: uploadingSigned ? 'default' : 'pointer', boxSizing: 'border-box' }}>
+                {uploadingSigned ? 'Subiendo...' : 'Subir PDF firmado'}
                 <input type="file" accept="application/pdf" onChange={handleUploadSigned} disabled={uploadingSigned} style={{ display: 'none' }} />
               </label>
             )}

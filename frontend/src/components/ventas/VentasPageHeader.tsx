@@ -12,7 +12,10 @@ export default function VentasPageHeader({
   description,
   actions,
   ayuda,
+  onVolver,
 }: {
+  /** Pantallas de segundo nivel: «← Volver» pequeño junto a «Ventas y CRM». */
+  onVolver?: () => void;
   title: string;
   description?: ReactNode;
   /** Botones propios de la pantalla: secundarios primero y el principal (`auth-btn`) al final. */
@@ -23,6 +26,7 @@ export default function VentasPageHeader({
   return (
     <PageHeader
       eyebrow="Ventas y CRM"
+      onVolver={onVolver}
       title={title}
       description={description}
       actions={

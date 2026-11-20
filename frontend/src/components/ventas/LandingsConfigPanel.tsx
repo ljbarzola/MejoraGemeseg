@@ -58,7 +58,7 @@ export default function LandingsConfigPanel({ inicial, servicios, puedeEditar, o
         style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', width: '100%', textAlign: 'left' }}
       >
         {abiertas ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-        <h4 style={{ margin: 0 }}>Landings</h4>
+        <h4 className="form-seccion-titulo">Landings</h4>
         <span style={{ fontSize: 13, color: '#718096' }}>({landings.length})</span>
       </button>
       {!abiertas && (
@@ -86,25 +86,31 @@ export default function LandingsConfigPanel({ inicial, servicios, puedeEditar, o
                 {landings.map((l, i) => (
                   <tr key={i}>
                     <td>
-                      <input type="text" value={l.slug} disabled={!puedeEditar} maxLength={80} aria-label="Dirección de la landing"
-                        onChange={(e) => cambiar(i, 'slug', e.target.value)}
-                        style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
+                      <div className="form-group">
+                        <input type="text" value={l.slug} disabled={!puedeEditar} maxLength={80} aria-label="Dirección de la landing"
+                          onChange={(e) => cambiar(i, 'slug', e.target.value)}
+                          style={{ width: '100%', boxSizing: 'border-box' }} />
+                      </div>
                     </td>
                     <td>
-                      <select value={l.servicio} disabled={!puedeEditar} aria-label="Servicio"
-                        onChange={(e) => cambiar(i, 'servicio', e.target.value)}
-                        style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}>
-                        <option value="">Elige un servicio…</option>
-                        {/* Si el servicio se desactivó o se borró del catálogo, se conserva a la vista (para no perderlo
-                            sin querer) pero avisando que ya no está disponible: hay que elegir otro. */}
-                        {l.servicio && !nombresServicio.includes(l.servicio) && <option value={l.servicio}>{l.servicio} (ya no está disponible)</option>}
-                        {servicios.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
-                      </select>
+                      <div className="form-group">
+                        <select value={l.servicio} disabled={!puedeEditar} aria-label="Servicio"
+                          onChange={(e) => cambiar(i, 'servicio', e.target.value)}
+                          style={{ width: '100%', boxSizing: 'border-box' }}>
+                          <option value="">Elegir...</option>
+                          {/* Si el servicio se desactivó o se borró del catálogo, se conserva a la vista (para no perderlo
+                              sin querer) pero avisando que ya no está disponible: hay que elegir otro. */}
+                          {l.servicio && !nombresServicio.includes(l.servicio) && <option value={l.servicio}>{l.servicio} (ya no está disponible)</option>}
+                          {servicios.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+                        </select>
+                      </div>
                     </td>
                     <td>
-                      <input type="text" value={l.linea} disabled={!puedeEditar} maxLength={60} aria-label="Línea comercial"
-                        onChange={(e) => cambiar(i, 'linea', e.target.value)}
-                        style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
+                      <div className="form-group">
+                        <input type="text" value={l.linea} disabled={!puedeEditar} maxLength={60} aria-label="Línea comercial"
+                          onChange={(e) => cambiar(i, 'linea', e.target.value)}
+                          style={{ width: '100%', boxSizing: 'border-box' }} />
+                      </div>
                     </td>
                     <td className="col-acciones">
                       <div className="acciones-iconos">
@@ -124,7 +130,7 @@ export default function LandingsConfigPanel({ inicial, servicios, puedeEditar, o
             </table>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-            <button className="btn-secondary" disabled={!puedeEditar} onClick={() => setLandings((ls) => [...ls, { slug: '', servicio: '', linea: '' }])}>
+            <button className="btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} disabled={!puedeEditar} onClick={() => setLandings((ls) => [...ls, { slug: '', servicio: '', linea: '' }])}>
               <Plus size={16} /> Agregar landing
             </button>
             <button className="auth-btn" onClick={guardar} disabled={guardando || !puedeEditar}>

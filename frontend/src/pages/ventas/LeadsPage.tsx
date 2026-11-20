@@ -259,7 +259,7 @@ export default function LeadsPage() {
               value={l.contactReason ?? ''}
               aria-label={`Tipo de contacto de ${l.name}`}
               onChange={(e) => clasificar(l, e.target.value)}
-              style={{ padding: '4px 6px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }}
+              style={{ padding: '4px 8px', borderRadius: 12, border: 'none', background: '#edf2f7', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
             >
               <option value="">Sin clasificar</option>
               {(Object.keys(MOTIVO_CONTACTO_LABEL) as MotivoContacto[]).map((k) => <option key={k} value={k}>{MOTIVO_CONTACTO_LABEL[k]}</option>)}
@@ -417,7 +417,7 @@ export default function LeadsPage() {
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por nombre, correo, teléfono o mensaje..."
-            style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
+            className="filtro-buscar"
           />
         </div>
         <div className="filter-bar-actions">

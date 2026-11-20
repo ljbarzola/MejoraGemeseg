@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, RefreshCw, Trash2, FilePlus, Link2, Unlink, Ban, RotateCcw, MessageSquareWarning, Mail, Info, PackageCheck, Upload, Bot } from 'lucide-react';
+import { Pencil, RefreshCw, Trash2, FilePlus, Link2, Unlink, Ban, RotateCcw, MessageSquareWarning, Mail, Info, PackageCheck, Upload, Bot } from 'lucide-react';
 import { abrirChatDeVentas } from '../../services/chat.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import RowActionsMenu, { type RowAction } from '../../components/common/RowActionsMenu';
@@ -11,7 +11,7 @@ import SubirDocumentoModal from '../../components/ventas/SubirDocumentoModal';
 import IncidentesContrato from '../../components/ventas/IncidentesContrato';
 import { useToast } from '../../contexts/ToastContext';
 import { etiquetaTipoDocumento } from '../../utils/documentoTipos';
-import { subPageTitle } from './contratoStyles';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import {
   getContratoComercial,
   deleteContratoComercial,
@@ -87,9 +87,7 @@ export default function ContratoComercialDetalle() {
   if (error) {
     return (
       <div className="page-container">
-        <button className="cacao-back-btn" onClick={() => navigate('/ventas/contratos')}>
-          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-        </button>
+        <VentasPageHeader title="Contrato" onVolver={() => navigate('/ventas/contratos')} ayuda={null} />
         <p style={{ color: '#c33', marginTop: 16 }}>{error}</p>
       </div>
     );
@@ -174,15 +172,13 @@ export default function ContratoComercialDetalle() {
 
   return (
     <div className="page-container">
-      <div className="page-title-row" style={{ alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-          <button className="cacao-back-btn" onClick={() => navigate('/ventas/contratos')}>
-            <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-          </button>
-          <h2 style={subPageTitle}>{titulo} — {contrato.salesClient.name}</h2>
-          <EstadoContratoBadge estado={contrato.estado} />
-        </div>
-        <div className="header-actions header-actions--ancho-movil">
+      <VentasPageHeader
+        title={`${titulo} — ${contrato.salesClient.name}`}
+        description={<EstadoContratoBadge estado={contrato.estado} />}
+        onVolver={() => navigate('/ventas/contratos')}
+        ayuda={null}
+        actions={
+        <>
           <button className="btn-secondary" onClick={() => setModo('editar')}
             title="Cambia las fechas, los servicios, el valor y las notas">
             <Pencil size={15} /> {producto ? 'Editar venta' : 'Editar contrato'}
@@ -200,8 +196,9 @@ export default function ContratoComercialDetalle() {
             </button>
           )}
           <RowActionsMenu actions={accionesMenu} label="Más acciones del contrato" />
-        </div>
-      </div>
+        </>
+        }
+      />
 
       {sinMotivoDeCierre && (
         <div style={{ background: '#fffbeb', border: '1px solid #f6e05e', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -434,7 +431,7 @@ export default function ContratoComercialDetalle() {
             </button>
           ) : (
             <div>
-              <p style={{ fontSize: 12, color: '#718096', margin: '0 0 8px' }}>
+              <p className="form-seccion-ayuda" style={{ margin: '0 0 8px' }}>
                 Útil si ya generaste un documento de este cliente por separado y quieres que cuente como parte de este contrato.
               </p>
               <div className="filter-bar-fields">

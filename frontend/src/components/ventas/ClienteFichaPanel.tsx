@@ -29,7 +29,6 @@ import {
   SalesActivityType,
   TimelineEvent,
   SERVICIO_KEY,
-  FUENTE_KEY,
   salesClientListaSubopcionesLabel,
   salesClientSelectLabel,
 } from '../../services/ventas.service';
@@ -57,12 +56,6 @@ const ACTIVITY_ICON: Record<SalesActivityType, typeof StickyNote> = {
   INCIDENTE_SERVICIO: ShieldAlert,
   CONVERSACION_SALIDA: LogOut,
   OTRO: Tag,
-};
-
-const labelStyle = { display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 };
-const inputStyle = {
-  width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd',
-  fontSize: 13, boxSizing: 'border-box' as const, fontFamily: 'inherit',
 };
 
 const formatCuando = (iso: string) =>
@@ -106,7 +99,6 @@ function Etapa({ info }: { info: { label: string; color: string } | null }) {
 // (creación, cambios de etapa, notas/llamadas/reuniones y documentos). Las
 // oportunidades y los contratos se abren desde sus accesos, no se muestran aquí.
 export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: Props) {
-  const fuenteField = fields.find((f) => f.key === FUENTE_KEY);
   const servicioField = fields.find((f) => f.key === SERVICIO_KEY);
   const tipoNegocioField = fields.find((f) => f.key === 'tipo_negocio');
   const sectorField = fields.find((f) => f.key === 'sector');
@@ -239,8 +231,8 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
   const conWhatsapp = (oportunidades ?? []).filter((o) => o.whatsapp);
   const dato = (label: string, value?: string | null) =>
     value ? (
-      <div>
-        <span style={labelStyle}>{label}</span>
+      <div className="form-group">
+        <label>{label}</label>
         <span style={{ fontSize: 13, color: '#2d3748' }}>{value}</span>
       </div>
     ) : null;
@@ -331,14 +323,15 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
             onChange={(e) => setEditText(e.target.value)}
             rows={3}
             maxLength={2000}
-            style={{ ...inputStyle, resize: 'vertical' }}
+            className="form-textarea"
+            style={{ width: '100%', boxSizing: 'border-box' }}
             autoFocus
           />
           <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-            <button type="button" className="btn-secondary" onClick={() => setEditingId(null)} style={{ padding: '5px 12px', fontSize: 12 }}>
+            <button type="button" className="btn-secondary btn-compacto" onClick={() => setEditingId(null)}>
               Cancelar
             </button>
-            <button type="button" className="auth-btn" onClick={() => guardarEdicion(ev.activityId)} style={{ padding: '5px 12px', fontSize: 12 }}>
+            <button type="button" className="auth-btn btn-compacto" onClick={() => guardarEdicion(ev.activityId)}>
               Guardar
             </button>
           </div>
@@ -400,15 +393,13 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
             <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: '#a0aec0', textTransform: 'uppercase' }}>Ficha</p>
             <h2 style={{ margin: '2px 0 0', fontSize: '1.25rem', wordBreak: 'break-word' }}>{client.name}</h2>
           </div>
-          <button type="button" className="btn-secondary"
+          <button type="button" className="btn-secondary btn-compacto"
             title={`El Agente de Ventas revisa todo el historial de ${client.name} y te sugiere qué hacer`}
-            onClick={() => { abrirChatDeVentas({ clienteId: client.id, clienteNombre: client.name }); onClose(); }}
-            style={{ padding: '5px 12px', fontSize: 12.5, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            onClick={() => { abrirChatDeVentas({ clienteId: client.id, clienteNombre: client.name }); onClose(); }}>
             <Bot size={14} /> Preguntar al agente
           </button>
           {onEdit && (
-            <button type="button" className="btn-secondary" onClick={() => onEdit(client)}
-              style={{ padding: '5px 12px', fontSize: 12.5, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <button type="button" className="btn-secondary btn-compacto" onClick={() => onEdit(client)}>
               <Pencil size={13} /> Editar
             </button>
           )}
@@ -446,8 +437,8 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
           {pestana === 'resumen' && (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px', marginBottom: 14 }}>
-                <div>
-                  <span style={labelStyle}>Relación</span>
+                <div className="form-group">
+                  <label>Relación</label>
                   <CicloVidaBadge ciclo={client.ciclo} razones={client.cicloRazones} />
                   {client.cicloRazones && client.cicloRazones.length > 0 && (
                     <div style={{ fontSize: 11, color: '#b45309', marginTop: 2 }}>{client.cicloRazones.join(' · ')}</div>
@@ -459,7 +450,6 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
                 {dato('Dirección', client.address)}
                 {tipoNegocioField && dato(tipoNegocioField.label, salesClientSelectLabel(client, tipoNegocioField))}
                 {sectorField && dato(sectorField.label, salesClientSelectLabel(client, sectorField))}
-                {fuenteField && dato(fuenteField.label, salesClientListaSubopcionesLabel(client, fuenteField))}
                 {servicioField && dato(servicioField.label, salesClientListaSubopcionesLabel(client, servicioField))}
                 {dato('Observaciones', client.observaciones)}
               </div>
@@ -472,8 +462,8 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
                   {conWhatsapp.map((o) => (
                     <div key={o.id} style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e2e8f0' }}>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
-                        <div>
-                          <span style={labelStyle}>Código</span>
+                        <div className="form-group">
+                          <label>Código</label>
                           <span style={{ fontSize: 13, fontFamily: 'monospace', fontWeight: 600, color: '#2d3748' }}>{o.whatsapp!.codigo}</span>
                         </div>
                         {dato('Tocó el botón', o.whatsapp!.fechaClic ? formatCuando(o.whatsapp!.fechaClic) : null)}
@@ -496,11 +486,11 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
                     <strong style={{ fontSize: 13.5 }}>Oportunidades ({cuenta(oportunidades, oportunidadesError)})</strong>
                     <div style={tenue}>Las negociaciones, con su etapa, responsable y siguiente paso.</div>
                   </div>
-                  <button type="button" className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12.5, whiteSpace: 'nowrap' }}
+                  <button type="button" className="btn-secondary btn-compacto"
                     onClick={() => navigate(`/ventas/oportunidades?q=${encodeURIComponent(client.name)}`)}>
                     Ver
                   </button>
-                  <button type="button" className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12.5, whiteSpace: 'nowrap' }}
+                  <button type="button" className="btn-secondary btn-compacto"
                     onClick={() => navigate(`/ventas/oportunidades?nueva=1&clienteId=${client.id}`)}>
                     Nueva oportunidad
                   </button>
@@ -510,11 +500,11 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
                     <strong style={{ fontSize: 13.5 }}>Contratos ({cuenta(contratos, contratosError)})</strong>
                     <div style={tenue}>Los acuerdos vigentes y sus renovaciones.</div>
                   </div>
-                  <button type="button" className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12.5, whiteSpace: 'nowrap' }}
+                  <button type="button" className="btn-secondary btn-compacto"
                     onClick={() => navigate(`/ventas/contratos?q=${encodeURIComponent(client.name)}`)}>
                     Ver
                   </button>
-                  <button type="button" className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12.5, whiteSpace: 'nowrap' }}
+                  <button type="button" className="btn-secondary btn-compacto"
                     onClick={() => navigate(`/ventas/contratos?nuevo=1&clienteId=${client.id}`)}>
                     Nuevo contrato
                   </button>
@@ -533,17 +523,17 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
                 Los incidentes del servicio y la conversación de salida ya no se anotan aquí: se registran dentro de cada contrato (Ventas → Contratos), porque ocurren durante la vigencia de uno en particular.
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <div style={{ flex: '0 0 auto' }}>
-                    <label style={labelStyle}>Tipo</label>
-                    <select value={type} onChange={(e) => setType(e.target.value as SalesActivityType)} style={{ ...inputStyle, width: 'auto' }}>
+                <div className="form-grid-2">
+                  <div className="form-group">
+                    <label>Tipo</label>
+                    <select value={type} onChange={(e) => setType(e.target.value as SalesActivityType)}>
                       {SALES_ACTIVITY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </div>
                   {type === 'OTRO' && (
-                    <div style={{ flex: '1 1 140px', minWidth: 0 }}>
-                      <label style={labelStyle}>¿Cuál?</label>
-                      <input value={otherLabel} onChange={(e) => setOtherLabel(e.target.value)} maxLength={40} placeholder="Ej: Visita a la obra" style={inputStyle} />
+                    <div className="form-group">
+                      <label>¿Cuál?</label>
+                      <input value={otherLabel} onChange={(e) => setOtherLabel(e.target.value)} maxLength={40} placeholder="Ej: Visita a la obra" />
                     </div>
                   )}
                 </div>
@@ -553,11 +543,11 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
                   rows={3}
                   maxLength={2000}
                   placeholder="¿Qué pasó? Ej: Llamé, pidió cotización para 10 guardias."
-                  style={{ ...inputStyle, resize: 'vertical' }}
+                  className="form-textarea"
                 />
                 <div>
                   <button type="button" className="auth-btn" onClick={agregar} disabled={saving || !text.trim()}
-                    style={{ padding: '8px 18px', fontSize: '0.9rem', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <Check size={15} /> Agregar
                   </button>
                 </div>
@@ -567,9 +557,8 @@ export default function ClienteFichaPanel({ client, fields, onClose, onEdit }: P
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                 <h3 style={{ fontSize: '0.95rem', margin: 0, flex: 1 }}>Historial</h3>
                 <button
-                  type="button" className="btn-secondary" onClick={alternarOrden}
+                  type="button" className="btn-secondary btn-compacto" onClick={alternarOrden}
                   title="Cambiar el orden del historial"
-                  style={{ padding: '4px 10px', fontSize: 12, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 >
                   {orden === 'nuevo' ? <ArrowDownNarrowWide size={14} /> : <ArrowUpNarrowWide size={14} />}
                   {orden === 'nuevo' ? 'Más nuevo primero' : 'Más antiguo primero'}

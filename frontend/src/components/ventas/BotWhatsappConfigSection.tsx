@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import ErrorBanner from '../common/ErrorBanner';
 import '../../styles/conversaciones.css';
 import { useToast } from '../../contexts/ToastContext';
@@ -91,197 +92,227 @@ export default function BotWhatsappConfigSection({ puedeEditar }: { puedeEditar:
 
   const urlWebhook = `${window.location.origin}/api/ventas/whatsapp-bot/webhook`;
 
+  const bloque = (titulo: string, descripcion: ReactNode, campos: ReactNode) => (
+    <section className="cfg-bloque">
+      <div className="cfg-bloque-info">
+        <h3>{titulo}</h3>
+        <p>{descripcion}</p>
+      </div>
+      <div className="cfg-bloque-campos">{campos}</div>
+    </section>
+  );
+
   return (
     <div className="cfg-bot">
       <ErrorBanner mensaje={error} />
 
-      <p className={a.conectado ? 'cfg-bot-estado cfg-bot-estado--ok' : 'cfg-bot-estado'} role="status">
-        {a.conectado
-          ? 'El servidor ya tiene la conexión con Meta: los mensajes se envían por WhatsApp.'
-          : 'Este servidor todavía no tiene la conexión con Meta. Mientras tanto, en tu computador los envíos son simulados y en producción no saldrá ningún mensaje.'}
-      </p>
-
-      <div className="form-group">
-        <label>
-          <input type="checkbox" checked={a.activo} disabled={!puedeEditar} onChange={(e) => cambiar({ activo: e.target.checked })} />{' '}
-          <strong>Bot activado</strong>
-        </label>
-        <small>Apagado, los mensajes que lleguen se ignoran. Enciéndelo cuando el número esté conectado en Meta.</small>
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="bot-modo"><strong>Cómo responde</strong></label>
-        <select id="bot-modo" value={a.modo} disabled={!puedeEditar} onChange={(e) => cambiar({ modo: e.target.value as AjustesBot['modo'] })}>
-          <option value="AUTO">Automático: el bot conversa y pregunta solo; las cotizaciones con precio las aprueba una persona</option>
-          <option value="COPILOTO">Copiloto: el bot propone y una persona aprueba cada mensaje (para las primeras pruebas)</option>
-        </select>
-        <small>
-          En automático el bot hace las preguntas necesarias hasta entender qué quiere el cliente y, cuando lo tiene claro, le avisa que lo pondrá en contacto con un asesor
-          (y el equipo recibe la notificación con el resumen). También pasa a una persona los reclamos y lo que no sabe. Solo las cotizaciones con precio esperan aprobación.
-        </small>
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="bot-numero"><strong>Identificador del número en Meta</strong></label>
-        <input id="bot-numero" value={a.phoneNumberId} disabled={!puedeEditar} placeholder="Ej.: 123456789012345" onChange={(e) => cambiar({ phoneNumberId: e.target.value })} />
-        <small>Lo ves en Meta → WhatsApp → Configuración de la API («Identificador del número de teléfono»). No es el número de teléfono.</small>
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="bot-telefonos-prueba"><strong>Teléfonos de prueba</strong></label>
-        <input
-          id="bot-telefonos-prueba" value={telefonosTexto} disabled={!puedeEditar}
-          placeholder="Ej.: 0979459793, +593 99 123 4567"
-          onChange={(e) => setTelefonosTexto(e.target.value)}
-        />
-        <small>
-          Estos números conversan con el bot igual que un cliente, pero no generan notificaciones al equipo ni el aviso de «Nuevo posible cliente».
-          Sepáralos con comas y quítalos de aquí cuando termines de probar.
-        </small>
-      </div>
-
-      <div className="form-group">
-        <label><strong>Horario de los asesores</strong></label>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input type="time" aria-label="Hora de inicio" value={a.horario.inicio} disabled={!puedeEditar} onChange={(e) => cambiar({ horario: { ...a.horario, inicio: e.target.value } })} />
-          <span>a</span>
-          <input type="time" aria-label="Hora de fin" value={a.horario.fin} disabled={!puedeEditar} onChange={(e) => cambiar({ horario: { ...a.horario, fin: e.target.value } })} />
-          {DIAS.map((d) => (
-            <label key={d.n} style={{ fontSize: 13 }}>
-              <input type="checkbox" checked={a.horario.dias.includes(d.n)} disabled={!puedeEditar} onChange={() => alternarDia(d.n)} /> {d.label}
+      {bloque('Estado', 'Si está apagado, los mensajes que lleguen se ignoran.', (
+        <>
+          <p className={a.conectado ? 'cfg-bot-estado cfg-bot-estado--ok' : 'cfg-bot-estado'} role="status">
+            {a.conectado
+              ? 'Conectado con Meta: los mensajes salen por WhatsApp.'
+              : 'Aún sin conexión con Meta: en tu computador los envíos son simulados y en producción no sale ningún mensaje.'}
+          </p>
+          <div className="form-group">
+            <label className="casilla">
+              <input type="checkbox" checked={a.activo} disabled={!puedeEditar} onChange={(e) => cambiar({ activo: e.target.checked })} />
+              <strong>Bot activado</strong>
             </label>
+          </div>
+          <div className="form-group">
+            <label htmlFor="bot-modo">Cómo responde</label>
+            <select id="bot-modo" value={a.modo} disabled={!puedeEditar} onChange={(e) => cambiar({ modo: e.target.value as AjustesBot['modo'] })}>
+              <option value="AUTO">Automático</option>
+              <option value="COPILOTO">Copiloto</option>
+            </select>
+            <small>
+              {a.modo === 'AUTO'
+                ? 'Conversa solo hasta entender qué necesita el cliente y luego lo pasa a un asesor. Las cotizaciones con precio las aprueba una persona.'
+                : 'Propone cada respuesta y una persona la aprueba antes de enviarla. Útil para las primeras pruebas.'}
+            </small>
+          </div>
+        </>
+      ))}
+
+      {bloque('Horario de los asesores', 'Hora de Ecuador. Fuera de este horario el bot toma los datos y avisa que un asesor responde el siguiente día hábil.', (
+        <>
+          <div className="cfg-campos-2" style={{ maxWidth: 360 }}>
+            <div className="form-group">
+              <label htmlFor="bot-hora-inicio">Desde</label>
+              <input id="bot-hora-inicio" type="time" value={a.horario.inicio} disabled={!puedeEditar} onChange={(e) => cambiar({ horario: { ...a.horario, inicio: e.target.value } })} />
+            </div>
+            <div className="form-group">
+              <label htmlFor="bot-hora-fin">Hasta</label>
+              <input id="bot-hora-fin" type="time" value={a.horario.fin} disabled={!puedeEditar} onChange={(e) => cambiar({ horario: { ...a.horario, fin: e.target.value } })} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label>Días</label>
+            <div className="cfg-dias">
+              {DIAS.map((d) => (
+                <button key={d.n} type="button" className="cfg-dia" aria-pressed={a.horario.dias.includes(d.n)} disabled={!puedeEditar} onClick={() => alternarDia(d.n)}>
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      ))}
+
+      {bloque('Qué sabe el bot', 'Es lo único que usa para responder, y un cliente lo puede leer: no pongas costos internos, márgenes ni datos de otras personas.', (
+        <div className="form-group">
+          <label htmlFor="bot-conocimiento">Información para los clientes</label>
+          <textarea
+            id="bot-conocimiento" rows={10} value={a.conocimiento} disabled={!puedeEditar}
+            placeholder="Servicios, ciudades donde operan, horarios, cómo contratar, preguntas frecuentes…"
+            onChange={(e) => cambiar({ conocimiento: e.target.value })}
+          />
+          <small>Las respuestas que un asesor corrige, el bot las aprende solo.</small>
+        </div>
+      ))}
+
+      {bloque('Áreas de servicio', 'Con un contacto nuevo, el bot pregunta primero cuál área le interesa y luego hace las preguntas de esa área, de a poco.', (
+        <>
+          <div className="form-group">
+            <label htmlFor="bot-pregunta-inicial">Pregunta de apertura (opcional)</label>
+            <input id="bot-pregunta-inicial" value={a.guion.preguntaInicial} disabled={!puedeEditar} placeholder="Ej.: ¿Sobre cuál de nuestras áreas quieres información?" onChange={(e) => cambiar({ guion: { ...a.guion, preguntaInicial: e.target.value } })} />
+            <small>Vacía: el bot la redacta nombrando las áreas.</small>
+          </div>
+          {a.guion.pilares.map((p, i) => (
+            <div key={i} className="cfg-bot-pilar">
+              <div className="cfg-bot-pilar-cab">
+                <div className="form-group">
+                  <label htmlFor={`bot-area-${i}`}>Área</label>
+                  <input id={`bot-area-${i}`} placeholder="Ej.: Seguridad física" value={p.nombre} disabled={!puedeEditar} onChange={(e) => cambiarPilar(i, { nombre: e.target.value })} />
+                </div>
+                <label className="casilla">
+                  <input type="checkbox" checked={p.activo} disabled={!puedeEditar} onChange={(e) => cambiarPilar(i, { activo: e.target.checked })} /> Activa
+                </label>
+                {puedeEditar && (
+                  <button type="button" className="btn-secondary icon-btn" title="Quitar área" aria-label={`Quitar el área ${p.nombre}`} onClick={() => quitarPilar(i)}>
+                    <Trash2 size={15} color="#c53030" />
+                  </button>
+                )}
+              </div>
+              <div className="form-group">
+                <label htmlFor={`bot-area-desc-${i}`}>Qué incluye</label>
+                <input id={`bot-area-desc-${i}`} placeholder="El bot lo usa para explicarle al cliente" value={p.descripcion} disabled={!puedeEditar} onChange={(e) => cambiarPilar(i, { descripcion: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label htmlFor={`bot-area-preg-${i}`}>Preguntas que hace (una por línea)</label>
+                <textarea
+                  id={`bot-area-preg-${i}`} rows={4} disabled={!puedeEditar} value={p.preguntas.join('\n')}
+                  placeholder="Lo que el bot debe averiguar en esta área"
+                  onChange={(e) => cambiarPilar(i, { preguntas: e.target.value.split('\n') })}
+                />
+              </div>
+              <div className="form-group">
+                <label>Puede cotizar</label>
+                <div className="cfg-bot-pilar-fila">
+                  <label className="casilla"><input type="checkbox" checked={p.cotiza.includes('CATALOGO')} disabled={!puedeEditar} onChange={() => alternarCotiza(i, 'CATALOGO')} /> Productos del Cotizador</label>
+                  <label className="casilla"><input type="checkbox" checked={p.cotiza.includes('CUSTODIA')} disabled={!puedeEditar} onChange={() => alternarCotiza(i, 'CUSTODIA')} /> Custodia móvil</label>
+                </div>
+                <small>Sin marcar: reúne los datos y cotiza un asesor.</small>
+              </div>
+            </div>
           ))}
-        </div>
-        <small>Hora de Ecuador. Fuera de este horario el bot atiende igual, toma los datos y avisa que un asesor responderá el siguiente día hábil.</small>
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="bot-conocimiento"><strong>Qué sabe el bot</strong></label>
-        <textarea
-          id="bot-conocimiento" rows={14} value={a.conocimiento} disabled={!puedeEditar}
-          placeholder={'Escribe aquí lo que el bot puede contarle a un cliente: servicios, ciudades donde operan, horarios, cómo contratar, preguntas frecuentes…'}
-          onChange={(e) => cambiar({ conocimiento: e.target.value })}
-        />
-        <small>
-          Es lo ÚNICO que el bot usa para responder, y lo que escribas aquí lo puede leer un cliente: no pongas costos internos, márgenes ni datos de otras personas.
-          Las respuestas que un asesor corrige se las aprende solo.
-        </small>
-      </div>
-
-      <div className="form-group">
-        <label><strong>Áreas de servicio y cómo indaga el bot</strong></label>
-        <small>
-          Con un posible cliente nuevo, el bot primero pregunta por cuál de estas áreas le interesa y luego hace las preguntas de esa área, de a poco.
-          Lo que cotiza el bot lo calcula el sistema con las tarifas del Cotizador y siempre queda para que una persona lo revise antes de salir.
-        </small>
-        {a.guion.pilares.map((p, i) => (
-          <div key={i} className="cfg-bot-pilar">
+          {puedeEditar && (
             <div className="cfg-bot-pilar-fila">
-              <input aria-label="Nombre del área" placeholder="Nombre del área" value={p.nombre} disabled={!puedeEditar} onChange={(e) => cambiarPilar(i, { nombre: e.target.value })} />
-              <label style={{ fontSize: 13 }}>
-                <input type="checkbox" checked={p.activo} disabled={!puedeEditar} onChange={(e) => cambiarPilar(i, { activo: e.target.checked })} /> Activa
-              </label>
-              {puedeEditar && <button type="button" className="btn-secondary" onClick={() => quitarPilar(i)}>Quitar</button>}
+              <button type="button" className="btn-secondary" onClick={anadirPilar}><Plus size={14} /> Añadir área</button>
+              {a.guion.pilares.length === 0 && (
+                <button type="button" className="btn-secondary" onClick={() => cambiar({ guion: { ...a.guion, pilares: PILARES_EJEMPLO } })}>
+                  Cargar ejemplo de Gemeseg
+                </button>
+              )}
             </div>
-            <input aria-label="Qué incluye el área" placeholder="Qué incluye (el bot lo usa para explicarle al cliente)" value={p.descripcion} disabled={!puedeEditar} onChange={(e) => cambiarPilar(i, { descripcion: e.target.value })} />
+          )}
+        </>
+      ))}
+
+      {bloque('Reglas de la conversación', 'Lo que el bot revisa antes de pasar a un cliente a un asesor.', (
+        <>
+          <div className="form-group">
+            <label htmlFor="bot-sedes">Ciudades donde opera la empresa (una por línea)</label>
             <textarea
-              aria-label="Preguntas del área" rows={4} disabled={!puedeEditar} value={p.preguntas.join('\n')}
-              placeholder="Una pregunta por línea: lo que el bot debe averiguar en esta área"
-              onChange={(e) => cambiarPilar(i, { preguntas: e.target.value.split('\n') })}
+              id="bot-sedes" rows={3} disabled={!puedeEditar} value={a.guion.sedes.join('\n')}
+              placeholder={'Ej.:\nQuito\nGuayaquil'}
+              onChange={(e) => cambiar({ guion: { ...a.guion, sedes: e.target.value.split('\n') } })}
             />
-            <div className="cfg-bot-pilar-fila" style={{ fontSize: 13 }}>
-              <span>El bot puede cotizar:</span>
-              <label><input type="checkbox" checked={p.cotiza.includes('CATALOGO')} disabled={!puedeEditar} onChange={() => alternarCotiza(i, 'CATALOGO')} /> Productos del Cotizador</label>
-              <label><input type="checkbox" checked={p.cotiza.includes('CUSTODIA')} disabled={!puedeEditar} onChange={() => alternarCotiza(i, 'CUSTODIA')} /> Custodia móvil</label>
-              <span style={{ color: '#666' }}>(sin marcar: reúne los datos y lo cotiza un asesor)</span>
-            </div>
+            <small>Si el servicio es en otra ciudad, no cotiza: lo pasa a un asesor para confirmar la cobertura. Vacía: no se revisa.</small>
           </div>
-        ))}
-        {puedeEditar && (
-          <div className="cfg-bot-pilar-fila">
-            <button type="button" className="btn-secondary" onClick={anadirPilar}>Añadir área</button>
-            {a.guion.pilares.length === 0 && (
-              <button type="button" className="btn-secondary" onClick={() => cambiar({ guion: { ...a.guion, pilares: PILARES_EJEMPLO } })}>
-                Cargar ejemplo con los tres pilares de Gemeseg
-              </button>
-            )}
+          <div className="form-group" style={{ maxWidth: 360 }}>
+            <label htmlFor="bot-minimo">Mensajes mínimos del cliente</label>
+            <input id="bot-minimo" type="number" min={1} max={12} value={a.guion.minimoRespuestas} disabled={!puedeEditar}
+              onChange={(e) => cambiar({ guion: { ...a.guion, minimoRespuestas: Number(e.target.value) } })} />
+            <small>Antes de este número (el saludo cuenta) sigue preguntando. No aplica a quejas, emergencias ni si piden una persona.</small>
           </div>
-        )}
-      </div>
+          <div className="form-group">
+            <label htmlFor="bot-privacidad">Aviso de datos personales</label>
+            <textarea id="bot-privacidad" rows={3} value={a.guion.privacidad} disabled={!puedeEditar} placeholder="Para qué se usan sus datos y cómo pedir que se borren." onChange={(e) => cambiar({ guion: { ...a.guion, privacidad: e.target.value } })} />
+            <small>Se muestra tal cual en el primer mensaje, después de avisar que es una IA. Pendiente de revisión legal.</small>
+          </div>
+        </>
+      ))}
 
-      <div className="form-group">
-        <label htmlFor="bot-pregunta-inicial"><strong>Pregunta de apertura (opcional)</strong></label>
-        <input id="bot-pregunta-inicial" value={a.guion.preguntaInicial} disabled={!puedeEditar} placeholder="Ej.: ¿Sobre cuál de nuestras áreas quieres información?" onChange={(e) => cambiar({ guion: { ...a.guion, preguntaInicial: e.target.value } })} />
-        <small>Si la dejas vacía, el bot la redacta nombrando las áreas.</small>
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="bot-sedes"><strong>Sedes de la empresa (una ciudad por línea)</strong></label>
-        <textarea
-          id="bot-sedes" rows={4} disabled={!puedeEditar} value={a.guion.sedes.join('\n')}
-          placeholder={'Ej.:\nQuito\nGuayaquil'}
-          onChange={(e) => cambiar({ guion: { ...a.guion, sedes: e.target.value.split('\n') } })}
-        />
-        <small>
-          El bot pregunta en qué ciudad sería el servicio. Si es en una ciudad que no es sede (por ejemplo, una custodia hacia otra ciudad), no cotiza ni promete:
-          reúne los datos y lo pasa a un asesor para que confirme la cobertura. Si la dejas vacía, no se revisa la ciudad.
-        </small>
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="bot-minimo"><strong>Mensajes mínimos del cliente antes de pasarlo a un asesor</strong></label>
-        <input id="bot-minimo" type="number" min={1} max={12} style={{ width: 80 }} value={a.guion.minimoRespuestas} disabled={!puedeEditar}
-          onChange={(e) => cambiar({ guion: { ...a.guion, minimoRespuestas: Number(e.target.value) } })} />
-        <small>
-          Evita que el bot cierre con un pedido a medias. Si cree que ya entendió antes de este número de mensajes del cliente (el saludo cuenta), se le obliga a preguntar más.
-          No aplica a quejas, emergencias ni cuando el cliente pide hablar con una persona.
-        </small>
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="bot-privacidad"><strong>Aviso de datos personales</strong></label>
-        <textarea id="bot-privacidad" rows={3} value={a.guion.privacidad} disabled={!puedeEditar} placeholder="Texto que el bot muestra tras avisar que es una IA, en el primer mensaje: para qué se usan sus datos y cómo pedir que se borren." onChange={(e) => cambiar({ guion: { ...a.guion, privacidad: e.target.value } })} />
-        <small>El texto lo define y lo revisa la empresa (pendiente de revisión legal); el bot lo muestra tal cual.</small>
-      </div>
-
-      <div className="form-group">
-        <label><strong>Márgenes de las cotizaciones del bot</strong></label>
-        <div className="cfg-bot-pilar-fila" style={{ fontSize: 13 }}>
-          <label>Custodia móvil (% sobre el precio){' '}
-            <input type="number" min={0} max={95} style={{ width: 80 }} value={a.cotizacion.margenCustodiaPct} disabled={!puedeEditar}
+      {bloque('Precios del bot', 'El bot nunca ve costos ni márgenes, y toda cotización con precio la revisa una persona antes de salir.', (
+        <div className="cfg-campos-2">
+          <div className="form-group">
+            <label htmlFor="bot-margen-custodia">Margen en custodia móvil (%)</label>
+            <input id="bot-margen-custodia" type="number" min={0} max={95} value={a.cotizacion.margenCustodiaPct} disabled={!puedeEditar}
               onChange={(e) => cambiar({ cotizacion: { ...a.cotizacion, margenCustodiaPct: Number(e.target.value) } })} />
-          </label>
-          <label>Productos (% sobre el costo){' '}
-            <input type="number" min={0} max={500} style={{ width: 80 }} value={a.cotizacion.margenProductosPct ?? ''} disabled={!puedeEditar} placeholder="auto"
+            <small>Sobre el precio.</small>
+          </div>
+          <div className="form-group">
+            <label htmlFor="bot-margen-productos">Margen en productos (%)</label>
+            <input id="bot-margen-productos" type="number" min={0} max={500} value={a.cotizacion.margenProductosPct ?? ''} disabled={!puedeEditar} placeholder="Automático"
               onChange={(e) => cambiar({ cotizacion: { ...a.cotizacion, margenProductosPct: e.target.value === '' ? null : Number(e.target.value) } })} />
-          </label>
+            <small>Sobre el costo. Vacío: la ganancia de cada proveedor del Cotizador.</small>
+          </div>
         </div>
-        <small>En productos, vacío usa la regla del Cotizador (la ganancia de cada proveedor). El bot nunca ve costos ni márgenes.</small>
-      </div>
+      ))}
 
-      <div className="form-group">
-        <label><strong>Plantilla para escribir pasadas 24 horas</strong></label>
-        <div className="cfg-bot-pilar-fila" style={{ fontSize: 13 }}>
-          <input aria-label="Nombre de la plantilla" style={{ width: 240 }} placeholder="nombre_de_la_plantilla" value={a.plantilla.nombre} disabled={!puedeEditar} onChange={(e) => cambiar({ plantilla: { ...a.plantilla, nombre: e.target.value } })} />
-          <input aria-label="Idioma de la plantilla" style={{ width: 70 }} placeholder="es" value={a.plantilla.idioma} disabled={!puedeEditar} onChange={(e) => cambiar({ plantilla: { ...a.plantilla, idioma: e.target.value } })} />
-          <label><input type="checkbox" checked={a.plantilla.conNombre} disabled={!puedeEditar} onChange={(e) => cambiar({ plantilla: { ...a.plantilla, conNombre: e.target.checked } })} /> Lleva el nombre del cliente en {'{{1}}'}</label>
-        </div>
-        <small>WhatsApp solo deja escribir primero con una plantilla aprobada por Meta. Si pasaron 24 h desde el último mensaje del cliente, se envía esta para que responda; después ya se puede escribir libre. Vacío: no se usa.</small>
-      </div>
-
-      <details className="cfg-bot-meta">
-        <summary>Datos para conectar el webhook en Meta</summary>
-        <p>URL de devolución de llamada: <code>{urlWebhook}</code></p>
-        <p>
-          El «token de verificación» y el secreto de la app los guarda Sistemas en el servidor (variables <code>WHATSAPP_VERIFY_TOKEN</code>, <code>WHATSAPP_APP_SECRET</code> y{' '}
-          <code>WHATSAPP_ACCESS_TOKEN</code>); no se escriben en esta pantalla. Suscribe el campo «messages».
-        </p>
-      </details>
+      {bloque('Conexión con Meta', 'Datos técnicos del número de WhatsApp. Las claves secretas no se escriben aquí: las guarda Sistemas en el servidor.', (
+        <>
+          <div className="form-group">
+            <label htmlFor="bot-numero">Identificador del número</label>
+            <input id="bot-numero" value={a.phoneNumberId} disabled={!puedeEditar} placeholder="Ej.: 123456789012345" onChange={(e) => cambiar({ phoneNumberId: e.target.value })} />
+            <small>En Meta → WhatsApp → Configuración de la API. No es el número de teléfono.</small>
+          </div>
+          <div className="form-group">
+            <label htmlFor="bot-telefonos-prueba">Teléfonos de prueba</label>
+            <input id="bot-telefonos-prueba" value={telefonosTexto} disabled={!puedeEditar} placeholder="Ej.: 0979459793, +593 99 123 4567" onChange={(e) => setTelefonosTexto(e.target.value)} />
+            <small>Conversan con el bot como un cliente, pero no avisan al equipo. Sepáralos con comas y quítalos al terminar.</small>
+          </div>
+          <div className="form-group">
+            <label htmlFor="bot-plantilla">Plantilla para escribir pasadas 24 horas</label>
+            <div className="cfg-campos-2" style={{ gridTemplateColumns: 'minmax(0, 1fr) 90px' }}>
+              <input id="bot-plantilla" placeholder="nombre_de_la_plantilla" value={a.plantilla.nombre} disabled={!puedeEditar} onChange={(e) => cambiar({ plantilla: { ...a.plantilla, nombre: e.target.value } })} />
+              <input aria-label="Idioma de la plantilla" placeholder="es" value={a.plantilla.idioma} disabled={!puedeEditar} onChange={(e) => cambiar({ plantilla: { ...a.plantilla, idioma: e.target.value } })} />
+            </div>
+            <label className="casilla">
+              <input type="checkbox" checked={a.plantilla.conNombre} disabled={!puedeEditar} onChange={(e) => cambiar({ plantilla: { ...a.plantilla, conNombre: e.target.checked } })} />
+              Lleva el nombre del cliente en {'{{1}}'}
+            </label>
+            <small>WhatsApp solo deja escribir primero con una plantilla aprobada por Meta. Vacía: no se usa.</small>
+          </div>
+          <details className="cfg-bot-meta">
+            <summary>Datos para conectar el webhook en Meta</summary>
+            <p>URL de devolución de llamada: <code>{urlWebhook}</code></p>
+            <p>
+              El token de verificación y los secretos van en el servidor (<code>WHATSAPP_VERIFY_TOKEN</code>, <code>WHATSAPP_APP_SECRET</code>,{' '}
+              <code>WHATSAPP_ACCESS_TOKEN</code>). Suscribe el campo «messages».
+            </p>
+          </details>
+        </>
+      ))}
 
       {puedeEditar && (
-        <button type="button" className="auth-btn" disabled={guardando} onClick={guardar}>
-          {guardando ? 'Guardando...' : 'Guardar'}
-        </button>
+        <div className="cfg-guardar">
+          <button type="button" className="auth-btn" disabled={guardando} onClick={guardar}>
+            {guardando ? 'Guardando...' : 'Guardar'}
+          </button>
+          <small>Nada cambia hasta que guardes.</small>
+        </div>
       )}
     </div>
   );

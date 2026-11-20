@@ -418,7 +418,7 @@ export default function VisitasPage() {
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por cliente, lugar, vendedor u oportunidad..."
-            style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
+            className="filtro-buscar"
           />
         </div>
         <div className="filter-bar-actions">
