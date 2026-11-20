@@ -9,7 +9,7 @@ import {
   Max,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { ESTADOS_ARMA, TIPOS_ARTICULO, TIPOS_MOVIMIENTO } from '../inventario.util';
+import { CATEGORIAS_ARMA, ESTADOS_ARMA, TIPOS_ARTICULO, TIPOS_MOVIMIENTO } from '../inventario.util';
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 const MSG_FECHA = 'La fecha debe tener el formato AAAA-MM-DD.';
@@ -214,6 +214,29 @@ export class CrearArmaDto {
   @IsString()
   @MaxLength(300)
   notas?: string | null;
+
+  @IsOptional()
+  @IsIn(CATEGORIAS_ARMA as unknown as string[])
+  categoria?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(100000)
+  municiones?: number | null;
+
+  @IsOptional()
+  @Transform(texto)
+  @IsString()
+  @MaxLength(60)
+  ciudad?: string | null;
+
+  @IsOptional()
+  @Transform(texto)
+  @IsString()
+  @MaxLength(60)
+  uso?: string | null;
 }
 
 export class ActualizarArmaDto {
@@ -260,6 +283,29 @@ export class ActualizarArmaDto {
   @IsString()
   @MaxLength(300)
   notas?: string | null;
+
+  @IsOptional()
+  @IsIn(CATEGORIAS_ARMA as unknown as string[])
+  categoria?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(100000)
+  municiones?: number | null;
+
+  @IsOptional()
+  @Transform(texto)
+  @IsString()
+  @MaxLength(60)
+  ciudad?: string | null;
+
+  @IsOptional()
+  @Transform(texto)
+  @IsString()
+  @MaxLength(60)
+  uso?: string | null;
 }
 
 export class AsignarArmaDto {

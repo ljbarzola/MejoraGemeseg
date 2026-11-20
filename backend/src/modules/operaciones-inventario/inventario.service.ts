@@ -19,6 +19,7 @@ import {
   estadoPermiso,
   estadoStock,
   motivoNoSePuede,
+  requiereCorreccion,
   pluralUnidad,
   reposicionSugerida,
   saldoBodega,
@@ -46,12 +47,18 @@ const limpiar = (v: string | null | undefined) => {
 /** Código de error de Prisma sin importar su clase (varía entre versiones). */
 const codigoPrisma = (err: unknown) => (err as { code?: string }).code;
 
-type MovSimple = { tipo: string; cantidad: number; puestoId: number | null; guardiaCedula: string | null };
+type MovSimple = {
+  tipo: string;
+  cantidad: number;
+  puestoId: number | null;
+  puestoNombre: string | null;
+  guardiaCedula: string | null;
+};
 
 const aCalculo = (m: MovSimple): MovimientoCalculo => ({
   tipo: m.tipo,
   cantidad: m.cantidad,
-  tenedor: claveTenedor({ puestoId: m.puestoId, guardiaCedula: m.guardiaCedula }),
+  tenedor: claveTenedor({ puestoId: m.puestoId, guardiaCedula: m.guardiaCedula, puestoNombre: m.puestoNombre }),
 });
 
 @Injectable()
@@ -108,7 +115,7 @@ export class InventarioService {
       where: { companyId },
       orderBy: [{ tipo: 'asc' }, { nombre: 'asc' }, { variante: 'asc' }],
       include: {
-        movimientos: { select: { tipo: true, cantidad: true, puestoId: true, guardiaCedula: true } },
+        movimientos: { select: { tipo: true, cantidad: true, puestoId: true, puestoNombre: true, guardiaCedula: true } },
       },
     });
     return articulos.map((a) => this.vistaArticulo(a));
@@ -129,7 +136,7 @@ export class InventarioService {
           stockMinimo: dto.stockMinimo ?? 0,
           stockMaximo: dto.stockMaximo ?? null,
         },
-        include: { movimientos: { select: { tipo: true, cantidad: true, puestoId: true, guardiaCedula: true } } },
+        include: { movimientos: { select: { tipo: true, cantidad: true, puestoId: true, puestoNombre: true, guardiaCedula: true } } },
       });
       return this.vistaArticulo(a);
     } catch (err) {
@@ -157,7 +164,7 @@ export class InventarioService {
           stockMaximo: maximo,
           ...(dto.activo !== undefined ? { activo: !!dto.activo } : {}),
         },
-        include: { movimientos: { select: { tipo: true, cantidad: true, puestoId: true, guardiaCedula: true } } },
+        include: { movimientos: { select: { tipo: true, cantidad: true, puestoId: true, puestoNombre: true, guardiaCedula: true } } },
       });
       return this.vistaArticulo(a);
     } catch (err) {
@@ -258,7 +265,7 @@ export class InventarioService {
       const movs = (
         await tx.invMovimiento.findMany({
           where: { articuloId: art.id },
-          select: { tipo: true, cantidad: true, puestoId: true, guardiaCedula: true },
+          select: { tipo: true, cantidad: true, puestoId: true, puestoNombre: true, guardiaCedula: true },
         })
       ).map(aCalculo);
       const antes = saldoBodega(movs);
@@ -266,11 +273,11 @@ export class InventarioService {
       const unidad = art.unidad;
 
       if (dto.tipo === 'ENTREGA' && dto.cantidad > antes)
-        throw new BadRequestException(`En bodega solo hay ${antes} ${pluralUnidad(unidad, antes)} de ${art.nombre}.`);
+        throw new BadRequestException(`En el rastrillo solo hay ${antes} ${pluralUnidad(unidad, antes)} de ${art.nombre}.`);
       if (dto.tipo === 'AJUSTE' && antes + dto.cantidad < 0)
-        throw new BadRequestException(`El ajuste dejaría la bodega en negativo (hay ${antes}).`);
+        throw new BadRequestException(`El ajuste dejaría el rastrillo en negativo (hay ${antes}).`);
       if (dto.tipo === 'BAJA' && !tenedor && dto.cantidad > antes)
-        throw new BadRequestException(`En bodega solo hay ${antes} ${pluralUnidad(unidad, antes)} de ${art.nombre}.`);
+        throw new BadRequestException(`En el rastrillo solo hay ${antes} ${pluralUnidad(unidad, antes)} de ${art.nombre}.`);
       if ((dto.tipo === 'DEVOLUCION' || (dto.tipo === 'BAJA' && tenedor)) && tenedor) {
         const tiene = saldosPorTenedor(movs).get(tenedor) ?? 0;
         if (dto.cantidad > tiene)
@@ -346,8 +353,8 @@ export class InventarioService {
       const nombre = art.variante ? `${art.nombre} (${art.variante})` : art.nombre;
       const message =
         stock <= 0
-          ? `Se agotó ${nombre} en bodega.`
-          : `Quedan ${stock} ${pluralUnidad(art.unidad, stock)} de ${nombre} en bodega; el mínimo es ${art.stockMinimo}.`;
+          ? `Se agotó ${nombre} en el rastrillo.`
+          : `Quedan ${stock} ${pluralUnidad(art.unidad, stock)} de ${nombre} en el rastrillo; el mínimo es ${art.stockMinimo}.`;
       for (const userId of destinatarios) {
         await this.notifications.create({
           userId,
@@ -374,7 +381,7 @@ export class InventarioService {
       { articuloId: number; articulo: string; variante: string; tipoArticulo: string; unidad: string; tenedor: string; tenedorTipo: 'GUARDIA' | 'PUESTO'; nombre: string; cedula: string | null; puestoNombre: string | null; cantidad: number; ultimaFecha: string | null }
     >();
     for (const m of filas) {
-      const clave = claveTenedor({ puestoId: m.puestoId, guardiaCedula: m.guardiaCedula });
+      const clave = claveTenedor({ puestoId: m.puestoId, guardiaCedula: m.guardiaCedula, puestoNombre: m.puestoNombre });
       if (!clave) continue;
       const k = `${m.articuloId}|${clave}`;
       const efecto = m.tipo === 'ENTREGA' ? m.cantidad : -m.cantidad;
@@ -421,6 +428,10 @@ export class InventarioService {
       permisoNumero: string | null;
       permisoVence: Date | null;
       notas: string | null;
+      categoria: string | null;
+      municiones: number | null;
+      ciudad: string | null;
+      uso: string | null;
     },
     hoy: string,
   ) {
@@ -444,6 +455,11 @@ export class InventarioService {
       permiso,
       diasParaVencer: vence ? diasEntre(hoy, vence) : null,
       notas: a.notas,
+      requiereCorreccion: requiereCorreccion(a.notas),
+      categoria: a.categoria,
+      municiones: a.municiones,
+      ciudad: a.ciudad,
+      uso: a.uso,
     };
   }
 
@@ -471,6 +487,10 @@ export class InventarioService {
           permisoNumero: limpiar(dto.permisoNumero),
           permisoVence: dto.permisoVence ? aFecha(dto.permisoVence) : null,
           notas: limpiar(dto.notas),
+          categoria: dto.categoria ?? null,
+          municiones: dto.municiones ?? null,
+          ciudad: limpiar(dto.ciudad),
+          uso: limpiar(dto.uso),
           eventos: { create: { tipo: 'ALTA', detalle: 'Arma registrada.', porNombre: actor.nombre } },
         },
       });
@@ -496,6 +516,10 @@ export class InventarioService {
           ...(dto.permisoNumero !== undefined ? { permisoNumero: limpiar(dto.permisoNumero) } : {}),
           ...(dto.permisoVence !== undefined ? { permisoVence: dto.permisoVence ? aFecha(dto.permisoVence) : null } : {}),
           ...(dto.notas !== undefined ? { notas: limpiar(dto.notas) } : {}),
+          ...(dto.categoria !== undefined ? { categoria: dto.categoria || null } : {}),
+          ...(dto.municiones !== undefined ? { municiones: dto.municiones ?? null } : {}),
+          ...(dto.ciudad !== undefined ? { ciudad: limpiar(dto.ciudad) } : {}),
+          ...(dto.uso !== undefined ? { uso: limpiar(dto.uso) } : {}),
           eventos: { create: { tipo: 'EDICION', detalle: 'Datos del arma actualizados.', porNombre: actor.nombre } },
         },
       });
@@ -572,7 +596,7 @@ export class InventarioService {
         eventos: {
           create: {
             tipo: 'DEVOLUCION',
-            detalle: limpiar(motivo) ?? 'Devuelta a la bodega.',
+            detalle: limpiar(motivo) ?? 'Devuelta al rastrillo.',
             puestoNombre: arma.puestoNombre,
             guardiaNombre: arma.guardiaNombre,
             porNombre: actor.nombre,

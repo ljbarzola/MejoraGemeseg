@@ -36,7 +36,7 @@ const RECORRIDO: Paso[] = [
     clave: 'inventario',
     pantalla: '4. Inventario',
     texto:
-      'Uniformes (por talla), implementos y municiones con su kardex: registras entradas, entregas a un guardia o a un puesto, devoluciones, bajas y ajustes, y el saldo se calcula solo. Avisa con una notificación en la app cuando un artículo llega al mínimo y dice cuánto reponer. Las armas se llevan por número de serie: quién la tiene, su historial y cuándo vence el permiso (no se asigna con el permiso vencido). «Quién tiene qué» muestra lo entregado y aún no devuelto.',
+      'Uniformes (por talla), implementos y municiones con su kardex: registras entradas, entregas a un guardia o a un puesto, devoluciones, bajas y ajustes, y el saldo se calcula solo. Avisa con una notificación en la app cuando un artículo llega al mínimo y dice cuánto reponer. Las armas se llevan por número de serie: categoría (letal, traumática, de fogueo o letal móvil), municiones, ciudad, para qué se usa, quién la tiene, su historial y cuándo vence el permiso (no se asigna con el permiso vencido); las que quedaron con una duda al cargarlas salen como «Por corregir». «Quién tiene qué» muestra lo entregado y aún no devuelto. «Importar desde Excel» carga el archivo de inventario de Operaciones: primero muestra qué se cargaría y solo guarda al confirmar (es temporal, hasta que todo se registre aquí).',
   },
   {
     clave: 'resumen',

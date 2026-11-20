@@ -3775,6 +3775,13 @@ model InvArma {
   permisoNumero String?
   permisoVence  DateTime? @db.Date
   notas         String?
+  // LETAL | TRAUMATICA | FOGUEO | LETAL_MOVIL (columnas nuevas de 2026-11-19, ver inv-arma-campos.schema.ts)
+  categoria     String?
+  // Municiones asignadas a esta arma.
+  municiones    Int?
+  ciudad        String?
+  // Para qué se usa (texto libre, p. ej. «Custodia»).
+  uso           String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

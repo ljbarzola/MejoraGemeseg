@@ -191,7 +191,7 @@ export class AiOperacionesQueries {
     }
     const lineas = [`Inventario: ${r.reposicion.length} de ${r.articulos.total} artículo(s) en el mínimo o debajo.`];
     for (const a of r.reposicion.slice(0, MAX_LINEAS)) {
-      lineas.push(`- ${a.nombre}${a.variante ? ` ${a.variante}` : ''}: ${a.enBodega} ${a.unidad ?? ''} en bodega, mínimo ${a.stockMinimo}${a.reponer ? `, conviene reponer ${a.reponer}` : ''}`.replace(/\s+/g, ' '));
+      lineas.push(`- ${a.nombre}${a.variante ? ` ${a.variante}` : ''}: ${a.enBodega} ${a.unidad ?? ''} en el rastrillo, mínimo ${a.stockMinimo}${a.reponer ? `, conviene reponer ${a.reponer}` : ''}`.replace(/\s+/g, ' '));
     }
     if (r.reposicion.length > MAX_LINEAS) lineas.push(`… y ${r.reposicion.length - MAX_LINEAS} más.`);
     return lineas.join('\n');

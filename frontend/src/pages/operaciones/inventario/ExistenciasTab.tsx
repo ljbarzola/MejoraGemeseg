@@ -49,7 +49,7 @@ export default function ExistenciasTab({
   const cf = useColumnFilters<Articulo>(articulos, [
     { key: 'tipo', etiqueta: 'Tipo', tipo: 'valores', orden: ['UNIFORME', 'IMPLEMENTO', 'MUNICION'], getValues: (a) => ({ valor: a.tipo, etiqueta: TIPO_ARTICULO_LABEL[a.tipo] }) },
     { key: 'nombre', etiqueta: 'Artículo', tipo: 'texto', getValue: (a) => `${a.nombre} ${a.variante}` },
-    { key: 'enBodega', etiqueta: 'En bodega', tipo: 'numero', getValue: (a) => a.enBodega },
+    { key: 'enBodega', etiqueta: 'En el rastrillo', tipo: 'numero', getValue: (a) => a.enBodega },
     { key: 'entregado', etiqueta: 'Entregado', tipo: 'numero', getValue: (a) => a.entregado },
     { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ORDEN_ESTADO, getValues: (a) => ({ valor: a.estado, etiqueta: a.activo ? ESTADO_STOCK_LABEL[a.estado] : 'Desactivado' }) },
   ]);
@@ -102,7 +102,7 @@ export default function ExistenciasTab({
                 <tr>
                   <th>Tipo <ColumnFilter cf={cf} col="tipo" orden={cf.ordenDe('tipo')} /></th>
                   <th>Artículo <ColumnFilter cf={cf} col="nombre" orden={cf.ordenDe('nombre')} /></th>
-                  <th>En bodega <ColumnFilter cf={cf} col="enBodega" orden={cf.ordenDe('enBodega')} /></th>
+                  <th>En el rastrillo <ColumnFilter cf={cf} col="enBodega" orden={cf.ordenDe('enBodega')} /></th>
                   <th>Entregado <ColumnFilter cf={cf} col="entregado" orden={cf.ordenDe('entregado')} /></th>
                   <th>Mín. / Máx.</th>
                   <th>Estado <ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>

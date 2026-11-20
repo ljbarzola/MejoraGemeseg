@@ -8,13 +8,19 @@ import {
   Post,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { AuthGuard } from '@nestjs/passport';
 import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
 import { Section } from '../../common/decorators/section.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActorInventario, InventarioService } from './inventario.service';
+import { InventarioImportService } from './inventario-import.service';
 import {
   ActualizarArmaDto,
   ActualizarArticuloDto,
@@ -29,6 +35,7 @@ import {
 } from './dto/inventario.dto';
 
 const SECCION = 'OPERACIONES';
+const MAX_BYTES_EXCEL = 5 * 1024 * 1024;
 
 interface AuthedRequest {
   user: { userId: number; email: string; role: string; companyId: number };
@@ -43,6 +50,7 @@ interface AuthedRequest {
 export class InventarioController {
   constructor(
     private readonly service: InventarioService,
+    private readonly importador: InventarioImportService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -52,6 +60,25 @@ export class InventarioController {
       select: { fullName: true },
     });
     return { userId: req.user.userId, companyId: req.user.companyId, nombre: u?.fullName ?? req.user.email };
+  }
+
+  /**
+   * Carga desde el Excel de inventario de Operaciones (TEMPORAL, 2026-11-19). Sin `confirmar=true` solo
+   * muestra qué se cargaría; con él escribe. Ver inventario-import.util.ts.
+   */
+  @Post('importar-excel')
+  @Section(SECCION, 'write')
+  @UseInterceptors(FileInterceptor('archivo', { storage: memoryStorage(), limits: { fileSize: MAX_BYTES_EXCEL } }))
+  async importarExcel(
+    @Req() req: AuthedRequest,
+    @UploadedFile() archivo: { buffer: Buffer; originalname: string } | undefined,
+    @Query('confirmar') confirmar?: string,
+  ) {
+    if (!archivo?.buffer?.length) throw new BadRequestException('Elige el archivo de Excel del inventario.');
+    if (!/\.xlsx$/i.test(archivo.originalname ?? '')) {
+      throw new BadRequestException('El archivo debe ser un Excel en formato .xlsx.');
+    }
+    return this.importador.importar(await this.actor(req), archivo.buffer, confirmar === 'true');
   }
 
   @Get('resumen')

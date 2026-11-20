@@ -4,6 +4,7 @@ export type EstadoStock = 'SIN_STOCK' | 'BAJO_MINIMO' | 'NORMAL' | 'SOBRE_MAXIMO
 export type EstadoArma = 'DISPONIBLE' | 'ASIGNADA' | 'MANTENIMIENTO' | 'BAJA';
 export type EstadoPermiso = 'SIN_PERMISO' | 'VIGENTE' | 'POR_VENCER' | 'VENCIDO';
 export type ClaseArma = 'PISTOLA' | 'REVOLVER' | 'ESCOPETA' | 'OTRA';
+export type CategoriaArma = 'LETAL' | 'TRAUMATICA' | 'FOGUEO' | 'LETAL_MOVIL';
 
 export const TIPOS_ARTICULO: TipoArticulo[] = ['UNIFORME', 'IMPLEMENTO', 'MUNICION'];
 export const TIPO_ARTICULO_LABEL: Record<TipoArticulo, string> = {
@@ -35,6 +36,12 @@ export const ESTADO_PERMISO_LABEL: Record<EstadoPermiso, string> = {
   VIGENTE: 'Vigente',
   POR_VENCER: 'Por vencer',
   VENCIDO: 'Vencido',
+};
+export const CATEGORIA_ARMA_LABEL: Record<CategoriaArma, string> = {
+  LETAL: 'Letal',
+  TRAUMATICA: 'Traumática',
+  FOGUEO: 'De fogueo',
+  LETAL_MOVIL: 'Letal móvil',
 };
 export const CLASE_ARMA_LABEL: Record<ClaseArma, string> = {
   PISTOLA: 'Pistola',
@@ -126,6 +133,12 @@ export interface Arma {
   permiso: EstadoPermiso;
   diasParaVencer: number | null;
   notas: string | null;
+  /** La nota empieza por «CORREGIR»: un dato del Excel de la carga inicial quedó con duda. */
+  requiereCorreccion: boolean;
+  categoria: CategoriaArma | null;
+  municiones: number | null;
+  ciudad: string | null;
+  uso: string | null;
 }
 
 export interface EventoArma {
@@ -184,6 +197,35 @@ export interface DatosArma {
   permisoNumero?: string | null;
   permisoVence?: string | null;
   notas?: string | null;
+  categoria?: CategoriaArma | null;
+  municiones?: number | null;
+  ciudad?: string | null;
+  uso?: string | null;
+}
+
+/** Respuesta de «Importar desde Excel» (vista previa o carga hecha). */
+export interface ResultadoImportacion {
+  confirmado: boolean;
+  avisos: string[];
+  armas: {
+    enElExcel: number;
+    nuevas: number;
+    yaRegistradas: number;
+    paraCorregir: { serie: string; puesto: string | null; nota: string }[];
+  };
+  chalecos: {
+    articulo: string;
+    filasACargar: number;
+    unidades: number;
+    enBodega: number;
+    enPuestos: number;
+    filasEnCero: number;
+    yaCargados: boolean;
+  };
+  accesorios: {
+    aCargar: { nombre: string; variante: string; tipo: string; cantidad: number; yaCargado: boolean }[];
+    sinCantidad: number;
+  };
 }
 
 export interface DatosArticulo {

@@ -8,6 +8,7 @@ import type {
   EventoArma,
   MovimientoInventario,
   NuevoMovimiento,
+  ResultadoImportacion,
   ResumenInventario,
   Tenencia,
   TipoMovimiento,
@@ -31,6 +32,20 @@ export const registrarMovimiento = (d: NuevoMovimiento): Promise<{ movimientoId:
   api.post(`${BASE}/movimientos`, d).then((r) => r.data);
 export const getTenencias = (articuloId?: number): Promise<Tenencia[]> =>
   api.get(`${BASE}/tenencias`, { params: articuloId ? { articuloId } : undefined }).then((r) => r.data);
+
+/** TEMPORAL: carga desde el Excel de inventario de Operaciones. Sin `confirmar` solo muestra qué se cargaría. */
+export const importarExcelInventario = (archivo: File, confirmar: boolean): Promise<ResultadoImportacion> => {
+  const fd = new FormData();
+  fd.append('archivo', archivo);
+  return api
+    .post(`${BASE}/importar-excel`, fd, {
+      params: confirmar ? { confirmar: 'true' } : undefined,
+      timeout: 120000,
+      // El cliente axios manda JSON por defecto: sin este encabezado serializaría el FormData como JSON.
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((r) => r.data);
+};
 
 export const getArmas = (estado?: EstadoArma): Promise<Arma[]> =>
   api.get(`${BASE}/armas`, { params: estado ? { estado } : undefined }).then((r) => r.data);

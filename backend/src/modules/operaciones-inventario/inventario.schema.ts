@@ -64,6 +64,10 @@ export const INVENTARIO_DDL: string[] = [
     "permisoNumero" TEXT,
     "permisoVence" DATE,
     "notas" TEXT,
+    "categoria" TEXT,
+    "municiones" INTEGER,
+    "ciudad" TEXT,
+    "uso" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "InvArma_pkey" PRIMARY KEY ("id")
