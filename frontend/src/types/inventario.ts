@@ -226,6 +226,30 @@ export interface ResultadoImportacion {
     aCargar: { nombre: string; variante: string; tipo: string; cantidad: number; yaCargado: boolean }[];
     sinCantidad: number;
   };
+  /** Puestos del Excel que ya existen en la aplicación (se enlazan) y los que aún no (quedan por nombre). */
+  puestos: { enlazados: string[]; sinEnlazar: string[] };
+}
+
+/** Armas y equipo de un puesto de un contrato (columna «Armas y equipo» del contrato en Operaciones). */
+export interface InventarioDePuesto {
+  puestoId: number;
+  nombre: string;
+  armas: {
+    id: number;
+    serie: string;
+    clase: ClaseArma;
+    marca: string | null;
+    modelo: string | null;
+    calibre: string | null;
+    categoria: CategoriaArma | null;
+    municiones: number | null;
+    permisoVence: string | null;
+    permiso: EstadoPermiso;
+    requiereCorreccion: boolean;
+  }[];
+  equipo: { articuloId: number; articulo: string; variante: string; unidad: string; cantidad: number }[];
+  totalArmas: number;
+  totalEquipo: number;
 }
 
 export interface DatosArticulo {

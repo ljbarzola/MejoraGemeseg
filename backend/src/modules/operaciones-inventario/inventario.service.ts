@@ -27,6 +27,7 @@ import {
   totalEntregado,
   type MovimientoCalculo,
 } from './inventario.util';
+import { indicePuestosPorNombre, puestoDeRegistro, puestoDeTenedor } from './inventario-puestos.util';
 
 export interface ActorInventario {
   userId: number;
@@ -470,6 +471,74 @@ export class InventarioService {
       orderBy: [{ estado: 'asc' }, { serie: 'asc' }],
     });
     return armas.map((a) => this.vistaArma(a, hoy));
+  }
+
+  /**
+   * Armas y equipo de cada puesto de un contrato (para la pestaña «Puestos» del contrato en Operaciones).
+   * Un arma o un artículo es de un puesto por su `puestoId` o, si fue cargado solo con el nombre (Excel de
+   * Operaciones), por el puesto que se llame igual, siempre que ese nombre sea único en la empresa.
+   * Solo lee: no cambia nada del inventario.
+   */
+  async inventarioPorContrato(companyId: number, contratoId: number) {
+    const delContrato = await this.prisma.cPPuestoServicio.findMany({
+      where: { companyId, contratoId },
+      select: { id: true, nombre: true },
+      orderBy: { nombre: 'asc' },
+    });
+    if (delContrato.length === 0) return [];
+    const ids = new Set(delContrato.map((p) => p.id));
+    const indice = indicePuestosPorNombre(
+      await this.prisma.cPPuestoServicio.findMany({ where: { companyId }, select: { id: true, nombre: true } }),
+    );
+
+    const hoy = hoyEcuador();
+    const armas = await this.prisma.invArma.findMany({
+      where: {
+        companyId,
+        estado: 'ASIGNADA',
+        OR: [{ puestoId: { in: [...ids] } }, { puestoId: null, puestoNombre: { not: null } }],
+      },
+      orderBy: { serie: 'asc' },
+    });
+    const tenencias = (await this.tenencias(companyId)).filter((t) => t.tenedorTipo === 'PUESTO');
+
+    return delContrato.map((p) => {
+      const armasDelPuesto = armas
+        .filter((a) => puestoDeRegistro(indice, a.puestoId, a.puestoNombre) === p.id)
+        .map((a) => {
+          const v = this.vistaArma(a, hoy);
+          return {
+            id: v.id,
+            serie: v.serie,
+            clase: v.clase,
+            marca: v.marca,
+            modelo: v.modelo,
+            calibre: v.calibre,
+            categoria: v.categoria,
+            municiones: v.municiones,
+            permisoVence: v.permisoVence,
+            permiso: v.permiso,
+            requiereCorreccion: v.requiereCorreccion,
+          };
+        });
+      // Lo entregado a este puesto, sumado por artículo (puede venir por `puestoId` y por nombre a la vez).
+      const equipo = new Map<number, { articuloId: number; articulo: string; variante: string; unidad: string; cantidad: number }>();
+      for (const t of tenencias) {
+        if (puestoDeTenedor(indice, t.tenedor, t.puestoNombre) !== p.id) continue;
+        const previo = equipo.get(t.articuloId);
+        if (previo) previo.cantidad += t.cantidad;
+        else equipo.set(t.articuloId, { articuloId: t.articuloId, articulo: t.articulo, variante: t.variante, unidad: t.unidad, cantidad: t.cantidad });
+      }
+      const equipoLista = [...equipo.values()].sort((a, b) => a.articulo.localeCompare(b.articulo, 'es'));
+      return {
+        puestoId: p.id,
+        nombre: p.nombre,
+        armas: armasDelPuesto,
+        equipo: equipoLista,
+        totalArmas: armasDelPuesto.length,
+        totalEquipo: equipoLista.reduce((s, e) => s + e.cantidad, 0),
+      };
+    });
   }
 
   async crearArma(actor: ActorInventario, dto: CrearArmaDto) {

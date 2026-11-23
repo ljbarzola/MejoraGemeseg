@@ -6,6 +6,7 @@ import type {
   DatosArticulo,
   EstadoArma,
   EventoArma,
+  InventarioDePuesto,
   MovimientoInventario,
   NuevoMovimiento,
   ResultadoImportacion,
@@ -32,6 +33,10 @@ export const registrarMovimiento = (d: NuevoMovimiento): Promise<{ movimientoId:
   api.post(`${BASE}/movimientos`, d).then((r) => r.data);
 export const getTenencias = (articuloId?: number): Promise<Tenencia[]> =>
   api.get(`${BASE}/tenencias`, { params: articuloId ? { articuloId } : undefined }).then((r) => r.data);
+
+/** Armas y equipo de cada puesto de un contrato (para la pestaña «Puestos» del contrato en Operaciones). */
+export const getInventarioPorContrato = (contratoId: number): Promise<InventarioDePuesto[]> =>
+  api.get(`${BASE}/por-contrato/${contratoId}`).then((r) => r.data);
 
 /** TEMPORAL: carga desde el Excel de inventario de Operaciones. Sin `confirmar` solo muestra qué se cargaría. */
 export const importarExcelInventario = (archivo: File, confirmar: boolean): Promise<ResultadoImportacion> => {

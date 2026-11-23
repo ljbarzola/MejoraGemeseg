@@ -147,6 +147,26 @@ export default function ImportarExcelModal({ onClose, onDone }: { onClose: () =>
                 )}
               </section>
 
+              {(r.puestos.enlazados.length > 0 || r.puestos.sinEnlazar.length > 0) && (
+                <section>
+                  <h4 style={{ margin: '0 0 6px', color: 'var(--azul-oscuro)' }}>Puestos</h4>
+                  <div style={{ fontSize: '0.9rem' }}>
+                    {r.puestos.enlazados.length > 0
+                      ? <><strong>{r.puestos.enlazados.length}</strong> puestos del Excel ya existen en la aplicación y {hecho ? 'quedaron enlazados' : 'quedarían enlazados'}: sus armas y su equipo se ven desde el contrato.</>
+                      : 'Ningún puesto del Excel existe todavía en la aplicación.'}
+                  </div>
+                  {r.puestos.sinEnlazar.length > 0 && (
+                    <div style={{ fontSize: '0.82rem', color: '#718096', marginTop: 4 }}>
+                      {r.puestos.sinEnlazar.length} no existen con ese nombre exacto y se guardan solo por nombre. Si más tarde se crean con ese mismo nombre, el contrato los encuentra igual.
+                      <details style={{ marginTop: 4 }}>
+                        <summary style={{ cursor: 'pointer' }}>Ver cuáles</summary>
+                        <div style={{ marginTop: 4 }}>{r.puestos.sinEnlazar.join(', ')}</div>
+                      </details>
+                    </div>
+                  )}
+                </section>
+              )}
+
               {r.avisos.map((a) => (
                 <div key={a} style={{ fontSize: '0.82rem', color: '#718096', borderLeft: '3px solid #e2e8f0', paddingLeft: 10 }}>{a}</div>
               ))}

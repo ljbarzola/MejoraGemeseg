@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { planDesdeLibro, type PlanImportacion } from './inventario-import.util';
+import { indicePuestosPorNombre, normalizarPuesto, puestoDeRegistro } from './inventario-puestos.util';
 import type { ActorInventario } from './inventario.service';
 
 /** Hoy en Ecuador (UTC-5, sin horario de verano), como fecha de día. */
@@ -31,6 +32,8 @@ export interface ResultadoImportacion {
     aCargar: { nombre: string; variante: string; tipo: string; cantidad: number; yaCargado: boolean }[];
     sinCantidad: number;
   };
+  /** Puestos del Excel (de lo que se va a cargar) que ya existen en la aplicación y los que aún no. */
+  puestos: { enlazados: string[]; sinEnlazar: string[] };
 }
 
 const NOMBRE_CARGA = 'Carga inicial desde el Excel de Operaciones.';
@@ -89,6 +92,27 @@ export class InventarioImportService {
     const chalecosYa = plan.chalecos.filas.length > 0 && (await yaTieneMovimientos(articuloChaleco));
     const accesoriosYa = await Promise.all(plan.accesorios.items.map((i) => yaTieneMovimientos(i)));
 
+    // ── Puestos de la aplicación: se enlaza por nombre solo cuando es inequívoco ──
+    const puestosApp = await this.prisma.cPPuestoServicio.findMany({
+      where: { companyId: actor.companyId },
+      select: { id: true, nombre: true },
+    });
+    const indicePuestos = indicePuestosPorNombre(puestosApp);
+    const nombreOficial = new Map(puestosApp.map((p) => [p.id, p.nombre]));
+    /** Puesto de la aplicación que se llama como el del Excel, o null si no existe (o hay dos con ese nombre). */
+    const enlace = (nombreExcel: string | null | undefined): { id: number; nombre: string } | null => {
+      const id = puestoDeRegistro(indicePuestos, null, nombreExcel);
+      return id != null ? { id, nombre: nombreOficial.get(id) ?? (nombreExcel ?? '') } : null;
+    };
+    // Un puesto cuenta una sola vez aunque venga escrito distinto (mayúsculas, tildes) en armas y chalecos.
+    const nombresACargar = new Map<string, string>();
+    const anotar = (n: string | null) => {
+      if (n && !nombresACargar.has(normalizarPuesto(n))) nombresACargar.set(normalizarPuesto(n), n);
+    };
+    for (const a of armasNuevas) if (a.estado === 'ASIGNADA') anotar(a.puestoNombre);
+    if (!chalecosYa) for (const f of plan.chalecos.filas) if (f.destino === 'PUESTO') anotar(f.puestoNombre);
+    const nombresOrdenados = [...nombresACargar.values()].sort((x, y) => x.localeCompare(y, 'es'));
+
     const unidades = plan.chalecos.filas.reduce((s, f) => s + f.cantidad, 0);
     const enBodega = plan.chalecos.filas.filter((f) => f.destino === 'BODEGA').reduce((s, f) => s + f.cantidad, 0);
     const resultado: ResultadoImportacion = {
@@ -122,6 +146,10 @@ export class InventarioImportService {
         })),
         sinCantidad: plan.accesorios.sinCantidad,
       },
+      puestos: {
+        enlazados: nombresOrdenados.filter((n) => enlace(n)),
+        sinEnlazar: nombresOrdenados.filter((n) => !enlace(n)),
+      },
     };
     if (!confirmar) return resultado;
 
@@ -130,6 +158,7 @@ export class InventarioImportService {
     await this.prisma.$transaction(
       async (tx) => {
         for (const a of armasNuevas) {
+          const puesto = a.estado === 'ASIGNADA' ? enlace(a.puestoNombre) : null;
           await tx.invArma.create({
             data: {
               companyId: actor.companyId,
@@ -138,7 +167,8 @@ export class InventarioImportService {
               marca: a.marca,
               calibre: a.calibre,
               estado: a.estado,
-              puestoNombre: a.puestoNombre,
+              puestoId: puesto?.id ?? null,
+              puestoNombre: puesto?.nombre ?? a.puestoNombre,
               permisoVence: a.permisoVence ? new Date(`${a.permisoVence}T00:00:00.000Z`) : null,
               notas: a.notas,
               categoria: a.categoria,
@@ -149,7 +179,7 @@ export class InventarioImportService {
                 create: {
                   tipo: 'ALTA',
                   detalle: a.puestoNombre ? `${NOMBRE_CARGA} Puesto: ${a.puestoNombre}.` : NOMBRE_CARGA,
-                  puestoNombre: a.puestoNombre,
+                  puestoNombre: puesto?.nombre ?? a.puestoNombre,
                   porNombre: actor.nombre,
                 },
               },
@@ -160,7 +190,7 @@ export class InventarioImportService {
         // Un artículo con su entrada y, si toca, las entregas a puestos.
         const cargarArticulo = async (
           art: { tipo: string; nombre: string; variante: string },
-          movimientos: { tipo: 'ENTRADA' | 'ENTREGA'; cantidad: number; puestoNombre?: string | null; motivo: string }[],
+          movimientos: { tipo: 'ENTRADA' | 'ENTREGA'; cantidad: number; puestoId?: number | null; puestoNombre?: string | null; motivo: string }[],
         ) => {
           const creado =
             (await tx.invArticulo.findFirst({
@@ -178,6 +208,7 @@ export class InventarioImportService {
               tipo: m.tipo,
               cantidad: m.cantidad,
               fecha,
+              puestoId: m.puestoId ?? null,
               puestoNombre: m.puestoNombre ?? null,
               motivo: m.motivo,
               porId: actor.userId,
@@ -191,7 +222,16 @@ export class InventarioImportService {
             { tipo: 'ENTRADA', cantidad: unidades, motivo: NOMBRE_CARGA },
             ...plan.chalecos.filas
               .filter((f) => f.destino === 'PUESTO')
-              .map((f) => ({ tipo: 'ENTREGA' as const, cantidad: f.cantidad, puestoNombre: f.puestoNombre, motivo: f.detalle })),
+              .map((f) => {
+                const puesto = enlace(f.puestoNombre);
+                return {
+                  tipo: 'ENTREGA' as const,
+                  cantidad: f.cantidad,
+                  puestoId: puesto?.id ?? null,
+                  puestoNombre: puesto?.nombre ?? f.puestoNombre,
+                  motivo: f.detalle,
+                };
+              }),
           ]);
         }
         for (const [k, i] of plan.accesorios.items.entries()) {
