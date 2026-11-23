@@ -14,6 +14,7 @@ import MarginConfig from '../../components/ventas/cotizador/MarginConfig';
 import NumInput from '../../components/ventas/cotizador/NumInput';
 import PriceChangesModal from '../../components/ventas/cotizador/PriceChangesModal';
 import ProductDetailModal from '../../components/ventas/cotizador/ProductDetailModal';
+import { ProductFormModal } from '../../components/ventas/cotizador/CatalogForms';
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import QuoteDetail from '../../components/ventas/cotizador/QuoteDetail';
 import CustodiaModal from '../../components/ventas/cotizador/CustodiaModal';
@@ -180,6 +181,16 @@ export default function CotizadorPage() {
 
   const byCode = useMemo(() => buildCatalogMap(products), [products]);
   const listados = useMemo(() => products.filter((p) => p.isActive), [products]);
+  // Mismos ayudantes que el Catálogo, para editar un producto desde la cotización con el mismo formulario.
+  const subcats = useMemo(
+    () => [...new Set(products.map((p) => p.subcategory).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')),
+    [products],
+  );
+  const suppliers = useMemo(
+    () => [...new Set(products.map((p) => p.supplier).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')),
+    [products],
+  );
+  const esAdminOGerente = user?.role === 'ADMIN' || user?.role === 'MANAGER';
 
   const recargarCatalogo = useCallback(async () => {
     try {
@@ -339,6 +350,8 @@ export default function CotizadorPage() {
   // Calculadora de custodia móvil: `linea` = una ya agregada que se recalcula; null = una nueva.
   const [custodiaModal, setCustodiaModal] = useState<{ linea: CotCustodiaLine | null } | null>(null);
   const [detalleCodigo, setDetalleCodigo] = useState<string | null>(null);
+  // Producto del catálogo abierto para editar desde la cotización (solo quien puede editar Ventas).
+  const [productoForm, setProductoForm] = useState<CotProduct | null>(null);
   const [cambiosPrecio, setCambiosPrecio] = useState<PriceChange[] | null>(null);
   const [confirmNueva, setConfirmNueva] = useState(false);
   const [soloAdmin, setSoloAdmin] = useState<string | null>(null);
@@ -856,6 +869,14 @@ export default function CotizadorPage() {
   };
 
   const detalle = detalleCodigo ? byCode.get(detalleCodigo) : undefined;
+  // Clic en el producto de la cotización: abre el formulario del catálogo si puede editarlo; si no,
+  // la ficha de solo lectura de siempre. Un producto eliminado (inactivo) no se puede editar.
+  const abrirProducto = (code: string) => {
+    const p = byCode.get(code);
+    if (!p) return;
+    if (puedeEscribir && !readOnly && p.isActive) setProductoForm(p);
+    else setDetalleCodigo(p.code);
+  };
   const accesoTexto =
     draft.access === 'shared'
       ? 'Esta cotización te la compartieron: la ves en solo lectura. Para modificarla crea una copia propia desde el historial.'
@@ -1182,7 +1203,7 @@ export default function CotizadorPage() {
                 comp={comp}
                 readOnly={readOnly}
                 onItems={setItems}
-                onOpenProduct={setDetalleCodigo}
+                onOpenProduct={abrirProducto}
                 onEditCustodia={(linea) => setCustodiaModal({ linea })}
               />
             </section>
@@ -1435,6 +1456,21 @@ export default function CotizadorPage() {
       {compartir && <ShareQuoteModal quoteId={compartir.id} quoteNumber={compartir.quoteNumber} onClose={() => setCompartir(null)} />}
       {elegirInstalacion && <InstallPicker installs={installs} onPick={onPickInstall} onClose={() => setElegirInstalacion(false)} />}
       {custodiaModal && <CustodiaModal inicial={custodiaModal.linea} onClose={() => setCustodiaModal(null)} onConfirm={onConfirmCustodia} />}
+      {productoForm && (
+        <ProductFormModal
+          product={productoForm}
+          subcategories={subcats}
+          suppliers={suppliers}
+          puedeFijarMinimo={esAdminOGerente}
+          aviso="Estás editando el catálogo de la empresa: el cambio se ve en todas las cotizaciones y en las futuras, y queda registrado en Catálogo → Historial. El precio de esta cotización no cambia."
+          onClose={() => setProductoForm(null)}
+          onSaved={(p) => {
+            setProductoForm(null);
+            void recargarCatalogo();
+            showToast(`Producto actualizado: ${p.code}`, 'success');
+          }}
+        />
+      )}
       {detalle && (
         <ProductDetailModal
           product={detalle}
