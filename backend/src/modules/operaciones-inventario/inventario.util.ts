@@ -13,6 +13,18 @@ export type TipoMovimiento = (typeof TIPOS_MOVIMIENTO)[number];
 export const ESTADOS_ARMA = ['DISPONIBLE', 'ASIGNADA', 'MANTENIMIENTO', 'BAJA'] as const;
 export type EstadoArma = (typeof ESTADOS_ARMA)[number];
 
+/** Categoría de un arma: letal, traumática, de fogueo o letal móvil (las que salen en custodia). */
+export const CATEGORIAS_ARMA = ['LETAL', 'TRAUMATICA', 'FOGUEO', 'LETAL_MOVIL'] as const;
+export type CategoriaArma = (typeof CATEGORIAS_ARMA)[number];
+
+/**
+ * Una nota que empieza así marca un arma cuyo dato vino del Excel con una duda y debe corregirse
+ * (carga inicial de 2026-11-19). Mientras la nota siga empezando así, la pantalla de Armas la señala.
+ */
+export const PREFIJO_CORREGIR = 'CORREGIR';
+export const requiereCorreccion = (notas: string | null | undefined): boolean =>
+  (notas ?? '').trimStart().toUpperCase().startsWith(PREFIJO_CORREGIR);
+
 /** Días de aviso antes de que venza el permiso de un arma. */
 export const DIAS_AVISO_PERMISO = 30;
 
@@ -25,13 +37,20 @@ export function pluralUnidad(unidad: string, cantidad: number): string {
 export interface Tenedor {
   puestoId?: number | null;
   guardiaCedula?: string | null;
+  /** Puesto escrito como texto (carga inicial desde el Excel, cuando el puesto aún no está registrado). */
+  puestoNombre?: string | null;
 }
 
-/** Quien tiene el material: un guardia (si hay cédula) o, si no, un puesto. null = sin tenedor (bodega). */
+/**
+ * Quien tiene el material: un guardia (si hay cédula) o, si no, un puesto registrado, o un puesto solo
+ * con su nombre. null = sin tenedor (bodega).
+ */
 export function claveTenedor(t: Tenedor): string | null {
   const cedula = (t.guardiaCedula ?? '').trim();
   if (cedula) return `G:${cedula}`;
   if (t.puestoId != null) return `P:${t.puestoId}`;
+  const nombre = (t.puestoNombre ?? '').trim().toUpperCase();
+  if (nombre) return `N:${nombre}`;
   return null;
 }
 

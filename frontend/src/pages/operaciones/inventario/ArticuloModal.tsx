@@ -95,12 +95,12 @@ export default function ArticuloModal({
 
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
               <div className="form-group" style={{ flex: '1 1 160px' }}>
-                <label>Mínimo en bodega</label>
+                <label>Mínimo en el rastrillo</label>
                 <input type="number" min="0" step="1" value={minimo} onChange={(e) => setMinimo(e.target.value)} />
                 <small style={{ color: '#718096' }}>Al llegar a esta cantidad llega una notificación en la app.</small>
               </div>
               <div className="form-group" style={{ flex: '1 1 160px' }}>
-                <label>Máximo en bodega</label>
+                <label>Máximo en el rastrillo</label>
                 <input type="number" min="0" step="1" value={maximo} onChange={(e) => setMaximo(e.target.value)} placeholder="Opcional" />
                 <small style={{ color: '#718096' }}>Con esto se calcula cuánto reponer.</small>
               </div>
