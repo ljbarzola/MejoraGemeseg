@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   CatalogoLoteDto,
+  CotCondicionesPilarDto,
   CotLimitesDto,
   CotKitDto,
   CotTemplateDto,
@@ -18,6 +19,8 @@ import {
   UpdateCotProductDto,
   UpdateCotTemplateDto,
 } from './dto/cotizador.dto';
+import { PILARES } from './ventas-pilares.const';
+import { CONDICIONES_GENERALES_POR_DEFECTO } from './cotizador-condiciones.const';
 import {
   CAMPOS_PRECIO,
   COT_PREFIX,
@@ -270,6 +273,48 @@ export class CotizadorCatalogoService {
       update: data,
     });
     return this.mapLimites(l);
+  }
+
+  // ---------------------------------------------------------------------
+  // Condiciones generales por pilar (texto que precarga el Cotizador)
+  // ---------------------------------------------------------------------
+
+  /**
+   * Siempre devuelve los tres pilares. Los que aún no tengan fila entregan el
+   * texto de siempre, para que nadie note el cambio hasta que lo edite.
+   */
+  async obtenerCondicionesPilares(companyId: number | null) {
+    const cid = this.requireCompany(companyId);
+    const filas = await this.prisma.cotCondicionesPilar.findMany({
+      where: { companyId: cid },
+    });
+    const guardadas = new Map(filas.map((f) => [f.pilar, f.texto]));
+    return PILARES.map((p) => ({
+      pilar: p.key,
+      texto: guardadas.get(p.key) ?? CONDICIONES_GENERALES_POR_DEFECTO,
+    }));
+  }
+
+  /** Solo quien puede escribir en Ventas (lo exige el controlador). */
+  async guardarCondicionesPilares(
+    companyId: number | null,
+    dto: CotCondicionesPilarDto,
+    userId: number,
+  ) {
+    const cid = this.requireCompany(companyId);
+    const ahora = new Date();
+    await this.prisma.cotCondicionesPilar.upsert({
+      where: { companyId_pilar: { companyId: cid, pilar: dto.pilar } },
+      create: {
+        companyId: cid,
+        pilar: dto.pilar,
+        texto: dto.texto,
+        updatedBy: userId,
+        updatedAt: ahora,
+      },
+      update: { texto: dto.texto, updatedBy: userId, updatedAt: ahora },
+    });
+    return this.obtenerCondicionesPilares(cid);
   }
 
   // ---------------------------------------------------------------------

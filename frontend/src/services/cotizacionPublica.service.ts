@@ -7,6 +7,8 @@ import { api } from './auth.service';
 export interface FilaProductoPublica {
   codigo: string;
   nombre: string;
+  /** Modelo del equipo (vacío en materiales y servicios). */
+  modelo: string;
   unidad: string;
   precioUnitario: number;
   cantidad: number;

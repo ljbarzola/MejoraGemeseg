@@ -15,6 +15,10 @@ import { diaCortoEcuador } from '../../../utils/rangoFechas';
 // Solo lectura. Lo escribe el servidor al guardar un producto o servicio de instalación.
 // Es una tabla como las demás: los filtros viven en la cabecera de cada columna.
 
+// Clave propia: el historial de COTIZACIONES usa `cotizador-historial`. Si esta ventana usara la misma,
+// las columnas que alguien eligió allá (p. ej. solo «Fecha») se aplicarían acá y parecería que faltan.
+const CLAVE_COLUMNAS = 'cotizador-historial-catalogo';
+
 const COLS = [
   { key: 'persona', label: 'Persona' },
   { key: 'producto', label: 'Producto' },
@@ -94,7 +98,7 @@ export default function HistorialCatalogoModal({ onClose }: { onClose: () => voi
     { key: 'despues', etiqueta: 'Después', tipo: 'texto', getValue: (c) => valorTexto(c, c.valorDespues) },
   ]);
 
-  const prefs = useColumnPreferences('cotizador-historial', DEF_COLS);
+  const prefs = useColumnPreferences(CLAVE_COLUMNAS, DEF_COLS);
   // Una columna oculta con filtro activo se muestra igual, para que se vea qué está filtrando.
   const visibles = useMemo(() => {
     const elegidas = prefs.visible.filter((k) => COLS.some((c) => c.key === k));
@@ -102,7 +106,7 @@ export default function HistorialCatalogoModal({ onClose }: { onClose: () => voi
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cf.filtro lee los filtros de ese momento; se recalcula cuando cambian.
   }, [prefs.visible, cf.filtros]);
   const columnasTabla = ['fecha', ...visibles];
-  const tablaRef = useResizableColumns('cotizador-historial', columnasTabla);
+  const tablaRef = useResizableColumns(CLAVE_COLUMNAS, columnasTabla);
 
   // Los filtros de columna ya se aplicaron (cf.filas); aquí solo falta el buscador general.
   const filas = useMemo(() => {

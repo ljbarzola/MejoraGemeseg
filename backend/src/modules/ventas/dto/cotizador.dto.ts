@@ -15,6 +15,10 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { PILARES } from '../ventas-pilares.const';
+
+/** Claves de los pilares que puede llevar una cotización. */
+export const COT_PILARES = PILARES.map((p) => p.key);
 
 // ---------------------------------------------------------------------------
 // Catálogo del Cotizador
@@ -145,6 +149,16 @@ export class CotLimitesDto {
   @Min(0)
   @Max(1000)
   minGananciaPct?: number | null;
+}
+
+/** Condiciones generales de un pilar (Configuración → Servicios). Texto vacío = sin condiciones. */
+export class CotCondicionesPilarDto {
+  @IsIn(COT_PILARES)
+  pilar: string;
+
+  @IsString()
+  @MaxLength(8000)
+  texto: string;
 }
 
 export class CreateCotInstallDto {
@@ -377,6 +391,11 @@ export class CreateCotQuoteDto {
 
   @IsOptional() @IsString() @MaxLength(8000) conditions?: string;
   @IsOptional() @IsString() @MaxLength(8000) notes?: string;
+
+  /** Pilar del que se tomaron las condiciones generales; null/vacío = sin pilar. */
+  @IsOptional()
+  @IsIn([...COT_PILARES, ''])
+  pilar?: string | null;
 }
 
 export class UpdateCotQuoteDto {
@@ -420,6 +439,10 @@ export class UpdateCotQuoteDto {
 
   @IsOptional() @IsString() @MaxLength(8000) conditions?: string;
   @IsOptional() @IsString() @MaxLength(8000) notes?: string;
+
+  @IsOptional()
+  @IsIn([...COT_PILARES, ''])
+  pilar?: string | null;
 }
 
 export class ChangeCotStatusDto {

@@ -287,6 +287,9 @@ export class CotizadorOportunidadService {
         quotedAmount: true,
         receivedAt: true,
         assignedUserId: true,
+        // Pilares de los servicios de la oportunidad: el Cotizador los usa para preseleccionar
+        // el pilar del que se precargan las condiciones generales.
+        services: { select: { service: { select: { pilar: true } } } },
         salesClient: {
           select: { id: true, name: true, ruc: true, address: true, phone: true, email: true, extra: true },
         },
@@ -316,6 +319,13 @@ export class CotizadorOportunidadService {
       monto: o.quotedAmount === null ? null : Number(o.quotedAmount),
       llegada: o.receivedAt,
       responsable: o.assignedUserId ? (responsables.get(o.assignedUserId) ?? '') : '',
+      pilares: [
+        ...new Set(
+          o.services
+            .map((s) => s.service.pilar)
+            .filter((p): p is string => Boolean(p)),
+        ),
+      ],
       cliente: {
         id: o.salesClient.id,
         nombre: o.salesClient.name,

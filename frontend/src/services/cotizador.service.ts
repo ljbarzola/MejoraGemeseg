@@ -183,7 +183,24 @@ export interface CotQuoteInput {
   discountValue: number;
   conditions: string;
   notes: string;
+  /** Pilar del que se tomaron las condiciones generales precargadas. */
+  pilar?: string | null;
 }
+
+/** Condiciones generales configuradas por pilar (Configuración → Servicios). */
+export interface CotCondicionPilar {
+  pilar: string;
+  texto: string;
+}
+
+export const getCotCondicionesPilares = (): Promise<CotCondicionPilar[]> =>
+  api.get('/ventas/cotizador/condiciones-pilares').then((r) => r.data);
+
+export const guardarCotCondicionPilar = (
+  pilar: string,
+  texto: string,
+): Promise<CotCondicionPilar[]> =>
+  api.put('/ventas/cotizador/condiciones-pilares', { pilar, texto }).then((r) => r.data);
 
 export const getCotQuotes = (): Promise<CotQuote[]> =>
   api.get('/ventas/cotizador/cotizaciones').then(r => r.data);
@@ -298,6 +315,8 @@ export interface CotOportunidadOpcion {
   monto: number | null;
   llegada: string;
   responsable: string;
+  /** Pilares (Gemeseg/Megamont/Adasmeg) de los servicios de la oportunidad. */
+  pilares: string[];
   cliente: { id: number; nombre: string; ruc: string; direccion: string; telefono: string; email: string };
 }
 

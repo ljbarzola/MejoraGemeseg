@@ -23,6 +23,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CotizadorCatalogoService } from './cotizador-catalogo.service';
 import {
   CatalogoLoteDto,
+  CotCondicionesPilarDto,
   CotLimitesDto,
   CotKitDto,
   CotTemplateDto,
@@ -119,6 +120,27 @@ export class CotizadorCatalogoController {
   @Section('VENTAS', 'write')
   guardarLimites(@Req() req: any, @Body() dto: CotLimitesDto) {
     return this.catalogo.guardarLimites(
+      req.user.companyId,
+      dto,
+      req.user.userId,
+    );
+  }
+
+  // Condiciones generales por pilar: las ve quien usa el Cotizador (las necesita para precargar);
+  // las cambia quien tiene «Escribir» en Ventas, igual que el resto de Configuración → Servicios.
+  @Get('condiciones-pilares')
+  @Section('VENTAS', 'view')
+  condicionesPilares(@Req() req: any) {
+    return this.catalogo.obtenerCondicionesPilares(req.user.companyId);
+  }
+
+  @Put('condiciones-pilares')
+  @Section('VENTAS', 'write')
+  guardarCondicionesPilares(
+    @Req() req: any,
+    @Body() dto: CotCondicionesPilarDto,
+  ) {
+    return this.catalogo.guardarCondicionesPilares(
       req.user.companyId,
       dto,
       req.user.userId,

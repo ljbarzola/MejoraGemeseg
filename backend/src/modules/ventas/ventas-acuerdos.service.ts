@@ -6,6 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ensureDefaultServices } from './ventas-servicios.util';
+import { pilarDeCategoria } from './ventas-pilares.const';
 import { graciaSugerida } from './client-lifecycle.util';
 import { VentasMotivosService, type MotivoInput } from './ventas-motivos.service';
 import {
@@ -112,11 +113,14 @@ export class VentasAcuerdosService {
       where: { companyId: cid },
       _max: { order: true },
     });
+    const description = dto.description?.trim() || null;
     return this.prisma.salesService.create({
       data: {
         companyId: cid,
         name,
-        description: dto.description?.trim() || null,
+        description,
+        // Sin pilar elegido, el de su categoría; en una categoría propia queda «Sin pilar» ('').
+        pilar: dto.pilar !== undefined ? dto.pilar : (pilarDeCategoria(description) ?? ''),
         order: (ultimo._max.order ?? -1) + 1,
       },
     });
@@ -150,6 +154,7 @@ export class VentasAcuerdosService {
     if (dto.description !== undefined) {
       data.description = dto.description.trim() || null;
     }
+    if (dto.pilar !== undefined) data.pilar = dto.pilar;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     return this.prisma.salesService.update({ where: { id }, data });
   }

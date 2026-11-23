@@ -38,6 +38,8 @@ export interface PriceItem {
   isService: boolean;
   /** Unidad de venta del catálogo (u, m, mes...); sale en la columna «Und». */
   unit?: string;
+  /** Modelo del equipo (ej. DS-X). Los materiales y servicios no llevan. */
+  model?: string;
   supplier: string;
   /** Copia con el precio guardado en la cotización (distinto al actual del catálogo). */
   frozen?: boolean;
@@ -61,7 +63,8 @@ export function toPriceItem(p: CotProduct): PriceItem {
     hasInstalacion: isService ? false : p.hasInstall,
     isService,
     unit: p.unit || '',
-    // Solo los equipos tienen proveedor (igual que el original)
+    // Solo los equipos llevan modelo y proveedor (igual que el original)
+    model: p.kind === 'EQUIPO' ? p.model || '' : '',
     supplier: p.kind === 'EQUIPO' ? p.supplier || '' : '',
   };
 }
