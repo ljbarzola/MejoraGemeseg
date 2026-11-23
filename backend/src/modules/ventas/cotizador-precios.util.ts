@@ -25,6 +25,8 @@ export interface ProductoCatalogo {
   kind: string;
   name: string;
   unit: string;
+  /** Solo equipos: modelo (ej. DS-X). La hoja impresa lo muestra en lugar del código. */
+  model?: string;
   unitCost: unknown;
   monthlyCost: unknown;
   annualCost: unknown;
@@ -37,6 +39,7 @@ interface PriceItem {
   code: string;
   name: string;
   unit: string;
+  model: string;
   cost: number;
   hasGanancia: boolean;
   hasInstalacion: boolean;
@@ -59,6 +62,7 @@ function toPriceItem(p: ProductoCatalogo): PriceItem {
     code: p.code,
     name: p.name,
     unit: p.unit || '',
+    model: p.kind === 'EQUIPO' ? p.model || '' : '',
     cost: isService ? serviceCost(p) : toNum(p.unitCost),
     hasGanancia: isService ? false : p.hasProfit,
     hasInstalacion: isService ? false : p.hasInstall,
@@ -97,6 +101,8 @@ function calcDiscount(base: number, type: string, value: number): number {
 export interface FilaProductoVenta {
   codigo: string;
   nombre: string;
+  /** Modelo del equipo (vacío en materiales y servicios): se imprime en lugar del código. */
+  modelo: string;
   unidad: string;
   /** Precio de venta unitario sin IVA. */
   precioUnitario: number;
@@ -195,6 +201,7 @@ function filaProducto(
   return {
     codigo: item.code,
     nombre: item.name,
+    modelo: item.model,
     unidad: item.unit,
     precioUnitario: precio,
     cantidad,

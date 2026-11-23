@@ -22,7 +22,7 @@ export default function QuotePrint({ draft, comp, companyName, logoUrl, issuerNa
     c.missing || !c.item || !c.price
       ? null
       : {
-          codigo: c.item.code,
+          modelo: c.item.model || '',
           nombre: c.item.name,
           unidad: c.item.unit || '',
           precioUnitario: c.price.priceBeforeIva,

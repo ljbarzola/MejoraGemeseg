@@ -204,7 +204,7 @@ export default function ColumnPickerMenu({
             border: '1px solid #e2e8f0',
             borderRadius: 10,
             boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
-            zIndex: 1000,
+            zIndex: 'var(--z-popover, 1100)',
             visibility: coords ? 'visible' : 'hidden',
           }}
         >

@@ -126,6 +126,7 @@ export const COTIZADOR_DDL: string[] = [
     "discountValue" DECIMAL(12,2) NOT NULL DEFAULT 0,
     "conditions" TEXT NOT NULL DEFAULT '',
     "notes" TEXT NOT NULL DEFAULT '',
+    "pilar" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "CotQuote_pkey" PRIMARY KEY ("id")
@@ -201,6 +202,19 @@ export const COTIZADOR_DDL: string[] = [
   )`,
   fk('CotLimites', 'companyId', 'Company', 'CASCADE'),
   fk('CotLimites', 'updatedBy', 'User', 'SET NULL'),
+
+  // Condiciones generales por pilar (2026-11-23): el texto que se precarga en el Cotizador.
+  // Fila por (empresa, pilar); se siembra con el texto de siempre al consultar.
+  `CREATE TABLE IF NOT EXISTS "CotCondicionesPilar" (
+    "companyId" INTEGER NOT NULL,
+    "pilar" TEXT NOT NULL,
+    "texto" TEXT NOT NULL DEFAULT '',
+    "updatedBy" INTEGER,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "CotCondicionesPilar_pkey" PRIMARY KEY ("companyId", "pilar")
+  )`,
+  fk('CotCondicionesPilar', 'companyId', 'Company', 'CASCADE'),
+  fk('CotCondicionesPilar', 'updatedBy', 'User', 'SET NULL'),
 
   // Enlace de la cotización para el cliente (2026-11-17). Tablas NUEVAS, sin modelo Prisma
   // (se consultan con SQL en cotizador-enlaces.service.ts). Un enlace activo por cotización;

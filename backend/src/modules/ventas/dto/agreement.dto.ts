@@ -248,6 +248,11 @@ export class CreateSalesServiceDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  // GEMESEG, MEGAMONT, ADASMEG o '' (sin pilar). Sin enviar, se deduce de la categoría.
+  @IsIn(['GEMESEG', 'MEGAMONT', 'ADASMEG', ''])
+  @IsOptional()
+  pilar?: string;
 }
 
 export class UpdateSalesServiceDto {
@@ -258,6 +263,10 @@ export class UpdateSalesServiceDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  @IsIn(['GEMESEG', 'MEGAMONT', 'ADASMEG', ''])
+  @IsOptional()
+  pilar?: string;
 
   @IsBoolean()
   @IsOptional()

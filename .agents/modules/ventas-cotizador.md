@@ -94,6 +94,7 @@ Solo historial (sin bloqueo ni aprobaciones). Un historial general, no por produ
 - Tabla `CotCambio` (un renglón por campo en `EDITO`, uno en `CREO`/`ELIMINO`; `userNombre` copiado). Lo escribe el servidor en la misma transacción (`anotar` en `cotizador-catalogo.service.ts`), también en el lote; sin cambios reales no anota. Comparación `diffCatalogo` (`cotizador.util.ts`; `85.0000` = `85`, vacío = `null`). `CAMPOS_PRECIO` = costo unitario/mensual/anual.
 - `GET historial?q=&tipo=precio|datos|creo|elimino&desde=&hasta=&userId=&pagina=&limite=` (días de Ecuador). No registra cambios hechos por scripts directos a la base.
 - Pantalla: Catálogo → pestaña «Historial» (`HistorialCatalogoModal.tsx`, `modal-ventas-lg`). Tabla estándar: filtros en la cabecera de columna (`useColumnFilters` + `ColumnFilter`), arriba solo buscador, «Columnas», limpiar y exportar. Trae el historial completo (de a 200, hasta 5.000) y filtra en el navegador. Error de carga: mensaje corto fijo.
+- **Clave de columnas propia (2026-11-23):** «Columnas» y los anchos de esta ventana se guardan como `columnas:cotizador-historial-catalogo`, **no** como `cotizador-historial` (que es la del historial de cotizaciones). Antes compartían clave: si alguien dejaba solo «Fecha» en las cotizaciones, aquí también salía solo Fecha. Además, el menú «Columnas» se pinta en el `body` con `--z-popover` (1100) para que no quede detrás del modal (1050) — en producción parecía que el botón no hacía nada. Verificado en local: salen las 6 columnas y el menú se abre por encima.
 
 ## 13. Avisos de precio bajo y límites
 
@@ -144,6 +145,34 @@ Una oportunidad puede tener varias cotizaciones. Funciona en los dos sentidos: �
 - Cotizador: `OportunidadSelector.tsx` (abiertas; empieza por el cliente escrito); «Crear oportunidad para «cliente»» la crea ahí (busca la empresa en el Directorio por RUC o nombre exacto; si no está, la agrega «solo datos»). Elegirla pone los datos de ese cliente. La unión se guarda con «Guardar cotización». `?oportunidad=<id>` empieza una cotización nueva prellenada (pregunta si hay una sin guardar). Una copia conserva la oportunidad.
 - Oportunidades: «⋯» → «Cotizar»; en «Editar», `CotizacionesDeOportunidad.tsx` con «Cotizar» y «Marcar principal». Con principal, «Monto cotizado» queda bloqueado y no se envía al guardar.
 - **Ojo:** el cambio de etapa a «Cotizada» aún pide y guarda un monto a mano; con principal, el siguiente guardado de esa cotización lo vuelve a poner.
+
+## 16. Modelo del equipo en la cotización y edición desde la línea (2026-11-23)
+
+**Pedido de Leidy:** que el modelo (el campo `model` del producto, ej. «DS-X») se vea en la cotización, y que al hacer clic en un producto dentro de la cotización se abra su edición.
+
+- **Dónde sale el modelo:** solo en los equipos (`CotProduct.model`; materiales y servicios no lo llevan). `toPriceItem` lo copia a `PriceItem.model` y `QuotePrint`/`cotizador-precios.util.ts` a `HojaFilaProducto.modelo` / `FilaProductoVenta.modelo`.
+  - **Pantalla de la cotización** (`QuoteDetail`): debajo del nombre queda `EQ-0422 · DS-X` (código y modelo).
+  - **PDF de la app y del enlace** (`HojaCotizacion`): **el código ya no se imprime**; en su lugar sale solo el modelo. Sin modelo no sale ninguna línea extra.
+  - **Página del enlace** (`CotizacionPublicaPage`, tabla web): el modelo ocupa el lugar del código, igual que su PDF.
+  - El modelo se lee del catálogo **actual** (no se congela por cotización, igual que el nombre).
+- **Clic en el producto (o en un componente del kit):** si la persona puede **editar Ventas** y la cotización es suya o de edición total, abre directo el formulario del catálogo (`ProductFormModal`) con aviso de que el cambio es de **toda la empresa** y queda en Catálogo → Historial. Si no (compartida, vista de administrador, solo lectura) o el producto está **desactivado**, se abre la ficha de solo lectura (`ProductDetailModal`).
+- **Al guardar desde la cotización:** se recarga el catálogo y se avisa «Producto actualizado». El precio sigue congelado con su aviso «precio de cuando se cotizó».
+- **Fuera de alcance:** editar cantidad o margen desde ese clic, y modelo para materiales o servicios.
+
+**Archivos:** `utils/cotizador/pricing.ts` (+ prueba en `pricing.test.ts`), `QuoteDetail.tsx`, `HojaCotizacion.tsx`, `QuotePrint.tsx`, `CotizadorPage.tsx`, `CatalogForms.tsx`, `services/cotizacionPublica.service.ts`, `CotizacionPublicaPage.tsx`, `backend/.../cotizador-precios.util.ts` (+ `cotizador-precios.util.spec.ts`).
+
+## 17. Condiciones generales por pilar (2026-11-23)
+
+**Pedido de Leidy:** en Ventas → Configuración → Servicios, debajo de cada pilar debe existir una configuración «Condiciones generales»; ese texto es el que aparece por defecto en el Cotizador (y por lo tanto al imprimir, en el PDF y en el enlace del cliente).
+
+- **Dónde se configura:** al pie de cada columna/pilar de Configuración → Servicios (Gemeseg / Megamont / Adasmeg) hay un textarea «Condiciones generales» y su botón «Guardar condiciones». Lo puede cambiar quien tiene «Escribir» en Ventas.
+- **Infraestructura de pilares incluida:** constantes `ventas-pilares.const.ts` / `utils/pilares.ts`, columna `SalesService.pilar` (DDL al arrancar) y selector de pilar en el alta/edición inline de servicios.
+- **Dónde se guarda:** tabla nueva `CotCondicionesPilar` (companyId + pilar + texto), creada al arrancar. `GET/PUT /ventas/cotizador/condiciones-pilares`. La consulta siempre devuelve los TRES pilares; los que no tengan fila entregan el texto de siempre (`CONDICIONES_GENERALES_POR_DEFECTO`), así que nadie nota el cambio hasta que lo edite.
+- **En el Cotizador:** selector «Pilar» junto a «Oportunidad» con los tres siempre visibles. Se preselecciona solo si todos los servicios de la oportunidad son de un pilar; si hay varios queda sin elegir. El backend manda `pilares` en `GET /ventas/cotizador/oportunidades[/:id]`.
+- **Cuándo se precarga:** si el campo está vacío o sigue siendo el texto automático se rellena sin preguntar; si la persona lo editó se abre un `ConfirmDialog` propio con «Usar las de [pilar]» / «Conservar las actuales». Reglas en `utils/cotizador/condiciones.ts` (+ test).
+- **Persistencia:** la cotización guarda el `pilar` elegido (columna nueva en `CotQuote`, asegurada con `ALTER TABLE ... IF NOT EXISTS` y en el `CREATE TABLE` del DDL). Impresión, PDF y enlace siguen usando el campo `conditions`, sin cambios. Las cotizaciones ya guardadas no se reescriben.
+
+**Verificado en local:** compilan frontend y backend; pasan los tests de `utils/cotizador` y del Cotizador en backend; probado en navegador (configuración, preselección desde oportunidad, diálogo al cambiar de pilar, PDF/enlace) y round-trip de `pilar` por API.
 
 ## Rutas frontend
 

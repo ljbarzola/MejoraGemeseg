@@ -36,6 +36,8 @@ export interface QuoteDraft {
   discountValue: number;
   conditions: string;
   notes: string;
+  /** Pilar elegido para precargar las condiciones generales; null = sin elegir. */
+  pilar: string | null;
   /**
    * Oportunidad de Ventas a la que pertenece (2026-11-17). Se guarda aparte de la cotización
    * (PUT /cotizaciones/:id/oportunidad) justo después de guardarla; obligatoria para enviar o descargar.
@@ -49,6 +51,8 @@ export interface CotOportunidadElegida {
   titulo: string;
   cliente: string;
   etapa: string;
+  /** Pilares de los servicios de esa oportunidad (para preseleccionar el de las condiciones). */
+  pilares: string[];
 }
 
 export function emptyDraft(): QuoteDraft {
@@ -69,6 +73,7 @@ export function emptyDraft(): QuoteDraft {
     discountValue: 0,
     conditions: DEFAULT_CONDITIONS,
     notes: '',
+    pilar: null,
     oportunidad: null,
   };
 }
@@ -91,6 +96,7 @@ export function draftFromQuote(q: CotQuote): QuoteDraft {
     discountValue: q.discountValue,
     conditions: q.conditions,
     notes: q.notes,
+    pilar: q.pilar ?? null,
     // La oportunidad no viene con la cotización: la pantalla la pide aparte al cargarla.
     oportunidad: null,
   };

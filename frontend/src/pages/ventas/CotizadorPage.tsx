@@ -14,6 +14,7 @@ import MarginConfig from '../../components/ventas/cotizador/MarginConfig';
 import NumInput from '../../components/ventas/cotizador/NumInput';
 import PriceChangesModal from '../../components/ventas/cotizador/PriceChangesModal';
 import ProductDetailModal from '../../components/ventas/cotizador/ProductDetailModal';
+import { ProductFormModal } from '../../components/ventas/cotizador/CatalogForms';
 import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import QuoteDetail from '../../components/ventas/cotizador/QuoteDetail';
 import CustodiaModal from '../../components/ventas/cotizador/CustodiaModal';
@@ -39,6 +40,7 @@ import {
   deleteCotQuote,
   deleteCotTemplate,
   getCotCatalogo,
+  getCotCondicionesPilares,
   getCotLimites,
   getCotKits,
   getCotNextNumber,
@@ -56,6 +58,7 @@ import {
 } from '../../services/cotizador.service';
 import {
   clearDraftLocal,
+  DEFAULT_CONDITIONS,
   draftFromQuote,
   draftHasContent,
   emptyDraft,
@@ -64,6 +67,8 @@ import {
   type QuoteDraft,
 } from '../../utils/cotizador/draft';
 import { apiError, todayISO } from '../../utils/cotizador/format';
+import { debePreguntarReemplazo, pilarUnicoDeOportunidad } from '../../utils/cotizador/condiciones';
+import { PILARES, nombreDePilar } from '../../utils/pilares';
 import {
   buildCatalogMap,
   computeQuote,
@@ -176,6 +181,16 @@ export default function CotizadorPage() {
 
   const byCode = useMemo(() => buildCatalogMap(products), [products]);
   const listados = useMemo(() => products.filter((p) => p.isActive), [products]);
+  // Mismos ayudantes que el Catálogo, para editar un producto desde la cotización con el mismo formulario.
+  const subcats = useMemo(
+    () => [...new Set(products.map((p) => p.subcategory).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')),
+    [products],
+  );
+  const suppliers = useMemo(
+    () => [...new Set(products.map((p) => p.supplier).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')),
+    [products],
+  );
+  const esAdminOGerente = user?.role === 'ADMIN' || user?.role === 'MANAGER';
 
   const recargarCatalogo = useCallback(async () => {
     try {
@@ -255,7 +270,7 @@ export default function CotizadorPage() {
   // (el cliente ve la versión guardada, no la de la pantalla).
   const firmaGuardada = useRef<string | null>(null);
   const firmaDe = (d: QuoteDraft) =>
-    JSON.stringify([d.quoteDate, d.client, d.items, d.supplierMargins, d.installMargin, d.discountType, d.discountValue, d.conditions, d.notes, d.oportunidad?.id ?? null]);
+    JSON.stringify([d.quoteDate, d.client, d.items, d.supplierMargins, d.installMargin, d.discountType, d.discountValue, d.conditions, d.notes, d.pilar, d.oportunidad?.id ?? null]);
   // Cotización guardada cuya oportunidad ya se consultó al servidor: solo entonces «sin oportunidad» en
   // pantalla significa «se la quitaron» (y al guardar se quita también en el servidor).
   const oportunidadLeidaDe = useRef<number | null>(null);
@@ -270,6 +285,36 @@ export default function CotizadorPage() {
     setTimeout(() => oportunidadRef.current?.focus(), 300);
   };
   const [enviarCliente, setEnviarCliente] = useState(false);
+
+  // Condiciones generales por pilar (Configuración → Servicios). Se leen al entrar; si falla la
+  // consulta se sigue con el texto de siempre, que es con el que nacía la cotización.
+  const condicionesPorPilar = useRef<Record<string, string>>({});
+  const textoAutoRef = useRef<string | null>(null);
+  const [preguntaPilar, setPreguntaPilar] = useState<{ pilar: string; texto: string } | null>(null);
+  useEffect(() => {
+    getCotCondicionesPilares()
+      .then((filas) => {
+        condicionesPorPilar.current = Object.fromEntries(filas.map((f) => [f.pilar, f.texto]));
+      })
+      .catch(() => {
+        /* sin configuración: DEFAULT_CONDITIONS */
+      });
+  }, []);
+  const textoDePilar = (pilar: string) => condicionesPorPilar.current[pilar] ?? DEFAULT_CONDITIONS;
+
+  /** Cambia el pilar y ofrece su texto de condiciones, preguntando solo si el usuario editó el campo. */
+  const aplicarPilar = (pilar: string | null, actual: string) => {
+    if (!pilar) return patch({ pilar: null });
+    const texto = textoDePilar(pilar);
+    patch({ pilar });
+    if (debePreguntarReemplazo(actual, textoAutoRef.current, DEFAULT_CONDITIONS)) {
+      setPreguntaPilar({ pilar, texto });
+      return;
+    }
+    patch({ conditions: texto });
+    textoAutoRef.current = texto;
+    setPreguntaPilar(null);
+  };
 
   const comp = useMemo(
     () =>
@@ -305,6 +350,8 @@ export default function CotizadorPage() {
   // Calculadora de custodia móvil: `linea` = una ya agregada que se recalcula; null = una nueva.
   const [custodiaModal, setCustodiaModal] = useState<{ linea: CotCustodiaLine | null } | null>(null);
   const [detalleCodigo, setDetalleCodigo] = useState<string | null>(null);
+  // Producto del catálogo abierto para editar desde la cotización (solo quien puede editar Ventas).
+  const [productoForm, setProductoForm] = useState<CotProduct | null>(null);
   const [cambiosPrecio, setCambiosPrecio] = useState<PriceChange[] | null>(null);
   const [confirmNueva, setConfirmNueva] = useState(false);
   const [soloAdmin, setSoloAdmin] = useState<string | null>(null);
@@ -437,6 +484,11 @@ export default function CotizadorPage() {
       (o.cliente.ruc && o.cliente.ruc.trim() === draft.client.ruc.trim()) ||
       o.cliente.nombre.trim().toLowerCase() === draft.client.name.trim().toLowerCase();
     setDraft((d) => ({ ...d, oportunidad: elegidaDe(o) }));
+    // Un solo pilar en los servicios de la oportunidad → se preselecciona y se ofrece su texto.
+    // Con varios, el selector queda abierto para que la persona elija.
+    const pilar = pilarUnicoDeOportunidad(o.pilares);
+    if (pilar) aplicarPilar(pilar, draft.conditions);
+    else if (!o.pilares.includes(draft.pilar ?? '')) patch({ pilar: null });
     if (!mismo) {
       const habiaOtro = draft.client.name.trim() !== '';
       await traerDelDirectorio({
@@ -459,7 +511,17 @@ export default function CotizadorPage() {
   const [cotizarPara, setCotizarPara] = useState<CotOportunidadOpcion | null>(null);
   const empezarParaOportunidad = async (o: CotOportunidadOpcion) => {
     setCotizarPara(null);
-    setDraft({ ...emptyDraft(), ownerName: user?.fullName ?? '', oportunidad: elegidaDe(o) });
+    const pilar = pilarUnicoDeOportunidad(o.pilares);
+    const texto = pilar ? textoDePilar(pilar) : DEFAULT_CONDITIONS;
+    setDraft({
+      ...emptyDraft(),
+      conditions: texto,
+      pilar,
+      ownerName: user?.fullName ?? '',
+      oportunidad: elegidaDe(o),
+    });
+    textoAutoRef.current = texto;
+    setPreguntaPilar(null);
     setClientErrors({});
     setErrorGuardar('');
     setErrorOportunidad(false);
@@ -674,6 +736,7 @@ export default function CotizadorPage() {
       discountValue: draft.discountValue,
       conditions: draft.conditions,
       notes: draft.notes,
+      pilar: draft.pilar,
     };
     const personalizado = !draft.numberIsTentative && draft.quoteNumber.trim() !== '';
     const numero = draft.quoteNumber.trim();
@@ -806,6 +869,14 @@ export default function CotizadorPage() {
   };
 
   const detalle = detalleCodigo ? byCode.get(detalleCodigo) : undefined;
+  // Clic en el producto de la cotización: abre el formulario del catálogo si puede editarlo; si no,
+  // la ficha de solo lectura de siempre. Un producto eliminado (inactivo) no se puede editar.
+  const abrirProducto = (code: string) => {
+    const p = byCode.get(code);
+    if (!p) return;
+    if (puedeEscribir && !readOnly && p.isActive) setProductoForm(p);
+    else setDetalleCodigo(p.code);
+  };
   const accesoTexto =
     draft.access === 'shared'
       ? 'Esta cotización te la compartieron: la ves en solo lectura. Para modificarla crea una copia propia desde el historial.'
@@ -993,6 +1064,24 @@ export default function CotizadorPage() {
                   {errorOportunidad && !draft.oportunidad && <span className="field-error">Elige la oportunidad</span>}
                 </div>
                 <div className="cot-field full">
+                  <label htmlFor="cot-pilar">
+                    Pilar <span className="cot-muted" style={{ fontWeight: 400 }}>(condiciones generales)</span>
+                  </label>
+                  <select
+                    id="cot-pilar"
+                    value={draft.pilar ?? ''}
+                    disabled={readOnly}
+                    onChange={(e) => aplicarPilar(e.target.value || null, draft.conditions)}
+                    aria-label="Pilar de la cotización"
+                    title="Al elegir un pilar se ofrecen sus condiciones generales configuradas"
+                  >
+                    <option value="">Sin pilar</option>
+                    {PILARES.map((p) => (
+                      <option key={p.key} value={p.key}>{p.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="cot-field full">
                   <label htmlFor="cot-c-name">
                     Cliente / Razón social <span className="req">*</span>
                   </label>
@@ -1114,7 +1203,7 @@ export default function CotizadorPage() {
                 comp={comp}
                 readOnly={readOnly}
                 onItems={setItems}
-                onOpenProduct={setDetalleCodigo}
+                onOpenProduct={abrirProducto}
                 onEditCustodia={(linea) => setCustodiaModal({ linea })}
               />
             </section>
@@ -1367,6 +1456,21 @@ export default function CotizadorPage() {
       {compartir && <ShareQuoteModal quoteId={compartir.id} quoteNumber={compartir.quoteNumber} onClose={() => setCompartir(null)} />}
       {elegirInstalacion && <InstallPicker installs={installs} onPick={onPickInstall} onClose={() => setElegirInstalacion(false)} />}
       {custodiaModal && <CustodiaModal inicial={custodiaModal.linea} onClose={() => setCustodiaModal(null)} onConfirm={onConfirmCustodia} />}
+      {productoForm && (
+        <ProductFormModal
+          product={productoForm}
+          subcategories={subcats}
+          suppliers={suppliers}
+          puedeFijarMinimo={esAdminOGerente}
+          aviso="Estás editando el catálogo de la empresa: el cambio se ve en todas las cotizaciones y en las futuras, y queda registrado en Catálogo → Historial. El precio de esta cotización no cambia."
+          onClose={() => setProductoForm(null)}
+          onSaved={(p) => {
+            setProductoForm(null);
+            void recargarCatalogo();
+            showToast(`Producto actualizado: ${p.code}`, 'success');
+          }}
+        />
+      )}
       {detalle && (
         <ProductDetailModal
           product={detalle}
@@ -1423,6 +1527,20 @@ export default function CotizadorPage() {
           confirmLabel="Empezar nueva"
           onConfirm={() => void empezarParaOportunidad(cotizarPara)}
           onCancel={() => setCotizarPara(null)}
+        />
+      )}
+      {preguntaPilar && (
+        <ConfirmDialog
+          title="Condiciones generales del pilar"
+          message={`Pasar a ${nombreDePilar(preguntaPilar.pilar)} ofrece sus condiciones generales. ¿Reemplazar el texto actual o conservar lo que escribiste?`}
+          confirmLabel={`Usar las de ${nombreDePilar(preguntaPilar.pilar)}`}
+          cancelLabel="Conservar las actuales"
+          onConfirm={() => {
+            patch({ conditions: preguntaPilar.texto });
+            textoAutoRef.current = preguntaPilar.texto;
+            setPreguntaPilar(null);
+          }}
+          onCancel={() => setPreguntaPilar(null)}
         />
       )}
       {cotizarDesdeChat && (
