@@ -319,6 +319,8 @@ export function mapQuote(
     discountValue: toNum(q.discountValue),
     conditions: q.conditions,
     notes: q.notes,
+    // Pilar del que salieron las condiciones generales precargadas (null en cotizaciones viejas).
+    pilar: q.pilar ?? null,
     createdAt: q.createdAt,
     updatedAt: q.updatedAt,
     access,

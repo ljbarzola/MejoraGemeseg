@@ -738,6 +738,8 @@ export interface SalesServicio {
   id: number;
   name: string;
   description?: string | null;
+  // Pilar (2026-11-13): GEMESEG, MEGAMONT, ADASMEG; '' o null = sin pilar.
+  pilar?: string | null;
   isActive: boolean;
   order: number;
   contratos?: number;
@@ -841,10 +843,10 @@ export interface ContratoComercialInput {
 export const getServicios = (incluirInactivos = false): Promise<SalesServicio[]> =>
   api.get('/ventas/servicios', { params: incluirInactivos ? { incluirInactivos: true } : undefined }).then(r => r.data);
 
-export const createServicio = (data: { name: string; description?: string }): Promise<SalesServicio> =>
+export const createServicio = (data: { name: string; description?: string; pilar?: string }): Promise<SalesServicio> =>
   api.post('/ventas/servicios', data).then(r => r.data);
 
-export const updateServicio = (id: number, data: { name?: string; description?: string; isActive?: boolean }): Promise<SalesServicio> =>
+export const updateServicio = (id: number, data: { name?: string; description?: string; pilar?: string; isActive?: boolean }): Promise<SalesServicio> =>
   api.patch(`/ventas/servicios/${id}`, data).then(r => r.data);
 
 export const deleteServicio = (id: number) =>

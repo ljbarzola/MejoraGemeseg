@@ -29,6 +29,7 @@ export function ProductFormModal({
   subcategories,
   suppliers,
   puedeFijarMinimo,
+  aviso,
   onClose,
   onSaved,
 }: {
@@ -38,6 +39,8 @@ export function ProductFormModal({
   suppliers: string[];
   /** Solo administradores y gerentes ponen el precio mínimo; los demás lo ven (si existe) pero no lo cambian. */
   puedeFijarMinimo: boolean;
+  /** Aviso opcional arriba del formulario (p. ej. al editar desde una cotización: el cambio es de todo el catálogo). */
+  aviso?: string;
   onClose: () => void;
   onSaved: (p: CotProduct, creado: boolean) => void;
 }) {
@@ -113,6 +116,22 @@ export function ProductFormModal({
         </div>
         <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
           <ErrorBanner mensaje={error} />
+          {aviso && (
+            <p
+              className="cot-muted"
+              style={{
+                marginTop: 0,
+                marginBottom: 12,
+                padding: '8px 10px',
+                border: '1px solid #f6e05e',
+                borderRadius: 8,
+                background: '#fffaf0',
+                color: '#744210',
+              }}
+            >
+              {aviso}
+            </p>
+          )}
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="cot-pf-kind">Tipo *</label>

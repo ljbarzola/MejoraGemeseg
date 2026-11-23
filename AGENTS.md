@@ -81,6 +81,11 @@ Cada modulo tiene sus reglas, decisiones y trampas en su archivo de `.agents/mod
 | Bitacora del equipo | `bitacora.md` |
 | Reglas de pantalla (tablas, cabeceras, modales, filtros) | `frontend-ui.md` |
 
+## Cambios del Cotizador en esta rama (2026-11-23)
+- **Modelo del equipo:** el modelo (`CotProduct.model`, solo equipos) se muestra en la cotización junto al código y, en el PDF de la app y del enlace del cliente, **en lugar del código**. Clic en el producto abre su edición en el catálogo cuando se puede editar Ventas; si no, abre la ficha de solo lectura. Detalle: `ventas-cotizador.md` punto 16.
+- **Condiciones generales por pilar:** en Configuración → Servicios hay un bloque al pie de cada pilar (Gemeseg / Megamont / Adasmeg); se guardan por empresa y precargan las cotizaciones nuevas. El Cotizador tiene selector «Pilar» (se preselecciona desde la oportunidad cuando sus servicios son de un solo pilar) y pregunta antes de reemplazar un texto editado. La cotización guarda el pilar; impresión, PDF y enlace usan el mismo campo `conditions`. Se incluye la infraestructura de pilares (constantes, `SalesService.pilar` y selector en Servicios). Detalle: `ventas-cotizador.md` punto 17.
+- **Historial del catálogo:** clave de columnas propia (`cotizador-historial-catalogo`) y `--z-popover` para que «Columnas» no se abra detrás del modal.
+
 ## Cuentas de prueba
 Solo en la base **local**: las crean los seeds de `backend/prisma/` (super admin, admin por empresa y empleados de ejemplo). El repo es publico: aqui no se escribe ninguna contrasena ni correo de persona. Las cuentas de seed no deben existir en produccion con contrasena de seed; antes de cada despliegue comprobar que las reales (sobre todo el super admin) tienen otra y que `JWT_SECRET` de Secret Manager no coincide con ningun ejemplo.
 

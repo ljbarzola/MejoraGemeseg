@@ -245,6 +245,7 @@ export class CotizadorCotizacionesService {
     if (dto.discountValue !== undefined) data.discountValue = dto.discountValue;
     if (dto.conditions !== undefined) data.conditions = dto.conditions;
     if (dto.notes !== undefined) data.notes = dto.notes;
+    if (dto.pilar !== undefined) data.pilar = dto.pilar || null;
     return data;
   }
 
@@ -363,6 +364,7 @@ export class CotizadorCotizacionesService {
         discountValue: dto.discountValue ?? 0,
         conditions: dto.conditions ?? '',
         notes: dto.notes ?? '',
+        pilar: dto.pilar || null,
       },
     );
     return this.mapConTelefono(q, 'owner');

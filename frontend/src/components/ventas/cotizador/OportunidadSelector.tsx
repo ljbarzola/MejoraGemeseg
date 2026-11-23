@@ -14,6 +14,7 @@ export const elegidaDe = (o: CotOportunidadOpcion): CotOportunidadElegida => ({
   titulo: o.titulo,
   cliente: o.cliente.nombre,
   etapa: o.etapa,
+  pilares: o.pilares ?? [],
 });
 
 /**
