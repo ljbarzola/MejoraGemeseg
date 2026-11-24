@@ -87,11 +87,12 @@
 .conv-cotizacion { margin: 0; font-size: 13px; background: #e6f1fb; color: #0c447c; border-radius: 8px; padding: 8px 10px; }
 
 /* Configuración → Bot de WhatsApp: áreas de servicio (pilares) del guion */
-.cfg-bot-pilar { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--borde, #e3e6ea); border-radius: 10px; padding: 12px; margin-top: 10px; }
-.cfg-bot-pilar input:not([type='checkbox']), .cfg-bot-pilar textarea { font: inherit; padding: 8px; border: 1px solid #d5d9de; border-radius: 8px; width: 100%; box-sizing: border-box; }
-.cfg-bot-pilar-fila { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
-.cfg-bot-pilar .cfg-bot-pilar-fila { margin-top: 0; }
-.cfg-bot-pilar .cfg-bot-pilar-fila > input:not([type='checkbox']) { flex: 1; min-width: 200px; }
+.cfg-bot-pilar { display: flex; flex-direction: column; gap: 12px; border: 1px solid #d9e2ec; border-radius: 12px; padding: 14px 16px; background: #fafcfe; }
+.cfg-bot-pilar-cab { display: flex; gap: 12px; align-items: flex-end; }
+.cfg-bot-pilar-cab > .form-group { flex: 1 1 auto; min-width: 0; }
+.cfg-bot-pilar-cab > .casilla { padding-bottom: 14px; }
+.cfg-bot-pilar-cab > .icon-btn { margin-bottom: 8px; }
+.cfg-bot-pilar-fila { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 
 /* Vista previa de la cotización que calculó el bot (modal «Ver cotización») */
 .conv-cot { display: flex; flex-direction: column; gap: 12px; }
@@ -101,3 +102,8 @@
 .conv-cot-fila:last-child { border-bottom: 0; }
 .conv-cot-fila--total { font-size: 16px; }
 .conv-cotizacion-tarjeta { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: #e6f1fb; color: #0c447c; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.cfg-bot-estado { margin: 0; padding: 10px 14px; border-radius: 12px; background: #fffaf0; border: 1px solid #fbd38d; color: #7b341e; font-size: 13px; line-height: 1.45; }
+.cfg-bot-estado--ok { background: #f0fff4; border-color: #9ae6b4; color: #22543d; }
+.cfg-bot-meta { font-size: 13px; color: #4a5568; }
+.cfg-bot-meta summary { cursor: pointer; font-weight: 600; color: var(--azul-oscuro, #12355b); }
+.cfg-bot-meta code { word-break: break-all; }

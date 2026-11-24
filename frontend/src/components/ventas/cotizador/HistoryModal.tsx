@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Copy, FolderOpen, Trash2, Users } from 'lucide-react';
+import { Copy, FolderOpen, Trash2, Users, X } from 'lucide-react';
 import ClearFiltersButton from '../../common/ClearFiltersButton';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../common/ColumnFilter';
 import ColumnPickerMenu from '../../common/ColumnPickerMenu';
@@ -191,9 +191,11 @@ export default function HistoryModal({
         aria-labelledby="cot-hist-title"
       >
         <div className="modal-header">
-          <h3 id="cot-hist-title">📂 Historial de cotizaciones</h3>
+          <h3 id="cot-hist-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <FolderOpen size={17} /> Historial de cotizaciones
+          </h3>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">
-            ✕
+            <X size={16} />
           </button>
         </div>
         <div className="modal-body">
@@ -223,7 +225,7 @@ export default function HistoryModal({
                 onChange={(e) => setBusqueda(e.target.value)}
                 placeholder="Buscar por número, cliente o vendedor..."
                 aria-label="Buscar en el historial"
-                style={{ flex: '1 1 220px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}
+                className="filtro-buscar"
               />
             </div>
             <div className="filter-bar-actions">
@@ -242,7 +244,7 @@ export default function HistoryModal({
           {loading && <p className="cot-muted">Cargando cotizaciones...</p>}
           {!loading && quotes.length === 0 && (
             <div className="cot-empty">
-              <div className="cot-empty-icon">📂</div>
+              <div className="cot-empty-icon"><FolderOpen size={28} aria-hidden /></div>
               Aún no hay cotizaciones guardadas.
             </div>
           )}
@@ -300,7 +302,7 @@ export default function HistoryModal({
                                 value={q.status}
                                 onChange={(e) => onStatus(q, e.target.value as CotStatus)}
                                 aria-label={`Estado de ${q.quoteNumber}`}
-                                style={{ padding: '3px 6px', borderRadius: 6, border: '1px solid #cbd5e0', fontSize: 12 }}
+                                style={{ padding: '4px 8px', fontSize: 12.5 }}
                               >
                                 {COT_STATUS_ORDER.map((s) => (
                                   <option key={s} value={s}>

@@ -34,6 +34,7 @@ import {
   salesClientListaSubopcionesLabel,
   SUBSERVICIOS_KEY,
   SERVICIO_KEY,
+  FUENTE_KEY,
   LISTA_SUBOPCIONES,
 } from '../../services/ventas.service';
 
@@ -93,9 +94,10 @@ export default function VentasClientesPage() {
     try {
       const [c, f] = await Promise.all([getSalesClients(), getSalesClientFields()]);
       setClients(c);
-      // «Servicio requerido» es de la oportunidad, no del Directorio: no se muestra ni se pide aquí. El dato
-      // guardado en las fichas NO se borra (lo usan los referidos, el historial y el Agente de Ventas).
-      setFields(f.filter((x) => x.key !== SERVICIO_KEY));
+      // «Servicio requerido» y «Fuente» (2026-11-20) son de la oportunidad, no del Directorio: no se muestran ni
+      // se piden aquí. El dato guardado en las fichas NO se borra (lo usan los referidos, el historial, el Agente
+      // de Ventas y la oportunidad que nace de «Es nueva en el directorio»).
+      setFields(f.filter((x) => x.key !== SERVICIO_KEY && x.key !== FUENTE_KEY));
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'No se pudo cargar el directorio', 'error');
     } finally {
@@ -220,7 +222,7 @@ export default function VentasClientesPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nombre, RUC, teléfono, correo o dirección..."
-            style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
+            className="filtro-buscar"
           />
         </div>
         <div className="filter-bar-actions">

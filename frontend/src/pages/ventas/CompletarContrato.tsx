@@ -99,24 +99,23 @@ export default function CompletarContrato() {
           const rows = values[field.variableName] || [];
           return (
             <div key={field.variableName} style={{ marginBottom: 24 }}>
-              <h3 style={{ fontSize: 14, margin: '0 0 10px' }}>{field.label}</h3>
+              <h3 className="form-seccion-titulo" style={{ marginBottom: 12 }}>{field.label}</h3>
               {rows.map((row, i) => (
-                <div key={i} style={{ display: 'grid', gridTemplateColumns: `repeat(${columns.length}, 1fr) auto`, gap: 6, marginBottom: 8, alignItems: 'end' }}>
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr)) auto`, gap: 10, marginBottom: 10, alignItems: 'end' }}>
                   {columns.map((col) => (
-                    <div key={col.key}>
-                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>{col.label}</label>
+                    <div key={col.key} className="form-group" style={{ minWidth: 0 }}>
+                      <label>{col.label}</label>
                       {col.type === 'DATE' ? (
                         <DateInput
                           value={row[col.key] || ''}
                           onChange={(v) => updateCell(field.variableName, i, col.key, v)}
-                          style={{ padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }}
                         />
                       ) : (
                         <input
                           type={col.type === 'NUMBER' ? 'number' : 'text'}
                           value={row[col.key] || ''}
                           onChange={(e) => updateCell(field.variableName, i, col.key, e.target.value)}
-                          style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12, boxSizing: 'border-box' }}
+                          style={{ width: '100%', boxSizing: 'border-box' }}
                         />
                       )}
                     </div>
@@ -127,18 +126,17 @@ export default function CompletarContrato() {
                     </button>
                 </div>
               ))}
-              <button onClick={() => addRow(field.variableName, columns, maxRows)}
-                style={{ padding: '6px 14px', borderRadius: 4, border: '1px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: 12 }}>
+              <button type="button" className="btn-secondary" onClick={() => addRow(field.variableName, columns, maxRows)}>
                 + Agregar fila
               </button>
-              {rows.length >= maxRows && <span style={{ marginLeft: 10, fontSize: 11, color: '#999' }}>Máximo {maxRows} filas</span>}
+              {rows.length >= maxRows && <span style={{ marginLeft: 10, fontSize: 12, color: '#718096' }}>Máximo {maxRows} filas</span>}
             </div>
           );
         })}
 
         {error && <p style={{ color: '#c33', fontSize: 13 }}>{error}</p>}
 
-        <button className="auth-btn" onClick={handleSubmit} disabled={saving} style={{ width: '100%', padding: 12, marginTop: 8 }}>
+        <button className="auth-btn" onClick={handleSubmit} disabled={saving} style={{ width: '100%', marginTop: 8 }}>
           {saving ? 'Enviando...' : 'Enviar información'}
         </button>
       </div>

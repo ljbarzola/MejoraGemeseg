@@ -18,7 +18,6 @@ import {
 } from '../../services/cotizador.service';
 
 const SIN_CATEGORIA = 'Otros';
-const inputStyle = { padding: '8px 10px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 };
 
 const mensajeDe = (err: any, porDefecto: string) => {
   const m = err?.response?.data?.message;
@@ -43,10 +42,8 @@ function CondicionesPilarEditor({
   const [guardando, setGuardando] = useState(false);
   useEffect(() => setValor(texto), [texto]);
   return (
-    <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #e2e8f0' }}>
-      <label htmlFor={`cond-${pilar}`} style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-        Condiciones generales
-      </label>
+    <div className="form-group" style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #e2e8f0' }}>
+      <label htmlFor={`cond-${pilar}`}>Condiciones generales</label>
       <p style={{ margin: '0 0 6px', fontSize: 12, color: '#4a5568' }}>
         Pilar de servicio: {nombrePilarServicio(pilar)} · Empresa: {nombreDePilar(pilar)}
       </p>
@@ -56,11 +53,11 @@ function CondicionesPilarEditor({
         value={valor}
         disabled={!puedeEditar || guardando}
         onChange={(e) => setValor(e.target.value)}
-        style={{ ...inputStyle, width: '100%', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.4 }}
+        style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', lineHeight: 1.4 }}
       />
       <button
         className="btn-secondary"
-        style={{ marginTop: 6 }}
+        style={{ alignSelf: 'flex-start' }}
         disabled={!puedeEditar || guardando || valor === texto}
         onClick={async () => {
           setGuardando(true);
@@ -199,27 +196,30 @@ export default function ServiciosConfigSection({ puedeEditar, onChanged }: { pue
       <ErrorBanner mensaje={error} />
 
       {puedeEditar && (
-        <div className="cfg-herramientas">
-          <input
-            type="text" value={nuevo} maxLength={100} placeholder="Nombre del servicio nuevo"
-            aria-label="Nombre del servicio nuevo"
-            onChange={(e) => setNuevo(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') agregar(); }}
-            style={{ ...inputStyle, flex: '1 1 220px' }}
-          />
-          <select
-            value={nuevaCat} aria-label="Categoría del servicio nuevo" style={inputStyle}
-            onChange={(e) => { setNuevaCat(e.target.value); setNuevoPilar(pilarDeCategoria(e.target.value)); }}
-          >
-            {[...CATEGORIAS_ORDEN, SIN_CATEGORIA].map((c) => <option key={c} value={c}>{c === SIN_CATEGORIA ? 'Otros (sin categoría)' : c}</option>)}
-          </select>
-          <select value={nuevoPilar} aria-label="Empresa del servicio nuevo" title="Empresa a la que pertenece el servicio. El pilar de servicio se muestra a la derecha." onChange={(e) => setNuevoPilar(e.target.value)} style={inputStyle}>
-            {PILARES.map((p) => <option key={p.key} value={p.key}>{p.nombre}</option>)}
-            <option value="">{SIN_PILAR}</option>
-          </select>
-          <span style={{ alignSelf: 'center', fontSize: 12, color: '#4a5568', whiteSpace: 'nowrap' }}>
-            Pilar de servicio: {nombrePilarServicio(nuevoPilar)}
-          </span>
+        <div className="cfg-herramientas" style={{ alignItems: 'flex-end' }}>
+          <div className="form-group" style={{ flex: '1 1 220px', minWidth: 0 }}>
+            <label htmlFor="servicio-nuevo-nombre">Servicio nuevo</label>
+            <input
+              id="servicio-nuevo-nombre"
+              type="text" value={nuevo} maxLength={100} placeholder="Nombre del servicio"
+              onChange={(e) => setNuevo(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') agregar(); }}
+            />
+          </div>
+          <div className="form-group" style={{ flex: '0 1 220px', minWidth: 0 }}>
+            <label htmlFor="servicio-nuevo-categoria">Categoría</label>
+            <select id="servicio-nuevo-categoria" value={nuevaCat} onChange={(e) => { setNuevaCat(e.target.value); setNuevoPilar(pilarDeCategoria(e.target.value)); }}>
+              {[...CATEGORIAS_ORDEN, SIN_CATEGORIA].map((c) => <option key={c} value={c}>{c === SIN_CATEGORIA ? 'Otros (sin categoría)' : c}</option>)}
+            </select>
+          </div>
+          <div className="form-group" style={{ flex: '0 1 200px', minWidth: 0 }}>
+            <label htmlFor="servicio-nuevo-pilar">Empresa</label>
+            <select id="servicio-nuevo-pilar" value={nuevoPilar} title="Empresa a la que pertenece el servicio. El pilar de servicio se muestra debajo." onChange={(e) => setNuevoPilar(e.target.value)}>
+              {PILARES.map((p) => <option key={p.key} value={p.key}>{p.nombre}</option>)}
+              <option value="">{SIN_PILAR}</option>
+            </select>
+            <span style={{ fontSize: 12, color: '#4a5568' }}>Pilar de servicio: {nombrePilarServicio(nuevoPilar)}</span>
+          </div>
           <button className="auth-btn" onClick={agregar}>Agregar servicio</button>
         </div>
       )}
@@ -257,25 +257,34 @@ export default function ServiciosConfigSection({ puedeEditar, onChanged }: { pue
                         <li key={s.id} className={`cfg-mot-item${s.isActive ? '' : ' cfg-mot-item--off'}${editando ? ' cfg-mot-item--edit' : ''}`}>
                           {editando ? (
                             <>
-                              <input value={editNombre} maxLength={100} aria-label={`Nombre de ${s.name}`}
-                                onChange={(e) => setEditNombre(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') guardarEdicion(); }}
-                                style={{ ...inputStyle, width: '100%', padding: '6px 8px' }} />
-                              <select value={editCat} aria-label={`Categoría de ${s.name}`}
-                                onChange={(e) => setEditCat(e.target.value)}
-                                style={{ ...inputStyle, width: '100%', padding: '6px 8px' }}>
-                                {opcionesCategoria(editCat).map((c) => <option key={c} value={c}>{c}</option>)}
-                                <option value={SIN_CATEGORIA}>Otros (sin categoría)</option>
-                              </select>
-                              <select value={editPilar} aria-label={`Empresa de ${s.name}`}
-                                onChange={(e) => setEditPilar(e.target.value)}
-                                style={{ ...inputStyle, width: '100%', padding: '6px 8px' }}>
-                                {PILARES.map((p) => <option key={p.key} value={p.key}>{p.nombre}</option>)}
-                                <option value="">{SIN_PILAR}</option>
-                              </select>
-                              <span style={{ fontSize: 12, color: '#4a5568' }}>
-                                Pilar de servicio: {nombrePilarServicio(editPilar) || SIN_PILAR_SERVICIO}
-                              </span>
+                              <div className="form-group">
+                                <label htmlFor={`servicio-${s.id}-nombre`}>Nombre</label>
+                                <input id={`servicio-${s.id}-nombre`} value={editNombre} maxLength={100}
+                                  onChange={(e) => setEditNombre(e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === 'Enter') guardarEdicion(); }}
+                                  style={{ width: '100%', boxSizing: 'border-box' }} />
+                              </div>
+                              <div className="form-group">
+                                <label htmlFor={`servicio-${s.id}-categoria`}>Categoría</label>
+                                <select id={`servicio-${s.id}-categoria`} value={editCat}
+                                  onChange={(e) => setEditCat(e.target.value)}
+                                  style={{ width: '100%', boxSizing: 'border-box' }}>
+                                  {opcionesCategoria(editCat).map((c) => <option key={c} value={c}>{c}</option>)}
+                                  <option value={SIN_CATEGORIA}>Otros (sin categoría)</option>
+                                </select>
+                              </div>
+                              <div className="form-group">
+                                <label htmlFor={`servicio-${s.id}-pilar`}>Empresa</label>
+                                <select id={`servicio-${s.id}-pilar`} value={editPilar}
+                                  onChange={(e) => setEditPilar(e.target.value)}
+                                  style={{ width: '100%', boxSizing: 'border-box' }}>
+                                  {PILARES.map((p) => <option key={p.key} value={p.key}>{p.nombre}</option>)}
+                                  <option value="">{SIN_PILAR}</option>
+                                </select>
+                                <span style={{ fontSize: 12, color: '#4a5568' }}>
+                                  Pilar de servicio: {nombrePilarServicio(editPilar) || SIN_PILAR_SERVICIO}
+                                </span>
+                              </div>
                               <div className="cfg-serv-acciones" style={{ justifyContent: 'flex-end' }}>
                                 <button className="btn-secondary icon-btn" title="Guardar" aria-label={`Guardar ${s.name}`} onClick={guardarEdicion}><Check size={15} /></button>
                                 <button className="btn-secondary icon-btn" title="Cancelar" aria-label="Cancelar" onClick={() => setEditId(null)}><XIcon size={15} /></button>

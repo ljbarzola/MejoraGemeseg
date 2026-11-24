@@ -209,10 +209,11 @@
 }
 
 .cot-catalog-meta select {
-  padding: 3px 6px;
-  border: 1px solid var(--borde-input, #a0aec0);
-  border-radius: 6px;
+  padding: 4px 8px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
   font-size: 12px;
+  background: #fff;
 }
 
 .cot-prod-list {

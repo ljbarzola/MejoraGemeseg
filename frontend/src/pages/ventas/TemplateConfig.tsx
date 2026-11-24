@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, HelpCircle, Trash2 } from 'lucide-react';
+import { HelpCircle, Trash2 } from 'lucide-react';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
+import PageTabs from '../../components/common/PageTabs';
 import { getTemplate, createTemplate, updateTemplate, downloadFromDrive, uploadTemplateDocx, detectVariables, saveTemplateFields, getSalesClientFields, SalesTemplateField, TableColumn, SalesClientField } from '../../services/ventas.service';
 import { PRIMARY } from './contratoStyles';
 import { useToast } from '../../contexts/ToastContext';
@@ -260,41 +262,25 @@ export default function TemplateConfig() {
     if (others.length > 0) fieldGroupsForConfig.push({ title: 'Otros', items: others });
   }
 
-  const inputCompact = { width: '100%', padding: '4px 6px', borderRadius: 3, border: '1px solid #ddd', fontSize: 12, boxSizing: 'border-box' as const };
-  const tabBtn = (active: boolean) => ({
-    padding: '8px 14px',
-    border: 'none',
-    borderBottom: active ? `2px solid ${PRIMARY}` : '2px solid transparent',
-    background: 'transparent',
-    color: active ? PRIMARY : '#888',
-    fontWeight: 600,
-    fontSize: 13,
-    cursor: 'pointer',
-  });
+  // Editor en línea dentro de la fila de la tabla de campos: mismo aspecto que los campos de la app
+  // (borde gris de 2px, esquinas redondeadas), pero más bajo para no agrandar cada fila.
+  const inputCompact = {
+    width: '100%', padding: '7px 10px', borderRadius: 10, border: '2px solid var(--borde-input)',
+    fontSize: 13, fontFamily: 'inherit', background: '#fff', boxSizing: 'border-box' as const,
+  };
 
   return (
     <div className="page-container">
-      <button className="cacao-back-btn" onClick={() => navigate('/ventas/documentacion')} style={{ marginBottom: 16 }}>
-        <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-      </button>
-
-      <div className="page-header-row">
-        <div>
-          <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Configuración de Plantilla</h1>
-        </div>
-        <div className="header-actions">
-          <button
-            type="button"
-            onClick={() => setShowHelp(true)}
-            title="Cómo funciona Documentación"
-            aria-label="Ayuda"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 6, border: 'none', background: 'var(--naranja)', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
-          >
-            <HelpCircle size={18} /> Ayuda
+      <VentasPageHeader
+        title="Configuración de plantilla"
+        onVolver={() => navigate('/ventas/documentacion')}
+        ayuda={
+          <button type="button" className="btn-secondary btn-icon-toolbar" onClick={() => setShowHelp(true)}
+            title="Cómo funciona Documentación" aria-label="Cómo funciona Documentación">
+            <HelpCircle size={18} />
           </button>
-        </div>
-      </div>
+        }
+      />
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
         {[1, 2, 3].map(s => (
@@ -305,63 +291,48 @@ export default function TemplateConfig() {
       </div>
 
       <div className="admin-section" style={{ marginBottom: 16 }}>
-        <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>Fuente del documento</h3>
-        <div style={{ marginBottom: 8 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>Nombre</label>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Contrato Marco Monitoreo"
-            style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
+        <div className="form-seccion-cab">
+          <h3 className="form-seccion-titulo">Fuente del documento</h3>
         </div>
-        <div style={{ marginBottom: 8 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>Descripción</label>
-          <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Descripción opcional"
-            style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
+        <div className="form-grid-2" style={{ marginBottom: 14 }}>
+          <div className="form-group">
+            <label>Nombre</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Contrato Marco Monitoreo" />
+          </div>
+          <div className="form-group">
+            <label>Descripción</label>
+            <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Descripción opcional" />
+          </div>
         </div>
-        <div style={{ marginBottom: 8 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>Documento</label>
-          <div style={{ display: 'flex', gap: 4, marginTop: 4, marginBottom: 10 }}>
-            <button type="button" onClick={() => setSourceMode('drive')}
-              style={{
-                padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderRadius: '6px 0 0 6px',
-                borderTop: `1px solid ${sourceMode === 'drive' ? PRIMARY : '#ddd'}`,
-                borderBottom: `1px solid ${sourceMode === 'drive' ? PRIMARY : '#ddd'}`,
-                borderLeft: `1px solid ${sourceMode === 'drive' ? PRIMARY : '#ddd'}`,
-                borderRight: `1px solid ${sourceMode === 'drive' ? PRIMARY : '#ddd'}`,
-                background: sourceMode === 'drive' ? PRIMARY : '#fff',
-                color: sourceMode === 'drive' ? '#fff' : '#666',
-              }}>
+        <div className="form-group">
+          <label>Documento</label>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} role="group" aria-label="Fuente del documento">
+            <button type="button" className={sourceMode === 'drive' ? 'auth-btn' : 'btn-secondary'} aria-pressed={sourceMode === 'drive'}
+              onClick={() => setSourceMode('drive')}>
               Link de Google Drive
             </button>
-            <button type="button" onClick={() => setSourceMode('upload')}
-              style={{
-                padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderRadius: '0 6px 6px 0',
-                borderTop: `1px solid ${sourceMode === 'upload' ? PRIMARY : '#ddd'}`,
-                borderBottom: `1px solid ${sourceMode === 'upload' ? PRIMARY : '#ddd'}`,
-                borderRight: `1px solid ${sourceMode === 'upload' ? PRIMARY : '#ddd'}`,
-                borderLeft: 'none',
-                background: sourceMode === 'upload' ? PRIMARY : '#fff',
-                color: sourceMode === 'upload' ? '#fff' : '#666',
-              }}>
+            <button type="button" className={sourceMode === 'upload' ? 'auth-btn' : 'btn-secondary'} aria-pressed={sourceMode === 'upload'}
+              onClick={() => setSourceMode('upload')}>
               Subir documento
             </button>
           </div>
 
           {sourceMode === 'drive' ? (
             <div key="drive-mode">
-              <p style={{ fontSize: 11, color: '#888', margin: '0 0 6px' }}>
+              <p className="form-seccion-ayuda" style={{ margin: '4px 0 8px' }}>
                 El documento debe estar compartido en Drive con acceso "Cualquier persona con el enlace" y rol <strong>Lector</strong>; si no, la descarga falla.
               </p>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input value={driveUrl} onChange={e => setDriveUrl(e.target.value)} placeholder="https://drive.google.com/file/d/..."
-                  style={{ flex: 1, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
-                <button className="auth-btn" onClick={handleDownload} disabled={downloading || !driveUrl.trim()}
-                  style={{ padding: '8px 16px', fontSize: 12 }}>
+                  aria-label="Link de Google Drive" style={{ flex: 1, minWidth: 0 }} />
+                <button className="auth-btn" onClick={handleDownload} disabled={downloading || !driveUrl.trim()} style={{ flex: '0 0 auto' }}>
                   {downloading ? 'Descargando...' : 'Descargar'}
                 </button>
               </div>
             </div>
           ) : (
             <div key="upload-mode">
-              <p style={{ fontSize: 11, color: '#888', margin: '0 0 6px' }}>
+              <p className="form-seccion-ayuda" style={{ margin: '4px 0 8px' }}>
                 Sube el archivo .docx directo desde tu computador, sin depender de Drive ni de permisos de compartir.
               </p>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -373,11 +344,10 @@ export default function TemplateConfig() {
                   onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadDocx(f); e.target.value = ''; }}
                   style={{ display: 'none' }}
                 />
-                <button type="button" className="btn-secondary" onClick={() => fileInputRef.current?.click()} disabled={uploading}
-                  style={{ padding: '8px 16px', fontSize: 12 }}>
+                <button type="button" className="btn-secondary" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
                   {uploading ? 'Subiendo...' : 'Elegir archivo .docx'}
                 </button>
-                {uploadFileName && !uploading && <span style={{ fontSize: 12, color: '#888' }}>{uploadFileName}</span>}
+                {uploadFileName && !uploading && <span style={{ fontSize: 13, color: '#5a6678' }}>{uploadFileName}</span>}
               </div>
             </div>
           )}
@@ -388,14 +358,15 @@ export default function TemplateConfig() {
 
       {step >= 2 && (
         <div className="admin-section" style={{ marginBottom: 16 }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>Variables detectadas</h3>
-          <p style={{ fontSize: 12, color: '#888', margin: '0 0 12px' }}>
+          <div className="form-seccion-cab">
+            <h3 className="form-seccion-titulo">Variables detectadas</h3>
+            <button className="btn-secondary" onClick={handleDetect} disabled={detecting}>
+              {detecting ? 'Detectando...' : 'Detectar variables del documento'}
+            </button>
+          </div>
+          <p className="form-seccion-ayuda">
             El sistema detectó estas variables en el documento (formato <code>[NombreVariable]</code>, también acepta <code>&lt;&lt;NombreVariable&gt;&gt;</code>):
           </p>
-          <button className="btn-secondary" onClick={handleDetect} disabled={detecting}
-            style={{ padding: '8px 16px', fontSize: 12, marginBottom: 12 }}>
-            {detecting ? 'Detectando...' : '🔍 Detectar variables del documento'}
-          </button>
           {detectedVars.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {detectedVars.map(v => (
@@ -407,15 +378,22 @@ export default function TemplateConfig() {
       )}
 
       {step >= 3 && (
-        <div style={{ display: 'flex', gap: 4, marginBottom: 12, borderBottom: '1px solid #e2e8f0' }}>
-          <button type="button" style={tabBtn(configTab === 'campos')} onClick={() => setConfigTab('campos')}>Campos</button>
-          <button type="button" style={tabBtn(configTab === 'extras')} onClick={() => setConfigTab('extras')}>Numeración y correo</button>
-        </div>
+        <PageTabs
+          label="Configuración de la plantilla"
+          value={configTab}
+          onChange={setConfigTab}
+          tabs={[
+            { key: 'campos', label: 'Campos' },
+            { key: 'extras', label: 'Numeración y correo' },
+          ]}
+        />
       )}
 
       {step >= 3 && fields.length > 0 && configTab === 'campos' && fieldGroupsForConfig.map(group => (
         <div key={group.title} className="admin-section" style={{ marginBottom: 16 }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>{group.title} ({group.items.length})</h3>
+          <div className="form-seccion-cab">
+            <h3 className="form-seccion-titulo">{group.title} ({group.items.length})</h3>
+          </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
@@ -451,7 +429,7 @@ export default function TemplateConfig() {
                       </td>
                       <td style={{ padding: '6px 8px' }}>
                         <select value={f.fieldType || 'TEXT'} onChange={e => handleFieldTypeChange(i, e.target.value)}
-                          style={{ padding: '4px 6px', borderRadius: 3, border: '1px solid #ddd', fontSize: 12 }}>
+                          style={inputCompact}>
                           <option value="TEXT">Texto</option>
                           <option value="NUMBER">Número</option>
                           <option value="DATE">Fecha</option>
@@ -483,35 +461,34 @@ export default function TemplateConfig() {
                           {isAuto ? (
                             <div style={{ fontSize: 12, color: '#666' }}>Lo asigna el sistema. Configura prefijo y correlativo en Numeración y correo.</div>
                           ) : (
-                            <div style={{ display: 'grid', gap: 10 }}>
+                            <div style={{ display: 'grid', gap: 14, maxWidth: 640 }}>
                               {!!f.isClientField && f.fieldType !== 'TABLE' && (
-                                <div>
-                                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>Texto guía para el firmante</div>
+                                <div className="form-group">
+                                  <label>Texto guía para el firmante</label>
                                   <input value={f.clientPrompt || ''} onChange={e => updateField(i, { clientPrompt: e.target.value })}
-                                    placeholder={f.fieldType === 'CHECKBOX' ? 'Ej: Marca si estás de acuerdo' : f.fieldType === 'DATE' ? 'La fecha de firma se completa sola' : 'Ej: Nombres y apellidos'}
-                                    style={inputCompact} />
+                                    placeholder={f.fieldType === 'CHECKBOX' ? 'Ej: Marca si estás de acuerdo' : f.fieldType === 'DATE' ? 'La fecha de firma se completa sola' : 'Ej: Nombres y apellidos'} />
                                 </div>
                               )}
-                              <div>
-                                <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>Mapear a campo de Cliente</div>
+                              <div className="form-group">
+                                <label>Mapear a campo de Cliente</label>
                                 <select value={f.clientFieldKey || ''} onChange={e => updateField(i, { clientFieldKey: e.target.value || null })}
-                                  style={{ maxWidth: 360, padding: '4px 6px', borderRadius: 3, border: '1px solid #ddd', fontSize: 12 }}>
-                                  <option value="">{f.isClientField ? '— No mapear (el firmante lo llena) —' : '— Sin mapear —'}</option>
+                                  style={{ maxWidth: 360 }}>
+                                  <option value="">{f.isClientField ? 'No mapear (el firmante lo llena)' : 'Sin mapear'}</option>
                                   {clientFields.map(cf => (
                                     <option key={cf.key} value={cf.key}>{cf.label}</option>
                                   ))}
                                 </select>
                               </div>
                               {f.fieldType === 'TABLE' && f.tableConfig && (
-                                <div>
-                                  <div style={{ fontSize: 11, color: '#666', marginBottom: 6 }}>Columnas de la tabla</div>
+                                <div className="form-group">
+                                  <label>Columnas de la tabla</label>
                                   {f.tableConfig.columns.map((col, ci) => (
-                                    <div key={ci} style={{ display: 'flex', gap: 6, marginBottom: 4, alignItems: 'center' }}>
+                                    <div key={ci} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                       <input value={col.label} onChange={e => updateTableColumn(i, ci, { label: e.target.value })}
-                                        placeholder="Nombre de columna"
-                                        style={{ flex: 1, padding: '4px 6px', borderRadius: 3, border: '1px solid #ddd', fontSize: 12 }} />
+                                        placeholder="Nombre de columna" aria-label="Nombre de columna"
+                                        style={{ flex: 1, minWidth: 0 }} />
                                       <select value={col.type} onChange={e => updateTableColumn(i, ci, { type: e.target.value as TableColumn['type'] })}
-                                        style={{ padding: '4px 6px', borderRadius: 3, border: '1px solid #ddd', fontSize: 12 }}>
+                                        aria-label="Tipo de columna">
                                         <option value="TEXT">Texto</option>
                                         <option value="NUMBER">Número</option>
                                         <option value="DATE">Fecha</option>
@@ -522,44 +499,42 @@ export default function TemplateConfig() {
                                         </button>
                                     </div>
                                   ))}
-                                  <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
-                                    <button type="button" onClick={() => addTableColumn(i)}
-                                      style={{ padding: '4px 10px', borderRadius: 3, border: '1px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: 11 }}>
+                                  <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
+                                    <button type="button" className="btn-secondary" onClick={() => addTableColumn(i)}>
                                       + Agregar columna
                                     </button>
-                                    <label style={{ fontSize: 11, color: '#666', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                       Máximo de filas:
                                       <input type="number" min={1} value={f.tableConfig.maxRows}
                                         onChange={e => setTableMaxRows(i, Math.max(1, +e.target.value || 1))}
-                                        style={{ width: 60, padding: '4px 6px', borderRadius: 3, border: '1px solid #ddd', fontSize: 12 }} />
+                                        style={{ width: 96 }} />
                                     </label>
                                   </div>
                                 </div>
                               )}
                               {f.fieldType === 'DROPDOWN' && (
-                                <div>
-                                  <div style={{ fontSize: 11, color: '#666', marginBottom: 6 }}>Opciones de selección</div>
+                                <div className="form-group">
+                                  <label>Opciones de selección</label>
                                   {(f.dropdownOptions || []).map((opt, oi) => (
-                                    <div key={oi} style={{ display: 'flex', gap: 6, marginBottom: 4, alignItems: 'center' }}>
+                                    <div key={oi} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                       <input value={opt} onChange={e => updateDropdownOption(i, oi, e.target.value)}
-                                        placeholder={`Opción ${oi + 1}`}
-                                        style={{ flex: 1, padding: '4px 6px', borderRadius: 3, border: '1px solid #ddd', fontSize: 12 }} />
+                                        placeholder={`Opción ${oi + 1}`} aria-label={`Opción ${oi + 1}`}
+                                        style={{ flex: 1, minWidth: 0 }} />
                                       <button type="button" className="btn-secondary icon-btn" onClick={() => removeDropdownOption(i, oi)}
                                         style={{ color: '#c53030' }} title="Quitar" aria-label="Quitar">
                                           <Trash2 size={14} />
                                         </button>
                                     </div>
                                   ))}
-                                  <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
-                                    <button type="button" onClick={() => addDropdownOption(i)}
-                                      style={{ padding: '4px 10px', borderRadius: 3, border: '1px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: 11 }}>
+                                  <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
+                                    <button type="button" className="btn-secondary" onClick={() => addDropdownOption(i)}>
                                       + Agregar opción
                                     </button>
-                                    <label style={{ fontSize: 11, color: '#666', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                                    <label className="casilla">
                                       <input type="checkbox" checked={!!f.allowMultiple} onChange={e => updateField(i, { allowMultiple: e.target.checked })} />
                                       Permitir selección múltiple
                                     </label>
-                                    <label style={{ fontSize: 11, color: '#666', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                                    <label className="casilla">
                                       <input type="checkbox" checked={!!f.allowOther} onChange={e => updateField(i, { allowOther: e.target.checked })} />
                                       Permitir "Otro"
                                     </label>
@@ -582,47 +557,48 @@ export default function TemplateConfig() {
       {step >= 3 && configTab === 'extras' && (
         <>
           <div className="admin-section" style={{ marginBottom: 16 }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>⚙ Numeración de contrato</h3>
-            <p style={{ fontSize: 12, color: '#888', margin: '0 0 12px' }}>
+            <div className="form-seccion-cab">
+              <h3 className="form-seccion-titulo">Numeración de contrato</h3>
+            </div>
+            <p className="form-seccion-ayuda">
               Aplica al campo marcado como "Número de Contrato (automático)". Ejemplo: <strong>{numberingPrefix || 'PREFIJO'}-{String(numberingNext).padStart(numberingDigits, '0')}</strong>
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(160px, 100%), 1fr))', gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>Prefijo</label>
-                <input value={numberingPrefix} onChange={e => setNumberingPrefix(e.target.value)} placeholder="Ej: MEGAMONT"
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(160px, 100%), 1fr))', gap: '14px 16px' }}>
+              <div className="form-group" style={{ minWidth: 0 }}>
+                <label>Prefijo</label>
+                <input value={numberingPrefix} onChange={e => setNumberingPrefix(e.target.value)} placeholder="Ej: MEGAMONT" />
               </div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>Cantidad de dígitos</label>
-                <input type="number" min={1} value={numberingDigits} onChange={e => setNumberingDigits(Math.max(1, +e.target.value || 1))}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
+              <div className="form-group" style={{ minWidth: 0 }}>
+                <label>Cantidad de dígitos</label>
+                <input type="number" min={1} value={numberingDigits} onChange={e => setNumberingDigits(Math.max(1, +e.target.value || 1))} />
               </div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>Próximo número</label>
-                <input type="number" min={1} value={numberingNext} onChange={e => setNumberingNext(Math.max(1, +e.target.value || 1))}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
+              <div className="form-group" style={{ minWidth: 0 }}>
+                <label>Próximo número</label>
+                <input type="number" min={1} value={numberingNext} onChange={e => setNumberingNext(Math.max(1, +e.target.value || 1))} />
               </div>
             </div>
           </div>
           <div className="admin-section" style={{ marginBottom: 16 }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>Configuración del correo</h3>
-            <div style={{ marginBottom: 8 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>Asunto por defecto</label>
-              <input value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Contrato #{{contractId}} — {{companyName}}"
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
+            <div className="form-seccion-cab">
+              <h3 className="form-seccion-titulo">Configuración del correo</h3>
             </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>Cuerpo del correo</label>
-              <textarea value={emailBody} onChange={e => setEmailBody(e.target.value)} rows={4} placeholder="Estimado(a) {{clientName}}, adjuntamos el contrato..."
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box', resize: 'vertical' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="form-group">
+                <label>Asunto por defecto</label>
+                <input value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Contrato #{{contractId}} — {{companyName}}" />
+              </div>
+              <div className="form-group">
+                <label>Cuerpo del correo</label>
+                <textarea value={emailBody} onChange={e => setEmailBody(e.target.value)} rows={4} placeholder="Estimado(a) {{clientName}}, adjuntamos el contrato..." />
+              </div>
             </div>
           </div>
         </>
       )}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-        <button className="btn-secondary" onClick={() => navigate('/ventas/documentacion')} style={{ padding: '10px 20px' }}>Cancelar</button>
-        <button className="auth-btn" onClick={handleSave} disabled={saving || !name.trim()} style={{ padding: '10px 20px' }}>
+        <button className="btn-secondary" onClick={() => navigate('/ventas/documentacion')}>Cancelar</button>
+        <button className="auth-btn" onClick={handleSave} disabled={saving || !name.trim()}>
           {saving ? 'Guardando...' : 'Guardar plantilla'}
         </button>
       </div>

@@ -8,6 +8,7 @@ import {
   SalesClientField,
   SERVICIO_KEY,
   SUBSERVICIOS_KEY,
+  FUENTE_KEY,
   LISTA_SUBOPCIONES,
   subopcionesKey,
   subserviciosDe,
@@ -40,7 +41,8 @@ interface Props {
 // ofrece a la vista y el resto queda en «Más datos (opcional)». Nadie siempre tiene a la mano la cédula,
 // el teléfono o el correo. «Servicio requerido» NO se pide: es de la oportunidad, no de la empresa.
 // «Tipo de negocio» y «Público / Privado» (2026-11-17) van a la vista: alimentan los filtros del Dashboard.
-const CAMPOS_VISIBLES = ['tipo_negocio', 'sector', 'fuente'];
+// «Fuente» ya no se pide aquí (2026-11-20): es de la oportunidad y se elige en Nueva oportunidad.
+const CAMPOS_VISIBLES = ['tipo_negocio', 'sector'];
 
 // Únicos campos núcleo que viven como columna propia de SalesClient en vez
 // de en `extra` — todo lo demás (fuente, servicio_requerido, cualquier
@@ -56,7 +58,7 @@ export default function ClienteFormModal({ client, fields, yaEsCliente = false, 
   // tiene sí se muestra, para no dejar un dato guardado sin poder corregirlo.
   const sinServicio = soloDatos && !client;
   const otherFields = fields
-    .filter((f) => f.key !== 'name' && f.key !== SUBSERVICIOS_KEY && !(sinServicio && f.key === SERVICIO_KEY))
+    .filter((f) => f.key !== 'name' && f.key !== SUBSERVICIOS_KEY && f.key !== FUENTE_KEY && !(sinServicio && f.key === SERVICIO_KEY))
     .sort((a, b) => a.order - b.order);
   const camposVisibles = soloDatos && !client ? otherFields.filter((f) => CAMPOS_VISIBLES.includes(f.key)) : otherFields;
   const camposOpcionales = soloDatos && !client ? otherFields.filter((f) => !CAMPOS_VISIBLES.includes(f.key)) : [];

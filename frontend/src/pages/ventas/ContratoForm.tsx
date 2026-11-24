@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Trash2 } from 'lucide-react';
-import { getTemplates, getTemplate, getContract, createContract, updateContract, getSalesClients, getContratosComerciales, salesClientValue, ContratoComercial, SalesTemplate, SalesTemplateField, TableColumn, SalesClient } from '../../services/ventas.service';
+import { Trash2 } from 'lucide-react';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
+import { getTemplates, getTemplate, getContract, createContract, updateContract, getSalesClients, getContratosComerciales, getOportunidades, Oportunidad, salesClientValue, ContratoComercial, SalesTemplate, SalesTemplateField, TableColumn, SalesClient } from '../../services/ventas.service';
 import { useToast } from '../../contexts/ToastContext';
 import DateInput from '../../components/common/DateInput';
 
@@ -22,6 +23,10 @@ export default function ContratoForm() {
   const [clientEmail, setClientEmail] = useState('');
   const [clients, setClients] = useState<SalesClient[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number | ''>('');
+  // Oportunidad (opcional, solo al crear): elegirla deja puesto su cliente y los datos de envío. No se guarda en el
+  // documento: es solo un atajo para no buscar el cliente a mano (2026-11-19).
+  const [oportunidades, setOportunidades] = useState<Oportunidad[]>([]);
+  const [oportunidadId, setOportunidadId] = useState<number | ''>('');
   // Contrato comercial (pantalla "Contratos") del que colgará este documento.
   // Opcional; solo al crear. Llega preseleccionado desde el detalle del contrato.
   const [searchParams] = useSearchParams();
@@ -44,6 +49,11 @@ export default function ContratoForm() {
       showToast(err?.response?.data?.message || 'No se pudieron cargar los clientes', 'error');
     });
   }, []);
+
+  useEffect(() => {
+    if (isEditMode) return;
+    getOportunidades({ estado: 'abiertas' }).then(setOportunidades).catch(() => setOportunidades([]));
+  }, [isEditMode]);
 
   // Llegar con ?clienteId= (desde un contrato o la ficha del cliente) deja el
   // cliente elegido; los datos de envío se autocompletan igual que al elegirlo.
@@ -147,10 +157,29 @@ export default function ContratoForm() {
   const handleSelectClient = (id: number | '') => {
     setSelectedClientId(id);
     setAgreementId('');
+    // Una oportunidad de otro cliente ya no aplica.
+    if (oportunidadId && oportunidades.find((o) => o.id === oportunidadId)?.salesClientId !== id) setOportunidadId('');
     if (!id) return;
     const client = clients.find((c) => c.id === id);
     applyClientContactInfo(client);
   };
+
+  const handleSelectOportunidad = (id: number | '') => {
+    setOportunidadId(id);
+    if (!id) return;
+    const o = oportunidades.find((x) => x.id === id);
+    if (!o) return;
+    if (o.salesClientId !== selectedClientId) setAgreementId('');
+    setSelectedClientId(o.salesClientId);
+    const client = clients.find((c) => c.id === o.salesClientId);
+    if (client) applyClientContactInfo(client);
+    else { setClientName(o.salesClient.name); setClientEmail(o.salesClient.email || ''); }
+  };
+
+  // Con un cliente elegido solo se ofrecen sus oportunidades; sin cliente, todas las abiertas.
+  const oportunidadesVisibles = selectedClientId && !oportunidadId
+    ? oportunidades.filter((o) => o.salesClientId === selectedClientId)
+    : oportunidades;
 
   const handleAutocompleteClientFields = (fields: SalesTemplateField[]) => {
     if (!selectedClientId) {
@@ -315,65 +344,77 @@ export default function ContratoForm() {
 
   return (
     <div className="page-container">
-      <button className="cacao-back-btn" onClick={handleBack} style={{ marginBottom: 16 }}>
-        <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-      </button>
-
-      <div className="page-header-row">
-        <div>
-          <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>{isEditMode ? 'Editar documento' : 'Nuevo documento'}</h1>
-        </div>
-      </div>
+      <VentasPageHeader
+        title={isEditMode ? 'Editar documento' : 'Nuevo documento'}
+        onVolver={handleBack}
+        ayuda={null}
+      />
 
       {/* Template selector */}
       {!templateId && !isEditMode && (
         <div className="admin-section" style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: '#666', display: 'block', marginBottom: 6 }}>Seleccionar plantilla</label>
-          <select value={selectedTemplate?.id || ''} onChange={e => loadTemplate(+e.target.value)}
-            style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}>
-            <option value="">— Seleccionar —</option>
-            {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
+          <div className="form-group">
+            <label>Plantilla *</label>
+            <select value={selectedTemplate?.id || ''} onChange={e => loadTemplate(+e.target.value)}>
+              <option value="">Elegir plantilla...</option>
+              {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
         </div>
       )}
 
       {selectedTemplate && (
         <>
           <Section title="Datos de envío">
-            <p style={{ fontSize: 12, color: '#666', margin: '-4px 0 12px' }}>
-              A quién se le envía el link para firmar. Si eliges un cliente, el nombre y el email se autocompletan (igual editables).
+            <p className="form-seccion-ayuda">
+              A quién se le envía el link para firmar. Elige una oportunidad o un cliente y el nombre y el email se llenan solos (igual editables).
             </p>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-              <select value={selectedClientId} onChange={(e) => handleSelectClient(e.target.value ? +e.target.value : '')}
-                style={{ flex: 1, minWidth: 220, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}>
-                <option value="">— Seleccionar cliente * —</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}{c.email ? ` (${c.email})` : ''}</option>
-                ))}
-              </select>
-              <button type="button" className="btn-secondary" onClick={() => navigate('/ventas/clientes?nuevo=1')}
-                style={{ padding: '8px 12px', fontSize: 12 }}>Ir al Directorio</button>
-            </div>
-            {!isEditMode && selectedClientId !== '' && (
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#666', display: 'block', marginBottom: 6 }}>
-                  Contrato del cliente (opcional)
-                </label>
-                <select value={agreementId} onChange={(e) => setAgreementId(e.target.value ? +e.target.value : '')}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}>
-                  <option value="">
-                    {contratosCliente.length === 0 ? 'Este cliente aún no tiene contratos vigentes' : '— Sin contrato —'}
-                  </option>
-                  {contratosCliente.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {(c.title || `Contrato #${c.id}`)} · {c.services.map((s) => s.name).join(', ')}
+            <div className="form-grid-2">
+              {!isEditMode && (
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label>Oportunidad (opcional)</label>
+                  <select value={oportunidadId} onChange={(e) => handleSelectOportunidad(e.target.value ? +e.target.value : '')}>
+                    <option value="">
+                      {oportunidadesVisibles.length === 0 ? 'No hay oportunidades abiertas' : 'Sin oportunidad'}
                     </option>
-                  ))}
-                </select>
+                    {oportunidadesVisibles.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.salesClient.name}{o.title ? ` · ${o.title}` : o.services.length ? ` · ${o.services.map((s) => s.name).join(', ')}` : ''}{o.stage ? ` (${o.stage.label})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <small>Rellena el cliente, el nombre y el email con los de la oportunidad.</small>
+                </div>
+              )}
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>Cliente *</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <select value={selectedClientId} onChange={(e) => handleSelectClient(e.target.value ? +e.target.value : '')}
+                    style={{ flex: 1, minWidth: 0 }}>
+                    <option value="">Elegir cliente...</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}{c.email ? ` (${c.email})` : ''}</option>
+                    ))}
+                  </select>
+                  <button type="button" className="btn-secondary" onClick={() => navigate('/ventas/clientes?nuevo=1')}
+                    style={{ flex: '0 0 auto' }}>Ir al Directorio</button>
+                </div>
               </div>
-            )}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {!isEditMode && selectedClientId !== '' && (
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label>Contrato del cliente (opcional)</label>
+                  <select value={agreementId} onChange={(e) => setAgreementId(e.target.value ? +e.target.value : '')}>
+                    <option value="">
+                      {contratosCliente.length === 0 ? 'Este cliente aún no tiene contratos vigentes' : 'Sin contrato'}
+                    </option>
+                    {contratosCliente.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {(c.title || `Contrato #${c.id}`)} · {c.services.map((s) => s.name).join(', ')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <Input label="Nombre para el envío *" value={clientName} onChange={setClientName} />
               <Input label="Email para el envío *" value={clientEmail} onChange={setClientEmail} type="email" />
             </div>
@@ -394,13 +435,12 @@ export default function ContratoForm() {
                     type="button"
                     className="btn-secondary"
                     onClick={() => handleAutocompleteClientFields(group.fields)}
-                    style={{ padding: '6px 12px', fontSize: 12 }}
                   >
                     Autocompletar campos de cliente{selectedClientId ? `: ${clients.find((c) => c.id === selectedClientId)?.name}` : ''}
                   </button>
                 ) : undefined}
               >
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-grid-2">
                   {group.fields.map(f => (
                     <div key={f.variableName} id={`field-${f.variableName}`}>
                       {f.isClientField ? (
@@ -428,7 +468,7 @@ export default function ContratoForm() {
 
           {hasContractNumber && (
             <Section title="Número de contrato">
-              <p style={{ fontSize: 12, color: '#666', margin: 0 }}>Se asignará automáticamente al generar el contrato (numeración configurada en la plantilla).</p>
+              <p className="form-seccion-ayuda" style={{ margin: 0 }}>Se asignará automáticamente al generar el contrato (numeración configurada en la plantilla).</p>
             </Section>
           )}
 
@@ -439,7 +479,7 @@ export default function ContratoForm() {
             return (
               <Section key={field.variableName} title={field.label}>
                 {rows.map((row, i) => (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: `repeat(${config.columns.length}, 1fr) auto`, gap: 6, marginBottom: 8, alignItems: 'end' }}>
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: `repeat(${config.columns.length}, minmax(0, 1fr)) auto`, gap: 10, marginBottom: 10, alignItems: 'end' }}>
                     {config.columns.map((col) => (
                       <Input key={col.key} label={col.label} value={row[col.key] || ''}
                         onChange={v => updateTableCell(field.variableName, i, col.key, v)}
@@ -451,12 +491,11 @@ export default function ContratoForm() {
                       </button>
                   </div>
                 ))}
-                <button onClick={() => addTableRow(field.variableName, config.columns, config.maxRows)}
-                  style={{ padding: '6px 14px', borderRadius: 4, border: '1px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: 12 }}>
+                <button type="button" className="btn-secondary" onClick={() => addTableRow(field.variableName, config.columns, config.maxRows)}>
                   + Agregar fila
                 </button>
                 {rows.length >= config.maxRows && (
-                  <span style={{ marginLeft: 10, fontSize: 11, color: '#999' }}>Máximo {config.maxRows} filas</span>
+                  <span style={{ marginLeft: 10, fontSize: 12, color: '#718096' }}>Máximo {config.maxRows} filas</span>
                 )}
               </Section>
             );
@@ -465,7 +504,7 @@ export default function ContratoForm() {
           {/* Tablas que llenará el cliente (aviso — el link se genera al crear el contrato) */}
           {clientTableFields.length > 0 && (
             <Section title="Información que completará el cliente">
-              <p style={{ fontSize: 12, color: '#666', margin: 0 }}>
+              <p className="form-seccion-ayuda" style={{ margin: 0 }}>
                 {clientTableFields.map((f) => f.label).join(', ')} — al generar el contrato se creará un link para que el cliente complete esta información antes de firmar.
               </p>
             </Section>
@@ -473,9 +512,8 @@ export default function ContratoForm() {
 
           {/* Generate/Save button */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-            <button className="auth-btn" onClick={handleGenerate} disabled={loading}
-              style={{ padding: '12px 32px', fontSize: 14 }}>
-              {loading ? 'Guardando...' : isEditMode ? '💾 Guardar cambios' : '⚡ Generar documento'}
+            <button className="auth-btn" onClick={handleGenerate} disabled={loading}>
+              {loading ? 'Guardando...' : isEditMode ? 'Guardar cambios' : 'Generar documento'}
             </button>
           </div>
         </>
@@ -487,8 +525,8 @@ export default function ContratoForm() {
 function Section({ title, headerExtra, children }: { title: string; headerExtra?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="admin-section" style={{ marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontSize: 14 }}>{title}</h3>
+      <div className="form-seccion-cab">
+        <h3 className="form-seccion-titulo">{title}</h3>
         {headerExtra}
       </div>
       {children}
@@ -496,16 +534,15 @@ function Section({ title, headerExtra, children }: { title: string; headerExtra?
   );
 }
 
+// Campos con el formato de los formularios de la app (`form-group`), no con estilos sueltos (2026-11-19).
 function Input({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
   return (
-    <div>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>{label}</label>
+    <div className="form-group">
+      <label>{label}</label>
       {type === 'date' ? (
-        <DateInput value={value} onChange={onChange}
-          style={{ padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }} />
+        <DateInput value={value} onChange={onChange} />
       ) : (
-        <input type={type} value={value} onChange={e => onChange(e.target.value)}
-          style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12, boxSizing: 'border-box' }} />
+        <input type={type} value={value} onChange={e => onChange(e.target.value)} />
       )}
     </div>
   );
@@ -521,31 +558,30 @@ function Select({ label, value, onChange, options, allowOther }: { label: string
   // guardado), se detecta solo sin necesidad de este estado.
   const [forceOther, setForceOther] = useState(false);
   const isOther = !!allowOther && (forceOther || (!!value && !options.includes(value)));
+  const yaTraeOtro = options.some((o) => o.trim().toLowerCase() === 'otro');
   if (isOther) {
     return (
-      <div>
-        <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>{label}</label>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <input value={value} onChange={e => onChange(e.target.value)} placeholder="Escribe la opción"
-            style={{ flex: 1, padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12, boxSizing: 'border-box' }} />
-          <button type="button" onClick={() => { setForceOther(false); onChange(''); }}
-            style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: 11 }}>
-            Elegir de lista
+      <div className="form-group">
+        <label>{label}</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input value={value} onChange={e => onChange(e.target.value)} placeholder="Escribe la opción" style={{ flex: 1, minWidth: 0 }} />
+          <button type="button" className="btn-secondary" onClick={() => { setForceOther(false); onChange(''); }}>
+            Lista
           </button>
         </div>
       </div>
     );
   }
   return (
-    <div>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>{label}</label>
+    <div className="form-group">
+      <label>{label}</label>
       <select value={value} onChange={e => {
         if (e.target.value === OTHER_SENTINEL) { setForceOther(true); onChange(''); }
         else onChange(e.target.value);
-      }} style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12, boxSizing: 'border-box' }}>
-        <option value="">— Seleccionar —</option>
+      }}>
+        <option value="">Elegir...</option>
         {options.map(o => <option key={o} value={o}>{o}</option>)}
-        {allowOther && <option value={OTHER_SENTINEL}>Otro (especifique)</option>}
+        {allowOther && !yaTraeOtro && <option value={OTHER_SENTINEL}>Otro (especifique)</option>}
       </select>
     </div>
   );
@@ -566,16 +602,12 @@ function ClientField({ field, value }: { field: SalesTemplateField; value: any }
   const action = CLIENT_FIELD_ACTION_LABEL[field.fieldType] || 'completará';
   const hasValue = Array.isArray(value) ? value.length > 0 : !!String(value ?? '').trim();
   return (
-    <div>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>
-        {field.label} {field.isRequired ? '*' : ''}
-      </label>
+    <div className="form-group">
+      <label>{field.label} {field.isRequired ? '*' : ''}</label>
       {hasValue ? (
-        <p style={{ fontSize: 12, margin: 0, padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', background: '#f9fafb' }}>
-          {Array.isArray(value) ? value.join(', ') : value}
-        </p>
+        <p className="campo-lectura">{Array.isArray(value) ? value.join(', ') : value}</p>
       ) : (
-        <p style={{ fontSize: 11, color: '#166534', margin: 0 }}>
+        <p className="campo-nota">
           {field.clientFieldKey ? 'Se autocompleta desde el cliente elegido arriba.' : `El cliente lo ${action} al momento de firmar.`}
         </p>
       )}
@@ -585,10 +617,12 @@ function ClientField({ field, value }: { field: SalesTemplateField; value: any }
 
 function Checkbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', marginTop: 16 }}>
-      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} />
-      {label}
-    </label>
+    <div className="form-group" style={{ justifyContent: 'flex-end' }}>
+      <label className="casilla">
+        <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} />
+        {label}
+      </label>
+    </div>
   );
 }
 
@@ -600,23 +634,23 @@ function MultiSelect({ label, value, onChange, onOtherChange, options, allowOthe
   // opciones predefinidas) — ese es el texto de "Otro", si lo hay.
   const customValue = value.find(v => !options.includes(v)) || '';
   return (
-    <div>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>{label}</label>
-      <div style={{ border: '1px solid #ddd', borderRadius: 4, padding: '6px 8px' }}>
+    <div className="form-group">
+      <label>{label}</label>
+      <div className="casillas-caja">
         {options.map(o => (
-          <label key={o} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', padding: '2px 0' }}>
+          <label key={o} className="casilla">
             <input type="checkbox" checked={value.includes(o)} onChange={e => onChange(o, e.target.checked)} />
             {o}
           </label>
         ))}
         {allowOther && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', marginTop: customValue ? 2 : 0 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label className="casilla">
               <input type="checkbox" checked={!!customValue} onChange={e => { if (!e.target.checked) onOtherChange?.(''); }} />
               Otro:
             </label>
             <input value={customValue} onChange={e => onOtherChange?.(e.target.value)} placeholder="Escribe la opción"
-              style={{ flex: 1, padding: '3px 6px', borderRadius: 3, border: '1px solid #ddd', fontSize: 12, boxSizing: 'border-box' }} />
+              style={{ flex: 1, minWidth: 0, padding: '8px 12px' }} />
           </div>
         )}
       </div>

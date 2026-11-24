@@ -277,7 +277,7 @@ export default function ContratosList() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por número, cliente, contrato o tipo..."
-            style={{ flex: '1 1 200px', minWidth: 160, padding: '8px 12px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }}
+            className="filtro-buscar"
           />
         </div>
         <div className="filter-bar-actions">

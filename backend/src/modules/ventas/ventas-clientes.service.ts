@@ -541,6 +541,21 @@ export class VentasClientesService {
     if (!field) throw new NotFoundException('Campo no encontrado');
     if (field.isCore)
       throw new BadRequestException('No se puede eliminar un campo núcleo');
+    // Un campo que alguien del Directorio tiene lleno no se borra (2026-11-20): se perdería ese dato. Primero se
+    // vacía en esas fichas (o se borran esas fichas); el mensaje dice cuántas y cuáles.
+    const conDato = await this.prisma.$queryRaw<{ id: number; name: string }[]>`
+      SELECT "id", "name" FROM "SalesClient"
+      WHERE "companyId" = ${companyId}
+        AND COALESCE(BTRIM("extra" ->> ${field.key}), '') NOT IN ('', '[]', 'false')
+      ORDER BY "name" ASC`;
+    if (conDato.length > 0) {
+      const lista = conDato.slice(0, MAX_BLOCKING_CLIENTS_LISTED).map((c) => c.name);
+      const resto = conDato.length - lista.length;
+      throw new BadRequestException(
+        `No se puede borrar «${field.label}»: ${conDato.length} ficha(s) del Directorio lo tienen lleno ` +
+          `(${lista.join(', ')}${resto > 0 ? ` y ${resto} más` : ''}). Vacíalo en esas fichas primero.`,
+      );
+    }
     await this.prisma.salesClientField.delete({ where: { id: field.id } });
     return { success: true };
   }

@@ -6,9 +6,13 @@
 .cus-form h4 { margin: 0 0 8px; font-size: 14px; color: var(--azul-oscuro, #12355b); }
 .cus-form h4 small { font-weight: 400; color: #718096; font-size: 12px; }
 .cus-fila { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px 12px; }
-.cus-campo label { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: #4a5568; }
-.cus-campo input, .cus-campo select { width: 100%; box-sizing: border-box; font: inherit; font-size: 13.5px; padding: 6px 8px; border: 1px solid #cbd5e0; border-radius: 6px; }
-.cus-campo small { display: block; margin-top: 2px; font-size: 11.5px; color: #718096; }
+/* Campos con el formato de los formularios de la app (2026-11-19): borde de 2px, esquinas de 12px. */
+.cus-campo label { display: grid; grid-template-rows: minmax(2.5em, auto) auto auto; align-items: end; row-gap: 6px; font-size: 0.85rem; font-weight: 600; line-height: 1.25; color: var(--azul-oscuro, #12355b); }
+/* El texto de la etiqueta reserva dos líneas y se apoya abajo: así los campos de una fila quedan a la misma altura. */
+.cus-campo label > small { align-self: start; }
+.cus-campo input, .cus-campo select { width: 100%; box-sizing: border-box; font: inherit; font-weight: 400; font-size: 0.95rem; padding: 10px 14px; border: 2px solid var(--borde-input); border-radius: 12px; outline: none; background: #fff; }
+.cus-campo input:focus, .cus-campo select:focus { border-color: var(--azul-claro); }
+.cus-campo small { display: block; margin-top: 0; font-size: 11.5px; font-weight: 400; color: #718096; }
 .cus-nota { display: block; margin-top: 6px; color: #718096; font-size: 12px; }
 
 .cus-extras { display: flex; flex-direction: column; gap: 6px; }
@@ -58,11 +62,14 @@
   .cus-extra { grid-template-columns: 1fr; }
 }
 
-/* Configuración → Tarifas de custodia */
-.cfg-custodia h4 { margin: 18px 0 8px; font-size: 14px; color: var(--azul-oscuro, #12355b); }
-.cfg-lista { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-.cfg-lista-fila { display: grid; grid-template-columns: minmax(160px, 260px) 120px minmax(120px, auto) auto; gap: 8px; align-items: center; width: 100%; }
-.cfg-lista-fila input, .cfg-lista-fila select { font: inherit; font-size: 13.5px; padding: 6px 8px; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box; width: 100%; }
-.cfg-lista-fila small { color: #718096; font-size: 12px; }
-.cfg-extra { grid-template-columns: minmax(200px, 1fr) 150px 110px 140px auto; }
-@media (max-width: 900px) { .cfg-lista-fila, .cfg-extra { grid-template-columns: 1fr 1fr; } }
+/* Configuración → Tarifas de custodia (2026-11-19: bloques «título a la izquierda, campos a la derecha»). */
+.cfg-lista { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.cfg-lista-fila { display: grid; grid-template-columns: minmax(160px, 260px) 150px 36px; gap: 8px; align-items: center; width: 100%; }
+.cfg-lista-fila input, .cfg-lista-fila select { font: inherit; font-size: 0.95rem; padding: 10px 14px; border: 2px solid var(--borde-input); border-radius: 12px; box-sizing: border-box; width: 100%; outline: none; background: #fff; }
+.cfg-lista-fila input:focus, .cfg-lista-fila select:focus { border-color: var(--azul-claro); }
+.cfg-lista-fila input:disabled { background: #f7fafc; color: #a0aec0; }
+.cfg-lista-cab { font-size: 0.8rem; font-weight: 600; color: var(--azul-oscuro, #12355b); margin-bottom: -2px; }
+.cfg-extra { grid-template-columns: minmax(240px, 1fr) 175px 100px 140px 36px; }
+/* La lista de extras usa todo el ancho: los nombres son largos. */
+.cfg-bloque-campos:has(.cfg-extra) { max-width: 1000px; }
+@media (max-width: 900px) { .cfg-lista-fila, .cfg-extra { grid-template-columns: 1fr 1fr; } .cfg-lista-cab { display: none; } }
