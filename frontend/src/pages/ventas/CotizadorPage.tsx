@@ -68,7 +68,7 @@ import {
 } from '../../utils/cotizador/draft';
 import { apiError, todayISO } from '../../utils/cotizador/format';
 import { debePreguntarReemplazo, pilarUnicoDeOportunidad } from '../../utils/cotizador/condiciones';
-import { PILARES, nombreDePilar } from '../../utils/pilares';
+import { PILARES, nombrePilarServicio, SIN_PILAR_SERVICIO } from '../../utils/pilares';
 import {
   buildCatalogMap,
   computeQuote,
@@ -1045,7 +1045,7 @@ export default function CotizadorPage() {
             <section className="cot-card">
               <h2 className="cot-card-title">Datos del cliente</h2>
               <div className="cot-grid-2">
-                <div className="cot-field full">
+                <div className="cot-field">
                   <label htmlFor="cot-opp">
                     Oportunidad <span className="cot-muted" style={{ fontWeight: 400 }}>(obligatoria para enviar o descargar)</span>
                   </label>
@@ -1063,21 +1063,21 @@ export default function CotizadorPage() {
                   />
                   {errorOportunidad && !draft.oportunidad && <span className="field-error">Elige la oportunidad</span>}
                 </div>
-                <div className="cot-field full">
+                <div className="cot-field">
                   <label htmlFor="cot-pilar">
-                    Pilar <span className="cot-muted" style={{ fontWeight: 400 }}>(condiciones generales)</span>
+                    Pilar de servicio <span className="cot-muted" style={{ fontWeight: 400 }}>(condiciones generales)</span>
                   </label>
                   <select
                     id="cot-pilar"
                     value={draft.pilar ?? ''}
                     disabled={readOnly}
                     onChange={(e) => aplicarPilar(e.target.value || null, draft.conditions)}
-                    aria-label="Pilar de la cotización"
-                    title="Al elegir un pilar se ofrecen sus condiciones generales configuradas"
+                    aria-label="Pilar de servicio de la cotización"
+                    title="Al elegir un pilar de servicio se ofrecen sus condiciones generales configuradas"
                   >
-                    <option value="">Sin pilar</option>
+                    <option value="">{SIN_PILAR_SERVICIO}</option>
                     {PILARES.map((p) => (
-                      <option key={p.key} value={p.key}>{p.nombre}</option>
+                      <option key={p.key} value={p.key}>{p.categoria}</option>
                     ))}
                   </select>
                 </div>
@@ -1462,7 +1462,7 @@ export default function CotizadorPage() {
           subcategories={subcats}
           suppliers={suppliers}
           puedeFijarMinimo={esAdminOGerente}
-          aviso="Estás editando el catálogo de la empresa: el cambio se ve en todas las cotizaciones y en las futuras, y queda registrado en Catálogo → Historial. El precio de esta cotización no cambia."
+          aviso="Estás editando el catálogo de la empresa: el cambio se ve en todas las cotizaciones y en las futuras, y queda registrado en Catálogo → Historial. En una cotización guardada el precio queda congelado con el valor anterior; usa «Usar precios actuales» para aplicar el nuevo. En una cotización nueva aún sin guardar, el precio sí se recalcula."
           onClose={() => setProductoForm(null)}
           onSaved={(p) => {
             setProductoForm(null);
@@ -1531,9 +1531,9 @@ export default function CotizadorPage() {
       )}
       {preguntaPilar && (
         <ConfirmDialog
-          title="Condiciones generales del pilar"
-          message={`Pasar a ${nombreDePilar(preguntaPilar.pilar)} ofrece sus condiciones generales. ¿Reemplazar el texto actual o conservar lo que escribiste?`}
-          confirmLabel={`Usar las de ${nombreDePilar(preguntaPilar.pilar)}`}
+          title="Condiciones generales del pilar de servicio"
+          message={`Pasar a ${nombrePilarServicio(preguntaPilar.pilar)} ofrece sus condiciones generales. ¿Reemplazar el texto actual o conservar lo que escribiste?`}
+          confirmLabel={`Usar las de ${nombrePilarServicio(preguntaPilar.pilar)}`}
           cancelLabel="Conservar las actuales"
           onConfirm={() => {
             patch({ conditions: preguntaPilar.texto });
