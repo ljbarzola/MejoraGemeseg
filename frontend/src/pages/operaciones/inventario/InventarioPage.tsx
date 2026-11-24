@@ -8,7 +8,9 @@ import { CLASE_ARMA_LABEL, ESTADO_PERMISO_LABEL, TIPO_ARTICULO_LABEL } from '../
 import { usePerm } from '../../../contexts/PermissionsContext';
 import OperacionesPageHeader from '../../../components/operaciones/OperacionesPageHeader';
 import PageTabs, { type PageTab } from '../../../components/common/PageTabs';
+import Cifra from './Cifra';
 import ExistenciasTab from './ExistenciasTab';
+import PorContratoTab from './PorContratoTab';
 import ArmasTab from './ArmasTab';
 import TenenciasTab from './TenenciasTab';
 import MovimientosTab from './MovimientosTab';
@@ -16,24 +18,15 @@ import MovimientoModal from './MovimientoModal';
 import ImportarExcelModal from './ImportarExcelModal';
 import { COLOR_PERMISO, formatoFecha, mensajeError, nombreArticulo } from './inventarioUi';
 
-type Pestana = 'resumen' | 'existencias' | 'armas' | 'tenencias' | 'movimientos';
+type Pestana = 'resumen' | 'contratos' | 'existencias' | 'armas' | 'tenencias' | 'movimientos';
 const PESTANAS: PageTab<Pestana>[] = [
   { key: 'resumen', label: 'Resumen' },
+  { key: 'contratos', label: 'Por contrato', title: 'Lo que tiene cada contrato en sus puestos' },
   { key: 'existencias', label: 'Existencias', title: 'Uniformes, implementos y municiones' },
   { key: 'armas', label: 'Armas' },
   { key: 'tenencias', label: 'Quién tiene qué', title: 'Lo entregado y aún no devuelto' },
   { key: 'movimientos', label: 'Movimientos', title: 'El kardex: entradas, entregas, devoluciones, bajas y ajustes' },
 ];
-
-function Cifra({ valor, etiqueta, alerta }: { valor: number; etiqueta: string; alerta?: boolean }) {
-  const color = alerta && valor > 0 ? '#c53030' : 'var(--azul-oscuro)';
-  return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-      <span style={{ fontSize: '1.5rem', fontWeight: 800, color, lineHeight: 1 }}>{valor}</span>
-      <span style={{ fontSize: '0.78rem', color: '#718096', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{etiqueta}</span>
-    </div>
-  );
-}
 
 /** Resumen: lo que pide atención hoy. Las cuentas salen de los movimientos; nada se escribe aquí. */
 function ResumenTab({ recarga, onIr }: { recarga: number; onIr: (p: Pestana) => void }) {
@@ -141,6 +134,7 @@ export default function InventarioPage() {
   const irA = useCallback(
     (p: Pestana) => {
       const next = new URLSearchParams(searchParams);
+      next.delete('buscar'); // la búsqueda que traía el enlace solo valía para «Por contrato»
       if (p === 'resumen') next.delete('pestana');
       else next.set('pestana', p);
       setSearchParams(next, { replace: true });
@@ -200,6 +194,7 @@ export default function InventarioPage() {
       <PageTabs tabs={PESTANAS} value={pestana} onChange={irA} label="Secciones del inventario" />
 
       {pestana === 'resumen' && <ResumenTab recarga={recarga} onIr={irA} />}
+      {pestana === 'contratos' && <PorContratoTab recarga={recarga} buscarInicial={searchParams.get('buscar') ?? undefined} />}
       {pestana === 'existencias' && (
         <ExistenciasTab
           puedeEscribir={puedeEscribir}

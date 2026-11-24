@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ContratoFormModal from './ContratoFormModal';
 import { fechaCorta } from '../../../utils/bitacoras';
-import { ArrowLeft, CalendarPlus, Pencil, Plus, Trash2, Upload, Download, RefreshCw, FileSignature } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, Package, Pencil, Plus, Trash2, Upload, Download, RefreshCw, FileSignature } from 'lucide-react';
 import {
   getContrato,
   getPuestosByContrato,
@@ -31,12 +31,13 @@ import { useModuloContratos } from '../../../hooks/useModuloContratos';
 import { textoTurnos } from '../puestos/turnosPuesto';
 import { getInventarioPorContrato } from '../../../services/inventario.service';
 import type { InventarioDePuesto } from '../../../types/inventario';
-import InventarioPuestoModal from '../inventario/InventarioPuestoModal';
+import ArmasYEquipoContrato from '../inventario/ArmasYEquipoContrato';
 
-const TABS = ['PUESTOS', 'ADENDAS', 'ADJUNTOS', 'HORARIOS', 'INFORMES'] as const;
+const TABS = ['PUESTOS', 'INVENTARIO', 'ADENDAS', 'ADJUNTOS', 'HORARIOS', 'INFORMES'] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   PUESTOS: 'Puestos',
+  INVENTARIO: 'Armas y equipo',
   ADENDAS: 'Adendas',
   ADJUNTOS: 'Adjuntos',
   HORARIOS: 'Horarios',
@@ -54,22 +55,49 @@ const ESTADO_HORARIO_COLOR: Record<string, { bg: string; fg: string }> = {
 
 const formatFecha = (date: string) => fechaCorta(date);
 
+/**
+ * Qué decirle a la persona cuando el contrato no abre. Antes cualquier fallo (permiso, red, un id raro) se veía como
+ * «Contrato no encontrado», aunque el contrato existiera: se confundía un permiso que falta con un contrato que no está.
+ */
+function mensajeDeCarga(err: any): string {
+  const estado = err?.response?.status;
+  if (estado === 403) return 'No tienes permiso para ver este contrato. Pídele acceso a Operaciones a un administrador de tu empresa.';
+  if (estado === 404) return 'Este contrato no existe o ya no está disponible. Vuelve a la lista de contratos.';
+  if (estado === 400) return 'La dirección de este contrato no es válida. Vuelve a la lista de contratos y ábrelo desde ahí.';
+  if (!err?.response) return 'No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.';
+  return 'No se pudo cargar el contrato. Inténtalo de nuevo en un momento.';
+}
+
+/** Reintentar solo ayuda cuando fue la red o el servidor; con un permiso que falta o un contrato que no existe, no. */
+const sePuedeReintentar = (err: any) => {
+  const estado = err?.response?.status;
+  return !estado || estado >= 500;
+};
+
 export default function ContratoDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
   const contratoId = Number(id);
   // En Contratación Pública no se ven los horarios (son de Operaciones): ni la pestaña ni su consulta.
   const { enCP, base, modulo, puedeEditar } = useModuloContratos();
-  const tabs = TABS.filter((t) => !(enCP && t === 'HORARIOS'));
+  const tabs = TABS.filter((t) => !(enCP && (t === 'HORARIOS' || t === 'INVENTARIO')));
 
   const [contrato, setContrato] = useState<CPContrato | null>(null);
   const [puestos, setPuestos] = useState<CPPuestoServicio[]>([]);
-  // Armas y equipo de cada puesto (solo en Operaciones; si no se puede leer, la columna queda en «—»).
+  // Armas y equipo de cada puesto (solo en Operaciones; si no se puede leer, se avisa en su pestaña).
   const [inventarioPuestos, setInventarioPuestos] = useState<InventarioDePuesto[]>([]);
-  const [verInventarioDe, setVerInventarioDe] = useState<InventarioDePuesto | null>(null);
+  const [cargandoInventario, setCargandoInventario] = useState(false);
+  const [sinInventario, setSinInventario] = useState(false);
+  const [enfocarPuesto, setEnfocarPuesto] = useState<number | null>(null);
   const [horarios, setHorarios] = useState<CPHorarioMensual[]>([]);
   const [informes, setInformes] = useState<CPInformeMensual[]>([]);
+  // Lo accesorio se carga aparte: si falla no debe esconder el contrato, solo avisar en su pestaña.
+  const [sinAccesoInformes, setSinAccesoInformes] = useState(false);
+  const [fallaHorarios, setFallaHorarios] = useState(false);
   const [loading, setLoading] = useState(true);
+  /** Por qué no abrió el contrato (si no abrió). `error` es para los fallos de lo que se hace dentro de la pantalla. */
+  const [errorCarga, setErrorCarga] = useState('');
+  const [reintentable, setReintentable] = useState(false);
   const [error, setError] = useState('');
   const errorRef = useRef<HTMLDivElement>(null);
   // Editar abre una ventana; `?editar=1` la abre sola (es lo que hace la dirección vieja `/:id/editar`).
@@ -77,7 +105,7 @@ export default function ContratoDetail() {
   // «?tab=HORARIOS» abre esa pestaña: así volver desde un horario o un informe cae donde estaba la persona.
   const [tab, setTab] = useState<Tab>(() => {
     const pedida = searchParams.get('tab');
-    return (TABS as readonly string[]).includes(pedida ?? '') && !(enCP && pedida === 'HORARIOS') ? (pedida as Tab) : 'PUESTOS';
+    return (TABS as readonly string[]).includes(pedida ?? '') && !(enCP && (pedida === 'HORARIOS' || pedida === 'INVENTARIO')) ? (pedida as Tab) : 'PUESTOS';
   });
   const [editandoContrato, setEditandoContrato] = useState(searchParams.get('editar') === '1');
   const cerrarEdicion = () => {
@@ -117,23 +145,36 @@ export default function ContratoDetail() {
   }, [error]);
 
   const load = () => {
-    setLoading(true);
     setError('');
-    Promise.all([
-      getContrato(contratoId),
-      getPuestosByContrato(contratoId),
-      enCP ? Promise.resolve([] as CPHorarioMensual[]) : getHorariosByContrato(contratoId),
-      getInformesByContrato(contratoId),
-    ])
-      .then(([c, p, h, inf]) => { setContrato(c); setPuestos(p); setHorarios(h); setInformes(inf); })
-      .catch((err) => setError(err.response?.data?.message || 'No se pudo cargar el contrato.'))
+    if (!Number.isInteger(contratoId) || contratoId <= 0) {
+      setContrato(null);
+      setErrorCarga(mensajeDeCarga({ response: { status: 400 } }));
+      setReintentable(false);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    // Lo esencial: sin el contrato y sus puestos no hay pantalla.
+    Promise.all([getContrato(contratoId), getPuestosByContrato(contratoId)])
+      .then(([c, p]) => { setContrato(c); setPuestos(p); setErrorCarga(''); })
+      .catch((err) => { setContrato(null); setErrorCarga(mensajeDeCarga(err)); setReintentable(sePuedeReintentar(err)); })
       .finally(() => setLoading(false));
-    // Aparte y sin bloquear la pantalla: un fallo aquí no debe impedir ver el contrato.
+    // Lo demás va aparte y sin bloquear: un fallo aquí no debe impedir ver el contrato (antes, el permiso de
+    // Contratación Pública que pedían los informes hacía que todo el contrato dijera «no encontrado»).
     if (!enCP) {
+      setFallaHorarios(false);
+      getHorariosByContrato(contratoId).then(setHorarios).catch(() => { setHorarios([]); setFallaHorarios(true); });
+      setCargandoInventario(true);
+      setSinInventario(false);
       getInventarioPorContrato(contratoId)
         .then(setInventarioPuestos)
-        .catch(() => setInventarioPuestos([]));
+        .catch(() => { setInventarioPuestos([]); setSinInventario(true); })
+        .finally(() => setCargandoInventario(false));
     }
+    setSinAccesoInformes(false);
+    getInformesByContrato(contratoId)
+      .then(setInformes)
+      .catch((err) => { setInformes([]); if (err?.response?.status === 403) setSinAccesoInformes(true); });
   };
 
   useEffect(load, [contratoId]);
@@ -239,7 +280,17 @@ export default function ContratoDetail() {
     return <div className="page-container"><div className="loading-state">Cargando contrato...</div></div>;
   }
   if (!contrato) {
-    return <div className="page-container"><div className="empty-state">Contrato no encontrado.</div></div>;
+    return (
+      <div className="page-container">
+        <button className="cacao-back-btn" onClick={() => navigate(base)} style={{ marginBottom: 12 }}>
+          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
+        </button>
+        <div className="empty-state">
+          <div>{errorCarga || 'No se pudo cargar el contrato.'}</div>
+          {reintentable && <button className="btn-secondary" style={{ marginTop: 12 }} onClick={load}>Reintentar</button>}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -251,15 +302,24 @@ export default function ContratoDetail() {
         <OperacionesPageHeader
           eyebrow={modulo}
           title={`Contrato ${contrato.numero}`}
-          description={`Contrato con ${contrato.entidad?.nombre ?? 'la entidad'}: sus puestos con sus turnos y guardias, adendas, adjuntos${enCP ? '' : ', horarios'} e informes.`}
+          description={`Contrato con ${contrato.entidad?.nombre ?? 'la entidad'}: sus puestos con sus turnos y guardias${enCP ? '' : ', las armas y el equipo que tiene'}, adendas, adjuntos${enCP ? '' : ', horarios'} e informes.`}
           actions={
-            puedeEditar && <>
-              <button className="btn-secondary" onClick={() => setEditandoContrato(true)}>
-                <Pencil size={16} /> Editar
-              </button>
-              <button className="btn-secondary" onClick={() => setShowRenovarForm(true)}>
-                <RefreshCw size={16} /> Renovar
-              </button>
+            <>
+              {!enCP && (
+                <button className="btn-secondary" onClick={() => navigate(`/operaciones/inventario?pestana=contratos&buscar=${encodeURIComponent(contrato.numero)}`)} title="Ver este contrato en la lista de Inventario por contrato">
+                  <Package size={16} /> Ver en Inventario
+                </button>
+              )}
+              {puedeEditar && (
+                <>
+                  <button className="btn-secondary" onClick={() => setEditandoContrato(true)}>
+                    <Pencil size={16} /> Editar
+                  </button>
+                  <button className="btn-secondary" onClick={() => setShowRenovarForm(true)}>
+                    <RefreshCw size={16} /> Renovar
+                  </button>
+                </>
+              )}
             </>
           }
         />
@@ -313,10 +373,11 @@ export default function ContratoDetail() {
             >
               {TAB_LABEL[t]}
               {t === 'PUESTOS' && ` (${puestos.length})`}
+              {t === 'INVENTARIO' && !cargandoInventario && !sinInventario && ` (${inventarioPuestos.reduce((s, p) => s + p.totalArmas, 0)} ${inventarioPuestos.reduce((s, p) => s + p.totalArmas, 0) === 1 ? 'arma' : 'armas'})`}
               {t === 'ADENDAS' && ` (${contrato.adendas?.length || 0})`}
               {t === 'ADJUNTOS' && ` (${contrato.adjuntos?.length || 0})`}
-              {t === 'HORARIOS' && ` (${horarios.length})`}
-              {t === 'INFORMES' && ` (${informes.length})`}
+              {t === 'HORARIOS' && !fallaHorarios && ` (${horarios.length})`}
+              {t === 'INFORMES' && !sinAccesoInformes && ` (${informes.length})`}
             </button>
           ))}
         </div>
@@ -367,8 +428,12 @@ export default function ContratoDetail() {
                               const inv = inventarioPuestos.find((x) => x.puestoId === p.id);
                               if (!inv || (inv.totalArmas === 0 && inv.totalEquipo === 0)) return <span style={{ color: '#a0aec0' }}>—</span>;
                               return (
-                                <button type="button" className="enlace-tabla" style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', font: 'inherit' }} onClick={() => setVerInventarioDe(inv)}>
-                                  {[inv.totalArmas > 0 ? `${inv.totalArmas} ${inv.totalArmas === 1 ? 'arma' : 'armas'}` : null, inv.totalEquipo > 0 ? `${inv.totalEquipo} de equipo` : null].filter(Boolean).join(' · ')}
+                                <button type="button" className="enlace-tabla" style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', font: 'inherit' }} onClick={() => { setEnfocarPuesto(p.id); setTab('INVENTARIO'); }}>
+                                  {[
+                                    inv.totalArmas > 0 ? `${inv.totalArmas} ${inv.totalArmas === 1 ? 'arma' : 'armas'}` : null,
+                                    inv.chalecos > 0 ? `${inv.chalecos} ${inv.chalecos === 1 ? 'chaleco' : 'chalecos'}` : null,
+                                    inv.municion + inv.otroEquipo > 0 ? `${inv.municion + inv.otroEquipo} de otro equipo y munición` : null,
+                                  ].filter(Boolean).join(' · ')}
                                 </button>
                               );
                             })()}
@@ -391,6 +456,14 @@ export default function ContratoDetail() {
               </div>
             )}
           </div>
+        )}
+
+        {tab === 'INVENTARIO' && (
+          sinInventario ? (
+            <div className="empty-state">No se pudieron cargar las armas y el equipo de este contrato. Inténtalo de nuevo en un momento.</div>
+          ) : (
+            <ArmasYEquipoContrato puestos={inventarioPuestos} cargando={cargandoInventario} enfocar={enfocarPuesto} />
+          )
         )}
 
         {tab === 'ADENDAS' && (
@@ -504,7 +577,9 @@ export default function ContratoDetail() {
                 <Plus size={16} /> Gestionar Horarios
               </button>
             </div>
-            {horarios.length === 0 ? (
+            {fallaHorarios ? (
+              <div className="empty-state">No se pudieron cargar los horarios de este contrato. Inténtalo de nuevo en un momento.</div>
+            ) : horarios.length === 0 ? (
               <div className="empty-state">No hay horarios mensuales creados para este contrato.</div>
             ) : (
               <div className="tasks-table-wrapper">
@@ -535,12 +610,19 @@ export default function ContratoDetail() {
 
         {tab === 'INFORMES' && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '14px' }}>
-              <button className="auth-btn" onClick={() => navigate(`/contratacion-publica/informes/nuevo?contratoId=${contratoId}`)}>
-                <FileSignature size={16} /> Nuevo Informe
-              </button>
-            </div>
-            {informes.length === 0 ? (
+            {!sinAccesoInformes && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '14px' }}>
+                <button className="auth-btn" onClick={() => navigate(`/contratacion-publica/informes/nuevo?contratoId=${contratoId}`)}>
+                  <FileSignature size={16} /> Nuevo Informe
+                </button>
+              </div>
+            )}
+            {sinAccesoInformes ? (
+              <div className="empty-state">
+                Los informes mensuales de este contrato son de Contratación Pública y tu usuario no tiene acceso a esa sección. Si los necesitas,
+                pídele acceso a un administrador de tu empresa.
+              </div>
+            ) : informes.length === 0 ? (
               <div className="empty-state">No hay informes mensuales creados para este contrato.</div>
             ) : (
               <div className="tasks-table-wrapper">
@@ -573,8 +655,6 @@ export default function ContratoDetail() {
           onSaved={() => { cerrarEdicion(); load(); }}
         />
       )}
-
-      {verInventarioDe && <InventarioPuestoModal puesto={verInventarioDe} onClose={() => setVerInventarioDe(null)} />}
 
       {showPuestoModal && (
         <PuestoFormModal

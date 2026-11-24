@@ -129,7 +129,14 @@ export class InventarioController {
     return this.service.tenencias(req.user.companyId, q.articuloId);
   }
 
-  /** Armas y equipo de cada puesto de un contrato (columna «Armas y equipo» del contrato en Operaciones). */
+  /** Todos los contratos con sus totales de armas y equipo (pestaña «Por contrato» de Inventario). */
+  @Get('por-contratos')
+  @Section(SECCION, 'view')
+  porContratos(@Req() req: AuthedRequest) {
+    return this.service.inventarioPorContratos(req.user.companyId);
+  }
+
+  /** Armas y equipo de cada puesto de un contrato (pestaña «Armas y equipo» del contrato en Operaciones). */
   @Get('por-contrato/:contratoId')
   @Section(SECCION, 'view')
   porContrato(@Req() req: AuthedRequest, @Param('contratoId', ParseIntPipe) contratoId: number) {

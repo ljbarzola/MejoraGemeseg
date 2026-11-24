@@ -230,7 +230,10 @@ export interface ResultadoImportacion {
   puestos: { enlazados: string[]; sinEnlazar: string[] };
 }
 
-/** Armas y equipo de un puesto de un contrato (columna «Armas y equipo» del contrato en Operaciones). */
+/** Para sumar el equipo sin mezclar cosas: los chalecos y la munición van aparte; lo demás es «otro equipo». */
+export type ClaseEquipo = 'CHALECO' | 'MUNICION' | 'OTRO';
+
+/** Armas y equipo de un puesto de un contrato (pestaña «Armas y equipo» del contrato en Operaciones). */
 export interface InventarioDePuesto {
   puestoId: number;
   nombre: string;
@@ -247,9 +250,41 @@ export interface InventarioDePuesto {
     permiso: EstadoPermiso;
     requiereCorreccion: boolean;
   }[];
-  equipo: { articuloId: number; articulo: string; variante: string; unidad: string; cantidad: number }[];
+  equipo: { articuloId: number; articulo: string; variante: string; unidad: string; clase: ClaseEquipo; cantidad: number }[];
   totalArmas: number;
   totalEquipo: number;
+  chalecos: number;
+  municion: number;
+  otroEquipo: number;
+}
+
+/** Un contrato con lo que tiene en sus puestos (pestaña «Por contrato» de Inventario). */
+export interface InventarioDeContrato {
+  contratoId: number;
+  numero: string;
+  entidad: string;
+  tipoEntidad: 'PUBLICA' | 'PRIVADA';
+  estado: string;
+  fechaInicio: string | null;
+  fechaFin: string | null;
+  puestos: number;
+  armas: number;
+  armasPorVencer: number;
+  armasVencidas: number;
+  armasPorCorregir: number;
+  chalecos: number;
+  municion: number;
+  otroEquipo: number;
+}
+
+export interface InventarioPorContratos {
+  contratos: InventarioDeContrato[];
+  /** Lo que no se pudo atar a un puesto de la aplicación (nombre que no coincide, o entregado a un guardia). */
+  sinEnlazar: { armas: number; chalecos: number; municion: number; otroEquipo: number; puestos: string[] };
+  /** Lo que está guardado y no asignado. */
+  rastrillo: { armas: number; chalecos: number; municion: number; otroEquipo: number };
+  /** Contratos + sin enlazar + rastrillo: debe coincidir con el Resumen. */
+  totales: { armas: number; chalecos: number; municion: number; otroEquipo: number };
 }
 
 export interface DatosArticulo {

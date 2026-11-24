@@ -9,12 +9,49 @@
 
 const quitarTildes = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-/** Nombre de puesto comparable: sin tildes, en mayúsculas y con los espacios normalizados. */
+/**
+ * Nombre de puesto comparable: sin tildes, en mayúsculas, y sin guiones, puntos ni otra puntuación (2026-11-24):
+ * «CNEL COLONCHE» y «CNEL - COLONCHE» son el mismo puesto. Los números sí cuentan: «DISTRITO CAÑAR (2)» no es
+ * «DISTRITO CAÑAR».
+ */
 export function normalizarPuesto(nombre: string | null | undefined): string {
   return quitarTildes(nombre ?? '')
     .toUpperCase()
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter((t) => !CONECTORES.has(t))
+    .map((t) => ABREVIATURAS[t] ?? t)
+    .join(' ');
+}
+
+/** Palabras de enlace que no distinguen un puesto de otro: «MINISTERIO DE GOBIERNO» = «MINISTERIO GOBIERNO». */
+const CONECTORES = new Set(['DE', 'DEL', 'LA', 'LAS', 'LOS', 'EL']);
+
+/**
+ * Abreviaturas que Operaciones usa en lugar de la palabra completa (2026-11-24, pedido de Leidy: «MIN» y
+ * «MINISTERIO» son lo mismo y deben quedar bajo un solo nombre). Se compara palabra por palabra, así que
+ * «MIN GOBIERNO ORION 1» y «MINISTERIO GOBIERNO ORION 1» coinciden. Agregar aquí solo abreviaturas inequívocas.
+ */
+const ABREVIATURAS: Record<string, string> = {
+  MIN: 'MINISTERIO',
+  MINIST: 'MINISTERIO',
+  MINISTE: 'MINISTERIO',
+  GOB: 'GOBIERNO',
+  ECU: 'ECUADOR',
+};
+
+export type ClaseEquipo = 'CHALECO' | 'MUNICION' | 'OTRO';
+
+/**
+ * Para sumar «el equipo» de un puesto o de un contrato sin mezclar peras con manzanas: los chalecos son lo que
+ * más se cuenta; la munición va aparte; lo demás (alimentadoras, uniformes, implementos) es «otro equipo».
+ * El inventario no tiene un campo para «chaleco», así que se reconoce por el nombre del artículo.
+ */
+export function claseEquipo(nombre: string | null | undefined, tipoArticulo: string | null | undefined): ClaseEquipo {
+  if (/CHALECO/.test(normalizarPuesto(nombre))) return 'CHALECO';
+  if (tipoArticulo === 'MUNICION') return 'MUNICION';
+  return 'OTRO';
 }
 
 export interface PuestoBasico {
