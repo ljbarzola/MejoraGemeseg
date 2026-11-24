@@ -27,7 +27,7 @@ import {
   totalEntregado,
   type MovimientoCalculo,
 } from './inventario.util';
-import { indicePuestosPorNombre, puestoDeRegistro, puestoDeTenedor } from './inventario-puestos.util';
+import { claseEquipo, indicePuestosPorNombre, puestoDeRegistro, puestoDeTenedor, type ClaseEquipo } from './inventario-puestos.util';
 
 export interface ActorInventario {
   userId: number;
@@ -485,7 +485,12 @@ export class InventarioService {
       select: { id: true, nombre: true },
       orderBy: { nombre: 'asc' },
     });
-    if (delContrato.length === 0) return [];
+    if (delContrato.length === 0) {
+      // Sin puestos no hay nada que mostrar, pero un contrato que no existe no es lo mismo que uno vacío.
+      const existe = await this.prisma.cPContrato.findFirst({ where: { id: contratoId, companyId }, select: { id: true } });
+      if (!existe) throw new NotFoundException('Contrato no encontrado');
+      return [];
+    }
     const ids = new Set(delContrato.map((p) => p.id));
     const indice = indicePuestosPorNombre(
       await this.prisma.cPPuestoServicio.findMany({ where: { companyId }, select: { id: true, nombre: true } }),
@@ -522,14 +527,24 @@ export class InventarioService {
           };
         });
       // Lo entregado a este puesto, sumado por artículo (puede venir por `puestoId` y por nombre a la vez).
-      const equipo = new Map<number, { articuloId: number; articulo: string; variante: string; unidad: string; cantidad: number }>();
+      const equipo = new Map<number, { articuloId: number; articulo: string; variante: string; unidad: string; clase: ClaseEquipo; cantidad: number }>();
       for (const t of tenencias) {
         if (puestoDeTenedor(indice, t.tenedor, t.puestoNombre) !== p.id) continue;
         const previo = equipo.get(t.articuloId);
         if (previo) previo.cantidad += t.cantidad;
-        else equipo.set(t.articuloId, { articuloId: t.articuloId, articulo: t.articulo, variante: t.variante, unidad: t.unidad, cantidad: t.cantidad });
+        else {
+          equipo.set(t.articuloId, {
+            articuloId: t.articuloId,
+            articulo: t.articulo,
+            variante: t.variante,
+            unidad: t.unidad,
+            clase: claseEquipo(t.articulo, t.tipoArticulo),
+            cantidad: t.cantidad,
+          });
+        }
       }
       const equipoLista = [...equipo.values()].sort((a, b) => a.articulo.localeCompare(b.articulo, 'es'));
+      const suma = (c: ClaseEquipo) => equipoLista.filter((e) => e.clase === c).reduce((s, e) => s + e.cantidad, 0);
       return {
         puestoId: p.id,
         nombre: p.nombre,
@@ -537,8 +552,108 @@ export class InventarioService {
         equipo: equipoLista,
         totalArmas: armasDelPuesto.length,
         totalEquipo: equipoLista.reduce((s, e) => s + e.cantidad, 0),
+        chalecos: suma('CHALECO'),
+        municion: suma('MUNICION'),
+        otroEquipo: suma('OTRO'),
       };
     });
+  }
+
+  /**
+   * Inventario de TODOS los contratos en una sola pasada (pestaña «Por contrato» de Inventario): por contrato, cuántas
+   * armas, chalecos, munición y otro equipo tiene en sus puestos; aparte, lo que no se puede atar a ningún puesto de
+   * la aplicación («sin enlazar»: nombre que no coincide, entregado a un guardia) y lo que está guardado en el
+   * rastrillo. Así la suma de todo cuadra con el total del Resumen. Un puesto se reconoce por `puestoId` o por
+   * nombre único (igual que `inventarioPorContrato`). Solo lee.
+   */
+  async inventarioPorContratos(companyId: number) {
+    const hoy = hoyEcuador();
+    const [contratos, puestos, armas, tenencias, articulos] = await Promise.all([
+      this.prisma.cPContrato.findMany({
+        where: { companyId },
+        select: { id: true, numero: true, estado: true, fechaInicio: true, fechaFin: true, entidad: { select: { nombre: true, tipo: true } } },
+        orderBy: { numero: 'asc' },
+      }),
+      this.prisma.cPPuestoServicio.findMany({ where: { companyId }, select: { id: true, nombre: true, contratoId: true } }),
+      this.prisma.invArma.findMany({ where: { companyId, estado: { not: 'BAJA' } }, orderBy: { serie: 'asc' } }),
+      this.tenencias(companyId),
+      this.listarArticulos(companyId),
+    ]);
+
+    const indice = indicePuestosPorNombre(puestos);
+    const contratoDePuesto = new Map(puestos.map((p) => [p.id, p.contratoId]));
+    const vacio = () => ({ armas: 0, armasPorVencer: 0, armasVencidas: 0, armasPorCorregir: 0, chalecos: 0, municion: 0, otroEquipo: 0 });
+    const porContrato = new Map(contratos.map((c) => [c.id, vacio()]));
+    const sinEnlazar = { armas: 0, chalecos: 0, municion: 0, otroEquipo: 0 };
+    const nombresSinEnlazar = new Map<string, string>(); // normalizado → como viene escrito
+    const rastrillo = { armas: 0, chalecos: 0, municion: 0, otroEquipo: 0 };
+    const anotarNombre = (n: string | null | undefined) => {
+      const t = (n ?? '').trim();
+      if (t && !nombresSinEnlazar.has(t.toUpperCase())) nombresSinEnlazar.set(t.toUpperCase(), t);
+    };
+    const sumaEquipo = (acc: { chalecos: number; municion: number; otroEquipo: number }, clase: ClaseEquipo, n: number) => {
+      if (clase === 'CHALECO') acc.chalecos += n;
+      else if (clase === 'MUNICION') acc.municion += n;
+      else acc.otroEquipo += n;
+    };
+
+    for (const a of armas) {
+      if (a.estado !== 'ASIGNADA') {
+        rastrillo.armas++;
+        continue;
+      }
+      const pid = puestoDeRegistro(indice, a.puestoId, a.puestoNombre);
+      const acc = pid != null ? porContrato.get(contratoDePuesto.get(pid) ?? -1) : undefined;
+      if (!acc) {
+        sinEnlazar.armas++;
+        anotarNombre(a.puestoNombre);
+        continue;
+      }
+      const v = this.vistaArma(a, hoy);
+      acc.armas++;
+      if (v.permiso === 'POR_VENCER') acc.armasPorVencer++;
+      if (v.permiso === 'VENCIDO') acc.armasVencidas++;
+      if (v.requiereCorreccion) acc.armasPorCorregir++;
+    }
+
+    for (const t of tenencias) {
+      const clase = claseEquipo(t.articulo, t.tipoArticulo);
+      const pid = t.tenedorTipo === 'PUESTO' ? puestoDeTenedor(indice, t.tenedor, t.puestoNombre) : null;
+      const acc = pid != null ? porContrato.get(contratoDePuesto.get(pid) ?? -1) : undefined;
+      if (acc) sumaEquipo(acc, clase, t.cantidad);
+      else {
+        sumaEquipo(sinEnlazar, clase, t.cantidad);
+        if (t.tenedorTipo === 'PUESTO') anotarNombre(t.puestoNombre);
+      }
+    }
+
+    for (const art of articulos) {
+      if (art.enBodega > 0) sumaEquipo(rastrillo, claseEquipo(art.nombre, art.tipo), art.enBodega);
+    }
+
+    const puestosPorContrato = new Map<number, number>();
+    for (const p of puestos) puestosPorContrato.set(p.contratoId, (puestosPorContrato.get(p.contratoId) ?? 0) + 1);
+
+    const filas = contratos.map((c) => ({
+      contratoId: c.id,
+      numero: c.numero,
+      entidad: c.entidad?.nombre ?? '',
+      tipoEntidad: c.entidad?.tipo ?? 'PUBLICA',
+      estado: c.estado,
+      fechaInicio: aISO(c.fechaInicio),
+      fechaFin: aISO(c.fechaFin),
+      puestos: puestosPorContrato.get(c.id) ?? 0,
+      ...porContrato.get(c.id)!,
+    }));
+    const suma = (k: 'armas' | 'chalecos' | 'municion' | 'otroEquipo') =>
+      filas.reduce((s, f) => s + f[k], 0) + sinEnlazar[k] + rastrillo[k];
+    return {
+      contratos: filas,
+      sinEnlazar: { ...sinEnlazar, puestos: [...nombresSinEnlazar.values()].sort((x, y) => x.localeCompare(y, 'es')) },
+      rastrillo,
+      // Lo que hay en total: contratos + sin enlazar + rastrillo (debe coincidir con el Resumen).
+      totales: { armas: suma('armas'), chalecos: suma('chalecos'), municion: suma('municion'), otroEquipo: suma('otroEquipo') },
+    };
   }
 
   async crearArma(actor: ActorInventario, dto: CrearArmaDto) {

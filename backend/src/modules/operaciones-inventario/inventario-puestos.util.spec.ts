@@ -1,10 +1,21 @@
-import { indicePuestosPorNombre, normalizarPuesto, puestoDeRegistro, puestoDeTenedor } from './inventario-puestos.util';
+import { claseEquipo, indicePuestosPorNombre, normalizarPuesto, puestoDeRegistro, puestoDeTenedor } from './inventario-puestos.util';
 
 describe('inventario-puestos.util', () => {
   describe('normalizarPuesto', () => {
     it('quita tildes, pasa a mayúsculas y junta espacios', () => {
       expect(normalizarPuesto('  Garita   Norte ')).toBe('GARITA NORTE');
-      expect(normalizarPuesto('Gestión de Riesgo')).toBe('GESTION DE RIESGO');
+      expect(normalizarPuesto('Gestión de Riesgo')).toBe('GESTION RIESGO');
+    });
+    it('los guiones y puntos no cuentan: «CNEL COLONCHE» es «CNEL - COLONCHE»', () => {
+      expect(normalizarPuesto('CNEL - COLONCHE')).toBe(normalizarPuesto('CNEL COLONCHE'));
+      expect(normalizarPuesto('CNEL -CAC')).toBe(normalizarPuesto('CNEL CAC'));
+      expect(normalizarPuesto('MIN. GOBIERNO / ORION 1')).toBe('MINISTERIO GOBIERNO ORION 1');
+      expect(normalizarPuesto('MIN GOBIERNO ORION 1')).toBe(normalizarPuesto('MINISTERIO DE GOBIERNO - ORION 1'));
+      expect(normalizarPuesto('KIA GALPON-NOCHE')).toBe(normalizarPuesto('Kia Galpon Noche'));
+    });
+    it('los números sí cuentan: la versión (2) es otro puesto', () => {
+      expect(normalizarPuesto('DISTRITO CAÑAR (2)')).not.toBe(normalizarPuesto('DISTRITO CAÑAR'));
+      expect(normalizarPuesto('DISTRITO CAÑAR (2)')).toBe('DISTRITO CANAR 2');
     });
     it('un nombre vacío o ausente queda vacío', () => {
       expect(normalizarPuesto(null)).toBe('');
@@ -13,7 +24,24 @@ describe('inventario-puestos.util', () => {
     });
   });
 
+  describe('claseEquipo', () => {
+    it('reconoce los chalecos por el nombre, con o sin tilde o mayúsculas', () => {
+      expect(claseEquipo('Chaleco nivel IIIA', 'IMPLEMENTO')).toBe('CHALECO');
+      expect(claseEquipo('CHALECO BALÍSTICO', 'UNIFORME')).toBe('CHALECO');
+    });
+    it('la munición va aparte y lo demás es otro equipo', () => {
+      expect(claseEquipo('MUNICION CAL 38 SPL', 'MUNICION')).toBe('MUNICION');
+      expect(claseEquipo('ALIMENTADORA', 'IMPLEMENTO')).toBe('OTRO');
+      expect(claseEquipo('Camisa', 'UNIFORME')).toBe('OTRO');
+      expect(claseEquipo(null, null)).toBe('OTRO');
+    });
+  });
+
   describe('indicePuestosPorNombre', () => {
+    it('un nombre escrito con guion encuentra al puesto que lo lleva sin él', () => {
+      const idx = indicePuestosPorNombre([{ id: 8, nombre: 'CNEL - COLONCHE' }]);
+      expect(puestoDeRegistro(idx, null, 'CNEL COLONCHE')).toBe(8);
+    });
     it('enlaza solo los nombres que identifican a un único puesto', () => {
       const idx = indicePuestosPorNombre([
         { id: 1, nombre: 'Garita Norte' },
