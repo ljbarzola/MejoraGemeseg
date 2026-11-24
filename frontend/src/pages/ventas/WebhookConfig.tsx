@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { Check, Copy, Trash2 } from 'lucide-react';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import { getSalesApiKeys, createSalesApiKey, deleteSalesApiKey, SalesApiKey } from '../../services/ventas.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { useToast } from '../../contexts/ToastContext';
@@ -82,46 +83,44 @@ export default function WebhookConfig() {
 
   return (
     <div className="page-container">
-      <div className="page-header-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '10px' }}>
-        <button className="cacao-back-btn" onClick={() => navigate('/ventas/leads')} style={{ alignSelf: 'flex-start' }}>
-          <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-        </button>
-        <div>
-          <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>API de prospectos</h1>
-        </div>
-      </div>
+      <VentasPageHeader
+        title="API de prospectos"
+        onVolver={() => navigate('/ventas/leads')}
+        ayuda={null}
+      />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '16px' }}>
+      <div className="form-grid-2" style={{ gap: '20px', marginTop: '16px' }}>
         {/* GENERATE API KEYS */}
         <div className="admin-section">
-          <h3 style={{ margin: '0 0 12px', color: 'var(--azul-oscuro)', fontSize: '1rem' }}>
-            🔑 Generar Nueva API Key
-          </h3>
-          <p style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '16px' }}>
+          <div className="form-seccion-cab">
+            <h3 className="form-seccion-titulo">Generar nueva API Key</h3>
+          </div>
+          <p className="form-seccion-ayuda">
             Crea claves secretas para conectar tus formularios web, Google Ads, Zapier o Make.
           </p>
 
           {createError && <div ref={createErrorRef} className="form-error" style={{ marginBottom: '12px' }}>{createError}</div>}
 
-          <form onSubmit={handleCreate} style={{ display: 'flex', gap: '10px' }}>
-            <input
-              type="text"
-              placeholder="Nombre del canal (ej: Google Ads 2026)"
-              value={keyName}
-              onChange={(e) => setKeyName(e.target.value)}
-              style={{ flex: 1, padding: '8px 12px', border: '1px solid #cbd5e0', borderRadius: '8px' }}
-              required
-            />
-            <button type="submit" className="auth-btn" disabled={creating}>
+          <form onSubmit={handleCreate} style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+            <div className="form-group" style={{ minWidth: 0 }}>
+              <label>Nombre del canal</label>
+              <input
+                type="text"
+                placeholder="Ej: Google Ads 2026"
+                value={keyName}
+                onChange={(e) => setKeyName(e.target.value)}
+                required
+              />
+            </div>
+            <button type="submit" className="auth-btn" disabled={creating} style={{ flex: '0 0 auto' }}>
               {creating ? 'Generando...' : '+ Crear API Key'}
             </button>
           </form>
 
           <div style={{ marginTop: '24px' }}>
-            <h4 style={{ margin: '0 0 12px', color: 'var(--azul-oscuro)', fontSize: '0.9rem' }}>
-              Mis Claves de API Activas
-            </h4>
+            <div className="form-seccion-cab">
+              <h3 className="form-seccion-titulo">Mis claves de API activas</h3>
+            </div>
 
             {deleteError && <div ref={deleteErrorRef} className="form-error" style={{ marginBottom: '12px' }}>{deleteError}</div>}
 
@@ -137,8 +136,9 @@ export default function WebhookConfig() {
                   <div key={k.id} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f7fafc' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                       <strong style={{ fontSize: '0.88rem', color: 'var(--azul-oscuro)' }}>{k.name}</strong>
-                      <button className="btn-danger-sm" onClick={() => handleDelete(k.id, k.name)} style={{ fontSize: '0.72rem' }}>
-                        Eliminar
+                      <button type="button" className="btn-secondary icon-btn" onClick={() => handleDelete(k.id, k.name)}
+                        style={{ color: '#c53030' }} title="Eliminar API Key" aria-label="Eliminar API Key">
+                        <Trash2 size={14} />
                       </button>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -146,11 +146,12 @@ export default function WebhookConfig() {
                         {k.apiKey}
                       </code>
                       <button
-                        className="btn-secondary-sm"
+                        type="button"
+                        className="btn-secondary"
                         onClick={() => copyToClipboard(k.apiKey || k.key)}
-                        style={{ fontSize: '0.72rem' }}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: '0 0 auto' }}
                       >
-                        {copiedKey === k.apiKey ? '✓ Copiado' : 'Copiar'}
+                        {copiedKey === k.apiKey ? <><Check size={14} /> Copiado</> : <><Copy size={14} /> Copiar</>}
                       </button>
                     </div>
                   </div>
@@ -162,9 +163,9 @@ export default function WebhookConfig() {
 
         {/* INSTRUCTIONS & PAYLOAD EXAMPLE */}
         <div className="admin-section">
-          <h3 style={{ margin: '0 0 12px', color: 'var(--azul-oscuro)', fontSize: '1rem' }}>
-            🌐 Documentación de Integración
-          </h3>
+          <div className="form-seccion-cab">
+            <h3 className="form-seccion-titulo">Documentación de integración</h3>
+          </div>
 
           <div style={{ fontSize: '0.85rem', color: '#4a5568', lineHeight: 1.6 }}>
             <p><strong>Endpoint URL:</strong></p>

@@ -18,9 +18,6 @@ import {
   type GrupoMotivos,
 } from '../../utils/motivosCierre';
 
-const inputStyle = { padding: '8px 10px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 };
-const checkStyle = { display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 400 } as const;
-
 interface Props {
   // Qué grupos mostrar (por defecto, los tres). El modal de Contratos solo muestra el suyo.
   grupos?: GrupoMotivoClave[];
@@ -198,21 +195,23 @@ function GrupoMotivosColumna({
       {puedeEditar && (
         <div className="cfg-mot-nuevo">
           <div className="cfg-mot-nuevo-fila">
-            <input
-              type="text" value={nuevo} maxLength={80}
-              placeholder="Escribe un motivo nuevo"
-              aria-label={`Nuevo motivo: ${grupo.corto}`}
-              onChange={(e) => setNuevo(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') agregar(); }}
-              style={{ ...inputStyle, flex: 1, minWidth: 0 }}
-            />
-            <button className="auth-btn" onClick={agregar} style={{ padding: '8px 14px', fontSize: 13 }}>Agregar</button>
+            <div className="form-group" style={{ minWidth: 0 }}>
+              <input
+                type="text" value={nuevo} maxLength={80}
+                placeholder="Escribe un motivo nuevo"
+                aria-label={`Nuevo motivo: ${grupo.corto}`}
+                onChange={(e) => setNuevo(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') agregar(); }}
+                style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+              />
+            </div>
+            <button className="auth-btn" onClick={agregar}>Agregar</button>
           </div>
           <details className="cfg-mot-opciones">
             <summary>Opciones del motivo nuevo</summary>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+            <div className="form-group" style={{ gap: 4, marginTop: 6 }}>
               {varios && grupo.kinds.map((k) => (
-                <label key={k} style={checkStyle}>
+                <label key={k} className="casilla">
                   <input
                     type="checkbox" checked={nuevosKinds.includes(k)}
                     onChange={() => setNuevosKinds((l) => (l.includes(k) ? l.filter((x) => x !== k) : [...l, k]))}
@@ -220,7 +219,7 @@ function GrupoMotivosColumna({
                   {ETIQUETA_CIERRE[k]}
                 </label>
               ))}
-              <label style={checkStyle}>
+              <label className="casilla">
                 <input type="checkbox" checked={exigirComentario} onChange={(e) => setExigirComentario(e.target.checked)} />
                 Exigir comentario al elegirlo
               </label>
@@ -240,15 +239,18 @@ function GrupoMotivosColumna({
               <li key={m.id} className={`cfg-mot-item${m.isActive ? '' : ' cfg-mot-item--off'}${enEdicion ? ' cfg-mot-item--edit' : ''}`}>
                 {enEdicion ? (
                   <>
-                    <input value={editLabel} maxLength={80} onChange={(e) => setEditLabel(e.target.value)}
-                      aria-label="Nombre del motivo" style={{ ...inputStyle, width: '100%', padding: '6px 8px' }} />
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <span style={{ fontSize: 11, color: '#718096' }}>Se usa en:</span>
+                    <div className="form-group">
+                      <label htmlFor={`motivo-edit-${m.id}`}>Nombre del motivo</label>
+                      <input id={`motivo-edit-${m.id}`} value={editLabel} maxLength={80} onChange={(e) => setEditLabel(e.target.value)}
+                        style={{ width: '100%', boxSizing: 'border-box' }} />
+                    </div>
+                    <div className="form-group">
+                      <label>Se usa en</label>
                       {GRUPOS_MOTIVOS.map((gr) => (
                         <div key={gr.clave}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: '#4a5568' }}>{gr.corto}</div>
+                          <div style={{ fontSize: 12.5, fontWeight: 600, color: '#4a5568', marginBottom: 2 }}>{gr.corto}</div>
                           {gr.kinds.map((k) => (
-                            <label key={k} style={checkStyle}>
+                            <label key={k} className="casilla">
                               <input type="checkbox" checked={editKinds.includes(k)} onChange={() => alternarEditKind(k)} />
                               {ETIQUETA_CIERRE[k]}
                             </label>

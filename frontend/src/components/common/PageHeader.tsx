@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ArrowLeft } from 'lucide-react';
 
 /**
  * Encabezado ESTÁNDAR de una pantalla (2026-10-20): nombre del módulo, título, descripción y botones, siempre
@@ -19,9 +20,15 @@ export default function PageHeader({
   title,
   description,
   actions,
+  onVolver,
 }: {
   /** Nombre del módulo, encima del título (ej. «Ventas y CRM»). */
   eyebrow?: string;
+  /**
+   * Solo en pantallas de segundo nivel (detalle, formulario): un «← Volver» pequeño en la misma línea que el
+   * nombre del módulo (2026-11-19). Antes era un botón grande en su propia fila, encima de todo.
+   */
+  onVolver?: () => void;
   title: string;
   /** Una o dos frases que dicen para qué sirve la pantalla. */
   description?: ReactNode;
@@ -31,7 +38,16 @@ export default function PageHeader({
   return (
     <div className="page-title-row">
       <div>
-        {eyebrow && <p className="page-eyebrow">{eyebrow}</p>}
+        {onVolver ? (
+          <div className="page-eyebrow-fila">
+            <button type="button" className="page-volver" onClick={onVolver}>
+              <ArrowLeft size={14} strokeWidth={2.4} aria-hidden="true" /> Volver
+            </button>
+            {eyebrow && <p className="page-eyebrow">{eyebrow}</p>}
+          </div>
+        ) : (
+          eyebrow && <p className="page-eyebrow">{eyebrow}</p>
+        )}
         <h1>{title}</h1>
         {description && <p className="page-title-help">{description}</p>}
       </div>

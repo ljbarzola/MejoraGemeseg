@@ -25,6 +25,9 @@ const slugifyKey = (label: string) =>
     .replace(/^_+|_+$/g, '')
     .replace(/^(?=[0-9])/, 'E_');
 
+// Botones de ícono de cada fila: más chicos que el `icon-btn` normal para que la fila quepa en la ventana chica.
+const BOTON_FILA = { width: 30, height: 30 } as const;
+
 // Ventas agrega/renombra/reordena/borra las etapas del pipeline de
 // seguimiento de Clientes — mismo patrón exacto que ComplaintStagesConfigModal.tsx.
 export default function SalesClientStagesConfigModal({ onClose, onChanged }: Props) {
@@ -159,22 +162,22 @@ export default function SalesClientStagesConfigModal({ onClose, onChanged }: Pro
           <button className="modal-close" onClick={onClose}><X size={16} /></button>
         </div>
         <div className="modal-body">
-          <p style={{ fontSize: '0.82rem', color: '#718096', margin: '0 0 14px' }}>
+          <div className="form-ayuda">
             Estas son las etapas de seguimiento de todos los clientes, vengan de donde vengan. La etapa marcada con la
             estrella es la etapa inicial: todo cliente nuevo se crea ahí. Si el cliente fue referido por alguien, cada
             cambio de etapa le notifica automáticamente.
-          </p>
+          </div>
 
-          {error && <div className="form-error" ref={errorRef} style={{ marginBottom: '14px' }}>{error}</div>}
+          {error && <div className="form-error" ref={errorRef}>{error}</div>}
 
           {loading ? (
             <div className="loading-state">Cargando...</div>
           ) : (
             <>
               {sortedStages.length === 0 ? (
-                <p style={{ fontSize: '0.82rem', color: '#a0aec0', marginBottom: '16px' }}>Sin etapas configuradas.</p>
+                <p style={{ fontSize: '0.85rem', color: '#718096', margin: 0 }}>Sin etapas configuradas.</p>
               ) : (
-                <div style={{ marginBottom: '16px' }}>
+                <div>
                   {sortedStages.map((stage, idx) => (
                     <div key={stage.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
                       <input
@@ -186,53 +189,69 @@ export default function SalesClientStagesConfigModal({ onClose, onChanged }: Pro
                       />
                       <input
                         type="text"
+                        aria-label="Nombre de la etapa"
                         defaultValue={stage.label}
                         onBlur={(e) => handleRename(stage, e.target.value)}
-                        style={{ flex: 1, padding: '6px 8px', border: '2px solid #e2e8f0', borderRadius: '6px', fontSize: '0.85rem' }}
+                        style={{ flex: 1, minWidth: 0, padding: '8px 12px' }}
                       />
                       <button
+                        type="button"
                         onClick={() => handleSetInitial(stage)}
                         title={stage.isInitial ? 'Etapa inicial' : 'Marcar como inicial'}
-                        style={{ background: 'none', border: 'none', cursor: stage.isInitial ? 'default' : 'pointer', color: stage.isInitial ? '#d69e2e' : '#cbd5e0' }}
+                        aria-label={stage.isInitial ? 'Etapa inicial' : 'Marcar como inicial'}
+                        style={{ background: 'none', border: 'none', cursor: stage.isInitial ? 'default' : 'pointer', color: stage.isInitial ? '#d69e2e' : '#a0aec0', display: 'inline-flex', padding: 4 }}
                       >
                         <Star size={16} fill={stage.isInitial ? '#d69e2e' : 'none'} />
                       </button>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.72rem', color: '#718096', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        <input type="checkbox" checked={stage.isFinal} onChange={() => handleToggleFinal(stage)} /> Final
-                      </label>
-                      <button onClick={() => handleMove(stage, -1)} disabled={idx === 0} style={{ background: 'none', border: 'none', cursor: idx === 0 ? 'default' : 'pointer', color: idx === 0 ? '#e2e8f0' : '#a0aec0' }}>
+                      <div className="form-group" style={{ flex: '0 0 auto' }}>
+                        <label className="casilla" style={{ whiteSpace: 'nowrap' }}>
+                          <input type="checkbox" checked={stage.isFinal} onChange={() => handleToggleFinal(stage)} /> Final
+                        </label>
+                      </div>
+                      <button type="button" className="btn-secondary icon-btn" style={BOTON_FILA} onClick={() => handleMove(stage, -1)} disabled={idx === 0}
+                        title="Subir" aria-label="Subir">
                         <ArrowUp size={14} />
                       </button>
-                      <button onClick={() => handleMove(stage, 1)} disabled={idx === sortedStages.length - 1} style={{ background: 'none', border: 'none', cursor: idx === sortedStages.length - 1 ? 'default' : 'pointer', color: idx === sortedStages.length - 1 ? '#e2e8f0' : '#a0aec0' }}>
+                      <button type="button" className="btn-secondary icon-btn" style={BOTON_FILA} onClick={() => handleMove(stage, 1)} disabled={idx === sortedStages.length - 1}
+                        title="Bajar" aria-label="Bajar">
                         <ArrowDown size={14} />
                       </button>
-                      <button onClick={() => handleDelete(stage)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e0' }}>
-                        <Trash2 size={15} />
+                      <button type="button" className="btn-secondary icon-btn" style={{ ...BOTON_FILA, color: '#c53030' }} onClick={() => handleDelete(stage)}
+                        title="Eliminar etapa" aria-label="Eliminar etapa">
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   ))}
                 </div>
               )}
 
-              <div style={{ paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
-                <p style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--azul-oscuro)', margin: '0 0 8px' }}>Agregar etapa nueva</p>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <input
-                    type="color"
-                    value={newColor}
-                    onChange={(e) => setNewColor(e.target.value)}
-                    style={{ width: '32px', minWidth: '32px', height: '32px', flex: '0 0 32px', border: 'none', padding: 0, background: 'none', cursor: 'pointer' }}
-                  />
-                  <input
-                    type="text"
-                    value={newLabel}
-                    onChange={(e) => setNewLabel(e.target.value)}
-                    placeholder="Nombre de la etapa (ej. En negociación)"
-                    style={{ flex: '1 1 220px', padding: '8px 10px', border: '2px solid #e2e8f0', borderRadius: '8px', fontSize: '0.85rem' }}
-                  />
-                  <button className="btn-secondary" onClick={handleAdd} disabled={saving || !newLabel.trim()} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Plus size={14} /> Agregar
-                  </button>
+              <div style={{ paddingTop: '14px', borderTop: '1px solid #e2e8f0' }}>
+                <div className="form-seccion-cab" style={{ marginBottom: 10 }}>
+                  <h4 className="form-seccion-titulo">Agregar etapa nueva</h4>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="etapa-nueva-nombre">Nombre de la etapa</label>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <input
+                      type="color"
+                      value={newColor}
+                      onChange={(e) => setNewColor(e.target.value)}
+                      title="Color de la etapa"
+                      aria-label="Color de la etapa"
+                      style={{ width: '32px', minWidth: '32px', height: '32px', flex: '0 0 32px', border: 'none', padding: 0, background: 'none', cursor: 'pointer' }}
+                    />
+                    <input
+                      id="etapa-nueva-nombre"
+                      type="text"
+                      value={newLabel}
+                      onChange={(e) => setNewLabel(e.target.value)}
+                      placeholder="Ej. En negociación"
+                      style={{ flex: '1 1 180px', minWidth: 0 }}
+                    />
+                    <button className="btn-secondary" onClick={handleAdd} disabled={saving || !newLabel.trim()} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <Plus size={14} /> Agregar
+                    </button>
+                  </div>
                 </div>
               </div>
             </>

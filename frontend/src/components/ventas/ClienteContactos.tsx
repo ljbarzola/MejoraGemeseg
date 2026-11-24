@@ -17,12 +17,6 @@ interface Props {
 
 const ETIQUETAS = ['WHATSAPP', 'CASA', 'TRABAJO', 'OTRO'];
 
-const labelStyle = { display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 };
-const inputStyle = {
-  padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd',
-  fontSize: 13, boxSizing: 'border-box' as const, fontFamily: 'inherit',
-};
-
 interface FormState {
   name: string;
   role: string;
@@ -53,12 +47,12 @@ function ListaValores({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {valores.map((v, i) => (
         <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <select value={v.label} onChange={(e) => actualizar(i, 'label', e.target.value)} style={{ ...inputStyle, width: 110 }}>
+          <select value={v.label} onChange={(e) => actualizar(i, 'label', e.target.value)} style={{ width: 120, flex: '0 0 auto' }}>
             {ETIQUETAS.map((et) => <option key={et} value={et}>{et}</option>)}
           </select>
-          <input value={v.value} onChange={(e) => actualizar(i, 'value', e.target.value)} placeholder={placeholder} style={{ ...inputStyle, flex: 1 }} />
-          <button type="button" onClick={() => quitar(i)} title="Quitar"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c53030', display: 'inline-flex' }}>
+          <input value={v.value} onChange={(e) => actualizar(i, 'value', e.target.value)} placeholder={placeholder} style={{ flex: 1, minWidth: 0 }} />
+          <button type="button" className="btn-secondary icon-btn" onClick={() => quitar(i)} title="Quitar" aria-label="Quitar"
+            style={{ color: '#c53030' }}>
             <Trash2 size={14} />
           </button>
         </div>
@@ -144,8 +138,7 @@ export default function ClienteContactos({ clientId }: Props) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <h3 style={{ fontSize: '0.95rem', margin: 0, flex: 1 }}>Personas de contacto</h3>
         {!nuevo && (
-          <button type="button" className="btn-secondary" onClick={empezarNuevo}
-            style={{ padding: '5px 12px', fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <button type="button" className="btn-secondary btn-compacto" onClick={empezarNuevo}>
             <Plus size={14} /> Agregar
           </button>
         )}
@@ -156,35 +149,35 @@ export default function ClienteContactos({ clientId }: Props) {
 
       {nuevo && (
         <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 12, marginBottom: 14, background: '#f7fafc' }}>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Nombre *</label>
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} maxLength={150} style={{ ...inputStyle, width: '100%' }} placeholder="Ej: Juan Pérez" />
+          <div className="form-grid-2" style={{ marginBottom: 14 }}>
+            <div className="form-group">
+              <label>Nombre *</label>
+              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} maxLength={150} placeholder="Ej: Juan Pérez" />
             </div>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Cargo (opcional)</label>
-              <input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} maxLength={100} style={{ ...inputStyle, width: '100%' }} placeholder="Ej: Jefe de Seguridad" />
+            <div className="form-group">
+              <label>Cargo (opcional)</label>
+              <input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} maxLength={100} placeholder="Ej: Jefe de Seguridad" />
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 8 }}>
-            <div style={{ flex: '1 1 220px' }}>
-              <label style={labelStyle}>Teléfonos</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 14 }}>
+            <div className="form-group">
+              <label>Teléfonos</label>
               <ListaValores valores={form.phones} onChange={(v) => setForm({ ...form, phones: v })} placeholder="Teléfono" />
             </div>
-            <div style={{ flex: '1 1 220px' }}>
-              <label style={labelStyle}>Correos</label>
+            <div className="form-group">
+              <label>Correos</label>
               <ListaValores valores={form.emails} onChange={(v) => setForm({ ...form, emails: v })} placeholder="Correo" />
             </div>
           </div>
-          <div style={{ marginBottom: 10 }}>
-            <label style={labelStyle}>Notas (opcional)</label>
-            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} maxLength={500} style={{ ...inputStyle, width: '100%', resize: 'vertical' }} />
+          <div className="form-group" style={{ marginBottom: 14 }}>
+            <label>Notas (opcional)</label>
+            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} maxLength={500} />
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className="btn-secondary" onClick={cancelar} disabled={guardando} style={{ padding: '6px 14px', fontSize: 12.5 }}>
+            <button type="button" className="btn-secondary btn-compacto" onClick={cancelar} disabled={guardando}>
               <X size={13} /> Cancelar
             </button>
-            <button type="button" className="auth-btn" onClick={guardar} disabled={guardando} style={{ padding: '6px 14px', fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <button type="button" className="auth-btn btn-compacto" onClick={guardar} disabled={guardando}>
               <Check size={13} /> {guardando ? 'Guardando...' : 'Guardar'}
             </button>
           </div>

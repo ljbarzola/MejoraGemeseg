@@ -946,6 +946,111 @@ a.enlace-tabla:hover {
    botones, alineados abajo, quedan siempre por debajo de ella aunque el título sea corto. */
 .page-title-row:has(> .header-actions) { min-height: 76px; }
 
+/* «← Volver» de las pantallas de segundo nivel (2026-11-19): pequeño y en la misma línea que el nombre del
+   módulo, en vez de un botón grande en su propia fila. Se usa con <PageHeader onVolver>. */
+.page-eyebrow-fila { display: flex; align-items: center; gap: 12px; margin: 0 0 2px; }
+.page-eyebrow-fila .page-eyebrow { margin: 0; }
+.page-volver {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 4px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: #4a5568;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.page-volver:hover { background: #e2e8f0; color: #1a202c; }
+
+/* Buscador de la barra de filtros de los listados de Ventas (2026-11-19): mismo borde y esquinas que los
+   selects de filtro (`.filter-select`), en vez del cuadro fino de 1px que traía cada pantalla escrito a mano. */
+.filtro-buscar { flex: 1 1 200px; min-width: 160px; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 10px; font: inherit; font-size: 0.88rem; box-sizing: border-box; outline: none; background: #fff; }
+.filtro-buscar:focus { border-color: var(--azul-claro); }
+/* Formularios de PÁGINA (no ventana) con el formato de los formularios de la app (2026-11-19): tarjeta
+   `admin-section` con título `form-seccion-titulo` y campos `form-group` en una cuadrícula de dos columnas. */
+.form-seccion-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+.form-seccion-titulo { margin: 0; font-size: 1rem; color: var(--azul-oscuro); }
+.form-seccion-ayuda { margin: -6px 0 14px; font-size: 13px; color: #5a6678; line-height: 1.5; }
+.form-grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 16px; }
+.form-grid-2 > .form-group, .form-grid-2 > div { min-width: 0; }
+.form-grid-2 .form-group :is(input, select, textarea) { width: 100%; box-sizing: border-box; }
+@media (max-width: 640px) { .form-grid-2 { grid-template-columns: minmax(0, 1fr); } }
+/* Una etiqueta de estado dentro de un form-group (ficha en solo lectura) conserva su ancho: el form-group es
+   una columna flex y la estiraba a todo el ancho. */
+.form-group > .status-badge { align-self: flex-start; }
+/* Valor de solo lectura con la misma caja que un campo. */
+.campo-lectura { margin: 0; padding: 12px 16px; border: 2px solid var(--borde-input); border-radius: 12px; background: #f7fafc; font-size: 0.95rem; }
+.campo-nota { margin: 0; font-size: 12.5px; color: #166534; }
+/* Casillas dentro de un form-group: etiqueta normal, no en negrita. */
+.form-group .casilla { display: flex; align-items: center; gap: 8px; font-weight: 400; font-size: 0.9rem; color: #2d3748; cursor: pointer; }
+.casillas-caja { border: 2px solid var(--borde-input); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+/* «Configurar campos de la ficha» (2026-11-20): una fila para agregar (como «Crear Puesto / Vacante») y debajo dos
+   paneles fijos: a la izquierda los campos, a la derecha las opciones de la lista elegida. Nada se mueve al elegir. */
+.cfc { display: flex; flex-direction: column; gap: 16px; }
+.cfc-ayuda { margin: 0; font-size: 13px; color: #5a6678; line-height: 1.5; }
+.modal-body.cfc input:not([type='checkbox']):not([type='radio']), .modal-body.cfc select { width: 100%; font: inherit; font-size: 0.88rem; padding: 8px 12px; border: 2px solid var(--borde-input); border-radius: 10px; background: #fff; outline: none; min-width: 0; box-sizing: border-box; }
+.modal-body.cfc input:not([type='checkbox']):not([type='radio']):focus, .modal-body.cfc select:focus { border-color: var(--azul-claro); }
+.cfc-agregar { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.cfc-btn-agregar { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; white-space: nowrap; }
+.cfc-opciones-nuevas { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; padding: 10px 12px; border: 1px dashed #cbd5e0; border-radius: 12px; }
+.cfc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cfc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #f1f5f9; font-size: 12.5px; }
+.cfc-chip button { border: 0; background: transparent; cursor: pointer; color: #c53030; padding: 0; display: inline-flex; }
+.cfc-dos { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 20px; align-items: start; }
+.cfc-lista { display: flex; flex-direction: column; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
+.cfc-campo { display: grid; grid-template-columns: minmax(0, 1fr) 92px 32px; gap: 8px; align-items: center; padding: 6px 10px; border-top: 1px solid #edf2f7; }
+.cfc-campo:first-child { border-top: 0; }
+.cfc-campo--elegido { background: #ebf4ff; }
+.cfc-tipo { font-size: 12px; color: #5a6678; }
+.cfc-tipo--lista { display: inline-flex; align-items: center; justify-content: space-between; gap: 4px; white-space: nowrap; padding: 6px 8px; border: 1px solid #cbd5e0; border-radius: 8px; background: #fff; font: inherit; font-size: 12px; color: var(--azul-oscuro); cursor: pointer; }
+.cfc-tipo--lista[aria-pressed='true'] { border-color: var(--azul-claro); background: #fff; font-weight: 600; }
+.cfc-candado { display: inline-flex; justify-content: center; color: #a0aec0; }
+.cfc-campo .icon-btn { width: 32px; height: 32px; }
+.cfc-vacio { margin: 0; padding: 14px; border: 1px dashed #cbd5e0; border-radius: 12px; font-size: 13px; color: #718096; }
+.cfc-opciones { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--azul-claro); border-radius: 12px; }
+.cfc-rejilla { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 10px; }
+.cfc-fila-sencilla { display: grid; grid-template-columns: minmax(0, 1fr) 32px; gap: 6px; align-items: center; }
+.cfc-opcion-grupo { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid #edf2f7; }
+.cfc-opcion-grupo > .cfc-fila-sencilla input { font-weight: 600; color: var(--azul-oscuro); }
+.cfc-hijos { margin-left: 16px; padding-left: 10px; border-left: 2px solid #e2e8f0; }
+@media (max-width: 760px) { .cfc-dos, .cfc-rejilla, .cfc-agregar { grid-template-columns: minmax(0, 1fr); } }
+/* Ayuda corta bajo un campo de formulario. */
+.form-group > small { font-size: 12px; color: #718096; line-height: 1.4; font-weight: 400; }
+/* Configuración de Ventas (2026-11-19): cada bloque es «título y una frase a la izquierda, campos a la derecha»,
+   como las pantallas de ajustes. Lo usan Bot de WhatsApp y Tarifas de custodia. */
+.cfg-bloque { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); gap: 10px 32px; padding: 20px 0; border-top: 1px solid #edf2f7; }
+.cfg-bloque:first-of-type { border-top: 0; padding-top: 0; }
+.cfg-bloque-info h3 { margin: 0 0 4px; font-size: 0.95rem; color: var(--azul-oscuro); }
+.cfg-bloque-info p { margin: 0; font-size: 12.5px; color: #5a6678; line-height: 1.5; }
+.cfg-bloque-campos { display: flex; flex-direction: column; gap: 16px; min-width: 0; max-width: 760px; }
+.cfg-bloque-campos .form-group { flex: none; }
+.cfg-bloque-campos .form-group :is(input:not([type='checkbox']):not([type='radio']), select, textarea) { width: 100%; box-sizing: border-box; }
+/* Campos numéricos cortos en cuadrícula; la etiqueta reserva dos líneas y se apoya abajo para que los campos
+   de una fila queden a la misma altura aunque una etiqueta sea más larga. */
+.cfg-campos-num { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); column-gap: 16px; row-gap: 0; }
+/* Los bloques de números usan todo el ancho: con el menú lateral cerrado caben más por fila y las etiquetas no se parten. */
+.cfg-bloque-campos:has(> .cfg-campos-num) { max-width: none; }
+/* Cada campo ocupa 3 filas de la cuadrícula compartida (etiqueta, caja, ayuda) con subgrid: todas las etiquetas de una
+   fila miden lo que la más alta, así las cajas quedan a la misma altura aunque una etiqueta use dos líneas. */
+.cfg-campos-num > .form-group { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 6px; margin-bottom: 14px; }
+.cfg-campos-num > .form-group > label { align-self: end; }
+.cfg-campos-num > .form-group > small { align-self: start; min-height: 0; }
+@media (max-width: 760px) { .cfg-campos-num { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cfg-campos-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 16px; }
+.cfg-guardar { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 12px; padding: 14px 0 4px; margin-top: 4px; background: #fff; border-top: 1px solid #edf2f7; }
+.cfg-guardar small { font-size: 12px; color: #718096; }
+/* Días de la semana como botones que se encienden. */
+.cfg-dias { display: flex; gap: 6px; flex-wrap: wrap; }
+.cfg-dia { min-width: 46px; padding: 7px 10px; border: 2px solid var(--borde-input); border-radius: 999px; background: #fff; font: inherit; font-size: 0.85rem; font-weight: 600; color: #4a5568; cursor: pointer; }
+.cfg-dia[aria-pressed='true'] { border-color: var(--azul-claro); background: #ebf4ff; color: var(--azul-oscuro); }
+.cfg-dia:disabled { cursor: default; opacity: 0.7; }
+@media (max-width: 900px) { .cfg-bloque { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) { .cfg-campos-2 { grid-template-columns: minmax(0, 1fr); } }
+
 /* Descripción de la pantalla DENTRO del bloque del título: los botones quedan a su lado, no encima. */
 .page-title-row .page-title-help { margin: 6px 0 0; max-width: 110ch; }
 
@@ -5150,7 +5255,7 @@ textarea.chat-input {
   border-bottom: 1px solid var(--gris-claro);
 }
 .cfg-panel-cab h2 { margin: 0 0 6px; font-size: 1.3rem; color: var(--azul-oscuro); }
-.cfg-panel-cab p { max-width: 72ch; margin: 0; font-size: 0.9rem; line-height: 1.55; color: #4a5568; }
+.cfg-panel-cab p { max-width: none; margin: 0; font-size: 0.9rem; line-height: 1.55; color: #4a5568; }
 .cfg-panel-cab p + p { margin-top: 6px; color: #718096; font-size: 0.85rem; }
 
 .cfg-aviso-lectura {

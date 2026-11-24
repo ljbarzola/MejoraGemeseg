@@ -96,7 +96,7 @@ export default function ConfiguracionVentasPage() {
       : pestana === 'custodia'
         ? {
           titulo: 'Tarifas de custodia',
-          ayuda: 'Los costos con los que el Cotizador calcula una custodia móvil: vehículo, personal por región, viáticos, imprevistos, margen e IVA, más los extras opcionales.',
+          ayuda: 'Los costos con los que el Cotizador calcula una custodia móvil. El margen y el IVA se eligen en cada cotización.',
           detalle: 'Son costos internos: solo los cambia un administrador o gerente. Las cotizaciones ya hechas no cambian.',
         }
       : pestana === 'bot'

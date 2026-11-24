@@ -25,20 +25,6 @@ interface SiguientePasoModalProps {
   onCancel: () => void;
 }
 
-const inputStyle = {
-  width: '100%',
-  padding: '6px 8px',
-  borderRadius: 4,
-  border: '1px solid #ddd',
-  fontSize: 13,
-  boxSizing: 'border-box' as const,
-};
-// Los .btn-secondary / .auth-btn globales son grandes (pensados para
-// formularios de pantalla completa); en un cuadro pequeño con tres acciones
-// no caben en una fila.
-const botonCompacto = { padding: '10px 18px', fontSize: '0.9rem', whiteSpace: 'nowrap' as const };
-const labelStyle = { display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 };
-
 // Ventanita "¿Cuál es el siguiente paso y cuándo?" — se usa al marcar "Hecho"
 // en la vista Hoy y al editar el siguiente paso desde las tablas. La etapa ya
 // no se cambia aquí: solo en Oportunidades.
@@ -96,22 +82,22 @@ export default function SiguientePasoModal({
               <p style={{ margin: 0, color: '#2d3748', lineHeight: 1.5 }}>
                 <strong>{clientName}</strong> — cuéntanos qué hiciste.
               </p>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <div style={{ flex: '0 0 auto' }}>
-                  <label style={labelStyle}>Tipo</label>
-                  <select value={actType} onChange={(e) => setActType(e.target.value as SalesActivityType)} style={{ ...inputStyle, width: 'auto' }}>
+              <div className="ficha-grid">
+                <div className="form-group">
+                  <label>Tipo</label>
+                  <select value={actType} onChange={(e) => setActType(e.target.value as SalesActivityType)}>
                     {SALES_ACTIVITY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
                 {actType === 'OTRO' && (
-                  <div style={{ flex: '1 1 140px', minWidth: 0 }}>
-                    <label style={labelStyle}>¿Cuál?</label>
-                    <input value={actOther} onChange={(e) => setActOther(e.target.value)} maxLength={40} placeholder="Ej: Visita a la obra" style={inputStyle} />
+                  <div className="form-group">
+                    <label>¿Cuál?</label>
+                    <input value={actOther} onChange={(e) => setActOther(e.target.value)} maxLength={40} placeholder="Ej: Visita a la obra" />
                   </div>
                 )}
               </div>
-              <div>
-                <label style={labelStyle}>¿Qué hiciste? (opcional)</label>
+              <div className="form-group">
+                <label>¿Qué hiciste? (opcional)</label>
                 <textarea
                   value={actText}
                   onChange={(e) => setActText(e.target.value)}
@@ -119,7 +105,6 @@ export default function SiguientePasoModal({
                   maxLength={2000}
                   autoFocus
                   placeholder="Ej: Llamé, pidió cotización para 10 guardias."
-                  style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
                 />
               </div>
               <p style={{ margin: '4px 0 0', color: '#4a5568', fontSize: 13 }}>Y ahora, ¿cuál es el siguiente paso y cuándo?</p>
@@ -132,35 +117,33 @@ export default function SiguientePasoModal({
             </p>
           )}
 
-          <div>
-            <label style={labelStyle}>Siguiente paso</label>
+          <div className="form-group">
+            <label>Siguiente paso</label>
             <input
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="Ej: Enviar cotización"
               maxLength={200}
               autoFocus={!conActividad}
-              style={inputStyle}
             />
           </div>
-          <div>
-            <label style={labelStyle}>Para cuándo</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={inputStyle} />
+          <div className="form-group">
+            <label>Para cuándo</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <p style={{ margin: 0, color: '#a0aec0', fontSize: 12 }}>
             Si los dejas vacíos, queda sin siguiente paso.
           </p>
           {errorLocal && <p style={{ margin: 0, color: '#c53030', fontSize: 13 }}>{errorLocal}</p>}
         </div>
-        <div className="modal-actions" style={{ alignItems: 'center', flexWrap: 'nowrap' }}>
-          <button className="btn-secondary" onClick={onCancel} disabled={busy} style={botonCompacto}>
+        <div className="modal-actions">
+          <button className="btn-secondary" onClick={onCancel} disabled={busy}>
             Cancelar
           </button>
           <button
             className="auth-btn"
             onClick={guardar}
             disabled={busy}
-            style={botonCompacto}
           >
             {saveLabel}
           </button>

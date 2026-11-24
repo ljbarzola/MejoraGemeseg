@@ -36,7 +36,6 @@ const hace = (iso: string) => {
 
 const caja = { background: '#f7fafc', border: '1px solid #edf2f7', borderRadius: 8, padding: '10px 12px', marginBottom: 12 } as const;
 const codigo = { fontFamily: 'Consolas, monospace', fontSize: 12, wordBreak: 'break-all' } as const;
-const inputStyle = { padding: '8px 10px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 } as const;
 const enmascarar = (k: string) => `${k.slice(0, 12)}…${k.slice(-4)}`;
 
 // Explicación de la «clave», para gente que no es técnica.
@@ -61,11 +60,11 @@ function FilaClave({ c, visible, puedeEditar, onVer, onActivar, onBorrar }: {
         <div style={{ fontWeight: 600, fontSize: 13 }}>{c.name} {!c.isActive && <span style={{ color: '#718096', fontWeight: 400 }}>· Desactivada</span>}</div>
         <div style={codigo}>{visible ? c.apiKey : enmascarar(c.apiKey)}</div>
       </div>
-      <button type="button" className="btn-secondary" onClick={onVer} style={{ padding: '4px 10px', fontSize: 12 }}>
+      <button type="button" className="btn-secondary" onClick={onVer}>
         {visible ? 'Ocultar' : 'Ver'}
       </button>
       <CopyLinkButton url={c.apiKey} title="Copiar la clave" />
-      <button type="button" className="btn-secondary" disabled={!puedeEditar} onClick={() => onActivar(!c.isActive)} style={{ padding: '4px 10px', fontSize: 12 }}>
+      <button type="button" className="btn-secondary" disabled={!puedeEditar} onClick={() => onActivar(!c.isActive)}>
         {c.isActive ? 'Desactivar' : 'Activar'}
       </button>
       {onBorrar && (
@@ -247,22 +246,27 @@ export default function ConexionesConfigSection({ config, servicios, puedeEditar
           </p>
           <QueEsLaClave />
 
-          <h4 style={{ margin: '0 0 8px' }}>Claves de conexión</h4>
+          <div className="form-seccion-cab" style={{ marginBottom: 8 }}>
+            <h4 className="form-seccion-titulo">Claves de conexión</h4>
+          </div>
           {clavesWeb.length === 0 && (
             <p style={{ fontSize: 13, color: '#4a5568', margin: '0 0 10px' }}>
               Está <strong>desactivada</strong> porque todavía no hay ninguna clave. Crea una para activarla (una por cada sitio que vaya a enviar contactos).
             </p>
           )}
           {puedeEditar && (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-              <input
-                type="text" value={nombreClaveWeb} maxLength={60} placeholder="Nombre del sitio (ej: Sitio web)"
-                aria-label="Nombre de la clave"
-                onChange={(e) => setNombreClaveWeb(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') crearClaveWeb(); }}
-                style={{ ...inputStyle, flex: '1 1 220px' }}
-              />
-              <button className="auth-btn" onClick={crearClaveWeb}>{clavesWeb.length === 0 ? 'Activar con una clave nueva' : 'Crear clave'}</button>
+            <div className="form-group" style={{ marginBottom: 12 }}>
+              <label htmlFor="cfg-clave-web-nombre">Nombre de la clave</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <input
+                  id="cfg-clave-web-nombre"
+                  type="text" value={nombreClaveWeb} maxLength={60} placeholder="Nombre del sitio (ej: Sitio web)"
+                  onChange={(e) => setNombreClaveWeb(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') crearClaveWeb(); }}
+                  style={{ flex: '1 1 220px', minWidth: 0 }}
+                />
+                <button className="auth-btn" onClick={crearClaveWeb}>{clavesWeb.length === 0 ? 'Activar con una clave nueva' : 'Crear clave'}</button>
+              </div>
             </div>
           )}
           {clavesWeb.map((c) => (
@@ -272,7 +276,9 @@ export default function ConexionesConfigSection({ config, servicios, puedeEditar
               onBorrar={() => setABorrarClave(c)} />
           ))}
 
-          <h4 style={{ margin: '14px 0 8px' }}>Dirección del CRM</h4>
+          <div className="form-seccion-cab" style={{ margin: '14px 0 8px' }}>
+            <h4 className="form-seccion-titulo">Dirección del CRM</h4>
+          </div>
           <div style={caja}>
             <p style={{ margin: '0 0 6px', fontSize: 13 }}>
               A quien administra el sitio pásale esta dirección junto con la clave:
@@ -302,7 +308,7 @@ export default function ConexionesConfigSection({ config, servicios, puedeEditar
             <p style={{ margin: '0 0 6px', fontSize: 13 }}>Dirección del CRM para esta conexión:</p>
             <div style={{ ...codigo, display: 'flex', alignItems: 'center', gap: 8 }}>{urlWeb} <CopyLinkButton url={urlWeb} title="Copiar la dirección" /></div>
           </div>
-          <button className="btn-secondary" style={{ color: '#c53030' }} disabled={!puedeEditar}
+          <button className="btn-secondary" style={{ color: '#c53030', display: 'inline-flex', alignItems: 'center', gap: 6 }} disabled={!puedeEditar}
             onClick={() => setAQuitar({ id: propiaAbierta.id, nombre: propiaAbierta.nombre })}>
             <Trash2 size={16} /> Quitar esta conexión
           </button>
@@ -365,15 +371,19 @@ export default function ConexionesConfigSection({ config, servicios, puedeEditar
                   Qué NO hace todavía: no existe una conexión directa con los formularios de Meta, LinkedIn ni TikTok; cada una necesitaría un desarrollo aparte. Por ahora todas las nuevas entran por la misma puerta que el Formulario web, y el CRM reconoce el canal por los datos del anuncio.
                 </p>
                 <QueEsLaClave />
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <input
-                    type="text" value={nombreNueva} maxLength={60} placeholder="Nombre de la conexión (ej: Otra página web)"
-                    aria-label="Nombre de la nueva conexión" disabled={!puedeEditar}
-                    onChange={(e) => setNombreNueva(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') crearNueva(); }}
-                    style={{ ...inputStyle, flex: '1 1 260px' }}
-                  />
-                  <button className="auth-btn" onClick={crearNueva} disabled={!puedeEditar}>Crear conexión</button>
+                <div className="form-group">
+                  <label htmlFor="cfg-conex-nueva-nombre">Nombre de la conexión</label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <input
+                      id="cfg-conex-nueva-nombre"
+                      type="text" value={nombreNueva} maxLength={60} placeholder="Ej: Otra página web"
+                      disabled={!puedeEditar}
+                      onChange={(e) => setNombreNueva(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') crearNueva(); }}
+                      style={{ flex: '1 1 260px', minWidth: 0 }}
+                    />
+                    <button className="auth-btn" onClick={crearNueva} disabled={!puedeEditar}>Crear conexión</button>
+                  </div>
                 </div>
               </div>
             </div>

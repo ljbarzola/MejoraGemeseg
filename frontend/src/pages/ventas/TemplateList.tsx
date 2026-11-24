@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
+import VentasPageHeader from '../../components/ventas/VentasPageHeader';
 import { getTemplates, deleteTemplate, SalesTemplate } from '../../services/ventas.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { useToast } from '../../contexts/ToastContext';
@@ -51,21 +52,16 @@ export default function TemplateList() {
 
   return (
     <div className="page-container">
-      <button className="cacao-back-btn" onClick={() => navigate('/ventas/documentacion')} style={{ marginBottom: 16 }}>
-        <ArrowLeft size={16} strokeWidth={2.4} /> Volver
-      </button>
-
-      <div className="page-header-row">
-        <div>
-          <p className="page-eyebrow">Ventas y CRM</p>
-          <h1>Plantillas de documentos</h1>
-        </div>
-        <div className="header-actions">
+      <VentasPageHeader
+        title="Plantillas de documentos"
+        onVolver={() => navigate('/ventas/documentacion')}
+        ayuda={null}
+        actions={
           <button className="auth-btn" onClick={() => navigate('/ventas/documentacion/configuracion')}>
             <Plus size={16} /> Nueva plantilla
           </button>
-        </div>
-      </div>
+        }
+      />
 
       <div className="admin-section">
         {loading ? (
@@ -74,7 +70,7 @@ export default function TemplateList() {
           <div className="empty-state">
             <div style={{ fontSize: '2rem', marginBottom: '8px' }}>📋</div>
             <div>No hay plantillas creadas</div>
-            <button className="auth-btn" onClick={() => navigate('/ventas/documentacion/configuracion')} style={{ marginTop: '16px', padding: '10px 24px' }}>Crear plantilla</button>
+            <button className="auth-btn" onClick={() => navigate('/ventas/documentacion/configuracion')} style={{ marginTop: '16px' }}>Crear plantilla</button>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
@@ -95,10 +91,11 @@ export default function TemplateList() {
                   </div>
                   <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
                     <button className="btn-secondary" onClick={() => navigate(`/ventas/documentacion/configuracion/${t.id}`)}
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px', fontSize: '0.8rem' }}>
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                       <Pencil size={14} /> Editar
                     </button>
-                    <button onClick={() => handleDelete(t.id)} style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #fecaca', background: '#fff', color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                    <button type="button" className="btn-secondary icon-btn" onClick={() => handleDelete(t.id)}
+                      style={{ color: '#c53030' }} title="Eliminar plantilla" aria-label="Eliminar plantilla">
                       <Trash2 size={14} />
                     </button>
                   </div>

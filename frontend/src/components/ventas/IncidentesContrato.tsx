@@ -29,12 +29,6 @@ const hoyLocal = () => {
   return `${d.getFullYear()}-${mm}-${dd}`;
 };
 
-const labelStyle = { display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 } as const;
-const inputStyle = {
-  padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd',
-  fontSize: 13, boxSizing: 'border-box' as const, fontFamily: 'inherit',
-};
-
 // Registro de lo que pasó con UN contrato mientras estuvo vigente (incidentes del servicio) y de
 // lo que dijo el cliente al terminar (conversación de salida). Antes se anotaba en el Historial
 // del cliente; aquí queda atado al contrato concreto.
@@ -95,25 +89,26 @@ export default function IncidentesContrato({ contrato, onCambio }: Props) {
           )}
         </div>
       </div>
-      <p style={{ fontSize: 12, color: '#718096', margin: '0 0 12px' }}>
+      <p className="form-seccion-ayuda" style={{ margin: '0 0 12px' }}>
         Aquí se anota lo que pasó con {producto ? 'esta venta' : 'este contrato'} de {contrato.salesClient.name}: los incidentes del servicio mientras estuvo vigente (una falla, un guardia ausente, un reclamo) y, cuando termina, la conversación de salida, es decir lo que dijo el propio cliente sobre por qué se va o no renueva. Sirve para entender por qué se pierde un cliente más allá del precio.
       </p>
 
       {abierto && (
         <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 12, marginBottom: 14, background: '#f7fafc' }}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-            <div>
-              <label style={labelStyle}>Qué se registra</label>
-              <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoIncidenteContrato)} style={{ ...inputStyle, width: 'auto' }}>
+          <div className="form-grid-2" style={{ marginBottom: 14 }}>
+            <div className="form-group">
+              <label>Qué se registra</label>
+              <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoIncidenteContrato)}>
                 {TIPOS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
-            <div>
-              <label style={labelStyle}>{tipo === 'CONVERSACION_SALIDA' ? 'Fecha de la conversación' : 'Fecha del incidente'}</label>
-              <input type="date" value={fecha} max={hoyLocal()} onChange={(e) => setFecha(e.target.value)} style={inputStyle} />
+            <div className="form-group">
+              <label>{tipo === 'CONVERSACION_SALIDA' ? 'Fecha de la conversación' : 'Fecha del incidente'}</label>
+              <input type="date" value={fecha} max={hoyLocal()} onChange={(e) => setFecha(e.target.value)} />
             </div>
           </div>
-          <label style={labelStyle}>{tipo === 'CONVERSACION_SALIDA' ? '¿Qué dijo el cliente? *' : '¿Qué pasó? *'}</label>
+          <div className="form-group" style={{ marginBottom: 14 }}>
+          <label>{tipo === 'CONVERSACION_SALIDA' ? '¿Qué dijo el cliente? *' : '¿Qué pasó? *'}</label>
           <textarea
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
@@ -122,14 +117,13 @@ export default function IncidentesContrato({ contrato, onCambio }: Props) {
             placeholder={tipo === 'CONVERSACION_SALIDA'
               ? `Ej: ${contrato.salesClient.name} dice que no renueva porque cambió de proveedor tras la falla de diciembre.`
               : `Ej: El 12 de marzo el guardia del turno de noche no llegó a ${contrato.salesClient.name}; se cubrió con 2 horas de retraso.`}
-            style={{ ...inputStyle, width: '100%', resize: 'vertical', marginBottom: 8 }}
           />
+          </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className="btn-secondary" onClick={cerrar} disabled={guardando} style={{ padding: '6px 14px', fontSize: 12.5 }}>
+            <button type="button" className="btn-secondary btn-compacto" onClick={cerrar} disabled={guardando}>
               <X size={13} /> Cancelar
             </button>
-            <button type="button" className="auth-btn" onClick={guardar} disabled={guardando || !texto.trim()}
-              style={{ padding: '6px 14px', fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <button type="button" className="auth-btn btn-compacto" onClick={guardar} disabled={guardando || !texto.trim()}>
               <Check size={13} /> {guardando ? 'Guardando...' : 'Guardar'}
             </button>
           </div>
