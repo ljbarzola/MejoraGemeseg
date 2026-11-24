@@ -16,7 +16,8 @@ import QuoteTotals from './QuoteTotals';
 const LOGO_GEMESEG_SOBRE_BLANCO = '/resources/logo-gemeseg-bgwhite.png';
 
 export interface HojaFilaProducto {
-  codigo: string;
+  /** Modelo del equipo (vacío en materiales y servicios): se imprime en lugar del código. */
+  modelo: string;
   nombre: string;
   /** Unidad de venta («—» si no tiene). */
   unidad: string;
@@ -75,7 +76,7 @@ export default function HojaCotizacion({ d }: { d: HojaDatos }) {
         <td className="num">{n}</td>
         <td>
           <span className="desc">{f.nombre}</span>
-          <small>{f.codigo}</small>
+          {f.modelo && <small>{f.modelo}</small>}
         </td>
         <td className="center und">{f.unidad || '—'}</td>
         <td className="right">{money(f.precioUnitario)}</td>

@@ -29,6 +29,9 @@ import DateInput from '../../../components/common/DateInput';
 import PuestoFormModal from '../puestos/PuestoFormModal';
 import { useModuloContratos } from '../../../hooks/useModuloContratos';
 import { textoTurnos } from '../puestos/turnosPuesto';
+import { getInventarioPorContrato } from '../../../services/inventario.service';
+import type { InventarioDePuesto } from '../../../types/inventario';
+import InventarioPuestoModal from '../inventario/InventarioPuestoModal';
 
 const TABS = ['PUESTOS', 'ADENDAS', 'ADJUNTOS', 'HORARIOS', 'INFORMES'] as const;
 type Tab = (typeof TABS)[number];
@@ -61,6 +64,9 @@ export default function ContratoDetail() {
 
   const [contrato, setContrato] = useState<CPContrato | null>(null);
   const [puestos, setPuestos] = useState<CPPuestoServicio[]>([]);
+  // Armas y equipo de cada puesto (solo en Operaciones; si no se puede leer, la columna queda en «—»).
+  const [inventarioPuestos, setInventarioPuestos] = useState<InventarioDePuesto[]>([]);
+  const [verInventarioDe, setVerInventarioDe] = useState<InventarioDePuesto | null>(null);
   const [horarios, setHorarios] = useState<CPHorarioMensual[]>([]);
   const [informes, setInformes] = useState<CPInformeMensual[]>([]);
   const [loading, setLoading] = useState(true);
@@ -122,6 +128,12 @@ export default function ContratoDetail() {
       .then(([c, p, h, inf]) => { setContrato(c); setPuestos(p); setHorarios(h); setInformes(inf); })
       .catch((err) => setError(err.response?.data?.message || 'No se pudo cargar el contrato.'))
       .finally(() => setLoading(false));
+    // Aparte y sin bloquear la pantalla: un fallo aquí no debe impedir ver el contrato.
+    if (!enCP) {
+      getInventarioPorContrato(contratoId)
+        .then(setInventarioPuestos)
+        .catch(() => setInventarioPuestos([]));
+    }
   };
 
   useEffect(load, [contratoId]);
@@ -336,6 +348,7 @@ export default function ContratoDetail() {
                       <th>Mínimo por día</th>
                       <th>Cant. guardias</th>
                       <th>Guardias asignados</th>
+                      {!enCP && <th>Armas y equipo</th>}
                       <th style={{ textAlign: 'right' }}>Acciones</th>
                     </tr>
                   </thead>
@@ -348,6 +361,19 @@ export default function ContratoDetail() {
                         <td>{p.guardiasSimultaneosRequeridos}</td>
                         <td>{p.cantidadGuardias}</td>
                         <td>{p.guardias?.length || 0}</td>
+                        {!enCP && (
+                          <td>
+                            {(() => {
+                              const inv = inventarioPuestos.find((x) => x.puestoId === p.id);
+                              if (!inv || (inv.totalArmas === 0 && inv.totalEquipo === 0)) return <span style={{ color: '#a0aec0' }}>—</span>;
+                              return (
+                                <button type="button" className="enlace-tabla" style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', font: 'inherit' }} onClick={() => setVerInventarioDe(inv)}>
+                                  {[inv.totalArmas > 0 ? `${inv.totalArmas} ${inv.totalArmas === 1 ? 'arma' : 'armas'}` : null, inv.totalEquipo > 0 ? `${inv.totalEquipo} de equipo` : null].filter(Boolean).join(' · ')}
+                                </button>
+                              );
+                            })()}
+                          </td>
+                        )}
                         <td style={{ textAlign: 'right' }}>
                           <div className="acciones-iconos">
                             <button type="button" className="btn-secondary icon-btn" title="Editar / asignar guardias" aria-label="Editar / asignar guardias" onClick={() => { setEditingPuesto(p); setShowPuestoModal(true); }}>
@@ -547,6 +573,8 @@ export default function ContratoDetail() {
           onSaved={() => { cerrarEdicion(); load(); }}
         />
       )}
+
+      {verInventarioDe && <InventarioPuestoModal puesto={verInventarioDe} onClose={() => setVerInventarioDe(null)} />}
 
       {showPuestoModal && (
         <PuestoFormModal

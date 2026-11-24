@@ -158,6 +158,8 @@ export interface CotQuote {
   discountValue: number;
   conditions: string;
   notes: string;
+  /** Pilar del que se tomaron las condiciones generales precargadas (null en cotizaciones viejas). */
+  pilar: string | null;
   createdAt: string;
   updatedAt: string;
   access: CotQuoteAccess | null;

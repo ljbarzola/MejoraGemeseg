@@ -257,7 +257,7 @@ export default function CotizacionPublicaPage() {
         <td className="cp-desc" data-label="Producto">
           <span>{f.nombre}</span>
           <small>
-            {f.codigo}
+            {f.modelo}
             {f.admiteInstalacion && (
               <span className={`cp-inst${f.instalacionIncluida ? ' si' : ''}`}>
                 {f.instalacionIncluida ? 'Instalación incluida' : 'Sin instalación'}

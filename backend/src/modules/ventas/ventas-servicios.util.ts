@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DEFAULT_SUBSERVICIOS } from './ventas-subservicios.const';
+import { pilarDeCategoria } from './ventas-pilares.const';
 
 // Categoría de cada sub-servicio, usada como descripción del servicio en el
 // catálogo la primera vez que se siembra.
@@ -61,6 +62,7 @@ export async function ensureDefaultServices(
         companyId,
         name: s.label,
         description: CATEGORIA_LABEL[cat] ?? null,
+        pilar: pilarDeCategoria(CATEGORIA_LABEL[cat]) ?? '',
         order: order++,
       });
     }

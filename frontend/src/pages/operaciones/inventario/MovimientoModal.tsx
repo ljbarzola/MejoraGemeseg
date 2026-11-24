@@ -10,11 +10,11 @@ import { hoyEcuador, mensajeError, nombreArticulo, pluralUnidad } from './invent
 type Quien = 'GUARDIA' | 'PUESTO' | 'BODEGA';
 
 const AYUDA: Record<TipoMovimiento, string> = {
-  ENTRADA: 'Material que llega a la bodega: compra, donación o reposición.',
-  ENTREGA: 'Sale de la bodega y queda a cargo de un guardia o de un puesto.',
-  DEVOLUCION: 'Vuelve a la bodega lo que tenía un guardia o un puesto. Si vuelve dañado, se da de baja solo.',
+  ENTRADA: 'Material que llega al rastrillo: compra, donación o reposición.',
+  ENTREGA: 'Sale del rastrillo y queda a cargo de un guardia o de un puesto.',
+  DEVOLUCION: 'Vuelve al rastrillo lo que tenía un guardia o un puesto. Si vuelve dañado, se da de baja solo.',
   BAJA: 'Sale del inventario: dañado, perdido, vencido o consumido (por ejemplo, munición usada en una práctica).',
-  AJUSTE: 'Corrige el conteo de la bodega después de revisarlo. Usa un número negativo para restar.',
+  AJUSTE: 'Corrige el conteo del rastrillo después de revisarlo. Usa un número negativo para restar.',
 };
 
 const DOCUMENTO: Partial<Record<TipoMovimiento, string>> = {
@@ -125,7 +125,7 @@ export default function MovimientoModal({
               <select value={articuloId} onChange={(e) => setArticuloId(e.target.value)} required>
                 <option value="">-- Elegir artículo --</option>
                 {articulos.map((a) => (
-                  <option key={a.id} value={a.id}>{nombreArticulo(a.nombre, a.variante)} (en bodega: {a.enBodega})</option>
+                  <option key={a.id} value={a.id}>{nombreArticulo(a.nombre, a.variante)} (en el rastrillo: {a.enBodega})</option>
                 ))}
               </select>
             </div>
@@ -147,7 +147,7 @@ export default function MovimientoModal({
                   <label>{tipo === 'ENTREGA' ? 'Entregar a' : tipo === 'DEVOLUCION' ? 'Devuelve' : 'Sale de'} *</label>
                   <select value={quien} onChange={(e) => setQuien(e.target.value as Quien)}>
                     {opcionesQuien.map((q) => (
-                      <option key={q} value={q}>{q === 'GUARDIA' ? 'Un guardia' : q === 'PUESTO' ? 'Un puesto' : 'La bodega'}</option>
+                      <option key={q} value={q}>{q === 'GUARDIA' ? 'Un guardia' : q === 'PUESTO' ? 'Un puesto' : 'El rastrillo'}</option>
                     ))}
                   </select>
                 </div>

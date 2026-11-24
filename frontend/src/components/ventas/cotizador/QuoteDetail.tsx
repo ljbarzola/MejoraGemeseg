@@ -89,11 +89,14 @@ function ProductRow({
     <tr className={isKitComp ? 'kit-comp' : undefined}>
       <td className="num">{num}</td>
       <td>
-        <button type="button" className="cot-link" onClick={onOpen} title="Ver detalle">
+        <button type="button" className="cot-link" onClick={onOpen} title="Ver o editar el producto">
           <strong style={{ fontWeight: 600 }}>{it.name}</strong>
         </button>
         <Chips c={c} />
-        <small>{it.code}</small>
+        <small>
+          {it.code}
+          {it.model ? ` · ${it.model}` : ''}
+        </small>
         {it.supplier && <small className="cot-screen-only"> · {it.supplier}</small>}
       </td>
       <td className="center" style={{ fontSize: 11, fontWeight: 600 }}>

@@ -9,8 +9,8 @@ import {
   getEventosArma,
   mantenimientoArma,
 } from '../../../services/inventario.service';
-import type { Arma, ClaseArma, EventoArma } from '../../../types/inventario';
-import { CLASE_ARMA_LABEL } from '../../../types/inventario';
+import type { Arma, CategoriaArma, ClaseArma, EventoArma } from '../../../types/inventario';
+import { CATEGORIA_ARMA_LABEL, CLASE_ARMA_LABEL } from '../../../types/inventario';
 import DateInput from '../../../components/common/DateInput';
 import EmpleadoSelect from '../../../components/custodias/EmpleadoSelect';
 import { formatoFecha, mensajeError } from './inventarioUi';
@@ -33,6 +33,10 @@ export function ArmaModal({ arma, onClose, onSaved }: { arma: Arma | null; onClo
   const [permisoNumero, setPermisoNumero] = useState(arma?.permisoNumero ?? '');
   const [permisoVence, setPermisoVence] = useState(arma?.permisoVence ?? '');
   const [notas, setNotas] = useState(arma?.notas ?? '');
+  const [categoria, setCategoria] = useState<CategoriaArma | ''>(arma?.categoria ?? '');
+  const [municiones, setMuniciones] = useState(arma?.municiones != null ? String(arma.municiones) : '');
+  const [ciudad, setCiudad] = useState(arma?.ciudad ?? '');
+  const [uso, setUso] = useState(arma?.uso ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const errorRef = useScrollAlError(error);
@@ -40,6 +44,7 @@ export function ArmaModal({ arma, onClose, onSaved }: { arma: Arma | null; onClo
   const guardar = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!serie.trim()) return setError('Escribe el número de serie del arma.');
+    if (municiones.trim() && !/^\d+$/.test(municiones.trim())) return setError('Las municiones deben ser un número entero.');
     setSaving(true);
     setError('');
     try {
@@ -52,6 +57,10 @@ export function ArmaModal({ arma, onClose, onSaved }: { arma: Arma | null; onClo
         permisoNumero: permisoNumero.trim() || null,
         permisoVence: permisoVence || null,
         notas: notas.trim() || null,
+        categoria: categoria || null,
+        municiones: municiones.trim() ? Number(municiones.trim()) : null,
+        ciudad: ciudad.trim() || null,
+        uso: uso.trim() || null,
       };
       if (arma) await actualizarArma(arma.id, datos);
       else await crearArma(datos);
@@ -108,6 +117,28 @@ export function ArmaModal({ arma, onClose, onSaved }: { arma: Arma | null; onClo
                 <label>El permiso vence</label>
                 <DateInput value={permisoVence} onChange={setPermisoVence} />
                 <small style={{ color: '#718096' }}>Se avisa 30 días antes y no se puede asignar un arma con el permiso vencido.</small>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              <div className="form-group" style={{ flex: '1 1 160px' }}>
+                <label>Categoría</label>
+                <select value={categoria} onChange={(e) => setCategoria(e.target.value as CategoriaArma | '')}>
+                  <option value="">Sin categoría</option>
+                  {(Object.keys(CATEGORIA_ARMA_LABEL) as CategoriaArma[]).map((c) => <option key={c} value={c}>{CATEGORIA_ARMA_LABEL[c]}</option>)}
+                </select>
+              </div>
+              <div className="form-group" style={{ flex: '1 1 140px' }}>
+                <label>Municiones asignadas</label>
+                <input type="text" inputMode="numeric" value={municiones} onChange={(e) => setMuniciones(e.target.value)} placeholder="10" />
+              </div>
+              <div className="form-group" style={{ flex: '1 1 160px' }}>
+                <label>Ciudad</label>
+                <input type="text" value={ciudad} onChange={(e) => setCiudad(e.target.value)} />
+              </div>
+              <div className="form-group" style={{ flex: '1 1 160px' }}>
+                <label>Se usa para</label>
+                <input type="text" value={uso} onChange={(e) => setUso(e.target.value)} placeholder="Custodia" list="usos-arma" />
+                <datalist id="usos-arma"><option value="Custodia" /></datalist>
               </div>
             </div>
             <div className="form-group">
@@ -194,7 +225,7 @@ export function AsignarArmaModal({
 export type AccionArma = 'DEVOLVER' | 'MANTENIMIENTO' | 'BAJA';
 
 const TEXTOS: Record<AccionArma, { titulo: string; boton: string; etiqueta: string; obligatorio: boolean; ayuda: string }> = {
-  DEVOLVER: { titulo: 'Devolver arma', boton: 'Devolver a la bodega', etiqueta: 'Observación', obligatorio: false, ayuda: 'Queda disponible en la bodega. Ej: estado en que vuelve.' },
+  DEVOLVER: { titulo: 'Devolver arma', boton: 'Devolver al rastrillo', etiqueta: 'Observación', obligatorio: false, ayuda: 'Queda disponible en el rastrillo. Ej: estado en que vuelve.' },
   MANTENIMIENTO: { titulo: 'Enviar a mantenimiento', boton: 'Enviar a mantenimiento', etiqueta: 'Qué necesita', obligatorio: true, ayuda: 'No se podrá asignar hasta que la reactives.' },
   BAJA: { titulo: 'Dar de baja el arma', boton: 'Dar de baja', etiqueta: 'Motivo de la baja', obligatorio: true, ayuda: 'Deja de contar como arma de la empresa. El historial se conserva.' },
 };

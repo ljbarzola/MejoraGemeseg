@@ -5,12 +5,13 @@ import { PermissionsModule } from '../permissions/permissions.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { InventarioController } from './inventario.controller';
 import { InventarioService } from './inventario.service';
+import { InventarioImportService } from './inventario-import.service';
 import { INVENTARIO_DDL } from './inventario.schema';
 
 @Module({
   imports: [PrismaModule, PermissionsModule, NotificationsModule],
   controllers: [InventarioController],
-  providers: [InventarioService],
+  providers: [InventarioService, InventarioImportService],
   // Lo lee el resumen de Operaciones (armas y artículos bajo el mínimo).
   exports: [InventarioService],
 })

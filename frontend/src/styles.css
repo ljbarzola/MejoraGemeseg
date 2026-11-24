@@ -18,6 +18,9 @@
   --z-report-btn: 250;
   --z-notif-btn: 260;
   --z-panel: 900;
+  /* Menús desplegables que se pintan en el body (p. ej. «Columnas» de una tabla):
+     deben quedar por encima de un modal anidado (1050), si no se abren detrás. */
+  --z-popover: 1100;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowLeftRight, Plus } from 'lucide-react';
+import { ArrowLeftRight, FileSpreadsheet, Plus } from 'lucide-react';
 import { getArticulos, getResumenInventario } from '../../../services/inventario.service';
 import { getOpcionesBitacora } from '../../../services/bitacoras.service';
 import type { Articulo, ResumenInventario, TipoMovimiento } from '../../../types/inventario';
@@ -13,6 +13,7 @@ import ArmasTab from './ArmasTab';
 import TenenciasTab from './TenenciasTab';
 import MovimientosTab from './MovimientosTab';
 import MovimientoModal from './MovimientoModal';
+import ImportarExcelModal from './ImportarExcelModal';
 import { COLOR_PERMISO, formatoFecha, mensajeError, nombreArticulo } from './inventarioUi';
 
 type Pestana = 'resumen' | 'existencias' | 'armas' | 'tenencias' | 'movimientos';
@@ -156,6 +157,8 @@ export default function InventarioPage() {
   const [crearArticulo, setCrearArticulo] = useState(false);
   const [crearArma, setCrearArma] = useState(false);
   const [movimiento, setMovimiento] = useState<{ articuloId?: number; tipo?: TipoMovimiento } | null>(null);
+  // TEMPORAL (2026-11-19): carga desde el Excel de Operaciones; se retira cuando todo se registre en la aplicación.
+  const [importando, setImportando] = useState(false);
 
   useEffect(() => {
     getArticulos().then(setArticulos).catch(() => setArticulos([]));
@@ -170,6 +173,9 @@ export default function InventarioPage() {
 
   const acciones = puedeEscribir ? (
     <>
+      <button className="btn-secondary" onClick={() => setImportando(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }} title="Carga el Excel de inventario de Operaciones (temporal)">
+        <FileSpreadsheet size={15} /> Importar desde Excel
+      </button>
       <button className="btn-secondary" onClick={() => setMovimiento({})} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <ArrowLeftRight size={15} /> Registrar movimiento
       </button>
@@ -216,6 +222,8 @@ export default function InventarioPage() {
       )}
       {pestana === 'tenencias' && <TenenciasTab recarga={recarga} />}
       {pestana === 'movimientos' && <MovimientosTab recarga={recarga} />}
+
+      {importando && <ImportarExcelModal onClose={() => setImportando(false)} onDone={cambio} />}
 
       {movimiento && (
         <MovimientoModal

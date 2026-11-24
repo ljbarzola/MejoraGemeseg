@@ -166,6 +166,12 @@ describe('serviceCost() / toPriceItem()', () => {
     expect(toPriceItem(product({ kind: 'MATERIAL', supplier: 'X' })).supplier).toBe('');
     expect(toPriceItem(product({ kind: 'EQUIPO', supplier: 'X' })).supplier).toBe('X');
   });
+  it('el modelo solo sale en los equipos (es lo que se imprime en la hoja, en lugar del código)', () => {
+    expect(toPriceItem(product({ kind: 'EQUIPO', model: 'DS-X' })).model).toBe('DS-X');
+    expect(toPriceItem(product({ kind: 'MATERIAL', model: 'DS-X' })).model).toBe('');
+    expect(toPriceItem(product({ kind: 'SERVICIO', model: 'DS-X' })).model).toBe('');
+    expect(toPriceItem(product({ kind: 'EQUIPO', model: '' })).model).toBe('');
+  });
 });
 
 describe('precio guardado (snap)', () => {

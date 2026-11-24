@@ -5,6 +5,7 @@ import {
   estadoStock,
   motivoNoSePuede,
   reposicionSugerida,
+  requiereCorreccion,
   saldoBodega,
   saldosPorTenedor,
   totalEntregado,
@@ -19,6 +20,26 @@ describe('claveTenedor', () => {
     expect(claveTenedor({ puestoId: 4 })).toBe('P:4');
     expect(claveTenedor({})).toBeNull();
     expect(claveTenedor({ guardiaCedula: '  ' })).toBeNull();
+  });
+});
+
+describe('claveTenedor con un puesto solo con su nombre (carga desde el Excel)', () => {
+  it('usa el nombre sin importar mayúsculas ni espacios, y la cédula y el puestoId mandan antes', () => {
+    expect(claveTenedor({ puestoNombre: ' Kia Matriz ' })).toBe('N:KIA MATRIZ');
+    expect(claveTenedor({ puestoNombre: 'kia matriz' })).toBe('N:KIA MATRIZ');
+    expect(claveTenedor({ puestoNombre: '   ' })).toBeNull();
+    expect(claveTenedor({ puestoId: 4, puestoNombre: 'Kia Matriz' })).toBe('P:4');
+    expect(claveTenedor({ guardiaCedula: '123', puestoNombre: 'Kia Matriz' })).toBe('G:123');
+  });
+});
+
+describe('requiereCorreccion', () => {
+  it('solo marca la nota que empieza por CORREGIR', () => {
+    expect(requiereCorreccion('CORREGIR (leído del Excel): serie borrosa')).toBe(true);
+    expect(requiereCorreccion('  corregir: algo')).toBe(true);
+    expect(requiereCorreccion('Nombre del puesto corregido: «A» → «B».')).toBe(false);
+    expect(requiereCorreccion(null)).toBe(false);
+    expect(requiereCorreccion('')).toBe(false);
   });
 });
 
