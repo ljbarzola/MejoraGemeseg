@@ -4,7 +4,7 @@ import ConfirmDialog from '../common/ConfirmDialog';
 import ErrorBanner from '../common/ErrorBanner';
 import { useToast } from '../../contexts/ToastContext';
 import { categoriaDe, CATEGORIAS_ORDEN } from './ServiciosPorCategoria';
-import { PILARES, SIN_PILAR, nombreDePilar, pilarDeCategoria } from '../../utils/pilares';
+import { PILARES, SIN_PILAR, SIN_PILAR_SERVICIO, nombreDePilar, nombrePilarServicio, pilarDeCategoria } from '../../utils/pilares';
 import {
   getServicios,
   createServicio,
@@ -26,7 +26,7 @@ const mensajeDe = (err: any, porDefecto: string) => {
 
 const contratosTexto = (n: number) => (n === 1 ? '1 contrato' : `${n} contratos`);
 
-/** Bloque al pie de cada pilar: el texto que se precarga en las cotizaciones nuevas. */
+/** Bloque al pie de cada pilar de servicio: el texto que se precarga en las cotizaciones nuevas. */
 function CondicionesPilarEditor({
   pilar,
   texto,
@@ -44,6 +44,9 @@ function CondicionesPilarEditor({
   return (
     <div className="form-group" style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #e2e8f0' }}>
       <label htmlFor={`cond-${pilar}`}>Condiciones generales</label>
+      <p style={{ margin: '0 0 6px', fontSize: 12, color: '#4a5568' }}>
+        Pilar de servicio: {nombrePilarServicio(pilar)} · Empresa: {nombreDePilar(pilar)}
+      </p>
       <textarea
         id={`cond-${pilar}`}
         rows={5}
@@ -82,7 +85,8 @@ export default function ServiciosConfigSection({ puedeEditar, onChanged }: { pue
   const [error, setError] = useState('');
   const [nuevo, setNuevo] = useState('');
   const [nuevaCat, setNuevaCat] = useState(CATEGORIAS_ORDEN[0]);
-  // Pilar (Gemeseg, Megamont, Adasmeg): por defecto el de la categoría elegida, y se puede cambiar.
+  // Empresa (Gemeseg, Megamont, Adasmeg): por defecto la de la categoría elegida, y se puede cambiar.
+  // En esta pantalla se muestra además el pilar de servicio (Seguridad Física / Monitoreo / Soluciones Tecnológicas).
   const [nuevoPilar, setNuevoPilar] = useState(pilarDeCategoria(CATEGORIAS_ORDEN[0]));
   const [editId, setEditId] = useState<number | null>(null);
   const [editNombre, setEditNombre] = useState('');
@@ -146,8 +150,8 @@ export default function ServiciosConfigSection({ puedeEditar, onChanged }: { pue
   const guardarCondiciones = (pilar: string, texto: string) =>
     correr(
       () => guardarCotCondicionPilar(pilar, texto),
-      `No se pudieron guardar las condiciones de ${nombreDePilar(pilar)}.`,
-      `Condiciones generales de ${nombreDePilar(pilar)} guardadas`,
+      `No se pudieron guardar las condiciones de ${nombrePilarServicio(pilar)}.`,
+      `Condiciones generales de ${nombrePilarServicio(pilar)} guardadas`,
     );
 
   const confirmarBorrado = () => {
@@ -209,11 +213,12 @@ export default function ServiciosConfigSection({ puedeEditar, onChanged }: { pue
             </select>
           </div>
           <div className="form-group" style={{ flex: '0 1 200px', minWidth: 0 }}>
-            <label htmlFor="servicio-nuevo-pilar">Pilar</label>
-            <select id="servicio-nuevo-pilar" value={nuevoPilar} title="Pilar al que pertenece: se usa para ver qué se vende por Gemeseg, Megamont y Adasmeg" onChange={(e) => setNuevoPilar(e.target.value)}>
+            <label htmlFor="servicio-nuevo-pilar">Empresa</label>
+            <select id="servicio-nuevo-pilar" value={nuevoPilar} title="Empresa a la que pertenece el servicio. El pilar de servicio se muestra debajo." onChange={(e) => setNuevoPilar(e.target.value)}>
               {PILARES.map((p) => <option key={p.key} value={p.key}>{p.nombre}</option>)}
               <option value="">{SIN_PILAR}</option>
             </select>
+            <span style={{ fontSize: 12, color: '#4a5568' }}>Pilar de servicio: {nombrePilarServicio(nuevoPilar)}</span>
           </div>
           <button className="auth-btn" onClick={agregar}>Agregar servicio</button>
         </div>
@@ -233,7 +238,7 @@ export default function ServiciosConfigSection({ puedeEditar, onChanged }: { pue
               const lista = grupos.get(cat)!;
               const apagados = lista.filter((s) => !s.isActive).length;
               const pilaresDelGrupo = [...new Set(lista.map((s) => s.pilar ?? ''))];
-              const pilarGrupo = pilaresDelGrupo.length === 1 ? nombreDePilar(pilaresDelGrupo[0]) : 'Pilares mezclados';
+              const pilarGrupo = pilaresDelGrupo.length === 1 ? `Empresa: ${nombreDePilar(pilaresDelGrupo[0])}` : 'Empresas mezcladas';
               return (
                 <section key={cat} className="cfg-mot-col" aria-label={cat}>
                   <header className="cfg-mot-cab cfg-mot-cab--corta">
@@ -269,13 +274,16 @@ export default function ServiciosConfigSection({ puedeEditar, onChanged }: { pue
                                 </select>
                               </div>
                               <div className="form-group">
-                                <label htmlFor={`servicio-${s.id}-pilar`}>Pilar</label>
+                                <label htmlFor={`servicio-${s.id}-pilar`}>Empresa</label>
                                 <select id={`servicio-${s.id}-pilar`} value={editPilar}
                                   onChange={(e) => setEditPilar(e.target.value)}
                                   style={{ width: '100%', boxSizing: 'border-box' }}>
-                                  {PILARES.map((p) => <option key={p.key} value={p.key}>Pilar {p.nombre}</option>)}
+                                  {PILARES.map((p) => <option key={p.key} value={p.key}>{p.nombre}</option>)}
                                   <option value="">{SIN_PILAR}</option>
                                 </select>
+                                <span style={{ fontSize: 12, color: '#4a5568' }}>
+                                  Pilar de servicio: {nombrePilarServicio(editPilar) || SIN_PILAR_SERVICIO}
+                                </span>
                               </div>
                               <div className="cfg-serv-acciones" style={{ justifyContent: 'flex-end' }}>
                                 <button className="btn-secondary icon-btn" title="Guardar" aria-label={`Guardar ${s.name}`} onClick={guardarEdicion}><Check size={15} /></button>
@@ -286,7 +294,7 @@ export default function ServiciosConfigSection({ puedeEditar, onChanged }: { pue
                             <>
                               <div className="cfg-serv-texto">
                                 <span className="cfg-serv-nombre">{s.name}</span>
-                                <span className="cfg-serv-sub">{nombreDePilar(s.pilar)} · {n === 0 ? 'Sin contratos' : contratosTexto(n)}</span>
+                                <span className="cfg-serv-sub">{nombrePilarServicio(s.pilar)} · Empresa: {nombreDePilar(s.pilar)} · {n === 0 ? 'Sin contratos' : contratosTexto(n)}</span>
                               </div>
                               <label className="cfg-switch" title={s.isActive ? `Desactivar ${s.name}` : `Activar ${s.name}`}>
                                 <input
@@ -297,7 +305,7 @@ export default function ServiciosConfigSection({ puedeEditar, onChanged }: { pue
                                 <span aria-hidden />
                               </label>
                               <div className="cfg-serv-acciones">
-                                <button className="btn-secondary icon-btn" disabled={!puedeEditar} title={`Renombrar o cambiar de categoría o pilar ${s.name}`} aria-label={`Editar ${s.name}`}
+                                <button className="btn-secondary icon-btn" disabled={!puedeEditar} title={`Renombrar o cambiar de categoría o empresa ${s.name}`} aria-label={`Editar ${s.name}`}
                                   onClick={() => { setEditId(s.id); setEditNombre(s.name); setEditCat(categoriaDe(s)); setEditPilar(s.pilar ?? pilarDeCategoria(categoriaDe(s))); }}>
                                   <Pencil size={14} />
                                 </button>

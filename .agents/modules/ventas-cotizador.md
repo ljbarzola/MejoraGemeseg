@@ -161,15 +161,17 @@ Una oportunidad puede tener varias cotizaciones. Funciona en los dos sentidos: �
 
 **Archivos:** `utils/cotizador/pricing.ts` (+ prueba en `pricing.test.ts`), `QuoteDetail.tsx`, `HojaCotizacion.tsx`, `QuotePrint.tsx`, `CotizadorPage.tsx`, `CatalogForms.tsx`, `services/cotizacionPublica.service.ts`, `CotizacionPublicaPage.tsx`, `backend/.../cotizador-precios.util.ts` (+ `cotizador-precios.util.spec.ts`).
 
-## 17. Condiciones generales por pilar (2026-11-23)
+## 17. Condiciones generales por pilar de servicio (2026-11-23)
 
 **Pedido de Leidy:** en Ventas → Configuración → Servicios, debajo de cada pilar debe existir una configuración «Condiciones generales»; ese texto es el que aparece por defecto en el Cotizador (y por lo tanto al imprimir, en el PDF y en el enlace del cliente).
 
-- **Dónde se configura:** al pie de cada columna/pilar de Configuración → Servicios (Gemeseg / Megamont / Adasmeg) hay un textarea «Condiciones generales» y su botón «Guardar condiciones». Lo puede cambiar quien tiene «Escribir» en Ventas.
-- **Infraestructura de pilares incluida:** constantes `ventas-pilares.const.ts` / `utils/pilares.ts`, columna `SalesService.pilar` (DDL al arrancar) y selector de pilar en el alta/edición inline de servicios.
+- **Nombres (2026-11-24):** las claves internas siguen siendo `GEMESEG`/`MEGAMONT`/`ADASMEG`. Los nombres de empresa (**Gemeseg / Megamont / Adasmeg**) se usan **solo en Configuración → Servicios**, en el campo editable «Empresa»; en esa misma pantalla se muestra además el **pilar de servicio** (Seguridad Física / Monitoreo / Soluciones Tecnológicas) como texto derivado. En el Cotizador y en el resto de módulos se muestra solo el nombre del pilar de servicio, nunca el de la empresa (`nombrePilarServicio` en `utils/pilares.ts`).
+- **Dónde se configura:** al pie de cada columna/pilar de servicio de Configuración → Servicios hay un textarea «Condiciones generales» y su botón «Guardar condiciones». Lo puede cambiar quien tiene «Escribir» en Ventas.
+- **Infraestructura de pilares incluida:** constantes `ventas-pilares.const.ts` / `utils/pilares.ts`, columna `SalesService.pilar` (DDL al arrancar) y selector de «Empresa» en el alta/edición inline de servicios.
 - **Dónde se guarda:** tabla nueva `CotCondicionesPilar` (companyId + pilar + texto), creada al arrancar. `GET/PUT /ventas/cotizador/condiciones-pilares`. La consulta siempre devuelve los TRES pilares; los que no tengan fila entregan el texto de siempre (`CONDICIONES_GENERALES_POR_DEFECTO`), así que nadie nota el cambio hasta que lo edite.
-- **En el Cotizador:** selector «Pilar» junto a «Oportunidad» con los tres siempre visibles. Se preselecciona solo si todos los servicios de la oportunidad son de un pilar; si hay varios queda sin elegir. El backend manda `pilares` en `GET /ventas/cotizador/oportunidades[/:id]`.
-- **Cuándo se precarga:** si el campo está vacío o sigue siendo el texto automático se rellena sin preguntar; si la persona lo editó se abre un `ConfirmDialog` propio con «Usar las de [pilar]» / «Conservar las actuales». Reglas en `utils/cotizador/condiciones.ts` (+ test).
+- **En el Cotizador:** selector «Pilar de servicio» en la misma fila que «Oportunidad» (campo más angosto), con los tres nombres de pilar siempre visibles. Se preselecciona solo si todos los servicios de la oportunidad son de un pilar; si hay varios queda sin elegir. El backend manda `pilares` en `GET /ventas/cotizador/oportunidades[/:id]`.
+- **Cuándo se precarga:** si el campo está vacío o sigue siendo el texto automático se rellena sin preguntar; si la persona lo editó se abre un `ConfirmDialog` propio con «Usar las de [pilar de servicio]» / «Conservar las actuales». Reglas en `utils/cotizador/condiciones.ts` (+ test).
+- **Aviso al editar desde la línea:** aclara que el catálogo cambia para todos, que en una cotización guardada el precio queda congelado hasta «Usar precios actuales» y que en una cotización nueva aún sin guardar el precio sí se recalcula.
 - **Persistencia:** la cotización guarda el `pilar` elegido (columna nueva en `CotQuote`, asegurada con `ALTER TABLE ... IF NOT EXISTS` y en el `CREATE TABLE` del DDL). Impresión, PDF y enlace siguen usando el campo `conditions`, sin cambios. Las cotizaciones ya guardadas no se reescriben.
 
 **Verificado en local:** compilan frontend y backend; pasan los tests de `utils/cotizador` y del Cotizador en backend; probado en navegador (configuración, preselección desde oportunidad, diálogo al cambiar de pilar, PDF/enlace) y round-trip de `pilar` por API.
