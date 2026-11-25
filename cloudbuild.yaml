@@ -103,7 +103,7 @@ steps:
       # lectura, con la cuenta de CORREO y su permiso admin.reports.audit.readonly; ver
       # AGENTS.md, «Bitácora del equipo»). Sin ella, «Leer Google ahora» y el job horario
       # responden con un mensaje claro y no leen nada.
-      - '--set-env-vars=NODE_ENV=production,REDIS_HOST=,REDIS_PORT=6379,GOOGLE_VERTEX_PROJECT=agentes-504115,GOOGLE_VERTEX_LOCATION=global,GOOGLE_VERTEX_MODEL_FUERTE=gemini-3.8-flash,GOOGLE_VERTEX_MODEL_LIGERO=gemini-3.5-flash-lite,GOOGLE_WORKSPACE_ADMIN_EMAIL=sistemas@gemeseg.com,MEJORA_CONTINUA_CORREO=sistemas@gemeseg.com'
+      - '--set-env-vars=NODE_ENV=production,REDIS_HOST=,REDIS_PORT=6379,GOOGLE_VERTEX_PROJECT=agentes-504115,GOOGLE_VERTEX_LOCATION=global,GOOGLE_VERTEX_MODEL_FUERTE=gemini-3.8-flash,GOOGLE_VERTEX_MODEL_LIGERO=gemini-3.5-flash-lite,GOOGLE_WORKSPACE_ADMIN_EMAIL=sistemas@gemeseg.com,MEJORA_CONTINUA_CORREO=sistemas@gemeseg.com,CUSTODIAS_FOTOS_BUCKET=mejora-gemeseg-custodias-fotos'
       # Bot de WhatsApp (2026-11-17): token de Meta, secreto de la app y token de verificación del webhook.
       # Los tres secretos DEBEN existir en Secret Manager (y tener acceso la cuenta de Cloud Run) ANTES de
       # fusionar este cambio, o todo el despliegue del backend falla.
