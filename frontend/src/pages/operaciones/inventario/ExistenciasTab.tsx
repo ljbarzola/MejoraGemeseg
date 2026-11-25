@@ -100,12 +100,12 @@ export default function ExistenciasTab({
             <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th>Tipo <ColumnFilter cf={cf} col="tipo" orden={cf.ordenDe('tipo')} /></th>
-                  <th>Artículo <ColumnFilter cf={cf} col="nombre" orden={cf.ordenDe('nombre')} /></th>
-                  <th>En el rastrillo <ColumnFilter cf={cf} col="enBodega" orden={cf.ordenDe('enBodega')} /></th>
-                  <th>Entregado <ColumnFilter cf={cf} col="entregado" orden={cf.ordenDe('entregado')} /></th>
-                  <th>Mín. / Máx.</th>
-                  <th>Estado <ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
+                  <th style={{ width: '11%' }}>Tipo <ColumnFilter cf={cf} col="tipo" orden={cf.ordenDe('tipo')} /></th>
+                  <th style={{ width: '21%' }}>Artículo <ColumnFilter cf={cf} col="nombre" orden={cf.ordenDe('nombre')} /></th>
+                  <th style={{ width: '16%' }}>En el rastrillo <ColumnFilter cf={cf} col="enBodega" orden={cf.ordenDe('enBodega')} /></th>
+                  <th style={{ width: '13%' }}>Entregado <ColumnFilter cf={cf} col="entregado" orden={cf.ordenDe('entregado')} /></th>
+                  <th style={{ width: '10%' }}>Mín. / Máx.</th>
+                  <th style={{ width: '14%' }}>Estado <ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
                   {puedeEscribir && <th className="col-acciones col-acciones--ancha" title="Acciones"><span className="visually-hidden">Acciones</span></th>}
                 </tr>
               </thead>

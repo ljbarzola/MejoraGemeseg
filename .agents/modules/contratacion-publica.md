@@ -182,3 +182,5 @@ Ver «Informe mensual en Word con la plantilla de la empresa».
 - `GET /contratacion-publica/dashboard?tipo=&desde=&hasta=` (`CONTRATACION_PUBLICA`, lectura): `dashboard/cp-dashboard.service.ts` trae filas, `cp-dashboard.util.ts` (puro, con pruebas) cuenta.
 - Campos de la entidad: `sector` (lista segun tipo; publica: Ministerio, GAD, Empresa publica, Salud, Educacion, Seguridad, Otra; privada: Industria, Comercio, Residencial, Agricola, Otra), `provincia` (24), `canton`; columnas nulas creadas al arrancar (`cp-informe-datos.schema.ts`). Listas en `entidades/entidad-clasificacion.util.ts` y copia `frontend/src/utils/entidadClasificacion.ts` (**cambiar las dos**). Cambiar el tipo vacia un sector que ya no corresponde.
 - Pendiente de decidir: el campo propio «Tipo de entidad» se pisa con «Sector» (propuesta: desactivarlo).
+
+- **2026-11-25: la plantilla del informe mensual vive aquí, no en Operaciones.** Pestaña «Plantilla del informe» de Contratación Pública › Configuración (junto a «Campos de la entidad» y «Carpeta de Drive»); los mensajes de error del informe ya apuntan a esa ruta.

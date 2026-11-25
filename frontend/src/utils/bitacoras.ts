@@ -47,6 +47,9 @@ export const TIPO_HALLAZGO_LABEL: Record<string, string> = {
   FECHA_FUERA_DE_CONTRATO: 'Fecha fuera del contrato',
   PUESTO_DISTINTO: 'Puesto distinto',
   FECHA_YA_CARGADA: 'Hoja repetida',
+  DOTACION_NUEVO: 'Artículo nuevo en la dotación',
+  DOTACION_DIFERENTE: 'Dotación distinta a la del puesto',
+  DOTACION_INVENTARIO: 'Dotación distinta a Inventario',
 };
 
 export const LECTURA_LABEL: Record<EstadoLectura, string> = {

@@ -72,6 +72,7 @@ export class BitacoraLectorService {
     mime: string,
     instruccionesDeLaEmpresa: string,
     pistaDeLaPersona?: string,
+    tipoEntidad?: string,
   ): Promise<ResultadoLectura> {
     const modelo = modeloVertex('fuerte');
     const inicio = Date.now();
@@ -80,6 +81,7 @@ export class BitacoraLectorService {
       hoy,
       instruccionesDeLaEmpresa,
       pistaDeLaPersona,
+      tipoEntidad,
     });
 
     let respuesta: Response;

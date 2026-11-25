@@ -67,12 +67,12 @@ export default function MovimientosTab({ recarga }: { recarga: number }) {
             <table className="tasks-table resizable-table" ref={tablaRef}>
               <thead>
                 <tr>
-                  <th>Fecha <ColumnFilter cf={cf} col="fecha" orden={cf.ordenDe('fecha')} /></th>
-                  <th>Movimiento <ColumnFilter cf={cf} col="tipo" orden={cf.ordenDe('tipo')} /></th>
-                  <th>Artículo <ColumnFilter cf={cf} col="articulo" orden={cf.ordenDe('articulo')} /></th>
-                  <th>Cantidad <ColumnFilter cf={cf} col="cantidad" orden={cf.ordenDe('cantidad')} /></th>
-                  <th>A quién / de quién <ColumnFilter cf={cf} col="quien" orden={cf.ordenDe('quien')} /></th>
-                  <th>Detalle</th>
+                  <th style={{ width: '11%' }}>Fecha <ColumnFilter cf={cf} col="fecha" orden={cf.ordenDe('fecha')} /></th>
+                  <th style={{ width: '13%' }}>Movimiento <ColumnFilter cf={cf} col="tipo" orden={cf.ordenDe('tipo')} /></th>
+                  <th style={{ width: '19%' }}>Artículo <ColumnFilter cf={cf} col="articulo" orden={cf.ordenDe('articulo')} /></th>
+                  <th style={{ width: '11%' }}>Cantidad <ColumnFilter cf={cf} col="cantidad" orden={cf.ordenDe('cantidad')} /></th>
+                  <th style={{ width: '20%' }}>A quién / de quién <ColumnFilter cf={cf} col="quien" orden={cf.ordenDe('quien')} /></th>
+                  <th style={{ width: '14%' }}>Detalle</th>
                   <th>Registró <ColumnFilter cf={cf} col="por" orden={cf.ordenDe('por')} /></th>
                 </tr>
               </thead>

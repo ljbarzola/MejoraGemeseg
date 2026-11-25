@@ -4,12 +4,15 @@ import { ArrowLeft, Bot, CheckCircle2, Pencil, Plus, RefreshCw, Save, Trash2, X 
 import {
   actualizarHallazgoBitacora,
   eliminarBitacora,
+  clasificarDotacionBitacora,
   getArchivoBitacora,
   getBitacora,
   guardarLecturaBitacora,
+  quitarDeLaDotacionDelPuesto,
   releerBitacora,
 } from '../../../services/bitacoras.service';
 import type {
+  AmbitoDotacion,
   BitacoraDetalle,
   CategoriaNovedad,
   EstadoHallazgo,
@@ -56,6 +59,26 @@ interface FilaNovedad {
   texto: string;
 }
 
+interface FilaDotacion {
+  /** Id de la fila guardada (para decir de quién es un artículo nuevo); sin id = fila que aún no se guarda. */
+  id?: number;
+  /** NUEVO = el puesto aún no lo tiene registrado como de Gemeseg ni del cliente o la entidad. */
+  estado?: 'CONOCIDO' | 'NUEVO';
+  ambito: AmbitoDotacion;
+  articulo: string;
+  cantidad: string;
+  detalle: string;
+}
+
+const AMBITOS_DOTACION: { codigo: AmbitoDotacion; titulo: string; ayuda: string }[] = [
+  { codigo: 'GEMESEG', titulo: 'Lo que entrega Gemeseg', ayuda: 'Armas, chalecos, radios, uniformes y lo que pone la empresa de seguridad.' },
+  { codigo: 'CLIENTE', titulo: 'Lo que es del cliente o de la entidad', ayuda: 'Tachos de basura, tablero, llaves… Gemeseg no los entrega.' },
+  { codigo: 'SIN_DATO', titulo: 'Sin definir', ayuda: 'El agente dudó de quién es. Elige de quién es y la app lo recuerda para las próximas hojas.' },
+];
+
+/** Botones de acción dentro de una fila: más chicos que los de la cabecera para que no rompan la línea. */
+const BOTON_CHICO: React.CSSProperties = { padding: '5px 12px', fontSize: '0.8rem', whiteSpace: 'nowrap', height: 'auto', minHeight: 0 };
+
 const inputCelda: React.CSSProperties = {
   padding: '6px 8px',
   border: '2px solid var(--borde-input)',
@@ -87,6 +110,9 @@ export default function BitacoraDetallePage() {
   const [fechasExtra, setFechasExtra] = useState<string[]>([]);
   const [registros, setRegistros] = useState<FilaRegistro[]>([]);
   const [novedades, setNovedades] = useState<FilaNovedad[]>([]);
+  const [guardiaSaliente, setGuardiaSaliente] = useState('');
+  const [guardiaEntrante, setGuardiaEntrante] = useState('');
+  const [dotacion, setDotacion] = useState<FilaDotacion[]>([]);
   const [sucio, setSucio] = useState(false);
   const [fechaNueva, setFechaNueva] = useState('');
   const [editandoDia, setEditandoDia] = useState<string | null>(null);
@@ -120,6 +146,18 @@ export default function BitacoraDetallePage() {
         texto: n.texto,
       })),
     );
+    setGuardiaSaliente(d.guardiaSaliente ?? '');
+    setGuardiaEntrante(d.guardiaEntrante ?? '');
+    setDotacion(
+      (d.dotacion ?? []).map((x) => ({
+        id: x.id,
+        estado: x.estado,
+        ambito: x.ambito,
+        articulo: x.articulo,
+        cantidad: x.cantidad === null || x.cantidad === undefined ? '' : String(x.cantidad),
+        detalle: x.detalle ?? '',
+      })),
+    );
     setSucio(false);
   }, []);
 
@@ -137,6 +175,11 @@ export default function BitacoraDetallePage() {
   );
 
   const marcar = () => { setSucio(true); setAviso(''); };
+  const muestraDotacion = det?.entidadTipo === 'PUBLICA' || (det?.dotacion?.length ?? 0) > 0;
+  const cambiarDotacion = (i: number, cambio: Partial<FilaDotacion>) => {
+    setDotacion((ds) => ds.map((x, j) => (j === i ? { ...x, ...cambio } : x)));
+    marcar();
+  };
 
   const guardar = async () => {
     if (!det) return;
@@ -157,6 +200,21 @@ export default function BitacoraDetallePage() {
         novedades: novedades
           .filter((n) => n.texto.trim())
           .map((n) => ({ fecha: n.fecha || null, hora: n.hora || null, texto: n.texto, categoria: n.categoria })),
+        guardiaSaliente: guardiaSaliente.trim() || null,
+        guardiaEntrante: guardiaEntrante.trim() || null,
+        // Solo en contratos públicos (o si ya había dotación guardada): en los privados no se toca.
+        ...(muestraDotacion
+          ? {
+              dotacion: dotacion
+                .filter((x) => x.articulo.trim())
+                .map((x) => ({
+                  ambito: x.ambito,
+                  articulo: x.articulo.trim(),
+                  cantidad: /^\d{1,4}$/.test(x.cantidad.trim()) ? parseInt(x.cantidad.trim(), 10) : null,
+                  detalle: x.detalle.trim() || null,
+                })),
+            }
+          : {}),
       });
       aplicar(d);
       setAviso('Guardado. La comparación con el horario se hizo de nuevo.');
@@ -176,6 +234,36 @@ export default function BitacoraDetallePage() {
     setNovedades((ns) => ns.map((n) => (n.fecha === desde ? { ...n, fecha: hasta } : n)));
     setEditandoDia(null);
     marcar();
+  };
+
+  // Una persona dice de quién es un artículo «Nuevo» (de Gemeseg o del cliente o la entidad): queda registrado en la
+  // dotación del puesto y desde entonces las hojas de ese puesto ya lo conocen.
+  const clasificar = async (fila: FilaDotacion, ambito: 'GEMESEG' | 'CLIENTE') => {
+    if (!det || fila.id === undefined) return;
+    setOcupado('guardar');
+    setError('');
+    try {
+      aplicar(await clasificarDotacionBitacora(det.id, fila.id, ambito));
+      setAviso(`«${fila.articulo}» quedó registrado como ${ambito === 'GEMESEG' ? 'de Gemeseg' : 'del cliente o la entidad'} en la dotación del puesto.`);
+    } catch (err) {
+      setError(mensajeError(err, 'No se pudo registrar el artículo en la dotación del puesto.'));
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  const quitarDelPuesto = async (filaId: number, articulo: string) => {
+    if (!det) return;
+    setOcupado('guardar');
+    setError('');
+    try {
+      aplicar(await quitarDeLaDotacionDelPuesto(det.id, filaId));
+      setAviso(`«${articulo}» ya no está en la dotación registrada del puesto.`);
+    } catch (err) {
+      setError(mensajeError(err, 'No se pudo quitar el artículo de la dotación del puesto.'));
+    } finally {
+      setOcupado(null);
+    }
   };
 
   const releer = async (nota?: string) => {
@@ -451,6 +539,101 @@ export default function BitacoraDetallePage() {
                 </div>
               )}
             </div>
+
+            <h4 style={{ margin: '14px 0 6px', fontSize: '0.92rem' }}>Cambio de turno</h4>
+            <div className="bitacora-fila bitacora-fila--turno">
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Guardia saliente</label>
+                <input type="text" value={guardiaSaliente} disabled={bloquear} onChange={(e) => { setGuardiaSaliente(e.target.value); marcar(); }} placeholder="Como está escrito" />
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Guardia entrante</label>
+                <input type="text" value={guardiaEntrante} disabled={bloquear} onChange={(e) => { setGuardiaEntrante(e.target.value); marcar(); }} placeholder="Como está escrito" />
+              </div>
+            </div>
+
+            {muestraDotacion && (
+              <>
+                <h4 style={{ margin: '18px 0 2px', fontSize: '0.92rem' }}>Dotación del puesto</h4>
+                <p style={{ margin: '0 0 8px', fontSize: '0.8rem', color: '#718096' }}>
+                  Lo que la hoja dice que hay en el puesto. En contratos públicos la Contraloría lo audita. Aparece separado: lo de Gemeseg y lo del cliente.
+                </p>
+                <div style={{ border: '1px dashed #a0aec0', borderRadius: 10, padding: '10px 12px', marginBottom: 10, fontSize: '0.84rem', color: '#2d3748' }}>
+                  <strong>Dotación registrada del puesto:</strong>{' '}
+                  {det.dotacionInventario && (det.dotacionInventario.armas > 0 || det.dotacionInventario.chalecos > 0 || det.dotacionInventario.equipo.length > 0)
+                    ? <>lo que Gemeseg manda sale de Inventario ({det.dotacionInventario.armas} {det.dotacionInventario.armas === 1 ? 'arma' : 'armas'}, {det.dotacionInventario.chalecos} {det.dotacionInventario.chalecos === 1 ? 'chaleco' : 'chalecos'}{det.dotacionInventario.equipo.length > 0 ? `, ${det.dotacionInventario.equipo.length} ${det.dotacionInventario.equipo.length === 1 ? 'artículo más' : 'artículos más'}` : ''}) y lo demás, de lo que ya se clasificó aquí.</>
+                    : <>este puesto no tiene equipo asignado en Inventario; se registra lo que se vaya clasificando aquí.</>}
+                  {' '}Si la hoja trae algo que el puesto no tiene registrado, sale marcado <strong>Nuevo</strong>: indica si es de Gemeseg o del cliente o la entidad.
+                  {(det.dotacionPuesto?.length ?? 0) > 0 && (
+                    <details style={{ marginTop: 8 }}>
+                      <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Ver lo ya clasificado en este puesto ({det.dotacionPuesto!.length})</summary>
+                      <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {det.dotacionPuesto!.map((x) => (
+                          <div key={x.id} style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                            <span>{x.articulo}{x.cantidad !== null ? ` · ${x.cantidad}` : ''} <span style={{ color: '#718096' }}>— {x.ambito === 'CLIENTE' ? 'del cliente o la entidad' : 'de Gemeseg'}</span></span>
+                            {puedeEscribir && (
+                              <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} aria-label={`Quitar ${x.articulo} de la dotación del puesto`} title="Quitar de la dotación del puesto" disabled={bloquear} onClick={() => void quitarDelPuesto(x.id, x.articulo)}><Trash2 size={14} /></button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+                {AMBITOS_DOTACION.map((g) => {
+                  const filas = dotacion.map((x, i) => ({ x, i })).filter(({ x }) => x.ambito === g.codigo);
+                  if (g.codigo === 'SIN_DATO' && filas.length === 0) return null;
+                  return (
+                    <div key={g.codigo} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', marginBottom: 10, background: g.codigo === 'CLIENTE' ? '#fffaf0' : '#f7fafc' }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.86rem', color: 'var(--azul-oscuro)' }}>{g.titulo}</div>
+                      <div style={{ fontSize: '0.76rem', color: '#718096', marginBottom: 6 }}>{g.ayuda}</div>
+                      {filas.length === 0 && <p style={{ margin: '0 0 6px', color: '#718096', fontSize: '0.85rem' }}>Ninguno anotado.</p>}
+                      {filas.length > 0 && (
+                        <div className="bitacora-fila bitacora-fila--dotacion bitacora-fila--cabecera" aria-hidden="true">
+                          <span>Artículo</span><span>Cantidad</span><span>Detalle</span><span>De quién es</span><span />
+                        </div>
+                      )}
+                      {filas.map(({ x, i }) => (
+                        <div key={i} style={{ marginBottom: 6, padding: 6, border: '1px solid transparent', borderRadius: 8, ...(x.estado === 'NUEVO' ? { background: '#fffbeb', borderColor: '#f6e05e' } : {}) }}>
+                        <div className="bitacora-fila bitacora-fila--dotacion">
+                          <input style={inputCelda} aria-label="Artículo" value={x.articulo} disabled={bloquear} onChange={(e) => cambiarDotacion(i, { articulo: e.target.value })} />
+                          <input style={inputCelda} inputMode="numeric" aria-label="Cantidad" value={x.cantidad} disabled={bloquear} onChange={(e) => cambiarDotacion(i, { cantidad: e.target.value.replace(/\D/g, '').slice(0, 4) })} />
+                          <input style={inputCelda} aria-label="Detalle (modelo, serie, placa, estado)" value={x.detalle} disabled={bloquear} onChange={(e) => cambiarDotacion(i, { detalle: e.target.value })} />
+                          <select style={inputCelda} aria-label="De quién es" value={x.ambito} disabled={bloquear} onChange={(e) => cambiarDotacion(i, { ambito: e.target.value as AmbitoDotacion })}>
+                            <option value="GEMESEG">Gemeseg</option>
+                            <option value="CLIENTE">Cliente o entidad</option>
+                            <option value="SIN_DATO">Sin definir</option>
+                          </select>
+                          {puedeEscribir ? (
+                            <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} aria-label="Quitar el artículo" title="Quitar el artículo" disabled={bloquear} onClick={() => { setDotacion((ds) => ds.filter((_, j) => j !== i)); marcar(); }}><Trash2 size={15} /></button>
+                          ) : <span />}
+                        </div>
+                        {x.estado === 'NUEVO' && (
+                          <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#744210' }}>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <span className="status-badge" style={{ background: '#faf089', color: '#744210', textTransform: 'none', letterSpacing: 0 }}>Nuevo</span>
+                              <span>El puesto no lo tiene registrado.{puedeEscribir ? ' ¿De quién es?' : ''}</span>
+                            </div>
+                            {puedeEscribir && x.id !== undefined && (
+                              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                                <button type="button" className="btn-secondary" style={BOTON_CHICO} disabled={bloquear || sucio} title={sucio ? 'Guarda primero los cambios de la hoja' : undefined} onClick={() => void clasificar(x, 'GEMESEG')}>Es de Gemeseg</button>
+                                <button type="button" className="btn-secondary" style={BOTON_CHICO} disabled={bloquear || sucio} title={sucio ? 'Guarda primero los cambios de la hoja' : undefined} onClick={() => void clasificar(x, 'CLIENTE')}>Es del cliente o la entidad</button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        </div>
+                      ))}
+                      {puedeEscribir && g.codigo !== 'SIN_DATO' && (
+                        <button type="button" className="btn-secondary" disabled={bloquear} onClick={() => { setDotacion((ds) => [...ds, { ambito: g.codigo, articulo: '', cantidad: '', detalle: '' }]); marcar(); }}>
+                          <Plus size={14} /> Agregar {g.codigo === 'CLIENTE' ? 'del cliente o la entidad' : 'de Gemeseg'}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
 
             <h4 style={{ margin: '14px 0 6px', fontSize: '0.92rem' }}>Guardias</h4>
             {registros.length === 0 && (

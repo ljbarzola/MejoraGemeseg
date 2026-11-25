@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import * as path from 'path';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -31,14 +32,27 @@ import {
   sugerirReemplazos,
   type SugerenciaReemplazo,
 } from './reemplazo-sugerido.util';
+import { InventarioService } from '../../operaciones-inventario/inventario.service';
+import {
+  compararDotacion,
+  estadoDeDotacion,
+  mismoArticulo,
+  type FilaDotacionBase,
+  type InventarioPuesto,
+} from './bitacora-dotacion.util';
+import { resumirActividad } from './bitacora-actividad.util';
 import {
   CATEGORIAS_NOVEDAD,
   ETIQUETA_CATEGORIA,
   GRAVEDAD_POR_CATEGORIA,
+  claveArticulo,
+  esAmbito,
   esCategoria,
+  normalizarCantidad,
   normalizarHora,
   type CategoriaNovedad,
   type LecturaBitacora,
+  type LecturaDotacion,
 } from './bitacora.util';
 import {
   revisarBitacora,
@@ -86,6 +100,8 @@ export class BitacorasService {
     private readonly agentRuns: AgentRunService,
     private readonly notifications: NotificationsService,
     private readonly permissions: PermissionsService,
+    // Opcional: sin Inventario la hoja se compara solo con la dotación inicial del puesto.
+    @Optional() private readonly inventario?: InventarioService,
   ) {}
 
   // ------------------------------------------------------------------ opciones
@@ -98,7 +114,7 @@ export class BitacorasService {
         id: true,
         numero: true,
         objeto: true,
-        entidad: { select: { id: true, nombre: true } },
+        entidad: { select: { id: true, nombre: true, tipo: true } },
         puestos: {
           select: { id: true, nombre: true },
           orderBy: { nombre: 'asc' },
@@ -114,8 +130,124 @@ export class BitacorasService {
         objeto: c.objeto,
         entidadId: c.entidad.id,
         entidadNombre: c.entidad.nombre,
+        // PUBLICA | PRIVADA: decide qué hoja en blanco se ofrece primero.
+        entidadTipo: c.entidad.tipo,
         puestos: c.puestos,
       }));
+  }
+
+  /**
+   * Datos de la hoja en blanco de un puesto: la entidad, el contrato, el puesto y la dotación registrada del puesto
+   * (lo de Inventario más lo ya clasificado). Sin `tipo` se elige según la entidad: pública → con dotación; las
+   * demás → formato estándar.
+   */
+  async datosHojaEnBlanco(companyId: number, puestoId: number, tipo?: 'PUBLICA' | 'ESTANDAR') {
+    const puesto = await this.prisma.cPPuestoServicio.findFirst({
+      where: { id: puestoId, companyId },
+      select: {
+        id: true,
+        nombre: true,
+        contratoId: true,
+        contrato: { select: { numero: true, entidad: { select: { nombre: true, tipo: true } } } },
+      },
+    });
+    if (!puesto) throw new NotFoundException('Puesto de servicio no encontrado.');
+    const elegido: 'PUBLICA' | 'ESTANDAR' = tipo ?? (puesto.contrato.entidad.tipo === 'PUBLICA' ? 'PUBLICA' : 'ESTANDAR');
+    const dotacionBase = elegido === 'PUBLICA' ? (await this.dotacionRegistrada(companyId, puesto.id, puesto.contratoId)).lista : [];
+    return {
+      tipo: elegido,
+      entidadNombre: puesto.contrato.entidad.nombre,
+      contratoNumero: puesto.contrato.numero,
+      puestoNombre: puesto.nombre,
+      dotacionBase,
+    };
+  }
+
+  // ---------------------------------------------------------------- dotación del puesto, cargada a mano
+
+  private async cargarPuestoDotacion(companyId: number, puestoId: number) {
+    const puesto = await this.prisma.cPPuestoServicio.findFirst({
+      where: { id: puestoId, companyId },
+      select: {
+        id: true,
+        nombre: true,
+        contratoId: true,
+        contrato: { select: { numero: true, entidad: { select: { nombre: true } } } },
+      },
+    });
+    if (!puesto) throw new NotFoundException('Puesto de servicio no encontrado.');
+    return puesto;
+  }
+
+  /** Lo que Gemeseg manda al puesto (Inventario, solo lectura) y la lista del puesto (se puede escribir). */
+  async dotacionDelPuesto(companyId: number, puestoId: number) {
+    const puesto = await this.cargarPuestoDotacion(companyId, puestoId);
+    const { base, inventario } = await this.dotacionRegistrada(companyId, puesto.id, puesto.contratoId);
+    return {
+      puestoId: puesto.id,
+      puestoNombre: puesto.nombre,
+      contratoNumero: puesto.contrato.numero,
+      entidadNombre: puesto.contrato.entidad.nombre,
+      inventario,
+      filas: base.map((f) => ({ id: f.id, ambito: f.ambito, articulo: f.articulo, cantidad: f.cantidad })),
+    };
+  }
+
+  private limpiarArticulo(articulo: string | undefined) {
+    const t = (articulo ?? '').replace(/\s+/g, ' ').trim();
+    if (!t || !claveArticulo(t)) throw new BadRequestException('Escribe el nombre del artículo.');
+    return t;
+  }
+
+  /** Agrega un artículo a la lista del puesto. Si ya estaba (otro nombre igual), se actualiza en vez de duplicarlo. */
+  async agregarADotacionDelPuesto(
+    companyId: number,
+    puestoId: number,
+    dto: { ambito: 'GEMESEG' | 'CLIENTE'; articulo: string; cantidad?: number | null },
+  ) {
+    const puesto = await this.cargarPuestoDotacion(companyId, puestoId);
+    const articulo = this.limpiarArticulo(dto.articulo);
+    const existentes = await this.prisma.cPPuestoDotacion.findMany({ where: { companyId, puestoId }, orderBy: { orden: 'asc' } });
+    const igual = existentes.find((e) => mismoArticulo(e.articulo, articulo));
+    if (igual) {
+      await this.prisma.cPPuestoDotacion.update({
+        where: { id: igual.id },
+        data: { ambito: dto.ambito, articulo, cantidad: dto.cantidad ?? null },
+      });
+    } else {
+      await this.prisma.cPPuestoDotacion.create({
+        data: { companyId, puestoId, ambito: dto.ambito, articulo, cantidad: dto.cantidad ?? null, orden: existentes.length },
+      });
+    }
+    await this.recordarAmbitos(companyId, [{ ambito: dto.ambito, articulo, cantidad: dto.cantidad ?? null, detalle: null }]);
+    return this.dotacionDelPuesto(companyId, puesto.id);
+  }
+
+  async editarDotacionDelPuesto(
+    companyId: number,
+    puestoId: number,
+    filaId: number,
+    dto: { ambito?: 'GEMESEG' | 'CLIENTE'; articulo?: string; cantidad?: number | null },
+  ) {
+    const puesto = await this.cargarPuestoDotacion(companyId, puestoId);
+    const fila = await this.prisma.cPPuestoDotacion.findFirst({ where: { id: filaId, companyId, puestoId } });
+    if (!fila) throw new NotFoundException('Ese artículo no está en la dotación de este puesto.');
+    const data: { ambito?: 'GEMESEG' | 'CLIENTE'; articulo?: string; cantidad?: number | null } = {};
+    if (dto.ambito) data.ambito = dto.ambito;
+    if (dto.articulo !== undefined) data.articulo = this.limpiarArticulo(dto.articulo);
+    if (dto.cantidad !== undefined) data.cantidad = dto.cantidad;
+    await this.prisma.cPPuestoDotacion.update({ where: { id: fila.id }, data });
+    await this.recordarAmbitos(companyId, [
+      { ambito: data.ambito ?? (fila.ambito === 'CLIENTE' ? 'CLIENTE' : 'GEMESEG'), articulo: data.articulo ?? fila.articulo, cantidad: null, detalle: null },
+    ]);
+    return this.dotacionDelPuesto(companyId, puesto.id);
+  }
+
+  async quitarDotacionDelPuesto(companyId: number, puestoId: number, filaId: number) {
+    const puesto = await this.cargarPuestoDotacion(companyId, puestoId);
+    const borradas = await this.prisma.cPPuestoDotacion.deleteMany({ where: { id: filaId, companyId, puestoId } });
+    if (borradas.count === 0) throw new NotFoundException('Ese artículo no está en la dotación de este puesto.');
+    return this.dotacionDelPuesto(companyId, puesto.id);
   }
 
   /** Estado del agente para mostrarlo en la pantalla. */
@@ -275,6 +407,7 @@ export class BitacorasService {
     }
 
     try {
+      const tipoEntidad = await this.tipoDeEntidad(id, actor.companyId);
       const r = await this.lector.leer(
         buffer,
         mime,
@@ -282,7 +415,14 @@ export class BitacorasService {
           ? ''
           : agente!.instructions,
         pistaDeLaPersona,
+        tipoEntidad,
       );
+      if (r.lectura.dotacion) {
+        r.lectura.dotacion = await this.aplicarAmbitosRecordados(
+          actor.companyId,
+          r.lectura.dotacion,
+        );
+      }
       if (!r.lectura.esBitacora) {
         await this.marcarLectura(id, {
           estadoLectura: 'ERROR',
@@ -317,6 +457,7 @@ export class BitacorasService {
           esBitacora: r.lectura.esBitacora,
           registros: r.lectura.registros.length,
           novedades: r.lectura.novedades.length,
+          dotacion: r.lectura.dotacion?.length ?? null,
           fechas: r.lectura.fechas,
           lineasPocoLegibles: r.lectura.registros.filter((x) => !x.legible)
             .length,
@@ -516,6 +657,226 @@ export class BitacorasService {
     };
   }
 
+  /** Lo que Inventario tiene asignado a un puesto (null si no hay Inventario o no se pudo consultar). */
+  private async inventarioDelPuesto(companyId: number, contratoId: number, puestoId: number): Promise<InventarioPuesto | null> {
+    if (!this.inventario) return null;
+    try {
+      const puestos = await this.inventario.inventarioPorContrato(companyId, contratoId);
+      const p = puestos.find((x) => x.puestoId === puestoId);
+      if (!p) return null;
+      return {
+        armas: p.totalArmas,
+        chalecos: p.chalecos,
+        // Armas y chalecos se comparan por total; el resto del equipo, artículo por artículo.
+        equipo: p.equipo.filter((e) => e.clase !== 'CHALECO').map((e) => ({ articulo: e.articulo, cantidad: e.cantidad })),
+      };
+    } catch (err) {
+      this.logger.warn(`No se pudo consultar Inventario del puesto ${puestoId}: ${(err as Error).message}`);
+      return null;
+    }
+  }
+
+  /**
+   * La dotación registrada de un puesto: lo que Gemeseg manda (Inventario) más lo ya clasificado en la lista del
+   * puesto. `lista` es lo que se imprime en la hoja en blanco; `base` y `inventario` sirven para comparar.
+   */
+  private async dotacionRegistrada(companyId: number, puestoId: number, contratoId: number) {
+    const base = await this.prisma.cPPuestoDotacion.findMany({
+      where: { companyId, puestoId },
+      orderBy: { orden: 'asc' },
+    });
+    const inventario = await this.inventarioDelPuesto(companyId, contratoId, puestoId);
+    const lista: FilaDotacionBase[] = [];
+    if (inventario) {
+      if (inventario.armas > 0) lista.push({ ambito: 'GEMESEG', articulo: 'Armas', cantidad: inventario.armas });
+      if (inventario.chalecos > 0) lista.push({ ambito: 'GEMESEG', articulo: 'Chalecos', cantidad: inventario.chalecos });
+      for (const e of inventario.equipo) lista.push({ ambito: 'GEMESEG', articulo: e.articulo, cantidad: e.cantidad });
+    }
+    for (const b of base) {
+      if (!lista.some((x) => mismoArticulo(x.articulo, b.articulo))) lista.push({ ambito: b.ambito, articulo: b.articulo, cantidad: b.cantidad });
+    }
+    return { base, inventario, lista };
+  }
+
+  /** Hallazgos de dotación de una hoja. Si falla algo al consultar, no hay hallazgos de este tipo (no se inventan). */
+  private async hallazgosDeDotacion(
+    b: { id: number; companyId: number; puestoId: number; contratoId: number },
+    dotacion: LecturaDotacion[],
+    fecha: string | null,
+  ) {
+    try {
+      const { base, inventario } = await this.dotacionRegistrada(b.companyId, b.puestoId, b.contratoId);
+      return compararDotacion({ base, actual: dotacion, inventario, fecha });
+    } catch (err) {
+      this.logger.warn(`No se pudo comparar la dotación de la bitácora ${b.id}: ${(err as Error).message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Una persona dice de quién es un artículo «Nuevo» de la hoja (de Gemeseg o del cliente o la entidad): queda
+   * registrado en la lista del puesto con la cantidad de la hoja, y las hojas siguientes ya lo conocen.
+   */
+  async clasificarDotacion(id: number, dotacionId: number, ambito: string, actor: ActorBitacora) {
+    if (ambito !== 'GEMESEG' && ambito !== 'CLIENTE') {
+      throw new BadRequestException('Elige si el artículo es de Gemeseg o del cliente o la entidad.');
+    }
+    const b = await this.cargarSimple(id, actor.companyId);
+    const fila = await this.prisma.cPBitacoraDotacion.findFirst({ where: { id: dotacionId, bitacoraId: id } });
+    if (!fila) throw new NotFoundException('Artículo no encontrado en esta hoja.');
+
+    const existentes = await this.prisma.cPPuestoDotacion.findMany({
+      where: { companyId: actor.companyId, puestoId: b.puestoId },
+      orderBy: { orden: 'asc' },
+    });
+    const mismos = existentes.filter((e) => mismoArticulo(e.articulo, fila.articulo)).map((e) => e.id);
+    await this.prisma.$transaction([
+      this.prisma.cPBitacoraDotacion.update({ where: { id: fila.id }, data: { ambito } }),
+      ...(mismos.length ? [this.prisma.cPPuestoDotacion.deleteMany({ where: { id: { in: mismos } } })] : []),
+      this.prisma.cPPuestoDotacion.create({
+        data: {
+          companyId: actor.companyId,
+          puestoId: b.puestoId,
+          bitacoraId: id,
+          ambito,
+          articulo: fila.articulo,
+          cantidad: fila.cantidad,
+          detalle: fila.detalle,
+          orden: existentes.length,
+        },
+      }),
+    ]);
+    await this.recordarAmbitos(actor.companyId, [{ ambito, articulo: fila.articulo, cantidad: fila.cantidad, detalle: fila.detalle }]);
+    await this.revisarDeNuevo(id, actor);
+    return this.obtener(id, actor.companyId);
+  }
+
+  /** Quita un artículo de la lista del puesto (por ejemplo, uno que se clasificó por error). */
+  async quitarDeLaDotacionDelPuesto(id: number, filaId: number, actor: ActorBitacora) {
+    const b = await this.cargarSimple(id, actor.companyId);
+    const borradas = await this.prisma.cPPuestoDotacion.deleteMany({
+      where: { id: filaId, companyId: actor.companyId, puestoId: b.puestoId },
+    });
+    if (borradas.count === 0) throw new NotFoundException('Ese artículo no está en la dotación de este puesto.');
+    await this.revisarDeNuevo(id, actor);
+    return this.obtener(id, actor.companyId);
+  }
+
+  /** Vuelve a comparar una hoja con lo que ya tiene guardado (sin volver a leer la foto). */
+  private async revisarDeNuevo(id: number, actor: ActorBitacora) {
+    const b = await this.prisma.cPBitacora.findFirst({
+      where: { id, companyId: actor.companyId },
+      include: {
+        registros: { orderBy: [{ fecha: 'asc' }, { orden: 'asc' }] },
+        novedades: { orderBy: [{ fecha: 'asc' }, { orden: 'asc' }] },
+        dotacion: { orderBy: { orden: 'asc' } },
+      },
+    });
+    if (!b) return;
+    const lectura: LecturaBitacora = {
+      esBitacora: true,
+      puesto: b.puestoLeido,
+      fechas: b.fechas,
+      registros: b.registros.map((r) => ({
+        fecha: aISO(r.fecha),
+        guardia: r.guardiaLeido,
+        horaEntrada: r.horaEntrada,
+        horaSalida: r.horaSalida,
+        legible: r.legible,
+      })),
+      novedades: b.novedades.map((n) => ({
+        fecha: aISO(n.fecha),
+        hora: n.hora,
+        guardia: n.guardiaLeido,
+        texto: n.texto,
+        categoria: esCategoria(n.categoria) ? n.categoria : 'OTRO',
+      })),
+      observaciones: b.observaciones,
+      dotacion: b.dotacion.map((d) => ({
+        ambito: esAmbito(d.ambito) ? d.ambito : 'SIN_DATO',
+        articulo: d.articulo,
+        cantidad: d.cantidad,
+        detalle: d.detalle,
+      })),
+    };
+    await this.revisarYGuardar(id, actor.companyId, lectura, undefined, actor.userId);
+  }
+
+  /** `PUBLICA` | `PRIVADA` del contrato de la hoja; si no se puede saber, no se lee la dotación (no se adivina). */
+  private async tipoDeEntidad(
+    bitacoraId: number,
+    companyId: number,
+  ): Promise<string | undefined> {
+    try {
+      const b = await this.cargarSimple(bitacoraId, companyId);
+      const e = await this.prisma.cPEntidadPublica.findFirst({
+        where: { id: b.entidadId, companyId },
+        select: { tipo: true },
+      });
+      return e?.tipo;
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo saber si la bitácora ${bitacoraId} es de un contrato público: ${(err as Error).message}`,
+      );
+      return undefined;
+    }
+  }
+
+  /** De quién es cada artículo según lo que la empresa ya corrigió antes; lo que el agente dudó (SIN_DATO) se completa. */
+  private async aplicarAmbitosRecordados(
+    companyId: number,
+    dotacion: LecturaDotacion[],
+  ): Promise<LecturaDotacion[]> {
+    if (dotacion.length === 0) return dotacion;
+    try {
+      const recordados = await this.prisma.cPBitacoraArticuloAmbito.findMany({
+        where: {
+          companyId,
+          clave: {
+            in: [...new Set(dotacion.map((d) => claveArticulo(d.articulo)))],
+          },
+        },
+      });
+      const porClave = new Map(recordados.map((r) => [r.clave, r.ambito]));
+      return dotacion.map((d) => {
+        const recordado = porClave.get(claveArticulo(d.articulo));
+        return esAmbito(recordado) ? { ...d, ambito: recordado } : d;
+      });
+    } catch (err) {
+      this.logger.warn(
+        `No se pudieron aplicar los ámbitos recordados: ${(err as Error).message}`,
+      );
+      return dotacion;
+    }
+  }
+
+  /** Recuerda lo que la persona decidió (de Gemeseg o del cliente) para las próximas hojas. «Sin dato» no se recuerda. */
+  private async recordarAmbitos(
+    companyId: number,
+    dotacion: LecturaDotacion[],
+  ) {
+    try {
+      const porClave = new Map<string, string>();
+      for (const d of dotacion) {
+        if (d.ambito !== 'SIN_DATO') {
+          porClave.set(claveArticulo(d.articulo), d.ambito);
+        }
+      }
+      for (const [clave, ambito] of porClave) {
+        if (!clave) continue;
+        await this.prisma.cPBitacoraArticuloAmbito.upsert({
+          where: { companyId_clave: { companyId, clave } },
+          create: { companyId, clave, ambito },
+          update: { ambito },
+        });
+      }
+    } catch (err) {
+      this.logger.warn(
+        `No se pudieron recordar los ámbitos de la dotación: ${(err as Error).message}`,
+      );
+    }
+  }
+
   /**
    * Guarda lo leído (líneas, novedades, días), compara con el horario y guarda
    * los hallazgos. Lo que la persona ya resolvió o descartó se conserva si el
@@ -565,6 +926,13 @@ export class BitacorasService {
           resultado: 'SIN_COMPARAR',
         };
 
+    // Dotación de la hoja contra la inicial del puesto y contra Inventario (solo si esta lectura trae dotación).
+    if (lectura.dotacion) {
+      const extra = await this.hallazgosDeDotacion(b, lectura.dotacion, fechas[0] ?? null);
+      salida.hallazgos.push(...extra);
+      if (extra.length > 0 && salida.resultado === 'CONFORME') salida.resultado = 'A_REVISAR';
+    }
+
     const anteriores = await this.prisma.cPBitacoraHallazgo.findMany({
       where: { bitacoraId: id, estado: { not: 'ABIERTO' } },
     });
@@ -572,7 +940,26 @@ export class BitacorasService {
     const fechaPorDefecto =
       fechas.length === 1 ? fechas[0] : (fechas[0] ?? hoyEcuador());
 
+    // La dotación solo se reemplaza si esta lectura la trae (contratos públicos); si no, se conserva lo guardado.
+    const dotacion = lectura.dotacion;
     await this.prisma.$transaction([
+      ...(dotacion
+        ? [
+            this.prisma.cPBitacoraDotacion.deleteMany({
+              where: { bitacoraId: id },
+            }),
+            this.prisma.cPBitacoraDotacion.createMany({
+              data: dotacion.map((d, i) => ({
+                bitacoraId: id,
+                ambito: d.ambito,
+                articulo: d.articulo,
+                cantidad: d.cantidad,
+                detalle: d.detalle,
+                orden: i,
+              })),
+            }),
+          ]
+        : []),
       this.prisma.cPBitacoraRegistro.deleteMany({ where: { bitacoraId: id } }),
       this.prisma.cPBitacoraNovedad.deleteMany({ where: { bitacoraId: id } }),
       this.prisma.cPBitacoraHallazgo.deleteMany({ where: { bitacoraId: id } }),
@@ -630,6 +1017,12 @@ export class BitacorasService {
           fechaHasta: fechas.length ? aFecha(fechas[fechas.length - 1]) : null,
           puestoLeido: lectura.puesto,
           observaciones: lectura.observaciones,
+          ...(lectura.guardiaSaliente !== undefined
+            ? { guardiaSaliente: lectura.guardiaSaliente }
+            : {}),
+          ...(lectura.guardiaEntrante !== undefined
+            ? { guardiaEntrante: lectura.guardiaEntrante }
+            : {}),
           resultado: salida.resultado,
           revisadaAt: new Date(),
           ...(estado?.estadoLectura
@@ -727,6 +1120,22 @@ export class BitacorasService {
           categoria: esCategoria(n.categoria) ? n.categoria : 'OTRO',
         })),
       observaciones: b.observaciones,
+      guardiaSaliente:
+        dto.guardiaSaliente === undefined
+          ? undefined
+          : dto.guardiaSaliente?.trim() || null,
+      guardiaEntrante:
+        dto.guardiaEntrante === undefined
+          ? undefined
+          : dto.guardiaEntrante?.trim() || null,
+      dotacion: dto.dotacion
+        ?.filter((d) => d.articulo.trim())
+        .map((d) => ({
+          ambito: esAmbito(d.ambito) ? d.ambito : 'SIN_DATO',
+          articulo: d.articulo.trim(),
+          cantidad: normalizarCantidad(d.cantidad),
+          detalle: d.detalle?.trim() || null,
+        })),
     };
     // Una hoja transcrita o corregida por una persona deja de ser "solo IA".
     await this.revisarYGuardar(
@@ -744,6 +1153,9 @@ export class BitacorasService {
       },
       actor.userId,
     );
+    if (lectura.dotacion) {
+      await this.recordarAmbitos(actor.companyId, lectura.dotacion);
+    }
     return this.obtener(id, actor.companyId);
   }
 
@@ -867,9 +1279,13 @@ export class BitacorasService {
         registros: { orderBy: [{ fecha: 'asc' }, { orden: 'asc' }] },
         novedades: { orderBy: [{ fecha: 'asc' }, { orden: 'asc' }] },
         hallazgos: { orderBy: [{ fecha: 'asc' }, { id: 'asc' }] },
+        dotacion: { orderBy: { orden: 'asc' } },
       },
     });
     if (!b) throw new NotFoundException('Bitácora no encontrada.');
+    // Dotación registrada del puesto y qué artículos de esta hoja ya están registrados o son nuevos.
+    const registrada = await this.dotacionRegistrada(companyId, b.puestoId, b.contratoId).catch(() => null);
+    const estados = estadoDeDotacion(b.dotacion, registrada?.base ?? [], registrada?.inventario ?? null);
 
     // Lo que decía el horario cada día, para mostrarlo junto a lo leído. Se
     // calcula al abrir (no se guarda): si el horario cambia, se ve lo vigente.
@@ -892,6 +1308,13 @@ export class BitacorasService {
       sugerenciasReemplazo: await this.sugerenciasReemplazo(b),
       ausencias: await this.ausenciasDeLaHoja(b),
       puestoExiste: !!entrada,
+      // PUBLICA | PRIVADA: en las públicas la hoja trae la dotación del puesto.
+      entidadTipo: (await this.tipoDeEntidad(id, companyId)) ?? null,
+      // Cada artículo de la hoja dice si el puesto ya lo tiene registrado (CONOCIDO) o es NUEVO.
+      dotacion: b.dotacion.map((d, i) => ({ ...d, estado: registrada ? estados[i] : 'CONOCIDO' })),
+      // Lo registrado del puesto: lo clasificado (editable) y lo que Inventario tiene asignado (solo lectura).
+      dotacionPuesto: registrada?.base ?? [],
+      dotacionInventario: registrada?.inventario ?? null,
       esperadoPorFecha: esperado?.esperadoPorFecha ?? {},
       horarioPorFecha: entrada?.horarioPorFecha ?? {},
       categorias: CATEGORIAS_NOVEDAD.map((c) => ({
@@ -1262,6 +1685,16 @@ export class BitacorasService {
         hallazgosAltos: abiertos.filter((h) => h.severidad === 'ALTA').length,
       },
       categorias,
+      // Rondas, ingresos de personas, vehículos e ingresos anotados «sin autorización» (por el texto de la hoja).
+      actividad: resumirActividad(
+        novedades.map((n) => ({
+          categoria: n.categoria,
+          texto: n.texto,
+          puestoId: n.bitacora.puestoId,
+          puestoNombre: n.bitacora.puestoNombre,
+          entidadNombre: n.bitacora.entidadNombre,
+        })),
+      ),
       diasConMasNovedades,
       porDiaSemana,
       puestosConMasNovedades: [...puestos.entries()]

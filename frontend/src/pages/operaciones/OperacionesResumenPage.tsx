@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ShieldCheck, Truck } from 'lucide-react';
+import { ClipboardList, ShieldCheck, Truck } from 'lucide-react';
 import { usePerm } from '../../contexts/PermissionsContext';
 import PageTabs from '../../components/common/PageTabs';
 import CustodiasDashboard from '../custodias/CustodiasDashboard';
@@ -15,10 +15,10 @@ import PuestosHoy from './PuestosHoy';
 import AvisoHorasCodigos from '../../components/operaciones/AvisoHorasCodigos';
 
 /**
- * Resumen de Operaciones, la primera pantalla del módulo. Arriba, «Hoy en los puestos» (quién debe
- * estar, si se cumple la cobertura y qué bitácoras faltan por subir); abajo, lo que dejan las bitácoras
- * de guardianía y cómo cuadran con el horario (novedad que más se repite, días y puestos con más
- * novedades, hallazgos abiertos). Lo de abajo antes era una pestaña dentro de Bitácoras.
+ * Resumen de Operaciones, la primera pantalla del módulo. Tres pestañas: «Hoy» (solo lo de hoy: quién debe
+ * estar en cada puesto, si se cumple la cobertura y qué bitácoras faltan por subir), «Bitácoras» (lo que
+ * dejan las hojas de guardianía en un período y cómo cuadran con el horario: novedades, rondas, ingresos,
+ * hallazgos abiertos) y «Custodias». Antes «Hoy» y lo de las bitácoras estaban juntos en una sola pestaña.
  */
 export default function OperacionesResumenPage() {
   const { canView } = usePerm();
@@ -26,7 +26,9 @@ export default function OperacionesResumenPage() {
   // «Custodias» es una ventana más del Resumen (2026-11-16): los viajes ya no son un módulo aparte.
   // Desde 2026-11-18 los viajes los gobierna el mismo permiso de Operaciones.
   const hayCustodias = canView('OPERACIONES');
-  const vista: 'puestos' | 'custodias' = hayCustodias && params.get('vista') === 'custodias' ? 'custodias' : 'puestos';
+  const pedida = params.get('vista');
+  const vista: 'hoy' | 'bitacoras' | 'custodias' =
+    hayCustodias && pedida === 'custodias' ? 'custodias' : pedida === 'bitacoras' ? 'bitacoras' : 'hoy';
   const [opciones, setOpciones] = useState<OpcionPuestoBitacora[]>([]);
   const [filtros, setFiltros] = useState<FiltrosBitacoras>({});
 
@@ -46,30 +48,32 @@ export default function OperacionesResumenPage() {
       <OperacionesPageHeader
         pantalla="resumen"
         title="Resumen"
-        description="Cómo van los puestos hoy y lo que dejan las bitácoras: quién debe estar, qué hojas faltan por subir, qué porcentaje cuadra con el horario y qué hallazgos siguen abiertos. En la pestaña Custodias ves cómo van los viajes."
+        description="Hoy: quién debe estar en cada puesto y qué hojas faltan por subir. Bitácoras: lo que dejan las hojas en un período (novedades, rondas, ingresos y hallazgos abiertos). Custodias: cómo van los viajes."
       />
 
-      {hayCustodias && (
-        <PageTabs
-          label="Resumen de Operaciones"
-          tabs={[
-            { key: 'puestos' as const, label: 'Puestos y bitácoras', icon: ShieldCheck },
-            { key: 'custodias' as const, label: 'Custodias', icon: Truck },
-          ]}
-          value={vista}
-          onChange={(key) => setParams(key === 'puestos' ? {} : { vista: key }, { replace: true })}
-        />
-      )}
+      <PageTabs
+        label="Resumen de Operaciones"
+        tabs={[
+          { key: 'hoy' as const, label: 'Hoy', icon: ShieldCheck },
+          { key: 'bitacoras' as const, label: 'Bitácoras', icon: ClipboardList },
+          ...(hayCustodias ? [{ key: 'custodias' as const, label: 'Custodias', icon: Truck }] : []),
+        ]}
+        value={vista}
+        onChange={(key) => setParams(key === 'hoy' ? {} : { vista: key }, { replace: true })}
+      />
 
       {vista === 'custodias' && <CustodiasDashboard incrustado />}
 
-      {vista === 'puestos' && (
+      {vista === 'hoy' && (
       <>
       <AvisoHorasCodigos />
 
       <PuestosHoy />
+      </>
+      )}
 
-      <h3 style={{ margin: '4px 0 10px', fontSize: '1.05rem', color: 'var(--azul-oscuro)' }}>Lo que dejan las bitácoras</h3>
+      {vista === 'bitacoras' && (
+      <>
       <div className="filter-bar">
         <div className="filter-bar-fields">
           <select

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
-import { SlidersHorizontal, FolderOpen } from 'lucide-react';
+import { SlidersHorizontal, FolderOpen, FileText } from 'lucide-react';
 import { getCamposEntidad, getCarpetaEntregas } from '../../../services/contratacion-publica.service';
 import type { CPCarpetaEntregas, CPEntidadCampo } from '../../../types/contratacion-publica';
 import { usePerm } from '../../../contexts/PermissionsContext';
@@ -8,17 +8,19 @@ import CPPageHeader from '../../../components/contratacion-publica/CPPageHeader'
 import PageTabs from '../../../components/common/PageTabs';
 import CamposEntidadModal from '../CamposEntidadModal';
 import CarpetaDrivePanel from '../CarpetaDrivePanel';
+import PlantillaInformeConfig from './PlantillaInformeConfig';
 
-type Pestana = 'campos' | 'drive';
+type Pestana = 'campos' | 'drive' | 'informe';
 
 const PESTANAS = [
   { key: 'campos' as const, label: 'Campos de la entidad', icon: SlidersHorizontal },
   { key: 'drive' as const, label: 'Carpeta de Drive', icon: FolderOpen },
+  { key: 'informe' as const, label: 'Plantilla del informe', icon: FileText },
 ];
 
 /**
  * Configuración de Contratación Pública (2026-10-30): un solo lugar para lo que se ajusta una vez y
- * usan las demás pantallas: «Campos de la entidad» y «Carpeta de Drive». Los códigos de turno y su
+ * usan las demás pantallas: «Campos de la entidad», «Carpeta de Drive» y «Plantilla del informe» mensual (que estuvo en Operaciones hasta el 2026-11-25). Los códigos de turno y su
  * horario pasaron a la Configuración de Operaciones (2026-11-05).
  */
 export default function ConfiguracionPage() {
@@ -51,7 +53,7 @@ export default function ConfiguracionPage() {
       <CPPageHeader
         pantalla="configuracion"
         title="Configuración"
-        description="Lo que se ajusta una vez y usan el resto de pantallas: los datos extra de cada entidad y la carpeta de Google Drive."
+        description="Lo que se ajusta una vez y usan el resto de pantallas: los datos extra de cada entidad, la carpeta de Google Drive y la plantilla del informe mensual."
       />
 
       <PageTabs
@@ -64,6 +66,7 @@ export default function ConfiguracionPage() {
       {error && <div className="form-error" style={{ margin: '12px 0' }}>{error}</div>}
 
       {pestana === 'campos' && <CamposEntidadModal embebido campos={campos} onChange={setCampos} />}
+      {pestana === 'informe' && <PlantillaInformeConfig />}
       {pestana === 'drive' && <CarpetaDrivePanel actual={carpeta} puedeEditar={puedeEditar} onGuardada={setCarpeta} />}
     </div>
   );

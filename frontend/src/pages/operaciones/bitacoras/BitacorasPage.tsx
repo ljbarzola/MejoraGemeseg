@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bot, Camera, Eye, Trash2 } from 'lucide-react';
+import { Bot, Camera, Eye, Printer, Trash2 } from 'lucide-react';
 import OperacionesPageHeader from '../../../components/operaciones/OperacionesPageHeader';
 import MovidoAConfiguracion from '../../../components/common/MovidoAConfiguracion';
 import {
@@ -35,6 +35,7 @@ import {
 } from '../../../utils/bitacoras';
 import { mensajeError } from '../../../utils/entregasCp';
 import SubirBitacoraModal from './SubirBitacoraModal';
+import HojaEnBlancoModal from './HojaEnBlancoModal';
 
 const COL_ENTIDAD = 'entidad';
 const COL_CONTRATO = 'contrato';
@@ -77,6 +78,7 @@ export default function BitacorasPage() {
   const [error, setError] = useState('');
 
   const [subiendo, setSubiendo] = useState(false);
+  const [hojaEnBlanco, setHojaEnBlanco] = useState(false);
   const [sinPermiso, setSinPermiso] = useState('');
   const [borrando, setBorrando] = useState<BitacoraResumen | null>(null);
 
@@ -164,9 +166,14 @@ export default function BitacorasPage() {
         title="Bitácoras"
         description="Sube la foto de la hoja que llenan los guardias. El agente la lee y la compara con el horario del puesto: avisa si quien aparece no es quien debía estar, o si faltan guardias u horas."
         actions={
-          <button className="auth-btn" onClick={pedirSubir}>
-            <Camera size={16} /> Subir bitácora
-          </button>
+          <>
+            <button className="btn-secondary" onClick={() => setHojaEnBlanco(true)} title="Hoja de bitácora para imprimir, con el puesto ya escrito">
+              <Printer size={16} /> Hoja en blanco
+            </button>
+            <button className="auth-btn" onClick={pedirSubir}>
+              <Camera size={16} /> Subir bitácora
+            </button>
+          </>
         }
       />
       <MovidoAConfiguracion to="/operaciones/configuracion?pestana=horas" enlace="Abrir Horario de los turnos">
@@ -236,11 +243,11 @@ export default function BitacorasPage() {
                 <table className="tasks-table resizable-table" ref={tablaRef}>
                   <thead>
                     <tr>
-                      <th {...thProps('periodo')} style={{ width: '17%', minWidth: 130 }}>Hoja <SortIcon campo="periodo" /></th>
+                      <th {...thProps('periodo')} style={{ width: '16%', minWidth: 130 }}>Hoja <SortIcon campo="periodo" /></th>
                       <th {...thProps('puesto')} style={{ width: '15%' }}>Puesto <SortIcon campo="puesto" /></th>
                       {ver(COL_ENTIDAD) && <th {...thProps('entidad')} style={{ width: '16%' }}>Entidad <SortIcon campo="entidad" /></th>}
                       {ver(COL_CONTRATO) && <th {...thProps('contrato')} style={{ width: '10%' }}>Contrato <SortIcon campo="contrato" /></th>}
-                      {ver(COL_NOVEDADES) && <th {...thProps('novedades')} style={{ width: '9%' }}>Novedades <SortIcon campo="novedades" /></th>}
+                      {ver(COL_NOVEDADES) && <th {...thProps('novedades')} style={{ width: '12.5%' }}>Novedades <SortIcon campo="novedades" /></th>}
                       {ver(COL_SUBIDA) && <th {...thProps('subida')} style={{ width: '12%' }}>Subida por <SortIcon campo="subida" /></th>}
                       {ver(COL_FECHA_SUBIDA) && <th {...thProps('fechaSubida')} style={{ width: '12%' }}>Subida el <SortIcon campo="fechaSubida" /></th>}
                       {ver(COL_LECTURA) && <th {...thProps('lectura')} style={{ width: '10%' }}>Lectura <SortIcon campo="lectura" /></th>}
@@ -305,6 +312,7 @@ export default function BitacorasPage() {
         </div>
       )}
 
+      {hojaEnBlanco && <HojaEnBlancoModal onClose={() => setHojaEnBlanco(false)} />}
       {subiendo && (
         <SubirBitacoraModal
           puestoInicial={filtros.puestoId ? Number(filtros.puestoId) : undefined}

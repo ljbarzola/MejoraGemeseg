@@ -177,6 +177,37 @@ export interface LecturaNovedad {
   categoria: CategoriaNovedad;
 }
 
+/** De quién es un artículo de la dotación: de Gemeseg, del cliente, o la hoja no lo dice (la persona lo corrige). */
+export const AMBITOS_DOTACION = ['GEMESEG', 'CLIENTE', 'SIN_DATO'] as const;
+export type AmbitoDotacion = (typeof AMBITOS_DOTACION)[number];
+
+export function esAmbito(v: unknown): v is AmbitoDotacion {
+  return typeof v === 'string' && (AMBITOS_DOTACION as readonly string[]).includes(v);
+}
+
+export interface LecturaDotacion {
+  ambito: AmbitoDotacion;
+  articulo: string;
+  cantidad: number | null;
+  detalle: string | null;
+}
+
+/**
+ * Nombre de artículo comparable, para recordar de quién es: sin tildes, mayúsculas, sin puntuación y con el
+ * plural quitado a cada palabra larga («Tachos de basura» y «tacho de basura» son el mismo artículo).
+ */
+export function claveArticulo(nombre: string | null | undefined): string {
+  return (nombre ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .trim()
+    .split(' ')
+    .map((t) => (t.length > 3 && t.endsWith('S') ? t.slice(0, -1) : t))
+    .join(' ');
+}
+
 export interface LecturaBitacora {
   esBitacora: boolean;
   puesto: string | null;
@@ -184,6 +215,11 @@ export interface LecturaBitacora {
   registros: LecturaRegistro[];
   novedades: LecturaNovedad[];
   observaciones: string | null;
+  /** Cambio de turno como lo escribe la hoja (en todas las hojas). Opcional: lo anterior sigue siendo válido. */
+  guardiaSaliente?: string | null;
+  guardiaEntrante?: string | null;
+  /** Solo en hojas de contratos públicos. `undefined` = no se pidió, no se toca lo guardado. */
+  dotacion?: LecturaDotacion[];
 }
 
 /** Lo que devuelve el modelo, sin confiar en nada: cada campo se revisa antes de usarlo. */
@@ -201,7 +237,16 @@ interface NovedadCruda {
   texto?: unknown;
   categoria?: unknown;
 }
+interface DotacionCruda {
+  ambito?: unknown;
+  articulo?: unknown;
+  cantidad?: unknown;
+  detalle?: unknown;
+}
 interface LecturaCruda {
+  guardiaSaliente?: unknown;
+  guardiaEntrante?: unknown;
+  dotacion?: unknown;
   esBitacora?: unknown;
   puesto?: unknown;
   fechas?: unknown;
@@ -212,6 +257,7 @@ interface LecturaCruda {
 
 const MAX_REGISTROS = 200;
 const MAX_NOVEDADES = 300;
+const MAX_DOTACION = 60;
 
 const texto = (v: unknown, max: number): string | null => {
   if (typeof v !== 'string') return null;
@@ -224,6 +270,34 @@ const texto = (v: unknown, max: number): string | null => {
  * se entiende (fecha inválida, línea sin guardia) y lo cuenta en `observaciones`
  * para que la persona lo vea, en vez de guardarlo roto o perderlo en silencio.
  */
+/** Cantidad entera de 0 a 9999 desde un número o un texto como «2»; cualquier otra cosa es «sin dato». */
+export function normalizarCantidad(v: unknown): number | null {
+  const n =
+    typeof v === 'number'
+      ? v
+      : typeof v === 'string' && /^\s*\d{1,4}\s*$/.test(v)
+        ? parseInt(v, 10)
+        : NaN;
+  return Number.isInteger(n) && n >= 0 && n <= 9999 ? n : null;
+}
+
+/** Limpia la dotación que devolvió el modelo: sin artículo no hay fila; el ámbito dudoso es «sin dato». */
+export function normalizarDotacion(crudo: unknown): LecturaDotacion[] {
+  if (!Array.isArray(crudo)) return [];
+  const filas: LecturaDotacion[] = [];
+  for (const d of (crudo as DotacionCruda[]).slice(0, MAX_DOTACION)) {
+    const articulo = texto(d?.articulo, 120);
+    if (!articulo) continue;
+    filas.push({
+      ambito: esAmbito(d?.ambito) ? d.ambito : 'SIN_DATO',
+      articulo,
+      cantidad: normalizarCantidad(d?.cantidad),
+      detalle: texto(d?.detalle, 200),
+    });
+  }
+  return filas;
+}
+
 export function normalizarLectura(crudo: unknown): LecturaBitacora {
   const o = (crudo && typeof crudo === 'object' ? crudo : {}) as LecturaCruda;
   const avisos: string[] = [];
@@ -290,5 +364,9 @@ export function normalizarLectura(crudo: unknown): LecturaBitacora {
     registros,
     novedades,
     observaciones,
+    guardiaSaliente: texto(o.guardiaSaliente, 120),
+    guardiaEntrante: texto(o.guardiaEntrante, 120),
+    // Solo si el modelo devolvió la lista: sin ella (contrato privado) no se toca lo que ya hubiera guardado.
+    ...(Array.isArray(o.dotacion) ? { dotacion: normalizarDotacion(o.dotacion) } : {}),
   };
 }

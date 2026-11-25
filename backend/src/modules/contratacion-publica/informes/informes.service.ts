@@ -353,7 +353,7 @@ export class CPInformesService {
       const buffer = await readStoredFile(this.prisma, elegida.storedKey, elegida.docxPath, DOCX_MIME);
       if (!buffer) {
         throw new BadRequestException(
-          `No se encontró el archivo de la plantilla «${elegida.nombre}». Súbela de nuevo en Operaciones → Configuración → Plantilla del informe.`,
+          `No se encontró el archivo de la plantilla «${elegida.nombre}». Súbela de nuevo en Contratación Pública → Configuración → Plantilla del informe.`,
         );
       }
       return buffer;

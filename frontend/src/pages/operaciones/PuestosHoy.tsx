@@ -254,9 +254,9 @@ export default function PuestosHoy() {
                     <td>
                       <div className="acciones-iconos" style={{ alignItems: 'center' }}>
                         {p.cobertura === 'SIN_HORARIO' ? (
-                          <button type="button" className="btn-secondary" onClick={() => navigate(`/operaciones/horarios?contratoId=${p.contratoId}`)}>Ver horarios</button>
+                          <button type="button" className="btn-secondary" style={{ whiteSpace: 'nowrap', padding: '7px 10px', fontSize: '0.8rem' }} onClick={() => navigate(`/operaciones/horarios?contratoId=${p.contratoId}`)}>Ver horarios</button>
                         ) : puedeEscribir ? (
-                          <button type="button" className="btn-secondary" onClick={() => setSubiendoPuesto(p.puestoId)} title="Subir la foto de la bitácora de este puesto">
+                          <button type="button" className="btn-secondary" style={{ whiteSpace: 'nowrap', padding: '7px 10px', fontSize: '0.8rem' }} onClick={() => setSubiendoPuesto(p.puestoId)} title="Subir la foto de la bitácora de este puesto">
                             <Camera size={14} style={{ marginRight: 4 }} />Subir bitácora
                           </button>
                         ) : null}

@@ -47,7 +47,7 @@ const COLUMNAS: { key: string; label: string }[] = [
 ];
 const COLUMNAS_POR_DEFECTO = ['estado', 'tipo', 'cliente', 'placa', 'personal', 'salida', 'llegada'];
 const ANCHO: Record<string, number> = {
-  estado: 185, tipo: 105, cliente: 130, placa: 95, personal: 165, salida: 125, llegada: 125, ruta: 260, observaciones: 240,
+  estado: 225, tipo: 125, cliente: 150, placa: 115, personal: 195, salida: 125, llegada: 125, ruta: 260, observaciones: 240,
 };
 const COLUMNAS_EXPORTAR = [
   { key: 'guia', label: 'Guía' },

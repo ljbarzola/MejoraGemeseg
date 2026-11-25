@@ -3135,6 +3135,9 @@ model CPBitacora {
   mensajeLectura  String?
   puestoLeido     String? // lo que dice la hoja como puesto, tal cual
   observaciones   String? // lo que el agente no pudo leer o dudó
+  // Cambio de turno tal como lo escribió la hoja (2026-11-25). Columnas aditivas: src/prisma/cp-bitacora-turno.schema.ts.
+  guardiaSaliente String?
+  guardiaEntrante String?
   // Días que cubre la hoja (YYYY-MM-DD), aunque algún día no tenga guardia ni novedad escritas.
   fechas          String[]
   fechaDesde      DateTime? @db.Date
@@ -3148,6 +3151,7 @@ model CPBitacora {
   registros CPBitacoraRegistro[]
   novedades CPBitacoraNovedad[]
   hallazgos CPBitacoraHallazgo[]
+  dotacion  CPBitacoraDotacion[]
 
   @@index([companyId, puestoId])
   @@index([companyId, fechaDesde])
@@ -3977,3 +3981,53 @@ model CPPlantillaInformeArchivo {
 
   @@index([companyId])
 }
+
+// Dotación que la hoja de un puesto declara (2026-11-25): lo que hay en el puesto, con su cantidad.
+// Solo se lee en contratos públicos (la Contraloría la audita). `ambito` separa lo que pone Gemeseg de lo
+// que es del cliente (tachos de basura, tablero, llaves). Tabla nueva: se crea al arrancar (bitacoras.schema.ts).
+model CPBitacoraDotacion {
+  id         Int     @id @default(autoincrement())
+  bitacoraId Int
+  // GEMESEG | CLIENTE | SIN_DATO (el agente no pudo decidir; la persona lo corrige)
+  ambito     String  @default("SIN_DATO")
+  articulo   String
+  cantidad   Int?
+  detalle    String?
+  orden      Int     @default(0)
+
+  bitacora CPBitacora @relation(fields: [bitacoraId], references: [id], onDelete: Cascade)
+
+  @@index([bitacoraId])
+}
+
+// Dotación registrada de un puesto (2026-11-25): lo que una persona ya clasificó como de Gemeseg o del
+// cliente/entidad al ver una hoja (tachos de basura, tablero, llaves…). Se suma a lo que Inventario tiene asignado
+// al puesto, que es lo que Gemeseg manda. Lo que una hoja trae y no está en ninguno de los dos se marca «Nuevo».
+model CPPuestoDotacion {
+  id         Int      @id @default(autoincrement())
+  companyId  Int
+  puestoId   Int
+  // De qué hoja se clasificó (informativo; sin FK: si se borra la hoja, el artículo sigue registrado).
+  bitacoraId Int?
+  ambito     String   @default("GEMESEG")
+  articulo   String
+  cantidad   Int?
+  detalle    String?
+  orden      Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([companyId, puestoId])
+}
+
+// De quién es cada artículo de la dotación, recordado por nombre: si una persona corrige «tachos de basura»
+// como del cliente, las hojas siguientes lo traen ya así. Una fila por empresa y nombre normalizado.
+model CPBitacoraArticuloAmbito {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  clave     String
+  ambito    String
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, clave])
+}
+

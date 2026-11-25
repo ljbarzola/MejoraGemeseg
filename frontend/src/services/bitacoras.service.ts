@@ -1,6 +1,8 @@
 import { api } from './auth.service';
 import type {
   BitacoraDetalle,
+  DatosHojaEnBlanco,
+  DotacionDelPuestoCargada,
   EstadoAgenteBitacoras,
   EstadoHallazgo,
   FiltrosBitacoras,
@@ -60,6 +62,42 @@ export const actualizarHallazgoBitacora = (
   nota?: string,
 ): Promise<BitacoraDetalle> =>
   api.patch(`${BASE}/hallazgos/${hallazgoId}`, { estado, nota }).then((r) => r.data);
+
+/** PDF de la hoja de bitácora en blanco de un puesto, lista para imprimir. */
+export const getHojaEnBlanco = (puestoId: number, tipo?: 'PUBLICA' | 'ESTANDAR'): Promise<Blob> =>
+  api
+    .get(`${BASE}/hoja-en-blanco`, { params: { puestoId, ...(tipo ? { tipo } : {}) }, responseType: 'blob' })
+    .then((r) => r.data);
+
+/** Los datos que llevará la hoja en blanco, para revisarlos antes de imprimir. */
+export const getDatosHojaEnBlanco = (puestoId: number, tipo?: 'PUBLICA' | 'ESTANDAR'): Promise<DatosHojaEnBlanco> =>
+  api.get(`${BASE}/hoja-en-blanco/datos`, { params: { puestoId, ...(tipo ? { tipo } : {}) } }).then((r) => r.data);
+
+/** Dotación del puesto para cargarla a mano antes de las hojas. */
+export const getDotacionDelPuesto = (puestoId: number): Promise<DotacionDelPuestoCargada> =>
+  api.get(`${BASE}/puestos/${puestoId}/dotacion`).then((r) => r.data);
+
+export const agregarADotacionDelPuesto = (
+  puestoId: number,
+  fila: { ambito: 'GEMESEG' | 'CLIENTE'; articulo: string; cantidad: number | null },
+): Promise<DotacionDelPuestoCargada> => api.post(`${BASE}/puestos/${puestoId}/dotacion`, fila).then((r) => r.data);
+
+export const actualizarDotacionDelPuesto = (
+  puestoId: number,
+  filaId: number,
+  cambios: { ambito?: 'GEMESEG' | 'CLIENTE'; articulo?: string; cantidad?: number | null },
+): Promise<DotacionDelPuestoCargada> => api.patch(`${BASE}/puestos/${puestoId}/dotacion/${filaId}`, cambios).then((r) => r.data);
+
+export const quitarDotacionDelPuesto = (puestoId: number, filaId: number): Promise<DotacionDelPuestoCargada> =>
+  api.delete(`${BASE}/puestos/${puestoId}/dotacion/${filaId}`).then((r) => r.data);
+
+/** Dice de quién es un artículo «Nuevo" de la hoja: queda registrado en la dotación del puesto. */
+export const clasificarDotacionBitacora = (id: number, dotacionId: number, ambito: 'GEMESEG' | 'CLIENTE'): Promise<BitacoraDetalle> =>
+  api.post(`${BASE}/${id}/dotacion/${dotacionId}/clasificar`, { ambito }).then((r) => r.data);
+
+/** Quita un artículo de la lista del puesto (por ejemplo, uno clasificado por error). */
+export const quitarDeLaDotacionDelPuesto = (id: number, filaId: number): Promise<BitacoraDetalle> =>
+  api.delete(`${BASE}/${id}/dotacion-puesto/${filaId}`).then((r) => r.data);
 
 export const eliminarBitacora = (id: number): Promise<{ ok: boolean }> =>
   api.delete(`${BASE}/${id}`).then((r) => r.data);

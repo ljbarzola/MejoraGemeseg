@@ -57,6 +57,8 @@ function montar(opciones: {
       update: jest.fn().mockResolvedValue(bitacoraBase),
       findFirst: jest.fn().mockResolvedValue({
         ...bitacoraBase,
+        contratoId: 3,
+        dotacion: [],
         registros: [],
         novedades: [],
         hallazgos: [],
@@ -85,6 +87,21 @@ function montar(opciones: {
       deleteMany: jest.fn(),
       createMany: jest.fn(),
     },
+    cPBitacoraDotacion: {
+      deleteMany: jest.fn(),
+      createMany: jest.fn(),
+      findFirst: jest.fn().mockResolvedValue(null),
+      update: jest.fn(),
+    },
+    cPPuestoDotacion: {
+      findMany: jest.fn().mockResolvedValue([]),
+      deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+      create: jest.fn(),
+      update: jest.fn(),
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    cPBitacoraArticuloAmbito: { findMany: jest.fn().mockResolvedValue([]), upsert: jest.fn() },
+    cPEntidadPublica: { findFirst: jest.fn().mockResolvedValue({ tipo: 'PUBLICA' }) },
     $transaction: jest.fn().mockResolvedValue([]),
   };
   const lector = {
@@ -137,6 +154,8 @@ describe('BitacorasService.releer cuando falla la IA', () => {
     prisma.cPBitacora.findFirst.mockResolvedValue({
       id: 99,
       companyId: 1,
+      contratoId: 3,
+      dotacion: [],
       puestoId: 10,
       puestoNombre: 'Garita norte',
       entidadNombre: 'M',
@@ -360,5 +379,280 @@ describe('BitacorasService.subir', () => {
     const fabrica = montar({ leer });
     await fabrica.servicio.subir(foto, 10, ACTOR);
     expect(leer.mock.calls[0][2]).toBe('');
+  });
+});
+
+describe('BitacorasService.dotación de la hoja (etapa 1 y 2)', () => {
+  const hojaConDotacion = (dotacion: unknown[]) => ({
+    id: 99,
+    companyId: 1,
+    puestoId: 10,
+    contratoId: 3,
+    puestoNombre: 'Garita norte',
+    entidadId: 5,
+    entidadNombre: 'Municipio de Ejemplo',
+    archivoKey: null,
+    archivoTipo: null,
+    origenLectura: 'IA',
+    estadoLectura: 'LEIDA',
+    observaciones: null,
+    puestoLeido: null,
+    fechas: [],
+    registros: [],
+    novedades: [],
+    hallazgos: [],
+    dotacion,
+  });
+
+  it('pide la dotación al lector solo en contratos de entidades públicas', async () => {
+    for (const [tipo, esperado] of [
+      ['PUBLICA', 'PUBLICA'],
+      ['PRIVADA', 'PRIVADA'],
+    ] as const) {
+      const leer = jest.fn().mockResolvedValue({
+        lectura: {
+          esBitacora: true,
+          puesto: null,
+          fechas: [],
+          registros: [],
+          novedades: [],
+          observaciones: null,
+        },
+        modelo: 'm',
+        tokensEntrada: 1,
+        tokensSalida: 1,
+        duracionMs: 1,
+      });
+      const { servicio, prisma } = montar({ leer });
+      prisma.cPEntidadPublica.findFirst.mockResolvedValue({ tipo });
+      await servicio.subir(foto, 10, ACTOR);
+      expect(leer.mock.calls[0][4]).toBe(esperado);
+    }
+  });
+
+  it('si no se puede saber el tipo de entidad no se pide dotación (no se adivina)', async () => {
+    const leer = jest.fn().mockResolvedValue({
+      lectura: { esBitacora: true, puesto: null, fechas: [], registros: [], novedades: [], observaciones: null },
+      modelo: 'm',
+      tokensEntrada: 1,
+      tokensSalida: 1,
+      duracionMs: 1,
+    });
+    const { servicio, prisma } = montar({ leer });
+    prisma.cPEntidadPublica.findFirst.mockRejectedValue(new Error('caído'));
+    await servicio.subir(foto, 10, ACTOR);
+    expect(leer.mock.calls[0][4]).toBeUndefined();
+  });
+
+  it('completa de quién es cada artículo con lo que la empresa ya corrigió antes', async () => {
+    const leer = jest.fn().mockResolvedValue({
+      lectura: {
+        esBitacora: true,
+        puesto: null,
+        fechas: [],
+        registros: [],
+        novedades: [],
+        observaciones: null,
+        dotacion: [{ ambito: 'SIN_DATO', articulo: 'Tachos de basura', cantidad: 2, detalle: null }],
+      },
+      modelo: 'm',
+      tokensEntrada: 1,
+      tokensSalida: 1,
+      duracionMs: 1,
+    });
+    const { servicio, prisma } = montar({ leer });
+    prisma.cPBitacoraArticuloAmbito.findMany.mockResolvedValue([{ clave: 'TACHO DE BASURA', ambito: 'CLIENTE' }]);
+    await servicio.subir(foto, 10, ACTOR);
+    const filas = prisma.cPBitacoraDotacion.createMany.mock.calls[0][0].data;
+    expect(filas).toEqual([expect.objectContaining({ articulo: 'Tachos de basura', ambito: 'CLIENTE', cantidad: 2 })]);
+  });
+
+  it('si la lectura no trae dotación (contrato privado) no se toca la que hubiera guardada', async () => {
+    const leer = jest.fn().mockResolvedValue({
+      lectura: { esBitacora: true, puesto: null, fechas: [], registros: [], novedades: [], observaciones: null },
+      modelo: 'm',
+      tokensEntrada: 1,
+      tokensSalida: 1,
+      duracionMs: 1,
+    });
+    const { servicio, prisma } = montar({ leer });
+    await servicio.subir(foto, 10, ACTOR);
+    expect(prisma.cPBitacoraDotacion.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('una persona clasifica un artículo nuevo: queda en la lista del puesto, en la hoja y se recuerda', async () => {
+    const { servicio, prisma } = montar({});
+    prisma.cPBitacora.findFirst.mockResolvedValue(hojaConDotacion([]));
+    prisma.cPBitacoraDotacion.findFirst.mockResolvedValue({ id: 5, bitacoraId: 99, articulo: 'Tablero', cantidad: 1, detalle: null });
+    await servicio.clasificarDotacion(99, 5, 'CLIENTE', ACTOR);
+    expect(prisma.cPBitacoraDotacion.update).toHaveBeenCalledWith({ where: { id: 5 }, data: { ambito: 'CLIENTE' } });
+    expect(prisma.cPPuestoDotacion.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ companyId: 1, puestoId: 10, bitacoraId: 99, ambito: 'CLIENTE', articulo: 'Tablero', cantidad: 1 }),
+    });
+    expect(prisma.cPBitacoraArticuloAmbito.upsert).toHaveBeenCalled();
+  });
+
+  it('al clasificar de nuevo un artículo reemplaza el que ya estaba en la lista del puesto', async () => {
+    const { servicio, prisma } = montar({});
+    prisma.cPBitacora.findFirst.mockResolvedValue(hojaConDotacion([]));
+    prisma.cPBitacoraDotacion.findFirst.mockResolvedValue({ id: 5, bitacoraId: 99, articulo: 'Tablero', cantidad: 2, detalle: null });
+    prisma.cPPuestoDotacion.findMany.mockResolvedValue([{ id: 40, articulo: 'tableros', ambito: 'CLIENTE', cantidad: 1 }]);
+    await servicio.clasificarDotacion(99, 5, 'GEMESEG', ACTOR);
+    expect(prisma.cPPuestoDotacion.deleteMany).toHaveBeenCalledWith({ where: { id: { in: [40] } } });
+  });
+
+  it('solo se puede clasificar como de Gemeseg o del cliente', async () => {
+    const { servicio, prisma } = montar({});
+    await expect(servicio.clasificarDotacion(99, 5, 'OTRO', ACTOR)).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.cPPuestoDotacion.create).not.toHaveBeenCalled();
+  });
+
+  it('un artículo que no es de esa hoja no se puede clasificar', async () => {
+    const { servicio, prisma } = montar({});
+    prisma.cPBitacoraDotacion.findFirst.mockResolvedValue(null);
+    await expect(servicio.clasificarDotacion(99, 5, 'CLIENTE', ACTOR)).rejects.toThrow('Artículo no encontrado en esta hoja.');
+  });
+
+  it('quitar de la dotación del puesto solo borra una fila de ESE puesto', async () => {
+    const { servicio, prisma } = montar({});
+    prisma.cPBitacora.findFirst.mockResolvedValue(hojaConDotacion([]));
+    await servicio.quitarDeLaDotacionDelPuesto(99, 40, ACTOR);
+    expect(prisma.cPPuestoDotacion.deleteMany).toHaveBeenCalledWith({ where: { id: 40, companyId: 1, puestoId: 10 } });
+  });
+
+  it('al guardar, la dotación de la hoja se compara con la del puesto y con Inventario, y marca lo nuevo', async () => {
+    const { servicio, prisma } = montar({});
+    prisma.cPBitacora.findFirst.mockResolvedValue(hojaConDotacion([]));
+    prisma.cPPuestoDotacion.findMany.mockResolvedValue([{ ambito: 'GEMESEG', articulo: 'Radios', cantidad: 2 }]);
+    (servicio as any).inventario = {
+      inventarioPorContrato: jest.fn().mockResolvedValue([{ puestoId: 10, totalArmas: 2, chalecos: 0, equipo: [] }]),
+    };
+    await servicio.guardarLectura(
+      99,
+      {
+        registros: [],
+        novedades: [],
+        dotacion: [
+          { ambito: 'GEMESEG', articulo: 'Radios', cantidad: 1 },
+          { ambito: 'SIN_DATO', articulo: 'Tablero', cantidad: 1 },
+        ],
+      } as any,
+      ACTOR,
+    );
+    const hallazgos = prisma.cPBitacoraHallazgo.createMany.mock.calls[0][0].data;
+    const tipos = hallazgos.map((h: any) => h.tipo);
+    expect(tipos).toEqual(expect.arrayContaining(['DOTACION_DIFERENTE', 'DOTACION_INVENTARIO', 'DOTACION_NUEVO']));
+    expect(Math.max(...hallazgos.map((h: any) => ['BAJA', 'MEDIA', 'ALTA'].indexOf(h.severidad)))).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('BitacorasService.datosHojaEnBlanco', () => {
+  const puestoDe = (tipo: string) => ({
+    id: 10,
+    nombre: 'Garita norte',
+    contratoId: 3,
+    contrato: { numero: 'CTR-1', entidad: { nombre: 'Municipio', tipo } },
+  });
+
+  it('en una entidad pública ofrece la hoja con dotación y trae la dotación inicial', async () => {
+    const { servicio, prisma } = montar({});
+    prisma.cPPuestoServicio.findFirst.mockResolvedValue(puestoDe('PUBLICA'));
+    prisma.cPPuestoDotacion.findMany.mockResolvedValue([{ ambito: 'CLIENTE', articulo: 'Tachos de basura', cantidad: 2 }]);
+    (servicio as any).inventario = {
+      inventarioPorContrato: jest
+        .fn()
+        .mockResolvedValue([{ puestoId: 10, totalArmas: 1, chalecos: 2, equipo: [{ articulo: 'Radio', cantidad: 2, clase: 'OTRO' }] }]),
+    };
+    const d = await servicio.datosHojaEnBlanco(1, 10);
+    expect(d.tipo).toBe('PUBLICA');
+    // Lo que Gemeseg manda (Inventario) y lo ya clasificado del cliente salen impresos como «Inicial».
+    expect(d.dotacionBase.map((x) => [x.articulo, x.cantidad])).toEqual([
+      ['Armas', 1],
+      ['Chalecos', 2],
+      ['Radio', 2],
+      ['Tachos de basura', 2],
+    ]);
+    expect(d.puestoNombre).toBe('Garita norte');
+  });
+
+  it('en una entidad privada ofrece la hoja estándar, sin dotación', async () => {
+    const { servicio, prisma } = montar({});
+    prisma.cPPuestoServicio.findFirst.mockResolvedValue(puestoDe('PRIVADA'));
+    const d = await servicio.datosHojaEnBlanco(1, 10);
+    expect(d.tipo).toBe('ESTANDAR');
+    expect(d.dotacionBase).toEqual([]);
+    expect(prisma.cPPuestoDotacion.findMany).not.toHaveBeenCalled();
+  });
+
+  it('la persona puede elegir el formato aunque la entidad sugiera otro', async () => {
+    const { servicio, prisma } = montar({});
+    prisma.cPPuestoServicio.findFirst.mockResolvedValue(puestoDe('PUBLICA'));
+    expect((await servicio.datosHojaEnBlanco(1, 10, 'ESTANDAR')).tipo).toBe('ESTANDAR');
+  });
+
+  it('un puesto que no existe da error claro', async () => {
+    const { servicio, prisma } = montar({});
+    prisma.cPPuestoServicio.findFirst.mockResolvedValue(null);
+    await expect(servicio.datosHojaEnBlanco(1, 999)).rejects.toThrow('Puesto de servicio no encontrado.');
+  });
+});
+
+
+describe('BitacorasService.dotación del puesto cargada a mano', () => {
+  const puesto = { id: 10, nombre: 'Garita norte', contratoId: 3, contrato: { numero: 'CTR-1', entidad: { nombre: 'Municipio' } } };
+
+  it('agrega un artículo del cliente a la lista del puesto, antes de cualquier hoja', async () => {
+    const { servicio, prisma } = montar({});
+    prisma.cPPuestoServicio.findFirst.mockResolvedValue(puesto);
+    await servicio.agregarADotacionDelPuesto(1, 10, { ambito: 'CLIENTE', articulo: '  Tablero   de llaves ', cantidad: 1 });
+    expect(prisma.cPPuestoDotacion.create).toHaveBeenCalledWith({
+      data: { companyId: 1, puestoId: 10, ambito: 'CLIENTE', articulo: 'Tablero de llaves', cantidad: 1, orden: 0 },
+    });
+    // La clasificación queda recordada para que las hojas que lo traigan ya sepan de quién es.
+    expect(prisma.cPBitacoraArticuloAmbito.upsert).toHaveBeenCalled();
+  });
+
+  it('si el artículo ya estaba (aunque en plural), lo actualiza en vez de duplicarlo', async () => {
+    const { servicio, prisma } = montar({});
+    prisma.cPPuestoServicio.findFirst.mockResolvedValue(puesto);
+    prisma.cPPuestoDotacion.findMany.mockResolvedValue([{ id: 40, articulo: 'Tachos de basura', ambito: 'CLIENTE', cantidad: 1, orden: 0 }]);
+    await servicio.agregarADotacionDelPuesto(1, 10, { ambito: 'CLIENTE', articulo: 'Tacho de basura', cantidad: 3 });
+    expect(prisma.cPPuestoDotacion.create).not.toHaveBeenCalled();
+    expect(prisma.cPPuestoDotacion.update).toHaveBeenCalledWith({
+      where: { id: 40 },
+      data: { ambito: 'CLIENTE', articulo: 'Tacho de basura', cantidad: 3 },
+    });
+  });
+
+  it('no acepta un artículo vacío', async () => {
+    const { servicio, prisma } = montar({});
+    prisma.cPPuestoServicio.findFirst.mockResolvedValue(puesto);
+    await expect(servicio.agregarADotacionDelPuesto(1, 10, { ambito: 'GEMESEG', articulo: '   ', cantidad: null })).rejects.toThrow('Escribe el nombre del artículo.');
+  });
+
+  it('edita y quita solo filas de ese puesto y de esa empresa', async () => {
+    const { servicio, prisma } = montar({});
+    prisma.cPPuestoServicio.findFirst.mockResolvedValue(puesto);
+    prisma.cPPuestoDotacion.findFirst.mockResolvedValue({ id: 40, ambito: 'CLIENTE', articulo: 'Tablero', cantidad: 1 });
+    await servicio.editarDotacionDelPuesto(1, 10, 40, { cantidad: 2 });
+    expect(prisma.cPPuestoDotacion.findFirst).toHaveBeenCalledWith({ where: { id: 40, companyId: 1, puestoId: 10 } });
+    expect(prisma.cPPuestoDotacion.update).toHaveBeenCalledWith({ where: { id: 40 }, data: { cantidad: 2 } });
+    await servicio.quitarDotacionDelPuesto(1, 10, 40);
+    expect(prisma.cPPuestoDotacion.deleteMany).toHaveBeenCalledWith({ where: { id: 40, companyId: 1, puestoId: 10 } });
+  });
+
+  it('editar o quitar una fila que no es de ese puesto da error claro', async () => {
+    const { servicio, prisma } = montar({});
+    prisma.cPPuestoServicio.findFirst.mockResolvedValue(puesto);
+    prisma.cPPuestoDotacion.findFirst.mockResolvedValue(null);
+    prisma.cPPuestoDotacion.deleteMany.mockResolvedValue({ count: 0 });
+    await expect(servicio.editarDotacionDelPuesto(1, 10, 99, { cantidad: 2 })).rejects.toThrow('Ese artículo no está en la dotación de este puesto.');
+    await expect(servicio.quitarDotacionDelPuesto(1, 10, 99)).rejects.toThrow('Ese artículo no está en la dotación de este puesto.');
+  });
+
+  it('un puesto que no existe da error claro', async () => {
+    const { servicio, prisma } = montar({});
+    prisma.cPPuestoServicio.findFirst.mockResolvedValue(null);
+    await expect(servicio.dotacionDelPuesto(1, 999)).rejects.toThrow('Puesto de servicio no encontrado.');
   });
 });
