@@ -53,6 +53,8 @@ Back-office de comercio de cacao que replica el proceso fisico: proveedores y cl
 ### Custodias
 Rutas y traslados de escoltas de seguridad. Estados `LISTO_PARA_CUSTODIAR → EN_CAMINO → LLEGO`, tipos hacienda, puerto y VIP, PDF de orden de custodia, consulta de viajes por cedula y el Agente de Custodia en el chat (reemplaza a GEME-BOT).
 
+**Custodias en campo (fases 1 y 2, en desarrollo local, sin desplegar):** la guia digital reemplaza la hoja de papel (numero de guia automatico, cliente del Directorio, hasta 4 custodios, contenedores o furgon y haciendas, campos configurables), se configura en Operaciones → Configuracion → Custodias (firmas, rutas, campos de la guia, fotos, correo, celulares, PIN y espacio) y se envia al cliente por correo con el PDF adjunto. El custodio usa una pagina web en el celular de la empresa (`/campo`, con cedula y PIN, sin senal incluida) para marcar salida, puntos y llegada, y subir fotos, novedades y firma. El seguimiento en vivo con mapa (fase 3) no esta construido.
+
 ### Recursos Humanos
 - **Reclutamiento**: postulantes sincronizados desde Google Drive, revision de documentos con apoyo de IA (la persona de RRHH siempre confirma) y contratacion que mueve la carpeta a su destino.
 - **Guardias y personal administrativo**: listados, fichas, alta manual, salidas y movimientos de personal (historial).
@@ -251,7 +253,8 @@ La API completa se explora en Swagger (`/docs`). El detalle por modulo, con sus 
 | `/chat`, `/admin/agents`, `/agents`, `/company-knowledge-base` | Agente Gemeseg, agentes y base de conocimiento |
 | `/notifications` | Bandeja de notificaciones |
 | `/cacao/...` | Proveedores, recepciones, lotes, liquidaciones, embarques, cuentas, kardex |
-| `/custodias` | Custodias (viajes y orden en PDF, sin dinero) |
+| `/custodias` | Custodias (viajes, guia digital y orden en PDF, configuracion, envio al cliente; sin dinero) |
+| `/custodias/campo/...`, `/public/custodias/fotos/:token` | Celular del custodio (token del celular + cedula y PIN, sin sesion de usuario) y enlace publico de fotos para el cliente |
 | `/contabilidad` | Contabilidad: pagos (con registro de pagado y extras/descuentos), tarifas y dashboard |
 | `/personal/...`, `/public/surveys/:token` | Recursos Humanos (reclutamiento, cumplimiento, capacitaciones, quejas, encuestas) |
 | `/ventas/...` | Posibles clientes (`leads`), directorio (`clientes`), referidos, oportunidades, contratos, cotizador, documentacion (plantillas y firma) y dashboard |

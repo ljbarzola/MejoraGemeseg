@@ -34,6 +34,7 @@ Reglas transversales de layout y tablas. Las reglas visuales/UX numeradas estan 
 - Overlays: usar `onClick={onClose}` en `.modal-overlay`; `utils/overlayClickGuard.ts` ya ignora un clic cuyo `mousedown` no empezo en el overlay.
 - Ventas, tres tamanos por CONTENIDO: `modal modal-ventas-sm` (470px: confirmaciones, listas de una columna, formularios cortos), `modal-ventas-md` (740px: formularios largos o con rejilla de servicios), `modal-ventas-lg` (970px: editores con tablas o mapas); `xl` (1250px) solo para un gestor de datos cuya tabla debe verse entera (catalogo del Cotizador). Nunca ancho inline ni `modal-lg`/`modal-xl` en Ventas. Los demas modulos migran a estos tamanos al tocarlos.
 - Nunca `window.confirm/alert/prompt`: usar un dialogo propio.
+- Formularios largos en ventana: bloques con titulo y borde; solo llevan fondo de color los que dependen del tipo elegido (`RECOMENDACIONES_UX_UI.md`, punto 27).
 
 ## Dashboard comercial (Ventas)
 - Un solo sistema: barra con «Cifras de» + UN «Periodo» compartido por las pestanas; tira de KPIs (`KpiFila`/`Contador`), tarjetas `Tarjeta`, rejilla de 16px, graficos SVG en `DashboardGraficos.tsx`.

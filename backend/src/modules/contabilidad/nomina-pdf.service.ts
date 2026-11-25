@@ -238,7 +238,7 @@ function dibujarMatrizPdf(
     .strokeColor(CUSTODIO_BORDER)
     .lineWidth(0.5)
     .stroke();
-  doc.text('Custodio 1 / 2', startX + 64, y);
+  doc.text('Custodios', startX + 64, y);
   doc
     .fillColor(NAVY)
     .font('Helvetica-Bold')

@@ -17,5 +17,9 @@ export function descargarBlob(blob: Blob, nombre: string) {
 }
 
 /** Nombre de archivo seguro: sin tildes, espacios ni símbolos. */
-export const nombreSeguro = (texto: string) =>
-  texto.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+export const nombreSeguro = (texto: string, separador = '_') =>
+  texto
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, separador)
+    .replace(new RegExp(`^${separador}|${separador}$`, 'g'), '');

@@ -136,6 +136,9 @@ const ContratoForm = lazy(() => import('./pages/ventas/ContratoForm'));
 const ContratoResult = lazy(() => import('./pages/ventas/ContratoResult'));
 const CompletarContrato = lazy(() => import('./pages/ventas/CompletarContrato'));
 const CotizacionPublicaPage = lazy(() => import('./pages/ventas/CotizacionPublicaPage'));
+// Custodias en campo (Fase 2): la pantalla del celular del custodio y el enlace público de fotos. Sin sesión de la app.
+const CampoPage = lazy(() => import('./pages/custodias/CampoPage'));
+const GuiaFotosPublicaPage = lazy(() => import('./pages/custodias/GuiaFotosPublicaPage'));
 const SoporteTecnicoPage = lazy(() => import('./pages/sistemas/SoporteTecnicoPage'));
 const SistemasDashboardPage = lazy(() => import('./pages/sistemas/SistemasDashboardPage'));
 const MejoraContinuaPage = lazy(() => import('./pages/sistemas/MejoraContinuaPage'));
@@ -282,7 +285,7 @@ function AppInner() {
   // En las páginas públicas (quejas de la inducción, cotización del cliente) no se muestra el chat del agente,
   // aunque quien la abra tenga sesión (el vendedor revisando lo que verá el cliente).
   const ruta = useLocation().pathname;
-  const enFormularioPublico = ruta === '/quejas' || ruta.startsWith('/cotizacion/');
+  const enFormularioPublico = ruta === '/quejas' || ruta.startsWith('/cotizacion/') || ruta === '/campo' || ruta.startsWith('/guia-fotos/');
 
   // «Preguntar al agente» desde la ficha de un cliente (chat.service.ts → abrirChatDeVentas):
   // abre el cajón del chat; ChatDrawer se encarga de elegir al Agente de Ventas y mandar la pregunta.
@@ -313,6 +316,11 @@ function AppInner() {
         {/* Cotización que el asesor le manda al cliente por enlace (Cotizador → «Enviar al cliente»).
             Sin sesión: el código al azar de la URL es la única credencial, y solo trae precios de venta. */}
         <Route path="/cotizacion/:token" element={<CotizacionPublicaPage />} />
+        {/* Pantalla del celular del custodio (Custodias en campo): sin menú, sin chat y sin la sesión de la app; entra con
+            el token del celular y la cédula + PIN de quien viaja. */}
+        <Route path="/campo" element={<CampoPage />} />
+        {/* Fotos del recorrido para el cliente, por el enlace del correo de la guía. El código del enlace es la credencial. */}
+        <Route path="/guia-fotos/:token" element={<GuiaFotosPublicaPage />} />
         <Route
           path="/dashboard"
           element={
@@ -497,6 +505,9 @@ function AppInner() {
         {/* Custodias ya no es un módulo (2026-11-18): los viajes son parte de Operaciones (permiso OPERACIONES).
             Las direcciones viejas /custodias/* llevan a su lugar nuevo, conservando la búsqueda (?nueva=1, filtros). */}
         <Route path="/operaciones/viajes" element={<ProtectedLayout><SectionRoute section="OPERACIONES"><CustodiasList /></SectionRoute></ProtectedLayout>} />
+        {/* La configuración de Custodias es una pestaña de Operaciones › Configuración (una sola por módulo). */}
+        <Route path="/operaciones/viajes/configuracion" element={<Navigate to="/operaciones/configuracion?pestana=custodias" replace />} />
+        <Route path="/custodias/configuracion" element={<Navigate to="/operaciones/configuracion?pestana=custodias" replace />} />
         <Route path="/custodias" element={<RedirigirConParametros a="/operaciones/viajes" />} />
         <Route path="/custodias/dashboard" element={<Navigate to="/operaciones?vista=custodias" replace />} />
         <Route path="/custodias/new" element={<Navigate to="/operaciones/viajes?nueva=1" replace />} />

@@ -74,7 +74,23 @@ interface PagoRegistrado {
   referencia: string | null;
 }
 
-const ROLES_VIAJE = ['Chofer', 'Custodio 1', 'Custodio 2'];
+// Custodio 3 y 4 (2026-11-24): cobran como custodios, pero solo cuentan si el viaje los tiene con nombre.
+const ROLES_VIAJE = ['Chofer', 'Custodio 1', 'Custodio 2', 'Custodio 3', 'Custodio 4'];
+
+/** Las personas que cobran en un viaje, con su rol. El chofer y los custodios 1 y 2 siempre; el 3 y el 4 solo si van. */
+function personasDeViaje(c: any): { nombre: string; cedula: string; rol: string }[] {
+  const todas = [
+    { nombre: c.choferName, cedula: c.choferCedula, rol: 'Chofer' },
+    { nombre: c.custodio1Name, cedula: c.custodio1Cedula, rol: 'Custodio 1' },
+    { nombre: c.custodio2Name, cedula: c.custodio2Cedula, rol: 'Custodio 2' },
+    { nombre: c.custodio3Name, cedula: c.custodio3Cedula, rol: 'Custodio 3' },
+    { nombre: c.custodio4Name, cedula: c.custodio4Cedula, rol: 'Custodio 4' },
+  ];
+  return todas.filter((p, i) => i < 3 || (p.nombre ?? '').trim() !== '');
+}
+
+/** Etiqueta corta del rol para la matriz: «Cust. 3». */
+const etiquetaRolCorta = (rol: string) => rol.replace('Custodio', 'Cust.');
 
 interface AjusteFila {
   id: number;
@@ -260,11 +276,9 @@ export class ContabilidadService implements OnModuleInit {
     if (dto.custodiaId) {
       const viaje = await this.prisma.custodia.findFirst({ where: { id: Number(dto.custodiaId), companyId } });
       if (!viaje) throw new BadRequestException('El viaje elegido no existe.');
-      const participa = [
-        [viaje.choferName, viaje.choferCedula],
-        [viaje.custodio1Name, viaje.custodio1Cedula],
-        [viaje.custodio2Name, viaje.custodio2Cedula],
-      ].some(([n, c]) => clavePersona(c, n) === clavePersona(cedula, persona));
+      const participa = personasDeViaje(viaje).some(
+        (p) => clavePersona(p.cedula, p.nombre) === clavePersona(cedula, persona),
+      );
       if (!participa) throw new BadRequestException('Esa persona no participó en el viaje elegido.');
       custodiaId = viaje.id;
       numeroGuia = viaje.numeroGuia;
@@ -360,11 +374,7 @@ export class ContabilidadService implements OnModuleInit {
    */
   private pagosDeViaje(c: any, tarifas: TarifaFila[], pagados?: Map<string, PagoRegistrado>) {
     const tarifa = tarifaVigente(tarifas, c.tipoCustodia, this.diaDelViaje(c));
-    return [
-      { nombre: c.choferName, cedula: c.choferCedula, rol: 'Chofer' },
-      { nombre: c.custodio1Name, cedula: c.custodio1Cedula, rol: 'Custodio 1' },
-      { nombre: c.custodio2Name, cedula: c.custodio2Cedula, rol: 'Custodio 2' },
-    ].map((p) => {
+    return personasDeViaje(c).map((p) => {
       const congelado = pagados?.get(`${c.id}|${p.rol}`);
       return {
         ...p,
@@ -594,9 +604,7 @@ export class ContabilidadService implements OnModuleInit {
     };
 
     for (const c of pagables) {
-      registrar(c.choferName, c.choferCedula, 'Chofer', c);
-      registrar(c.custodio1Name, c.custodio1Cedula, 'Custodio 1', c);
-      registrar(c.custodio2Name, c.custodio2Cedula, 'Custodio 2', c);
+      for (const p of personasDeViaje(c)) registrar(p.nombre, p.cedula, p.rol, c);
     }
 
     // Extras y descuentos del período: se suman al neto de cada persona (aunque no haya hecho viajes en el período).
@@ -629,11 +637,10 @@ export class ContabilidadService implements OnModuleInit {
 
     const filas = [];
     for (const c of pagables) {
-      const participantes = [
-        { nombre: nombreDe(c.choferName, c.choferCedula), rol: 'Chofer' },
-        { nombre: nombreDe(c.custodio1Name, c.custodio1Cedula), rol: 'Custodio 1' },
-        { nombre: nombreDe(c.custodio2Name, c.custodio2Cedula), rol: 'Custodio 2' },
-      ];
+      const participantes = personasDeViaje(c).map((p) => ({
+        nombre: nombreDe(p.nombre, p.cedula),
+        rol: p.rol,
+      }));
       const celdas: Record<string, any> = {};
       for (const p of participantes) {
         const tarifa = montoDe(c, p.rol);
@@ -641,7 +648,7 @@ export class ContabilidadService implements OnModuleInit {
         const label =
           p.rol === 'Chofer'
             ? `Chofer-${tipoTxt}: ${tarifa}`
-            : `${p.rol === 'Custodio 1' ? 'Cust. 1' : 'Cust. 2'} ${c.tipoCustodia} ${tarifa} dolares`;
+            : `${etiquetaRolCorta(p.rol)} ${c.tipoCustodia} ${tarifa} dolares`;
         celdas[p.nombre] = { tipo: c.tipoCustodia, monto: tarifa, rol: p.rol, label };
         if (totalesMatrix[p.nombre] !== undefined) totalesMatrix[p.nombre] += tarifa;
       }
