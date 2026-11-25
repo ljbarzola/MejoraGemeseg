@@ -26,6 +26,7 @@ import { OperacionesResumenModule } from './modules/operaciones-resumen/operacio
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { BitacoraModule } from './modules/bitacora/bitacora.module';
 import { ContabilidadModule } from './modules/contabilidad/contabilidad.module';
+import { MarketingModule } from './modules/marketing/marketing.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { ContabilidadModule } from './modules/contabilidad/contabilidad.module';
     NotificationsModule,
     BitacoraModule,
     ContabilidadModule,
+    MarketingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

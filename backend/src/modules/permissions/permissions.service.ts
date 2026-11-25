@@ -69,6 +69,8 @@ export const ALL_SECTIONS = [
   // roles de pago). Apagada por empresa y cerrada por defecto: quien ve los viajes (Operaciones) NO ve dinero
   // a menos que tenga además su propia fila de permiso aquí.
   { key: 'CONTABILIDAD', label: 'Contabilidad', alwaysEnabled: false },
+  // Marketing: apagado por empresa y cerrado por defecto (sin fila de permiso no se entra).
+  { key: 'MARKETING', label: 'Marketing', alwaysEnabled: false },
 ];
 
 /** Secciones que no se pueden negar usuario por usuario (ver ALL_SECTIONS). */
@@ -104,6 +106,7 @@ export const SECCIONES_CERRADAS_POR_DEFECTO: string[] = [
   'SISTEMAS',
   'BITACORA',
   'CONTABILIDAD',
+  'MARKETING',
 ];
 
 /** Una fila de permiso de una sección que ya no existe (TOOLS, CUSTODIAS) se ignora. */

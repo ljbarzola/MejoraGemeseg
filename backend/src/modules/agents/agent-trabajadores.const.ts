@@ -14,10 +14,17 @@ export const SCOPE_ENTREGAS = 'ENTREGAS';
 
 export const SCOPE_BITACORA_RESUMEN = 'BITACORA_RESUMEN';
 
+// Marketing: dos trabajadores invisibles en el chat. El estratega arma el plan y
+// los borradores; el revisor deja avisos antes de la aprobación.
+export const SCOPE_MARKETING_ESTRATEGA = 'MARKETING_ESTRATEGA';
+export const SCOPE_MARKETING_REVISOR = 'MARKETING_REVISOR';
+
 export const SCOPES_SIN_CHAT: readonly string[] = [
   SCOPE_BITACORAS,
   SCOPE_ENTREGAS,
   SCOPE_BITACORA_RESUMEN,
+  SCOPE_MARKETING_ESTRATEGA,
+  SCOPE_MARKETING_REVISOR,
 ];
 
 export const esAgenteSinChat = (scope: string | null | undefined): boolean =>
@@ -54,6 +61,28 @@ export const INSTRUCCIONES_BITACORA_RESUMEN_POR_DEFECTO = [
   '- «Contratación Pública» se escribe siempre completo.',
   '',
   '(Mientras no cambies este texto, el redactor usa solo sus reglas fijas.)',
+].join('\n');
+
+export const NOMBRE_AGENTE_MARKETING_ESTRATEGA = 'Agente Estratega de Marketing';
+
+export const INSTRUCCIONES_MARKETING_ESTRATEGA_POR_DEFECTO = [
+  'Describe aquí cómo quieres que se redacten los planes y el contenido de tu empresa. Ejemplos:',
+  '- Habla de servicios, no de precios ni descuentos.',
+  '- Usa un tono cercano pero formal.',
+  '- Para videos, entrega primero guion y prompts, no archivos.',
+  '',
+  '(Mientras no cambies este texto, el estratega usa solo sus reglas fijas.)',
+].join('\n');
+
+export const NOMBRE_AGENTE_MARKETING_REVISOR = 'Agente Revisor de Marketing';
+
+export const INSTRUCCIONES_MARKETING_REVISOR_POR_DEFECTO = [
+  'Describe aquí qué debe revisarse siempre antes de aprobar contenido de tu empresa. Ejemplos:',
+  '- No prometer resultados concretos.',
+  '- No publicar precios sin autorización.',
+  '- Avisar cuando algo necesite revisión legal.',
+  '',
+  '(Mientras no cambies este texto, el revisor usa solo sus reglas fijas.)',
 ].join('\n');
 
 export interface DocumentacionAgente {
@@ -181,6 +210,34 @@ export const DOCUMENTACION_AGENTES: DocumentacionAgente[] = [
       'Se puede regenerar hasta 10 veces por persona y día; sin datos nuevos se devuelve el ya guardado.',
       'Si el agente se desactiva o la IA no está configurada, el resumen sale con la plantilla calculada.',
     ],
+  },
+  {
+    scope: SCOPE_MARKETING_ESTRATEGA,
+    nombre: NOMBRE_AGENTE_MARKETING_ESTRATEGA,
+    resumen:
+      'Convierte una idea en un plan de marketing completo y deja borradores de contenido para que una persona los apruebe.',
+    dondeSeUsa: 'Marketing → Campañas (botón «Armar plan»). Solo con la sección Marketing.',
+    recibe: ['La idea y el objetivo escritos por Marketing.', 'La Base de Conocimiento y los ajustes de la empresa.'],
+    hace: [
+      'Propone público, mercado, canales, calendario, KPIs, presupuesto y piezas de contenido.',
+      'Entrega textos, guiones de video y prompts de imagen como borradores.',
+    ],
+    decide: ['No publica ni envía nada: todo queda como borrador hasta la aprobación humana.'],
+    noHace: ['No promete precios, descuentos ni resultados.', 'No envía correos ni mensajes.'],
+    datos: ['Se envían a Vertex AI solo la idea, el objetivo y el contexto de la empresa. Cada corrida queda en AgentRun.'],
+    limites: ['Si el modelo no responde o cambia el formato, se guarda un plan con plantilla fija y se avisa.'],
+  },
+  {
+    scope: SCOPE_MARKETING_REVISOR,
+    nombre: NOMBRE_AGENTE_MARKETING_REVISOR,
+    resumen: 'Revisa el plan propuesto y deja avisos de marca, precios y consentimiento antes de la aprobación.',
+    dondeSeUsa: 'Marketing → Campañas, dentro de la pantalla de aprobación.',
+    recibe: ['El plan y las piezas generadas.', 'Las reglas que la empresa escribió en las instrucciones del agente.'],
+    hace: ['Marca observaciones cortas por pieza cuando algo puede necesitar revisión.'],
+    decide: ['No aprueba ni rechaza: solo sugiere. La aprobación la hace una persona.'],
+    noHace: ['No modifica el contenido ni lo envía.'],
+    datos: ['Cada revisión queda registrada en AgentRun con el modelo y los tokens.'],
+    limites: ['Es una sugerencia: la persona que aprueba sigue siendo responsable de lo que se publique.'],
   },
 ];
 

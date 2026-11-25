@@ -63,6 +63,7 @@ export default function Sidebar() {
   const [cacaoOpen, setCacaoOpen] = useState(() => location.pathname.startsWith('/cacao'));
   const [contabilidadOpen, setContabilidadOpen] = useState(() => location.pathname.startsWith('/contabilidad'));
   const [sistemasOpen, setSistemasOpen] = useState(false);
+  const [marketingOpen, setMarketingOpen] = useState(() => location.pathname.startsWith('/marketing'));
   // Abiertos desde el inicio si se entra directo a una pantalla del módulo (si no, se ve cerrado y sin pista de dónde está cada cosa).
   const [contratacionPublicaOpen, setContratacionPublicaOpen] = useState(() => location.pathname.startsWith('/contratacion-publica'));
   // Custodias ya no es un módulo aparte (2026-11-16): sus viajes viven dentro de Operaciones, así que el menú de
@@ -264,6 +265,12 @@ export default function Sidebar() {
     { label: 'Base de Conocimiento', path: '/sistemas/base-conocimiento', icon: '📚' },
     { label: 'Soporte Técnico', path: '/sistemas/soporte', icon: '🛠️' },
     { label: 'Novedades', path: '/sistemas/novedades', icon: '📣' },
+  ];
+
+  const marketingSubItems: SubItem[] = [
+    { label: 'Campañas', path: '/marketing', icon: '✨' },
+    { label: 'Biblioteca', path: '/marketing/biblioteca', icon: '📚' },
+    { label: 'Configuración', path: '/marketing/configuracion', icon: '⚙️' },
   ];
 
   // Dentro de un submenú se marca UN solo ítem: el de la ruta más específica. Sin esto,
@@ -603,6 +610,37 @@ export default function Sidebar() {
             {!collapsed && sistemasOpen && (
               <div style={{ marginLeft: '12px', borderLeft: '2px solid #e2e8f0', paddingLeft: '0' }}>
                 {renderSubItems(sistemasSubItems)}
+              </div>
+            )}
+          </>
+        )}
+
+        {canView('MARKETING') && (
+          <>
+            <button
+              className={`sidebar-link ${marketingSubItems.some((i) => isActive(i.path)) ? 'sidebar-link-active' : ''}`}
+              onClick={() => {
+                if (collapsed) {
+                  navigate('/marketing');
+                } else {
+                  setMarketingOpen(!marketingOpen);
+                  if (!marketingOpen) navigate('/marketing');
+                }
+              }}
+              title={collapsed ? 'Marketing' : undefined}
+              style={{ justifyContent: 'space-between' }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span className="sidebar-icon">📣</span>
+                {!collapsed && <span className="sidebar-label">Marketing</span>}
+              </span>
+              {!collapsed && (
+                <span style={{ fontSize: '0.7rem', transition: 'transform 0.2s', transform: marketingOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+              )}
+            </button>
+            {!collapsed && marketingOpen && (
+              <div style={{ marginLeft: '12px', borderLeft: '2px solid #e2e8f0', paddingLeft: '0' }}>
+                {renderSubItems(marketingSubItems)}
               </div>
             )}
           </>
