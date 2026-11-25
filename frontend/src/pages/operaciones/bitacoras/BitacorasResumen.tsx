@@ -131,6 +131,36 @@ export default function BitacorasResumen({ filtros }: { filtros: FiltrosBitacora
           />
         </Tarjeta>
 
+        {datos.actividad && (
+          <Tarjeta titulo="Rondas, ingresos y vehículos">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+              {([
+                ['Rondas', datos.actividad.rondas],
+                ['Ingresos de personas', datos.actividad.ingresosPersonas],
+                ['Vehículos', datos.actividad.vehiculos],
+                ['Ingresos sin autorización', datos.actividad.ingresosSinAutorizacion],
+              ] as const).map(([etiqueta, valor]) => (
+                <div key={etiqueta}>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 800, lineHeight: 1.1, color: etiqueta === 'Ingresos sin autorización' && valor > 0 ? '#c05621' : 'var(--azul-oscuro)' }}>{valor}</div>
+                  <div style={{ fontSize: '0.74rem', color: '#718096', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{etiqueta}</div>
+                </div>
+              ))}
+            </div>
+            <p style={{ margin: '12px 0 0', fontSize: '0.74rem', color: '#a0aec0' }}>
+              Se cuentan por el tipo de cada anotación de las hojas. «Sin autorización» es lo que la hoja anota con esas palabras (sin autorización, no autorizado, sin permiso).
+            </p>
+          </Tarjeta>
+        )}
+
+        {datos.actividad && (
+          <Tarjeta titulo="Puestos con más ingresos sin autorización">
+            <Barras
+              vacio="Ninguna hoja de este período anota ingresos sin autorización."
+              filas={datos.actividad.puestosConIngresosSinAutorizacion.map((p) => ({ clave: String(p.puestoId), etiqueta: <>{p.puestoNombre} <span style={{ color: '#718096' }}>· {p.entidadNombre}</span></>, cantidad: p.cantidad }))}
+            />
+          </Tarjeta>
+        )}
+
         <Tarjeta titulo="Días con más novedades">
           <Barras
             vacio="No hay novedades en este período."

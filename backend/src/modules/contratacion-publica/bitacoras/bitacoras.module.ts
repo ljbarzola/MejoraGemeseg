@@ -4,16 +4,19 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { PermissionsModule } from '../../permissions/permissions.module';
 import { AgentsModule } from '../../agents/agents.module';
 import { NotificationsModule } from '../../notifications/notifications.module';
+import { OperacionesInventarioModule } from '../../operaciones-inventario/operaciones-inventario.module';
 import { GoogleAuthService } from '../../../common/services/google-auth.service';
 import { BitacorasController } from './bitacoras.controller';
 import { BitacorasService } from './bitacoras.service';
 import { BitacoraLectorService } from './bitacora-lector.service';
+import { BitacoraHojaPdfService } from './bitacora-hoja-pdf.service';
 import { CP_BITACORAS_DDL } from './bitacoras.schema';
 
 @Module({
-  imports: [PrismaModule, PermissionsModule, AgentsModule, NotificationsModule],
+  // Inventario: la dotación de la hoja (armas y chalecos) se compara con lo asignado al puesto.
+  imports: [PrismaModule, PermissionsModule, AgentsModule, NotificationsModule, OperacionesInventarioModule],
   controllers: [BitacorasController],
-  providers: [BitacorasService, BitacoraLectorService, GoogleAuthService],
+  providers: [BitacorasService, BitacoraLectorService, BitacoraHojaPdfService, GoogleAuthService],
   // Lo lee el resumen de Operaciones (operaciones-resumen/), que solo consulta «Hoy en los puestos».
   exports: [BitacorasService],
 })

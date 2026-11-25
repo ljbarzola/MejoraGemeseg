@@ -117,7 +117,7 @@ export default function InformeForm() {
       URL.revokeObjectURL(url);
     } catch (err: any) {
       // El archivo llega como Blob: el mensaje del servidor viene dentro del Blob.
-      let mensaje = 'No se pudo generar el Word. Verifica que la plantilla del informe esté cargada (Operaciones → Configuración → Plantilla del informe).';
+      let mensaje = 'No se pudo generar el Word. Verifica que la plantilla del informe esté cargada (Contratación Pública → Configuración → Plantilla del informe).';
       try {
         const txt = await err?.response?.data?.text?.();
         if (txt) mensaje = JSON.parse(txt).message || mensaje;

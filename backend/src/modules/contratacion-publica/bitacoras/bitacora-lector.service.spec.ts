@@ -33,6 +33,25 @@ describe('buildBitacoraPrompt', () => {
     expect(p).toContain('TRANSCRIBIR');
   });
 
+  it('pide la dotación solo en contratos públicos y el cambio de turno siempre', () => {
+    const publica = buildBitacoraPrompt({ hoy: '2026-10-18', instruccionesDeLaEmpresa: '', tipoEntidad: 'PUBLICA' });
+    const privada = buildBitacoraPrompt({ hoy: '2026-10-18', instruccionesDeLaEmpresa: '', tipoEntidad: 'PRIVADA' });
+    expect(publica).toContain('"dotacion"');
+    expect(publica).toContain('SIN_DATO');
+    expect(privada).not.toContain('"dotacion"');
+    expect(prompt).not.toContain('"dotacion"');
+    for (const p of [publica, privada, prompt]) {
+      expect(p).toContain('guardiaSaliente');
+      expect(p).toContain('guardiaEntrante');
+    }
+  });
+
+  it('en la dotación manda leer la cantidad escrita por el guardia hoy, no la impresa', () => {
+    const p = buildBitacoraPrompt({ hoy: '2026-10-18', instruccionesDeLaEmpresa: '', tipoEntidad: 'PUBLICA' });
+    expect(p).toContain('Hay hoy');
+    expect(p).toContain('no la impresa');
+  });
+
   it('no repite las instrucciones propias cuando no hay', () => {
     expect(prompt).not.toContain('INSTRUCCIONES PROPIAS');
   });

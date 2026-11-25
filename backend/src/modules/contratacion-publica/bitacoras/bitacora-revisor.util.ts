@@ -28,7 +28,10 @@ export type TipoHallazgo =
   | 'HORARIO_NO_APROBADO' // el horario de ese día sigue en borrador o fue rechazado
   | 'FECHA_FUERA_DE_CONTRATO'
   | 'PUESTO_DISTINTO' // la hoja dice otro puesto que el elegido al subirla
-  | 'FECHA_YA_CARGADA'; // otra bitácora del mismo puesto ya cubre ese día
+  | 'FECHA_YA_CARGADA' // otra bitácora del mismo puesto ya cubre ese día
+  | 'DOTACION_NUEVO' // la hoja trae un artículo que el puesto no tiene registrado
+  | 'DOTACION_DIFERENTE' // la dotación de la hoja no coincide con la registrada del puesto
+  | 'DOTACION_INVENTARIO'; // la hoja dice otras armas o chalecos que los de Inventario
 
 export interface HallazgoRevision {
   fecha: string | null;

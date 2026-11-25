@@ -1,8 +1,11 @@
 import {
+  claveArticulo,
   corregirAnioPorDiaSemana,
   diferenciaMinutos,
   esFechaISO,
   indiceDiaSemana,
+  normalizarCantidad,
+  normalizarDotacion,
   normalizarHora,
   normalizarLectura,
 } from './bitacora.util';
@@ -97,6 +100,8 @@ describe('normalizarLectura', () => {
       registros: [],
       novedades: [],
       observaciones: null,
+      guardiaSaliente: null,
+      guardiaEntrante: null,
     });
   });
 
@@ -182,5 +187,60 @@ describe('corregirAnioPorDiaSemana', () => {
     expect(corregirAnioPorDiaSemana(buena, null, '2026-11-17')).toBe(buena);
     const rara = lectura('2021-08-24');
     expect(corregirAnioPorDiaSemana(rara, 'jueves', '2026-11-17')).toBe(rara);
+  });
+});
+
+describe('dotación de la hoja', () => {
+  it('claveArticulo junta singular y plural, tildes y puntuación', () => {
+    expect(claveArticulo('Tachos de basura')).toBe(claveArticulo('tacho de BASURA.'));
+    expect(claveArticulo('Radio  ')).toBe(claveArticulo('radios'));
+    expect(claveArticulo(null)).toBe('');
+  });
+
+  it('normalizarCantidad solo acepta enteros de 0 a 9999', () => {
+    expect(normalizarCantidad(2)).toBe(2);
+    expect(normalizarCantidad(' 3 ')).toBe(3);
+    expect(normalizarCantidad('dos')).toBeNull();
+    expect(normalizarCantidad(-1)).toBeNull();
+    expect(normalizarCantidad(1.5)).toBeNull();
+    expect(normalizarCantidad(10000)).toBeNull();
+    expect(normalizarCantidad(null)).toBeNull();
+  });
+
+  it('normalizarDotacion descarta lo sin artículo y deja «sin dato» el ámbito dudoso', () => {
+    const filas = normalizarDotacion([
+      { ambito: 'GEMESEG', articulo: ' Chaleco ', cantidad: 2, detalle: 'Nivel IIIA' },
+      { ambito: 'CLIENTE', articulo: 'Tachos de basura', cantidad: '2' },
+      { ambito: 'OTRO', articulo: 'Linterna', cantidad: 'varias' },
+      { ambito: 'GEMESEG', articulo: '   ' },
+      null,
+    ]);
+    expect(filas).toEqual([
+      { ambito: 'GEMESEG', articulo: 'Chaleco', cantidad: 2, detalle: 'Nivel IIIA' },
+      { ambito: 'CLIENTE', articulo: 'Tachos de basura', cantidad: 2, detalle: null },
+      { ambito: 'SIN_DATO', articulo: 'Linterna', cantidad: null, detalle: null },
+    ]);
+  });
+
+  it('normalizarDotacion limita la cantidad de filas', () => {
+    const muchas = Array.from({ length: 200 }, (_, i) => ({ articulo: `Cosa ${i}` }));
+    expect(normalizarDotacion(muchas)).toHaveLength(60);
+    expect(normalizarDotacion('no es lista')).toEqual([]);
+  });
+
+  it('normalizarLectura trae el cambio de turno y solo trae la dotación si el modelo la devolvió', () => {
+    const con = normalizarLectura({
+      guardiaSaliente: ' Ana ',
+      guardiaEntrante: 'Luis',
+      dotacion: [{ ambito: 'GEMESEG', articulo: 'Pistola', cantidad: 1 }],
+    });
+    expect(con.guardiaSaliente).toBe('Ana');
+    expect(con.guardiaEntrante).toBe('Luis');
+    expect(con.dotacion).toEqual([{ ambito: 'GEMESEG', articulo: 'Pistola', cantidad: 1, detalle: null }]);
+
+    const sin = normalizarLectura({});
+    expect(sin.guardiaSaliente).toBeNull();
+    // Sin lista (contrato privado) queda indefinida: el servidor no toca lo que ya hubiera guardado.
+    expect(sin.dotacion).toBeUndefined();
   });
 });

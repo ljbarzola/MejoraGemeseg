@@ -5103,6 +5103,20 @@ textarea.chat-input {
 .bitacora-fila--novedad {
   grid-template-columns: 136px 96px minmax(120px, 1fr) 36px;
 }
+.bitacora-fila--dotacion {
+  grid-template-columns: minmax(130px, 1fr) 84px minmax(110px, 1fr) 150px 36px;
+}
+.bitacora-fila--turno {
+  grid-template-columns: 1fr 1fr;
+}
+@media (max-width: 720px) {
+  .bitacora-fila--dotacion {
+    grid-template-columns: 1fr 84px;
+  }
+  .bitacora-fila--turno {
+    grid-template-columns: 1fr;
+  }
+}
 .bitacora-fila--cabecera {
   font-size: 0.72rem;
   font-weight: 700;

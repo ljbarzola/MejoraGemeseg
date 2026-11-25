@@ -70,6 +70,62 @@ export interface NovedadBitacora {
   gravedad: Severidad;
 }
 
+/** De quién es un artículo de la dotación (lo decide el agente y la persona lo corrige). */
+export type AmbitoDotacion = 'GEMESEG' | 'CLIENTE' | 'SIN_DATO';
+
+export interface DotacionBitacora {
+  id?: number;
+  ambito: AmbitoDotacion;
+  articulo: string;
+  cantidad: number | null;
+  detalle: string | null;
+  /** Solo en el detalle: si el puesto ya tiene registrado el artículo o la hoja lo trae por primera vez. */
+  estado?: 'CONOCIDO' | 'NUEVO';
+}
+
+/** Un artículo ya clasificado en la lista del puesto (de Gemeseg o del cliente o la entidad). */
+export interface DotacionDelPuesto {
+  id: number;
+  ambito: AmbitoDotacion;
+  articulo: string;
+  cantidad: number | null;
+  detalle: string | null;
+}
+
+/** Lo que Inventario tiene asignado a un puesto (lo que Gemeseg manda). */
+export interface DotacionInventarioPuesto {
+  armas: number;
+  chalecos: number;
+  equipo: { articulo: string; cantidad: number }[];
+}
+
+/** Una fila de la dotación de un puesto (lo del cliente o la entidad y lo de Gemeseg que no está en Inventario). */
+export interface FilaDotacionPuesto {
+  id: number;
+  ambito: 'GEMESEG' | 'CLIENTE';
+  articulo: string;
+  cantidad: number | null;
+}
+
+/** La dotación de un puesto para cargarla a mano: lo de Inventario (solo lectura) y la lista editable. */
+export interface DotacionDelPuestoCargada {
+  puestoId: number;
+  puestoNombre: string;
+  contratoNumero: string;
+  entidadNombre: string;
+  inventario: DotacionInventarioPuesto | null;
+  filas: FilaDotacionPuesto[];
+}
+
+/** Los datos que llevará impresa la hoja en blanco de un puesto, para revisarlos antes de imprimir. */
+export interface DatosHojaEnBlanco {
+  tipo: 'PUBLICA' | 'ESTANDAR';
+  entidadNombre: string;
+  contratoNumero: string;
+  puestoNombre: string;
+  dotacionBase: { ambito: string; articulo: string; cantidad: number | null }[];
+}
+
 export interface HallazgoBitacora {
   id: number;
   /** Para «Guardia que no aparece»: `GUARDIA_AUSENTE|fecha|cedula`. */
@@ -114,6 +170,16 @@ export interface BitacoraDetalle extends Omit<BitacoraResumen, 'lineas' | 'noved
   companyId: number;
   puestoLeido: string | null;
   observaciones: string | null;
+  /** Cambio de turno como lo escribe la hoja. */
+  guardiaSaliente?: string | null;
+  guardiaEntrante?: string | null;
+  /** Dotación del puesto que declara la hoja (contratos públicos). */
+  dotacion?: DotacionBitacora[];
+  /** PUBLICA | PRIVADA; en las públicas se lee y se muestra la dotación. */
+  entidadTipo?: string | null;
+  /** Lo ya clasificado en la lista del puesto (se puede quitar) y lo que Inventario tiene asignado (solo lectura). */
+  dotacionPuesto?: DotacionDelPuesto[];
+  dotacionInventario?: DotacionInventarioPuesto | null;
   fechas: string[];
   revisadaAt: string | null;
   registros: (RegistroBitacora & { fecha: string })[];
@@ -138,6 +204,8 @@ export interface OpcionPuestoBitacora {
   objeto: string;
   entidadId: number;
   entidadNombre: string;
+  /** PUBLICA | PRIVADA: decide qué hoja en blanco se ofrece primero. */
+  entidadTipo?: string;
   puestos: { id: number; nombre: string }[];
 }
 
@@ -146,6 +214,10 @@ export interface LecturaParaGuardar {
   fechas?: string[];
   registros: { fecha: string; guardia: string; horaEntrada?: string | null; horaSalida?: string | null; legible?: boolean }[];
   novedades: { fecha?: string | null; hora?: string | null; guardia?: string | null; texto: string; categoria: CategoriaNovedad }[];
+  guardiaSaliente?: string | null;
+  guardiaEntrante?: string | null;
+  /** Sin este campo (contrato privado) el servidor no toca la dotación guardada. */
+  dotacion?: { ambito: AmbitoDotacion; articulo: string; cantidad?: number | null; detalle?: string | null }[];
 }
 
 export interface ResumenBitacoras {
@@ -163,6 +235,14 @@ export interface ResumenBitacoras {
     hallazgosAltos: number;
   };
   categorias: { codigo: CategoriaNovedad; etiqueta: string; cantidad: number }[];
+  /** Rondas, ingresos de personas, vehículos e ingresos que la hoja anota como sin autorización. */
+  actividad?: {
+    rondas: number;
+    ingresosPersonas: number;
+    vehiculos: number;
+    ingresosSinAutorizacion: number;
+    puestosConIngresosSinAutorizacion: { puestoId: number; puestoNombre: string; entidadNombre: string; cantidad: number }[];
+  };
   diasConMasNovedades: { fecha: string; cantidad: number; graves: number }[];
   porDiaSemana: { dia: string; cantidad: number }[];
   puestosConMasNovedades: { puestoId: number; puestoNombre: string; entidadNombre: string; cantidad: number }[];

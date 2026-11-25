@@ -29,7 +29,10 @@ const COLUMNAS = [
   { key: 'ciudad', label: 'Ciudad' },
   { key: 'revision', label: 'Revisión' },
 ];
-const DEFAULT_VISIBLE = ['clase', 'estado', 'categoria', 'uso', 'tiene', 'permiso', 'revision'];
+// Ancho de cada columna (en %): sin esto todas se reparten igual y «La tiene» y el estado quedaban cortados.
+const ANCHO_COLUMNA: Record<string, string> = { clase: '9.5%', estado: '11.5%', categoria: '12.5%', uso: '13%', tiene: '17%', permiso: '11.5%', municiones: '10%', ciudad: '11%', revision: '11.5%' };
+// «Se usa para» casi siempre está vacío: se puede agregar con «Columnas».
+const DEFAULT_VISIBLE = ['clase', 'estado', 'categoria', 'tiene', 'permiso', 'revision'];
 
 /** Armas por número de serie: quién la tiene, si el permiso está vigente y todo lo que le ha pasado. */
 export default function ArmasTab({
@@ -209,9 +212,9 @@ export default function ArmasTab({
             <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
               <thead>
                 <tr>
-                  <th>Serie <ColumnFilter cf={cf} col="serie" orden={cf.ordenDe('serie')} /></th>
+                  <th style={{ width: '13%' }}>Serie <ColumnFilter cf={cf} col="serie" orden={cf.ordenDe('serie')} /></th>
                   {columnasVisibles.map((k) => (
-                    <th key={k}>{etiqueta(k)} <ColumnFilter cf={cf} col={k} orden={cf.ordenDe(k)} /></th>
+                    <th key={k} style={{ width: ANCHO_COLUMNA[k] }}>{etiqueta(k)} <ColumnFilter cf={cf} col={k} orden={cf.ordenDe(k)} /></th>
                   ))}
                   <th className="col-acciones col-acciones--ancha" title="Acciones"><span className="visually-hidden">Acciones</span></th>
                 </tr>

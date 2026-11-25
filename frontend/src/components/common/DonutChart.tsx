@@ -104,21 +104,21 @@ export default function DonutChart({
         </div>
       </div>
 
-      <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '170px' }}>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '8px', flex: '1 1 230px', minWidth: 0 }}>
         {segments.map((s) => (
           <li
             key={s.key}
             onMouseEnter={() => setActivo(s.key)}
             onMouseLeave={() => setActivo(null)}
             style={{
-              display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: '#4a5568',
+              display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.85rem', color: '#4a5568',
               opacity: activo && activo !== s.key ? 0.5 : 1, transition: 'opacity 0.15s',
             }}
           >
             <span style={{ width: 10, height: 10, borderRadius: 3, background: s.color, flexShrink: 0 }} />
-            <span style={{ flex: 1 }}>{s.label}</span>
-            <strong style={{ color: 'var(--azul-oscuro)' }}>{s.value}</strong>
-            <span style={{ width: '38px', textAlign: 'right', color: '#718096' }}>{pct(s.value)}%</span>
+            <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{s.label}</span>
+            <strong style={{ color: 'var(--azul-oscuro)', minWidth: '24px', textAlign: 'right', flexShrink: 0 }}>{s.value}</strong>
+            <span style={{ width: '40px', textAlign: 'right', color: '#718096', flexShrink: 0 }}>{pct(s.value)}%</span>
           </li>
         ))}
       </ul>

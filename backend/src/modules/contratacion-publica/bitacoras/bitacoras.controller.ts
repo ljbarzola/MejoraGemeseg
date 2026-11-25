@@ -24,12 +24,17 @@ import { SectionPermissionGuard } from '../../../common/guards/section-permissio
 import { Section } from '../../../common/decorators/section.decorator';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ActorBitacora, BitacorasService } from './bitacoras.service';
+import { BitacoraHojaPdfService } from './bitacora-hoja-pdf.service';
 import {
+  ActualizarFilaDotacionPuestoDto,
   ActualizarHallazgoDto,
+  ClasificarDotacionDto,
+  FilaDotacionPuestoDto,
   ReleerBitacoraDto,
   DashboardBitacorasQueryDto,
   PuestosHoyQueryDto,
   GuardarLecturaDto,
+  HojaEnBlancoQueryDto,
   ListarBitacorasQueryDto,
   SubirBitacoraDto,
 } from './dto/bitacoras.dto';
@@ -52,6 +57,7 @@ export class BitacorasController {
   constructor(
     private readonly service: BitacorasService,
     private readonly prisma: PrismaService,
+    private readonly hojaPdf: BitacoraHojaPdfService,
   ) {}
 
   private async actor(req: AuthedRequest): Promise<ActorBitacora> {
@@ -70,6 +76,67 @@ export class BitacorasController {
   @Section(SECCION, 'view')
   opciones(@Req() req: AuthedRequest) {
     return this.service.opcionesParaSubir(req.user.companyId);
+  }
+
+  // Hoja de bitácora en blanco para imprimir. Va antes de ':id' para que «hoja-en-blanco» no se tome por un id.
+  @Get('hoja-en-blanco/datos')
+  @Section(SECCION, 'view')
+  datosHojaEnBlanco(@Query() q: HojaEnBlancoQueryDto, @Req() req: AuthedRequest) {
+    return this.service.datosHojaEnBlanco(req.user.companyId, Number(q.puestoId), q.tipo);
+  }
+
+  // Dotación de un puesto, cargada a mano antes de las hojas (lo que Gemeseg manda sale de Inventario).
+  @Get('puestos/:puestoId/dotacion')
+  @Section(SECCION, 'view')
+  dotacionDelPuesto(@Param('puestoId', ParseIntPipe) puestoId: number, @Req() req: AuthedRequest) {
+    return this.service.dotacionDelPuesto(req.user.companyId, puestoId);
+  }
+
+  @Post('puestos/:puestoId/dotacion')
+  @Section(SECCION, 'write')
+  agregarADotacionDelPuesto(
+    @Param('puestoId', ParseIntPipe) puestoId: number,
+    @Body() dto: FilaDotacionPuestoDto,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.service.agregarADotacionDelPuesto(req.user.companyId, puestoId, dto);
+  }
+
+  @Patch('puestos/:puestoId/dotacion/:filaId')
+  @Section(SECCION, 'write')
+  editarDotacionDelPuesto(
+    @Param('puestoId', ParseIntPipe) puestoId: number,
+    @Param('filaId', ParseIntPipe) filaId: number,
+    @Body() dto: ActualizarFilaDotacionPuestoDto,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.service.editarDotacionDelPuesto(req.user.companyId, puestoId, filaId, dto);
+  }
+
+  @Delete('puestos/:puestoId/dotacion/:filaId')
+  @Section(SECCION, 'write')
+  quitarDotacionDelPuesto(
+    @Param('puestoId', ParseIntPipe) puestoId: number,
+    @Param('filaId', ParseIntPipe) filaId: number,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.service.quitarDotacionDelPuesto(req.user.companyId, puestoId, filaId);
+  }
+
+  @Get('hoja-en-blanco')
+  @Section(SECCION, 'view')
+  async hojaEnBlanco(
+    @Query() q: HojaEnBlancoQueryDto,
+    @Req() req: AuthedRequest,
+    @Res() res: Response,
+  ) {
+    const datos = await this.service.datosHojaEnBlanco(req.user.companyId, Number(q.puestoId), q.tipo);
+    const pdf = await this.hojaPdf.generar(datos);
+    const nombre = `bitacora-en-blanco-${datos.puestoNombre.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'puesto'}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', pdf.length.toString());
+    res.setHeader('Content-Disposition', `inline; filename="${nombre}"`);
+    res.end(pdf);
   }
 
   @Get('agente')
@@ -177,6 +244,27 @@ export class BitacorasController {
     @Req() req: AuthedRequest,
   ) {
     return this.service.releer(id, await this.actor(req), dto?.nota);
+  }
+
+  @Post(':id/dotacion/:dotacionId/clasificar')
+  @Section(SECCION, 'write')
+  async clasificarDotacion(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('dotacionId', ParseIntPipe) dotacionId: number,
+    @Body() dto: ClasificarDotacionDto,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.service.clasificarDotacion(id, dotacionId, dto.ambito, await this.actor(req));
+  }
+
+  @Delete(':id/dotacion-puesto/:filaId')
+  @Section(SECCION, 'write')
+  async quitarDeLaDotacionDelPuesto(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('filaId', ParseIntPipe) filaId: number,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.service.quitarDeLaDotacionDelPuesto(id, filaId, await this.actor(req));
   }
 
   @Delete(':id')

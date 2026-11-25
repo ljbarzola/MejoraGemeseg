@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ContratoFormModal from './ContratoFormModal';
 import { fechaCorta } from '../../../utils/bitacoras';
-import { ArrowLeft, CalendarPlus, Package, Pencil, Plus, Trash2, Upload, Download, RefreshCw, FileSignature } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, ClipboardList, Package, Pencil, Plus, Trash2, Upload, Download, RefreshCw, FileSignature } from 'lucide-react';
 import {
   getContrato,
   getPuestosByContrato,
@@ -24,9 +24,11 @@ import type {
 } from '../../../types/contratacion-publica';
 import { ESTADO_HORARIO_LABEL } from '../../../types/contratacion-publica';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import RowActionsMenu from '../../../components/common/RowActionsMenu';
 import OperacionesPageHeader from '../../../components/operaciones/OperacionesPageHeader';
 import DateInput from '../../../components/common/DateInput';
 import PuestoFormModal from '../puestos/PuestoFormModal';
+import DotacionPuestoModal from '../puestos/DotacionPuestoModal';
 import { useModuloContratos } from '../../../hooks/useModuloContratos';
 import { textoTurnos } from '../puestos/turnosPuesto';
 import { getInventarioPorContrato } from '../../../services/inventario.service';
@@ -120,6 +122,7 @@ export default function ContratoDetail() {
   const [showPuestoModal, setShowPuestoModal] = useState(false);
   const [editingPuesto, setEditingPuesto] = useState<CPPuestoServicio | null>(null);
   const [confirmandoEliminarPuesto, setConfirmandoEliminarPuesto] = useState<CPPuestoServicio | null>(null);
+  const [dotacionDe, setDotacionDe] = useState<CPPuestoServicio | null>(null);
 
   const [showAdendaForm, setShowAdendaForm] = useState(false);
   const [adendaNumero, setAdendaNumero] = useState('');
@@ -410,7 +413,7 @@ export default function ContratoDetail() {
                       <th>Cant. guardias</th>
                       <th>Guardias asignados</th>
                       {!enCP && <th>Armas y equipo</th>}
-                      <th style={{ textAlign: 'right' }}>Acciones</th>
+                      <th className="col-acciones"><span className="visually-hidden">Acciones</span></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -439,15 +442,15 @@ export default function ContratoDetail() {
                             })()}
                           </td>
                         )}
-                        <td style={{ textAlign: 'right' }}>
-                          <div className="acciones-iconos">
-                            <button type="button" className="btn-secondary icon-btn" title="Editar / asignar guardias" aria-label="Editar / asignar guardias" onClick={() => { setEditingPuesto(p); setShowPuestoModal(true); }}>
-                              <Pencil size={16} />
-                            </button>
-                            <button type="button" className="btn-secondary icon-btn" style={{ color: '#c53030' }} title="Eliminar puesto" aria-label="Eliminar puesto" onClick={() => setConfirmandoEliminarPuesto(p)}>
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
+                        <td className="col-acciones">
+                          <RowActionsMenu
+                            label={`Acciones de ${p.nombre}`}
+                            actions={[
+                              ...(!enCP ? [{ label: 'Dotación del puesto', icon: <ClipboardList size={15} />, hint: 'Lo que entrega Gemeseg y lo del cliente', onClick: () => setDotacionDe(p) }] : []),
+                              { label: 'Editar / asignar guardias', icon: <Pencil size={15} />, onClick: () => { setEditingPuesto(p); setShowPuestoModal(true); } },
+                              { label: 'Eliminar puesto', icon: <Trash2 size={15} />, danger: true, onClick: () => setConfirmandoEliminarPuesto(p) },
+                            ]}
+                          />
                         </td>
                       </tr>
                     ))}
@@ -697,6 +700,8 @@ export default function ContratoDetail() {
           </div>
         </div>
       )}
+
+      {dotacionDe && <DotacionPuestoModal puestoId={dotacionDe.id} puestoNombre={dotacionDe.nombre} onClose={() => setDotacionDe(null)} />}
 
       {confirmandoEliminarPuesto && (
         <ConfirmDialog
