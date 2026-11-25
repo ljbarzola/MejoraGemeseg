@@ -972,6 +972,22 @@ model Custodia {
   nombreHacienda   String?
   cantidadSacos    Int?
   contenedores     String[]
+  // Guía digital en campo (2026-11-24): custodios 3 y 4, cliente del Directorio y ruta (sin relación Prisma),
+  // y la hoja de ruta completa en `guia` (forma en modules/custodias/custodia-guia.types.ts).
+  custodio3Name    String         @default("")
+  custodio3Cedula  String         @default("")
+  custodio4Name    String         @default("")
+  custodio4Cedula  String         @default("")
+  clienteId        Int?
+  rutaId           Int?
+  patrulla         String?
+  ciudadSalida     String?
+  ciudadLlegada    String?
+  guia             Json           @default("{}")
+  // Celular de la empresa asignado al viaje y custodio a cargo (2026-11-24, Fase 2; sin relación Prisma:
+  // el celular vive en la tabla CustodiaDispositivo, creada al arrancar).
+  dispositivoId    Int?
+  custodioACargo   String?
   companyId        Int
   company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdBy        Int

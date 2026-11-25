@@ -165,6 +165,24 @@ describe('ContabilidadService', () => {
       expect(pagos.map((p) => p.rol)).toEqual(expect.arrayContaining(['Chofer', 'Custodio 1', 'Custodio 2']));
     });
 
+    it('el custodio 3 y el 4 cobran como custodios, pero solo si el viaje los tiene con nombre', async () => {
+      prisma.custodia.findMany.mockResolvedValue([
+        makeCustodia({
+          id: 1,
+          custodio3Name: 'Eva Tercera',
+          custodio3Cedula: '4444444444',
+          custodio4Name: 'Raúl Cuarto',
+          custodio4Cedula: '',
+        }),
+        makeCustodia({ id: 2, numeroGuia: 'G-002', custodio3Name: '', custodio4Name: '' }),
+      ]);
+      const { pagos } = await service.getPagos(1);
+      expect(pagos.filter((p) => p.numeroGuia === 'G-001')).toHaveLength(5);
+      expect(pagos.filter((p) => p.numeroGuia === 'G-002')).toHaveLength(3);
+      const c4 = pagos.find((p) => p.rol === 'Custodio 4')!;
+      expect(c4).toMatchObject({ persona: 'Raúl Cuarto', monto: 20 });
+    });
+
     it('marca sin tarifa (y paga 0) el viaje cuyo tipo no tiene tarifa ese día', async () => {
       prisma.$queryRaw.mockResolvedValue([]);
       prisma.custodia.findMany.mockResolvedValue([makeCustodia()]);

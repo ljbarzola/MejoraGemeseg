@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router-dom';
-import { Tag, Clock, FileText } from 'lucide-react';
+import { Tag, Clock, FileText, Truck } from 'lucide-react';
 import { usePerm } from '../../../contexts/PermissionsContext';
 import OperacionesPageHeader from '../../../components/operaciones/OperacionesPageHeader';
 import PageTabs from '../../../components/common/PageTabs';
@@ -7,13 +7,15 @@ import CodigosTurnoConfig from './CodigosTurnoConfig';
 import HorasTurnoModal from '../bitacoras/HorasTurnoModal';
 import PlantillaInformeConfig from './PlantillaInformeConfig';
 import AvisoHorasCodigos from '../../../components/operaciones/AvisoHorasCodigos';
+import CustodiasConfiguracion from '../../custodias/CustodiasConfiguracionPage';
 
-type Pestana = 'codigos' | 'horas' | 'informe';
+type Pestana = 'codigos' | 'horas' | 'informe' | 'custodias';
 
 const PESTANAS = [
   { key: 'codigos' as const, label: 'Códigos de turno', icon: Tag },
   { key: 'horas' as const, label: 'Horario de los turnos', icon: Clock },
   { key: 'informe' as const, label: 'Plantilla del informe', icon: FileText },
+  { key: 'custodias' as const, label: 'Custodias', icon: Truck },
 ];
 
 /**
@@ -32,7 +34,7 @@ export default function ConfiguracionOperacionesPage() {
       <OperacionesPageHeader
         pantalla="configuracion"
         title="Configuración"
-        description="Lo que se ajusta una vez y usan los horarios y las bitácoras: los códigos de turno, el horario de cada turno y la plantilla del informe mensual."
+        description="Lo que se ajusta una vez: los códigos y el horario de los turnos, la plantilla del informe mensual y, en Custodias, las firmas, rutas, campos de la guía y el correo de los viajes."
       />
 
       <PageTabs
@@ -45,6 +47,7 @@ export default function ConfiguracionOperacionesPage() {
       {pestana === 'codigos' && <CodigosTurnoConfig />}
       {pestana === 'horas' && <><AvisoHorasCodigos enConfiguracion /><HorasTurnoModal embebido puedeEditar={puedeEditar} /></>}
       {pestana === 'informe' && <PlantillaInformeConfig />}
+      {pestana === 'custodias' && <CustodiasConfiguracion />}
     </div>
   );
 }

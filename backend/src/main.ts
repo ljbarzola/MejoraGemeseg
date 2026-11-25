@@ -8,12 +8,22 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { origenesDeLanding } from './modules/ventas/whatsapp-clics.util';
 import helmet from 'helmet';
+import { json } from 'express';
 import { join } from 'path';
 import { existsSync } from 'fs';
 
 async function bootstrap() {
   // rawBody: el aviso de WhatsApp (Meta) se valida con la firma del cuerpo EXACTO que llegó.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
+
+  // La firma del custodio llega en base64 (hasta 300 KB de imagen son unos 400 KB de texto): más que el límite normal
+  // de 100 KB. Solo esa ruta lleva el límite mayor; va antes del lector de cuerpos de Nest, que ya no la relee.
+  // OJO: va envuelto en una función con otro nombre. Si se registra `json()` directo, Nest ve una capa llamada
+  // «jsonParser» y cree que el lector general ya está puesto, y deja TODA la API sin leer el cuerpo (login incluido).
+  const lectorFirmas = json({ limit: '600kb' });
+  app.use('/api/custodias/campo/firmas', function lectorFirmaCustodio(req: Parameters<typeof lectorFirmas>[0], res: Parameters<typeof lectorFirmas>[1], next: Parameters<typeof lectorFirmas>[2]) {
+    return lectorFirmas(req, res, next);
+  });
 
   app.use(
     helmet({

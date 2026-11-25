@@ -1,9 +1,16 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CustodiasGuiaService } from './custodias-guia.service';
+import { CustodiasDispositivosService } from './custodias-dispositivos.service';
+import { CustodiaArchivosService } from './custodia-archivos.storage';
+import { CustodiasNumeracionService } from './custodias-numeracion.service';
+import type { RefCustodio } from './custodia-guia.types';
 import { CreateCustodiaDto } from './dto/create-custodia.dto';
 import { UpdateCustodiaDto } from './dto/update-custodia.dto';
 import { esCedulaSintetica } from '../personal/utils/postulacion-validacion.util';
@@ -28,53 +35,134 @@ const TRANSICIONES: Record<string, string[]> = {
 
 @Injectable()
 export class CustodiasService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(CustodiasService.name);
+
+  // `dispositivos` y `archivos` son de la Fase 2 (celular del custodio); opcionales para que los specs que arman
+  // el servicio a mano sigan funcionando. En la app siempre llegan.
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly guias: CustodiasGuiaService,
+    @Optional() private readonly dispositivos?: CustodiasDispositivosService,
+    @Optional() private readonly archivos?: CustodiaArchivosService,
+    // Número de guía automático (2026-11-24). Opcional por los specs que arman el servicio a mano: sin él se usa
+    // el número que llega en el DTO (comportamiento anterior).
+    @Optional() private readonly numeracion?: CustodiasNumeracionService,
+  ) {}
+
+  /** Los nombres de los cuatro custodios de un viaje, para validar el custodio de cabina de cada contenedor. */
+  private nombresCustodios(v: {
+    custodio1Name?: string | null;
+    custodio2Name?: string | null;
+    custodio3Name?: string | null;
+    custodio4Name?: string | null;
+  }): Record<RefCustodio, string> {
+    return {
+      custodio1: (v.custodio1Name ?? '').trim(),
+      custodio2: (v.custodio2Name ?? '').trim(),
+      custodio3: (v.custodio3Name ?? '').trim(),
+      custodio4: (v.custodio4Name ?? '').trim(),
+    };
+  }
+
+  // El custodio 4 solo existe si hay un custodio 3: así los puestos se llenan en orden.
+  private exigirCustodiosEnOrden(c3?: string | null, c4?: string | null) {
+    if ((c4 ?? '').trim() && !(c3 ?? '').trim()) {
+      throw new BadRequestException('Para agregar el custodio 4 primero agrega el custodio 3.');
+    }
+  }
+
+  // Las horas programadas del viaje (las que se escriben en el formulario): la llegada no puede ser antes de la salida.
+  private exigirLlegadaDespuesDeSalida(salida?: Date | string | null, llegada?: Date | string | null) {
+    if (!salida || !llegada) return;
+    if (new Date(llegada).getTime() < new Date(salida).getTime()) {
+      throw new BadRequestException('La llegada no puede ser antes de la salida.');
+    }
+  }
 
   async create(dto: CreateCustodiaDto, companyId: number, userId: number) {
     const normalizedType = dto.tipoCustodia
       .toUpperCase()
       .replace(/\s+/g, '_') as any;
 
-    const existing = await this.prisma.custodia.findUnique({
-      where: { numeroGuia: dto.numeroGuia },
-    });
-    if (existing) {
-      throw new BadRequestException('El número de guía ya existe.');
+    // Con la numeración automática el número NO viene del formulario: lo asigna el servidor al guardar.
+    if (!this.numeracion) {
+      const manual = (dto.numeroGuia ?? '').trim();
+      if (!manual) throw new BadRequestException('El número de guía es requerido.');
+      const existing = await this.prisma.custodia.findUnique({ where: { numeroGuia: manual } });
+      if (existing) {
+        throw new BadRequestException('El número de guía ya existe.');
+      }
     }
+    this.exigirLlegadaDespuesDeSalida(dto.fechaHoraSalida, dto.fechaHoraLlegada);
+    this.exigirCustodiosEnOrden(dto.custodio3Name, dto.custodio4Name);
     this.exigirPersonasDistintas([
       { nombre: dto.choferName, cedula: dto.choferCedula },
       { nombre: dto.custodio1Name, cedula: dto.custodio1Cedula },
       { nombre: dto.custodio2Name, cedula: dto.custodio2Cedula },
+      { nombre: dto.custodio3Name, cedula: dto.custodio3Cedula },
+      { nombre: dto.custodio4Name, cedula: dto.custodio4Cedula },
     ]);
 
-    return this.prisma.custodia.create({
-      data: {
-        numeroGuia: dto.numeroGuia.trim(),
-        tipoCustodia: normalizedType,
-        choferName: dto.choferName.trim(),
-        choferCedula: dto.choferCedula?.trim() || '',
-        custodio1Name: dto.custodio1Name.trim(),
-        custodio1Cedula: dto.custodio1Cedula?.trim() || '',
-        custodio2Name: dto.custodio2Name.trim(),
-        custodio2Cedula: dto.custodio2Cedula?.trim() || '',
-        cliente: dto.cliente?.trim() || '',
-        placa: dto.placa?.trim() || '',
-        direccionSalida: dto.direccionSalida?.trim() || '',
-        direccionLlegada: dto.direccionLlegada?.trim() || '',
-        fechaHoraSalida: dto.fechaHoraSalida
-          ? new Date(dto.fechaHoraSalida)
-          : null,
-        fechaHoraLlegada: dto.fechaHoraLlegada
-          ? new Date(dto.fechaHoraLlegada)
-          : null,
-        observaciones: dto.observaciones?.trim() || null,
-        nombreHacienda: dto.nombreHacienda?.trim() || null,
-        cantidadSacos: dto.cantidadSacos || null,
-        contenedores: dto.contenedores || [],
-        companyId,
-        createdBy: userId,
-      },
+    // Cliente del Directorio, ruta y guía en campo (todo opcional; el servidor revisa lo que llega).
+    const extra = await this.guias.preparar(companyId, {
+      tipo: normalizedType,
+      clienteId: dto.clienteId,
+      clienteTexto: dto.cliente,
+      rutaId: dto.rutaId,
+      guia: dto.guia,
+      custodios: this.nombresCustodios(dto),
     });
+    // Celular y custodio a cargo (Fase 2): el celular debe ser de la empresa y estar libre.
+    const asignacion = await this.dispositivos?.validarAsignacion(companyId, {
+      dispositivoId: dto.dispositivoId,
+      custodioACargo: dto.custodioACargo,
+      personal: dto,
+    });
+
+    const datos = {
+      tipoCustodia: normalizedType,
+      choferName: dto.choferName.trim(),
+      choferCedula: dto.choferCedula?.trim() || '',
+      custodio1Name: dto.custodio1Name.trim(),
+      custodio1Cedula: dto.custodio1Cedula?.trim() || '',
+      custodio2Name: dto.custodio2Name.trim(),
+      custodio2Cedula: dto.custodio2Cedula?.trim() || '',
+      custodio3Name: dto.custodio3Name?.trim() || '',
+      custodio3Cedula: dto.custodio3Cedula?.trim() || '',
+      custodio4Name: dto.custodio4Name?.trim() || '',
+      custodio4Cedula: dto.custodio4Cedula?.trim() || '',
+      cliente: extra.cliente ?? (dto.cliente?.trim() || ''),
+      clienteId: extra.clienteId,
+      rutaId: extra.rutaId,
+      patrulla: dto.patrulla?.trim() || null,
+      ciudadSalida: dto.ciudadSalida?.trim() || null,
+      ciudadLlegada: dto.ciudadLlegada?.trim() || null,
+      guia: extra.guia as any,
+      dispositivoId: asignacion?.dispositivoId ?? null,
+      custodioACargo: asignacion?.custodioACargo ?? null,
+      placa: dto.placa?.trim() || '',
+      direccionSalida: dto.direccionSalida?.trim() || '',
+      direccionLlegada: dto.direccionLlegada?.trim() || '',
+      fechaHoraSalida: dto.fechaHoraSalida
+        ? new Date(dto.fechaHoraSalida)
+        : null,
+      fechaHoraLlegada: dto.fechaHoraLlegada
+        ? new Date(dto.fechaHoraLlegada)
+        : null,
+      observaciones: dto.observaciones?.trim() || null,
+      // Con guía digital, estas columnas se sincronizan desde ella (primera hacienda, suma de sacos, n.º de contenedores).
+      nombreHacienda: extra.columnas ? extra.columnas.nombreHacienda : dto.nombreHacienda?.trim() || null,
+      cantidadSacos: extra.columnas ? extra.columnas.cantidadSacos : dto.cantidadSacos || null,
+      contenedores: extra.columnas ? extra.columnas.contenedores : dto.contenedores || [],
+      companyId,
+      createdBy: userId,
+    };
+    if (!this.numeracion) {
+      return this.prisma.custodia.create({ data: { ...datos, numeroGuia: (dto.numeroGuia ?? '').trim() } });
+    }
+    return this.numeracion.crearConNumero(companyId, (tx, numeroGuia) =>
+      tx.custodia.create({ data: { ...datos, numeroGuia } }),
+    );
   }
 
   async findAll(
@@ -115,6 +203,19 @@ export class CustodiasService {
     return custodia;
   }
 
+  // El detalle de un viaje para la pantalla: el viaje más su ruta con puntos, el cliente del Directorio y cuándo se firma.
+  async detalle(id: number, companyId: number) {
+    const custodia = await this.findOne(id, companyId);
+    const [ruta, clienteDirectorio, firmaMomentoEfectivo, dispositivo, avisos] = await Promise.all([
+      this.guias.rutaDeViaje(companyId, custodia.rutaId),
+      this.guias.clienteDirectorio(companyId, custodia.clienteId),
+      this.guias.firmaEfectiva(companyId, custodia.guia, custodia.clienteId),
+      this.dispositivos?.celularDeViaje(companyId, custodia.dispositivoId) ?? Promise.resolve(null),
+      this.dispositivos?.avisos(companyId, custodia) ?? Promise.resolve([] as string[]),
+    ]);
+    return { ...custodia, ruta, clienteDirectorio, firmaMomentoEfectivo, dispositivo, avisos };
+  }
+
   // Un viaje con pagos ya registrados en Contabilidad (tabla ContabPagoCustodia) no se elimina, no vuelve al inicio ni
   // cambia de tipo o de personal: eso movería lo que ya se pagó. Primero hay que deshacer esos pagos en Pagos. Si la
   // tabla aún no existe (el servidor no terminó de arrancar), se asume que no hay pagos.
@@ -146,12 +247,17 @@ export class CustodiasService {
     const cambiaPagable =
       (dto.tipoCustodia !== undefined &&
         dto.tipoCustodia.toUpperCase().replace(/\s+/g, '_') !== actual.tipoCustodia) ||
-      (['choferName', 'custodio1Name', 'custodio2Name', 'choferCedula', 'custodio1Cedula', 'custodio2Cedula'] as const).some(
-        (k) => dto[k] !== undefined && (dto[k] ?? '').trim() !== ((actual as any)[k] ?? '').trim(),
-      );
+      (
+        [
+          'choferName', 'custodio1Name', 'custodio2Name', 'custodio3Name', 'custodio4Name',
+          'choferCedula', 'custodio1Cedula', 'custodio2Cedula', 'custodio3Cedula', 'custodio4Cedula',
+        ] as const
+      ).some((k) => dto[k] !== undefined && (dto[k] ?? '').trim() !== ((actual as any)[k] ?? '').trim());
     if (cambiaPagable) await this.exigirSinPagos(id, 'cambiar su tipo o su personal');
 
-    if (dto.numeroGuia !== undefined) {
+    // El número de guía lo asigna el servidor al crear y no se cambia al editar (con la numeración automática).
+    // Sin ella (specs que arman el servicio a mano) se conserva la edición anterior.
+    if (!this.numeracion && dto.numeroGuia !== undefined) {
       const guia = dto.numeroGuia.trim();
       if (!guia) throw new BadRequestException('El número de guía es requerido.');
       if (guia !== actual.numeroGuia) {
@@ -174,16 +280,30 @@ export class CustodiasService {
         data[campo] = v;
       }
     }
+    // Custodios 3 y 4: pueden quedar vacíos (quitar al custodio).
+    for (const campo of ['custodio3Name', 'custodio4Name'] as const) {
+      if (dto[campo] !== undefined) data[campo] = (dto[campo] ?? '').trim();
+    }
     for (const campo of [
-      'choferCedula', 'custodio1Cedula', 'custodio2Cedula', 'cliente', 'placa', 'direccionSalida', 'direccionLlegada',
+      'choferCedula', 'custodio1Cedula', 'custodio2Cedula', 'custodio3Cedula', 'custodio4Cedula',
+      'placa', 'direccionSalida', 'direccionLlegada',
     ] as const) {
       if (dto[campo] !== undefined) data[campo] = (dto[campo] ?? '').trim();
+    }
+    for (const campo of ['patrulla', 'ciudadSalida', 'ciudadLlegada'] as const) {
+      if (dto[campo] !== undefined) data[campo] = (dto[campo] ?? '').trim() || null;
     }
     if ('fechaHoraSalida' in dto) {
       data.fechaHoraSalida = dto.fechaHoraSalida ? new Date(dto.fechaHoraSalida) : null;
     }
     if ('fechaHoraLlegada' in dto) {
       data.fechaHoraLlegada = dto.fechaHoraLlegada ? new Date(dto.fechaHoraLlegada) : null;
+    }
+    if ('fechaHoraSalida' in dto || 'fechaHoraLlegada' in dto) {
+      this.exigirLlegadaDespuesDeSalida(
+        'fechaHoraSalida' in data ? data.fechaHoraSalida : actual.fechaHoraSalida,
+        'fechaHoraLlegada' in data ? data.fechaHoraLlegada : actual.fechaHoraLlegada,
+      );
     }
     if ('observaciones' in dto) data.observaciones = dto.observaciones?.trim() || null;
 
@@ -202,11 +322,69 @@ export class CustodiasService {
     }
 
     // Chofer y custodios deben ser personas distintas (misma regla que en el formulario).
+    this.exigirCustodiosEnOrden(
+      data.custodio3Name ?? actual.custodio3Name,
+      data.custodio4Name ?? actual.custodio4Name,
+    );
     this.exigirPersonasDistintas([
       { nombre: data.choferName ?? actual.choferName, cedula: data.choferCedula ?? actual.choferCedula },
       { nombre: data.custodio1Name ?? actual.custodio1Name, cedula: data.custodio1Cedula ?? actual.custodio1Cedula },
       { nombre: data.custodio2Name ?? actual.custodio2Name, cedula: data.custodio2Cedula ?? actual.custodio2Cedula },
+      { nombre: data.custodio3Name ?? actual.custodio3Name, cedula: data.custodio3Cedula ?? actual.custodio3Cedula },
+      { nombre: data.custodio4Name ?? actual.custodio4Name, cedula: data.custodio4Cedula ?? actual.custodio4Cedula },
     ]);
+
+    // Cliente del Directorio, ruta y guía en campo.
+    const extra = await this.guias.preparar(companyId, {
+      tipo: tipoFinal,
+      actual: { clienteId: actual.clienteId, rutaId: actual.rutaId, guia: actual.guia },
+      clienteId: dto.clienteId,
+      clienteTexto: dto.cliente,
+      rutaId: dto.rutaId,
+      guia: dto.guia,
+      custodios: this.nombresCustodios({
+        custodio1Name: data.custodio1Name ?? actual.custodio1Name,
+        custodio2Name: data.custodio2Name ?? actual.custodio2Name,
+        custodio3Name: data.custodio3Name ?? actual.custodio3Name,
+        custodio4Name: data.custodio4Name ?? actual.custodio4Name,
+      }),
+    });
+    if (dto.clienteId !== undefined) data.clienteId = extra.clienteId;
+    if ((dto.clienteId !== undefined || dto.cliente !== undefined) && extra.cliente !== undefined) {
+      data.cliente = extra.cliente;
+    }
+    if (dto.rutaId !== undefined) data.rutaId = extra.rutaId;
+    // Celular y custodio a cargo (Fase 2), revisados con el personal final del viaje.
+    const asignacion = await this.dispositivos?.validarAsignacion(companyId, {
+      dispositivoId: dto.dispositivoId,
+      custodioACargo: dto.custodioACargo,
+      actual: {
+        id: actual.id,
+        dispositivoId: actual.dispositivoId,
+        custodioACargo: actual.custodioACargo,
+        estado: actual.estado,
+      },
+      personal: {
+        choferName: data.choferName ?? actual.choferName,
+        choferCedula: data.choferCedula ?? actual.choferCedula,
+        custodio1Name: data.custodio1Name ?? actual.custodio1Name,
+        custodio1Cedula: data.custodio1Cedula ?? actual.custodio1Cedula,
+        custodio2Name: data.custodio2Name ?? actual.custodio2Name,
+        custodio2Cedula: data.custodio2Cedula ?? actual.custodio2Cedula,
+        custodio3Name: data.custodio3Name ?? actual.custodio3Name,
+        custodio3Cedula: data.custodio3Cedula ?? actual.custodio3Cedula,
+        custodio4Name: data.custodio4Name ?? actual.custodio4Name,
+        custodio4Cedula: data.custodio4Cedula ?? actual.custodio4Cedula,
+      },
+    });
+    if (asignacion?.dispositivoId !== undefined) data.dispositivoId = asignacion.dispositivoId;
+    if (asignacion?.custodioACargo !== undefined) data.custodioACargo = asignacion.custodioACargo;
+    if (dto.guia !== undefined || tipoFinal !== actual.tipoCustodia) data.guia = extra.guia as any;
+    if (extra.columnas) {
+      data.nombreHacienda = extra.columnas.nombreHacienda;
+      data.cantidadSacos = extra.columnas.cantidadSacos;
+      data.contenedores = extra.columnas.contenedores;
+    }
 
     return this.prisma.custodia.update({ where: { id }, data });
   }
@@ -236,6 +414,19 @@ export class CustodiasService {
     }
     const actual = await this.findOne(id, companyId);
     if (estado === 'LISTO_PARA_CUSTODIAR') await this.exigirSinPagos(id, 'devolver al inicio');
+    const data = this.datosCambioEstado(actual, estado, fecha);
+    return this.prisma.custodia.update({ where: { id }, data });
+  }
+
+  /**
+   * Las reglas de un cambio de estado y lo que hay que guardar (estado + hora real). Las usan la oficina
+   * (`updateEstado`) y el celular del custodio (eventos SALIDA y LLEGADA), para que sean una sola.
+   */
+  datosCambioEstado(
+    actual: { estado: string; fechaHoraSalida: Date | null },
+    estado: string,
+    fecha?: string,
+  ): Record<string, any> {
     const permitidos = TRANSICIONES[actual.estado] ?? [];
     if (!permitidos.includes(estado)) {
       throw new BadRequestException(
@@ -265,13 +456,42 @@ export class CustodiasService {
         data.fechaHoraLlegada = momento;
       }
     }
-    return this.prisma.custodia.update({ where: { id }, data });
+    return data;
+  }
+
+  private async clavesDeArchivos(id: number): Promise<string[]> {
+    if (!this.archivos) return [];
+    try {
+      const fotos = await this.prisma.$queryRaw<{ claveArchivo: string; claveMiniatura: string }[]>`
+        SELECT "claveArchivo", "claveMiniatura" FROM "CustodiaFoto" WHERE "custodiaId" = ${id} AND "borradaEn" IS NULL`;
+      const firmas = await this.prisma.$queryRaw<{ claveImagen: string }[]>`
+        SELECT "claveImagen" FROM "CustodiaFirma" WHERE "custodiaId" = ${id}`;
+      return [...fotos.flatMap((f) => [f.claveArchivo, f.claveMiniatura]), ...firmas.map((f) => f.claveImagen)];
+    } catch (err) {
+      // Si las tablas de campo aún no existen no hay nada que borrar.
+      this.logger.warn(`No se pudieron listar los archivos del viaje ${id}: ${(err as Error).message}`);
+      return [];
+    }
+  }
+
+  private async borrarArchivos(claves: string[]) {
+    for (const clave of claves) {
+      try {
+        await this.archivos!.borrar(clave);
+      } catch (err) {
+        this.logger.warn(`No se pudo borrar el archivo ${clave}: ${(err as Error).message}`);
+      }
+    }
   }
 
   async remove(id: number, companyId: number) {
     await this.findOne(id, companyId);
     await this.exigirSinPagos(id, 'eliminar');
-    return this.prisma.custodia.delete({ where: { id } });
+    // Las filas de fotos y firmas se van con el viaje (ON DELETE CASCADE); sus archivos hay que borrarlos aparte.
+    const claves = await this.clavesDeArchivos(id);
+    const borrado = await this.prisma.custodia.delete({ where: { id } });
+    await this.borrarArchivos(claves);
+    return borrado;
   }
 
   async getAvailableCustodios(companyId: number) {
@@ -390,6 +610,8 @@ export class CustodiasService {
         [c.choferName, c.choferCedula],
         [c.custodio1Name, c.custodio1Cedula],
         [c.custodio2Name, c.custodio2Cedula],
+        [c.custodio3Name, c.custodio3Cedula],
+        [c.custodio4Name, c.custodio4Cedula],
       ]) {
         const clave = (cedula || nombre || '').trim();
         if (!clave) continue;

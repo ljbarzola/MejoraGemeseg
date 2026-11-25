@@ -332,7 +332,15 @@ Agregado el 2026-10-23 con Cacao (las tres pautas fijas de la usuaria; ver `.age
 - **Si un contenido nuevo no cabe, la ventana se hace más grande o más larga** (`ancho` de `FormModal`, o scroll del cuerpo), nunca se deja que algo se corte o produzca scroll horizontal. Al probar una pantalla nueva: abrir cada ventana a 1530×740 y comprobar que ningún desplegable toca el borde.
 - **No hacer:** un `position: absolute` para un calendario o menú dentro de un contenedor con `overflow`; ni abrir un desplegable en el evento de foco.
 
+## 27. Formularios largos: bloques con borde, y fondo de color solo para lo que depende del tipo
+
+### Regla: Una Ventana de Formulario Larga se Agrupa en Bloques con Título y Borde; Solo Llevan Fondo los Bloques que Aparecen Según una Opción Elegida (Leidy, 2026-11-25)
+- **Contexto:** el formulario de «Nueva custodia» creció hasta replicar la hoja de papel (servicio, salida y llegada, personal, celular, contenedores, furgón y haciendas, firma). Con todo en una sola columna de campos sueltos era difícil de recorrer.
+- **Regla:** se agrupa en bloques con título, borde y esquinas redondeadas (`Bloque` en `CustodiaFormModal.tsx`). **Decisión de la usuaria: solo llevan fondo tintado los bloques que existen porque se eligió un tipo** (Contenedores en azul para Puerto; Furgón y Haciendas en amarillo para Hacienda); los demás bloques van con borde y SIN fondo. Así el color dice «esto depende del tipo de servicio» y no decora.
+- **No hacer:** pintar todos los bloques de color, ni usar fondos distintos solo por variar.
+
 ## Versión
+- v2.4 - Noviembre 2026 (formularios largos en bloques con borde; fondo solo para lo que depende del tipo)
 - v2.3 - Noviembre 2026 (nada se sale de su cuadro: calendario en portal, abre con clic)
 - v2.2 - Octubre 2026 (módulo en línea blanca: submódulos, Dashboard primero y «Primeros pasos»)
 - v2.1 - Octubre 2026 (marco de pantalla, estado desde la lista, tarea como ventana)

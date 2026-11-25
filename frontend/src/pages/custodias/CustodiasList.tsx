@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, Eye, Trash2, Plus, Pencil, Undo2 } from 'lucide-react';
+import { FileText, Eye, Trash2, Plus, Pencil, Undo2, Mail } from 'lucide-react';
 import { getCustodias, deleteCustodia, updateCustodiaEstado, descargarOrdenCustodia } from '../../services/custodia.service';
 import CustodiaDetalleModal from '../../components/custodias/CustodiaDetalleModal';
 import CustodiaFormModal from '../../components/custodias/CustodiaFormModal';
 import MarcarEstadoModal from '../../components/custodias/MarcarEstadoModal';
-import ImprimirOrdenModal from '../../components/custodias/ImprimirOrdenModal';
+import CustodiaGuardadaModal from '../../components/custodias/CustodiaGuardadaModal';
+import EnviarGuiaModal from '../../components/custodias/EnviarGuiaModal';
 import PageHeader from '../../components/common/PageHeader';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ErrorBanner from '../../components/common/ErrorBanner';
@@ -57,6 +58,8 @@ const COLUMNAS_EXPORTAR = [
   { key: 'chofer', label: 'Chofer' },
   { key: 'custodio1', label: 'Custodio 1' },
   { key: 'custodio2', label: 'Custodio 2' },
+  { key: 'custodio3', label: 'Custodio 3' },
+  { key: 'custodio4', label: 'Custodio 4' },
   { key: 'salida', label: 'Salida' },
   { key: 'llegada', label: 'Llegada' },
   { key: 'origen', label: 'Dirección de salida' },
@@ -81,7 +84,7 @@ function formatFechaHora(date?: string | null) {
 
 const fechaSalida = (c: any): string => c.fechaHoraSalida || c.createdAt;
 const personalTexto = (c: any) =>
-  [c.choferName, c.custodio1Name, c.custodio2Name, c.choferCedula, c.custodio1Cedula, c.custodio2Cedula].filter(Boolean).join(' ');
+  [c.choferName, c.custodio1Name, c.custodio2Name, c.custodio3Name, c.custodio4Name, c.choferCedula, c.custodio1Cedula, c.custodio2Cedula, c.custodio3Cedula, c.custodio4Cedula].filter(Boolean).join(' ');
 
 function valorExportar(c: any, key: string): string {
   switch (key) {
@@ -93,6 +96,8 @@ function valorExportar(c: any, key: string): string {
     case 'chofer': return c.choferName || '';
     case 'custodio1': return c.custodio1Name || '';
     case 'custodio2': return c.custodio2Name || '';
+    case 'custodio3': return c.custodio3Name || '';
+    case 'custodio4': return c.custodio4Name || '';
     case 'salida': return formatFechaHora(fechaSalida(c));
     case 'llegada': return c.fechaHoraLlegada ? formatFechaHora(c.fechaHoraLlegada) : '';
     case 'origen': return c.direccionSalida || '';
@@ -120,6 +125,7 @@ export default function CustodiasList() {
   const [formAbierto, setFormAbierto] = useState(false);
   const [creada, setCreada] = useState<any>(null);
   const [editando, setEditando] = useState<any>(null);
+  const [enviando, setEnviando] = useState<any>(null);
   const [confirmandoVolver, setConfirmandoVolver] = useState<any>(null);
   // «Salió»/«Llegó» abren una ventana para elegir la hora real.
   const [marcando, setMarcando] = useState<{ custodia: any; estado: 'EN_CAMINO' | 'LLEGO' } | null>(null);
@@ -196,7 +202,7 @@ export default function CustodiasList() {
     }
   }
 
-  async function imprimir() {
+  async function descargarCreada() {
     if (!creada) return;
     const c = creada;
     setCreada(null);
@@ -204,7 +210,7 @@ export default function CustodiasList() {
     try {
       await descargarOrdenCustodia(c.id, c.numeroGuia);
     } catch {
-      setError('No se pudo generar la orden en PDF. Inténtalo de nuevo desde «⋯ → Orden en PDF».');
+      setError('No se pudo generar el PDF. Inténtalo de nuevo desde «⋯ → Orden en PDF».');
     }
   }
 
@@ -217,6 +223,7 @@ export default function CustodiasList() {
       },
     ];
     if (puedeEscribir) {
+      acciones.push({ label: 'Enviar al cliente', icon: <Mail size={14} />, hint: 'La guía en PDF por correo', onClick: () => setEnviando(c) });
       acciones.push({ label: 'Editar', icon: <Pencil size={14} />, onClick: () => setEditando(c) });
       // Un viaje solo avanza al paso siguiente (botón de la fila) o vuelve al inicio.
       if (c.estado !== 'LISTO_PARA_CUSTODIAR') {
@@ -253,6 +260,8 @@ export default function CustodiasList() {
             <div>{c.choferName} <span style={{ color: '#718096' }}>(chofer)</span></div>
             <div>{c.custodio1Name}</div>
             <div>{c.custodio2Name}</div>
+            {c.custodio3Name && <div>{c.custodio3Name}</div>}
+            {c.custodio4Name && <div>{c.custodio4Name}</div>}
           </div>
         );
       case 'salida': return <span style={{ fontSize: '0.8rem', color: '#4a5568' }}>{formatFechaHora(fechaSalida(c))}</span>;
@@ -298,7 +307,7 @@ export default function CustodiasList() {
           <ExportTableButton
             titulo="Viajes de custodia"
             columns={COLUMNAS_EXPORTAR}
-            defaultKeys={['guia', ...visibles.filter((k) => k !== 'personal' && k !== 'ruta'), 'chofer', 'custodio1', 'custodio2']}
+            defaultKeys={['guia', ...visibles.filter((k) => k !== 'personal' && k !== 'ruta'), 'chofer', 'custodio1', 'custodio2', 'custodio3', 'custodio4']}
             rows={filas}
             getValue={valorExportar}
           />
@@ -368,7 +377,9 @@ export default function CustodiasList() {
         )}
       </div>
 
-      <CustodiaDetalleModal custodia={detalle} onClose={() => setDetalle(null)} />
+      <CustodiaDetalleModal custodia={detalle} onClose={() => setDetalle(null)} puedeEnviar={puedeEscribir} />
+
+      {enviando && <EnviarGuiaModal custodia={enviando} onClose={() => setEnviando(null)} />}
 
       {(formAbierto || editando) && (
         <CustodiaFormModal
@@ -377,7 +388,7 @@ export default function CustodiasList() {
           onGuardada={(c, esNueva) => {
             setFormAbierto(false);
             setEditando(null);
-            if (esNueva) setCreada(c); // solo un viaje nuevo ofrece imprimir su orden
+            if (esNueva) setCreada(c); // solo un viaje nuevo ofrece descargar su orden
             load();
           }}
         />
@@ -403,7 +414,7 @@ export default function CustodiasList() {
       )}
 
       {creada && (
-        <ImprimirOrdenModal numeroGuia={creada.numeroGuia} onImprimir={imprimir} onCerrar={() => setCreada(null)} />
+        <CustodiaGuardadaModal numeroGuia={creada.numeroGuia} onDescargar={descargarCreada} onCerrar={() => setCreada(null)} />
       )}
 
       {confirmandoEliminar && (

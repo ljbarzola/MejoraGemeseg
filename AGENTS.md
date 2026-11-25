@@ -74,7 +74,7 @@ Cada modulo tiene sus reglas, decisiones y trampas en su archivo de `.agents/mod
 | Cotizador | `ventas-cotizador.md` |
 | Bot de WhatsApp | `whatsapp-bot.md` |
 | Cacao | `cacao.md` |
-| Custodias (viajes) | `custodias.md` |
+| Custodias (viajes, guia digital, celular de campo) | `custodias.md` |
 | Contabilidad | `contabilidad.md` |
 | Contratacion Publica | `contratacion-publica.md` |
 | Operaciones (contratos, horarios, bitacoras de guardiania, inventario, faltas) | `operaciones.md` |
@@ -85,6 +85,9 @@ Cada modulo tiene sus reglas, decisiones y trampas en su archivo de `.agents/mod
 - **Modelo del equipo:** el modelo (`CotProduct.model`, solo equipos) se muestra en la cotización junto al código y, en el PDF de la app y del enlace del cliente, **en lugar del código**. Clic en el producto abre su edición en el catálogo cuando se puede editar Ventas; si no, abre la ficha de solo lectura. Detalle: `ventas-cotizador.md` punto 16.
 - **Condiciones generales por pilar de servicio:** en Configuración → Servicios hay un bloque al pie de cada pilar de servicio; los nombres de empresa (Gemeseg / Megamont / Adasmeg) se usan solo ahí, en el campo editable «Empresa», y junto a él se muestra el pilar de servicio (Seguridad Física / Monitoreo / Soluciones Tecnológicas). En el Cotizador y el resto de módulos se muestra solo el nombre del pilar de servicio. El selector del Cotizador queda al lado de «Oportunidad» y precarga las condiciones; si la persona editó el texto, pregunta antes de reemplazarlo. La cotización guarda el pilar; impresión, PDF y enlace usan el mismo campo `conditions`. Detalle: `ventas-cotizador.md` punto 17.
 - **Historial del catálogo:** clave de columnas propia (`cotizador-historial-catalogo`) y `--z-popover` para que «Columnas» no se abra detrás del modal.
+
+## Custodias en campo (2026-11-24, fases 1 y 2, solo local)
+Guia digital de los viajes, su configuracion (Operaciones → Configuracion → pestana Custodias), el envio al cliente por correo y la pagina del celular del custodio (`/campo`). Detalle, decisiones y endpoints en `.agents/modules/custodias.md`, seccion «Custodias en campo». Antes de desplegar: (1) el bucket de fotos NO esta creado en produccion; sin la variable `CUSTODIAS_FOTOS_BUCKET` las fotos se guardan en la base (`StoredFile`) y crear el bucket pide autorizacion de Leidy; (2) las tablas y columnas nuevas se crean al arrancar (sin migraciones); (3) la fase 3 (seguimiento en vivo) no esta construida.
 
 ## Cuentas de prueba
 Solo en la base **local**: las crean los seeds de `backend/prisma/` (super admin, admin por empresa y empleados de ejemplo). El repo es publico: aqui no se escribe ninguna contrasena ni correo de persona. Las cuentas de seed no deben existir en produccion con contrasena de seed; antes de cada despliegue comprobar que las reales (sobre todo el super admin) tienen otra y que `JWT_SECRET` de Secret Manager no coincide con ningun ejemplo.

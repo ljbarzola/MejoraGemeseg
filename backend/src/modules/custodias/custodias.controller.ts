@@ -17,7 +17,8 @@ import type { Response } from 'express';
 import { CustodiasService } from './custodias.service';
 import { CustodiasPersonalService } from './custodias-personal.service';
 import { CreatePersonaCustodiaDto } from './dto/create-persona.dto';
-import { PdfService } from './pdf.service';
+import { CustodiasEnvioService } from './custodias-envio.service';
+import { EnviarGuiaDto } from './dto/custodias-config.dto';
 import { CreateCustodiaDto } from './dto/create-custodia.dto';
 import { UpdateEstadoDto } from './dto/update-estado.dto';
 import { UpdateCustodiaDto } from './dto/update-custodia.dto';
@@ -30,7 +31,7 @@ export class CustodiasController {
   constructor(
     private readonly custodiasService: CustodiasService,
     private readonly personalService: CustodiasPersonalService,
-    private readonly pdfService: PdfService,
+    private readonly envioService: CustodiasEnvioService,
   ) {}
 
   // Persona nueva desde el formulario del viaje («No existe, créalo aquí»): entra a la lista de Guardias de RRHH.
@@ -82,7 +83,31 @@ export class CustodiasController {
   @Get(':id')
   @Section('OPERACIONES', 'view')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
-    return this.custodiasService.findOne(id, req.user.companyId);
+    // Con la ruta, el cliente del Directorio y cuándo firma el cliente (2026-11-24).
+    return this.custodiasService.detalle(id, req.user.companyId);
+  }
+
+  // Envío de la guía (PDF) al cliente por correo, con su historial.
+  @Get(':id/envio')
+  @Section('OPERACIONES', 'view')
+  sugerenciaEnvio(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.envioService.sugerencia(id, req.user.companyId);
+  }
+
+  @Get(':id/envios')
+  @Section('OPERACIONES', 'view')
+  historialEnvios(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.envioService.historial(id, req.user.companyId);
+  }
+
+  @Post(':id/enviar')
+  @Section('OPERACIONES', 'write')
+  enviar(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: EnviarGuiaDto,
+    @Req() req: any,
+  ) {
+    return this.envioService.enviar(id, req.user.companyId, req.user, dto);
   }
 
   @Get(':id/pdf')
@@ -93,11 +118,8 @@ export class CustodiasController {
     @Res() res: Response,
   ) {
     try {
-      const custodia = await this.custodiasService.findOne(
-        id,
-        req.user.companyId,
-      );
-      const pdfBuffer = await this.pdfService.generarPdfOrdenCustodia(custodia);
+      const { viaje: custodia, buffer: pdfBuffer } =
+        await this.envioService.pdfDeViaje(id, req.user.companyId);
       const filename = `orden_custodia_${custodia.numeroGuia.replace(/[^a-zA-Z0-9\-]/g, '_')}.pdf`;
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Length', pdfBuffer.length.toString());

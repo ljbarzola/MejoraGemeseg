@@ -6000,3 +6000,22 @@ textarea.chat-input {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* Configuración › Custodias › Fotos: una tarjeta por tipo de servicio, con «Al salir» y «Al llegar» lado a lado */
+.fotos-tarjeta { padding: 14px; border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; }
+.fotos-tarjeta + .fotos-tarjeta { margin-top: 12px; }
+.fotos-tarjeta-titulo { margin: 0 0 10px; font-size: 0.82rem; font-weight: 700; text-transform: uppercase; color: var(--azul-oscuro, #1e3a5f); }
+.fotos-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+.fotos-col { min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid #edf2f7; border-radius: 12px; background: #f8fafc; }
+.fotos-col-titulo { font-size: 0.88rem; font-weight: 700; color: #1a202c; }
+.fotos-col-ayuda { font-size: 0.76rem; color: #718096; }
+.fotos-vacio { font-size: 0.82rem; color: #a0aec0; padding: 4px 2px; }
+.fotos-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; }
+.fotos-fila input[type='text'] {
+  flex: 1 1 150px; min-width: 0; box-sizing: border-box; padding: 7px 12px; border: 2px solid var(--borde-input); border-radius: 10px;
+  background: #fff; font: inherit; font-size: 0.88rem; outline: none; transition: border-color 0.2s;
+}
+.fotos-fila input[type='text']:focus { border-color: var(--azul-claro); }
+.fotos-fila input[type='text']:disabled { background: #f7fafc; color: #4a5568; }
+.fotos-opcion { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #4a5568; white-space: nowrap; cursor: pointer; }
+.fotos-agregar { display: flex; align-items: center; gap: 10px; }

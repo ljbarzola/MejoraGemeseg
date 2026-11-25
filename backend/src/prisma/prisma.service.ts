@@ -12,6 +12,7 @@ import { COT_QUOTE_PILAR_DDL } from './cot-quote-pilar.schema';
 import { SALES_SERVICE_PILAR_DDL } from './sales-service-pilar.schema';
 import { TASK_SIN_PROYECTO_DDL } from './task-sin-proyecto.schema';
 import { INV_ARMA_CAMPOS_DDL } from './inv-arma-campos.schema';
+import { CUSTODIA_CAMPO_DDL } from './custodia-campo.schema';
 
 /** Default pg pool size. Cloud SQL db-f1-micro allows ~25 connections; Cloud Run max-instances=10 would blow that with pg's default of 10. */
 const DEFAULT_POOL_MAX = 3;
@@ -101,6 +102,7 @@ export class PrismaService
       ...SALES_SERVICE_PILAR_DDL,
       ...TASK_SIN_PROYECTO_DDL,
       ...INV_ARMA_CAMPOS_DDL,
+      ...CUSTODIA_CAMPO_DDL,
     ]) {
       try {
         await this.$executeRawUnsafe(ddl);

@@ -3,6 +3,12 @@ import { google } from 'googleapis';
 import * as fs from 'fs';
 import * as path from 'path';
 
+export interface CorreoAdjunto {
+  filename: string;
+  contentType: string;
+  content: Buffer;
+}
+
 // Servicio de envío de correo (Fase C de Entidades/Cumplimiento) vía Gmail
 // API, usando la MISMA service account que ya usa DriveService (mismo
 // google-service-account.json / GOOGLE_SERVICE_ACCOUNT_JSON, misma lógica de
@@ -215,13 +221,16 @@ export class GmailMailService {
   }
 
   private buildRawMessage(params: {
-    to: string;
+    to: string | string[];
+    cc?: string[];
     subject: string;
     bodyText: string;
+    bodyHtml?: string;
+    attachments?: CorreoAdjunto[];
     from: string;
     fromName?: string | null;
   }): string {
-    // MIME simple, texto plano UTF-8. El "From" DEBE coincidir con la casilla
+    // MIME, texto plano UTF-8. El "From" DEBE coincidir con la casilla
     // impersonada (el subject de la delegación) o Gmail rechaza el envío, por
     // eso lo recibe ya resuelto en vez de leerlo del entorno por su cuenta.
     //
@@ -231,17 +240,91 @@ export class GmailMailService {
     const from = nombre
       ? `=?UTF-8?B?${Buffer.from(nombre, 'utf-8').toString('base64')}?= <${params.from}>`
       : params.from;
-    const lines = [
+    const para = Array.isArray(params.to) ? params.to.join(', ') : params.to;
+    const cabeceras = [
       `From: ${from}`,
-      `To: ${params.to}`,
+      `To: ${para}`,
+      ...(params.cc && params.cc.length ? [`Cc: ${params.cc.join(', ')}`] : []),
       `Subject: =?UTF-8?B?${Buffer.from(params.subject, 'utf-8').toString('base64')}?=`,
       'MIME-Version: 1.0',
-      'Content-Type: text/plain; charset="UTF-8"',
-      'Content-Transfer-Encoding: 7bit',
-      '',
-      params.bodyText,
     ];
-    return this.encodeBase64Url(lines.join('\r\n'));
+    const adjuntos = params.attachments ?? [];
+
+    // Sin HTML ni adjuntos: el mensaje queda exactamente como antes.
+    if (!params.bodyHtml && !adjuntos.length) {
+      return this.encodeBase64Url(
+        [
+          ...cabeceras,
+          'Content-Type: text/plain; charset="UTF-8"',
+          'Content-Transfer-Encoding: 7bit',
+          '',
+          params.bodyText,
+        ].join('\r\n'),
+      );
+    }
+
+    const b64 = (buf: Buffer | string) =>
+      (Buffer.isBuffer(buf) ? buf : Buffer.from(buf, 'utf-8'))
+        .toString('base64')
+        .replace(/(.{76})/g, '$1\r\n');
+    const unico = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+    const parteTexto = [
+      'Content-Type: text/plain; charset="UTF-8"',
+      'Content-Transfer-Encoding: base64',
+      '',
+      b64(params.bodyText),
+    ];
+
+    // Cuerpo: solo texto, o texto + HTML como alternativas.
+    let cuerpo: string[];
+    let tipoCuerpo: string;
+    if (params.bodyHtml) {
+      const alt = `alt_${unico}`;
+      tipoCuerpo = `multipart/alternative; boundary="${alt}"`;
+      cuerpo = [
+        `--${alt}`,
+        ...parteTexto,
+        `--${alt}`,
+        'Content-Type: text/html; charset="UTF-8"',
+        'Content-Transfer-Encoding: base64',
+        '',
+        b64(params.bodyHtml),
+        `--${alt}--`,
+      ];
+    } else {
+      tipoCuerpo = 'text/plain; charset="UTF-8"';
+      cuerpo = parteTexto.slice(1);
+    }
+
+    if (!adjuntos.length) {
+      return this.encodeBase64Url(
+        [...cabeceras, `Content-Type: ${tipoCuerpo}`, '', ...cuerpo].join('\r\n'),
+      );
+    }
+
+    const mixto = `mix_${unico}`;
+    const partes: string[] = [
+      ...cabeceras,
+      `Content-Type: multipart/mixed; boundary="${mixto}"`,
+      '',
+      `--${mixto}`,
+      `Content-Type: ${tipoCuerpo}`,
+      ...(params.bodyHtml ? [''] : ['Content-Transfer-Encoding: base64', '']),
+      ...(params.bodyHtml ? cuerpo : [b64(params.bodyText)]),
+    ];
+    for (const a of adjuntos) {
+      const simple = a.filename.replace(/[^\w.-]/g, '_');
+      partes.push(
+        `--${mixto}`,
+        `Content-Type: ${a.contentType}; name="${simple}"`,
+        'Content-Transfer-Encoding: base64',
+        `Content-Disposition: attachment; filename="${simple}"; filename*=UTF-8''${encodeURIComponent(a.filename)}`,
+        '',
+        b64(a.content),
+      );
+    }
+    partes.push(`--${mixto}--`, '');
+    return this.encodeBase64Url(partes.join('\r\n'));
   }
 
   // Deja que cualquier error se propague (credenciales faltantes, delegación
@@ -249,9 +332,15 @@ export class GmailMailService {
   // es responsable de capturarlo por destinatario para que un correo fallido
   // no aborte el resto del lote.
   async sendMail(params: {
-    to: string;
+    to: string | string[];
+    /** Con copia. */
+    cc?: string[];
     subject: string;
     bodyText: string;
+    /** Versión HTML opcional (el texto plano va siempre como alternativa). */
+    bodyHtml?: string;
+    /** Archivos adjuntos (p. ej. el PDF de la guía de custodia). */
+    attachments?: CorreoAdjunto[];
     /** Casilla desde la que se envía. Si no viene, GMAIL_SENDER_ADDRESS. */
     from?: string | null;
     /** Nombre visible del remitente ("Recursos Humanos"). */
@@ -265,10 +354,10 @@ export class GmailMailService {
         userId: 'me',
         requestBody: { raw },
       });
-      this.logger.log(`Correo enviado a ${params.to} desde ${remitente}`);
+      this.logger.log(`Correo enviado a ${Array.isArray(params.to) ? params.to.join(', ') : params.to} desde ${remitente}`);
     } catch (err: any) {
       const explicado = this.explicarErrorGoogle(err, remitente);
-      this.logger.error(`No se pudo enviar el correo a ${params.to}: ${explicado}`);
+      this.logger.error(`No se pudo enviar el correo a ${Array.isArray(params.to) ? params.to.join(', ') : params.to}: ${explicado}`);
       // Ese cliente quedó construido con algo que no sirve; se descarta para
       // que el siguiente intento lo reconstruya (si acaban de corregir la
       // configuración, no hace falta reiniciar el servidor).

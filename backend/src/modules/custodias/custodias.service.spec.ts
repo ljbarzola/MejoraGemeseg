@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CustodiasService } from './custodias.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CustodiasGuiaService } from './custodias-guia.service';
 
 function makeCustodia(overrides: Partial<any> = {}) {
   return {
@@ -42,6 +43,7 @@ describe('CustodiasService', () => {
     cPPuestoGuardia: { findMany: jest.Mock };
     $queryRaw: jest.Mock;
   };
+  let guias: { preparar: jest.Mock; rutaDeViaje: jest.Mock; clienteDirectorio: jest.Mock; firmaEfectiva: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -63,7 +65,24 @@ describe('CustodiasService', () => {
       // Pagos registrados en Contabilidad: por defecto, ninguno.
       $queryRaw: jest.fn().mockResolvedValue([{ n: 0 }]),
     };
-    service = new CustodiasService(prisma as unknown as PrismaService);
+    // La revisión de cliente, ruta y guía vive en CustodiasGuiaService (con su propia base de configuración):
+    // aquí se reemplaza por una versión mínima que solo devuelve lo que se le da.
+    guias = {
+      preparar: jest.fn(async (_companyId: number, p: any) => ({
+        clienteId: p.clienteId === undefined ? (p.actual?.clienteId ?? null) : p.clienteId,
+        cliente: p.clienteTexto?.trim(),
+        rutaId: p.rutaId === undefined ? (p.actual?.rutaId ?? null) : p.rutaId,
+        guia: {},
+        columnas: null,
+      })),
+      rutaDeViaje: jest.fn().mockResolvedValue(null),
+      clienteDirectorio: jest.fn().mockResolvedValue(null),
+      firmaEfectiva: jest.fn().mockResolvedValue('LLEGADA'),
+    };
+    service = new CustodiasService(
+      prisma as unknown as PrismaService,
+      guias as unknown as CustodiasGuiaService,
+    );
   });
 
   describe('getAvailableCustodios', () => {
@@ -124,6 +143,51 @@ describe('CustodiasService', () => {
         { ...base, choferName: 'Ana Mora', custodio1Name: 'Luis Pérez', custodio2Name: 'Eva Cruz' }, 1, 1,
       );
       expect(prisma.custodia.create.mock.calls[0][0].data).toMatchObject({ choferCedula: '', custodio1Cedula: '', custodio2Cedula: '' });
+    });
+  });
+
+  describe('custodios 3 y 4', () => {
+    const base = {
+      numeroGuia: 'G-9', tipoCustodia: 'hacienda',
+      choferName: 'Ana Mora', custodio1Name: 'Luis Pérez', custodio2Name: 'Eva Cruz',
+    } as any;
+
+    it('guarda el custodio 3 y el 4, y exige el 3 para poner el 4', async () => {
+      prisma.custodia.findUnique.mockResolvedValue(null);
+      prisma.custodia.create.mockResolvedValue({ id: 1 });
+      await service.create({ ...base, custodio3Name: ' Raúl Díaz ', custodio4Name: 'Sofía Paz', custodio4Cedula: '123' }, 1, 1);
+      expect(prisma.custodia.create.mock.calls[0][0].data).toMatchObject({
+        custodio3Name: 'Raúl Díaz', custodio3Cedula: '', custodio4Name: 'Sofía Paz', custodio4Cedula: '123',
+      });
+      await expect(service.create({ ...base, custodio4Name: 'Sofía Paz' }, 1, 1)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('el custodio 3 tampoco puede ser alguien que ya va en el viaje', async () => {
+      prisma.custodia.findUnique.mockResolvedValue(null);
+      await expect(service.create({ ...base, custodio3Name: 'luis pérez' }, 1, 1)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('al editar: quitar al 3 con el 4 puesto se rechaza; cambiarlos pide que no haya pagos', async () => {
+      prisma.custodia.findFirst.mockResolvedValue(
+        makeCustodia({ custodio3Name: 'Raúl Díaz', custodio4Name: 'Sofía Paz' }),
+      );
+      await expect(service.update(1, { custodio3Name: '' }, 1)).rejects.toBeInstanceOf(BadRequestException);
+      prisma.$queryRaw.mockResolvedValue([{ n: 2 }]);
+      await expect(service.update(1, { custodio4Name: 'Otra Persona' }, 1)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('la guía revisada sincroniza las columnas de siempre (contenedores, hacienda y sacos)', async () => {
+      prisma.custodia.findUnique.mockResolvedValue(null);
+      prisma.custodia.create.mockResolvedValue({ id: 1 });
+      guias.preparar.mockResolvedValueOnce({
+        clienteId: 5, cliente: 'Cliente del Directorio', rutaId: 2, guia: { haciendas: [] },
+        columnas: { contenedores: ['ABCD123'], nombreHacienda: 'La Esperanza', cantidadSacos: 80 },
+      });
+      await service.create({ ...base, guia: {}, clienteId: 5 }, 1, 1);
+      expect(prisma.custodia.create.mock.calls[0][0].data).toMatchObject({
+        cliente: 'Cliente del Directorio', clienteId: 5, rutaId: 2,
+        contenedores: ['ABCD123'], nombreHacienda: 'La Esperanza', cantidadSacos: 80,
+      });
     });
   });
 

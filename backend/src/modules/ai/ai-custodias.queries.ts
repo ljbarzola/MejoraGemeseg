@@ -125,6 +125,8 @@ export class AiCustodiasQueries {
         c.choferName ? `chofer ${c.choferName}` : '',
         c.custodio1Name ? `custodio ${c.custodio1Name}` : '',
         c.custodio2Name ? `custodio ${c.custodio2Name}` : '',
+        c.custodio3Name ? `custodio ${c.custodio3Name}` : '',
+        c.custodio4Name ? `custodio ${c.custodio4Name}` : '',
       ].filter(Boolean);
       lineas.push(
         `- Guía ${c.numeroGuia} (${TIPO_TEXTO[c.tipoCustodia] ?? c.tipoCustodia}, ${ESTADO_TEXTO[c.estado] ?? c.estado}), cliente ${c.cliente || 'sin cliente'}, placa ${c.placa || 'sin placa'}, salida ${fechaEc(c.fechaHoraSalida ?? c.createdAt)}${gente.length ? ', ' + gente.join(', ') : ''}`,
@@ -137,12 +139,20 @@ export class AiCustodiasQueries {
   private condicionesDePersona(texto: string) {
     const t = texto.trim();
     if (/^\d{10}$/.test(t)) {
-      return [{ choferCedula: t }, { custodio1Cedula: t }, { custodio2Cedula: t }];
+      return [
+        { choferCedula: t },
+        { custodio1Cedula: t },
+        { custodio2Cedula: t },
+        { custodio3Cedula: t },
+        { custodio4Cedula: t },
+      ];
     }
     return [
       { choferName: { contains: t, mode: 'insensitive' as const } },
       { custodio1Name: { contains: t, mode: 'insensitive' as const } },
       { custodio2Name: { contains: t, mode: 'insensitive' as const } },
+      { custodio3Name: { contains: t, mode: 'insensitive' as const } },
+      { custodio4Name: { contains: t, mode: 'insensitive' as const } },
     ];
   }
 
@@ -161,7 +171,13 @@ export class AiCustodiasQueries {
     const esEl = (n: string, ced: string) =>
       ced === nombre.trim() || (n && sinTildes(n).includes(buscado));
     const porTipo: Record<string, number> = {};
-    const porRol: Record<string, number> = { Chofer: 0, 'Custodio 1': 0, 'Custodio 2': 0 };
+    const porRol: Record<string, number> = {
+      Chofer: 0,
+      'Custodio 1': 0,
+      'Custodio 2': 0,
+      'Custodio 3': 0,
+      'Custodio 4': 0,
+    };
     const hace30 = Date.now() - 30 * DIA_MS;
     let ultimos30 = 0;
     for (const c of filas) {
@@ -169,6 +185,8 @@ export class AiCustodiasQueries {
       if (esEl(c.choferName, c.choferCedula)) porRol['Chofer']++;
       else if (esEl(c.custodio1Name, c.custodio1Cedula)) porRol['Custodio 1']++;
       else if (esEl(c.custodio2Name, c.custodio2Cedula)) porRol['Custodio 2']++;
+      else if (esEl(c.custodio3Name, c.custodio3Cedula)) porRol['Custodio 3']++;
+      else if (esEl(c.custodio4Name, c.custodio4Cedula)) porRol['Custodio 4']++;
       if (new Date(c.createdAt).getTime() >= hace30) ultimos30++;
     }
     const lineas = [
@@ -252,12 +270,12 @@ export class AiCustodiasQueries {
         tipoCustodia: 'HACIENDA',
         createdAt: { gte: new Date(Date.now() - 30 * DIA_MS) },
       },
-      select: { custodio1Name: true, custodio2Name: true },
+      select: { custodio1Name: true, custodio2Name: true, custodio3Name: true, custodio4Name: true },
     });
     if (filas.length === 0) return 'No hay viajes de Hacienda registrados en los últimos 30 días.';
     const cuenta = new Map<string, number>();
     for (const f of filas) {
-      for (const n of [f.custodio1Name, f.custodio2Name]) {
+      for (const n of [f.custodio1Name, f.custodio2Name, f.custodio3Name, f.custodio4Name]) {
         const nombre = n?.trim();
         if (nombre) cuenta.set(nombre, (cuenta.get(nombre) ?? 0) + 1);
       }

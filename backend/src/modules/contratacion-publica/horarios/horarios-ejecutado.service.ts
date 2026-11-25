@@ -58,7 +58,14 @@ export class CPHorariosEjecutadoService {
       }),
       this.prisma.custodia.findMany({
         where: { companyId, fechaHoraSalida: { gte: desde, lt: hasta } },
-        select: { numeroGuia: true, fechaHoraSalida: true, custodio1Cedula: true, custodio2Cedula: true },
+        select: {
+          numeroGuia: true,
+          fechaHoraSalida: true,
+          custodio1Cedula: true,
+          custodio2Cedula: true,
+          custodio3Cedula: true,
+          custodio4Cedula: true,
+        },
       }),
     ]);
 
@@ -67,7 +74,7 @@ export class CPHorariosEjecutadoService {
       .map((c) => ({
         fecha: diaEcuador(c.fechaHoraSalida as Date),
         guia: c.numeroGuia,
-        cedulas: [c.custodio1Cedula, c.custodio2Cedula]
+        cedulas: [c.custodio1Cedula, c.custodio2Cedula, c.custodio3Cedula, c.custodio4Cedula]
           .map((x) => normalizarCedula(x))
           .filter((x): x is string => !!x),
       }));
