@@ -6,12 +6,18 @@ import {
   INSTRUCCIONES_BITACORA_RESUMEN_POR_DEFECTO,
   INSTRUCCIONES_BITACORAS_POR_DEFECTO,
   INSTRUCCIONES_ENTREGAS_POR_DEFECTO,
+  INSTRUCCIONES_MARKETING_ESTRATEGA_POR_DEFECTO,
+  INSTRUCCIONES_MARKETING_REVISOR_POR_DEFECTO,
   NOMBRE_AGENTE_BITACORA_RESUMEN,
   NOMBRE_AGENTE_BITACORAS,
   NOMBRE_AGENTE_ENTREGAS,
+  NOMBRE_AGENTE_MARKETING_ESTRATEGA,
+  NOMBRE_AGENTE_MARKETING_REVISOR,
   SCOPE_BITACORA_RESUMEN,
   SCOPE_BITACORAS,
   SCOPE_ENTREGAS,
+  SCOPE_MARKETING_ESTRATEGA,
+  SCOPE_MARKETING_REVISOR,
 } from './agent-trabajadores.const';
 
 export interface RegistroDeAgente {
@@ -81,6 +87,43 @@ export class AgentRunService implements OnModuleInit {
       this.logger.warn(
         `No se pudo sembrar el Agente Redactor del Resumen del Día: ${(err as Error).message}`,
       );
+    }
+    try {
+      await this.sembrarAgenteMarketing();
+    } catch (err) {
+      this.logger.warn(
+        `No se pudieron sembrar los agentes de Marketing: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  private async sembrarAgenteMarketing() {
+    const agentes = [
+      {
+        scope: SCOPE_MARKETING_ESTRATEGA,
+        name: NOMBRE_AGENTE_MARKETING_ESTRATEGA,
+        instructions: INSTRUCCIONES_MARKETING_ESTRATEGA_POR_DEFECTO,
+      },
+      {
+        scope: SCOPE_MARKETING_REVISOR,
+        name: NOMBRE_AGENTE_MARKETING_REVISOR,
+        instructions: INSTRUCCIONES_MARKETING_REVISOR_POR_DEFECTO,
+      },
+    ];
+    for (const agente of agentes) {
+      const existe = await this.prisma.agent.findFirst({
+        where: { createdBy: null, scope: agente.scope },
+        select: { id: true },
+      });
+      if (existe) continue;
+      await this.prisma.agent.create({
+        data: {
+          name: agente.name,
+          instructions: agente.instructions,
+          scope: agente.scope,
+          isDefault: false,
+        },
+      });
     }
   }
 

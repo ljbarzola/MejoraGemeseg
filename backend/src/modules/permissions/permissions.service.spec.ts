@@ -128,8 +128,9 @@ describe('PermissionsService', () => {
         { section: 'CACAO', canView: true, canWrite: false },
         { section: 'SISTEMAS', canView: false, canWrite: false },
         { section: 'BITACORA', canView: false, canWrite: false },
-        // Contabilidad (2026-11-16) también es de «cerrada por defecto»: sin fila, no se ve.
+        // Contabilidad (2026-11-16) y Marketing son de «cerrada por defecto»: sin fila, no se ve.
         { section: 'CONTABILIDAD', canView: false, canWrite: false },
+        { section: 'MARKETING', canView: false, canWrite: false },
       ]);
     });
   });

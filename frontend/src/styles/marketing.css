@@ -1,0 +1,103 @@
+/* Marketing: una sola voz visual para las cuatro pantallas del módulo.
+   Sin sombras ni tarjetas repetidas: secciones con regla izquierda, como un brief impreso. */
+
+.marketing-plan-section {
+  border-left: 3px solid #2e74b5;
+  padding: 2px 0 2px 14px;
+  margin: 0 0 18px;
+}
+
+.marketing-plan-section h4 {
+  margin: 0 0 6px;
+  font-size: 0.86rem;
+  color: #1f4e79;
+}
+
+.marketing-plan-section p,
+.marketing-plan-section pre {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: #475569;
+  white-space: pre-wrap;
+  font-family: inherit;
+}
+
+.marketing-pieza {
+  border-left: 3px solid #cbd5e0;
+  padding: 2px 0 2px 12px;
+  margin: 0 0 16px;
+}
+
+.marketing-pieza-aprobada {
+  border-left-color: #2f855a;
+}
+
+.marketing-pieza-descartada {
+  border-left-color: #cbd5e0;
+  opacity: 0.6;
+}
+
+.marketing-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 22px;
+}
+
+.marketing-stepper button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.marketing-stepper button.activo {
+  border-color: #2e74b5;
+  color: #1f4e79;
+  background: #eff6ff;
+}
+
+.marketing-stepper button .numero {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #edf2f7;
+  font-size: 0.7rem;
+}
+
+.marketing-stepper button.activo .numero {
+  background: #2e74b5;
+  color: #fff;
+}
+
+.marketing-ayuda p {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: #475569;
+  margin: 0 0 10px;
+}
+
+.marketing-ayuda ol {
+  font-size: 0.88rem;
+  line-height: 1.7;
+  color: #475569;
+  margin: 0 0 14px 18px;
+}
+
+@media (max-width: 768px) {
+  .marketing-stepper button {
+    font-size: 0.75rem;
+    padding: 6px 9px;
+  }
+}

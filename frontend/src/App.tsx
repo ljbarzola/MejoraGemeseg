@@ -143,6 +143,10 @@ const SoporteTecnicoPage = lazy(() => import('./pages/sistemas/SoporteTecnicoPag
 const SistemasDashboardPage = lazy(() => import('./pages/sistemas/SistemasDashboardPage'));
 const MejoraContinuaPage = lazy(() => import('./pages/sistemas/MejoraContinuaPage'));
 const NovedadesPage = lazy(() => import('./pages/sistemas/NovedadesPage'));
+const MarketingPage = lazy(() => import('./pages/marketing/MarketingPage'));
+const MarketingCampaniaPage = lazy(() => import('./pages/marketing/MarketingCampaniaPage'));
+const MarketingBibliotecaPage = lazy(() => import('./pages/marketing/MarketingBibliotecaPage'));
+const MarketingConfiguracionPage = lazy(() => import('./pages/marketing/MarketingConfiguracionPage'));
 
 // Redirección que conserva los parámetros de la ruta (":id" del destino se
 // llena con el ":id" de la URL vieja).
@@ -635,6 +639,10 @@ function AppInner() {
         <Route path="/sistemas/base-conocimiento" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><KnowledgeBasePage /></SectionRoute></ProtectedLayout>} />
         <Route path="/sistemas/soporte" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><SoporteTecnicoPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/sistemas/novedades" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><NovedadesPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/marketing" element={<ProtectedLayout><SectionRoute section="MARKETING"><MarketingPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/marketing/campanias/:id" element={<ProtectedLayout><SectionRoute section="MARKETING"><MarketingCampaniaPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/marketing/biblioteca" element={<ProtectedLayout><SectionRoute section="MARKETING"><MarketingBibliotecaPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/marketing/configuracion" element={<ProtectedLayout><SectionRoute section="MARKETING"><MarketingConfiguracionPage /></SectionRoute></ProtectedLayout>} />
       </Routes>
       </Suspense>
 
