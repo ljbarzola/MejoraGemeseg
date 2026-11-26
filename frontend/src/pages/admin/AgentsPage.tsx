@@ -1,21 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Activity, BookOpen, FileText, MessagesSquare, Trash2, Pencil } from 'lucide-react';
+import { Activity, BookOpen, FileText, MessagesSquare, Trash2, Pencil, Bot } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
+import PageTabs from '../../components/common/PageTabs';
 import {
   getAgentCatalog,
-  getAgentAssignments,
   createAgent,
   updateAgent,
   deleteAgent,
-  assignAgent,
-  unassignAgent,
   getAgentDocs,
 } from '../../services/agent.service';
-import type { Agent, AgentAssignment, DocumentacionAgente } from '../../types/agent';
+import { getUser } from '../../services/auth.service';
+import type { Agent, DocumentacionAgente } from '../../types/agent';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
-import ClearFiltersButton from '../../components/common/ClearFiltersButton';
-import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
-import { useColumnFilters } from '../../hooks/useColumnFilters';
 import AgenteDocModal from '../../components/sistemas/AgenteDocModal';
 import ActividadAgentes from '../../components/sistemas/ActividadAgentes';
 import HistorialPreguntasAgentes from '../../components/sistemas/HistorialPreguntasAgentes';
@@ -27,8 +23,8 @@ const SCOPE_OPTIONS = [
   { value: 'TASKS', label: 'Tareas', desc: 'Enfocado en tareas y Kanban' },
   { value: 'ADMIN', label: 'Administracion', desc: 'Panel de administracion' },
   // Agente especializado (2026-10-07): solo consulta datos de Ventas y no aparece
-  // para nadie hasta que se le asigne a una persona (botón de asignar).
-  { value: 'VENTAS', label: 'Ventas', desc: 'Investiga clientes y cartera de Ventas; solo lo ve quien lo tenga asignado' },
+  // para quien no tenga la sección Ventas.
+  { value: 'VENTAS', label: 'Ventas', desc: 'Investiga clientes y cartera de Ventas; lo ve quien tenga Ventas' },
   // Agente de Cacao (2026-11-11): lo siembra el sistema y lo ve quien tenga acceso a Cacao.
   { value: 'CACAO', label: 'Cacao', desc: 'Explica el flujo de Cacao y consulta datos reales de la empresa; lo ve quien tenga acceso a Cacao' },
   // Agente especializado (2026-11-16, reemplaza a GEME-BOT): solo consulta viajes de custodia, sin dinero. Desde
@@ -57,25 +53,28 @@ const SCOPE_PREVIEW: Record<string, string[]> = {
   BITACORAS: ['Foto de la hoja', 'Guardias y sus horas', 'Novedades por tipo', 'Nada del horario ni de los guardias'],
 };
 
+/** Quién ve el agente en el chat: sale del módulo, ya no se asigna persona por persona. */
+function quienLoVe(agent: Agent): string {
+  const modulo: Record<string, string> = { VENTAS: 'Ventas', CACAO: 'Cacao', CUSTODIAS: 'Operaciones', OPERACIONES: 'Operaciones' };
+  if (modulo[agent.scope]) return `todas las personas con acceso al módulo ${modulo[agent.scope]}`;
+  if (agent.createdBy !== null) return 'quien lo creó y a quien se le asignó antes';
+  return 'todas las personas de la empresa';
+}
+
 export default function AgentsPage() {
   const [catalog, setCatalog] = useState<(Agent & { _count: { userLinks: number } })[]>([]);
-  const [assignments, setAssignments] = useState<AgentAssignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busqueda, setBusqueda] = useState('');
+  const [pestana, setPestana] = useState<'agentes' | 'preguntas' | 'actividad'>('agentes');
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showAssignModal, setShowAssignModal] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
-  const [assigningAgent, setAssigningAgent] = useState<Agent | null>(null);
 
-  const [createForm, setCreateForm] = useState({ name: '', systemMsg: '', scope: 'GLOBAL', userId: '' });
+  const [createForm, setCreateForm] = useState({ name: '', systemMsg: '', scope: 'GLOBAL' });
   const [editForm, setEditForm] = useState({ name: '', systemMsg: '', scope: 'GLOBAL' });
-  const [assignForm, setAssignForm] = useState({ selectedUsers: [] as number[] });
   const [formError, setFormError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
   const [confirmandoEliminarAgente, setConfirmandoEliminarAgente] = useState<number | null>(null);
-  const [confirmandoQuitarAsignacion, setConfirmandoQuitarAsignacion] = useState<number | null>(null);
   const [docs, setDocs] = useState<DocumentacionAgente[]>([]);
   const [verDoc, setVerDoc] = useState<DocumentacionAgente | null>(null);
   const [verActividad, setVerActividad] = useState<Agent | null>(null);
@@ -84,43 +83,17 @@ export default function AgentsPage() {
 
   const loadData = () => {
     setLoading(true);
-    Promise.all([getAgentCatalog(), getAgentAssignments()])
-      .then(([c, a]) => { setCatalog(c); setAssignments(a); })
+    getAgentCatalog()
+      .then(setCatalog)
+      .catch(() => setCatalog([]))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { loadData(); }, []);
   useEffect(() => { getAgentDocs().then(setDocs).catch(() => setDocs([])); }, []);
 
-  // Los filtros de las asignaciones viven en la cabecera de cada columna; el buscador general mira usuario y agente.
-  const cf = useColumnFilters<AgentAssignment>(assignments, [
-    { key: 'usuario', etiqueta: 'Usuario', tipo: 'valores', getValues: (a) => ({ valor: String(a.user.id), etiqueta: a.user.fullName }) },
-    { key: 'agente', etiqueta: 'Agente', tipo: 'valores', getValues: (a) => ({ valor: String(a.agent.id), etiqueta: a.agent.name }) },
-    {
-      key: 'alcance', etiqueta: 'Alcance', tipo: 'valores',
-      orden: SCOPE_OPTIONS.map((o) => o.value),
-      getValues: (a) => ({ valor: a.agent.scope, etiqueta: a.agent.scope }),
-    },
-    { key: 'estado', etiqueta: 'Estado', tipo: 'valores', orden: ['1', '0'], getValues: (a) => ({ valor: a.agent.isActive ? '1' : '0', etiqueta: a.agent.isActive ? 'Activo' : 'Inactivo' }) },
-    { key: 'fecha', etiqueta: 'Fecha', tipo: 'fecha', getValue: (a) => a.createdAt },
-  ]);
-  const filteredAssignments = cf.filas.filter((a) => {
-    const q = busqueda.toLowerCase().trim();
-    if (!q) return true;
-    return a.agent.name.toLowerCase().includes(q) || a.user.fullName.toLowerCase().includes(q) || a.user.email.toLowerCase().includes(q);
-  });
-  const hayFiltros = !!busqueda || cf.hayFiltros;
-  const limpiarTodo = () => { setBusqueda(''); cf.limpiar(); };
-
-  const allUserOptions = (() => {
-    const seen = new Set<number>();
-    return assignments
-      .filter((a) => { if (seen.has(a.user.id)) return false; seen.add(a.user.id); return true; })
-      .map((a) => a.user);
-  })();
-
   function openCreateModal() {
-    setCreateForm({ name: '', systemMsg: '', scope: 'GLOBAL', userId: '' });
+    setCreateForm({ name: '', systemMsg: '', scope: 'GLOBAL' });
     setFormError('');
     setShowCreateModal(true);
   }
@@ -135,11 +108,12 @@ export default function AgentsPage() {
   async function handleCreate() {
     if (!createForm.name.trim()) { setFormError('El nombre es requerido'); return; }
     if (!createForm.systemMsg.trim()) { setFormError('El prompt del sistema es requerido'); return; }
-    if (!createForm.userId) { setFormError('Selecciona un usuario creador'); return; }
+    const yo = getUser();
+    if (!yo) { setFormError('Tu sesión expiró, vuelve a entrar.'); return; }
     setFormLoading(true); setFormError('');
     try {
       await createAgent({
-        userId: Number(createForm.userId),
+        userId: yo.id,
         name: createForm.name.trim(),
         systemMsg: createForm.systemMsg.trim(),
         scope: createForm.scope,
@@ -178,45 +152,6 @@ export default function AgentsPage() {
     try { await deleteAgent(id); loadData(); } catch {}
   }
 
-  async function handleAssign() {
-    if (!assigningAgent || assignForm.selectedUsers.length === 0) {
-      setFormError('Selecciona al menos un usuario');
-      return;
-    }
-    setFormLoading(true); setFormError('');
-    let successCount = 0;
-    let errorCount = 0;
-    for (const userId of assignForm.selectedUsers) {
-      try { await assignAgent(assigningAgent.id, userId); successCount++; } catch { errorCount++; }
-    }
-    setShowAssignModal(false);
-    loadData();
-    if (errorCount > 0) {
-      setFormError(`${successCount} asignada(s), ${errorCount} fallida(s)`);
-    }
-  }
-
-  function handleUnassign(assignmentId: number) {
-    setConfirmandoQuitarAsignacion(assignmentId);
-  }
-
-  async function confirmarQuitarAsignacion() {
-    if (confirmandoQuitarAsignacion === null) return;
-    const assignmentId = confirmandoQuitarAsignacion;
-    setConfirmandoQuitarAsignacion(null);
-    const a = assignments.find((x) => x.id === assignmentId);
-    if (a) { try { await unassignAgent(a.agent.id, a.user.id); loadData(); } catch {} }
-  }
-
-  function toggleAssignUser(userId: number) {
-    setAssignForm((prev) => ({
-      ...prev,
-      selectedUsers: prev.selectedUsers.includes(userId)
-        ? prev.selectedUsers.filter((id) => id !== userId)
-        : [...prev.selectedUsers, userId],
-    }));
-  }
-
   const previewItems = SCOPE_PREVIEW[editForm.scope] || SCOPE_PREVIEW.GLOBAL;
 
   return (
@@ -224,137 +159,77 @@ export default function AgentsPage() {
       <PageHeader
         eyebrow="Sistemas"
         title="Agentes de IA"
-        description="Qué agentes hay, a quién está asignado cada uno, qué se les ha preguntado, su prompt real y qué han hecho los que trabajan solos."
+        description="Qué agentes hay, quién los ve (quien tiene el módulo ve sus agentes), qué se les ha preguntado, su prompt real y qué han hecho los que trabajan solos."
         actions={
-          <>
-            <button className="btn-secondary" onClick={openCreateModal}>
-              + Nuevo agente
-            </button>
-            <button className="auth-btn" onClick={() => { setFormError(''); setShowAssignModal(true); setAssigningAgent(null); setAssignForm({ selectedUsers: [] }); }}>
-              + Asignar agente
-            </button>
-          </>
+          <button className="auth-btn" onClick={openCreateModal}>+ Nuevo agente</button>
         }
+      />
+
+      <PageTabs
+        label="Secciones de Agentes de IA"
+        value={pestana}
+        onChange={setPestana}
+        tabs={[
+          { key: 'agentes', label: `Agentes (${catalog.length})`, icon: Bot },
+          { key: 'preguntas', label: 'Historial de preguntas', icon: MessagesSquare },
+          { key: 'actividad', label: 'Actividad automática', icon: Activity, title: 'Lo que han hecho los agentes que trabajan solos' },
+        ]}
       />
 
       <div className="admin-section">
         {loading ? (
           <div className="loading-state">Cargando agentes...</div>
+        ) : pestana === 'preguntas' ? (
+          <HistorialPreguntasAgentes />
+        ) : pestana === 'actividad' ? (
+          <ActividadAgentes />
+        ) : catalog.length === 0 ? (
+          <div className="empty-state">No hay agentes creados</div>
         ) : (
-          <>
-            <div className="tools-section">
-              <h2 className="tools-section-title">Agentes ({catalog.length})</h2>
-              {catalog.length === 0 ? (
-                <div className="empty-state">No hay agentes creados</div>
-              ) : (
-                <div className="tools-catalog-grid">
-                  {catalog.map((agent) => (
-                    <div key={agent.id} className="tools-catalog-card">
-                      <div className="tools-catalog-header">
-                        <div className="tools-catalog-icon">🤖</div>
-                        <div className="tools-catalog-info">
-                          <div className="tools-catalog-name">{agent.name}</div>
-                          <span className="agent-scope-badge">{agent.scope}</span>
-                        </div>
-                        <div className="tools-actions-cell">
-                          <button className="btn-secondary icon-btn" onClick={() => setVerPromptDe(agent.id)} title="Ver el prompt real" aria-label="Ver el prompt real"><FileText size={14} /></button>
-                          {!ES_TRABAJADOR(agent.scope) && (
-                            <button className="btn-secondary icon-btn" onClick={() => setVerPreguntas(agent)} title="Qué le han preguntado" aria-label="Qué le han preguntado"><MessagesSquare size={14} /></button>
-                          )}
-                          {docs.some((d) => d.scope === agent.scope) && (
-                            <>
-                              <button className="btn-secondary icon-btn" onClick={() => setVerDoc(docs.find((d) => d.scope === agent.scope) ?? null)} title="Qué hace este agente" aria-label="Qué hace este agente"><BookOpen size={14} /></button>
-                              <button className="btn-secondary icon-btn" onClick={() => setVerActividad(agent)} title="Qué ha hecho este agente" aria-label="Qué ha hecho este agente"><Activity size={14} /></button>
-                            </>
-                          )}
-                          <button className="btn-secondary icon-btn" onClick={() => openEditModal(agent)} title="Editar" aria-label="Editar"><Pencil size={14} /></button>
-                          {!ES_TRABAJADOR(agent.scope) && (
-                            <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => handleDeleteAgent(agent.id)} title="Eliminar agente" aria-label="Eliminar agente"><Trash2 size={14} /></button>
-                          )}
-                        </div>
-                      </div>
-                      <div className="tools-catalog-meta">
-                        {ES_TRABAJADOR(agent.scope)
-                          ? `Trabaja solo, no conversa — ${agent.isActive ? 'Activo' : 'Inactivo'}`
-                          : `${agent._count.userLinks} asignacion(es) — ${agent.isActive ? 'Activo' : 'Inactivo'}`}
+          <div className="agentes-grid">
+            {catalog.map((agent) => {
+              const opcion = SCOPE_OPTIONS.find((o) => o.value === agent.scope);
+              const trabajador = ES_TRABAJADOR(agent.scope);
+              const doc = docs.find((d) => d.scope === agent.scope) ?? null;
+              return (
+                <div key={agent.id} className={`agente-card ${agent.isActive ? '' : 'inactivo'}`}>
+                  <div className="agente-card-top">
+                    <div className="agente-card-icono">🤖</div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div className="agente-card-nombre">{agent.name}</div>
+                      <div className="agente-card-chips">
+                        <span className="agent-scope-badge">{opcion?.label ?? agent.scope}</span>
+                        <span className={`agente-estado ${agent.isActive ? 'on' : 'off'}`}>{agent.isActive ? 'Activo' : 'Inactivo'}</span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="tools-section" style={{ marginTop: '32px' }}>
-              <h2 className="tools-section-title">Asignaciones ({filteredAssignments.length})</h2>
-              {assignments.length === 0 ? (
-                <div className="empty-state">No hay asignaciones registradas</div>
-              ) : (
-                <>
-                <div className="filter-bar">
-                  <div className="filter-bar-fields">
-                    <input type="text" placeholder="Buscar por agente o usuario..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="admin-search" />
                   </div>
-                  <div className="filter-bar-actions">
-                    <ClearFiltersButton onClear={limpiarTodo} disabled={!hayFiltros} />
+                  <p className="agente-card-desc">{opcion?.desc ?? 'Agente creado a mano.'}</p>
+                  <p className="agente-card-quien">
+                    <strong>Quién lo ve: </strong>
+                    {trabajador ? 'nadie lo usa en el chat: trabaja solo' : quienLoVe(agent)}
+                  </p>
+                  <div className="agente-card-ver">
+                    {!trabajador
+                      ? <button className="btn-secondary" onClick={() => setVerPreguntas(agent)} title="Qué le han preguntado"><MessagesSquare size={14} /> Preguntas</button>
+                      : <span />}
+                    {doc
+                      ? <button className="btn-secondary" onClick={() => setVerDoc(doc)} title="Qué hace este agente"><BookOpen size={14} /> Qué hace</button>
+                      : <span />}
+                    {doc
+                      ? <button className="btn-secondary" onClick={() => setVerActividad(agent)} title="Qué ha hecho este agente"><Activity size={14} /> Actividad</button>
+                      : <span />}
+                  </div>
+                  <div className="agente-card-gestion">
+                    <button type="button" className="agente-icono" onClick={() => setVerPromptDe(agent.id)} title="Ver el prompt real" aria-label="Ver el prompt real"><FileText size={16} /></button>
+                    <button type="button" className="agente-icono" onClick={() => openEditModal(agent)} title="Editar" aria-label="Editar"><Pencil size={16} /></button>
+                    {!trabajador && (
+                      <button type="button" className="agente-icono peligro" onClick={() => handleDeleteAgent(agent.id)} title="Eliminar agente" aria-label="Eliminar agente"><Trash2 size={16} /></button>
+                    )}
                   </div>
                 </div>
-                <ChipsFiltros cf={cf} />
-                <div className="tasks-table-wrapper">
-                  <table className="tasks-table">
-                    <thead>
-                      <tr>
-                        <th>Usuario<ColumnFilter cf={cf} col="usuario" orden={cf.ordenDe('usuario')} /></th>
-                        <th>Agente<ColumnFilter cf={cf} col="agente" orden={cf.ordenDe('agente')} /></th>
-                        <th>Alcance<ColumnFilter cf={cf} col="alcance" orden={cf.ordenDe('alcance')} /></th>
-                        <th>Estado<ColumnFilter cf={cf} col="estado" orden={cf.ordenDe('estado')} /></th>
-                        <th>Fecha<ColumnFilter cf={cf} col="fecha" orden={cf.ordenDe('fecha')} /></th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredAssignments.length === 0 && (
-                        <FilaSinResultados columnas={6} mensaje="No hay asignaciones que coincidan con los filtros." onLimpiar={hayFiltros ? limpiarTodo : undefined} />
-                      )}
-                      {filteredAssignments.map((a) => (
-                        <tr key={a.id}>
-                          <td>
-                            <div className="tasks-table-assignee-item">
-                              <span className="kanban-avatar">{a.user.fullName.charAt(0)}</span>
-                              {a.user.fullName}
-                            </div>
-                          </td>
-                          <td className="tasks-table-title">{a.agent.name}</td>
-                          <td><span className="agent-scope-badge">{a.agent.scope}</span></td>
-                          <td>
-                            <span className={`status-badge ${a.agent.isActive ? 'agent-active' : 'agent-inactive'}`}>
-                              {a.agent.isActive ? 'Activo' : 'Inactivo'}
-                            </span>
-                          </td>
-                          <td className="tasks-table-date">
-                            {new Date(a.createdAt).toLocaleDateString('es-EC')}
-                          </td>
-                          <td>
-                            <div className="tools-actions-cell">
-                              <button className="btn-secondary icon-btn" style={{ color: '#c53030' }} onClick={() => handleUnassign(a.id)} title="Quitar agente" aria-label="Quitar agente"><Trash2 size={14} /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                </>
-              )}
-            </div>
-            <div className="tools-section" style={{ marginTop: '32px' }}>
-              <h2 className="tools-section-title">Preguntas a los agentes</h2>
-              <HistorialPreguntasAgentes />
-            </div>
-            <div className="tools-section" style={{ marginTop: '32px' }}>
-              <h2 className="tools-section-title">Actividad de los agentes que trabajan solos</h2>
-              <ActividadAgentes />
-            </div>
-          </>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -370,15 +245,6 @@ export default function AgentsPage() {
               <div className="form-group">
                 <label>Nombre del agente *</label>
                 <input type="text" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} placeholder="Ej: Agente de Marketing" maxLength={100} />
-              </div>
-              <div className="form-group">
-                <label>Usuario creador *</label>
-                <select value={createForm.userId} onChange={(e) => setCreateForm({ ...createForm, userId: e.target.value })}>
-                  <option value="">Seleccionar usuario...</option>
-                  {allUserOptions.map((u) => (
-                    <option key={u.id} value={u.id}>{u.fullName} ({u.email})</option>
-                  ))}
-                </select>
               </div>
               <div className="form-group">
                 <label>Alcance</label>
@@ -493,52 +359,6 @@ export default function AgentsPage() {
         </div>
       )}
 
-      {showAssignModal && (
-        <div className="modal-overlay" onClick={() => setShowAssignModal(false)}>
-          <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{assigningAgent ? `Asignar agente — ${assigningAgent.name}` : 'Asignar agente'}</h3>
-              <button className="modal-close" onClick={() => setShowAssignModal(false)}>✕</button>
-            </div>
-            <div className="modal-body">
-              {formError && <div className="auth-error-banner">{formError}</div>}
-              {!assigningAgent && (
-                <div className="form-group">
-                  <label>Agente *</label>
-                  <select value="" onChange={(e) => { const ag = catalog.find((a) => a.id === Number(e.target.value)); if (ag) { setAssigningAgent(ag); setAssignForm({ selectedUsers: [] }); } }}>
-                    <option value="">Seleccionar agente...</option>
-                    {catalog.filter((a) => a.isActive && !ES_TRABAJADOR(a.scope)).map((a) => (
-                      <option key={a.id} value={a.id}>{a.name} ({a.scope})</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {assigningAgent && (
-                <>
-                  <div className="form-group">
-                    <label>Seleccionar usuarios *</label>
-                    <div className="tools-user-select-grid">
-                      {allUserOptions.map((u) => (
-                        <button key={u.id} type="button" className={`tools-user-select-chip ${assignForm.selectedUsers.includes(u.id) ? 'active' : ''}`} onClick={() => toggleAssignUser(u.id)}>
-                          <span className="assignee-chip-avatar">{u.fullName.charAt(0)}</span>
-                          <span className="tools-user-select-name">{u.fullName}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setShowAssignModal(false)}>Cancelar</button>
-              <button className="auth-btn" onClick={handleAssign} disabled={formLoading || !assigningAgent || assignForm.selectedUsers.length === 0}>
-                {formLoading ? 'Asignando...' : `Asignar a ${assignForm.selectedUsers.length} usuario(s)`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {confirmandoEliminarAgente !== null && (
         <ConfirmDialog
           title="Eliminar agente"
@@ -550,16 +370,6 @@ export default function AgentsPage() {
         />
       )}
 
-      {confirmandoQuitarAsignacion !== null && (
-        <ConfirmDialog
-          title="Quitar agente"
-          message="¿Quitar este agente del usuario?"
-          confirmLabel="Quitar"
-          danger
-          onConfirm={confirmarQuitarAsignacion}
-          onCancel={() => setConfirmandoQuitarAsignacion(null)}
-        />
-      )}
     </div>
   );
 }

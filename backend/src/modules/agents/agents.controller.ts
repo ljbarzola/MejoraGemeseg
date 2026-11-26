@@ -55,12 +55,14 @@ export class AgentsController {
   runsList(
     @Req() req: any,
     @Query('agentId') agentId?: string,
+    @Query('agentNombre') agentNombre?: string,
     @Query('exito') exito?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
     return this.runs.listar(req.user.companyId ?? null, {
       agentId: agentId ? parseInt(agentId, 10) || undefined : undefined,
+      agentNombre: agentNombre?.trim() || undefined,
       exito: exito === 'true' ? true : exito === 'false' ? false : undefined,
       limit: limit ? parseInt(limit, 10) || undefined : undefined,
       offset: offset ? parseInt(offset, 10) || undefined : undefined,
