@@ -147,6 +147,10 @@ const MarketingPage = lazy(() => import('./pages/marketing/MarketingPage'));
 const MarketingCampaniaPage = lazy(() => import('./pages/marketing/MarketingCampaniaPage'));
 const MarketingBibliotecaPage = lazy(() => import('./pages/marketing/MarketingBibliotecaPage'));
 const MarketingConfiguracionPage = lazy(() => import('./pages/marketing/MarketingConfiguracionPage'));
+const MarketingInicioPage = lazy(() => import('./pages/marketing/MarketingInicioPage'));
+const MarketingCalendarioPage = lazy(() => import('./pages/marketing/MarketingCalendarioPage'));
+const MarketingRadarPage = lazy(() => import('./pages/marketing/MarketingRadarPage'));
+const MarketingIntegracionesPage = lazy(() => import('./pages/marketing/MarketingIntegracionesPage'));
 
 // Redirección que conserva los parámetros de la ruta (":id" del destino se
 // llena con el ":id" de la URL vieja).
@@ -639,7 +643,11 @@ function AppInner() {
         <Route path="/sistemas/base-conocimiento" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><KnowledgeBasePage /></SectionRoute></ProtectedLayout>} />
         <Route path="/sistemas/soporte" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><SoporteTecnicoPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/sistemas/novedades" element={<ProtectedLayout><SectionRoute section="SISTEMAS"><NovedadesPage /></SectionRoute></ProtectedLayout>} />
-        <Route path="/marketing" element={<ProtectedLayout><SectionRoute section="MARKETING"><MarketingPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/marketing" element={<ProtectedLayout><SectionRoute section="MARKETING"><MarketingInicioPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/marketing/campanias" element={<ProtectedLayout><SectionRoute section="MARKETING"><MarketingPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/marketing/calendario" element={<ProtectedLayout><SectionRoute section="MARKETING"><MarketingCalendarioPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/marketing/radar" element={<ProtectedLayout><SectionRoute section="MARKETING"><MarketingRadarPage /></SectionRoute></ProtectedLayout>} />
+        <Route path="/marketing/integraciones" element={<ProtectedLayout><SectionRoute section="MARKETING"><MarketingIntegracionesPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/marketing/campanias/:id" element={<ProtectedLayout><SectionRoute section="MARKETING"><MarketingCampaniaPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/marketing/biblioteca" element={<ProtectedLayout><SectionRoute section="MARKETING"><MarketingBibliotecaPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/marketing/configuracion" element={<ProtectedLayout><SectionRoute section="MARKETING"><MarketingConfiguracionPage /></SectionRoute></ProtectedLayout>} />

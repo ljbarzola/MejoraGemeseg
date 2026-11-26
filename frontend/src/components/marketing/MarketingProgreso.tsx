@@ -15,14 +15,22 @@ export default function MarketingProgreso({
 }) {
   return (
     <div className="admin-section" style={{ padding: 14, marginBottom: 14 }} aria-live="polite">
-      <p style={{ margin: '0 0 10px', fontWeight: 600, fontSize: '0.9rem', color: '#1f4e79' }}>
-        <span className="loading-state" style={{ display: 'inline-block', width: 12, height: 12, borderRadius: '50%', background: '#2e74b5', marginRight: 8 }} />
+      <p className="marketing-progreso-titulo">
+        <span className="marketing-progreso-punto" />
         {texto || `Paso ${paso + 1} de ${PASOS.length}: ${PASOS[paso]}`}
       </p>
       {!texto && (
         <>
           {PASOS.map((nombre, i) => (
-            <div key={nombre} style={{ fontSize: '0.82rem', marginBottom: 6, color: i < paso ? '#2f855a' : i === paso ? '#1f4e79' : '#a0aec0', fontWeight: i === paso ? 600 : 400 }}>
+            <div
+              key={nombre}
+              style={{
+                fontSize: '0.82rem',
+                marginBottom: 6,
+                color: i < paso ? '#2f855a' : i === paso ? 'var(--azul-oscuro)' : '#a0aec0',
+                fontWeight: i === paso ? 600 : 400,
+              }}
+            >
               {i < paso ? '✓' : i === paso ? '→' : '○'} {nombre}
             </div>
           ))}

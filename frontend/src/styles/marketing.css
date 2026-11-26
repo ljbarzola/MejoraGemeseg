@@ -1,8 +1,11 @@
-/* Marketing: una sola voz visual para las cuatro pantallas del módulo.
-   Sin sombras ni tarjetas repetidas: secciones con regla izquierda, como un brief impreso. */
+/* Marketing: una sola voz visual para las pantallas del módulo.
+   Sin sombras ni tarjetas repetidas: secciones con regla izquierda, como un brief impreso.
+   Los colores de marca salen de las variables de la empresa (--azul-oscuro = principal,
+   --azul-claro = secundario, --naranja = acento): nada de azules fijos, porque cada empresa
+   pone los suyos (línea blanca). */
 
 .marketing-plan-section {
-  border-left: 3px solid #2e74b5;
+  border-left: 3px solid var(--azul-claro);
   padding: 2px 0 2px 14px;
   margin: 0 0 18px;
 }
@@ -10,7 +13,7 @@
 .marketing-plan-section h4 {
   margin: 0 0 6px;
   font-size: 0.86rem;
-  color: #1f4e79;
+  color: var(--azul-oscuro);
 }
 
 .marketing-plan-section p,
@@ -38,6 +41,127 @@
   opacity: 0.6;
 }
 
+.marketing-pieza-cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.marketing-pieza-cabecera strong {
+  font-size: 0.9rem;
+  color: #1a202c;
+}
+
+.marketing-pieza-cabecera span.marketing-pieza-canal {
+  color: #718096;
+  font-weight: 500;
+}
+
+.marketing-pieza textarea {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  box-sizing: border-box;
+}
+
+.marketing-pieza-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.marketing-pieza-acciones .btn-secondary {
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  border-radius: 10px;
+}
+
+.marketing-guardado {
+  font-size: 0.78rem;
+  color: #2f855a;
+  font-weight: 600;
+}
+
+/* Etiquetas elegibles (objetivos, ejemplos de qué pedir): con borde, para que se vean como botones
+   y no como texto suelto; la elegida se rellena con el color principal de la empresa. */
+.marketing-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.marketing-chip {
+  padding: 7px 14px;
+  border: 1px solid #cbd5e0;
+  border-radius: 999px;
+  background: #fff;
+  color: #475569;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.marketing-chip:hover:not(:disabled) {
+  border-color: var(--azul-claro);
+  color: var(--azul-oscuro);
+}
+
+.marketing-chip[aria-pressed='true'] {
+  background: var(--azul-oscuro);
+  border-color: var(--azul-oscuro);
+  color: #fff;
+}
+
+.marketing-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Insignias de estado (se apoyan en .status-badge). */
+.marketing-estado--borrador {
+  background: #edf2f7;
+  color: #4a5568;
+}
+
+.marketing-estado--aprobada {
+  background: #c6f6d5;
+  color: #276749;
+}
+
+.marketing-estado--pendiente {
+  background: #fefcbf;
+  color: #975a16;
+}
+
+.marketing-estado--descartada {
+  background: #e2e8f0;
+  color: #718096;
+}
+
+/* Texto de los cuadros de confirmación: lista corta de lo que va a pasar. */
+.marketing-confirmar {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.6;
+  text-align: left;
+}
+
+.marketing-confirmar li + li {
+  margin-top: 4px;
+}
+
+.marketing-campo-ayuda {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  color: #718096;
+}
+
 .marketing-stepper {
   display: flex;
   flex-wrap: wrap;
@@ -54,15 +178,16 @@
   border-radius: 999px;
   background: #fff;
   color: #64748b;
+  font-family: inherit;
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
 }
 
 .marketing-stepper button.activo {
-  border-color: #2e74b5;
-  color: #1f4e79;
-  background: #eff6ff;
+  border-color: var(--azul-claro);
+  color: var(--azul-oscuro);
+  background: color-mix(in srgb, var(--azul-claro) 10%, #fff);
 }
 
 .marketing-stepper button .numero {
@@ -77,7 +202,7 @@
 }
 
 .marketing-stepper button.activo .numero {
-  background: #2e74b5;
+  background: var(--azul-claro);
   color: #fff;
 }
 
@@ -95,9 +220,542 @@
   margin: 0 0 14px 18px;
 }
 
+.marketing-progreso-titulo {
+  margin: 0 0 10px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--azul-oscuro);
+}
+
+.marketing-progreso-punto {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--azul-claro);
+}
+
+.marketing-exito {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background: #f0fff4;
+  border: 1px solid #c6f6d5;
+  border-radius: 10px;
+  color: #276749;
+  font-weight: 600;
+  font-size: 13px;
+}
+
 @media (max-width: 768px) {
   .marketing-stepper button {
     font-size: 0.75rem;
     padding: 6px 9px;
   }
 }
+
+/* Botón de texto dentro de una fila de tabla (junto al «⋯»): compacto y en una sola línea.
+   El .btn-secondary base mide 14×24 px y partía «Ver plan» en dos renglones. */
+.marketing-fila-boton {
+  padding: 5px 12px;
+  font-size: 0.82rem;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+/* Extracto del texto de una pieza en la Biblioteca: una línea, con puntos suspensivos. */
+.marketing-extracto {
+  margin-top: 2px;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+/* Calendario por semanas: una columna por semana, se desplaza de lado si no caben. */
+.marketing-calendario-resumen {
+  margin: 0 0 14px;
+  font-size: 0.86rem;
+  color: #475569;
+}
+.marketing-calendario {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(210px, 1fr);
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.marketing-calendario-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.marketing-calendario-cabecera {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--azul-oscuro);
+  padding: 6px 10px;
+  border-bottom: 2px solid var(--azul-claro);
+}
+.marketing-calendario-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid var(--azul-claro);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 0.85rem;
+}
+.marketing-calendario-dia {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+.marketing-calendario-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+.marketing-calendario-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Medición: indicador principal destacado y secundarios en tarjetas con su explicación. */
+.marketing-kpi-principal {
+  display: flex;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid var(--azul-oscuro);
+  border-radius: 12px;
+  background: #f8fafc;
+  margin-bottom: 20px;
+}
+.marketing-kpi-icono {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--azul-oscuro);
+  color: #fff;
+}
+.marketing-kpi-etiqueta {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+.marketing-kpi-principal h4 {
+  margin: 2px 0 6px;
+  font-size: 1.15rem;
+  color: var(--azul-oscuro);
+}
+.marketing-kpi-principal p {
+  margin: 0 0 4px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: #475569;
+}
+.marketing-kpi-titulo {
+  margin: 0 0 10px;
+  font-size: 0.86rem;
+  color: var(--azul-oscuro);
+}
+.marketing-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.marketing-kpi-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fff;
+}
+.marketing-kpi-card-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: var(--azul-oscuro);
+}
+.marketing-kpi-card p {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #475569;
+}
+.marketing-kpi-card p span {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+.marketing-kpi-valor {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+/* Entrevista previa al plan. */
+.marketing-entrevista-paso {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+.marketing-entrevista-pregunta {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--azul-oscuro);
+}
+.marketing-entrevista-barra {
+  height: 4px;
+  border-radius: 4px;
+  background: #e2e8f0;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.marketing-entrevista-barra > span {
+  display: block;
+  height: 100%;
+  background: var(--azul-claro);
+  transition: width 0.25s ease;
+}
+.marketing-aviso-bloqueo {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.85rem;
+}
+
+/* Botón de estado de la campaña: «Aprobar todo» y «Quitar aprobación» ocupan el mismo sitio y ancho. */
+.marketing-boton-estado {
+  min-width: 160px;
+  justify-content: center;
+}
+
+/* Origen del dato de una pieza. */
+.marketing-origen {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e0;
+  color: #475569;
+  background: #f8fafc;
+  white-space: nowrap;
+}
+.marketing-origen--dato_interno { border-color: #9ae6b4; color: #276749; background: #f0fff4; }
+.marketing-origen--fuente_externa { border-color: #bee3f8; color: #2b6cb0; background: #ebf8ff; }
+
+/* Imagen o video generado dentro de la pieza. */
+.marketing-archivo {
+  margin: 8px 0 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.marketing-archivo img,
+.marketing-archivo video {
+  max-width: min(100%, 520px);
+  max-height: 320px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #0f172a;
+}
+.marketing-archivo--espera,
+.marketing-archivo--error {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+.marketing-archivo--espera { background: #f1f5f9; color: #475569; }
+.marketing-archivo--error { background: #fff5f5; color: #c53030; border: 1px solid #fed7d7; }
+.marketing-archivo-descarga {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 0.82rem;
+  border-radius: 10px;
+  text-decoration: none;
+}
+.marketing-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #cbd5e0;
+  border-top-color: var(--azul-oscuro);
+  border-radius: 50%;
+  animation: marketing-giro 0.9s linear infinite;
+}
+@keyframes marketing-giro { to { transform: rotate(360deg); } }
+
+/* ── Asistente de campaña (pasos, canales, reparto) ── */
+.marketing-pasos {
+  display: flex;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 10px 20px 0;
+  flex-wrap: wrap;
+}
+.marketing-pasos li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #94a3b8;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  background: #f1f5f9;
+}
+.marketing-pasos li span {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #64748b;
+  font-size: 0.72rem;
+}
+.marketing-pasos li.activo { color: var(--azul-oscuro); background: #e8eef7; }
+.marketing-pasos li.activo span { background: var(--azul-oscuro); color: #fff; }
+.marketing-pasos li.hecho span { background: #2f855a; color: #fff; }
+.marketing-nota { font-size: 0.82rem; color: #64748b; margin: 0; }
+.marketing-ia-nota {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  color: #4c1d95;
+  font-size: 0.85rem;
+  margin-bottom: 10px;
+}
+.marketing-ia-nota svg { flex-shrink: 0; margin-top: 2px; }
+.marketing-canales-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin: 10px 0 14px;
+}
+.marketing-canal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.marketing-canal-card:hover { border-color: var(--canal, var(--azul-claro)); }
+.marketing-canal-card.activo {
+  border-color: var(--canal, var(--azul-oscuro));
+  box-shadow: inset 0 0 0 1px var(--canal, var(--azul-oscuro));
+  background: #fafcff;
+}
+.marketing-canal-card-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.marketing-canal-card-top strong { font-size: 0.86rem; color: #1e293b; }
+.marketing-canal-icono { font-size: 1.1rem; }
+.marketing-canal-card-texto { font-size: 0.78rem; color: #64748b; line-height: 1.4; }
+.marketing-canal-tag {
+  align-self: flex-start;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.marketing-prioridad {
+  margin-left: auto;
+  font-size: 0.68rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: #ede9fe;
+  color: #5b21b6;
+}
+.marketing-bloque {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-top: 6px;
+}
+.marketing-fila-input { display: flex; gap: 8px; }
+.marketing-fila-input input { flex: 1; min-width: 0; }
+.marketing-fila-input .btn-secondary { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.marketing-chip--fijo { display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+.marketing-chip--fijo button { border: 0; background: none; cursor: pointer; padding: 0; display: inline-flex; color: inherit; }
+.marketing-dos-columnas { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 640px) { .marketing-dos-columnas { grid-template-columns: 1fr; } }
+.marketing-reparto { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.marketing-reparto li {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.2fr) 2fr minmax(90px, auto);
+  gap: 10px;
+  align-items: center;
+  font-size: 0.82rem;
+  color: #334155;
+}
+.marketing-reparto-barra { height: 8px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+.marketing-reparto-barra span { display: block; height: 100%; border-radius: 999px; }
+
+/* ── Vista previa de cada pieza como se verá en su canal ── */
+.marketing-estudio { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 18px; }
+@media (max-width: 900px) { .marketing-estudio { grid-template-columns: 1fr; } }
+.marketing-preview {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+  font-size: 0.82rem;
+  color: #1e293b;
+  align-self: start;
+}
+.marketing-preview-cabecera { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
+.marketing-preview-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--azul-oscuro);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+.marketing-preview-cabecera small { display: block; color: #64748b; font-size: 0.72rem; }
+.marketing-preview-media {
+  background: #f1f5f9;
+  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
+  color: #94a3b8;
+  text-align: center;
+  padding: 0;
+}
+.marketing-preview-media img,
+.marketing-preview-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.marketing-preview-media .btn-secondary { margin-top: 8px; }
+.marketing-preview-texto { padding: 10px 12px; white-space: pre-wrap; line-height: 1.45; max-height: 160px; overflow: auto; }
+.marketing-preview--google .marketing-preview-texto { color: #1a0dab; }
+.marketing-preview-google { padding: 12px; }
+.marketing-preview-google small { color: #202124; font-weight: 600; }
+.marketing-preview-google h5 { margin: 4px 0; color: #1a0dab; font-size: 1rem; font-weight: 500; }
+.marketing-preview-google p { margin: 0; color: #4d5156; white-space: pre-wrap; max-height: 140px; overflow: auto; }
+.marketing-preview--whatsapp { background: #e5ddd5; }
+.marketing-preview-burbuja {
+  margin: 12px;
+  padding: 8px 10px;
+  background: #dcf8c6;
+  border-radius: 10px 10px 2px 10px;
+  white-space: pre-wrap;
+  line-height: 1.45;
+  max-height: 220px;
+  overflow: auto;
+}
+.marketing-preview-burbuja img { width: 100%; border-radius: 8px; margin-bottom: 6px; display: block; }
+.marketing-preview-pie { display: flex; justify-content: space-between; padding: 8px 12px; border-top: 1px solid #f1f5f9; color: #64748b; font-size: 0.74rem; }
+.marketing-boton-ia { display: inline-flex; align-items: center; gap: 6px; }
+.marketing-feedback-historial { margin: 6px 0 0; padding-left: 18px; font-size: 0.78rem; color: #64748b; }
+
+/* ── Inicio (dashboard) ── */
+.marketing-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.marketing-kpi {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+.marketing-kpi span { display: block; font-size: 0.76rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.02em; }
+.marketing-kpi strong { display: block; font-size: 1.7rem; color: var(--azul-oscuro); margin: 4px 0 2px; }
+.marketing-kpi small { color: #64748b; font-size: 0.78rem; }
+/* minmax(0, …): sin esto, una línea larga sin cortes (próximas publicaciones) estira la columna y la página se desborda. */
+.marketing-inicio-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.marketing-inicio-grid > * { min-width: 0; }
+@media (max-width: 1100px) { .marketing-inicio-grid { grid-template-columns: 1fr; } }
+.marketing-panel { border: 1px solid #e2e8f0; background: #fff; border-radius: 14px; padding: 16px 18px; margin-bottom: 16px; }
+.marketing-panel-titulo { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.marketing-panel-titulo h3 { margin: 0; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px; }
+.marketing-propuesta {
+  border: 1px solid #ddd6fe;
+  background: linear-gradient(180deg, #faf5ff 0%, #fff 70%);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.marketing-propuesta h4 { margin: 0 0 4px; font-size: 0.95rem; color: #1e293b; }
+.marketing-propuesta p { margin: 0 0 8px; font-size: 0.84rem; color: #475569; line-height: 1.45; }
+.marketing-senal { display: inline-block; font-size: 0.72rem; font-weight: 700; color: #5b21b6; background: #ede9fe; border-radius: 999px; padding: 2px 9px; margin-bottom: 6px; }
+.marketing-propuesta-pie { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.marketing-canal-mini { font-size: 0.74rem; padding: 2px 8px; border-radius: 999px; background: #f1f5f9; color: #334155; }
+.marketing-propuesta-pie .acciones { margin-left: auto; display: flex; gap: 8px; }
+.marketing-embudo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.marketing-embudo div { text-align: center; padding: 10px 6px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; }
+.marketing-embudo strong { display: block; font-size: 1.35rem; color: var(--azul-oscuro); }
+.marketing-embudo span { font-size: 0.75rem; color: #64748b; }
+.marketing-barras { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.marketing-barras li { display: grid; grid-template-columns: 110px 1fr 36px; gap: 8px; align-items: center; font-size: 0.8rem; color: #334155; }
+.marketing-lista-simple { list-style: none; margin: 0; padding: 0; }
+.marketing-lista-simple li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.84rem; cursor: pointer; }
+.marketing-lista-simple li:last-child { border-bottom: 0; }
+.marketing-lista-simple time { min-width: 76px; font-weight: 700; color: var(--azul-oscuro); font-size: 0.78rem; }
+.marketing-lista-simple .texto { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.marketing-conexion-fila { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 0.84rem; }
+.marketing-estado--demo { background: #ede9fe; color: #5b21b6; }
+.marketing-hero {
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  color: #fff;
+  background: linear-gradient(120deg, var(--azul-oscuro) 0%, var(--azul-claro) 100%);
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.marketing-hero h2 { margin: 0 0 4px; font-size: 1.15rem; color: #fff; }
+.marketing-hero p { margin: 0; opacity: 0.9; font-size: 0.88rem; max-width: 720px; }
+.marketing-hero .auth-btn { background: #fff; color: var(--azul-oscuro); }

@@ -1,31 +1,37 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, X, HelpCircle } from 'lucide-react';
+﻿import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { HelpCircle } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
+import ColumnPickerMenu from '../../components/common/ColumnPickerMenu';
+import ExportTableButton from '../../components/common/ExportTableButton';
+import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import RowActionsMenu from '../../components/common/RowActionsMenu';
 import ErrorAviso from '../../components/marketing/ErrorAviso';
+import EstadoMarketing from '../../components/marketing/EstadoMarketing';
 import MarketingAyuda from '../../components/marketing/MarketingAyuda';
-import MarketingProgreso from '../../components/marketing/MarketingProgreso';
+import NuevaCampaniaModal from '../../components/marketing/NuevaCampaniaModal';
+import { estadoMarketing, fechaMarketing } from '../../components/marketing/marketingEtiquetas';
 import { useColumnFilters } from '../../hooks/useColumnFilters';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { useSortableTable } from '../../hooks/useSortableTable';
-import {
-  aprobarCampania,
-  crearCampania,
-  listarCampanias,
-} from '../../services/marketing.service';
-import type { MarketingCampaniaDetalle, MarketingCampaniaResumen } from '../../types/marketing';
+import { aprobarCampania, eliminarCampania, listarCampanias } from '../../services/marketing.service';
+import type { MarketingCampaniaResumen } from '../../types/marketing';
 import '../../styles/marketing.css';
 
-const OBJETIVOS = [
-  'Dar a conocer un servicio',
-  'Generar contactos',
-  'Reactivar clientes',
-  'Promocionar una oferta',
+// «Campaña» es la columna fija; las demás las elige cada persona con «Columnas».
+const COLUMNAS = [
+  { key: 'estado', label: 'Estado' },
+  { key: 'piezas', label: 'Piezas aprobadas' },
+  { key: 'fecha', label: 'Creada' },
 ];
+const COLUMNAS_POR_DEFECTO = COLUMNAS.map((c) => c.key);
+const COLUMNAS_EXPORTAR = [{ key: 'nombre', label: 'Campaña' }, { key: 'idea', label: 'Lo que se pidió' }, { key: 'objetivo', label: 'Objetivo' }, ...COLUMNAS];
+
+// El nombre corto lo pone la IA; las campañas viejas sin nombre muestran la idea.
+const nombreDe = (c: MarketingCampaniaResumen) => c.nombre || c.idea;
 
 export default function MarketingPage() {
   const navigate = useNavigate();
@@ -33,21 +39,32 @@ export default function MarketingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [nueva, setNueva] = useState<{ idea: string; objetivo: string } | null>(null);
+  const [eliminando, setEliminando] = useState<MarketingCampaniaResumen | null>(null);
   const [ayuda, setAyuda] = useState(false);
+  const [params, setParams] = useSearchParams();
+
+  // Otras pantallas (radar, calendario) abren el asistente con «?nueva=1&idea=...».
+  useEffect(() => {
+    if (params.get('nueva') !== '1') return;
+    setNueva({ idea: params.get('idea') || '', objetivo: '' });
+    setParams({}, { replace: true });
+  }, [params, setParams]);
 
   const tablaRef = useResizableColumns('marketing-campanias');
+  const columnPrefs = useColumnPreferences('marketing-campanias', COLUMNAS_POR_DEFECTO);
+  const visibles = columnPrefs.visible.filter((k) => COLUMNAS.some((c) => c.key === k));
   const cf = useColumnFilters<MarketingCampaniaResumen>(campanias, [
-    { key: 'idea', etiqueta: 'Campaña', tipo: 'texto', getValue: (c) => `${c.idea} ${c.objetivo || ''}` },
-    { key: 'estado', etiqueta: 'Estado', tipo: 'texto', getValue: (c) => c.estado },
-    { key: 'piezas', etiqueta: 'Piezas', tipo: 'numero', getValue: (c) => c.piezas, formato: (n) => String(n) },
-    { key: 'fecha', etiqueta: 'Fecha', tipo: 'fecha', getValue: (c) => c.createdAt },
+    { key: 'nombre', etiqueta: 'Campaña', tipo: 'texto', getValue: (c) => `${nombreDe(c)} ${c.idea} ${c.objetivo || ''}` },
+    { key: 'estado', etiqueta: 'Estado', tipo: 'texto', getValue: (c) => estadoMarketing(c.estado).texto },
+    { key: 'piezas', etiqueta: 'Piezas aprobadas', tipo: 'numero', getValue: (c) => c.aprobadas, formato: (n) => String(n) },
+    { key: 'fecha', etiqueta: 'Creada', tipo: 'fecha', getValue: (c) => c.createdAt },
   ]);
   const { filas, thProps, ordenDe } = useSortableTable(
     cf.filas,
     {
-      idea: (c) => c.idea,
-      estado: (c) => c.estado,
-      piezas: (c) => c.piezas,
+      nombre: (c) => nombreDe(c),
+      estado: (c) => estadoMarketing(c.estado).texto,
+      piezas: (c) => c.aprobadas,
       fecha: (c) => new Date(c.createdAt).getTime(),
     },
     'fecha',
@@ -68,18 +85,20 @@ export default function MarketingPage() {
       <PageHeader
         eyebrow="Marketing"
         title="Campañas"
-        description="Escribe una idea y el agente arma el plan completo. Todo queda en borradores hasta que una persona apruebe."
+        description="Cada campaña tiene su plan, sus piezas para cada canal, su calendario y su publicación. Todo queda en borrador hasta que una persona apruebe."
         actions={
           <>
-            <button className="btn-secondary" onClick={() => setAyuda(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <HelpCircle size={16} /> Cómo funciona
-            </button>
             <button
-              className="auth-btn"
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              onClick={() => setNueva({ idea: '', objetivo: '' })}
+              type="button"
+              className="btn-secondary btn-icon-toolbar"
+              onClick={() => setAyuda(true)}
+              title="Cómo funciona Marketing"
+              aria-label="Cómo funciona Marketing"
             >
-              <Plus size={16} /> + Nueva campaña
+              <HelpCircle size={18} />
+            </button>
+            <button className="auth-btn" onClick={() => setNueva({ idea: '', objetivo: '' })}>
+              + Nueva campaña
             </button>
           </>
         }
@@ -97,44 +116,80 @@ export default function MarketingPage() {
           <div className="filter-bar">
             <div className="filter-bar-fields" />
             <div className="filter-bar-actions">
+              <ColumnPickerMenu
+                columns={COLUMNAS}
+                visible={columnPrefs.visible}
+                pinned={columnPrefs.pinned}
+                maxPinned={columnPrefs.maxPinned}
+                fixedLabel="Campaña"
+                onApply={(keys, fijas) => columnPrefs.set(keys, fijas)}
+              />
               <ClearFiltersButton onClear={cf.limpiar} disabled={!cf.hayFiltros} />
+              <ExportTableButton
+                titulo="Campañas de marketing"
+                columns={COLUMNAS_EXPORTAR}
+                defaultKeys={['nombre', ...visibles]}
+                rows={filas}
+                getValue={(c, key) => {
+                  switch (key) {
+                    case 'nombre': return nombreDe(c);
+                    case 'idea': return c.idea;
+                    case 'objetivo': return c.objetivo || '';
+                    case 'estado': return estadoMarketing(c.estado).texto;
+                    case 'piezas': return `${c.aprobadas} de ${c.piezas}`;
+                    default: return fechaMarketing(c.createdAt);
+                  }
+                }}
+              />
             </div>
           </div>
           <ChipsFiltros cf={cf} />
           <div className="admin-section">
             <div className="tasks-table-wrapper">
-              <table className="tasks-table resizable-table" ref={tablaRef}>
+              <table className="tasks-table resizable-table" ref={tablaRef} data-fijas={columnPrefs.fijas}>
                 <thead>
                   <tr>
-                    <th {...thProps('idea')}>Campaña <ColumnFilter cf={cf} col="idea" orden={ordenDe('idea')} /></th>
-                    <th {...thProps('estado')}>Estado <ColumnFilter cf={cf} col="estado" orden={ordenDe('estado')} /></th>
-                    <th {...thProps('piezas')}>Piezas <ColumnFilter cf={cf} col="piezas" orden={ordenDe('piezas')} /></th>
-                    <th {...thProps('fecha')}>Fecha <ColumnFilter cf={cf} col="fecha" orden={ordenDe('fecha')} /></th>
-                    <th>Acciones</th>
+                    <th {...thProps('nombre')}>Campaña <ColumnFilter cf={cf} col="nombre" orden={ordenDe('nombre')} /></th>
+                    {visibles.map((k) => (
+                      <th key={k} {...thProps(k)}>
+                        {COLUMNAS.find((c) => c.key === k)!.label} <ColumnFilter cf={cf} col={k} orden={ordenDe(k)} />
+                      </th>
+                    ))}
+                    <th className="col-acciones col-acciones--ancha"><span className="visually-hidden">Acciones</span></th>
                   </tr>
                 </thead>
                 <tbody>
                   {filas.length === 0 && (
-                    <FilaSinResultados columnas={5} mensaje="No hay campañas que coincidan con los filtros." onLimpiar={cf.limpiar} />
+                    <FilaSinResultados columnas={2 + visibles.length} mensaje="No hay campañas que coincidan con los filtros." onLimpiar={cf.limpiar} />
                   )}
                   {filas.map((c) => (
                     <tr key={c.id}>
-                      <td>
-                        <strong>{c.idea}</strong>
+                      <td title={c.idea}>
+                        <strong>{nombreDe(c)}</strong>
                         {c.objetivo && <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{c.objetivo}</div>}
                       </td>
-                      <td>{c.estado === 'APROBADA' ? 'Aprobada' : 'En borrador'}</td>
-                      <td>{c.aprobadas}/{c.piezas}</td>
-                      <td>{new Date(c.createdAt).toLocaleString('es-EC')}</td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <button className="btn-secondary" onClick={() => navigate(`/marketing/campanias/${c.id}`)}>Ver plan</button>
+                      {visibles.map((k) => (
+                        <td key={k}>
+                          {k === 'estado' ? <EstadoMarketing estado={c.estado} />
+                            : k === 'piezas' ? `${c.aprobadas} de ${c.piezas}`
+                            : fechaMarketing(c.createdAt)}
+                        </td>
+                      ))}
+                      <td className="col-acciones col-acciones--ancha">
+                        <div className="acciones-iconos" style={{ justifyContent: 'flex-end' }}>
+                          <button className="btn-secondary marketing-fila-boton" onClick={() => navigate(`/marketing/campanias/${c.id}`)}>Ver plan</button>
                           <RowActionsMenu
                             actions={[
                               {
                                 label: 'Duplicar idea',
                                 hint: 'Armar otra campaña con la misma idea.',
                                 onClick: () => setNueva({ idea: c.idea, objetivo: c.objetivo || '' }),
+                              },
+                              {
+                                label: 'Eliminar campaña',
+                                hint: 'Borra la campaña, sus piezas y los archivos generados.',
+                                danger: true,
+                                onClick: () => setEliminando(c),
                               },
                               {
                                 label: 'Aprobar todo',
@@ -159,6 +214,27 @@ export default function MarketingPage() {
         </>
       )}
 
+      {eliminando && (
+        <ConfirmDialog
+          title="Eliminar campaña"
+          confirmLabel="Eliminar"
+          danger
+          message={
+            <ul className="marketing-confirmar">
+              <li>Se borra «{nombreDe(eliminando)}» con su plan, sus piezas y las imágenes o videos generados.</li>
+              <li>No se puede deshacer.</li>
+            </ul>
+          }
+          onConfirm={() => {
+            const c = eliminando;
+            setEliminando(null);
+            eliminarCampania(c.id).then(load).catch((err: any) => {
+              setError(err.response?.data?.message || 'No se pudo eliminar la campaña.');
+            });
+          }}
+          onCancel={() => setEliminando(null)}
+        />
+      )}
       {nueva && (
         <NuevaCampaniaModal
           inicial={nueva}
@@ -175,120 +251,3 @@ export default function MarketingPage() {
   );
 }
 
-function NuevaCampaniaModal({
-  inicial,
-  onClose,
-  onCreada,
-}: {
-  inicial: { idea: string; objetivo: string };
-  onClose: () => void;
-  onCreada: (detalle: MarketingCampaniaDetalle) => void;
-}) {
-  const [idea, setIdea] = useState(inicial.idea);
-  const [objetivo, setObjetivo] = useState(inicial.objetivo);
-  const [generando, setGenerando] = useState(false);
-  const [pasoGeneracion, setPasoGeneracion] = useState(0);
-  const [confirmando, setConfirmando] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (!generando) {
-      setPasoGeneracion(0);
-      return;
-    }
-    const temporizador = setInterval(() => {
-      setPasoGeneracion((paso) => Math.min(paso + 1, 3));
-    }, 9000);
-    return () => clearInterval(temporizador);
-  }, [generando]);
-
-  const pedirArmar = () => {
-    if (idea.trim().length < 4) {
-      setError('Escribe la idea con al menos 4 caracteres.');
-      return;
-    }
-    setError('');
-    setConfirmando(true);
-  };
-
-  const armar = async () => {
-    setGenerando(true);
-    setError('');
-    try {
-      const detalle = await crearCampania(idea.trim(), objetivo.trim() || undefined);
-      onCreada(detalle);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'No se pudo armar el plan.');
-    } finally {
-      setGenerando(false);
-    }
-  };
-
-  return (
-    <>
-      <div className="modal-overlay" onClick={onClose}>
-        <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '620px' }}>
-          <div className="modal-header">
-            <h3>Nueva campaña</h3>
-          <button className="modal-close" onClick={onClose}><X size={16} /></button>
-        </div>
-        <div className="modal-body">
-          <ErrorAviso mensaje={error} />
-          {generando && <MarketingProgreso paso={pasoGeneracion} />}
-          <label style={{ display: 'block', marginBottom: '12px', fontSize: '0.85rem', fontWeight: 600 }}>
-            ¿Qué quieres promocionar?
-            <textarea
-              rows={3}
-              value={idea}
-              maxLength={1000}
-              disabled={generando}
-              onChange={(e) => setIdea(e.target.value)}
-              placeholder="Ej. Promocionar nuestros servicios de monitoreo"
-              style={{ display: 'block', width: '100%', marginTop: '6px', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', boxSizing: 'border-box', resize: 'vertical' }}
-            />
-          </label>
-          <div style={{ marginBottom: '14px' }}>
-            <p style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '8px' }}>Objetivo (opcional)</p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {OBJETIVOS.map((o) => (
-                <button
-                  key={o}
-                  className={objetivo === o ? 'auth-btn' : 'btn-secondary'}
-                  disabled={generando}
-                  onClick={() => setObjetivo(objetivo === o ? '' : o)}
-                  style={{ padding: '7px 10px', fontSize: '0.8rem' }}
-                >
-                  {o}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="modal-footer">
-          <button className="btn-secondary" onClick={onClose}>Cancelar</button>
-          <button className="auth-btn" onClick={pedirArmar} disabled={generando}>
-            {generando ? 'Armando plan...' : 'Armar plan'}
-          </button>
-        </div>
-      </div>
-    </div>
-    {confirmando && (
-      <ConfirmDialog
-          title="Crear plan de Marketing"
-          confirmLabel="Crear plan"
-          message={
-            <>
-              <div></div>
-              <div></div>
-            </>
-          }
-          onConfirm={() => {
-            setConfirmando(false);
-            armar();
-          }}
-          onCancel={() => setConfirmando(false)}
-        />
-      )}
-    </>
-  );
-}
