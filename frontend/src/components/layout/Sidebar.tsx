@@ -268,9 +268,13 @@ export default function Sidebar() {
   ];
 
   const marketingSubItems: SubItem[] = [
-    { label: 'Campañas', path: '/marketing', icon: '✨' },
+    { label: 'Inicio', path: '/marketing', icon: '📊' },
+    { label: 'Campañas', path: '/marketing/campanias', icon: '✨' },
+    { label: 'Calendario', path: '/marketing/calendario', icon: '📅' },
+    { label: 'Radar de competencia', path: '/marketing/radar', icon: '📡' },
     { label: 'Biblioteca', path: '/marketing/biblioteca', icon: '📚' },
-    { label: 'Configuración', path: '/marketing/configuracion', icon: '⚙️' },
+    { label: 'Integraciones', path: '/marketing/integraciones', icon: '🔌' },
+    { label: 'Configuración', path: '/marketing/configuracion', icon: '⚙️', separadorAntes: true },
   ];
 
   // Dentro de un submenú se marca UN solo ítem: el de la ruta más específica. Sin esto,

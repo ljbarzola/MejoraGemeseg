@@ -74,6 +74,7 @@ Cada modulo tiene sus reglas, decisiones y trampas en su archivo de `.agents/mod
 | Cotizador | `ventas-cotizador.md` |
 | Bot de WhatsApp | `whatsapp-bot.md` |
 | Cacao | `cacao.md` |
+| Marketing (campañas con IA, calendario, radar, integraciones, recursos de marca) | `marketing.md` |
 | Custodias (viajes, guia digital, celular de campo) | `custodias.md` |
 | Contabilidad | `contabilidad.md` |
 | Contratacion Publica | `contratacion-publica.md` |

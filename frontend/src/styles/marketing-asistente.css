@@ -1,0 +1,111 @@
+/* Asistente «Nueva campaña»: resumen editable de la idea, historial de respuestas y canales extra.
+   Complementa marketing.css (chips, bloques, notas); no lo reemplaza. */
+
+.marketing-asistente .modal-body { min-width: 0; }
+
+/* Acción de texto pequeña («Editar», «Cambiar»). */
+.marketing-enlace-accion {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--azul-oscuro);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.marketing-enlace-accion:hover:not(:disabled) { background: #e2e8f0; }
+.marketing-enlace-accion:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Resumen «Lo que quieres conseguir». */
+.marketing-objetivo-resumen { margin: 0 0 10px; }
+.marketing-objetivo-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.marketing-objetivo-cabecera strong { font-size: 0.82rem; color: #334155; }
+.marketing-objetivo-texto {
+  margin: 4px 0 0;
+  font-size: 0.86rem;
+  color: #1e293b;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.marketing-objetivo-etiqueta {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: #ede9fe;
+  color: #5b21b6;
+  font-size: 0.72rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.marketing-objetivo-acciones { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Respuestas ya dadas, cada una con su «Cambiar». */
+.marketing-historial {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+.marketing-historial li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+.marketing-historial-texto { display: grid; gap: 1px; min-width: 0; flex: 1; }
+.marketing-historial-pregunta { font-size: 0.74rem; color: #64748b; overflow-wrap: anywhere; }
+.marketing-historial-respuesta {
+  font-size: 0.82rem;
+  color: #1e293b;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Canales extra: etiqueta + resultado de la revisión de la IA. */
+.marketing-extras-lista { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.marketing-extras-lista li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.marketing-extra-estado {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+.marketing-extra-insignia {
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: #dcfce7;
+  color: #166534;
+  white-space: nowrap;
+}
+.marketing-extra-insignia.pedido { background: #fef3c7; color: #92400e; }
+
+/* En el reparto, los canales extra ocupan el ancho que sobra (el texto es más largo que un porcentaje). */
+.marketing-reparto li.marketing-reparto-extra { grid-template-columns: minmax(150px, 1.2fr) 3fr; }

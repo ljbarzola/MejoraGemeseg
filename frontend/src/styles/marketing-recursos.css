@@ -1,0 +1,66 @@
+/* Configuración de Marketing: «Recursos de marca» (sitio web, redes, logo, fotos, videos y documentos). */
+.mkt-rec-bloque { padding: 18px; margin-top: 16px; min-width: 0; }
+.mkt-rec-bloque > h3 { margin: 0 0 4px; font-size: 1.05rem; color: var(--azul-oscuro); }
+.mkt-rec-intro { margin: 0 0 16px; font-size: 0.88rem; color: #475569; line-height: 1.5; }
+
+.mkt-rec-seccion {
+  border-left: 3px solid var(--azul-claro);
+  padding: 2px 0 2px 14px;
+  margin: 0 0 20px;
+  min-width: 0;
+}
+.mkt-rec-seccion h4 { margin: 0 0 6px; font-size: 0.9rem; color: var(--azul-oscuro); }
+.mkt-rec-seccion .form-group { margin-bottom: 12px; min-width: 0; }
+.mkt-rec-seccion .form-group label { display: block; margin-bottom: 4px; }
+.mkt-rec-seccion .form-group input,
+.mkt-rec-seccion .form-group textarea { width: 100%; box-sizing: border-box; }
+
+.mkt-rec-web { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.mkt-rec-web input { flex: 1 1 260px; min-width: 0; }
+.mkt-rec-web .btn-secondary { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.mkt-rec-columnas { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 720px) { .mkt-rec-columnas { grid-template-columns: 1fr; } }
+
+/* Logo */
+.mkt-rec-logo { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.mkt-rec-logo-vista {
+  width: 160px; height: 110px; flex: 0 0 auto;
+  border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 8px; box-sizing: border-box;
+}
+.mkt-rec-logo-vista img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.mkt-rec-logo-info { flex: 1 1 260px; min-width: 0; }
+.mkt-rec-estado { margin: 0 0 4px; font-size: 0.9rem; color: #334155; overflow-wrap: anywhere; }
+.mkt-rec-botones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.mkt-rec-botones .btn-secondary { display: inline-flex; align-items: center; gap: 6px; }
+.mkt-rec-peligro { color: #c53030; }
+.mkt-rec-miniatura-vacia { font-size: 0.78rem; color: #64748b; text-align: center; padding: 6px; }
+
+/* Barra de subida (descripción opcional + botón) */
+.mkt-rec-subida { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin: 10px 0 14px; }
+.mkt-rec-subida .mkt-rec-descripcion { flex: 1 1 240px; margin: 0; }
+.mkt-rec-subida .mkt-rec-botones { margin-top: 0; }
+.mkt-rec-subida > .btn-secondary { display: inline-flex; align-items: center; gap: 6px; }
+.mkt-rec-vacio { margin: 0; font-size: 0.86rem; color: #64748b; }
+
+/* Fotos */
+.mkt-rec-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.mkt-rec-foto { margin: 0; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; overflow: hidden; min-width: 0; }
+.mkt-rec-foto-vista {
+  aspect-ratio: 1 / 1; background: #f1f5f9; display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.mkt-rec-foto-vista img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mkt-rec-foto figcaption { display: flex; align-items: center; gap: 6px; padding: 6px 8px; min-width: 0; }
+.mkt-rec-foto-texto { flex: 1; min-width: 0; font-size: 0.78rem; color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Videos y documentos */
+.mkt-rec-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.mkt-rec-lista li {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 12px; padding: 8px 12px;
+}
+.mkt-rec-icono { color: var(--azul-oscuro); display: inline-flex; flex: 0 0 auto; }
+.mkt-rec-lista-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mkt-rec-lista-texto strong { font-size: 0.88rem; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mkt-rec-lista-texto small { font-size: 0.76rem; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mkt-rec-lista-acciones { display: inline-flex; gap: 6px; flex: 0 0 auto; }

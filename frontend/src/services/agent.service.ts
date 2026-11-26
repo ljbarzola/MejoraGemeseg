@@ -78,6 +78,7 @@ export async function getAgentDocs(): Promise<DocumentacionAgente[]> {
 
 export async function getAgentRuns(filtros: {
   agentId?: number;
+  agentNombre?: string;
   exito?: boolean;
   limit?: number;
   offset?: number;

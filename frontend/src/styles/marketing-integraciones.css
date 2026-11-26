@@ -1,0 +1,300 @@
+/* Pantalla Marketing → Integraciones y capacidades. */
+
+/* Cada bloque de la pantalla es una tarjeta con borde propio y separación
+   uniforme entre ellas (antes se fundían: solo tenían sombra y ningún margen). */
+.mkt-int-hero,
+.mkt-int-bloque {
+  border: 1px solid #cbd5e1;
+  border-radius: 16px;
+  box-shadow: 0 2px 10px rgba(16, 15, 49, 0.06);
+  margin-bottom: 20px;
+  min-width: 0;
+}
+.mkt-int-hero {
+  padding: 22px 24px;
+  background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+  border-left: 4px solid var(--azul-claro);
+}
+.mkt-int-hero h2 {
+  margin: 0 0 6px;
+  font-size: 1.25rem;
+  color: #0f172a;
+}
+.mkt-int-hero > p {
+  margin: 0 0 16px;
+  color: #475569;
+  font-size: 0.92rem;
+  max-width: 760px;
+}
+.mkt-int-pasos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+.mkt-int-pasos li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  min-width: 0;
+}
+.mkt-int-pasos p {
+  margin: 2px 0 0;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+.mkt-int-numero {
+  flex: 0 0 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-primary, #100f31);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.mkt-int-bloque {
+  padding: 18px 20px 20px;
+  background: #fff;
+}
+.mkt-int-bloque h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 1.02rem;
+  color: var(--azul-oscuro, #100f31);
+}
+.mkt-int-bloque h3::before {
+  content: '';
+  flex: 0 0 4px;
+  align-self: stretch;
+  border-radius: 2px;
+  background: var(--naranja, #ee3b1b);
+}
+.mkt-int-contador {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+}
+.mkt-int-nota {
+  margin: 0 0 14px;
+  font-size: 0.85rem;
+  color: #475569;
+  background: #f1f5f9;
+  border-left: 3px solid #94a3b8;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.mkt-int-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.mkt-int-grid--compacta {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+.mkt-int-card {
+  border: 1px solid #e2e8f0;
+  border-top: 3px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.mkt-int-card--simple {
+  border-top-width: 1px;
+  background: #fbfcfe;
+}
+.mkt-int-card-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mkt-int-card-cabecera strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.92rem;
+  color: #0f172a;
+}
+.mkt-int-icono {
+  font-size: 1.2rem;
+}
+.mkt-int-desc,
+.mkt-int-ia {
+  margin: 0;
+  font-size: 0.83rem;
+  color: #475569;
+}
+.mkt-int-ia strong {
+  color: #334155;
+}
+.mkt-int-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mkt-int-tag {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  white-space: nowrap;
+}
+.mkt-int-tag--pagado {
+  background: #fef3c7;
+  color: #92400e;
+}
+.mkt-int-estado {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: #f1f5f9;
+  color: #475569;
+}
+.mkt-int-estado--aprobada {
+  background: #dcfce7;
+  color: #166534;
+}
+.mkt-int-estado--pendiente {
+  background: #fef3c7;
+  color: #92400e;
+}
+.mkt-int-estado--demo {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+.mkt-int-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  align-items: center;
+}
+.mkt-int-acciones button {
+  font-size: 0.8rem;
+}
+.mkt-int-espera {
+  font-size: 0.8rem;
+  color: #92400e;
+}
+
+.mkt-int-necesidad {
+  background: #f8fafc;
+  border-left: 4px solid var(--naranja, #ee3b1b);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 20px;
+  align-items: start;
+}
+.mkt-int-necesidad-texto h3 {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.mkt-int-necesidad-texto h3::before {
+  display: none;
+}
+.mkt-int-necesidad-texto p {
+  margin: 0;
+  color: #475569;
+  font-size: 0.9rem;
+}
+.mkt-int-form {
+  min-width: 0;
+}
+.mkt-int-form-fila {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+.mkt-int-form select,
+.mkt-int-form input,
+.mkt-int-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+.mkt-int-form-acciones {
+  display: flex;
+  justify-content: flex-end;
+}
+.mkt-int-exito {
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 0.85rem;
+}
+
+.mkt-int-vacio {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+.mkt-int-pedidos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mkt-int-pedidos li {
+  border: 1px solid #cbd5e1;
+  border-left: 4px solid var(--azul-claro);
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 10px 14px;
+  min-width: 0;
+}
+.mkt-int-pedido-cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+.mkt-int-pedido-fecha {
+  color: #64748b;
+  font-size: 0.78rem;
+  margin-right: auto;
+}
+.mkt-int-pedido-detalle {
+  margin: 4px 0 0;
+  font-size: 0.83rem;
+  color: #475569;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .mkt-int-necesidad {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,45 @@
+/* Radar de competencia (MarketingRadarPage). */
+.radar-bloque { padding: 18px; margin-bottom: 14px; min-width: 0; }
+.radar-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.radar-ayuda { font-size: 0.8rem; color: #64748b; margin: 6px 0 0; }
+.radar-ejemplos { margin-top: 8px; }
+.radar-enfoque { border-left: 3px solid var(--azul-medio, #3b82f6); }
+.radar-enfoque .radar-texto { margin-top: 4px; }
+.radar-titulo { margin: 0 0 8px; font-size: 1rem; color: var(--azul-oscuro, #1e293b); }
+.radar-seccion { margin: 18px 0 10px; font-size: 1rem; color: var(--azul-oscuro, #1e293b); }
+.radar-texto { margin: 0; font-size: 0.9rem; color: #334155; line-height: 1.5; overflow-wrap: anywhere; }
+.radar-lista { margin: 0; padding-left: 18px; font-size: 0.88rem; color: #334155; line-height: 1.55; }
+
+.radar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.radar-tarjeta { padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; margin: 0; }
+.radar-tarjeta h5 { margin: 0; font-size: 0.98rem; color: var(--azul-oscuro, #1e293b); overflow-wrap: anywhere; }
+.radar-idea button { align-self: flex-start; margin-top: auto; }
+.radar-dato p, .radar-hueco p { margin: 2px 0 0; font-size: 0.86rem; color: #334155; line-height: 1.45; overflow-wrap: anywhere; }
+.radar-dato-titulo { font-size: 0.74rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #64748b; }
+.radar-chip {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  font-size: 0.78rem;
+  color: #334155;
+}
+.radar-hueco {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.radar-hueco .radar-dato-titulo { color: #15803d; }
+
+.radar-dos-columnas { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.radar-oportunidades { border-left: 3px solid #22c55e; }
+
+.radar-fuentes { margin: 8px 0 0; padding-left: 18px; font-size: 0.84rem; line-height: 1.6; }
+.radar-fuentes a { overflow-wrap: anywhere; }

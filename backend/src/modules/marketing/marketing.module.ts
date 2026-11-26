@@ -8,10 +8,12 @@ import { VertexChatClient } from '../ai/vertex-chat.client';
 import { GoogleAuthService } from '../../common/services/google-auth.service';
 import { MarketingController } from './marketing.controller';
 import { MarketingService } from './marketing.service';
+import { MarketingCrecimientoService } from './marketing-crecimiento.service';
+import { MarketingPropuestasCronController } from './marketing-propuestas-cron.controller';
 
 @Module({
   imports: [PrismaModule, PermissionsModule, AgentsModule, NotificationsModule, PersonalModule],
-  controllers: [MarketingController],
-  providers: [MarketingService, VertexChatClient, GoogleAuthService],
+  controllers: [MarketingController, MarketingPropuestasCronController],
+  providers: [MarketingService, MarketingCrecimientoService, VertexChatClient, GoogleAuthService],
 })
 export class MarketingModule {}

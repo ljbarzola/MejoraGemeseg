@@ -23,6 +23,7 @@ export default function NovedadesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [detalle, setDetalle] = useState<NovedadApp | null>(null);
 
   const tablaRef = useResizableColumns('sistemas-novedades');
   const labelDe = (key: string) => secciones.find((s) => s.key === key)?.label || key;
@@ -110,11 +111,12 @@ export default function NovedadesPage() {
                   <FilaSinResultados columnas={5} mensaje="No hay novedades que coincidan con los filtros." onLimpiar={cf.limpiar} />
                 )}
                 {filas.map((n) => (
-                  <tr key={n.id}>
+                  <tr key={n.id} onClick={() => setDetalle(n)} style={{ cursor: 'pointer' }}>
                     <td>{new Date(n.createdAt).toLocaleString('es-EC')}</td>
                     <td>
-                      <strong>{n.titulo}</strong>
-                      <div style={{ fontSize: '0.8rem', color: '#64748b', whiteSpace: 'pre-wrap' }}>{n.descripcion}</div>
+                      <button type="button" className="enlace-tabla" style={{ background: 'none', border: 0, padding: 0, font: 'inherit', fontWeight: 700, textAlign: 'left', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setDetalle(n); }}>
+                        {n.titulo}
+                      </button>
                     </td>
                     <td>{n.secciones.map(labelDe).join(', ')}</td>
                     <td>{n.createdByNombre}</td>
@@ -126,6 +128,29 @@ export default function NovedadesPage() {
           </div>
         </div>
         </>
+      )}
+
+      {detalle && (
+        <div className="modal-overlay" onClick={() => setDetalle(null)}>
+          <div className="modal modal-ventas-md" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{detalle.titulo}</h3>
+              <button className="modal-close" onClick={() => setDetalle(null)} aria-label="Cerrar"><X size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <div style={{ fontSize: '0.82rem', color: '#718096', marginBottom: 12 }}>
+                {new Date(detalle.createdAt).toLocaleString('es-EC')} · Publicada por {detalle.createdByNombre} · La recibieron {detalle.destinatarios} {detalle.destinatarios === 1 ? 'persona' : 'personas'}
+              </div>
+              <div style={{ fontSize: '0.9rem', color: '#2d3748', whiteSpace: 'pre-wrap', lineHeight: 1.55, overflowWrap: 'anywhere' }}>{detalle.descripcion}</div>
+              <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {detalle.secciones.map((k) => <span key={k} className="agent-scope-badge">{labelDe(k)}</span>)}
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setDetalle(null)}>Cerrar</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showForm && (
@@ -200,7 +225,10 @@ function NovedadModal({ secciones, onClose, onPublished }: {
 
   const completo = titulo.trim() && descripcion.trim() && elegidas.length > 0;
 
+  // El diálogo de confirmar es HERMANO del fondo de esta ventana, no hijo: si fuera hijo en el DOM, un clic en
+  // su fondo oscuro burbujearía hasta el `onClick={onClose}` de abajo y cerraría también esta ventana.
   return (
+    <>
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
         <div className="modal-header">
@@ -310,6 +338,7 @@ function NovedadModal({ secciones, onClose, onPublished }: {
           </div>
         </div>
       </div>
+    </div>
 
       {confirmando && (
         <ConfirmDialog
@@ -320,6 +349,6 @@ function NovedadModal({ secciones, onClose, onPublished }: {
           onCancel={() => setConfirmando(false)}
         />
       )}
-    </div>
+    </>
   );
 }
