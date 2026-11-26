@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles.css';
 import './styles/vistas.css';
+import './styles/agentes.css';
 import { installOverlayClickGuard } from './utils/overlayClickGuard';
 import { installTablasVivas } from './utils/tablasVivas';
 

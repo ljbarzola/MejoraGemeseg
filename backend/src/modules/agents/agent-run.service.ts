@@ -132,6 +132,7 @@ export class AgentRunService implements OnModuleInit {
     companyId: number | null,
     filtros: {
       agentId?: number;
+      agentNombre?: string;
       exito?: boolean;
       limit?: number;
       offset?: number;
@@ -140,6 +141,7 @@ export class AgentRunService implements OnModuleInit {
     const where = {
       ...(companyId !== null ? { companyId } : {}),
       ...(filtros.agentId ? { agentId: filtros.agentId } : {}),
+      ...(filtros.agentNombre ? { agentNombre: filtros.agentNombre } : {}),
       ...(filtros.exito !== undefined ? { exito: filtros.exito } : {}),
     };
     const limit = Math.min(Math.max(filtros.limit ?? 50, 1), 200);
