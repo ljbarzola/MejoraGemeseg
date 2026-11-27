@@ -8,8 +8,6 @@ export default function Navbar() {
   const { theme } = useCompany();
   const { canView, isSuperAdmin } = usePerm();
   const user = getUser();
-  const isAdmin = user?.role === 'ADMIN';
-  const isCompanyAdmin = isAdmin && !!user?.companyId;
 
   const handleLogout = () => {
     removeToken();
@@ -43,7 +41,7 @@ export default function Navbar() {
         {isSuperAdmin && canView('COMPANIES') && (
           <button className="navbar-link navbar-link-admin" onClick={() => navigate('/admin/companies')}>Empresas</button>
         )}
-        {isCompanyAdmin && canView('COMPANY_SETTINGS') && (
+        {!isSuperAdmin && canView('COMPANY_SETTINGS') && (
           <button className="navbar-link navbar-link-admin" onClick={() => navigate('/admin/company-settings')}>Mi Empresa</button>
         )}
         {canView('CACAO') && (
@@ -52,7 +50,7 @@ export default function Navbar() {
         {isSuperAdmin && (
           <button className="navbar-link navbar-link-admin" onClick={() => navigate('/admin/permissions')}>Permisos</button>
         )}
-        {isCompanyAdmin && (
+        {!isSuperAdmin && canView('ADMIN') && (
           <button className="navbar-link navbar-link-admin" onClick={() => navigate('/admin/user-permissions')}>Permisos Usuarios</button>
         )}
       </div>

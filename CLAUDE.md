@@ -69,7 +69,7 @@ El disco de Cloud Run se borra al reciclar la instancia. Todo archivo que la app
 ### Seguridad de sesion
 - `User.password` se omite de toda consulta (`PrismaService` con `omit` global; solo `auth.service.ts` la pide). Sin registro publico. Login, solicitud de restablecer y cambio de contrasena tienen limite de intentos (`AuthAttempt`). Detalle en `users.md`.
 - Cambiar o restablecer la contrasena cierra las otras sesiones (`UserSessionCutoff`, `auth/session-cutoff.service.ts`; `JwtStrategy` rechaza tokens con `iat` anterior, falla abierto, cache de 30 s).
-- Autorizacion en dos capas (rol + seccion) y como agregar un modulo: ver `AGENTS.md`, «Permisos».
+- Autorizacion en dos capas (rol + seccion) y como agregar un modulo: ver `AGENTS.md`, «Permisos». Estado actual de las secciones: `alwaysEnabled` solo DASHBOARD, PROJECTS, ADMIN y COMPANY_SETTINGS (Mi Empresa); SISTEMAS se activa por empresa (solo `gemeseg` lo tiene); QUEJAS y ENCUESTAS las asigna el super admin por empresa y, si las tiene, las ve toda su gente; al activar modulos nuevos en una empresa, sus administradores los reciben solos; Administracion, Mi Empresa y Permisos usuarios mandan por casillas Ver/Escribir (el ADMIN de empresa siempre las tiene); los usuarios antiguos sin filas se cerraron una vez (migracion `permisos-usuarios-cerrados-2026-11`).
 
 ### Multitenencia por `companyId`
 `User.companyId` es el unico limite de tenencia; el resto de los datos (proyectos, tareas, cacao, ventas…) se aisla indirectamente por el usuario que actua, no con un filtro `companyId` propio en todos lados: revisar la consulta de cada servicio antes de asumir aislamiento. `companyId: null` significa super admin, no «sin empresa».

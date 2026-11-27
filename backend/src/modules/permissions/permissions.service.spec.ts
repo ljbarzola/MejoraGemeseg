@@ -99,6 +99,37 @@ describe('PermissionsService', () => {
       expect(persistedKeys).toContain('CACAO');
       expect(new Set(persistedKeys).size).toBe(persistedKeys.length); // deduped
     });
+
+    it('da a los administradores de la empresa solo los módulos que ENTRAN, sin los de siempre', async () => {
+      // Ya tenía CACAO; ahora se activan MARKETING y CACAO.
+      prisma.companySection.findMany.mockResolvedValue([{ section: 'CACAO' }]);
+      prisma.user.findMany.mockResolvedValue([{ id: 20 }, { id: 21 }]);
+
+      await service.setCompanySections(9, ['CACAO', 'MARKETING']);
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith({
+        where: { companyId: 9, role: 'ADMIN' },
+        select: { id: true },
+      });
+      const llamada = prisma.userPermission.createMany.mock.calls[0][0] as {
+        data: { userId: number; section: string; canView: boolean; canWrite: boolean }[];
+        skipDuplicates: boolean;
+      };
+      // Solo MARKETING (CACAO ya estaba; SISTEMAS y los de siempre no cuentan).
+      expect(llamada.data).toEqual([
+        { userId: 20, section: 'MARKETING', canView: true, canWrite: true },
+        { userId: 21, section: 'MARKETING', canView: true, canWrite: true },
+      ]);
+      expect(llamada.skipDuplicates).toBe(true);
+    });
+
+    it('no toca permisos de usuarios si no entra ningún módulo nuevo', async () => {
+      prisma.companySection.findMany.mockResolvedValue([{ section: 'CACAO' }]);
+
+      await service.setCompanySections(9, ['CACAO']);
+
+      expect(prisma.userPermission.createMany).not.toHaveBeenCalled();
+    });
   });
 
   describe('getMyPermissions', () => {
@@ -153,7 +184,8 @@ describe('PermissionsService', () => {
         usuario(5, 1, [{ canWrite: true }]), // el reportante -> excluido
         usuario(6, null, [{ canWrite: true }]), // super admin (sin empresa) -> excluido
       ]);
-      prisma.companySection.findMany.mockResolvedValue([]);
+      // Sistemas se activa por empresa (2026-11-26): ambas empresas la tienen.
+      prisma.companySection.findMany.mockResolvedValue([{ companyId: 1 }, { companyId: 2 }]);
 
       const res = await service.getUsersWithExplicitSectionWrite('SISTEMAS', 5);
 

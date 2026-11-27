@@ -43,10 +43,6 @@ export default function Sidebar() {
   const { theme } = useCompany();
   const { canView, canWrite, isSuperAdmin, sections, permissions, error: permError, reload: reloadPerms } = usePerm();
   const user = getUser();
-  const isAdmin = user?.role === 'ADMIN';
-  const isCompanyAdmin = isAdmin && !!user?.companyId;
-  // El Gerente ve en solo lectura las pantallas administrativas de su empresa.
-  const isManager = user?.role === 'MANAGER';
   const { collapsed: collapsedPref, setCollapsed } = useSidebar();
   // Colapsar a iconos es una preferencia de escritorio (se guarda en
   // localStorage). En movil el cajon siempre va expandido: si se respetara,
@@ -116,15 +112,24 @@ export default function Sidebar() {
 
   const navItems = [
     { label: 'Inicio', path: '/dashboard', icon: '⌂', show: true },
-    { label: 'Buzón de Quejas y Sugerencias', path: '/rrhh/quejas', icon: '📮', show: true },
-    { label: 'Encuestas', path: '/rrhh/encuestas', icon: '📝', show: true },
+    // Buzón y Encuestas las asigna el super administrador a cada empresa; si las tiene, las ve toda su gente.
+    { label: 'Buzón de Quejas y Sugerencias', path: '/rrhh/quejas', icon: '📮', show: canView('QUEJAS') },
+    { label: 'Encuestas', path: '/rrhh/encuestas', icon: '📝', show: canView('ENCUESTAS') },
     { label: 'Proyectos', path: '/projects', icon: '📁', show: canView('PROJECTS') },
-    { label: 'Administración', path: '/admin', icon: '👥', show: canView('ADMIN') && (isAdmin || isManager) },
+    { label: 'Administración', path: '/admin', icon: '👥', show: canView('ADMIN') },
     { label: 'Empresas', path: '/admin/companies', icon: '🏢', show: isSuperAdmin && canView('COMPANIES') },
-    { label: 'Mi Empresa', path: '/admin/company-settings', icon: '🎨', show: (isCompanyAdmin || isManager) && canView('COMPANY_SETTINGS') },
+    { label: 'Mi Empresa', path: '/admin/company-settings', icon: '🎨', show: !isSuperAdmin && canView('COMPANY_SETTINGS') },
     { label: 'Permisos', path: '/admin/permissions', icon: '🔐', show: isSuperAdmin },
-    { label: 'Permisos Usuarios', path: '/admin/user-permissions', icon: '🔑', show: isCompanyAdmin || isManager },
+    { label: 'Permisos Usuarios', path: '/admin/user-permissions', icon: '🔑', show: !isSuperAdmin && canView('ADMIN') },
   ];
+
+  // Se marca UN solo ítem: el de la ruta más específica. «Administración» (/admin) es prefijo de
+  // /admin/user-permissions, /admin/companies…, y sin esto quedaba marcada junto con su hermano
+  // (mismo problema que ya estaba resuelto en los submenús, ver renderSubItems).
+  const itemsVisibles = navItems.filter((item) => item.show);
+  const rutaPrincipalActiva = itemsVisibles
+    .filter((i) => isActive(i.path))
+    .reduce<string | null>((best, i) => (best === null || i.path.length > best.length ? i.path : best), null);
 
   // Bitácora (2026-10-27): módulo propio con submenú. Por defecto NADIE tiene hoja, y cada persona ve solo lo
   // suyo: «Dashboard» (métricas) y «Actividad del día» (el detalle de un día) solo quien tenga fila de permiso
@@ -353,10 +358,10 @@ export default function Sidebar() {
             <button type="button" onClick={() => reloadPerms()}>Reintentar</button>
           </div>
         )}
-        {navItems.filter(item => item.show).map(item => (
+        {itemsVisibles.map(item => (
           <button
             key={item.path}
-            className={`sidebar-link ${isActive(item.path) ? 'sidebar-link-active' : ''}`}
+            className={`sidebar-link ${item.path === rutaPrincipalActiva ? 'sidebar-link-active' : ''}`}
             onClick={() => navigate(item.path)}
             title={collapsed ? item.label : undefined}
           >

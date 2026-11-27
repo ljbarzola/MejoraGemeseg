@@ -16,7 +16,7 @@ export default function SoloAdminDialog({
   return (
     <ConfirmDialog
       title="No tienes permiso para esto"
-      message={`Esta acción es solo para administradores: tu rol tiene acceso de solo lectura en esta pantalla. Contacta a un administrador de tu empresa para que ${accion}.`}
+      message={`No tienes permiso para hacer esto: tu acceso a esta pantalla es de solo lectura (o es una acción reservada a administradores). Pide a un administrador de tu empresa que ${accion}.`}
       confirmLabel="Entendido"
       hideCancel
       onConfirm={onClose}

@@ -10,6 +10,8 @@ import {
   asegurarCustodiasEnOperaciones,
   asegurarSeccionOperaciones,
 } from './operaciones-seccion.schema';
+import { asegurarSistemasPorEmpresa } from './sistemas-seccion.schema';
+import { cerrarUsuariosSinPermisos } from './permisos-usuarios.schema';
 
 // `alwaysEnabled`  = la EMPRESA la tiene activa siempre (no hace falta que un
 //                     super admin la encienda).
@@ -34,7 +36,9 @@ export const ALL_SECTIONS = [
   },
   { key: 'ADMIN', label: 'Administración', alwaysEnabled: true },
   { key: 'CACAO', label: 'Cacao', alwaysEnabled: false },
-  { key: 'COMPANY_SETTINGS', label: 'Mi Empresa', alwaysEnabled: false },
+  // Mi Empresa (marca y colores): módulo por defecto desde 2026-11-26. Toda empresa, incluso recién
+  // creada y sin módulos, necesita poder poner su logo y sus colores desde el primer día.
+  { key: 'COMPANY_SETTINGS', label: 'Mi Empresa', alwaysEnabled: true },
   { key: 'COMPANIES', label: 'Empresas', alwaysEnabled: false },
   // Custodias ya NO es una sección (2026-11-18): los viajes son parte de Operaciones y los gobierna
   // OPERACIONES (asegurarCustodiasEnOperaciones la enciende donde estaba Custodias). Las filas
@@ -54,12 +58,14 @@ export const ALL_SECTIONS = [
   // en Sistemas y seguía apareciendo en Permisos usuarios sin gobernar nada. Las
   // filas UserPermission 'TOOLS' que ya existan en la base se ignoran.
   //
-  // alwaysEnabled: Herramientas y Agentes vivían sueltas en el menú como
-  // secciones siempre activas (TOOLS/AGENTS) hasta que se agruparon dentro de
-  // Sistemas. Si Sistemas fuera opt-in, esas dos pantallas quedarían
-  // inalcanzables para toda empresa existente hasta que un super admin
-  // activara la sección a mano — que es exactamente lo que pasó al publicarla.
-  { key: 'SISTEMAS', label: 'Sistemas', alwaysEnabled: true },
+  // Sistemas se activa por empresa, como Cacao o Ventas (2026-11-26). Antes era
+  // `alwaysEnabled` porque Herramientas y Agentes vivían sueltas en el menú
+  // como secciones siempre activas y, al agruparse en Sistemas, volverla opt-in
+  // las dejaba inalcanzables hasta que un super admin la activara a mano. Pero
+  // es la pantalla interna de TI de Gemeseg (claves de licencia, agentes,
+  // tickets): no debe estar a un permiso de distancia de cada empresa cliente.
+  // `asegurarSistemasPorEmpresa` la deja encendida solo donde ya se usaba (GEMESEG).
+  { key: 'SISTEMAS', label: 'Sistemas', alwaysEnabled: false },
   // Bitácora del equipo (2026-10-27): apagada por empresa (un super admin la
   // enciende, y hasta entonces NO se registra nada de esa empresa) y cerrada por
   // defecto (solo ve la bitácora de todo el equipo quien tenga fila de permiso).
@@ -71,7 +77,34 @@ export const ALL_SECTIONS = [
   { key: 'CONTABILIDAD', label: 'Contabilidad', alwaysEnabled: false },
   // Marketing: apagado por empresa y cerrado por defecto (sin fila de permiso no se entra).
   { key: 'MARKETING', label: 'Marketing', alwaysEnabled: false },
+  // Buzón de Quejas y Encuestas (2026-11-26): el super administrador las asigna a cada empresa. Si la
+  // empresa las tiene, las ve TODA su gente (`abiertaSiActiva`); si no, nadie. Antes se veían siempre.
+  { key: 'QUEJAS', label: 'Buzón de Quejas y Sugerencias', alwaysEnabled: false, abiertaSiActiva: true },
+  { key: 'ENCUESTAS', label: 'Encuestas', alwaysEnabled: false, abiertaSiActiva: true },
 ];
+
+/**
+ * Secciones que, una vez asignadas a la empresa, ve todo el mundo en ella (no se niegan usuario por
+ * usuario). A diferencia de `siempreVisible`, la empresa tiene que tenerlas activas.
+ */
+export const SECCIONES_ABIERTAS_SI_ACTIVA: string[] = ALL_SECTIONS.filter(
+  (s) => (s as { abiertaSiActiva?: boolean }).abiertaSiActiva,
+).map((s) => s.key);
+
+/**
+ * Administración y Mi Empresa nunca se le cierran al ADMINISTRADOR de una empresa (si no, podría
+ * quedarse sin forma de volver a abrirlas). Para Gerente y usuarios normales mandan sus casillas.
+ */
+export const SECCIONES_BASE_DEL_ADMIN: string[] = ['ADMIN', 'COMPANY_SETTINGS'];
+
+export function esAdminDeEmpresaEnSeccionBase(
+  user: { role: string; companyId: number | null },
+  section: string,
+): boolean {
+  return (
+    user.role === 'ADMIN' && !!user.companyId && SECCIONES_BASE_DEL_ADMIN.includes(section)
+  );
+}
 
 /** Secciones que no se pueden negar usuario por usuario (ver ALL_SECTIONS). */
 export const SECCIONES_SIEMPRE_VISIBLES: string[] = ALL_SECTIONS.filter(
@@ -149,6 +182,38 @@ export class PermissionsService implements OnModuleInit {
         err instanceof Error ? err.stack : String(err),
       );
     }
+
+    // Sistemas pasa a activarse por empresa: se deja encendida solo en GEMESEG (una sola vez). Si falla
+    // no tumba el servidor; mientras no corra, las empresas conservan las filas que ya tenían.
+    try {
+      const hecho = await asegurarSistemasPorEmpresa(
+        this.prisma as unknown as Parameters<typeof asegurarSistemasPorEmpresa>[0],
+      );
+      if (hecho) {
+        this.logger.log('Sección SISTEMAS dejada solo en la empresa interna (gemeseg).');
+      }
+    } catch (err) {
+      this.logger.error(
+        'No se pudo ajustar la sección SISTEMAS por empresa; sigue como estaba hasta el próximo arranque.',
+        err instanceof Error ? err.stack : String(err),
+      );
+    }
+
+    // Usuarios antiguos sin permisos guardados: se cierran una sola vez (ver permisos-usuarios.schema.ts).
+    try {
+      const hecho = await cerrarUsuariosSinPermisos(
+        this.prisma as unknown as Parameters<typeof cerrarUsuariosSinPermisos>[0],
+        ALL_SECTIONS.map((s) => s.key),
+      );
+      if (hecho) {
+        this.logger.log('Usuarios sin permisos guardados cerrados; Quejas y Encuestas asignadas donde hay RRHH.');
+      }
+    } catch (err) {
+      this.logger.error(
+        'No se pudieron cerrar los usuarios sin permisos; siguen como estaban hasta el próximo arranque.',
+        err instanceof Error ? err.stack : String(err),
+      );
+    }
   }
 
   isSuperAdmin(user: any): boolean {
@@ -175,6 +240,7 @@ export class PermissionsService implements OnModuleInit {
     if (!enabled) return false;
 
     if (esSeccionSiempreVisible(section)) return true;
+    if (esAdminDeEmpresaEnSeccionBase(user, section)) return true;
     const fijas = await this.getFixedSections(user.companyId);
     if (fijas.includes(section)) return true;
 
@@ -251,7 +317,7 @@ export class PermissionsService implements OnModuleInit {
       const tieneAcceso = validas.some((section) => {
         const alwaysEnabled = ALL_SECTIONS.find((a) => a.key === section)?.alwaysEnabled;
         if (!alwaysEnabled && !habilitadas.get(companyId)?.has(section)) return false;
-        if (esSeccionSiempreVisible(section) || fijas.get(companyId)?.has(section)) return true;
+        if (esSeccionSiempreVisible(section) || SECCIONES_ABIERTAS_SI_ACTIVA.includes(section) || fijas.get(companyId)?.has(section)) return true;
         const perm = u.permissions.find((p) => p.section === section);
         if (perm && !perm.canView) negada = true;
         return perm ? perm.canView : permiteSinFila(section);
@@ -376,7 +442,8 @@ export class PermissionsService implements OnModuleInit {
       db.filter((s) => s.fixedForAll).map((s) => s.section),
     );
     return ALL_SECTIONS.map((s) => {
-      const siempre = esSeccionSiempreVisible(s.key);
+      const abierta = SECCIONES_ABIERTAS_SI_ACTIVA.includes(s.key);
+      const siempre = esSeccionSiempreVisible(s.key) || abierta;
       return {
         ...s,
         enabled: s.alwaysEnabled || dbSections.includes(s.key),
@@ -384,6 +451,9 @@ export class PermissionsService implements OnModuleInit {
         fixedForAll: siempre || fijasEnBd.has(s.key),
         // Las de código no se pueden desmarcar desde la app.
         fixedLockedByCode: siempre,
+        // Sin fila de permiso: ¿la persona entra o no? Lo necesita la pantalla
+        // de Permisos Usuarios para mostrar lo que de verdad puede hacer.
+        cerradaPorDefecto: !permiteSinFila(s.key),
       };
     });
   }
@@ -394,10 +464,16 @@ export class PermissionsService implements OnModuleInit {
       where: { companyId, fixedForAll: true },
       select: { section: true },
     });
+    // Las «abiertas si activa» cuentan solo cuando la empresa las tiene asignadas.
+    const activas = await this.prisma.companySection.findMany({
+      where: { companyId, section: { in: SECCIONES_ABIERTAS_SI_ACTIVA } },
+      select: { section: true },
+    });
     return [
       ...new Set([
         ...SECCIONES_SIEMPRE_VISIBLES,
         ...rows.map((r) => r.section),
+        ...activas.map((r) => r.section),
       ]),
     ];
   }
@@ -433,6 +509,13 @@ export class PermissionsService implements OnModuleInit {
     );
     const allowed = [...new Set([...alwaysOn, ...sections])];
 
+    // Qué módulos ya tenía, para saber cuáles ENTRAN con este guardado.
+    const previas = await this.prisma.companySection.findMany({
+      where: { companyId },
+      select: { section: true },
+    });
+    const yaEstaban = new Set((previas ?? []).map((s) => s.section));
+
     // Antes esto borraba TODAS las filas y las volvía a crear, lo que perdía
     // `fixedForAll` en cada guardado del super admin. Ahora se borran solo las
     // que salen y se crean solo las que entran.
@@ -445,7 +528,48 @@ export class PermissionsService implements OnModuleInit {
         skipDuplicates: true,
       });
     }
+
+    // Los módulos que el super administrador acaba de activar se le dan de una
+    // vez al administrador de la empresa (2026-11-26). Los «de siempre» (Inicio,
+    // Proyectos, Administración, Mi Empresa…) no cuentan: nunca se «activan».
+    const nuevas = allowed.filter(
+      (key) =>
+        !yaEstaban.has(key) &&
+        ALL_SECTIONS.some((a) => a.key === key && !a.alwaysEnabled),
+    );
+    await this.darSeccionesAAdministradores(companyId, nuevas);
+
     return this.getCompanySections(companyId);
+  }
+
+  /**
+   * Da vista y escritura sobre `secciones` a cada ADMIN de la empresa. Es solo
+   * añadir: si el administrador ya tenía una fila para esa sección (incluso
+   * negada a propósito) no se toca, y los demás usuarios no reciben nada.
+   * Hace falta porque Marketing, Contabilidad y Bitácora son «cerradas por
+   * defecto»: sin fila propia nadie las ve, ni el administrador de la empresa.
+   */
+  private async darSeccionesAAdministradores(
+    companyId: number,
+    secciones: string[],
+  ): Promise<void> {
+    if (secciones.length === 0) return;
+    const admins = await this.prisma.user.findMany({
+      where: { companyId, role: 'ADMIN' },
+      select: { id: true },
+    });
+    if (!admins?.length) return;
+    await this.prisma.userPermission.createMany({
+      data: admins.flatMap((a) =>
+        secciones.map((section) => ({
+          userId: a.id,
+          section,
+          canView: true,
+          canWrite: true,
+        })),
+      ),
+      skipDuplicates: true,
+    });
   }
 
   async getUserPermissions(userId: number) {
@@ -483,16 +607,44 @@ export class PermissionsService implements OnModuleInit {
    */
   async assertPuedeGestionarUsuario(
     userId: number,
-    actor: { role: string; companyId: number | null },
+    actor: { role: string; companyId: number | null; userId?: number },
   ): Promise<void> {
     const objetivo = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { companyId: true },
+      select: { companyId: true, role: true },
     });
     if (!objetivo) throw new NotFoundException('Usuario no encontrado');
     if (this.isSuperAdmin(actor)) return;
     if (!actor.companyId || objetivo.companyId !== actor.companyId) {
       throw new ForbiddenException('No tienes acceso a este usuario');
+    }
+    // Quien no es administrador (un Gerente con «Administración» activa) no toca a los administradores
+    // ni sus propios permisos: si no, podría darse a sí mismo o a otro más poder del que le corresponde.
+    if (actor.role !== 'ADMIN') {
+      if (objetivo.role === 'ADMIN') {
+        throw new ForbiddenException('Solo un administrador puede cambiar los permisos de otro administrador');
+      }
+      if (actor.userId !== undefined && actor.userId === userId) {
+        throw new ForbiddenException('No puedes cambiar tus propios permisos');
+      }
+    }
+  }
+
+  /**
+   * Quien no es administrador solo puede dar acceso a lo que él mismo puede ver (y escribir solo lo que
+   * él mismo puede escribir). El administrador de empresa y el super administrador no tienen tope.
+   */
+  async assertPuedeOtorgar(
+    actor: { userId: number; role: string; companyId: number | null },
+    permissions: { section: string; canView: boolean; canWrite: boolean }[],
+  ): Promise<void> {
+    if (this.isSuperAdmin(actor) || actor.role === 'ADMIN') return;
+    for (const p of permissions) {
+      if (!p.canView && !p.canWrite) continue;
+      if (!(await this.hasSectionAccess(actor, p.section, 'view')) ||
+          (p.canWrite && !(await this.hasSectionAccess(actor, p.section, 'write')))) {
+        throw new ForbiddenException('No puedes dar acceso a un módulo al que tú no tienes acceso');
+      }
     }
   }
 
@@ -500,10 +652,11 @@ export class PermissionsService implements OnModuleInit {
     userId: number,
     permissions: { section: string; canView: boolean; canWrite: boolean }[],
   ) {
+    const validas = permissions.filter((p) => ALL_SECTIONS.some((a) => a.key === p.section));
     await this.prisma.userPermission.deleteMany({ where: { userId } });
-    if (permissions.length > 0) {
+    if (validas.length > 0) {
       await this.prisma.userPermission.createMany({
-        data: permissions.map((p) => ({
+        data: validas.map((p) => ({
           userId,
           section: p.section,
           canView: p.canView,

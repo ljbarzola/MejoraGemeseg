@@ -20,18 +20,20 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { CreateLocationDto } from './dto/create-location.dto';
 import { SetPreferenceDto } from './dto/set-preference.dto';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { UserRole } from '@prisma/client';
+import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
+import { Section } from '../../common/decorators/section.decorator';
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  // Administración (2026-11-26): manda la casilla de la sección, no el rol. Quien no es administrador
+  // (un Gerente al que le dieron «Escribir») no puede crear ni tocar administradores.
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('ADMIN', 'write')
   create(@Body() dto: CreateUserDto, @Req() req: any) {
+    this.soloAdminToca(req.user, dto.role);
     return this.usersService.create(dto, req.user.companyId);
   }
 
@@ -47,8 +49,8 @@ export class UsersController {
   // Lecturas de la pantalla Administración: el Gerente también las ve (solo
   // lectura). Crear/editar/borrar siguen siendo solo ADMIN.
   @Get('stats')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('ADMIN', 'view')
   getStats(@Req() req: any) {
     return this.usersService.getStats(req.user.companyId);
   }
@@ -93,22 +95,22 @@ export class UsersController {
   }
 
   @Get('locations')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('ADMIN', 'view')
   getLocations(@Req() req: any) {
     return this.usersService.getLocations(req.user.companyId);
   }
 
   @Post('locations')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('ADMIN', 'write')
   createLocation(@Body() dto: CreateLocationDto, @Req() req: any) {
     return this.usersService.createLocation(req.user.companyId, dto.nombre);
   }
 
   @Get(':id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('ADMIN', 'view')
   async findOne(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     const user = await this.usersService.findOne(id);
     if (req.user.companyId && user.companyId !== req.user.companyId) {
@@ -118,8 +120,8 @@ export class UsersController {
   }
 
   @Patch(':id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('ADMIN', 'write')
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateUserDto,
@@ -129,12 +131,13 @@ export class UsersController {
     if (req.user.companyId && user.companyId !== req.user.companyId) {
       throw new ForbiddenException('No puedes editar usuarios de otra empresa');
     }
+    this.soloAdminToca(req.user, dto.role, user.role);
     return this.usersService.update(id, dto, req.user.userId);
   }
 
   @Delete(':id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('ADMIN', 'write')
   async remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     const user = await this.usersService.findOne(id);
     if (req.user.companyId && user.companyId !== req.user.companyId) {
@@ -142,6 +145,19 @@ export class UsersController {
         'No puedes eliminar usuarios de otra empresa',
       );
     }
+    this.soloAdminToca(req.user, undefined, user.role);
     return this.usersService.remove(id);
+  }
+
+  /** Un no-administrador no crea administradores ni edita o borra a uno (evita subirse el rol a sí mismo). */
+  private soloAdminToca(
+    actor: { role: string; companyId: number | null },
+    rolNuevo?: string,
+    rolActual?: string,
+  ) {
+    if (actor.role === 'ADMIN') return;
+    if (rolNuevo === 'ADMIN' || rolActual === 'ADMIN') {
+      throw new ForbiddenException('Solo un administrador puede crear o cambiar a otro administrador');
+    }
   }
 }

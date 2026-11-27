@@ -17,6 +17,7 @@ import type { Project } from '../../types/project';
 import { getUser } from '../../services/auth.service';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import SoloAdminDialog from '../../components/common/SoloAdminDialog';
+import { usePerm } from '../../contexts/PermissionsContext';
 import ClearFiltersButton from '../../components/common/ClearFiltersButton';
 import ColumnFilter, { ChipsFiltros, FilaSinResultados } from '../../components/common/ColumnFilter';
 import RowActionsMenu from '../../components/common/RowActionsMenu';
@@ -95,19 +96,19 @@ export default function AdminDashboardPage() {
   // El Gerente entra en SOLO LECTURA: ve la lista de usuarios y sus cifras, sin
   // crear/editar/borrar (el backend lo impone igual con @Roles(ADMIN)) y sin el
   // panel de proyectos, cuyos datos son solo de administradores.
+  // Quién puede cambiar usuarios lo decide la casilla «Escribir» de Administración (no el rol), desde
+  // 2026-11-26. El panel de proyectos sigue siendo solo del rol administrador.
+  const { canWrite } = usePerm();
   const esAdmin = currentUser?.role === 'ADMIN';
-  const esGerente = currentUser?.role === 'MANAGER';
+  const soloLectura = !canWrite('ADMIN');
   // Si el Gerente intenta cambiar algo, se le explica por qué no puede y a
   // quién acudir (en vez de esconderle los botones).
   const [avisoSoloAdmin, setAvisoSoloAdmin] = useState('');
   const soloAdmin = (accion: string, fn: () => void) =>
-    esAdmin ? fn : () => setAvisoSoloAdmin(accion);
+    !soloLectura ? fn : () => setAvisoSoloAdmin(accion);
 
   useEffect(() => {
-    if (!esAdmin && !esGerente) {
-      navigate('/dashboard');
-      return;
-    }
+    // El acceso a esta pantalla ya lo controla SectionRoute («ADMIN»).
     loadData();
   }, []);
 
@@ -317,7 +318,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  if (!esAdmin && !esGerente) return null;
 
   return (
     <div className="page-container">
@@ -328,14 +328,14 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {esGerente && (
+      {soloLectura && (
         <div className="auth-info-banner" style={{ marginBottom: 16 }}>
           Estás viendo esta pantalla en modo solo lectura. Para crear o cambiar usuarios, contacta
           a un administrador de tu empresa.
         </div>
       )}
 
-      {userStats && (esGerente || projectStats) && (
+      {userStats && (!esAdmin || projectStats) && (
         <div className="admin-stats-grid">
           <div className="admin-stat-card">
             <span className="admin-stat-number">{userStats.active}</span>
@@ -363,7 +363,7 @@ export default function AdminDashboardPage() {
           className={`admin-tab ${tab === 'users' ? 'active' : ''}`}
           onClick={() => setTab('users')}
         >
-          {esGerente ? 'Usuarios' : 'Gestionar usuarios'}
+          {soloLectura ? 'Usuarios' : 'Gestionar usuarios'}
         </button>
         {esAdmin && (
           <button

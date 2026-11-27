@@ -65,11 +65,13 @@ describe('UsersService.create — permisos por defecto', () => {
     expect(sections).toContain('VENTAS');
   });
 
-  it('crea las mismas filas para un Manager nuevo', async () => {
+  it('el Manager nuevo nace denegado en todo salvo «Ver» en Administración y Mi Empresa (sin escribir)', async () => {
     await service.create({ ...baseDto, role: 'MANAGER' } as any, 1);
 
     const { data } = tx.userPermission.createMany.mock.calls[0][0];
-    expect(data.every((row: any) => row.canView === false)).toBe(true);
+    const conVista = data.filter((row: any) => row.canView).map((row: any) => row.section).sort();
+    expect(conVista).toEqual(['ADMIN', 'COMPANY_SETTINGS']);
+    expect(data.every((row: any) => row.canWrite === false)).toBe(true);
   });
 
   it('sin rol en el DTO (default EMPLOYEE) también queda denegado', async () => {

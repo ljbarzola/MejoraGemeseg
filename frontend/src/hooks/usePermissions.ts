@@ -14,12 +14,15 @@ import { getUser } from '../services/auth.service';
 // y allá dejan de coincidir, el menú mostraría cosas que la API rechaza.
 const SECCIONES_SIEMPRE_VISIBLES = ['DASHBOARD', 'PROJECTS'];
 
-// Pantallas administrativas que el Gerente (rol MANAGER) ve SIEMPRE, en solo
-// lectura, sin depender de lo marcado en Permisos usuarios (decisión
-// 2026-10-06: «quienes tienen este rol» las ven). La empresa sí tiene que tener
-// el módulo habilitado, igual que para el administrador. Escribir sigue siendo
-// solo ADMIN: el backend lo impone con @Roles(ADMIN) en cada endpoint de cambio.
-const SECCIONES_VISTA_GERENTE = ['ADMIN', 'COMPANY_SETTINGS'];
+// Administración y Mi Empresa (2026-11-26): para Gerente y usuarios normales mandan sus casillas de
+// Permisos usuarios (Ver / Escribir), como en cualquier otro módulo; el Gerente nace con «Ver» en las dos.
+// Solo el ADMINISTRADOR de una empresa las tiene siempre, para que nunca se quede sin poder reabrirlas.
+// Espejo de SECCIONES_BASE_DEL_ADMIN en el backend (permissions.service.ts).
+const SECCIONES_BASE_DEL_ADMIN = ['ADMIN', 'COMPANY_SETTINGS'];
+const esAdminDeEmpresaEnBase = (section: string) => {
+  const u = getUser();
+  return u?.role === 'ADMIN' && !!u?.companyId && SECCIONES_BASE_DEL_ADMIN.includes(section);
+};
 
 const LANDING_ROUTES: { section: string; path: string }[] = [
   { section: 'DASHBOARD', path: '/dashboard' },
@@ -117,7 +120,7 @@ export function usePermissions() {
     // Módulo marcado como fijo por la empresa: lo ve todo el mundo, sin mirar
     // el permiso individual.
     if (state.fixedSections.includes(section)) return true;
-    if (SECCIONES_VISTA_GERENTE.includes(section) && getUser()?.role === 'MANAGER') return true;
+    if (esAdminDeEmpresaEnBase(section)) return true;
     const perm = state.permissions[section];
     return perm ? perm.canView : true;
   }, [state]);
@@ -125,6 +128,7 @@ export function usePermissions() {
   const canWrite = useCallback((section: string) => {
     if (state.isSuperAdmin) return true;
     if (!state.sections.includes(section)) return false;
+    if (esAdminDeEmpresaEnBase(section)) return true;
     const perm = state.permissions[section];
     return perm ? perm.canWrite : true;
   }, [state]);

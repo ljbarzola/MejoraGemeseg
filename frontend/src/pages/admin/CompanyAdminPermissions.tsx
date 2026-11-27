@@ -5,6 +5,7 @@ import ModulosFijosModal from '../../components/admin/ModulosFijosModal';
 import { getCompanySections, getUsersWithPermissions, setUserPermissions, type SectionConfig, type UserWithPermissions, type UserPerm } from '../../services/permissions.service';
 import { getUser } from '../../services/auth.service';
 import SoloAdminDialog from '../../components/common/SoloAdminDialog';
+import { usePerm } from '../../contexts/PermissionsContext';
 
 // Secciones que no se pueden negar a un usuario: son la pantalla de inicio y
 // los canales abiertos a cualquier empleado. Espejo de
@@ -16,7 +17,7 @@ const SECCIONES_SIEMPRE_VISIBLES = ['DASHBOARD', 'PROJECTS'];
 
 const SECTION_ICONS: Record<string, string> = {
   DASHBOARD: '📊', PROJECTS: '📁', ADMIN: '👥',
-  CACAO: '🫘', COMPANY_SETTINGS: '🎨', COMPANIES: '🏢', RRHH: '👤',
+  CACAO: '🫘', COMPANY_SETTINGS: '🎨', COMPANIES: '🏢', CONTABILIDAD: '🧾', RRHH: '👤',
   VENTAS: '💼', SISTEMAS: '🖥️',
 };
 
@@ -25,7 +26,9 @@ export default function CompanyAdminPermissions() {
   const user = getUser();
   // El Gerente ve los permisos de su empresa en SOLO LECTURA: sin marcar, sin
   // guardar y sin tocar los módulos fijos (el backend exige ADMIN para escribir).
-  const soloLectura = user?.role !== 'ADMIN';
+  // Desde 2026-11-26 lo decide la casilla «Escribir» de Administración (el administrador de empresa siempre la tiene).
+  const { canWrite } = usePerm();
+  const sinEscritura = !canWrite('ADMIN');
   const [avisoSoloAdmin, setAvisoSoloAdmin] = useState('');
   // Si el Gerente intenta cambiar algo, se le explica por qué no puede.
   const bloquear = (e: React.SyntheticEvent) => {
@@ -36,6 +39,11 @@ export default function CompanyAdminPermissions() {
   const [sections, setSections] = useState<SectionConfig[]>([]);
   const [users, setUsers] = useState<UserWithPermissions[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserWithPermissions | null>(null);
+  // Quien no es administrador no cambia los permisos de un administrador ni los suyos (si no, podría darse
+  // más poder del que le corresponde); el servidor lo impone igual.
+  const personaProtegida =
+    !!selectedUser && user?.role !== 'ADMIN' && (selectedUser.role === 'ADMIN' || selectedUser.id === user?.id);
+  const soloLectura = sinEscritura || personaProtegida;
   const [showModulosFijos, setShowModulosFijos] = useState(false);
   const [userPerms, setUserPerms] = useState<Record<string, { canView: boolean; canWrite: boolean }>>({});
   const [loading, setLoading] = useState(true);
@@ -44,17 +52,22 @@ export default function CompanyAdminPermissions() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    // Esta ruta no tiene SectionRoute: solo Administrador y Gerente la usan.
-    if (!user || (user.role !== 'ADMIN' && user.role !== 'MANAGER')) {
+    // El acceso a esta pantalla lo controla SectionRoute («ADMIN»).
+    if (!user) {
       navigate('/dashboard');
       return;
     }
-    const slug = user.email?.split('@')[1]?.split('.')[0] || 'gemeseg';
-    import('../../services/company.service').then(({ getCompanyBySlug }) =>
-      getCompanyBySlug(slug)
-    ).then((c) => {
-      setSelectedCompanyId(c.id);
-    }).finally(() => setLoading(false));
+    // La empresa es la del propio usuario (`companyId` de su sesión). Antes se
+    // adivinaba por el dominio del correo (admin@gmail.com → «gmail»), así que
+    // una empresa cuyo administrador no usa un correo con el nombre de su slug
+    // veía «Usuarios (0)» y ni siquiera se listaba a sí mismo.
+    if (user.companyId) {
+      setSelectedCompanyId(user.companyId);
+      setLoading(false);
+      return;
+    }
+    // Super administrador (sin empresa): esta pantalla es de la empresa, no suya.
+    navigate('/dashboard');
   }, []);
 
   useEffect(() => {
@@ -74,14 +87,25 @@ export default function CompanyAdminPermissions() {
 
   const enabledSections = sections.filter(s => s.enabled);
 
+  // Lo que la persona PUEDE hacer hoy en una sección. Sin fila guardada no es «nada»: en la mayoría
+  // de secciones entra y escribe (el servidor es permisivo por omisión) y solo en las cerradas por
+  // defecto no entra. Antes la pantalla mostraba todo desmarcado sin fila, y al pulsar Guardar eso
+  // se escribía como «negado» aunque la persona sí tuviera acceso.
+  const permisoEfectivo = (u: UserWithPermissions, s: SectionConfig) => {
+    if (SECCIONES_SIEMPRE_VISIBLES.includes(s.key) || s.fixedForAll) {
+      return { canView: true, canWrite: true };
+    }
+    const fila = u.permissions.find(p => p.section === s.key);
+    if (fila) return { canView: fila.canView, canWrite: fila.canWrite };
+    const abierta = !s.cerradaPorDefecto;
+    return { canView: abierta, canWrite: abierta };
+  };
+
   const selectUser = (u: UserWithPermissions) => {
     setSelectedUser(u);
     const permMap: Record<string, { canView: boolean; canWrite: boolean }> = {};
     for (const s of enabledSections) {
-      const existing = u.permissions.find(p => p.section === s.key);
-      permMap[s.key] = existing
-        ? { canView: existing.canView, canWrite: existing.canWrite }
-        : { canView: false, canWrite: false };
+      permMap[s.key] = permisoEfectivo(u, s);
     }
     setUserPerms(permMap);
     setSuccess('');
@@ -195,7 +219,7 @@ export default function CompanyAdminPermissions() {
             </div>
             <div style={{ maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
               {filteredUsers.map((u) => {
-                const permsCount = u.permissions.filter(p => p.canView).length;
+                const permsCount = enabledSections.filter(s => permisoEfectivo(u, s).canView).length;
                 const isSelected = selectedUser?.id === u.id;
                 return (
                   <div
