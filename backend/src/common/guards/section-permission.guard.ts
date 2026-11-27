@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import {
   PermissionsService,
+  esAdminDeEmpresaEnSeccionBase,
   esSeccionSiempreVisible,
   permiteSinFila,
 } from '../../modules/permissions/permissions.service';
@@ -88,6 +89,8 @@ export class SectionPermissionGuard implements CanActivate {
     // Fijas por código (Inicio, Proyectos) o marcadas por la empresa como
     // visibles para todos: no se niegan usuario por usuario.
     if (esSeccionSiempreVisible(requirement.section)) return true;
+    // El administrador de la empresa no pierde Administración ni Mi Empresa (ver permissions.service).
+    if (esAdminDeEmpresaEnSeccionBase(user, requirement.section)) return true;
     const fijas = await this.permissionsService.getFixedSections(user.companyId);
     if (fijas.includes(requirement.section)) return true;
 

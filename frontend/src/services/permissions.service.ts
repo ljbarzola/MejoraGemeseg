@@ -10,6 +10,8 @@ export interface SectionConfig {
   fixedForAll?: boolean;
   /** Fija por decisión de producto (Inicio, Proyectos): no se puede desmarcar. */
   fixedLockedByCode?: boolean;
+  /** Sin fila de permiso la persona NO entra (Sistemas, Bitácora, Contabilidad, Marketing). */
+  cerradaPorDefecto?: boolean;
 }
 
 export interface UserPerm {

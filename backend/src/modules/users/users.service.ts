@@ -20,6 +20,8 @@ import { Prisma } from '@prisma/client';
 import {
   ALL_SECTIONS,
   SECCIONES_SIEMPRE_VISIBLES,
+  SECCIONES_ABIERTAS_SI_ACTIVA,
+  SECCIONES_BASE_DEL_ADMIN,
 } from '../permissions/permissions.service';
 
 @Injectable()
@@ -93,15 +95,21 @@ export class UsersService implements OnModuleInit {
           ...fixedRows.map((r) => r.section),
         ]);
         const applicableSections = ALL_SECTIONS.filter(
-          (s) => !fixedSections.has(s.key),
+          (s) =>
+            !fixedSections.has(s.key) &&
+            !SECCIONES_ABIERTAS_SI_ACTIVA.includes(s.key),
         );
         if (applicableSections.length > 0) {
           const allow = role === 'ADMIN';
+          // El Gerente nace viendo Administración y Mi Empresa (como siempre, pero ahora es una casilla que
+          // su administrador puede quitar o ampliar a «Escribir»). Un usuario normal nace sin nada.
+          const gerenteVe = (key: string) =>
+            role === 'MANAGER' && SECCIONES_BASE_DEL_ADMIN.includes(key);
           await tx.userPermission.createMany({
             data: applicableSections.map((s) => ({
               userId: user.id,
               section: s.key,
-              canView: allow,
+              canView: allow || gerenteVe(s.key),
               canWrite: allow,
             })),
             skipDuplicates: true,

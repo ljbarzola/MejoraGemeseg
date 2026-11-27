@@ -14,6 +14,8 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { UserRole } from '@prisma/client';
 import { PermissionsService } from './permissions.service';
+import { SectionPermissionGuard } from '../../common/guards/section-permission.guard';
+import { Section } from '../../common/decorators/section.decorator';
 import {
   SetCompanySectionsDto,
   SetFixedSectionsDto,
@@ -33,8 +35,8 @@ export class PermissionsController {
   // Las dos lecturas (secciones y permisos por usuario) las ve también el
   // Gerente, en modo solo lectura. Todo lo que escribe sigue siendo solo ADMIN.
   @Get('sections/:companyId')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('ADMIN', 'view')
   getCompanySections(
     @Param('companyId', ParseIntPipe) companyId: number,
     @Req() req: any,
@@ -68,8 +70,8 @@ export class PermissionsController {
   // administrador de esa empresa, no el super admin: es una decisión de cómo
   // trabaja cada organización, no de qué tiene contratado.
   @Post('sections/:companyId/fixed')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('ADMIN', 'write')
   setFixedSections(
     @Param('companyId', ParseIntPipe) companyId: number,
     @Body() dto: SetFixedSectionsDto,
@@ -85,8 +87,8 @@ export class PermissionsController {
   }
 
   @Get('users/:companyId')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('ADMIN', 'view')
   getUserPermissionsForCompany(
     @Param('companyId', ParseIntPipe) companyId: number,
     @Req() req: any,
@@ -101,14 +103,15 @@ export class PermissionsController {
   }
 
   @Post('users/:userId')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
+  @Section('ADMIN', 'write')
   async setUserPermissions(
     @Param('userId', ParseIntPipe) userId: number,
     @Body() dto: SetUserPermissionsDto,
     @Req() req: any,
   ) {
     await this.service.assertPuedeGestionarUsuario(userId, req.user);
+    await this.service.assertPuedeOtorgar(req.user, dto.permissions);
     return this.service.setUserPermissions(userId, dto.permissions);
   }
 }

@@ -83,8 +83,7 @@ export class CompaniesController {
   }
 
   @Get(':id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
   @Section('COMPANY_SETTINGS', 'view')
   findOne(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     if (req.user.companyId && req.user.companyId !== id) {
@@ -107,8 +106,7 @@ export class CompaniesController {
   }
 
   @Patch(':id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
   @Section('COMPANY_SETTINGS', 'write')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -135,8 +133,7 @@ export class CompaniesController {
   }
 
   @Post(':id/logo')
-  @UseGuards(AuthGuard('jwt'), RolesGuard, SectionPermissionGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AuthGuard('jwt'), SectionPermissionGuard)
   @Section('COMPANY_SETTINGS', 'write')
   @UseInterceptors(
     FileInterceptor('logo', {

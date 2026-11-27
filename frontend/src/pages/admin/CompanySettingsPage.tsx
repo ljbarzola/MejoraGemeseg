@@ -9,14 +9,16 @@ import {
 } from '../../services/company.service';
 import { useCompany, resolveLogoUrl } from '../../contexts/ThemeContext';
 import SoloAdminDialog from '../../components/common/SoloAdminDialog';
+import { usePerm } from '../../contexts/PermissionsContext';
 
 export default function CompanySettingsPage() {
   const navigate = useNavigate();
   const { applyTheme } = useCompany();
   const user = getUser();
-  // El Gerente ve la identidad de su empresa en SOLO LECTURA; guardar es solo
-  // del administrador (el backend lo exige igual con @Roles(ADMIN)).
-  const soloLectura = user?.role !== 'ADMIN';
+  // Quien solo tiene «Ver» en Mi Empresa (p. ej. el Gerente) la ve en SOLO LECTURA; guardar lo decide la
+  // casilla «Escribir» (2026-11-26), no el rol. El administrador de empresa siempre puede.
+  const { canWrite } = usePerm();
+  const soloLectura = !canWrite('COMPANY_SETTINGS');
   const [avisoSoloAdmin, setAvisoSoloAdmin] = useState('');
   // Si el Gerente intenta tocar algo, se le explica por qué no puede.
   const bloquear = (accion: string) => (e: React.SyntheticEvent) => {

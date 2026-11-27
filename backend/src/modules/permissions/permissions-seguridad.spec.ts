@@ -48,6 +48,11 @@ describe('permisos: Sistemas cerrado por defecto', () => {
     });
 
     it('hasSectionAccess: con fila explícita en SISTEMAS manda la fila', async () => {
+      // Sistemas se activa por empresa (2026-11-26): la empresa debe tenerla.
+      // (el mock respeta el `where`: no es una sección «fija» ni «abierta si activa»).
+      prisma.companySection.findMany.mockImplementation(({ where }: { where?: { fixedForAll?: boolean; section?: unknown } }) =>
+        Promise.resolve(where?.fixedForAll || where?.section ? [] : [{ section: 'SISTEMAS', fixedForAll: false }]),
+      );
       prisma.userPermission.findMany.mockResolvedValue([
         { section: 'SISTEMAS', canView: true, canWrite: false },
       ]);

@@ -429,7 +429,7 @@ function AppInner() {
           path="/admin/user-permissions"
           element={
             <ProtectedLayout>
-              <CompanyAdminPermissions />
+              <SectionRoute section="ADMIN"><CompanyAdminPermissions /></SectionRoute>
             </ProtectedLayout>
           }
         />
@@ -592,11 +592,11 @@ function AppInner() {
             puede enviar una queja, tenga o no acceso al módulo de RRHH. Solo
             es un formulario de envío — la gestión vive aparte, gateada por
             RRHH, en /rrhh/quejas/gestion. */}
-        <Route path="/rrhh/quejas" element={<ProtectedLayout><ComplaintsPage /></ProtectedLayout>} />
+        <Route path="/rrhh/quejas" element={<ProtectedLayout><SectionRoute section="QUEJAS"><ComplaintsPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/quejas/gestion" element={<ProtectedLayout><SectionRoute section="RRHH"><ComplaintsManagementPage /></SectionRoute></ProtectedLayout>} />
         {/* Sin SectionRoute("RRHH") a propósito, mismo motivo que Buzón de Quejas:
             cualquier empleado con cuenta puede tener encuestas pendientes. */}
-        <Route path="/rrhh/encuestas" element={<ProtectedLayout><SurveysPage /></ProtectedLayout>} />
+        <Route path="/rrhh/encuestas" element={<ProtectedLayout><SectionRoute section="ENCUESTAS"><SurveysPage /></SectionRoute></ProtectedLayout>} />
         <Route path="/rrhh/encuestas/gestion" element={<ProtectedLayout><SectionRoute section="RRHH"><SurveyManagementPage /></SectionRoute></ProtectedLayout>} />
         {/* Asignaciones y Movimientos se unieron en /rrhh/historial — se conservan como redirect por si hay enlaces guardados. */}
         <Route path="/rrhh/asignaciones" element={<Navigate to="/rrhh/historial" replace />} />
